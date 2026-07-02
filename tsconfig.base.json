@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "paths": {
+      "@yct/contracts": ["./packages/contracts/src/index.ts"],
+      "@yct/event-bus": ["./packages/event-bus/src/index.ts"],
+      "@yct/adapters": ["./packages/adapters/src/index.ts"],
+      "@yct/domain": ["./packages/domain/src/index.ts"],
+      "@yct/schemas": ["./packages/schemas/src/index.ts"],
+      "@yct/design-tokens": ["./packages/design-tokens/src/index.ts"]
+    }
+  }
+}

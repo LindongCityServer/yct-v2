@@ -1,0 +1,32 @@
+{
+  "name": "yuchengtong",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @yct/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "brand:icons": "node scripts/generate-icons.mjs",
+    "legacy:inspect": "tsx scripts/inspect-legacy-data.ts",
+    "legacy:assets:download": "tsx scripts/download-legacy-assets.ts",
+    "admin:init": "tsx scripts/init-admin.ts",
+    "web:dev:start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-dev-start.ps1",
+    "web:dev:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-dev-stop.ps1",
+    "web:dev:restart": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-dev-restart.ps1",
+    "web:dev:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-dev-status.ps1",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@yct/legacy-import": "workspace:*",
+    "prettier": "^3.7.4",
+    "sharp": "^0.35.2",
+    "tsx": "4.22.4",
+    "typescript": "^6.0.3"
+  }
+}

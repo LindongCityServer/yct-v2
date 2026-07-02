@@ -1,0 +1,51 @@
+export const yctTokens = {
+  color: {
+    primary: '#168F78',
+    primaryHover: '#0F725F',
+    primarySoft: '#E9FBF6',
+    accentDefault: '#168F78',
+    accentRed: '#C93A3A',
+    accentGray: '#6F7775',
+    secondary: '#2584E8',
+    tertiary: '#F59B22',
+    surface: '#F7F8F8',
+    surfacePanel: '#FFFFFF',
+    surfaceMuted: '#EEF1F1',
+    surfaceSelected: '#D9F6ED',
+    text: '#111817',
+    textSecondary: '#364240',
+    textMuted: '#7A8684',
+    border: '#DFE5E4',
+    error: '#E5484D',
+    tram: '#C64255',
+    ferry: '#168AA5',
+  },
+  radius: {
+    xs: '4px',
+    sm: '6px',
+    md: '8px',
+    lg: '20px',
+    pill: '999px',
+  },
+  space: {
+    1: '4px',
+    2: '8px',
+    3: '12px',
+    4: '16px',
+    5: '20px',
+    6: '24px',
+    8: '32px',
+    10: '40px',
+  },
+  shadow: {
+    panel: '0 12px 32px rgba(17, 24, 23, 0.08)',
+    floating: '0 18px 48px rgba(17, 24, 23, 0.14)',
+  },
+  motion: {
+    durationFast: '120ms',
+    durationStandard: '180ms',
+    easingStandard: 'cubic-bezier(0.2, 0, 0, 1)',
+  },
+} as const;
+
+export type YctTokens = typeof yctTokens;

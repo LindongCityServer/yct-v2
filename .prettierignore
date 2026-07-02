@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.next-dev-logs/
+.turbo/
+dist/
+coverage/
+.yct-data/
+apps/web/public/legacy-assets/
+scripts/*.ps1
+*.tsbuildinfo

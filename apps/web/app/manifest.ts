@@ -1,0 +1,32 @@
+import type { MetadataRoute } from 'next';
+
+export default function manifest(): MetadataRoute.Manifest {
+  return {
+    name: '雨城通',
+    short_name: 'YCT',
+    description: '雨城通 Yuchengtong',
+    start_url: '/',
+    scope: '/',
+    display: 'standalone',
+    background_color: '#F7F8F8',
+    theme_color: '#168F78',
+    icons: [
+      {
+        src: '/icons/yct-icon-192.png',
+        sizes: '192x192',
+        type: 'image/png',
+      },
+      {
+        src: '/icons/yct-icon-512.png',
+        sizes: '512x512',
+        type: 'image/png',
+      },
+      {
+        src: '/icons/yct-icon-maskable.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
+    ],
+  };
+}

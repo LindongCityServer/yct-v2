@@ -1,0 +1,54 @@
+body {
+    font-size: 16px;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    line-height: 1.6;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    position: relative;
+    overflow-y: auto; /* 确保页面可以垂直滚动 */
+}
+main {
+    padding-top: 60px; /* 确保内容不会被固定在顶部的标题栏遮挡 */
+    overflow-y: auto; /* 确保主要内容区域可以滚动 */
+    background-color: black;
+}
+header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background-color: var(--header-background);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    z-index: 1000; /* 确保标题栏在其他内容之上 */
+}
+.content-container {
+    display: flex;
+    flex-direction: column;
+    padding: 60px 36px;
+}
+.content-container img {
+    width: 100%;
+}
+section {
+    margin-bottom: 24px;
+}
+.caption-section {
+    padding: 0;
+}
+@media (prefers-color-scheme: dark) {
+    #copy img{
+        filter: invert(1);
+    }
+}
+@media (max-width: 360px) { 
+    .header .toolbar {
+        display: block;
+    }
+}
