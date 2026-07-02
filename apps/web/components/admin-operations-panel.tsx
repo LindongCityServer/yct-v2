@@ -6,6 +6,7 @@ import type {
   LegacyAssetManifest,
   LegacyAssetManifestIssue,
   LegacyAssetManifestIssueKind,
+  LegacyContentAssetInventory,
 } from '@yct/contracts';
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
@@ -57,6 +58,7 @@ interface LegacyAssetDownloadReportForAdmin {
 
 interface LegacyAssetAdminResponse {
   manifest?: ApiItemResponse<LegacyAssetManifest>;
+  contentAssets?: ApiItemResponse<LegacyContentAssetInventory>;
   downloadReport?: {
     status: 'ready' | 'not_found' | 'invalid';
     report?: LegacyAssetDownloadReportForAdmin;
@@ -70,6 +72,8 @@ const categories = ['通知公告', '运营信息', '地铁运营', '公交运�
 export function AdminOperationsPanel() {
   const [records, setRecords] = useState<AdminContentRecord[]>([]);
   const [legacyAssetManifest, setLegacyAssetManifest] = useState<LegacyAssetManifest | null>(null);
+  const [legacyContentAssets, setLegacyContentAssets] =
+    useState<LegacyContentAssetInventory | null>(null);
   const [legacyDownloadReport, setLegacyDownloadReport] = useState<
     LegacyAssetAdminResponse['downloadReport'] | null
   >(null);
@@ -120,6 +124,7 @@ export function AdminOperationsPanel() {
     }
 
     setLegacyDownloadReport(data.downloadReport ?? null);
+    setLegacyContentAssets(data.contentAssets?.item ?? null);
     if (!data.manifest?.item) {
       setLegacyAssetManifest(null);
       setLegacyAssetStatusText(data.manifest?.meta.message ?? '旧资源清单暂不可用');
@@ -284,6 +289,12 @@ export function AdminOperationsPanel() {
                 value={legacyDownloadReport?.report?.summary.failed ?? 0}
                 tone={(legacyDownloadReport?.report?.summary.failed ?? 0) > 0 ? 'warning' : 'ok'}
               />
+              <ReportMetric label="素材记录" value={legacyContentAssets?.summary.assetCount ?? 0} />
+              <ReportMetric
+                label="待审核素材"
+                value={legacyContentAssets?.summary.pendingReviewCount ?? 0}
+                tone={(legacyContentAssets?.summary.pendingReviewCount ?? 0) > 0 ? 'warning' : 'ok'}
+              />
             </div>
 
             <div className="admin-report-chips" aria-label="旧资源 issue 分类">
@@ -302,6 +313,7 @@ export function AdminOperationsPanel() {
             <div className="admin-report-grid">
               <IssuePreview issues={legacyAssetManifest.issues} />
               <DuplicateResourcePreview duplicates={legacyAssetManifest.duplicateResources} />
+              <ContentAssetPreview inventory={legacyContentAssets} />
               <FailedDownloadPreview
                 failedDownloads={
                   legacyDownloadReport?.report?.differenceReport?.failedDownloads ?? []
@@ -420,6 +432,36 @@ function DuplicateResourcePreview({
   );
 }
 
+function ContentAssetPreview({
+  inventory,
+}: Readonly<{ inventory: LegacyContentAssetInventory | null }>) {
+  return (
+    <article className="admin-report-card">
+      <h3>素材清单</h3>
+      {inventory ? (
+        <>
+          <p>
+            <strong>{`${inventory.summary.deduplicatedReferenceCount} 个重复引用已复用`}</strong>
+            <span>{`${inventory.summary.referenceCount} 个内容引用，${formatBytes(
+              inventory.summary.totalSizeBytes,
+            )}`}</span>
+          </p>
+          {inventory.items.slice(0, 4).map((item) => (
+            <p key={item.asset.id}>
+              <strong>{item.asset.fileName}</strong>
+              <span>{`${statusLabelForAsset(item.asset.status)} · ${
+                item.references.length
+              } 个引用`}</span>
+            </p>
+          ))}
+        </>
+      ) : (
+        <p className="muted">尚未生成可映射的旧内容素材清单。</p>
+      )}
+    </article>
+  );
+}
+
 function FailedDownloadPreview({
   failedDownloads,
 }: Readonly<{
@@ -459,6 +501,31 @@ function issueKindLabel(kind: LegacyAssetManifestIssueKind): string {
 
 function formatDate(value: string | undefined): string {
   return value ? value.slice(0, 10) : '未生成';
+}
+
+function statusLabelForAsset(
+  status: LegacyContentAssetInventory['items'][number]['asset']['status'],
+): string {
+  const labels: Record<LegacyContentAssetInventory['items'][number]['asset']['status'], string> = {
+    pending_review: '待审核',
+    approved: '已通过',
+    rejected: '已驳回',
+    archived: '已归档',
+  };
+
+  return labels[status];
+}
+
+function formatBytes(value: number): string {
+  if (value >= 1024 * 1024) {
+    return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  if (value >= 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+
+  return `${value} B`;
 }
 
 function statusLabel(status: AdminContentRecord['revision']['status']): string {

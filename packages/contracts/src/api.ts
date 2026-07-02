@@ -1,4 +1,4 @@
-import type { ContentSummary, ISODateTimeString, ServiceEntry } from './domain';
+import type { ContentAsset, ContentSummary, ISODateTimeString, ServiceEntry } from './domain';
 
 export type DataSourceStatus = 'ready' | 'not_configured' | 'unavailable';
 
@@ -119,4 +119,47 @@ export interface LegacyAssetManifest {
   issues: LegacyAssetManifestIssue[];
   duplicateResources: LegacyAssetDuplicateResource[];
   sourceFiles: string[];
+}
+
+export interface LegacyContentAssetReference {
+  entryId: string;
+  referenceKind: LegacyAssetReferenceKind;
+  contentId: string;
+  contentTitle: string;
+  sourcePageUrl?: string;
+}
+
+export interface LegacyContentAssetInventoryItem {
+  asset: ContentAsset;
+  migratedPath: string;
+  sha256?: string;
+  references: LegacyContentAssetReference[];
+  duplicateGroupId?: string;
+}
+
+export interface LegacyContentAssetDuplicateGroup {
+  id: string;
+  sha256: string;
+  assetIds: string[];
+  migratedPaths: string[];
+  sourceUrls: string[];
+  referenceCount: number;
+}
+
+export interface LegacyContentAssetInventory {
+  summary: {
+    assetCount: number;
+    referenceCount: number;
+    pendingReviewCount: number;
+    approvedCount: number;
+    rejectedCount: number;
+    missingHashCount: number;
+    reusedAssetCount: number;
+    deduplicatedReferenceCount: number;
+    duplicateGroupCount: number;
+    duplicateAssetCount: number;
+    totalSizeBytes: number;
+  };
+  items: LegacyContentAssetInventoryItem[];
+  duplicateGroups: LegacyContentAssetDuplicateGroup[];
 }

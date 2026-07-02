@@ -24,6 +24,19 @@ export interface LegacyAssetDownloadReport {
       error?: string;
     }>;
   };
+  items?: LegacyAssetDownloadReportItem[];
+}
+
+export interface LegacyAssetDownloadReportItem {
+  id: string;
+  sourceUrl: string;
+  migratedPath: string;
+  filePath: string;
+  status: 'downloaded' | 'updated' | 'unchanged' | 'failed';
+  sizeBytes?: number;
+  sha256?: string;
+  contentType?: string;
+  error?: string;
 }
 
 export async function readLegacyAssetDownloadReport(): Promise<{
