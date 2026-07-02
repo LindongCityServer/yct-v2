@@ -1,4 +1,4 @@
-const YCT_SW_VERSION = '2026-07-02-07';
+const YCT_SW_VERSION = '2026-07-02-08';
 const YCT_SHELL_CACHE = `yct-shell-${YCT_SW_VERSION}`;
 const YCT_RUNTIME_CACHE = `yct-runtime-${YCT_SW_VERSION}`;
 const YCT_DATA_CACHE = `yct-data-${YCT_SW_VERSION}`;
@@ -8,6 +8,7 @@ const YCT_DISABLE_ON_LOCAL_DEV = ['localhost', '127.0.0.1', '::1'].includes(self
 const YCT_CORE_URLS = [
   '/',
   '/travel',
+  '/travel/schedules',
   '/travel/screen',
   '/services',
   '/map',
@@ -32,6 +33,7 @@ const YCT_DATA_PATHS = new Set([
   '/api/transit/screen',
   '/api/transit/service-notices',
   '/api/transit/station-details',
+  '/api/travel/schedules',
 ]);
 
 self.addEventListener('install', (event) => {
@@ -203,6 +205,7 @@ function isRecentContentPath(url) {
 
 function isRecentTravelPath(url) {
   return (
+    url.pathname === '/travel/schedules' ||
     url.pathname === '/travel/screen' ||
     url.pathname.startsWith('/travel/stations/') ||
     /^\/travel\/[^/]+$/.test(url.pathname)

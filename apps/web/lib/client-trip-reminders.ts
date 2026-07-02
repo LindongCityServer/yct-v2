@@ -25,6 +25,8 @@ export interface TripReminderDraft {
   departure?: string;
   arrival?: string;
   lineName?: string;
+  transportMode?: TripReminderRouteSnapshot['transportMode'];
+  detail?: string;
   source?: TripReminderSource;
 }
 
@@ -268,9 +270,13 @@ function normalizeDraftRoute(draft: TripReminderDraft): TripReminderRouteSnapsho
     departure: normalizeString(draft.departure),
     arrival: normalizeString(draft.arrival),
     lineName: normalizeString(draft.lineName),
+    transportMode: draft.transportMode,
+    detail: normalizeString(draft.detail),
   };
 
-  return route.departure || route.arrival || route.lineName ? route : undefined;
+  return route.departure || route.arrival || route.lineName || route.transportMode || route.detail
+    ? route
+    : undefined;
 }
 
 function normalizeRouteSnapshot(value: unknown): TripReminderRouteSnapshot | undefined {
@@ -394,6 +400,7 @@ function normalizeLegacyMode(value: unknown): TripReminderRouteSnapshot['transpo
     mode === 'coach' ||
     mode === 'tram' ||
     mode === 'ferry' ||
+    mode === 'flight' ||
     mode === 'railway'
   ) {
     return mode;

@@ -5,6 +5,7 @@ import type {
   RectangleBounds,
   ReviewDecision,
   ServiceEntryCategory,
+  TicketableServiceKind,
   TransitModeProfile,
   TransitModeSnapshotSummary,
   TileProviderSourceKind,
@@ -178,8 +179,6 @@ export interface ServiceEntryPublishedPayload {
   href: string;
   publishedAt: ISODateTimeString;
 }
-
-export type TicketableServiceKind = 'coach' | 'ferry' | 'flight' | 'railway' | 'custom';
 
 export interface TravelSchedulePublishedPayload {
   scheduleServiceId: string;

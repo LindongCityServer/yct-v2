@@ -19,6 +19,9 @@ export const yctTokens = {
     error: '#E5484D',
     tram: '#C64255',
     ferry: '#168AA5',
+    coach: '#8BBF35',
+    railway: '#8B5E34',
+    flight: '#6657D9',
   },
   radius: {
     xs: '4px',

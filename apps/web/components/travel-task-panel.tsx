@@ -1,6 +1,6 @@
 import type { ApiItemResponse, TransitScreenSnapshot } from '@yct/contracts';
 import Link from 'next/link';
-import type { TransitLineSummary, TransitOverview } from '../lib/legacy-transit';
+import type { TransitOverview } from '../lib/legacy-transit';
 
 export function TravelTaskPanel({
   overview,
@@ -18,8 +18,7 @@ export function TravelTaskPanel({
   const stationCount = screenSnapshot
     ? screenSnapshot.stations.length
     : new Set(coachLines.flatMap((line) => line.stationNames)).size;
-  const firstBookingUrl = findFirstBookingUrl(coachLines);
-  const bookingLineCount = coachLines.filter((line) => line.bookingUrl).length;
+  const gateCount = screenSnapshot?.gates.length ?? 0;
 
   return (
     <section className="travel-task-panel" aria-labelledby="travel-task-title">
@@ -39,24 +38,18 @@ export function TravelTaskPanel({
       <div className="travel-task-grid">
         <TravelTaskCard
           icon="departure_board"
-          title="客运班次"
-          detail={`${tripCount} 个班次，${stationCount} 个车站`}
-          href="/travel/screen"
+          title="班次查询"
+          detail={`客运 ${tripCount} 个班次，${stationCount} 个车站；轮渡与航班预留统一入口`}
+          href="/travel/schedules"
           actionLabel="查询班次"
           tone="coach"
         />
         <TravelTaskCard
-          icon="confirmation_number"
-          title="班次与票务平台"
-          detail={
-            firstBookingUrl
-              ? `${bookingLineCount} 条客运线路带有旧版参考入口，新平台待重写`
-              : '客运、轮渡、航班将接入统一查询订票平台'
-          }
-          href={firstBookingUrl}
-          actionLabel={firstBookingUrl ? '打开旧版参考' : '待接入'}
-          external={Boolean(firstBookingUrl)}
-          disabled={!firstBookingUrl}
+          icon="analytics"
+          title="智运大屏"
+          detail={`${gateCount} 个检票口数据，展示近期客运班次与运营提示`}
+          href="/travel/screen"
+          actionLabel="查看大屏"
           tone="ticket"
         />
         <TravelTaskCard
@@ -68,9 +61,9 @@ export function TravelTaskPanel({
           tone="map"
         />
         <TravelTaskCard
-          icon="connecting_airports"
-          title="轮渡与航班"
-          detail="预留后续排班交通方式入口，当前暂无真实数据源"
+          icon="confirmation_number"
+          title="票券与订单"
+          detail="真实电子票、检票、退票和乘车码后续接入临东通"
           actionLabel="待接入"
           disabled
           tone="future"
@@ -142,17 +135,4 @@ function TravelTaskCard({
       {content}
     </Link>
   );
-}
-
-function findFirstBookingUrl(lines: TransitLineSummary[]): string | undefined {
-  const bookingUrl = lines.find((line) => line.bookingUrl)?.bookingUrl;
-  if (!bookingUrl) {
-    return undefined;
-  }
-
-  try {
-    return new URL(bookingUrl, 'https://yct.shangxiaoguan.top/').toString();
-  } catch {
-    return bookingUrl;
-  }
 }

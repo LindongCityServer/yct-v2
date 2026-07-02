@@ -352,6 +352,90 @@ export interface TransitScreenSnapshot {
   sourceFiles: string[];
 }
 
+export type TicketableServiceKind = 'coach' | 'ferry' | 'flight' | 'railway' | 'custom';
+export type TravelScheduleServiceStatus = 'active' | 'not_connected' | 'planned';
+export type TravelTripAvailability =
+  'query_only' | 'booking_reference' | 'ticketing_unavailable' | 'not_connected';
+
+export interface TravelScheduleServiceSummary {
+  serviceId: string;
+  kind: TicketableServiceKind;
+  label: string;
+  status: TravelScheduleServiceStatus;
+  tripCount: number;
+  stationCount: number;
+  message?: string;
+}
+
+export interface TravelTripInstance {
+  tripInstanceId: string;
+  tripCode?: string;
+  serviceKind: TicketableServiceKind;
+  serviceLabel: string;
+  departureTime: string;
+  arrivalTime?: string;
+  arrivalDayOffset?: number;
+  lineName: string;
+  routeNote?: string;
+  stationNames: string[];
+  originStationName?: string;
+  destinationStationName?: string;
+  fareText?: string;
+  operator?: string;
+  bookingUrl?: string;
+  runtimeText?: string;
+  gateText?: string;
+  vehicleTypeText?: string;
+  vehicleModelText?: string;
+  operatingDays?: string[];
+  availability: TravelTripAvailability;
+  sourcePath?: string;
+}
+
+export type TravelScheduleHistoryReason = 'saved' | 'reminder';
+
+export interface TravelScheduleHistoryItem {
+  id: string;
+  tripInstanceId: string;
+  tripCode?: string;
+  serviceKind: TicketableServiceKind;
+  serviceLabel: string;
+  lineName: string;
+  departureTime: string;
+  arrivalTime?: string;
+  arrivalDayOffset?: number;
+  stationNames: string[];
+  originStationName?: string;
+  destinationStationName?: string;
+  fareText?: string;
+  operator?: string;
+  gateText?: string;
+  vehicleTypeText?: string;
+  vehicleModelText?: string;
+  operatingDays?: string[];
+  lastReason: TravelScheduleHistoryReason;
+  recordedAt: ISODateTimeString;
+  updatedAt: ISODateTimeString;
+  reminderCreatedAt?: ISODateTimeString;
+}
+
+export type TravelScheduleTimeScope = 'all' | 'upcoming' | 'past';
+
+export interface TravelScheduleQuery {
+  serviceKind?: TicketableServiceKind | 'all';
+  query?: string;
+  stationName?: string;
+  timeScope?: TravelScheduleTimeScope;
+}
+
+export interface TravelScheduleQueryResult {
+  services: TravelScheduleServiceSummary[];
+  trips: TravelTripInstance[];
+  stationOptions: string[];
+  sourceFiles: string[];
+  notice?: string;
+}
+
 export type ServiceEntryStatus =
   'draft' | 'pending_review' | 'approved' | 'rejected' | 'published' | 'archived';
 export type ServiceEntryCategory = 'operations' | 'server_sites' | 'toolbox' | 'other';
@@ -407,7 +491,7 @@ export interface TripReminderRouteSnapshot {
   departure?: string;
   arrival?: string;
   lineName?: string;
-  transportMode?: Exclude<TransportMode, 'walk'> | 'walk';
+  transportMode?: Exclude<TransportMode, 'walk'> | 'walk' | 'flight';
   detail?: string;
 }
 

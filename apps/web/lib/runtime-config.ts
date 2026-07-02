@@ -17,6 +17,7 @@ export interface RuntimeConfig {
   legacyDataDir?: string;
   legacyDataRemoteBaseUrl: string;
   legacyPublicBaseUrl: string;
+  flightDataUrl: string;
   legacyAssetPublicPrefix: string;
   poiIconCandidates: Array<{
     categoryHint: string;
@@ -63,6 +64,9 @@ export function readRuntimeConfig(): RuntimeConfig {
       'https://yct.shangxiaoguan.top/data',
     legacyPublicBaseUrl:
       emptyToUndefined(process.env.YCT_LEGACY_PUBLIC_BASE_URL) ?? 'https://yct.shangxiaoguan.top',
+    flightDataUrl:
+      emptyToUndefined(process.env.YCT_FLIGHT_DATA_URL) ??
+      'https://haojin.guanmu233.cn/data/flight_data.txt',
     legacyAssetPublicPrefix:
       emptyToUndefined(process.env.YCT_LEGACY_ASSET_PUBLIC_PREFIX) ?? '/legacy-assets',
     poiIconCandidates: parsePoiIconCandidates(process.env.YCT_POI_ICON_CANDIDATES),

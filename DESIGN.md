@@ -34,6 +34,7 @@ colors:
   ferry: '#168AA5'
   railway: '#8B5E34'
   coach: '#8BBF35'
+  flight: '#6657D9'
 motion:
   duration-fast: 120ms
   duration-standard: 180ms
@@ -158,7 +159,7 @@ components:
 - **Tertiary `#F59B22`**：用于公交、轻量提醒和非危险强调。
 - **Error `#E5484D`**：用于危险操作、停运、校验错误和强警示。
 - **Neutral scale**：页面背景、卡片、边框、文本和辅助信息都从中取值。
-- **Mode colors**：`metro`、`bus`、`tram`、`ferry`、`railway`、`coach` 仅表达交通方式，不替代具体线路色。默认语义中地方铁路使用棕色，客运使用黄绿色；不同服务器的交通方式色、图标和排序允许通过后台 Profile 配置覆盖，前台不要把这组颜色写死为不可变常量。
+- **Mode colors**：`metro`、`bus`、`tram`、`ferry`、`railway`、`coach` 仅表达交通方式，不替代具体线路色。默认语义中地方铁路使用棕色，客运大巴使用黄绿色，轮渡保留青蓝色，航班使用蓝紫色；不同服务器的交通方式色、图标和排序允许通过后台 Profile 配置覆盖，前台不要把这组颜色写死为不可变常量。
 
 不要把界面做成单一青绿色主题。运营信息、地图线路、出行提醒和后台状态需要有足够的语义区分。
 

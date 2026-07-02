@@ -1672,6 +1672,10 @@ body .material-symbols-outlined {
   --category-chip-active-tone: var(--yct-color-ferry);
 }
 
+.category-chip.tone-flight {
+  --category-chip-active-tone: var(--yct-color-flight);
+}
+
 .category-chip.tone-railway {
   --category-chip-active-tone: var(--yct-color-railway);
 }
@@ -3437,6 +3441,321 @@ body .material-symbols-outlined {
   font-weight: 700;
 }
 
+.travel-schedule-panel {
+  display: grid;
+  gap: var(--yct-space-4);
+}
+
+.schedule-service-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 144px), 1fr));
+  gap: var(--yct-space-2);
+}
+
+.schedule-service-strip button {
+  --schedule-service-tone: var(--yct-color-primary);
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: var(--yct-space-1) var(--yct-space-2);
+  align-items: center;
+  min-height: 72px;
+  padding: var(--yct-space-3);
+  border: 0;
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.schedule-service-strip button.is-active {
+  background: color-mix(in srgb, var(--schedule-service-tone) 12%, var(--yct-color-surface-panel));
+  color: var(--schedule-service-tone);
+}
+
+.schedule-service-strip button[data-status='not_connected'] {
+  color: var(--yct-color-text-muted);
+}
+
+.schedule-service-strip button[data-service='coach'],
+.schedule-trip-card[data-service='coach'],
+.schedule-history-item[data-service='coach'] {
+  --schedule-service-tone: var(--yct-color-coach);
+}
+
+.schedule-service-strip button[data-service='ferry'],
+.schedule-trip-card[data-service='ferry'],
+.schedule-history-item[data-service='ferry'] {
+  --schedule-service-tone: var(--yct-color-ferry);
+}
+
+.schedule-service-strip button[data-service='flight'],
+.schedule-trip-card[data-service='flight'],
+.schedule-history-item[data-service='flight'] {
+  --schedule-service-tone: var(--yct-color-flight);
+}
+
+.schedule-service-strip button[data-service='railway'],
+.schedule-trip-card[data-service='railway'],
+.schedule-history-item[data-service='railway'] {
+  --schedule-service-tone: var(--yct-color-railway);
+}
+
+.schedule-service-strip .material-symbols-outlined {
+  grid-row: span 2;
+  font-size: 26px;
+}
+
+.schedule-service-strip button.is-active .material-symbols-outlined {
+  --icon-fill: 1;
+}
+
+.schedule-service-strip span:not(.material-symbols-outlined) {
+  min-width: 0;
+  color: var(--yct-color-text);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.schedule-service-strip strong {
+  color: currentColor;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.schedule-filter-panel {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-4);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+}
+
+.schedule-search-box {
+  background: var(--yct-color-surface);
+}
+
+.schedule-history-panel {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-4);
+  border-radius: var(--yct-radius-lg);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 84%, transparent);
+}
+
+.schedule-history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+}
+
+.schedule-history-heading h3 {
+  margin: 0 0 2px;
+  color: var(--yct-color-text);
+  font-size: 16px;
+}
+
+.schedule-history-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+}
+
+.schedule-history-item {
+  --schedule-service-tone: var(--yct-color-primary);
+  display: inline-grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: var(--yct-space-2);
+  align-items: center;
+  max-width: min(100%, 320px);
+  min-height: 48px;
+  padding: var(--yct-space-2) var(--yct-space-3);
+  border: 0;
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.schedule-history-item:hover {
+  background: color-mix(in srgb, var(--schedule-service-tone) 10%, var(--yct-color-surface));
+}
+
+.schedule-history-item > .material-symbols-outlined {
+  --icon-fill: 1;
+  color: var(--schedule-service-tone);
+}
+
+.schedule-history-item strong,
+.schedule-history-item small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-history-item strong {
+  color: var(--yct-color-text);
+  font-size: 13px;
+}
+
+.schedule-history-item small {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.schedule-filter-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(240px, 1fr);
+  gap: var(--yct-space-3);
+  align-items: end;
+}
+
+.schedule-filter-row label {
+  display: grid;
+  gap: var(--yct-space-1);
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.schedule-filter-row select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text);
+  font: inherit;
+}
+
+.schedule-time-filter {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--yct-space-2);
+  padding: 4px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-muted);
+}
+
+.schedule-time-filter button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--yct-space-1);
+  min-width: 0;
+  min-height: 36px;
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 500;
+}
+
+.schedule-time-filter button.is-active {
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-primary);
+  font-weight: 800;
+  box-shadow: var(--yct-shadow-soft);
+}
+
+.schedule-time-filter button.is-active .material-symbols-outlined {
+  --icon-fill: 1;
+}
+
+.schedule-trip-list {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.schedule-trip-card {
+  --schedule-service-tone: var(--yct-color-primary);
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-4);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+}
+
+.schedule-trip-time {
+  display: grid;
+  align-content: start;
+  gap: var(--yct-space-1);
+}
+
+.schedule-trip-time time {
+  color: var(--schedule-service-tone);
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.schedule-trip-time span {
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--schedule-service-tone) 14%, var(--yct-color-surface-muted));
+  color: var(--schedule-service-tone);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.schedule-trip-main {
+  display: grid;
+  min-width: 0;
+  gap: var(--yct-space-2);
+}
+
+.schedule-trip-main h3,
+.schedule-trip-main p {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.schedule-trip-main h3 {
+  color: var(--yct-color-text);
+  font-size: 18px;
+}
+
+.schedule-trip-main p {
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+}
+
+.schedule-trip-meta {
+  grid-column: 2;
+}
+
+.schedule-trip-actions {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+}
+
+.schedule-trip-feedback {
+  grid-column: 2;
+  margin: 0;
+  color: var(--yct-color-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.schedule-empty-state {
+  background: var(--yct-color-surface-panel);
+}
+
 .transit-overview {
   display: grid;
   gap: var(--yct-space-4);
@@ -4314,6 +4633,34 @@ body .material-symbols-outlined {
 
   .screen-time-filter button {
     font-size: 13px;
+  }
+
+  .schedule-filter-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .schedule-time-filter button {
+    font-size: 13px;
+  }
+
+  .schedule-trip-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .schedule-trip-time {
+    grid-template-columns: auto auto;
+    align-items: center;
+    justify-content: start;
+  }
+
+  .schedule-trip-meta,
+  .schedule-trip-actions,
+  .schedule-trip-feedback {
+    grid-column: auto;
+  }
+
+  .schedule-trip-meta {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .travel-task-grid {

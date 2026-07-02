@@ -14,6 +14,11 @@ import {
   type OfflinePackageState,
 } from '../lib/client-offline-packages';
 import {
+  clearTravelScheduleHistory,
+  readTravelScheduleHistoryState,
+  type TravelScheduleHistoryState,
+} from '../lib/client-schedule-history';
+import {
   clearLocalTripReminders,
   readTripReminderState,
   type TripReminderState,
@@ -145,6 +150,9 @@ export function AccountSettingsPanel({
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [cacheStatusText, setCacheStatusText] = useState('正在检查');
   const [tripSummary, setTripSummary] = useState<TripReminderState['summary'] | null>(null);
+  const [scheduleHistorySummary, setScheduleHistorySummary] = useState<
+    TravelScheduleHistoryState['summary'] | null
+  >(null);
   const [offlinePackageState, setOfflinePackageState] = useState<OfflinePackageState | null>(null);
   const [offlinePackageDraft, setOfflinePackageDraft] = useState(emptyOfflinePackageDraft);
   const [offlinePackageFormOpen, setOfflinePackageFormOpen] = useState(false);
@@ -152,6 +160,7 @@ export function AccountSettingsPanel({
   const [refreshingPackageId, setRefreshingPackageId] = useState<string | null>(null);
   const syncTripSummary = () => {
     setTripSummary(readTripReminderState().summary);
+    setScheduleHistorySummary(readTravelScheduleHistoryState().summary);
   };
   const syncOfflinePackageState = () => {
     setOfflinePackageState(readOfflinePackageState());
@@ -320,14 +329,17 @@ export function AccountSettingsPanel({
     syncOfflinePackageState();
   };
 
-  const clearTripHistory = () => {
+  const clearLocalHistory = () => {
     if (
-      !window.confirm('要清空雨城通新版本地行程提醒和历史记录吗？旧站 orders 原始数据不会被删除。')
+      !window.confirm(
+        '要清空雨城通新版本地行程提醒、历史记录和班次查询记录吗？旧站 orders 原始数据不会被删除。',
+      )
     ) {
       return;
     }
 
     clearLocalTripReminders();
+    clearTravelScheduleHistory();
     syncTripSummary();
   };
 
@@ -453,12 +465,15 @@ export function AccountSettingsPanel({
             </span>
             <span id="history-settings-title">本地历史</span>
             <span className="settings-inline-status">
-              {tripSummary ? `${tripSummary.total} 条` : '读取中'}
+              {tripSummary && scheduleHistorySummary
+                ? `${tripSummary.total + scheduleHistorySummary.total} 条`
+                : '读取中'}
             </span>
           </div>
           <div className="settings-history-summary">
             <span>{tripSummary?.scheduled ?? 0} 个即将进行</span>
             <span>{tripSummary?.history ?? 0} 个历史行程</span>
+            <span>{scheduleHistorySummary?.total ?? 0} 条班次记录</span>
             <span>{tripSummary?.localOnly ?? 0} 个待同步</span>
           </div>
           <div className="settings-action-row">
@@ -467,6 +482,12 @@ export function AccountSettingsPanel({
                 event_upcoming
               </span>
               <span>管理行程</span>
+            </a>
+            <a className="secondary-action-button" href="/travel/schedules">
+              <span className="material-symbols-outlined" aria-hidden="true">
+                departure_board
+              </span>
+              <span>查询班次</span>
             </a>
             <button
               className="secondary-action-button"
@@ -478,7 +499,7 @@ export function AccountSettingsPanel({
               </span>
               <span>同步到账号</span>
             </button>
-            <button className="secondary-action-button" type="button" onClick={clearTripHistory}>
+            <button className="secondary-action-button" type="button" onClick={clearLocalHistory}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 delete_sweep
               </span>
@@ -921,11 +942,13 @@ async function warmAppShellCache(): Promise<void> {
     [
       '/',
       '/travel',
+      '/travel/schedules',
       '/travel/screen',
       '/services',
       '/map',
       '/offline',
       '/api/transit/overview',
+      '/api/travel/schedules',
       '/api/transit/screen',
       '/api/transit/service-notices',
       '/api/transit/station-details',
