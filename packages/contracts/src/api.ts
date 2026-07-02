@@ -48,6 +48,15 @@ export interface ServiceEntryGroup {
 }
 
 export type LegacyAssetReferenceKind = 'content_cover' | 'legacy_page' | 'html_asset' | 'html_link';
+export type LegacyAssetOriginKind = 'legacy_origin' | 'external';
+export type LegacyAssetManifestIssueKind =
+  | 'external_reference'
+  | 'not_downloadable'
+  | 'missing_migrated_path'
+  | 'missing_local_file'
+  | 'duplicate_reference'
+  | 'duplicate_resource';
+export type LegacyAssetManifestIssueSeverity = 'info' | 'warning' | 'error';
 
 export interface LegacyAssetManifestEntry {
   id: string;
@@ -56,18 +65,58 @@ export interface LegacyAssetManifestEntry {
   contentTitle: string;
   originalValue: string;
   sourceUrl: string;
+  sourceOrigin: string;
+  originKind: LegacyAssetOriginKind;
   migratedPath?: string;
   sourcePageUrl?: string;
   downloadable: boolean;
+}
+
+export interface LegacyAssetManifestIssue {
+  id: string;
+  kind: LegacyAssetManifestIssueKind;
+  severity: LegacyAssetManifestIssueSeverity;
+  message: string;
+  entryId?: string;
+  duplicateOfEntryId?: string;
+  relatedEntryIds?: string[];
+  contentId?: string;
+  contentTitle?: string;
+  sourceUrl?: string;
+  migratedPath?: string;
+  sourcePageUrl?: string;
+  occurrenceCount?: number;
+}
+
+export interface LegacyAssetDuplicateResource {
+  id: string;
+  sourceUrl: string;
+  migratedPath: string;
+  entryIds: string[];
+  contentIds: string[];
+  contentTitles: string[];
+  occurrenceCount: number;
 }
 
 export interface LegacyAssetManifest {
   summary: {
     contentCount: number;
     pageCount: number;
+    rawReferenceCount: number;
     referenceCount: number;
     downloadableCount: number;
+    sameOriginCount: number;
+    externalCount: number;
+    notDownloadableCount: number;
+    missingMigratedPathCount: number;
+    missingLocalFileCount: number;
+    duplicateReferenceCount: number;
+    duplicateResourceCount: number;
+    issueCount: number;
+    byKind: Record<LegacyAssetReferenceKind, number>;
   };
   entries: LegacyAssetManifestEntry[];
+  issues: LegacyAssetManifestIssue[];
+  duplicateResources: LegacyAssetDuplicateResource[];
   sourceFiles: string[];
 }

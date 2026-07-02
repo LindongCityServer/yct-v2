@@ -1,13 +1,15 @@
 import type {
   ApiItemResponse,
+  LegacyAssetDuplicateResource,
   LegacyAssetManifest,
   LegacyAssetManifestEntry,
+  LegacyAssetManifestIssue,
   LegacyAssetReferenceKind,
 } from '@yct/contracts';
 import type { LegacyContentImportItemInput } from '@yct/schemas';
 import { parseLegacyContentSource } from '@yct/legacy-import';
 import { createApiMeta } from './api-meta';
-import { resolveLegacyAssetReference } from './legacy-assets';
+import { legacyMigratedAssetExists, resolveLegacyAssetReference } from './legacy-assets';
 import {
   isLegacyDataSourceConfigured,
   LegacyDataSourceNotConfiguredError,
@@ -22,9 +24,17 @@ interface PendingLegacyReference {
   contentTitle: string;
   originalValue: string;
   sourceUrl: string;
+  sourceOrigin: string;
+  originKind: LegacyAssetManifestEntry['originKind'];
   migratedPath?: string;
   sourcePageUrl?: string;
   downloadable: boolean;
+}
+
+interface FinalizedLegacyEntries {
+  entries: LegacyAssetManifestEntry[];
+  duplicateReferenceCount: number;
+  duplicateReferenceIssues: LegacyAssetManifestIssue[];
 }
 
 export async function readLegacyAssetManifest(): Promise<ApiItemResponse<LegacyAssetManifest>> {
@@ -72,7 +82,13 @@ export async function readLegacyAssetManifest(): Promise<ApiItemResponse<LegacyA
       }
     }
 
-    const entries = finalizeEntries(pendingEntries);
+    const finalized = finalizeEntries(pendingEntries);
+    const duplicateResources = findDuplicateResources(finalized.entries);
+    const issues = [
+      ...finalized.duplicateReferenceIssues,
+      ...buildManifestIssues(finalized.entries, duplicateResources),
+    ];
+    const entries = finalized.entries;
 
     return {
       meta: createApiMeta('ready'),
@@ -80,10 +96,32 @@ export async function readLegacyAssetManifest(): Promise<ApiItemResponse<LegacyA
         summary: {
           contentCount: contentItems.length,
           pageCount,
+          rawReferenceCount: pendingEntries.length,
           referenceCount: entries.length,
           downloadableCount: entries.filter((entry) => entry.downloadable).length,
+          sameOriginCount: entries.filter((entry) => entry.originKind === 'legacy_origin').length,
+          externalCount: entries.filter((entry) => entry.originKind === 'external').length,
+          notDownloadableCount: entries.filter((entry) => !entry.downloadable).length,
+          missingMigratedPathCount: entries.filter(
+            (entry) => entry.downloadable && !entry.migratedPath,
+          ).length,
+          missingLocalFileCount: entries.filter(
+            (entry) =>
+              entry.downloadable &&
+              entry.migratedPath &&
+              !legacyMigratedAssetExists(entry.migratedPath),
+          ).length,
+          duplicateReferenceCount: finalized.duplicateReferenceCount,
+          duplicateResourceCount: duplicateResources.reduce(
+            (total, item) => total + Math.max(item.occurrenceCount - 1, 0),
+            0,
+          ),
+          issueCount: issues.length,
+          byKind: countEntriesByKind(entries),
         },
         entries,
+        issues,
+        duplicateResources,
         sourceFiles: Array.from(sourceFiles),
       },
     };
@@ -118,9 +156,10 @@ function createContentCoverEntry(
     migratedPublicPrefix: config.legacyAssetPublicPrefix,
   });
 
-  if (!asset || !isSameLegacyOrigin(asset.sourceUrl, config)) {
+  if (!asset) {
     return undefined;
   }
+  const originKind = getAssetOriginKind(asset.sourceUrl, config);
 
   return {
     kind: 'content_cover',
@@ -128,8 +167,10 @@ function createContentCoverEntry(
     contentTitle,
     originalValue: asset.originalValue,
     sourceUrl: asset.sourceUrl,
-    migratedPath: asset.migratedPath,
-    downloadable: true,
+    sourceOrigin: new URL(asset.sourceUrl).origin,
+    originKind,
+    migratedPath: originKind === 'legacy_origin' ? asset.migratedPath : undefined,
+    downloadable: originKind === 'legacy_origin',
   };
 }
 
@@ -144,17 +185,25 @@ function createLegacyPageEntry(
     migratedPublicPrefix: config.legacyAssetPublicPrefix,
   });
 
-  if (!asset || !isSameLegacyOrigin(asset.sourceUrl, config)) {
+  if (!asset) {
     return undefined;
   }
+  const sourceUrl = stripHash(asset.sourceUrl);
+  const originKind = getAssetOriginKind(sourceUrl, config);
+  const kind: LegacyAssetReferenceKind =
+    originKind === 'legacy_origin' && isLegacyContentHtmlPage(sourceUrl, config)
+      ? 'legacy_page'
+      : 'html_link';
 
   return {
-    kind: 'legacy_page',
+    kind,
     contentId: item.sourceId,
     contentTitle,
     originalValue: asset.originalValue,
-    sourceUrl: stripHash(asset.sourceUrl),
-    migratedPath: asset.migratedPath,
+    sourceUrl,
+    sourceOrigin: new URL(sourceUrl).origin,
+    originKind,
+    migratedPath: originKind === 'legacy_origin' ? asset.migratedPath : undefined,
     downloadable: false,
   };
 }
@@ -213,11 +262,12 @@ function createHtmlReferenceEntry(input: {
     baseUrl: input.pageUrl,
   });
 
-  if (!asset || !isSameLegacyOrigin(asset.sourceUrl, input.config)) {
+  if (!asset) {
     return undefined;
   }
 
   const sourceUrl = stripHash(asset.sourceUrl);
+  const originKind = getAssetOriginKind(sourceUrl, input.config);
   const kind: LegacyAssetReferenceKind = isHtmlLikePath(sourceUrl) ? 'html_link' : 'html_asset';
 
   return {
@@ -226,30 +276,185 @@ function createHtmlReferenceEntry(input: {
     contentTitle: input.contentTitle,
     originalValue: asset.originalValue,
     sourceUrl,
-    migratedPath: asset.migratedPath,
+    sourceOrigin: new URL(sourceUrl).origin,
+    originKind,
+    migratedPath: originKind === 'legacy_origin' ? asset.migratedPath : undefined,
     sourcePageUrl: input.pageUrl,
-    downloadable: kind === 'html_asset',
+    downloadable: originKind === 'legacy_origin' && kind === 'html_asset',
   };
 }
 
-function finalizeEntries(entries: PendingLegacyReference[]): LegacyAssetManifestEntry[] {
-  const seen = new Set<string>();
+function finalizeEntries(entries: PendingLegacyReference[]): FinalizedLegacyEntries {
+  const seen = new Map<string, LegacyAssetManifestEntry>();
   const uniqueEntries: LegacyAssetManifestEntry[] = [];
+  const duplicateReferenceIssues: LegacyAssetManifestIssue[] = [];
 
   for (const entry of entries) {
     const key = `${entry.kind}|${entry.contentId}|${entry.sourcePageUrl ?? ''}|${entry.sourceUrl}`;
-    if (seen.has(key)) {
+    const duplicateOf = seen.get(key);
+    if (duplicateOf) {
+      duplicateReferenceIssues.push({
+        id: `legacy-asset-issue:duplicate-reference:${duplicateReferenceIssues.length + 1}`,
+        kind: 'duplicate_reference',
+        severity: 'info',
+        message: `重复引用已合并到 ${duplicateOf.id}。`,
+        duplicateOfEntryId: duplicateOf.id,
+        contentId: entry.contentId,
+        contentTitle: entry.contentTitle,
+        sourceUrl: entry.sourceUrl,
+        migratedPath: entry.migratedPath,
+        sourcePageUrl: entry.sourcePageUrl,
+      });
       continue;
     }
 
-    seen.add(key);
-    uniqueEntries.push({
+    const manifestEntry = {
       id: `legacy-asset:${uniqueEntries.length + 1}`,
       ...entry,
+    };
+    seen.set(key, manifestEntry);
+    uniqueEntries.push(manifestEntry);
+  }
+
+  return {
+    entries: uniqueEntries,
+    duplicateReferenceCount: duplicateReferenceIssues.length,
+    duplicateReferenceIssues,
+  };
+}
+
+function buildManifestIssues(
+  entries: LegacyAssetManifestEntry[],
+  duplicateResources: LegacyAssetDuplicateResource[],
+): LegacyAssetManifestIssue[] {
+  const issues: LegacyAssetManifestIssue[] = [];
+
+  for (const entry of entries) {
+    if (entry.originKind === 'external') {
+      issues.push(
+        createEntryIssue(
+          issues,
+          entry,
+          'external_reference',
+          'info',
+          '外链资源不会由旧站资源下载脚本自动落盘。',
+        ),
+      );
+    }
+
+    if (!entry.downloadable) {
+      issues.push(
+        createEntryIssue(
+          issues,
+          entry,
+          'not_downloadable',
+          'info',
+          '该引用不是当前批量下载候选，需要保留链接或后续单独迁移。',
+        ),
+      );
+      continue;
+    }
+
+    if (!entry.migratedPath) {
+      issues.push(
+        createEntryIssue(
+          issues,
+          entry,
+          'missing_migrated_path',
+          'warning',
+          '下载候选缺少同站迁移目标路径。',
+        ),
+      );
+      continue;
+    }
+
+    if (!legacyMigratedAssetExists(entry.migratedPath)) {
+      issues.push(
+        createEntryIssue(
+          issues,
+          entry,
+          'missing_local_file',
+          'warning',
+          '本地 legacy-assets 中尚未找到该资源文件。',
+        ),
+      );
+    }
+  }
+
+  for (const duplicate of duplicateResources) {
+    issues.push({
+      id: `legacy-asset-issue:${issues.length + 1}`,
+      kind: 'duplicate_resource',
+      severity: 'info',
+      message: `同一资源被 ${duplicate.occurrenceCount} 个引用复用，迁移时应共享同一个落盘文件。`,
+      entryId: duplicate.entryIds[0],
+      relatedEntryIds: duplicate.entryIds.slice(1),
+      sourceUrl: duplicate.sourceUrl,
+      migratedPath: duplicate.migratedPath,
+      occurrenceCount: duplicate.occurrenceCount,
     });
   }
 
-  return uniqueEntries;
+  return issues;
+}
+
+function createEntryIssue(
+  issues: LegacyAssetManifestIssue[],
+  entry: LegacyAssetManifestEntry,
+  kind: LegacyAssetManifestIssue['kind'],
+  severity: LegacyAssetManifestIssue['severity'],
+  message: string,
+): LegacyAssetManifestIssue {
+  return {
+    id: `legacy-asset-issue:${issues.length + 1}`,
+    kind,
+    severity,
+    message,
+    entryId: entry.id,
+    contentId: entry.contentId,
+    contentTitle: entry.contentTitle,
+    sourceUrl: entry.sourceUrl,
+    migratedPath: entry.migratedPath,
+    sourcePageUrl: entry.sourcePageUrl,
+  };
+}
+
+function findDuplicateResources(
+  entries: LegacyAssetManifestEntry[],
+): LegacyAssetDuplicateResource[] {
+  const groups = new Map<string, LegacyAssetManifestEntry[]>();
+
+  for (const entry of entries) {
+    if (!entry.downloadable || !entry.migratedPath) {
+      continue;
+    }
+
+    const key = `${entry.sourceUrl}|${entry.migratedPath}`;
+    groups.set(key, [...(groups.get(key) ?? []), entry]);
+  }
+
+  return Array.from(groups.values())
+    .filter((group) => group.length > 1)
+    .map((group, index) => ({
+      id: `legacy-asset-duplicate:${index + 1}`,
+      sourceUrl: group[0].sourceUrl,
+      migratedPath: group[0].migratedPath ?? '',
+      entryIds: group.map((entry) => entry.id),
+      contentIds: Array.from(new Set(group.map((entry) => entry.contentId))),
+      contentTitles: Array.from(new Set(group.map((entry) => entry.contentTitle))),
+      occurrenceCount: group.length,
+    }));
+}
+
+function countEntriesByKind(
+  entries: LegacyAssetManifestEntry[],
+): Record<LegacyAssetReferenceKind, number> {
+  return {
+    content_cover: entries.filter((entry) => entry.kind === 'content_cover').length,
+    legacy_page: entries.filter((entry) => entry.kind === 'legacy_page').length,
+    html_asset: entries.filter((entry) => entry.kind === 'html_asset').length,
+    html_link: entries.filter((entry) => entry.kind === 'html_link').length,
+  };
 }
 
 function normalizeLegacyTitle(title: string): string {
@@ -283,6 +488,13 @@ function isLegacyContentHtmlPage(sourceUrl: string, config: RuntimeConfig): bool
 
 function isSameLegacyOrigin(sourceUrl: string, config: RuntimeConfig): boolean {
   return new URL(sourceUrl).origin === new URL(config.legacyPublicBaseUrl).origin;
+}
+
+function getAssetOriginKind(
+  sourceUrl: string,
+  config: RuntimeConfig,
+): LegacyAssetManifestEntry['originKind'] {
+  return isSameLegacyOrigin(sourceUrl, config) ? 'legacy_origin' : 'external';
 }
 
 function shouldSkipHtmlReference(value: string): boolean {

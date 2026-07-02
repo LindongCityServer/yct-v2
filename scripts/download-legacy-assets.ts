@@ -34,7 +34,8 @@ if (!manifestResponse.item) {
   throw new Error(manifestResponse.meta.message ?? '旧内容资源清单不可用。');
 }
 
-const downloadEntries = uniqueDownloadEntries(manifestResponse.item.entries);
+const manifest = manifestResponse.item;
+const downloadEntries = uniqueDownloadEntries(manifest.entries);
 const report: DownloadReportItem[] = [];
 
 for (const entry of downloadEntries) {
@@ -47,14 +48,24 @@ for (const entry of downloadEntries) {
   console.log(`${item.sourceUrl} -> ${item.migratedPath} ${statusText}`);
 }
 
+const generatedAt = new Date().toISOString();
+const summary = summarizeReport(report);
 await mkdir(dirname(reportPath), { recursive: true });
 await writeFile(
   reportPath,
   `${JSON.stringify(
     {
-      generatedAt: new Date().toISOString(),
+      generatedAt,
       dataSource,
-      summary: summarizeReport(report),
+      summary,
+      differenceReport: {
+        generatedAt,
+        manifestSummary: manifest.summary,
+        issueSummary: summarizeManifestIssues(manifest.issues),
+        issues: manifest.issues,
+        duplicateResources: manifest.duplicateResources,
+        failedDownloads: report.filter((item) => item.status === 'failed'),
+      },
       items: report,
     },
     null,
@@ -63,7 +74,6 @@ await writeFile(
   'utf8',
 );
 
-const summary = summarizeReport(report);
 console.log(JSON.stringify({ reportPath, ...summary }, null, 2));
 
 if (summary.failed > 0) {
@@ -186,6 +196,15 @@ function summarizeReport(items: DownloadReportItem[]) {
     failed: items.filter((item) => item.status === 'failed').length,
     sizeBytes: items.reduce((total, item) => total + (item.sizeBytes ?? 0), 0),
   };
+}
+
+function summarizeManifestIssues(
+  issues: NonNullable<typeof manifestResponse.item>['issues'],
+): Record<string, number> {
+  return issues.reduce<Record<string, number>>((summary, issue) => {
+    summary[issue.kind] = (summary[issue.kind] ?? 0) + 1;
+    return summary;
+  }, {});
 }
 
 function toLegacyLocalRoot(value: string): string {

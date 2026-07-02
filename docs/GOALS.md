@@ -397,6 +397,7 @@ DESIGN.md
 - 已处理：旧内容封面和内容 Markdown 图片会先检查同站 `/legacy-assets/...` 文件是否真实存在；本地缺失时自动回退旧站 URL，避免下载未完成或临时子路径部署时出现 `feed-item-cover` 破图。下载脚本也会把 `/v2/legacy-assets/...` 正确映射回 `apps/web/public/legacy-assets`，不把临时反代前缀写进落盘目录。
 - 已处理：旧内容 Markdown 的 `原始图片：...` 重写会排除颜色 token，并把真实相对图片路径改写为 `/legacy-assets/...` 或旧站回退 URL；当前真实旧内容 16 条图片行均无相对路径残留，也没有颜色 token 被渲染为图片。
 - 已处理：`/v2` 反代仅作为保留旧站数据时的临时测试前缀；应用路径工具已保持幂等，标题栏图标、favicon、manifest、运营封面和 Markdown 图片会按当前公开前缀输出，后续迁回主路径时清空 `NEXT_PUBLIC_YCT_BASE_PATH` / `YCT_BASE_PATH` 即可。
+- 已处理：旧内容资源清单新增正式差异报告，接口返回外链、非下载候选、本地缺失文件、重复引用和重复资源分组；下载脚本生成的 `.yct-data/legacy-assets-download-report.json` 会同步写入 `differenceReport`，包含清单 issue 统计、重复资源和真实下载失败项。当前真实旧站数据验证为 131 个原始引用、122 个唯一引用、18 个外链、12 组重复资源、本地缺失 0、下载失败 0。
 
 2026-07-02 已推进服务入口管理闭环：
 
