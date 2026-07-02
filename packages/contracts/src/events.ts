@@ -47,6 +47,22 @@ export interface ContentPublishedPayload {
   publishedAt: ISODateTimeString;
 }
 
+export interface ContentAssetImportedPayload {
+  assetId: string;
+  fileName: string;
+  url: string;
+  sourceUrl?: string;
+  sha256?: string;
+  referenceCount: number;
+}
+
+export interface ContentAssetReviewedPayload {
+  assetId: string;
+  decision: ReviewDecision;
+  reviewerId: string;
+  reason?: string;
+}
+
 export interface PoiSubmittedPayload {
   poiId: string;
   revisionId?: string;
@@ -283,6 +299,8 @@ export type YctEventPayloadMap = {
   ContentSubmitted: ContentSubmittedPayload;
   ContentReviewed: ContentReviewedPayload;
   ContentPublished: ContentPublishedPayload;
+  ContentAssetImported: ContentAssetImportedPayload;
+  ContentAssetReviewed: ContentAssetReviewedPayload;
   PoiSubmitted: PoiSubmittedPayload;
   PoiReviewed: PoiReviewedPayload;
   PoiPublished: PoiPublishedPayload;

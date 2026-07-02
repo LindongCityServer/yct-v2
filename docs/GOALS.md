@@ -390,7 +390,7 @@ DESIGN.md
 - 新增 `/admin/operations` 内容后台页面，可创建 Markdown 草稿并执行提交、通过、驳回和发布。
 - 首页、搜索页、运营详情页与 `/api/operations/feed` 已合并读取本地已发布内容和旧站内容；草稿和待审核内容不会进入前台。
 - 运营详情页已接入白名单 Markdown 渲染，支持标题、段落、列表、引用、站内/HTTPS 链接、加粗、行内代码和图片；旧资源迁移后的 `原始图片：/legacy-assets/...` 会作为图片块展示，但新增图片素材仍必须走上传和管理员审核。
-- 素材审核模块接入前，带 `assetIds` 的内容不能发布，避免绕过图片审核边界。
+- 内容素材审核模块接入后，带 `assetIds` 的内容只有在所有素材均为 `approved` 时才能发布，避免绕过图片审核边界。
 - 新增旧内容资源清单：`/api/operations/legacy-assets` 会扫描旧 `content_data.js` 的封面和站内链接，并对 `/content/*.html` 旧专题页继续扫描 `src`、`href`、CSS `url(...)` 引用，输出旧站 URL、未来 `/legacy-assets/...` 路径和下载候选标记；当前只做清单，不下载、不绕过审核。
 - 新增旧资源下载脚本：`pnpm legacy:assets:download` 会下载清单中的下载候选到 `apps/web/public/legacy-assets`，生成 `.yct-data/legacy-assets-download-report.json` 校验报告；下载后旧内容封面优先使用本地 `/legacy-assets/...`，缺失时再回退旧站 URL。
 - 已验证旧资源下载脚本可复跑：资源清单中 91 个下载候选引用按来源和目标路径去重后实际落盘 61 个文件，总大小 72,256,470 字节；二次运行全部为 `unchanged`，失败项为 0。
@@ -399,7 +399,8 @@ DESIGN.md
 - 已处理：`/v2` 反代仅作为保留旧站数据时的临时测试前缀；应用路径工具已保持幂等，标题栏图标、favicon、manifest、运营封面和 Markdown 图片会按当前公开前缀输出，后续迁回主路径时清空 `NEXT_PUBLIC_YCT_BASE_PATH` / `YCT_BASE_PATH` 即可。
 - 已处理：旧内容资源清单新增正式差异报告，接口返回外链、非下载候选、本地缺失文件、重复引用和重复资源分组；下载脚本生成的 `.yct-data/legacy-assets-download-report.json` 会同步写入 `differenceReport`，包含清单 issue 统计、重复资源和真实下载失败项。当前真实旧站数据验证为 131 个原始引用、122 个唯一引用、18 个外链、12 组重复资源、本地缺失 0、下载失败 0。
 - 已处理：`/admin/operations` 内容后台新增旧资源差异报告面板，通过后台专用只读 API 展示引用摘要、issue 分类、重复资源样例和真实下载失败样例；API 会校验 YCT 管理员身份，并通过 `YCT_LEGACY_ASSET_DOWNLOAD_REPORT_PATH` 读取最近一次 `.yct-data/legacy-assets-download-report.json`。
-- 已处理：内容后台新增只读旧内容素材清单，基于旧资源清单和下载报告记录来源 URL、迁移路径、SHA-256、文件类型、文件大小、待审核状态和内容引用关系；当前真实旧站数据为 61 条素材记录、91 个内容引用、12 条被多处内容复用的素材、30 个重复引用已复用，SHA-256 缺失 0，真实哈希重复组 0。下一步仍要把该清单接入正式素材审批、引用回写和回滚流程。
+- 已处理：内容后台新增只读旧内容素材清单，基于旧资源清单和下载报告记录来源 URL、迁移路径、SHA-256、文件类型、文件大小、待审核状态和内容引用关系；当前真实旧站数据为 61 条素材记录、91 个内容引用、12 条被多处内容复用的素材、30 个重复引用已复用，SHA-256 缺失 0，真实哈希重复组 0。
+- 已处理：旧内容素材清单可以导入 `.yct-data/content-asset-store.json`，后台可审核通过或驳回素材，成功后发布 `ContentAssetImported` / `ContentAssetReviewed` 事件；内容发布会读取真实素材状态，带 `assetIds` 的内容在素材全部通过后可以发布。下一步仍要补正式上传入口、数据库素材表、引用回写和回滚流程。
 
 2026-07-02 已推进服务入口管理闭环：
 

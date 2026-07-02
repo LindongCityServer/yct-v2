@@ -1,6 +1,6 @@
 # YCT Event Schema
 
-更新时间：2026-07-02
+更新时间：2026-07-03
 
 本文档记录雨城通 v2 第一阶段的领域事件。后端业务 Service 只负责本模块校验和写库，成功后发布事件；通知、Push、缓存失效、搜索索引、`ldpass` 同步等副作用由监听器处理。
 
@@ -29,6 +29,8 @@ export interface YctDomainEvent<TType extends string, TPayload> {
 | `ContentSubmitted`                    | 内容修订提交审核              | 审核待办、站内通知                                                                                                     |
 | `ContentReviewed`                     | 管理员审核内容                | 通知投稿者、记录审计                                                                                                   |
 | `ContentPublished`                    | 内容版本发布                  | 刷新首页、搜索索引、缓存                                                                                               |
+| `ContentAssetImported`                | 内容素材从旧清单或适配器导入  | 素材审核待办、来源追踪、审计                                                                                           |
+| `ContentAssetReviewed`                | 管理员审核内容素材            | 内容发布校验、通知投稿者、记录审计                                                                                     |
 | `PoiSubmitted`                        | 用户提交公开 POI              | POI 审核待办                                                                                                           |
 | `PoiReviewed`                         | 管理员审核 POI                | 地图数据发布、通知投稿者                                                                                               |
 | `PoiPublished`                        | 已审核 POI 发布为公开标记     | 地图标记缓存刷新、搜索索引、通知投稿者                                                                                 |

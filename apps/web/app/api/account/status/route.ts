@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LdpassIdentityProvider } from '@yct/adapters';
 import { findActiveAdminByLdpassUserId } from '../../../../lib/admin-membership-store';
+import { listContentAssetRecords } from '../../../../lib/content-asset-store';
 import { listContentRecords } from '../../../../lib/content-store';
 import { listPoiSubmissions } from '../../../../lib/poi-submission-store';
 import { readRuntimeConfig } from '../../../../lib/runtime-config';
@@ -23,6 +24,7 @@ interface AccountStatusResponse {
     pendingReviewCount: number;
     pendingReview: {
       contents: number;
+      contentAssets: number;
       services: number;
       transit: number;
       poi: number;
@@ -73,6 +75,7 @@ export async function GET(request: NextRequest) {
       const pendingReview = membership ? await readAdminPendingReviewSummary() : undefined;
       const pendingReviewCount = pendingReview
         ? pendingReview.contents +
+          pendingReview.contentAssets +
           pendingReview.services +
           pendingReview.transit +
           pendingReview.poi
@@ -100,6 +103,7 @@ export async function GET(request: NextRequest) {
               pendingReviewCount,
               pendingReview: pendingReview ?? {
                 contents: 0,
+                contentAssets: 0,
                 services: 0,
                 transit: 0,
                 poi: 0,
@@ -150,12 +154,14 @@ export async function GET(request: NextRequest) {
 
 async function readAdminPendingReviewSummary(): Promise<{
   contents: number;
+  contentAssets: number;
   services: number;
   transit: number;
   poi: number;
 }> {
-  const [contents, services, transit, poi] = await Promise.all([
+  const [contents, contentAssets, services, transit, poi] = await Promise.all([
     listContentRecords(),
+    listContentAssetRecords(),
     listServiceEntries(),
     listTransitDataRevisions(),
     listPoiSubmissions(),
@@ -163,6 +169,8 @@ async function readAdminPendingReviewSummary(): Promise<{
 
   return {
     contents: contents.filter((record) => record.revision.status === 'pending_review').length,
+    contentAssets: contentAssets.filter((record) => record.asset.status === 'pending_review')
+      .length,
     services: services.filter((entry) => entry.status === 'pending_review').length,
     transit: transit.filter((revision) => revision.status === 'pending_review').length,
     poi: poi.filter((submission) => submission.status === 'pending_review').length,

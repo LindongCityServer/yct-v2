@@ -118,6 +118,7 @@
 - 内容后台 `/admin/operations` 已接入旧资源差异报告，只读展示引用总数、下载候选、外链、本地缺失、真实下载失败、issue 分类、重复资源样例和下载失败样例；后台 API 会校验管理员身份，并从 `YCT_LEGACY_ASSET_DOWNLOAD_REPORT_PATH` 指向的路径读取最近一次下载报告，默认读取 `.yct-data/legacy-assets-download-report.json`。
 - 内容后台会基于旧资源清单和下载报告生成只读 `LegacyContentAssetInventory`：每条素材记录保留旧站来源 URL、迁移后公开路径、SHA-256、Content-Type、文件大小、待审核状态、引用的旧内容和引用类型；同一下载项被多个内容复用时只生成一条素材记录。
 - 已迁移资源的去重分两层记录：`sourceUrl + migratedPath` 相同的重复引用直接复用同一素材记录，`summary.reusedAssetCount` 和 `summary.deduplicatedReferenceCount` 记录复用规模；SHA-256 相同但下载项不同的资源进入 `duplicateGroups`，供正式素材入库前二次去重。
+- 内容后台可以把旧内容素材清单导入 `.yct-data/content-asset-store.json`，导入后每条素材进入 `pending_review` 状态；管理员审核通过或驳回时分别发布 `ContentAssetReviewed` 事件。内容发布时会读取真实素材状态，只有全部素材为 `approved` 时才允许带 `assetIds` 的内容发布。
 - 旧内容封面和 `原始图片：...` Markdown 引用在运行时会先检查本地 `/legacy-assets/...` 文件是否存在；存在则使用同站资源，不存在则回退旧站绝对 URL，避免资源下载未完成时出现破图。临时 `/v2` 子路径只用于浏览器公开路径，落盘检查和下载目标仍映射到 `apps/web/public/legacy-assets`。
 - 当前实测资源清单包含 131 个原始引用、122 个唯一引用、91 个下载候选引用、18 个外链引用、31 个非下载项、9 个重复引用和 12 组重复资源；本地缺失文件为 0。按 `sourceUrl + migratedPath` 去重后实际下载并生成 61 条素材记录，复用 30 个重复内容引用，SHA-256 缺失 0，真实哈希重复组 0。首次下载结果为 61 个成功、0 个失败、总大小 72,256,470 字节；二次运行结果为 61 个未变化、0 个失败，证明脚本可以复跑。
 
@@ -131,7 +132,7 @@
 
 仍需要补齐的批量迁移能力：
 
-- 将只读旧内容素材清单接入正式素材上传/审核表，管理员通过后再把内容引用切换到已审核素材。
+- 将本地 `.yct-data/content-asset-store.json` 迁移到正式数据库素材表，并补齐上传入口。
 - 素材替换、归档或删除后的内容引用回写、审计记录和回滚策略。
 
 ## 7. 已验证结果

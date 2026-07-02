@@ -2198,7 +2198,8 @@ body .material-symbols-outlined {
   opacity: 0.46;
 }
 
-.admin-asset-report {
+.admin-asset-report,
+.admin-asset-workflow {
   display: grid;
   gap: var(--yct-space-3);
   padding: var(--yct-space-4);
@@ -2207,6 +2208,7 @@ body .material-symbols-outlined {
 }
 
 .admin-asset-report h2,
+.admin-asset-workflow h2,
 .admin-report-card h3 {
   margin: 0;
 }

@@ -6,6 +6,7 @@ export interface RuntimeConfig {
   ldpassClientId?: string;
   adminStorePath: string;
   contentStorePath: string;
+  contentAssetStorePath: string;
   serviceEntryStorePath: string;
   transitDataStorePath: string;
   transitModeProfileStorePath: string;
@@ -43,6 +44,9 @@ export function readRuntimeConfig(): RuntimeConfig {
       emptyToUndefined(process.env.YCT_ADMIN_STORE_PATH) ?? '.yct-data/admin-memberships.json',
     contentStorePath:
       emptyToUndefined(process.env.YCT_CONTENT_STORE_PATH) ?? '.yct-data/content-store.json',
+    contentAssetStorePath:
+      emptyToUndefined(process.env.YCT_CONTENT_ASSET_STORE_PATH) ??
+      '.yct-data/content-asset-store.json',
     serviceEntryStorePath:
       emptyToUndefined(process.env.YCT_SERVICE_ENTRY_STORE_PATH) ??
       '.yct-data/service-entry-store.json',

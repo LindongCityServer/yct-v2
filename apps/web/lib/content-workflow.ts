@@ -8,6 +8,7 @@ import type {
 } from '@yct/contracts';
 import { canPublishContentRevision, transitionContentRevisionStatus } from '@yct/domain';
 import { InMemoryEventBus } from '@yct/event-bus';
+import { findContentAssetRecordsByIds } from './content-asset-store';
 import {
   createContentRecord,
   findContentRecord,
@@ -128,13 +129,16 @@ export async function publishContentRevision(input: {
     return notFound();
   }
 
-  if (record.revision.assetIds.length > 0) {
-    return invalidTransition('内容包含素材引用；素材审核模块接入前不能发布带素材的内容');
+  const assetRecords = await findContentAssetRecordsByIds(record.revision.assetIds);
+  const foundAssetIds = new Set(assetRecords.map((assetRecord) => assetRecord.asset.id));
+  const missingAssetIds = record.revision.assetIds.filter((assetId) => !foundAssetIds.has(assetId));
+  if (missingAssetIds.length > 0) {
+    return invalidTransition(`内容引用了不存在的素材：${missingAssetIds.join('、')}`);
   }
 
   const publishCheck = canPublishContentRevision({
     revisionStatus: record.revision.status,
-    assetStatuses: [],
+    assetStatuses: assetRecords.map((assetRecord) => assetRecord.asset.status),
     publishMode: input.mode,
     scheduledAt: input.scheduledAt,
   });

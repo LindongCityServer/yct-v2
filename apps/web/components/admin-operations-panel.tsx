@@ -2,6 +2,7 @@
 
 import type {
   ApiItemResponse,
+  ContentAsset,
   LegacyAssetDuplicateResource,
   LegacyAssetManifest,
   LegacyAssetManifestIssue,
@@ -29,6 +30,23 @@ interface AdminContentRecord {
     coverImageUrl?: string;
     expiresAt?: string;
   };
+  updatedAt: string;
+}
+
+interface AdminContentAssetRecord {
+  asset: ContentAsset;
+  sourceKind: 'legacy' | 'upload' | 'external';
+  migratedPath?: string;
+  sha256?: string;
+  references: Array<{
+    entryId: string;
+    referenceKind: string;
+    contentId: string;
+    contentTitle: string;
+    sourcePageUrl?: string;
+  }>;
+  duplicateGroupId?: string;
+  createdAt: string;
   updatedAt: string;
 }
 
@@ -71,6 +89,7 @@ const categories = ['通知公告', '运营信息', '地铁运营', '公交运�
 
 export function AdminOperationsPanel() {
   const [records, setRecords] = useState<AdminContentRecord[]>([]);
+  const [assetRecords, setAssetRecords] = useState<AdminContentAssetRecord[]>([]);
   const [legacyAssetManifest, setLegacyAssetManifest] = useState<LegacyAssetManifest | null>(null);
   const [legacyContentAssets, setLegacyContentAssets] =
     useState<LegacyContentAssetInventory | null>(null);
@@ -78,6 +97,7 @@ export function AdminOperationsPanel() {
     LegacyAssetAdminResponse['downloadReport'] | null
   >(null);
   const [statusText, setStatusText] = useState('正在读取内容记录');
+  const [assetStatusText, setAssetStatusText] = useState('正在读取内容素材');
   const [legacyAssetStatusText, setLegacyAssetStatusText] = useState('正在读取旧资源差异报告');
   const [isBusy, setIsBusy] = useState(false);
   const [title, setTitle] = useState('');
@@ -89,6 +109,23 @@ export function AdminOperationsPanel() {
   const sortedRecords = useMemo(
     () => [...records].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
     [records],
+  );
+  const sortedAssetRecords = useMemo(
+    () =>
+      [...assetRecords].sort((left, right) => {
+        const leftPending = left.asset.status === 'pending_review' ? 0 : 1;
+        const rightPending = right.asset.status === 'pending_review' ? 0 : 1;
+        if (leftPending !== rightPending) {
+          return leftPending - rightPending;
+        }
+
+        return right.updatedAt.localeCompare(left.updatedAt);
+      }),
+    [assetRecords],
+  );
+  const pendingAssetCount = useMemo(
+    () => assetRecords.filter((record) => record.asset.status === 'pending_review').length,
+    [assetRecords],
   );
   const issueSummary = useMemo(
     () =>
@@ -110,6 +147,20 @@ export function AdminOperationsPanel() {
     setRecords(data.items ?? []);
     setStatusText(
       data.items?.length ? `已读取 ${data.items.length} 条内容记录` : '暂无后台内容记录',
+    );
+  };
+
+  const loadContentAssets = async () => {
+    const response = await fetch(appPath('/api/admin/operations/assets'), { cache: 'no-store' });
+    const data = (await response.json()) as { items?: AdminContentAssetRecord[]; message?: string };
+    if (!response.ok) {
+      setAssetStatusText(data.message ?? '内容素材暂不可用');
+      return;
+    }
+
+    setAssetRecords(data.items ?? []);
+    setAssetStatusText(
+      data.items?.length ? `已读取 ${data.items.length} 条素材记录` : '暂无内容素材记录',
     );
   };
 
@@ -136,7 +187,7 @@ export function AdminOperationsPanel() {
   };
 
   useEffect(() => {
-    void Promise.all([loadRecords(), loadLegacyAssetReport()]);
+    void Promise.all([loadRecords(), loadContentAssets(), loadLegacyAssetReport()]);
   }, []);
 
   const createDraft = async () => {
@@ -204,6 +255,60 @@ export function AdminOperationsPanel() {
 
       setStatusText('操作已完成');
       await loadRecords();
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const importLegacyAssets = async () => {
+    setIsBusy(true);
+    try {
+      const response = await fetch(appPath('/api/admin/operations/assets/import-legacy'), {
+        method: 'POST',
+      });
+      const data = (await response.json()) as {
+        message?: string;
+        summary?: { total: number; created: number; refreshed: number; pendingReview: number };
+      };
+      if (!response.ok) {
+        setAssetStatusText(data.message ?? '导入旧素材失败');
+        return;
+      }
+
+      setAssetStatusText(
+        `旧素材已导入：新增 ${data.summary?.created ?? 0} 条，刷新 ${
+          data.summary?.refreshed ?? 0
+        } 条`,
+      );
+      await loadContentAssets();
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const reviewAsset = async (
+    assetId: string,
+    decision: 'approved' | 'rejected',
+    reason?: string,
+  ) => {
+    setIsBusy(true);
+    try {
+      const response = await fetch(
+        appPath(`/api/admin/operations/assets/${encodeURIComponent(assetId)}/review`),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ decision, reason }),
+        },
+      );
+      const data = (await response.json()) as { message?: string };
+      if (!response.ok) {
+        setAssetStatusText(data.message ?? '素材审核失败');
+        return;
+      }
+
+      setAssetStatusText('素材审核已更新');
+      await loadContentAssets();
     } finally {
       setIsBusy(false);
     }
@@ -324,6 +429,71 @@ export function AdminOperationsPanel() {
         ) : (
           <p className="muted">旧资源清单不可用时不会展示迁移差异，需先确认旧站数据源配置。</p>
         )}
+      </section>
+
+      <section className="admin-asset-workflow" aria-labelledby="admin-content-assets-title">
+        <div className="section-heading">
+          <h2 id="admin-content-assets-title">内容素材审核</h2>
+          <span className="muted">{assetStatusText}</span>
+        </div>
+
+        <div className="admin-report-summary" aria-label="内容素材摘要">
+          <ReportMetric label="素材" value={assetRecords.length} />
+          <ReportMetric
+            label="待审核"
+            value={pendingAssetCount}
+            tone={pendingAssetCount > 0 ? 'warning' : 'ok'}
+          />
+          <ReportMetric
+            label="已通过"
+            value={assetRecords.filter((record) => record.asset.status === 'approved').length}
+            tone="ok"
+          />
+          <button
+            className="secondary-action-button"
+            type="button"
+            disabled={isBusy}
+            onClick={importLegacyAssets}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              inventory_2
+            </span>
+            <span>导入旧素材</span>
+          </button>
+        </div>
+
+        <div className="admin-content-list" aria-label="内容素材记录">
+          {sortedAssetRecords.slice(0, 12).map((record) => (
+            <article className="admin-content-item" key={record.asset.id}>
+              <div>
+                <strong>{record.asset.fileName}</strong>
+                <p className="muted">
+                  {statusLabelForAsset(record.asset.status)} · {record.references.length} 个引用
+                  {record.sha256 ? ` · SHA-256 ${record.sha256.slice(0, 12)}` : ''}
+                </p>
+              </div>
+              <div className="admin-content-actions">
+                <button
+                  type="button"
+                  disabled={isBusy || record.asset.status !== 'pending_review'}
+                  onClick={() => reviewAsset(record.asset.id, 'approved')}
+                >
+                  通过
+                </button>
+                <button
+                  type="button"
+                  disabled={isBusy || record.asset.status !== 'pending_review'}
+                  onClick={() => reviewAsset(record.asset.id, 'rejected', '后台退回')}
+                >
+                  驳回
+                </button>
+              </div>
+            </article>
+          ))}
+          {sortedAssetRecords.length === 0 ? (
+            <p className="muted">尚未导入内容素材。旧素材导入后会先进入待审核状态。</p>
+          ) : null}
+        </div>
       </section>
 
       <div className="admin-content-list" aria-label="内容记录">
@@ -503,10 +673,8 @@ function formatDate(value: string | undefined): string {
   return value ? value.slice(0, 10) : '未生成';
 }
 
-function statusLabelForAsset(
-  status: LegacyContentAssetInventory['items'][number]['asset']['status'],
-): string {
-  const labels: Record<LegacyContentAssetInventory['items'][number]['asset']['status'], string> = {
+function statusLabelForAsset(status: ContentAsset['status']): string {
+  const labels: Record<ContentAsset['status'], string> = {
     pending_review: '待审核',
     approved: '已通过',
     rejected: '已驳回',
