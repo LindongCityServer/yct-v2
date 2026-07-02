@@ -395,6 +395,7 @@ DESIGN.md
 - 新增旧资源下载脚本：`pnpm legacy:assets:download` 会下载清单中的下载候选到 `apps/web/public/legacy-assets`，生成 `.yct-data/legacy-assets-download-report.json` 校验报告；下载后旧内容封面优先使用本地 `/legacy-assets/...`，缺失时再回退旧站 URL。
 - 已验证旧资源下载脚本可复跑：资源清单中 91 个下载候选引用按来源和目标路径去重后实际落盘 61 个文件，总大小 72,256,470 字节；二次运行全部为 `unchanged`，失败项为 0。
 - 已处理：旧内容封面和内容 Markdown 图片会先检查同站 `/legacy-assets/...` 文件是否真实存在；本地缺失时自动回退旧站 URL，避免下载未完成或临时子路径部署时出现 `feed-item-cover` 破图。下载脚本也会把 `/v2/legacy-assets/...` 正确映射回 `apps/web/public/legacy-assets`，不把临时反代前缀写进落盘目录。
+- 已处理：旧内容 Markdown 的 `原始图片：...` 重写会排除颜色 token，并把真实相对图片路径改写为 `/legacy-assets/...` 或旧站回退 URL；当前真实旧内容 16 条图片行均无相对路径残留，也没有颜色 token 被渲染为图片。
 
 2026-07-02 已推进服务入口管理闭环：
 

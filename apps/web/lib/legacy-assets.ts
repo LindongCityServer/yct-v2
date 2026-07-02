@@ -15,7 +15,7 @@ export function resolveLegacyAssetReference(input: {
   baseUrl?: string;
 }): LegacyAssetReference | undefined {
   const rawValue = input.value?.trim();
-  if (!rawValue || rawValue.startsWith('#')) {
+  if (!rawValue || isLegacyColorTokenValue(rawValue)) {
     return undefined;
   }
 
@@ -43,7 +43,7 @@ export function rewriteLegacyMarkdownAssets(input: {
   legacyPublicBaseUrl: string;
   migratedPublicPrefix: string;
 }): string {
-  return input.markdown.replace(/(原始图片：)(\\S+)/g, (_match, label: string, value: string) => {
+  return input.markdown.replace(/(原始图片：)(\S+)/g, (_match, label: string, value: string) => {
     const asset = resolveLegacyAssetReference({
       value,
       legacyPublicBaseUrl: input.legacyPublicBaseUrl,
@@ -94,6 +94,14 @@ function joinPublicPath(prefix: string, pathname: string): string {
   const cleanPrefix = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix;
   const cleanPath = pathname.startsWith('/') ? pathname : `/${pathname}`;
   return `${cleanPrefix}${cleanPath}`.replace(/\\/g, '/');
+}
+
+function isLegacyColorTokenValue(value: string): boolean {
+  return (
+    /^#[0-9A-Fa-f]{3,8}$/.test(value) ||
+    /^var\(--[-_a-zA-Z0-9]+\)$/.test(value) ||
+    /^--[-_a-zA-Z0-9]+$/.test(value)
+  );
 }
 
 function normalizeMigratedPublicPath(migratedPath: string): string | undefined {
