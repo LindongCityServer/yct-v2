@@ -39,7 +39,7 @@
 
 客运大屏运行时入口为 `/api/transit/screen`，会合并读取 `ltcx/route.txt`、`ltcx/screen/station.txt`、`ltcx/screen/tickets.txt`、`ltcx/screen/rttime.txt` 和 `ltcx/screen/notice.txt`。其中 `route.txt` 在大屏语境下保留逐班次记录，不使用已聚合的客运线路列表。
 
-统一班次查询 MVP 运行时入口为 `/api/travel/schedules`，当前复用同一批旧 `ltcx` 真实逐班次、站点、检票口、票价和运营方数据，并映射为 `TravelTripInstance`；航班读取 `YCT_FLIGHT_DATA_URL` 的真实文本数据并过滤到 YCT 范围；轮渡在数据源接入前只返回未接入服务摘要，不生成占位班次。查询接口支持 `serviceDate` 或兼容参数 `date`，格式为 `YYYY-MM-DD`；只有数据本身带 `operatingDays` 的班次才会按星期过滤，旧客运逐班次暂缺运行日字段时不做臆测剔除。接口也支持 `originStationName` / `destinationStationName`，兼容 `origin` / `destination` 和 `from` / `to`；当起终点同时存在时，按真实站点序列要求起点不晚于终点，避免把反向不存在的班次展示为可达。
+统一班次查询 MVP 运行时入口为 `/api/travel/schedules`，当前复用同一批旧 `ltcx` 真实逐班次、站点、检票口、票价和运营方数据，并映射为 `TravelTripInstance`；航班读取 `YCT_FLIGHT_DATA_URL` 的真实文本数据并过滤到 YCT 范围；轮渡在数据源接入前只返回未接入服务摘要，不生成占位班次。查询接口支持 `serviceDate` 或兼容参数 `date`，格式为 `YYYY-MM-DD`；只有数据本身带 `operatingDays` 的班次才会按星期过滤，旧客运逐班次暂缺运行日字段时不做臆测剔除。接口也支持 `originStationName` / `destinationStationName`，兼容 `origin` / `destination` 和 `from` / `to`；当起终点同时存在时，按真实站点序列要求起点不晚于终点，避免把反向不存在的班次展示为可达。接口会同时返回旧 `ltcx/stop.txt` 解析出的 `serviceNotices`，前端按当前选择的服务日期展示匹配公告；旧公告目前只有时段和原因，不能自动关联具体班次或改写可售状态。
 
 航班查询数据源当前可通过 `YCT_FLIGHT_DATA_URL` 配置，默认读取 `https://haojin.guanmu233.cn/data/flight_data.txt`。解析器按 `【航班号】〈航线备注〉«运行日»〔执飞机型〕『航空公司』《地点出发/经停/到达》{时间}#+天数#@位置@ ... §票价§《航班结束》` 结构读取，只纳入“临东金桦”起飞、经停、到达的航班，以及航空公司为“临东航空”的航班；其他航班不迁入 YCT 查询结果。当前运行时对外部航班源做短重试以缓解 `ECONNRESET` 等瞬时失败，但长期仍应迁入 YCT 后台数据源或稳定抓取快照。
 
@@ -49,6 +49,7 @@
 
 数据源配置：
 
+- `NEXT_PUBLIC_YCT_BASE_PATH=/v2` / `YCT_BASE_PATH=/v2`：仅用于临时把新站挂到子路径测试；当前生产反代会把 `/v2` 剥离到应用根路径，因此应用只给浏览器侧链接和静态资源补前缀。后续迁回主路径时留空即可。
 - `YCT_LEGACY_DATA_SOURCE=auto`：默认模式；配置了 `YCT_LEGACY_DATA_DIR` 时优先读取本地，否则读取远程旧站。
 - `YCT_LEGACY_DATA_SOURCE=local`：只读取 `YCT_LEGACY_DATA_DIR`。
 - `YCT_LEGACY_DATA_SOURCE=remote`：只读取 `YCT_LEGACY_DATA_REMOTE_BASE_URL`。

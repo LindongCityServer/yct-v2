@@ -3536,6 +3536,14 @@ body .material-symbols-outlined {
   background: var(--yct-color-surface);
 }
 
+.schedule-service-notice-panel {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-4);
+  border-radius: var(--yct-radius-lg);
+  background: color-mix(in srgb, var(--yct-color-coach) 10%, var(--yct-color-surface-panel));
+}
+
 .schedule-history-panel {
   display: grid;
   gap: var(--yct-space-3);

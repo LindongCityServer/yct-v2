@@ -2,6 +2,7 @@
 
 import type {
   TicketableServiceKind,
+  TransitServiceNotice,
   TravelScheduleHistoryItem,
   TravelScheduleQueryResult,
   TravelScheduleServiceSummary,
@@ -70,6 +71,10 @@ export function TravelScheduleQueryPanel({
       stationFilter,
       timeFilter,
     ],
+  );
+  const serviceNotices = useMemo(
+    () => filterServiceNoticesByDate(result.serviceNotices ?? [], serviceDate),
+    [result.serviceNotices, serviceDate],
   );
   const selectedService = result.services.find((service) => service.kind === serviceFilter);
   const serviceByKind = useMemo(
@@ -239,6 +244,8 @@ export function TravelScheduleQueryPanel({
         onClear={clearHistory}
       />
 
+      <ScheduleServiceNoticePanel notices={serviceNotices} serviceDate={serviceDate} />
+
       {result.notice ? (
         <section className="screen-detail-notice" aria-label="班次公告">
           <span className="material-symbols-outlined" aria-hidden="true">
@@ -267,6 +274,45 @@ export function TravelScheduleQueryPanel({
           <p>{emptyMessage}</p>
         </div>
       )}
+    </section>
+  );
+}
+
+function ScheduleServiceNoticePanel({
+  notices,
+  serviceDate,
+}: Readonly<{
+  notices: TransitServiceNotice[];
+  serviceDate: string;
+}>) {
+  if (notices.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="schedule-service-notice-panel" aria-labelledby="schedule-notice-title">
+      <div className="section-heading">
+        <div>
+          <h3 id="schedule-notice-title">客运提醒</h3>
+          <span className="muted">
+            {formatScheduleNoticeDate(serviceDate)} · {notices.length} 条
+          </span>
+        </div>
+      </div>
+      <div className="transit-notice-list">
+        {notices.map((notice) => (
+          <article className="transit-notice-item" key={notice.id}>
+            <span className="material-symbols-outlined" aria-hidden="true">
+              campaign
+            </span>
+            <div>
+              <h3>{notice.title}</h3>
+              <p>{notice.reason}</p>
+              <span className="muted">{formatServiceNoticePeriod(notice)}</span>
+            </div>
+          </article>
+        ))}
+      </div>
     </section>
   );
 }
@@ -514,6 +560,28 @@ function filterTrips(
     .sort(compareTrips);
 }
 
+function filterServiceNoticesByDate(
+  notices: TransitServiceNotice[],
+  serviceDate: string,
+): TransitServiceNotice[] {
+  const normalizedDate = normalizeServiceDate(serviceDate) ?? toDateInputValue(new Date());
+  const dayStart = new Date(`${normalizedDate}T00:00:00+08:00`).getTime();
+  const dayEnd = new Date(`${normalizedDate}T23:59:59.999+08:00`).getTime();
+
+  return notices.filter((notice) => {
+    const startsAt = notice.startsAt ? new Date(notice.startsAt).getTime() : Number.NaN;
+    const endsAt = notice.endsAt ? new Date(notice.endsAt).getTime() : Number.NaN;
+    const hasStart = Number.isFinite(startsAt);
+    const hasEnd = Number.isFinite(endsAt);
+
+    if (!hasStart && !hasEnd) {
+      return true;
+    }
+
+    return (!hasStart || startsAt <= dayEnd) && (!hasEnd || endsAt >= dayStart);
+  });
+}
+
 function filterByTime(
   trip: Pick<TravelTripInstance, 'departureTime'>,
   timeFilter: TravelScheduleTimeScope,
@@ -617,6 +685,30 @@ function toDateInputValue(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function formatScheduleNoticeDate(serviceDate: string): string {
+  const normalizedDate = normalizeServiceDate(serviceDate) ?? toDateInputValue(new Date());
+  return new Intl.DateTimeFormat('zh-CN', {
+    dateStyle: 'medium',
+    timeZone: 'Asia/Shanghai',
+  }).format(new Date(`${normalizedDate}T00:00:00+08:00`));
+}
+
+function formatServiceNoticePeriod(notice: TransitServiceNotice): string {
+  if (notice.startsAt && notice.endsAt) {
+    return `${formatDateTime(notice.startsAt)} 至 ${formatDateTime(notice.endsAt)}`;
+  }
+
+  return notice.periodText;
+}
+
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat('zh-CN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Asia/Shanghai',
+  }).format(new Date(value));
 }
 
 function compareTrips(left: TravelTripInstance, right: TravelTripInstance): number {

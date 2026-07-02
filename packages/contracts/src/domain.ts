@@ -448,6 +448,7 @@ export interface TravelScheduleQuery {
 export interface TravelScheduleQueryResult {
   services: TravelScheduleServiceSummary[];
   trips: TravelTripInstance[];
+  serviceNotices?: TransitServiceNotice[];
   stationOptions: string[];
   sourceFiles: string[];
   serviceDate?: string;

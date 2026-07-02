@@ -1,6 +1,7 @@
 import type {
   ApiItemResponse,
   TicketableServiceKind,
+  TransitServiceNotice,
   TransitScreenGate,
   TransitScreenSnapshot,
   TransitScreenTrip,
@@ -14,6 +15,7 @@ import type {
 import { createApiMeta } from './api-meta';
 import { readRuntimeConfig } from './runtime-config';
 import { readTransitScreenSnapshot } from './transit-screen';
+import { readTransitServiceNotices } from './transit-service-notices';
 import { readTravelServiceProfiles } from './travel-service-profile-store';
 
 const targetFlightAirport = '临东金桦';
@@ -37,9 +39,10 @@ interface FlightSegment {
 export async function readTravelScheduleQuery(
   query: TravelScheduleQuery = {},
 ): Promise<ApiItemResponse<TravelScheduleQueryResult>> {
-  const [profiles, screen] = await Promise.all([
+  const [profiles, screen, serviceNotices] = await Promise.all([
     readTravelServiceProfiles(),
     readTransitScreenSnapshot(),
+    readTransitServiceNotices(),
   ]);
   const flight = await readFlightTrips(profiles);
   const coachTrips =
@@ -54,7 +57,16 @@ export async function readTravelScheduleQuery(
   );
   const serviceDate = normalizeServiceDate(query.serviceDate);
   const filteredTrips = filterTrips(trips, { ...query, serviceDate });
-  const sourceMessages = [screen.meta.message, flight.meta.message].filter(Boolean);
+  const sourceMessages = [
+    screen.meta.message,
+    flight.meta.message,
+    serviceNotices.meta.message,
+  ].filter(Boolean);
+  const sourceFiles = buildScheduleSourceFiles({
+    coachSnapshot: screen.item,
+    flight,
+    serviceNotices: serviceNotices.items,
+  });
 
   if (trips.length === 0) {
     return {
@@ -74,8 +86,9 @@ export async function readTravelScheduleQuery(
           profiles,
         }),
         trips: [],
+        serviceNotices: serviceNotices.items,
         stationOptions: [],
-        sourceFiles: [...(screen.item?.sourceFiles ?? []), ...flight.sourceFiles],
+        sourceFiles,
         serviceDate,
       },
     };
@@ -93,12 +106,25 @@ export async function readTravelScheduleQuery(
         profiles,
       }),
       trips: filteredTrips,
+      serviceNotices: serviceNotices.items,
       stationOptions: uniqueSorted(trips.flatMap((trip) => trip.stationNames)),
-      sourceFiles: [...(screen.item?.sourceFiles ?? []), ...flight.sourceFiles],
+      sourceFiles,
       serviceDate,
       notice: screen.item?.notice,
     },
   };
+}
+
+function buildScheduleSourceFiles(input: {
+  coachSnapshot?: TransitScreenSnapshot;
+  flight: TravelScheduleSourceResult;
+  serviceNotices: TransitServiceNotice[];
+}): string[] {
+  return uniqueSorted([
+    ...(input.coachSnapshot?.sourceFiles ?? []),
+    ...input.flight.sourceFiles,
+    ...input.serviceNotices.map((notice) => notice.sourcePath).filter(isDefinedString),
+  ]);
 }
 
 function buildServiceSummaries(input: {
@@ -705,6 +731,10 @@ function uniqueSorted(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean))).sort((left, right) =>
     left.localeCompare(right, 'zh-CN', { numeric: true }),
   );
+}
+
+function isDefinedString(value: string | undefined): value is string {
+  return Boolean(value);
 }
 
 function delay(milliseconds: number): Promise<void> {
