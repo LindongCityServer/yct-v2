@@ -1,3 +1,7 @@
+import { existsSync } from 'node:fs';
+import { resolve, sep } from 'node:path';
+import { appBasePath } from './app-paths';
+
 export interface LegacyAssetReference {
   originalValue: string;
   sourceUrl: string;
@@ -46,8 +50,40 @@ export function rewriteLegacyMarkdownAssets(input: {
       migratedPublicPrefix: input.migratedPublicPrefix,
     });
 
-    return asset ? `${label}${asset.migratedPath}` : `${label}${value}`;
+    const displayUrl = resolveLegacyAssetDisplayUrl(asset);
+    return displayUrl ? `${label}${displayUrl}` : `${label}${value}`;
   });
+}
+
+export function resolveLegacyAssetDisplayUrl(
+  asset: LegacyAssetReference | undefined,
+): string | undefined {
+  if (!asset) {
+    return undefined;
+  }
+
+  return legacyMigratedAssetExists(asset.migratedPath) ? asset.migratedPath : asset.sourceUrl;
+}
+
+export function legacyMigratedAssetExists(migratedPath: string): boolean {
+  const filePath = legacyPublicFilePathFromMigratedPath(migratedPath);
+  return filePath ? existsSync(filePath) : false;
+}
+
+export function legacyPublicFilePathFromMigratedPath(migratedPath: string): string | undefined {
+  const publicPath = normalizeMigratedPublicPath(migratedPath);
+  if (!publicPath) {
+    return undefined;
+  }
+
+  const publicRoot = resolveWebPublicRoot();
+  const relativePath = safeDecodeURIComponent(publicPath.replace(/^\/+/, ''));
+  const filePath = resolve(publicRoot, relativePath);
+  if (!filePath.startsWith(`${publicRoot}${sep}`)) {
+    return undefined;
+  }
+
+  return filePath;
 }
 
 function ensureTrailingSlash(value: string): string {
@@ -58,4 +94,45 @@ function joinPublicPath(prefix: string, pathname: string): string {
   const cleanPrefix = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix;
   const cleanPath = pathname.startsWith('/') ? pathname : `/${pathname}`;
   return `${cleanPrefix}${cleanPath}`.replace(/\\/g, '/');
+}
+
+function normalizeMigratedPublicPath(migratedPath: string): string | undefined {
+  const trimmed = migratedPath.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  let pathname: string;
+  try {
+    pathname = new URL(trimmed, 'https://yct.local').pathname;
+  } catch {
+    return undefined;
+  }
+
+  if (appBasePath && (pathname === appBasePath || pathname.startsWith(`${appBasePath}/`))) {
+    pathname = pathname.slice(appBasePath.length) || '/';
+  }
+
+  if (!pathname.startsWith('/legacy-assets/')) {
+    return undefined;
+  }
+
+  return pathname;
+}
+
+function resolveWebPublicRoot(): string {
+  const cwdPublicRoot = resolve(process.cwd(), 'public');
+  if (existsSync(cwdPublicRoot)) {
+    return cwdPublicRoot;
+  }
+
+  return resolve(process.cwd(), 'apps', 'web', 'public');
+}
+
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }

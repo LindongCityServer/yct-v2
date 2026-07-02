@@ -110,6 +110,7 @@
 - 在内容详情中保留旧图片来源和原始链接信息。
 - 通过 `/api/operations/legacy-assets` 生成旧内容资源清单：扫描 `content_data.js` 中的封面图和站内链接，对 `/content/*.html` 旧专题页继续扫描 `src`、`href` 与 CSS `url(...)` 引用，输出旧站 URL、未来迁移路径和是否为下载候选。
 - 通过 `pnpm legacy:assets:download` 下载清单中的下载候选到 `apps/web/public/legacy-assets`，并写入 `.yct-data/legacy-assets-download-report.json`，记录大小、SHA-256、Content-Type 和失败项。该命令可重复运行，远端内容未变化时不会重写文件。
+- 旧内容封面和 `原始图片：...` Markdown 引用在运行时会先检查本地 `/legacy-assets/...` 文件是否存在；存在则使用同站资源，不存在则回退旧站绝对 URL，避免资源下载未完成时出现破图。临时 `/v2` 子路径只用于浏览器公开路径，落盘检查和下载目标仍映射到 `apps/web/public/legacy-assets`。
 - 当前实测资源清单包含 91 个下载候选引用；按 `sourceUrl + migratedPath` 去重后实际下载 61 个文件。首次下载结果为 61 个成功、0 个失败、总大小 72,256,470 字节；二次运行结果为 61 个未变化、0 个失败，证明脚本可以复跑。
 
 旧内容图片字段需要兼容的特殊情况：

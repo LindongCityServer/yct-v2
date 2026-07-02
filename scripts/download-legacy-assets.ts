@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve, sep } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import type { LegacyAssetManifestEntry } from '@yct/contracts';
+import { legacyPublicFilePathFromMigratedPath } from '../apps/web/lib/legacy-assets';
 import { readLegacyAssetManifest } from '../apps/web/lib/legacy-asset-manifest';
 
 interface DownloadReportItem {
@@ -26,7 +27,6 @@ const isRemoteSource = /^https?:\/\//i.test(dataSource);
 configureRuntimeLegacySource(dataSource, isRemoteSource);
 
 const projectRoot = process.cwd();
-const publicRoot = resolve(projectRoot, 'apps', 'web', 'public');
 const reportPath = resolve(projectRoot, '.yct-data', 'legacy-assets-download-report.json');
 
 const manifestResponse = await readLegacyAssetManifest();
@@ -157,9 +157,8 @@ async function downloadEntry(entry: LegacyAssetManifestEntry): Promise<DownloadR
 }
 
 function targetPathFromMigratedPath(migratedPath: string): string {
-  const relativePath = safeDecodeURIComponent(migratedPath.replace(/^\/+/, ''));
-  const filePath = resolve(publicRoot, relativePath);
-  if (!filePath.startsWith(`${publicRoot}${sep}`)) {
+  const filePath = legacyPublicFilePathFromMigratedPath(migratedPath);
+  if (!filePath) {
     throw new Error(`资源目标路径越界：${migratedPath}`);
   }
 
@@ -187,14 +186,6 @@ function summarizeReport(items: DownloadReportItem[]) {
     failed: items.filter((item) => item.status === 'failed').length,
     sizeBytes: items.reduce((total, item) => total + (item.sizeBytes ?? 0), 0),
   };
-}
-
-function safeDecodeURIComponent(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
 }
 
 function toLegacyLocalRoot(value: string): string {

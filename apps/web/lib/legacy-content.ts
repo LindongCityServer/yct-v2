@@ -7,7 +7,11 @@ import type {
 import type { LegacyContentImportItemInput } from '@yct/schemas';
 import { parseLegacyContentSource } from '@yct/legacy-import';
 import { createApiMeta } from './api-meta';
-import { resolveLegacyAssetReference, rewriteLegacyMarkdownAssets } from './legacy-assets';
+import {
+  resolveLegacyAssetDisplayUrl,
+  resolveLegacyAssetReference,
+  rewriteLegacyMarkdownAssets,
+} from './legacy-assets';
 import {
   isLegacyDataSourceConfigured,
   LegacyDataSourceNotConfiguredError,
@@ -110,7 +114,7 @@ function mapLegacyContentItem(
     showInBanner: Boolean(item.showInBanner),
     tags: inferTags([normalizedTitle, item.summary, item.categoryId].filter(Boolean).join(' ')),
     coverColor,
-    coverImageUrl: coverImageUrl ?? legacyImageAsset?.migratedPath ?? legacyImageAsset?.sourceUrl,
+    coverImageUrl: coverImageUrl ?? resolveLegacyAssetDisplayUrl(legacyImageAsset),
     legacyImagePath: coverColor || coverImageUrl ? undefined : item.image,
     migratedImagePath: legacyImageAsset?.migratedPath,
     legacyImageSourceUrl: legacyImageAsset?.sourceUrl,
