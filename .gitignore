@@ -5,6 +5,7 @@ node_modules/
 dist/
 coverage/
 .yct-data/
+apps/web/public/content-assets/
 *.tsbuildinfo
 packages/schemas/src/*.js
 *.log

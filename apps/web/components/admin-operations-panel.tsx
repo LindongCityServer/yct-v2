@@ -9,7 +9,7 @@ import type {
   LegacyAssetManifestIssueKind,
   LegacyContentAssetInventory,
 } from '@yct/contracts';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 
 interface AdminContentRecord {
@@ -104,7 +104,13 @@ export function AdminOperationsPanel() {
   const [categoryId, setCategoryId] = useState(categories[0] ?? '运营信息');
   const [excerpt, setExcerpt] = useState('');
   const [markdown, setMarkdown] = useState('');
+  const [assetIdsText, setAssetIdsText] = useState('');
   const [showInBanner, setShowInBanner] = useState(false);
+  const [selectedAssetFile, setSelectedAssetFile] = useState<File | null>(null);
+  const [recentUploadedAsset, setRecentUploadedAsset] = useState<AdminContentAssetRecord | null>(
+    null,
+  );
+  const assetFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const sortedRecords = useMemo(
     () => [...records].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
@@ -202,7 +208,7 @@ export function AdminOperationsPanel() {
           excerpt: excerpt || undefined,
           markdown,
           showInBanner,
-          assetIds: [],
+          assetIds: parseAssetIds(assetIdsText),
         }),
       });
       const data = (await response.json()) as { message?: string };
@@ -214,6 +220,7 @@ export function AdminOperationsPanel() {
       setTitle('');
       setExcerpt('');
       setMarkdown('');
+      setAssetIdsText('');
       setShowInBanner(false);
       setStatusText('草稿已创建');
       await loadRecords();
@@ -286,6 +293,43 @@ export function AdminOperationsPanel() {
     }
   };
 
+  const uploadAsset = async () => {
+    if (!selectedAssetFile) {
+      setAssetStatusText('请先选择素材文件');
+      return;
+    }
+
+    setIsBusy(true);
+    try {
+      const body = new FormData();
+      body.set('asset', selectedAssetFile);
+      const response = await fetch(appPath('/api/admin/operations/assets/upload'), {
+        method: 'POST',
+        body,
+      });
+      const data = (await response.json()) as {
+        message?: string;
+        record?: AdminContentAssetRecord;
+        reused?: boolean;
+      };
+      if (!response.ok || !data.record) {
+        setAssetStatusText(data.message ?? '上传素材失败');
+        return;
+      }
+
+      setRecentUploadedAsset(data.record);
+      setAssetIdsText((current) => mergeAssetIdText(current, data.record!.asset.id));
+      setSelectedAssetFile(null);
+      if (assetFileInputRef.current) {
+        assetFileInputRef.current.value = '';
+      }
+      setAssetStatusText(data.reused ? '素材已存在，已复用记录' : '素材已上传，等待审核');
+      await loadContentAssets();
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const reviewAsset = async (
     assetId: string,
     decision: 'approved' | 'rejected',
@@ -346,6 +390,13 @@ export function AdminOperationsPanel() {
         <label className="admin-editor-markdown">
           <span>Markdown 正文</span>
           <textarea value={markdown} onChange={(event) => setMarkdown(event.currentTarget.value)} />
+        </label>
+        <label>
+          <span>素材 ID</span>
+          <input
+            value={assetIdsText}
+            onChange={(event) => setAssetIdsText(event.currentTarget.value)}
+          />
         </label>
         <label className="checkbox-row">
           <input
@@ -460,6 +511,34 @@ export function AdminOperationsPanel() {
             </span>
             <span>导入旧素材</span>
           </button>
+        </div>
+
+        <div className="admin-asset-upload-row">
+          <label>
+            <span>上传素材</span>
+            <input
+              ref={assetFileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,image/avif,application/pdf,text/plain,text/markdown,.md"
+              onChange={(event) => setSelectedAssetFile(event.currentTarget.files?.[0] ?? null)}
+            />
+          </label>
+          <button
+            className="secondary-action-button"
+            type="button"
+            disabled={isBusy || !selectedAssetFile}
+            onClick={uploadAsset}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              upload
+            </span>
+            <span>上传</span>
+          </button>
+          {recentUploadedAsset ? (
+            <p className="muted">
+              {recentUploadedAsset.asset.id} · {markdownImageSnippet(recentUploadedAsset.asset)}
+            </p>
+          ) : null}
         </div>
 
         <div className="admin-content-list" aria-label="内容素材记录">
@@ -694,6 +773,29 @@ function formatBytes(value: number): string {
   }
 
   return `${value} B`;
+}
+
+function parseAssetIds(value: string): string[] {
+  return Array.from(
+    new Set(
+      value
+        .split(/[\s,，]+/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function mergeAssetIdText(current: string, assetId: string): string {
+  return Array.from(new Set([...parseAssetIds(current), assetId])).join('\n');
+}
+
+function markdownImageSnippet(asset: ContentAsset): string {
+  if (asset.kind !== 'image') {
+    return asset.url;
+  }
+
+  return `![${asset.fileName}](${appPath(asset.url)})`;
 }
 
 function statusLabel(status: AdminContentRecord['revision']['status']): string {

@@ -58,6 +58,7 @@
 - `YCT_LEGACY_DATA_REMOTE_BASE_URL=https://yct.shangxiaoguan.top/data`：默认远程旧站 data 基准。
 - `YCT_FLIGHT_DATA_URL=https://haojin.guanmu233.cn/data/flight_data.txt`：默认航班文本数据源；迁移到 YCT 后台或其他服务器时可替换为新的同格式 URL。
 - `YCT_TRAVEL_SERVICE_PROFILE_STORE_PATH=.yct-data/travel-service-profile-store.json`：统一班次/票务服务 Profile 本地仓储路径，维护客运大巴、轮渡、航班等可排班服务的名称、颜色、图标、排序和启用状态。
+- `YCT_CONTENT_ASSET_UPLOAD_DIR=apps/web/public/content-assets`：内容后台上传素材的本地落盘目录；该目录属于运行时文件，不进入 Git，后续可替换为对象存储或共享资产目录。
 - `YCT_LEGACY_ASSET_DOWNLOAD_REPORT_PATH=.yct-data/legacy-assets-download-report.json`：旧内容资源下载报告路径，供内容后台展示最近一次真实下载失败项；如果服务进程运行目录与下载脚本运行目录不同，需要显式配置到同一个报告文件。
 
 只有在强制 `local` 但没有配置本地目录时，接口返回 `not_configured`。其他读取失败返回 `unavailable`。前台不得使用模拟内容或模拟线路数据。
@@ -119,6 +120,7 @@
 - 内容后台会基于旧资源清单和下载报告生成只读 `LegacyContentAssetInventory`：每条素材记录保留旧站来源 URL、迁移后公开路径、SHA-256、Content-Type、文件大小、待审核状态、引用的旧内容和引用类型；同一下载项被多个内容复用时只生成一条素材记录。
 - 已迁移资源的去重分两层记录：`sourceUrl + migratedPath` 相同的重复引用直接复用同一素材记录，`summary.reusedAssetCount` 和 `summary.deduplicatedReferenceCount` 记录复用规模；SHA-256 相同但下载项不同的资源进入 `duplicateGroups`，供正式素材入库前二次去重。
 - 内容后台可以把旧内容素材清单导入 `.yct-data/content-asset-store.json`，导入后每条素材进入 `pending_review` 状态；管理员审核通过或驳回时分别发布 `ContentAssetReviewed` 事件。内容发布时会读取真实素材状态，只有全部素材为 `approved` 时才允许带 `assetIds` 的内容发布。
+- 内容后台可以上传新内容素材到 `apps/web/public/content-assets`，文件名按 SHA-256 稳定生成，业务记录仍进入 `.yct-data/content-asset-store.json` 的 `pending_review` 状态；同 SHA-256 文件重复上传会复用已有素材记录，不额外生成重复素材。运行时上传目录可通过 `YCT_CONTENT_ASSET_UPLOAD_DIR` 调整，该目录默认不进入 Git。
 - 旧内容封面和 `原始图片：...` Markdown 引用在运行时会先检查本地 `/legacy-assets/...` 文件是否存在；存在则使用同站资源，不存在则回退旧站绝对 URL，避免资源下载未完成时出现破图。临时 `/v2` 子路径只用于浏览器公开路径，落盘检查和下载目标仍映射到 `apps/web/public/legacy-assets`。
 - 当前实测资源清单包含 131 个原始引用、122 个唯一引用、91 个下载候选引用、18 个外链引用、31 个非下载项、9 个重复引用和 12 组重复资源；本地缺失文件为 0。按 `sourceUrl + migratedPath` 去重后实际下载并生成 61 条素材记录，复用 30 个重复内容引用，SHA-256 缺失 0，真实哈希重复组 0。首次下载结果为 61 个成功、0 个失败、总大小 72,256,470 字节；二次运行结果为 61 个未变化、0 个失败，证明脚本可以复跑。
 
@@ -132,7 +134,7 @@
 
 仍需要补齐的批量迁移能力：
 
-- 将本地 `.yct-data/content-asset-store.json` 迁移到正式数据库素材表，并补齐上传入口。
+- 将本地 `.yct-data/content-asset-store.json` 迁移到正式数据库素材表，并把 `apps/web/public/content-assets` 迁移到正式对象存储或服务器共享资产目录。
 - 素材替换、归档或删除后的内容引用回写、审计记录和回滚策略。
 
 ## 7. 已验证结果

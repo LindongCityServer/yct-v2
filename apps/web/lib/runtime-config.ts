@@ -7,6 +7,7 @@ export interface RuntimeConfig {
   adminStorePath: string;
   contentStorePath: string;
   contentAssetStorePath: string;
+  contentAssetUploadDir: string;
   serviceEntryStorePath: string;
   transitDataStorePath: string;
   transitModeProfileStorePath: string;
@@ -47,6 +48,9 @@ export function readRuntimeConfig(): RuntimeConfig {
     contentAssetStorePath:
       emptyToUndefined(process.env.YCT_CONTENT_ASSET_STORE_PATH) ??
       '.yct-data/content-asset-store.json',
+    contentAssetUploadDir:
+      emptyToUndefined(process.env.YCT_CONTENT_ASSET_UPLOAD_DIR) ??
+      'apps/web/public/content-assets',
     serviceEntryStorePath:
       emptyToUndefined(process.env.YCT_SERVICE_ENTRY_STORE_PATH) ??
       '.yct-data/service-entry-store.json',

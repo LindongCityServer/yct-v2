@@ -2233,6 +2233,35 @@ body .material-symbols-outlined {
   font-size: 13px;
 }
 
+.admin-asset-upload-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--yct-space-3);
+  align-items: end;
+}
+
+.admin-asset-upload-row label {
+  display: grid;
+  gap: var(--yct-space-1);
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+}
+
+.admin-asset-upload-row input[type='file'] {
+  min-height: 38px;
+  padding: var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+}
+
+.admin-asset-upload-row p {
+  grid-column: 1 / -1;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .admin-report-metric strong {
   color: var(--yct-color-text);
   font-size: 24px;

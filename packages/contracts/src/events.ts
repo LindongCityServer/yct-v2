@@ -56,6 +56,15 @@ export interface ContentAssetImportedPayload {
   referenceCount: number;
 }
 
+export interface ContentAssetUploadedPayload {
+  assetId: string;
+  fileName: string;
+  url: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+}
+
 export interface ContentAssetReviewedPayload {
   assetId: string;
   decision: ReviewDecision;
@@ -300,6 +309,7 @@ export type YctEventPayloadMap = {
   ContentReviewed: ContentReviewedPayload;
   ContentPublished: ContentPublishedPayload;
   ContentAssetImported: ContentAssetImportedPayload;
+  ContentAssetUploaded: ContentAssetUploadedPayload;
   ContentAssetReviewed: ContentAssetReviewedPayload;
   PoiSubmitted: PoiSubmittedPayload;
   PoiReviewed: PoiReviewedPayload;

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type {
   ContentAsset,
+  ContentAssetKind,
   ContentAssetStatus,
   YctEvent,
   YctEventPayloadMap,
@@ -16,9 +17,23 @@ import {
   writeContentAssetRecords,
   type StoredContentAssetRecord,
 } from './content-asset-store';
+import { storeUploadedContentAssetFile } from './content-asset-file-store';
 import { readLegacyContentAssetInventory } from './legacy-content-asset-inventory';
 
 const contentAssetEventBus = new InMemoryEventBus();
+
+const uploadedMimeTypeByExtension: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.avif': 'image/avif',
+  '.pdf': 'application/pdf',
+  '.txt': 'text/plain',
+  '.md': 'text/markdown',
+};
 
 export interface ContentAssetActionResult {
   ok: boolean;
@@ -33,6 +48,7 @@ export interface ContentAssetActionResult {
     refreshed: number;
     pendingReview: number;
   };
+  reused?: boolean;
 }
 
 export async function listAdminContentAssetRecords(): Promise<StoredContentAssetRecord[]> {
@@ -123,6 +139,72 @@ export async function importLegacyContentAssets(input: {
   };
 }
 
+export async function uploadContentAsset(input: {
+  actorId: string;
+  fileName: string;
+  mimeType: string;
+  bytes: Uint8Array;
+}): Promise<ContentAssetActionResult> {
+  const validation = validateUploadedAsset(input);
+  if (!validation.ok) {
+    return validation;
+  }
+
+  const mimeType = normalizeUploadedMimeType(input.fileName, input.mimeType);
+  const storedFile = await storeUploadedContentAssetFile({
+    ...input,
+    mimeType,
+  });
+  const existing = (await listContentAssetRecords()).find(
+    (record) => record.sha256 === storedFile.sha256,
+  );
+  if (existing) {
+    return {
+      ok: true,
+      record: existing,
+      reused: true,
+    };
+  }
+
+  const now = new Date().toISOString();
+  const asset: ContentAsset = {
+    id: `content_asset_${storedFile.sha256.slice(0, 24)}`,
+    kind: inferUploadedAssetKind(mimeType),
+    fileName: input.fileName,
+    mimeType,
+    sizeBytes: storedFile.sizeBytes,
+    url: storedFile.publicPath,
+    status: 'pending_review',
+    uploadedBy: input.actorId,
+    uploadedAt: now,
+  };
+  const records = await listContentAssetRecords();
+  const record: StoredContentAssetRecord = {
+    asset,
+    sourceKind: 'upload',
+    migratedPath: storedFile.publicPath,
+    sha256: storedFile.sha256,
+    references: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await writeContentAssetRecords([...records, record]);
+  await emitEvent('ContentAssetUploaded', input.actorId, {
+    assetId: asset.id,
+    fileName: asset.fileName,
+    url: asset.url,
+    mimeType: asset.mimeType,
+    sizeBytes: asset.sizeBytes,
+    sha256: storedFile.sha256,
+  });
+
+  return {
+    ok: true,
+    record,
+  };
+}
+
 export async function reviewContentAsset(input: {
   assetId: string;
   actorId: string;
@@ -161,6 +243,68 @@ export async function reviewContentAsset(input: {
   return { ok: true, record: updated };
 }
 
+function validateUploadedAsset(input: {
+  fileName: string;
+  mimeType: string;
+  bytes: Uint8Array;
+}): ContentAssetActionResult {
+  const mimeType = normalizeUploadedMimeType(input.fileName, input.mimeType);
+  if (!input.fileName.trim()) {
+    return invalidUpload('文件名不能为空。');
+  }
+
+  if (input.fileName.trim().length > 200) {
+    return invalidUpload('文件名不能超过 200 个字符。');
+  }
+
+  if (!mimeType) {
+    return invalidUpload('无法识别上传文件类型。');
+  }
+
+  if (!isAllowedUploadedMimeType(mimeType)) {
+    return invalidUpload('当前只允许上传常见图片、PDF、TXT 或 Markdown 附件。');
+  }
+
+  if (input.bytes.byteLength === 0) {
+    return invalidUpload('上传文件不能为空。');
+  }
+
+  if (input.bytes.byteLength > 20 * 1024 * 1024) {
+    return invalidUpload('上传文件不能超过 20MB。');
+  }
+
+  return { ok: true };
+}
+
+function isAllowedUploadedMimeType(mimeType: string): boolean {
+  return [
+    'image/png',
+    'image/jpeg',
+    'image/gif',
+    'image/webp',
+    'image/svg+xml',
+    'image/avif',
+    'application/pdf',
+    'text/plain',
+    'text/markdown',
+  ].includes(mimeType);
+}
+
+function inferUploadedAssetKind(mimeType: string): ContentAssetKind {
+  return mimeType.startsWith('image/') ? 'image' : 'attachment';
+}
+
+function normalizeUploadedMimeType(fileName: string, mimeType: string): string {
+  const trimmed = mimeType.trim().toLowerCase();
+  if (trimmed) {
+    return trimmed;
+  }
+
+  const extensionStart = fileName.lastIndexOf('.');
+  const extension = extensionStart >= 0 ? fileName.slice(extensionStart).toLowerCase() : '';
+  return uploadedMimeTypeByExtension[extension] ?? '';
+}
+
 function refreshAssetSnapshot(existing: ContentAsset, incoming: ContentAsset): ContentAsset {
   return {
     ...incoming,
@@ -170,6 +314,15 @@ function refreshAssetSnapshot(existing: ContentAsset, incoming: ContentAsset): C
     reviewedBy: existing.reviewedBy,
     reviewedAt: existing.reviewedAt,
     reviewReason: existing.reviewReason,
+  };
+}
+
+function invalidUpload(message: string): ContentAssetActionResult {
+  return {
+    ok: false,
+    status: 400,
+    error: 'invalid_content_asset_upload',
+    message,
   };
 }
 

@@ -400,7 +400,8 @@ DESIGN.md
 - 已处理：旧内容资源清单新增正式差异报告，接口返回外链、非下载候选、本地缺失文件、重复引用和重复资源分组；下载脚本生成的 `.yct-data/legacy-assets-download-report.json` 会同步写入 `differenceReport`，包含清单 issue 统计、重复资源和真实下载失败项。当前真实旧站数据验证为 131 个原始引用、122 个唯一引用、18 个外链、12 组重复资源、本地缺失 0、下载失败 0。
 - 已处理：`/admin/operations` 内容后台新增旧资源差异报告面板，通过后台专用只读 API 展示引用摘要、issue 分类、重复资源样例和真实下载失败样例；API 会校验 YCT 管理员身份，并通过 `YCT_LEGACY_ASSET_DOWNLOAD_REPORT_PATH` 读取最近一次 `.yct-data/legacy-assets-download-report.json`。
 - 已处理：内容后台新增只读旧内容素材清单，基于旧资源清单和下载报告记录来源 URL、迁移路径、SHA-256、文件类型、文件大小、待审核状态和内容引用关系；当前真实旧站数据为 61 条素材记录、91 个内容引用、12 条被多处内容复用的素材、30 个重复引用已复用，SHA-256 缺失 0，真实哈希重复组 0。
-- 已处理：旧内容素材清单可以导入 `.yct-data/content-asset-store.json`，后台可审核通过或驳回素材，成功后发布 `ContentAssetImported` / `ContentAssetReviewed` 事件；内容发布会读取真实素材状态，带 `assetIds` 的内容在素材全部通过后可以发布。下一步仍要补正式上传入口、数据库素材表、引用回写和回滚流程。
+- 已处理：旧内容素材清单可以导入 `.yct-data/content-asset-store.json`，后台可审核通过或驳回素材，成功后发布 `ContentAssetImported` / `ContentAssetReviewed` 事件；内容发布会读取真实素材状态，带 `assetIds` 的内容在素材全部通过后可以发布。
+- 已处理：内容后台新增本地素材上传入口，文件落盘到 `apps/web/public/content-assets`，记录进入 `.yct-data/content-asset-store.json` 并等待审核；同 SHA-256 上传会复用已有素材记录，成功上传发布 `ContentAssetUploaded` 事件。下一步仍要补数据库素材表、对象存储/共享资产目录、引用回写和回滚流程。
 
 2026-07-02 已推进服务入口管理闭环：
 
