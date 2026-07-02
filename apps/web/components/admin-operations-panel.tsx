@@ -3,6 +3,7 @@
 import type {
   ApiItemResponse,
   ContentAsset,
+  LegacyHtmlContentMigrationPreview,
   LegacyAssetDuplicateResource,
   LegacyAssetManifest,
   LegacyAssetManifestIssue,
@@ -85,6 +86,8 @@ interface LegacyAssetAdminResponse {
   message?: string;
 }
 
+type LegacyHtmlPagePreviewResponse = ApiItemResponse<LegacyHtmlContentMigrationPreview>;
+
 const categories = ['通知公告', '运营信息', '地铁运营', '公交运营', '有轨运营', '网站公告'];
 
 export function AdminOperationsPanel() {
@@ -93,12 +96,15 @@ export function AdminOperationsPanel() {
   const [legacyAssetManifest, setLegacyAssetManifest] = useState<LegacyAssetManifest | null>(null);
   const [legacyContentAssets, setLegacyContentAssets] =
     useState<LegacyContentAssetInventory | null>(null);
+  const [legacyHtmlPreview, setLegacyHtmlPreview] =
+    useState<LegacyHtmlContentMigrationPreview | null>(null);
   const [legacyDownloadReport, setLegacyDownloadReport] = useState<
     LegacyAssetAdminResponse['downloadReport'] | null
   >(null);
   const [statusText, setStatusText] = useState('正在读取内容记录');
   const [assetStatusText, setAssetStatusText] = useState('正在读取内容素材');
   const [legacyAssetStatusText, setLegacyAssetStatusText] = useState('正在读取旧资源差异报告');
+  const [legacyHtmlStatusText, setLegacyHtmlStatusText] = useState('正在读取旧专题页面');
   const [isBusy, setIsBusy] = useState(false);
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState(categories[0] ?? '运营信息');
@@ -192,8 +198,28 @@ export function AdminOperationsPanel() {
     setLegacyAssetStatusText(`已读取 ${data.manifest.item.summary.referenceCount} 个旧资源引用`);
   };
 
+  const loadLegacyHtmlPreview = async () => {
+    const response = await fetch(appPath('/api/admin/operations/legacy-html-pages'), {
+      cache: 'no-store',
+    });
+    const data = (await response.json()) as LegacyHtmlPagePreviewResponse;
+    if (!response.ok || !data.item) {
+      setLegacyHtmlPreview(null);
+      setLegacyHtmlStatusText(data.meta?.message ?? '旧专题页面迁移预览暂不可用');
+      return;
+    }
+
+    setLegacyHtmlPreview(data.item);
+    setLegacyHtmlStatusText(`已转换 ${data.item.summary.convertedCount} 个旧专题页面`);
+  };
+
   useEffect(() => {
-    void Promise.all([loadRecords(), loadContentAssets(), loadLegacyAssetReport()]);
+    void Promise.all([
+      loadRecords(),
+      loadContentAssets(),
+      loadLegacyAssetReport(),
+      loadLegacyHtmlPreview(),
+    ]);
   }, []);
 
   const createDraft = async () => {
@@ -470,6 +496,10 @@ export function AdminOperationsPanel() {
               <IssuePreview issues={legacyAssetManifest.issues} />
               <DuplicateResourcePreview duplicates={legacyAssetManifest.duplicateResources} />
               <ContentAssetPreview inventory={legacyContentAssets} />
+              <LegacyHtmlPreviewCard
+                preview={legacyHtmlPreview}
+                statusText={legacyHtmlStatusText}
+              />
               <FailedDownloadPreview
                 failedDownloads={
                   legacyDownloadReport?.report?.differenceReport?.failedDownloads ?? []
@@ -706,6 +736,36 @@ function ContentAssetPreview({
         </>
       ) : (
         <p className="muted">尚未生成可映射的旧内容素材清单。</p>
+      )}
+    </article>
+  );
+}
+
+function LegacyHtmlPreviewCard({
+  preview,
+  statusText,
+}: Readonly<{
+  preview: LegacyHtmlContentMigrationPreview | null;
+  statusText: string;
+}>) {
+  return (
+    <article className="admin-report-card">
+      <h3>旧专题正文</h3>
+      {preview ? (
+        <>
+          <p>
+            <strong>{`${preview.summary.convertedCount} 个页面已转换`}</strong>
+            <span>{`${preview.summary.warningCount} 条转换提示`}</span>
+          </p>
+          {preview.items.slice(0, 3).map((item) => (
+            <p key={item.sourceUrl}>
+              <strong>{item.contentTitle}</strong>
+              <span>{`${item.markdownLength} 字 · ${item.imageCount} 图 · ${item.linkCount} 链接`}</span>
+            </p>
+          ))}
+        </>
+      ) : (
+        <p className="muted">{statusText}</p>
       )}
     </article>
   );

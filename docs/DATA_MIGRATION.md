@@ -117,6 +117,7 @@
 - 通过 `pnpm legacy:assets:download` 下载清单中的下载候选到 `apps/web/public/legacy-assets`，并写入 `.yct-data/legacy-assets-download-report.json`，记录大小、SHA-256、Content-Type 和失败项。该命令可重复运行，远端内容未变化时不会重写文件。
 - 下载报告会同步写入 `differenceReport`，合并当前资源清单摘要、issue 统计、重复资源分组和真实下载失败项；`.yct-data` 仍属于运行报告目录，不进入仓库。
 - 内容后台 `/admin/operations` 已接入旧资源差异报告，只读展示引用总数、下载候选、外链、本地缺失、真实下载失败、issue 分类、重复资源样例和下载失败样例；后台 API 会校验管理员身份，并从 `YCT_LEGACY_ASSET_DOWNLOAD_REPORT_PATH` 指向的路径读取最近一次下载报告，默认读取 `.yct-data/legacy-assets-download-report.json`。
+- 内容后台 `/admin/operations` 已接入旧专题正文迁移预览：服务端读取旧 `content/*.html`，优先提取 `.content-container` 正文区域，保守转换为 Markdown 候选并展示页面数、图片数、链接数和转换提示；该步骤只做预览，不直接创建或发布内容。
 - 内容后台会基于旧资源清单和下载报告生成只读 `LegacyContentAssetInventory`：每条素材记录保留旧站来源 URL、迁移后公开路径、SHA-256、Content-Type、文件大小、待审核状态、引用的旧内容和引用类型；同一下载项被多个内容复用时只生成一条素材记录。
 - 已迁移资源的去重分两层记录：`sourceUrl + migratedPath` 相同的重复引用直接复用同一素材记录，`summary.reusedAssetCount` 和 `summary.deduplicatedReferenceCount` 记录复用规模；SHA-256 相同但下载项不同的资源进入 `duplicateGroups`，供正式素材入库前二次去重。
 - 内容后台可以把旧内容素材清单导入 `.yct-data/content-asset-store.json`，导入后每条素材进入 `pending_review` 状态；管理员审核通过或驳回时分别发布 `ContentAssetReviewed` 事件。内容发布时会读取真实素材状态，只有全部素材为 `approved` 时才允许带 `assetIds` 的内容发布。
@@ -226,4 +227,4 @@ pnpm legacy:inspect https://yct.shangxiaoguan.top/data
 ## 8. 待补充
 
 - 图片素材正式入库后的审批动作、引用回写和回滚策略。
-- 原有专题 HTML 页面正文迁移为 Markdown 或归档附件。
+- 旧专题 HTML 正文预览写入内容草稿或归档附件前的人工确认、差异对比和回滚策略。

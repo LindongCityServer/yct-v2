@@ -163,3 +163,24 @@ export interface LegacyContentAssetInventory {
   items: LegacyContentAssetInventoryItem[];
   duplicateGroups: LegacyContentAssetDuplicateGroup[];
 }
+
+export interface LegacyHtmlContentMigrationItem {
+  contentId: string;
+  contentTitle: string;
+  sourceUrl: string;
+  sourcePath: string;
+  markdown: string;
+  markdownLength: number;
+  imageCount: number;
+  linkCount: number;
+  warnings: string[];
+}
+
+export interface LegacyHtmlContentMigrationPreview {
+  summary: {
+    pageCount: number;
+    convertedCount: number;
+    warningCount: number;
+  };
+  items: LegacyHtmlContentMigrationItem[];
+}

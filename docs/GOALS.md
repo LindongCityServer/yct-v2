@@ -403,6 +403,7 @@ DESIGN.md
 - 已处理：旧内容素材清单可以导入 `.yct-data/content-asset-store.json`，后台可审核通过或驳回素材，成功后发布 `ContentAssetImported` / `ContentAssetReviewed` 事件；内容发布会读取真实素材状态，带 `assetIds` 的内容在素材全部通过后可以发布。
 - 已处理：内容后台新增本地素材上传入口，文件落盘到 `apps/web/public/content-assets`，记录进入 `.yct-data/content-asset-store.json` 并等待审核；同 SHA-256 上传会复用已有素材记录，成功上传发布 `ContentAssetUploaded` 事件。下一步仍要补数据库素材表、对象存储/共享资产目录、引用回写和回滚流程。
 - 已处理：创建内容草稿时会自动扫描 Markdown 中的同站 `/content-assets/...` 图片链接，并把匹配到的素材 ID 合并进 `assetIds`；临时 `/v2/content-assets/...` 前缀也会被归一化识别，减少运营人员手动漏填素材 ID 导致发布校验失效的风险。
+- 已处理第一版：旧专题 HTML 页面可以生成 Markdown 迁移预览，后台展示页面数、转换后的正文长度、图片数、链接数和转换提示；当前真实旧站 4 个专题页均可转换且无转换警告。该能力只做预览，不直接绕过内容审核创建或发布内容。
 
 2026-07-02 已推进服务入口管理闭环：
 
