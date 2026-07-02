@@ -122,8 +122,9 @@ export function OperationsHome({ feed }: Readonly<{ feed: ApiListResponse<Operat
 
 function buildHeroBackgroundStyle(item: OperationsFeedItem): CSSProperties | undefined {
   if (item.coverImageUrl) {
+    const coverImageUrl = appPath(item.coverImageUrl);
     return {
-      backgroundImage: `linear-gradient(to top, rgba(17, 24, 23, 0.78), rgba(17, 24, 23, 0.28) 54%, rgba(17, 24, 23, 0.04)), url("${item.coverImageUrl}")`,
+      backgroundImage: `linear-gradient(to top, rgba(17, 24, 23, 0.78), rgba(17, 24, 23, 0.28) 54%, rgba(17, 24, 23, 0.04)), url("${coverImageUrl}")`,
     };
   }
 
@@ -173,7 +174,7 @@ function FeedList({ items }: Readonly<{ items: OperationsFeedItem[] }>) {
 
 function buildFeedCoverStyle(item: OperationsFeedItem): CSSProperties | undefined {
   if (item.coverImageUrl) {
-    return { backgroundImage: `url("${item.coverImageUrl}")` };
+    return { backgroundImage: `url("${appPath(item.coverImageUrl)}")` };
   }
 
   if (item.coverColor) {

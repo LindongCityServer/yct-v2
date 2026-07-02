@@ -12,7 +12,6 @@ export const metadata: Metadata = {
     template: '%s - 雨城通',
   },
   description: '雨城通 Yuchengtong',
-  manifest: appPath('/manifest.webmanifest'),
   icons: {
     icon: [
       { url: appPath('/icons/yct-logo.svg'), type: 'image/svg+xml' },
@@ -35,6 +34,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link rel="manifest" href={appPath('/manifest.webmanifest')} />
         <link
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
           rel="stylesheet"

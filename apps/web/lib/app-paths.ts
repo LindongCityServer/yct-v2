@@ -7,6 +7,10 @@ export function appPath(path: string): string {
     return path;
   }
 
+  if (appBasePath && (path === appBasePath || path.startsWith(`${appBasePath}/`))) {
+    return path;
+  }
+
   const cleanPath = path.replace(/^\/+/, '');
   if (!cleanPath) {
     return appBasePath ? `${appBasePath}/` : '/';

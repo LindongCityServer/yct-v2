@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { SecondaryShell } from '../../../components/app-shell';
 import { TitleWithBreaks } from '../../../components/title-with-breaks';
+import { appPath } from '../../../lib/app-paths';
 import { readOperationDetail } from '../../../lib/operations-content';
 
 export const dynamic = 'force-dynamic';
@@ -40,7 +41,7 @@ export default async function OperationDetailPage({
               item.coverColor
                 ? { backgroundColor: item.coverColor }
                 : item.coverImageUrl
-                  ? { backgroundImage: `url("${item.coverImageUrl}")` }
+                  ? { backgroundImage: `url("${appPath(item.coverImageUrl)}")` }
                   : undefined
             }
           >
@@ -131,7 +132,7 @@ function renderMarkdownImage(block: Extract<MarkdownBlock, { type: 'image' }>, i
 
   return (
     <figure className="markdown-image" key={index}>
-      <img src={block.src} alt={block.alt} loading="lazy" />
+      <img src={appPath(block.src)} alt={block.alt} loading="lazy" />
       {block.alt ? <figcaption>{block.alt}</figcaption> : null}
     </figure>
   );

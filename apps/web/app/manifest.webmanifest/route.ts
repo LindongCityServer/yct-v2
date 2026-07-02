@@ -1,8 +1,7 @@
-import type { MetadataRoute } from 'next';
-import { appPath } from '../lib/app-paths';
+import { appPath } from '../../lib/app-paths';
 
-export default function manifest(): MetadataRoute.Manifest {
-  return {
+export function GET(): Response {
+  return Response.json({
     name: '雨城通',
     short_name: 'YCT',
     description: '雨城通 Yuchengtong',
@@ -29,5 +28,5 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: 'maskable',
       },
     ],
-  };
+  });
 }
