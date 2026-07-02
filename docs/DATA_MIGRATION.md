@@ -50,6 +50,7 @@
 数据源配置：
 
 - `NEXT_PUBLIC_YCT_BASE_PATH=/v2` / `YCT_BASE_PATH=/v2`：仅用于临时把新站挂到子路径测试；当前生产反代会把 `/v2` 剥离到应用根路径，因此应用只给浏览器侧链接和静态资源补前缀。后续迁回主路径时留空即可。
+- PWA Service Worker 会从自身公开地址推导子路径前缀：`/sw.js` 对应主路径，`/v2/sw.js` 对应 `/v2`。应用壳预热、离线兜底、公开 API 缓存、敏感路径排除都按该前缀归一化匹配，避免临时 `/v2` 反代下离线缓存失效。
 - `YCT_LEGACY_DATA_SOURCE=auto`：默认模式；配置了 `YCT_LEGACY_DATA_DIR` 时优先读取本地，否则读取远程旧站。
 - `YCT_LEGACY_DATA_SOURCE=local`：只读取 `YCT_LEGACY_DATA_DIR`。
 - `YCT_LEGACY_DATA_SOURCE=remote`：只读取 `YCT_LEGACY_DATA_REMOTE_BASE_URL`。

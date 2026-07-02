@@ -1,9 +1,10 @@
-const YCT_SW_VERSION = '2026-07-02-08';
+const YCT_SW_VERSION = '2026-07-03-01';
 const YCT_SHELL_CACHE = `yct-shell-${YCT_SW_VERSION}`;
 const YCT_RUNTIME_CACHE = `yct-runtime-${YCT_SW_VERSION}`;
 const YCT_DATA_CACHE = `yct-data-${YCT_SW_VERSION}`;
 const YCT_CACHE_PREFIX = 'yct-';
 const YCT_DISABLE_ON_LOCAL_DEV = ['localhost', '127.0.0.1', '::1'].includes(self.location.hostname);
+const YCT_BASE_PATH = inferBasePath();
 
 const YCT_CORE_URLS = [
   '/',
@@ -97,7 +98,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (YCT_DATA_PATHS.has(url.pathname)) {
+  const appPath = toAppPath(url);
+
+  if (YCT_DATA_PATHS.has(appPath)) {
     event.respondWith(staleWhileRevalidate(request, YCT_DATA_CACHE));
     return;
   }
@@ -111,10 +114,11 @@ async function warmAppShell() {
   const cache = await caches.open(YCT_SHELL_CACHE);
   await Promise.all(
     YCT_CORE_URLS.map(async (url) => {
+      const scopedUrl = fromAppPath(url);
       try {
-        const response = await fetch(url, { cache: 'reload' });
+        const response = await fetch(scopedUrl, { cache: 'reload' });
         if (response.ok) {
-          await cache.put(url, response);
+          await cache.put(scopedUrl, response);
         }
       } catch {
         // 单个预热失败不影响整体安装。
@@ -137,12 +141,12 @@ async function handleNavigation(request, url) {
     try {
       return await fetch(request);
     } catch {
-      return (await caches.match('/offline')) || Response.error();
+      return (await caches.match(fromAppPath('/offline'))) || Response.error();
     }
   }
 
   const cacheName = isRecentContentPath(url) ? YCT_RUNTIME_CACHE : YCT_SHELL_CACHE;
-  return networkFirst(request, cacheName, '/offline');
+  return networkFirst(request, cacheName, fromAppPath('/offline'));
 }
 
 async function cacheFirst(request, cacheName) {
@@ -192,36 +196,78 @@ async function staleWhileRevalidate(request, cacheName) {
 }
 
 function isStaticAsset(url) {
+  const appPath = toAppPath(url);
   return (
-    url.pathname.startsWith('/_next/static/') ||
-    url.pathname.startsWith('/icons/') ||
-    url.pathname === '/manifest.webmanifest'
+    appPath.startsWith('/_next/static/') ||
+    appPath.startsWith('/icons/') ||
+    appPath === '/manifest.webmanifest'
   );
 }
 
 function isRecentContentPath(url) {
-  return isRecentTravelPath(url) || isRecentMapPath(url) || url.pathname.startsWith('/operations/');
-}
-
-function isRecentTravelPath(url) {
+  const appPath = toAppPath(url);
   return (
-    url.pathname === '/travel/schedules' ||
-    url.pathname === '/travel/screen' ||
-    url.pathname.startsWith('/travel/stations/') ||
-    /^\/travel\/[^/]+$/.test(url.pathname)
+    isRecentTravelPath(appPath) || isRecentMapPath(appPath) || appPath.startsWith('/operations/')
   );
 }
 
-function isRecentMapPath(url) {
-  return url.pathname.startsWith('/map/lines/');
+function isRecentTravelPath(appPath) {
+  return (
+    appPath === '/travel/schedules' ||
+    appPath === '/travel/screen' ||
+    appPath.startsWith('/travel/stations/') ||
+    /^\/travel\/[^/]+$/.test(appPath)
+  );
+}
+
+function isRecentMapPath(appPath) {
+  return appPath.startsWith('/map/lines/');
 }
 
 function isSensitivePath(url) {
+  const appPath = toAppPath(url);
   return (
-    url.pathname.startsWith('/account') ||
-    url.pathname.startsWith('/admin') ||
-    url.pathname.startsWith('/auth') ||
-    url.pathname.startsWith('/api/auth') ||
-    url.pathname.startsWith('/api/admin')
+    appPath.startsWith('/account') ||
+    appPath.startsWith('/admin') ||
+    appPath.startsWith('/auth') ||
+    appPath.startsWith('/api/auth') ||
+    appPath.startsWith('/api/admin')
   );
+}
+
+function inferBasePath() {
+  const pathname = new URL(self.location.href).pathname;
+  const marker = '/sw.js';
+  if (!pathname.endsWith(marker)) {
+    return '';
+  }
+
+  const basePath = pathname.slice(0, -marker.length).replace(/\/+$/g, '');
+  return basePath === '/' ? '' : basePath;
+}
+
+function toAppPath(url) {
+  const pathname = url.pathname;
+  if (!YCT_BASE_PATH) {
+    return pathname;
+  }
+
+  if (pathname === YCT_BASE_PATH) {
+    return '/';
+  }
+
+  if (pathname.startsWith(`${YCT_BASE_PATH}/`)) {
+    return pathname.slice(YCT_BASE_PATH.length) || '/';
+  }
+
+  return pathname;
+}
+
+function fromAppPath(path) {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  if (YCT_BASE_PATH && (cleanPath === YCT_BASE_PATH || cleanPath.startsWith(`${YCT_BASE_PATH}/`))) {
+    return cleanPath;
+  }
+
+  return YCT_BASE_PATH ? `${YCT_BASE_PATH}${cleanPath}` : cleanPath;
 }
