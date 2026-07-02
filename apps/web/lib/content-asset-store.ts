@@ -6,6 +6,7 @@ import type {
   ISODateTimeString,
   LegacyContentAssetReference,
 } from '@yct/contracts';
+import { appBasePath } from './app-paths';
 import { readRuntimeConfig } from './runtime-config';
 
 export interface StoredContentAssetRecord {
@@ -51,6 +52,20 @@ export async function findContentAssetRecordsByIds(
   const requestedIds = new Set(assetIds);
   const snapshot = await readSnapshot();
   return snapshot.records.filter((record) => requestedIds.has(record.asset.id));
+}
+
+export async function findContentAssetRecordsByPublicPaths(
+  paths: string[],
+): Promise<StoredContentAssetRecord[]> {
+  if (paths.length === 0) {
+    return [];
+  }
+
+  const requestedPaths = new Set(paths.map(normalizeContentAssetPublicPath).filter(Boolean));
+  const snapshot = await readSnapshot();
+  return snapshot.records.filter((record) =>
+    requestedPaths.has(normalizeContentAssetPublicPath(record.asset.url)),
+  );
 }
 
 export async function writeContentAssetRecords(records: StoredContentAssetRecord[]): Promise<void> {
@@ -133,4 +148,22 @@ function compareContentAssetRecords(
   }
 
   return right.updatedAt.localeCompare(left.updatedAt);
+}
+
+function normalizeContentAssetPublicPath(value: string): string {
+  const pathname = safePathname(value);
+  const basePrefix = appBasePath ? `${appBasePath}/content-assets/` : '';
+  if (basePrefix && pathname.startsWith(basePrefix)) {
+    return pathname.slice(appBasePath.length);
+  }
+
+  return pathname.startsWith('/content-assets/') ? pathname : '';
+}
+
+function safePathname(value: string): string {
+  try {
+    return new URL(value, 'https://yct.local').pathname;
+  } catch {
+    return value;
+  }
 }

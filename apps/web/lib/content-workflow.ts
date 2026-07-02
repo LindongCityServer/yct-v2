@@ -8,7 +8,10 @@ import type {
 } from '@yct/contracts';
 import { canPublishContentRevision, transitionContentRevisionStatus } from '@yct/domain';
 import { InMemoryEventBus } from '@yct/event-bus';
-import { findContentAssetRecordsByIds } from './content-asset-store';
+import {
+  findContentAssetRecordsByIds,
+  findContentAssetRecordsByPublicPaths,
+} from './content-asset-store';
 import {
   createContentRecord,
   findContentRecord,
@@ -41,7 +44,17 @@ export async function createContentDraft(input: {
   metadata: StoredContentMetadata;
   actorId: string;
 }): Promise<ContentActionResult> {
-  const record = await createContentRecord(input);
+  const markdownAssetRecords = await findContentAssetRecordsByPublicPaths(
+    extractContentAssetPaths(input.markdown),
+  );
+  const assetIds = mergeAssetIds([
+    ...input.assetIds,
+    ...markdownAssetRecords.map((record) => record.asset.id),
+  ]);
+  const record = await createContentRecord({
+    ...input,
+    assetIds,
+  });
   return { ok: true, record };
 }
 
@@ -183,6 +196,25 @@ function invalidTransition(reason?: string): ContentActionResult {
     error: 'invalid_content_state',
     message: reason ?? '当前内容状态不允许执行该操作。',
   };
+}
+
+function extractContentAssetPaths(markdown: string): string[] {
+  const paths: string[] = [];
+  const imagePattern = /!\[[^\]]*]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = imagePattern.exec(markdown)) !== null) {
+    const source = match[1]?.trim();
+    if (source) {
+      paths.push(source);
+    }
+  }
+
+  return paths;
+}
+
+function mergeAssetIds(assetIds: string[]): string[] {
+  return Array.from(new Set(assetIds.map((assetId) => assetId.trim()).filter(Boolean)));
 }
 
 async function emitEvent<TType extends YctEventType>(

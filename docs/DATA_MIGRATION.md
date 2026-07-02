@@ -121,6 +121,7 @@
 - 已迁移资源的去重分两层记录：`sourceUrl + migratedPath` 相同的重复引用直接复用同一素材记录，`summary.reusedAssetCount` 和 `summary.deduplicatedReferenceCount` 记录复用规模；SHA-256 相同但下载项不同的资源进入 `duplicateGroups`，供正式素材入库前二次去重。
 - 内容后台可以把旧内容素材清单导入 `.yct-data/content-asset-store.json`，导入后每条素材进入 `pending_review` 状态；管理员审核通过或驳回时分别发布 `ContentAssetReviewed` 事件。内容发布时会读取真实素材状态，只有全部素材为 `approved` 时才允许带 `assetIds` 的内容发布。
 - 内容后台可以上传新内容素材到 `apps/web/public/content-assets`，文件名按 SHA-256 稳定生成，业务记录仍进入 `.yct-data/content-asset-store.json` 的 `pending_review` 状态；同 SHA-256 文件重复上传会复用已有素材记录，不额外生成重复素材。运行时上传目录可通过 `YCT_CONTENT_ASSET_UPLOAD_DIR` 调整，该目录默认不进入 Git。
+- 创建内容草稿时会扫描 Markdown 图片中的同站 `/content-assets/...` 链接，并把匹配到的素材记录自动合并进 `assetIds`；临时反代使用的 `/v2/content-assets/...` 也会归一化为同一个素材路径。
 - 旧内容封面和 `原始图片：...` Markdown 引用在运行时会先检查本地 `/legacy-assets/...` 文件是否存在；存在则使用同站资源，不存在则回退旧站绝对 URL，避免资源下载未完成时出现破图。临时 `/v2` 子路径只用于浏览器公开路径，落盘检查和下载目标仍映射到 `apps/web/public/legacy-assets`。
 - 当前实测资源清单包含 131 个原始引用、122 个唯一引用、91 个下载候选引用、18 个外链引用、31 个非下载项、9 个重复引用和 12 组重复资源；本地缺失文件为 0。按 `sourceUrl + migratedPath` 去重后实际下载并生成 61 条素材记录，复用 30 个重复内容引用，SHA-256 缺失 0，真实哈希重复组 0。首次下载结果为 61 个成功、0 个失败、总大小 72,256,470 字节；二次运行结果为 61 个未变化、0 个失败，证明脚本可以复跑。
 
