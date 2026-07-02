@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import {
+  readTripReminderState,
+  tripReminderStateChangedEventName,
+} from '../lib/client-trip-reminders';
 
 export type PrimaryNavKey = 'operations' | 'map' | 'travel' | 'services';
 export type AppShellVariant = 'default' | 'map';
@@ -30,6 +34,12 @@ interface AccountStatusResponse {
   };
 }
 
+interface TopbarBadgeSummary {
+  kind: 'none' | 'count' | 'dot';
+  count: number;
+  label: string;
+}
+
 export function AppShell({
   active,
   pageTitle,
@@ -45,6 +55,7 @@ export function AppShell({
   const [navOpen, setNavOpen] = useState(true);
   const [topbarNotice, setTopbarNotice] = useState<string | null>(null);
   const [accountStatus, setAccountStatus] = useState<AccountStatusResponse | null>(null);
+  const [localPendingSyncCount, setLocalPendingSyncCount] = useState(0);
   const noticeTimer = useRef<number | null>(null);
 
   useEffect(
@@ -87,6 +98,25 @@ export function AppShell({
     };
   }, []);
 
+  useEffect(() => {
+    const syncLocalBadge = () => {
+      try {
+        setLocalPendingSyncCount(readTripReminderState().summary.localOnly);
+      } catch {
+        setLocalPendingSyncCount(0);
+      }
+    };
+
+    syncLocalBadge();
+    window.addEventListener(tripReminderStateChangedEventName, syncLocalBadge);
+    window.addEventListener('storage', syncLocalBadge);
+
+    return () => {
+      window.removeEventListener(tripReminderStateChangedEventName, syncLocalBadge);
+      window.removeEventListener('storage', syncLocalBadge);
+    };
+  }, []);
+
   const showTopbarNotice = (message: string) => {
     if (noticeTimer.current) {
       window.clearTimeout(noticeTimer.current);
@@ -98,6 +128,7 @@ export function AppShell({
   const openGlobalSearch = () => {
     router.push(appPath('/search'));
   };
+  const accountBadge = mergeTopbarBadge(accountStatus?.badge, localPendingSyncCount);
 
   return (
     <main
@@ -150,10 +181,10 @@ export function AppShell({
             <span className="material-symbols-outlined">search</span>
           </button>
           <Link
-            className={accountButtonClassName(accountStatus)}
+            className={accountButtonClassName(accountStatus, accountBadge)}
             href={appPath('/account')}
-            aria-label={accountButtonAriaLabel(accountStatus)}
-            title={accountButtonAriaLabel(accountStatus)}
+            aria-label={accountButtonAriaLabel(accountStatus, accountBadge)}
+            title={accountButtonAriaLabel(accountStatus, accountBadge)}
           >
             {accountStatus?.avatarUrl ? (
               <img className="topbar-account-avatar" src={accountStatus.avatarUrl} alt="" />
@@ -162,12 +193,12 @@ export function AppShell({
                 {accountIcon(accountStatus?.accountStatus)}
               </span>
             )}
-            {accountStatus?.badge.kind === 'count' ? (
+            {accountBadge.kind === 'count' ? (
               <span className="account-badge" aria-hidden="true">
-                {formatBadgeCount(accountStatus.badge.count)}
+                {formatBadgeCount(accountBadge.count)}
               </span>
             ) : null}
-            {accountStatus?.badge.kind === 'dot' ? (
+            {accountBadge.kind === 'dot' ? (
               <span className="account-badge is-dot" aria-hidden="true" />
             ) : null}
           </Link>
@@ -218,7 +249,10 @@ export function AppShell({
   );
 }
 
-function accountButtonClassName(status: AccountStatusResponse | null): string {
+function accountButtonClassName(
+  status: AccountStatusResponse | null,
+  badge: TopbarBadgeSummary,
+): string {
   return [
     'account-button',
     status?.accountStatus === 'active' ? 'is-authenticated' : '',
@@ -226,15 +260,19 @@ function accountButtonClassName(status: AccountStatusResponse | null): string {
     status?.accountStatus === 'unavailable' || status?.accountStatus === 'not_configured'
       ? 'is-attention'
       : '',
-    status?.badge.kind !== 'none' ? 'has-badge' : '',
+    badge.kind !== 'none' ? 'has-badge' : '',
   ]
     .filter(Boolean)
     .join(' ');
 }
 
-function accountButtonAriaLabel(status: AccountStatusResponse | null): string {
+function accountButtonAriaLabel(
+  status: AccountStatusResponse | null,
+  badge: TopbarBadgeSummary,
+): string {
   if (!status) {
-    return '账号设置';
+    const badgeText = badge.kind === 'none' ? '' : `，${badge.label}`;
+    return `账号设置${badgeText}`;
   }
 
   const statusText: Record<AccountStatusResponse['accountStatus'], string> = {
@@ -244,8 +282,38 @@ function accountButtonAriaLabel(status: AccountStatusResponse | null): string {
     readonly: status.username ? `只读账号：${status.username}` : '只读账号',
     unavailable: '账号状态暂不可用',
   };
-  const badgeText = status.badge.kind === 'none' ? '' : `，${status.badge.label}`;
+  const badgeText = badge.kind === 'none' ? '' : `，${badge.label}`;
   return `账号设置：${statusText[status.accountStatus]}${badgeText}`;
+}
+
+function mergeTopbarBadge(
+  accountBadge: AccountStatusResponse['badge'] | undefined,
+  localPendingSyncCount: number,
+): TopbarBadgeSummary {
+  const accountCount = accountBadge?.kind === 'count' ? accountBadge.count : 0;
+  const count = accountCount + localPendingSyncCount;
+  const labels = [
+    accountBadge && accountBadge.kind !== 'none' ? accountBadge.label : undefined,
+    localPendingSyncCount > 0 ? `${localPendingSyncCount} 个本地行程待同步` : undefined,
+  ].filter((label): label is string => Boolean(label));
+
+  if (count > 0) {
+    return {
+      kind: 'count',
+      count,
+      label: labels.join('，') || `${count} 个待处理事项`,
+    };
+  }
+
+  if (accountBadge?.kind === 'dot') {
+    return accountBadge;
+  }
+
+  return {
+    kind: 'none',
+    count: 0,
+    label: '无待办',
+  };
 }
 
 function accountIcon(status: AccountStatusResponse['accountStatus'] | undefined): string {

@@ -376,7 +376,7 @@ DESIGN.md
 - 新增 `/auth/ldpass/callback`：校验回跳 `state`，读取 `ldpass` `client-session`，并在拿到真实账号后写入 YCT 本地账号快照 Cookie。
 - 新增 `/api/auth/logout`：清理 YCT 本地登录状态；是否联动退出 `ldpass` 仍待后续确认。
 - 新增 `/api/account/status`：读取 `ldpass` 会话并区分未配置、未登录、Active 登录、只读账号和会话不可用；只有匹配 YCT 本地管理员成员时才合并内容、服务入口、交通数据和 POI 的待审核计数。
-- 顶部头像入口已接入账号状态：普通登录显示登录态，只读/异常/未配置显示状态点，管理员待审核数量合并为单一计数徽标。
+- 顶部头像入口已接入账号状态：普通登录显示登录态，只读/异常/未配置显示状态点，管理员待审核数量与浏览器本地待同步行程提醒数量合并为单一计数徽标；本地行程提醒写入、删除或清空时会发出轻量前端事件刷新标题栏。
 - 账号设置页已接入登录状态展示、临东通账号入口、退出入口和未配置提示。
 - 共享契约新增 `YctUserLink`、`YctAccountSessionSnapshot`，并新增 `LdpassUserLinked`、`YctSessionStarted`、`YctSessionEnded` 事件 Schema。
 - 当前阶段未接入数据库，账号快照仅用于前台展示；业务写接口后续仍必须实时校验 `ldpass` 会话或服务端本地会话。

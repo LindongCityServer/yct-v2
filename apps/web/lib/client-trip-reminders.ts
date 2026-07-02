@@ -7,6 +7,7 @@ import type {
 
 export const tripReminderStorageKey = 'yct.tripReminders.v1';
 export const tripReminderLegacyImportedAtKey = 'yct.tripReminders.legacyImportedAt';
+export const tripReminderStateChangedEventName = 'yct-trip-reminders-changed';
 
 export interface TripReminderState {
   reminders: TripReminder[];
@@ -179,6 +180,7 @@ function readLegacyOrderReminders(now: Date): TripReminder[] {
 
 function writeStoredReminders(reminders: TripReminder[]): void {
   window.localStorage.setItem(tripReminderStorageKey, JSON.stringify(sortReminders(reminders)));
+  window.dispatchEvent(new CustomEvent(tripReminderStateChangedEventName));
 }
 
 function readJsonArray(value: string | null): unknown[] {
