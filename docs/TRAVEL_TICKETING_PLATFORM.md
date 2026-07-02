@@ -81,7 +81,7 @@ export interface TicketOrder {
 - 航班不强行塞进现有地图 `TransitLine`；在票务平台里先作为 `TicketableServiceKind`，需要地图化时再另行建模。
 - 客运旧 `ltcx/route.txt` 可以导入为 `ScheduleService` + 多个 `TripInstance`，不要只聚合成线路后丢掉班次粒度。
 - 轮渡和航班即使第一阶段没有数据，也要共享同一套查询与订单接口，避免后续再造一套页面。
-- 统一班次/票务的服务语义色不能混用：客运大巴默认黄绿色，轮渡默认青蓝色，航班默认蓝紫色；后续后台 Profile 需要允许不同服务器覆盖这些默认值。
+- 统一班次/票务的服务语义色不能混用：客运大巴默认黄绿色，轮渡默认青蓝色，航班默认蓝紫色；当前已提供 `TravelScheduleServiceProfile` 本地仓储和后台 API，后续接入数据库后继续保留不同服务器覆盖默认值的能力。
 
 ## 4. 事件清单
 

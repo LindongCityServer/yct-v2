@@ -4,16 +4,21 @@ import type {
   TransitDataRevision,
   TransitDataRevisionStatus,
   TransitModeProfile,
+  TravelScheduleServiceProfile,
 } from '@yct/contracts';
 import { useEffect, useMemo, useState } from 'react';
 
 export function AdminTransitPanel() {
   const [revisions, setRevisions] = useState<TransitDataRevision[]>([]);
   const [modeProfiles, setModeProfiles] = useState<TransitModeProfile[]>([]);
+  const [serviceProfiles, setServiceProfiles] = useState<TravelScheduleServiceProfile[]>([]);
   const [statusText, setStatusText] = useState('正在读取交通数据版本');
   const [profileStatusText, setProfileStatusText] = useState('正在读取交通方式配置');
+  const [serviceProfileStatusText, setServiceProfileStatusText] =
+    useState('正在读取可排班服务配置');
   const [isBusy, setIsBusy] = useState(false);
   const [profileBusy, setProfileBusy] = useState(false);
+  const [serviceProfileBusy, setServiceProfileBusy] = useState(false);
 
   const sortedRevisions = useMemo(
     () => [...revisions].sort((left, right) => right.importedAt.localeCompare(left.importedAt)),
@@ -35,7 +40,7 @@ export function AdminTransitPanel() {
   };
 
   useEffect(() => {
-    void Promise.all([loadRevisions(), loadModeProfiles()]);
+    void Promise.all([loadRevisions(), loadModeProfiles(), loadServiceProfiles()]);
   }, []);
 
   const loadModeProfiles = async () => {
@@ -49,6 +54,23 @@ export function AdminTransitPanel() {
     setModeProfiles(data.items ?? []);
     setProfileStatusText(
       data.items?.length ? `已读取 ${data.items.length} 个交通方式` : '暂无交通方式配置',
+    );
+  };
+
+  const loadServiceProfiles = async () => {
+    const response = await fetch('/api/admin/travel/service-profiles', { cache: 'no-store' });
+    const data = (await response.json()) as {
+      items?: TravelScheduleServiceProfile[];
+      message?: string;
+    };
+    if (!response.ok) {
+      setServiceProfileStatusText(data.message ?? '可排班服务配置暂不可用');
+      return;
+    }
+
+    setServiceProfiles(data.items ?? []);
+    setServiceProfileStatusText(
+      data.items?.length ? `已读取 ${data.items.length} 个可排班服务` : '暂无可排班服务配置',
     );
   };
 
@@ -120,6 +142,15 @@ export function AdminTransitPanel() {
     );
   };
 
+  const updateServiceProfileDraft = (
+    kind: TravelScheduleServiceProfile['kind'],
+    patch: Partial<TravelScheduleServiceProfile>,
+  ) => {
+    setServiceProfiles((current) =>
+      current.map((profile) => (profile.kind === kind ? { ...profile, ...patch } : profile)),
+    );
+  };
+
   const saveModeProfiles = async () => {
     setProfileBusy(true);
     try {
@@ -147,6 +178,39 @@ export function AdminTransitPanel() {
       setProfileStatusText('交通方式配置已保存');
     } finally {
       setProfileBusy(false);
+    }
+  };
+
+  const saveServiceProfiles = async () => {
+    setServiceProfileBusy(true);
+    try {
+      const response = await fetch('/api/admin/travel/service-profiles', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          services: serviceProfiles.map(({ kind, label, color, icon, sortOrder, enabled }) => ({
+            kind,
+            label,
+            color,
+            icon,
+            sortOrder,
+            enabled,
+          })),
+        }),
+      });
+      const data = (await response.json()) as {
+        items?: TravelScheduleServiceProfile[];
+        message?: string;
+      };
+      if (!response.ok) {
+        setServiceProfileStatusText(data.message ?? '保存可排班服务配置失败');
+        return;
+      }
+
+      setServiceProfiles(data.items ?? []);
+      setServiceProfileStatusText('可排班服务配置已保存');
+    } finally {
+      setServiceProfileBusy(false);
     }
   };
 
@@ -256,6 +320,100 @@ export function AdminTransitPanel() {
             onClick={saveModeProfiles}
           >
             保存交通方式配置
+          </button>
+        </div>
+      </section>
+
+      <section
+        className="transit-mode-profile-editor"
+        aria-labelledby="travel-service-profile-title"
+      >
+        <div className="section-heading">
+          <h2 id="travel-service-profile-title">可排班服务配置</h2>
+          <span className="muted">{serviceProfileStatusText}</span>
+        </div>
+        <div className="transit-mode-profile-grid" aria-label="可排班服务颜色、图标和排序">
+          {serviceProfiles.map((profile) => (
+            <article className="transit-mode-profile-item" key={profile.kind}>
+              <div className="transit-mode-profile-preview">
+                <span
+                  className="material-symbols-outlined"
+                  style={{ color: profile.color }}
+                  aria-hidden="true"
+                >
+                  {profile.icon}
+                </span>
+                <strong>{profile.label}</strong>
+              </div>
+              <label>
+                名称
+                <input
+                  type="text"
+                  value={profile.label}
+                  maxLength={40}
+                  onChange={(event) =>
+                    updateServiceProfileDraft(profile.kind, { label: event.currentTarget.value })
+                  }
+                />
+              </label>
+              <label>
+                颜色
+                <input
+                  type="color"
+                  value={profile.color}
+                  onChange={(event) =>
+                    updateServiceProfileDraft(profile.kind, { color: event.currentTarget.value })
+                  }
+                />
+              </label>
+              <label>
+                图标
+                <input
+                  type="text"
+                  value={profile.icon}
+                  maxLength={80}
+                  onChange={(event) =>
+                    updateServiceProfileDraft(profile.kind, { icon: event.currentTarget.value })
+                  }
+                />
+              </label>
+              <label>
+                排序
+                <input
+                  type="number"
+                  min={0}
+                  max={999}
+                  value={profile.sortOrder}
+                  onChange={(event) =>
+                    updateServiceProfileDraft(profile.kind, {
+                      sortOrder: Number(event.currentTarget.value),
+                    })
+                  }
+                />
+              </label>
+              <label className="transit-mode-profile-toggle">
+                <input
+                  type="checkbox"
+                  checked={profile.enabled}
+                  onChange={(event) =>
+                    updateServiceProfileDraft(profile.kind, {
+                      enabled: event.currentTarget.checked,
+                    })
+                  }
+                />
+                <span>启用</span>
+              </label>
+            </article>
+          ))}
+        </div>
+        <div className="admin-toolbar">
+          <button
+            className="secondary-action-button is-primary"
+            type="button"
+            disabled={serviceProfileBusy || serviceProfiles.length === 0}
+            onClick={saveServiceProfiles}
+          >
+            保存可排班服务配置
           </button>
         </div>
       </section>

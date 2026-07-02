@@ -8,6 +8,7 @@ import type {
   TicketableServiceKind,
   TransitModeProfile,
   TransitModeSnapshotSummary,
+  TravelScheduleServiceProfile,
   TileProviderSourceKind,
   TransportMode,
   YctProfileId,
@@ -188,6 +189,12 @@ export interface TravelSchedulePublishedPayload {
   tripInstanceCount: number;
 }
 
+export interface TravelScheduleServiceProfileUpdatedPayload {
+  services: TravelScheduleServiceProfile[];
+  updatedBy: string;
+  updatedAt: ISODateTimeString;
+}
+
 export interface TicketInventoryHeldPayload {
   inventoryHoldId: string;
   tripInstanceId: string;
@@ -296,6 +303,7 @@ export type YctEventPayloadMap = {
   ServiceEntryReviewed: ServiceEntryReviewedPayload;
   ServiceEntryPublished: ServiceEntryPublishedPayload;
   TravelSchedulePublished: TravelSchedulePublishedPayload;
+  TravelScheduleServiceProfileUpdated: TravelScheduleServiceProfileUpdatedPayload;
   TicketInventoryHeld: TicketInventoryHeldPayload;
   TicketInventoryHoldExpired: TicketInventoryHoldExpiredPayload;
   TicketOrderCreated: TicketOrderCreatedPayload;

@@ -8,7 +8,7 @@ import type {
   TravelScheduleTimeScope,
   TravelTripInstance,
 } from '@yct/contracts';
-import { useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import {
   clearTravelScheduleHistory,
   readTravelScheduleHistoryState,
@@ -56,6 +56,10 @@ export function TravelScheduleQueryPanel({
     [currentMinutes, query, result.trips, serviceFilter, stationFilter, timeFilter],
   );
   const selectedService = result.services.find((service) => service.kind === serviceFilter);
+  const serviceByKind = useMemo(
+    () => new Map(result.services.map((service) => [service.kind, service])),
+    [result.services],
+  );
   const emptyMessage =
     serviceFilter !== 'all' && selectedService?.status !== 'active'
       ? selectedService?.message
@@ -173,6 +177,7 @@ export function TravelScheduleQueryPanel({
 
       <ScheduleLocalHistoryPanel
         state={historyState}
+        serviceByKind={serviceByKind}
         onSelect={selectHistoryItem}
         onClear={clearHistory}
       />
@@ -191,6 +196,7 @@ export function TravelScheduleQueryPanel({
           {filteredTrips.map((trip) => (
             <ScheduleTripCard
               trip={trip}
+              service={serviceByKind.get(trip.serviceKind)}
               key={trip.tripInstanceId}
               onHistoryChange={syncScheduleHistory}
             />
@@ -224,10 +230,11 @@ function ServiceFilterButton({
       aria-pressed={active}
       data-service={service.kind}
       data-status={service.status}
+      style={createServiceToneStyle(service.color)}
       onClick={onClick}
     >
       <span className="material-symbols-outlined" aria-hidden="true">
-        {getServiceIcon(service.kind)}
+        {service.icon}
       </span>
       <span>{service.label}</span>
       <strong>{service.status === 'active' ? service.tripCount : '未接入'}</strong>
@@ -237,10 +244,12 @@ function ServiceFilterButton({
 
 function ScheduleLocalHistoryPanel({
   state,
+  serviceByKind,
   onSelect,
   onClear,
 }: Readonly<{
   state: TravelScheduleHistoryState | null;
+  serviceByKind: Map<TicketableServiceKind, TravelScheduleServiceSummary>;
   onSelect: (item: TravelScheduleHistoryItem) => void;
   onClear: () => void;
 }>) {
@@ -274,11 +283,12 @@ function ScheduleLocalHistoryPanel({
             className="schedule-history-item"
             type="button"
             data-service={item.serviceKind}
+            style={createServiceToneStyle(serviceByKind.get(item.serviceKind)?.color)}
             key={item.id}
             onClick={() => onSelect(item)}
           >
             <span className="material-symbols-outlined" aria-hidden="true">
-              {getServiceIcon(item.serviceKind)}
+              {serviceByKind.get(item.serviceKind)?.icon ?? getServiceIcon(item.serviceKind)}
             </span>
             <span>
               <strong>{formatHistoryItemTitle(item)}</strong>
@@ -293,9 +303,11 @@ function ScheduleLocalHistoryPanel({
 
 function ScheduleTripCard({
   trip,
+  service,
   onHistoryChange,
 }: Readonly<{
   trip: TravelTripInstance;
+  service?: TravelScheduleServiceSummary;
   onHistoryChange: () => void;
 }>) {
   const [message, setMessage] = useState('');
@@ -323,7 +335,11 @@ function ScheduleTripCard({
   };
 
   return (
-    <article className="schedule-trip-card" data-service={trip.serviceKind}>
+    <article
+      className="schedule-trip-card"
+      data-service={trip.serviceKind}
+      style={createServiceToneStyle(service?.color)}
+    >
       <div className="schedule-trip-time">
         <time>{trip.departureTime}</time>
         <span>{trip.serviceLabel}</span>
@@ -496,6 +512,10 @@ function normalizeSearchValue(value: string): string {
     .replace(/[|\s\u3000]+/g, '')
     .trim()
     .toLowerCase();
+}
+
+function createServiceToneStyle(color: string | undefined): CSSProperties | undefined {
+  return color ? ({ '--schedule-service-tone': color } as CSSProperties) : undefined;
 }
 
 function formatHistoryItemTitle(item: TravelScheduleHistoryItem): string {

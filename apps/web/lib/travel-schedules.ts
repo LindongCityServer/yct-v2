@@ -7,22 +7,18 @@ import type {
   TravelScheduleQuery,
   TravelScheduleQueryResult,
   TravelScheduleServiceSummary,
+  TravelScheduleServiceProfile,
   TravelScheduleTimeScope,
   TravelTripInstance,
 } from '@yct/contracts';
 import { createApiMeta } from './api-meta';
 import { readRuntimeConfig } from './runtime-config';
 import { readTransitScreenSnapshot } from './transit-screen';
+import { readTravelServiceProfiles } from './travel-service-profile-store';
 
-const serviceLabels: Record<TicketableServiceKind, string> = {
-  coach: '客运',
-  ferry: '轮渡',
-  flight: '航班',
-  railway: '地方铁路',
-  custom: '自定义',
-};
 const targetFlightAirport = '临东金桦';
 const targetFlightOperator = '临东航空';
+const flightFetchMaxAttempts = 3;
 
 interface TravelScheduleSourceResult {
   meta: ReturnType<typeof createApiMeta>;
@@ -41,10 +37,21 @@ interface FlightSegment {
 export async function readTravelScheduleQuery(
   query: TravelScheduleQuery = {},
 ): Promise<ApiItemResponse<TravelScheduleQueryResult>> {
-  const [screen, flight] = await Promise.all([readTransitScreenSnapshot(), readFlightTrips()]);
+  const [profiles, screen] = await Promise.all([
+    readTravelServiceProfiles(),
+    readTransitScreenSnapshot(),
+  ]);
+  const flight = await readFlightTrips(profiles);
   const coachTrips =
-    screen.item && screen.meta.sourceStatus === 'ready' ? buildCoachTripInstances(screen.item) : [];
-  const trips = [...coachTrips, ...flight.trips];
+    screen.item && screen.meta.sourceStatus === 'ready'
+      ? buildCoachTripInstances(screen.item, profiles)
+      : [];
+  const enabledKinds = new Set(
+    profiles.filter((profile) => profile.enabled).map((profile) => profile.kind),
+  );
+  const trips = [...coachTrips, ...flight.trips].filter((trip) =>
+    enabledKinds.has(trip.serviceKind),
+  );
   const filteredTrips = filterTrips(trips, query);
   const sourceMessages = [screen.meta.message, flight.meta.message].filter(Boolean);
 
@@ -63,6 +70,7 @@ export async function readTravelScheduleQuery(
           coachStatus: screen.meta.sourceStatus,
           coachMessage: screen.meta.message,
           flight,
+          profiles,
         }),
         trips: [],
         stationOptions: [],
@@ -80,6 +88,7 @@ export async function readTravelScheduleQuery(
         coachStatus: screen.meta.sourceStatus,
         coachMessage: screen.meta.message,
         flight,
+        profiles,
       }),
       trips: filteredTrips,
       stationOptions: uniqueSorted(trips.flatMap((trip) => trip.stationNames)),
@@ -95,6 +104,7 @@ function buildServiceSummaries(input: {
   coachStatus: 'ready' | 'not_configured' | 'unavailable';
   coachMessage?: string;
   flight: TravelScheduleSourceResult;
+  profiles: TravelScheduleServiceProfile[];
 }): TravelScheduleServiceSummary[] {
   const coachStationCount = input.coachSnapshot
     ? new Set(input.coachSnapshot.trips.flatMap((trip) => trip.stationNames)).size
@@ -102,28 +112,22 @@ function buildServiceSummaries(input: {
   const flightStationCount = new Set(input.flight.trips.flatMap((trip) => trip.stationNames)).size;
 
   return [
-    {
+    buildServiceSummary('coach', input.profiles, {
       serviceId: 'legacy-coach',
-      kind: 'coach',
-      label: serviceLabels.coach,
       status: input.coachStatus === 'ready' ? 'active' : 'not_connected',
       tripCount: input.coachTrips.length,
       stationCount: coachStationCount,
       message: input.coachStatus === 'ready' ? undefined : input.coachMessage,
-    },
-    {
+    }),
+    buildServiceSummary('ferry', input.profiles, {
       serviceId: 'future-ferry',
-      kind: 'ferry',
-      label: serviceLabels.ferry,
       status: 'not_connected',
       tripCount: 0,
       stationCount: 0,
       message: '轮渡班次尚未接入统一平台。',
-    },
-    {
+    }),
+    buildServiceSummary('flight', input.profiles, {
       serviceId: 'haojin-flight',
-      kind: 'flight',
-      label: serviceLabels.flight,
       status: input.flight.meta.sourceStatus === 'ready' ? 'active' : 'not_connected',
       tripCount: input.flight.trips.length,
       stationCount: flightStationCount,
@@ -131,15 +135,37 @@ function buildServiceSummaries(input: {
         input.flight.meta.sourceStatus === 'ready'
           ? undefined
           : (input.flight.meta.message ?? '航班班次尚未接入统一平台。'),
-    },
-  ];
+    }),
+  ]
+    .filter((service) => getServiceProfile(service.kind, input.profiles).enabled)
+    .sort((left, right) => left.sortOrder - right.sortOrder);
 }
 
-function buildCoachTripInstances(snapshot: TransitScreenSnapshot): TravelTripInstance[] {
+function buildServiceSummary(
+  kind: TicketableServiceKind,
+  profiles: TravelScheduleServiceProfile[],
+  input: Omit<TravelScheduleServiceSummary, 'kind' | 'label' | 'color' | 'icon' | 'sortOrder'>,
+): TravelScheduleServiceSummary {
+  const profile = getServiceProfile(kind, profiles);
+  return {
+    ...input,
+    kind,
+    label: profile.label,
+    color: profile.color,
+    icon: profile.icon,
+    sortOrder: profile.sortOrder,
+  };
+}
+
+function buildCoachTripInstances(
+  snapshot: TransitScreenSnapshot,
+  profiles: TravelScheduleServiceProfile[],
+): TravelTripInstance[] {
   const stationNameById = new Map(
     snapshot.stations.map((station) => [station.stationId, station.name]),
   );
   const gatesByLine = groupGatesByLine(snapshot.gates);
+  const profile = getServiceProfile('coach', profiles);
 
   return snapshot.trips.map((trip) => {
     const gateText = formatGates(gatesByLine.get(trip.lineName) ?? [], stationNameById);
@@ -148,7 +174,7 @@ function buildCoachTripInstances(snapshot: TransitScreenSnapshot): TravelTripIns
       tripInstanceId: trip.sourceId,
       tripCode: trip.tripId,
       serviceKind: 'coach',
-      serviceLabel: serviceLabels.coach,
+      serviceLabel: profile.label,
       departureTime: trip.departureTime,
       routeNote: undefined,
       lineName: trip.lineName,
@@ -166,20 +192,21 @@ function buildCoachTripInstances(snapshot: TransitScreenSnapshot): TravelTripIns
   });
 }
 
-async function readFlightTrips(): Promise<TravelScheduleSourceResult> {
+async function readFlightTrips(
+  profiles: TravelScheduleServiceProfile[],
+): Promise<TravelScheduleSourceResult> {
   const config = readRuntimeConfig();
   try {
-    const response = await fetch(config.flightDataUrl, { cache: 'no-store' });
-    if (!response.ok) {
+    const sourceResult = await fetchFlightSource(config.flightDataUrl);
+    if (!sourceResult.ok) {
       return {
-        meta: createApiMeta('unavailable', `航班数据源返回 ${response.status}。`),
+        meta: createApiMeta('unavailable', sourceResult.message),
         trips: [],
         sourceFiles: [config.flightDataUrl],
       };
     }
 
-    const source = await response.text();
-    const trips = parseFlightScheduleSource(source, config.flightDataUrl);
+    const trips = parseFlightScheduleSource(sourceResult.text, config.flightDataUrl, profiles);
     return {
       meta: createApiMeta(
         'ready',
@@ -202,10 +229,45 @@ async function readFlightTrips(): Promise<TravelScheduleSourceResult> {
   }
 }
 
-function parseFlightScheduleSource(source: string, sourcePath: string): TravelTripInstance[] {
+async function fetchFlightSource(
+  url: string,
+): Promise<{ ok: true; text: string } | { ok: false; message: string }> {
+  let lastMessage = '航班数据源暂不可用。';
+
+  for (let attempt = 1; attempt <= flightFetchMaxAttempts; attempt += 1) {
+    try {
+      const response = await fetch(url, { cache: 'no-store' });
+      if (response.ok) {
+        return { ok: true, text: await response.text() };
+      }
+
+      lastMessage = `航班数据源返回 ${response.status}。`;
+      if (response.status < 500) {
+        break;
+      }
+    } catch (error) {
+      lastMessage = error instanceof Error ? error.message : '航班数据源暂不可用。';
+    }
+
+    if (attempt < flightFetchMaxAttempts) {
+      await delay(160 * attempt);
+    }
+  }
+
+  return {
+    ok: false,
+    message: `航班数据源读取失败（已重试 ${flightFetchMaxAttempts} 次）：${lastMessage}`,
+  };
+}
+
+function parseFlightScheduleSource(
+  source: string,
+  sourcePath: string,
+  profiles: TravelScheduleServiceProfile[],
+): TravelTripInstance[] {
   return source
     .split(/\r?\n/)
-    .map((line) => parseFlightScheduleLine(line, sourcePath))
+    .map((line) => parseFlightScheduleLine(line, sourcePath, profiles))
     .filter((trip): trip is TravelTripInstance => Boolean(trip))
     .sort(compareTrips);
 }
@@ -213,6 +275,7 @@ function parseFlightScheduleSource(source: string, sourcePath: string): TravelTr
 function parseFlightScheduleLine(
   rawLine: string,
   sourcePath: string,
+  profiles: TravelScheduleServiceProfile[],
 ): TravelTripInstance | undefined {
   const line = rawLine.trim();
   if (!line.includes('【') || !line.includes('《航班结束》')) {
@@ -247,12 +310,13 @@ function parseFlightScheduleLine(
 
   const routeName = `${departureSegment.airportName} - ${arrivalSegment.airportName}`;
   const fareText = parseFlightFareText(line);
+  const profile = getServiceProfile('flight', profiles);
 
   return {
     tripInstanceId: `flight:${flightNumber.trim()}:${departureSegment.time}`,
     tripCode: flightNumber.trim(),
     serviceKind: 'flight',
-    serviceLabel: serviceLabels.flight,
+    serviceLabel: profile.label,
     departureTime: departureSegment.time,
     arrivalTime: arrivalSegment.time,
     arrivalDayOffset: arrivalSegment.dayOffset,
@@ -269,6 +333,25 @@ function parseFlightScheduleLine(
     operatingDays: parseOperatingDays(daysText),
     availability: 'query_only',
     sourcePath,
+  };
+}
+
+function getServiceProfile(
+  kind: TicketableServiceKind,
+  profiles: TravelScheduleServiceProfile[],
+): TravelScheduleServiceProfile {
+  const profile = profiles.find((item) => item.kind === kind);
+  if (profile) {
+    return profile;
+  }
+
+  return {
+    kind,
+    label: kind,
+    color: '#168F78',
+    icon: 'route',
+    sortOrder: 999,
+    enabled: true,
   };
 }
 
@@ -514,4 +597,10 @@ function uniqueSorted(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean))).sort((left, right) =>
     left.localeCompare(right, 'zh-CN', { numeric: true }),
   );
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
 }

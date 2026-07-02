@@ -357,10 +357,24 @@ export type TravelScheduleServiceStatus = 'active' | 'not_connected' | 'planned'
 export type TravelTripAvailability =
   'query_only' | 'booking_reference' | 'ticketing_unavailable' | 'not_connected';
 
+export interface TravelScheduleServiceProfile {
+  kind: TicketableServiceKind;
+  label: string;
+  color: string;
+  icon: string;
+  sortOrder: number;
+  enabled: boolean;
+  updatedAt?: ISODateTimeString;
+  updatedBy?: string;
+}
+
 export interface TravelScheduleServiceSummary {
   serviceId: string;
   kind: TicketableServiceKind;
   label: string;
+  color: string;
+  icon: string;
+  sortOrder: number;
   status: TravelScheduleServiceStatus;
   tripCount: number;
   stationCount: number;

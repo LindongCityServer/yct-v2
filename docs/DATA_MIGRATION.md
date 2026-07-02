@@ -41,7 +41,7 @@
 
 统一班次查询 MVP 运行时入口为 `/api/travel/schedules`，当前复用同一批旧 `ltcx` 真实逐班次、站点、检票口、票价和运营方数据，并映射为 `TravelTripInstance`；航班读取 `YCT_FLIGHT_DATA_URL` 的真实文本数据并过滤到 YCT 范围；轮渡在数据源接入前只返回未接入服务摘要，不生成占位班次。
 
-航班查询数据源当前可通过 `YCT_FLIGHT_DATA_URL` 配置，默认读取 `https://haojin.guanmu233.cn/data/flight_data.txt`。解析器按 `【航班号】〈航线备注〉«运行日»〔执飞机型〕『航空公司』《地点出发/经停/到达》{时间}#+天数#@位置@ ... §票价§《航班结束》` 结构读取，只纳入“临东金桦”起飞、经停、到达的航班，以及航空公司为“临东航空”的航班；其他航班不迁入 YCT 查询结果。
+航班查询数据源当前可通过 `YCT_FLIGHT_DATA_URL` 配置，默认读取 `https://haojin.guanmu233.cn/data/flight_data.txt`。解析器按 `【航班号】〈航线备注〉«运行日»〔执飞机型〕『航空公司』《地点出发/经停/到达》{时间}#+天数#@位置@ ... §票价§《航班结束》` 结构读取，只纳入“临东金桦”起飞、经停、到达的航班，以及航空公司为“临东航空”的航班；其他航班不迁入 YCT 查询结果。当前运行时对外部航班源做短重试以缓解 `ECONNRESET` 等瞬时失败，但长期仍应迁入 YCT 后台数据源或稳定抓取快照。
 
 浏览器本地班次记录保存在 `yct.travelScheduleHistory.v1`，只记录统一班次查询结果快照和提醒关联时间，最多保留最近 50 条。它不能作为旧订单或新版票务订单迁移来源；登录后若要同步到账号，需要单独的用户确认、去重和撤销导入策略。
 
@@ -54,6 +54,7 @@
 - `YCT_LEGACY_DATA_SOURCE=remote`：只读取 `YCT_LEGACY_DATA_REMOTE_BASE_URL`。
 - `YCT_LEGACY_DATA_REMOTE_BASE_URL=https://yct.shangxiaoguan.top/data`：默认远程旧站 data 基准。
 - `YCT_FLIGHT_DATA_URL=https://haojin.guanmu233.cn/data/flight_data.txt`：默认航班文本数据源；迁移到 YCT 后台或其他服务器时可替换为新的同格式 URL。
+- `YCT_TRAVEL_SERVICE_PROFILE_STORE_PATH=.yct-data/travel-service-profile-store.json`：统一班次/票务服务 Profile 本地仓储路径，维护客运大巴、轮渡、航班等可排班服务的名称、颜色、图标、排序和启用状态。
 
 只有在强制 `local` 但没有配置本地目录时，接口返回 `not_configured`。其他读取失败返回 `unavailable`。前台不得使用模拟内容或模拟线路数据。
 

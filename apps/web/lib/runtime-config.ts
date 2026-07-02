@@ -7,6 +7,7 @@ export interface RuntimeConfig {
   serviceEntryStorePath: string;
   transitDataStorePath: string;
   transitModeProfileStorePath: string;
+  travelServiceProfileStorePath: string;
   poiSubmissionStorePath: string;
   tileFreshHttpTemplate?: string;
   tileSafeHttpsStaticTemplate?: string;
@@ -48,6 +49,9 @@ export function readRuntimeConfig(): RuntimeConfig {
     transitModeProfileStorePath:
       emptyToUndefined(process.env.YCT_TRANSIT_MODE_PROFILE_STORE_PATH) ??
       '.yct-data/transit-mode-profile-store.json',
+    travelServiceProfileStorePath:
+      emptyToUndefined(process.env.YCT_TRAVEL_SERVICE_PROFILE_STORE_PATH) ??
+      '.yct-data/travel-service-profile-store.json',
     poiSubmissionStorePath:
       emptyToUndefined(process.env.YCT_POI_SUBMISSION_STORE_PATH) ??
       '.yct-data/poi-submission-store.json',
