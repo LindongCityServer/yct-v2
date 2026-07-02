@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { appPath } from '../lib/app-paths';
 
 interface AdminContentRecord {
   contentId: string;
@@ -41,7 +42,7 @@ export function AdminOperationsPanel() {
   );
 
   const loadRecords = async () => {
-    const response = await fetch('/api/admin/operations/contents', { cache: 'no-store' });
+    const response = await fetch(appPath('/api/admin/operations/contents'), { cache: 'no-store' });
     const data = (await response.json()) as { items?: AdminContentRecord[]; message?: string };
     if (!response.ok) {
       setStatusText(data.message ?? '内容后台暂不可用');
@@ -61,7 +62,7 @@ export function AdminOperationsPanel() {
   const createDraft = async () => {
     setIsBusy(true);
     try {
-      const response = await fetch('/api/admin/operations/contents', {
+      const response = await fetch(appPath('/api/admin/operations/contents'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -98,10 +99,10 @@ export function AdminOperationsPanel() {
     try {
       const endpoint =
         action === 'submit'
-          ? `/api/admin/operations/contents/${encodeURIComponent(contentId)}/submit`
+          ? appPath(`/api/admin/operations/contents/${encodeURIComponent(contentId)}/submit`)
           : action === 'publish'
-            ? `/api/admin/operations/contents/${encodeURIComponent(contentId)}/publish`
-            : `/api/admin/operations/contents/${encodeURIComponent(contentId)}/review`;
+            ? appPath(`/api/admin/operations/contents/${encodeURIComponent(contentId)}/publish`)
+            : appPath(`/api/admin/operations/contents/${encodeURIComponent(contentId)}/review`);
       const body =
         action === 'approve'
           ? { decision: 'approved' }

@@ -32,6 +32,8 @@ export function TravelScheduleQueryPanel({
 }>) {
   const [serviceFilter, setServiceFilter] = useState<ServiceFilter>('all');
   const [stationFilter, setStationFilter] = useState('all');
+  const [originFilter, setOriginFilter] = useState('all');
+  const [destinationFilter, setDestinationFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState<TravelScheduleTimeScope>('all');
   const [serviceDate, setServiceDate] = useState(() => toDateInputValue(new Date()));
   const [query, setQuery] = useState('');
@@ -50,12 +52,24 @@ export function TravelScheduleQueryPanel({
       filterTrips(result.trips, {
         serviceFilter,
         stationFilter,
+        originFilter,
+        destinationFilter,
         timeFilter,
         serviceDate,
         query,
         currentMinutes,
       }),
-    [currentMinutes, query, result.trips, serviceDate, serviceFilter, stationFilter, timeFilter],
+    [
+      currentMinutes,
+      destinationFilter,
+      originFilter,
+      query,
+      result.trips,
+      serviceDate,
+      serviceFilter,
+      stationFilter,
+      timeFilter,
+    ],
   );
   const selectedService = result.services.find((service) => service.kind === serviceFilter);
   const serviceByKind = useMemo(
@@ -69,6 +83,8 @@ export function TravelScheduleQueryPanel({
   const selectHistoryItem = (item: TravelScheduleHistoryItem) => {
     setServiceFilter(item.serviceKind);
     setStationFilter('all');
+    setOriginFilter('all');
+    setDestinationFilter('all');
     setTimeFilter('all');
     setQuery(item.tripCode ?? item.lineName);
   };
@@ -144,12 +160,42 @@ export function TravelScheduleQueryPanel({
 
         <div className="schedule-filter-row">
           <label>
-            <span>车站</span>
+            <span>经过</span>
             <select
               value={stationFilter}
               onChange={(event) => setStationFilter(event.currentTarget.value)}
             >
-              <option value="all">全部车站</option>
+              <option value="all">任意车站</option>
+              {result.stationOptions.map((stationName) => (
+                <option value={stationName} key={stationName}>
+                  {stationName}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>起点</span>
+            <select
+              value={originFilter}
+              onChange={(event) => setOriginFilter(event.currentTarget.value)}
+            >
+              <option value="all">任意起点</option>
+              {result.stationOptions.map((stationName) => (
+                <option value={stationName} key={stationName}>
+                  {stationName}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>终点</span>
+            <select
+              value={destinationFilter}
+              onChange={(event) => setDestinationFilter(event.currentTarget.value)}
+            >
+              <option value="all">任意终点</option>
               {result.stationOptions.map((stationName) => (
                 <option value={stationName} key={stationName}>
                   {stationName}
@@ -432,6 +478,8 @@ function filterTrips(
   input: {
     serviceFilter: ServiceFilter;
     stationFilter: string;
+    originFilter: string;
+    destinationFilter: string;
     timeFilter: TravelScheduleTimeScope;
     serviceDate: string;
     query: string;
@@ -442,6 +490,10 @@ function filterTrips(
   const stationFilter = normalizeSearchValue(
     input.stationFilter === 'all' ? '' : input.stationFilter,
   );
+  const originFilter = normalizeSearchValue(input.originFilter === 'all' ? '' : input.originFilter);
+  const destinationFilter = normalizeSearchValue(
+    input.destinationFilter === 'all' ? '' : input.destinationFilter,
+  );
   const serviceDate = normalizeServiceDate(input.serviceDate);
   const serviceDateState = getServiceDateState(serviceDate);
   const serviceDay = getServiceDay(serviceDate);
@@ -449,6 +501,7 @@ function filterTrips(
   return [...trips]
     .filter((trip) => input.serviceFilter === 'all' || trip.serviceKind === input.serviceFilter)
     .filter((trip) => filterByServiceDay(trip, serviceDay))
+    .filter((trip) => filterByStationPair(trip, originFilter, destinationFilter))
     .filter(
       (trip) =>
         !stationFilter ||
@@ -491,6 +544,32 @@ function filterByServiceDay(trip: TravelTripInstance, serviceDay: string | undef
   }
 
   return trip.operatingDays.includes(serviceDay);
+}
+
+function filterByStationPair(
+  trip: TravelTripInstance,
+  originStationName: string,
+  destinationStationName: string,
+): boolean {
+  if (!originStationName && !destinationStationName) {
+    return true;
+  }
+
+  const stationNames = trip.stationNames.map(normalizeSearchValue);
+  const originIndex = originStationName ? stationNames.indexOf(originStationName) : -1;
+  const destinationIndex = destinationStationName
+    ? stationNames.indexOf(destinationStationName)
+    : -1;
+
+  if (originStationName && originIndex < 0) {
+    return false;
+  }
+
+  if (destinationStationName && destinationIndex < 0) {
+    return false;
+  }
+
+  return !originStationName || !destinationStationName || originIndex <= destinationIndex;
 }
 
 function getServiceDateState(serviceDate: string | undefined): ServiceDateState {

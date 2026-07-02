@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { SettingsBootstrap } from '@yct/contracts';
+import { appPath } from '../../../../lib/app-paths';
 import { readRuntimeConfig } from '../../../../lib/runtime-config';
 
 export function GET() {
@@ -9,8 +10,8 @@ export function GET() {
       name: '雨城通',
       englishName: 'Yuchengtong',
       abbreviation: 'YCT',
-      iconUrl: '/icons/yct-icon.svg',
-      wordmarkUrl: '/icons/yct-logo-wordmark.svg',
+      iconUrl: appPath('/icons/yct-icon.svg'),
+      wordmarkUrl: appPath('/icons/yct-logo-wordmark.svg'),
     },
     integrations: {
       ldpassConfigured: Boolean(config.ldpassBaseUrl && config.ldpassClientId),

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { appPath } from '../lib/app-paths';
 
 export function PwaBridge() {
   useEffect(() => {
@@ -43,8 +44,8 @@ export function PwaBridge() {
     let cancelled = false;
 
     navigator.serviceWorker
-      .register('/sw.js', {
-        scope: '/',
+      .register(appPath('/sw.js'), {
+        scope: appPath('/'),
       })
       .then((registration) => {
         if (cancelled) {

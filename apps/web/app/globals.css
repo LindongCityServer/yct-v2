@@ -3612,7 +3612,7 @@ body .material-symbols-outlined {
 
 .schedule-filter-row {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(160px, 0.8fr) minmax(240px, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--yct-space-3);
   align-items: end;
 }
@@ -3640,6 +3640,7 @@ body .material-symbols-outlined {
 .schedule-time-filter {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-column: span 2;
   gap: var(--yct-space-2);
   padding: 4px;
   border-radius: var(--yct-radius-pill);
@@ -4638,6 +4639,10 @@ body .material-symbols-outlined {
 
   .schedule-filter-row {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .schedule-time-filter {
+    grid-column: auto;
   }
 
   .schedule-time-filter button {

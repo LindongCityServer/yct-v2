@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { appPath } from '../lib/app-paths';
 
 interface AdminServiceEntry {
   id: string;
@@ -45,7 +46,7 @@ export function AdminServicesPanel() {
   );
 
   const loadEntries = async () => {
-    const response = await fetch('/api/admin/services/entries', { cache: 'no-store' });
+    const response = await fetch(appPath('/api/admin/services/entries'), { cache: 'no-store' });
     const data = (await response.json()) as { items?: AdminServiceEntry[]; message?: string };
     if (!response.ok) {
       setStatusText(data.message ?? '服务入口后台暂不可用');
@@ -63,7 +64,7 @@ export function AdminServicesPanel() {
   const createDraft = async () => {
     setIsBusy(true);
     try {
-      const response = await fetch('/api/admin/services/entries', {
+      const response = await fetch(appPath('/api/admin/services/entries'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -102,10 +103,10 @@ export function AdminServicesPanel() {
     try {
       const endpoint =
         action === 'submit'
-          ? `/api/admin/services/entries/${encodeURIComponent(entryId)}/submit`
+          ? appPath(`/api/admin/services/entries/${encodeURIComponent(entryId)}/submit`)
           : action === 'publish'
-            ? `/api/admin/services/entries/${encodeURIComponent(entryId)}/publish`
-            : `/api/admin/services/entries/${encodeURIComponent(entryId)}/review`;
+            ? appPath(`/api/admin/services/entries/${encodeURIComponent(entryId)}/publish`)
+            : appPath(`/api/admin/services/entries/${encodeURIComponent(entryId)}/review`);
       const body =
         action === 'approve'
           ? { decision: 'approved' }

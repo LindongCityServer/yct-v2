@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LdpassIdentityProvider } from '@yct/adapters';
+import { appPath } from '../../../../lib/app-paths';
 import { readRuntimeConfig } from '../../../../lib/runtime-config';
 import {
   createYctSessionSnapshot,
@@ -12,7 +13,7 @@ import {
 } from '../../../../lib/yct-session';
 
 export async function GET(request: NextRequest) {
-  const accountUrl = new URL('/account', request.url);
+  const accountUrl = new URL(appPath('/account'), request.url);
   const returnedState = request.nextUrl.searchParams.get('state');
   const storedState = request.cookies.get(yctAuthStateCookieName)?.value;
 

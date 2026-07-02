@@ -439,6 +439,8 @@ export interface TravelScheduleQuery {
   serviceKind?: TicketableServiceKind | 'all';
   query?: string;
   stationName?: string;
+  originStationName?: string;
+  destinationStationName?: string;
   serviceDate?: string;
   timeScope?: TravelScheduleTimeScope;
 }

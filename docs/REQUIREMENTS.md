@@ -211,7 +211,7 @@
 - 车站信息：站点设施、候车点、检票口、运营提示；第一版站点详情使用旧 `metro_station_detail.js`，可从线路详情和全局搜索进入，未覆盖的公交/客运等站点不生成空详情。
 - 客运大屏：旧 `ltcx_schedule` 的现代化入口。
 - 客运大屏数据：读取旧 `ltcx/route.txt` 与 `ltcx/screen/*.txt`，结构化为站点、逐班次、检票口、运行区间和滚动公告；出行页展示摘要，`/travel/screen` 提供完整班次筛选和检票口展示。
-- 统一班次查询 MVP：当前工程新增 `/travel/schedules` 和 `/api/travel/schedules`，以同一套 `TravelScheduleService` / `TravelTripInstance` 展示客运、轮渡、航班等可排班交通方式；客运读取旧 `ltcx` 真实班次，保留班次号、站点、检票口、票价、运营方，并预留车型/船型/机型字段；航班读取 `YCT_FLIGHT_DATA_URL` 并过滤到 YCT 范围；轮渡在没有数据源前只显示“暂未接入”，不生成模拟班次，不创建真实订单。页面支持服务日期筛选，默认选中今天；接口支持 `serviceDate` 或 `date` 参数，只有具备运行日字段的数据会按星期过滤，旧客运缺失运行日时不能凭空隐藏班次。
+- 统一班次查询 MVP：当前工程新增 `/travel/schedules` 和 `/api/travel/schedules`，以同一套 `TravelScheduleService` / `TravelTripInstance` 展示客运、轮渡、航班等可排班交通方式；客运读取旧 `ltcx` 真实班次，保留班次号、站点、检票口、票价、运营方，并预留车型/船型/机型字段；航班读取 `YCT_FLIGHT_DATA_URL` 并过滤到 YCT 范围；轮渡在没有数据源前只显示“暂未接入”，不生成模拟班次，不创建真实订单。页面支持服务日期、经过车站、起点和终点筛选，默认选中今天；接口支持 `serviceDate` 或 `date` 参数，只有具备运行日字段的数据会按星期过滤，旧客运缺失运行日时不能凭空隐藏班次。接口还支持 `originStationName` / `destinationStationName`，兼容 `origin` / `destination`、`from` / `to`；同时选择起终点时必须按班次真实站点序列判断可达方向。
 - 班次服务配置：`/api/travel/schedules` 返回的服务摘要需要携带服务 Profile 中的 `label`、`color`、`icon` 和 `sortOrder`；前台不能用固定前端常量决定客运/轮渡/航班的图标和颜色。管理员第一版可在 `/admin/transit` 的“可排班服务配置”区维护这些值。
 - 航班数据源：航班信息可参考 `https://haojin.guanmu233.cn/data/flight_data.txt` 的文本格式，形如 `【航班号】〈航线备注〉«运行日»〔执飞机型〕『航空公司』《起飞机场出发》{起飞时间}#+天数#@值机位置@ ... 《到达机场到达》{到达时间}#+天数#@到达位置@ §票价§《航班结束》`。YCT 当前只处理任一航段地点为“临东金桦”的航班，以及航空公司为“临东航空”的航班；其他城市间航班不进入本项目查询结果。解析器需要预留经停航段，但如果上游当前没有经停样例，不得伪造经停。
 - 班次提醒联动：统一班次查询中的真实班次可以创建本地行程提醒，默认按下一次发车时间提前 30 分钟提醒，若班次过近则使用当前时间后 1 分钟；提醒来源标记为 `schedule`，写入本地 `yct.tripReminders.v1`，不代表订票、占座或服务端订单。

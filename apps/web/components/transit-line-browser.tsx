@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { TransitModeProfile } from '@yct/contracts';
+import { appPath } from '../lib/app-paths';
 import type { TransitLineSummary, TransitModeSummary } from '../lib/legacy-transit';
 import { TitleWithBreaks } from './title-with-breaks';
 
@@ -130,7 +131,7 @@ export function TransitLineBrowser({
         {sortedLines.map((line) => (
           <Link
             className="line-list-item"
-            href={`/map/lines/${encodeURIComponent(line.id)}`}
+            href={appPath(`/map/lines/${encodeURIComponent(line.id)}`)}
             key={line.id}
           >
             <span className="line-list-title">

@@ -1,5 +1,6 @@
 import type { ApiItemResponse, TransitScreenSnapshot, TransitScreenTrip } from '@yct/contracts';
 import Link from 'next/link';
+import { appPath } from '../lib/app-paths';
 
 export function TransitScreenPanel({
   screen,
@@ -19,7 +20,7 @@ export function TransitScreenPanel({
       <div className="section-heading">
         <h2 id="transit-screen-title">智运大屏</h2>
         <div className="screen-panel-actions">
-          <Link className="screen-open-link" href="/travel/screen">
+          <Link className="screen-open-link" href={appPath('/travel/screen')}>
             <span className="material-symbols-outlined" aria-hidden="true">
               departure_board
             </span>

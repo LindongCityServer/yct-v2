@@ -1,3 +1,5 @@
+import { appPath } from './app-paths';
+
 export interface RuntimeConfig {
   siteUrl: string;
   ldpassBaseUrl?: string;
@@ -72,7 +74,7 @@ export function readRuntimeConfig(): RuntimeConfig {
       emptyToUndefined(process.env.YCT_FLIGHT_DATA_URL) ??
       'https://haojin.guanmu233.cn/data/flight_data.txt',
     legacyAssetPublicPrefix:
-      emptyToUndefined(process.env.YCT_LEGACY_ASSET_PUBLIC_PREFIX) ?? '/legacy-assets',
+      emptyToUndefined(process.env.YCT_LEGACY_ASSET_PUBLIC_PREFIX) ?? appPath('/legacy-assets'),
     poiIconCandidates: parsePoiIconCandidates(process.env.YCT_POI_ICON_CANDIDATES),
   };
 }

@@ -19,6 +19,16 @@ export async function GET(request: Request) {
     serviceKind: normalizeServiceKind(url.searchParams.get('serviceKind')),
     query: normalizeString(url.searchParams.get('q')),
     stationName: normalizeString(url.searchParams.get('stationName')),
+    originStationName: normalizeString(
+      url.searchParams.get('originStationName') ??
+        url.searchParams.get('origin') ??
+        url.searchParams.get('from'),
+    ),
+    destinationStationName: normalizeString(
+      url.searchParams.get('destinationStationName') ??
+        url.searchParams.get('destination') ??
+        url.searchParams.get('to'),
+    ),
     serviceDate: normalizeServiceDate(
       url.searchParams.get('serviceDate') ?? url.searchParams.get('date'),
     ),

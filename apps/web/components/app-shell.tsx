@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { appPath } from '../lib/app-paths';
 
 export type PrimaryNavKey = 'operations' | 'map' | 'travel' | 'services';
 export type AppShellVariant = 'default' | 'map';
@@ -60,7 +61,7 @@ export function AppShell({
 
     async function loadAccountStatus() {
       try {
-        const response = await fetch('/api/account/status', { cache: 'no-store' });
+        const response = await fetch(appPath('/api/account/status'), { cache: 'no-store' });
         const data = (await response.json()) as AccountStatusResponse;
         if (!cancelled) {
           setAccountStatus(data);
@@ -95,7 +96,7 @@ export function AppShell({
   };
 
   const openGlobalSearch = () => {
-    router.push('/search');
+    router.push(appPath('/search'));
   };
 
   return (
@@ -118,13 +119,17 @@ export function AppShell({
         >
           <span className="material-symbols-outlined">menu</span>
         </button>
-        <Link className="brand" href="/" aria-label="雨城通首页">
+        <Link className="brand" href={appPath('/')} aria-label="雨城通首页">
           <img
             className="brand-logo brand-logo-wordmark"
-            src="/icons/yct-logo-wordmark.svg"
+            src={appPath('/icons/yct-logo-wordmark.svg')}
             alt="雨城通"
           />
-          <img className="brand-logo brand-logo-symbol" src="/icons/yct-logo.svg" alt="雨城通" />
+          <img
+            className="brand-logo brand-logo-symbol"
+            src={appPath('/icons/yct-logo.svg')}
+            alt="雨城通"
+          />
         </Link>
         {pageTitle ? <span className="topbar-page-title">{pageTitle}</span> : null}
         <div className="topbar-actions">
@@ -146,7 +151,7 @@ export function AppShell({
           </button>
           <Link
             className={accountButtonClassName(accountStatus)}
-            href="/account"
+            href={appPath('/account')}
             aria-label={accountButtonAriaLabel(accountStatus)}
             title={accountButtonAriaLabel(accountStatus)}
           >
@@ -180,7 +185,7 @@ export function AppShell({
             {navItems.map((item) => (
               <Link
                 className={active === item.key ? 'rail-item is-active' : 'rail-item'}
-                href={item.href}
+                href={appPath(item.href)}
                 key={item.key}
               >
                 <span className="material-symbols-outlined">{item.icon}</span>
@@ -201,7 +206,7 @@ export function AppShell({
         {navItems.map((item) => (
           <Link
             className={active === item.key ? 'bottom-nav-item is-active' : 'bottom-nav-item'}
-            href={item.href}
+            href={appPath(item.href)}
             key={item.key}
           >
             <span className="material-symbols-outlined">{item.icon}</span>
@@ -273,7 +278,7 @@ export function SecondaryShell({
   return (
     <main className="secondary-shell">
       <header className="topbar secondary-topbar">
-        <Link className="icon-button" href={backHref} aria-label="返回">
+        <Link className="icon-button" href={appPath(backHref)} aria-label="返回">
           <span className="material-symbols-outlined">arrow_back</span>
         </Link>
         <h1 className="secondary-title">{title}</h1>

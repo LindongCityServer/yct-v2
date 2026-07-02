@@ -460,6 +460,8 @@ function filterTrips(
   const serviceKind = query.serviceKind ?? 'all';
   const timeScope = query.timeScope ?? 'all';
   const stationName = normalizeQueryValue(query.stationName);
+  const originStationName = normalizeQueryValue(query.originStationName);
+  const destinationStationName = normalizeQueryValue(query.destinationStationName);
   const searchText = normalizeQueryValue(query.query);
   const serviceDateState = getServiceDateState(query.serviceDate);
   const serviceDay = getServiceDay(query.serviceDate);
@@ -471,6 +473,7 @@ function filterTrips(
   return trips
     .filter((trip) => serviceKind === 'all' || trip.serviceKind === serviceKind)
     .filter((trip) => filterByServiceDay(trip, serviceDay))
+    .filter((trip) => filterByStationPair(trip, originStationName, destinationStationName))
     .filter(
       (trip) =>
         !stationName || trip.stationNames.some((name) => normalizeQueryValue(name) === stationName),
@@ -546,6 +549,32 @@ function filterByServiceDay(trip: TravelTripInstance, serviceDay: string | undef
   }
 
   return trip.operatingDays.includes(serviceDay);
+}
+
+function filterByStationPair(
+  trip: TravelTripInstance,
+  originStationName: string,
+  destinationStationName: string,
+): boolean {
+  if (!originStationName && !destinationStationName) {
+    return true;
+  }
+
+  const stationNames = trip.stationNames.map(normalizeQueryValue);
+  const originIndex = originStationName ? stationNames.indexOf(originStationName) : -1;
+  const destinationIndex = destinationStationName
+    ? stationNames.indexOf(destinationStationName)
+    : -1;
+
+  if (originStationName && originIndex < 0) {
+    return false;
+  }
+
+  if (destinationStationName && destinationIndex < 0) {
+    return false;
+  }
+
+  return !originStationName || !destinationStationName || originIndex <= destinationIndex;
 }
 
 function getServiceDateState(serviceDate: string | undefined): ServiceDateState {

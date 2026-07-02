@@ -4,6 +4,7 @@ import type { ApiListResponse, OperationsFeedItem } from '@yct/contracts';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
+import { appPath } from '../lib/app-paths';
 import { TitleWithBreaks } from './title-with-breaks';
 
 const categories = [
@@ -49,7 +50,7 @@ export function OperationsHome({ feed }: Readonly<{ feed: ApiListResponse<Operat
         {bannerItem ? (
           <Link
             className="hero-feature-link"
-            href={`/operations/${encodeURIComponent(bannerItem.id)}`}
+            href={appPath(`/operations/${encodeURIComponent(bannerItem.id)}`)}
             style={buildHeroBackgroundStyle(bannerItem)}
           >
             <div className="hero-copy">
@@ -139,7 +140,7 @@ function FeedList({ items }: Readonly<{ items: OperationsFeedItem[] }>) {
       {items.map((item) => (
         <Link
           className="operations-feed-item"
-          href={`/operations/${encodeURIComponent(item.id)}`}
+          href={appPath(`/operations/${encodeURIComponent(item.id)}`)}
           key={item.id}
         >
           <div

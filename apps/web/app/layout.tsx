@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import '@yct/design-tokens/tokens.css';
 import { PreferenceBridge } from '../components/preference-bridge';
 import { PwaBridge } from '../components/pwa-bridge';
+import { appPath } from '../lib/app-paths';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -11,14 +12,14 @@ export const metadata: Metadata = {
     template: '%s - 雨城通',
   },
   description: '雨城通 Yuchengtong',
-  manifest: '/manifest.webmanifest',
+  manifest: appPath('/manifest.webmanifest'),
   icons: {
     icon: [
-      { url: '/icons/yct-logo.svg', type: 'image/svg+xml' },
-      { url: '/icons/yct-logo-192.png', sizes: '192x192', type: 'image/png' },
+      { url: appPath('/icons/yct-logo.svg'), type: 'image/svg+xml' },
+      { url: appPath('/icons/yct-logo-192.png'), sizes: '192x192', type: 'image/png' },
     ],
-    shortcut: [{ url: '/icons/yct-logo.svg', type: 'image/svg+xml' }],
-    apple: [{ url: '/icons/yct-logo-192.png', sizes: '192x192', type: 'image/png' }],
+    shortcut: [{ url: appPath('/icons/yct-logo.svg'), type: 'image/svg+xml' }],
+    apple: [{ url: appPath('/icons/yct-logo-192.png'), sizes: '192x192', type: 'image/png' }],
   },
 };
 

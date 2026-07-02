@@ -14,6 +14,7 @@ import type {
   WheelEvent,
 } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { appPath } from '../lib/app-paths';
 
 interface MarkerResponse {
   meta: ApiMeta;
@@ -276,9 +277,9 @@ export function MapStage() {
 
       try {
         const [tileResult, markerResult, categoryResult] = await Promise.all([
-          fetch('/api/map/tile-providers', { cache: 'no-store' }),
-          fetch('/api/map/markers', { cache: 'no-store' }),
-          fetch('/api/map/poi-categories', { cache: 'no-store' }),
+          fetch(appPath('/api/map/tile-providers'), { cache: 'no-store' }),
+          fetch(appPath('/api/map/markers'), { cache: 'no-store' }),
+          fetch(appPath('/api/map/poi-categories'), { cache: 'no-store' }),
         ]);
 
         const tileData = (await tileResult.json()) as ApiListResponse<TileProviderDescriptor>;
@@ -312,7 +313,7 @@ export function MapStage() {
 
     async function loadTransitOverview() {
       try {
-        const response = await fetch('/api/transit/overview', { cache: 'no-store' });
+        const response = await fetch(appPath('/api/transit/overview'), { cache: 'no-store' });
         const data = (await response.json()) as TransitOverviewResponse;
         if (!cancelled && response.ok) {
           setTransitOverview(data);
@@ -670,7 +671,9 @@ export function MapStage() {
 
     async function loadUnminedRegions() {
       try {
-        const response = await fetch('/api/map/unmined-regions', { cache: 'force-cache' });
+        const response = await fetch(appPath('/api/map/unmined-regions'), {
+          cache: 'force-cache',
+        });
         const data = (await response.json()) as UnminedRegionResponse;
         if (!cancelled) {
           setRegionResponse(response.ok ? data : null);
@@ -807,7 +810,7 @@ export function MapStage() {
 
     setPoiSubmitBusy(true);
     try {
-      const response = await fetch('/api/map/poi-submissions', {
+      const response = await fetch(appPath('/api/map/poi-submissions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

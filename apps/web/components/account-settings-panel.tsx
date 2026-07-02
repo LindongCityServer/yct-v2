@@ -34,6 +34,7 @@ import {
   readMotionMode,
   readThemeMode,
 } from './preference-bridge';
+import { appPath } from '../lib/app-paths';
 
 const themeOptions: Array<{ value: ThemeMode; label: string }> = [
   { value: 'system', label: '跟随系统' },
@@ -477,13 +478,13 @@ export function AccountSettingsPanel({
             <span>{tripSummary?.localOnly ?? 0} 个待同步</span>
           </div>
           <div className="settings-action-row">
-            <a className="secondary-action-button" href="/travel">
+            <a className="secondary-action-button" href={appPath('/travel')}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 event_upcoming
               </span>
               <span>管理行程</span>
             </a>
-            <a className="secondary-action-button" href="/travel/schedules">
+            <a className="secondary-action-button" href={appPath('/travel/schedules')}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 departure_board
               </span>
@@ -758,25 +759,25 @@ function AccountAuthPanel({
       <div className="account-auth-actions">
         {user || readonlyUser ? (
           <>
-            <a className="secondary-action-button" href="/admin/operations">
+            <a className="secondary-action-button" href={appPath('/admin/operations')}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 admin_panel_settings
               </span>
               <span>内容后台</span>
             </a>
-            <a className="secondary-action-button" href="/admin/services">
+            <a className="secondary-action-button" href={appPath('/admin/services')}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 dashboard_customize
               </span>
               <span>服务后台</span>
             </a>
-            <a className="secondary-action-button" href="/admin/transit">
+            <a className="secondary-action-button" href={appPath('/admin/transit')}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 route
               </span>
               <span>线路后台</span>
             </a>
-            <a className="secondary-action-button" href="/admin/map-poi">
+            <a className="secondary-action-button" href={appPath('/admin/map-poi')}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 add_location_alt
               </span>
@@ -795,7 +796,7 @@ function AccountAuthPanel({
                 <span>临东通账号</span>
               </a>
             ) : null}
-            <a className="secondary-action-button" href="/api/auth/logout">
+            <a className="secondary-action-button" href={appPath('/api/auth/logout')}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 logout
               </span>
@@ -809,7 +810,7 @@ function AccountAuthPanel({
                 ? 'secondary-action-button is-primary'
                 : 'secondary-action-button'
             }
-            href={auth.ldpassConfigured ? '/api/auth/ldpass/start' : undefined}
+            href={auth.ldpassConfigured ? appPath('/api/auth/ldpass/start') : undefined}
             aria-disabled={!auth.ldpassConfigured}
           >
             <span className="material-symbols-outlined" aria-hidden="true">
@@ -954,7 +955,7 @@ async function warmAppShellCache(): Promise<void> {
       '/api/transit/station-details',
       '/api/operations/feed',
     ].map((url) =>
-      fetch(url, {
+      fetch(appPath(url), {
         cache: 'reload',
       }).catch(() => undefined),
     ),
@@ -971,7 +972,7 @@ async function warmOfflinePackageCache(): Promise<void> {
       '/api/map/markers',
       '/api/map/unmined-regions',
     ].map(async (url) => {
-      const response = await fetch(url, {
+      const response = await fetch(appPath(url), {
         cache: 'reload',
       });
 

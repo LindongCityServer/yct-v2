@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
 import type { TransitModeProfile, TransitStationDetailSnapshot } from '@yct/contracts';
+import { appPath } from '../lib/app-paths';
 import type { TransitLineSummary } from '../lib/legacy-transit';
 import { TitleWithBreaks } from './title-with-breaks';
 
@@ -135,7 +136,9 @@ export function TransitLineDetailPanel({
                     {detailByStationName.has(stationName) ? (
                       <Link
                         className="station-detail-link"
-                        href={`/travel/stations/${encodeURIComponent(line.name)}/${encodeURIComponent(stationName)}`}
+                        href={appPath(
+                          `/travel/stations/${encodeURIComponent(line.name)}/${encodeURIComponent(stationName)}`,
+                        )}
                       >
                         <TitleWithBreaks title={stationName} />
                       </Link>

@@ -1,5 +1,6 @@
 import type { ApiItemResponse, TransitScreenSnapshot } from '@yct/contracts';
 import Link from 'next/link';
+import { appPath } from '../lib/app-paths';
 import type { TransitOverview } from '../lib/legacy-transit';
 
 export function TravelTaskPanel({
@@ -27,7 +28,7 @@ export function TravelTaskPanel({
           <h2 id="travel-task-title">出行服务</h2>
           <span className="muted">提醒、班次查询与后续票务入口</span>
         </div>
-        <Link className="screen-open-link" href="/map">
+        <Link className="screen-open-link" href={appPath('/map')}>
           <span className="material-symbols-outlined" aria-hidden="true">
             map
           </span>
@@ -40,7 +41,7 @@ export function TravelTaskPanel({
           icon="departure_board"
           title="班次查询"
           detail={`客运 ${tripCount} 个班次，${stationCount} 个车站；轮渡与航班预留统一入口`}
-          href="/travel/schedules"
+          href={appPath('/travel/schedules')}
           actionLabel="查询班次"
           tone="coach"
         />
@@ -48,7 +49,7 @@ export function TravelTaskPanel({
           icon="analytics"
           title="智运大屏"
           detail={`${gateCount} 个检票口数据，展示近期客运班次与运营提示`}
-          href="/travel/screen"
+          href={appPath('/travel/screen')}
           actionLabel="查看大屏"
           tone="ticket"
         />
@@ -56,7 +57,7 @@ export function TravelTaskPanel({
           icon="route"
           title="线路与站点"
           detail={`${overview.lines.length} 条线路已迁入地图探索，客运 ${coachLineCount} 条`}
-          href="/map"
+          href={appPath('/map')}
           actionLabel="去地图探索"
           tone="map"
         />
@@ -131,7 +132,7 @@ function TravelTaskCard({
   }
 
   return (
-    <Link className={className} href={href}>
+    <Link className={className} href={appPath(href)}>
       {content}
     </Link>
   );

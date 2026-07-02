@@ -7,6 +7,7 @@ import type {
   TravelScheduleServiceProfile,
 } from '@yct/contracts';
 import { useEffect, useMemo, useState } from 'react';
+import { appPath } from '../lib/app-paths';
 
 export function AdminTransitPanel() {
   const [revisions, setRevisions] = useState<TransitDataRevision[]>([]);
@@ -26,7 +27,7 @@ export function AdminTransitPanel() {
   );
 
   const loadRevisions = async () => {
-    const response = await fetch('/api/admin/transit/datasets', { cache: 'no-store' });
+    const response = await fetch(appPath('/api/admin/transit/datasets'), { cache: 'no-store' });
     const data = (await response.json()) as { items?: TransitDataRevision[]; message?: string };
     if (!response.ok) {
       setStatusText(data.message ?? '交通数据后台暂不可用');
@@ -44,7 +45,9 @@ export function AdminTransitPanel() {
   }, []);
 
   const loadModeProfiles = async () => {
-    const response = await fetch('/api/admin/transit/mode-profiles', { cache: 'no-store' });
+    const response = await fetch(appPath('/api/admin/transit/mode-profiles'), {
+      cache: 'no-store',
+    });
     const data = (await response.json()) as { items?: TransitModeProfile[]; message?: string };
     if (!response.ok) {
       setProfileStatusText(data.message ?? '交通方式配置暂不可用');
@@ -58,7 +61,9 @@ export function AdminTransitPanel() {
   };
 
   const loadServiceProfiles = async () => {
-    const response = await fetch('/api/admin/travel/service-profiles', { cache: 'no-store' });
+    const response = await fetch(appPath('/api/admin/travel/service-profiles'), {
+      cache: 'no-store',
+    });
     const data = (await response.json()) as {
       items?: TravelScheduleServiceProfile[];
       message?: string;
@@ -77,7 +82,7 @@ export function AdminTransitPanel() {
   const importLatest = async () => {
     setIsBusy(true);
     try {
-      const response = await fetch('/api/admin/transit/datasets', {
+      const response = await fetch(appPath('/api/admin/transit/datasets'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -105,10 +110,10 @@ export function AdminTransitPanel() {
     try {
       const endpoint =
         action === 'submit'
-          ? `/api/admin/transit/datasets/${encodeURIComponent(revisionId)}/submit`
+          ? appPath(`/api/admin/transit/datasets/${encodeURIComponent(revisionId)}/submit`)
           : action === 'publish'
-            ? `/api/admin/transit/datasets/${encodeURIComponent(revisionId)}/publish`
-            : `/api/admin/transit/datasets/${encodeURIComponent(revisionId)}/review`;
+            ? appPath(`/api/admin/transit/datasets/${encodeURIComponent(revisionId)}/publish`)
+            : appPath(`/api/admin/transit/datasets/${encodeURIComponent(revisionId)}/review`);
       const body =
         action === 'approve'
           ? { decision: 'approved' }
@@ -154,7 +159,7 @@ export function AdminTransitPanel() {
   const saveModeProfiles = async () => {
     setProfileBusy(true);
     try {
-      const response = await fetch('/api/admin/transit/mode-profiles', {
+      const response = await fetch(appPath('/api/admin/transit/mode-profiles'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -184,7 +189,7 @@ export function AdminTransitPanel() {
   const saveServiceProfiles = async () => {
     setServiceProfileBusy(true);
     try {
-      const response = await fetch('/api/admin/travel/service-profiles', {
+      const response = await fetch(appPath('/api/admin/travel/service-profiles'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

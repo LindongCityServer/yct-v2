@@ -9,6 +9,7 @@ import type {
 } from '@yct/contracts';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import { appPath } from '../lib/app-paths';
 import type { TransitOverview } from '../lib/legacy-transit';
 import { normalizeTitleForSearch, TitleWithBreaks } from './title-with-breaks';
 
@@ -205,7 +206,7 @@ export function SearchPageClient({
                   {operationResults.map((item) => (
                     <Link
                       className="search-result-item"
-                      href={`/operations/${encodeURIComponent(item.id)}`}
+                      href={appPath(`/operations/${encodeURIComponent(item.id)}`)}
                       key={item.id}
                     >
                       <span className="material-symbols-outlined" aria-hidden="true">
@@ -233,7 +234,7 @@ export function SearchPageClient({
                   {lineResults.map((line) => (
                     <Link
                       className="search-result-item"
-                      href={`/map/lines/${encodeURIComponent(line.id)}`}
+                      href={appPath(`/map/lines/${encodeURIComponent(line.id)}`)}
                       key={line.id}
                     >
                       <span className="material-symbols-outlined" aria-hidden="true">
@@ -263,7 +264,9 @@ export function SearchPageClient({
                   {stationResults.map((detail) => (
                     <Link
                       className="search-result-item"
-                      href={`/travel/stations/${encodeURIComponent(detail.lineName)}/${encodeURIComponent(detail.stationName)}`}
+                      href={appPath(
+                        `/travel/stations/${encodeURIComponent(detail.lineName)}/${encodeURIComponent(detail.stationName)}`,
+                      )}
                       key={detail.sourceId}
                     >
                       <span className="material-symbols-outlined" aria-hidden="true">

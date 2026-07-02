@@ -2,6 +2,7 @@
 
 import type { MapGeometry, PoiSubmission, PoiSubmissionStatus } from '@yct/contracts';
 import { useEffect, useMemo, useState } from 'react';
+import { appPath } from '../lib/app-paths';
 
 export function AdminPoiPanel() {
   const [submissions, setSubmissions] = useState<PoiSubmission[]>([]);
@@ -20,7 +21,7 @@ export function AdminPoiPanel() {
   );
 
   const loadSubmissions = async () => {
-    const response = await fetch('/api/admin/map/poi-submissions', { cache: 'no-store' });
+    const response = await fetch(appPath('/api/admin/map/poi-submissions'), { cache: 'no-store' });
     const data = (await response.json()) as { items?: PoiSubmission[]; message?: string };
     if (!response.ok) {
       setStatusText(data.message ?? 'POI 后台暂不可用');
@@ -40,8 +41,8 @@ export function AdminPoiPanel() {
     try {
       const endpoint =
         action === 'publish'
-          ? `/api/admin/map/poi-submissions/${encodeURIComponent(poiId)}/publish`
-          : `/api/admin/map/poi-submissions/${encodeURIComponent(poiId)}/review`;
+          ? appPath(`/api/admin/map/poi-submissions/${encodeURIComponent(poiId)}/publish`)
+          : appPath(`/api/admin/map/poi-submissions/${encodeURIComponent(poiId)}/review`);
       const body =
         action === 'approve'
           ? { decision: 'approved' }

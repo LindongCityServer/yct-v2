@@ -4,6 +4,7 @@ import type {
   TransitModeProfile,
   TransitStationSnapshot,
 } from '@yct/contracts';
+import { appPath } from './app-paths';
 import { readLegacyTransitSnapshot } from './legacy-transit';
 import { findPublishedTransitDataRevision } from './transit-data-store';
 import { readTransitModeProfiles } from './transit-mode-profile-store';
@@ -32,7 +33,7 @@ export async function readTransitLinePoiMarkers(): Promise<MapMarkerSnapshot['ma
       symbolIcon: profile?.icon ?? 'route',
       accentColor: line.color ?? profile?.color,
       description: buildLineDescription(line, profile, coordinates.length),
-      href: `/map/lines/${encodeURIComponent(line.sourceId)}`,
+      href: appPath(`/map/lines/${encodeURIComponent(line.sourceId)}`),
     };
   });
 }
