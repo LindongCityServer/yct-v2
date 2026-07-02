@@ -33,6 +33,7 @@ export function TravelScheduleQueryPanel({
   const [serviceFilter, setServiceFilter] = useState<ServiceFilter>('all');
   const [stationFilter, setStationFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState<TravelScheduleTimeScope>('all');
+  const [serviceDate, setServiceDate] = useState(() => toDateInputValue(new Date()));
   const [query, setQuery] = useState('');
   const [historyState, setHistoryState] = useState<TravelScheduleHistoryState | null>(null);
   const currentMinutes = getCurrentAdjustedMinutes();
@@ -50,10 +51,11 @@ export function TravelScheduleQueryPanel({
         serviceFilter,
         stationFilter,
         timeFilter,
+        serviceDate,
         query,
         currentMinutes,
       }),
-    [currentMinutes, query, result.trips, serviceFilter, stationFilter, timeFilter],
+    [currentMinutes, query, result.trips, serviceDate, serviceFilter, stationFilter, timeFilter],
   );
   const selectedService = result.services.find((service) => service.kind === serviceFilter);
   const serviceByKind = useMemo(
@@ -154,6 +156,15 @@ export function TravelScheduleQueryPanel({
                 </option>
               ))}
             </select>
+          </label>
+
+          <label>
+            <span>日期</span>
+            <input
+              type="date"
+              value={serviceDate}
+              onChange={(event) => setServiceDate(event.currentTarget.value)}
+            />
           </label>
 
           <div className="schedule-time-filter" aria-label="时间筛选">
@@ -422,6 +433,7 @@ function filterTrips(
     serviceFilter: ServiceFilter;
     stationFilter: string;
     timeFilter: TravelScheduleTimeScope;
+    serviceDate: string;
     query: string;
     currentMinutes: number;
   },
@@ -430,9 +442,13 @@ function filterTrips(
   const stationFilter = normalizeSearchValue(
     input.stationFilter === 'all' ? '' : input.stationFilter,
   );
+  const serviceDate = normalizeServiceDate(input.serviceDate);
+  const serviceDateState = getServiceDateState(serviceDate);
+  const serviceDay = getServiceDay(serviceDate);
 
   return [...trips]
     .filter((trip) => input.serviceFilter === 'all' || trip.serviceKind === input.serviceFilter)
+    .filter((trip) => filterByServiceDay(trip, serviceDay))
     .filter(
       (trip) =>
         !stationFilter ||
@@ -440,7 +456,7 @@ function filterTrips(
           (stationName) => normalizeSearchValue(stationName) === stationFilter,
         ),
     )
-    .filter((trip) => filterByTime(trip, input.timeFilter, input.currentMinutes))
+    .filter((trip) => filterByTime(trip, input.timeFilter, serviceDateState, input.currentMinutes))
     .filter((trip) => !query || normalizeSearchValue(buildSearchText(trip)).includes(query))
     .sort(compareTrips);
 }
@@ -448,14 +464,80 @@ function filterTrips(
 function filterByTime(
   trip: Pick<TravelTripInstance, 'departureTime'>,
   timeFilter: TravelScheduleTimeScope,
+  serviceDateState: ServiceDateState,
   currentMinutes: number,
 ): boolean {
   if (timeFilter === 'all') {
     return true;
   }
 
+  if (serviceDateState === 'future') {
+    return timeFilter === 'upcoming';
+  }
+
+  if (serviceDateState === 'past') {
+    return timeFilter === 'past';
+  }
+
   const tripMinutes = parseAdjustedTime(trip.departureTime);
   return timeFilter === 'upcoming' ? tripMinutes >= currentMinutes : tripMinutes < currentMinutes;
+}
+
+type ServiceDateState = 'unspecified' | 'past' | 'today' | 'future';
+
+function filterByServiceDay(trip: TravelTripInstance, serviceDay: string | undefined): boolean {
+  if (!serviceDay || !trip.operatingDays?.length) {
+    return true;
+  }
+
+  return trip.operatingDays.includes(serviceDay);
+}
+
+function getServiceDateState(serviceDate: string | undefined): ServiceDateState {
+  if (!serviceDate) {
+    return 'unspecified';
+  }
+
+  const today = toDateInputValue(new Date());
+  if (serviceDate === today) {
+    return 'today';
+  }
+
+  return serviceDate > today ? 'future' : 'past';
+}
+
+function getServiceDay(serviceDate: string | undefined): string | undefined {
+  if (!serviceDate) {
+    return undefined;
+  }
+
+  const [yearText, monthText, dayText] = serviceDate.split('-');
+  const date = new Date(Number(yearText), Number(monthText) - 1, Number(dayText));
+  const dayKeys = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  return dayKeys[date.getDay()];
+}
+
+function normalizeServiceDate(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed || !/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return undefined;
+  }
+
+  const [yearText, monthText, dayText] = trimmed.split('-');
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
+    ? trimmed
+    : undefined;
+}
+
+function toDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function compareTrips(left: TravelTripInstance, right: TravelTripInstance): number {

@@ -52,7 +52,8 @@ export async function readTravelScheduleQuery(
   const trips = [...coachTrips, ...flight.trips].filter((trip) =>
     enabledKinds.has(trip.serviceKind),
   );
-  const filteredTrips = filterTrips(trips, query);
+  const serviceDate = normalizeServiceDate(query.serviceDate);
+  const filteredTrips = filterTrips(trips, { ...query, serviceDate });
   const sourceMessages = [screen.meta.message, flight.meta.message].filter(Boolean);
 
   if (trips.length === 0) {
@@ -75,6 +76,7 @@ export async function readTravelScheduleQuery(
         trips: [],
         stationOptions: [],
         sourceFiles: [...(screen.item?.sourceFiles ?? []), ...flight.sourceFiles],
+        serviceDate,
       },
     };
   }
@@ -93,6 +95,7 @@ export async function readTravelScheduleQuery(
       trips: filteredTrips,
       stationOptions: uniqueSorted(trips.flatMap((trip) => trip.stationNames)),
       sourceFiles: [...(screen.item?.sourceFiles ?? []), ...flight.sourceFiles],
+      serviceDate,
       notice: screen.item?.notice,
     },
   };
@@ -458,15 +461,21 @@ function filterTrips(
   const timeScope = query.timeScope ?? 'all';
   const stationName = normalizeQueryValue(query.stationName);
   const searchText = normalizeQueryValue(query.query);
-  const currentMinutes = getCurrentAdjustedMinutes();
+  const serviceDateState = getServiceDateState(query.serviceDate);
+  const serviceDay = getServiceDay(query.serviceDate);
+  const currentMinutes =
+    serviceDateState === 'today' || serviceDateState === 'unspecified'
+      ? getCurrentAdjustedMinutes()
+      : undefined;
 
   return trips
     .filter((trip) => serviceKind === 'all' || trip.serviceKind === serviceKind)
+    .filter((trip) => filterByServiceDay(trip, serviceDay))
     .filter(
       (trip) =>
         !stationName || trip.stationNames.some((name) => normalizeQueryValue(name) === stationName),
     )
-    .filter((trip) => filterByTime(trip, timeScope, currentMinutes))
+    .filter((trip) => filterByTime(trip, timeScope, serviceDateState, currentMinutes))
     .filter((trip) => {
       if (!searchText) {
         return true;
@@ -506,14 +515,84 @@ function formatGates(
 function filterByTime(
   trip: Pick<TransitScreenTrip, 'departureTime'>,
   timeScope: TravelScheduleTimeScope,
-  currentMinutes: number,
+  serviceDateState: ServiceDateState,
+  currentMinutes: number | undefined,
 ): boolean {
   if (timeScope === 'all') {
     return true;
   }
 
+  if (serviceDateState === 'future') {
+    return timeScope === 'upcoming';
+  }
+
+  if (serviceDateState === 'past') {
+    return timeScope === 'past';
+  }
+
+  if (currentMinutes === undefined) {
+    return true;
+  }
+
   const tripMinutes = parseAdjustedTime(trip.departureTime);
   return timeScope === 'upcoming' ? tripMinutes >= currentMinutes : tripMinutes < currentMinutes;
+}
+
+type ServiceDateState = 'unspecified' | 'past' | 'today' | 'future';
+
+function filterByServiceDay(trip: TravelTripInstance, serviceDay: string | undefined): boolean {
+  if (!serviceDay || !trip.operatingDays?.length) {
+    return true;
+  }
+
+  return trip.operatingDays.includes(serviceDay);
+}
+
+function getServiceDateState(serviceDate: string | undefined): ServiceDateState {
+  if (!serviceDate) {
+    return 'unspecified';
+  }
+
+  const today = toDateInputValue(new Date());
+  if (serviceDate === today) {
+    return 'today';
+  }
+
+  return serviceDate > today ? 'future' : 'past';
+}
+
+function getServiceDay(serviceDate: string | undefined): string | undefined {
+  if (!serviceDate) {
+    return undefined;
+  }
+
+  const [yearText, monthText, dayText] = serviceDate.split('-');
+  const date = new Date(Number(yearText), Number(monthText) - 1, Number(dayText));
+  const dayKeys = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  return dayKeys[date.getDay()];
+}
+
+function normalizeServiceDate(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed || !/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return undefined;
+  }
+
+  const [yearText, monthText, dayText] = trimmed.split('-');
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
+    ? trimmed
+    : undefined;
+}
+
+function toDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function compareTrips(left: TravelTripInstance, right: TravelTripInstance): number {

@@ -3612,7 +3612,7 @@ body .material-symbols-outlined {
 
 .schedule-filter-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(240px, 1fr);
+  grid-template-columns: minmax(160px, 1fr) minmax(160px, 0.8fr) minmax(240px, 1fr);
   gap: var(--yct-space-3);
   align-items: end;
 }
@@ -3625,7 +3625,8 @@ body .material-symbols-outlined {
   font-weight: 700;
 }
 
-.schedule-filter-row select {
+.schedule-filter-row select,
+.schedule-filter-row input {
   width: 100%;
   min-height: 40px;
   padding: 0 var(--yct-space-3);

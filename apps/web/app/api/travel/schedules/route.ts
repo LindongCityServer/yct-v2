@@ -19,6 +19,9 @@ export async function GET(request: Request) {
     serviceKind: normalizeServiceKind(url.searchParams.get('serviceKind')),
     query: normalizeString(url.searchParams.get('q')),
     stationName: normalizeString(url.searchParams.get('stationName')),
+    serviceDate: normalizeServiceDate(
+      url.searchParams.get('serviceDate') ?? url.searchParams.get('date'),
+    ),
     timeScope: normalizeTimeScope(url.searchParams.get('timeScope')),
   });
 
@@ -48,4 +51,20 @@ function normalizeTimeScope(value: string | null): TravelScheduleTimeScope | und
 function normalizeString(value: string | null): string | undefined {
   const trimmed = value?.trim();
   return trimmed || undefined;
+}
+
+function normalizeServiceDate(value: string | null): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed || !/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return undefined;
+  }
+
+  const [yearText, monthText, dayText] = trimmed.split('-');
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
+    ? trimmed
+    : undefined;
 }
