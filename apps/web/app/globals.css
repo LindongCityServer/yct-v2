@@ -2198,6 +2198,107 @@ body .material-symbols-outlined {
   opacity: 0.46;
 }
 
+.admin-asset-report {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-4);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+}
+
+.admin-asset-report h2,
+.admin-report-card h3 {
+  margin: 0;
+}
+
+.admin-report-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: var(--yct-space-2);
+}
+
+.admin-report-metric {
+  display: grid;
+  gap: var(--yct-space-1);
+  min-height: 76px;
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+}
+
+.admin-report-metric span {
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+}
+
+.admin-report-metric strong {
+  color: var(--yct-color-text);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.admin-report-metric.is-ok strong {
+  color: var(--yct-color-primary);
+}
+
+.admin-report-metric.is-warning strong {
+  color: var(--yct-color-error);
+}
+
+.admin-report-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+}
+
+.admin-report-chips span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 var(--yct-space-3);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+}
+
+.admin-report-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--yct-space-3);
+}
+
+.admin-report-card {
+  display: grid;
+  align-content: start;
+  gap: var(--yct-space-2);
+  min-width: 0;
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+}
+
+.admin-report-card p {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+}
+
+.admin-report-card p strong,
+.admin-report-card p span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-report-card p strong {
+  color: var(--yct-color-text);
+}
+
 .transit-revision-item {
   align-items: flex-start;
 }
@@ -4790,6 +4891,10 @@ body .material-symbols-outlined {
 
   .admin-editor,
   .admin-content-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-report-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 

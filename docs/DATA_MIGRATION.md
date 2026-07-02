@@ -58,6 +58,7 @@
 - `YCT_LEGACY_DATA_REMOTE_BASE_URL=https://yct.shangxiaoguan.top/data`：默认远程旧站 data 基准。
 - `YCT_FLIGHT_DATA_URL=https://haojin.guanmu233.cn/data/flight_data.txt`：默认航班文本数据源；迁移到 YCT 后台或其他服务器时可替换为新的同格式 URL。
 - `YCT_TRAVEL_SERVICE_PROFILE_STORE_PATH=.yct-data/travel-service-profile-store.json`：统一班次/票务服务 Profile 本地仓储路径，维护客运大巴、轮渡、航班等可排班服务的名称、颜色、图标、排序和启用状态。
+- `YCT_LEGACY_ASSET_DOWNLOAD_REPORT_PATH=.yct-data/legacy-assets-download-report.json`：旧内容资源下载报告路径，供内容后台展示最近一次真实下载失败项；如果服务进程运行目录与下载脚本运行目录不同，需要显式配置到同一个报告文件。
 
 只有在强制 `local` 但没有配置本地目录时，接口返回 `not_configured`。其他读取失败返回 `unavailable`。前台不得使用模拟内容或模拟线路数据。
 
@@ -114,6 +115,7 @@
 - 旧内容资源清单同时输出正式差异报告字段：`summary` 记录原始引用数、唯一引用数、外链数、非下载项、本地缺失文件、重复引用和重复资源数量；`issues` 逐条列出外链、非下载候选、缺少迁移目标、本地缺失文件、重复引用和重复资源；`duplicateResources` 记录同一资源被多个内容复用的条目，便于后续去重迁移。
 - 通过 `pnpm legacy:assets:download` 下载清单中的下载候选到 `apps/web/public/legacy-assets`，并写入 `.yct-data/legacy-assets-download-report.json`，记录大小、SHA-256、Content-Type 和失败项。该命令可重复运行，远端内容未变化时不会重写文件。
 - 下载报告会同步写入 `differenceReport`，合并当前资源清单摘要、issue 统计、重复资源分组和真实下载失败项；`.yct-data` 仍属于运行报告目录，不进入仓库。
+- 内容后台 `/admin/operations` 已接入旧资源差异报告，只读展示引用总数、下载候选、外链、本地缺失、真实下载失败、issue 分类、重复资源样例和下载失败样例；后台 API 会校验管理员身份，并从 `YCT_LEGACY_ASSET_DOWNLOAD_REPORT_PATH` 指向的路径读取最近一次下载报告，默认读取 `.yct-data/legacy-assets-download-report.json`。
 - 旧内容封面和 `原始图片：...` Markdown 引用在运行时会先检查本地 `/legacy-assets/...` 文件是否存在；存在则使用同站资源，不存在则回退旧站绝对 URL，避免资源下载未完成时出现破图。临时 `/v2` 子路径只用于浏览器公开路径，落盘检查和下载目标仍映射到 `apps/web/public/legacy-assets`。
 - 当前实测资源清单包含 131 个原始引用、122 个唯一引用、91 个下载候选引用、18 个外链引用、31 个非下载项、9 个重复引用和 12 组重复资源；本地缺失文件为 0。按 `sourceUrl + migratedPath` 去重后实际下载 61 个文件。首次下载结果为 61 个成功、0 个失败、总大小 72,256,470 字节；二次运行结果为 61 个未变化、0 个失败，证明脚本可以复跑。
 
@@ -128,7 +130,6 @@
 仍需要补齐的批量迁移能力：
 
 - 按内容素材模型记录来源、校验哈希、审核状态和引用关系。
-- 将资源清单差异报告接入后台页面，给管理员展示缺失资源、外链、真实下载失败项和重复资源。
 - 对已迁移资源做去重，避免同一图片被多个内容重复保存。
 
 ## 7. 已验证结果

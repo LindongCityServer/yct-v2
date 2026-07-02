@@ -1,5 +1,12 @@
 'use client';
 
+import type {
+  ApiItemResponse,
+  LegacyAssetDuplicateResource,
+  LegacyAssetManifest,
+  LegacyAssetManifestIssue,
+  LegacyAssetManifestIssueKind,
+} from '@yct/contracts';
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 
@@ -24,11 +31,50 @@ interface AdminContentRecord {
   updatedAt: string;
 }
 
+interface LegacyAssetDownloadReportForAdmin {
+  generatedAt: string;
+  dataSource: string;
+  summary: {
+    total: number;
+    downloaded: number;
+    updated: number;
+    unchanged: number;
+    failed: number;
+    sizeBytes: number;
+  };
+  differenceReport?: {
+    issueSummary?: Record<string, number>;
+    failedDownloads?: Array<{
+      id: string;
+      sourceUrl: string;
+      migratedPath: string;
+      filePath: string;
+      status: 'failed';
+      error?: string;
+    }>;
+  };
+}
+
+interface LegacyAssetAdminResponse {
+  manifest?: ApiItemResponse<LegacyAssetManifest>;
+  downloadReport?: {
+    status: 'ready' | 'not_found' | 'invalid';
+    report?: LegacyAssetDownloadReportForAdmin;
+    message?: string;
+  };
+  message?: string;
+}
+
 const categories = ['通知公告', '运营信息', '地铁运营', '公交运营', '有轨运营', '网站公告'];
 
 export function AdminOperationsPanel() {
   const [records, setRecords] = useState<AdminContentRecord[]>([]);
+  const [legacyAssetManifest, setLegacyAssetManifest] = useState<LegacyAssetManifest | null>(null);
+  const [legacyDownloadReport, setLegacyDownloadReport] = useState<
+    LegacyAssetAdminResponse['downloadReport'] | null
+  >(null);
   const [statusText, setStatusText] = useState('正在读取内容记录');
+  const [legacyAssetStatusText, setLegacyAssetStatusText] = useState('正在读取旧资源差异报告');
   const [isBusy, setIsBusy] = useState(false);
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState(categories[0] ?? '运营信息');
@@ -39,6 +85,14 @@ export function AdminOperationsPanel() {
   const sortedRecords = useMemo(
     () => [...records].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
     [records],
+  );
+  const issueSummary = useMemo(
+    () =>
+      legacyAssetManifest?.issues.reduce<Record<string, number>>((summary, issue) => {
+        summary[issue.kind] = (summary[issue.kind] ?? 0) + 1;
+        return summary;
+      }, {}) ?? {},
+    [legacyAssetManifest],
   );
 
   const loadRecords = async () => {
@@ -55,8 +109,29 @@ export function AdminOperationsPanel() {
     );
   };
 
+  const loadLegacyAssetReport = async () => {
+    const response = await fetch(appPath('/api/admin/operations/legacy-assets'), {
+      cache: 'no-store',
+    });
+    const data = (await response.json()) as LegacyAssetAdminResponse;
+    if (!response.ok) {
+      setLegacyAssetStatusText(data.message ?? '旧资源差异报告暂不可用');
+      return;
+    }
+
+    setLegacyDownloadReport(data.downloadReport ?? null);
+    if (!data.manifest?.item) {
+      setLegacyAssetManifest(null);
+      setLegacyAssetStatusText(data.manifest?.meta.message ?? '旧资源清单暂不可用');
+      return;
+    }
+
+    setLegacyAssetManifest(data.manifest.item);
+    setLegacyAssetStatusText(`已读取 ${data.manifest.item.summary.referenceCount} 个旧资源引用`);
+  };
+
   useEffect(() => {
-    void loadRecords();
+    void Promise.all([loadRecords(), loadLegacyAssetReport()]);
   }, []);
 
   const createDraft = async () => {
@@ -183,6 +258,62 @@ export function AdminOperationsPanel() {
         </button>
       </section>
 
+      <section className="admin-asset-report" aria-labelledby="admin-asset-report-title">
+        <div className="section-heading">
+          <h2 id="admin-asset-report-title">旧资源差异报告</h2>
+          <span className="muted">{legacyAssetStatusText}</span>
+        </div>
+
+        {legacyAssetManifest ? (
+          <>
+            <div className="admin-report-summary" aria-label="旧资源摘要">
+              <ReportMetric label="内容" value={legacyAssetManifest.summary.contentCount} />
+              <ReportMetric label="唯一引用" value={legacyAssetManifest.summary.referenceCount} />
+              <ReportMetric
+                label="下载候选"
+                value={legacyAssetManifest.summary.downloadableCount}
+              />
+              <ReportMetric label="外链" value={legacyAssetManifest.summary.externalCount} />
+              <ReportMetric
+                label="本地缺失"
+                value={legacyAssetManifest.summary.missingLocalFileCount}
+                tone={legacyAssetManifest.summary.missingLocalFileCount > 0 ? 'warning' : 'ok'}
+              />
+              <ReportMetric
+                label="下载失败"
+                value={legacyDownloadReport?.report?.summary.failed ?? 0}
+                tone={(legacyDownloadReport?.report?.summary.failed ?? 0) > 0 ? 'warning' : 'ok'}
+              />
+            </div>
+
+            <div className="admin-report-chips" aria-label="旧资源 issue 分类">
+              {Object.entries(issueSummary).map(([kind, count]) => (
+                <span
+                  key={kind}
+                >{`${issueKindLabel(kind as LegacyAssetManifestIssueKind)} ${count}`}</span>
+              ))}
+              {legacyDownloadReport?.status === 'ready' ? (
+                <span>{`下载报告 ${formatDate(legacyDownloadReport.report?.generatedAt)}`}</span>
+              ) : (
+                <span>{legacyDownloadReport?.message ?? '尚无下载报告'}</span>
+              )}
+            </div>
+
+            <div className="admin-report-grid">
+              <IssuePreview issues={legacyAssetManifest.issues} />
+              <DuplicateResourcePreview duplicates={legacyAssetManifest.duplicateResources} />
+              <FailedDownloadPreview
+                failedDownloads={
+                  legacyDownloadReport?.report?.differenceReport?.failedDownloads ?? []
+                }
+              />
+            </div>
+          </>
+        ) : (
+          <p className="muted">旧资源清单不可用时不会展示迁移差异，需先确认旧站数据源配置。</p>
+        )}
+      </section>
+
       <div className="admin-content-list" aria-label="内容记录">
         {sortedRecords.map((record) => (
           <article className="admin-content-item" key={record.contentId}>
@@ -230,6 +361,104 @@ export function AdminOperationsPanel() {
       </div>
     </section>
   );
+}
+
+function ReportMetric({
+  label,
+  value,
+  tone,
+}: Readonly<{ label: string; value: number; tone?: 'ok' | 'warning' }>) {
+  return (
+    <div className={['admin-report-metric', tone ? `is-${tone}` : ''].filter(Boolean).join(' ')}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function IssuePreview({ issues }: Readonly<{ issues: LegacyAssetManifestIssue[] }>) {
+  const visibleIssues = issues
+    .filter((issue) =>
+      ['missing_local_file', 'external_reference', 'duplicate_reference'].includes(issue.kind),
+    )
+    .slice(0, 6);
+
+  return (
+    <article className="admin-report-card">
+      <h3>问题样例</h3>
+      {visibleIssues.length ? (
+        visibleIssues.map((issue) => (
+          <p key={issue.id}>
+            <strong>{issueKindLabel(issue.kind)}</strong>
+            <span>{issue.contentTitle ?? issue.sourceUrl ?? issue.id}</span>
+          </p>
+        ))
+      ) : (
+        <p className="muted">没有需要优先处理的问题。</p>
+      )}
+    </article>
+  );
+}
+
+function DuplicateResourcePreview({
+  duplicates,
+}: Readonly<{ duplicates: LegacyAssetDuplicateResource[] }>) {
+  return (
+    <article className="admin-report-card">
+      <h3>重复资源</h3>
+      {duplicates.length ? (
+        duplicates.slice(0, 5).map((duplicate) => (
+          <p key={duplicate.id}>
+            <strong>{`${duplicate.occurrenceCount} 次`}</strong>
+            <span>{duplicate.migratedPath}</span>
+          </p>
+        ))
+      ) : (
+        <p className="muted">没有发现重复资源。</p>
+      )}
+    </article>
+  );
+}
+
+function FailedDownloadPreview({
+  failedDownloads,
+}: Readonly<{
+  failedDownloads: NonNullable<
+    LegacyAssetDownloadReportForAdmin['differenceReport']
+  >['failedDownloads'];
+}>) {
+  return (
+    <article className="admin-report-card">
+      <h3>下载失败</h3>
+      {failedDownloads?.length ? (
+        failedDownloads.slice(0, 5).map((item) => (
+          <p key={item.id}>
+            <strong>{item.error ?? '失败'}</strong>
+            <span>{item.sourceUrl}</span>
+          </p>
+        ))
+      ) : (
+        <p className="muted">最近一次下载没有失败项。</p>
+      )}
+    </article>
+  );
+}
+
+function issueKindLabel(kind: LegacyAssetManifestIssueKind): string {
+  const labels: Record<LegacyAssetManifestIssueKind, string> = {
+    external_reference: '外链',
+    not_downloadable: '非下载项',
+    missing_migrated_path: '缺少目标',
+    missing_local_file: '本地缺失',
+    duplicate_reference: '重复引用',
+    duplicate_resource: '重复资源',
+  };
+
+  return labels[kind];
+}
+
+function formatDate(value: string | undefined): string {
+  return value ? value.slice(0, 10) : '未生成';
 }
 
 function statusLabel(status: AdminContentRecord['revision']['status']): string {

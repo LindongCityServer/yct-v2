@@ -22,6 +22,7 @@ export interface RuntimeConfig {
   legacyPublicBaseUrl: string;
   flightDataUrl: string;
   legacyAssetPublicPrefix: string;
+  legacyAssetDownloadReportPath: string;
   poiIconCandidates: Array<{
     categoryHint: string;
     fileName: string;
@@ -75,6 +76,9 @@ export function readRuntimeConfig(): RuntimeConfig {
       'https://haojin.guanmu233.cn/data/flight_data.txt',
     legacyAssetPublicPrefix:
       emptyToUndefined(process.env.YCT_LEGACY_ASSET_PUBLIC_PREFIX) ?? appPath('/legacy-assets'),
+    legacyAssetDownloadReportPath:
+      emptyToUndefined(process.env.YCT_LEGACY_ASSET_DOWNLOAD_REPORT_PATH) ??
+      '.yct-data/legacy-assets-download-report.json',
     poiIconCandidates: parsePoiIconCandidates(process.env.YCT_POI_ICON_CANDIDATES),
   };
 }
