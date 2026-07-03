@@ -338,6 +338,9 @@ export function MapStage() {
   });
   const [poiTitle, setPoiTitle] = useState('');
   const [poiCategoryId, setPoiCategoryId] = useState('');
+  const [poiDescription, setPoiDescription] = useState('');
+  const [poiHref, setPoiHref] = useState('');
+  const [poiImageUrl, setPoiImageUrl] = useState('');
   const [poiX, setPoiX] = useState('');
   const [poiZ, setPoiZ] = useState('');
   const [poiSubmitStatus, setPoiSubmitStatus] = useState('');
@@ -1043,6 +1046,9 @@ export function MapStage() {
         body: JSON.stringify({
           title: poiTitle,
           categoryId: poiCategoryId,
+          description: poiDescription.trim() || undefined,
+          href: poiHref.trim() || undefined,
+          imageUrl: poiImageUrl.trim() || undefined,
           visibility: 'public_pending_review',
           geometry: {
             type: 'Point',
@@ -1057,6 +1063,9 @@ export function MapStage() {
       }
 
       setPoiTitle('');
+      setPoiDescription('');
+      setPoiHref('');
+      setPoiImageUrl('');
       setPoiX('');
       setPoiZ('');
       setPoiSubmitStatus('已提交，等待管理员审核。');
@@ -1410,6 +1419,13 @@ export function MapStage() {
                     <RoadMapDetail marker={focusedMarker} />
                   ) : poiDetailTab === 'summary' ? (
                     <>
+                      {focusedMarker.imageUrl ? (
+                        <img
+                          className="map-poi-detail-image"
+                          src={focusedMarker.imageUrl}
+                          alt={`${formatMarkerDisplayName(focusedMarker.label)} 图片`}
+                        />
+                      ) : null}
                       {focusedMarker.description ? <p>{focusedMarker.description}</p> : null}
                       <dl>
                         {focusedMarkerCenter ? (
@@ -1875,6 +1891,36 @@ export function MapStage() {
                     </option>
                   ))}
                 </select>
+              </label>
+              <label>
+                <span>地点简介</span>
+                <textarea
+                  value={poiDescription}
+                  onChange={(event) => setPoiDescription(event.currentTarget.value)}
+                  placeholder="可填写地点用途、开放状态、出入口说明等"
+                  aria-label="地点简介"
+                  maxLength={1000}
+                />
+              </label>
+              <label>
+                <span>相关链接</span>
+                <input
+                  type="url"
+                  value={poiHref}
+                  onChange={(event) => setPoiHref(event.currentTarget.value)}
+                  placeholder="https://..."
+                  aria-label="相关链接"
+                />
+              </label>
+              <label>
+                <span>图片链接</span>
+                <input
+                  type="url"
+                  value={poiImageUrl}
+                  onChange={(event) => setPoiImageUrl(event.currentTarget.value)}
+                  placeholder="https://.../photo.png"
+                  aria-label="图片链接"
+                />
               </label>
               <div className="map-poi-coordinate-row">
                 <label>

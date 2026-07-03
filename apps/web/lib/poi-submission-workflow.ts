@@ -31,12 +31,18 @@ export async function listAdminPoiSubmissions(): Promise<PoiSubmission[]> {
 export async function submitPublicPoi(input: {
   title: string;
   categoryId: string;
+  description?: string;
+  href?: string;
+  imageUrl?: string;
   geometry: MapGeometry;
   actorId: string;
 }): Promise<PoiSubmissionActionResult> {
   const draft = await createLocalPoiSubmission({
     title: input.title,
     categoryId: input.categoryId,
+    description: input.description,
+    href: input.href,
+    imageUrl: input.imageUrl,
     geometry: input.geometry,
     visibility: 'public_pending_review',
     actorId: input.actorId,
@@ -66,6 +72,9 @@ export async function submitPublicPoi(input: {
         poiId: submitted.id,
         title: submitted.title,
         categoryId: submitted.categoryId,
+        description: submitted.description,
+        href: submitted.href,
+        imageUrl: submitted.imageUrl,
         geometry: submitted.geometry,
       },
     );
@@ -151,6 +160,9 @@ export async function publishPoiSubmission(input: {
       {
         poiId: updated.id,
         categoryId: updated.categoryId,
+        description: updated.description,
+        href: updated.href,
+        imageUrl: updated.imageUrl,
         geometry: updated.geometry,
         publishedAt,
       },

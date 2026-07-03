@@ -84,6 +84,9 @@ export interface PoiSubmittedPayload {
   revisionId?: string;
   title?: string;
   categoryId: string;
+  description?: string;
+  href?: string;
+  imageUrl?: string;
   geometry: MapGeometry;
 }
 
@@ -98,6 +101,9 @@ export interface PoiReviewedPayload {
 export interface PoiPublishedPayload {
   poiId: string;
   categoryId: string;
+  description?: string;
+  href?: string;
+  imageUrl?: string;
   geometry: MapGeometry;
   publishedAt: ISODateTimeString;
 }

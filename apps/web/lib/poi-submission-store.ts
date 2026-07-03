@@ -39,6 +39,9 @@ export async function findLocalPoiSubmission(id: string): Promise<PoiSubmission 
 export async function createLocalPoiSubmission(input: {
   title: string;
   categoryId: string;
+  description?: string;
+  href?: string;
+  imageUrl?: string;
   geometry: MapGeometry;
   visibility: PoiVisibility;
   actorId: string;
@@ -49,6 +52,9 @@ export async function createLocalPoiSubmission(input: {
     profileId: 'default',
     title: input.title,
     categoryId: input.categoryId,
+    description: input.description,
+    href: input.href,
+    imageUrl: input.imageUrl,
     geometry: input.geometry,
     visibility: input.visibility,
     status: 'draft',

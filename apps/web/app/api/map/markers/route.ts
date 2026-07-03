@@ -242,6 +242,9 @@ function mergeLocalMapMarkers(
       id: `poi-${submission.id}`,
       label: submission.title,
       categoryId: submission.categoryId,
+      description: submission.description,
+      href: submission.href,
+      imageUrl: submission.imageUrl,
       geometry: submission.geometry,
       iconFileName: category?.iconMapping.defaultIconFileName,
     };

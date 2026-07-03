@@ -1640,15 +1640,28 @@ body .material-symbols-outlined {
 }
 
 .map-poi-submit-form input,
-.map-poi-submit-form select {
+.map-poi-submit-form select,
+.map-poi-submit-form textarea {
   min-width: 0;
-  height: 38px;
-  padding: 0 var(--yct-space-3);
   border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-pill);
   outline: 0;
   background: var(--yct-color-surface);
   color: var(--yct-color-text);
+}
+
+.map-poi-submit-form input,
+.map-poi-submit-form select {
+  height: 38px;
+  padding: 0 var(--yct-space-3);
+  border-radius: var(--yct-radius-pill);
+}
+
+.map-poi-submit-form textarea {
+  min-height: 86px;
+  resize: vertical;
+  padding: var(--yct-space-2) var(--yct-space-3);
+  border-radius: var(--yct-radius-lg);
+  line-height: 1.45;
 }
 
 .map-poi-coordinate-row {
@@ -1762,6 +1775,15 @@ body .material-symbols-outlined {
   color: var(--yct-color-text-secondary);
   font-size: 13px;
   line-height: 1.55;
+}
+
+.map-poi-detail-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-muted);
 }
 
 .map-poi-detail-body dl {

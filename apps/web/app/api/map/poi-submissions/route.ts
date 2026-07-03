@@ -48,6 +48,9 @@ export async function POST(request: NextRequest) {
   const result = await submitPublicPoi({
     title: parsed.data.title,
     categoryId: parsed.data.categoryId,
+    description: parsed.data.description,
+    href: parsed.data.href,
+    imageUrl: parsed.data.imageUrl,
     geometry: parsed.data.geometry,
     actorId: user.ldpassUserId,
   });

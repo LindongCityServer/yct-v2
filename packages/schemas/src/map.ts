@@ -84,6 +84,9 @@ export const poiCategorySchema = z.object({
 export const poiSubmissionSchema = z.object({
   title: nonEmptyTextSchema,
   categoryId: idSchema,
+  description: z.string().trim().max(1000).optional(),
+  href: urlSchema.optional(),
+  imageUrl: urlSchema.optional(),
   geometry: mapGeometrySchema,
   visibility: z.enum(['private', 'public_pending_review']),
 });

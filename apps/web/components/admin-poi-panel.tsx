@@ -88,6 +88,9 @@ export function AdminPoiPanel() {
                 {submission.submittedAt ? ` · ${formatDate(submission.submittedAt)}` : ''}
                 {submission.reviewReason ? ` · ${submission.reviewReason}` : ''}
               </p>
+              {submission.description ? <p>{submission.description}</p> : null}
+              {submission.href ? <p className="muted">链接：{submission.href}</p> : null}
+              {submission.imageUrl ? <p className="muted">图片：{submission.imageUrl}</p> : null}
             </div>
             <div className="admin-content-actions">
               <button

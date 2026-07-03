@@ -120,6 +120,9 @@ export interface PoiSubmission {
   profileId: YctProfileId;
   title: string;
   categoryId: string;
+  description?: string;
+  href?: string;
+  imageUrl?: string;
   geometry: MapGeometry;
   visibility: PoiVisibility;
   status: PoiSubmissionStatus;

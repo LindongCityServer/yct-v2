@@ -30,6 +30,7 @@ export interface MapMarkerSnapshot {
     accentColor?: string;
     description?: string;
     href?: string;
+    imageUrl?: string;
   }>;
 }
 
