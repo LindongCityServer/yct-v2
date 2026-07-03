@@ -1010,6 +1010,82 @@ body .material-symbols-outlined {
   box-shadow: var(--yct-shadow-soft);
 }
 
+.map-route-plan-card {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-4);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-xl);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 96%, transparent);
+  box-shadow: var(--yct-shadow-floating);
+  backdrop-filter: blur(18px);
+}
+
+.map-route-plan-header {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+.map-route-plan-header > .material-symbols-outlined {
+  --icon-fill: 1;
+  color: var(--yct-color-primary);
+  font-size: 22px;
+}
+
+.map-route-plan-header strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-route-plan-card dl {
+  display: grid;
+  gap: var(--yct-space-2);
+  margin: 0;
+}
+
+.map-route-plan-card dl div {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--yct-space-2);
+}
+
+.map-route-plan-card dt,
+.map-route-plan-card dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.map-route-plan-card dt {
+  color: var(--yct-color-text-muted);
+  font-weight: 700;
+}
+
+.map-route-plan-card dd {
+  color: var(--yct-color-text-secondary);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.map-route-plan-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yct-space-2);
+}
+
+.map-route-plan-actions .secondary-action-button {
+  justify-content: center;
+  min-width: 0;
+}
+
 .map-source-note {
   display: flex;
   align-items: flex-start;

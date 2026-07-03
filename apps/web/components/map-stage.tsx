@@ -193,6 +193,13 @@ interface TransitLineConnection {
   sortOrder: number;
 }
 
+interface RoutePlanDraft {
+  destinationId: string;
+  destinationLabel: string;
+  destination: [number, number];
+  origin: [number, number];
+}
+
 interface ScaleBarInfo {
   distance: number;
   pixelWidth: number;
@@ -268,6 +275,7 @@ export function MapStage() {
   const [linearFeaturesVisible, setLinearFeaturesVisible] = useState(true);
   const [markerListExpanded, setMarkerListExpanded] = useState(true);
   const [cursorWorld, setCursorWorld] = useState<{ x: number; z: number } | null>(null);
+  const [routePlanDraft, setRoutePlanDraft] = useState<RoutePlanDraft | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -849,6 +857,26 @@ export function MapStage() {
     }
   };
 
+  const createRoutePlanDraft = (marker: CenterableMarker) => {
+    const destination = getMarkerCenter(marker);
+    if (!destination) {
+      return;
+    }
+
+    setRoutePlanDraft({
+      destinationId: marker.id,
+      destinationLabel: formatMarkerDisplayName(marker.label),
+      destination,
+      origin: [mapView.centerX, mapView.centerZ],
+    });
+  };
+
+  const updateRoutePlanOriginToMapCenter = () => {
+    setRoutePlanDraft((current) =>
+      current ? { ...current, origin: [mapView.centerX, mapView.centerZ] } : current,
+    );
+  };
+
   const hasMapOverlay =
     projectedMarkers.length > 0 ||
     projectedLinearPois.length > 0 ||
@@ -887,6 +915,14 @@ export function MapStage() {
               </button>
             ) : null}
           </div>
+          {routePlanDraft ? (
+            <RoutePlanDraftCard
+              draft={routePlanDraft}
+              onClear={() => setRoutePlanDraft(null)}
+              onFocusDestination={() => setFocusedMarkerId(routePlanDraft.destinationId)}
+              onUseMapCenter={updateRoutePlanOriginToMapCenter}
+            />
+          ) : null}
           {focusedMarker && isCenterableMarker(focusedMarker) ? null : (
             <div
               className={markerListExpanded ? 'map-marker-list' : 'map-marker-list is-collapsed'}
@@ -1094,7 +1130,10 @@ export function MapStage() {
                       <span>打开详情</span>
                     </a>
                   ) : null}
-                  <PoiActionBar marker={focusedMarker} />
+                  <PoiActionBar
+                    marker={focusedMarker}
+                    onPlanRoute={() => createRoutePlanDraft(focusedMarker)}
+                  />
                 </>
               ) : null}
               {!isLinearDetailMarker(focusedMarker) && poiDetailTab === 'facilities' ? (
@@ -1717,10 +1756,78 @@ function RoadMapDetail({ marker }: Readonly<{ marker: EndpointGroupMarker }>) {
   );
 }
 
-function PoiActionBar({ marker }: Readonly<{ marker: CenterableMarker }>) {
+function RoutePlanDraftCard({
+  draft,
+  onClear,
+  onFocusDestination,
+  onUseMapCenter,
+}: Readonly<{
+  draft: RoutePlanDraft;
+  onClear: () => void;
+  onFocusDestination: () => void;
+  onUseMapCenter: () => void;
+}>) {
+  return (
+    <section className="map-route-plan-card" aria-label="路线规划">
+      <div className="map-route-plan-header">
+        <span className="material-symbols-outlined" aria-hidden="true">
+          directions
+        </span>
+        <strong>路线规划</strong>
+        <button
+          className="icon-action-button"
+          type="button"
+          aria-label="关闭路线规划"
+          onClick={onClear}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            close
+          </span>
+        </button>
+      </div>
+      <dl>
+        <div>
+          <dt>起点</dt>
+          <dd>{formatPoint(draft.origin)}</dd>
+        </div>
+        <div>
+          <dt>终点</dt>
+          <dd>{draft.destinationLabel}</dd>
+        </div>
+        <div>
+          <dt>坐标</dt>
+          <dd>{formatPoint(draft.destination)}</dd>
+        </div>
+        <div>
+          <dt>状态</dt>
+          <dd>道路图待发布</dd>
+        </div>
+      </dl>
+      <div className="map-route-plan-actions">
+        <button className="secondary-action-button" type="button" onClick={onUseMapCenter}>
+          <span className="material-symbols-outlined" aria-hidden="true">
+            my_location
+          </span>
+          <span>更新起点</span>
+        </button>
+        <button className="secondary-action-button" type="button" onClick={onFocusDestination}>
+          <span className="material-symbols-outlined" aria-hidden="true">
+            location_on
+          </span>
+          <span>查看终点</span>
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function PoiActionBar({
+  marker,
+  onPlanRoute,
+}: Readonly<{ marker: CenterableMarker; onPlanRoute: () => void }>) {
   return (
     <div className="map-poi-action-bar" aria-label="地点操作">
-      <button className="secondary-action-button is-primary" type="button">
+      <button className="secondary-action-button is-primary" type="button" onClick={onPlanRoute}>
         <span className="material-symbols-outlined" aria-hidden="true">
           directions
         </span>
