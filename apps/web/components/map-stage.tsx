@@ -455,6 +455,16 @@ export function MapStage() {
     markerQuery,
     pointMarkers,
   ]);
+
+  useEffect(() => {
+    const categoryStillAvailable = markerListCategoryOptions.some(
+      (category) => category.id === markerListCategoryId,
+    );
+    if (!categoryStillAvailable) {
+      setMarkerListCategoryId('all');
+    }
+  }, [markerListCategoryId, markerListCategoryOptions]);
+
   const rawProjectedMarkers = useMemo(
     () =>
       projectPointMarkers(
@@ -877,7 +887,7 @@ export function MapStage() {
               </button>
             ) : null}
           </div>
-          {focusedMarker && isCenterableMarker(focusedMarker) ? null : sidebarMarkers.length ? (
+          {focusedMarker && isCenterableMarker(focusedMarker) ? null : (
             <div
               className={markerListExpanded ? 'map-marker-list' : 'map-marker-list is-collapsed'}
             >
@@ -933,56 +943,58 @@ export function MapStage() {
                     ) : null}
                   </div>
                   <div className="map-marker-list-items">
-                    {sidebarMarkers.map((marker) => {
-                      const center = getMarkerCenter(marker);
-                      const content = (
-                        <>
-                          <MarkerListIcon marker={marker} tileBaseUrl={tileBaseUrl} />
-                          <span>{formatMarkerDisplayName(marker.label)}</span>
-                          <span className="muted">{formatMarkerDetail(marker)}</span>
-                        </>
-                      );
+                    {sidebarMarkers.length > 0 ? (
+                      sidebarMarkers.map((marker) => {
+                        const center = getMarkerCenter(marker);
+                        const content = (
+                          <>
+                            <MarkerListIcon marker={marker} tileBaseUrl={tileBaseUrl} />
+                            <span>{formatMarkerDisplayName(marker.label)}</span>
+                            <span className="muted">{formatMarkerDetail(marker)}</span>
+                          </>
+                        );
 
-                      if (marker.href) {
+                        if (marker.href) {
+                          return (
+                            <a
+                              className={
+                                marker.id === focusedMarkerId
+                                  ? 'map-marker-list-item is-active'
+                                  : 'map-marker-list-item'
+                              }
+                              href={marker.href}
+                              key={marker.id}
+                            >
+                              {content}
+                            </a>
+                          );
+                        }
+
                         return (
-                          <a
+                          <button
                             className={
                               marker.id === focusedMarkerId
                                 ? 'map-marker-list-item is-active'
                                 : 'map-marker-list-item'
                             }
-                            href={marker.href}
+                            type="button"
                             key={marker.id}
+                            disabled={!center}
+                            onClick={() => focusMapMarker(marker)}
                           >
                             {content}
-                          </a>
+                          </button>
                         );
-                      }
-
-                      return (
-                        <button
-                          className={
-                            marker.id === focusedMarkerId
-                              ? 'map-marker-list-item is-active'
-                              : 'map-marker-list-item'
-                          }
-                          type="button"
-                          key={marker.id}
-                          disabled={!center}
-                          onClick={() => focusMapMarker(marker)}
-                        >
-                          {content}
-                        </button>
-                      );
-                    })}
+                      })
+                    ) : (
+                      <p className="map-marker-list-empty">
+                        {loadStatus === 'loading' ? '正在读取地图标记' : '暂无匹配标记'}
+                      </p>
+                    )}
                   </div>
                 </>
               ) : null}
             </div>
-          ) : (
-            <p className="muted">
-              {loadStatus === 'loading' ? '正在读取地图标记' : '暂无匹配标记'}
-            </p>
           )}
         </div>
         {focusedMarker && isCenterableMarker(focusedMarker) ? (

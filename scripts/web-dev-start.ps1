@@ -24,7 +24,7 @@ Clear-YctLogFile -Path $logs.Output
 Clear-YctLogFile -Path $logs.Error
 
 $pnpm = Get-YctPnpmCommand
-$commandLine = "`"$pnpm`" --filter @yct/web exec next dev --hostname $HostName --port $Port > `"$($logs.Output)`" 2> `"$($logs.Error)`""
+$commandLine = "`"$pnpm`" --filter @yct/web exec next dev --webpack --hostname $HostName --port $Port > `"$($logs.Output)`" 2> `"$($logs.Error)`""
 $cmdArguments = "/d /s /c `"$commandLine`""
 
 $process = Start-Process `

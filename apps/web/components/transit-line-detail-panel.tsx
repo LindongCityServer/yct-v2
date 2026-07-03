@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
 import type { TransitModeProfile, TransitStationDetailSnapshot } from '@yct/contracts';
 import { appPath } from '../lib/app-paths';
-import type { TransitLineSummary } from '../lib/legacy-transit';
+import type { TransitLineStopSummary, TransitLineSummary } from '../lib/legacy-transit';
 import { TitleWithBreaks } from './title-with-breaks';
 
 const fallbackModeProfiles: TransitModeProfile[] = [
@@ -67,9 +67,10 @@ export function TransitLineDetailPanel({
     () => new Map(stationDetails.map((detail) => [detail.stationName, detail])),
     [stationDetails],
   );
-  const stationNames = useMemo(() => {
-    return direction === 'forward' ? line.stationNames : [...line.stationNames].reverse();
-  }, [direction, line.stationNames]);
+  const stationStops = useMemo(
+    () => getDirectionalStationStops(line, direction),
+    [direction, line],
+  );
 
   return (
     <article
@@ -126,30 +127,38 @@ export function TransitLineDetailPanel({
         <h2 id="station-sequence-title" className="sr-only">
           站点列表
         </h2>
-        {stationNames.length > 0 ? (
+        {stationStops.length > 0 ? (
           <ol className="station-timeline">
-            {stationNames.map((stationName, index) => (
-              <li key={`${stationName}-${index}`}>
-                <span className="station-node" aria-hidden="true" />
-                <span className="station-copy">
-                  <strong>
-                    {detailByStationName.has(stationName) ? (
-                      <Link
-                        className="station-detail-link"
-                        href={appPath(
-                          `/travel/stations/${encodeURIComponent(line.name)}/${encodeURIComponent(stationName)}`,
-                        )}
-                      >
+            {stationStops.map((stop, index) => {
+              const stationName = stop.stationName;
+              return (
+                <li key={`${stationName}-${stop.sequence}-${index}`}>
+                  <span className="station-node" aria-hidden="true" />
+                  <span className="station-copy">
+                    <strong>
+                      {detailByStationName.has(stationName) ? (
+                        <Link
+                          className="station-detail-link"
+                          href={appPath(
+                            `/travel/stations/${encodeURIComponent(line.name)}/${encodeURIComponent(stationName)}`,
+                          )}
+                        >
+                          <TitleWithBreaks title={stationName} />
+                        </Link>
+                      ) : (
                         <TitleWithBreaks title={stationName} />
-                      </Link>
-                    ) : (
-                      <TitleWithBreaks title={stationName} />
-                    )}
-                  </strong>
-                  <StationDetailSummary detail={detailByStationName.get(stationName)} />
-                </span>
-              </li>
-            ))}
+                      )}
+                    </strong>
+                    {stop.oneWay ? (
+                      <span className="station-stop-direction">
+                        {stop.oneWay === 'up' ? '仅正向' : '仅反向'}
+                      </span>
+                    ) : null}
+                    <StationDetailSummary detail={detailByStationName.get(stationName)} />
+                  </span>
+                </li>
+              );
+            })}
           </ol>
         ) : (
           <div className="empty-state">
@@ -239,9 +248,33 @@ function getDirectionLabels(line: TransitLineSummary): Record<DirectionKey, stri
   const last = line.lastStationName ?? '最后一站';
 
   return {
-    forward: `${last}方向`,
-    reverse: `${first}方向`,
+    forward: `${formatDirectionTerminalName(last)}方向`,
+    reverse: `${formatDirectionTerminalName(first)}方向`,
   };
+}
+
+function getDirectionalStationStops(
+  line: TransitLineSummary,
+  direction: DirectionKey,
+): TransitLineStopSummary[] {
+  const sourceStops: TransitLineStopSummary[] =
+    line.stationStops.length > 0
+      ? line.stationStops
+      : line.stationNames.map((stationName, sequence) => ({
+          stationName,
+          sequence,
+        }));
+  const filteredStops =
+    direction === 'forward'
+      ? sourceStops.filter((stop) => stop.oneWay !== 'down')
+      : sourceStops.filter((stop) => stop.oneWay !== 'up');
+  const sortedStops = [...filteredStops].sort((left, right) => left.sequence - right.sequence);
+
+  return direction === 'forward' ? sortedStops : sortedStops.reverse();
+}
+
+function formatDirectionTerminalName(name: string): string {
+  return name.replace(/\s+/g, '').replace(/\|/g, '');
 }
 
 function formatFirstLastBus(line: TransitLineSummary): string {

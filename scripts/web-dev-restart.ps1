@@ -6,6 +6,7 @@ param(
 
 $stopScript = Join-Path $PSScriptRoot "web-dev-stop.ps1"
 $startScript = Join-Path $PSScriptRoot "web-dev-start.ps1"
+. (Join-Path $PSScriptRoot "web-dev-common.ps1")
 
 function Convert-YctScriptOutput {
   param([object[]]$Lines)
@@ -23,6 +24,7 @@ function Convert-YctScriptOutput {
 }
 
 $stopResult = Convert-YctScriptOutput -Lines (& $stopScript -Port $Port -HostName $HostName)
+Clear-YctNextDevManifestCache -Root (Get-YctRepoRoot)
 $startResult = Convert-YctScriptOutput -Lines (& $startScript -Port $Port -HostName $HostName -TimeoutSeconds $TimeoutSeconds)
 
 $result = [pscustomobject]@{

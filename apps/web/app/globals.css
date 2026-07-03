@@ -1166,6 +1166,14 @@ body .material-symbols-outlined {
   margin-top: var(--yct-space-2);
 }
 
+.map-marker-list-empty {
+  margin: 0;
+  padding: var(--yct-space-3);
+  color: var(--yct-color-text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .map-category-filter {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 28px;
@@ -4223,6 +4231,23 @@ body .material-symbols-outlined {
   display: grid;
   min-width: 0;
   gap: 2px;
+}
+
+.station-stop-direction {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 22px;
+  padding: 0 var(--yct-space-2);
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(
+    in srgb,
+    var(--line-detail-color, var(--yct-color-primary)) 12%,
+    transparent
+  );
+  color: var(--line-detail-color, var(--yct-color-primary));
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .station-detail-summary {
