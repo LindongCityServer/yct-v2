@@ -311,7 +311,9 @@ export function MapStage() {
   const [markerListExpanded, setMarkerListExpanded] = useState(true);
   const [cursorWorld, setCursorWorld] = useState<{ x: number; z: number } | null>(null);
   const [routePlanDraft, setRoutePlanDraft] = useState<RoutePlanDraft | null>(null);
+  const [routePlanCollapsed, setRoutePlanCollapsed] = useState(false);
   const [nearbySearchCenter, setNearbySearchCenter] = useState<NearbySearchCenter | null>(null);
+  const [poiDetailCollapsed, setPoiDetailCollapsed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -782,6 +784,7 @@ export function MapStage() {
     setMapView((current) => fitMarkerToMapView(marker, current, viewportSize));
     setFocusedMarkerId(marker.id);
     setPoiDetailTab('summary');
+    setPoiDetailCollapsed(false);
     setNearbySearchCenter(null);
   };
 
@@ -993,6 +996,7 @@ export function MapStage() {
       destination,
       origin: [mapView.centerX, mapView.centerZ],
     });
+    setRoutePlanCollapsed(false);
   };
 
   const updateRoutePlanOriginToMapCenter = () => {
@@ -1109,8 +1113,13 @@ export function MapStage() {
           {routePlanDraft ? (
             <RoutePlanDraftCard
               draft={routePlanDraft}
+              collapsed={routePlanCollapsed}
               onClear={() => setRoutePlanDraft(null)}
-              onFocusDestination={() => setFocusedMarkerId(routePlanDraft.destinationId)}
+              onFocusDestination={() => {
+                setFocusedMarkerId(routePlanDraft.destinationId);
+                setPoiDetailCollapsed(false);
+              }}
+              onToggleCollapsed={() => setRoutePlanCollapsed((current) => !current)}
               onUseMapCenter={updateRoutePlanOriginToMapCenter}
             />
           ) : null}
@@ -1246,13 +1255,29 @@ export function MapStage() {
           )}
         </div>
         {focusedMarker && isCenterableMarker(focusedMarker) ? (
-          <aside className="map-poi-detail-panel" aria-labelledby="map-poi-detail-title">
+          <aside
+            className={
+              poiDetailCollapsed ? 'map-poi-detail-panel is-collapsed' : 'map-poi-detail-panel'
+            }
+            aria-labelledby="map-poi-detail-title"
+          >
             <div className="map-poi-detail-header">
               <MarkerListIcon marker={focusedMarker} tileBaseUrl={tileBaseUrl} />
               <div>
                 <h2 id="map-poi-detail-title">{formatMarkerDisplayName(focusedMarker.label)}</h2>
                 <span>{focusedMarkerCategoryName ?? focusedMarker.categoryId ?? '地图对象'}</span>
               </div>
+              <button
+                className="icon-action-button"
+                type="button"
+                aria-label={poiDetailCollapsed ? '展开地点信息' : '收起地点信息'}
+                aria-expanded={!poiDetailCollapsed}
+                onClick={() => setPoiDetailCollapsed((current) => !current)}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  {poiDetailCollapsed ? 'keyboard_arrow_down' : 'keyboard_arrow_up'}
+                </span>
+              </button>
               <button
                 className="icon-action-button"
                 type="button"
@@ -1264,95 +1289,99 @@ export function MapStage() {
                 </span>
               </button>
             </div>
-            {!isLinearDetailMarker(focusedMarker) ? (
-              <div className="map-poi-detail-tabs" aria-label="地点信息分类">
-                {[
-                  ['summary', '简介'],
-                  ['facilities', '设施/出入口'],
-                ].map(([tab, label]) => (
-                  <button
-                    className={poiDetailTab === tab ? 'is-active' : ''}
-                    type="button"
-                    aria-pressed={poiDetailTab === tab}
-                    key={tab}
-                    onClick={() => setPoiDetailTab(tab as PoiDetailTab)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-            <div className="map-poi-detail-body">
-              {focusedTransitLine ? (
-                <TransitLineMapDetail
-                  line={focusedTransitLine}
-                  lineColor={focusedMarker.accentColor}
-                />
-              ) : isRoadEndpointGroupMarker(focusedMarker) ? (
-                <RoadMapDetail marker={focusedMarker} />
-              ) : poiDetailTab === 'summary' ? (
-                <>
-                  {focusedMarker.description ? <p>{focusedMarker.description}</p> : null}
-                  <dl>
-                    {focusedMarkerCenter ? (
-                      <div>
-                        <dt>坐标</dt>
-                        <dd>{formatPoint(focusedMarkerCenter)}</dd>
-                      </div>
-                    ) : null}
-                    <div>
-                      <dt>类型</dt>
-                      <dd>{formatGeometryDetail(focusedMarker)}</dd>
-                    </div>
-                    {isTransitStationPoi(focusedMarker) ? (
-                      <div>
-                        <dt>接驳线路</dt>
-                        <dd>
-                          {focusedMarkerConnections.length > 0 ? (
-                            <span className="map-transfer-line-list">
-                              {focusedMarkerConnections.map((connection) => (
-                                <button
-                                  className="map-transfer-line-chip"
-                                  type="button"
-                                  key={connection.id}
-                                  onClick={() => focusTransitLineById(connection.id)}
-                                  style={
-                                    {
-                                      '--transfer-line-color': connection.color,
-                                    } as CSSProperties
-                                  }
-                                  title={`${connection.modeLabel} · ${connection.name}`}
-                                >
-                                  {connection.name}
-                                </button>
-                              ))}
-                            </span>
-                          ) : (
-                            '暂无已知接驳线路'
-                          )}
-                        </dd>
-                      </div>
-                    ) : null}
-                  </dl>
-                  {focusedMarker.href ? (
-                    <a className="secondary-action-button" href={focusedMarker.href}>
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        open_in_new
-                      </span>
-                      <span>打开详情</span>
-                    </a>
+            {!poiDetailCollapsed ? (
+              <>
+                {!isLinearDetailMarker(focusedMarker) ? (
+                  <div className="map-poi-detail-tabs" aria-label="地点信息分类">
+                    {[
+                      ['summary', '简介'],
+                      ['facilities', '设施/出入口'],
+                    ].map(([tab, label]) => (
+                      <button
+                        className={poiDetailTab === tab ? 'is-active' : ''}
+                        type="button"
+                        aria-pressed={poiDetailTab === tab}
+                        key={tab}
+                        onClick={() => setPoiDetailTab(tab as PoiDetailTab)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="map-poi-detail-body">
+                  {focusedTransitLine ? (
+                    <TransitLineMapDetail
+                      line={focusedTransitLine}
+                      lineColor={focusedMarker.accentColor}
+                    />
+                  ) : isRoadEndpointGroupMarker(focusedMarker) ? (
+                    <RoadMapDetail marker={focusedMarker} />
+                  ) : poiDetailTab === 'summary' ? (
+                    <>
+                      {focusedMarker.description ? <p>{focusedMarker.description}</p> : null}
+                      <dl>
+                        {focusedMarkerCenter ? (
+                          <div>
+                            <dt>坐标</dt>
+                            <dd>{formatPoint(focusedMarkerCenter)}</dd>
+                          </div>
+                        ) : null}
+                        <div>
+                          <dt>类型</dt>
+                          <dd>{formatGeometryDetail(focusedMarker)}</dd>
+                        </div>
+                        {isTransitStationPoi(focusedMarker) ? (
+                          <div>
+                            <dt>接驳线路</dt>
+                            <dd>
+                              {focusedMarkerConnections.length > 0 ? (
+                                <span className="map-transfer-line-list">
+                                  {focusedMarkerConnections.map((connection) => (
+                                    <button
+                                      className="map-transfer-line-chip"
+                                      type="button"
+                                      key={connection.id}
+                                      onClick={() => focusTransitLineById(connection.id)}
+                                      style={
+                                        {
+                                          '--transfer-line-color': connection.color,
+                                        } as CSSProperties
+                                      }
+                                      title={`${connection.modeLabel} · ${connection.name}`}
+                                    >
+                                      {connection.name}
+                                    </button>
+                                  ))}
+                                </span>
+                              ) : (
+                                '暂无已知接驳线路'
+                              )}
+                            </dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                      {focusedMarker.href ? (
+                        <a className="secondary-action-button" href={focusedMarker.href}>
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            open_in_new
+                          </span>
+                          <span>打开详情</span>
+                        </a>
+                      ) : null}
+                      <PoiActionBar
+                        marker={focusedMarker}
+                        onPlanRoute={() => createRoutePlanDraft(focusedMarker)}
+                        onSearchNearby={() => startNearbySearch(focusedMarker)}
+                      />
+                    </>
                   ) : null}
-                  <PoiActionBar
-                    marker={focusedMarker}
-                    onPlanRoute={() => createRoutePlanDraft(focusedMarker)}
-                    onSearchNearby={() => startNearbySearch(focusedMarker)}
-                  />
-                </>
-              ) : null}
-              {!isLinearDetailMarker(focusedMarker) && poiDetailTab === 'facilities' ? (
-                <p>{focusedMarker.description ?? '暂无设施数据'}</p>
-              ) : null}
-            </div>
+                  {!isLinearDetailMarker(focusedMarker) && poiDetailTab === 'facilities' ? (
+                    <p>{focusedMarker.description ?? '暂无设施数据'}</p>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
           </aside>
         ) : null}
       </aside>
@@ -1996,22 +2025,40 @@ function RoadMapDetail({ marker }: Readonly<{ marker: EndpointGroupMarker }>) {
 
 function RoutePlanDraftCard({
   draft,
+  collapsed,
   onClear,
   onFocusDestination,
+  onToggleCollapsed,
   onUseMapCenter,
 }: Readonly<{
   draft: RoutePlanDraft;
+  collapsed: boolean;
   onClear: () => void;
   onFocusDestination: () => void;
+  onToggleCollapsed: () => void;
   onUseMapCenter: () => void;
 }>) {
   return (
-    <section className="map-route-plan-card" aria-label="路线规划">
+    <section
+      className={collapsed ? 'map-route-plan-card is-collapsed' : 'map-route-plan-card'}
+      aria-label="路线规划"
+    >
       <div className="map-route-plan-header">
         <span className="material-symbols-outlined" aria-hidden="true">
           directions
         </span>
         <strong>路线规划</strong>
+        <button
+          className="icon-action-button"
+          type="button"
+          aria-label={collapsed ? '展开路线规划' : '收起路线规划'}
+          aria-expanded={!collapsed}
+          onClick={onToggleCollapsed}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            {collapsed ? 'keyboard_arrow_down' : 'keyboard_arrow_up'}
+          </span>
+        </button>
         <button
           className="icon-action-button"
           type="button"
@@ -2023,38 +2070,42 @@ function RoutePlanDraftCard({
           </span>
         </button>
       </div>
-      <dl>
-        <div>
-          <dt>起点</dt>
-          <dd>{formatPoint(draft.origin)}</dd>
-        </div>
-        <div>
-          <dt>终点</dt>
-          <dd>{draft.destinationLabel}</dd>
-        </div>
-        <div>
-          <dt>坐标</dt>
-          <dd>{formatPoint(draft.destination)}</dd>
-        </div>
-        <div>
-          <dt>状态</dt>
-          <dd>道路图待发布</dd>
-        </div>
-      </dl>
-      <div className="map-route-plan-actions">
-        <button className="secondary-action-button" type="button" onClick={onUseMapCenter}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            my_location
-          </span>
-          <span>更新起点</span>
-        </button>
-        <button className="secondary-action-button" type="button" onClick={onFocusDestination}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            location_on
-          </span>
-          <span>查看终点</span>
-        </button>
-      </div>
+      {!collapsed ? (
+        <>
+          <dl>
+            <div>
+              <dt>起点</dt>
+              <dd>{formatPoint(draft.origin)}</dd>
+            </div>
+            <div>
+              <dt>终点</dt>
+              <dd>{draft.destinationLabel}</dd>
+            </div>
+            <div>
+              <dt>坐标</dt>
+              <dd>{formatPoint(draft.destination)}</dd>
+            </div>
+            <div>
+              <dt>状态</dt>
+              <dd>道路图待发布</dd>
+            </div>
+          </dl>
+          <div className="map-route-plan-actions">
+            <button className="secondary-action-button" type="button" onClick={onUseMapCenter}>
+              <span className="material-symbols-outlined" aria-hidden="true">
+                my_location
+              </span>
+              <span>更新起点</span>
+            </button>
+            <button className="secondary-action-button" type="button" onClick={onFocusDestination}>
+              <span className="material-symbols-outlined" aria-hidden="true">
+                location_on
+              </span>
+              <span>查看终点</span>
+            </button>
+          </div>
+        </>
+      ) : null}
     </section>
   );
 }

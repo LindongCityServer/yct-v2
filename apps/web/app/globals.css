@@ -644,6 +644,11 @@ body .material-symbols-outlined {
   gap: 4px;
   pointer-events: none;
   transform: translate(-50%, -50%);
+  transition:
+    left 160ms ease,
+    top 160ms ease,
+    transform 160ms ease,
+    opacity 160ms ease;
 }
 
 .map-guide-marker.is-route-origin,
@@ -1077,9 +1082,13 @@ body .material-symbols-outlined {
   backdrop-filter: blur(18px);
 }
 
+.map-route-plan-card.is-collapsed {
+  gap: 0;
+}
+
 .map-route-plan-header {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 34px;
+  grid-template-columns: 24px minmax(0, 1fr) 34px 34px;
   align-items: center;
   gap: var(--yct-space-2);
   min-width: 0;
@@ -1521,9 +1530,13 @@ body .material-symbols-outlined {
   backdrop-filter: blur(18px);
 }
 
+.map-poi-detail-panel.is-collapsed {
+  gap: 0;
+}
+
 .map-poi-detail-header {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) 38px;
+  grid-template-columns: 32px minmax(0, 1fr) 34px 34px;
   align-items: center;
   gap: var(--yct-space-2);
 }
@@ -1553,7 +1566,7 @@ body .material-symbols-outlined {
 
 .map-poi-detail-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 3px;
   padding: 3px;
   border-radius: var(--yct-radius-pill);
