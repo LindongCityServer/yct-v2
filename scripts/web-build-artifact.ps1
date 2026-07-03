@@ -107,38 +107,68 @@ function Copy-YctPublicAssets {
   }
 }
 
-function Copy-YctSwcHelpersDependency {
+function Resolve-YctLinkedPath {
+  param(
+    [Parameter(Mandatory = $true)][System.IO.FileSystemInfo]$Item
+  )
+
+  if ($Item.LinkType -and $Item.Target) {
+    $target = @($Item.Target)[0]
+    if (-not [System.IO.Path]::IsPathRooted($target)) {
+      $target = Join-Path $Item.DirectoryName $target
+    }
+    return (Resolve-Path -LiteralPath $target).Path
+  }
+
+  return $Item.FullName
+}
+
+function Copy-YctNodeModuleEntry {
+  param(
+    [Parameter(Mandatory = $true)][System.IO.FileSystemInfo]$Source,
+    [Parameter(Mandatory = $true)][string]$Destination
+  )
+
+  $actualSource = Resolve-YctLinkedPath -Item $Source
+  if (Test-Path -LiteralPath $Destination) {
+    Remove-Item -LiteralPath $Destination -Recurse -Force
+  }
+  $destinationParent = Split-Path -Parent $Destination
+  New-Item -ItemType Directory -Force -Path $destinationParent | Out-Null
+  Copy-Item -LiteralPath $actualSource -Destination $Destination -Recurse -Force
+}
+
+function Copy-YctNextRuntimeDependencies {
   param(
     [Parameter(Mandatory = $true)][string]$Root,
     [Parameter(Mandatory = $true)][string]$DestinationNodeModules
   )
 
-  $candidatePaths = @(
-    (Join-Path $Root "apps\web\node_modules\@swc\helpers"),
-    (Join-Path $Root "node_modules\@swc\helpers"),
-    (Join-Path $Root "node_modules\.pnpm\node_modules\@swc\helpers")
-  )
-
   $pnpmRoot = Join-Path $Root "node_modules\.pnpm"
+  $nextNodeModules = $null
   if (Test-Path -LiteralPath $pnpmRoot) {
-    $candidatePaths += @(
-      Get-ChildItem -LiteralPath $pnpmRoot -Directory -Filter "@swc+helpers@*" -ErrorAction SilentlyContinue |
-        ForEach-Object { Join-Path $_.FullName "node_modules\@swc\helpers" }
-    )
+    $nextNodeModules = Get-ChildItem -LiteralPath $pnpmRoot -Directory -Filter "next@*" -ErrorAction SilentlyContinue |
+      ForEach-Object { Join-Path $_.FullName "node_modules" } |
+      Where-Object { Test-Path -LiteralPath (Join-Path $_ "next\package.json") } |
+      Select-Object -First 1
   }
 
-  $source = $candidatePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-  if (-not $source) {
-    throw "Cannot find @swc/helpers in local node_modules. Run pnpm install before building the artifact."
+  if (-not $nextNodeModules) {
+    throw "Cannot find pnpm next package node_modules. Run pnpm install before building the artifact."
   }
 
-  $scopeDestination = Join-Path $DestinationNodeModules "@swc"
-  $packageDestination = Join-Path $scopeDestination "helpers"
-  New-Item -ItemType Directory -Force -Path $scopeDestination | Out-Null
-  if (Test-Path -LiteralPath $packageDestination) {
-    Remove-Item -LiteralPath $packageDestination -Recurse -Force
+  New-Item -ItemType Directory -Force -Path $DestinationNodeModules | Out-Null
+  Get-ChildItem -LiteralPath $nextNodeModules -Force | Where-Object { $_.Name -ne "next" } | ForEach-Object {
+    if ($_.Name.StartsWith("@")) {
+      $scopeDestination = Join-Path $DestinationNodeModules $_.Name
+      New-Item -ItemType Directory -Force -Path $scopeDestination | Out-Null
+      Get-ChildItem -LiteralPath $_.FullName -Force | ForEach-Object {
+        Copy-YctNodeModuleEntry -Source $_ -Destination (Join-Path $scopeDestination $_.Name)
+      }
+    } else {
+      Copy-YctNodeModuleEntry -Source $_ -Destination (Join-Path $DestinationNodeModules $_.Name)
+    }
   }
-  Copy-Item -LiteralPath $source -Destination $scopeDestination -Recurse -Force
 }
 
 function Write-YctUtf8File {
@@ -200,7 +230,7 @@ $standaloneWebNodeModules = Join-Path $standaloneWebRoot "node_modules"
 New-Item -ItemType Directory -Force -Path $standaloneNextRoot | Out-Null
 Copy-Item -LiteralPath $staticRoot -Destination $standaloneNextRoot -Recurse -Force
 Copy-YctPublicAssets -Source $publicRoot -Destination (Join-Path $standaloneWebRoot "public")
-Copy-YctSwcHelpersDependency -Root $root -DestinationNodeModules $standaloneWebNodeModules
+Copy-YctNextRuntimeDependencies -Root $root -DestinationNodeModules $standaloneWebNodeModules
 
 $startScript = @"
 param(

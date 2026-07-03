@@ -50,6 +50,7 @@ pnpm web:artifact
 - 运行 `@yct/web` 的生产构建。
 - 使用 Next.js standalone 输出作为部署主体。
 - 补齐 `apps/web/.next/static` 和 `apps/web/public`。
+- 补齐 pnpm workspace 下 Next standalone 可能漏掉的 `@next/*`、`@swc/*` 等运行时依赖。
 - 跳过本机上传素材目录 `apps/web/public/content-assets`。
 - 不打包 `.env`、`.env.*`、`.yct-data`、日志和本地缓存。
 - 在 `artifacts/` 下生成 `yct-web-时间戳.zip`。
