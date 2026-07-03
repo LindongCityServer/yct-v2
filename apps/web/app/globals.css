@@ -634,6 +634,23 @@ body .material-symbols-outlined {
   cursor: grabbing;
 }
 
+.map-location-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  width: 16px;
+  height: 16px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  background: #1a73e8;
+  box-shadow:
+    0 0 0 1px rgba(26, 115, 232, 0.38),
+    0 4px 12px rgba(17, 24, 23, 0.28);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
 .unmined-tile-stack,
 .unmined-tile-layer {
   position: absolute;

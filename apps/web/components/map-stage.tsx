@@ -1063,7 +1063,7 @@ export function MapStage() {
               onUseMapCenter={updateRoutePlanOriginToMapCenter}
             />
           ) : null}
-          {focusedMarker && isCenterableMarker(focusedMarker) ? null : (
+          {routePlanDraft || (focusedMarker && isCenterableMarker(focusedMarker)) ? null : (
             <div
               className={markerListExpanded ? 'map-marker-list' : 'map-marker-list is-collapsed'}
             >
@@ -1371,6 +1371,12 @@ export function MapStage() {
             </span>
           </div>
         </div>
+
+        <div
+          className="map-location-dot"
+          aria-hidden="true"
+          title={`地图中心 X ${formatMapCoordinate(mapView.centerX)} / Z ${formatMapCoordinate(mapView.centerZ)}`}
+        />
 
         {hasMapOverlay ? (
           <div className="map-marker-layer" aria-label="地图标记示意层">
