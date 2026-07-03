@@ -227,6 +227,29 @@ interface RoutePlanDraft {
   origin: [number, number];
 }
 
+type RouteTransportMode = 'walk' | 'bus' | 'metro' | 'tram' | 'coach' | 'railway';
+
+interface RouteTransportModeOption {
+  mode: RouteTransportMode;
+  label: string;
+  icon: string;
+  color: string;
+}
+
+type EnabledRouteTransportModes = Record<RouteTransportMode, boolean>;
+
+interface RoutePlanOption {
+  id: string;
+  title: string;
+  summary: string;
+  icon: string;
+  color: string;
+  estimatedDistance: number;
+  estimatedMinutes: number;
+  steps: string[];
+  note: string;
+}
+
 interface NearbySearchCenter {
   markerId: string;
   label: string;
@@ -247,6 +270,24 @@ const mapBrowseModes: Array<{ value: MapBrowseMode; label: string; icon: string 
   { value: 'satellite', label: '卫星', icon: 'satellite_alt' },
   { value: 'road-network', label: '路网', icon: 'conversion_path' },
   { value: 'traffic', label: '交通', icon: 'commute' },
+];
+
+const defaultRouteTransportModes: EnabledRouteTransportModes = {
+  walk: true,
+  bus: true,
+  metro: true,
+  tram: true,
+  coach: false,
+  railway: false,
+};
+
+const routeTransportModeOptions: RouteTransportModeOption[] = [
+  { mode: 'walk', label: '步行', icon: 'directions_walk', color: '#4B5B57' },
+  { mode: 'bus', label: '公交', icon: 'directions_bus', color: 'var(--yct-color-tertiary)' },
+  { mode: 'metro', label: '地铁', icon: 'subway', color: 'var(--yct-color-secondary)' },
+  { mode: 'tram', label: '有轨', icon: 'tram', color: 'var(--yct-color-tram)' },
+  { mode: 'coach', label: '客运', icon: 'airport_shuttle', color: 'var(--yct-color-coach)' },
+  { mode: 'railway', label: '铁路', icon: 'train', color: 'var(--yct-color-railway)' },
 ];
 
 const highPriorityTransitCategoryIds = new Set([
@@ -312,6 +353,10 @@ export function MapStage() {
   const [cursorWorld, setCursorWorld] = useState<{ x: number; z: number } | null>(null);
   const [routePlanDraft, setRoutePlanDraft] = useState<RoutePlanDraft | null>(null);
   const [routePlanCollapsed, setRoutePlanCollapsed] = useState(false);
+  const [routeTransportModes, setRouteTransportModes] = useState<EnabledRouteTransportModes>(
+    defaultRouteTransportModes,
+  );
+  const [selectedRouteOptionId, setSelectedRouteOptionId] = useState<string | null>(null);
   const [nearbySearchCenter, setNearbySearchCenter] = useState<NearbySearchCenter | null>(null);
   const [poiDetailCollapsed, setPoiDetailCollapsed] = useState(false);
 
@@ -656,6 +701,21 @@ export function MapStage() {
     () => buildStationConnectionIndex(transitOverview),
     [transitOverview],
   );
+  const routePlanOptions = useMemo(
+    () =>
+      routePlanDraft
+        ? buildRoutePlanOptions({
+            draft: routePlanDraft,
+            enabledModes: routeTransportModes,
+            pointMarkers,
+            stationConnectionIndex,
+            modeProfiles: transitOverview?.modeProfiles ?? [],
+          })
+        : [],
+    [pointMarkers, routePlanDraft, routeTransportModes, stationConnectionIndex, transitOverview],
+  );
+  const selectedRouteOption =
+    routePlanOptions.find((option) => option.id === selectedRouteOptionId) ?? routePlanOptions[0];
   const focusedMarkerCenter =
     focusedMarker && isCenterableMarker(focusedMarker) ? getMarkerCenter(focusedMarker) : undefined;
   const focusedMarkerCategoryName = focusedMarker?.categoryId
@@ -711,6 +771,20 @@ export function MapStage() {
       setPoiCategoryId(publicPoiCategories[0].id);
     }
   }, [poiCategoryId, publicPoiCategories]);
+
+  useEffect(() => {
+    if (!routePlanDraft) {
+      setSelectedRouteOptionId(null);
+      return;
+    }
+
+    if (
+      routePlanOptions.length > 0 &&
+      !routePlanOptions.some((option) => option.id === selectedRouteOptionId)
+    ) {
+      setSelectedRouteOptionId(routePlanOptions[0].id);
+    }
+  }, [routePlanDraft, routePlanOptions, selectedRouteOptionId]);
 
   useEffect(() => {
     if (!tilesVisible || !tileTemplate) {
@@ -997,6 +1071,7 @@ export function MapStage() {
       origin: [mapView.centerX, mapView.centerZ],
     });
     setRoutePlanCollapsed(false);
+    setSelectedRouteOptionId(null);
   };
 
   const updateRoutePlanOriginToMapCenter = () => {
@@ -1114,12 +1189,19 @@ export function MapStage() {
             <RoutePlanDraftCard
               draft={routePlanDraft}
               collapsed={routePlanCollapsed}
+              enabledModes={routeTransportModes}
+              options={routePlanOptions}
+              selectedOptionId={selectedRouteOption?.id}
               onClear={() => setRoutePlanDraft(null)}
               onFocusDestination={() => {
                 setFocusedMarkerId(routePlanDraft.destinationId);
                 setPoiDetailCollapsed(false);
               }}
+              onSelectOption={setSelectedRouteOptionId}
               onToggleCollapsed={() => setRoutePlanCollapsed((current) => !current)}
+              onToggleMode={(mode) =>
+                setRouteTransportModes((current) => ({ ...current, [mode]: !current[mode] }))
+              }
               onUseMapCenter={updateRoutePlanOriginToMapCenter}
             />
           ) : null}
@@ -2026,18 +2108,30 @@ function RoadMapDetail({ marker }: Readonly<{ marker: EndpointGroupMarker }>) {
 function RoutePlanDraftCard({
   draft,
   collapsed,
+  enabledModes,
+  options,
+  selectedOptionId,
   onClear,
   onFocusDestination,
+  onSelectOption,
   onToggleCollapsed,
+  onToggleMode,
   onUseMapCenter,
 }: Readonly<{
   draft: RoutePlanDraft;
   collapsed: boolean;
+  enabledModes: EnabledRouteTransportModes;
+  options: RoutePlanOption[];
+  selectedOptionId?: string;
   onClear: () => void;
   onFocusDestination: () => void;
+  onSelectOption: (optionId: string) => void;
   onToggleCollapsed: () => void;
+  onToggleMode: (mode: RouteTransportMode) => void;
   onUseMapCenter: () => void;
 }>) {
+  const selectedOption = options.find((option) => option.id === selectedOptionId) ?? options[0];
+
   return (
     <section
       className={collapsed ? 'map-route-plan-card is-collapsed' : 'map-route-plan-card'}
@@ -2087,9 +2181,71 @@ function RoutePlanDraftCard({
             </div>
             <div>
               <dt>状态</dt>
-              <dd>道路图待发布</dd>
+              <dd>{selectedOption ? '已生成初步方案' : '暂无可用方案'}</dd>
             </div>
           </dl>
+          <div className="map-route-mode-toggle-list" aria-label="路线交通方式">
+            {routeTransportModeOptions.map((mode) => (
+              <button
+                className={enabledModes[mode.mode] ? 'is-active' : ''}
+                type="button"
+                key={mode.mode}
+                aria-pressed={enabledModes[mode.mode]}
+                onClick={() => onToggleMode(mode.mode)}
+                style={{ '--route-mode-color': mode.color } as CSSProperties}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  {mode.icon}
+                </span>
+                <span>{mode.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="map-route-option-list" aria-label="路线方案">
+            {options.length > 0 ? (
+              options.map((option, index) => (
+                <button
+                  className={
+                    option.id === selectedOption?.id
+                      ? 'map-route-option-card is-selected'
+                      : 'map-route-option-card'
+                  }
+                  type="button"
+                  key={option.id}
+                  onClick={() => onSelectOption(option.id)}
+                  style={{ '--route-option-color': option.color } as CSSProperties}
+                >
+                  <span className="map-route-option-index">{index + 1}</span>
+                  <span
+                    className="material-symbols-outlined map-route-option-icon"
+                    aria-hidden="true"
+                  >
+                    {option.icon}
+                  </span>
+                  <span className="map-route-option-copy">
+                    <strong>{option.title}</strong>
+                    <span>{option.summary}</span>
+                  </span>
+                  <span className="map-route-option-time">
+                    {formatRoutePlanMinutes(option.estimatedMinutes)}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="map-route-plan-note">请至少启用一种交通方式。</p>
+            )}
+          </div>
+          {selectedOption ? (
+            <div className="map-route-option-detail" aria-label="选中路线步骤">
+              <strong>{selectedOption.title}</strong>
+              <ol>
+                {selectedOption.steps.map((step, index) => (
+                  <li key={`${selectedOption.id}-${index}`}>{step}</li>
+                ))}
+              </ol>
+              <p>{selectedOption.note}</p>
+            </div>
+          ) : null}
           <div className="map-route-plan-actions">
             <button className="secondary-action-button" type="button" onClick={onUseMapCenter}>
               <span className="material-symbols-outlined" aria-hidden="true">
@@ -2108,6 +2264,181 @@ function RoutePlanDraftCard({
       ) : null}
     </section>
   );
+}
+
+function buildRoutePlanOptions(input: {
+  draft: RoutePlanDraft;
+  enabledModes: EnabledRouteTransportModes;
+  pointMarkers: PointMarker[];
+  stationConnectionIndex: Map<string, TransitLineConnection[]>;
+  modeProfiles: TransitModeProfileForMap[];
+}): RoutePlanOption[] {
+  const options: RoutePlanOption[] = [];
+  const directDistance = getCoordinateDistance(input.draft.origin, input.draft.destination);
+
+  if (input.enabledModes.walk) {
+    options.push({
+      id: 'walk-direct',
+      title: '步行直达',
+      summary: `${formatRoutePlanDistance(directDistance)} · 直线估算`,
+      icon: 'directions_walk',
+      color: routeTransportModeOptions.find((option) => option.mode === 'walk')?.color ?? '#4B5B57',
+      estimatedDistance: directDistance,
+      estimatedMinutes: estimateRouteMinutes(directDistance, 72),
+      steps: [
+        `从起点按直线前往 ${input.draft.destinationLabel}`,
+        `到达 ${input.draft.destinationLabel}`,
+      ],
+      note: '当前为直线步行估算；道路级导航发布后会改为沿道路、出入口和可通行规则规划。',
+    });
+  }
+
+  const profileByMode = new Map(input.modeProfiles.map((profile) => [profile.mode, profile]));
+  for (const mode of routeTransportModeOptions) {
+    if (mode.mode === 'walk' || !input.enabledModes[mode.mode]) {
+      continue;
+    }
+
+    const option = buildTransitRoutePlanOption({
+      draft: input.draft,
+      mode,
+      profile: profileByMode.get(mode.mode),
+      pointMarkers: input.pointMarkers,
+      stationConnectionIndex: input.stationConnectionIndex,
+    });
+    if (option) {
+      options.push(option);
+    }
+  }
+
+  return options
+    .sort(
+      (left, right) =>
+        left.estimatedMinutes - right.estimatedMinutes ||
+        left.estimatedDistance - right.estimatedDistance ||
+        left.title.localeCompare(right.title, 'zh-CN'),
+    )
+    .slice(0, 5);
+}
+
+function buildTransitRoutePlanOption(input: {
+  draft: RoutePlanDraft;
+  mode: RouteTransportModeOption;
+  profile?: TransitModeProfileForMap;
+  pointMarkers: PointMarker[];
+  stationConnectionIndex: Map<string, TransitLineConnection[]>;
+}): RoutePlanOption | undefined {
+  const stationCandidates = input.pointMarkers
+    .filter((marker) => isTransitStationPoi(marker))
+    .map((marker) => {
+      const center = getMarkerCenter(marker);
+      const connections = findStationConnections(marker, input.stationConnectionIndex).filter(
+        (connection) => connection.mode === input.mode.mode,
+      );
+      return center && connections.length > 0 ? { marker, center, connections } : undefined;
+    })
+    .filter(
+      (
+        candidate,
+      ): candidate is {
+        marker: PointMarker;
+        center: [number, number];
+        connections: TransitLineConnection[];
+      } => Boolean(candidate),
+    );
+
+  if (stationCandidates.length < 2) {
+    return undefined;
+  }
+
+  const originStation = findNearestRouteStation(input.draft.origin, stationCandidates);
+  const destinationStation = findNearestRouteStation(input.draft.destination, stationCandidates);
+  if (!originStation || !destinationStation) {
+    return undefined;
+  }
+
+  const accessDistance = getCoordinateDistance(input.draft.origin, originStation.center);
+  const egressDistance = getCoordinateDistance(input.draft.destination, destinationStation.center);
+  const transitDistance = getCoordinateDistance(originStation.center, destinationStation.center);
+  const sharedLine = originStation.connections.find((left) =>
+    destinationStation.connections.some((right) => right.id === left.id),
+  );
+  const modeLabel = input.profile?.label ?? input.mode.label;
+  const color = input.profile?.color ?? input.mode.color;
+  const icon = input.profile?.icon ?? input.mode.icon;
+  const transferPenalty = sharedLine ? 0 : 8;
+  const estimatedMinutes =
+    estimateRouteMinutes(accessDistance + egressDistance, 72) +
+    estimateRouteMinutes(transitDistance, getTransitSpeedFactor(input.mode.mode)) +
+    transferPenalty;
+
+  return {
+    id: `${input.mode.mode}-${originStation.marker.id}-${destinationStation.marker.id}`,
+    title: sharedLine ? `${modeLabel}少换乘` : `${modeLabel}接驳`,
+    summary: `${formatRoutePlanDistance(accessDistance + egressDistance)} 步行接驳 · ${formatRoutePlanDistance(
+      transitDistance,
+    )} 站间估算`,
+    icon,
+    color,
+    estimatedDistance: accessDistance + egressDistance + transitDistance,
+    estimatedMinutes,
+    steps: [
+      `步行约 ${formatRoutePlanDistance(accessDistance)} 到 ${formatMarkerDisplayName(originStation.marker.label)}`,
+      sharedLine
+        ? `乘坐 ${sharedLine.name} 前往 ${formatMarkerDisplayName(destinationStation.marker.label)}`
+        : `使用 ${modeLabel} 从 ${formatMarkerDisplayName(originStation.marker.label)} 前往 ${formatMarkerDisplayName(
+            destinationStation.marker.label,
+          )}，可能需要换乘`,
+      `步行约 ${formatRoutePlanDistance(egressDistance)} 到 ${input.draft.destinationLabel}`,
+    ],
+    note: sharedLine
+      ? '已找到两端共同线路，但站间路径仍按直线估算，未代表真实乘车时间。'
+      : '已找到两端接驳站点，但换乘和站间路径需要等待线路坐标、道路网络和时刻表继续完善。',
+  };
+}
+
+function findNearestRouteStation<T extends { center: [number, number] }>(
+  point: [number, number],
+  candidates: T[],
+): T | undefined {
+  return [...candidates].sort(
+    (left, right) =>
+      getCoordinateDistance(point, left.center) - getCoordinateDistance(point, right.center),
+  )[0];
+}
+
+function getCoordinateDistance(left: [number, number], right: [number, number]): number {
+  const deltaX = left[0] - right[0];
+  const deltaZ = left[1] - right[1];
+  return Math.hypot(deltaX, deltaZ);
+}
+
+function estimateRouteMinutes(distance: number, blocksPerMinute: number): number {
+  return Math.max(1, Math.round(distance / blocksPerMinute));
+}
+
+function getTransitSpeedFactor(mode: RouteTransportMode): number {
+  if (mode === 'metro' || mode === 'railway') {
+    return 220;
+  }
+
+  if (mode === 'tram') {
+    return 150;
+  }
+
+  if (mode === 'coach') {
+    return 180;
+  }
+
+  return 120;
+}
+
+function formatRoutePlanDistance(distance: number): string {
+  return `${Math.max(0, Math.round(distance))} 格`;
+}
+
+function formatRoutePlanMinutes(minutes: number): string {
+  return `约 ${Math.max(1, minutes)} 分`;
 }
 
 function PoiActionBar({

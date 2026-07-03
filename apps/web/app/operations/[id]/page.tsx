@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import type { OperationsContentDetail } from '@yct/contracts';
 import type { ReactNode } from 'react';
 import { SecondaryShell } from '../../../components/app-shell';
 import { TitleWithBreaks } from '../../../components/title-with-breaks';
@@ -56,13 +57,21 @@ export default async function OperationDetailPage({
           </div>
         ) : null}
 
-        <MarkdownBlocks markdown={item.markdown} />
+        {item.markdown.trim() ? (
+          <MarkdownBlocks markdown={item.markdown} />
+        ) : (
+          <LegacyBodyFallback item={item} />
+        )}
 
         {item.legacyImageSourceUrl || item.legacyLink ? (
           <p className="operation-source-note">
             {item.legacyImageSourceUrl ? `旧图片来源：${item.legacyImageSourceUrl}` : null}
             {item.legacyImageSourceUrl && item.legacyLink ? ' · ' : null}
-            {item.legacyLink ? `原始链接：${item.legacyLink}` : null}
+            {item.legacyLink ? (
+              <a href={item.legacyLink} target="_blank" rel="noreferrer">
+                原始链接
+              </a>
+            ) : null}
           </p>
         ) : null}
       </article>
@@ -76,6 +85,33 @@ function decodeSegment(value: string): string {
   } catch {
     return value;
   }
+}
+
+function LegacyBodyFallback({ item }: Readonly<{ item: OperationsContentDetail }>) {
+  return (
+    <div className="operation-empty-body">
+      <span className="material-symbols-outlined" aria-hidden="true">
+        open_in_new
+      </span>
+      <div>
+        <strong>这条旧运营消息没有独立正文</strong>
+        <p>旧系统主要通过外部链接承载详情，新版当前只保留标题、摘要和原始入口。</p>
+      </div>
+      {item.legacyLink ? (
+        <a
+          className="secondary-action-button"
+          href={item.legacyLink}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            open_in_new
+          </span>
+          <span>打开原始内容</span>
+        </a>
+      ) : null}
+    </div>
+  );
 }
 
 type MarkdownBlock =

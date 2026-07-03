@@ -99,6 +99,12 @@ function mapLegacyContentItem(
       });
   const titleSegments = splitLegacyTitleSegments(item.title);
   const normalizedTitle = titleSegments.join('');
+  const rewrittenMarkdown = rewriteLegacyMarkdownAssets({
+    markdown: item.markdown,
+    legacyPublicBaseUrl: config.legacyPublicBaseUrl,
+    migratedPublicPrefix: config.legacyAssetPublicPrefix,
+  });
+  const markdown = isSummaryOnlyLegacyMarkdown(item, rewrittenMarkdown) ? '' : rewrittenMarkdown;
 
   return {
     id: item.sourceId,
@@ -118,15 +124,34 @@ function mapLegacyContentItem(
     legacyImagePath: coverColor || coverImageUrl ? undefined : item.image,
     migratedImagePath: legacyImageAsset?.migratedPath,
     legacyImageSourceUrl: legacyImageAsset?.sourceUrl,
-    legacyLink: item.link,
+    legacyLink: normalizeLegacyLink(item.link, config.legacyPublicBaseUrl),
     legacySourcePath: item.sourcePath,
-    markdown: rewriteLegacyMarkdownAssets({
-      markdown: item.markdown,
-      legacyPublicBaseUrl: config.legacyPublicBaseUrl,
-      migratedPublicPrefix: config.legacyAssetPublicPrefix,
-    }),
+    markdown,
     sourceKind: 'legacy_content_data',
   };
+}
+
+function isSummaryOnlyLegacyMarkdown(
+  item: LegacyContentImportItemInput,
+  markdown: string,
+): boolean {
+  const normalizedMarkdown = normalizeBodyText(markdown);
+  if (!normalizedMarkdown) {
+    return true;
+  }
+
+  const comparableTexts = [
+    item.summary,
+    item.title,
+    item.title.replace(/\|+/g, ''),
+    '旧内容无独立正文',
+  ].map(normalizeBodyText);
+
+  return comparableTexts.some((text) => text && text === normalizedMarkdown);
+}
+
+function normalizeBodyText(value: string | undefined): string {
+  return (value ?? '').replace(/\s+/g, ' ').trim();
 }
 
 function splitLegacyTitleSegments(title: string): string[] {
@@ -191,6 +216,19 @@ function normalizeCoverImageUrl(value: string | undefined): string | undefined {
   }
 
   return trimmed.startsWith('https://') || trimmed.startsWith('http://') ? trimmed : undefined;
+}
+
+function normalizeLegacyLink(value: string | undefined, baseUrl: string): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  try {
+    return new URL(trimmed, baseUrl).toString();
+  } catch {
+    return trimmed;
+  }
 }
 
 function normalizeLegacyDate(value: string | undefined): string | undefined {
