@@ -16,6 +16,7 @@ import { createApiMeta } from './api-meta';
 import { readRuntimeConfig } from './runtime-config';
 import { readTransitScreenSnapshot } from './transit-screen';
 import { readTransitServiceNotices } from './transit-service-notices';
+import { attachTicketingAvailability } from './travel-ticketing';
 import { readTravelServiceProfiles } from './travel-service-profile-store';
 
 const targetFlightAirport = '临东金桦';
@@ -56,7 +57,9 @@ export async function readTravelScheduleQuery(
     enabledKinds.has(trip.serviceKind),
   );
   const serviceDate = normalizeServiceDate(query.serviceDate);
-  const filteredTrips = filterTrips(trips, { ...query, serviceDate });
+  const filteredTrips = await attachTicketingAvailability(
+    filterTrips(trips, { ...query, serviceDate }),
+  );
   const sourceMessages = [
     screen.meta.message,
     flight.meta.message,
@@ -202,6 +205,7 @@ function buildCoachTripInstances(
     return {
       tripInstanceId: trip.sourceId,
       tripCode: trip.tripId,
+      serviceId: 'legacy-coach',
       serviceKind: 'coach',
       serviceLabel: profile.label,
       departureTime: trip.departureTime,
@@ -344,6 +348,7 @@ function parseFlightScheduleLine(
   return {
     tripInstanceId: `flight:${flightNumber.trim()}:${departureSegment.time}`,
     tripCode: flightNumber.trim(),
+    serviceId: 'haojin-flight',
     serviceKind: 'flight',
     serviceLabel: profile.label,
     departureTime: departureSegment.time,

@@ -472,6 +472,7 @@ DESIGN.md
 - 票务库存、核销链接、退票和对账细则。
 - 客运班次订购与展示的交互深度以旧站 `https://yct.shangxiaoguan.top/ltcx/` 为参考：需要覆盖线路/站点/日期筛选、班次卡片、动态票价、购票确认、订单详情、条形码或核销凭证、退票、本地历史和停运提醒；真实票券、核销和跨设备订单同步仍以 `ldpass` 接入方案为准。
 - 新增方向：客运、轮渡、航班等班次查询和票务能力需要通过同一套新版查询订票平台解决，不沿用旧 `/ltcx/` 的纯前端本地订单逻辑。已新增 `docs/TRAVEL_TICKETING_PLATFORM.md` 记录统一模型、状态机、事件、踩坑点和测试用例，并已在 `packages/contracts/src/domain.ts`、`packages/contracts/src/events.ts` 和 `packages/schemas/src/ticketing.ts` 中补充第一版票务领域与事件契约。
+- 已处理第一版：统一班次查询新增只读票务可售性预检；`/api/travel/schedules` 会在真实班次上返回 `ticketing` 状态，`/api/travel/ticketing/availability?tripInstanceId=...` 可单独查询。预检读取 `.yct-data/ticketing-catalog-store.json` 中真实配置的票种和库存，没有配置时只返回不可售原因，不生成默认票种、模拟库存或真实订单。
 
 ## 12. 界面反馈处理进展
 

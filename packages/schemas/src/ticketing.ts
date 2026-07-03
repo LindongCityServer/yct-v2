@@ -57,6 +57,16 @@ export const ticketOrderCancellationReasonSchema = z.enum([
   'admin_cancelled',
   'system',
 ]);
+export const travelTicketingAvailabilityStatusSchema = z.enum([
+  'order_available',
+  'legacy_reference_only',
+  'fare_not_configured',
+  'inventory_not_configured',
+  'sold_out',
+  'service_not_connected',
+  'trip_not_found',
+  'ticketing_unavailable',
+]);
 
 export const travelFareProductSchema = z.object({
   fareProductId: idSchema,
@@ -153,9 +163,47 @@ export const ticketRefundRequestSchema = z.object({
   updatedAt: isoDateTimeSchema,
 });
 
+export const travelFareProductSummarySchema = travelFareProductSchema.pick({
+  fareProductId: true,
+  name: true,
+  priceAmount: true,
+  currency: true,
+});
+
+export const ticketInventoryPoolSummarySchema = ticketInventoryPoolSchema.pick({
+  inventoryPoolId: true,
+  fareProductId: true,
+  totalCapacity: true,
+  availableCapacity: true,
+});
+
+export const travelTicketingAvailabilitySchema = z.object({
+  tripInstanceId: idSchema,
+  serviceKind: ticketableServiceKindSchema.optional(),
+  status: travelTicketingAvailabilityStatusSchema,
+  orderSupported: z.boolean(),
+  requiresLogin: z.boolean(),
+  message: nonEmptyTextSchema,
+  fareProducts: z.array(travelFareProductSummarySchema).max(50),
+  inventoryPools: z.array(ticketInventoryPoolSummarySchema).max(50),
+  availableCapacity: z.number().int().nonnegative().optional(),
+  bookingUrl: z.string().url().optional(),
+  checkedAt: isoDateTimeSchema,
+});
+
+export const ticketingCatalogSnapshotSchema = z.object({
+  version: z.literal(1).default(1),
+  fareProducts: z.array(travelFareProductSchema).max(2000).default([]),
+  inventoryPools: z.array(ticketInventoryPoolSchema).max(5000).default([]),
+  updatedAt: isoDateTimeSchema.optional(),
+  updatedBy: idSchema.optional(),
+});
+
 export type TravelFareProductInput = z.infer<typeof travelFareProductSchema>;
 export type TicketInventoryPoolInput = z.infer<typeof ticketInventoryPoolSchema>;
 export type TicketInventoryHoldInput = z.infer<typeof ticketInventoryHoldSchema>;
 export type TicketOrderInput = z.infer<typeof ticketOrderSchema>;
 export type TicketRecordInput = z.infer<typeof ticketRecordSchema>;
 export type TicketRefundRequestInput = z.infer<typeof ticketRefundRequestSchema>;
+export type TravelTicketingAvailabilityInput = z.infer<typeof travelTicketingAvailabilitySchema>;
+export type TicketingCatalogSnapshotInput = z.infer<typeof ticketingCatalogSnapshotSchema>;

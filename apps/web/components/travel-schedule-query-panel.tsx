@@ -7,6 +7,7 @@ import type {
   TravelScheduleQueryResult,
   TravelScheduleServiceSummary,
   TravelScheduleTimeScope,
+  TravelTicketingAvailability,
   TravelTripInstance,
 } from '@yct/contracts';
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';
@@ -498,16 +499,88 @@ function ScheduleTripCard({
             <span>旧版参考</span>
           </a>
         ) : null}
-        <button className="secondary-action-button" type="button" disabled>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            confirmation_number
-          </span>
-          <span>新票务待接入</span>
-        </button>
+        <TicketingStatusButton ticketing={trip.ticketing} />
       </div>
       {message ? <p className="schedule-trip-feedback">{message}</p> : null}
     </article>
   );
+}
+
+function TicketingStatusButton({
+  ticketing,
+}: Readonly<{
+  ticketing?: TravelTicketingAvailability;
+}>) {
+  const state = getTicketingButtonState(ticketing);
+
+  return (
+    <button className="secondary-action-button" type="button" disabled title={state.message}>
+      <span className="material-symbols-outlined" aria-hidden="true">
+        {state.icon}
+      </span>
+      <span>{state.label}</span>
+    </button>
+  );
+}
+
+function getTicketingButtonState(ticketing: TravelTicketingAvailability | undefined): {
+  icon: string;
+  label: string;
+  message: string;
+} {
+  if (!ticketing) {
+    return {
+      icon: 'confirmation_number',
+      label: '新票务待接入',
+      message: '新版票务状态尚未返回。',
+    };
+  }
+
+  if (ticketing.status === 'order_available') {
+    return {
+      icon: 'confirmation_number',
+      label: '票务已配置',
+      message: ticketing.message,
+    };
+  }
+
+  if (ticketing.status === 'legacy_reference_only') {
+    return {
+      icon: 'open_in_new',
+      label: '旧版参考可用',
+      message: ticketing.message,
+    };
+  }
+
+  if (ticketing.status === 'inventory_not_configured') {
+    return {
+      icon: 'inventory_2',
+      label: '库存待配置',
+      message: ticketing.message,
+    };
+  }
+
+  if (ticketing.status === 'sold_out') {
+    return {
+      icon: 'event_busy',
+      label: '暂无余票',
+      message: ticketing.message,
+    };
+  }
+
+  if (ticketing.status === 'service_not_connected' || ticketing.status === 'trip_not_found') {
+    return {
+      icon: 'sync_problem',
+      label: '暂不可订',
+      message: ticketing.message,
+    };
+  }
+
+  return {
+    icon: 'confirmation_number',
+    label: '新票务待接入',
+    message: ticketing.message,
+  };
 }
 
 function MetaItem({ label, value }: Readonly<{ label: string; value: string }>) {

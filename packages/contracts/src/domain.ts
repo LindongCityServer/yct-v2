@@ -384,6 +384,7 @@ export interface TravelScheduleServiceSummary {
 export interface TravelTripInstance {
   tripInstanceId: string;
   tripCode?: string;
+  serviceId?: string;
   serviceKind: TicketableServiceKind;
   serviceLabel: string;
   departureTime: string;
@@ -403,6 +404,7 @@ export interface TravelTripInstance {
   vehicleModelText?: string;
   operatingDays?: string[];
   availability: TravelTripAvailability;
+  ticketing?: TravelTicketingAvailability;
   sourcePath?: string;
 }
 
@@ -483,6 +485,15 @@ export type TicketRefundStatus =
   'requested' | 'approved' | 'rejected' | 'processing' | 'completed' | 'failed' | 'cancelled';
 export type TicketOrderCancellationReason =
   'user_cancelled' | 'inventory_expired' | 'issue_failed' | 'admin_cancelled' | 'system';
+export type TravelTicketingAvailabilityStatus =
+  | 'order_available'
+  | 'legacy_reference_only'
+  | 'fare_not_configured'
+  | 'inventory_not_configured'
+  | 'sold_out'
+  | 'service_not_connected'
+  | 'trip_not_found'
+  | 'ticketing_unavailable';
 
 export interface TravelFareProduct {
   fareProductId: string;
@@ -508,6 +519,34 @@ export interface TicketInventoryPool {
   availableCapacity?: number;
   status: TicketInventoryPoolStatus;
   updatedAt: ISODateTimeString;
+}
+
+export interface TravelFareProductSummary {
+  fareProductId: string;
+  name: string;
+  priceAmount: number;
+  currency: TravelFareCurrency;
+}
+
+export interface TicketInventoryPoolSummary {
+  inventoryPoolId: string;
+  fareProductId: string;
+  totalCapacity?: number;
+  availableCapacity?: number;
+}
+
+export interface TravelTicketingAvailability {
+  tripInstanceId: string;
+  serviceKind?: TicketableServiceKind;
+  status: TravelTicketingAvailabilityStatus;
+  orderSupported: boolean;
+  requiresLogin: boolean;
+  message: string;
+  fareProducts: TravelFareProductSummary[];
+  inventoryPools: TicketInventoryPoolSummary[];
+  availableCapacity?: number;
+  bookingUrl?: string;
+  checkedAt: ISODateTimeString;
 }
 
 export interface TicketInventoryHold {
