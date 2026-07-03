@@ -4,12 +4,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createApiMeta } from '../../../../../lib/api-meta';
 import {
   createTicketOrderDraft,
+  listTicketOrdersForUser,
   TicketOrderWorkflowError,
 } from '../../../../../lib/ticket-order-workflow';
 import { readTravelScheduleQuery } from '../../../../../lib/travel-schedules';
 import { requireActiveLdpassUser } from '../../../../../lib/user-auth';
 
 export const dynamic = 'force-dynamic';
+
+export async function GET(request: NextRequest) {
+  const user = await requireActiveLdpassUser(request);
+  if (!user.ok) {
+    return user.response;
+  }
+
+  return NextResponse.json({
+    meta: createApiMeta('ready'),
+    items: await listTicketOrdersForUser(user.userId),
+  });
+}
 
 export async function POST(request: NextRequest) {
   const user = await requireActiveLdpassUser(request);

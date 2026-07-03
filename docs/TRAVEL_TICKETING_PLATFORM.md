@@ -109,7 +109,7 @@ export interface TicketOrder {
 - `packages/schemas/src/ticketing.ts` 已补充同名运行时校验 schema，并通过 `@yct/schemas` 导出，供后续票务 Repository、API 和导入器复用。
 - 已新增第一版票务可售性预检：`/api/travel/schedules` 会在每个真实班次上返回 `ticketing` 状态，`/api/travel/ticketing/availability?tripInstanceId=...` 可单独查询某个班次的新票务状态。
 - 预检读取 `.yct-data/ticketing-catalog-store.json` 中真实配置的 `TravelFareProduct` 与 `TicketInventoryPool`；没有配置时只返回“票种未配置 / 库存未配置 / 旧版参考可用”等不可售状态，不生成默认票种或模拟库存。
-- 已新增第一版订单草稿创建入口：`POST /api/travel/ticketing/orders` 需要真实 `ldpass` Active 用户，会按真实班次、真实票种和真实库存池创建 `draft` 订单与 15 分钟库存占用，并发出 `TicketInventoryHeld` 与 `TicketOrderCreated` 事件。没有真实票种或库存配置时返回 409，不落库、不发事件。
+- 已新增第一版订单草稿入口：`GET /api/travel/ticketing/orders` 可列出当前登录用户的订单草稿和库存占用；`POST /api/travel/ticketing/orders` 需要真实 `ldpass` Active 用户，会按真实班次、真实票种和真实库存池创建 `draft` 订单与 15 分钟库存占用，并发出 `TicketInventoryHeld` 与 `TicketOrderCreated` 事件；`POST /api/travel/ticketing/orders/:orderId/cancel` 只允许取消当前用户自己的 `draft` / `pending_issue` 订单，取消后释放对应占用并发出 `TicketOrderCancelled`。没有真实票种或库存配置时返回 409，不落库、不发事件。
 - 当前仍未创建真实票券、核销记录或退票记录；这些契约、预检和草稿订单入口只用于约束后续实现，避免查询页把可查询班次误包装成可购票。
 
 ## 5. 状态机

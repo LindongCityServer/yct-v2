@@ -3,6 +3,7 @@ import type {
   TicketInventoryHold,
   TicketOrder,
   TicketOrderDraftResult,
+  TicketOrderListItem,
   TravelTripInstance,
   YctEventPayloadMap,
   YctEventType,
@@ -17,11 +18,32 @@ const defaultHoldDurationMs = 15 * 60 * 1000;
 export class TicketOrderWorkflowError extends Error {
   constructor(
     public readonly code:
-      'ticketing_unavailable' | 'fare_not_configured' | 'inventory_not_configured' | 'sold_out',
+      | 'order_not_found'
+      | 'order_not_cancellable'
+      | 'ticketing_unavailable'
+      | 'fare_not_configured'
+      | 'inventory_not_configured'
+      | 'sold_out',
     message: string,
   ) {
     super(message);
   }
+}
+
+export async function listTicketOrdersForUser(userId: string): Promise<TicketOrderListItem[]> {
+  const orderStore = await readTicketOrderStore();
+  const holdById = new Map(orderStore.inventoryHolds.map((hold) => [hold.inventoryHoldId, hold]));
+
+  return orderStore.orders
+    .filter((order) => order.userId === userId)
+    .map((order) => ({
+      order,
+      inventoryHold: order.inventoryHoldId ? holdById.get(order.inventoryHoldId) : undefined,
+    }))
+    .sort(
+      (left, right) =>
+        new Date(right.order.updatedAt).getTime() - new Date(left.order.updatedAt).getTime(),
+    );
 }
 
 export async function createTicketOrderDraft(input: {
@@ -119,6 +141,71 @@ export async function createTicketOrderDraft(input: {
       currency: candidate.fareProduct.currency,
     },
     ticketing: candidate.ticketing,
+  };
+}
+
+export async function cancelTicketOrderDraft(input: {
+  orderId: string;
+  userId: string;
+  ldpassUserId: string;
+}): Promise<TicketOrderListItem> {
+  const now = new Date().toISOString();
+  const orderStore = await readTicketOrderStore();
+  const order = orderStore.orders.find(
+    (item) =>
+      item.orderId === input.orderId &&
+      item.userId === input.userId &&
+      item.ldpassUserId === input.ldpassUserId,
+  );
+
+  if (!order) {
+    throw new TicketOrderWorkflowError('order_not_found', '没有找到对应订单。');
+  }
+
+  if (order.status !== 'draft' && order.status !== 'pending_issue') {
+    throw new TicketOrderWorkflowError('order_not_cancellable', '当前订单状态不允许取消。');
+  }
+
+  const updatedOrder: TicketOrder = {
+    ...order,
+    status: 'cancelled',
+    cancellationReason: 'user_cancelled',
+    cancelledAt: now,
+    updatedAt: now,
+  };
+  let releasedHold: TicketInventoryHold | undefined;
+  const inventoryHolds = orderStore.inventoryHolds.map((hold) => {
+    if (
+      hold.inventoryHoldId !== order.inventoryHoldId ||
+      (hold.status !== 'held' && hold.status !== 'confirmed')
+    ) {
+      return hold;
+    }
+
+    releasedHold = {
+      ...hold,
+      status: 'cancelled',
+      releasedAt: now,
+    };
+    return releasedHold;
+  });
+
+  await writeTicketOrderStore({
+    version: 1,
+    orders: orderStore.orders.map((item) => (item.orderId === order.orderId ? updatedOrder : item)),
+    inventoryHolds,
+    updatedAt: now,
+  });
+
+  await emitEvent('TicketOrderCancelled', input.userId, {
+    orderId: order.orderId,
+    cancelledAt: now,
+    reason: 'user_cancelled',
+  });
+
+  return {
+    order: updatedOrder,
+    inventoryHold: releasedHold,
   };
 }
 

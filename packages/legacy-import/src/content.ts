@@ -47,25 +47,5 @@ export function parseLegacyContentSource(
 }
 
 function buildLegacyContentMarkdown(record: LegacyContentRecord): string {
-  const lines = [record.summary?.trim()].filter(Boolean) as string[];
-
-  if (record.link?.trim()) {
-    lines.push('');
-    lines.push(`[查看原始链接](${record.link.trim()})`);
-  }
-
-  if (record.image?.trim() && !isLegacyColorToken(record.image.trim())) {
-    lines.push('');
-    lines.push(`原始图片：${record.image.trim()}`);
-  }
-
-  return lines.join('\n') || record.title?.trim() || '旧内容待补正文';
-}
-
-function isLegacyColorToken(value: string): boolean {
-  return (
-    /^#[0-9A-Fa-f]{3,8}$/.test(value) ||
-    /^var\(--[-_a-zA-Z0-9]+\)$/.test(value) ||
-    /^--[-_a-zA-Z0-9]+$/.test(value)
-  );
+  return record.summary?.trim() || record.title?.trim() || '旧内容无独立正文';
 }

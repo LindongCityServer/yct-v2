@@ -217,6 +217,11 @@ export const ticketOrderDraftResultSchema = z.object({
   ticketing: travelTicketingAvailabilitySchema,
 });
 
+export const ticketOrderListItemSchema = z.object({
+  order: ticketOrderSchema,
+  inventoryHold: ticketInventoryHoldSchema.optional(),
+});
+
 export const ticketOrderStoreSnapshotSchema = z.object({
   version: z.literal(1).default(1),
   orders: z.array(ticketOrderSchema).max(5000).default([]),
@@ -234,4 +239,5 @@ export type TicketOrderDraftCreateInput = z.infer<typeof ticketOrderDraftCreateS
 export type TravelTicketingAvailabilityInput = z.infer<typeof travelTicketingAvailabilitySchema>;
 export type TicketingCatalogSnapshotInput = z.infer<typeof ticketingCatalogSnapshotSchema>;
 export type TicketOrderDraftResultInput = z.infer<typeof ticketOrderDraftResultSchema>;
+export type TicketOrderListItemInput = z.infer<typeof ticketOrderListItemSchema>;
 export type TicketOrderStoreSnapshotInput = z.infer<typeof ticketOrderStoreSnapshotSchema>;

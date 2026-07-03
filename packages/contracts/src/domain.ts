@@ -610,6 +610,11 @@ export interface TicketOrderDraftResult {
   ticketing: TravelTicketingAvailability;
 }
 
+export interface TicketOrderListItem {
+  order: TicketOrder;
+  inventoryHold?: TicketInventoryHold;
+}
+
 export interface TicketRefundRequest {
   refundRequestId: string;
   orderId: string;
