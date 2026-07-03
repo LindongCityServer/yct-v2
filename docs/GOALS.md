@@ -545,6 +545,7 @@ DESIGN.md
 - 当前结论：`localhost:3300` 打开很久主要是开发服务器被 `/api/transit/overview`、`/api/map/markers` 和 `/map` 的旧数据重复拉取/解析占满；代码侧已降低重复工作，但已运行的旧 dev 进程仍可能需要重启后才完全吃到新逻辑和清理 Next dev cache。
 - 已处理第一版：`/map` 改为客户端懒加载地图大组件，降低 Next dev 对地图页的 SSR/编译压力；旧客运大屏快照读取加入 30 秒进程内缓存，减少 `/travel`、统一班次查询和客运大屏页面重复读取旧 `ltcx` 文本。
 - 已处理第一版：补充静态 `apps/web/public/manifest.webmanifest`，使用相对 `start_url`、`scope` 和图标路径兼容根路径与 `/v2` 临时子路径；同时在非生产环境不向页面输出 PWA manifest 链接。本地开发继续由 `PwaBridge` 清理同源 Service Worker 和 `yct-*` Cache，重启脚本会清理 `.next/dev`，降低旧 RSC/chunk 或 Next dev manifest route 缓存污染导致加载失败的概率。
+- 已处理第一版：统一班次查询增加 30 秒进程内查询结果缓存，航班文本源增加 60 秒进程内读取缓存；缓存 key 包含旧数据源、航班 URL、服务 Profile 仓储、票务目录仓储和查询参数，降低 `/travel/schedules` 与票务可售性预检连续访问时重复拉取外部数据的压力。
 
 ## 13. 完成定义
 

@@ -18,10 +18,17 @@ import { readTransitScreenSnapshot } from './transit-screen';
 import { readTransitServiceNotices } from './transit-service-notices';
 import { attachTicketingAvailability } from './travel-ticketing';
 import { readTravelServiceProfiles } from './travel-service-profile-store';
+import { createTimedCache } from './server-cache';
 
 const targetFlightAirport = '临东金桦';
 const targetFlightOperator = '临东航空';
 const flightFetchMaxAttempts = 3;
+const travelScheduleQueryCache = createTimedCache<ApiItemResponse<TravelScheduleQueryResult>>(
+  30 * 1000,
+);
+const flightSourceCache = createTimedCache<
+  { ok: true; text: string } | { ok: false; message: string }
+>(60 * 1000);
 
 interface TravelScheduleSourceResult {
   meta: ReturnType<typeof createApiMeta>;
@@ -38,6 +45,15 @@ interface FlightSegment {
 }
 
 export async function readTravelScheduleQuery(
+  query: TravelScheduleQuery = {},
+): Promise<ApiItemResponse<TravelScheduleQueryResult>> {
+  const config = readRuntimeConfig();
+  return travelScheduleQueryCache.read(buildTravelScheduleQueryCacheKey(query, config), () =>
+    readTravelScheduleQueryUncached(query),
+  );
+}
+
+async function readTravelScheduleQueryUncached(
   query: TravelScheduleQuery = {},
 ): Promise<ApiItemResponse<TravelScheduleQueryResult>> {
   const [profiles, screen, serviceNotices] = await Promise.all([
@@ -230,7 +246,9 @@ async function readFlightTrips(
 ): Promise<TravelScheduleSourceResult> {
   const config = readRuntimeConfig();
   try {
-    const sourceResult = await fetchFlightSource(config.flightDataUrl);
+    const sourceResult = await flightSourceCache.read(config.flightDataUrl, () =>
+      fetchFlightSource(config.flightDataUrl),
+    );
     if (!sourceResult.ok) {
       return {
         meta: createApiMeta('unavailable', sourceResult.message),
@@ -260,6 +278,29 @@ async function readFlightTrips(
       sourceFiles: [config.flightDataUrl],
     };
   }
+}
+
+function buildTravelScheduleQueryCacheKey(
+  query: TravelScheduleQuery,
+  config: ReturnType<typeof readRuntimeConfig>,
+): string {
+  return [
+    config.legacyDataSource,
+    config.legacyDataDir ?? '',
+    config.legacyDataRemoteBaseUrl,
+    config.legacyPublicBaseUrl,
+    config.legacyDataFetchTimeoutMs,
+    config.flightDataUrl,
+    config.travelServiceProfileStorePath,
+    config.ticketingCatalogStorePath,
+    query.serviceKind ?? 'all',
+    query.query ?? '',
+    query.stationName ?? '',
+    query.originStationName ?? '',
+    query.destinationStationName ?? '',
+    query.serviceDate ?? '',
+    query.timeScope ?? 'all',
+  ].join('|');
 }
 
 async function fetchFlightSource(
