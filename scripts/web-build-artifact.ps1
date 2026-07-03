@@ -196,6 +196,8 @@ if (`$normalizedBasePath -and -not `$normalizedBasePath.StartsWith("/")) {
 node `$serverPath
 "@
 
+$startBasePathArgument = $basePathValue.TrimStart("/")
+
 $deploymentNotes = @"
 Yuchengtong web standalone deployment
 
@@ -203,7 +205,7 @@ Build base path: $basePathValue
 Required Node.js: >=20.9.0. The current repository uses Next.js 16, so Node.js 18.6.0 on the server should be upgraded before running this bundle.
 
 Start command example:
-  powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath "$basePathValue"
+  powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath "$startBasePathArgument"
 
 Notes:
 - Do not upload local .env files or .yct-data into this bundle.

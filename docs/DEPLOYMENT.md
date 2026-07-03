@@ -60,7 +60,7 @@ pnpm web:artifact
 把 `artifacts/yct-web-*.zip` 上传到服务器并解压到部署目录，然后运行：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath /v2
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath v2
 ```
 
 如果未来站点不再挂载 `/v2`，需要重新用空 BasePath 构建，并以空 BasePath 启动。
