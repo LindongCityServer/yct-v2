@@ -603,6 +603,13 @@ export interface TicketRecord {
   updatedAt: ISODateTimeString;
 }
 
+export interface TicketOrderDraftResult {
+  order: TicketOrder;
+  inventoryHold: TicketInventoryHold;
+  fareProduct: TravelFareProductSummary;
+  ticketing: TravelTicketingAvailability;
+}
+
 export interface TicketRefundRequest {
   refundRequestId: string;
   orderId: string;

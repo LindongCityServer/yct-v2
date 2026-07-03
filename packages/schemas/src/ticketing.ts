@@ -163,6 +163,17 @@ export const ticketRefundRequestSchema = z.object({
   updatedAt: isoDateTimeSchema,
 });
 
+export const ticketOrderDraftCreateSchema = z.object({
+  tripInstanceId: idSchema,
+  serviceDate: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  fareProductId: idSchema.optional(),
+  passengerCount: z.number().int().positive().max(9).default(1),
+});
+
 export const travelFareProductSummarySchema = travelFareProductSchema.pick({
   fareProductId: true,
   name: true,
@@ -199,11 +210,28 @@ export const ticketingCatalogSnapshotSchema = z.object({
   updatedBy: idSchema.optional(),
 });
 
+export const ticketOrderDraftResultSchema = z.object({
+  order: ticketOrderSchema,
+  inventoryHold: ticketInventoryHoldSchema,
+  fareProduct: travelFareProductSummarySchema,
+  ticketing: travelTicketingAvailabilitySchema,
+});
+
+export const ticketOrderStoreSnapshotSchema = z.object({
+  version: z.literal(1).default(1),
+  orders: z.array(ticketOrderSchema).max(5000).default([]),
+  inventoryHolds: z.array(ticketInventoryHoldSchema).max(5000).default([]),
+  updatedAt: isoDateTimeSchema.optional(),
+});
+
 export type TravelFareProductInput = z.infer<typeof travelFareProductSchema>;
 export type TicketInventoryPoolInput = z.infer<typeof ticketInventoryPoolSchema>;
 export type TicketInventoryHoldInput = z.infer<typeof ticketInventoryHoldSchema>;
 export type TicketOrderInput = z.infer<typeof ticketOrderSchema>;
 export type TicketRecordInput = z.infer<typeof ticketRecordSchema>;
 export type TicketRefundRequestInput = z.infer<typeof ticketRefundRequestSchema>;
+export type TicketOrderDraftCreateInput = z.infer<typeof ticketOrderDraftCreateSchema>;
 export type TravelTicketingAvailabilityInput = z.infer<typeof travelTicketingAvailabilitySchema>;
 export type TicketingCatalogSnapshotInput = z.infer<typeof ticketingCatalogSnapshotSchema>;
+export type TicketOrderDraftResultInput = z.infer<typeof ticketOrderDraftResultSchema>;
+export type TicketOrderStoreSnapshotInput = z.infer<typeof ticketOrderStoreSnapshotSchema>;

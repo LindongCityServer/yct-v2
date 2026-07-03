@@ -15,6 +15,7 @@ export interface RuntimeConfig {
   transitModeProfileStorePath: string;
   travelServiceProfileStorePath: string;
   ticketingCatalogStorePath: string;
+  ticketOrderStorePath: string;
   poiSubmissionStorePath: string;
   offlinePackageStorePath: string;
   eventOutboxStorePath: string;
@@ -84,6 +85,9 @@ export function readRuntimeConfig(): RuntimeConfig {
     ticketingCatalogStorePath:
       emptyToUndefined(process.env.YCT_TICKETING_CATALOG_STORE_PATH) ??
       '.yct-data/ticketing-catalog-store.json',
+    ticketOrderStorePath:
+      emptyToUndefined(process.env.YCT_TICKET_ORDER_STORE_PATH) ??
+      '.yct-data/ticket-order-store.json',
     poiSubmissionStorePath:
       emptyToUndefined(process.env.YCT_POI_SUBMISSION_STORE_PATH) ??
       '.yct-data/poi-submission-store.json',

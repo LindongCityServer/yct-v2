@@ -1,21 +1,95 @@
 import type {
   TicketInventoryPool,
   TicketInventoryPoolSummary,
+  TicketInventoryHold,
   TravelFareProduct,
   TravelFareProductSummary,
   TravelTicketingAvailability,
   TravelTripInstance,
 } from '@yct/contracts';
+import type { TicketingCatalogSnapshot } from './ticketing-catalog-store';
+import { readTicketOrderStore, type TicketOrderStoreSnapshot } from './ticket-order-store';
 import { readTicketingCatalog } from './ticketing-catalog-store';
+
+export type TicketingOrderCandidate =
+  | {
+      ok: true;
+      fareProduct: TravelFareProduct;
+      inventoryPool: TicketInventoryPool;
+      ticketing: TravelTicketingAvailability;
+    }
+  | {
+      ok: false;
+      ticketing: TravelTicketingAvailability;
+    };
 
 export async function attachTicketingAvailability(
   trips: TravelTripInstance[],
 ): Promise<TravelTripInstance[]> {
-  const catalog = await readTicketingCatalog();
+  const [catalog, orderStore] = await Promise.all([readTicketingCatalog(), readTicketOrderStore()]);
   return trips.map((trip) => ({
     ...trip,
-    ticketing: resolveTicketingAvailability(trip, catalog),
+    ticketing: resolveTicketingAvailability(trip, catalog, orderStore),
   }));
+}
+
+export function findTicketingOrderCandidate(input: {
+  trip: TravelTripInstance;
+  catalog: TicketingCatalogSnapshot;
+  orderStore: TicketOrderStoreSnapshot;
+  fareProductId?: string;
+  passengerCount: number;
+  now?: Date;
+}): TicketingOrderCandidate {
+  const now = input.now ?? new Date();
+  const activeFareProducts = getActiveFareProducts(input.catalog.fareProducts, input.trip);
+  const candidateFareProducts = input.fareProductId
+    ? activeFareProducts.filter((product) => product.fareProductId === input.fareProductId)
+    : activeFareProducts;
+  const candidateFareProductIds = new Set(
+    candidateFareProducts.map((product) => product.fareProductId),
+  );
+  const candidatePools = getActiveInventoryPools(input.catalog.inventoryPools, input.trip).filter(
+    (pool) => candidateFareProductIds.has(pool.fareProductId),
+  );
+  const poolState = getAvailablePoolStates(candidatePools, input.orderStore.inventoryHolds, now)
+    .filter((state) => state.remainingCapacity === undefined || state.remainingCapacity > 0)
+    .find(
+      (state) =>
+        state.remainingCapacity === undefined || state.remainingCapacity >= input.passengerCount,
+    );
+
+  const ticketing = resolveTicketingAvailability(
+    input.trip,
+    input.catalog,
+    input.orderStore,
+    now,
+    input.fareProductId,
+  );
+
+  if (!poolState) {
+    return {
+      ok: false,
+      ticketing,
+    };
+  }
+
+  const fareProduct = candidateFareProducts.find(
+    (product) => product.fareProductId === poolState.pool.fareProductId,
+  );
+  if (!fareProduct) {
+    return {
+      ok: false,
+      ticketing,
+    };
+  }
+
+  return {
+    ok: true,
+    fareProduct,
+    inventoryPool: poolState.pool,
+    ticketing,
+  };
 }
 
 export function resolveTripNotFoundTicketingAvailability(
@@ -35,20 +109,21 @@ export function resolveTripNotFoundTicketingAvailability(
 
 function resolveTicketingAvailability(
   trip: TravelTripInstance,
-  catalog: Awaited<ReturnType<typeof readTicketingCatalog>>,
+  catalog: TicketingCatalogSnapshot,
+  orderStore: TicketOrderStoreSnapshot,
+  now = new Date(),
+  selectedFareProductId?: string,
 ): TravelTicketingAvailability {
-  const activeFareProducts = catalog.fareProducts.filter(
-    (product) => product.status === 'active' && fareProductMatchesTrip(product, trip),
+  const activeFareProducts = getActiveFareProducts(catalog.fareProducts, trip).filter(
+    (product) => !selectedFareProductId || product.fareProductId === selectedFareProductId,
   );
   const activeFareProductIds = new Set(activeFareProducts.map((product) => product.fareProductId));
-  const activeInventoryPools = catalog.inventoryPools.filter(
-    (pool) =>
-      pool.status === 'active' &&
-      pool.tripInstanceId === trip.tripInstanceId &&
-      activeFareProductIds.has(pool.fareProductId),
+  const activeInventoryPools = getActiveInventoryPools(catalog.inventoryPools, trip).filter(
+    (pool) => activeFareProductIds.has(pool.fareProductId),
   );
-  const availablePools = activeInventoryPools.filter(
-    (pool) => pool.availableCapacity === undefined || pool.availableCapacity > 0,
+  const poolStates = getAvailablePoolStates(activeInventoryPools, orderStore.inventoryHolds, now);
+  const availablePools = poolStates.filter(
+    (state) => state.remainingCapacity === undefined || state.remainingCapacity > 0,
   );
   const availableCapacity = sumAvailableCapacity(availablePools);
   const base = {
@@ -56,10 +131,10 @@ function resolveTicketingAvailability(
     serviceKind: trip.serviceKind,
     requiresLogin: true,
     fareProducts: activeFareProducts.map(toFareProductSummary),
-    inventoryPools: activeInventoryPools.map(toInventoryPoolSummary),
+    inventoryPools: poolStates.map(toInventoryPoolSummary),
     availableCapacity,
     bookingUrl: trip.bookingUrl,
-    checkedAt: new Date().toISOString(),
+    checkedAt: now.toISOString(),
   };
 
   if (trip.availability === 'not_connected') {
@@ -108,6 +183,24 @@ function resolveTicketingAvailability(
   };
 }
 
+function getActiveFareProducts(
+  products: TravelFareProduct[],
+  trip: TravelTripInstance,
+): TravelFareProduct[] {
+  return products.filter(
+    (product) => product.status === 'active' && fareProductMatchesTrip(product, trip),
+  );
+}
+
+function getActiveInventoryPools(
+  pools: TicketInventoryPool[],
+  trip: TravelTripInstance,
+): TicketInventoryPool[] {
+  return pools.filter(
+    (pool) => pool.status === 'active' && pool.tripInstanceId === trip.tripInstanceId,
+  );
+}
+
 function fareProductMatchesTrip(product: TravelFareProduct, trip: TravelTripInstance): boolean {
   if (product.serviceKind !== trip.serviceKind) {
     return false;
@@ -133,18 +226,53 @@ function toFareProductSummary(product: TravelFareProduct): TravelFareProductSumm
   };
 }
 
-function toInventoryPoolSummary(pool: TicketInventoryPool): TicketInventoryPoolSummary {
+function toInventoryPoolSummary(state: {
+  pool: TicketInventoryPool;
+  remainingCapacity?: number;
+}): TicketInventoryPoolSummary {
   return {
-    inventoryPoolId: pool.inventoryPoolId,
-    fareProductId: pool.fareProductId,
-    totalCapacity: pool.totalCapacity,
-    availableCapacity: pool.availableCapacity,
+    inventoryPoolId: state.pool.inventoryPoolId,
+    fareProductId: state.pool.fareProductId,
+    totalCapacity: state.pool.totalCapacity,
+    availableCapacity: state.remainingCapacity,
   };
 }
 
-function sumAvailableCapacity(pools: TicketInventoryPool[]): number | undefined {
+function getAvailablePoolStates(
+  pools: TicketInventoryPool[],
+  holds: TicketInventoryHold[],
+  now: Date,
+): Array<{ pool: TicketInventoryPool; remainingCapacity?: number }> {
+  return pools.map((pool) => {
+    if (pool.availableCapacity === undefined) {
+      return { pool };
+    }
+
+    const heldQuantity = holds
+      .filter((hold) => isActiveHoldForPool(hold, pool, now))
+      .reduce((total, hold) => total + hold.quantity, 0);
+    return {
+      pool,
+      remainingCapacity: Math.max(pool.availableCapacity - heldQuantity, 0),
+    };
+  });
+}
+
+function isActiveHoldForPool(
+  hold: TicketInventoryHold,
+  pool: TicketInventoryPool,
+  now: Date,
+): boolean {
+  return (
+    hold.inventoryPoolId === pool.inventoryPoolId &&
+    (hold.status === 'held' || hold.status === 'confirmed') &&
+    new Date(hold.expiresAt).getTime() > now.getTime()
+  );
+}
+
+function sumAvailableCapacity(pools: Array<{ remainingCapacity?: number }>): number | undefined {
   const capacities = pools
-    .map((pool) => pool.availableCapacity)
+    .map((pool) => pool.remainingCapacity)
     .filter((capacity): capacity is number => capacity !== undefined);
   return capacities.length === pools.length
     ? capacities.reduce((total, capacity) => total + capacity, 0)
