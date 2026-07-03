@@ -137,6 +137,14 @@ interface ProjectedLinearPoi {
   }>;
 }
 
+interface ProjectedGuideMarker {
+  id: string;
+  label: string;
+  left: number;
+  top: number;
+  kind: 'default-anchor' | 'route-origin' | 'route-destination';
+}
+
 interface ProjectedRoadTrace {
   id: string;
   label: string;
@@ -1017,7 +1025,50 @@ export function MapStage() {
     setMarkerListExpanded(true);
   };
 
+  const projectedGuideMarkers = useMemo(() => {
+    const markers: ProjectedGuideMarker[] = [];
+    const defaultAnchor = projectCoordinateMarker(
+      'default-anchor',
+      '默认视图',
+      [mapDefaults.centerX, mapDefaults.centerZ],
+      mapView,
+      viewportSize,
+      32,
+    );
+    if (defaultAnchor) {
+      markers.push(defaultAnchor);
+    }
+
+    if (routePlanDraft) {
+      const routeOrigin = projectCoordinateMarker(
+        'route-origin',
+        '起点',
+        routePlanDraft.origin,
+        mapView,
+        viewportSize,
+        40,
+      );
+      const routeDestination = projectCoordinateMarker(
+        'route-destination',
+        '终点',
+        routePlanDraft.destination,
+        mapView,
+        viewportSize,
+        40,
+      );
+      if (routeOrigin) {
+        markers.push(routeOrigin);
+      }
+      if (routeDestination) {
+        markers.push(routeDestination);
+      }
+    }
+
+    return markers;
+  }, [mapView, routePlanDraft, viewportSize]);
+
   const hasMapOverlay =
+    projectedGuideMarkers.length > 0 ||
     projectedMarkers.length > 0 ||
     projectedLinearPois.length > 0 ||
     projectedRoadTraces.length > 0 ||
@@ -1372,14 +1423,33 @@ export function MapStage() {
           </div>
         </div>
 
-        <div
-          className="map-location-dot"
-          aria-hidden="true"
-          title={`地图中心 X ${formatMapCoordinate(mapView.centerX)} / Z ${formatMapCoordinate(mapView.centerZ)}`}
-        />
-
         {hasMapOverlay ? (
           <div className="map-marker-layer" aria-label="地图标记示意层">
+            {projectedGuideMarkers.map((marker) => (
+              <div
+                className={`map-guide-marker is-${marker.kind}`}
+                key={marker.id}
+                style={
+                  {
+                    '--marker-left': `${marker.left}px`,
+                    '--marker-top': `${marker.top}px`,
+                  } as CSSProperties
+                }
+                title={marker.label}
+                aria-hidden="true"
+              >
+                {marker.kind === 'default-anchor' ? (
+                  <span className="map-guide-marker-dot" />
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined map-guide-marker-icon">
+                      location_on
+                    </span>
+                    <span className="map-guide-marker-badge">{marker.label}</span>
+                  </>
+                )}
+              </div>
+            ))}
             {projectedRoadTraces.length ? (
               <div className="map-road-trace-layer" aria-hidden="true">
                 {projectedRoadTraces.map((trace) => (
@@ -2431,6 +2501,39 @@ function projectPointMarkers(
   return projected;
 }
 
+function projectCoordinateMarker(
+  id: ProjectedGuideMarker['kind'],
+  label: string,
+  coordinates: [number, number],
+  view: MapView,
+  size: ViewportSize,
+  padding: number,
+): ProjectedGuideMarker | null {
+  if (size.width <= 0 || size.height <= 0) {
+    return null;
+  }
+
+  const scale = getScale(view.zoom);
+  const left = size.width / 2 + (coordinates[0] - view.centerX) * scale;
+  const top = size.height / 2 + (coordinates[1] - view.centerZ) * scale;
+  if (
+    left < -padding ||
+    left > size.width + padding ||
+    top < -padding ||
+    top > size.height + padding
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    label,
+    kind: id,
+    left,
+    top,
+  };
+}
+
 function projectRoadTraceMarkers(
   markers: EndpointGroupMarker[],
   view: MapView,
@@ -3011,7 +3114,7 @@ function projectLinearPoiMarkers(
   const projected: ProjectedLinearPoi[] = [];
 
   for (const marker of markers) {
-    const labelAnchor = getLinearMarkerLabelAnchor(marker);
+    const labelAnchor = getLinearMarkerLabelAnchor(marker, view, size);
     if (!labelAnchor) {
       continue;
     }
@@ -3368,6 +3471,8 @@ function getMarkerCenter(marker: CenterableMarker): [number, number] | undefined
 
 function getLinearMarkerLabelAnchor(
   marker: EndpointGroupMarker | TransitLineMarker,
+  view: MapView,
+  size: ViewportSize,
 ): [number, number] | undefined {
   if (marker.geometry.coordinates.length === 0) {
     return undefined;
@@ -3381,7 +3486,117 @@ function getLinearMarkerLabelAnchor(
     ? marker.geometry.coordinates
     : orderRoadTracePoints(marker.geometry.coordinates);
 
-  return getPolylineMidpoint(orderedCoordinates);
+  return (
+    getPolylineMidpoint(getVisiblePolylineCoordinates(orderedCoordinates, view, size)) ??
+    getPolylineMidpoint(orderedCoordinates)
+  );
+}
+
+interface WorldBounds {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
+function getVisiblePolylineCoordinates(
+  coordinates: Array<[number, number]>,
+  view: MapView,
+  size: ViewportSize,
+): Array<[number, number]> {
+  if (coordinates.length < 2) {
+    return coordinates;
+  }
+
+  const bounds = getViewportWorldBounds(view, size, 96);
+  const visibleCoordinates: Array<[number, number]> = [];
+  for (let index = 1; index < coordinates.length; index += 1) {
+    const from = coordinates[index - 1];
+    const to = coordinates[index];
+    const clipped = clipSegmentToWorldBounds(from, to, bounds);
+    if (!clipped) {
+      continue;
+    }
+
+    appendCoordinate(visibleCoordinates, clipped[0]);
+    appendCoordinate(visibleCoordinates, clipped[1]);
+  }
+
+  return visibleCoordinates;
+}
+
+function getViewportWorldBounds(
+  view: MapView,
+  size: ViewportSize,
+  paddingPixels: number,
+): WorldBounds {
+  const scale = getScale(view.zoom);
+  const padding = paddingPixels / scale;
+  const halfWidth = size.width / 2 / scale;
+  const halfHeight = size.height / 2 / scale;
+  return {
+    minX: view.centerX - halfWidth - padding,
+    maxX: view.centerX + halfWidth + padding,
+    minZ: view.centerZ - halfHeight - padding,
+    maxZ: view.centerZ + halfHeight + padding,
+  };
+}
+
+function clipSegmentToWorldBounds(
+  from: [number, number],
+  to: [number, number],
+  bounds: WorldBounds,
+): [[number, number], [number, number]] | null {
+  const deltaX = to[0] - from[0];
+  const deltaZ = to[1] - from[1];
+  let startRatio = 0;
+  let endRatio = 1;
+
+  const edges: Array<[number, number]> = [
+    [-deltaX, from[0] - bounds.minX],
+    [deltaX, bounds.maxX - from[0]],
+    [-deltaZ, from[1] - bounds.minZ],
+    [deltaZ, bounds.maxZ - from[1]],
+  ];
+
+  for (const [edgeDelta, edgeDistance] of edges) {
+    if (edgeDelta === 0) {
+      if (edgeDistance < 0) {
+        return null;
+      }
+      continue;
+    }
+
+    const ratio = edgeDistance / edgeDelta;
+    if (edgeDelta < 0) {
+      startRatio = Math.max(startRatio, ratio);
+    } else {
+      endRatio = Math.min(endRatio, ratio);
+    }
+
+    if (startRatio > endRatio) {
+      return null;
+    }
+  }
+
+  return [interpolateCoordinate(from, to, startRatio), interpolateCoordinate(from, to, endRatio)];
+}
+
+function interpolateCoordinate(
+  from: [number, number],
+  to: [number, number],
+  ratio: number,
+): [number, number] {
+  return [from[0] + (to[0] - from[0]) * ratio, from[1] + (to[1] - from[1]) * ratio];
+}
+
+function appendCoordinate(target: Array<[number, number]>, coordinate: [number, number]) {
+  const previous = target.at(-1);
+  if (previous && squaredDistance(previous, coordinate) < 0.000001) {
+    return;
+  }
+
+  target.push(coordinate);
 }
 
 function getPolylineMidpoint(coordinates: Array<[number, number]>): [number, number] | undefined {

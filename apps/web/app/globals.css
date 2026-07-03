@@ -634,11 +634,24 @@ body .material-symbols-outlined {
   cursor: grabbing;
 }
 
-.map-location-dot {
+.map-guide-marker {
   position: absolute;
-  left: 50%;
-  top: 50%;
+  left: var(--marker-left);
+  top: var(--marker-top);
   z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.map-guide-marker.is-route-origin,
+.map-guide-marker.is-route-destination {
+  transform: translate(-50%, -100%);
+}
+
+.map-guide-marker-dot {
   width: 16px;
   height: 16px;
   border: 3px solid #ffffff;
@@ -647,8 +660,31 @@ body .material-symbols-outlined {
   box-shadow:
     0 0 0 1px rgba(26, 115, 232, 0.38),
     0 4px 12px rgba(17, 24, 23, 0.28);
-  pointer-events: none;
-  transform: translate(-50%, -50%);
+}
+
+.map-guide-marker-icon {
+  --icon-fill: 1;
+  filter: drop-shadow(0 4px 10px rgba(17, 24, 23, 0.28));
+  font-size: 26px;
+}
+
+.map-guide-marker.is-route-origin {
+  color: var(--yct-color-primary);
+}
+
+.map-guide-marker.is-route-destination {
+  color: var(--yct-color-accent-red);
+}
+
+.map-guide-marker-badge {
+  padding: 0 6px;
+  border-radius: var(--yct-radius-pill);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--yct-color-text-secondary);
+  box-shadow: 0 4px 12px rgba(17, 24, 23, 0.18);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 20px;
 }
 
 .unmined-tile-stack,
