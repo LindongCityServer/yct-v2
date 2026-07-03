@@ -219,6 +219,12 @@ interface RoutePlanDraft {
   origin: [number, number];
 }
 
+interface NearbySearchCenter {
+  markerId: string;
+  label: string;
+  coordinates: [number, number];
+}
+
 interface ScaleBarInfo {
   distance: number;
   pixelWidth: number;
@@ -297,6 +303,7 @@ export function MapStage() {
   const [markerListExpanded, setMarkerListExpanded] = useState(true);
   const [cursorWorld, setCursorWorld] = useState<{ x: number; z: number } | null>(null);
   const [routePlanDraft, setRoutePlanDraft] = useState<RoutePlanDraft | null>(null);
+  const [nearbySearchCenter, setNearbySearchCenter] = useState<NearbySearchCenter | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -454,9 +461,14 @@ export function MapStage() {
   }, [categoryResponse, endpointGroupMarkers, pointMarkers, transitLineMarkers]);
   const sidebarMarkers = useMemo(() => {
     const queryMode = Boolean(markerQuery.trim());
+    const nearbyMode = !queryMode && nearbySearchCenter;
     const source = queryMode
       ? [...filteredTransitLineMarkers, ...filteredEndpointGroupMarkers, ...filteredPointMarkers]
-      : [...endpointGroupMarkers, ...pointMarkers];
+      : nearbyMode
+        ? [...endpointGroupMarkers, ...pointMarkers].filter(
+            (marker) => marker.id !== nearbySearchCenter.markerId,
+          )
+        : [...endpointGroupMarkers, ...pointMarkers];
     const categoryFiltered =
       markerListCategoryId === 'all'
         ? source
@@ -464,6 +476,17 @@ export function MapStage() {
 
     if (queryMode) {
       return categoryFiltered.slice(0, 12);
+    }
+
+    if (nearbyMode) {
+      return categoryFiltered
+        .map((marker) => ({
+          marker,
+          distance: getMarkerDistanceToCoordinates(marker, nearbySearchCenter.coordinates),
+        }))
+        .sort((left, right) => left.distance - right.distance)
+        .map(({ marker }) => marker)
+        .slice(0, 12);
     }
 
     return categoryFiltered
@@ -482,6 +505,7 @@ export function MapStage() {
     mapView,
     markerListCategoryId,
     markerQuery,
+    nearbySearchCenter,
     pointMarkers,
   ]);
 
@@ -750,6 +774,7 @@ export function MapStage() {
     setMapView((current) => fitMarkerToMapView(marker, current, viewportSize));
     setFocusedMarkerId(marker.id);
     setPoiDetailTab('summary');
+    setNearbySearchCenter(null);
   };
 
   const focusTransitLineById = (lineId: string) => {
@@ -968,6 +993,30 @@ export function MapStage() {
     );
   };
 
+  const updateMarkerQuery = (value: string) => {
+    setMarkerQuery(value);
+    if (value.trim()) {
+      setNearbySearchCenter(null);
+    }
+  };
+
+  const startNearbySearch = (marker: CenterableMarker) => {
+    const center = getMarkerCenter(marker);
+    if (!center) {
+      return;
+    }
+
+    setNearbySearchCenter({
+      markerId: marker.id,
+      label: formatMarkerDisplayName(marker.label),
+      coordinates: center,
+    });
+    setMarkerQuery('');
+    setFocusedMarkerId(null);
+    setRoutePlanDraft(null);
+    setMarkerListExpanded(true);
+  };
+
   const hasMapOverlay =
     projectedMarkers.length > 0 ||
     projectedLinearPois.length > 0 ||
@@ -990,7 +1039,7 @@ export function MapStage() {
               type="search"
               aria-label="筛选地图标记"
               value={markerQuery}
-              onChange={(event) => setMarkerQuery(event.currentTarget.value)}
+              onChange={(event) => updateMarkerQuery(event.currentTarget.value)}
               placeholder="搜索地点或标记"
             />
             {markerQuery ? (
@@ -998,7 +1047,7 @@ export function MapStage() {
                 className="search-clear-button"
                 type="button"
                 aria-label="清空地图搜索"
-                onClick={() => setMarkerQuery('')}
+                onClick={() => updateMarkerQuery('')}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
                   close
@@ -1027,11 +1076,28 @@ export function MapStage() {
                 <span className="material-symbols-outlined" aria-hidden="true">
                   {markerListExpanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
                 </span>
-                <span>{markerQuery.trim() ? '搜索结果' : '地图标记'}</span>
+                <span>
+                  {markerQuery.trim()
+                    ? '搜索结果'
+                    : nearbySearchCenter
+                      ? `${nearbySearchCenter.label}周边`
+                      : '地图标记'}
+                </span>
                 <span className="muted">{sidebarMarkers.length} 个</span>
               </button>
               {markerListExpanded ? (
                 <>
+                  {nearbySearchCenter ? (
+                    <div className="map-nearby-search-note">
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        travel_explore
+                      </span>
+                      <span>按距离显示 {nearbySearchCenter.label} 周边标记</span>
+                      <button type="button" onClick={() => setNearbySearchCenter(null)}>
+                        退出
+                      </button>
+                    </div>
+                  ) : null}
                   <div
                     className={
                       markerCategoryExpanded
@@ -1115,7 +1181,11 @@ export function MapStage() {
                       })
                     ) : (
                       <p className="map-marker-list-empty">
-                        {loadStatus === 'loading' ? '正在读取地图标记' : '暂无匹配标记'}
+                        {loadStatus === 'loading'
+                          ? '正在读取地图标记'
+                          : nearbySearchCenter
+                            ? '周边暂无可显示标记'
+                            : '暂无匹配标记'}
                       </p>
                     )}
                   </div>
@@ -1224,6 +1294,7 @@ export function MapStage() {
                   <PoiActionBar
                     marker={focusedMarker}
                     onPlanRoute={() => createRoutePlanDraft(focusedMarker)}
+                    onSearchNearby={() => startNearbySearch(focusedMarker)}
                   />
                 </>
               ) : null}
@@ -1915,7 +1986,8 @@ function RoutePlanDraftCard({
 function PoiActionBar({
   marker,
   onPlanRoute,
-}: Readonly<{ marker: CenterableMarker; onPlanRoute: () => void }>) {
+  onSearchNearby,
+}: Readonly<{ marker: CenterableMarker; onPlanRoute: () => void; onSearchNearby: () => void }>) {
   return (
     <div className="map-poi-action-bar" aria-label="地点操作">
       <button className="secondary-action-button is-primary" type="button" onClick={onPlanRoute}>
@@ -1924,7 +1996,12 @@ function PoiActionBar({
         </span>
         <span>查看路线</span>
       </button>
-      <button className="icon-action-button" type="button" aria-label={`搜索 ${marker.label} 周边`}>
+      <button
+        className="icon-action-button"
+        type="button"
+        aria-label={`搜索 ${marker.label} 周边`}
+        onClick={onSearchNearby}
+      >
         <span className="material-symbols-outlined" aria-hidden="true">
           travel_explore
         </span>
@@ -3341,12 +3418,19 @@ function getPolylineMidpoint(coordinates: Array<[number, number]>): [number, num
 }
 
 function getMarkerDistanceToMapCenter(marker: CenterableMarker, view: MapView): number {
+  return getMarkerDistanceToCoordinates(marker, [view.centerX, view.centerZ]);
+}
+
+function getMarkerDistanceToCoordinates(
+  marker: CenterableMarker,
+  coordinates: [number, number],
+): number {
   const center = getMarkerCenter(marker);
   if (!center) {
     return Number.POSITIVE_INFINITY;
   }
 
-  return squaredDistance(center, [view.centerX, view.centerZ]);
+  return squaredDistance(center, coordinates);
 }
 
 function formatGeometryDetail(marker: CenterableMarker): string {

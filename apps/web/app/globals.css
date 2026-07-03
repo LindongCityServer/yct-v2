@@ -1253,6 +1253,43 @@ body .material-symbols-outlined {
   line-height: 1.5;
 }
 
+.map-nearby-search-note {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-2) var(--yct-space-3);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-primary) 10%, var(--yct-color-surface));
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.map-nearby-search-note .material-symbols-outlined {
+  --icon-fill: 1;
+  color: var(--yct-color-primary);
+  font-size: 18px;
+}
+
+.map-nearby-search-note span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-nearby-search-note button {
+  min-height: 28px;
+  padding: 0 var(--yct-space-2);
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-primary);
+  cursor: pointer;
+  font: inherit;
+}
+
 .map-category-filter {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 28px;
