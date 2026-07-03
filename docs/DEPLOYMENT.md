@@ -1,0 +1,102 @@
+# 雨城通 v2 部署说明
+
+本文档记录当前 Next.js 版本的推荐部署流程，重点是减少云服务器构建时的内存和磁盘压力。
+
+## 构建产物在哪里
+
+直接运行：
+
+```powershell
+pnpm --filter @yct/web build
+```
+
+默认构建目录在：
+
+```text
+apps/web/.next
+```
+
+启用 `output: 'standalone'` 后，还会生成可部署运行目录：
+
+```text
+apps/web/.next/standalone
+```
+
+注意：`.next` 是构建输出和缓存目录，不建议手动整目录上传。推荐使用仓库提供的打包脚本生成 zip。
+
+## 推荐流程
+
+在本地开发机或 CI 上构建部署包：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2
+```
+
+如果未来从 `/v2` 切回站点根路径，改为：
+
+```powershell
+pnpm web:artifact
+```
+
+也可以先设置环境变量，再使用快捷脚本：
+
+```powershell
+$env:YCT_DEPLOY_BASE_PATH = "v2"
+pnpm web:artifact
+```
+
+脚本会：
+
+- 运行 `@yct/web` 的生产构建。
+- 使用 Next.js standalone 输出作为部署主体。
+- 补齐 `apps/web/.next/static` 和 `apps/web/public`。
+- 跳过本机上传素材目录 `apps/web/public/content-assets`。
+- 不打包 `.env`、`.env.*`、`.yct-data`、日志和本地缓存。
+- 在 `artifacts/` 下生成 `yct-web-时间戳.zip`。
+- 在 Windows 上优先使用 `tar.exe` 生成 zip，避免 `Compress-Archive` 处理大量文件时非常慢。
+
+## 云服务器运行
+
+把 `artifacts/yct-web-*.zip` 上传到服务器并解压到部署目录，然后运行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath /v2
+```
+
+如果未来站点不再挂载 `/v2`，需要重新用空 BasePath 构建，并以空 BasePath 启动。
+
+## Node.js 版本
+
+当前仓库根 `package.json` 要求：
+
+```text
+node >=20.9.0
+```
+
+项目使用 Next.js 16。云服务器当前如果仍是 Node.js 18.6.0，需要先升级到 Node.js 20.9+，建议使用 22 LTS。否则即使上传 standalone 包，也可能运行失败。
+
+## 不建议的做法
+
+不建议在 2 核 4G 的云服务器上新开 Codex 拉仓库再构建，原因是：
+
+- Next.js 生产构建会同时占用 CPU、内存和 `.next/cache` 磁盘空间。
+- Codex 自身也会占用一部分内存。
+- 云服务器当前剩余磁盘较少，构建缓存和 `node_modules` 容易把空间吃满。
+
+更稳妥的做法是：本地或 CI 构建 zip，服务器只负责解压、保留运行时数据、重启 Node 进程。
+
+## 需要持久化但不进部署包的内容
+
+以下内容应该保存在服务器持久目录或后续数据库/对象存储中，不随每次部署覆盖：
+
+- `.env` 和真实密钥。
+- `.yct-data` 本地运行时仓储。
+- 后台上传素材目录 `apps/web/public/content-assets`。
+- 日志、备份和导入中间文件。
+
+## 后续改进
+
+- 增加正式生产启动/停止脚本，和当前 `web:dev:*` 脚本区分。
+- 将 `.yct-data` 替换为数据库与 Transactional Outbox。
+- 将后台上传素材迁移到对象存储或共享静态资源目录。
+- 增加 GitHub Actions 构建 artifact，避免本机手动打包。

@@ -3,6 +3,7 @@ const normalizedBasePath = normalizeBasePath(rawBasePath);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   reactStrictMode: true,
   poweredByHeader: false,
   assetPrefix: normalizedBasePath || undefined,

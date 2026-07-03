@@ -19,6 +19,7 @@
     "web:dev:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-dev-stop.ps1",
     "web:dev:restart": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-dev-restart.ps1",
     "web:dev:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-dev-status.ps1",
+    "web:artifact": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
