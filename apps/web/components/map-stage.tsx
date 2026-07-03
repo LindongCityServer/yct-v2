@@ -2744,10 +2744,6 @@ function getMarkerPriorityForBrowseMode(marker: PointMarker, browseMode: MapBrow
     return browseMode === 'traffic' ? 12 : 5;
   }
 
-  if (browseMode === 'road-network' && lowPriorityTrafficCategoryIds.has(categoryId)) {
-    return 4;
-  }
-
   if (browseMode === 'traffic' && lowPriorityTrafficCategoryIds.has(categoryId)) {
     return 2;
   }
