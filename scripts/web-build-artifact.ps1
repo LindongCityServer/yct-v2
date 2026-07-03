@@ -107,6 +107,40 @@ function Copy-YctPublicAssets {
   }
 }
 
+function Copy-YctSwcHelpersDependency {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [Parameter(Mandatory = $true)][string]$DestinationNodeModules
+  )
+
+  $candidatePaths = @(
+    (Join-Path $Root "apps\web\node_modules\@swc\helpers"),
+    (Join-Path $Root "node_modules\@swc\helpers"),
+    (Join-Path $Root "node_modules\.pnpm\node_modules\@swc\helpers")
+  )
+
+  $pnpmRoot = Join-Path $Root "node_modules\.pnpm"
+  if (Test-Path -LiteralPath $pnpmRoot) {
+    $candidatePaths += @(
+      Get-ChildItem -LiteralPath $pnpmRoot -Directory -Filter "@swc+helpers@*" -ErrorAction SilentlyContinue |
+        ForEach-Object { Join-Path $_.FullName "node_modules\@swc\helpers" }
+    )
+  }
+
+  $source = $candidatePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+  if (-not $source) {
+    throw "Cannot find @swc/helpers in local node_modules. Run pnpm install before building the artifact."
+  }
+
+  $scopeDestination = Join-Path $DestinationNodeModules "@swc"
+  $packageDestination = Join-Path $scopeDestination "helpers"
+  New-Item -ItemType Directory -Force -Path $scopeDestination | Out-Null
+  if (Test-Path -LiteralPath $packageDestination) {
+    Remove-Item -LiteralPath $packageDestination -Recurse -Force
+  }
+  Copy-Item -LiteralPath $source -Destination $scopeDestination -Recurse -Force
+}
+
 function Write-YctUtf8File {
   param(
     [Parameter(Mandatory = $true)][string]$Path,
@@ -162,15 +196,18 @@ Copy-YctDirectoryChildren -Source $standaloneRoot -Destination $stageRoot
 
 $standaloneWebRoot = Join-Path $stageRoot "apps\web"
 $standaloneNextRoot = Join-Path $standaloneWebRoot ".next"
+$standaloneWebNodeModules = Join-Path $standaloneWebRoot "node_modules"
 New-Item -ItemType Directory -Force -Path $standaloneNextRoot | Out-Null
 Copy-Item -LiteralPath $staticRoot -Destination $standaloneNextRoot -Recurse -Force
 Copy-YctPublicAssets -Source $publicRoot -Destination (Join-Path $standaloneWebRoot "public")
+Copy-YctSwcHelpersDependency -Root $root -DestinationNodeModules $standaloneWebNodeModules
 
 $startScript = @"
 param(
   [int]`$Port = 3300,
   [string]`$HostName = "127.0.0.1",
-  [string]`$BasePath = "$basePathValue"
+  [string]`$BasePath = "$basePathValue",
+  [string]`$NodePath = ""
 )
 
 `$ErrorActionPreference = "Stop"
@@ -193,7 +230,8 @@ if (`$normalizedBasePath -and -not `$normalizedBasePath.StartsWith("/")) {
 `$env:YCT_BASE_PATH = `$normalizedBasePath
 `$env:NEXT_PUBLIC_YCT_BASE_PATH = `$normalizedBasePath
 
-node `$serverPath
+`$nodeCommand = if (`$NodePath) { `$NodePath } else { "node" }
+& `$nodeCommand `$serverPath
 "@
 
 $startBasePathArgument = $basePathValue.TrimStart("/")
@@ -205,7 +243,7 @@ Build base path: $basePathValue
 Required Node.js: >=20.9.0. The current repository uses Next.js 16, so Node.js 18.6.0 on the server should be upgraded before running this bundle.
 
 Start command example:
-  powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath "$startBasePathArgument"
+  powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath "$startBasePathArgument" -NodePath "C:\node-v22\node.exe"
 
 Notes:
 - Do not upload local .env files or .yct-data into this bundle.

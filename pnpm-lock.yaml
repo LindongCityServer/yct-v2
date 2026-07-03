@@ -25,6 +25,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@swc/helpers':
+        specifier: 0.5.15
+        version: 0.5.15
       '@yct/adapters':
         specifier: workspace:*
         version: link:../../packages/adapters

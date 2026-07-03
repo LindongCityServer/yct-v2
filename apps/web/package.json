@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@swc/helpers": "0.5.15",
     "@yct/adapters": "workspace:*",
     "@yct/contracts": "workspace:*",
     "@yct/design-tokens": "workspace:*",

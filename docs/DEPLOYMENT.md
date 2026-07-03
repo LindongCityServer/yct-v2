@@ -60,7 +60,7 @@ pnpm web:artifact
 把 `artifacts/yct-web-*.zip` 上传到服务器并解压到部署目录，然后运行：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath v2
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath v2 -NodePath "C:\node-v22\node.exe"
 ```
 
 如果未来站点不再挂载 `/v2`，需要重新用空 BasePath 构建，并以空 BasePath 启动。
@@ -74,6 +74,17 @@ node >=20.9.0
 ```
 
 项目使用 Next.js 16。云服务器当前如果仍是 Node.js 18.6.0，需要先升级到 Node.js 20.9+，建议使用 22 LTS。否则即使上传 standalone 包，也可能运行失败。
+
+如果宝塔面板的 Node 版本列表最高只有 18.6.0，可以不使用宝塔内置 Node，改用便携版 Node：
+
+1. 在服务器下载 Windows x64 的 Node.js 22 LTS zip。
+2. 解压到例如 `C:\node-v22`。
+3. 用 `C:\node-v22\node.exe -v` 确认版本。
+4. 启动时给 `start-yct-web.ps1` 传入 `-NodePath "C:\node-v22\node.exe"`。
+
+这种方式不需要在云服务器上重新安装依赖或执行构建，只替换运行时使用的 Node 可执行文件。
+
+如果使用宝塔 Node 项目管理器，且它不能选择自定义 `node.exe`，可以改用宝塔的进程守护/计划任务或 Windows 服务工具运行上述 PowerShell 启动命令，反向代理仍然指向 `127.0.0.1:3300`。
 
 ## 不建议的做法
 
