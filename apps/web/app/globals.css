@@ -218,13 +218,16 @@ body .material-symbols-outlined {
 }
 
 .account-badge.is-dot {
-  top: 1px;
-  right: 1px;
-  min-width: 9px;
-  width: 9px;
-  height: 9px;
+  top: 0;
+  right: 0;
+  min-width: 11px;
+  width: 11px;
+  height: 11px;
   padding: 0;
   background: currentColor;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, currentColor 48%, transparent),
+    0 2px 5px rgba(17, 24, 23, 0.18);
 }
 
 .icon-button.is-active {
@@ -1895,6 +1898,27 @@ body .material-symbols-outlined {
   background: var(--yct-color-surface-panel);
 }
 
+.search-filter-strip {
+  justify-content: flex-start;
+}
+
+.search-filter-strip .category-chip {
+  min-height: 38px;
+}
+
+.search-filter-strip .category-chip small {
+  margin-left: 4px;
+  color: currentColor;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.72;
+}
+
+.search-filter-strip .category-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
 .search-result-groups,
 .search-result-group,
 .search-result-list {
@@ -2583,6 +2607,14 @@ body .material-symbols-outlined {
   color: var(--yct-color-text-muted);
   font-size: 13px;
   font-weight: 500;
+}
+
+.settings-row-note {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.55;
 }
 
 .settings-control-grid {
@@ -3944,34 +3976,129 @@ body .material-symbols-outlined {
 .schedule-trip-card {
   --schedule-service-tone: var(--yct-color-primary);
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
   gap: var(--yct-space-3);
-  padding: var(--yct-space-4);
-  border-radius: var(--yct-radius-lg);
+  padding: var(--yct-space-4) var(--yct-space-4) var(--yct-space-3);
+  border-radius: var(--yct-radius-xl);
   background: var(--yct-color-surface-panel);
 }
 
-.schedule-trip-time {
+.schedule-trip-header {
   display: grid;
-  align-content: start;
-  gap: var(--yct-space-1);
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: var(--yct-space-3);
+  align-items: start;
 }
 
-.schedule-trip-time time {
-  color: var(--schedule-service-tone);
-  font-size: 24px;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.schedule-trip-time span {
-  width: fit-content;
-  padding: 4px 8px;
+.schedule-trip-service-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
   border-radius: var(--yct-radius-pill);
   background: color-mix(in srgb, var(--schedule-service-tone) 14%, var(--yct-color-surface-muted));
   color: var(--schedule-service-tone);
-  font-size: 12px;
-  font-weight: 800;
+}
+
+.schedule-trip-service-mark .material-symbols-outlined {
+  --icon-fill: 1;
+  font-size: 26px;
+}
+
+.schedule-trip-title {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.schedule-trip-title span,
+.schedule-trip-fare span,
+.schedule-trip-time-block span {
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.schedule-trip-title strong {
+  min-width: 0;
+  color: var(--yct-color-text);
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+.schedule-trip-fare {
+  display: grid;
+  min-width: 76px;
+  justify-items: end;
+  gap: 2px;
+  color: var(--schedule-service-tone);
+  text-align: right;
+}
+
+.schedule-trip-fare strong {
+  color: var(--schedule-service-tone);
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.schedule-trip-journey {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 0.85fr) minmax(0, 1fr);
+  gap: var(--yct-space-3);
+  align-items: center;
+}
+
+.schedule-trip-time-block {
+  display: grid;
+  min-width: 0;
+  gap: var(--yct-space-1);
+}
+
+.schedule-trip-time-block time {
+  color: var(--yct-color-text);
+  font-size: 42px;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.schedule-trip-time-block small {
+  color: var(--yct-color-text-secondary);
+  font-size: 15px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.schedule-trip-time-block.is-arrival {
+  justify-items: end;
+  text-align: right;
+}
+
+.schedule-trip-duration {
+  display: grid;
+  min-width: 0;
+  justify-items: center;
+  gap: var(--yct-space-1);
+  color: var(--yct-color-text-muted);
+  text-align: center;
+}
+
+.schedule-trip-duration::after {
+  width: 100%;
+  max-width: 180px;
+  height: 2px;
+  background: currentColor;
+  content: '';
+  opacity: 0.62;
+}
+
+.schedule-trip-duration strong {
+  color: var(--yct-color-text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .schedule-trip-main {
@@ -3980,38 +4107,28 @@ body .material-symbols-outlined {
   gap: var(--yct-space-2);
 }
 
-.schedule-trip-main h3,
 .schedule-trip-main p {
   margin: 0;
   min-width: 0;
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
   overflow-wrap: anywhere;
 }
 
-.schedule-trip-main h3 {
-  color: var(--yct-color-text);
-  font-size: 18px;
-}
-
-.schedule-trip-main p {
-  color: var(--yct-color-text-muted);
-  font-size: 13px;
-}
-
 .schedule-trip-meta {
-  grid-column: 2;
+  grid-column: auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .schedule-trip-actions {
-  grid-column: 2;
   display: flex;
   flex-wrap: wrap;
   gap: var(--yct-space-2);
 }
 
 .schedule-trip-feedback {
-  grid-column: 2;
   margin: 0;
-  color: var(--yct-color-primary);
+  color: var(--schedule-service-tone);
   font-size: 13px;
   font-weight: 700;
 }
@@ -4929,19 +5046,32 @@ body .material-symbols-outlined {
   }
 
   .schedule-trip-card {
+    padding: var(--yct-space-3);
+  }
+
+  .schedule-trip-header {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .schedule-trip-fare {
+    grid-column: 1 / -1;
+    justify-items: start;
+    text-align: left;
+  }
+
+  .schedule-trip-journey {
     grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
   }
 
-  .schedule-trip-time {
-    grid-template-columns: auto auto;
-    align-items: center;
-    justify-content: start;
+  .schedule-trip-time-block.is-arrival,
+  .schedule-trip-duration {
+    justify-items: start;
+    text-align: left;
   }
 
-  .schedule-trip-meta,
-  .schedule-trip-actions,
-  .schedule-trip-feedback {
-    grid-column: auto;
+  .schedule-trip-time-block time {
+    font-size: 34px;
   }
 
   .schedule-trip-meta {

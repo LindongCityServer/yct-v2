@@ -716,19 +716,23 @@ export function AccountSettingsPanel({
             <span className="material-symbols-outlined" aria-hidden="true">
               notifications
             </span>
-            <span id="notification-settings-title">通知与免打扰</span>
-            <label className="switch-control">
+            <span id="notification-settings-title">通知类型与免打扰</span>
+            <label className="switch-control" title="开启或关闭本设备 Push 通知">
               <input
                 type="checkbox"
+                aria-label="开启或关闭本设备 Push 通知"
                 checked={notificationEnabled}
                 onChange={(event) => updateNotificationEnabled(event.currentTarget.checked)}
               />
               <span />
             </label>
           </div>
+          <p className="settings-row-note">
+            总开关控制本设备是否接收推送；下方分类决定哪些提醒允许推送，免打扰时段只用于静默或延后这些提醒。
+          </p>
           <div className="time-control-row">
             <label>
-              <span>开始</span>
+              <span>免打扰开始</span>
               <input
                 type="time"
                 value={quietStart}
@@ -736,7 +740,7 @@ export function AccountSettingsPanel({
               />
             </label>
             <label>
-              <span>结束</span>
+              <span>免打扰结束</span>
               <input
                 type="time"
                 value={quietEnd}
@@ -744,7 +748,7 @@ export function AccountSettingsPanel({
               />
             </label>
           </div>
-          <div className="notification-type-grid" aria-label="通知类型">
+          <div className="notification-type-grid" aria-label="允许接收的通知类型">
             {notificationTypeOptions.map((option) => (
               <label className="notification-type-toggle" key={option.key}>
                 <input

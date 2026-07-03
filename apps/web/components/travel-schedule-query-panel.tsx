@@ -444,13 +444,44 @@ function ScheduleTripCard({
       data-service={trip.serviceKind}
       style={createServiceToneStyle(service?.color)}
     >
-      <div className="schedule-trip-time">
-        <time>{trip.departureTime}</time>
-        <span>{trip.serviceLabel}</span>
-        {trip.tripCode ? <span>班次 {trip.tripCode}</span> : null}
+      <div className="schedule-trip-header">
+        <span className="schedule-trip-service-mark">
+          <span className="material-symbols-outlined" aria-hidden="true">
+            {service?.icon ?? getServiceIcon(trip.serviceKind)}
+          </span>
+        </span>
+        <div className="schedule-trip-title">
+          <span>{formatTripHeading(trip)}</span>
+          <strong>{trip.lineName}</strong>
+        </div>
+        <div className="schedule-trip-fare">
+          <span>票价</span>
+          <strong>{trip.fareText ?? '待公布'}</strong>
+        </div>
       </div>
+
+      <div className="schedule-trip-journey">
+        <div className="schedule-trip-time-block">
+          <span>出发时间</span>
+          <time>{trip.departureTime}</time>
+          <small>{trip.originStationName ?? trip.stationNames[0] ?? '出发地点待公布'}</small>
+        </div>
+        <div className="schedule-trip-duration">
+          <span>{trip.runtimeText ?? '运行时间待公布'}</span>
+          <strong>{formatStopSummary(trip)}</strong>
+        </div>
+        <div className="schedule-trip-time-block is-arrival">
+          <span>到达时间</span>
+          <time>{formatArrivalTime(trip)}</time>
+          <small>
+            {trip.destinationStationName ??
+              trip.stationNames[trip.stationNames.length - 1] ??
+              '到达地点待公布'}
+          </small>
+        </div>
+      </div>
+
       <div className="schedule-trip-main">
-        <h3>{trip.lineName}</h3>
         <p>{formatTripEndpoints(trip)}</p>
         <div className="screen-station-flow" aria-label={`${trip.lineName} 停靠站`}>
           {trip.stationNames.map((stationName) => (
@@ -459,17 +490,13 @@ function ScheduleTripCard({
         </div>
       </div>
       <dl className="screen-detail-trip-meta schedule-trip-meta">
-        <MetaItem label="班次号" value={trip.tripCode ?? '待公布'} />
-        {trip.arrivalTime ? <MetaItem label="到达" value={formatArrivalTime(trip)} /> : null}
         <MetaItem
           label={getLocationMetaLabel(trip.serviceKind)}
           value={trip.gateText ?? '待公布'}
         />
-        <MetaItem label="运行" value={trip.runtimeText ?? '待公布'} />
         {trip.operatingDays?.length ? (
           <MetaItem label="运行日" value={formatOperatingDays(trip.operatingDays)} />
         ) : null}
-        <MetaItem label="票价" value={trip.fareText ?? '待公布'} />
         <MetaItem label="运营" value={trip.operator ?? '待公布'} />
         <MetaItem label={getVehicleMetaLabel(trip.serviceKind)} value={formatVehicleText(trip)} />
       </dl>
@@ -880,6 +907,25 @@ function formatTripEndpoints(trip: TravelTripInstance): string {
   const last = trip.destinationStationName ?? trip.stationNames[trip.stationNames.length - 1];
   const endpoints = first && last ? `${first} - ${last}` : `${trip.stationNames.length} 站`;
   return trip.routeNote ? `${endpoints} · ${trip.routeNote}` : endpoints;
+}
+
+function formatTripHeading(trip: TravelTripInstance): string {
+  return trip.tripCode ? `${trip.tripCode} · ${trip.serviceLabel}` : `${trip.serviceLabel}班次`;
+}
+
+function formatStopSummary(trip: TravelTripInstance): string {
+  if (trip.routeNote) {
+    return trip.routeNote;
+  }
+
+  if (trip.stationNames.length <= 2) {
+    return '直达';
+  }
+
+  const middleStations = trip.stationNames.slice(1, -1);
+  return middleStations.length > 2
+    ? `经停 ${middleStations.slice(0, 2).join('、')} 等 ${middleStations.length} 站`
+    : `经停 ${middleStations.join('、')}`;
 }
 
 function getServiceIcon(kind: TicketableServiceKind): string {

@@ -13,6 +13,8 @@ import { appPath } from '../lib/app-paths';
 import type { TransitOverview } from '../lib/legacy-transit';
 import { normalizeTitleForSearch, TitleWithBreaks } from './title-with-breaks';
 
+type SearchCategory = 'all' | 'operations' | 'lines' | 'stations' | 'services';
+
 const fallbackModeProfiles: TransitModeProfile[] = [
   { mode: 'metro', label: '地铁', color: '#2584E8', icon: 'subway', sortOrder: 0, enabled: true },
   { mode: 'tram', label: '有轨', color: '#C64255', icon: 'tram', sortOrder: 1, enabled: true },
@@ -65,6 +67,7 @@ export function SearchPageClient({
   initialQuery: string;
 }>) {
   const [query, setQuery] = useState(initialQuery);
+  const [activeCategory, setActiveCategory] = useState<SearchCategory>('all');
   const normalizedQuery = normalizeTitleForSearch(query.trim());
   const modeProfileByMode = useMemo(
     () => buildModeProfileMap(transit.modeProfiles ?? fallbackModeProfiles),
@@ -142,11 +145,25 @@ export function SearchPageClient({
   }, [normalizedQuery, serviceGroups]);
 
   const hasQuery = query.trim().length > 0;
+  const totalResultCount =
+    operationResults.length + lineResults.length + stationResults.length + serviceResults.length;
+  const resultCounts: Record<SearchCategory, number> = {
+    all: totalResultCount,
+    operations: operationResults.length,
+    lines: lineResults.length,
+    stations: stationResults.length,
+    services: serviceResults.length,
+  };
   const hasResults =
     operationResults.length > 0 ||
     lineResults.length > 0 ||
     stationResults.length > 0 ||
     serviceResults.length > 0;
+  const hasVisibleResults = hasResults && resultCounts[activeCategory] > 0;
+  const shouldShowOperations = activeCategory === 'all' || activeCategory === 'operations';
+  const shouldShowLines = activeCategory === 'all' || activeCategory === 'lines';
+  const shouldShowStations = activeCategory === 'all' || activeCategory === 'stations';
+  const shouldShowServices = activeCategory === 'all' || activeCategory === 'services';
 
   return (
     <div className="search-page-stack">
@@ -179,15 +196,7 @@ export function SearchPageClient({
       <section className="module-panel search-results-panel" aria-labelledby="search-title">
         <div className="section-heading">
           <h1 id="search-title">搜索结果</h1>
-          {hasQuery ? (
-            <span className="muted">
-              {operationResults.length +
-                lineResults.length +
-                stationResults.length +
-                serviceResults.length}{' '}
-              项结果
-            </span>
-          ) : null}
+          {hasQuery ? <span className="muted">{totalResultCount} 项结果</span> : null}
         </div>
 
         {!hasQuery ? (
@@ -198,128 +207,169 @@ export function SearchPageClient({
             <p>输入关键词后显示运营信息、线路、站点和服务结果</p>
           </div>
         ) : hasResults ? (
-          <div className="search-result-groups">
-            {operationResults.length > 0 ? (
-              <section className="search-result-group" aria-labelledby="search-operations-title">
-                <h2 id="search-operations-title">运营信息</h2>
-                <div className="search-result-list">
-                  {operationResults.map((item) => (
-                    <Link
-                      className="search-result-item"
-                      href={appPath(`/operations/${encodeURIComponent(item.id)}`)}
-                      key={item.id}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        article
-                      </span>
-                      <span>
-                        <strong>
-                          <TitleWithBreaks title={item.title} segments={item.titleSegments} />
-                        </strong>
-                        <span className="muted">
-                          {item.categoryId}
-                          {item.displayDate ? ` · ${item.displayDate}` : ''}
-                        </span>
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+          <>
+            <div className="category-strip search-filter-strip" aria-label="搜索结果分类">
+              {searchCategories.map((category) => {
+                const count = resultCounts[category.key];
+                return (
+                  <button
+                    className={
+                      activeCategory === category.key
+                        ? 'category-chip tone-primary is-active'
+                        : 'category-chip tone-primary'
+                    }
+                    type="button"
+                    disabled={count === 0}
+                    onClick={() => setActiveCategory(category.key)}
+                    key={category.key}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      {category.icon}
+                    </span>
+                    <span>
+                      {category.label}
+                      <small>{count}</small>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
 
-            {lineResults.length > 0 ? (
-              <section className="search-result-group" aria-labelledby="search-lines-title">
-                <h2 id="search-lines-title">线路</h2>
-                <div className="search-result-list">
-                  {lineResults.map((line) => (
-                    <Link
-                      className="search-result-item"
-                      href={appPath(`/map/lines/${encodeURIComponent(line.id)}`)}
-                      key={line.id}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        {modeIcon(line.mode, modeProfileByMode)}
-                      </span>
-                      <span>
-                        <strong>
-                          <TitleWithBreaks title={line.name} />
-                        </strong>
-                        <span className="muted">
-                          {modeLabel(line.mode, modeProfileByMode)}
-                          {line.firstStationName && line.lastStationName
-                            ? ` · ${line.firstStationName} - ${line.lastStationName}`
-                            : ` · ${line.stationCount} 站`}
-                        </span>
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+            {hasVisibleResults ? (
+              <div className="search-result-groups">
+                {shouldShowOperations && operationResults.length > 0 ? (
+                  <section
+                    className="search-result-group"
+                    aria-labelledby="search-operations-title"
+                  >
+                    <h2 id="search-operations-title">运营信息</h2>
+                    <div className="search-result-list">
+                      {operationResults.map((item) => (
+                        <Link
+                          className="search-result-item"
+                          href={appPath(`/operations/${encodeURIComponent(item.id)}`)}
+                          key={item.id}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            article
+                          </span>
+                          <span>
+                            <strong>
+                              <TitleWithBreaks title={item.title} segments={item.titleSegments} />
+                            </strong>
+                            <span className="muted">
+                              {item.categoryId}
+                              {item.displayDate ? ` · ${item.displayDate}` : ''}
+                            </span>
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
 
-            {stationResults.length > 0 ? (
-              <section className="search-result-group" aria-labelledby="search-stations-title">
-                <h2 id="search-stations-title">站点</h2>
-                <div className="search-result-list">
-                  {stationResults.map((detail) => (
-                    <Link
-                      className="search-result-item"
-                      href={appPath(
-                        `/travel/stations/${encodeURIComponent(detail.lineName)}/${encodeURIComponent(detail.stationName)}`,
-                      )}
-                      key={detail.sourceId}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        subway
-                      </span>
-                      <span>
-                        <strong>
-                          <TitleWithBreaks title={detail.stationName} />
-                        </strong>
-                        <span className="muted">
-                          {detail.lineName}
-                          {detail.exits.length > 0 ? ` · ${detail.exits.length} 个出入口` : ''}
-                          {detail.facilities.length > 0
-                            ? ` · ${detail.facilities.length} 项设施`
-                            : ''}
-                        </span>
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+                {shouldShowLines && lineResults.length > 0 ? (
+                  <section className="search-result-group" aria-labelledby="search-lines-title">
+                    <h2 id="search-lines-title">线路</h2>
+                    <div className="search-result-list">
+                      {lineResults.map((line) => (
+                        <Link
+                          className="search-result-item"
+                          href={appPath(`/map/lines/${encodeURIComponent(line.id)}`)}
+                          key={line.id}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            {modeIcon(line.mode, modeProfileByMode)}
+                          </span>
+                          <span>
+                            <strong>
+                              <TitleWithBreaks title={line.name} />
+                            </strong>
+                            <span className="muted">
+                              {modeLabel(line.mode, modeProfileByMode)}
+                              {line.firstStationName && line.lastStationName
+                                ? ` · ${line.firstStationName} - ${line.lastStationName}`
+                                : ` · ${line.stationCount} 站`}
+                            </span>
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
 
-            {serviceResults.length > 0 ? (
-              <section className="search-result-group" aria-labelledby="search-services-title">
-                <h2 id="search-services-title">服务与工具</h2>
-                <div className="search-result-list">
-                  {serviceResults.map(({ entry, groupTitle }) => (
-                    <a
-                      className="search-result-item"
-                      href={entry.href}
-                      target={entry.openMode === 'new_tab' ? '_blank' : undefined}
-                      rel={entry.openMode === 'new_tab' ? 'noreferrer' : undefined}
-                      key={entry.id}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        {entry.icon}
-                      </span>
-                      <span>
-                        <strong>
-                          <TitleWithBreaks title={entry.title} />
-                        </strong>
-                        <span className="muted">
-                          {groupTitle}
-                          {entry.description ? ` · ${entry.description}` : ''}
-                        </span>
-                      </span>
-                    </a>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-          </div>
+                {shouldShowStations && stationResults.length > 0 ? (
+                  <section className="search-result-group" aria-labelledby="search-stations-title">
+                    <h2 id="search-stations-title">站点</h2>
+                    <div className="search-result-list">
+                      {stationResults.map((detail) => (
+                        <Link
+                          className="search-result-item"
+                          href={appPath(
+                            `/travel/stations/${encodeURIComponent(detail.lineName)}/${encodeURIComponent(detail.stationName)}`,
+                          )}
+                          key={detail.sourceId}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            subway
+                          </span>
+                          <span>
+                            <strong>
+                              <TitleWithBreaks title={detail.stationName} />
+                            </strong>
+                            <span className="muted">
+                              {detail.lineName}
+                              {detail.exits.length > 0 ? ` · ${detail.exits.length} 个出入口` : ''}
+                              {detail.facilities.length > 0
+                                ? ` · ${detail.facilities.length} 项设施`
+                                : ''}
+                            </span>
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
+                {shouldShowServices && serviceResults.length > 0 ? (
+                  <section className="search-result-group" aria-labelledby="search-services-title">
+                    <h2 id="search-services-title">服务与工具</h2>
+                    <div className="search-result-list">
+                      {serviceResults.map(({ entry, groupTitle }) => (
+                        <a
+                          className="search-result-item"
+                          href={entry.href}
+                          target={entry.openMode === 'new_tab' ? '_blank' : undefined}
+                          rel={entry.openMode === 'new_tab' ? 'noreferrer' : undefined}
+                          key={entry.id}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            {entry.icon}
+                          </span>
+                          <span>
+                            <strong>
+                              <TitleWithBreaks title={entry.title} />
+                            </strong>
+                            <span className="muted">
+                              {groupTitle}
+                              {entry.description ? ` · ${entry.description}` : ''}
+                            </span>
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+              </div>
+            ) : (
+              <div className="empty-state">
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  filter_alt_off
+                </span>
+                <p>当前分类下暂无匹配结果</p>
+              </div>
+            )}
+          </>
         ) : (
           <div className="empty-state">
             <span className="material-symbols-outlined" aria-hidden="true">
@@ -332,6 +382,14 @@ export function SearchPageClient({
     </div>
   );
 }
+
+const searchCategories: Array<{ key: SearchCategory; label: string; icon: string }> = [
+  { key: 'all', label: '全部', icon: 'select_all' },
+  { key: 'operations', label: '运营', icon: 'article' },
+  { key: 'lines', label: '线路', icon: 'route' },
+  { key: 'stations', label: '站点', icon: 'subway' },
+  { key: 'services', label: '服务', icon: 'apps' },
+];
 
 function toTime(value: string | undefined): number {
   if (!value) {
