@@ -733,6 +733,7 @@ body .material-symbols-outlined {
 }
 
 .map-road-trace-layer,
+.map-route-trace-layer,
 .map-transit-trace-layer {
   position: absolute;
   inset: 0;
@@ -800,6 +801,20 @@ body .material-symbols-outlined {
   opacity: 0.9;
   filter: drop-shadow(0 2px 4px rgba(17, 24, 23, 0.24))
     drop-shadow(0 0 8px color-mix(in srgb, var(--transit-trace-color) 46%, transparent));
+  vector-effect: non-scaling-stroke;
+}
+
+.map-route-trace {
+  --route-trace-color: var(--yct-color-primary);
+  fill: none;
+  stroke: var(--route-trace-color);
+  stroke-dasharray: 16 10;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 8;
+  opacity: 0.94;
+  filter: drop-shadow(0 2px 4px rgba(17, 24, 23, 0.3))
+    drop-shadow(0 0 8px color-mix(in srgb, var(--route-trace-color) 44%, transparent));
   vector-effect: non-scaling-stroke;
 }
 

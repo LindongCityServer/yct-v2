@@ -244,6 +244,7 @@ interface RoutePlanOption {
   summary: string;
   icon: string;
   color: string;
+  coordinates: Array<[number, number]>;
   estimatedDistance: number;
   estimatedMinutes: number;
   steps: string[];
@@ -716,6 +717,13 @@ export function MapStage() {
   );
   const selectedRouteOption =
     routePlanOptions.find((option) => option.id === selectedRouteOptionId) ?? routePlanOptions[0];
+  const selectedRouteTrace = useMemo(
+    () =>
+      selectedRouteOption
+        ? projectRoutePlanTrace(selectedRouteOption, mapView, viewportSize)
+        : undefined,
+    [mapView, selectedRouteOption, viewportSize],
+  );
   const focusedMarkerCenter =
     focusedMarker && isCenterableMarker(focusedMarker) ? getMarkerCenter(focusedMarker) : undefined;
   const focusedMarkerCategoryName = focusedMarker?.categoryId
@@ -1148,6 +1156,7 @@ export function MapStage() {
 
   const hasMapOverlay =
     projectedGuideMarkers.length > 0 ||
+    Boolean(selectedRouteTrace) ||
     projectedMarkers.length > 0 ||
     projectedLinearPois.length > 0 ||
     projectedRoadTraces.length > 0 ||
@@ -1536,6 +1545,15 @@ export function MapStage() {
 
         {hasMapOverlay ? (
           <div className="map-marker-layer" aria-label="地图标记示意层">
+            {selectedRouteTrace ? (
+              <div className="map-route-trace-layer" aria-hidden="true">
+                <TraceLayerView
+                  trace={selectedRouteTrace}
+                  kind="route"
+                  title={`${selectedRouteOption?.title ?? '路线方案'} · 初步估算`}
+                />
+              </div>
+            ) : null}
             {projectedGuideMarkers.map((marker) => (
               <div
                 className={`map-guide-marker is-${marker.kind}`}
@@ -1969,7 +1987,7 @@ function TraceLayerView({
   trace,
   kind,
   title,
-}: Readonly<{ trace: ProjectedRoadTrace; kind: 'road' | 'transit'; title: string }>) {
+}: Readonly<{ trace: ProjectedRoadTrace; kind: 'road' | 'transit' | 'route'; title: string }>) {
   const pathClassName =
     kind === 'road'
       ? [
@@ -1980,7 +1998,9 @@ function TraceLayerView({
         ]
           .filter(Boolean)
           .join(' ')
-      : 'map-transit-trace is-selected';
+      : kind === 'route'
+        ? 'map-route-trace is-selected'
+        : 'map-transit-trace is-selected';
 
   return (
     <svg
@@ -1995,6 +2015,7 @@ function TraceLayerView({
           '--trace-height': `${trace.height}px`,
           '--road-trace-color': trace.accentColor,
           '--transit-trace-color': trace.accentColor,
+          '--route-trace-color': trace.accentColor,
         } as CSSProperties
       }
     >
@@ -2283,6 +2304,7 @@ function buildRoutePlanOptions(input: {
       summary: `${formatRoutePlanDistance(directDistance)} · 直线估算`,
       icon: 'directions_walk',
       color: routeTransportModeOptions.find((option) => option.mode === 'walk')?.color ?? '#4B5B57',
+      coordinates: [input.draft.origin, input.draft.destination],
       estimatedDistance: directDistance,
       estimatedMinutes: estimateRouteMinutes(directDistance, 72),
       steps: [
@@ -2380,6 +2402,12 @@ function buildTransitRoutePlanOption(input: {
     )} 站间估算`,
     icon,
     color,
+    coordinates: [
+      input.draft.origin,
+      originStation.center,
+      destinationStation.center,
+      input.draft.destination,
+    ],
     estimatedDistance: accessDistance + egressDistance + transitDistance,
     estimatedMinutes,
     steps: [
@@ -3021,6 +3049,44 @@ function projectTransitLineTraces(
       },
     ];
   });
+}
+
+function projectRoutePlanTrace(
+  option: RoutePlanOption,
+  view: MapView,
+  size: ViewportSize,
+): ProjectedRoadTrace | undefined {
+  if (size.width <= 0 || size.height <= 0 || option.coordinates.length < 2) {
+    return undefined;
+  }
+
+  const scale = getScale(view.zoom);
+  const points = option.coordinates.map(([x, z]) => ({
+    left: size.width / 2 + (x - view.centerX) * scale,
+    top: size.height / 2 + (z - view.centerZ) * scale,
+  }));
+  const traceProjection = buildTraceProjection(option.coordinates, view, size);
+  const bounds = getTraceBounds(points);
+
+  if (!traceProjection || !traceBoundsIntersectsViewport(bounds, size)) {
+    return undefined;
+  }
+
+  return {
+    id: `route-option-${option.id}`,
+    label: option.title,
+    path: traceProjection.path,
+    viewBox: traceProjection.viewBox,
+    accentColor: option.color,
+    pointCount: option.coordinates.length,
+    pathLength: getProjectedPathLength(points),
+    bounds,
+    left: traceProjection.left,
+    top: traceProjection.top,
+    width: traceProjection.width,
+    height: traceProjection.height,
+    isSelected: true,
+  };
 }
 
 function buildTraceProjection(
