@@ -7,7 +7,7 @@ import type {
   YctEventType,
 } from '@yct/contracts';
 import { transitionPoiSubmissionStatus } from '@yct/domain';
-import { InMemoryEventBus } from '@yct/event-bus';
+import { publishDomainEvent } from './app-event-bus';
 import {
   createLocalPoiSubmission,
   findLocalPoiSubmission,
@@ -15,8 +15,6 @@ import {
   updateLocalPoiSubmission,
   withPoiSubmissionStatus,
 } from './poi-submission-store';
-
-const poiSubmissionEventBus = new InMemoryEventBus();
 
 export interface PoiSubmissionActionResult {
   ok: boolean;
@@ -185,14 +183,11 @@ async function emitEvent<TType extends YctEventType>(
   actor: YctEvent<TType>['actor'],
   payload: YctEventPayloadMap[TType],
 ): Promise<void> {
-  const event: YctEvent<TType> = {
+  await publishDomainEvent({
     eventId: `event_${randomUUID()}`,
     type,
     occurredAt: new Date().toISOString(),
-    profileId: 'default',
     actor,
     payload,
-  } as YctEvent<TType>;
-
-  await poiSubmissionEventBus.emit(event);
+  });
 }

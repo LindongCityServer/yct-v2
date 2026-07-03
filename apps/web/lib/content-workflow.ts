@@ -2,12 +2,11 @@ import { randomUUID } from 'node:crypto';
 import type {
   ContentPublishMode,
   ContentRevisionStatus,
-  YctEvent,
   YctEventPayloadMap,
   YctEventType,
 } from '@yct/contracts';
 import { canPublishContentRevision, transitionContentRevisionStatus } from '@yct/domain';
-import { InMemoryEventBus } from '@yct/event-bus';
+import { publishDomainEvent } from './app-event-bus';
 import {
   findContentAssetRecordsByIds,
   findContentAssetRecordsByPublicPaths,
@@ -21,8 +20,6 @@ import {
   updateContentRecord,
   withRevisionStatus,
 } from './content-store';
-
-const eventBus = new InMemoryEventBus();
 
 export interface ContentActionResult {
   ok: boolean;
@@ -222,17 +219,14 @@ async function emitEvent<TType extends YctEventType>(
   actorId: string,
   payload: YctEventPayloadMap[TType],
 ): Promise<void> {
-  const event: YctEvent<TType> = {
+  await publishDomainEvent({
     eventId: `event_${randomUUID()}`,
     type,
     occurredAt: new Date().toISOString(),
-    profileId: 'default',
     actor: {
       type: 'admin',
       id: actorId,
     },
     payload,
-  } as YctEvent<TType>;
-
-  await eventBus.emit(event);
+  });
 }

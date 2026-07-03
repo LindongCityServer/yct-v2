@@ -43,7 +43,7 @@
 
 航班查询数据源当前可通过 `YCT_FLIGHT_DATA_URL` 配置，默认读取 `https://haojin.guanmu233.cn/data/flight_data.txt`。解析器按 `【航班号】〈航线备注〉«运行日»〔执飞机型〕『航空公司』《地点出发/经停/到达》{时间}#+天数#@位置@ ... §票价§《航班结束》` 结构读取，只纳入“临东金桦”起飞、经停、到达的航班，以及航空公司为“临东航空”的航班；其他航班不迁入 YCT 查询结果。当前运行时对外部航班源做短重试以缓解 `ECONNRESET` 等瞬时失败，但长期仍应迁入 YCT 后台数据源或稳定抓取快照。
 
-浏览器本地班次记录保存在 `yct.travelScheduleHistory.v1`，只记录统一班次查询结果快照和提醒关联时间，最多保留最近 50 条。它不能作为旧订单或新版票务订单迁移来源；登录后若要同步到账号，需要单独的用户确认、去重和撤销导入策略。
+浏览器本地班次记录保存在 `yct.travelScheduleHistory.v1`，只记录统一班次查询结果快照和提醒关联时间，最多保留最近 50 条。它不能作为旧订单或新版票务订单迁移来源；当前登录同步只提交行程提醒快照，不同步班次记录。旧站 `orders` 只读导入的 `legacy_order` 提醒同步到账号前会先向用户确认，拒绝时仍可同步非旧站提醒；确认状态保存在本机 `yct.tripReminders.legacySyncConsentAt`，账号页可撤销本地同意。登录状态下撤销会通过 `/api/account/trip-reminders` 删除账号侧 `legacy_order` 提醒副本，成功后把本机旧站提醒标回待同步；细粒度去重、冲突策略和正式迁移文案仍待后续实现。
 
 统一班次与票务平台重写后，旧客运 `ltcx` 文本需要同时进入新版 `ScheduleService`、`TripInstance`、`FareProduct` 和停运提醒模型。旧站订单只允许作为历史或提醒来源迁移，不能直接视为新版真实票务订单；轮渡、航班后续也应通过同一套导入/适配器接口进入查询订票平台。
 
@@ -56,8 +56,15 @@
 - `YCT_LEGACY_DATA_SOURCE=local`：只读取 `YCT_LEGACY_DATA_DIR`。
 - `YCT_LEGACY_DATA_SOURCE=remote`：只读取 `YCT_LEGACY_DATA_REMOTE_BASE_URL`。
 - `YCT_LEGACY_DATA_REMOTE_BASE_URL=https://yct.shangxiaoguan.top/data`：默认远程旧站 data 基准。
+- `YCT_LEGACY_DATA_FETCH_TIMEOUT_MS=8000`：远程旧站文件读取超时，默认 8 秒；线路快照会并行读取各旧数据源，公开交通和地图相关 API 会对旧数据派生结果做短 TTL 进程内缓存和进行中请求合并，避免本地开发站点因重复拉取/解析旧数据被拖慢。
 - `YCT_FLIGHT_DATA_URL=https://haojin.guanmu233.cn/data/flight_data.txt`：默认航班文本数据源；迁移到 YCT 后台或其他服务器时可替换为新的同格式 URL。
 - `YCT_TRAVEL_SERVICE_PROFILE_STORE_PATH=.yct-data/travel-service-profile-store.json`：统一班次/票务服务 Profile 本地仓储路径，维护客运大巴、轮渡、航班等可排班服务的名称、颜色、图标、排序和启用状态。
+- `YCT_EVENT_OUTBOX_STORE_PATH=.yct-data/event-outbox-store.json`：单机开发阶段的领域事件 Outbox 本地仓储路径；当前用于持久化事件审计、连接共享内存事件总线，并支持通过 `/api/internal/events/process` 重放待处理或失败事件，后续替换为数据库 Transactional Outbox。
+- `YCT_PUSH_DELIVERY_STORE_PATH=.yct-data/push-delivery-store.json`：账号侧行程提醒触发的 Push 投递队列和送达审计本地仓储路径。
+- `YCT_WEB_PUSH_PUBLIC_KEY` / `NEXT_PUBLIC_YCT_WEB_PUSH_PUBLIC_KEY`、`YCT_WEB_PUSH_PRIVATE_KEY`、`YCT_WEB_PUSH_SUBJECT`：服务端 Web Push VAPID 配置；缺少任一项时内部投递任务只会延后队列并记录原因，不会伪造已送达。
+- `NEXT_PUBLIC_YCT_PUSH_DEFAULT_ENABLED_TYPES` / `YCT_PUSH_DEFAULT_ENABLED_TYPES=trip,operations,ticket,check_in`：账号页和服务端新用户通知偏好的默认预选类型，留空或无有效项时默认四类都预选。
+- `YCT_PUSH_DELIVERY_MIN_INTERVAL_MS=300000`：同一用户同一通知类型的服务端 Push 最小投递间隔，默认 5 分钟；设为 `0` 可关闭该开发期限频策略。
+- `YCT_INTERNAL_TASK_TOKEN`：内部任务接口 `/api/internal/events/process` 与 `/api/internal/notifications/process` 的调用令牌，分别用于重放事件 Outbox 和处理到期 Push 投递队列。
 - `YCT_CONTENT_ASSET_UPLOAD_DIR=apps/web/public/content-assets`：内容后台上传素材的本地落盘目录；该目录属于运行时文件，不进入 Git，后续可替换为对象存储或共享资产目录。
 - `YCT_LEGACY_ASSET_DOWNLOAD_REPORT_PATH=.yct-data/legacy-assets-download-report.json`：旧内容资源下载报告路径，供内容后台展示最近一次真实下载失败项；如果服务进程运行目录与下载脚本运行目录不同，需要显式配置到同一个报告文件。
 
@@ -117,12 +124,12 @@
 - 通过 `pnpm legacy:assets:download` 下载清单中的下载候选到 `apps/web/public/legacy-assets`，并写入 `.yct-data/legacy-assets-download-report.json`，记录大小、SHA-256、Content-Type 和失败项。该命令可重复运行，远端内容未变化时不会重写文件。
 - 下载报告会同步写入 `differenceReport`，合并当前资源清单摘要、issue 统计、重复资源分组和真实下载失败项；`.yct-data` 仍属于运行报告目录，不进入仓库。
 - 内容后台 `/admin/operations` 已接入旧资源差异报告，只读展示引用总数、下载候选、外链、本地缺失、真实下载失败、issue 分类、重复资源样例和下载失败样例；后台 API 会校验管理员身份，并从 `YCT_LEGACY_ASSET_DOWNLOAD_REPORT_PATH` 指向的路径读取最近一次下载报告，默认读取 `.yct-data/legacy-assets-download-report.json`。
-- 内容后台 `/admin/operations` 已接入旧专题正文迁移预览：服务端读取旧 `content/*.html`，优先提取 `.content-container` 正文区域，保守转换为 Markdown 候选并展示页面数、图片数、链接数和转换提示；该步骤只做预览，不直接创建或发布内容。
+- 内容后台 `/admin/operations` 已接入旧专题正文迁移预览：服务端读取旧 `content/*.html`，优先提取 `.content-container` 正文区域，保守转换为 Markdown 候选并展示页面数、图片数、链接数和转换提示；管理员可把单个旧专题载入内容编辑器后创建草稿，后续仍走提交审核、素材审核和发布流程。
 - 内容后台会基于旧资源清单和下载报告生成只读 `LegacyContentAssetInventory`：每条素材记录保留旧站来源 URL、迁移后公开路径、SHA-256、Content-Type、文件大小、待审核状态、引用的旧内容和引用类型；同一下载项被多个内容复用时只生成一条素材记录。
 - 已迁移资源的去重分两层记录：`sourceUrl + migratedPath` 相同的重复引用直接复用同一素材记录，`summary.reusedAssetCount` 和 `summary.deduplicatedReferenceCount` 记录复用规模；SHA-256 相同但下载项不同的资源进入 `duplicateGroups`，供正式素材入库前二次去重。
 - 内容后台可以把旧内容素材清单导入 `.yct-data/content-asset-store.json`，导入后每条素材进入 `pending_review` 状态；管理员审核通过或驳回时分别发布 `ContentAssetReviewed` 事件。内容发布时会读取真实素材状态，只有全部素材为 `approved` 时才允许带 `assetIds` 的内容发布。
 - 内容后台可以上传新内容素材到 `apps/web/public/content-assets`，文件名按 SHA-256 稳定生成，业务记录仍进入 `.yct-data/content-asset-store.json` 的 `pending_review` 状态；同 SHA-256 文件重复上传会复用已有素材记录，不额外生成重复素材。运行时上传目录可通过 `YCT_CONTENT_ASSET_UPLOAD_DIR` 调整，该目录默认不进入 Git。
-- 创建内容草稿时会扫描 Markdown 图片中的同站 `/content-assets/...` 链接，并把匹配到的素材记录自动合并进 `assetIds`；临时反代使用的 `/v2/content-assets/...` 也会归一化为同一个素材路径。
+- 创建内容草稿时会扫描 Markdown 图片中的同站 `/content-assets/...` 和 `/legacy-assets/...` 链接，并把匹配到的素材记录自动合并进 `assetIds`；临时反代使用的 `/v2/content-assets/...` 与 `/v2/legacy-assets/...` 也会归一化为同一个素材路径。
 - 旧内容封面和 `原始图片：...` Markdown 引用在运行时会先检查本地 `/legacy-assets/...` 文件是否存在；存在则使用同站资源，不存在则回退旧站绝对 URL，避免资源下载未完成时出现破图。临时 `/v2` 子路径只用于浏览器公开路径，落盘检查和下载目标仍映射到 `apps/web/public/legacy-assets`。
 - 当前实测资源清单包含 131 个原始引用、122 个唯一引用、91 个下载候选引用、18 个外链引用、31 个非下载项、9 个重复引用和 12 组重复资源；本地缺失文件为 0。按 `sourceUrl + migratedPath` 去重后实际下载并生成 61 条素材记录，复用 30 个重复内容引用，SHA-256 缺失 0，真实哈希重复组 0。首次下载结果为 61 个成功、0 个失败、总大小 72,256,470 字节；二次运行结果为 61 个未变化、0 个失败，证明脚本可以复跑。
 
@@ -227,4 +234,4 @@ pnpm legacy:inspect https://yct.shangxiaoguan.top/data
 ## 8. 待补充
 
 - 图片素材正式入库后的审批动作、引用回写和回滚策略。
-- 旧专题 HTML 正文预览写入内容草稿或归档附件前的人工确认、差异对比和回滚策略。
+- 旧专题 HTML 归档附件、差异对比和回滚策略。

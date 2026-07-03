@@ -4,10 +4,17 @@ import {
   readLegacyTransitOverview,
   type TransitOverview,
 } from './legacy-transit';
+import { createTimedCache } from './server-cache';
 import { findPublishedTransitDataRevision } from './transit-data-store';
 import { readTransitModeProfiles } from './transit-mode-profile-store';
 
+const transitOverviewCache = createTimedCache<TransitOverview>(30 * 1000);
+
 export async function readTransitOverview(): Promise<TransitOverview> {
+  return transitOverviewCache.read('transit-overview', readTransitOverviewUncached);
+}
+
+async function readTransitOverviewUncached(): Promise<TransitOverview> {
   const modeProfiles = await readTransitModeProfiles();
   const publishedRevision = await findPublishedTransitDataRevision();
   if (publishedRevision) {

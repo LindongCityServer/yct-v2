@@ -73,6 +73,27 @@ self.addEventListener('message', (event) => {
   }
 });
 
+self.addEventListener('push', (event) => {
+  const notification = parsePushNotification(event.data);
+  event.waitUntil(
+    self.registration.showNotification(notification.title, {
+      body: notification.body,
+      icon: fromAppPath('/icons/yct-icon-192.png'),
+      badge: fromAppPath('/icons/yct-icon-192.png'),
+      tag: notification.tag,
+      data: {
+        url: fromAppPath(notification.url || '/account'),
+      },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || fromAppPath('/account');
+  event.waitUntil(openOrFocusClient(targetUrl));
+});
+
 self.addEventListener('fetch', (event) => {
   if (YCT_DISABLE_ON_LOCAL_DEV) {
     return;
@@ -125,6 +146,56 @@ async function warmAppShell() {
       }
     }),
   );
+}
+
+function parsePushNotification(data) {
+  const fallback = {
+    title: '雨城通提醒',
+    body: '你有一条新的雨城通通知。',
+    tag: 'yct-notification',
+    url: '/account',
+  };
+
+  if (!data) {
+    return fallback;
+  }
+
+  try {
+    const parsed = data.json();
+    return {
+      title:
+        typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title : fallback.title,
+      body: typeof parsed.body === 'string' && parsed.body.trim() ? parsed.body : fallback.body,
+      tag: typeof parsed.tag === 'string' && parsed.tag.trim() ? parsed.tag : fallback.tag,
+      url: typeof parsed.url === 'string' && parsed.url.startsWith('/') ? parsed.url : fallback.url,
+    };
+  } catch {
+    const text = data.text();
+    return {
+      ...fallback,
+      body: text || fallback.body,
+    };
+  }
+}
+
+async function openOrFocusClient(url) {
+  const allClients = await self.clients.matchAll({
+    type: 'window',
+    includeUncontrolled: true,
+  });
+  const absoluteUrl = new URL(url, self.location.origin).href;
+
+  for (const client of allClients) {
+    if (client.url === absoluteUrl && 'focus' in client) {
+      return client.focus();
+    }
+  }
+
+  if (self.clients.openWindow) {
+    return self.clients.openWindow(absoluteUrl);
+  }
+
+  return undefined;
 }
 
 async function deleteYctCaches(keepKeys = new Set()) {

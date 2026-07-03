@@ -2,7 +2,8 @@ import type { RectangleBounds } from '@yct/contracts';
 
 const offlinePackageStorageKey = 'yct.offlinePackages.v1';
 
-export type OfflinePackageStatus = 'registered' | 'base_cache_refreshed' | 'refresh_failed';
+export type OfflinePackageStatus =
+  'registered' | 'server_requested' | 'base_cache_refreshed' | 'request_failed' | 'refresh_failed';
 
 export interface OfflinePackageRecord {
   packageId: string;
@@ -13,6 +14,15 @@ export interface OfflinePackageRecord {
   updatedAt: string;
   lastRefreshedAt?: string;
   errorMessage?: string;
+}
+
+export interface AccountOfflinePackageRequest {
+  packageId: string;
+  name: string;
+  bounds: RectangleBounds;
+  createdAt: string;
+  updatedAt: string;
+  lastRequestedAt: string;
 }
 
 export interface OfflinePackageState {
@@ -50,6 +60,48 @@ export function createOfflinePackage(input: {
 
 export function deleteOfflinePackage(packageId: string): void {
   writeOfflinePackages(readOfflinePackages().filter((item) => item.packageId !== packageId));
+}
+
+export function mergeOfflinePackagesFromAccount(
+  requests: AccountOfflinePackageRequest[],
+): OfflinePackageState {
+  const currentPackages = readOfflinePackages();
+  const packageById = new Map(currentPackages.map((item) => [item.packageId, item]));
+
+  for (const request of requests) {
+    const current = packageById.get(request.packageId);
+    const serverRecord: OfflinePackageRecord = {
+      packageId: request.packageId,
+      name: request.name,
+      bounds: normalizeBounds(request.bounds),
+      status: 'server_requested',
+      createdAt: request.createdAt,
+      updatedAt: request.updatedAt,
+    };
+
+    packageById.set(
+      request.packageId,
+      current
+        ? {
+            ...current,
+            name: request.name,
+            bounds: normalizeBounds(request.bounds),
+            status:
+              current.status === 'base_cache_refreshed' || current.status === 'refresh_failed'
+                ? current.status
+                : 'server_requested',
+            createdAt: minIsoDate(current.createdAt, request.createdAt),
+            updatedAt: maxIsoDate(current.updatedAt, request.updatedAt),
+          }
+        : serverRecord,
+    );
+  }
+
+  const merged = [...packageById.values()].sort((left, right) =>
+    right.updatedAt.localeCompare(left.updatedAt),
+  );
+  writeOfflinePackages(merged);
+  return createOfflinePackageState(merged);
 }
 
 export function updateOfflinePackageStatus(
@@ -99,7 +151,9 @@ export function formatBounds(bounds: RectangleBounds): string {
 export function offlinePackageStatusLabel(status: OfflinePackageStatus): string {
   const labels: Record<OfflinePackageStatus, string> = {
     registered: '待生成',
+    server_requested: '已请求生成',
     base_cache_refreshed: '基础缓存已刷新',
+    request_failed: '请求失败',
     refresh_failed: '刷新失败',
   };
 
@@ -136,9 +190,13 @@ function createOfflinePackageState(packages: OfflinePackageRecord[]): OfflinePac
     packages,
     summary: {
       total: packages.length,
-      pending: packages.filter((item) => item.status === 'registered').length,
+      pending: packages.filter(
+        (item) => item.status === 'registered' || item.status === 'server_requested',
+      ).length,
       refreshed: packages.filter((item) => item.status === 'base_cache_refreshed').length,
-      failed: packages.filter((item) => item.status === 'refresh_failed').length,
+      failed: packages.filter(
+        (item) => item.status === 'request_failed' || item.status === 'refresh_failed',
+      ).length,
       totalArea: packages.reduce((sum, item) => sum + calculateBoundsArea(item.bounds), 0),
     },
   };
@@ -176,7 +234,13 @@ function parseOfflinePackageRecord(value: unknown): OfflinePackageRecord | null 
 }
 
 function isOfflinePackageStatus(value: unknown): value is OfflinePackageStatus {
-  return value === 'registered' || value === 'base_cache_refreshed' || value === 'refresh_failed';
+  return (
+    value === 'registered' ||
+    value === 'server_requested' ||
+    value === 'base_cache_refreshed' ||
+    value === 'request_failed' ||
+    value === 'refresh_failed'
+  );
 }
 
 function isFiniteBounds(value: unknown): value is RectangleBounds {
@@ -199,6 +263,14 @@ function createPackageId(): string {
   }
 
   return `offline-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function minIsoDate(left: string, right: string): string {
+  return left.localeCompare(right) <= 0 ? left : right;
+}
+
+function maxIsoDate(left: string, right: string): string {
+  return left.localeCompare(right) >= 0 ? left : right;
 }
 
 function formatCoordinate(value: number): string {

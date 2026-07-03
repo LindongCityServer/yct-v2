@@ -1,15 +1,17 @@
 'use client';
 
-import type { RectangleBounds, YctAccountSessionSnapshot } from '@yct/contracts';
+import type { RectangleBounds, TripReminder, YctAccountSessionSnapshot } from '@yct/contracts';
 import { type FormEvent, useEffect, useState } from 'react';
 import {
   calculateBoundsArea,
   createOfflinePackage,
   deleteOfflinePackage,
   formatBounds,
+  mergeOfflinePackagesFromAccount,
   offlinePackageStatusLabel,
   readOfflinePackageState,
   updateOfflinePackageStatus,
+  type AccountOfflinePackageRequest,
   type OfflinePackageRecord,
   type OfflinePackageState,
 } from '../lib/client-offline-packages';
@@ -20,7 +22,13 @@ import {
 } from '../lib/client-schedule-history';
 import {
   clearLocalTripReminders,
+  grantLegacyTripReminderSyncConsent,
+  hasLegacyTripReminderSyncConsent,
+  markTripRemindersSynced,
+  markTripRemindersUnsynced,
+  mergeTripRemindersFromAccount,
   readTripReminderState,
+  revokeLegacyTripReminderSyncConsent,
   type TripReminderState,
 } from '../lib/client-trip-reminders';
 import {
@@ -57,9 +65,12 @@ const motionOptions: Array<{ value: MotionMode; label: string }> = [
 
 type PwaInstallStatus = 'checking' | 'installed' | 'installable' | 'manual' | 'unsupported';
 type NotificationTypeKey = 'trip_reminder' | 'operations' | 'ticket' | 'checkin';
+type ServerPushNotificationType = 'trip' | 'operations' | 'ticket' | 'check_in';
 type NotificationTypePreferences = Record<NotificationTypeKey, boolean>;
 
 const notificationTypePreferenceKey = 'yct.notifications.types.v1';
+const pushSubscriptionEndpointKey = 'yct.pushSubscription.endpoint';
+const webPushPublicKey = process.env.NEXT_PUBLIC_YCT_WEB_PUSH_PUBLIC_KEY?.trim() ?? '';
 const notificationTypeOptions: Array<{
   key: NotificationTypeKey;
   label: string;
@@ -92,11 +103,21 @@ const notificationTypeOptions: Array<{
   },
 ];
 
+const notificationTypeToServerType: Record<NotificationTypeKey, ServerPushNotificationType> = {
+  trip_reminder: 'trip',
+  operations: 'operations',
+  ticket: 'ticket',
+  checkin: 'check_in',
+};
+
+const defaultServerNotificationTypes = parseDefaultServerNotificationTypes(
+  process.env.NEXT_PUBLIC_YCT_PUSH_DEFAULT_ENABLED_TYPES,
+);
 const defaultNotificationTypePreferences: NotificationTypePreferences = {
-  trip_reminder: true,
-  operations: true,
-  ticket: true,
-  checkin: true,
+  trip_reminder: defaultServerNotificationTypes.has('trip'),
+  operations: defaultServerNotificationTypes.has('operations'),
+  ticket: defaultServerNotificationTypes.has('ticket'),
+  checkin: defaultServerNotificationTypes.has('check_in'),
 };
 
 const emptyOfflinePackageDraft = {
@@ -117,6 +138,26 @@ interface BeforeInstallPromptEvent extends Event {
 
 interface NavigatorWithStandalone extends Navigator {
   standalone?: boolean;
+}
+
+function parseDefaultServerNotificationTypes(
+  value: string | undefined,
+): Set<ServerPushNotificationType> {
+  const allTypes: ServerPushNotificationType[] = ['trip', 'operations', 'ticket', 'check_in'];
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return new Set(allTypes);
+  }
+
+  const validTypes = new Set<ServerPushNotificationType>(allTypes);
+  const parsed = trimmed
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item): item is ServerPushNotificationType =>
+      validTypes.has(item as ServerPushNotificationType),
+    );
+
+  return parsed.length > 0 ? new Set(parsed) : new Set(allTypes);
 }
 
 type AuthStatus =
@@ -142,6 +183,8 @@ export function AccountSettingsPanel({
   const [accentMode, setAccentMode] = useState<AccentMode>('ldpass');
   const [motionMode, setMotionMode] = useState<MotionMode>('system');
   const [notificationEnabled, setNotificationEnabled] = useState(false);
+  const [pushDeviceStatusText, setPushDeviceStatusText] = useState('');
+  const [isSyncingPushDevice, setIsSyncingPushDevice] = useState(false);
   const [notificationTypes, setNotificationTypes] = useState<NotificationTypePreferences>(
     defaultNotificationTypePreferences,
   );
@@ -154,6 +197,10 @@ export function AccountSettingsPanel({
   const [scheduleHistorySummary, setScheduleHistorySummary] = useState<
     TravelScheduleHistoryState['summary'] | null
   >(null);
+  const [tripSyncStatusText, setTripSyncStatusText] = useState('');
+  const [isSyncingTripReminders, setIsSyncingTripReminders] = useState(false);
+  const [legacyTripSyncConsentGranted, setLegacyTripSyncConsentGranted] = useState(false);
+  const [isRevokingLegacyTripSyncConsent, setIsRevokingLegacyTripSyncConsent] = useState(false);
   const [offlinePackageState, setOfflinePackageState] = useState<OfflinePackageState | null>(null);
   const [offlinePackageDraft, setOfflinePackageDraft] = useState(emptyOfflinePackageDraft);
   const [offlinePackageFormOpen, setOfflinePackageFormOpen] = useState(false);
@@ -175,8 +222,60 @@ export function AccountSettingsPanel({
     setNotificationTypes(readNotificationTypePreferences());
     setQuietStart(window.localStorage.getItem('yct.notifications.quietStart') ?? '23:00');
     setQuietEnd(window.localStorage.getItem('yct.notifications.quietEnd') ?? '07:00');
+    setLegacyTripSyncConsentGranted(hasLegacyTripReminderSyncConsent());
     syncTripSummary();
     syncOfflinePackageState();
+    if (auth.session?.user) {
+      void readServerTripReminders()
+        .then((reminders) => {
+          if (reminders.length === 0) {
+            return;
+          }
+
+          mergeTripRemindersFromAccount(reminders);
+          setTripSyncStatusText(`已载入账号中的 ${reminders.length} 个提醒`);
+          syncTripSummary();
+        })
+        .catch(() => undefined);
+
+      void readServerPushPreference()
+        .then((preference) => {
+          const nextTypes = notificationTypeOptions.reduce<NotificationTypePreferences>(
+            (current, option) => ({
+              ...current,
+              [option.key]: preference.enabledTypes.includes(
+                notificationTypeToServerType[option.key],
+              ),
+            }),
+            { ...defaultNotificationTypePreferences },
+          );
+          setNotificationEnabled(preference.enabled);
+          setNotificationTypes(nextTypes);
+          setQuietStart(preference.quietHours.startTime);
+          setQuietEnd(preference.quietHours.endTime);
+          window.localStorage.setItem('yct.notifications.enabled', String(preference.enabled));
+          writeNotificationTypePreferences(nextTypes);
+          window.localStorage.setItem(
+            'yct.notifications.quietStart',
+            preference.quietHours.startTime,
+          );
+          window.localStorage.setItem('yct.notifications.quietEnd', preference.quietHours.endTime);
+          if (preference.enabled && hasGrantedNotificationPermission()) {
+            void syncBrowserPushDevice(true);
+          }
+        })
+        .catch(() => undefined);
+
+      void readServerOfflinePackageRequests()
+        .then((requests) => {
+          if (requests.length === 0) {
+            return;
+          }
+
+          setOfflinePackageState(mergeOfflinePackagesFromAccount(requests));
+        })
+        .catch(() => undefined);
+    }
 
     setInstallStatus(readPwaInstallStatus());
     void refreshPwaCacheStatus(setCacheStatusText);
@@ -218,6 +317,41 @@ export function AccountSettingsPanel({
   const updateNotificationEnabled = (enabled: boolean) => {
     setNotificationEnabled(enabled);
     window.localStorage.setItem('yct.notifications.enabled', String(enabled));
+    syncServerPushPreference({
+      enabled,
+      preferences: notificationTypes,
+      quietStart,
+      quietEnd,
+    });
+    if (auth.session?.user) {
+      void syncBrowserPushDevice(enabled);
+    } else if (enabled) {
+      setPushDeviceStatusText('登录后可把本设备加入服务端 Push 订阅');
+    } else {
+      setPushDeviceStatusText('');
+    }
+  };
+
+  const syncBrowserPushDevice = async (enabled: boolean) => {
+    if (!auth.session?.user) {
+      return;
+    }
+
+    setIsSyncingPushDevice(true);
+    setPushDeviceStatusText(enabled ? '正在登记本设备 Push 订阅' : '正在撤销本设备 Push 订阅');
+    try {
+      if (enabled) {
+        const endpoint = await ensureBrowserPushSubscription();
+        setPushDeviceStatusText(`本设备已加入 Push 订阅：${readEndpointHost(endpoint)}`);
+      } else {
+        const revoked = await revokeBrowserPushSubscription();
+        setPushDeviceStatusText(revoked ? '已撤销本设备 Push 订阅' : '已关闭通知偏好');
+      }
+    } catch (error) {
+      setPushDeviceStatusText(error instanceof Error ? error.message : '本设备 Push 订阅同步失败');
+    } finally {
+      setIsSyncingPushDevice(false);
+    }
   };
 
   const updateNotificationType = (key: NotificationTypeKey, enabled: boolean) => {
@@ -227,6 +361,12 @@ export function AccountSettingsPanel({
         [key]: enabled,
       };
       writeNotificationTypePreferences(next);
+      syncServerPushPreference({
+        enabled: notificationEnabled,
+        preferences: next,
+        quietStart,
+        quietEnd,
+      });
       return next;
     });
   };
@@ -234,11 +374,23 @@ export function AccountSettingsPanel({
   const updateQuietStart = (value: string) => {
     setQuietStart(value);
     window.localStorage.setItem('yct.notifications.quietStart', value);
+    syncServerPushPreference({
+      enabled: notificationEnabled,
+      preferences: notificationTypes,
+      quietStart: value,
+      quietEnd,
+    });
   };
 
   const updateQuietEnd = (value: string) => {
     setQuietEnd(value);
     window.localStorage.setItem('yct.notifications.quietEnd', value);
+    syncServerPushPreference({
+      enabled: notificationEnabled,
+      preferences: notificationTypes,
+      quietStart,
+      quietEnd: value,
+    });
   };
 
   const installPwa = async () => {
@@ -292,19 +444,50 @@ export function AccountSettingsPanel({
       return;
     }
 
-    createOfflinePackage({
+    const offlinePackage = createOfflinePackage({
       name: offlinePackageDraft.name,
       bounds,
     });
     setOfflinePackageDraft(emptyOfflinePackageDraft);
     setOfflinePackageFormOpen(false);
     syncOfflinePackageState();
+    if (auth.session?.user) {
+      void requestServerOfflinePackage(offlinePackage)
+        .then(() => {
+          updateOfflinePackageStatus(offlinePackage.packageId, 'server_requested');
+          syncOfflinePackageState();
+        })
+        .catch((error) => {
+          updateOfflinePackageStatus(
+            offlinePackage.packageId,
+            'request_failed',
+            error instanceof Error ? error.message : '服务端离线包请求失败',
+          );
+          syncOfflinePackageState();
+        });
+    }
+  };
+
+  const syncServerPushPreference = (input: {
+    enabled: boolean;
+    preferences: NotificationTypePreferences;
+    quietStart: string;
+    quietEnd: string;
+  }) => {
+    if (!auth.session?.user) {
+      return;
+    }
+
+    void writeServerPushPreference(input).catch(() => undefined);
   };
 
   const refreshOfflinePackage = async (offlinePackage: OfflinePackageRecord) => {
     setRefreshingPackageId(offlinePackage.packageId);
     setCacheStatusText('正在刷新离线范围基础数据');
     try {
+      if (auth.session?.user) {
+        await requestServerOfflinePackage(offlinePackage);
+      }
       await warmOfflinePackageCache();
       updateOfflinePackageStatus(offlinePackage.packageId, 'base_cache_refreshed');
       await refreshPwaCacheStatus(setCacheStatusText);
@@ -321,13 +504,21 @@ export function AccountSettingsPanel({
     }
   };
 
-  const removeOfflinePackage = (offlinePackage: OfflinePackageRecord) => {
+  const removeOfflinePackage = async (offlinePackage: OfflinePackageRecord) => {
     if (!window.confirm(`要删除离线范围“${offlinePackage.name}”吗？`)) {
       return;
     }
 
     deleteOfflinePackage(offlinePackage.packageId);
     syncOfflinePackageState();
+    if (auth.session?.user) {
+      try {
+        await deleteServerOfflinePackageRequest(offlinePackage.packageId);
+        setCacheStatusText('已删除本机与账号中的离线范围请求');
+      } catch {
+        setCacheStatusText('已删除本机离线范围，账号侧请求删除失败');
+      }
+    }
   };
 
   const clearLocalHistory = () => {
@@ -341,7 +532,127 @@ export function AccountSettingsPanel({
 
     clearLocalTripReminders();
     clearTravelScheduleHistory();
+    setTripSyncStatusText('');
     syncTripSummary();
+  };
+
+  const revokeLegacyTripSyncConsent = async () => {
+    const canDeleteAccountCopies = Boolean(auth.session?.user);
+    if (
+      !window.confirm(
+        canDeleteAccountCopies
+          ? '撤销后，会删除账号中由旧站 orders 同步来的提醒副本，并保留本机旧站记录。后续同步账号时会再次询问。'
+          : '撤销后，后续同步账号时会再次询问是否同步旧站 orders 导入的记录。',
+      )
+    ) {
+      return;
+    }
+
+    revokeLegacyTripReminderSyncConsent();
+    setLegacyTripSyncConsentGranted(false);
+    if (!canDeleteAccountCopies) {
+      setTripSyncStatusText('已撤销旧站记录同步同意');
+      return;
+    }
+
+    setIsRevokingLegacyTripSyncConsent(true);
+    setTripSyncStatusText('正在删除账号中的旧站提醒副本');
+    try {
+      const result = await deleteServerTripReminderCopies({ source: 'legacy_order' });
+      markTripRemindersUnsynced({ source: 'legacy_order' });
+      syncTripSummary();
+      setTripSyncStatusText(
+        result.deletedCount > 0
+          ? `已撤销旧站记录同步同意，并删除 ${result.deletedCount} 个账号侧旧站提醒副本`
+          : '已撤销旧站记录同步同意，账号中没有需要删除的旧站提醒副本',
+      );
+    } catch (error) {
+      setTripSyncStatusText(
+        error instanceof Error
+          ? `已撤销本地同意，账号副本删除失败：${error.message}`
+          : '已撤销本地同意，账号副本删除失败',
+      );
+    } finally {
+      setIsRevokingLegacyTripSyncConsent(false);
+    }
+  };
+
+  const syncTripRemindersToAccount = async () => {
+    if (!auth.session?.user) {
+      return;
+    }
+
+    const unsyncedReminders = readTripReminderState().reminders.filter(
+      (reminder) => !reminder.syncedAt,
+    );
+    const legacyReminders = unsyncedReminders.filter(
+      (reminder) => reminder.source === 'legacy_order',
+    );
+    const regularReminders = unsyncedReminders.filter(
+      (reminder) => reminder.source !== 'legacy_order',
+    );
+    let reminders = unsyncedReminders;
+
+    if (legacyReminders.length > 0 && !legacyTripSyncConsentGranted) {
+      const accepted = window.confirm(
+        `这次同步包含 ${legacyReminders.length} 条从旧站 orders 只读导入的记录。同步后它们只会作为账号侧行程提醒快照，不代表新版票务订单、票券或核销凭证。是否同意同步这些旧站记录？`,
+      );
+
+      if (accepted) {
+        grantLegacyTripReminderSyncConsent();
+        setLegacyTripSyncConsentGranted(true);
+      } else {
+        reminders = regularReminders;
+        if (reminders.length === 0) {
+          setTripSyncStatusText('已保留旧站记录在本机，未同步到账号');
+          return;
+        }
+      }
+    }
+
+    if (reminders.length === 0) {
+      setTripSyncStatusText('没有需要同步的提醒');
+      return;
+    }
+
+    setIsSyncingTripReminders(true);
+    setTripSyncStatusText('正在同步提醒');
+    try {
+      const response = await fetch(appPath('/api/account/trip-reminders'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reminders }),
+      });
+      const data = (await response.json()) as {
+        reminders?: TripReminder[];
+        syncedAt?: string;
+        message?: string;
+      };
+
+      if (!response.ok || !data.syncedAt) {
+        throw new Error(data.message ?? '行程提醒同步失败');
+      }
+
+      const syncedUserId = data.reminders?.find((reminder) => reminder.userId)?.userId;
+      markTripRemindersSynced({
+        reminderIds: reminders.map((reminder) => reminder.id),
+        userId: syncedUserId ?? `yct_user_${auth.session.user.ldpassUserId}`,
+        syncedAt: data.syncedAt,
+      });
+      const skippedLegacyCount = unsyncedReminders.length - reminders.length;
+      setTripSyncStatusText(
+        skippedLegacyCount > 0
+          ? `已同步 ${reminders.length} 个提醒，保留 ${skippedLegacyCount} 条旧站记录在本机`
+          : `已同步 ${reminders.length} 个提醒`,
+      );
+      syncTripSummary();
+    } catch (error) {
+      setTripSyncStatusText(error instanceof Error ? error.message : '行程提醒同步失败');
+    } finally {
+      setIsSyncingTripReminders(false);
+    }
   };
 
   return (
@@ -454,6 +765,11 @@ export function AccountSettingsPanel({
               </label>
             ))}
           </div>
+          {pushDeviceStatusText ? (
+            <span className="muted">
+              {isSyncingPushDevice ? `${pushDeviceStatusText}...` : pushDeviceStatusText}
+            </span>
+          ) : null}
         </section>
 
         <section
@@ -493,12 +809,26 @@ export function AccountSettingsPanel({
             <button
               className="secondary-action-button"
               type="button"
-              disabled={!auth.session?.user}
+              disabled={
+                !auth.session?.user || isSyncingTripReminders || (tripSummary?.localOnly ?? 0) === 0
+              }
+              onClick={() => void syncTripRemindersToAccount()}
             >
               <span className="material-symbols-outlined" aria-hidden="true">
                 cloud_sync
               </span>
-              <span>同步到账号</span>
+              <span>{isSyncingTripReminders ? '同步中' : '同步提醒'}</span>
+            </button>
+            <button
+              className="secondary-action-button"
+              type="button"
+              disabled={!legacyTripSyncConsentGranted || isRevokingLegacyTripSyncConsent}
+              onClick={() => void revokeLegacyTripSyncConsent()}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                rule
+              </span>
+              <span>{isRevokingLegacyTripSyncConsent ? '撤销中' : '撤销旧站同步'}</span>
             </button>
             <button className="secondary-action-button" type="button" onClick={clearLocalHistory}>
               <span className="material-symbols-outlined" aria-hidden="true">
@@ -507,6 +837,7 @@ export function AccountSettingsPanel({
               <span>清空本地</span>
             </button>
           </div>
+          {tripSyncStatusText ? <span className="muted">{tripSyncStatusText}</span> : null}
         </section>
 
         <section
@@ -601,7 +932,7 @@ export function AccountSettingsPanel({
                     <button
                       className="icon-action-button"
                       type="button"
-                      onClick={() => removeOfflinePackage(offlinePackage)}
+                      onClick={() => void removeOfflinePackage(offlinePackage)}
                       aria-label={`删除 ${offlinePackage.name}`}
                     >
                       <span className="material-symbols-outlined" aria-hidden="true">
@@ -931,6 +1262,245 @@ function writeNotificationTypePreferences(preferences: NotificationTypePreferenc
   window.localStorage.setItem(notificationTypePreferenceKey, JSON.stringify(preferences));
 }
 
+async function ensureBrowserPushSubscription(): Promise<string> {
+  if (!webPushPublicKey) {
+    throw new Error('Web Push 公钥尚未配置，本设备暂不能订阅推送');
+  }
+
+  if (!window.isSecureContext) {
+    throw new Error('当前页面不是安全上下文，浏览器不会开放 Push 订阅');
+  }
+
+  if (!('Notification' in window) || !('PushManager' in window)) {
+    throw new Error('当前浏览器不支持 Web Push');
+  }
+
+  const permission =
+    Notification.permission === 'default'
+      ? await Notification.requestPermission()
+      : Notification.permission;
+  if (permission !== 'granted') {
+    throw new Error('浏览器通知权限未开启');
+  }
+
+  const registration = await navigator.serviceWorker.ready.catch(() => undefined);
+  if (!registration) {
+    throw new Error('Service Worker 尚未就绪，暂不能订阅 Push');
+  }
+
+  const subscription =
+    (await registration.pushManager.getSubscription()) ??
+    (await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: decodeWebPushPublicKey(webPushPublicKey),
+    }));
+  const payload = toPushSubscriptionPayload(subscription);
+
+  const response = await fetch(appPath('/api/account/push-subscriptions'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      ...payload,
+      userAgent: navigator.userAgent,
+    }),
+  });
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { message?: string };
+    throw new Error(data.message ?? 'Push 设备订阅登记失败');
+  }
+
+  window.localStorage.setItem(pushSubscriptionEndpointKey, payload.endpoint);
+  return payload.endpoint;
+}
+
+async function revokeBrowserPushSubscription(): Promise<boolean> {
+  const registration = await navigator.serviceWorker.ready.catch(() => undefined);
+  const subscription = await registration?.pushManager.getSubscription().catch(() => undefined);
+  const endpoint =
+    subscription?.endpoint ?? window.localStorage.getItem(pushSubscriptionEndpointKey) ?? undefined;
+
+  if (subscription) {
+    await subscription.unsubscribe().catch(() => undefined);
+  }
+
+  if (!endpoint) {
+    window.localStorage.removeItem(pushSubscriptionEndpointKey);
+    return false;
+  }
+
+  const response = await fetch(appPath('/api/account/push-subscriptions'), {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ endpoint }),
+  });
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { message?: string };
+    throw new Error(data.message ?? 'Push 设备订阅撤销失败');
+  }
+
+  window.localStorage.removeItem(pushSubscriptionEndpointKey);
+  return true;
+}
+
+function toPushSubscriptionPayload(subscription: PushSubscription): {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+} {
+  const data = subscription.toJSON() as {
+    endpoint?: string;
+    keys?: {
+      p256dh?: string;
+      auth?: string;
+    };
+  };
+
+  if (!data.endpoint || !data.keys?.p256dh || !data.keys.auth) {
+    throw new Error('浏览器返回的 Push 订阅缺少必要密钥');
+  }
+
+  return {
+    endpoint: data.endpoint,
+    keys: {
+      p256dh: data.keys.p256dh,
+      auth: data.keys.auth,
+    },
+  };
+}
+
+function decodeWebPushPublicKey(value: string): ArrayBuffer {
+  const padding = '='.repeat((4 - (value.length % 4)) % 4);
+  const base64 = `${value}${padding}`.replace(/-/g, '+').replace(/_/g, '/');
+  const raw = window.atob(base64);
+  const bytes = Uint8Array.from([...raw].map((character) => character.charCodeAt(0)));
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+}
+
+function hasGrantedNotificationPermission(): boolean {
+  return 'Notification' in window && Notification.permission === 'granted';
+}
+
+function readEndpointHost(endpoint: string): string {
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return '未知服务';
+  }
+}
+
+async function readServerTripReminders(): Promise<TripReminder[]> {
+  const response = await fetch(appPath('/api/account/trip-reminders'), {
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    throw new Error('账号提醒暂不可用');
+  }
+
+  const data = (await response.json()) as { items?: TripReminder[] };
+  return data.items ?? [];
+}
+
+async function deleteServerTripReminderCopies(input: {
+  source: TripReminder['source'];
+}): Promise<{ deletedCount: number; deletedAt?: string }> {
+  const response = await fetch(appPath('/api/account/trip-reminders'), {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
+  const data = (await response.json().catch(() => ({}))) as {
+    deletedCount?: number;
+    deletedAt?: string;
+    message?: string;
+  };
+
+  if (!response.ok) {
+    throw new Error(data.message ?? '账号提醒副本删除失败');
+  }
+
+  return {
+    deletedCount: data.deletedCount ?? 0,
+    deletedAt: data.deletedAt,
+  };
+}
+
+async function readServerPushPreference(): Promise<{
+  enabled: boolean;
+  enabledTypes: ServerPushNotificationType[];
+  quietHours: {
+    enabled: boolean;
+    startTime: string;
+    endTime: string;
+    timezone: string;
+  };
+}> {
+  const response = await fetch(appPath('/api/account/push-preferences'), {
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    throw new Error('通知偏好暂不可用');
+  }
+
+  const data = (await response.json()) as {
+    item?: {
+      enabled: boolean;
+      enabledTypes: ServerPushNotificationType[];
+      quietHours: {
+        enabled: boolean;
+        startTime: string;
+        endTime: string;
+        timezone: string;
+      };
+    };
+  };
+
+  if (!data.item) {
+    throw new Error('通知偏好暂不可用');
+  }
+
+  return data.item;
+}
+
+async function writeServerPushPreference(input: {
+  enabled: boolean;
+  preferences: NotificationTypePreferences;
+  quietStart: string;
+  quietEnd: string;
+}): Promise<void> {
+  const enabledTypes = notificationTypeOptions
+    .filter((option) => input.preferences[option.key])
+    .map((option) => notificationTypeToServerType[option.key]);
+
+  await fetch(appPath('/api/account/push-preferences'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      enabled: input.enabled,
+      enabledTypes,
+      quietHours: {
+        enabled: input.enabled,
+        startTime: input.quietStart,
+        endTime: input.quietEnd,
+        timezone: readClientTimezone(),
+      },
+    }),
+  });
+}
+
+function readClientTimezone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai';
+}
+
 async function warmAppShellCache(): Promise<void> {
   if ('serviceWorker' in navigator) {
     const registration = await navigator.serviceWorker.ready.catch(() => undefined);
@@ -981,6 +1551,50 @@ async function warmOfflinePackageCache(): Promise<void> {
       }
     }),
   );
+}
+
+async function requestServerOfflinePackage(offlinePackage: OfflinePackageRecord): Promise<void> {
+  const response = await fetch(appPath('/api/account/offline-packages'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      packageId: offlinePackage.packageId,
+      name: offlinePackage.name,
+      bounds: offlinePackage.bounds,
+    }),
+  });
+
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { message?: string };
+    throw new Error(data.message ?? '服务端离线包请求失败');
+  }
+}
+
+async function readServerOfflinePackageRequests(): Promise<AccountOfflinePackageRequest[]> {
+  const response = await fetch(appPath('/api/account/offline-packages'), {
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    throw new Error('账号离线范围暂不可用');
+  }
+
+  const data = (await response.json()) as { items?: AccountOfflinePackageRequest[] };
+  return data.items ?? [];
+}
+
+async function deleteServerOfflinePackageRequest(packageId: string): Promise<void> {
+  const response = await fetch(appPath('/api/account/offline-packages'), {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ packageId }),
+  });
+  if (!response.ok) {
+    throw new Error('账号离线范围请求删除失败');
+  }
 }
 
 async function clearYctCaches(): Promise<void> {

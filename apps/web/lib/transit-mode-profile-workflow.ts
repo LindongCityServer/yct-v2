@@ -1,14 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import type {
-  TransitModeProfile,
-  YctEvent,
-  YctEventPayloadMap,
-  YctEventType,
-} from '@yct/contracts';
-import { InMemoryEventBus } from '@yct/event-bus';
+import type { TransitModeProfile, YctEventPayloadMap, YctEventType } from '@yct/contracts';
+import { publishDomainEvent } from './app-event-bus';
 import { readTransitModeProfiles, writeTransitModeProfiles } from './transit-mode-profile-store';
-
-const transitModeProfileEventBus = new InMemoryEventBus();
 
 export interface TransitModeProfileActionResult {
   ok: boolean;
@@ -46,17 +39,14 @@ async function emitEvent<TType extends YctEventType>(
   actorId: string,
   payload: YctEventPayloadMap[TType],
 ): Promise<void> {
-  const event: YctEvent<TType> = {
+  await publishDomainEvent({
     eventId: `event_${randomUUID()}`,
     type,
     occurredAt: new Date().toISOString(),
-    profileId: 'default',
     actor: {
       type: 'admin',
       id: actorId,
     },
     payload,
-  } as YctEvent<TType>;
-
-  await transitModeProfileEventBus.emit(event);
+  });
 }

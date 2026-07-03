@@ -3,12 +3,11 @@ import type {
   ContentAsset,
   ContentAssetKind,
   ContentAssetStatus,
-  YctEvent,
   YctEventPayloadMap,
   YctEventType,
 } from '@yct/contracts';
 import { transitionContentAssetStatus } from '@yct/domain';
-import { InMemoryEventBus } from '@yct/event-bus';
+import { publishDomainEvent } from './app-event-bus';
 import {
   findContentAssetRecord,
   listContentAssetRecords,
@@ -19,8 +18,6 @@ import {
 } from './content-asset-store';
 import { storeUploadedContentAssetFile } from './content-asset-file-store';
 import { readLegacyContentAssetInventory } from './legacy-content-asset-inventory';
-
-const contentAssetEventBus = new InMemoryEventBus();
 
 const uploadedMimeTypeByExtension: Record<string, string> = {
   '.png': 'image/png',
@@ -349,17 +346,14 @@ async function emitEvent<TType extends YctEventType>(
   actorId: string,
   payload: YctEventPayloadMap[TType],
 ): Promise<void> {
-  const event: YctEvent<TType> = {
+  await publishDomainEvent({
     eventId: `event_${randomUUID()}`,
     type,
     occurredAt: new Date().toISOString(),
-    profileId: 'default',
     actor: {
       type: 'admin',
       id: actorId,
     },
     payload,
-  } as YctEvent<TType>;
-
-  await contentAssetEventBus.emit(event);
+  });
 }

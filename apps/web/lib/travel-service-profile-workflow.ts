@@ -1,17 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type {
   TravelScheduleServiceProfile,
-  YctEvent,
   YctEventPayloadMap,
   YctEventType,
 } from '@yct/contracts';
-import { InMemoryEventBus } from '@yct/event-bus';
+import { publishDomainEvent } from './app-event-bus';
 import {
   readTravelServiceProfiles,
   writeTravelServiceProfiles,
 } from './travel-service-profile-store';
-
-const travelServiceProfileEventBus = new InMemoryEventBus();
 
 export interface TravelServiceProfileActionResult {
   ok: boolean;
@@ -49,17 +46,14 @@ async function emitEvent<TType extends YctEventType>(
   actorId: string,
   payload: YctEventPayloadMap[TType],
 ): Promise<void> {
-  const event: YctEvent<TType> = {
+  await publishDomainEvent({
     eventId: `event_${randomUUID()}`,
     type,
     occurredAt: new Date().toISOString(),
-    profileId: 'default',
     actor: {
       type: 'admin',
       id: actorId,
     },
     payload,
-  } as YctEvent<TType>;
-
-  await travelServiceProfileEventBus.emit(event);
+  });
 }

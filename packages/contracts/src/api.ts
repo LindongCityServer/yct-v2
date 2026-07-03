@@ -167,6 +167,7 @@ export interface LegacyContentAssetInventory {
 export interface LegacyHtmlContentMigrationItem {
   contentId: string;
   contentTitle: string;
+  categoryId: string;
   sourceUrl: string;
   sourcePath: string;
   markdown: string;

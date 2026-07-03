@@ -384,6 +384,16 @@ export function AdminOperationsPanel() {
     }
   };
 
+  const loadLegacyHtmlItemToEditor = (item: LegacyHtmlContentMigrationPreview['items'][number]) => {
+    setTitle(item.contentTitle);
+    setCategoryId(item.categoryId || categories[0] || '运营信息');
+    setMarkdown(item.markdown);
+    setAssetIdsText('');
+    setExcerpt('');
+    setShowInBanner(false);
+    setStatusText('旧专题正文已载入编辑器');
+  };
+
   return (
     <section
       className="module-panel admin-operations-panel"
@@ -499,6 +509,7 @@ export function AdminOperationsPanel() {
               <LegacyHtmlPreviewCard
                 preview={legacyHtmlPreview}
                 statusText={legacyHtmlStatusText}
+                onLoadItem={loadLegacyHtmlItemToEditor}
               />
               <FailedDownloadPreview
                 failedDownloads={
@@ -744,9 +755,11 @@ function ContentAssetPreview({
 function LegacyHtmlPreviewCard({
   preview,
   statusText,
+  onLoadItem,
 }: Readonly<{
   preview: LegacyHtmlContentMigrationPreview | null;
   statusText: string;
+  onLoadItem: (item: LegacyHtmlContentMigrationPreview['items'][number]) => void;
 }>) {
   return (
     <article className="admin-report-card">
@@ -758,10 +771,15 @@ function LegacyHtmlPreviewCard({
             <span>{`${preview.summary.warningCount} 条转换提示`}</span>
           </p>
           {preview.items.slice(0, 3).map((item) => (
-            <p key={item.sourceUrl}>
-              <strong>{item.contentTitle}</strong>
-              <span>{`${item.markdownLength} 字 · ${item.imageCount} 图 · ${item.linkCount} 链接`}</span>
-            </p>
+            <div className="admin-report-card-row" key={item.sourceUrl}>
+              <p>
+                <strong>{item.contentTitle}</strong>
+                <span>{`${item.markdownLength} 字 · ${item.imageCount} 图 · ${item.linkCount} 链接`}</span>
+              </p>
+              <button type="button" onClick={() => onLoadItem(item)}>
+                载入
+              </button>
+            </div>
           ))}
         </>
       ) : (

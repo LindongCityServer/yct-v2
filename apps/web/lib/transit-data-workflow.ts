@@ -2,12 +2,11 @@ import { randomUUID } from 'node:crypto';
 import type {
   TransitDataRevision,
   TransitModeSnapshotSummary,
-  YctEvent,
   YctEventPayloadMap,
   YctEventType,
 } from '@yct/contracts';
 import { canPublishTransitDataRevision, transitionTransitDataRevisionStatus } from '@yct/domain';
-import { InMemoryEventBus } from '@yct/event-bus';
+import { publishDomainEvent } from './app-event-bus';
 import { readLegacyTransitSnapshot } from './legacy-transit';
 import {
   createTransitDataRevision,
@@ -17,8 +16,6 @@ import {
   updateTransitDataRevision,
   withTransitDataRevisionStatus,
 } from './transit-data-store';
-
-const transitDataEventBus = new InMemoryEventBus();
 
 export interface TransitDataActionResult {
   ok: boolean;
@@ -287,17 +284,14 @@ async function emitEvent<TType extends YctEventType>(
   actorId: string,
   payload: YctEventPayloadMap[TType],
 ): Promise<void> {
-  const event: YctEvent<TType> = {
+  await publishDomainEvent({
     eventId: `event_${randomUUID()}`,
     type,
     occurredAt: new Date().toISOString(),
-    profileId: 'default',
     actor: {
       type: 'admin',
       id: actorId,
     },
     payload,
-  } as YctEvent<TType>;
-
-  await transitDataEventBus.emit(event);
+  });
 }

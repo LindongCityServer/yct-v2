@@ -235,7 +235,7 @@ MVP 完成标准：
 
 - 是否保留旧节庆特效。
 - 公开 POI 的分类、图片、命名规范和驳回模板。
-- 旧行程和订单迁移的用户同意文案与撤销机制。
+- 旧行程和订单迁移到账号后的冲突策略和正式同意文案细化。
 - 更多服务里哪些工具必须第一阶段可用。
 - 后台标记数据如何生成道路图。
 
@@ -315,7 +315,6 @@ DESIGN.md
 
 - 运营信息 Markdown 内容模型、图片素材审核模型和发布状态机。
 - 地图真实数据适配器：瓦片模板配置、BDSLM/地图标记点读取、POI 图标分类映射。
-- `ldpass` 登录回跳和本地用户映射模型。
 - 后台命令行初始化首位超级管理员。
 - 旧线路/站点/内容数据导入器的 schema 设计。
 
@@ -373,13 +372,13 @@ DESIGN.md
 2026-07-02 已推进 `ldpass` 登录闭环：
 
 - 新增 `/api/auth/ldpass/start`：生成一次性 `state`，写入 HttpOnly Cookie，并跳转到 `ldpass` 登录页。
-- 新增 `/auth/ldpass/callback`：校验回跳 `state`，读取 `ldpass` `client-session`，并在拿到真实账号后写入 YCT 本地账号快照 Cookie。
-- 新增 `/api/auth/logout`：清理 YCT 本地登录状态；是否联动退出 `ldpass` 仍待后续确认。
+- 新增 `/auth/ldpass/callback`：校验回跳 `state`，读取 `ldpass` `client-session`，并在拿到真实 Active 账号后写入 `.yct-data/yct-user-links.json` 本地用户映射和 YCT 本地账号快照 Cookie；只读账号只写展示快照，不创建可写用户映射。
+- 新增 `/api/auth/logout`：清理 YCT 本地登录状态并发布 `YctSessionEnded` 事件；是否联动退出 `ldpass` 仍待后续确认。
 - 新增 `/api/account/status`：读取 `ldpass` 会话并区分未配置、未登录、Active 登录、只读账号和会话不可用；只有匹配 YCT 本地管理员成员时才合并内容、服务入口、交通数据和 POI 的待审核计数。
 - 顶部头像入口已接入账号状态：普通登录显示登录态，只读/异常/未配置显示状态点，管理员待审核数量与浏览器本地待同步行程提醒数量合并为单一计数徽标；本地行程提醒写入、删除或清空时会发出轻量前端事件刷新标题栏。
 - 账号设置页已接入登录状态展示、临东通账号入口、退出入口和未配置提示。
 - 共享契约新增 `YctUserLink`、`YctAccountSessionSnapshot`，并新增 `LdpassUserLinked`、`YctSessionStarted`、`YctSessionEnded` 事件 Schema。
-- 当前阶段未接入数据库，账号快照仅用于前台展示；业务写接口后续仍必须实时校验 `ldpass` 会话或服务端本地会话。
+- 当前阶段未接入数据库，`YctUserLink` 使用 `.yct-data/yct-user-links.json` 作为本地仓储；账号快照仅用于前台展示，业务写接口仍必须实时校验 `ldpass` 会话。后台鉴权和 POI 投稿鉴权会在通过真实 `ldpass` 会话后补写或刷新本地用户映射。
 
 2026-07-02 已推进内容审核发布闭环：
 
@@ -402,8 +401,8 @@ DESIGN.md
 - 已处理：内容后台新增只读旧内容素材清单，基于旧资源清单和下载报告记录来源 URL、迁移路径、SHA-256、文件类型、文件大小、待审核状态和内容引用关系；当前真实旧站数据为 61 条素材记录、91 个内容引用、12 条被多处内容复用的素材、30 个重复引用已复用，SHA-256 缺失 0，真实哈希重复组 0。
 - 已处理：旧内容素材清单可以导入 `.yct-data/content-asset-store.json`，后台可审核通过或驳回素材，成功后发布 `ContentAssetImported` / `ContentAssetReviewed` 事件；内容发布会读取真实素材状态，带 `assetIds` 的内容在素材全部通过后可以发布。
 - 已处理：内容后台新增本地素材上传入口，文件落盘到 `apps/web/public/content-assets`，记录进入 `.yct-data/content-asset-store.json` 并等待审核；同 SHA-256 上传会复用已有素材记录，成功上传发布 `ContentAssetUploaded` 事件。下一步仍要补数据库素材表、对象存储/共享资产目录、引用回写和回滚流程。
-- 已处理：创建内容草稿时会自动扫描 Markdown 中的同站 `/content-assets/...` 图片链接，并把匹配到的素材 ID 合并进 `assetIds`；临时 `/v2/content-assets/...` 前缀也会被归一化识别，减少运营人员手动漏填素材 ID 导致发布校验失效的风险。
-- 已处理第一版：旧专题 HTML 页面可以生成 Markdown 迁移预览，后台展示页面数、转换后的正文长度、图片数、链接数和转换提示；当前真实旧站 4 个专题页均可转换且无转换警告。该能力只做预览，不直接绕过内容审核创建或发布内容。
+- 已处理：创建内容草稿时会自动扫描 Markdown 中的同站 `/content-assets/...` 和 `/legacy-assets/...` 图片链接，并把匹配到的素材 ID 合并进 `assetIds`；临时 `/v2/content-assets/...` 与 `/v2/legacy-assets/...` 前缀也会被归一化识别，减少运营人员手动漏填素材 ID 导致发布校验失效的风险。
+- 已处理第一版：旧专题 HTML 页面可以生成 Markdown 迁移预览，后台展示页面数、转换后的正文长度、图片数、链接数和转换提示；管理员可把单个旧专题载入内容编辑器，再按草稿、提交审核、素材审核和发布流程上线。当前真实旧站 4 个专题页均可转换且无转换警告。
 
 2026-07-02 已推进服务入口管理闭环：
 
@@ -441,17 +440,18 @@ DESIGN.md
 - 客运大屏 API `/api/transit/screen` 纳入数据缓存和账号页“刷新缓存”入口，支撑出行页近期班次摘要离线查看。
 - 地图公开基础 API `/api/map/tile-providers`、`/api/map/markers`、`/api/map/poi-categories`、`/api/map/unmined-regions` 纳入数据缓存名单，用于后续自定义范围离线包的基础数据预热。
 - Service Worker 明确不缓存 `/account`、`/admin`、`/auth`、`/api/auth`、`/api/admin`，避免登录态、后台页面和鉴权结果进入离线缓存。
-- 账号设置页新增安装入口、刷新缓存、清理缓存和自定义矩形离线范围管理；范围记录保存到浏览器本地，包含 `packageId`、名称、Minecraft X/Z 边界、状态和刷新时间，可手动刷新基础公开数据或删除。
+- 账号设置页新增安装入口、刷新缓存、清理缓存和自定义矩形离线范围管理；范围记录保存到浏览器本地，包含 `packageId`、名称、Minecraft X/Z 边界、状态和刷新时间，可手动刷新基础公开数据或删除。登录用户打开账号页时会拉取并合并 `/api/account/offline-packages` 服务端请求记录；保存或刷新范围时会写入 `.yct-data/offline-package-store.json` 并发布 `OfflinePackageRequested` 事件，删除范围时会清理账号侧请求记录并发布 `OfflinePackageRequestDeleted` 事件。
 - 已处理：Service Worker 会从 `/sw.js` 或 `/v2/sw.js` 自身地址推导应用子路径，并用归一化后的应用路径判断应用壳、公开 API、近期内容、敏感路径和离线兜底；临时 `/v2` 反代不会再让 PWA 缓存规则只匹配根路径。
-- 当前通知类型管理仅保存本地偏好，不代表服务端 Web Push、设备订阅和送达链路已经完成；自定义矩形离线范围当前只登记边界并预热基础数据，不代表真实瓦片离线包已经生成。体积上限、范围上限、增量更新和服务端生成策略仍保持待拍板。
+- 当前通知类型管理已支持登录用户同步到 `.yct-data/notification-preference-store.json` 并发布 `PushPreferenceUpdated` 事件；浏览器设备订阅可在配置 `NEXT_PUBLIC_YCT_WEB_PUSH_PUBLIC_KEY` 后登记到 `.yct-data/push-subscription-store.json`，并发布 `PushDeviceSubscribed` / `PushDeviceSubscriptionRevoked` 事件。已新增本地事件 Outbox `.yct-data/event-outbox-store.json` 和受 `YCT_INTERNAL_TASK_TOKEN` 保护的 `/api/internal/events/process` 重放入口；已新增服务端投递队列 `.yct-data/push-delivery-store.json`、真实 `web-push` 发送器、失败/延后回写、同用户同类型最小间隔限频和内部处理接口 `/api/internal/notifications/process`。缺少 VAPID 配置时不会伪造送达，只会把到期投递延后并记录原因。通知类型默认预选项已可通过 `NEXT_PUBLIC_YCT_PUSH_DEFAULT_ENABLED_TYPES` / `YCT_PUSH_DEFAULT_ENABLED_TYPES` 配置；跨实例数据库 Outbox、正式计划任务部署和送达统计看板仍待后续实现。自定义矩形离线范围当前只登记边界、同步账号侧请求并预热基础数据，不代表真实瓦片离线包已经生成。体积上限、范围上限、增量更新和服务端生成策略仍保持待拍板。
 
 2026-07-02 已推进出行提醒与本地历史闭环：
 
 - 共享契约 `TripReminder` 已扩展来源、路线快照、旧订单来源、同步时间和完整状态字段；`TripReminderScheduled` 事件 payload 预留 `title` 与 `source`。
 - 新增浏览器侧行程提醒存储适配器：新数据保存到 `yct.tripReminders.v1`，首次发现旧站 `localStorage.orders` 时只读导入为 `legacy_order`，并用 `yct.tripReminders.legacyImportedAt` 避免重复导入。
+- 新增服务端行程提醒同步 MVP：登录用户可在账号页把未同步提醒提交到 `/api/account/trip-reminders`，写入 `.yct-data/trip-reminder-store.json`，成功后回写本地 `syncedAt`；账号页打开时会拉取服务端提醒并保守合并到本机；待提醒记录会发布 `TripReminderScheduled` 事件，并由通知投递监听器按用户偏好和活跃设备订阅写入 `.yct-data/push-delivery-store.json`。旧站 `orders` 来源的提醒同步前会单独确认，拒绝时仍可同步非旧站提醒；确认状态保存在本机，账号页可撤销本地同意，已登录时会删除账号侧旧站提醒副本并发布 `TripReminderDeleted`。
 - `/travel` 新增行程提醒面板，支持匿名用户手动创建、完成、取消和删除本地提醒，并分为“即将进行”和“历史行程”展示。
-- `/account` 新增本地历史概览，展示行程提醒、历史行程和待同步数量，提供进入出行页管理和清空新版本地历史的入口。
-- 当前阶段不把旧 `orders` 解释成真实新版票务订单；登录后的跨设备同步、用户同意文案、冲突去重和撤销导入能力仍待后续实现。
+- `/account` 新增本地历史概览，展示行程提醒、历史行程、班次查询记录和待同步数量，提供进入出行页管理、班次查询、同步提醒到账号和清空新版本地历史的入口。
+- 当前阶段不把旧 `orders` 解释成真实新版票务订单；班次查询记录不作为服务端订单同步。旧站 `orders` 来源同步账号已有最小确认门槛、本地撤销同意和账号侧副本删除；更细冲突解决和正式迁移文案仍待后续实现。
 
 2026-07-02 已推进公开 POI 投稿与审核闭环：
 
@@ -467,7 +467,7 @@ DESIGN.md
 - 瓦片 HTTPS/反代最终方案。
 - 后台标记数据生成道路图的具体编辑方式。
 - 自定义矩形范围离线包的体积上限、范围上限和增量更新策略。
-- Web Push 默认开关和频率限制。
+- Web Push 正式计划任务部署和跨实例 Outbox。
 - 管理员 PIN 来源。
 - 票务库存、核销链接、退票和对账细则。
 - 客运班次订购与展示的交互深度以旧站 `https://yct.shangxiaoguan.top/ltcx/` 为参考：需要覆盖线路/站点/日期筛选、班次卡片、动态票价、购票确认、订单详情、条形码或核销凭证、退票、本地历史和停运提醒；真实票券、核销和跨设备订单同步仍以 `ldpass` 接入方案为准。
@@ -535,6 +535,14 @@ DESIGN.md
 - 已处理第一版：道路文字标签参与普通标记点同一套碰撞检测；线性对象标签锚点取近似折线中点，确保标签落在道路或线路轨迹上。普通道路不补线性图标，标签中心与道路轨迹锚点对齐，局部 Z 跨度明显大于 X 跨度时使用竖排文字；选中道路近似轨迹改用强调色高亮。
 - 已处理第一版：地图标记列表增加可折叠分类筛选；无搜索词时按当前地图中心列出最近标记，搜索时展示匹配结果。
 - 已处理第一版：除页面根滚动条外，内部滚动容器的滚动条轨道背景设置为透明，降低面板滚动条对地图和卡片的视觉干扰。
+
+2026-07-03 本地开发站点打开缓慢排查，当前进展：
+
+- 已处理第一版：`/api/transit/overview`、线路型 POI、POI 分类和 `/api/map/markers` 外部标记源读取加入短 TTL 进程内缓存，并合并进行中的同 key 请求，避免首页、地图页和 RSC 预取同时触发多次旧线路/地图数据全量读取。
+- 已处理第一版：旧线路快照读取改为并行读取各旧数据源，远程旧站文件读取增加 `YCT_LEGACY_DATA_FETCH_TIMEOUT_MS` 超时配置，默认 8 秒，避免旧站或外部地图源响应慢时把本地 `next dev` 请求队列拖到分钟级。
+- 当前结论：`localhost:3300` 打开很久主要是开发服务器被 `/api/transit/overview`、`/api/map/markers` 和 `/map` 的旧数据重复拉取/解析占满；代码侧已降低重复工作，但已运行的旧 dev 进程仍可能需要重启后才完全吃到新逻辑和清理 Next dev cache。
+- 已处理第一版：`/map` 改为客户端懒加载地图大组件，降低 Next dev 对地图页的 SSR/编译压力；旧客运大屏快照读取加入 30 秒进程内缓存，减少 `/travel`、统一班次查询和客运大屏页面重复读取旧 `ltcx` 文本。
+- 已处理第一版：补充 `app/manifest.ts`，并在非生产环境不向页面输出 PWA manifest 链接；本地开发继续由 `PwaBridge` 清理同源 Service Worker 和 `yct-*` Cache，降低旧 RSC/chunk 被 SW 或 Next dev manifest 路由缓存污染导致加载失败的概率。
 
 ## 13. 完成定义
 

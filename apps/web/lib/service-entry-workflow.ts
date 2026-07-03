@@ -2,11 +2,10 @@ import { randomUUID } from 'node:crypto';
 import type {
   ServiceEntry,
   ServiceEntryStatus,
-  YctEvent,
   YctEventPayloadMap,
   YctEventType,
 } from '@yct/contracts';
-import { InMemoryEventBus } from '@yct/event-bus';
+import { publishDomainEvent } from './app-event-bus';
 import {
   createLocalServiceEntry,
   findLocalServiceEntry,
@@ -14,8 +13,6 @@ import {
   updateLocalServiceEntry,
   withServiceEntryStatus,
 } from './service-entry-store';
-
-const serviceEntryEventBus = new InMemoryEventBus();
 
 const serviceEntryTransitions: Record<ServiceEntryStatus, ServiceEntryStatus[]> = {
   draft: ['pending_review', 'archived'],
@@ -195,17 +192,14 @@ async function emitEvent<TType extends YctEventType>(
   actorId: string,
   payload: YctEventPayloadMap[TType],
 ): Promise<void> {
-  const event: YctEvent<TType> = {
+  await publishDomainEvent({
     eventId: `event_${randomUUID()}`,
     type,
     occurredAt: new Date().toISOString(),
-    profileId: 'default',
     actor: {
       type: 'admin',
       id: actorId,
     },
     payload,
-  } as YctEvent<TType>;
-
-  await serviceEntryEventBus.emit(event);
+  });
 }

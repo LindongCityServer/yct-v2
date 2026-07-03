@@ -17,7 +17,8 @@ import {
   readLegacyDataSourceFile,
   readLegacyPublicFile,
 } from './legacy-data-source';
-import { readRuntimeConfig } from './runtime-config';
+import { readRuntimeConfig, type RuntimeConfig } from './runtime-config';
+import { createTimedCache } from './server-cache';
 
 export interface TransitLineSummary {
   id: string;
@@ -90,6 +91,23 @@ interface LegacyCoachRouteSource {
 }
 
 type LegacyTransitSourceConfig = LegacyTransitSource | LegacyCoachRouteSource;
+type LegacyTransitSnapshotResult = {
+  meta: ApiMeta;
+  snapshot?: LegacyTransitSnapshot;
+};
+
+type ParsedLegacyTransitSourceResult =
+  | {
+      source: LegacyTransitSourceConfig;
+      sourcePath: string;
+      parsed: ReturnType<typeof parseLegacyTransitSource>;
+    }
+  | {
+      source: LegacyTransitSourceConfig;
+      error: unknown;
+    };
+
+const legacyTransitSnapshotCache = createTimedCache<LegacyTransitSnapshotResult>(5 * 60 * 1000);
 
 const legacyTransitSources: LegacyTransitSourceConfig[] = [
   {
@@ -138,7 +156,14 @@ export async function readLegacyTransitSnapshot(): Promise<{
   snapshot?: LegacyTransitSnapshot;
 }> {
   const config = readRuntimeConfig();
+  return legacyTransitSnapshotCache.read(createLegacyTransitCacheKey(config), () =>
+    readLegacyTransitSnapshotUncached(config),
+  );
+}
 
+async function readLegacyTransitSnapshotUncached(
+  config: RuntimeConfig,
+): Promise<LegacyTransitSnapshotResult> {
   if (!isLegacyDataSourceConfigured(config)) {
     return {
       meta: createApiMeta('not_configured', '旧线路数据目录尚未配置。'),
@@ -149,43 +174,24 @@ export async function readLegacyTransitSnapshot(): Promise<{
   const lines: TransitLineSnapshot[] = [];
   const stationMap = new Map<string, TransitStationSnapshot>();
   const sourceFiles: string[] = [];
+  const parsedSources = await Promise.all(
+    legacyTransitSources.map((source) => readAndParseLegacyTransitSource(config, source)),
+  );
 
-  for (const source of legacyTransitSources) {
-    let parsed: ReturnType<typeof parseLegacyTransitSource>;
-    let sourcePath = '';
-
-    try {
-      const legacyFile =
-        source.kind === 'coach_route'
-          ? await readLegacyPublicFile(config, source.fileName)
-          : await readLegacyDataSourceFile(config, source.fileName);
-      sourcePath = legacyFile.sourcePath;
-      sourceFiles.push(sourcePath);
-      parsed =
-        source.kind === 'coach_route'
-          ? parseLegacyCoachRouteSource({
-              source: legacyFile.source,
-              sourcePath,
-              sourcePrefix: source.sourcePrefix,
-            })
-          : parseLegacyTransitSource({
-              source: legacyFile.source,
-              sourcePath,
-              mode: source.mode,
-              exportExpression: source.exportExpression,
-              sourcePrefix: source.sourcePrefix,
-            });
-    } catch (error) {
-      if (error instanceof LegacyDataSourceNotConfiguredError) {
+  for (const result of parsedSources) {
+    if ('error' in result) {
+      if (result.error instanceof LegacyDataSourceNotConfiguredError) {
         return {
-          meta: createApiMeta('not_configured', error.message),
+          meta: createApiMeta('not_configured', result.error.message),
         };
       }
 
       continue;
     }
 
-    for (const station of parsed.stations) {
+    sourceFiles.push(result.sourcePath);
+
+    for (const station of result.parsed.stations) {
       const existing = stationMap.get(station.sourceId);
       stationMap.set(station.sourceId, {
         sourceId: station.sourceId,
@@ -200,13 +206,13 @@ export async function readLegacyTransitSnapshot(): Promise<{
     }
 
     summary.push({
-      mode: source.mode,
-      label: source.label,
-      lineCount: parsed.lines.length,
-      stationCount: parsed.stations.length,
+      mode: result.source.mode,
+      label: result.source.label,
+      lineCount: result.parsed.lines.length,
+      stationCount: result.parsed.stations.length,
     });
 
-    for (const line of parsed.lines) {
+    for (const line of result.parsed.lines) {
       lines.push({
         sourceId: line.sourceId,
         mode: line.mode,
@@ -244,6 +250,54 @@ export async function readLegacyTransitSnapshot(): Promise<{
       stations: Array.from(stationMap.values()),
     },
   };
+}
+
+async function readAndParseLegacyTransitSource(
+  config: RuntimeConfig,
+  source: LegacyTransitSourceConfig,
+): Promise<ParsedLegacyTransitSourceResult> {
+  try {
+    const legacyFile =
+      source.kind === 'coach_route'
+        ? await readLegacyPublicFile(config, source.fileName)
+        : await readLegacyDataSourceFile(config, source.fileName);
+    const sourcePath = legacyFile.sourcePath;
+    const parsed =
+      source.kind === 'coach_route'
+        ? parseLegacyCoachRouteSource({
+            source: legacyFile.source,
+            sourcePath,
+            sourcePrefix: source.sourcePrefix,
+          })
+        : parseLegacyTransitSource({
+            source: legacyFile.source,
+            sourcePath,
+            mode: source.mode,
+            exportExpression: source.exportExpression,
+            sourcePrefix: source.sourcePrefix,
+          });
+
+    return {
+      source,
+      sourcePath,
+      parsed,
+    };
+  } catch (error) {
+    return {
+      source,
+      error,
+    };
+  }
+}
+
+function createLegacyTransitCacheKey(config: RuntimeConfig): string {
+  return [
+    config.legacyDataSource,
+    config.legacyDataDir ?? '',
+    config.legacyDataRemoteBaseUrl,
+    config.legacyPublicBaseUrl,
+    config.legacyDataFetchTimeoutMs,
+  ].join('|');
 }
 
 export async function readLegacyTransitOverview(): Promise<TransitOverview> {

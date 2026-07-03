@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LdpassIdentityProvider } from '@yct/adapters';
 import { appPath } from '../../../../lib/app-paths';
+import { startYctSessionFromLdpass } from '../../../../lib/auth-workflow';
 import { readRuntimeConfig } from '../../../../lib/runtime-config';
 import {
-  createYctSessionSnapshot,
   encodeYctSessionSnapshot,
   expiredCookieOptions,
   isSecureRequest,
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       clientId: config.ldpassClientId,
       cookieHeader: request.headers.get('cookie') ?? undefined,
     });
-    const snapshot = createYctSessionSnapshot(session);
+    const { snapshot } = await startYctSessionFromLdpass({ session });
 
     if (!snapshot) {
       accountUrl.searchParams.set('auth', 'session_unavailable');

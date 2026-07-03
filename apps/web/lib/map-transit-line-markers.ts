@@ -6,10 +6,20 @@ import type {
 } from '@yct/contracts';
 import { appPath } from './app-paths';
 import { readLegacyTransitSnapshot } from './legacy-transit';
+import { createTimedCache } from './server-cache';
 import { findPublishedTransitDataRevision } from './transit-data-store';
 import { readTransitModeProfiles } from './transit-mode-profile-store';
 
+const transitLinePoiMarkerCache = createTimedCache<MapMarkerSnapshot['markers']>(60 * 1000);
+
 export async function readTransitLinePoiMarkers(): Promise<MapMarkerSnapshot['markers']> {
+  return transitLinePoiMarkerCache.read(
+    'transit-line-poi-markers',
+    readTransitLinePoiMarkersUncached,
+  );
+}
+
+async function readTransitLinePoiMarkersUncached(): Promise<MapMarkerSnapshot['markers']> {
   const snapshot = await readTransitSnapshotForMap();
   if (!snapshot) {
     return [];

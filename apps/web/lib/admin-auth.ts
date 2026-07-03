@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { LdpassIdentityProvider } from '@yct/adapters';
 import type { YctAdminMembership } from '@yct/contracts';
 import { findActiveAdminByLdpassUserId } from './admin-membership-store';
+import { ensureYctUserLinkForLdpassSession } from './auth-workflow';
 import { readRuntimeConfig } from './runtime-config';
 
 export type AdminAuthResult =
@@ -69,6 +70,8 @@ export async function requireYctAdmin(request: NextRequest): Promise<AdminAuthRe
         ),
       };
     }
+
+    await ensureYctUserLinkForLdpassSession(session);
 
     return {
       ok: true,

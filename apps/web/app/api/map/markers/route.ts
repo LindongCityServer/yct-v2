@@ -6,6 +6,9 @@ import { readTransitLinePoiMarkers } from '../../../../lib/map-transit-line-mark
 import { readPoiCategories } from '../../../../lib/poi-categories';
 import { listPublishedPublicPoiSubmissions } from '../../../../lib/poi-submission-store';
 import { readRuntimeConfig } from '../../../../lib/runtime-config';
+import { createTimedCache } from '../../../../lib/server-cache';
+
+const providerMarkerSnapshotCache = createTimedCache<MapMarkerSnapshot>(60 * 1000);
 
 export async function GET() {
   const config = readRuntimeConfig();
@@ -28,8 +31,16 @@ export async function GET() {
           fetchTimeoutMs: config.markerBdslmTimeoutMs,
         });
 
-    const snapshot = groupRoadEndpointMarkers(
-      normalizeMarkerSnapshotText(await provider.fetchMarkers('default')),
+    const snapshot = await providerMarkerSnapshotCache.read(
+      [
+        provider.id,
+        config.markerBdslmBaseUrl ?? config.unminedMapBaseUrl,
+        config.markerBdslmTimeoutMs,
+      ].join('|'),
+      async () =>
+        groupRoadEndpointMarkers(
+          normalizeMarkerSnapshotText(await provider.fetchMarkers('default')),
+        ),
     );
     const mergedSnapshot = normalizeMarkerSnapshotText(
       mergeLocalMapMarkers(snapshot, publishedPoiSubmissions, categories, transitLinePoiMarkers),

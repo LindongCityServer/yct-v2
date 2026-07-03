@@ -550,11 +550,75 @@ export interface OfflineRectanglePackage {
   updatedAt?: ISODateTimeString;
 }
 
+export type PushNotificationType = 'trip' | 'operations' | 'ticket' | 'check_in';
+
 export interface PushQuietHours {
   enabled: boolean;
   startTime: string;
   endTime: string;
   timezone: string;
+}
+
+export interface UserPushPreference {
+  userId: string;
+  ldpassUserId: string;
+  enabled: boolean;
+  enabledTypes: PushNotificationType[];
+  quietHours: PushQuietHours;
+  updatedAt: ISODateTimeString;
+}
+
+export type PushDeviceSubscriptionStatus = 'active' | 'revoked';
+
+export interface PushDeviceSubscription {
+  subscriptionId: string;
+  userId: string;
+  ldpassUserId: string;
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  userAgent?: string;
+  status: PushDeviceSubscriptionStatus;
+  createdAt: ISODateTimeString;
+  updatedAt: ISODateTimeString;
+  lastSeenAt: ISODateTimeString;
+  revokedAt?: ISODateTimeString;
+}
+
+export type PushDeliveryStatus =
+  'queued' | 'deferred' | 'sent' | 'failed' | 'skipped' | 'cancelled';
+export type PushDeliverySourceType = 'trip_reminder' | 'operations' | 'ticket' | 'check_in';
+
+export interface PushDeliveryPayload {
+  title: string;
+  body: string;
+  url: string;
+  tag: string;
+}
+
+export interface PushDelivery {
+  deliveryId: string;
+  sourceKey: string;
+  sourceType: PushDeliverySourceType;
+  sourceId: string;
+  userId: string;
+  subscriptionId?: string;
+  notificationType: PushNotificationType;
+  status: PushDeliveryStatus;
+  payload: PushDeliveryPayload;
+  dueAt: ISODateTimeString;
+  attempts: number;
+  createdAt: ISODateTimeString;
+  updatedAt: ISODateTimeString;
+  sentAt?: ISODateTimeString;
+  failedAt?: ISODateTimeString;
+  deferredUntil?: ISODateTimeString;
+  skippedAt?: ISODateTimeString;
+  cancelledAt?: ISODateTimeString;
+  lastErrorCode?: string;
+  lastErrorMessage?: string;
 }
 
 export interface SettingsBootstrap {

@@ -9,8 +9,12 @@ import type {
   TransitModeProfile,
   TransitModeSnapshotSummary,
   TravelScheduleServiceProfile,
+  TripReminderSource,
   TileProviderSourceKind,
   TransportMode,
+  PushNotificationType,
+  PushDeliverySourceType,
+  PushDeliveryStatus,
   YctProfileId,
 } from './domain';
 
@@ -145,20 +149,63 @@ export interface TripReminderScheduledPayload {
   userId?: string;
   localDeviceId?: string;
   title?: string;
-  source?: 'manual' | 'route_plan' | 'schedule' | 'ticket' | 'legacy_order';
+  source?: TripReminderSource;
   remindAt: ISODateTimeString;
+}
+
+export interface TripReminderDeletedPayload {
+  userId: string;
+  reminderIds: string[];
+  source?: TripReminderSource;
+  deletedAt: ISODateTimeString;
+  reason: 'user_requested' | 'legacy_sync_consent_revoked' | 'system';
 }
 
 export interface PushPreferenceUpdatedPayload {
   userId: string;
-  enabledTypes: Array<'trip' | 'operations' | 'ticket' | 'check_in'>;
+  enabledTypes: PushNotificationType[];
   quietHoursEnabled: boolean;
+}
+
+export interface PushDeviceSubscribedPayload {
+  userId: string;
+  subscriptionId: string;
+  endpointHost: string;
+}
+
+export interface PushDeviceSubscriptionRevokedPayload {
+  userId: string;
+  subscriptionId: string;
+  revokedAt: ISODateTimeString;
+}
+
+export interface PushDeliveryQueuedPayload {
+  deliveryId: string;
+  userId: string;
+  sourceType: PushDeliverySourceType;
+  sourceId: string;
+  dueAt: ISODateTimeString;
+}
+
+export interface PushDeliveryCompletedPayload {
+  deliveryId: string;
+  userId: string;
+  subscriptionId?: string;
+  status: PushDeliveryStatus;
+  completedAt: ISODateTimeString;
+  errorCode?: string;
 }
 
 export interface OfflinePackageRequestedPayload {
   userId: string;
   packageId: string;
   bounds: RectangleBounds;
+}
+
+export interface OfflinePackageRequestDeletedPayload {
+  userId: string;
+  packageId: string;
+  deletedAt: ISODateTimeString;
 }
 
 export interface LdpassThemeScheduleSyncedPayload {
@@ -321,8 +368,14 @@ export type YctEventPayloadMap = {
   TransitModeProfileUpdated: TransitModeProfileUpdatedPayload;
   TileProviderSelected: TileProviderSelectedPayload;
   TripReminderScheduled: TripReminderScheduledPayload;
+  TripReminderDeleted: TripReminderDeletedPayload;
   PushPreferenceUpdated: PushPreferenceUpdatedPayload;
+  PushDeviceSubscribed: PushDeviceSubscribedPayload;
+  PushDeviceSubscriptionRevoked: PushDeviceSubscriptionRevokedPayload;
+  PushDeliveryQueued: PushDeliveryQueuedPayload;
+  PushDeliveryCompleted: PushDeliveryCompletedPayload;
   OfflinePackageRequested: OfflinePackageRequestedPayload;
+  OfflinePackageRequestDeleted: OfflinePackageRequestDeletedPayload;
   LdpassThemeScheduleSynced: LdpassThemeScheduleSyncedPayload;
   LdpassUserLinked: LdpassUserLinkedPayload;
   YctSessionStarted: YctSessionStartedPayload;

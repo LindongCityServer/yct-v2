@@ -71,8 +71,8 @@ GET /api/auth/logout
 - `login-url` 只负责根据 `LDPASS_BASE_URL` 和 `LDPASS_CLIENT_ID` 生成跳转地址。
 - `client-session` 只在环境变量配置齐全时转发当前请求 Cookie 到 `ldpass` 会话校验接口。
 - `start` 负责生成一次性 `state`、写入 HttpOnly Cookie，并跳转到 `ldpass` 登录页。
-- `callback` 负责校验 `state`、读取 `client-session`，并在读取到真实账号后写入 YCT 本地账号快照 Cookie。
-- `logout` 只清理 YCT 本地 `state` 和账号快照 Cookie，不代表已经退出 `ldpass`。
+- `callback` 负责校验 `state`、读取 `client-session`，并在读取到真实 Active 账号后写入 YCT 本地用户映射和账号快照 Cookie；只读账号只写展示快照。
+- `logout` 只清理 YCT 本地 `state` 和账号快照 Cookie，并发布本地会话结束事件，不代表已经退出 `ldpass`。
 - 未配置 `ldpass` 时，JSON API 返回 503；用户跳转入口回到账号页显示未配置提示；所有路径都不伪造登录态。
 
 请求要求：
@@ -137,7 +137,8 @@ export interface YctUserLink {
 - `usernameSnapshot` 和 `emailSnapshot` 只用于展示快照和审计，真实账号信息以 `ldpass` 为准。
 - 邮箱等敏感信息前台展示需要最小化。
 - 用户退出 YCT 时只清理 YCT 本地会话；是否同时跳转 `ldpass` 退出需要后续确认。
-- 当前代码阶段尚未接入数据库，先用 `yct.account_snapshot` HttpOnly Cookie 保存账号展示快照；后续落库时需要把它替换或同步到 `YctUserLink` 表。
+- 当前代码阶段尚未接入数据库，先用 `.yct-data/yct-user-links.json` 保存 `YctUserLink` 本地映射，路径可通过 `YCT_USER_LINK_STORE_PATH` 覆盖；后续接入数据库时迁移到正式 `YctUserLink` 表。
+- `yct.account_snapshot` HttpOnly Cookie 只保存账号展示快照，登录回跳、后台鉴权和需要服务器账号验证的写接口会基于真实 `ldpass` 会话补写或刷新本地用户映射。
 - Cookie 快照只能用于账号页展示和前台状态提示，不能作为业务写接口授权依据；需要写入的业务接口仍必须实时校验 `ldpass` 会话或服务端本地会话。
 
 ### 2.4 登录相关事件
@@ -164,7 +165,7 @@ export interface YctSessionEndedPayload {
 
 说明：
 
-- 当前阶段先定义事件 Schema，后续接数据库和 Outbox 时由 Auth Service 在本地用户映射创建、会话开始、会话结束后发布。
+- 当前阶段已由 `auth-workflow` 在本地用户映射创建、会话开始、会话结束后发布领域事件；事件会先写入 `.yct-data/event-outbox-store.json`，再交给共享内存事件总线分发。后续接数据库 Transactional Outbox 时保持同一事件契约。
 - 监听器可用于刷新计数徽标、记录审计、触发历史迁移提醒或清理本地设备状态。
 
 ## 3. 账号设置入口

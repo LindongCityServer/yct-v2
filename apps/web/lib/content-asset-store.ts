@@ -152,12 +152,19 @@ function compareContentAssetRecords(
 
 function normalizeContentAssetPublicPath(value: string): string {
   const pathname = safePathname(value);
-  const basePrefix = appBasePath ? `${appBasePath}/content-assets/` : '';
-  if (basePrefix && pathname.startsWith(basePrefix)) {
-    return pathname.slice(appBasePath.length);
+  const prefixes = ['/content-assets/', '/legacy-assets/'];
+  for (const prefix of prefixes) {
+    const basePrefix = appBasePath ? `${appBasePath}${prefix}` : '';
+    if (basePrefix && pathname.startsWith(basePrefix)) {
+      return pathname.slice(appBasePath.length);
+    }
+
+    if (pathname.startsWith(prefix)) {
+      return pathname;
+    }
   }
 
-  return pathname.startsWith('/content-assets/') ? pathname : '';
+  return '';
 }
 
 function safePathname(value: string): string {

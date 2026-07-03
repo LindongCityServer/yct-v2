@@ -7,6 +7,7 @@ import type {
 
 export const tripReminderStorageKey = 'yct.tripReminders.v1';
 export const tripReminderLegacyImportedAtKey = 'yct.tripReminders.legacyImportedAt';
+export const tripReminderLegacySyncConsentAtKey = 'yct.tripReminders.legacySyncConsentAt';
 export const tripReminderStateChangedEventName = 'yct-trip-reminders-changed';
 
 export interface TripReminderState {
@@ -104,6 +105,87 @@ export function deleteTripReminder(id: string): TripReminder[] {
   const reminders = readTripReminderState().reminders.filter((reminder) => reminder.id !== id);
   writeStoredReminders(reminders);
   return sortReminders(reminders);
+}
+
+export function markTripRemindersSynced(input: {
+  reminderIds: string[];
+  userId: string;
+  syncedAt: string;
+}): TripReminder[] {
+  const reminderIds = new Set(input.reminderIds);
+  const reminders = readTripReminderState().reminders.map((reminder) =>
+    reminderIds.has(reminder.id)
+      ? {
+          ...reminder,
+          userId: input.userId,
+          syncedAt: input.syncedAt,
+          updatedAt: reminder.updatedAt ?? input.syncedAt,
+        }
+      : reminder,
+  );
+  writeStoredReminders(reminders);
+  return sortReminders(reminders);
+}
+
+export function markTripRemindersUnsynced(input: {
+  reminderIds?: string[];
+  source?: TripReminderSource;
+}): TripReminder[] {
+  const state = readTripReminderState();
+  const reminderIds = new Set(input.reminderIds ?? []);
+  if (!input.source && reminderIds.size === 0) {
+    return state.reminders;
+  }
+
+  const updatedAt = new Date().toISOString();
+  let changed = false;
+  const reminders = state.reminders.map((reminder) => {
+    const matchedById = reminderIds.has(reminder.id);
+    const matchedByLegacyOrderId = reminder.legacyOrderId
+      ? reminderIds.has(reminder.legacyOrderId)
+      : false;
+    const matchedBySource = input.source ? reminder.source === input.source : false;
+
+    if (!matchedById && !matchedByLegacyOrderId && !matchedBySource) {
+      return reminder;
+    }
+
+    changed = true;
+    const nextReminder = {
+      ...reminder,
+      updatedAt,
+    };
+    delete nextReminder.userId;
+    delete nextReminder.syncedAt;
+    return nextReminder;
+  });
+
+  if (changed) {
+    writeStoredReminders(reminders);
+  }
+
+  return sortReminders(reminders);
+}
+
+export function mergeTripRemindersFromAccount(reminders: TripReminder[]): TripReminder[] {
+  const current = readTripReminderState().reminders;
+  const merged = sortReminders(mergeReminders(current, reminders));
+  writeStoredReminders(merged);
+  return merged;
+}
+
+export function hasLegacyTripReminderSyncConsent(): boolean {
+  return Boolean(window.localStorage.getItem(tripReminderLegacySyncConsentAtKey));
+}
+
+export function grantLegacyTripReminderSyncConsent(): string {
+  const consentedAt = new Date().toISOString();
+  window.localStorage.setItem(tripReminderLegacySyncConsentAtKey, consentedAt);
+  return consentedAt;
+}
+
+export function revokeLegacyTripReminderSyncConsent(): void {
+  window.localStorage.removeItem(tripReminderLegacySyncConsentAtKey);
 }
 
 export function clearLocalTripReminders(): void {

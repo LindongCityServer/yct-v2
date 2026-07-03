@@ -39,9 +39,7 @@ export async function readLegacyDataSourceFile(
   }
 
   const sourceUrl = joinLegacyDataUrl(config.legacyDataRemoteBaseUrl, fileName);
-  const response = await fetch(sourceUrl, {
-    cache: 'no-store',
-  });
+  const response = await fetchLegacySource(sourceUrl, config.legacyDataFetchTimeoutMs);
 
   if (!response.ok) {
     throw new Error(`旧站数据文件读取失败：${sourceUrl} (${response.status})`);
@@ -78,9 +76,7 @@ export async function readLegacyPublicFile(
   }
 
   const sourceUrl = joinLegacyDataUrl(config.legacyPublicBaseUrl, fileName);
-  const response = await fetch(sourceUrl, {
-    cache: 'no-store',
-  });
+  const response = await fetchLegacySource(sourceUrl, config.legacyDataFetchTimeoutMs);
 
   if (!response.ok) {
     throw new Error(`旧站公开文件读取失败：${sourceUrl} (${response.status})`);
@@ -107,4 +103,17 @@ function shouldUseLocalLegacySource(config: RuntimeConfig): boolean {
 
 function joinLegacyDataUrl(baseUrl: string, fileName: string): string {
   return `${baseUrl.replace(/\/+$/, '')}/${fileName.replace(/^\/+/, '')}`;
+}
+
+async function fetchLegacySource(sourceUrl: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(sourceUrl, {
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }

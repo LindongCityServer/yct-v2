@@ -29,12 +29,16 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const shouldExposePwaManifest = process.env.NODE_ENV === 'production';
+
   return (
     <html lang="zh-CN" data-color-scheme="system">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link rel="manifest" href={appPath('/manifest.webmanifest')} />
+        {shouldExposePwaManifest ? (
+          <link rel="manifest" href={appPath('/manifest.webmanifest')} />
+        ) : null}
         <link
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
           rel="stylesheet"

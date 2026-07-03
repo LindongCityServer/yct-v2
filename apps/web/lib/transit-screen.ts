@@ -12,10 +12,28 @@ import {
   readLegacyPublicFile,
 } from './legacy-data-source';
 import { readRuntimeConfig } from './runtime-config';
+import { createTimedCache } from './server-cache';
+
+const transitScreenSnapshotCache = createTimedCache<ApiItemResponse<TransitScreenSnapshot>>(
+  30 * 1000,
+);
 
 export async function readTransitScreenSnapshot(): Promise<ApiItemResponse<TransitScreenSnapshot>> {
   const config = readRuntimeConfig();
+  const cacheKey = [
+    config.legacyDataSource,
+    config.legacyDataDir ?? '',
+    config.legacyDataRemoteBaseUrl,
+    config.legacyPublicBaseUrl,
+    config.legacyDataFetchTimeoutMs,
+  ].join('|');
 
+  return transitScreenSnapshotCache.read(cacheKey, () => readTransitScreenSnapshotUncached(config));
+}
+
+async function readTransitScreenSnapshotUncached(
+  config: ReturnType<typeof readRuntimeConfig>,
+): Promise<ApiItemResponse<TransitScreenSnapshot>> {
   if (!isLegacyDataSourceConfigured(config)) {
     return {
       meta: createApiMeta('not_configured', '旧客运大屏数据源尚未配置。'),

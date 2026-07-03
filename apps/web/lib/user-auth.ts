@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LdpassIdentityProvider } from '@yct/adapters';
+import { ensureYctUserLinkForLdpassSession } from './auth-workflow';
 import { readRuntimeConfig } from './runtime-config';
 
 export type WritableUserAuthResult =
   | {
       ok: true;
+      userId: string;
       ldpassUserId: string;
       username: string;
+      serverAccountVerified: boolean;
       serverAccountName?: string | null;
     }
   | {
@@ -14,7 +17,7 @@ export type WritableUserAuthResult =
       response: NextResponse;
     };
 
-export async function requireVerifiedLdpassUser(
+export async function requireActiveLdpassUser(
   request: NextRequest,
 ): Promise<WritableUserAuthResult> {
   const config = readRuntimeConfig();
@@ -25,7 +28,7 @@ export async function requireVerifiedLdpassUser(
       response: NextResponse.json(
         {
           error: 'ldpass_not_configured',
-          message: '投稿需要先配置 LDPASS_BASE_URL 与 LDPASS_CLIENT_ID。',
+          message: '需要先配置 LDPASS_BASE_URL 与 LDPASS_CLIENT_ID。',
         },
         { status: 503 },
       ),
@@ -56,23 +59,14 @@ export async function requireVerifiedLdpassUser(
       };
     }
 
-    if (!session.user.serverAccountVerified) {
-      return {
-        ok: false,
-        response: NextResponse.json(
-          {
-            error: 'server_account_not_verified',
-            message: '投稿公开 POI 需要先验证服务器账号。',
-          },
-          { status: 403 },
-        ),
-      };
-    }
+    const userLink = await ensureYctUserLinkForLdpassSession(session);
 
     return {
       ok: true,
+      userId: userLink?.id ?? `yct_user_${session.user.id}`,
       ldpassUserId: session.user.id,
       username: session.user.username,
+      serverAccountVerified: session.user.serverAccountVerified,
       serverAccountName: session.user.serverAccountName,
     };
   } catch {
@@ -87,4 +81,28 @@ export async function requireVerifiedLdpassUser(
       ),
     };
   }
+}
+
+export async function requireVerifiedLdpassUser(
+  request: NextRequest,
+): Promise<WritableUserAuthResult> {
+  const result = await requireActiveLdpassUser(request);
+  if (!result.ok) {
+    return result;
+  }
+
+  if (!result.serverAccountVerified) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: 'server_account_not_verified',
+          message: '投稿公开 POI 需要先验证服务器账号。',
+        },
+        { status: 403 },
+      ),
+    };
+  }
+
+  return result;
 }

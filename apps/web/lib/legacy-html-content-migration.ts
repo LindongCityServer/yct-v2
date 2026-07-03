@@ -41,6 +41,7 @@ export async function readLegacyHtmlContentMigrationPreview(): Promise<
           html: pageFile.source,
           contentId: item.sourceId,
           contentTitle: normalizeLegacyTitle(item.title),
+          categoryId: item.categoryId,
           sourceUrl: pageUrl,
           sourcePath: pageFile.sourcePath,
           config,
@@ -79,6 +80,7 @@ function convertLegacyHtmlPage(input: {
   html: string;
   contentId: string;
   contentTitle: string;
+  categoryId: string;
   sourceUrl: string;
   sourcePath: string;
   config: RuntimeConfig;
@@ -163,6 +165,7 @@ function convertLegacyHtmlPage(input: {
   return {
     contentId: input.contentId,
     contentTitle: input.contentTitle,
+    categoryId: input.categoryId,
     sourceUrl: input.sourceUrl,
     sourcePath: input.sourcePath,
     markdown,

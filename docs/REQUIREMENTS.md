@@ -98,7 +98,7 @@
 - 信息流列表：按发布时间展示全部结果；已过期消息默认折叠到“过期消息”区域，用户可展开查看，避免旧消息挤占主要信息流。
 - 内容详情页：支持 Markdown 正文、图片、附件、外链、发布时间、过期时间。
 - 当前工程状态：运营详情页已用白名单方式渲染 Markdown，支持标题、段落、列表、引用、站内/HTTPS 链接、加粗、行内代码和图片；旧资源迁移后的 `原始图片：/legacy-assets/...` 会作为图片展示。该能力只负责安全展示，新增图片素材仍必须走上传和管理员审核。
-- 当前工程状态：内容后台已具备本地内容素材审核闭环，可上传新素材到 `apps/web/public/content-assets`，也可把旧内容素材清单导入 `.yct-data/content-asset-store.json`，记录来源、哈希、引用关系和审核状态；同 SHA-256 素材会复用已有记录。创建草稿时会扫描 Markdown 中的同站 `/content-assets/...` 图片链接，并自动合并对应素材 ID；素材审核通过后，带 `assetIds` 的内容才允许发布。
+- 当前工程状态：内容后台已具备本地内容素材审核闭环，可上传新素材到 `apps/web/public/content-assets`，也可把旧内容素材清单导入 `.yct-data/content-asset-store.json`，记录来源、哈希、引用关系和审核状态；同 SHA-256 素材会复用已有记录。创建草稿时会扫描 Markdown 中的同站 `/content-assets/...` 与 `/legacy-assets/...` 图片链接，并自动合并对应素材 ID；素材审核通过后，带 `assetIds` 的内容才允许发布。
 - 旧标题里的 `|` 是软断行点，展示时不显示该字符；迁移数据需要保留分段信息，以便前端插入 `<wbr>` 控制自然换行。
 - Hero 的 eyebrow 使用当前消息分类名称，而不是固定宣传文案。
 - 内容卡片封面优先使用已审核或已迁移图片；旧数据中如果把语义色变量名写在图片字段里，迁移时需要识别为颜色 token 或颜色 fallback，不能当作图片 URL 下载。
@@ -106,9 +106,9 @@
 后台能力：
 
 - 内容新建、Markdown 编辑、预览、提交审核、通过、驳回、定时发布、下线。
-- 图片上传与插入：正文图片必须先作为内容素材上传并进入审核；上传后可把素材 ID 绑定到内容草稿，并在 Markdown 中引用同站公开路径。系统会自动识别 `/content-assets/...` 和临时 `/v2/content-assets/...` 链接。外链图片需要记录来源、展示域名和审核状态。
+- 图片上传与插入：正文图片必须先作为内容素材上传并进入审核；上传后可把素材 ID 绑定到内容草稿，并在 Markdown 中引用同站公开路径。系统会自动识别 `/content-assets/...`、`/legacy-assets/...` 以及临时 `/v2/content-assets/...`、`/v2/legacy-assets/...` 链接。外链图片需要记录来源、展示域名和审核状态。
 - 旧资源迁移清单：先扫描旧 `content_data.js` 和 `/content/*.html` 中的相对图片、附件和站内链接，生成旧站 URL、目标路径、引用来源和下载候选标记；资源真正进入新版展示前仍必须下载、校验、去重并进入素材审核。
-- 旧专题正文预览：后台可把旧 `content/*.html` 的正文区域转换为 Markdown 候选，供管理员人工确认后再创建草稿或归档附件，不能直接绕过内容审核上线。
+- 旧专题正文预览：后台可把旧 `content/*.html` 的正文区域转换为 Markdown 候选，供管理员人工载入内容编辑器后创建草稿；草稿仍需提交审核、素材审核通过后才能发布，不能直接绕过内容审核上线。
 - 旧资源下载：清单中的下载候选可以先落盘到 `apps/web/public/legacy-assets` 并生成校验报告；该步骤只保证资源不丢失，不代表素材已通过管理员审核。
 - Banner 是否展示、排序、有效期管理。
 - 分类和标签管理。
@@ -197,6 +197,8 @@
 - 面性标记优先评估“多个矩形组合”作为 Minecraft 存档内的编辑/存储方式，因为它更贴近方块世界和后台录入习惯。显示层可以按需转换为多边形或合并轮廓，但是否转换、如何合并、是否保留原始矩形集合，需要根据性能和编辑体验评估后决定。
 - 工程过渡实现：在数据库/Prisma 接入前，公开 POI 投稿使用 `.yct-data/poi-submission-store.json` 作为本地仓储；前台 `/api/map/poi-submissions` 仅允许已登录且服务器账号已验证的 `ldpass` 用户提交公开 POI，后台 `/api/admin/map/poi-submissions` 由 YCT 管理员审核和发布。
 - 发布后的公开 POI 会合并进 `/api/map/markers`，与旧地图标记一起提供给前台；第一版前台投稿入口只开放点坐标提交，接口和数据模型继续保留线、多矩形和多边形几何，待地图渲染层支持后再开放对应编辑 UI。
+- 公开地图和交通数据 API 在读取旧站文件、旧地图标记或派生线路型 POI 时必须做请求合并和短 TTL 服务端缓存；不能让首页、地图页、RSC 预取和 Service Worker 预热的并发请求各自全量拉取/解析同一批旧数据。远程旧站文件读取必须有明确超时，当前运行时配置为 `YCT_LEGACY_DATA_FETCH_TIMEOUT_MS`，默认 8 秒。该缓存只是开发和过渡期的进程内保护，不等同正式数据库缓存、Outbox 或跨实例一致性机制。
+- 地图页的大型交互组件在开发环境和首屏 SSR 中需要控制编译压力；当前地图主体通过客户端懒加载挂载，服务端先返回页面壳，地图数据仍由前端按需读取公开 API。
 
 ### 3.3 出行
 
@@ -238,7 +240,7 @@
 - 真实电子票、检票、退票在 `ldpass` 票券接入后上线。
 - 旧 `/ltcx/` 的购票和订单功能可作为交互基准，但不能继续依赖清空全站 `localStorage`、纯前端订单号或仅本地条形码来表示真实票务状态。新版需要把本地匿名体验、登录后迁移、`ldpass` 票券和核销凭证分层处理。
 - 客运大屏的“检票口”仅表示站内展示数据，不代表 YCT 已经具备真实检票核销能力；真实核销仍以后续 `ldpass` 票券/核销链路为准。
-- 工程过渡实现：在服务端历史同步上线前，浏览器侧使用 `yct.tripReminders.v1` 保存新版本地行程提醒和历史；首次发现旧站 `localStorage.orders` 时会只读导入为 `legacy_order` 来源记录，写入新版 key 后不删除旧 key，也不反复导入，避免用户在新版删除后又被旧数据恢复。
+- 工程过渡实现：浏览器侧使用 `yct.tripReminders.v1` 保存新版本地行程提醒和历史；首次发现旧站 `localStorage.orders` 时会只读导入为 `legacy_order` 来源记录，写入新版 key 后不删除旧 key，也不反复导入，避免用户在新版删除后又被旧数据恢复。登录用户可在账号页把未同步的提醒快照提交到 `/api/account/trip-reminders`，服务端写入 `.yct-data/trip-reminder-store.json` 并对待提醒记录发布 `TripReminderScheduled` 事件。通知投递监听器会把该事件转换为 `.yct-data/push-delivery-store.json` 中的投递队列，内部任务接口 `/api/internal/notifications/process` 在 `YCT_INTERNAL_TASK_TOKEN` 校验通过后处理到期队列；配置 `YCT_WEB_PUSH_PUBLIC_KEY` / `NEXT_PUBLIC_YCT_WEB_PUSH_PUBLIC_KEY`、`YCT_WEB_PUSH_PRIVATE_KEY` 和 `YCT_WEB_PUSH_SUBJECT` 后才会执行真实 Web Push，未配置时只保留队列延后和审计原因。旧站 `orders` 来源提醒同步到账号前必须单独确认，拒绝时保留在本机且仍允许同步非旧站提醒；账号页可撤销本地同步同意，已登录时会删除账号侧 `legacy_order` 提醒副本并发布 `TripReminderDeleted` 事件。
 - 本地提醒来源第一阶段包含 `manual` 和 `legacy_order`；路线规划、班次查询、票务联动后续分别使用 `route_plan`、`schedule`、`ticket` 来源。
 
 ### 3.4 更多服务
@@ -283,12 +285,13 @@
 - `ldpass` 相关入口：绑定账号、服务器账号验证、更改头像、账户安全、设备管理等页面可以作为跳转入口展示，不在 YCT 内复制实现。
 - 顶部头像入口需要区分未登录、已登录、登录异常、管理员有待办等状态，并按需显示合并计数徽标。徽标只显示一个数字或状态点，来源可包含未读通知、待处理订单、管理员审核待办和账号异常。
 - 当前工程状态：顶部头像通过 `/api/account/status` 读取账号状态；未配置/只读/会话不可用显示状态点，Active 登录显示登录态，YCT 管理员会合并显示内容、服务入口、交通数据和 POI 待审核数量。前台还会读取浏览器本地行程提醒中的待同步数量，与服务端待办合并成一个徽标；普通用户不会暴露管理员计数。
-- 本地历史第一阶段在账号设置页展示行程提醒、历史行程、本地班次记录和待同步数量，并提供进入出行页、班次查询页和清空新版本地历史的入口；同步到账号必须等服务端历史模型、用户同意文案、冲突去重和撤销导入能力确认后再启用。
+- 本地历史第一阶段在账号设置页展示行程提醒、历史行程、本地班次记录和待同步数量，并提供进入出行页、班次查询页、同步提醒到账号和清空新版本地历史的入口；当前只同步行程提醒快照，不把本地班次记录或旧 `orders` 解释成服务端订单。登录后会拉取服务端提醒并保守合并到本机，本机已有同 ID 或同旧订单来源的记录优先保留；旧 `orders` 来源提醒同步前已有用户确认，撤销时可删除账号侧旧站提醒副本并把本机旧站提醒标回待同步，更细冲突解决和正式迁移文案仍待完善。
 
 接入建议：
 
 - 第一阶段使用 `ldpass` 已有轻量登录回跳和 `client-session` 校验。
 - 雨城通后端只保存 `ldpassUserId` 映射、偏好、历史和权限快照，不保存 ldpass 密码。
+- 当前工程过渡实现：`YctUserLink` 本地映射保存到 `.yct-data/yct-user-links.json`，可通过 `YCT_USER_LINK_STORE_PATH` 覆盖；登录回跳、后台鉴权和 POI 投稿鉴权都会以真实 `ldpass` 会话为依据补写或刷新映射。`yct.account_snapshot` Cookie 仅用于账号页展示，不作为业务写接口授权依据。
 - YCT 管理员权限由 YCT 自己维护角色表；登录身份来自 `ldpass`，后台权限不直接等同于 `ldpass` 角色。
 - 后续若要开放给第三方或移动端，再评估标准 OIDC Provider。
 
@@ -349,7 +352,7 @@
   - 当前建议优先评估 MapLibre，若瓦片格式与性能不合适，再退到 Leaflet。
 - 后台 UI：自建轻量组件库，基于 design token，不引入重型后台模板。
 - 数据校验：Zod 或同类 schema 校验库。
-- 事件机制：进程内 EventBus + 数据库 Transactional Outbox。单机 MVP 可以先用内存事件总线，但公开数据发布、通知、Webhook、同步任务必须落 Outbox。
+- 事件机制：进程内 EventBus + 数据库 Transactional Outbox。单机 MVP 可以先用共享内存事件总线和本地 JSON Outbox 过渡；当前本地 Outbox 写入 `.yct-data/event-outbox-store.json`，并通过 `/api/internal/events/process` 提供受保护重放入口。公开数据发布、通知、Webhook、同步任务的正式实现仍必须落数据库 Transactional Outbox。
 - PWA：轻量增强，见第 6 章。
 
 参考资料：
@@ -387,13 +390,14 @@
 - 近期访问的 `/travel/[id]`、`/travel/screen`、`/travel/stations/[lineName]/[stationName]` 与 `/operations/[id]` 会进入运行时缓存，用于弱网或离线时继续打开最近内容；`/travel/screen` 作为公共出行二级页也会随应用壳预热。
 - `/api/transit/overview`、`/api/operations/feed`、`/api/services/entries`、`/api/settings/bootstrap` 以及公开地图基础 API `/api/map/tile-providers`、`/api/map/markers`、`/api/map/poi-categories`、`/api/map/unmined-regions` 使用 stale-while-revalidate 缓存策略，优先保证近期公开数据可读。
 - Service Worker 不缓存 `/account`、`/admin`、`/auth`、`/api/auth`、`/api/admin`，避免把登录态、后台和鉴权内容放进离线缓存。
-- 账号设置页提供安装入口、刷新缓存、清理缓存和自定义矩形离线范围管理。当前工程允许用户在浏览器本地保存多个 Minecraft X/Z 矩形范围，手动刷新该范围所需的基础公开数据，或删除范围；这仍不是完整瓦片离线包生成。
-- 账号设置页已支持通知总开关、Push 免打扰时段，以及行程提醒、运营提醒、票务状态、检票提醒四类通知类型的本地偏好管理；服务端 Web Push 接入后需要把这些偏好同步到账号侧或服务端 Repository。
+- 账号设置页提供安装入口、刷新缓存、清理缓存和自定义矩形离线范围管理。当前工程允许用户在浏览器本地保存多个 Minecraft X/Z 矩形范围，手动刷新该范围所需的基础公开数据，或删除范围；登录用户打开账号页时会拉取 `/api/account/offline-packages` 的服务端请求记录并合并到本机，保存或刷新范围时写入 `.yct-data/offline-package-store.json` 并发布 `OfflinePackageRequested` 事件，删除范围时会清理账号侧请求记录并发布 `OfflinePackageRequestDeleted` 事件。这仍不是完整瓦片离线包生成。
+- 账号设置页已支持通知总开关、Push 免打扰时段，以及行程提醒、运营提醒、票务状态、检票提醒四类通知类型的偏好管理；匿名用户继续保存在浏览器本地，登录用户变更时会通过 `/api/account/push-preferences` 同步到 `.yct-data/notification-preference-store.json`，并发布 `PushPreferenceUpdated` 事件。登录用户在配置 `NEXT_PUBLIC_YCT_WEB_PUSH_PUBLIC_KEY` 后，可由账号页把当前浏览器 Push 订阅登记到 `/api/account/push-subscriptions`，写入 `.yct-data/push-subscription-store.json` 并发布 `PushDeviceSubscribed` / `PushDeviceSubscriptionRevoked` 事件；当前服务端发送器、投递队列、失败/延后回写、送达审计、通知类型默认预选配置和同用户同类型最小间隔限频已有第一版，仍需正式配置 VAPID 密钥、部署内部定时任务和补数据库 Outbox。
+- 本地开发环境不输出 PWA manifest 链接，并会主动注销同源 Service Worker、删除 `yct-*` Cache，避免旧 RSC/chunk 缓存干扰 Next dev 热更新；生产环境继续暴露 `/manifest.webmanifest` 并注册 Service Worker。
 
 待确认：
 
 - 离线包体积上限、自动清理策略、增量更新方式，以及单个自定义矩形范围的最大面积。
-- Web Push 的频率限制和不同提醒类型的默认开关；当前工程默认四类通知类型本地开启，最终默认值仍需按正式推送策略确认。
+- Web Push 通知类型默认预选项已可通过 `NEXT_PUBLIC_YCT_PUSH_DEFAULT_ENABLED_TYPES` / `YCT_PUSH_DEFAULT_ENABLED_TYPES` 配置；当前工程默认四类通知类型本地开启，正式上线可按推送策略调整。
 
 PWA 安装文案草案：
 
@@ -476,7 +480,7 @@ export interface ContentSourceProvider {
 - Service 只负责本模块数据库操作和校验。
 - 核心操作成功后发布领域事件。
 - 副作用逻辑由监听器处理，例如通知、搜索索引刷新、缓存失效、Webhook 投递。
-- 公开发布、通知、同步任务使用 Outbox 保证至少一次投递。
+- 公开发布、通知、同步任务使用 Outbox 保证至少一次投递。当前单机过渡版已有本地 Outbox 和重放入口，后续接入数据库时需要把事件写入与业务状态变更放入同一事务。
 
 ### 8.1 事件基础结构
 
@@ -560,8 +564,16 @@ export interface TripReminderCreatedPayload {
   reminderId: string;
   userId?: string;
   anonymousDeviceId?: string;
-  source: 'manual' | 'route_plan' | 'schedule' | 'ticket';
+  source: 'manual' | 'route_plan' | 'schedule' | 'ticket' | 'legacy_order';
   plannedStartAt: string;
+}
+
+export interface TripReminderDeletedPayload {
+  userId: string;
+  reminderIds: string[];
+  source?: 'manual' | 'route_plan' | 'schedule' | 'ticket' | 'legacy_order';
+  deletedAt: string;
+  reason: 'user_requested' | 'legacy_sync_consent_revoked' | 'system';
 }
 
 export interface TripReminderNotificationDuePayload {
@@ -743,7 +755,7 @@ NotificationQueued -> Failed -> RetryQueued 或 Cancelled
 
 - 新版本地提醒以 `TripReminder` 结构保存，状态包含 `scheduled`、`notification_queued`、`notified`、`sent`、`ongoing`、`completed`、`cancelled`、`expired`。
 - 旧站 `orders` 导入只作为历史迁移来源，不代表真实票务订单已经迁移到新版。
-- 未登录用户允许创建、完成、取消、删除浏览器本地提醒；登录后的跨设备同步仍待服务端 Repository、Outbox 通知和用户确认流程。
+- 未登录用户允许创建、完成、取消、删除浏览器本地提醒；登录用户已有服务端 Repository 同步 MVP、旧站来源同步前确认和账号侧旧站提醒副本删除。通知送达已具备 Web Push 设备订阅、投递队列、内部处理接口和失败/延后审计第一版；跨实例 Outbox、正式计划任务部署和更细冲突处理仍待后续实现。
 
 ### 9.5 电子票
 
@@ -789,7 +801,7 @@ CheckedIn -> RefundBlocked 或 ManualReview
 - 登录接入：未登录跳转 ldpass、回跳校验 `state`、账号非 Active 时仅允许只读账号页并拒绝业务写接口。
 - 历史同步：匿名本地行程登录后导入，同一行程不重复，跨设备可见。
 - PWA 缓存：离线打开最近访问线路，恢复联网后刷新到新版本。
-- Web Push：服务端推送成功、用户撤销授权、设备过期、重复推送去重。
+- Web Push：设备订阅登记、服务端推送成功、用户撤销授权、设备过期、重复推送去重。
 - 票务联动：订票成功后生成 `ldpass` 票券、退票后同步状态、检票后行程状态变化、票券异常进入人工处理。
 - 多实例事件：发布内容后 Outbox 可重放，监听器失败不会丢事件。
 - 地图性能：低端移动设备加载地图、线路、标记点时保持可交互。
@@ -886,7 +898,7 @@ CheckedIn -> RefundBlocked 或 ManualReview
 
 仍待确认：
 
-- 旧本地历史迁移时的用户同意文案、冲突处理和撤销导入能力。
+- 旧本地历史迁移到账号后的冲突处理和正式同意文案细化；旧站 `orders` 来源同步前确认、账号侧副本删除和本地撤销同意已完成第一版。
 
 ### 13.4 后台与审核
 
@@ -929,8 +941,8 @@ CheckedIn -> RefundBlocked 或 ManualReview
 - 尽量支持离线打开线路或站点详情。
 - 离线包按用户自定义矩形范围存储。
 - 自定义范围离线包的手动更新和删除入口放在账号设置页。
-- 当前工程已提供本地自定义矩形范围管理，后续需要把 `OfflinePackageRequested` 事件接入服务端离线包生成、体积检查、瓦片/API 清单生成和下载状态回写。
-- 推送需要做服务端 Web Push。
+- 当前工程已提供本地自定义矩形范围管理，并已把登录用户的范围请求接入服务端请求记录、账号页合并、删除清理、`OfflinePackageRequested` 和 `OfflinePackageRequestDeleted` 事件；后续仍需要接服务端离线包生成、体积检查、瓦片/API 清单生成和下载状态回写。
+- 推送需要做服务端 Web Push；当前已完成账号侧设备订阅登记和撤销，并新增投递队列、真实 `web-push` 发送器、失败/延后回写、送达审计、通知类型默认预选配置和同用户同类型最小间隔限频第一版。正式上线仍需要配置 VAPID 密钥、部署内部定时任务和补跨实例 Outbox。
 - Push 触发来源包括行程提醒、运营提醒、订票和检票等。
 - Push 免打扰时段由用户设置。
 - 设置页面需要提供 Push 类型管理入口。
@@ -942,7 +954,7 @@ CheckedIn -> RefundBlocked 或 ManualReview
 仍待确认：
 
 - 自定义矩形范围的最大面积、离线包体积上限、自动清理和增量更新策略。
-- Web Push 服务端推送的频率限制和默认开关。
+- Web Push 正式定时任务部署和跨实例 Outbox。
 
 ### 13.7 管理员账号来源方案
 
