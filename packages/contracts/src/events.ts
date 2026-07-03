@@ -15,6 +15,9 @@ import type {
   PushNotificationType,
   PushDeliverySourceType,
   PushDeliveryStatus,
+  TicketOrderCancellationReason,
+  TicketOrderStatus,
+  TicketRefundStatus,
   YctProfileId,
 } from './domain';
 
@@ -293,7 +296,7 @@ export interface TicketOrderCreatedPayload {
   fareProductId?: string;
   inventoryHoldId?: string;
   passengerCount?: number;
-  status?: 'pending_issue' | 'issued' | 'cancelled';
+  status?: TicketOrderStatus;
 }
 
 export interface TicketIssuedPayload {
@@ -331,12 +334,13 @@ export interface TicketRefundCompletedPayload {
   ticketId: string;
   refundedAt: ISODateTimeString;
   amount?: number;
+  status?: TicketRefundStatus;
 }
 
 export interface TicketOrderCancelledPayload {
   orderId: string;
   cancelledAt: ISODateTimeString;
-  reason: 'user_cancelled' | 'inventory_expired' | 'issue_failed' | 'admin_cancelled' | 'system';
+  reason: TicketOrderCancellationReason;
 }
 
 export interface LdpassTicketStatusSyncedPayload {

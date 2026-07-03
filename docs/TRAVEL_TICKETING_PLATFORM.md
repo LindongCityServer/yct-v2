@@ -103,6 +103,12 @@ export interface TicketOrder {
 
 已同步到契约源码：`packages/contracts/src/events.ts`。
 
+## 4.1 契约源码进展
+
+- `packages/contracts/src/domain.ts` 已补充 `TravelFareProduct`、`TicketInventoryPool`、`TicketInventoryHold`、`TicketOrder`、`TicketRecord`、`TicketRefundRequest` 以及对应状态枚举。
+- `packages/schemas/src/ticketing.ts` 已补充同名运行时校验 schema，并通过 `@yct/schemas` 导出，供后续票务 Repository、API 和导入器复用。
+- 当前仍未创建真实订单、库存、票券或核销记录；这些契约只用于约束后续实现，避免查询页把可查询班次误包装成可购票。
+
 ## 5. 状态机
 
 订单主线：

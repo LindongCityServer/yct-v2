@@ -4,5 +4,6 @@ export * from './imports';
 export * from './map';
 export * from './notifications';
 export * from './services';
+export * from './ticketing';
 export * from './transit';
 export * from './trips';

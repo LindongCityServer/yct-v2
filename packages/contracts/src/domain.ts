@@ -455,6 +455,130 @@ export interface TravelScheduleQueryResult {
   notice?: string;
 }
 
+export type TravelFareCurrency = 'CNY' | 'SERVER_CREDIT' | 'CUSTOM';
+export type TravelFareProductStatus = 'draft' | 'active' | 'suspended' | 'archived';
+export type TicketInventoryPoolStatus = 'draft' | 'active' | 'suspended' | 'archived';
+export type TicketInventoryHoldStatus = 'held' | 'confirmed' | 'expired' | 'cancelled' | 'released';
+export type TicketOrderStatus =
+  | 'draft'
+  | 'pending_issue'
+  | 'issued'
+  | 'checked_in'
+  | 'completed'
+  | 'cancelled'
+  | 'refund_requested'
+  | 'refunded'
+  | 'expired'
+  | 'manual_review';
+export type TicketStatus =
+  | 'pending_issue'
+  | 'issued'
+  | 'redemption_linked'
+  | 'checked_in'
+  | 'cancelled'
+  | 'refunded'
+  | 'expired'
+  | 'manual_review';
+export type TicketRefundStatus =
+  'requested' | 'approved' | 'rejected' | 'processing' | 'completed' | 'failed' | 'cancelled';
+export type TicketOrderCancellationReason =
+  'user_cancelled' | 'inventory_expired' | 'issue_failed' | 'admin_cancelled' | 'system';
+
+export interface TravelFareProduct {
+  fareProductId: string;
+  serviceKind: TicketableServiceKind;
+  serviceId?: string;
+  tripInstanceId?: string;
+  name: string;
+  priceAmount: number;
+  currency: TravelFareCurrency;
+  status: TravelFareProductStatus;
+  rules: Record<string, unknown>;
+  createdAt: ISODateTimeString;
+  updatedAt: ISODateTimeString;
+  sourcePath?: string;
+}
+
+export interface TicketInventoryPool {
+  inventoryPoolId: string;
+  serviceKind: TicketableServiceKind;
+  tripInstanceId: string;
+  fareProductId: string;
+  totalCapacity?: number;
+  availableCapacity?: number;
+  status: TicketInventoryPoolStatus;
+  updatedAt: ISODateTimeString;
+}
+
+export interface TicketInventoryHold {
+  inventoryHoldId: string;
+  inventoryPoolId: string;
+  tripInstanceId: string;
+  fareProductId: string;
+  userId: string;
+  ldpassUserId: string;
+  quantity: number;
+  status: TicketInventoryHoldStatus;
+  heldAt: ISODateTimeString;
+  expiresAt: ISODateTimeString;
+  confirmedAt?: ISODateTimeString;
+  releasedAt?: ISODateTimeString;
+  orderId?: string;
+}
+
+export interface TicketOrder {
+  orderId: string;
+  userId: string;
+  ldpassUserId: string;
+  serviceKind: TicketableServiceKind;
+  tripInstanceId: string;
+  fareProductId: string;
+  inventoryHoldId?: string;
+  passengerCount: number;
+  status: TicketOrderStatus;
+  createdAt: ISODateTimeString;
+  updatedAt: ISODateTimeString;
+  issuedAt?: ISODateTimeString;
+  checkedInAt?: ISODateTimeString;
+  completedAt?: ISODateTimeString;
+  cancelledAt?: ISODateTimeString;
+  cancellationReason?: TicketOrderCancellationReason;
+  refundRequestedAt?: ISODateTimeString;
+  refundedAt?: ISODateTimeString;
+  legacyOrderId?: string;
+}
+
+export interface TicketRecord {
+  ticketId: string;
+  orderId: string;
+  userId: string;
+  ldpassUserId: string;
+  status: TicketStatus;
+  ldpassPassId?: string;
+  actionLinkId?: string;
+  redemptionRequestId?: string;
+  issuedAt?: ISODateTimeString;
+  checkedInAt?: ISODateTimeString;
+  cancelledAt?: ISODateTimeString;
+  refundedAt?: ISODateTimeString;
+  updatedAt: ISODateTimeString;
+}
+
+export interface TicketRefundRequest {
+  refundRequestId: string;
+  orderId: string;
+  ticketId: string;
+  userId: string;
+  status: TicketRefundStatus;
+  reason?: string;
+  amount?: number;
+  requestedAt: ISODateTimeString;
+  reviewedAt?: ISODateTimeString;
+  completedAt?: ISODateTimeString;
+  failedAt?: ISODateTimeString;
+  updatedAt: ISODateTimeString;
+}
+
 export type ServiceEntryStatus =
   'draft' | 'pending_review' | 'approved' | 'rejected' | 'published' | 'archived';
 export type ServiceEntryCategory = 'operations' | 'server_sites' | 'toolbox' | 'other';
