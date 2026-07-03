@@ -40,6 +40,25 @@ interface DragState {
   centerZ: number;
 }
 
+interface ActivePointer {
+  x: number;
+  y: number;
+}
+
+interface GesturePoint extends ActivePointer {
+  id: number;
+}
+
+interface PinchState {
+  pointerIds: [number, number];
+  startDistance: number;
+  startZoom: number;
+  anchorWorld: {
+    x: number;
+    z: number;
+  };
+}
+
 interface VisibleTile {
   id: string;
   url: string;
@@ -241,6 +260,8 @@ type PoiDetailTab = 'summary' | 'facilities';
 export function MapStage() {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const activePointersRef = useRef<Map<number, ActivePointer>>(new Map());
+  const pinchRef = useRef<PinchState | null>(null);
   const [layerPanelOpen, setLayerPanelOpen] = useState(false);
   const [markerQuery, setMarkerQuery] = useState('');
   const [tileResponse, setTileResponse] = useState<ApiListResponse<TileProviderDescriptor> | null>(
@@ -742,6 +763,60 @@ export function MapStage() {
     focusMapMarker(lineMarker);
   };
 
+  const startDragGesture = (pointerId: number, clientX: number, clientY: number, view: MapView) => {
+    dragRef.current = {
+      pointerId,
+      startX: clientX,
+      startY: clientY,
+      centerX: view.centerX,
+      centerZ: view.centerZ,
+    };
+  };
+
+  const startPinchGesture = (target: HTMLDivElement) => {
+    const points = getPinchPoints(activePointersRef.current);
+    if (!points) {
+      return;
+    }
+
+    const rect = target.getBoundingClientRect();
+    const midpoint = getMidpoint(points.left, points.right);
+    const screenX = midpoint.x - rect.left;
+    const screenY = midpoint.y - rect.top;
+    pinchRef.current = {
+      pointerIds: [points.left.id, points.right.id],
+      startDistance: Math.max(1, getPointerDistance(points.left, points.right)),
+      startZoom: mapView.zoom,
+      anchorWorld: screenToWorld(screenX, screenY, mapView, viewportSize),
+    };
+  };
+
+  const updatePinchGesture = (target: HTMLDivElement) => {
+    const pinch = pinchRef.current;
+    if (!pinch) {
+      return;
+    }
+
+    const left = activePointersRef.current.get(pinch.pointerIds[0]);
+    const right = activePointersRef.current.get(pinch.pointerIds[1]);
+    if (!left || !right) {
+      return;
+    }
+
+    const rect = target.getBoundingClientRect();
+    const midpoint = getMidpoint(left, right);
+    const distance = Math.max(1, getPointerDistance(left, right));
+    const nextZoom = clampZoom(pinch.startZoom + Math.log2(distance / pinch.startDistance));
+    const nextScale = getScale(nextZoom);
+    const screenX = midpoint.x - rect.left;
+    const screenY = midpoint.y - rect.top;
+    setMapView({
+      zoom: nextZoom,
+      centerX: pinch.anchorWorld.x - (screenX - viewportSize.width / 2) / nextScale,
+      centerZ: pinch.anchorWorld.z - (screenY - viewportSize.height / 2) / nextScale,
+    });
+  };
+
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) {
       return;
@@ -749,17 +824,28 @@ export function MapStage() {
 
     updateCursorWorld(event);
     event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      centerX: mapView.centerX,
-      centerZ: mapView.centerZ,
-    };
+    activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (activePointersRef.current.size >= 2) {
+      dragRef.current = null;
+      startPinchGesture(event.currentTarget);
+      return;
+    }
+
+    startDragGesture(event.pointerId, event.clientX, event.clientY, mapView);
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     updateCursorWorld(event);
+    if (activePointersRef.current.has(event.pointerId)) {
+      activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    }
+
+    if (pinchRef.current && activePointersRef.current.size >= 2) {
+      updatePinchGesture(event.currentTarget);
+      return;
+    }
+
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) {
       return;
@@ -774,6 +860,11 @@ export function MapStage() {
   };
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    activePointersRef.current.delete(event.pointerId);
+    if (pinchRef.current?.pointerIds.includes(event.pointerId)) {
+      pinchRef.current = null;
+    }
+
     if (dragRef.current?.pointerId === event.pointerId) {
       dragRef.current = null;
     }
@@ -3103,6 +3194,33 @@ function formatMapCoordinate(value: number): string {
 
 function getScale(zoom: number): number {
   return 2 ** zoom;
+}
+
+function getPinchPoints(
+  pointers: Map<number, ActivePointer>,
+): { left: GesturePoint; right: GesturePoint } | null {
+  const points = Array.from(pointers.entries())
+    .slice(0, 2)
+    .map(([id, point]) => ({ id, ...point }));
+  if (points.length < 2) {
+    return null;
+  }
+
+  return {
+    left: points[0],
+    right: points[1],
+  };
+}
+
+function getPointerDistance(left: ActivePointer, right: ActivePointer): number {
+  return Math.hypot(right.x - left.x, right.y - left.y);
+}
+
+function getMidpoint(left: ActivePointer, right: ActivePointer): ActivePointer {
+  return {
+    x: (left.x + right.x) / 2,
+    y: (left.y + right.y) / 2,
+  };
 }
 
 function clampZoom(zoom: number): number {
