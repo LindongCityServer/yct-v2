@@ -66,6 +66,39 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 33
 
 如果未来站点不再挂载 `/v2`，需要重新用空 BasePath 构建，并以空 BasePath 启动。
 
+### 端口无法监听
+
+如果启动时报：
+
+```text
+listen EACCES: permission denied 127.0.0.1:3300
+```
+
+优先检查端口占用：
+
+```powershell
+Get-NetTCPConnection -LocalPort 3300 -ErrorAction SilentlyContinue
+netstat -ano | findstr :3300
+```
+
+如果没有普通监听进程，再检查 Windows 排除端口段：
+
+```powershell
+netsh interface ipv4 show excludedportrange protocol=tcp
+```
+
+如果 `3300` 落在排除范围内，直接换一个内部端口，例如：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3400 -HostName 127.0.0.1 -BasePath v2 -NodePath "C:\node-v22\node.exe"
+```
+
+然后把宝塔反向代理目标同步改为：
+
+```text
+http://127.0.0.1:3400
+```
+
 ## Node.js 版本
 
 当前仓库根 `package.json` 要求：

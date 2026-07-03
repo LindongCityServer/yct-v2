@@ -11,7 +11,6 @@ export function TravelTaskPanel({
   screen: ApiItemResponse<TransitScreenSnapshot>;
 }>) {
   const coachLines = overview.lines.filter((line) => line.mode === 'coach');
-  const coachLineCount = coachLines.length;
   const screenSnapshot = screen.meta.sourceStatus === 'ready' ? screen.item : undefined;
   const tripCount = screenSnapshot
     ? screenSnapshot.trips.length
@@ -26,14 +25,8 @@ export function TravelTaskPanel({
       <div className="section-heading">
         <div>
           <h2 id="travel-task-title">出行服务</h2>
-          <span className="muted">提醒、班次查询与后续票务入口</span>
+          <span className="muted">班次查询、客运展示与后续票务入口</span>
         </div>
-        <Link className="screen-open-link" href={appPath('/map')}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            map
-          </span>
-          <span>线路去地图查看</span>
-        </Link>
       </div>
 
       <div className="travel-task-grid">
@@ -52,14 +45,6 @@ export function TravelTaskPanel({
           href={appPath('/travel/screen')}
           actionLabel="查看大屏"
           tone="ticket"
-        />
-        <TravelTaskCard
-          icon="route"
-          title="线路与站点"
-          detail={`${overview.lines.length} 条线路已迁入地图探索，客运 ${coachLineCount} 条`}
-          href={appPath('/map')}
-          actionLabel="去地图探索"
-          tone="map"
         />
         <TravelTaskCard
           icon="confirmation_number"
@@ -91,7 +76,7 @@ function TravelTaskCard({
   actionLabel: string;
   external?: boolean;
   disabled?: boolean;
-  tone: 'coach' | 'ticket' | 'map' | 'future';
+  tone: 'coach' | 'ticket' | 'future';
 }>) {
   const content = (
     <>
