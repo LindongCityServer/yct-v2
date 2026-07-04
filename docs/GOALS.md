@@ -477,7 +477,7 @@ DESIGN.md
 - 新增方向：客运、轮渡、航班等班次查询和票务能力需要通过同一套新版查询订票平台解决，不沿用旧 `/ltcx/` 的纯前端本地订单逻辑。已新增 `docs/TRAVEL_TICKETING_PLATFORM.md` 记录统一模型、状态机、事件、踩坑点和测试用例，并已在 `packages/contracts/src/domain.ts`、`packages/contracts/src/events.ts` 和 `packages/schemas/src/ticketing.ts` 中补充第一版票务领域与事件契约。
 - 已处理第一版：统一班次查询新增只读票务可售性预检；`/api/travel/schedules` 会在真实班次上返回 `ticketing` 状态，`/api/travel/ticketing/availability?tripInstanceId=...` 可单独查询。预检读取 `.yct-data/ticketing-catalog-store.json` 中真实配置的票种和库存，没有配置时只返回不可售原因，不生成默认票种、模拟库存或真实订单。
 - 已处理第一版：新增 `POST /api/travel/ticketing/orders` 订单草稿创建入口；接口要求真实 `ldpass` Active 用户，并且必须存在真实票种与库存池，成功时写入 `.yct-data/ticket-order-store.json` 的 `draft` 订单和 15 分钟库存占用，并发布 `TicketInventoryHeld` / `TicketOrderCreated` 事件。统一班次查询前台会在 `ticketing.status === 'order_available'` 时启用“创建草稿”按钮，调用该接口创建订单草稿并提示库存占用到期时间；缺少票种或库存时仍返回 409，不落库、不发事件。
-- 已处理第一版：新增 `GET /api/travel/ticketing/orders` 当前用户订单草稿列表，以及 `POST /api/travel/ticketing/orders/:orderId/cancel` 取消草稿订单；取消只允许当前用户自己的 `draft` / `pending_issue` 订单，会释放对应库存占用并发布 `TicketOrderCancelled` 事件。
+- 已处理第一版：新增 `GET /api/travel/ticketing/orders` 当前用户订单草稿列表，以及 `POST /api/travel/ticketing/orders/:orderId/cancel` 取消草稿订单；取消只允许当前用户自己的 `draft` / `pending_issue` 订单，会释放对应库存占用并发布 `TicketOrderCancelled` 事件。统一班次查询页已提供“我的票务草稿”面板，可查看占座中的草稿、刷新列表并取消草稿释放库存。
 
 ## 12. 界面反馈处理进展
 

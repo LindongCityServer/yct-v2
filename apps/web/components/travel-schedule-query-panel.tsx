@@ -1,8 +1,10 @@
 'use client';
 
 import type {
+  ApiListResponse,
   ApiItemResponse,
   TicketOrderDraftResult,
+  TicketOrderListItem,
   TicketableServiceKind,
   TransitServiceNotice,
   TravelScheduleHistoryItem,
@@ -43,13 +45,68 @@ export function TravelScheduleQueryPanel({
   const [serviceDate, setServiceDate] = useState(() => toDateInputValue(new Date()));
   const [query, setQuery] = useState('');
   const [historyState, setHistoryState] = useState<TravelScheduleHistoryState | null>(null);
+  const [ticketOrders, setTicketOrders] = useState<TicketOrderListItem[] | null>(null);
+  const [ticketOrderStatusText, setTicketOrderStatusText] = useState('');
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const currentMinutes = getCurrentAdjustedMinutes();
   const syncScheduleHistory = () => {
     setHistoryState(readTravelScheduleHistoryState());
   };
+  const refreshTicketOrders = async () => {
+    try {
+      const response = await fetch(appPath('/api/travel/ticketing/orders'), { cache: 'no-store' });
+      const data = (await response.json()) as Partial<ApiListResponse<TicketOrderListItem>> & {
+        message?: string;
+      };
+
+      if (response.status === 401) {
+        setTicketOrders([]);
+        setTicketOrderStatusText('登录后可查看订单草稿。');
+        return;
+      }
+
+      if (!response.ok || !data.items) {
+        throw new Error(data.message ?? '订单草稿读取失败');
+      }
+
+      setTicketOrders(data.items);
+      setTicketOrderStatusText(data.items.length > 0 ? '' : '暂无订单草稿。');
+    } catch (error) {
+      setTicketOrders([]);
+      setTicketOrderStatusText(error instanceof Error ? error.message : '订单草稿读取失败');
+    }
+  };
+  const cancelTicketOrder = async (orderId: string) => {
+    if (!window.confirm('要取消这个订单草稿并释放库存占用吗？')) {
+      return;
+    }
+
+    setCancellingOrderId(orderId);
+    setTicketOrderStatusText('正在取消订单草稿');
+    try {
+      const response = await fetch(
+        appPath(`/api/travel/ticketing/orders/${encodeURIComponent(orderId)}/cancel`),
+        { method: 'POST' },
+      );
+      const data = (await response.json()) as Partial<ApiItemResponse<TicketOrderListItem>> & {
+        message?: string;
+      };
+      if (!response.ok || !data.item) {
+        throw new Error(data.message ?? '订单草稿取消失败');
+      }
+
+      setTicketOrderStatusText('已取消订单草稿');
+      await refreshTicketOrders();
+    } catch (error) {
+      setTicketOrderStatusText(error instanceof Error ? error.message : '订单草稿取消失败');
+    } finally {
+      setCancellingOrderId(null);
+    }
+  };
 
   useEffect(() => {
     syncScheduleHistory();
+    void refreshTicketOrders();
   }, []);
 
   const filteredTrips = useMemo(
@@ -259,6 +316,14 @@ export function TravelScheduleQueryPanel({
         </section>
       ) : null}
 
+      <TicketOrderDraftPanel
+        cancellingOrderId={cancellingOrderId}
+        orders={ticketOrders}
+        statusText={ticketOrderStatusText}
+        onCancel={(orderId) => void cancelTicketOrder(orderId)}
+        onRefresh={() => void refreshTicketOrders()}
+      />
+
       {filteredTrips.length > 0 ? (
         <div className="schedule-trip-list" aria-label="班次列表">
           {filteredTrips.map((trip) => (
@@ -268,6 +333,7 @@ export function TravelScheduleQueryPanel({
               serviceDate={serviceDate}
               key={trip.tripInstanceId}
               onHistoryChange={syncScheduleHistory}
+              onTicketOrderChange={() => void refreshTicketOrders()}
             />
           ))}
         </div>
@@ -414,11 +480,13 @@ function ScheduleTripCard({
   service,
   serviceDate,
   onHistoryChange,
+  onTicketOrderChange,
 }: Readonly<{
   trip: TravelTripInstance;
   service?: TravelScheduleServiceSummary;
   serviceDate: string;
   onHistoryChange: () => void;
+  onTicketOrderChange: () => void;
 }>) {
   const [message, setMessage] = useState('');
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
@@ -476,6 +544,7 @@ function ScheduleTripCard({
           data.item.inventoryHold.expiresAt,
         )}`,
       );
+      onTicketOrderChange();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '订单草稿创建失败');
     } finally {
@@ -587,6 +656,78 @@ function ScheduleTripCard({
   );
 }
 
+function TicketOrderDraftPanel({
+  cancellingOrderId,
+  orders,
+  statusText,
+  onCancel,
+  onRefresh,
+}: Readonly<{
+  cancellingOrderId: string | null;
+  orders: TicketOrderListItem[] | null;
+  statusText: string;
+  onCancel: (orderId: string) => void;
+  onRefresh: () => void;
+}>) {
+  const visibleOrders =
+    orders?.filter((item) => item.order.status === 'draft' || item.order.status === 'pending_issue') ??
+    [];
+
+  return (
+    <section className="ticket-order-draft-panel" aria-label="我的票务草稿">
+      <div className="ticket-order-draft-heading">
+        <div>
+          <h3>我的票务草稿</h3>
+          <span className="muted">仅显示占座中的草稿订单，不代表已出票。</span>
+        </div>
+        <button className="icon-action-button" type="button" aria-label="刷新订单草稿" onClick={onRefresh}>
+          <span className="material-symbols-outlined" aria-hidden="true">
+            refresh
+          </span>
+        </button>
+      </div>
+      {visibleOrders.length > 0 ? (
+        <div className="ticket-order-draft-list">
+          {visibleOrders.map((item) => (
+            <article className="ticket-order-draft-item" key={item.order.orderId}>
+              <div>
+                <strong>{formatTicketOrderTitle(item)}</strong>
+                <small>
+                  {formatTicketServiceKind(item.order.serviceKind)} · {item.order.passengerCount}人 ·{' '}
+                  {formatTicketOrderStatus(item.order.status)}
+                </small>
+              </div>
+              <span>
+                {item.inventoryHold
+                  ? `占用至 ${formatTicketHoldExpiresAt(item.inventoryHold.expiresAt)}`
+                  : '无库存占用'}
+              </span>
+              <button
+                className="secondary-action-button"
+                type="button"
+                disabled={cancellingOrderId === item.order.orderId}
+                onClick={() => onCancel(item.order.orderId)}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  cancel
+                </span>
+                <span>{cancellingOrderId === item.order.orderId ? '取消中' : '取消草稿'}</span>
+              </button>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="ticket-order-draft-empty">
+          {orders === null ? '正在读取订单草稿' : statusText || '暂无订单草稿。'}
+        </p>
+      )}
+      {statusText && visibleOrders.length > 0 ? (
+        <p className="ticket-order-draft-status">{statusText}</p>
+      ) : null}
+    </section>
+  );
+}
+
 function TicketingStatusButton({
   busy,
   onCreateOrder,
@@ -694,6 +835,37 @@ function formatTicketHoldExpiresAt(value: string): string {
     minute: '2-digit',
     month: '2-digit',
   });
+}
+
+function formatTicketOrderTitle(item: TicketOrderListItem): string {
+  return `订单 ${item.order.orderId.slice(-8).toUpperCase()}`;
+}
+
+function formatTicketOrderStatus(status: TicketOrderListItem['order']['status']): string {
+  const labels: Record<TicketOrderListItem['order']['status'], string> = {
+    cancelled: '已取消',
+    checked_in: '已检票',
+    completed: '已完成',
+    draft: '草稿',
+    expired: '已过期',
+    issued: '已出票',
+    manual_review: '人工审核',
+    pending_issue: '待出票',
+    refund_requested: '已申请退票',
+    refunded: '已退票',
+  };
+  return labels[status] ?? status;
+}
+
+function formatTicketServiceKind(kind: TicketableServiceKind): string {
+  const labels: Record<TicketableServiceKind, string> = {
+    coach: '客运',
+    custom: '其他',
+    ferry: '轮渡',
+    flight: '航班',
+    railway: '铁路',
+  };
+  return labels[kind] ?? kind;
 }
 
 function MetaItem({ label, value }: Readonly<{ label: string; value: string }>) {

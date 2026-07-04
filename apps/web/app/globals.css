@@ -4601,6 +4601,65 @@ body .material-symbols-outlined {
   font-weight: 600;
 }
 
+.ticket-order-draft-panel {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-4);
+  border-radius: var(--yct-radius-lg);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 84%, transparent);
+}
+
+.ticket-order-draft-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+}
+
+.ticket-order-draft-heading h3 {
+  margin: 0 0 2px;
+  color: var(--yct-color-text);
+  font-size: 16px;
+}
+
+.ticket-order-draft-list {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.ticket-order-draft-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+}
+
+.ticket-order-draft-item strong,
+.ticket-order-draft-item small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-order-draft-item strong {
+  color: var(--yct-color-text);
+  font-size: 14px;
+}
+
+.ticket-order-draft-item small,
+.ticket-order-draft-item > span,
+.ticket-order-draft-empty,
+.ticket-order-draft-status {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
 .schedule-filter-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -5775,6 +5834,15 @@ body .material-symbols-outlined {
 
   .schedule-trip-card {
     padding: var(--yct-space-4) var(--yct-space-3);
+  }
+
+  .ticket-order-draft-item {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .ticket-order-draft-item .secondary-action-button {
+    justify-content: center;
   }
 
   .schedule-trip-header {
