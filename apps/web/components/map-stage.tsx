@@ -222,11 +222,14 @@ interface TransitLineConnection {
 
 interface RoutePlanDraft {
   destinationId?: string;
+  originId?: string;
   originLabel: string;
   destinationLabel: string;
   destination: [number, number];
   origin: [number, number];
 }
+
+type RouteEndpointKind = 'origin' | 'destination';
 
 type RouteTransportMode = 'walk' | 'bus' | 'metro' | 'tram' | 'coach' | 'ferry' | 'railway';
 
@@ -367,6 +370,8 @@ export function MapStage() {
     defaultRouteTransportModes,
   );
   const [selectedRouteOptionId, setSelectedRouteOptionId] = useState<string | null>(null);
+  const [editingRouteEndpoint, setEditingRouteEndpoint] = useState<RouteEndpointKind | null>(null);
+  const [routeEndpointQuery, setRouteEndpointQuery] = useState('');
   const [nearbySearchCenter, setNearbySearchCenter] = useState<NearbySearchCenter | null>(null);
   const [poiDetailCollapsed, setPoiDetailCollapsed] = useState(false);
 
@@ -481,6 +486,32 @@ export function MapStage() {
     () => markerSnapshot.filter(isTransitLineMarker),
     [markerSnapshot],
   );
+  const centerableMarkers = useMemo(
+    () => markerSnapshot.filter(isCenterableMarker),
+    [markerSnapshot],
+  );
+  const routeEndpointCandidates = useMemo(() => {
+    if (!editingRouteEndpoint) {
+      return [];
+    }
+
+    const query = routeEndpointQuery.trim();
+    const source = query
+      ? filterMarkers(centerableMarkers, query)
+      : [...centerableMarkers].sort(
+          (left, right) =>
+            getMarkerDistanceToCoordinates(left, [mapView.centerX, mapView.centerZ]) -
+            getMarkerDistanceToCoordinates(right, [mapView.centerX, mapView.centerZ]),
+        );
+
+    return source.slice(0, 8);
+  }, [
+    centerableMarkers,
+    editingRouteEndpoint,
+    mapView.centerX,
+    mapView.centerZ,
+    routeEndpointQuery,
+  ]);
   const filteredPointMarkers = useMemo(
     () => filterMarkers(pointMarkers, markerQuery),
     [markerQuery, pointMarkers],
@@ -1128,6 +1159,8 @@ export function MapStage() {
     });
     setRoutePlanCollapsed(false);
     setSelectedRouteOptionId(null);
+    setEditingRouteEndpoint(null);
+    setRouteEndpointQuery('');
   };
 
   const updateRoutePlanOriginToMapCenter = () => {
@@ -1135,11 +1168,15 @@ export function MapStage() {
       current
         ? {
             ...current,
+            originId: undefined,
             origin: [mapView.centerX, mapView.centerZ],
             originLabel: formatPoint([mapView.centerX, mapView.centerZ]),
           }
         : current,
     );
+    setEditingRouteEndpoint(null);
+    setRouteEndpointQuery('');
+    setSelectedRouteOptionId(null);
   };
 
   const swapRoutePlanEndpoints = () => {
@@ -1147,7 +1184,8 @@ export function MapStage() {
       current
         ? {
             ...current,
-            destinationId: undefined,
+            destinationId: current.originId,
+            originId: current.destinationId,
             origin: current.destination,
             originLabel: current.destinationLabel,
             destination: current.origin,
@@ -1156,6 +1194,54 @@ export function MapStage() {
         : current,
     );
     setSelectedRouteOptionId(null);
+  };
+
+  const beginRouteEndpointEdit = (endpoint: RouteEndpointKind) => {
+    setEditingRouteEndpoint(endpoint);
+    setRouteEndpointQuery('');
+    setRoutePlanCollapsed(false);
+  };
+
+  const applyRouteEndpointMarker = (endpoint: RouteEndpointKind, marker: CenterableMarker) => {
+    const center = getMarkerCenter(marker);
+    if (!center) {
+      return;
+    }
+
+    const label = formatMarkerDisplayName(marker.label);
+    setRoutePlanDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return endpoint === 'origin'
+        ? {
+            ...current,
+            originId: marker.id,
+            origin: center,
+            originLabel: label,
+          }
+        : {
+            ...current,
+            destinationId: marker.id,
+            destination: center,
+            destinationLabel: label,
+          };
+    });
+    setFocusedMarkerId(marker.id);
+    setPoiDetailCollapsed(true);
+    setEditingRouteEndpoint(null);
+    setRouteEndpointQuery('');
+    setSelectedRouteOptionId(null);
+  };
+
+  const handleMapMarkerActivate = (marker: CenterableMarker) => {
+    if (editingRouteEndpoint) {
+      applyRouteEndpointMarker(editingRouteEndpoint, marker);
+      return;
+    }
+
+    focusMapMarker(marker);
   };
 
   const updateMarkerQuery = (value: string) => {
@@ -1179,6 +1265,8 @@ export function MapStage() {
     setMarkerQuery('');
     setFocusedMarkerId(null);
     setRoutePlanDraft(null);
+    setEditingRouteEndpoint(null);
+    setRouteEndpointQuery('');
     setMarkerListExpanded(true);
   };
 
@@ -1268,16 +1356,20 @@ export function MapStage() {
             <RoutePlanDraftCard
               draft={routePlanDraft}
               collapsed={routePlanCollapsed}
+              editingEndpoint={editingRouteEndpoint}
               enabledModes={routeTransportModes}
+              endpointCandidates={routeEndpointCandidates}
+              endpointQuery={routeEndpointQuery}
               options={routePlanOptions}
               selectedOptionId={selectedRouteOption?.id}
-              onClear={() => setRoutePlanDraft(null)}
-              onFocusDestination={() => {
-                if (routePlanDraft.destinationId) {
-                  setFocusedMarkerId(routePlanDraft.destinationId);
-                  setPoiDetailCollapsed(false);
-                }
+              tileBaseUrl={tileBaseUrl}
+              onBeginEndpointEdit={beginRouteEndpointEdit}
+              onClear={() => {
+                setRoutePlanDraft(null);
+                setEditingRouteEndpoint(null);
+                setRouteEndpointQuery('');
               }}
+              onEndpointQueryChange={setRouteEndpointQuery}
               onSetAllModes={(enabled) =>
                 setRouteTransportModes(
                   Object.fromEntries(
@@ -1286,6 +1378,7 @@ export function MapStage() {
                 )
               }
               onSelectOption={setSelectedRouteOptionId}
+              onSelectEndpointCandidate={applyRouteEndpointMarker}
               onSwapEndpoints={swapRoutePlanEndpoints}
               onToggleCollapsed={() => setRoutePlanCollapsed((current) => !current)}
               onToggleMode={(mode) =>
@@ -1378,7 +1471,7 @@ export function MapStage() {
                           </>
                         );
 
-                        if (marker.href) {
+                        if (marker.href && !editingRouteEndpoint) {
                           return (
                             <a
                               className={
@@ -1404,7 +1497,7 @@ export function MapStage() {
                             type="button"
                             key={marker.id}
                             disabled={!center}
-                            onClick={() => focusMapMarker(marker)}
+                            onClick={() => handleMapMarkerActivate(marker)}
                           >
                             {content}
                           </button>
@@ -1694,7 +1787,7 @@ export function MapStage() {
               const sourceMarker = linearOverlaySource.find((item) => item.id === marker.id);
               const focusLinearMarker = () => {
                 if (sourceMarker) {
-                  focusMapMarker(sourceMarker);
+                  handleMapMarkerActivate(sourceMarker);
                 }
               };
 
@@ -1779,7 +1872,7 @@ export function MapStage() {
                 onClick={() => {
                   const source = pointMarkers.find((item) => item.id === marker.id);
                   if (source) {
-                    focusMapMarker(source);
+                    handleMapMarkerActivate(source);
                   }
                 }}
                 style={
@@ -2256,13 +2349,19 @@ function RoadMapDetail({ marker }: Readonly<{ marker: EndpointGroupMarker }>) {
 function RoutePlanDraftCard({
   draft,
   collapsed,
+  editingEndpoint,
   enabledModes,
+  endpointCandidates,
+  endpointQuery,
   options,
   selectedOptionId,
+  tileBaseUrl,
+  onBeginEndpointEdit,
   onClear,
-  onFocusDestination,
+  onEndpointQueryChange,
   onSetAllModes,
   onSelectOption,
+  onSelectEndpointCandidate,
   onSwapEndpoints,
   onToggleCollapsed,
   onToggleMode,
@@ -2270,13 +2369,19 @@ function RoutePlanDraftCard({
 }: Readonly<{
   draft: RoutePlanDraft;
   collapsed: boolean;
+  editingEndpoint: RouteEndpointKind | null;
   enabledModes: EnabledRouteTransportModes;
+  endpointCandidates: CenterableMarker[];
+  endpointQuery: string;
   options: RoutePlanOption[];
   selectedOptionId?: string;
+  tileBaseUrl: string;
+  onBeginEndpointEdit: (endpoint: RouteEndpointKind) => void;
   onClear: () => void;
-  onFocusDestination: () => void;
+  onEndpointQueryChange: (value: string) => void;
   onSetAllModes: (enabled: boolean) => void;
   onSelectOption: (optionId: string) => void;
+  onSelectEndpointCandidate: (endpoint: RouteEndpointKind, marker: CenterableMarker) => void;
   onSwapEndpoints: () => void;
   onToggleCollapsed: () => void;
   onToggleMode: (mode: RouteTransportMode) => void;
@@ -2294,15 +2399,47 @@ function RoutePlanDraftCard({
         <div className="map-route-endpoint-list">
           <div className="map-route-endpoint-row">
             <span className="map-route-endpoint-dot is-origin" aria-hidden="true" />
-            <strong>{draft.originLabel}</strong>
-            <button type="button" onClick={onUseMapCenter}>
+            {editingEndpoint === 'origin' ? (
+              <input
+                autoFocus
+                value={endpointQuery}
+                onChange={(event) => onEndpointQueryChange(event.currentTarget.value)}
+                placeholder={draft.originLabel}
+                aria-label="输入路线起点"
+              />
+            ) : (
+              <button
+                className="map-route-endpoint-value"
+                type="button"
+                onClick={() => onBeginEndpointEdit('origin')}
+              >
+                {draft.originLabel}
+              </button>
+            )}
+            <button type="button" onClick={() => onBeginEndpointEdit('origin')}>
               修改
             </button>
           </div>
           <div className="map-route-endpoint-row">
             <span className="map-route-endpoint-dot is-destination" aria-hidden="true" />
-            <strong>{draft.destinationLabel}</strong>
-            <button type="button" onClick={onFocusDestination} disabled={!draft.destinationId}>
+            {editingEndpoint === 'destination' ? (
+              <input
+                autoFocus
+                value={endpointQuery}
+                onChange={(event) => onEndpointQueryChange(event.currentTarget.value)}
+                placeholder={draft.destinationLabel}
+                aria-label="输入路线终点"
+              />
+            ) : (
+              <button
+                className="map-route-endpoint-value"
+                type="button"
+                onClick={() => onBeginEndpointEdit('destination')}
+              >
+                {draft.destinationLabel}
+              </button>
+            )}
+            <button type="button" onClick={() => onBeginEndpointEdit('destination')}>
               修改
             </button>
           </div>
@@ -2332,6 +2469,36 @@ function RoutePlanDraftCard({
       </div>
       {!collapsed ? (
         <>
+          {editingEndpoint ? (
+            <div className="map-route-endpoint-candidates" aria-label="路线端点候选">
+              <div className="map-route-endpoint-candidate-heading">
+                <span>{editingEndpoint === 'origin' ? '选择起点' : '选择终点'}</span>
+                {editingEndpoint === 'origin' ? (
+                  <button type="button" onClick={onUseMapCenter}>
+                    使用地图中心
+                  </button>
+                ) : null}
+              </div>
+              <div className="map-route-endpoint-candidate-list">
+                {endpointCandidates.length > 0 ? (
+                  endpointCandidates.map((marker) => (
+                    <button
+                      className="map-route-endpoint-candidate"
+                      type="button"
+                      key={marker.id}
+                      onClick={() => onSelectEndpointCandidate(editingEndpoint, marker)}
+                    >
+                      <MarkerListIcon marker={marker} tileBaseUrl={tileBaseUrl} />
+                      <span>{formatMarkerDisplayName(marker.label)}</span>
+                      <small>{formatMarkerDetail(marker)}</small>
+                    </button>
+                  ))
+                ) : (
+                  <p className="map-route-plan-note">没有匹配的可定位标记。</p>
+                )}
+              </div>
+            </div>
+          ) : null}
           <div className="map-route-mode-toggle-list" aria-label="路线交通方式">
             <button
               className={allModesEnabled ? 'is-active' : ''}

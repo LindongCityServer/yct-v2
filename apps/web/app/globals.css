@@ -1157,14 +1157,28 @@ body .material-symbols-outlined {
   background: #ffa800;
 }
 
-.map-route-endpoint-row strong {
+.map-route-endpoint-row input,
+.map-route-endpoint-value {
   min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
   color: var(--yct-color-text);
   overflow: hidden;
   font-size: 14px;
   font-weight: 800;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.map-route-endpoint-row input::placeholder {
+  color: var(--yct-color-text-muted);
+}
+
+.map-route-endpoint-value {
+  cursor: text;
 }
 
 .map-route-endpoint-row button {
@@ -1237,6 +1251,75 @@ body .material-symbols-outlined {
 
 .map-route-mode-toggle-list button.is-active .material-symbols-outlined {
   --icon-fill: 1;
+}
+
+.map-route-endpoint-candidates {
+  display: grid;
+  gap: var(--yct-space-2);
+  min-height: 0;
+  padding: var(--yct-space-2);
+  border-radius: var(--yct-radius-lg);
+  background: color-mix(in srgb, var(--yct-color-surface-muted) 66%, transparent);
+}
+
+.map-route-endpoint-candidate-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.map-route-endpoint-candidate-heading button {
+  border: 0;
+  background: transparent;
+  color: var(--yct-color-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.map-route-endpoint-candidate-list {
+  display: grid;
+  gap: var(--yct-space-1);
+  max-height: min(180px, 28dvh);
+  overflow: auto;
+}
+
+.map-route-endpoint-candidate {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-height: 34px;
+  padding: var(--yct-space-1) var(--yct-space-2);
+  border: 0;
+  border-radius: var(--yct-radius-md);
+  background: transparent;
+  color: var(--yct-color-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.map-route-endpoint-candidate:hover,
+.map-route-endpoint-candidate:focus-visible {
+  background: color-mix(in srgb, var(--yct-color-primary) 10%, transparent);
+}
+
+.map-route-endpoint-candidate span:not(.material-symbols-outlined),
+.map-route-endpoint-candidate small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-route-endpoint-candidate small {
+  color: var(--yct-color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .map-route-option-list {
