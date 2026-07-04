@@ -2756,6 +2756,7 @@ function buildRoutePlanOptions(input: {
   const directDistance = getCoordinateDistance(input.draft.origin, input.draft.destination);
 
   if (input.enabledModes.walk) {
+    const directMinutes = estimateRouteMinutes(directDistance, 72);
     options.push({
       id: 'walk-direct',
       title: '步行直达',
@@ -2763,11 +2764,12 @@ function buildRoutePlanOptions(input: {
       icon: 'directions_walk',
       color: routeTransportModeOptions.find((option) => option.mode === 'walk')?.color ?? '#4B5B57',
       coordinates: [input.draft.origin, input.draft.destination],
-      markerIds: [],
+      markerIds: getRouteEndpointMarkerIds(input.draft),
       estimatedDistance: directDistance,
-      estimatedMinutes: estimateRouteMinutes(directDistance, 72),
+      estimatedMinutes: directMinutes,
       steps: [
-        `从起点按直线前往 ${input.draft.destinationLabel}`,
+        `${input.draft.originLabel} 出发`,
+        `步行 ${formatRoutePlanDistance(directDistance)} ${formatRouteStepMinutes(directMinutes)}`,
         `到达 ${input.draft.destinationLabel}`,
       ],
       note: '当前为直线步行估算；道路级导航发布后会改为沿道路、出入口和可通行规则规划。',
@@ -2881,9 +2883,14 @@ function buildDirectTransitLineOption(
   const accessDistance = getCoordinateDistance(draft.origin, originStop.center);
   const egressDistance = getCoordinateDistance(draft.destination, destinationStop.center);
   const transitDistance = getTransitSegmentDistance(segmentStops);
-  const estimatedMinutes =
-    estimateRouteMinutes(accessDistance + egressDistance, 72) +
-    estimateTransitSegmentMinutes(segmentStops, transitDistance, candidate.mode.mode);
+  const accessMinutes = estimateRouteMinutes(accessDistance, 72);
+  const egressMinutes = estimateRouteMinutes(egressDistance, 72);
+  const transitMinutes = estimateTransitSegmentMinutes(
+    segmentStops,
+    transitDistance,
+    candidate.mode.mode,
+  );
+  const estimatedMinutes = accessMinutes + egressMinutes + transitMinutes;
   const stationSpan = Math.max(1, destinationStop.index - originStop.index);
 
   return {
@@ -2895,15 +2902,22 @@ function buildDirectTransitLineOption(
     icon: candidate.icon,
     color: candidate.color,
     coordinates: [draft.origin, ...segmentStops.map((stop) => stop.center), draft.destination],
-    markerIds: dedupeValues(segmentStops.map((stop) => stop.marker.id)),
+    markerIds: dedupeValues([
+      ...getRouteEndpointMarkerIds(draft),
+      ...segmentStops.map((stop) => stop.marker.id),
+    ]),
     estimatedDistance: accessDistance + egressDistance + transitDistance,
     estimatedMinutes,
     steps: [
-      `步行约 ${formatRoutePlanDistance(accessDistance)} 到 ${formatMarkerDisplayName(originStop.marker.label)}`,
-      `乘坐 ${candidate.line.name} 往 ${candidate.terminalName} 方向，${stationSpan}站到 ${formatMarkerDisplayName(
-        destinationStop.marker.label,
+      `${draft.originLabel} 出发`,
+      `步行 ${formatRoutePlanDistance(accessDistance)} ${formatRouteStepMinutes(accessMinutes)}`,
+      `${formatMarkerDisplayName(originStop.marker.label)} 进站`,
+      `乘坐 ${candidate.line.name}（${candidate.terminalName}方向） ${stationSpan}站 ${formatRouteStepMinutes(
+        transitMinutes,
       )}`,
-      `步行约 ${formatRoutePlanDistance(egressDistance)} 到 ${draft.destinationLabel}`,
+      `${formatMarkerDisplayName(destinationStop.marker.label)} 出站`,
+      `步行 ${formatRoutePlanDistance(egressDistance)} ${formatRouteStepMinutes(egressMinutes)}`,
+      `到达 ${draft.destinationLabel}`,
     ],
     note: '已按真实线路站序生成候选；站间耗时优先使用旧数据 travelTime，缺失时仍按距离估算。',
   };
@@ -2992,18 +3006,30 @@ function buildTransferTransitLineOptions(
         transfer.fromStop.marker.id === transfer.toStop.marker.id
           ? 0
           : getCoordinateDistance(transfer.fromStop.center, transfer.toStop.center);
+      const accessMinutes = estimateRouteMinutes(accessDistance, 72);
+      const egressMinutes = estimateRouteMinutes(egressDistance, 72);
+      const transferWalkMinutes = estimateRouteMinutes(transferDistance, 72);
+      const firstTransitMinutes = estimateTransitSegmentMinutes(
+        firstSegment,
+        firstTransitDistance,
+        originCandidate.candidate.mode.mode,
+      );
+      const secondTransitMinutes = estimateTransitSegmentMinutes(
+        secondSegment,
+        secondTransitDistance,
+        destinationCandidate.candidate.mode.mode,
+      );
+      const firstStationSpan = Math.max(1, transfer.fromStop.index - originCandidate.originStop.index);
+      const secondStationSpan = Math.max(
+        1,
+        destinationCandidate.destinationStop.index - transfer.toStop.index,
+      );
       const estimatedMinutes =
-        estimateRouteMinutes(accessDistance + egressDistance + transferDistance, 72) +
-        estimateTransitSegmentMinutes(
-          firstSegment,
-          firstTransitDistance,
-          originCandidate.candidate.mode.mode,
-        ) +
-        estimateTransitSegmentMinutes(
-          secondSegment,
-          secondTransitDistance,
-          destinationCandidate.candidate.mode.mode,
-        ) +
+        accessMinutes +
+        egressMinutes +
+        transferWalkMinutes +
+        firstTransitMinutes +
+        secondTransitMinutes +
         4;
 
       options.push({
@@ -3021,6 +3047,7 @@ function buildTransferTransitLineOptions(
           draft.destination,
         ],
         markerIds: dedupeValues([
+          ...getRouteEndpointMarkerIds(draft),
           ...firstSegment.map((stop) => stop.marker.id),
           ...secondSegment.map((stop) => stop.marker.id),
         ]),
@@ -3028,16 +3055,25 @@ function buildTransferTransitLineOptions(
           accessDistance + egressDistance + transferDistance + firstTransitDistance + secondTransitDistance,
         estimatedMinutes,
         steps: [
-          `步行约 ${formatRoutePlanDistance(accessDistance)} 到 ${formatMarkerDisplayName(
-            originCandidate.originStop.marker.label,
+          `${draft.originLabel} 出发`,
+          `步行 ${formatRoutePlanDistance(accessDistance)} ${formatRouteStepMinutes(accessMinutes)}`,
+          `${formatMarkerDisplayName(originCandidate.originStop.marker.label)} 进站`,
+          `乘坐 ${originCandidate.candidate.line.name}（${originCandidate.candidate.terminalName}方向） ${firstStationSpan}站 ${formatRouteStepMinutes(
+            firstTransitMinutes,
           )}`,
-          `乘坐 ${originCandidate.candidate.line.name} 到 ${formatMarkerDisplayName(
-            transfer.fromStop.marker.label,
+          `${formatMarkerDisplayName(transfer.fromStop.marker.label)} 换乘`,
+          `换乘 步行 ${formatRoutePlanDistance(transferDistance)} ${formatRouteStepMinutes(
+            transferWalkMinutes,
           )}`,
-          `换乘 ${destinationCandidate.candidate.line.name} 前往 ${formatMarkerDisplayName(
+          `${formatMarkerDisplayName(transfer.toStop.marker.label)} 上车`,
+          `乘坐 ${destinationCandidate.candidate.line.name}（${destinationCandidate.candidate.terminalName}方向） ${secondStationSpan}站 ${formatRouteStepMinutes(
+            secondTransitMinutes,
+          )}`,
+          `${formatMarkerDisplayName(
             destinationCandidate.destinationStop.marker.label,
-          )}`,
-          `步行约 ${formatRoutePlanDistance(egressDistance)} 到 ${draft.destinationLabel}`,
+          )} 出站`,
+          `步行 ${formatRoutePlanDistance(egressDistance)} ${formatRouteStepMinutes(egressMinutes)}`,
+          `到达 ${draft.destinationLabel}`,
         ],
         note: '已按真实线路站序组合一次换乘候选；换乘距离和缺失站间耗时仍为估算。',
       });
@@ -3128,20 +3164,38 @@ function estimateTransitSegmentMinutes(
   distance: number,
   mode: RouteTransportMode,
 ): number {
-  const travelTime = stops
-    .slice(1)
+  const travelTimes = stops
     .map((stop) => stop.stop.travelTime)
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
-    .reduce((total, value) => total + value, 0);
+    .map((value) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined));
+  const knownTravelTimes = travelTimes.filter((value): value is number => value !== undefined);
+  const looksCumulative =
+    knownTravelTimes.length >= 2 &&
+    knownTravelTimes.every((value, index) => index === 0 || value >= knownTravelTimes[index - 1]!);
+  const firstTravelTime = travelTimes.find((value) => value !== undefined);
+  const lastTravelTime = [...travelTimes].reverse().find((value) => value !== undefined);
+  const cumulativeTravelTime =
+    looksCumulative && firstTravelTime !== undefined && lastTravelTime !== undefined
+      ? lastTravelTime - firstTravelTime
+      : 0;
+  const segmentTravelTime = looksCumulative
+    ? cumulativeTravelTime
+    : travelTimes
+        .slice(1)
+        .filter((value): value is number => value !== undefined)
+        .reduce((total, value) => total + value, 0);
 
-  if (travelTime > 0) {
-    return Math.max(1, Math.round(travelTime));
+  if (segmentTravelTime > 0) {
+    return Math.max(1, Math.round(segmentTravelTime));
   }
   return estimateRouteMinutes(distance, getTransitSpeedFactor(mode));
 }
 
 function dedupeValues<T>(values: T[]): T[] {
   return Array.from(new Set(values));
+}
+
+function getRouteEndpointMarkerIds(draft: RoutePlanDraft): string[] {
+  return [draft.originId, draft.destinationId].filter((id): id is string => Boolean(id));
 }
 
 function findNearestRouteStation<T extends { center: [number, number] }>(
@@ -3190,6 +3244,10 @@ function formatRoutePlanDistance(distance: number): string {
 
 function formatRoutePlanMinutes(minutes: number): string {
   return `约 ${Math.max(1, minutes)} 分`;
+}
+
+function formatRouteStepMinutes(minutes: number): string {
+  return `${Math.max(1, Math.round(minutes))}分钟`;
 }
 
 function PoiActionBar({

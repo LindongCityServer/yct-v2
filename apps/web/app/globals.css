@@ -676,9 +676,12 @@ body .material-symbols-outlined {
   font-size: 26px;
 }
 
-.map-guide-marker.is-route-origin,
+.map-guide-marker.is-route-origin {
+  color: #078616;
+}
+
 .map-guide-marker.is-route-destination {
-  color: var(--yct-color-primary);
+  color: #ffa800;
 }
 
 .map-guide-marker-pin {
