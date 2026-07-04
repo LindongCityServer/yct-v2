@@ -451,8 +451,8 @@ function ScheduleTripCard({
           </span>
         </span>
         <div className="schedule-trip-title">
-          <span>{formatTripHeading(trip)}</span>
-          <strong>{trip.lineName}</strong>
+          <strong>{formatTripHeading(trip)}</strong>
+          <span>{trip.serviceLabel}</span>
         </div>
         <div className="schedule-trip-fare">
           <span>票价</span>
@@ -910,7 +910,8 @@ function formatTripEndpoints(trip: TravelTripInstance): string {
 }
 
 function formatTripHeading(trip: TravelTripInstance): string {
-  return trip.tripCode ? `${trip.tripCode} · ${trip.serviceLabel}` : `${trip.serviceLabel}班次`;
+  const prefix = trip.tripCode ?? `${trip.serviceLabel}班次`;
+  return trip.lineName ? `${prefix} - ${trip.lineName}` : prefix;
 }
 
 function formatStopSummary(trip: TravelTripInstance): string {
