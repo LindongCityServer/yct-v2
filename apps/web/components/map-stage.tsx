@@ -2580,139 +2580,147 @@ function RoutePlanDraftCard({
               </div>
             </div>
           ) : null}
-          <div
-            className={
-              modeListExpanded
-                ? 'map-route-mode-toggle-list is-expanded'
-                : 'map-route-mode-toggle-list is-collapsed'
-            }
-            aria-label="路线交通方式"
-          >
-            <button
-              className={allModesEnabled ? 'is-active' : ''}
-              type="button"
-              aria-pressed={allModesEnabled}
-              onClick={() => onSetAllModes(!allModesEnabled)}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                {allModesEnabled ? 'check_box' : 'select_check_box'}
-              </span>
-              <span>全部</span>
-            </button>
-            {visibleRouteTransportModes.map((mode) => (
-              <button
-                className={enabledModes[mode.mode] ? 'is-active' : ''}
-                type="button"
-                key={mode.mode}
-                aria-pressed={enabledModes[mode.mode]}
-                onClick={() => onToggleMode(mode.mode)}
-                style={{ '--route-mode-color': mode.color } as CSSProperties}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  {mode.icon}
-                </span>
-                <span>{mode.label}</span>
-              </button>
-            ))}
-            {collapsibleModeCount > 0 ? (
-              <button
+          {!editingEndpoint ? (
+            <>
+              <div
                 className={
-                  collapsedModesHaveEnabled
-                    ? 'map-route-mode-toggle-more is-active'
-                    : 'map-route-mode-toggle-more'
+                  modeListExpanded
+                    ? 'map-route-mode-toggle-list is-expanded'
+                    : 'map-route-mode-toggle-list is-collapsed'
                 }
-                type="button"
-                aria-expanded={modeListExpanded}
-                onClick={() => setModeListExpanded((value) => !value)}
+                aria-label="路线交通方式"
               >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  {modeListExpanded ? 'keyboard_arrow_up' : 'more_horiz'}
-                </span>
-                <span>{modeListExpanded ? '收起' : `更多${collapsibleModeCount}`}</span>
-              </button>
-            ) : null}
-          </div>
-          <div className="map-route-option-list" aria-label="路线方案">
-            {options.length > 0 ? (
-              options.map((option, index) => {
-                const isSelected = option.id === selectedOption?.id;
-                return (
-                  <article
-                    className={
-                      isSelected ? 'map-route-option-card is-selected' : 'map-route-option-card'
-                    }
-                    key={option.id}
-                    style={{ '--route-option-color': option.color } as CSSProperties}
+                <button
+                  className={allModesEnabled ? 'is-active' : ''}
+                  type="button"
+                  aria-pressed={allModesEnabled}
+                  onClick={() => onSetAllModes(!allModesEnabled)}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    {allModesEnabled ? 'check_box' : 'select_check_box'}
+                  </span>
+                  <span>全部</span>
+                </button>
+                {visibleRouteTransportModes.map((mode) => (
+                  <button
+                    className={enabledModes[mode.mode] ? 'is-active' : ''}
+                    type="button"
+                    key={mode.mode}
+                    aria-pressed={enabledModes[mode.mode]}
+                    onClick={() => onToggleMode(mode.mode)}
+                    style={{ '--route-mode-color': mode.color } as CSSProperties}
                   >
-                    <button
-                      className="map-route-option-summary"
-                      type="button"
-                      onClick={() => onSelectOption(option.id)}
-                      aria-expanded={isSelected}
-                    >
-                      <span
-                        className="material-symbols-outlined map-route-option-icon"
-                        aria-hidden="true"
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      {mode.icon}
+                    </span>
+                    <span>{mode.label}</span>
+                  </button>
+                ))}
+                {collapsibleModeCount > 0 ? (
+                  <button
+                    className={
+                      collapsedModesHaveEnabled
+                        ? 'map-route-mode-toggle-more is-active'
+                        : 'map-route-mode-toggle-more'
+                    }
+                    type="button"
+                    aria-expanded={modeListExpanded}
+                    onClick={() => setModeListExpanded((value) => !value)}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      {modeListExpanded ? 'keyboard_arrow_up' : 'more_horiz'}
+                    </span>
+                    <span>{modeListExpanded ? '收起' : `更多${collapsibleModeCount}`}</span>
+                  </button>
+                ) : null}
+              </div>
+              <div className="map-route-option-list" aria-label="路线方案">
+                {options.length > 0 ? (
+                  options.map((option, index) => {
+                    const isSelected = option.id === selectedOption?.id;
+                    return (
+                      <article
+                        className={
+                          isSelected ? 'map-route-option-card is-selected' : 'map-route-option-card'
+                        }
+                        key={option.id}
+                        style={{ '--route-option-color': option.color } as CSSProperties}
                       >
-                        schedule
-                      </span>
-                      <strong>{formatRoutePlanMinutes(option.estimatedMinutes)}</strong>
-                      <span className="map-route-option-distance">
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          directions_walk
-                        </span>
-                        {formatRoutePlanDistance(option.estimatedDistance)}
-                      </span>
-                      {index === 0 ? (
-                        <span className="map-route-option-badge">最快到达</span>
-                      ) : null}
-                      <span
-                        className="material-symbols-outlined map-route-option-expand"
-                        aria-hidden="true"
-                      >
-                        {isSelected ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
-                      </span>
-                    </button>
-                    <p className="map-route-option-copy">
-                      <span
-                        className="material-symbols-outlined map-route-option-type-icon"
-                        aria-hidden="true"
-                      >
-                        {option.icon}
-                      </span>
-                      <span>
-                        {option.title} · {option.summary}
-                      </span>
-                    </p>
-                    {isSelected ? (
-                      <ol className="map-route-step-timeline" aria-label="选中路线步骤">
-                        {option.steps.map((step, stepIndex) => {
-                          const isFirst = stepIndex === 0;
-                          const isLast = stepIndex === option.steps.length - 1;
-                          return (
-                            <li
-                              className={
-                                isFirst ? 'is-origin' : isLast ? 'is-destination' : 'is-transfer'
-                              }
-                              key={`${option.id}-${stepIndex}`}
-                            >
-                              <span className="map-route-step-marker" aria-hidden="true">
-                                {isFirst ? '起' : isLast ? '终' : ''}
-                              </span>
-                              <span>{step}</span>
-                            </li>
-                          );
-                        })}
-                      </ol>
-                    ) : null}
-                  </article>
-                );
-              })
-            ) : (
-              <p className="map-route-plan-note">请至少启用一种交通方式。</p>
-            )}
-          </div>
-          {selectedOption ? <p className="map-route-plan-note">{selectedOption.note}</p> : null}
+                        <button
+                          className="map-route-option-summary"
+                          type="button"
+                          onClick={() => onSelectOption(option.id)}
+                          aria-expanded={isSelected}
+                        >
+                          <span
+                            className="material-symbols-outlined map-route-option-icon"
+                            aria-hidden="true"
+                          >
+                            schedule
+                          </span>
+                          <strong>{formatRoutePlanMinutes(option.estimatedMinutes)}</strong>
+                          <span className="map-route-option-distance">
+                            <span className="material-symbols-outlined" aria-hidden="true">
+                              directions_walk
+                            </span>
+                            {formatRoutePlanDistance(option.estimatedDistance)}
+                          </span>
+                          {index === 0 ? (
+                            <span className="map-route-option-badge">最快到达</span>
+                          ) : null}
+                          <span
+                            className="material-symbols-outlined map-route-option-expand"
+                            aria-hidden="true"
+                          >
+                            {isSelected ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
+                          </span>
+                        </button>
+                        <p className="map-route-option-copy">
+                          <span
+                            className="material-symbols-outlined map-route-option-type-icon"
+                            aria-hidden="true"
+                          >
+                            {option.icon}
+                          </span>
+                          <span>
+                            {option.title} · {option.summary}
+                          </span>
+                        </p>
+                        {isSelected ? (
+                          <ol className="map-route-step-timeline" aria-label="选中路线步骤">
+                            {option.steps.map((step, stepIndex) => {
+                              const isFirst = stepIndex === 0;
+                              const isLast = stepIndex === option.steps.length - 1;
+                              return (
+                                <li
+                                  className={
+                                    isFirst
+                                      ? 'is-origin'
+                                      : isLast
+                                        ? 'is-destination'
+                                        : 'is-transfer'
+                                  }
+                                  key={`${option.id}-${stepIndex}`}
+                                >
+                                  <span className="map-route-step-marker" aria-hidden="true">
+                                    {isFirst ? '起' : isLast ? '终' : ''}
+                                  </span>
+                                  <span>{step}</span>
+                                </li>
+                              );
+                            })}
+                          </ol>
+                        ) : null}
+                      </article>
+                    );
+                  })
+                ) : (
+                  <p className="map-route-plan-note">请至少启用一种交通方式。</p>
+                )}
+              </div>
+              {selectedOption ? <p className="map-route-plan-note">{selectedOption.note}</p> : null}
+            </>
+          ) : null}
         </>
       ) : null}
     </section>
