@@ -2607,7 +2607,7 @@ function TransitLineMapDetail({
               <span className="map-line-station-node" aria-hidden="true" />
               <span>
                 {formatMarkerDisplayName(stop.stationName)}
-                {stop.oneWay ? <small>{stop.oneWay === 'up' ? '仅正向' : '仅反向'}</small> : null}
+                {stop.oneWay ? <small>{stop.oneWay === 'down' ? '仅正向' : '仅反向'}</small> : null}
               </span>
             </li>
           ))}
@@ -4103,8 +4103,8 @@ function getDirectionalLineStops(
 
   const filteredStops =
     direction === 'forward'
-      ? sourceStops.filter((stop) => stop.oneWay !== 'down')
-      : sourceStops.filter((stop) => stop.oneWay !== 'up');
+      ? sourceStops.filter((stop) => stop.oneWay !== 'up')
+      : sourceStops.filter((stop) => stop.oneWay !== 'down');
 
   const sortedStops = [...filteredStops].sort((left, right) => left.sequence - right.sequence);
   return direction === 'forward' ? sortedStops : sortedStops.reverse();

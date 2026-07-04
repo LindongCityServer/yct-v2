@@ -151,7 +151,7 @@ export function TransitLineDetailPanel({
                     </strong>
                     {stop.oneWay ? (
                       <span className="station-stop-direction">
-                        {stop.oneWay === 'up' ? '仅正向' : '仅反向'}
+                        {stop.oneWay === 'down' ? '仅正向' : '仅反向'}
                       </span>
                     ) : null}
                     <StationDetailSummary detail={detailByStationName.get(stationName)} />
@@ -266,8 +266,8 @@ function getDirectionalStationStops(
         }));
   const filteredStops =
     direction === 'forward'
-      ? sourceStops.filter((stop) => stop.oneWay !== 'down')
-      : sourceStops.filter((stop) => stop.oneWay !== 'up');
+      ? sourceStops.filter((stop) => stop.oneWay !== 'up')
+      : sourceStops.filter((stop) => stop.oneWay !== 'down');
   const sortedStops = [...filteredStops].sort((left, right) => left.sequence - right.sequence);
 
   return direction === 'forward' ? sortedStops : sortedStops.reverse();

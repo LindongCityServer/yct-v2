@@ -933,10 +933,10 @@ body .material-symbols-outlined {
 .map-marker-label {
   position: relative;
   z-index: 1;
-  max-width: 120px;
+  max-width: none;
   margin-left: 4px;
   padding: 0 2px;
-  overflow: hidden;
+  overflow: visible;
   color: #ffffff;
   font-size: 12px;
   font-weight: 900;
@@ -947,7 +947,7 @@ body .material-symbols-outlined {
     -1px 0 0 rgba(17, 24, 23, 0.82),
     0 1px 0 rgba(17, 24, 23, 0.82),
     0 -1px 0 rgba(17, 24, 23, 0.82);
-  text-overflow: ellipsis;
+  text-overflow: clip;
   white-space: nowrap;
 }
 
@@ -987,9 +987,9 @@ body .material-symbols-outlined {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  max-width: 160px;
+  max-width: none;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
   border: 0;
   border-radius: var(--yct-radius-pill);
   background: transparent;
@@ -997,7 +997,7 @@ body .material-symbols-outlined {
   cursor: pointer;
   font-size: 12px;
   font: inherit;
-  text-overflow: ellipsis;
+  text-overflow: clip;
   white-space: nowrap;
   pointer-events: auto;
 }
