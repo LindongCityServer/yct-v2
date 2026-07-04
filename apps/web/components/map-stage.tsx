@@ -1746,11 +1746,11 @@ export function MapStage() {
                       })
                     ) : (
                       <p className="map-marker-list-empty">
-                        {loadStatus === 'loading'
-                          ? '正在读取地图标记'
-                          : nearbySearchCenter
-                            ? '周边暂无可显示标记'
-                            : '暂无匹配标记'}
+                        {getMapMarkerListEmptyText({
+                          loadStatus,
+                          markerListCategoryId,
+                          nearbySearchCenter,
+                        })}
                       </p>
                     )}
                   </div>
@@ -3983,6 +3983,26 @@ async function copyTextToClipboard(value: string) {
   }
 
   throw new Error(`Clipboard API is unavailable for ${value.length} characters`);
+}
+
+function getMapMarkerListEmptyText(input: {
+  loadStatus: LoadStatus;
+  markerListCategoryId: string;
+  nearbySearchCenter: NearbySearchCenter | null;
+}): string {
+  if (input.loadStatus === 'loading') {
+    return '正在读取地图标记';
+  }
+
+  if (input.nearbySearchCenter) {
+    return '周边暂无可显示标记';
+  }
+
+  if (input.markerListCategoryId === favoriteMarkerCategoryId) {
+    return '暂无收藏地点';
+  }
+
+  return '暂无匹配标记';
 }
 
 function PoiActionBar({
