@@ -221,13 +221,14 @@ interface TransitLineConnection {
 }
 
 interface RoutePlanDraft {
-  destinationId: string;
+  destinationId?: string;
+  originLabel: string;
   destinationLabel: string;
   destination: [number, number];
   origin: [number, number];
 }
 
-type RouteTransportMode = 'walk' | 'bus' | 'metro' | 'tram' | 'coach' | 'railway';
+type RouteTransportMode = 'walk' | 'bus' | 'metro' | 'tram' | 'coach' | 'ferry' | 'railway';
 
 interface RouteTransportModeOption {
   mode: RouteTransportMode;
@@ -279,6 +280,7 @@ const defaultRouteTransportModes: EnabledRouteTransportModes = {
   metro: true,
   tram: true,
   coach: false,
+  ferry: false,
   railway: false,
 };
 
@@ -288,6 +290,7 @@ const routeTransportModeOptions: RouteTransportModeOption[] = [
   { mode: 'metro', label: '地铁', icon: 'subway', color: 'var(--yct-color-secondary)' },
   { mode: 'tram', label: '有轨', icon: 'tram', color: 'var(--yct-color-tram)' },
   { mode: 'coach', label: '客运', icon: 'airport_shuttle', color: 'var(--yct-color-coach)' },
+  { mode: 'ferry', label: '轮渡', icon: 'directions_boat', color: 'var(--yct-color-ferry)' },
   { mode: 'railway', label: '铁路', icon: 'train', color: 'var(--yct-color-railway)' },
 ];
 
@@ -1083,6 +1086,7 @@ export function MapStage() {
 
     setRoutePlanDraft({
       destinationId: marker.id,
+      originLabel: formatPoint([mapView.centerX, mapView.centerZ]),
       destinationLabel: formatMarkerDisplayName(marker.label),
       destination,
       origin: [mapView.centerX, mapView.centerZ],
@@ -1093,8 +1097,30 @@ export function MapStage() {
 
   const updateRoutePlanOriginToMapCenter = () => {
     setRoutePlanDraft((current) =>
-      current ? { ...current, origin: [mapView.centerX, mapView.centerZ] } : current,
+      current
+        ? {
+            ...current,
+            origin: [mapView.centerX, mapView.centerZ],
+            originLabel: formatPoint([mapView.centerX, mapView.centerZ]),
+          }
+        : current,
     );
+  };
+
+  const swapRoutePlanEndpoints = () => {
+    setRoutePlanDraft((current) =>
+      current
+        ? {
+            ...current,
+            destinationId: undefined,
+            origin: current.destination,
+            originLabel: current.destinationLabel,
+            destination: current.origin,
+            destinationLabel: current.originLabel,
+          }
+        : current,
+    );
+    setSelectedRouteOptionId(null);
   };
 
   const updateMarkerQuery = (value: string) => {
@@ -1212,10 +1238,20 @@ export function MapStage() {
               selectedOptionId={selectedRouteOption?.id}
               onClear={() => setRoutePlanDraft(null)}
               onFocusDestination={() => {
-                setFocusedMarkerId(routePlanDraft.destinationId);
-                setPoiDetailCollapsed(false);
+                if (routePlanDraft.destinationId) {
+                  setFocusedMarkerId(routePlanDraft.destinationId);
+                  setPoiDetailCollapsed(false);
+                }
               }}
+              onSetAllModes={(enabled) =>
+                setRouteTransportModes(
+                  Object.fromEntries(
+                    routeTransportModeOptions.map((mode) => [mode.mode, enabled]),
+                  ) as EnabledRouteTransportModes,
+                )
+              }
               onSelectOption={setSelectedRouteOptionId}
+              onSwapEndpoints={swapRoutePlanEndpoints}
               onToggleCollapsed={() => setRoutePlanCollapsed((current) => !current)}
               onToggleMode={(mode) =>
                 setRouteTransportModes((current) => ({ ...current, [mode]: !current[mode] }))
@@ -2180,7 +2216,9 @@ function RoutePlanDraftCard({
   selectedOptionId,
   onClear,
   onFocusDestination,
+  onSetAllModes,
   onSelectOption,
+  onSwapEndpoints,
   onToggleCollapsed,
   onToggleMode,
   onUseMapCenter,
@@ -2192,66 +2230,75 @@ function RoutePlanDraftCard({
   selectedOptionId?: string;
   onClear: () => void;
   onFocusDestination: () => void;
+  onSetAllModes: (enabled: boolean) => void;
   onSelectOption: (optionId: string) => void;
+  onSwapEndpoints: () => void;
   onToggleCollapsed: () => void;
   onToggleMode: (mode: RouteTransportMode) => void;
   onUseMapCenter: () => void;
 }>) {
   const selectedOption = options.find((option) => option.id === selectedOptionId) ?? options[0];
+  const allModesEnabled = routeTransportModeOptions.every((mode) => enabledModes[mode.mode]);
 
   return (
     <section
       className={collapsed ? 'map-route-plan-card is-collapsed' : 'map-route-plan-card'}
       aria-label="路线规划"
     >
-      <div className="map-route-plan-header">
-        <span className="material-symbols-outlined" aria-hidden="true">
-          directions
-        </span>
-        <strong>路线规划</strong>
-        <button
-          className="icon-action-button"
-          type="button"
-          aria-label={collapsed ? '展开路线规划' : '收起路线规划'}
-          aria-expanded={!collapsed}
-          onClick={onToggleCollapsed}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            {collapsed ? 'keyboard_arrow_down' : 'keyboard_arrow_up'}
-          </span>
-        </button>
-        <button
-          className="icon-action-button"
-          type="button"
-          aria-label="关闭路线规划"
-          onClick={onClear}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            close
-          </span>
-        </button>
+      <div className="map-route-plan-top">
+        <div className="map-route-endpoint-list">
+          <div className="map-route-endpoint-row">
+            <span className="map-route-endpoint-dot is-origin" aria-hidden="true" />
+            <strong>{draft.originLabel}</strong>
+            <button type="button" onClick={onUseMapCenter}>
+              修改
+            </button>
+          </div>
+          <div className="map-route-endpoint-row">
+            <span className="map-route-endpoint-dot is-destination" aria-hidden="true" />
+            <strong>{draft.destinationLabel}</strong>
+            <button type="button" onClick={onFocusDestination} disabled={!draft.destinationId}>
+              修改
+            </button>
+          </div>
+        </div>
+        <div className="map-route-plan-header-actions">
+          <button type="button" aria-label="交换起终点" onClick={onSwapEndpoints}>
+            <span className="material-symbols-outlined" aria-hidden="true">
+              swap_vert
+            </span>
+          </button>
+          <button
+            type="button"
+            aria-label={collapsed ? '展开路线规划' : '收起路线规划'}
+            aria-expanded={!collapsed}
+            onClick={onToggleCollapsed}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              {collapsed ? 'keyboard_arrow_down' : 'keyboard_arrow_up'}
+            </span>
+          </button>
+          <button type="button" aria-label="关闭路线规划" onClick={onClear}>
+            <span className="material-symbols-outlined" aria-hidden="true">
+              close
+            </span>
+          </button>
+        </div>
       </div>
       {!collapsed ? (
         <>
-          <dl>
-            <div>
-              <dt>起点</dt>
-              <dd>{formatPoint(draft.origin)}</dd>
-            </div>
-            <div>
-              <dt>终点</dt>
-              <dd>{draft.destinationLabel}</dd>
-            </div>
-            <div>
-              <dt>坐标</dt>
-              <dd>{formatPoint(draft.destination)}</dd>
-            </div>
-            <div>
-              <dt>状态</dt>
-              <dd>{selectedOption ? '已生成初步方案' : '暂无可用方案'}</dd>
-            </div>
-          </dl>
           <div className="map-route-mode-toggle-list" aria-label="路线交通方式">
+            <button
+              className={allModesEnabled ? 'is-active' : ''}
+              type="button"
+              aria-pressed={allModesEnabled}
+              onClick={() => onSetAllModes(!allModesEnabled)}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                {allModesEnabled ? 'check_box' : 'select_check_box'}
+              </span>
+              <span>全部</span>
+            </button>
             {routeTransportModeOptions.map((mode) => (
               <button
                 className={enabledModes[mode.mode] ? 'is-active' : ''}
@@ -2270,63 +2317,85 @@ function RoutePlanDraftCard({
           </div>
           <div className="map-route-option-list" aria-label="路线方案">
             {options.length > 0 ? (
-              options.map((option, index) => (
-                <button
-                  className={
-                    option.id === selectedOption?.id
-                      ? 'map-route-option-card is-selected'
-                      : 'map-route-option-card'
-                  }
-                  type="button"
-                  key={option.id}
-                  onClick={() => onSelectOption(option.id)}
-                  style={{ '--route-option-color': option.color } as CSSProperties}
-                >
-                  <span className="map-route-option-index">{index + 1}</span>
-                  <span
-                    className="material-symbols-outlined map-route-option-icon"
-                    aria-hidden="true"
+              options.map((option, index) => {
+                const isSelected = option.id === selectedOption?.id;
+                return (
+                  <article
+                    className={
+                      isSelected ? 'map-route-option-card is-selected' : 'map-route-option-card'
+                    }
+                    key={option.id}
+                    style={{ '--route-option-color': option.color } as CSSProperties}
                   >
-                    {option.icon}
-                  </span>
-                  <span className="map-route-option-copy">
-                    <strong>{option.title}</strong>
-                    <span>{option.summary}</span>
-                  </span>
-                  <span className="map-route-option-time">
-                    {formatRoutePlanMinutes(option.estimatedMinutes)}
-                  </span>
-                </button>
-              ))
+                    <button
+                      className="map-route-option-summary"
+                      type="button"
+                      onClick={() => onSelectOption(option.id)}
+                      aria-expanded={isSelected}
+                    >
+                      <span
+                        className="material-symbols-outlined map-route-option-icon"
+                        aria-hidden="true"
+                      >
+                        schedule
+                      </span>
+                      <strong>{formatRoutePlanMinutes(option.estimatedMinutes)}</strong>
+                      <span className="map-route-option-distance">
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          directions_walk
+                        </span>
+                        {formatRoutePlanDistance(option.estimatedDistance)}
+                      </span>
+                      {index === 0 ? (
+                        <span className="map-route-option-badge">最快到达</span>
+                      ) : null}
+                      <span
+                        className="material-symbols-outlined map-route-option-expand"
+                        aria-hidden="true"
+                      >
+                        {isSelected ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
+                      </span>
+                    </button>
+                    <p className="map-route-option-copy">
+                      <span
+                        className="material-symbols-outlined map-route-option-type-icon"
+                        aria-hidden="true"
+                      >
+                        {option.icon}
+                      </span>
+                      <span>
+                        {option.title} · {option.summary}
+                      </span>
+                    </p>
+                    {isSelected ? (
+                      <ol className="map-route-step-timeline" aria-label="选中路线步骤">
+                        {option.steps.map((step, stepIndex) => {
+                          const isFirst = stepIndex === 0;
+                          const isLast = stepIndex === option.steps.length - 1;
+                          return (
+                            <li
+                              className={
+                                isFirst ? 'is-origin' : isLast ? 'is-destination' : 'is-transfer'
+                              }
+                              key={`${option.id}-${stepIndex}`}
+                            >
+                              <span className="map-route-step-marker" aria-hidden="true">
+                                {isFirst ? '起' : isLast ? '终' : ''}
+                              </span>
+                              <span>{step}</span>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    ) : null}
+                  </article>
+                );
+              })
             ) : (
               <p className="map-route-plan-note">请至少启用一种交通方式。</p>
             )}
           </div>
-          {selectedOption ? (
-            <div className="map-route-option-detail" aria-label="选中路线步骤">
-              <strong>{selectedOption.title}</strong>
-              <ol>
-                {selectedOption.steps.map((step, index) => (
-                  <li key={`${selectedOption.id}-${index}`}>{step}</li>
-                ))}
-              </ol>
-              <p>{selectedOption.note}</p>
-            </div>
-          ) : null}
-          <div className="map-route-plan-actions">
-            <button className="secondary-action-button" type="button" onClick={onUseMapCenter}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                my_location
-              </span>
-              <span>更新起点</span>
-            </button>
-            <button className="secondary-action-button" type="button" onClick={onFocusDestination}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                location_on
-              </span>
-              <span>查看终点</span>
-            </button>
-          </div>
+          {selectedOption ? <p className="map-route-plan-note">{selectedOption.note}</p> : null}
         </>
       ) : null}
     </section>
@@ -2502,6 +2571,10 @@ function getTransitSpeedFactor(mode: RouteTransportMode): number {
 
   if (mode === 'coach') {
     return 180;
+  }
+
+  if (mode === 'ferry') {
+    return 130;
   }
 
   return 120;
