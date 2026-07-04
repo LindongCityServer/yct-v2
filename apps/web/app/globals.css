@@ -12,6 +12,7 @@ body {
   --yct-topbar-height: 64px;
   --yct-bottom-nav-reserved-height: 0px;
   --yct-visible-map-height: calc(100dvh - var(--yct-topbar-height));
+  --yct-map-stage-height: var(--yct-visible-map-height);
   --yct-map-control-inset: var(--yct-space-4);
   --yct-map-bottom-controls-offset: var(--yct-map-control-inset);
   background: var(--yct-color-surface);
@@ -592,8 +593,8 @@ body .material-symbols-outlined {
 
 .map-stage {
   position: relative;
-  height: var(--yct-visible-map-height);
-  min-height: var(--yct-visible-map-height);
+  height: var(--yct-map-stage-height);
+  min-height: var(--yct-map-stage-height);
   overflow: hidden;
   border: 0;
   border-radius: 0;
@@ -622,7 +623,7 @@ body .material-symbols-outlined {
   position: relative;
   overflow: hidden;
   height: 100%;
-  min-height: var(--yct-visible-map-height);
+  min-height: var(--yct-map-stage-height);
   padding-bottom: 0;
   background: #dbe0e1;
   cursor: grab;
@@ -5371,6 +5372,7 @@ body .material-symbols-outlined {
     --yct-visible-map-height: calc(
       100dvh - var(--yct-topbar-height) - var(--yct-bottom-nav-reserved-height)
     );
+    --yct-map-stage-height: calc(100dvh - var(--yct-topbar-height));
     --yct-map-control-inset: var(--yct-space-3);
     --yct-map-bottom-controls-offset: calc(
       var(--yct-bottom-nav-reserved-height) + var(--yct-space-3)
@@ -5379,6 +5381,10 @@ body .material-symbols-outlined {
 
   .app-shell {
     padding-bottom: 92px;
+  }
+
+  .app-shell.is-map-shell {
+    padding-bottom: 0;
   }
 
   .topbar {
@@ -5417,7 +5423,7 @@ body .material-symbols-outlined {
   }
 
   .app-shell.is-map-shell .content {
-    min-height: var(--yct-visible-map-height);
+    min-height: var(--yct-map-stage-height);
   }
 
   .app-shell.is-map-shell .rail {
@@ -5425,8 +5431,8 @@ body .material-symbols-outlined {
   }
 
   .map-stage {
-    height: var(--yct-visible-map-height);
-    min-height: var(--yct-visible-map-height);
+    height: var(--yct-map-stage-height);
+    min-height: var(--yct-map-stage-height);
   }
 
   .map-empty {
