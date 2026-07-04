@@ -43,6 +43,11 @@ import {
   readThemeMode,
 } from './preference-bridge';
 import { appPath } from '../lib/app-paths';
+import {
+  clearMapFavoriteMarkers,
+  readMapFavoriteState,
+  type MapFavoriteState,
+} from '../lib/client-map-favorites';
 
 const themeOptions: Array<{ value: ThemeMode; label: string }> = [
   { value: 'system', label: '跟随系统' },
@@ -197,6 +202,9 @@ export function AccountSettingsPanel({
   const [scheduleHistorySummary, setScheduleHistorySummary] = useState<
     TravelScheduleHistoryState['summary'] | null
   >(null);
+  const [mapFavoriteSummary, setMapFavoriteSummary] = useState<MapFavoriteState['summary'] | null>(
+    null,
+  );
   const [tripSyncStatusText, setTripSyncStatusText] = useState('');
   const [isSyncingTripReminders, setIsSyncingTripReminders] = useState(false);
   const [legacyTripSyncConsentGranted, setLegacyTripSyncConsentGranted] = useState(false);
@@ -209,6 +217,7 @@ export function AccountSettingsPanel({
   const syncTripSummary = () => {
     setTripSummary(readTripReminderState().summary);
     setScheduleHistorySummary(readTravelScheduleHistoryState().summary);
+    setMapFavoriteSummary(readMapFavoriteState().summary);
   };
   const syncOfflinePackageState = () => {
     setOfflinePackageState(readOfflinePackageState());
@@ -524,7 +533,7 @@ export function AccountSettingsPanel({
   const clearLocalHistory = () => {
     if (
       !window.confirm(
-        '要清空雨城通新版本地行程提醒、历史记录和班次查询记录吗？旧站 orders 原始数据不会被删除。',
+        '要清空雨城通新版本地行程提醒、历史记录、班次查询记录和地图收藏吗？旧站 orders 原始数据不会被删除。',
       )
     ) {
       return;
@@ -532,6 +541,7 @@ export function AccountSettingsPanel({
 
     clearLocalTripReminders();
     clearTravelScheduleHistory();
+    clearMapFavoriteMarkers();
     setTripSyncStatusText('');
     syncTripSummary();
   };
@@ -793,8 +803,8 @@ export function AccountSettingsPanel({
             </span>
             <span id="history-settings-title">本地历史</span>
             <span className="settings-inline-status">
-              {tripSummary && scheduleHistorySummary
-                ? `${tripSummary.total + scheduleHistorySummary.total} 条`
+              {tripSummary && scheduleHistorySummary && mapFavoriteSummary
+                ? `${tripSummary.total + scheduleHistorySummary.total + mapFavoriteSummary.total} 条`
                 : '读取中'}
             </span>
           </div>
@@ -802,6 +812,7 @@ export function AccountSettingsPanel({
             <span>{tripSummary?.scheduled ?? 0} 个即将进行</span>
             <span>{tripSummary?.history ?? 0} 个历史行程</span>
             <span>{scheduleHistorySummary?.total ?? 0} 条班次记录</span>
+            <span>{mapFavoriteSummary?.total ?? 0} 个地图收藏</span>
             <span>{tripSummary?.localOnly ?? 0} 个待同步</span>
           </div>
           <div className="settings-action-row">
@@ -816,6 +827,12 @@ export function AccountSettingsPanel({
                 departure_board
               </span>
               <span>查询班次</span>
+            </a>
+            <a className="secondary-action-button" href={appPath('/map')}>
+              <span className="material-symbols-outlined" aria-hidden="true">
+                map
+              </span>
+              <span>查看地图</span>
             </a>
             <button
               className="secondary-action-button"

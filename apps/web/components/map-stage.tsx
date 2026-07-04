@@ -15,6 +15,7 @@ import type {
 } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { readMapFavoriteMarkerIds, writeMapFavoriteMarkerIds } from '../lib/client-map-favorites';
 
 interface MarkerResponse {
   meta: ApiMeta;
@@ -370,7 +371,6 @@ const mapDefaults = {
 };
 
 type PoiDetailTab = 'summary' | 'facilities';
-const mapFavoriteStorageKey = 'yct.mapFavorites.v1';
 
 export function MapStage() {
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -3959,20 +3959,6 @@ function formatRoutePlanMinutes(minutes: number): string {
 
 function formatRouteStepMinutes(minutes: number): string {
   return `${Math.max(1, Math.round(minutes))}分钟`;
-}
-
-function readMapFavoriteMarkerIds(): string[] {
-  try {
-    const source = window.localStorage.getItem(mapFavoriteStorageKey);
-    const parsed = source ? JSON.parse(source) : [];
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeMapFavoriteMarkerIds(markerIds: string[]) {
-  window.localStorage.setItem(mapFavoriteStorageKey, JSON.stringify(dedupeValues(markerIds)));
 }
 
 function buildMapMarkerShareUrl(marker: CenterableMarker): string {
