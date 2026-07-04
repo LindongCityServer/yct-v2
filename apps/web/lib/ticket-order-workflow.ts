@@ -10,10 +10,20 @@ import type {
 } from '@yct/contracts';
 import { createYctEvent, emitAppEvent } from './app-event-bus';
 import { readTicketingCatalog } from './ticketing-catalog-store';
-import { readTicketOrderStore, writeTicketOrderStore } from './ticket-order-store';
+import {
+  readTicketOrderStore,
+  writeTicketOrderStore,
+  type TicketOrderStoreSnapshot,
+} from './ticket-order-store';
 import { findTicketingOrderCandidate } from './travel-ticketing';
 
 const defaultHoldDurationMs = 15 * 60 * 1000;
+
+export interface TicketOrderExpirationSummary {
+  processedAt: string;
+  expiredOrderCount: number;
+  expiredHoldCount: number;
+}
 
 export class TicketOrderWorkflowError extends Error {
   constructor(
@@ -180,12 +190,32 @@ export async function createTicketOrderDraft(input: {
   };
 }
 
-export async function expireStaleTicketOrders(now = new Date()): Promise<{
-  version: 1;
-  orders: TicketOrder[];
-  inventoryHolds: TicketInventoryHold[];
-  updatedAt?: string;
-}> {
+export async function expireStaleTicketOrders(
+  now = new Date(),
+): Promise<TicketOrderStoreSnapshot> {
+  return (await expireStaleTicketOrdersWithSummary(now)).store;
+}
+
+export async function processExpiredTicketOrders(input: {
+  now?: string;
+} = {}): Promise<TicketOrderExpirationSummary> {
+  const now = input.now ? new Date(input.now) : new Date();
+  const result = await expireStaleTicketOrdersWithSummary(
+    Number.isNaN(now.getTime()) ? new Date() : now,
+  );
+
+  return {
+    processedAt: result.processedAt,
+    expiredOrderCount: result.expiredOrderCount,
+    expiredHoldCount: result.expiredHoldCount,
+  };
+}
+
+async function expireStaleTicketOrdersWithSummary(now = new Date()): Promise<
+  TicketOrderExpirationSummary & {
+    store: TicketOrderStoreSnapshot;
+  }
+> {
   const orderStore = await readTicketOrderStore();
   const nowMs = now.getTime();
   const nowIso = now.toISOString();
@@ -201,7 +231,12 @@ export async function expireStaleTicketOrders(now = new Date()): Promise<{
   );
 
   if (expiredHoldIds.size === 0) {
-    return orderStore;
+    return {
+      store: orderStore,
+      processedAt: nowIso,
+      expiredOrderCount: 0,
+      expiredHoldCount: 0,
+    };
   }
 
   const expiredOrders: TicketOrder[] = [];
@@ -257,7 +292,12 @@ export async function expireStaleTicketOrders(now = new Date()): Promise<{
     ),
   );
 
-  return updatedStore;
+  return {
+    store: updatedStore,
+    processedAt: nowIso,
+    expiredOrderCount: expiredOrders.length,
+    expiredHoldCount: expiredHoldIds.size,
+  };
 }
 
 export async function cancelTicketOrderDraft(input: {
@@ -265,8 +305,9 @@ export async function cancelTicketOrderDraft(input: {
   userId: string;
   ldpassUserId: string;
 }): Promise<TicketOrderListItem> {
-  const now = new Date().toISOString();
-  const orderStore = await readTicketOrderStore();
+  const nowDate = new Date();
+  const now = nowDate.toISOString();
+  const orderStore = await expireStaleTicketOrders(nowDate);
   const order = orderStore.orders.find(
     (item) =>
       item.orderId === input.orderId &&

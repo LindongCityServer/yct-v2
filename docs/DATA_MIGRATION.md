@@ -66,7 +66,7 @@
 - `YCT_WEB_PUSH_PUBLIC_KEY` / `NEXT_PUBLIC_YCT_WEB_PUSH_PUBLIC_KEY`、`YCT_WEB_PUSH_PRIVATE_KEY`、`YCT_WEB_PUSH_SUBJECT`：服务端 Web Push VAPID 配置；缺少任一项时内部投递任务只会延后队列并记录原因，不会伪造已送达。
 - `NEXT_PUBLIC_YCT_PUSH_DEFAULT_ENABLED_TYPES` / `YCT_PUSH_DEFAULT_ENABLED_TYPES=trip,operations,ticket,check_in`：账号页和服务端新用户通知偏好的默认预选类型，留空或无有效项时默认四类都预选。
 - `YCT_PUSH_DELIVERY_MIN_INTERVAL_MS=300000`：同一用户同一通知类型的服务端 Push 最小投递间隔，默认 5 分钟；设为 `0` 可关闭该开发期限频策略。
-- `YCT_INTERNAL_TASK_TOKEN`：内部任务接口 `/api/internal/events/process` 与 `/api/internal/notifications/process` 的调用令牌，分别用于重放事件 Outbox 和处理到期 Push 投递队列。
+- `YCT_INTERNAL_TASK_TOKEN`：内部任务接口 `/api/internal/events/process`、`/api/internal/notifications/process` 与统一 runner `/api/internal/tasks/run` 的调用令牌；统一 runner 会重放事件 Outbox、处理到期 Push 投递队列，并清理过期票务占座。
 - `YCT_CONTENT_ASSET_UPLOAD_DIR=apps/web/public/content-assets`：内容后台上传素材的本地落盘目录；该目录属于运行时文件，不进入 Git，后续可替换为对象存储或共享资产目录。
 - `YCT_LEGACY_ASSET_DOWNLOAD_REPORT_PATH=.yct-data/legacy-assets-download-report.json`：旧内容资源下载报告路径，供内容后台展示最近一次真实下载失败项；如果服务进程运行目录与下载脚本运行目录不同，需要显式配置到同一个报告文件。
 

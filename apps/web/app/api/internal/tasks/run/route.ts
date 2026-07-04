@@ -8,6 +8,7 @@ import {
 } from '../../../../../lib/internal-task-auth';
 import { ensureNotificationDeliveryListenersRegistered } from '../../../../../lib/notification-delivery-listeners';
 import { processDuePushDeliveries } from '../../../../../lib/notification-delivery-workflow';
+import { processExpiredTicketOrders } from '../../../../../lib/ticket-order-workflow';
 
 export async function GET(request: NextRequest) {
   return runInternalTasks(request, request.nextUrl.searchParams);
@@ -35,10 +36,14 @@ async function runInternalTasks(request: NextRequest, source: unknown) {
     limit: pushLimit,
     now,
   });
+  const ticketing = await processExpiredTicketOrders({
+    now,
+  });
 
   return NextResponse.json({
     processedAt: new Date().toISOString(),
     events,
     notifications,
+    ticketing,
   });
 }
