@@ -1,6 +1,8 @@
 'use client';
 
 import type { TicketOrderListItem, TicketableServiceKind, TravelTripInstance } from '@yct/contracts';
+import Link from 'next/link';
+import { appPath } from '../lib/app-paths';
 
 type TicketOrderTripLookup = Map<string, TravelTripInstance>;
 
@@ -53,6 +55,15 @@ export function TicketOrderDraftPanel({
                   ? `占用至 ${formatTicketHoldExpiresAt(item.inventoryHold.expiresAt)}`
                   : '无库存占用'}
               </span>
+              <Link
+                className="secondary-action-button"
+                href={appPath(`/travel/ticketing/orders/${encodeURIComponent(item.order.orderId)}`)}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  receipt_long
+                </span>
+                <span>详情</span>
+              </Link>
               <button
                 className="secondary-action-button"
                 type="button"
@@ -79,7 +90,7 @@ export function TicketOrderDraftPanel({
   );
 }
 
-function formatTicketHoldExpiresAt(value: string): string {
+export function formatTicketHoldExpiresAt(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value;
@@ -116,7 +127,7 @@ function formatTicketOrderSubtitle(
     .join(' · ');
 }
 
-function formatTicketOrderStatus(status: TicketOrderListItem['order']['status']): string {
+export function formatTicketOrderStatus(status: TicketOrderListItem['order']['status']): string {
   const labels: Record<TicketOrderListItem['order']['status'], string> = {
     cancelled: '已取消',
     checked_in: '已检票',
@@ -132,7 +143,7 @@ function formatTicketOrderStatus(status: TicketOrderListItem['order']['status'])
   return labels[status] ?? status;
 }
 
-function formatTicketServiceKind(kind: TicketableServiceKind): string {
+export function formatTicketServiceKind(kind: TicketableServiceKind): string {
   const labels: Record<TicketableServiceKind, string> = {
     coach: '客运',
     custom: '其他',

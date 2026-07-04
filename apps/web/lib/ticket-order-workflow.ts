@@ -46,6 +46,31 @@ export async function listTicketOrdersForUser(userId: string): Promise<TicketOrd
     );
 }
 
+export async function getTicketOrderForUser(input: {
+  orderId: string;
+  userId: string;
+  ldpassUserId: string;
+}): Promise<TicketOrderListItem> {
+  const orderStore = await readTicketOrderStore();
+  const order = orderStore.orders.find(
+    (item) =>
+      item.orderId === input.orderId &&
+      item.userId === input.userId &&
+      item.ldpassUserId === input.ldpassUserId,
+  );
+
+  if (!order) {
+    throw new TicketOrderWorkflowError('order_not_found', '没有找到对应订单。');
+  }
+
+  return {
+    order,
+    inventoryHold: order.inventoryHoldId
+      ? orderStore.inventoryHolds.find((hold) => hold.inventoryHoldId === order.inventoryHoldId)
+      : undefined,
+  };
+}
+
 export async function createTicketOrderDraft(input: {
   trip: TravelTripInstance;
   userId: string;
