@@ -32,7 +32,20 @@ apps/web/.next/standalone
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2
 ```
 
-如果 zip 压缩在 Windows 上耗时过长或留下 0 字节临时文件，可以改用 `tar.gz`：
+生成 `zip` 时脚本会优先使用 7-Zip，其次回退到 `tar.exe -a`，最后才使用 PowerShell `Compress-Archive`。如果 7-Zip 不在 PATH 或常见安装目录，可以显式指定：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -SevenZipPath "C:\Program Files\7-Zip\7z.exe"
+```
+
+也可以通过环境变量复用同一路径：
+
+```powershell
+$env:YCT_7Z_PATH = "C:\Program Files\7-Zip\7z.exe"
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2
+```
+
+如果没有可用的 7-Zip，且 zip 压缩在 Windows 上耗时过长或留下 0 字节临时文件，可以改用 `tar.gz`：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -ArchiveFormat tar.gz
@@ -73,7 +86,7 @@ pnpm web:artifact
 - 不打包 `.env`、`.env.*`、`.yct-data`、日志和本地缓存。
 - 在 `artifacts/` 下生成 `yct-web-时间戳.zip`、`yct-web-时间戳.tar.gz` 或 `yct-web-时间戳.tar`。
 - 压缩时先写入临时文件，成功后再改名为最终产物，避免失败时留下看似可用的坏包。
-- 在 Windows 上生成 zip 时优先使用 `tar.exe`，避免 `Compress-Archive` 处理大量文件时非常慢；需要更稳定的大包压缩时建议使用 `tar.gz`。
+- 在 Windows 上生成 zip 时优先使用 7-Zip，避免 `tar.exe -a` 或 `Compress-Archive` 处理大量文件时非常慢；需要更稳定的大包压缩时仍可使用 `tar.gz`。
 - 支持 `-SkipBuild -SkipStaging` 复用已经完成的 `.deploy/web`，只重新生成归档文件。
 
 如果只想验证当前 staging 目录里的 standalone 产物是否完整，而不重新压缩大包，可以使用：

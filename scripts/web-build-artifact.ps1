@@ -5,6 +5,7 @@ param(
   [string]$StagingDir = ".deploy\web",
   [ValidateSet("zip", "tar.gz", "tar")]
   [string]$ArchiveFormat = "zip",
+  [string]$SevenZipPath = $env:YCT_7Z_PATH,
   [switch]$SkipBuild,
   [switch]$SkipStaging,
   [switch]$ValidateOnly
@@ -37,6 +38,37 @@ function Resolve-YctOutputPath {
     return [System.IO.Path]::GetFullPath($Path)
   }
   return [System.IO.Path]::GetFullPath((Join-Path $Root $Path))
+}
+
+function Resolve-YctSevenZipPath {
+  param([string]$Path)
+
+  $candidates = @()
+  if (-not [string]::IsNullOrWhiteSpace($Path)) {
+    $candidates += $Path
+  }
+
+  $command = Get-Command 7z.exe -ErrorAction SilentlyContinue
+  if ($command) {
+    $candidates += $command.Source
+  }
+
+  $programFiles = [Environment]::GetFolderPath("ProgramFiles")
+  $programFilesX86 = [Environment]::GetFolderPath("ProgramFilesX86")
+  if (-not [string]::IsNullOrWhiteSpace($programFiles)) {
+    $candidates += (Join-Path $programFiles "7-Zip\7z.exe")
+  }
+  if (-not [string]::IsNullOrWhiteSpace($programFilesX86)) {
+    $candidates += (Join-Path $programFilesX86 "7-Zip\7z.exe")
+  }
+
+  foreach ($candidate in ($candidates | Select-Object -Unique)) {
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+      return (Resolve-Path -LiteralPath $candidate).Path
+    }
+  }
+
+  return $null
 }
 
 function Assert-YctPathInsideRoot {
@@ -437,10 +469,12 @@ if ($ValidateOnly) {
   return
 }
 
+$sevenZip = Resolve-YctSevenZipPath -Path $SevenZipPath
 $tar = Get-Command tar.exe -ErrorAction SilentlyContinue
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $artifactPath = Join-Path $outputRoot "yct-web-$timestamp.$ArchiveFormat"
 $temporaryArtifactPath = Join-Path $outputRoot "yct-web-$timestamp.tmp.$ArchiveFormat"
+$archiveTool = $null
 
 if (Test-Path -LiteralPath $artifactPath) {
   Remove-Item -LiteralPath $artifactPath -Force
@@ -454,6 +488,7 @@ try {
     if ($null -eq $tar) {
       throw "tar.exe is required to create a tar.gz deployment artifact."
     }
+    $archiveTool = $tar.Source
     & $tar.Source -czf $temporaryArtifactPath -C $stageRoot .
     if ($LASTEXITCODE -ne 0) {
       throw "tar.exe failed to create deployment artifact with exit code $LASTEXITCODE."
@@ -462,16 +497,30 @@ try {
     if ($null -eq $tar) {
       throw "tar.exe is required to create a tar deployment artifact."
     }
+    $archiveTool = $tar.Source
     & $tar.Source -cf $temporaryArtifactPath -C $stageRoot .
     if ($LASTEXITCODE -ne 0) {
       throw "tar.exe failed to create deployment artifact with exit code $LASTEXITCODE."
     }
+  } elseif ($null -ne $sevenZip) {
+    $archiveTool = $sevenZip
+    Push-Location -LiteralPath $stageRoot
+    try {
+      & $sevenZip a -tzip -mx=5 $temporaryArtifactPath ".\*" | Out-Host
+      if ($LASTEXITCODE -ne 0) {
+        throw "7-Zip failed to create deployment artifact with exit code $LASTEXITCODE."
+      }
+    } finally {
+      Pop-Location
+    }
   } elseif ($null -ne $tar) {
+    $archiveTool = $tar.Source
     & $tar.Source -a -cf $temporaryArtifactPath -C $stageRoot .
     if ($LASTEXITCODE -ne 0) {
       throw "tar.exe failed to create deployment artifact with exit code $LASTEXITCODE."
     }
   } else {
+    $archiveTool = "Compress-Archive"
     Compress-Archive -Path (Join-Path $stageRoot "*") -DestinationPath $temporaryArtifactPath -CompressionLevel Optimal
   }
 
@@ -486,6 +535,7 @@ try {
 $result = [pscustomobject]@{
   Artifact = $artifactPath
   ArchiveFormat = $ArchiveFormat
+  ArchiveTool = $archiveTool
   StagingDirectory = $stageRoot
   SkippedStaging = [bool]$SkipStaging
   BasePath = $basePathValue
