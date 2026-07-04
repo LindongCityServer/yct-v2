@@ -434,7 +434,7 @@ DESIGN.md
 2026-07-02 已推进轻量 PWA 增强：
 
 - 新增 `apps/web/public/sw.js`：缓存应用壳、manifest、图标、公开一级页面和离线兜底页。
-- 新增 `/offline` 离线兜底页面；普通导航离线且没有近期缓存时会退回该页面。
+- 新增 `/offline` 离线兜底页面；普通导航离线且没有近期缓存时会退回该页面。当前离线页会提供运营信息、地图探索、班次查询和离线管理入口，并提示对应内容需要先被缓存。
 - 新增 `PwaBridge` 并接入根布局，在安全上下文或本地开发环境注册 Service Worker。
 - 近期访问的出行二级页 `/travel/[id]`、`/travel/screen`、`/travel/stations/[lineName]/[stationName]` 和运营详情 `/operations/[id]` 进入运行时缓存；`/travel/screen` 同时纳入应用壳预热；公开 API `/api/transit/overview`、`/api/transit/service-notices`、`/api/operations/feed`、`/api/services/entries`、`/api/settings/bootstrap` 使用 stale-while-revalidate。
 - 站点详情 API `/api/transit/station-details` 纳入数据缓存和账号页“刷新缓存”入口，支撑近期线路详情离线查看站点摘要。

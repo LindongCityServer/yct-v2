@@ -2827,6 +2827,31 @@ body .material-symbols-outlined {
   background: var(--yct-color-surface-muted);
 }
 
+.offline-page-panel {
+  display: grid;
+  gap: var(--yct-space-4);
+  align-content: start;
+  padding: var(--yct-space-6);
+}
+
+.offline-page-panel > .material-symbols-outlined {
+  color: var(--yct-color-text-muted);
+  font-size: 40px;
+  font-variation-settings: 'FILL' 1;
+}
+
+.offline-page-panel h1,
+.offline-page-panel p {
+  margin: 0;
+}
+
+.offline-page-panel > p {
+  color: var(--yct-color-text-muted);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.65;
+}
+
 .settings-list {
   display: grid;
   gap: var(--yct-space-2);
