@@ -142,6 +142,10 @@ export function TravelScheduleQueryPanel({
     () => new Map(result.services.map((service) => [service.kind, service])),
     [result.services],
   );
+  const tripById = useMemo(
+    () => new Map(result.trips.map((trip) => [trip.tripInstanceId, trip])),
+    [result.trips],
+  );
   const emptyMessage =
     serviceFilter !== 'all' && selectedService?.status !== 'active'
       ? selectedService?.message
@@ -320,6 +324,7 @@ export function TravelScheduleQueryPanel({
         cancellingOrderId={cancellingOrderId}
         orders={ticketOrders}
         statusText={ticketOrderStatusText}
+        tripById={tripById}
         onCancel={(orderId) => void cancelTicketOrder(orderId)}
         onRefresh={() => void refreshTicketOrders()}
       />
@@ -660,12 +665,14 @@ function TicketOrderDraftPanel({
   cancellingOrderId,
   orders,
   statusText,
+  tripById,
   onCancel,
   onRefresh,
 }: Readonly<{
   cancellingOrderId: string | null;
   orders: TicketOrderListItem[] | null;
   statusText: string;
+  tripById: Map<string, TravelTripInstance>;
   onCancel: (orderId: string) => void;
   onRefresh: () => void;
 }>) {
@@ -691,10 +698,9 @@ function TicketOrderDraftPanel({
           {visibleOrders.map((item) => (
             <article className="ticket-order-draft-item" key={item.order.orderId}>
               <div>
-                <strong>{formatTicketOrderTitle(item)}</strong>
+                <strong>{formatTicketOrderTitle(item, tripById)}</strong>
                 <small>
-                  {formatTicketServiceKind(item.order.serviceKind)} · {item.order.passengerCount}人 ·{' '}
-                  {formatTicketOrderStatus(item.order.status)}
+                  {formatTicketOrderSubtitle(item, tripById)}
                 </small>
               </div>
               <span>
@@ -837,8 +843,27 @@ function formatTicketHoldExpiresAt(value: string): string {
   });
 }
 
-function formatTicketOrderTitle(item: TicketOrderListItem): string {
-  return `订单 ${item.order.orderId.slice(-8).toUpperCase()}`;
+function formatTicketOrderTitle(
+  item: TicketOrderListItem,
+  tripById: Map<string, TravelTripInstance>,
+): string {
+  const trip = tripById.get(item.order.tripInstanceId);
+  return trip ? formatTripHeading(trip) : `订单 ${item.order.orderId.slice(-8).toUpperCase()}`;
+}
+
+function formatTicketOrderSubtitle(
+  item: TicketOrderListItem,
+  tripById: Map<string, TravelTripInstance>,
+): string {
+  const trip = tripById.get(item.order.tripInstanceId);
+  return [
+    formatTicketServiceKind(item.order.serviceKind),
+    trip ? formatTripEndpoints(trip) : undefined,
+    `${item.order.passengerCount}人`,
+    formatTicketOrderStatus(item.order.status),
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 function formatTicketOrderStatus(status: TicketOrderListItem['order']['status']): string {
