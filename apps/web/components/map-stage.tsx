@@ -2467,6 +2467,9 @@ function RoutePlanDraftCard({
     ? routeTransportModeOptions
     : routeTransportModeOptions.slice(0, 3);
   const collapsibleModeCount = Math.max(routeTransportModeOptions.length - 3, 0);
+  const collapsedModesHaveEnabled = routeTransportModeOptions
+    .slice(3)
+    .some((mode) => enabledModes[mode.mode]);
 
   return (
     <section
@@ -2613,7 +2616,11 @@ function RoutePlanDraftCard({
             ))}
             {collapsibleModeCount > 0 ? (
               <button
-                className="map-route-mode-toggle-more"
+                className={
+                  collapsedModesHaveEnabled
+                    ? 'map-route-mode-toggle-more is-active'
+                    : 'map-route-mode-toggle-more'
+                }
                 type="button"
                 aria-expanded={modeListExpanded}
                 onClick={() => setModeListExpanded((value) => !value)}
