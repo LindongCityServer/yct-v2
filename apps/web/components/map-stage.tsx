@@ -370,6 +370,7 @@ const mapDefaults = {
 };
 
 type PoiDetailTab = 'summary' | 'facilities';
+const mapFavoriteStorageKey = 'yct.mapFavorites.v1';
 
 export function MapStage() {
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -427,10 +428,30 @@ export function MapStage() {
   const [routeEndpointQuery, setRouteEndpointQuery] = useState('');
   const [nearbySearchCenter, setNearbySearchCenter] = useState<NearbySearchCenter | null>(null);
   const [poiDetailCollapsed, setPoiDetailCollapsed] = useState(false);
+  const [favoriteMarkerIds, setFavoriteMarkerIds] = useState<Set<string>>(() => new Set());
+  const [poiActionStatus, setPoiActionStatus] = useState('');
+  const [sharedMarkerFocusApplied, setSharedMarkerFocusApplied] = useState(false);
 
   useEffect(() => {
     mapViewRef.current = mapView;
   }, [mapView]);
+
+  useEffect(() => {
+    setFavoriteMarkerIds(new Set(readMapFavoriteMarkerIds()));
+  }, []);
+
+  useEffect(() => {
+    setPoiActionStatus('');
+  }, [focusedMarkerId]);
+
+  useEffect(() => {
+    if (!poiActionStatus) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setPoiActionStatus(''), 3200);
+    return () => window.clearTimeout(timer);
+  }, [poiActionStatus]);
 
   useEffect(() => {
     let cancelled = false;
@@ -996,6 +1017,67 @@ export function MapStage() {
     setPoiDetailTab('summary');
     setPoiDetailCollapsed(false);
     setNearbySearchCenter(null);
+  };
+
+  useEffect(() => {
+    if (sharedMarkerFocusApplied || markerSnapshot.length === 0) {
+      return;
+    }
+
+    const markerId = new URLSearchParams(window.location.search).get('marker');
+    if (!markerId) {
+      setSharedMarkerFocusApplied(true);
+      return;
+    }
+
+    const marker = markerSnapshot.find((item) => item.id === markerId);
+    if (marker && isCenterableMarker(marker)) {
+      focusMapMarker(marker);
+    }
+    setSharedMarkerFocusApplied(true);
+  }, [focusMapMarker, markerSnapshot, sharedMarkerFocusApplied]);
+
+  const toggleFavoriteMarker = (marker: CenterableMarker) => {
+    const label = formatMarkerDisplayName(marker.label);
+    const next = new Set(favoriteMarkerIds);
+
+    if (next.has(marker.id)) {
+      next.delete(marker.id);
+      setPoiActionStatus(`已取消收藏 ${label}`);
+    } else {
+      next.add(marker.id);
+      setPoiActionStatus(`已收藏 ${label}`);
+    }
+
+    setFavoriteMarkerIds(next);
+    writeMapFavoriteMarkerIds([...next]);
+  };
+
+  const shareMarker = async (marker: CenterableMarker) => {
+    const label = formatMarkerDisplayName(marker.label);
+    const url = buildMapMarkerShareUrl(marker);
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `${label} - 雨城通地图`,
+          text: `在雨城通地图中查看 ${label}`,
+          url,
+        });
+        setPoiActionStatus('已打开系统分享面板');
+        return;
+      }
+
+      await copyTextToClipboard(url);
+      setPoiActionStatus('已复制地点链接');
+    } catch {
+      try {
+        await copyTextToClipboard(url);
+        setPoiActionStatus('已复制地点链接');
+      } catch {
+        setPoiActionStatus('当前浏览器暂不支持分享或复制');
+      }
+    }
   };
 
   const focusTransitLineById = (lineId: string) => {
@@ -1791,9 +1873,13 @@ export function MapStage() {
                         </a>
                       ) : null}
                       <PoiActionBar
+                        isFavorite={favoriteMarkerIds.has(focusedMarker.id)}
                         marker={focusedMarker}
                         onPlanRoute={() => createRoutePlanDraft(focusedMarker)}
                         onSearchNearby={() => startNearbySearch(focusedMarker)}
+                        onShare={() => void shareMarker(focusedMarker)}
+                        onToggleFavorite={() => toggleFavoriteMarker(focusedMarker)}
+                        status={poiActionStatus}
                       />
                     </>
                   ) : null}
@@ -3875,40 +3961,95 @@ function formatRouteStepMinutes(minutes: number): string {
   return `${Math.max(1, Math.round(minutes))}分钟`;
 }
 
+function readMapFavoriteMarkerIds(): string[] {
+  try {
+    const source = window.localStorage.getItem(mapFavoriteStorageKey);
+    const parsed = source ? JSON.parse(source) : [];
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeMapFavoriteMarkerIds(markerIds: string[]) {
+  window.localStorage.setItem(mapFavoriteStorageKey, JSON.stringify(dedupeValues(markerIds)));
+}
+
+function buildMapMarkerShareUrl(marker: CenterableMarker): string {
+  const url = new URL(appPath('/map'), window.location.origin);
+  url.searchParams.set('marker', marker.id);
+  return url.toString();
+}
+
+async function copyTextToClipboard(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  throw new Error(`Clipboard API is unavailable for ${value.length} characters`);
+}
+
 function PoiActionBar({
+  isFavorite,
   marker,
   onPlanRoute,
   onSearchNearby,
-}: Readonly<{ marker: CenterableMarker; onPlanRoute: () => void; onSearchNearby: () => void }>) {
+  onShare,
+  onToggleFavorite,
+  status,
+}: Readonly<{
+  isFavorite: boolean;
+  marker: CenterableMarker;
+  onPlanRoute: () => void;
+  onSearchNearby: () => void;
+  onShare: () => void;
+  onToggleFavorite: () => void;
+  status: string;
+}>) {
   return (
-    <div className="map-poi-action-bar" aria-label="地点操作">
-      <button className="secondary-action-button is-primary" type="button" onClick={onPlanRoute}>
-        <span className="material-symbols-outlined" aria-hidden="true">
-          directions
-        </span>
-        <span>查看路线</span>
-      </button>
-      <button
-        className="icon-action-button"
-        type="button"
-        aria-label={`搜索 ${marker.label} 周边`}
-        onClick={onSearchNearby}
-      >
-        <span className="material-symbols-outlined" aria-hidden="true">
-          travel_explore
-        </span>
-      </button>
-      <button className="icon-action-button" type="button" aria-label={`收藏 ${marker.label}`}>
-        <span className="material-symbols-outlined" aria-hidden="true">
-          bookmark
-        </span>
-      </button>
-      <button className="icon-action-button" type="button" aria-label={`分享 ${marker.label}`}>
-        <span className="material-symbols-outlined" aria-hidden="true">
-          share
-        </span>
-      </button>
-    </div>
+    <>
+      <div className="map-poi-action-bar" aria-label="地点操作">
+        <button className="secondary-action-button is-primary" type="button" onClick={onPlanRoute}>
+          <span className="material-symbols-outlined" aria-hidden="true">
+            directions
+          </span>
+          <span>查看路线</span>
+        </button>
+        <button
+          className="icon-action-button"
+          type="button"
+          aria-label={`搜索 ${marker.label} 周边`}
+          onClick={onSearchNearby}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            travel_explore
+          </span>
+        </button>
+        <button
+          className={`icon-action-button${isFavorite ? ' is-active' : ''}`}
+          type="button"
+          aria-pressed={isFavorite}
+          aria-label={`${isFavorite ? '取消收藏' : '收藏'} ${marker.label}`}
+          onClick={onToggleFavorite}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            bookmark
+          </span>
+        </button>
+        <button
+          className="icon-action-button"
+          type="button"
+          aria-label={`分享 ${marker.label}`}
+          onClick={onShare}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            share
+          </span>
+        </button>
+      </div>
+      {status ? <p className="map-poi-action-status">{status}</p> : null}
+    </>
   );
 }
 

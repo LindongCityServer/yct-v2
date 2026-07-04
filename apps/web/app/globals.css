@@ -2322,6 +2322,18 @@ body .material-symbols-outlined {
   justify-content: center;
 }
 
+.map-poi-action-bar .icon-action-button.is-active {
+  --icon-fill: 1;
+  background: color-mix(in srgb, var(--yct-color-primary) 16%, var(--yct-color-surface-muted));
+  color: var(--yct-color-primary);
+}
+
+.map-poi-action-status {
+  margin: var(--yct-space-2) 0 0;
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+}
+
 .map-legal {
   position: absolute;
   right: var(--yct-map-control-inset);
