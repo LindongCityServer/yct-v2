@@ -2134,6 +2134,32 @@ body .material-symbols-outlined {
 
 .map-poi-related-list {
   display: grid;
+  gap: var(--yct-space-3);
+}
+
+.map-poi-related-group {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.map-poi-related-group h4 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+}
+
+.map-poi-related-group h4 small {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.map-poi-related-group-items {
+  display: grid;
   gap: var(--yct-space-2);
 }
 

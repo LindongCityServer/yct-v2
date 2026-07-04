@@ -307,6 +307,12 @@ interface SecondaryPoiLink {
   marker: PointMarker;
 }
 
+interface SecondaryPoiGroup {
+  id: string;
+  label: string;
+  items: SecondaryPoiLink[];
+}
+
 interface NearbySearchCenter {
   markerId: string;
   label: string;
@@ -617,6 +623,10 @@ export function MapStage() {
   const focusedSecondaryPois = focusedPointMarker
     ? (secondaryPoiIndex.get(focusedPointMarker.id) ?? [])
     : [];
+  const focusedSecondaryPoiGroups = useMemo(
+    () => groupSecondaryPois(focusedSecondaryPois),
+    [focusedSecondaryPois],
+  );
   const pointOverlaySource = useMemo(
     () =>
       focusedPointMarker
@@ -1895,23 +1905,34 @@ export function MapStage() {
                   {!isLinearDetailMarker(focusedMarker) && poiDetailTab === 'facilities' ? (
                     focusedSecondaryPois.length > 0 ? (
                       <div className="map-poi-related-list" aria-label="关联地点">
-                        {focusedSecondaryPois.map((item) => (
-                          <button
-                            className="map-poi-related-item"
-                            type="button"
-                            key={item.marker.id}
-                            onClick={() => focusMapMarker(item.marker)}
-                          >
-                            <MarkerListIcon marker={item.marker} tileBaseUrl={tileBaseUrl} />
-                            <span>
-                              <strong>{item.childLabel}</strong>
-                              <small>
-                                {item.marker.categoryId
-                                  ? (categoryById.get(item.marker.categoryId) ?? item.marker.categoryId)
-                                  : '关联地点'}
-                              </small>
-                            </span>
-                          </button>
+                        {focusedSecondaryPoiGroups.map((group) => (
+                          <section className="map-poi-related-group" key={group.id}>
+                            <h4>
+                              <span>{group.label}</span>
+                              <small>{group.items.length} 个</small>
+                            </h4>
+                            <div className="map-poi-related-group-items">
+                              {group.items.map((item) => (
+                                <button
+                                  className="map-poi-related-item"
+                                  type="button"
+                                  key={item.marker.id}
+                                  onClick={() => focusMapMarker(item.marker)}
+                                >
+                                  <MarkerListIcon marker={item.marker} tileBaseUrl={tileBaseUrl} />
+                                  <span>
+                                    <strong>{item.childLabel}</strong>
+                                    <small>
+                                      {item.marker.categoryId
+                                        ? (categoryById.get(item.marker.categoryId) ??
+                                          item.marker.categoryId)
+                                        : '关联地点'}
+                                    </small>
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </section>
                         ))}
                       </div>
                     ) : (
@@ -4126,6 +4147,58 @@ function isTransitStationPoi(marker: MapMarkerSnapshot['markers'][number]): bool
       marker.categoryId,
     ),
   );
+}
+
+function groupSecondaryPois(links: SecondaryPoiLink[]): SecondaryPoiGroup[] {
+  const groups = new Map<string, SecondaryPoiGroup>();
+
+  for (const link of links) {
+    const group = getSecondaryPoiGroup(link);
+    const current = groups.get(group.id) ?? { ...group, items: [] };
+    current.items.push(link);
+    groups.set(group.id, current);
+  }
+
+  return [...groups.values()].sort(
+    (left, right) =>
+      getSecondaryPoiGroupOrder(left.id) - getSecondaryPoiGroupOrder(right.id) ||
+      left.label.localeCompare(right.label, 'zh-CN'),
+  );
+}
+
+function getSecondaryPoiGroup(link: SecondaryPoiLink): Omit<SecondaryPoiGroup, 'items'> {
+  const categoryId = link.marker.categoryId?.toLowerCase() ?? '';
+  const text = normalizeMarkerSearchText(`${link.childLabel} ${link.marker.label} ${categoryId}`);
+
+  if (isRouteAccessSecondaryPoi(link)) {
+    return { id: 'access', label: '出入口' };
+  }
+
+  if (
+    isTransitStationPoi(link.marker) ||
+    /station|stop|port|airport|metro|bus|tram|railway|coach|ferry/.test(categoryId)
+  ) {
+    return { id: 'transport', label: '交通' };
+  }
+
+  if (/([a-z]\d?座|[0-9一二三四五六七八九十]+号楼|楼栋|楼|栋|座|塔)/.test(text)) {
+    return { id: 'building', label: '楼栋' };
+  }
+
+  if (/景点|公园|广场|展馆|文化|纪念|湖|山|岛|园|scenery|park/.test(text)) {
+    return { id: 'scenery', label: '景点' };
+  }
+
+  if (/商店|商场|餐厅|酒店|超市|住宅|小区|工厂|shop|restaurant|hotel|residence|industry/.test(text)) {
+    return { id: 'nearby', label: '周边' };
+  }
+
+  return { id: 'facility', label: '设施' };
+}
+
+function getSecondaryPoiGroupOrder(groupId: string): number {
+  const index = ['access', 'transport', 'building', 'scenery', 'facility', 'nearby'].indexOf(groupId);
+  return index >= 0 ? index : 99;
 }
 
 function buildSecondaryPoiIndex(markers: PointMarker[]): Map<string, SecondaryPoiLink[]> {
