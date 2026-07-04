@@ -266,9 +266,33 @@ interface RoutePlanOption {
 
 interface RoutePlanStep {
   kind: 'place' | 'walk' | 'transit' | 'transfer';
+  color?: string;
   label: string;
   icon?: string;
   role?: 'origin' | 'destination' | 'boarding' | 'alighting' | 'transfer';
+}
+
+interface RoadRouteNode {
+  id: string;
+  coordinate: [number, number];
+  roadId: string;
+  roadLabel: string;
+}
+
+interface RoadRouteEdge {
+  distance: number;
+  to: string;
+}
+
+interface RoadRouteGraph {
+  adjacency: Map<string, RoadRouteEdge[]>;
+  nodes: RoadRouteNode[];
+  nodesById: Map<string, RoadRouteNode>;
+}
+
+interface RoadRoutePath {
+  distance: number;
+  nodes: RoadRouteNode[];
 }
 
 interface NearbySearchCenter {
@@ -770,11 +794,12 @@ export function MapStage() {
             draft: routePlanDraft,
             enabledModes: routeTransportModes,
             pointMarkers,
+            roadMarkers: roadTraceSource,
             transitLines: transitOverview?.lines ?? [],
             modeProfiles: transitOverview?.modeProfiles ?? [],
           })
         : [],
-    [pointMarkers, routePlanDraft, routeTransportModes, transitOverview],
+    [pointMarkers, roadTraceSource, routePlanDraft, routeTransportModes, transitOverview],
   );
   const selectedRouteOption =
     routePlanOptions.find((option) => option.id === selectedRouteOptionId) ?? routePlanOptions[0];
@@ -2731,6 +2756,11 @@ function RoutePlanDraftCard({
                                 <li
                                   className={stepClassName}
                                   key={`${option.id}-${stepIndex}`}
+                                  style={
+                                    {
+                                      '--route-step-color': step.color ?? option.color,
+                                    } as CSSProperties
+                                  }
                                 >
                                   <span className="map-route-step-marker" aria-hidden="true">
                                     {step.icon ? (
@@ -2765,6 +2795,7 @@ function buildRoutePlanOptions(input: {
   draft: RoutePlanDraft;
   enabledModes: EnabledRouteTransportModes;
   pointMarkers: PointMarker[];
+  roadMarkers: EndpointGroupMarker[];
   transitLines: TransitOverviewLine[];
   modeProfiles: TransitModeProfileForMap[];
 }): RoutePlanOption[] {
@@ -2795,6 +2826,11 @@ function buildRoutePlanOptions(input: {
       ],
       note: '当前为直线步行估算；道路级导航发布后会改为沿道路、出入口和可通行规则规划。',
     });
+
+    const roadAssistedWalkOption = buildRoadAssistedWalkOption(input.draft, input.roadMarkers);
+    if (roadAssistedWalkOption) {
+      options.push(roadAssistedWalkOption);
+    }
   }
 
   options.push(...buildTransitRoutePlanOptions(input));
@@ -2848,16 +2884,17 @@ function createRoutePlaceStep(
   label: string,
   role?: RoutePlanStep['role'],
   icon?: string,
+  color?: string,
 ): RoutePlanStep {
-  return { kind: 'place', label, role, icon };
+  return { kind: 'place', label, role, icon, color };
 }
 
 function createRouteWalkStep(label: string): RoutePlanStep {
   return { kind: 'walk', label };
 }
 
-function createRouteTransitStep(label: string): RoutePlanStep {
-  return { kind: 'transit', label };
+function createRouteTransitStep(label: string, color?: string): RoutePlanStep {
+  return { kind: 'transit', label, color };
 }
 
 function createRouteTransferStep(label: string): RoutePlanStep {
@@ -2872,6 +2909,246 @@ function getRouteStepMarkerText(step: RoutePlanStep): string {
     return '终';
   }
   return '';
+}
+
+function buildRoadAssistedWalkOption(
+  draft: RoutePlanDraft,
+  roadMarkers: EndpointGroupMarker[],
+): RoutePlanOption | undefined {
+  const graph = buildRoadRouteGraph(roadMarkers);
+  if (!graph || graph.nodes.length < 2) {
+    return undefined;
+  }
+
+  const originRoadNode = findNearestRoadRouteNode(draft.origin, graph.nodes);
+  const destinationRoadNode = findNearestRoadRouteNode(draft.destination, graph.nodes);
+  if (!originRoadNode || !destinationRoadNode || originRoadNode.id === destinationRoadNode.id) {
+    return undefined;
+  }
+
+  const roadPath = findRoadRoutePath(graph, originRoadNode.id, destinationRoadNode.id);
+  if (!roadPath || roadPath.nodes.length < 2) {
+    return undefined;
+  }
+
+  const accessDistance = getCoordinateDistance(draft.origin, originRoadNode.coordinate);
+  const egressDistance = getCoordinateDistance(draft.destination, destinationRoadNode.coordinate);
+  const roadDistance = roadPath.distance;
+  const accessMinutes = estimateRouteMinutes(accessDistance, 72);
+  const roadMinutes = estimateRouteMinutes(roadDistance, 64);
+  const egressMinutes = estimateRouteMinutes(egressDistance, 72);
+  const walkingDistance = accessDistance + roadDistance + egressDistance;
+  const walkColor =
+    routeTransportModeOptions.find((option) => option.mode === 'walk')?.color ?? '#4B5B57';
+  const roadNames = Array.from(new Set(roadPath.nodes.map((node) => node.roadLabel))).slice(0, 3);
+
+  return {
+    id: `walk-road-${originRoadNode.id}-${destinationRoadNode.id}`,
+    title: '道路步行估算',
+    summary: `${formatRoutePlanDistance(walkingDistance)} · ${roadNames.join('、') || '道路端点'}`,
+    icon: 'conversion_path',
+    color: walkColor,
+    coordinates: dedupeConsecutiveCoordinates([
+      draft.origin,
+      originRoadNode.coordinate,
+      ...roadPath.nodes.map((node) => node.coordinate),
+      destinationRoadNode.coordinate,
+      draft.destination,
+    ]),
+    markerIds: getRouteEndpointMarkerIds(draft),
+    estimatedDistance: walkingDistance,
+    estimatedMinutes: accessMinutes + roadMinutes + egressMinutes,
+    transferCount: 0,
+    walkingDistance,
+    steps: [
+      createRoutePlaceStep(`${draft.originLabel} 出发`, 'origin'),
+      createRouteWalkStep(
+        `步行接驳 ${formatRoutePlanDistance(accessDistance)} ${formatRouteStepMinutes(accessMinutes)}`,
+      ),
+      createRouteWalkStep(
+        `沿道路端点估算 ${formatRoutePlanDistance(roadDistance)} ${formatRouteStepMinutes(
+          roadMinutes,
+        )}`,
+      ),
+      createRouteWalkStep(
+        `步行 ${formatRoutePlanDistance(egressDistance)} ${formatRouteStepMinutes(egressMinutes)}`,
+      ),
+      createRoutePlaceStep(`到达 ${draft.destinationLabel}`, 'destination'),
+    ],
+    note: '基于旧地图道路端点近似排序和 50 格连通候选生成，仅用于路线预览；正式道路级导航仍需要后台道路图、可通行规则和权重数据。',
+  };
+}
+
+function buildRoadRouteGraph(roadMarkers: EndpointGroupMarker[]): RoadRouteGraph | undefined {
+  const nodes: RoadRouteNode[] = [];
+  const adjacency = new Map<string, RoadRouteEdge[]>();
+
+  for (const marker of roadMarkers) {
+    if (marker.geometry.coordinates.length < 2) {
+      continue;
+    }
+
+    const roadLabel = formatMarkerDisplayName(marker.label);
+    const coordinates = orderRoadTracePoints(marker.geometry.coordinates);
+    coordinates.forEach((coordinate, index) => {
+      const node: RoadRouteNode = {
+        id: `${marker.id}:${index}`,
+        coordinate,
+        roadId: marker.id,
+        roadLabel,
+      };
+      nodes.push(node);
+      adjacency.set(node.id, []);
+    });
+  }
+
+  if (nodes.length < 2 || nodes.length > 1200) {
+    return undefined;
+  }
+
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  const nodesByRoadId = new Map<string, RoadRouteNode[]>();
+  for (const node of nodes) {
+    const roadNodes = nodesByRoadId.get(node.roadId) ?? [];
+    roadNodes.push(node);
+    nodesByRoadId.set(node.roadId, roadNodes);
+  }
+
+  for (const roadNodes of nodesByRoadId.values()) {
+    for (let index = 1; index < roadNodes.length; index += 1) {
+      const previous = roadNodes[index - 1];
+      const current = roadNodes[index];
+      if (previous && current) {
+        addRoadRouteGraphEdge(adjacency, previous.id, current.id, getCoordinateDistance(previous.coordinate, current.coordinate));
+      }
+    }
+  }
+
+  const connectionThreshold = 50;
+  for (let leftIndex = 0; leftIndex < nodes.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < nodes.length; rightIndex += 1) {
+      const left = nodes[leftIndex];
+      const right = nodes[rightIndex];
+      if (!left || !right || left.roadId === right.roadId) {
+        continue;
+      }
+
+      const distance = getCoordinateDistance(left.coordinate, right.coordinate);
+      if (distance <= connectionThreshold) {
+        addRoadRouteGraphEdge(adjacency, left.id, right.id, distance);
+      }
+    }
+  }
+
+  return { adjacency, nodes, nodesById };
+}
+
+function addRoadRouteGraphEdge(
+  adjacency: Map<string, RoadRouteEdge[]>,
+  from: string,
+  to: string,
+  distance: number,
+) {
+  adjacency.get(from)?.push({ to, distance });
+  adjacency.get(to)?.push({ to: from, distance });
+}
+
+function findNearestRoadRouteNode(
+  point: [number, number],
+  nodes: RoadRouteNode[],
+): RoadRouteNode | undefined {
+  return [...nodes].sort(
+    (left, right) =>
+      getCoordinateDistance(point, left.coordinate) - getCoordinateDistance(point, right.coordinate),
+  )[0];
+}
+
+function findRoadRoutePath(
+  graph: RoadRouteGraph,
+  originId: string,
+  destinationId: string,
+): RoadRoutePath | undefined {
+  const distances = new Map<string, number>();
+  const previous = new Map<string, string>();
+  const unvisited = new Set(graph.nodes.map((node) => node.id));
+
+  for (const node of graph.nodes) {
+    distances.set(node.id, node.id === originId ? 0 : Number.POSITIVE_INFINITY);
+  }
+
+  while (unvisited.size > 0) {
+    const currentId = findNearestUnvisitedRoadRouteNode(unvisited, distances);
+    if (!currentId) {
+      break;
+    }
+    if (currentId === destinationId) {
+      break;
+    }
+
+    unvisited.delete(currentId);
+    const currentDistance = distances.get(currentId) ?? Number.POSITIVE_INFINITY;
+    if (!Number.isFinite(currentDistance)) {
+      break;
+    }
+
+    for (const edge of graph.adjacency.get(currentId) ?? []) {
+      if (!unvisited.has(edge.to)) {
+        continue;
+      }
+      const nextDistance = currentDistance + edge.distance;
+      if (nextDistance < (distances.get(edge.to) ?? Number.POSITIVE_INFINITY)) {
+        distances.set(edge.to, nextDistance);
+        previous.set(edge.to, currentId);
+      }
+    }
+  }
+
+  const distance = distances.get(destinationId);
+  if (distance === undefined || !Number.isFinite(distance)) {
+    return undefined;
+  }
+
+  const pathIds = [destinationId];
+  let currentId = destinationId;
+  while (currentId !== originId) {
+    const previousId = previous.get(currentId);
+    if (!previousId) {
+      return undefined;
+    }
+    pathIds.push(previousId);
+    currentId = previousId;
+  }
+
+  const nodes = pathIds
+    .reverse()
+    .map((id) => graph.nodesById.get(id))
+    .filter((node): node is RoadRouteNode => Boolean(node));
+  return nodes.length >= 2 ? { distance, nodes } : undefined;
+}
+
+function findNearestUnvisitedRoadRouteNode(
+  unvisited: Set<string>,
+  distances: Map<string, number>,
+): string | undefined {
+  let nearestId: string | undefined;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  for (const id of unvisited) {
+    const distance = distances.get(id) ?? Number.POSITIVE_INFINITY;
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestId = id;
+    }
+  }
+  return nearestId;
+}
+
+function dedupeConsecutiveCoordinates(
+  coordinates: Array<[number, number]>,
+): Array<[number, number]> {
+  return coordinates.filter((coordinate, index) => {
+    const previous = coordinates[index - 1];
+    return !previous || previous[0] !== coordinate[0] || previous[1] !== coordinate[1];
+  });
 }
 
 interface TransitRouteStop {
@@ -3006,11 +3283,13 @@ function buildDirectTransitLineOption(
         `${formatMarkerDisplayName(originStop.marker.label)} 进站`,
         'boarding',
         candidate.icon,
+        candidate.color,
       ),
       createRouteTransitStep(
         `乘坐 ${candidate.line.name}（${candidate.terminalName}方向） ${stationSpan}站 ${formatRouteStepMinutes(
           transitMinutes,
         )}`,
+        candidate.color,
       ),
       createRoutePlaceStep(
         `${formatMarkerDisplayName(destinationStop.marker.label)} 出站`,
@@ -3167,11 +3446,13 @@ function buildTransferTransitLineOptions(
             `${formatMarkerDisplayName(originCandidate.originStop.marker.label)} 进站`,
             'boarding',
             originCandidate.candidate.icon,
+            originCandidate.candidate.color,
           ),
           createRouteTransitStep(
             `乘坐 ${originCandidate.candidate.line.name}（${originCandidate.candidate.terminalName}方向） ${firstStationSpan}站 ${formatRouteStepMinutes(
               firstTransitMinutes,
             )}`,
+            originCandidate.candidate.color,
           ),
           createRoutePlaceStep(`${formatMarkerDisplayName(transfer.fromStop.marker.label)} 换乘`, 'transfer'),
           createRouteTransferStep(
@@ -3183,11 +3464,13 @@ function buildTransferTransitLineOptions(
             `${formatMarkerDisplayName(transfer.toStop.marker.label)} 上车`,
             'boarding',
             destinationCandidate.candidate.icon,
+            destinationCandidate.candidate.color,
           ),
           createRouteTransitStep(
             `乘坐 ${destinationCandidate.candidate.line.name}（${destinationCandidate.candidate.terminalName}方向） ${secondStationSpan}站 ${formatRouteStepMinutes(
               secondTransitMinutes,
             )}`,
+            destinationCandidate.candidate.color,
           ),
           createRoutePlaceStep(
             `${formatMarkerDisplayName(
