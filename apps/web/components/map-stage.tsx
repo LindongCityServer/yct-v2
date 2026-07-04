@@ -339,6 +339,7 @@ export function MapStage() {
     centerZ: mapDefaults.centerZ,
     zoom: mapDefaults.defaultZoom,
   });
+  const mapViewRef = useRef<MapView>(mapView);
   const [poiTitle, setPoiTitle] = useState('');
   const [poiCategoryId, setPoiCategoryId] = useState('');
   const [poiDescription, setPoiDescription] = useState('');
@@ -368,6 +369,10 @@ export function MapStage() {
   const [selectedRouteOptionId, setSelectedRouteOptionId] = useState<string | null>(null);
   const [nearbySearchCenter, setNearbySearchCenter] = useState<NearbySearchCenter | null>(null);
   const [poiDetailCollapsed, setPoiDetailCollapsed] = useState(false);
+
+  useEffect(() => {
+    mapViewRef.current = mapView;
+  }, [mapView]);
 
   useEffect(() => {
     let cancelled = false;
@@ -909,11 +914,12 @@ export function MapStage() {
     const midpoint = getMidpoint(points.left, points.right);
     const screenX = midpoint.x - rect.left;
     const screenY = midpoint.y - rect.top;
+    const currentView = mapViewRef.current;
     pinchRef.current = {
       pointerIds: [points.left.id, points.right.id],
       startDistance: Math.max(1, getPointerDistance(points.left, points.right)),
-      startZoom: mapView.zoom,
-      anchorWorld: screenToWorld(screenX, screenY, mapView, viewportSize),
+      startZoom: currentView.zoom,
+      anchorWorld: screenToWorld(screenX, screenY, currentView, viewportSize),
     };
   };
 
@@ -958,7 +964,7 @@ export function MapStage() {
       return;
     }
 
-    startDragGesture(event.pointerId, event.clientX, event.clientY, mapView);
+    startDragGesture(event.pointerId, event.clientX, event.clientY, mapViewRef.current);
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -986,9 +992,14 @@ export function MapStage() {
   };
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const wasPinching = pinchRef.current?.pointerIds.includes(event.pointerId) ?? false;
     activePointersRef.current.delete(event.pointerId);
-    if (pinchRef.current?.pointerIds.includes(event.pointerId)) {
+    if (wasPinching) {
       pinchRef.current = null;
+      const remaining = Array.from(activePointersRef.current.entries())[0];
+      if (remaining) {
+        startDragGesture(remaining[0], remaining[1].x, remaining[1].y, mapViewRef.current);
+      }
     }
 
     if (dragRef.current?.pointerId === event.pointerId) {
@@ -2525,6 +2536,10 @@ function buildTransitRoutePlanOption(input: {
   const originStation = findNearestRouteStation(input.draft.origin, stationCandidates);
   const destinationStation = findNearestRouteStation(input.draft.destination, stationCandidates);
   if (!originStation || !destinationStation) {
+    return undefined;
+  }
+
+  if (originStation.marker.id === destinationStation.marker.id) {
     return undefined;
   }
 

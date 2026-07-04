@@ -31,6 +31,8 @@ export interface MapMarkerSnapshot {
     description?: string;
     href?: string;
     imageUrl?: string;
+    parentLabel?: string;
+    secondaryLabel?: string;
   }>;
 }
 

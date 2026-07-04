@@ -210,13 +210,17 @@ function buildCoachTripInstances(
   profiles: TravelScheduleServiceProfile[],
 ): TravelTripInstance[] {
   const stationNameById = new Map(
-    snapshot.stations.map((station) => [station.stationId, station.name]),
+    snapshot.stations.map((station) => [
+      station.stationId,
+      normalizeCoachStationName(station.name),
+    ]),
   );
   const gatesByLine = groupGatesByLine(snapshot.gates);
   const profile = getServiceProfile('coach', profiles);
 
   return snapshot.trips.map((trip) => {
     const gateText = formatGates(gatesByLine.get(trip.lineName) ?? [], stationNameById);
+    const stationNames = trip.stationNames.map(normalizeCoachStationName);
 
     return {
       tripInstanceId: trip.sourceId,
@@ -227,9 +231,9 @@ function buildCoachTripInstances(
       departureTime: trip.departureTime,
       routeNote: undefined,
       lineName: trip.lineName,
-      stationNames: trip.stationNames,
-      originStationName: trip.stationNames[0],
-      destinationStationName: trip.stationNames[trip.stationNames.length - 1],
+      stationNames,
+      originStationName: stationNames[0],
+      destinationStationName: stationNames[stationNames.length - 1],
       fareText: trip.fare,
       operator: trip.operator,
       bookingUrl: normalizeBookingUrl(trip.bookingUrl),
@@ -239,6 +243,11 @@ function buildCoachTripInstances(
       sourcePath: trip.sourcePath,
     };
   });
+}
+
+function normalizeCoachStationName(value: string): string {
+  const trimmed = value.trim();
+  return trimmed === '临东站（SB站）' ? '临东站汽车客运枢纽站' : trimmed;
 }
 
 async function readFlightTrips(

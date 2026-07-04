@@ -158,13 +158,19 @@ function groupRoadEndpointMarkers(snapshot: MapMarkerSnapshot): MapMarkerSnapsho
 function normalizeMarkerSnapshotText(snapshot: MapMarkerSnapshot): MapMarkerSnapshot {
   return {
     ...snapshot,
-    markers: snapshot.markers.map((marker) => ({
-      ...marker,
-      label: normalizeMarkerLabelText(marker.label),
-      description: marker.description
-        ? normalizeMarkerDescriptionText(marker.description)
-        : marker.description,
-    })),
+    markers: snapshot.markers.map((marker) => {
+      const label = normalizeMarkerLabelText(marker.label);
+      const secondary = parseSecondaryMarkerLabel(label);
+      return {
+        ...marker,
+        label,
+        parentLabel: marker.parentLabel ?? secondary?.parentLabel,
+        secondaryLabel: marker.secondaryLabel ?? secondary?.secondaryLabel,
+        description: marker.description
+          ? normalizeMarkerDescriptionText(marker.description)
+          : marker.description,
+      };
+    }),
   };
 }
 
@@ -177,6 +183,20 @@ function normalizeMarkerLabelText(value: string): string {
 
 function normalizeMarkerDescriptionText(value: string): string {
   return value.replace(/\u3000/g, '').trim();
+}
+
+function parseSecondaryMarkerLabel(
+  value: string,
+): { parentLabel: string; secondaryLabel: string } | undefined {
+  const [parentLabel, secondaryLabel] = value.split('-', 2).map((item) => item.trim());
+  if (!parentLabel || !secondaryLabel) {
+    return undefined;
+  }
+
+  return {
+    parentLabel,
+    secondaryLabel,
+  };
 }
 
 function isRoadEndpointSourceMarker(
