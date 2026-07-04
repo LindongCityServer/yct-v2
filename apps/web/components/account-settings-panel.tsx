@@ -655,6 +655,9 @@ export function AccountSettingsPanel({
     }
   };
 
+  const notificationMasterStatus = notificationEnabled ? '推送开启' : '推送关闭';
+  const notificationMasterLabel = `本设备推送总开关，当前${notificationEnabled ? '已开启' : '已关闭'}`;
+
   return (
     <section className="module-panel" aria-labelledby="account-title">
       <div className="section-heading">
@@ -717,10 +720,14 @@ export function AccountSettingsPanel({
               notifications
             </span>
             <span id="notification-settings-title">通知类型与免打扰</span>
-            <label className="switch-control" title="开启或关闭本设备 Push 通知">
+            <span className="settings-inline-status">{notificationMasterStatus}</span>
+            <label
+              className="switch-control notification-master-switch"
+              title={notificationMasterLabel}
+            >
               <input
                 type="checkbox"
-                aria-label="开启或关闭本设备 Push 通知"
+                aria-label={notificationMasterLabel}
                 checked={notificationEnabled}
                 onChange={(event) => updateNotificationEnabled(event.currentTarget.checked)}
               />

@@ -3246,6 +3246,10 @@ body .material-symbols-outlined {
   margin-left: auto;
 }
 
+.notification-master-switch {
+  margin-left: 0;
+}
+
 .switch-control input {
   position: absolute;
   inset: 0;
