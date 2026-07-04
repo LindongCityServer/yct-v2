@@ -293,6 +293,8 @@ Notes:
 - Do not upload local .env files or .yct-data into this bundle.
 - Keep server-side runtime stores, uploaded content assets, logs, and backups outside the deployment directory.
 - If the reverse proxy is mounted at /v2, build and start with BasePath /v2. If it is mounted at the site root later, rebuild with an empty BasePath.
+- Stop the old process before deployment and unpack this bundle into an empty deployment directory, or clean the old standalone files first. Do not merge it over an old .next directory: server.js, .next/server, and .next/static must come from the same build.
+- After deployment, /v2/map, /v2/api/map/markers, and the /v2/_next/static assets referenced by the page HTML should all return 200.
 "@
 
   Write-YctUtf8File -Path (Join-Path $stageRoot "start-yct-web.ps1") -Content $startScript

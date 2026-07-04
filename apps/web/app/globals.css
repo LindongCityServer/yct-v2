@@ -1430,6 +1430,15 @@ body .material-symbols-outlined {
   font-size: 17px;
 }
 
+.map-route-option-badges {
+  display: inline-flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
 .map-route-option-copy {
   display: flex;
   align-items: center;
@@ -1535,6 +1544,37 @@ body .material-symbols-outlined {
 .map-route-step-timeline li.is-destination .map-route-step-marker {
   background: #ffa800;
   box-shadow: none;
+}
+
+.map-route-step-timeline li.is-walk,
+.map-route-step-timeline li.is-transfer {
+  color: var(--yct-color-text-secondary);
+  font-weight: 650;
+}
+
+.map-route-step-timeline li.is-walk .map-route-step-marker,
+.map-route-step-timeline li.is-transfer .map-route-step-marker {
+  width: 14px;
+  height: 14px;
+  margin-top: 6px;
+  margin-left: 4px;
+  border-width: 3px;
+  box-shadow: inset 0 0 0 3px var(--yct-color-border-strong);
+}
+
+.map-route-step-timeline li.is-transit {
+  color: var(--yct-color-text);
+  font-weight: 820;
+}
+
+.map-route-step-timeline li.is-transit .map-route-step-marker {
+  border-radius: var(--yct-radius-sm);
+  background: var(--route-rail-color);
+  box-shadow: none;
+}
+
+.map-route-step-timeline li.is-place:not(.is-origin):not(.is-destination) .map-route-step-marker {
+  background: var(--yct-color-surface-panel);
 }
 
 .map-route-plan-note {

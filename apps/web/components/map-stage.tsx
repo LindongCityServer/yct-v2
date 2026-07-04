@@ -258,8 +258,16 @@ interface RoutePlanOption {
   markerIds: string[];
   estimatedDistance: number;
   estimatedMinutes: number;
-  steps: string[];
+  transferCount: number;
+  walkingDistance: number;
+  steps: RoutePlanStep[];
   note: string;
+}
+
+interface RoutePlanStep {
+  kind: 'place' | 'walk' | 'transit' | 'transfer';
+  label: string;
+  role?: 'origin' | 'destination' | 'boarding' | 'alighting' | 'transfer';
 }
 
 interface NearbySearchCenter {
@@ -784,9 +792,9 @@ export function MapStage() {
   const visibleProjectedMarkers = useMemo(
     () =>
       routeResultMarkerIds
-        ? projectedMarkers.filter((marker) => routeResultMarkerIds.has(marker.id))
+        ? rawProjectedMarkers.filter((marker) => routeResultMarkerIds.has(marker.id))
         : projectedMarkers,
-    [projectedMarkers, routeResultMarkerIds],
+    [projectedMarkers, rawProjectedMarkers, routeResultMarkerIds],
   );
   const visibleProjectedLinearPois = routeResultActive ? [] : projectedLinearPois;
   const visibleProjectedRoadTraces = routeResultActive ? [] : projectedRoadTraces;
@@ -2656,6 +2664,7 @@ function RoutePlanDraftCard({
                 {options.length > 0 ? (
                   options.map((option, index) => {
                     const isSelected = option.id === selectedOption?.id;
+                    const optionBadges = getRouteOptionBadges(option, options, index);
                     return (
                       <article
                         className={
@@ -2681,11 +2690,15 @@ function RoutePlanDraftCard({
                             <span className="material-symbols-outlined" aria-hidden="true">
                               directions_walk
                             </span>
-                            {formatRoutePlanDistance(option.estimatedDistance)}
+                            {formatRoutePlanDistance(option.walkingDistance)}
                           </span>
-                          {index === 0 ? (
-                            <span className="map-route-option-badge">最快到达</span>
-                          ) : null}
+                          <span className="map-route-option-badges" aria-label="路线特征">
+                            {optionBadges.map((badge) => (
+                              <span className="map-route-option-badge" key={badge}>
+                                {badge}
+                              </span>
+                            ))}
+                          </span>
                           <span
                             className="material-symbols-outlined map-route-option-expand"
                             aria-hidden="true"
@@ -2707,23 +2720,21 @@ function RoutePlanDraftCard({
                         {isSelected ? (
                           <ol className="map-route-step-timeline" aria-label="选中路线步骤">
                             {option.steps.map((step, stepIndex) => {
-                              const isFirst = stepIndex === 0;
-                              const isLast = stepIndex === option.steps.length - 1;
+                              const stepClassName = [
+                                `is-${step.kind}`,
+                                step.role ? `is-${step.role}` : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ');
                               return (
                                 <li
-                                  className={
-                                    isFirst
-                                      ? 'is-origin'
-                                      : isLast
-                                        ? 'is-destination'
-                                        : 'is-transfer'
-                                  }
+                                  className={stepClassName}
                                   key={`${option.id}-${stepIndex}`}
                                 >
                                   <span className="map-route-step-marker" aria-hidden="true">
-                                    {isFirst ? '起' : isLast ? '终' : ''}
+                                    {getRouteStepMarkerText(step)}
                                   </span>
-                                  <span>{step}</span>
+                                  <span>{step.label}</span>
                                 </li>
                               );
                             })}
@@ -2754,6 +2765,7 @@ function buildRoutePlanOptions(input: {
 }): RoutePlanOption[] {
   const options: RoutePlanOption[] = [];
   const directDistance = getCoordinateDistance(input.draft.origin, input.draft.destination);
+  const routeOptionLimit = getRouteOptionLimit(input.enabledModes);
 
   if (input.enabledModes.walk) {
     const directMinutes = estimateRouteMinutes(directDistance, 72);
@@ -2767,10 +2779,14 @@ function buildRoutePlanOptions(input: {
       markerIds: getRouteEndpointMarkerIds(input.draft),
       estimatedDistance: directDistance,
       estimatedMinutes: directMinutes,
+      transferCount: 0,
+      walkingDistance: directDistance,
       steps: [
-        `${input.draft.originLabel} 出发`,
-        `步行 ${formatRoutePlanDistance(directDistance)} ${formatRouteStepMinutes(directMinutes)}`,
-        `到达 ${input.draft.destinationLabel}`,
+        createRoutePlaceStep(`${input.draft.originLabel} 出发`, 'origin'),
+        createRouteWalkStep(
+          `步行 ${formatRoutePlanDistance(directDistance)} ${formatRouteStepMinutes(directMinutes)}`,
+        ),
+        createRoutePlaceStep(`到达 ${input.draft.destinationLabel}`, 'destination'),
       ],
       note: '当前为直线步行估算；道路级导航发布后会改为沿道路、出入口和可通行规则规划。',
     });
@@ -2785,7 +2801,68 @@ function buildRoutePlanOptions(input: {
         left.estimatedDistance - right.estimatedDistance ||
         left.title.localeCompare(right.title, 'zh-CN'),
     )
-    .slice(0, 3);
+    .slice(0, routeOptionLimit);
+}
+
+function getRouteOptionLimit(enabledModes: EnabledRouteTransportModes): number {
+  const enabledCount = routeTransportModeOptions.filter((option) => enabledModes[option.mode]).length;
+  return Math.min(10, Math.max(3, enabledCount + 2));
+}
+
+function getRouteOptionBadges(
+  option: RoutePlanOption,
+  options: RoutePlanOption[],
+  index: number,
+): string[] {
+  const badges: string[] = [];
+  const minTransferCount = Math.min(...options.map((item) => item.transferCount));
+  const minWalkingDistance = Math.min(...options.map((item) => item.walkingDistance));
+
+  if (index === 0) {
+    badges.push('最快到达');
+  }
+
+  if (
+    option.transferCount === minTransferCount &&
+    options.some((item) => item.transferCount !== minTransferCount)
+  ) {
+    badges.push('最少换乘');
+  }
+
+  if (
+    Math.round(option.walkingDistance) === Math.round(minWalkingDistance) &&
+    options.some((item) => Math.round(item.walkingDistance) !== Math.round(minWalkingDistance))
+  ) {
+    badges.push('最少步行');
+  }
+
+  return badges;
+}
+
+function createRoutePlaceStep(label: string, role?: RoutePlanStep['role']): RoutePlanStep {
+  return { kind: 'place', label, role };
+}
+
+function createRouteWalkStep(label: string): RoutePlanStep {
+  return { kind: 'walk', label };
+}
+
+function createRouteTransitStep(label: string): RoutePlanStep {
+  return { kind: 'transit', label };
+}
+
+function createRouteTransferStep(label: string): RoutePlanStep {
+  return { kind: 'transfer', label, role: 'transfer' };
+}
+
+function getRouteStepMarkerText(step: RoutePlanStep): string {
+  if (step.role === 'origin') {
+    return '起';
+  }
+  if (step.role === 'destination') {
+    return '终';
+  }
+  return '';
 }
 
 interface TransitRouteStop {
@@ -2908,16 +2985,27 @@ function buildDirectTransitLineOption(
     ]),
     estimatedDistance: accessDistance + egressDistance + transitDistance,
     estimatedMinutes,
+    transferCount: 0,
+    walkingDistance: accessDistance + egressDistance,
     steps: [
-      `${draft.originLabel} 出发`,
-      `步行 ${formatRoutePlanDistance(accessDistance)} ${formatRouteStepMinutes(accessMinutes)}`,
-      `${formatMarkerDisplayName(originStop.marker.label)} 进站`,
-      `乘坐 ${candidate.line.name}（${candidate.terminalName}方向） ${stationSpan}站 ${formatRouteStepMinutes(
-        transitMinutes,
-      )}`,
-      `${formatMarkerDisplayName(destinationStop.marker.label)} 出站`,
-      `步行 ${formatRoutePlanDistance(egressDistance)} ${formatRouteStepMinutes(egressMinutes)}`,
-      `到达 ${draft.destinationLabel}`,
+      createRoutePlaceStep(`${draft.originLabel} 出发`, 'origin'),
+      createRouteWalkStep(
+        `步行 ${formatRoutePlanDistance(accessDistance)} ${formatRouteStepMinutes(accessMinutes)}`,
+      ),
+      createRoutePlaceStep(`${formatMarkerDisplayName(originStop.marker.label)} 进站`, 'boarding'),
+      createRouteTransitStep(
+        `乘坐 ${candidate.line.name}（${candidate.terminalName}方向） ${stationSpan}站 ${formatRouteStepMinutes(
+          transitMinutes,
+        )}`,
+      ),
+      createRoutePlaceStep(
+        `${formatMarkerDisplayName(destinationStop.marker.label)} 出站`,
+        'alighting',
+      ),
+      createRouteWalkStep(
+        `步行 ${formatRoutePlanDistance(egressDistance)} ${formatRouteStepMinutes(egressMinutes)}`,
+      ),
+      createRoutePlaceStep(`到达 ${draft.destinationLabel}`, 'destination'),
     ],
     note: '已按真实线路站序生成候选；站间耗时优先使用旧数据 travelTime，缺失时仍按距离估算。',
   };
@@ -3054,26 +3142,44 @@ function buildTransferTransitLineOptions(
         estimatedDistance:
           accessDistance + egressDistance + transferDistance + firstTransitDistance + secondTransitDistance,
         estimatedMinutes,
+        transferCount: 1,
+        walkingDistance: accessDistance + egressDistance + transferDistance,
         steps: [
-          `${draft.originLabel} 出发`,
-          `步行 ${formatRoutePlanDistance(accessDistance)} ${formatRouteStepMinutes(accessMinutes)}`,
-          `${formatMarkerDisplayName(originCandidate.originStop.marker.label)} 进站`,
-          `乘坐 ${originCandidate.candidate.line.name}（${originCandidate.candidate.terminalName}方向） ${firstStationSpan}站 ${formatRouteStepMinutes(
-            firstTransitMinutes,
-          )}`,
-          `${formatMarkerDisplayName(transfer.fromStop.marker.label)} 换乘`,
-          `换乘 步行 ${formatRoutePlanDistance(transferDistance)} ${formatRouteStepMinutes(
-            transferWalkMinutes,
-          )}`,
-          `${formatMarkerDisplayName(transfer.toStop.marker.label)} 上车`,
-          `乘坐 ${destinationCandidate.candidate.line.name}（${destinationCandidate.candidate.terminalName}方向） ${secondStationSpan}站 ${formatRouteStepMinutes(
-            secondTransitMinutes,
-          )}`,
-          `${formatMarkerDisplayName(
-            destinationCandidate.destinationStop.marker.label,
-          )} 出站`,
-          `步行 ${formatRoutePlanDistance(egressDistance)} ${formatRouteStepMinutes(egressMinutes)}`,
-          `到达 ${draft.destinationLabel}`,
+          createRoutePlaceStep(`${draft.originLabel} 出发`, 'origin'),
+          createRouteWalkStep(
+            `步行 ${formatRoutePlanDistance(accessDistance)} ${formatRouteStepMinutes(accessMinutes)}`,
+          ),
+          createRoutePlaceStep(
+            `${formatMarkerDisplayName(originCandidate.originStop.marker.label)} 进站`,
+            'boarding',
+          ),
+          createRouteTransitStep(
+            `乘坐 ${originCandidate.candidate.line.name}（${originCandidate.candidate.terminalName}方向） ${firstStationSpan}站 ${formatRouteStepMinutes(
+              firstTransitMinutes,
+            )}`,
+          ),
+          createRoutePlaceStep(`${formatMarkerDisplayName(transfer.fromStop.marker.label)} 换乘`, 'transfer'),
+          createRouteTransferStep(
+            `换乘 步行 ${formatRoutePlanDistance(transferDistance)} ${formatRouteStepMinutes(
+              transferWalkMinutes,
+            )}`,
+          ),
+          createRoutePlaceStep(`${formatMarkerDisplayName(transfer.toStop.marker.label)} 上车`, 'boarding'),
+          createRouteTransitStep(
+            `乘坐 ${destinationCandidate.candidate.line.name}（${destinationCandidate.candidate.terminalName}方向） ${secondStationSpan}站 ${formatRouteStepMinutes(
+              secondTransitMinutes,
+            )}`,
+          ),
+          createRoutePlaceStep(
+            `${formatMarkerDisplayName(
+              destinationCandidate.destinationStop.marker.label,
+            )} 出站`,
+            'alighting',
+          ),
+          createRouteWalkStep(
+            `步行 ${formatRoutePlanDistance(egressDistance)} ${formatRouteStepMinutes(egressMinutes)}`,
+          ),
+          createRoutePlaceStep(`到达 ${draft.destinationLabel}`, 'destination'),
         ],
         note: '已按真实线路站序组合一次换乘候选；换乘距离和缺失站间耗时仍为估算。',
       });
