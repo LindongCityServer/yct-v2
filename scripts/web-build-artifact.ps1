@@ -6,7 +6,8 @@ param(
   [ValidateSet("zip", "tar.gz", "tar")]
   [string]$ArchiveFormat = "zip",
   [switch]$SkipBuild,
-  [switch]$SkipStaging
+  [switch]$SkipStaging,
+  [switch]$ValidateOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -184,6 +185,125 @@ function Write-YctUtf8File {
   [System.IO.File]::WriteAllText($Path, $Content, $encoding)
 }
 
+function Get-YctCleanUrlPath {
+  param([Parameter(Mandatory = $true)][string]$Path)
+
+  return ($Path -split "[?#]", 2)[0]
+}
+
+function Test-YctPathStartsWith {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][string]$Prefix
+  )
+
+  return $Path.Equals($Prefix, [System.StringComparison]::OrdinalIgnoreCase) -or
+    $Path.StartsWith("$Prefix/", [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Convert-YctUrlPathToStagedPath {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][string]$WebRoot,
+    [Parameter(Mandatory = $true)][string]$BasePath
+  )
+
+  $cleanPath = Get-YctCleanUrlPath -Path $Path
+  $pathWithoutBase = $cleanPath
+  if ($BasePath -and (Test-YctPathStartsWith -Path $cleanPath -Prefix $BasePath)) {
+    $pathWithoutBase = $cleanPath.Substring($BasePath.Length)
+    if (-not $pathWithoutBase) {
+      $pathWithoutBase = "/"
+    }
+  }
+
+  if ($pathWithoutBase.StartsWith("/_next/static/", [System.StringComparison]::OrdinalIgnoreCase)) {
+    $relativePath = $pathWithoutBase.Substring("/_next/static/".Length).Replace("/", "\")
+    return Join-Path (Join-Path $WebRoot ".next\static") $relativePath
+  }
+
+  if (
+    $pathWithoutBase.StartsWith("/icons/", [System.StringComparison]::OrdinalIgnoreCase) -or
+    $pathWithoutBase -eq "/manifest.webmanifest" -or
+    $pathWithoutBase -eq "/sw.js"
+  ) {
+    $relativePath = $pathWithoutBase.TrimStart("/").Replace("/", "\")
+    return Join-Path (Join-Path $WebRoot "public") $relativePath
+  }
+
+  return $null
+}
+
+function Assert-YctStagedWebAssetConsistency {
+  param(
+    [Parameter(Mandatory = $true)][string]$StageRoot,
+    [Parameter(Mandatory = $true)][string]$BasePath
+  )
+
+  $webRoot = Join-Path $StageRoot "apps\web"
+  $serverRoot = Join-Path $webRoot ".next\server"
+  if (-not (Test-Path -LiteralPath $serverRoot)) {
+    throw "Staged Next server output is missing: $serverRoot"
+  }
+
+  $referencePattern = [regex]'(?<path>/(?:[A-Za-z0-9._~!$&''()*+,;=:@%/-]+))'
+  $serverFiles = Get-ChildItem -LiteralPath $serverRoot -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Extension -in @(".html", ".rsc") }
+  $referencedPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+  $basePathViolations = [System.Collections.Generic.List[string]]::new()
+  $missingAssets = [System.Collections.Generic.List[string]]::new()
+
+  foreach ($file in $serverFiles) {
+    $content = [System.IO.File]::ReadAllText($file.FullName, [System.Text.Encoding]::UTF8)
+    foreach ($match in $referencePattern.Matches($content)) {
+      $rawPath = $match.Groups["path"].Value
+      $cleanPath = Get-YctCleanUrlPath -Path $rawPath
+      $isStaticOrPublicAsset =
+        $cleanPath.StartsWith("/_next/static/", [System.StringComparison]::OrdinalIgnoreCase) -or
+        $cleanPath.StartsWith("/icons/", [System.StringComparison]::OrdinalIgnoreCase) -or
+        $cleanPath -eq "/manifest.webmanifest" -or
+        $cleanPath -eq "/sw.js" -or
+        ($BasePath -and (Test-YctPathStartsWith -Path $cleanPath -Prefix $BasePath))
+
+      if (-not $isStaticOrPublicAsset) {
+        continue
+      }
+
+      if ($BasePath) {
+        $hasBasePath = Test-YctPathStartsWith -Path $cleanPath -Prefix $BasePath
+        $isRootMountedAsset =
+          $cleanPath.StartsWith("/_next/static/", [System.StringComparison]::OrdinalIgnoreCase) -or
+          $cleanPath.StartsWith("/icons/", [System.StringComparison]::OrdinalIgnoreCase) -or
+          $cleanPath -eq "/manifest.webmanifest" -or
+          $cleanPath -eq "/sw.js"
+        if ($isRootMountedAsset -and -not $hasBasePath) {
+          $basePathViolations.Add("$cleanPath in $($file.FullName)") | Out-Null
+          continue
+        }
+      }
+
+      [void]$referencedPaths.Add($cleanPath)
+    }
+  }
+
+  foreach ($path in $referencedPaths) {
+    $assetPath = Convert-YctUrlPathToStagedPath -Path $path -WebRoot $webRoot -BasePath $BasePath
+    if ($assetPath -and -not (Test-Path -LiteralPath $assetPath)) {
+      $missingAssets.Add("$path -> $assetPath") | Out-Null
+    }
+  }
+
+  if ($basePathViolations.Count -gt 0) {
+    $sample = ($basePathViolations | Select-Object -First 8) -join [Environment]::NewLine
+    throw "Staged output contains root-mounted asset links while BasePath is '$BasePath':$([Environment]::NewLine)$sample"
+  }
+
+  if ($missingAssets.Count -gt 0) {
+    $sample = ($missingAssets | Select-Object -First 12) -join [Environment]::NewLine
+    throw "Staged output references assets that are not included in the deployment bundle:$([Environment]::NewLine)$sample"
+  }
+}
+
 $root = Get-YctRepoRoot
 $basePathValue = Normalize-YctBasePath -Value $BasePath
 $webRoot = Join-Path $root "apps\web"
@@ -299,6 +419,22 @@ Notes:
 
   Write-YctUtf8File -Path (Join-Path $stageRoot "start-yct-web.ps1") -Content $startScript
   Write-YctUtf8File -Path (Join-Path $stageRoot "DEPLOYMENT.txt") -Content $deploymentNotes
+}
+
+Assert-YctStagedWebAssetConsistency -StageRoot $stageRoot -BasePath $basePathValue
+
+if ($ValidateOnly) {
+  $result = [pscustomobject]@{
+    ValidationOnly = $true
+    StagingDirectory = $stageRoot
+    SkippedStaging = [bool]$SkipStaging
+    BasePath = $basePathValue
+    StartScript = "start-yct-web.ps1"
+    NodeRequirement = ">=20.9.0"
+  }
+
+  Write-Output ($result | ConvertTo-Json -Depth 4)
+  return
 }
 
 $tar = Get-Command tar.exe -ErrorAction SilentlyContinue

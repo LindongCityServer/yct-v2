@@ -76,6 +76,14 @@ pnpm web:artifact
 - 在 Windows 上生成 zip 时优先使用 `tar.exe`，避免 `Compress-Archive` 处理大量文件时非常慢；需要更稳定的大包压缩时建议使用 `tar.gz`。
 - 支持 `-SkipBuild -SkipStaging` 复用已经完成的 `.deploy/web`，只重新生成归档文件。
 
+如果只想验证当前 staging 目录里的 standalone 产物是否完整，而不重新压缩大包，可以使用：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -SkipBuild -SkipStaging -ValidateOnly
+```
+
+该校验会检查 staged HTML/RSC 引用的 `_next/static`、图标、manifest 和 service worker 是否存在；当 `BasePath` 为 `/v2` 时，也会拦截没有 `/v2` 前缀的同源静态资源链接。
+
 ## 云服务器运行
 
 把 `artifacts/yct-web-*` 上传到服务器并解压到部署目录。不要把新包直接覆盖解压到仍保留旧 `.next` 文件的目录里；Next.js 的 `server.js`、`.next/server` 和 `.next/static` 必须来自同一次构建，否则会出现页面能打开但客户端 chunk 404、路线规划或周边地点等交互失效的问题。推荐做法是先停止旧进程，再解压到一个空目录，确认可用后切换反代；如果只能使用原目录，先备份并清空旧目录中除持久数据外的部署文件。
