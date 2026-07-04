@@ -339,6 +339,8 @@ const defaultRouteTransportModes: EnabledRouteTransportModes = {
   railway: false,
 };
 
+const favoriteMarkerCategoryId = 'favorites';
+
 const routeTransportModeOptions: RouteTransportModeOption[] = [
   { mode: 'walk', label: '步行', icon: 'directions_walk', color: '#4B5B57' },
   { mode: 'bus', label: '公交', icon: 'directions_bus', color: 'var(--yct-color-tertiary)' },
@@ -636,7 +638,11 @@ export function MapStage() {
             left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'zh-CN'),
         ) ?? [];
 
-    return [{ id: 'all', name: '全部' }, ...categories];
+    return [
+      { id: 'all', name: '全部' },
+      { id: favoriteMarkerCategoryId, name: '收藏' },
+      ...categories,
+    ];
   }, [categoryResponse, endpointGroupMarkers, pointMarkers, transitLineMarkers]);
   const sidebarMarkers = useMemo(() => {
     const queryMode = Boolean(markerQuery.trim());
@@ -651,7 +657,9 @@ export function MapStage() {
     const categoryFiltered =
       markerListCategoryId === 'all'
         ? source
-        : source.filter((marker) => marker.categoryId === markerListCategoryId);
+        : markerListCategoryId === favoriteMarkerCategoryId
+          ? source.filter((marker) => favoriteMarkerIds.has(marker.id))
+          : source.filter((marker) => marker.categoryId === markerListCategoryId);
 
     if (queryMode) {
       return categoryFiltered.slice(0, 12);
@@ -681,6 +689,7 @@ export function MapStage() {
     filteredEndpointGroupMarkers,
     filteredPointMarkers,
     filteredTransitLineMarkers,
+    favoriteMarkerIds,
     mapView,
     markerListCategoryId,
     markerQuery,
