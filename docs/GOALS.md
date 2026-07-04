@@ -442,6 +442,7 @@ DESIGN.md
 - 地图公开基础 API `/api/map/tile-providers`、`/api/map/markers`、`/api/map/poi-categories`、`/api/map/unmined-regions` 纳入数据缓存名单，用于后续自定义范围离线包的基础数据预热。
 - Service Worker 明确不缓存 `/account`、`/admin`、`/auth`、`/api/auth`、`/api/admin`，避免登录态、后台页面和鉴权结果进入离线缓存。
 - 账号设置页新增安装入口、刷新缓存、清理缓存和自定义矩形离线范围管理；范围记录保存到浏览器本地，包含 `packageId`、名称、Minecraft X/Z 边界、状态和刷新时间，可手动刷新基础公开数据或删除。登录用户打开账号页时会拉取并合并 `/api/account/offline-packages` 服务端请求记录；保存或刷新范围时会写入 `.yct-data/offline-package-store.json` 并发布 `OfflinePackageRequested` 事件，删除范围时会清理账号侧请求记录并发布 `OfflinePackageRequestDeleted` 事件。
+- 账号设置页“安装与离线”已展示 PWA 安装文案，并按浏览器安装能力显示直接安装、手动添加到主屏幕或不支持安装的说明。
 - 已处理：Service Worker 会从 `/sw.js` 或 `/v2/sw.js` 自身地址推导应用子路径，并用归一化后的应用路径判断应用壳、公开 API、近期内容、敏感路径和离线兜底；临时 `/v2` 反代不会再让 PWA 缓存规则只匹配根路径。
 - 当前通知类型管理已支持登录用户同步到 `.yct-data/notification-preference-store.json` 并发布 `PushPreferenceUpdated` 事件；浏览器设备订阅可在配置 `NEXT_PUBLIC_YCT_WEB_PUSH_PUBLIC_KEY` 后登记到 `.yct-data/push-subscription-store.json`，并发布 `PushDeviceSubscribed` / `PushDeviceSubscriptionRevoked` 事件。已新增本地事件 Outbox `.yct-data/event-outbox-store.json` 和受 `YCT_INTERNAL_TASK_TOKEN` 保护的 `/api/internal/events/process` 重放入口；已新增服务端投递队列 `.yct-data/push-delivery-store.json`、真实 `web-push` 发送器、失败/延后回写、同用户同类型最小间隔限频和内部处理接口 `/api/internal/notifications/process`。缺少 VAPID 配置时不会伪造送达，只会把到期投递延后并记录原因。通知类型默认预选项已可通过 `NEXT_PUBLIC_YCT_PUSH_DEFAULT_ENABLED_TYPES` / `YCT_PUSH_DEFAULT_ENABLED_TYPES` 配置；跨实例数据库 Outbox、正式计划任务部署和送达统计看板仍待后续实现。自定义矩形离线范围当前只登记边界、同步账号侧请求并预热基础数据，不代表真实瓦片离线包已经生成。体积上限、范围上限、增量更新和服务端生成策略仍保持待拍板。
 

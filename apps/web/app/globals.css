@@ -3310,6 +3310,11 @@ body .material-symbols-outlined {
   line-height: 1.55;
 }
 
+.settings-row-note strong {
+  color: var(--yct-color-text);
+  font-weight: 800;
+}
+
 .settings-control-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

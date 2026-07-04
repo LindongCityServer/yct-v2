@@ -988,6 +988,11 @@ export function AccountSettingsPanel({
             <span id="offline-settings-title">安装与离线</span>
             <span className="settings-inline-status">{installStatusLabel(installStatus)}</span>
           </div>
+          <p className="settings-row-note">
+            <strong>安装雨城通：</strong>
+            把 YCT 添加到主屏幕，快速查看运营信息、线路和站点详情。支持缓存已下载的自定义范围离线包，并在你允许后接收行程、运营、订票和检票提醒。
+          </p>
+          <p className="settings-row-note">{installStatusDescription(installStatus)}</p>
           <div className="settings-action-row">
             <button
               className="secondary-action-button"
@@ -1370,6 +1375,18 @@ function installStatusLabel(status: PwaInstallStatus): string {
   };
 
   return labels[status];
+}
+
+function installStatusDescription(status: PwaInstallStatus): string {
+  const descriptions: Record<PwaInstallStatus, string> = {
+    checking: '正在检查当前浏览器是否支持安装入口。',
+    installed: '当前已经以独立应用方式打开，后续可继续在这里管理离线缓存。',
+    installable: '当前浏览器支持直接安装，点击“安装雨城通”即可打开安装确认。',
+    manual: '当前浏览器需要通过菜单添加到主屏幕或安装为应用；在 Safari 中可使用分享菜单里的“添加到主屏幕”。',
+    unsupported: '当前浏览器不支持安装入口，仍可继续使用网页和近期内容缓存。',
+  };
+
+  return descriptions[status];
 }
 
 function readNotificationTypePreferences(): NotificationTypePreferences {
