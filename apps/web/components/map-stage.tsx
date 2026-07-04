@@ -354,6 +354,7 @@ const highPriorityTransitCategoryIds = new Set([
 const lowPriorityTrafficCategoryIds = new Set(['bus-stop', 'residence', 'industry', 'facility']);
 
 const tileSize = 256;
+const representativePoiPriorityBoost = 24;
 const mapDefaults = {
   minZoom: -7,
   maxZoom: 3,
@@ -583,6 +584,7 @@ export function MapStage() {
     [focusedMarkerId, pointMarkers],
   );
   const secondaryPoiIndex = useMemo(() => buildSecondaryPoiIndex(pointMarkers), [pointMarkers]);
+  const representativePoiIds = useMemo(() => new Set(secondaryPoiIndex.keys()), [secondaryPoiIndex]);
   const focusedSecondaryPois = focusedPointMarker
     ? (secondaryPoiIndex.get(focusedPointMarker.id) ?? [])
     : [];
@@ -677,6 +679,7 @@ export function MapStage() {
         tileBaseUrl,
         focusedMarkerId,
         browseMode,
+        representativePoiIds,
       ).slice(0, 220),
     [
       browseMode,
@@ -684,6 +687,7 @@ export function MapStage() {
       markerQuery,
       markersVisible,
       pointOverlaySource,
+      representativePoiIds,
       mapView,
       tileBaseUrl,
       viewportSize,
@@ -4168,6 +4172,7 @@ function projectPointMarkers(
   iconBaseUrl: string,
   focusedMarkerId: string | null,
   browseMode: MapBrowseMode,
+  representativePoiIds: ReadonlySet<string>,
 ): ProjectedMarker[] {
   if (size.width <= 0 || size.height <= 0) {
     return [];
@@ -4177,7 +4182,9 @@ function projectPointMarkers(
   const projected = markers
     .map((marker) => {
       const [x, z] = marker.geometry.coordinates;
-      const priority = getMarkerPriorityForBrowseMode(marker, browseMode);
+      const priority =
+        getMarkerPriorityForBrowseMode(marker, browseMode) +
+        (representativePoiIds.has(marker.id) ? representativePoiPriorityBoost : 0);
       return {
         id: marker.id,
         label: formatMarkerDisplayName(marker.label),
