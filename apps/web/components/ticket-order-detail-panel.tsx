@@ -4,6 +4,7 @@ import type { ApiItemResponse, TicketOrderListItem } from '@yct/contracts';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { notifyTicketOrderStateChanged } from '../lib/client-ticket-orders';
 import {
   formatTicketHoldExpiresAt,
   formatTicketOrderStatus,
@@ -64,6 +65,7 @@ export function TicketOrderDetailPanel({
 
       setItem(data.item);
       setStatusText('已取消订单草稿');
+      notifyTicketOrderStateChanged();
     } catch (error) {
       setStatusText(error instanceof Error ? error.message : '订单草稿取消失败');
     } finally {

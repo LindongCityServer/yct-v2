@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { ticketOrderStateChangedEventName } from '../lib/client-ticket-orders';
 import {
   readTripReminderState,
   tripReminderStateChangedEventName,
@@ -91,10 +92,16 @@ export function AppShell({
       }
     }
 
+    const handleAccountStatusChanged = () => {
+      void loadAccountStatus();
+    };
+
     void loadAccountStatus();
+    window.addEventListener(ticketOrderStateChangedEventName, handleAccountStatusChanged);
 
     return () => {
       cancelled = true;
+      window.removeEventListener(ticketOrderStateChangedEventName, handleAccountStatusChanged);
     };
   }, []);
 

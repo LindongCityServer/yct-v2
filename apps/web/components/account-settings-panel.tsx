@@ -55,6 +55,7 @@ import {
   readMapFavoriteState,
   type MapFavoriteState,
 } from '../lib/client-map-favorites';
+import { notifyTicketOrderStateChanged } from '../lib/client-ticket-orders';
 import { TicketOrderDraftPanel } from './ticket-order-draft-panel';
 
 const themeOptions: Array<{ value: ThemeMode; label: string }> = [
@@ -291,6 +292,7 @@ export function AccountSettingsPanel({
 
       setTicketOrderStatusText('已取消订单草稿');
       await refreshTicketOrders();
+      notifyTicketOrderStateChanged();
     } catch (error) {
       setTicketOrderStatusText(error instanceof Error ? error.message : '订单草稿取消失败');
     } finally {

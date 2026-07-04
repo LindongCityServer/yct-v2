@@ -16,6 +16,7 @@ import type {
 } from '@yct/contracts';
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { notifyTicketOrderStateChanged } from '../lib/client-ticket-orders';
 import {
   clearTravelScheduleHistory,
   readTravelScheduleHistoryState,
@@ -98,6 +99,7 @@ export function TravelScheduleQueryPanel({
 
       setTicketOrderStatusText('已取消订单草稿');
       await refreshTicketOrders();
+      notifyTicketOrderStateChanged();
     } catch (error) {
       setTicketOrderStatusText(error instanceof Error ? error.message : '订单草稿取消失败');
     } finally {
@@ -551,6 +553,7 @@ function ScheduleTripCard({
         )}`,
       );
       onTicketOrderChange();
+      notifyTicketOrderStateChanged();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '订单草稿创建失败');
     } finally {
