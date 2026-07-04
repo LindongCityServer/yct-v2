@@ -225,9 +225,11 @@ body .material-symbols-outlined {
   width: 11px;
   height: 11px;
   padding: 0;
+  border-color: var(--yct-color-surface-panel);
   background: currentColor;
   box-shadow:
-    0 0 0 1px color-mix(in srgb, currentColor 48%, transparent),
+    0 0 0 2px var(--yct-color-surface-panel),
+    0 0 0 3px color-mix(in srgb, currentColor 58%, var(--yct-color-border)),
     0 2px 5px rgba(17, 24, 23, 0.18);
 }
 
