@@ -59,6 +59,12 @@ interface PinchState {
   };
 }
 
+interface TapState {
+  pointerId: number;
+  startX: number;
+  startY: number;
+}
+
 interface VisibleTile {
   id: string;
   url: string;
@@ -324,6 +330,7 @@ export function MapStage() {
   const dragRef = useRef<DragState | null>(null);
   const activePointersRef = useRef<Map<number, ActivePointer>>(new Map());
   const pinchRef = useRef<PinchState | null>(null);
+  const tapRef = useRef<TapState | null>(null);
   const [layerPanelOpen, setLayerPanelOpen] = useState(false);
   const [markerQuery, setMarkerQuery] = useState('');
   const [tileResponse, setTileResponse] = useState<ApiListResponse<TileProviderDescriptor> | null>(
@@ -988,9 +995,17 @@ export function MapStage() {
     updateCursorWorld(event);
     event.currentTarget.setPointerCapture(event.pointerId);
     activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    tapRef.current = editingRouteEndpoint
+      ? {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+        }
+      : null;
 
     if (activePointersRef.current.size >= 2) {
       dragRef.current = null;
+      tapRef.current = null;
       startPinchGesture(event.currentTarget);
       return;
     }
@@ -1003,8 +1018,18 @@ export function MapStage() {
     if (activePointersRef.current.has(event.pointerId)) {
       activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     }
+    if (
+      tapRef.current?.pointerId === event.pointerId &&
+      getPointerDistance(
+        { x: tapRef.current.startX, y: tapRef.current.startY },
+        { x: event.clientX, y: event.clientY },
+      ) > 8
+    ) {
+      tapRef.current = null;
+    }
 
     if (pinchRef.current && activePointersRef.current.size >= 2) {
+      tapRef.current = null;
       updatePinchGesture(event.currentTarget);
       return;
     }
@@ -1024,6 +1049,25 @@ export function MapStage() {
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     const wasPinching = pinchRef.current?.pointerIds.includes(event.pointerId) ?? false;
+    const tap = tapRef.current;
+    if (tap?.pointerId === event.pointerId) {
+      tapRef.current = null;
+      if (!wasPinching && editingRouteEndpoint) {
+        const rect = event.currentTarget.getBoundingClientRect();
+        applyRouteEndpointCoordinate(
+          editingRouteEndpoint,
+          toCoordinatePair(
+            screenToWorld(
+              event.clientX - rect.left,
+              event.clientY - rect.top,
+              mapViewRef.current,
+              viewportSize,
+            ),
+          ),
+        );
+      }
+    }
+
     activePointersRef.current.delete(event.pointerId);
     if (wasPinching) {
       pinchRef.current = null;
@@ -1230,6 +1274,35 @@ export function MapStage() {
     });
     setFocusedMarkerId(marker.id);
     setPoiDetailCollapsed(true);
+    setEditingRouteEndpoint(null);
+    setRouteEndpointQuery('');
+    setSelectedRouteOptionId(null);
+  };
+
+  const applyRouteEndpointCoordinate = (
+    endpoint: RouteEndpointKind,
+    coordinates: [number, number],
+  ) => {
+    const label = formatPoint(coordinates);
+    setRoutePlanDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return endpoint === 'origin'
+        ? {
+            ...current,
+            originId: undefined,
+            origin: coordinates,
+            originLabel: label,
+          }
+        : {
+            ...current,
+            destinationId: undefined,
+            destination: coordinates,
+            destinationLabel: label,
+          };
+    });
     setEditingRouteEndpoint(null);
     setRouteEndpointQuery('');
     setSelectedRouteOptionId(null);
@@ -3975,6 +4048,10 @@ function screenToWorld(
     x: view.centerX + (x - size.width / 2) / scale,
     z: view.centerZ + (y - size.height / 2) / scale,
   };
+}
+
+function toCoordinatePair(point: { x: number; z: number }): [number, number] {
+  return [point.x, point.z];
 }
 
 function buildScaleBarInfo(view: MapView, size: ViewportSize): ScaleBarInfo {
