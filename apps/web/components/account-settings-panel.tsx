@@ -1,6 +1,13 @@
 'use client';
 
-import type { RectangleBounds, TripReminder, YctAccountSessionSnapshot } from '@yct/contracts';
+import type {
+  ApiItemResponse,
+  ApiListResponse,
+  RectangleBounds,
+  TicketOrderListItem,
+  TripReminder,
+  YctAccountSessionSnapshot,
+} from '@yct/contracts';
 import { type FormEvent, useEffect, useState } from 'react';
 import {
   calculateBoundsArea,
@@ -48,6 +55,7 @@ import {
   readMapFavoriteState,
   type MapFavoriteState,
 } from '../lib/client-map-favorites';
+import { TicketOrderDraftPanel } from './ticket-order-draft-panel';
 
 const themeOptions: Array<{ value: ThemeMode; label: string }> = [
   { value: 'system', label: '跟随系统' },
@@ -184,6 +192,9 @@ export function AccountSettingsPanel({
     session?: YctAccountSessionSnapshot;
   };
 }>) {
+  const ticketOrderLockedText = auth.session?.readonlyUser
+    ? '账号为只读状态，Active 后可查看订单草稿。'
+    : '登录后可查看订单草稿。';
   const [themeMode, setThemeMode] = useState<ThemeMode>('system');
   const [accentMode, setAccentMode] = useState<AccentMode>('ldpass');
   const [motionMode, setMotionMode] = useState<MotionMode>('system');
@@ -214,6 +225,11 @@ export function AccountSettingsPanel({
   const [offlinePackageFormOpen, setOfflinePackageFormOpen] = useState(false);
   const [offlinePackageError, setOfflinePackageError] = useState('');
   const [refreshingPackageId, setRefreshingPackageId] = useState<string | null>(null);
+  const [ticketOrders, setTicketOrders] = useState<TicketOrderListItem[] | null>(null);
+  const [ticketOrderStatusText, setTicketOrderStatusText] = useState(
+    auth.session?.user ? '正在读取订单草稿' : ticketOrderLockedText,
+  );
+  const [cancellingTicketOrderId, setCancellingTicketOrderId] = useState<string | null>(null);
   const syncTripSummary = () => {
     setTripSummary(readTripReminderState().summary);
     setScheduleHistorySummary(readTravelScheduleHistoryState().summary);
@@ -221,6 +237,65 @@ export function AccountSettingsPanel({
   };
   const syncOfflinePackageState = () => {
     setOfflinePackageState(readOfflinePackageState());
+  };
+  const refreshTicketOrders = async () => {
+    if (!auth.session?.user) {
+      setTicketOrders([]);
+      setTicketOrderStatusText(ticketOrderLockedText);
+      return;
+    }
+
+    setTicketOrderStatusText('正在读取订单草稿');
+    try {
+      const response = await fetch(appPath('/api/travel/ticketing/orders'), { cache: 'no-store' });
+      const data = (await response.json()) as Partial<ApiListResponse<TicketOrderListItem>> & {
+        message?: string;
+      };
+
+      if (response.status === 401) {
+        setTicketOrders([]);
+        setTicketOrderStatusText('登录后可查看订单草稿。');
+        return;
+      }
+
+      if (!response.ok || !data.items) {
+        throw new Error(data.message ?? '订单草稿读取失败');
+      }
+
+      setTicketOrders(data.items);
+      setTicketOrderStatusText(data.items.length > 0 ? '' : '暂无订单草稿。');
+    } catch (error) {
+      setTicketOrders([]);
+      setTicketOrderStatusText(error instanceof Error ? error.message : '订单草稿读取失败');
+    }
+  };
+  const cancelTicketOrder = async (orderId: string) => {
+    if (!window.confirm('要取消这个订单草稿并释放库存占用吗？')) {
+      return;
+    }
+
+    setCancellingTicketOrderId(orderId);
+    setTicketOrderStatusText('正在取消订单草稿');
+    try {
+      const response = await fetch(
+        appPath(`/api/travel/ticketing/orders/${encodeURIComponent(orderId)}/cancel`),
+        { method: 'POST' },
+      );
+      const data = (await response.json()) as Partial<ApiItemResponse<TicketOrderListItem>> & {
+        message?: string;
+      };
+
+      if (!response.ok || !data.item) {
+        throw new Error(data.message ?? '订单草稿取消失败');
+      }
+
+      setTicketOrderStatusText('已取消订单草稿');
+      await refreshTicketOrders();
+    } catch (error) {
+      setTicketOrderStatusText(error instanceof Error ? error.message : '订单草稿取消失败');
+    } finally {
+      setCancellingTicketOrderId(null);
+    }
   };
 
   useEffect(() => {
@@ -235,6 +310,8 @@ export function AccountSettingsPanel({
     syncTripSummary();
     syncOfflinePackageState();
     if (auth.session?.user) {
+      void refreshTicketOrders();
+
       void readServerTripReminders()
         .then((reminders) => {
           if (reminders.length === 0) {
@@ -284,6 +361,9 @@ export function AccountSettingsPanel({
           setOfflinePackageState(mergeOfflinePackagesFromAccount(requests));
         })
         .catch(() => undefined);
+    } else {
+      setTicketOrders([]);
+      setTicketOrderStatusText(ticketOrderLockedText);
     }
 
     setInstallStatus(readPwaInstallStatus());
@@ -667,6 +747,9 @@ export function AccountSettingsPanel({
 
   const notificationMasterStatus = notificationEnabled ? '推送开启' : '推送关闭';
   const notificationMasterLabel = `本设备推送总开关，当前${notificationEnabled ? '已开启' : '已关闭'}`;
+  const ticketDraftCount =
+    ticketOrders?.filter((item) => item.order.status === 'draft' || item.order.status === 'pending_issue')
+      .length ?? 0;
 
   return (
     <section className="module-panel" aria-labelledby="account-title">
@@ -866,6 +949,30 @@ export function AccountSettingsPanel({
             </button>
           </div>
           {tripSyncStatusText ? <span className="muted">{tripSyncStatusText}</span> : null}
+        </section>
+
+        <section
+          className="settings-row settings-row-block"
+          aria-labelledby="ticket-order-settings-title"
+        >
+          <div className="settings-row-title">
+            <span className="material-symbols-outlined" aria-hidden="true">
+              confirmation_number
+            </span>
+            <span id="ticket-order-settings-title">票务草稿</span>
+            <span className="settings-inline-status">
+              {ticketOrders === null ? '读取中' : `${ticketDraftCount} 个`}
+            </span>
+          </div>
+          <TicketOrderDraftPanel
+            cancellingOrderId={cancellingTicketOrderId}
+            orders={ticketOrders}
+            statusText={ticketOrderStatusText}
+            title="占座草稿"
+            description="这里展示本账号仍在占座或待出票的草稿；取消后会释放库存占用。"
+            onCancel={(orderId) => void cancelTicketOrder(orderId)}
+            onRefresh={() => void refreshTicketOrders()}
+          />
         </section>
 
         <section

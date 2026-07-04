@@ -23,6 +23,7 @@ import {
   type TravelScheduleHistoryState,
 } from '../lib/client-schedule-history';
 import { createTripReminder, formatTripReminderTime } from '../lib/client-trip-reminders';
+import { TicketOrderDraftPanel } from './ticket-order-draft-panel';
 
 type ServiceFilter = TicketableServiceKind | 'all';
 
@@ -661,79 +662,6 @@ function ScheduleTripCard({
   );
 }
 
-function TicketOrderDraftPanel({
-  cancellingOrderId,
-  orders,
-  statusText,
-  tripById,
-  onCancel,
-  onRefresh,
-}: Readonly<{
-  cancellingOrderId: string | null;
-  orders: TicketOrderListItem[] | null;
-  statusText: string;
-  tripById: Map<string, TravelTripInstance>;
-  onCancel: (orderId: string) => void;
-  onRefresh: () => void;
-}>) {
-  const visibleOrders =
-    orders?.filter((item) => item.order.status === 'draft' || item.order.status === 'pending_issue') ??
-    [];
-
-  return (
-    <section className="ticket-order-draft-panel" aria-label="我的票务草稿">
-      <div className="ticket-order-draft-heading">
-        <div>
-          <h3>我的票务草稿</h3>
-          <span className="muted">仅显示占座中的草稿订单，不代表已出票。</span>
-        </div>
-        <button className="icon-action-button" type="button" aria-label="刷新订单草稿" onClick={onRefresh}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            refresh
-          </span>
-        </button>
-      </div>
-      {visibleOrders.length > 0 ? (
-        <div className="ticket-order-draft-list">
-          {visibleOrders.map((item) => (
-            <article className="ticket-order-draft-item" key={item.order.orderId}>
-              <div>
-                <strong>{formatTicketOrderTitle(item, tripById)}</strong>
-                <small>
-                  {formatTicketOrderSubtitle(item, tripById)}
-                </small>
-              </div>
-              <span>
-                {item.inventoryHold
-                  ? `占用至 ${formatTicketHoldExpiresAt(item.inventoryHold.expiresAt)}`
-                  : '无库存占用'}
-              </span>
-              <button
-                className="secondary-action-button"
-                type="button"
-                disabled={cancellingOrderId === item.order.orderId}
-                onClick={() => onCancel(item.order.orderId)}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  cancel
-                </span>
-                <span>{cancellingOrderId === item.order.orderId ? '取消中' : '取消草稿'}</span>
-              </button>
-            </article>
-          ))}
-        </div>
-      ) : (
-        <p className="ticket-order-draft-empty">
-          {orders === null ? '正在读取订单草稿' : statusText || '暂无订单草稿。'}
-        </p>
-      )}
-      {statusText && visibleOrders.length > 0 ? (
-        <p className="ticket-order-draft-status">{statusText}</p>
-      ) : null}
-    </section>
-  );
-}
-
 function TicketingStatusButton({
   busy,
   onCreateOrder,
@@ -827,70 +755,6 @@ function getTicketingButtonState(ticketing: TravelTicketingAvailability | undefi
     label: '新票务待接入',
     message: ticketing.message,
   };
-}
-
-function formatTicketHoldExpiresAt(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString('zh-CN', {
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    month: '2-digit',
-  });
-}
-
-function formatTicketOrderTitle(
-  item: TicketOrderListItem,
-  tripById: Map<string, TravelTripInstance>,
-): string {
-  const trip = tripById.get(item.order.tripInstanceId);
-  return trip ? formatTripHeading(trip) : `订单 ${item.order.orderId.slice(-8).toUpperCase()}`;
-}
-
-function formatTicketOrderSubtitle(
-  item: TicketOrderListItem,
-  tripById: Map<string, TravelTripInstance>,
-): string {
-  const trip = tripById.get(item.order.tripInstanceId);
-  return [
-    formatTicketServiceKind(item.order.serviceKind),
-    trip ? formatTripEndpoints(trip) : undefined,
-    `${item.order.passengerCount}人`,
-    formatTicketOrderStatus(item.order.status),
-  ]
-    .filter(Boolean)
-    .join(' · ');
-}
-
-function formatTicketOrderStatus(status: TicketOrderListItem['order']['status']): string {
-  const labels: Record<TicketOrderListItem['order']['status'], string> = {
-    cancelled: '已取消',
-    checked_in: '已检票',
-    completed: '已完成',
-    draft: '草稿',
-    expired: '已过期',
-    issued: '已出票',
-    manual_review: '人工审核',
-    pending_issue: '待出票',
-    refund_requested: '已申请退票',
-    refunded: '已退票',
-  };
-  return labels[status] ?? status;
-}
-
-function formatTicketServiceKind(kind: TicketableServiceKind): string {
-  const labels: Record<TicketableServiceKind, string> = {
-    coach: '客运',
-    custom: '其他',
-    ferry: '轮渡',
-    flight: '航班',
-    railway: '铁路',
-  };
-  return labels[kind] ?? kind;
 }
 
 function MetaItem({ label, value }: Readonly<{ label: string; value: string }>) {
@@ -1183,6 +1047,20 @@ function formatHistoryArrivalTime(item: TravelScheduleHistoryItem): string {
   return item.arrivalDayOffset && item.arrivalDayOffset > 0
     ? `${item.arrivalTime} +${item.arrivalDayOffset}天`
     : item.arrivalTime;
+}
+
+function formatTicketHoldExpiresAt(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString('zh-CN', {
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: '2-digit',
+  });
 }
 
 function formatTripEndpoints(trip: TravelTripInstance): string {
