@@ -676,12 +676,25 @@ body .material-symbols-outlined {
   font-size: 26px;
 }
 
-.map-guide-marker.is-route-origin {
+.map-guide-marker.is-route-origin,
+.map-guide-marker.is-route-destination {
   color: var(--yct-color-primary);
 }
 
-.map-guide-marker.is-route-destination {
-  color: var(--yct-color-accent-red);
+.map-guide-marker-pin {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+
+.map-guide-marker-pin-label {
+  position: absolute;
+  top: 3px;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(17, 24, 23, 0.28);
 }
 
 .map-guide-marker-badge {

@@ -255,6 +255,7 @@ interface RoutePlanOption {
   icon: string;
   color: string;
   coordinates: Array<[number, number]>;
+  markerIds: string[];
   estimatedDistance: number;
   estimatedMinutes: number;
   steps: string[];
@@ -760,11 +761,11 @@ export function MapStage() {
             draft: routePlanDraft,
             enabledModes: routeTransportModes,
             pointMarkers,
-            stationConnectionIndex,
+            transitLines: transitOverview?.lines ?? [],
             modeProfiles: transitOverview?.modeProfiles ?? [],
           })
         : [],
-    [pointMarkers, routePlanDraft, routeTransportModes, stationConnectionIndex, transitOverview],
+    [pointMarkers, routePlanDraft, routeTransportModes, transitOverview],
   );
   const selectedRouteOption =
     routePlanOptions.find((option) => option.id === selectedRouteOptionId) ?? routePlanOptions[0];
@@ -775,6 +776,21 @@ export function MapStage() {
         : undefined,
     [mapView, selectedRouteOption, viewportSize],
   );
+  const routeResultActive = Boolean(routePlanDraft && selectedRouteOption && !editingRouteEndpoint);
+  const routeResultMarkerIds = useMemo(
+    () => (routeResultActive ? new Set(selectedRouteOption?.markerIds ?? []) : undefined),
+    [routeResultActive, selectedRouteOption],
+  );
+  const visibleProjectedMarkers = useMemo(
+    () =>
+      routeResultMarkerIds
+        ? projectedMarkers.filter((marker) => routeResultMarkerIds.has(marker.id))
+        : projectedMarkers,
+    [projectedMarkers, routeResultMarkerIds],
+  );
+  const visibleProjectedLinearPois = routeResultActive ? [] : projectedLinearPois;
+  const visibleProjectedRoadTraces = routeResultActive ? [] : projectedRoadTraces;
+  const visibleProjectedTransitTraces = routeResultActive ? [] : projectedTransitTraces;
   const focusedMarkerCenter =
     focusedMarker && isCenterableMarker(focusedMarker) ? getMarkerCenter(focusedMarker) : undefined;
   const focusedMarkerCategoryName = focusedMarker?.categoryId
@@ -1353,7 +1369,7 @@ export function MapStage() {
       viewportSize,
       32,
     );
-    if (defaultAnchor) {
+    if (defaultAnchor && !routePlanDraft) {
       markers.push(defaultAnchor);
     }
 
@@ -1388,10 +1404,10 @@ export function MapStage() {
   const hasMapOverlay =
     projectedGuideMarkers.length > 0 ||
     Boolean(selectedRouteTrace) ||
-    projectedMarkers.length > 0 ||
-    projectedLinearPois.length > 0 ||
-    projectedRoadTraces.length > 0 ||
-    projectedTransitTraces.length > 0;
+    visibleProjectedMarkers.length > 0 ||
+    visibleProjectedLinearPois.length > 0 ||
+    visibleProjectedRoadTraces.length > 0 ||
+    visibleProjectedTransitTraces.length > 0;
 
   return (
     <section className="map-stage" aria-labelledby="map-title">
@@ -1823,18 +1839,20 @@ export function MapStage() {
                 {marker.kind === 'default-anchor' ? (
                   <span className="map-guide-marker-dot" />
                 ) : (
-                  <>
+                  <span className="map-guide-marker-pin">
                     <span className="material-symbols-outlined map-guide-marker-icon">
                       location_on
                     </span>
-                    <span className="map-guide-marker-badge">{marker.label}</span>
-                  </>
+                    <span className="map-guide-marker-pin-label">
+                      {marker.kind === 'route-origin' ? '起' : '终'}
+                    </span>
+                  </span>
                 )}
               </div>
             ))}
-            {projectedRoadTraces.length ? (
+            {visibleProjectedRoadTraces.length ? (
               <div className="map-road-trace-layer" aria-hidden="true">
-                {projectedRoadTraces.map((trace) => (
+                {visibleProjectedRoadTraces.map((trace) => (
                   <TraceLayerView
                     trace={trace}
                     kind="road"
@@ -1844,9 +1862,9 @@ export function MapStage() {
                 ))}
               </div>
             ) : null}
-            {projectedTransitTraces.length ? (
+            {visibleProjectedTransitTraces.length ? (
               <div className="map-transit-trace-layer" aria-hidden="true">
-                {projectedTransitTraces.map((trace) => (
+                {visibleProjectedTransitTraces.map((trace) => (
                   <TraceLayerView
                     trace={trace}
                     kind="transit"
@@ -1856,7 +1874,7 @@ export function MapStage() {
                 ))}
               </div>
             ) : null}
-            {projectedLinearPois.map((marker) => {
+            {visibleProjectedLinearPois.map((marker) => {
               const sourceMarker = linearOverlaySource.find((item) => item.id === marker.id);
               const focusLinearMarker = () => {
                 if (sourceMarker) {
@@ -1927,7 +1945,7 @@ export function MapStage() {
                 </div>
               );
             })}
-            {projectedMarkers.map((marker) => (
+            {visibleProjectedMarkers.map((marker) => (
               <button
                 className={[
                   'map-marker-dot',
@@ -2731,7 +2749,7 @@ function buildRoutePlanOptions(input: {
   draft: RoutePlanDraft;
   enabledModes: EnabledRouteTransportModes;
   pointMarkers: PointMarker[];
-  stationConnectionIndex: Map<string, TransitLineConnection[]>;
+  transitLines: TransitOverviewLine[];
   modeProfiles: TransitModeProfileForMap[];
 }): RoutePlanOption[] {
   const options: RoutePlanOption[] = [];
@@ -2745,6 +2763,7 @@ function buildRoutePlanOptions(input: {
       icon: 'directions_walk',
       color: routeTransportModeOptions.find((option) => option.mode === 'walk')?.color ?? '#4B5B57',
       coordinates: [input.draft.origin, input.draft.destination],
+      markerIds: [],
       estimatedDistance: directDistance,
       estimatedMinutes: estimateRouteMinutes(directDistance, 72),
       steps: [
@@ -2755,23 +2774,7 @@ function buildRoutePlanOptions(input: {
     });
   }
 
-  const profileByMode = new Map(input.modeProfiles.map((profile) => [profile.mode, profile]));
-  for (const mode of routeTransportModeOptions) {
-    if (mode.mode === 'walk' || !input.enabledModes[mode.mode]) {
-      continue;
-    }
-
-    const option = buildTransitRoutePlanOption({
-      draft: input.draft,
-      mode,
-      profile: profileByMode.get(mode.mode),
-      pointMarkers: input.pointMarkers,
-      stationConnectionIndex: input.stationConnectionIndex,
-    });
-    if (option) {
-      options.push(option);
-    }
-  }
+  options.push(...buildTransitRoutePlanOptions(input));
 
   return options
     .sort(
@@ -2780,93 +2783,365 @@ function buildRoutePlanOptions(input: {
         left.estimatedDistance - right.estimatedDistance ||
         left.title.localeCompare(right.title, 'zh-CN'),
     )
-    .slice(0, 5);
+    .slice(0, 3);
 }
 
-function buildTransitRoutePlanOption(input: {
-  draft: RoutePlanDraft;
+interface TransitRouteStop {
+  center: [number, number];
+  index: number;
+  marker: PointMarker;
+  stop: TransitLineStopForMap;
+}
+
+interface TransitLineDirectionCandidate {
+  color: string;
+  direction: 'forward' | 'reverse';
+  icon: string;
+  line: TransitOverviewLine;
   mode: RouteTransportModeOption;
-  profile?: TransitModeProfileForMap;
+  modeLabel: string;
+  stops: TransitRouteStop[];
+  terminalName: string;
+}
+
+function buildTransitRoutePlanOptions(input: {
+  draft: RoutePlanDraft;
+  enabledModes: EnabledRouteTransportModes;
+  modeProfiles: TransitModeProfileForMap[];
   pointMarkers: PointMarker[];
-  stationConnectionIndex: Map<string, TransitLineConnection[]>;
-}): RoutePlanOption | undefined {
-  const stationCandidates = input.pointMarkers
-    .filter((marker) => isTransitStationPoi(marker))
-    .map((marker) => {
-      const center = getMarkerCenter(marker);
-      const connections = findStationConnections(marker, input.stationConnectionIndex).filter(
-        (connection) => connection.mode === input.mode.mode,
-      );
-      return center && connections.length > 0 ? { marker, center, connections } : undefined;
-    })
-    .filter(
-      (
-        candidate,
-      ): candidate is {
-        marker: PointMarker;
-        center: [number, number];
-        connections: TransitLineConnection[];
-      } => Boolean(candidate),
-    );
+  transitLines: TransitOverviewLine[];
+}): RoutePlanOption[] {
+  const profileByMode = new Map(input.modeProfiles.map((profile) => [profile.mode, profile]));
+  const stationMarkerIndex = buildTransitStationMarkerIndex(input.pointMarkers);
+  const lineCandidates: TransitLineDirectionCandidate[] = [];
 
-  if (stationCandidates.length < 2) {
+  for (const mode of routeTransportModeOptions) {
+    if (mode.mode === 'walk' || !input.enabledModes[mode.mode]) {
+      continue;
+    }
+
+    const profile = profileByMode.get(mode.mode);
+    for (const line of input.transitLines.filter((item) => item.mode === mode.mode)) {
+      for (const direction of ['forward', 'reverse'] as const) {
+        const stops = getDirectionalLineStops(line, direction)
+          .map((stop, index): TransitRouteStop | undefined => {
+            const marker = findTransitStationMarker(stop.stationName, stationMarkerIndex);
+            const center = marker ? getMarkerCenter(marker) : undefined;
+            return marker && center ? { center, index, marker, stop } : undefined;
+          })
+          .filter((stop): stop is TransitRouteStop => Boolean(stop));
+
+        if (stops.length < 2) {
+          continue;
+        }
+
+        lineCandidates.push({
+          color: line.color ?? profile?.color ?? mode.color,
+          direction,
+          icon: profile?.icon ?? mode.icon,
+          line,
+          mode,
+          modeLabel: profile?.label ?? mode.label,
+          stops,
+          terminalName: stops.at(-1)?.stop.stationName ?? line.lastStationName ?? line.name,
+        });
+      }
+    }
+  }
+
+  const directOptions = lineCandidates
+    .map((candidate) => buildDirectTransitLineOption(candidate, input.draft))
+    .filter((option): option is RoutePlanOption => Boolean(option));
+  const transferOptions = buildTransferTransitLineOptions(lineCandidates, input.draft);
+
+  return [...directOptions, ...transferOptions]
+    .sort(
+      (left, right) =>
+        left.estimatedMinutes - right.estimatedMinutes ||
+        left.estimatedDistance - right.estimatedDistance ||
+        left.title.localeCompare(right.title, 'zh-CN'),
+    )
+    .slice(0, 8);
+}
+
+function buildDirectTransitLineOption(
+  candidate: TransitLineDirectionCandidate,
+  draft: RoutePlanDraft,
+): RoutePlanOption | undefined {
+  const originStop = findNearestRouteLineStop(draft.origin, candidate.stops);
+  const destinationStop = findNearestRouteLineStop(draft.destination, candidate.stops);
+  if (!originStop || !destinationStop || originStop.index >= destinationStop.index) {
+    return undefined;
+  }
+  if (originStop.marker.id === destinationStop.marker.id) {
     return undefined;
   }
 
-  const originStation = findNearestRouteStation(input.draft.origin, stationCandidates);
-  const destinationStation = findNearestRouteStation(input.draft.destination, stationCandidates);
-  if (!originStation || !destinationStation) {
-    return undefined;
-  }
-
-  if (originStation.marker.id === destinationStation.marker.id) {
-    return undefined;
-  }
-
-  const accessDistance = getCoordinateDistance(input.draft.origin, originStation.center);
-  const egressDistance = getCoordinateDistance(input.draft.destination, destinationStation.center);
-  const transitDistance = getCoordinateDistance(originStation.center, destinationStation.center);
-  const sharedLine = originStation.connections.find((left) =>
-    destinationStation.connections.some((right) => right.id === left.id),
-  );
-  const modeLabel = input.profile?.label ?? input.mode.label;
-  const color = input.profile?.color ?? input.mode.color;
-  const icon = input.profile?.icon ?? input.mode.icon;
-  const transferPenalty = sharedLine ? 0 : 8;
+  const segmentStops = candidate.stops.slice(originStop.index, destinationStop.index + 1);
+  const accessDistance = getCoordinateDistance(draft.origin, originStop.center);
+  const egressDistance = getCoordinateDistance(draft.destination, destinationStop.center);
+  const transitDistance = getTransitSegmentDistance(segmentStops);
   const estimatedMinutes =
     estimateRouteMinutes(accessDistance + egressDistance, 72) +
-    estimateRouteMinutes(transitDistance, getTransitSpeedFactor(input.mode.mode)) +
-    transferPenalty;
+    estimateTransitSegmentMinutes(segmentStops, transitDistance, candidate.mode.mode);
+  const stationSpan = Math.max(1, destinationStop.index - originStop.index);
 
   return {
-    id: `${input.mode.mode}-${originStation.marker.id}-${destinationStation.marker.id}`,
-    title: sharedLine ? `${modeLabel}少换乘` : `${modeLabel}接驳`,
-    summary: `${formatRoutePlanDistance(accessDistance + egressDistance)} 步行接驳 · ${formatRoutePlanDistance(
-      transitDistance,
-    )} 站间估算`,
-    icon,
-    color,
-    coordinates: [
-      input.draft.origin,
-      originStation.center,
-      destinationStation.center,
-      input.draft.destination,
-    ],
+    id: `${candidate.mode.mode}-${candidate.line.id}-${candidate.direction}-${originStop.marker.id}-${destinationStop.marker.id}`,
+    title: `${candidate.modeLabel}直达`,
+    summary: `${candidate.line.name} · ${stationSpan}站 · ${formatRoutePlanDistance(
+      accessDistance + egressDistance,
+    )}步行`,
+    icon: candidate.icon,
+    color: candidate.color,
+    coordinates: [draft.origin, ...segmentStops.map((stop) => stop.center), draft.destination],
+    markerIds: dedupeValues(segmentStops.map((stop) => stop.marker.id)),
     estimatedDistance: accessDistance + egressDistance + transitDistance,
     estimatedMinutes,
     steps: [
-      `步行约 ${formatRoutePlanDistance(accessDistance)} 到 ${formatMarkerDisplayName(originStation.marker.label)}`,
-      sharedLine
-        ? `乘坐 ${sharedLine.name} 前往 ${formatMarkerDisplayName(destinationStation.marker.label)}`
-        : `使用 ${modeLabel} 从 ${formatMarkerDisplayName(originStation.marker.label)} 前往 ${formatMarkerDisplayName(
-            destinationStation.marker.label,
-          )}，可能需要换乘`,
-      `步行约 ${formatRoutePlanDistance(egressDistance)} 到 ${input.draft.destinationLabel}`,
+      `步行约 ${formatRoutePlanDistance(accessDistance)} 到 ${formatMarkerDisplayName(originStop.marker.label)}`,
+      `乘坐 ${candidate.line.name} 往 ${candidate.terminalName} 方向，${stationSpan}站到 ${formatMarkerDisplayName(
+        destinationStop.marker.label,
+      )}`,
+      `步行约 ${formatRoutePlanDistance(egressDistance)} 到 ${draft.destinationLabel}`,
     ],
-    note: sharedLine
-      ? '已找到两端共同线路，但站间路径仍按直线估算，未代表真实乘车时间。'
-      : '已找到两端接驳站点，但换乘和站间路径需要等待线路坐标、道路网络和时刻表继续完善。',
+    note: '已按真实线路站序生成候选；站间耗时优先使用旧数据 travelTime，缺失时仍按距离估算。',
   };
+}
+
+function buildTransferTransitLineOptions(
+  candidates: TransitLineDirectionCandidate[],
+  draft: RoutePlanDraft,
+): RoutePlanOption[] {
+  const originCandidates = candidates
+    .map((candidate) => ({
+      candidate,
+      originStop: findNearestRouteLineStop(draft.origin, candidate.stops),
+    }))
+    .filter(
+      (
+        item,
+      ): item is {
+        candidate: TransitLineDirectionCandidate;
+        originStop: TransitRouteStop;
+      } => Boolean(item.originStop && item.originStop.index < item.candidate.stops.length - 1),
+    )
+    .sort(
+      (left, right) =>
+        getCoordinateDistance(draft.origin, left.originStop.center) -
+        getCoordinateDistance(draft.origin, right.originStop.center),
+    )
+    .slice(0, 12);
+  const destinationCandidates = candidates
+    .map((candidate) => ({
+      candidate,
+      destinationStop: findNearestRouteLineStop(draft.destination, candidate.stops),
+    }))
+    .filter(
+      (
+        item,
+      ): item is {
+        candidate: TransitLineDirectionCandidate;
+        destinationStop: TransitRouteStop;
+      } => Boolean(item.destinationStop && item.destinationStop.index > 0),
+    )
+    .sort(
+      (left, right) =>
+        getCoordinateDistance(draft.destination, left.destinationStop.center) -
+        getCoordinateDistance(draft.destination, right.destinationStop.center),
+    )
+    .slice(0, 12);
+  const options: RoutePlanOption[] = [];
+
+  for (const originCandidate of originCandidates) {
+    for (const destinationCandidate of destinationCandidates) {
+      if (originCandidate.candidate.line.id === destinationCandidate.candidate.line.id) {
+        continue;
+      }
+
+      const transfer = findTransferStopPair({
+        fromCandidate: originCandidate.candidate,
+        fromStartIndex: originCandidate.originStop.index + 1,
+        toCandidate: destinationCandidate.candidate,
+        toEndIndex: destinationCandidate.destinationStop.index - 1,
+      });
+      if (!transfer) {
+        continue;
+      }
+
+      const firstSegment = originCandidate.candidate.stops.slice(
+        originCandidate.originStop.index,
+        transfer.fromStop.index + 1,
+      );
+      const secondSegment = destinationCandidate.candidate.stops.slice(
+        transfer.toStop.index,
+        destinationCandidate.destinationStop.index + 1,
+      );
+      if (firstSegment.length < 2 || secondSegment.length < 2) {
+        continue;
+      }
+
+      const accessDistance = getCoordinateDistance(draft.origin, originCandidate.originStop.center);
+      const egressDistance = getCoordinateDistance(
+        draft.destination,
+        destinationCandidate.destinationStop.center,
+      );
+      const firstTransitDistance = getTransitSegmentDistance(firstSegment);
+      const secondTransitDistance = getTransitSegmentDistance(secondSegment);
+      const transferDistance =
+        transfer.fromStop.marker.id === transfer.toStop.marker.id
+          ? 0
+          : getCoordinateDistance(transfer.fromStop.center, transfer.toStop.center);
+      const estimatedMinutes =
+        estimateRouteMinutes(accessDistance + egressDistance + transferDistance, 72) +
+        estimateTransitSegmentMinutes(
+          firstSegment,
+          firstTransitDistance,
+          originCandidate.candidate.mode.mode,
+        ) +
+        estimateTransitSegmentMinutes(
+          secondSegment,
+          secondTransitDistance,
+          destinationCandidate.candidate.mode.mode,
+        ) +
+        4;
+
+      options.push({
+        id: `transfer-${originCandidate.candidate.line.id}-${destinationCandidate.candidate.line.id}-${originCandidate.originStop.marker.id}-${transfer.fromStop.marker.id}-${destinationCandidate.destinationStop.marker.id}`,
+        title: `${originCandidate.candidate.modeLabel}+${destinationCandidate.candidate.modeLabel}换乘`,
+        summary: `${originCandidate.candidate.line.name} → ${destinationCandidate.candidate.line.name} · ${formatRoutePlanDistance(
+          accessDistance + egressDistance + transferDistance,
+        )}步行`,
+        icon: 'transfer_within_a_station',
+        color: originCandidate.candidate.color,
+        coordinates: [
+          draft.origin,
+          ...firstSegment.map((stop) => stop.center),
+          ...secondSegment.slice(1).map((stop) => stop.center),
+          draft.destination,
+        ],
+        markerIds: dedupeValues([
+          ...firstSegment.map((stop) => stop.marker.id),
+          ...secondSegment.map((stop) => stop.marker.id),
+        ]),
+        estimatedDistance:
+          accessDistance + egressDistance + transferDistance + firstTransitDistance + secondTransitDistance,
+        estimatedMinutes,
+        steps: [
+          `步行约 ${formatRoutePlanDistance(accessDistance)} 到 ${formatMarkerDisplayName(
+            originCandidate.originStop.marker.label,
+          )}`,
+          `乘坐 ${originCandidate.candidate.line.name} 到 ${formatMarkerDisplayName(
+            transfer.fromStop.marker.label,
+          )}`,
+          `换乘 ${destinationCandidate.candidate.line.name} 前往 ${formatMarkerDisplayName(
+            destinationCandidate.destinationStop.marker.label,
+          )}`,
+          `步行约 ${formatRoutePlanDistance(egressDistance)} 到 ${draft.destinationLabel}`,
+        ],
+        note: '已按真实线路站序组合一次换乘候选；换乘距离和缺失站间耗时仍为估算。',
+      });
+    }
+  }
+
+  return options;
+}
+
+function buildTransitStationMarkerIndex(pointMarkers: PointMarker[]): Map<string, PointMarker> {
+  const index = new Map<string, PointMarker>();
+  for (const marker of pointMarkers) {
+    if (!isTransitStationPoi(marker)) {
+      continue;
+    }
+    for (const key of getStationNameMatchKeys(marker.label)) {
+      if (!index.has(key)) {
+        index.set(key, marker);
+      }
+    }
+  }
+  return index;
+}
+
+function findTransitStationMarker(
+  stationName: string,
+  stationMarkerIndex: Map<string, PointMarker>,
+): PointMarker | undefined {
+  for (const key of getStationNameMatchKeys(stationName)) {
+    const marker = stationMarkerIndex.get(key);
+    if (marker) {
+      return marker;
+    }
+  }
+  return undefined;
+}
+
+function findNearestRouteLineStop(
+  point: [number, number],
+  stops: TransitRouteStop[],
+): TransitRouteStop | undefined {
+  return [...stops].sort(
+    (left, right) =>
+      getCoordinateDistance(point, left.center) - getCoordinateDistance(point, right.center),
+  )[0];
+}
+
+function findTransferStopPair(input: {
+  fromCandidate: TransitLineDirectionCandidate;
+  fromStartIndex: number;
+  toCandidate: TransitLineDirectionCandidate;
+  toEndIndex: number;
+}): { fromStop: TransitRouteStop; toStop: TransitRouteStop } | undefined {
+  const toStopsByMarkerId = new Map<string, TransitRouteStop>();
+  for (const stop of input.toCandidate.stops) {
+    if (stop.index > input.toEndIndex) {
+      continue;
+    }
+    toStopsByMarkerId.set(stop.marker.id, stop);
+  }
+
+  return input.fromCandidate.stops
+    .filter((stop) => stop.index >= input.fromStartIndex)
+    .map((fromStop) => {
+      const toStop = toStopsByMarkerId.get(fromStop.marker.id);
+      return toStop ? { fromStop, toStop } : undefined;
+    })
+    .filter(
+      (pair): pair is { fromStop: TransitRouteStop; toStop: TransitRouteStop } => Boolean(pair),
+    )
+    .sort(
+      (left, right) =>
+        left.fromStop.index +
+        left.toStop.index -
+        (right.fromStop.index + right.toStop.index),
+    )[0];
+}
+
+function getTransitSegmentDistance(stops: TransitRouteStop[]): number {
+  return stops.slice(1).reduce((total, stop, index) => {
+    const previous = stops[index];
+    return previous ? total + getCoordinateDistance(previous.center, stop.center) : total;
+  }, 0);
+}
+
+function estimateTransitSegmentMinutes(
+  stops: TransitRouteStop[],
+  distance: number,
+  mode: RouteTransportMode,
+): number {
+  const travelTime = stops
+    .slice(1)
+    .map((stop) => stop.stop.travelTime)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+    .reduce((total, value) => total + value, 0);
+
+  if (travelTime > 0) {
+    return Math.max(1, Math.round(travelTime));
+  }
+  return estimateRouteMinutes(distance, getTransitSpeedFactor(mode));
+}
+
+function dedupeValues<T>(values: T[]): T[] {
+  return Array.from(new Set(values));
 }
 
 function findNearestRouteStation<T extends { center: [number, number] }>(
