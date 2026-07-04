@@ -22,7 +22,7 @@ apps/web/.next
 apps/web/.next/standalone
 ```
 
-注意：`.next` 是构建输出和缓存目录，不建议手动整目录上传。推荐使用仓库提供的打包脚本生成 zip。
+注意：`.next` 是构建输出和缓存目录，不建议手动整目录上传。推荐使用仓库提供的打包脚本生成部署包。
 
 ## 推荐流程
 
@@ -30,6 +30,24 @@ apps/web/.next/standalone
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2
+```
+
+如果 zip 压缩在 Windows 上耗时过长或留下 0 字节临时文件，可以改用 `tar.gz`：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -ArchiveFormat tar.gz
+```
+
+如果压缩本身仍然很慢，可以生成不压缩的 `tar` 包：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -ArchiveFormat tar
+```
+
+如果上一次命令已经完成 staging，只是在归档阶段中断，可以复用 `.deploy/web` 直接重试归档：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -ArchiveFormat zip -SkipBuild -SkipStaging
 ```
 
 如果未来从 `/v2` 切回站点根路径，改为：
@@ -53,12 +71,26 @@ pnpm web:artifact
 - 补齐 pnpm workspace 下 Next standalone 可能漏掉的 `@next/*`、`@swc/*` 等运行时依赖。
 - 跳过本机上传素材目录 `apps/web/public/content-assets`。
 - 不打包 `.env`、`.env.*`、`.yct-data`、日志和本地缓存。
-- 在 `artifacts/` 下生成 `yct-web-时间戳.zip`。
-- 在 Windows 上优先使用 `tar.exe` 生成 zip，避免 `Compress-Archive` 处理大量文件时非常慢。
+- 在 `artifacts/` 下生成 `yct-web-时间戳.zip`、`yct-web-时间戳.tar.gz` 或 `yct-web-时间戳.tar`。
+- 压缩时先写入临时文件，成功后再改名为最终产物，避免失败时留下看似可用的坏包。
+- 在 Windows 上生成 zip 时优先使用 `tar.exe`，避免 `Compress-Archive` 处理大量文件时非常慢；需要更稳定的大包压缩时建议使用 `tar.gz`。
+- 支持 `-SkipBuild -SkipStaging` 复用已经完成的 `.deploy/web`，只重新生成归档文件。
 
 ## 云服务器运行
 
-把 `artifacts/yct-web-*.zip` 上传到服务器并解压到部署目录，然后运行：
+把 `artifacts/yct-web-*` 上传到服务器并解压到部署目录。zip 包可以直接右键解压，`tar.gz` 包可以用：
+
+```powershell
+tar -xzf .\yct-web-20260704-xxxxxx.tar.gz -C C:\wwwroot\yct-v2
+```
+
+不压缩的 `tar` 包使用：
+
+```powershell
+tar -xf .\yct-web-20260704-xxxxxx.tar -C C:\wwwroot\yct-v2
+```
+
+解压后运行：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath v2 -NodePath "C:\node-v22\node.exe"

@@ -3,7 +3,10 @@ param(
   [string]$BasePath = $env:YCT_DEPLOY_BASE_PATH,
   [string]$OutputDir = "artifacts",
   [string]$StagingDir = ".deploy\web",
-  [switch]$SkipBuild
+  [ValidateSet("zip", "tar.gz", "tar")]
+  [string]$ArchiveFormat = "zip",
+  [switch]$SkipBuild,
+  [switch]$SkipStaging
 )
 
 $ErrorActionPreference = "Stop"
@@ -211,28 +214,39 @@ if (-not $SkipBuild) {
   }
 }
 
-if (-not (Test-Path -LiteralPath $standaloneRoot)) {
-  throw "Standalone output is missing. Check apps/web/next.config.mjs output: 'standalone'."
-}
-if (-not (Test-Path -LiteralPath $staticRoot)) {
-  throw "Next static output is missing: $staticRoot"
+if ($SkipStaging -and -not $SkipBuild) {
+  throw "-SkipStaging requires -SkipBuild so the artifact cannot accidentally package stale staging after a fresh build."
 }
 
-Remove-YctDirectoryInsideRoot -Root $root -Path $stageRoot
-New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 
-Copy-YctDirectoryChildren -Source $standaloneRoot -Destination $stageRoot
+if ($SkipStaging) {
+  $stagedServerPath = Join-Path $stageRoot "apps\web\server.js"
+  if (-not (Test-Path -LiteralPath $stagedServerPath)) {
+    throw "Staging directory is missing or incomplete: $stageRoot"
+  }
+} else {
+  if (-not (Test-Path -LiteralPath $standaloneRoot)) {
+    throw "Standalone output is missing. Check apps/web/next.config.mjs output: 'standalone'."
+  }
+  if (-not (Test-Path -LiteralPath $staticRoot)) {
+    throw "Next static output is missing: $staticRoot"
+  }
 
-$standaloneWebRoot = Join-Path $stageRoot "apps\web"
-$standaloneNextRoot = Join-Path $standaloneWebRoot ".next"
-$standaloneWebNodeModules = Join-Path $standaloneWebRoot "node_modules"
-New-Item -ItemType Directory -Force -Path $standaloneNextRoot | Out-Null
-Copy-Item -LiteralPath $staticRoot -Destination $standaloneNextRoot -Recurse -Force
-Copy-YctPublicAssets -Source $publicRoot -Destination (Join-Path $standaloneWebRoot "public")
-Copy-YctNextRuntimeDependencies -Root $root -DestinationNodeModules $standaloneWebNodeModules
+  Remove-YctDirectoryInsideRoot -Root $root -Path $stageRoot
+  New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
 
-$startScript = @"
+  Copy-YctDirectoryChildren -Source $standaloneRoot -Destination $stageRoot
+
+  $standaloneWebRoot = Join-Path $stageRoot "apps\web"
+  $standaloneNextRoot = Join-Path $standaloneWebRoot ".next"
+  $standaloneWebNodeModules = Join-Path $standaloneWebRoot "node_modules"
+  New-Item -ItemType Directory -Force -Path $standaloneNextRoot | Out-Null
+  Copy-Item -LiteralPath $staticRoot -Destination $standaloneNextRoot -Recurse -Force
+  Copy-YctPublicAssets -Source $publicRoot -Destination (Join-Path $standaloneWebRoot "public")
+  Copy-YctNextRuntimeDependencies -Root $root -DestinationNodeModules $standaloneWebNodeModules
+
+  $startScript = @"
 param(
   [int]`$Port = 3300,
   [string]`$HostName = "127.0.0.1",
@@ -264,9 +278,9 @@ if (`$normalizedBasePath -and -not `$normalizedBasePath.StartsWith("/")) {
 & `$nodeCommand `$serverPath
 "@
 
-$startBasePathArgument = $basePathValue.TrimStart("/")
+  $startBasePathArgument = $basePathValue.TrimStart("/")
 
-$deploymentNotes = @"
+  $deploymentNotes = @"
 Yuchengtong web standalone deployment
 
 Build base path: $basePathValue
@@ -281,28 +295,61 @@ Notes:
 - If the reverse proxy is mounted at /v2, build and start with BasePath /v2. If it is mounted at the site root later, rebuild with an empty BasePath.
 "@
 
-Write-YctUtf8File -Path (Join-Path $stageRoot "start-yct-web.ps1") -Content $startScript
-Write-YctUtf8File -Path (Join-Path $stageRoot "DEPLOYMENT.txt") -Content $deploymentNotes
-
-$timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$zipPath = Join-Path $outputRoot "yct-web-$timestamp.zip"
-if (Test-Path -LiteralPath $zipPath) {
-  Remove-Item -LiteralPath $zipPath -Force
+  Write-YctUtf8File -Path (Join-Path $stageRoot "start-yct-web.ps1") -Content $startScript
+  Write-YctUtf8File -Path (Join-Path $stageRoot "DEPLOYMENT.txt") -Content $deploymentNotes
 }
 
 $tar = Get-Command tar.exe -ErrorAction SilentlyContinue
-if ($null -ne $tar) {
-  & $tar.Source -a -cf $zipPath -C $stageRoot .
-  if ($LASTEXITCODE -ne 0) {
-    throw "tar.exe failed to create deployment artifact with exit code $LASTEXITCODE."
+$timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$artifactPath = Join-Path $outputRoot "yct-web-$timestamp.$ArchiveFormat"
+$temporaryArtifactPath = Join-Path $outputRoot "yct-web-$timestamp.tmp.$ArchiveFormat"
+
+if (Test-Path -LiteralPath $artifactPath) {
+  Remove-Item -LiteralPath $artifactPath -Force
+}
+if (Test-Path -LiteralPath $temporaryArtifactPath) {
+  Remove-Item -LiteralPath $temporaryArtifactPath -Force
+}
+
+try {
+  if ($ArchiveFormat -eq "tar.gz") {
+    if ($null -eq $tar) {
+      throw "tar.exe is required to create a tar.gz deployment artifact."
+    }
+    & $tar.Source -czf $temporaryArtifactPath -C $stageRoot .
+    if ($LASTEXITCODE -ne 0) {
+      throw "tar.exe failed to create deployment artifact with exit code $LASTEXITCODE."
+    }
+  } elseif ($ArchiveFormat -eq "tar") {
+    if ($null -eq $tar) {
+      throw "tar.exe is required to create a tar deployment artifact."
+    }
+    & $tar.Source -cf $temporaryArtifactPath -C $stageRoot .
+    if ($LASTEXITCODE -ne 0) {
+      throw "tar.exe failed to create deployment artifact with exit code $LASTEXITCODE."
+    }
+  } elseif ($null -ne $tar) {
+    & $tar.Source -a -cf $temporaryArtifactPath -C $stageRoot .
+    if ($LASTEXITCODE -ne 0) {
+      throw "tar.exe failed to create deployment artifact with exit code $LASTEXITCODE."
+    }
+  } else {
+    Compress-Archive -Path (Join-Path $stageRoot "*") -DestinationPath $temporaryArtifactPath -CompressionLevel Optimal
   }
-} else {
-  Compress-Archive -Path (Join-Path $stageRoot "*") -DestinationPath $zipPath -CompressionLevel Optimal
+
+  Move-Item -LiteralPath $temporaryArtifactPath -Destination $artifactPath -Force
+} catch {
+  if (Test-Path -LiteralPath $temporaryArtifactPath) {
+    Remove-Item -LiteralPath $temporaryArtifactPath -Force -ErrorAction SilentlyContinue
+  }
+  throw
 }
 
 $result = [pscustomobject]@{
-  Artifact = $zipPath
+  Artifact = $artifactPath
+  ArchiveFormat = $ArchiveFormat
   StagingDirectory = $stageRoot
+  SkippedStaging = [bool]$SkipStaging
   BasePath = $basePathValue
   StartScript = "start-yct-web.ps1"
   NodeRequirement = ">=20.9.0"
