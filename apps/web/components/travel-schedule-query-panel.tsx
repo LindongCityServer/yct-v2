@@ -1,6 +1,8 @@
 'use client';
 
 import type {
+  ApiItemResponse,
+  TicketOrderDraftResult,
   TicketableServiceKind,
   TransitServiceNotice,
   TravelScheduleHistoryItem,
@@ -11,6 +13,7 @@ import type {
   TravelTripInstance,
 } from '@yct/contracts';
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';
+import { appPath } from '../lib/app-paths';
 import {
   clearTravelScheduleHistory,
   readTravelScheduleHistoryState,
@@ -262,6 +265,7 @@ export function TravelScheduleQueryPanel({
             <ScheduleTripCard
               trip={trip}
               service={serviceByKind.get(trip.serviceKind)}
+              serviceDate={serviceDate}
               key={trip.tripInstanceId}
               onHistoryChange={syncScheduleHistory}
             />
@@ -408,13 +412,16 @@ function ScheduleLocalHistoryPanel({
 function ScheduleTripCard({
   trip,
   service,
+  serviceDate,
   onHistoryChange,
 }: Readonly<{
   trip: TravelTripInstance;
   service?: TravelScheduleServiceSummary;
+  serviceDate: string;
   onHistoryChange: () => void;
 }>) {
   const [message, setMessage] = useState('');
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
 
   const addReminder = () => {
     const remindAt = getDefaultReminderTime(trip.departureTime);
@@ -436,6 +443,44 @@ function ScheduleTripCard({
     saveTravelScheduleHistory(trip, 'saved');
     onHistoryChange();
     setMessage('已保存到本地班次记录');
+  };
+  const createOrderDraft = async () => {
+    if (trip.ticketing?.status !== 'order_available') {
+      setMessage(trip.ticketing?.message ?? '当前班次暂不可创建订单草稿');
+      return;
+    }
+
+    setIsCreatingOrder(true);
+    setMessage('正在创建订单草稿');
+    try {
+      const response = await fetch(appPath('/api/travel/ticketing/orders'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          passengerCount: 1,
+          serviceDate,
+          tripInstanceId: trip.tripInstanceId,
+        }),
+      });
+      const data = (await response.json()) as Partial<ApiItemResponse<TicketOrderDraftResult>> & {
+        message?: string;
+      };
+      if (!response.ok || !data.item) {
+        throw new Error(data.message ?? '订单草稿创建失败');
+      }
+
+      setMessage(
+        `已创建订单草稿，库存占用至 ${formatTicketHoldExpiresAt(
+          data.item.inventoryHold.expiresAt,
+        )}`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '订单草稿创建失败');
+    } finally {
+      setIsCreatingOrder(false);
+    }
   };
 
   return (
@@ -526,7 +571,11 @@ function ScheduleTripCard({
             <span>旧版参考</span>
           </a>
         ) : null}
-        <TicketingStatusButton ticketing={trip.ticketing} />
+        <TicketingStatusButton
+          ticketing={trip.ticketing}
+          busy={isCreatingOrder}
+          onCreateOrder={createOrderDraft}
+        />
       </div>
       {message ? <p className="schedule-trip-feedback">{message}</p> : null}
     </article>
@@ -534,29 +583,41 @@ function ScheduleTripCard({
 }
 
 function TicketingStatusButton({
+  busy,
+  onCreateOrder,
   ticketing,
 }: Readonly<{
+  busy: boolean;
+  onCreateOrder: () => void;
   ticketing?: TravelTicketingAvailability;
 }>) {
   const state = getTicketingButtonState(ticketing);
 
   return (
-    <button className="secondary-action-button" type="button" disabled title={state.message}>
+    <button
+      className="secondary-action-button"
+      type="button"
+      disabled={busy || !state.canCreate}
+      title={state.message}
+      onClick={onCreateOrder}
+    >
       <span className="material-symbols-outlined" aria-hidden="true">
-        {state.icon}
+        {busy ? 'progress_activity' : state.icon}
       </span>
-      <span>{state.label}</span>
+      <span>{busy ? '创建中' : state.label}</span>
     </button>
   );
 }
 
 function getTicketingButtonState(ticketing: TravelTicketingAvailability | undefined): {
+  canCreate: boolean;
   icon: string;
   label: string;
   message: string;
 } {
   if (!ticketing) {
     return {
+      canCreate: false,
       icon: 'confirmation_number',
       label: '新票务待接入',
       message: '新版票务状态尚未返回。',
@@ -565,14 +626,16 @@ function getTicketingButtonState(ticketing: TravelTicketingAvailability | undefi
 
   if (ticketing.status === 'order_available') {
     return {
+      canCreate: true,
       icon: 'confirmation_number',
-      label: '票务已配置',
+      label: '创建草稿',
       message: ticketing.message,
     };
   }
 
   if (ticketing.status === 'legacy_reference_only') {
     return {
+      canCreate: false,
       icon: 'open_in_new',
       label: '旧版参考可用',
       message: ticketing.message,
@@ -581,6 +644,7 @@ function getTicketingButtonState(ticketing: TravelTicketingAvailability | undefi
 
   if (ticketing.status === 'inventory_not_configured') {
     return {
+      canCreate: false,
       icon: 'inventory_2',
       label: '库存待配置',
       message: ticketing.message,
@@ -589,6 +653,7 @@ function getTicketingButtonState(ticketing: TravelTicketingAvailability | undefi
 
   if (ticketing.status === 'sold_out') {
     return {
+      canCreate: false,
       icon: 'event_busy',
       label: '暂无余票',
       message: ticketing.message,
@@ -597,6 +662,7 @@ function getTicketingButtonState(ticketing: TravelTicketingAvailability | undefi
 
   if (ticketing.status === 'service_not_connected' || ticketing.status === 'trip_not_found') {
     return {
+      canCreate: false,
       icon: 'sync_problem',
       label: '暂不可订',
       message: ticketing.message,
@@ -604,10 +670,25 @@ function getTicketingButtonState(ticketing: TravelTicketingAvailability | undefi
   }
 
   return {
+    canCreate: false,
     icon: 'confirmation_number',
     label: '新票务待接入',
     message: ticketing.message,
   };
+}
+
+function formatTicketHoldExpiresAt(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString('zh-CN', {
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: '2-digit',
+  });
 }
 
 function MetaItem({ label, value }: Readonly<{ label: string; value: string }>) {
