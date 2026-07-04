@@ -2462,6 +2462,11 @@ function RoutePlanDraftCard({
 }>) {
   const selectedOption = options.find((option) => option.id === selectedOptionId) ?? options[0];
   const allModesEnabled = routeTransportModeOptions.every((mode) => enabledModes[mode.mode]);
+  const [modeListExpanded, setModeListExpanded] = useState(false);
+  const visibleRouteTransportModes = modeListExpanded
+    ? routeTransportModeOptions
+    : routeTransportModeOptions.slice(0, 3);
+  const collapsibleModeCount = Math.max(routeTransportModeOptions.length - 3, 0);
 
   return (
     <section
@@ -2572,7 +2577,14 @@ function RoutePlanDraftCard({
               </div>
             </div>
           ) : null}
-          <div className="map-route-mode-toggle-list" aria-label="路线交通方式">
+          <div
+            className={
+              modeListExpanded
+                ? 'map-route-mode-toggle-list is-expanded'
+                : 'map-route-mode-toggle-list is-collapsed'
+            }
+            aria-label="路线交通方式"
+          >
             <button
               className={allModesEnabled ? 'is-active' : ''}
               type="button"
@@ -2584,7 +2596,7 @@ function RoutePlanDraftCard({
               </span>
               <span>全部</span>
             </button>
-            {routeTransportModeOptions.map((mode) => (
+            {visibleRouteTransportModes.map((mode) => (
               <button
                 className={enabledModes[mode.mode] ? 'is-active' : ''}
                 type="button"
@@ -2599,6 +2611,19 @@ function RoutePlanDraftCard({
                 <span>{mode.label}</span>
               </button>
             ))}
+            {collapsibleModeCount > 0 ? (
+              <button
+                className="map-route-mode-toggle-more"
+                type="button"
+                aria-expanded={modeListExpanded}
+                onClick={() => setModeListExpanded((value) => !value)}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  {modeListExpanded ? 'keyboard_arrow_up' : 'more_horiz'}
+                </span>
+                <span>{modeListExpanded ? '收起' : `更多${collapsibleModeCount}`}</span>
+              </button>
+            ) : null}
           </div>
           <div className="map-route-option-list" aria-label="路线方案">
             {options.length > 0 ? (

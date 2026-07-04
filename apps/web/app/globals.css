@@ -1256,6 +1256,10 @@ body .material-symbols-outlined {
   --icon-fill: 1;
 }
 
+.map-route-mode-toggle-more {
+  --route-mode-color: var(--yct-color-primary);
+}
+
 .map-route-endpoint-candidates {
   display: grid;
   gap: var(--yct-space-2);
@@ -5645,13 +5649,13 @@ body .material-symbols-outlined {
     top: auto;
     display: grid;
     width: auto;
-    max-height: min(42dvh, calc(var(--yct-visible-map-height) - var(--yct-map-control-inset) * 2));
+    max-height: min(52dvh, calc(var(--yct-visible-map-height) - var(--yct-map-control-inset) * 2));
     padding: 0;
   }
 
   .map-route-plan-card {
     max-height: min(
-      42dvh,
+      52dvh,
       calc(var(--yct-visible-map-height) - var(--yct-map-control-inset) * 2 - 56px)
     );
   }
