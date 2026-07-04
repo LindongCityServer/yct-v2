@@ -6,6 +6,7 @@ import { listContentRecords } from '../../../../lib/content-store';
 import { listPoiSubmissions } from '../../../../lib/poi-submission-store';
 import { readRuntimeConfig } from '../../../../lib/runtime-config';
 import { listServiceEntries } from '../../../../lib/service-entry-store';
+import { countPendingTicketOrdersForLdpassUser } from '../../../../lib/ticket-order-workflow';
 import { listTransitDataRevisions } from '../../../../lib/transit-data-store';
 
 interface AccountBadgeSummary {
@@ -29,6 +30,9 @@ interface AccountStatusResponse {
       transit: number;
       poi: number;
     };
+  };
+  ticketing?: {
+    pendingOrderCount: number;
   };
   message?: string;
 }
@@ -72,7 +76,10 @@ export async function GET(request: NextRequest) {
 
     if (session.user) {
       const membership = await findActiveAdminByLdpassUserId(session.user.id);
-      const pendingReview = membership ? await readAdminPendingReviewSummary() : undefined;
+      const [pendingReview, pendingTicketOrderCount] = await Promise.all([
+        membership ? readAdminPendingReviewSummary() : undefined,
+        countPendingTicketOrdersForLdpassUser(session.user.id),
+      ]);
       const pendingReviewCount = pendingReview
         ? pendingReview.contents +
           pendingReview.contentAssets +
@@ -80,17 +87,22 @@ export async function GET(request: NextRequest) {
           pendingReview.transit +
           pendingReview.poi
         : 0;
+      const totalBadgeCount = pendingReviewCount + pendingTicketOrderCount;
+      const badgeLabels = [
+        pendingReviewCount > 0 ? `${pendingReviewCount} 个管理员待办` : undefined,
+        pendingTicketOrderCount > 0 ? `${pendingTicketOrderCount} 个待处理票务订单` : undefined,
+      ].filter(Boolean);
 
       return NextResponse.json({
         accountStatus: 'active',
         username: session.user.username,
         avatarUrl: session.user.avatarUrl ?? session.user.avatarFallbackUrl,
         badge:
-          pendingReviewCount > 0
+          totalBadgeCount > 0
             ? {
                 kind: 'count',
-                count: pendingReviewCount,
-                label: `${pendingReviewCount} 个管理员待办`,
+                count: totalBadgeCount,
+                label: badgeLabels.join('，'),
               }
             : {
                 kind: 'none',
@@ -110,6 +122,9 @@ export async function GET(request: NextRequest) {
               },
             }
           : undefined,
+        ticketing: {
+          pendingOrderCount: pendingTicketOrderCount,
+        },
       } satisfies AccountStatusResponse);
     }
 

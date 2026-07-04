@@ -46,6 +46,17 @@ export async function listTicketOrdersForUser(userId: string): Promise<TicketOrd
     );
 }
 
+export async function countPendingTicketOrdersForLdpassUser(ldpassUserId: string): Promise<number> {
+  const orderStore = await readTicketOrderStore();
+  return orderStore.orders.filter(
+    (order) =>
+      order.ldpassUserId === ldpassUserId &&
+      (order.status === 'draft' ||
+        order.status === 'pending_issue' ||
+        order.status === 'manual_review'),
+  ).length;
+}
+
 export async function getTicketOrderForUser(input: {
   orderId: string;
   userId: string;
