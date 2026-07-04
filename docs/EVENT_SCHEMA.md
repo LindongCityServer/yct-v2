@@ -32,6 +32,7 @@ export interface YctDomainEvent<TType extends string, TPayload> {
 | `ContentAssetImported`                | 内容素材从旧清单或适配器导入  | 素材审核待办、来源追踪、审计                                                                                                           |
 | `ContentAssetUploaded`                | 管理员上传内容素材            | 素材审核待办、去重、来源追踪、审计                                                                                                     |
 | `ContentAssetReviewed`                | 管理员审核内容素材            | 内容发布校验、通知投稿者、记录审计                                                                                                     |
+| `PoiSubmissionImageUploaded`          | 用户上传 POI 投稿图片         | POI 审核资料、图片来源追踪和审计；当前只记录生成的图片 URL、MIME、大小和哈希，不代表图片已公开审核通过                                 |
 | `PoiSubmitted`                        | 用户提交公开 POI              | POI 审核待办                                                                                                                           |
 | `PoiReviewed`                         | 管理员审核 POI                | 地图数据发布、通知投稿者                                                                                                               |
 | `PoiPublished`                        | 已审核 POI 发布为公开标记     | 地图标记缓存刷新、搜索索引、通知投稿者                                                                                                 |

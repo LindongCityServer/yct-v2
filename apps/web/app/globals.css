@@ -1742,6 +1742,14 @@ body .material-symbols-outlined {
   border-radius: var(--yct-radius-pill);
 }
 
+.map-poi-submit-form input[type='file'] {
+  height: auto;
+  padding: var(--yct-space-2);
+  border-radius: var(--yct-radius-lg);
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+}
+
 .map-poi-submit-form textarea {
   min-height: 86px;
   resize: vertical;

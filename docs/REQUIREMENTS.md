@@ -202,12 +202,12 @@
 - 不存在瓦片的区域必须透明处理，不能显示破图、错误占位或大块不自然底色；前端瓦片层需要继续基于 uNmINeD region 索引或 Provider 能力判断是否请求/渲染该 tile。
 - 当用户关闭地图瓦片时，可以显示道路类对象的粗线条轨迹作为可读底图；但旧道路端点没有顺序，不能直接把同名端点按数组顺序连成路线。实现前需要评估基于后台道路网络生成、基于端点近似生成，或只展示端点与道路名称的方案。
 - `map-data-badge`、`map-data-panel` 这类数据源、标记数量、适配器状态说明，对普通用户价值有限，不应占据地图页主要可见区域；必要时只保留“数据更新时间/来源”的轻量入口，详细诊断信息放入管理员、调试或关于面板。
-- 用户上传公共 POI 前必须登录；公开前必须人工审核。POI 简介、外部链接和图片同样属于审核内容；第一阶段可先支持图片链接，后续文件上传需要补充大小、格式、存储位置、违规图片处理和管理员预览规则。
+- 用户上传公共 POI 前必须登录；公开前必须人工审核。POI 简介、外部链接和图片同样属于审核内容；第一阶段支持图片文件上传和图片链接兜底，文件上传限制常见图片格式与大小，并生成可进入 POI 审核流的图片 URL。后续仍需要补充对象存储、违规图片处理、图片安全检查和更完整的管理员预览规则。
 - POI 分类体系第一阶段参考 `map.shangxiaoguan.top` 的 PNG 资源归纳，分类与图标允许一对多；后台需要能维护分类名称、图标、显示顺序、是否允许投稿和默认审核规则。
 - BDSLM 标记点通过适配器转换为统一 `MapMarkerSnapshot`，Minecraft 世界坐标 `x/z` 直接进入 `Point` 几何；屏幕/瓦片坐标转换继续由地图渲染层处理。
 - 面性标记优先评估“多个矩形组合”作为 Minecraft 存档内的编辑/存储方式，因为它更贴近方块世界和后台录入习惯。显示层可以按需转换为多边形或合并轮廓，但是否转换、如何合并、是否保留原始矩形集合，需要根据性能和编辑体验评估后决定。
-- 工程过渡实现：在数据库/Prisma 接入前，公开 POI 投稿使用 `.yct-data/poi-submission-store.json` 作为本地仓储；前台 `/api/map/poi-submissions` 仅允许已登录且服务器账号已验证的 `ldpass` 用户提交公开 POI，后台 `/api/admin/map/poi-submissions` 由 YCT 管理员审核和发布。当前第一版投稿资料包括地点名称、分类、简介、相关链接、图片链接和点坐标。
-- 发布后的公开 POI 会合并进 `/api/map/markers`，与旧地图标记一起提供给前台；第一版前台投稿入口只开放点坐标提交，接口和数据模型继续保留线、多矩形和多边形几何，待地图渲染层支持后再开放对应编辑 UI。发布后的图片链接会在地点详情中展示，但仍需后续补充本地文件上传、图片审核与资源迁移策略。
+- 工程过渡实现：在数据库/Prisma 接入前，公开 POI 投稿使用 `.yct-data/poi-submission-store.json` 作为本地仓储，POI 投稿图片默认落盘到 `.yct-data/poi-submission-images`；前台 `/api/map/poi-submissions` 仅允许已登录且服务器账号已验证的 `ldpass` 用户提交公开 POI，后台 `/api/admin/map/poi-submissions` 由 YCT 管理员审核和发布。当前第一版投稿资料包括地点名称、分类、简介、相关链接、上传图片或图片链接和点坐标。
+- 发布后的公开 POI 会合并进 `/api/map/markers`，与旧地图标记一起提供给前台；第一版前台投稿入口只开放点坐标提交，接口和数据模型继续保留线、多矩形和多边形几何，待地图渲染层支持后再开放对应编辑 UI。发布后的图片会在地点详情中展示；当前本地文件上传仍是过渡实现，后续需要补充对象存储、图片审核状态和资源迁移策略。
 - 公开地图和交通数据 API 在读取旧站文件、旧地图标记或派生线路型 POI 时必须做请求合并和短 TTL 服务端缓存；不能让首页、地图页、RSC 预取和 Service Worker 预热的并发请求各自全量拉取/解析同一批旧数据。远程旧站文件读取必须有明确超时，当前运行时配置为 `YCT_LEGACY_DATA_FETCH_TIMEOUT_MS`，默认 8 秒。该缓存只是开发和过渡期的进程内保护，不等同正式数据库缓存、Outbox 或跨实例一致性机制。
 - 地图页的大型交互组件在开发环境和首屏 SSR 中需要控制编译压力；当前地图主体通过客户端懒加载挂载，服务端先返回页面壳，地图数据仍由前端按需读取公开 API。
 
@@ -565,6 +565,15 @@ export interface PoiSubmittedPayload {
   name: string;
   geometry: MapGeometry;
   visibility: 'private' | 'public_requested';
+}
+
+export interface PoiSubmissionImageUploadedPayload {
+  imageId: string;
+  fileName: string;
+  imageUrl: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
 }
 
 export interface PoiApprovedPayload {

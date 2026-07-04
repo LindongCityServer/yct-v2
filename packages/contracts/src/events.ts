@@ -90,6 +90,15 @@ export interface PoiSubmittedPayload {
   geometry: MapGeometry;
 }
 
+export interface PoiSubmissionImageUploadedPayload {
+  imageId: string;
+  fileName: string;
+  imageUrl: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+}
+
 export interface PoiReviewedPayload {
   poiId: string;
   revisionId?: string;
@@ -368,6 +377,7 @@ export type YctEventPayloadMap = {
   ContentAssetImported: ContentAssetImportedPayload;
   ContentAssetUploaded: ContentAssetUploadedPayload;
   ContentAssetReviewed: ContentAssetReviewedPayload;
+  PoiSubmissionImageUploaded: PoiSubmissionImageUploadedPayload;
   PoiSubmitted: PoiSubmittedPayload;
   PoiReviewed: PoiReviewedPayload;
   PoiPublished: PoiPublishedPayload;

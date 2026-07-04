@@ -459,8 +459,8 @@ DESIGN.md
 - 新增本地 POI 投稿仓储 `.yct-data/poi-submission-store.json`，并新增 `YCT_POI_SUBMISSION_STORE_PATH` 配置；该目录不进入仓库，后续可替换为数据库 Repository。
 - 新增 POI 投稿工作流：验证服务器账号的 `ldpass` 用户提交公开 POI，管理员审核通过/驳回，审核通过后发布为公开 POI；成功后发布 `PoiSubmitted`、`PoiReviewed`、`PoiPublished` 事件。
 - 新增前台投稿 API `/api/map/poi-submissions`；当前前台只开放点坐标提交，接口和数据模型继续保留线、多矩形和多边形几何。
-- 当前前台入口位于 `/map` 的地图浏览/图层面板内，点击“投稿 POI”打开弹窗；表单采集地点名称、允许公开投稿的 POI 分类、简介、相关链接、图片链接和 Minecraft X/Z 坐标，并以 `public_pending_review` 的点状公开 POI 提交审核。
-- 当前投稿接口要求登录 `ldpass` 且已验证服务器账号；匿名用户、非验证用户和私有 POI 暂不开放提交。图片第一版先支持可审核的 URL 字段，文件上传、营业时间、电话、出入口/设施关联、代表 POI、线性/区域几何的可视化编辑仍待后续后台与表单设计。
+- 当前前台入口位于 `/map` 的地图浏览/图层面板内，点击“投稿 POI”打开弹窗；表单采集地点名称、允许公开投稿的 POI 分类、简介、相关链接、上传图片或图片链接和 Minecraft X/Z 坐标，并以 `public_pending_review` 的点状公开 POI 提交审核。
+- 当前投稿接口要求登录 `ldpass` 且已验证服务器账号；匿名用户、非验证用户和私有 POI 暂不开放提交。图片第一版支持用户文件上传到 `.yct-data/poi-submission-images`，上传成功后发布 `PoiSubmissionImageUploaded` 事件并把生成的图片 URL 写入 POI 投稿；图片安全检查、对象存储、营业时间、电话、出入口/设施关联、代表 POI、线性/区域几何的可视化编辑仍待后续后台与表单设计。
 - 新增后台 API `/api/admin/map/poi-submissions`、`/review`、`/publish`，并新增 `/admin/map-poi` 后台页面。
 - `/api/map/markers` 会合并本地已发布公开 POI 与旧地图/BDSLM 标记；外部标记源不可用时，仍可返回本地已发布 POI。
 - `/account` 登录后的后台入口增加“POI 后台”。

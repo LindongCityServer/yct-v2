@@ -344,6 +344,8 @@ export function MapStage() {
   const [poiDescription, setPoiDescription] = useState('');
   const [poiHref, setPoiHref] = useState('');
   const [poiImageUrl, setPoiImageUrl] = useState('');
+  const [poiImageFile, setPoiImageFile] = useState<File | null>(null);
+  const [poiImageFileInputKey, setPoiImageFileInputKey] = useState(0);
   const [poiX, setPoiX] = useState('');
   const [poiZ, setPoiZ] = useState('');
   const [poiSubmitStatus, setPoiSubmitStatus] = useState('');
@@ -1043,6 +1045,26 @@ export function MapStage() {
 
     setPoiSubmitBusy(true);
     try {
+      let imageUrl = poiImageUrl.trim() || undefined;
+      if (poiImageFile) {
+        const imageBody = new FormData();
+        imageBody.append('file', poiImageFile);
+        const imageResponse = await fetch(appPath('/api/map/poi-submission-images/upload'), {
+          method: 'POST',
+          body: imageBody,
+        });
+        const imageData = (await imageResponse.json()) as {
+          imageUrl?: string;
+          message?: string;
+        };
+        if (!imageResponse.ok || !imageData.imageUrl) {
+          setPoiSubmitStatus(imageData.message ?? '图片上传失败');
+          return;
+        }
+
+        imageUrl = imageData.imageUrl;
+      }
+
       const response = await fetch(appPath('/api/map/poi-submissions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1051,7 +1073,7 @@ export function MapStage() {
           categoryId: poiCategoryId,
           description: poiDescription.trim() || undefined,
           href: poiHref.trim() || undefined,
-          imageUrl: poiImageUrl.trim() || undefined,
+          imageUrl,
           visibility: 'public_pending_review',
           geometry: {
             type: 'Point',
@@ -1069,6 +1091,8 @@ export function MapStage() {
       setPoiDescription('');
       setPoiHref('');
       setPoiImageUrl('');
+      setPoiImageFile(null);
+      setPoiImageFileInputKey((current) => current + 1);
       setPoiX('');
       setPoiZ('');
       setPoiSubmitStatus('已提交，等待管理员审核。');
@@ -1946,6 +1970,16 @@ export function MapStage() {
                   onChange={(event) => setPoiHref(event.currentTarget.value)}
                   placeholder="https://..."
                   aria-label="相关链接"
+                />
+              </label>
+              <label>
+                <span>上传图片</span>
+                <input
+                  key={poiImageFileInputKey}
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
+                  onChange={(event) => setPoiImageFile(event.currentTarget.files?.[0] ?? null)}
+                  aria-label="上传图片"
                 />
               </label>
               <label>

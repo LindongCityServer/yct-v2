@@ -17,6 +17,7 @@ export interface RuntimeConfig {
   ticketingCatalogStorePath: string;
   ticketOrderStorePath: string;
   poiSubmissionStorePath: string;
+  poiSubmissionImageUploadDir: string;
   offlinePackageStorePath: string;
   eventOutboxStorePath: string;
   notificationPreferenceStorePath: string;
@@ -91,6 +92,9 @@ export function readRuntimeConfig(): RuntimeConfig {
     poiSubmissionStorePath:
       emptyToUndefined(process.env.YCT_POI_SUBMISSION_STORE_PATH) ??
       '.yct-data/poi-submission-store.json',
+    poiSubmissionImageUploadDir:
+      emptyToUndefined(process.env.YCT_POI_SUBMISSION_IMAGE_UPLOAD_DIR) ??
+      '.yct-data/poi-submission-images',
     offlinePackageStorePath:
       emptyToUndefined(process.env.YCT_OFFLINE_PACKAGE_STORE_PATH) ??
       '.yct-data/offline-package-store.json',
