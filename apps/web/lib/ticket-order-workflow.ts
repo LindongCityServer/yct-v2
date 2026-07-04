@@ -31,7 +31,7 @@ export class TicketOrderWorkflowError extends Error {
 }
 
 export async function listTicketOrdersForUser(userId: string): Promise<TicketOrderListItem[]> {
-  const orderStore = await readTicketOrderStore();
+  const orderStore = await expireStaleTicketOrders();
   const holdById = new Map(orderStore.inventoryHolds.map((hold) => [hold.inventoryHoldId, hold]));
 
   return orderStore.orders
@@ -47,7 +47,7 @@ export async function listTicketOrdersForUser(userId: string): Promise<TicketOrd
 }
 
 export async function countPendingTicketOrdersForLdpassUser(ldpassUserId: string): Promise<number> {
-  const orderStore = await readTicketOrderStore();
+  const orderStore = await expireStaleTicketOrders();
   return orderStore.orders.filter(
     (order) =>
       order.ldpassUserId === ldpassUserId &&
@@ -62,7 +62,7 @@ export async function getTicketOrderForUser(input: {
   userId: string;
   ldpassUserId: string;
 }): Promise<TicketOrderListItem> {
-  const orderStore = await readTicketOrderStore();
+  const orderStore = await expireStaleTicketOrders();
   const order = orderStore.orders.find(
     (item) =>
       item.orderId === input.orderId &&
@@ -91,7 +91,7 @@ export async function createTicketOrderDraft(input: {
 }): Promise<TicketOrderDraftResult> {
   const now = new Date();
   const catalog = await readTicketingCatalog();
-  const orderStore = await readTicketOrderStore();
+  const orderStore = await expireStaleTicketOrders(now);
   const candidate = findTicketingOrderCandidate({
     trip: input.trip,
     catalog,
@@ -178,6 +178,86 @@ export async function createTicketOrderDraft(input: {
     },
     ticketing: candidate.ticketing,
   };
+}
+
+export async function expireStaleTicketOrders(now = new Date()): Promise<{
+  version: 1;
+  orders: TicketOrder[];
+  inventoryHolds: TicketInventoryHold[];
+  updatedAt?: string;
+}> {
+  const orderStore = await readTicketOrderStore();
+  const nowMs = now.getTime();
+  const nowIso = now.toISOString();
+  const expiredHoldIds = new Set(
+    orderStore.inventoryHolds
+      .filter(
+        (hold) =>
+          hold.status === 'held' &&
+          Number.isFinite(new Date(hold.expiresAt).getTime()) &&
+          new Date(hold.expiresAt).getTime() <= nowMs,
+      )
+      .map((hold) => hold.inventoryHoldId),
+  );
+
+  if (expiredHoldIds.size === 0) {
+    return orderStore;
+  }
+
+  const expiredOrders: TicketOrder[] = [];
+  const nextOrders = orderStore.orders.map((order) => {
+    if (!order.inventoryHoldId || !expiredHoldIds.has(order.inventoryHoldId) || order.status !== 'draft') {
+      return order;
+    }
+
+    const nextOrder: TicketOrder = {
+      ...order,
+      status: 'expired',
+      cancellationReason: 'inventory_expired',
+      cancelledAt: nowIso,
+      updatedAt: nowIso,
+    };
+    expiredOrders.push(nextOrder);
+    return nextOrder;
+  });
+  const nextHolds = orderStore.inventoryHolds.map((hold) =>
+    expiredHoldIds.has(hold.inventoryHoldId)
+      ? {
+          ...hold,
+          status: 'expired' as const,
+          releasedAt: nowIso,
+        }
+      : hold,
+  );
+  const updatedStore = await writeTicketOrderStore({
+    version: 1,
+    orders: nextOrders,
+    inventoryHolds: nextHolds,
+    updatedAt: nowIso,
+  });
+
+  await Promise.all(
+    expiredOrders.map((order) =>
+      emitAppEvent(
+        createYctEvent({
+          eventId: `event_${randomUUID()}`,
+          type: 'TicketOrderCancelled',
+          occurredAt: nowIso,
+          actor: {
+            type: 'system',
+            id: 'ticket-order-expirer',
+          },
+          payload: {
+            orderId: order.orderId,
+            cancelledAt: nowIso,
+            reason: 'inventory_expired',
+          },
+        }),
+      ),
+    ),
+  );
+
+  return updatedStore;
 }
 
 export async function cancelTicketOrderDraft(input: {
