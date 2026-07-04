@@ -1483,7 +1483,7 @@ body .material-symbols-outlined {
 .map-route-step-timeline {
   --route-rail-color: color-mix(in srgb, var(--route-option-color) 82%, var(--yct-color-border));
   display: grid;
-  gap: 0;
+  gap: 2px;
   margin: var(--yct-space-2) 0 0;
   padding: 0;
   list-style: none;
@@ -1492,30 +1492,18 @@ body .material-symbols-outlined {
 .map-route-step-timeline li {
   position: relative;
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
-  min-height: 42px;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: start;
+  min-height: 36px;
   color: var(--yct-color-text);
-  font-size: 13px;
-  font-weight: 750;
+  font-size: 15px;
+  font-weight: 760;
   line-height: 1.45;
 }
 
 .map-route-step-timeline li::before {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 15px;
-  width: 5px;
-  background: var(--route-rail-color);
   content: '';
-}
-
-.map-route-step-timeline li:first-child::before {
-  top: 18px;
-}
-
-.map-route-step-timeline li:last-child::before {
-  bottom: calc(100% - 18px);
+  display: none;
 }
 
 .map-route-step-marker {
@@ -1524,26 +1512,65 @@ body .material-symbols-outlined {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   margin-top: 2px;
-  border: 4px solid var(--yct-color-surface-panel);
+  border: 0;
   border-radius: var(--yct-radius-pill);
-  background: var(--yct-color-surface-panel);
-  box-shadow: inset 0 0 0 4px var(--route-rail-color);
+  background: color-mix(in srgb, var(--yct-color-text-secondary) 18%, transparent);
+  box-shadow: inset 0 0 0 5px var(--yct-color-text-secondary);
   color: #ffffff;
   font-size: 10px;
   font-weight: 900;
 }
 
+.map-route-step-marker .material-symbols-outlined {
+  --icon-fill: 1;
+  font-size: 18px;
+}
+
+.map-route-step-timeline li.is-place {
+  min-height: 38px;
+  color: #000000;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+:root[data-color-scheme='dark'] .map-route-step-timeline li.is-place {
+  color: var(--yct-color-text);
+}
+
 .map-route-step-timeline li.is-origin .map-route-step-marker {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   background: #078616;
   box-shadow: none;
 }
 
 .map-route-step-timeline li.is-destination .map-route-step-marker {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   background: #ffa800;
   box-shadow: none;
+}
+
+.map-route-step-timeline li.is-boarding .map-route-step-marker {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--route-rail-color);
+  box-shadow: none;
+}
+
+.map-route-step-timeline li.is-alighting .map-route-step-marker,
+.map-route-step-timeline li.is-transfer.is-place .map-route-step-marker {
+  width: 24px;
+  height: 24px;
+  background: var(--yct-color-surface-panel);
+  box-shadow: inset 0 0 0 6px var(--yct-color-text-secondary);
 }
 
 .map-route-step-timeline li.is-walk,
@@ -1554,12 +1581,14 @@ body .material-symbols-outlined {
 
 .map-route-step-timeline li.is-walk .map-route-step-marker,
 .map-route-step-timeline li.is-transfer .map-route-step-marker {
-  width: 14px;
-  height: 14px;
-  margin-top: 6px;
-  margin-left: 4px;
-  border-width: 3px;
-  box-shadow: inset 0 0 0 3px var(--yct-color-border-strong);
+  align-self: stretch;
+  width: 8px;
+  height: auto;
+  min-height: 34px;
+  margin: 0 0 0 8px;
+  border-radius: 0;
+  background: var(--yct-color-border-strong);
+  box-shadow: none;
 }
 
 .map-route-step-timeline li.is-transit {
@@ -1568,13 +1597,14 @@ body .material-symbols-outlined {
 }
 
 .map-route-step-timeline li.is-transit .map-route-step-marker {
-  border-radius: var(--yct-radius-sm);
+  align-self: stretch;
+  width: 8px;
+  height: auto;
+  min-height: 52px;
+  margin: 0 0 0 8px;
+  border-radius: 0;
   background: var(--route-rail-color);
   box-shadow: none;
-}
-
-.map-route-step-timeline li.is-place:not(.is-origin):not(.is-destination) .map-route-step-marker {
-  background: var(--yct-color-surface-panel);
 }
 
 .map-route-plan-note {

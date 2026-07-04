@@ -267,6 +267,7 @@ interface RoutePlanOption {
 interface RoutePlanStep {
   kind: 'place' | 'walk' | 'transit' | 'transfer';
   label: string;
+  icon?: string;
   role?: 'origin' | 'destination' | 'boarding' | 'alighting' | 'transfer';
 }
 
@@ -2732,7 +2733,11 @@ function RoutePlanDraftCard({
                                   key={`${option.id}-${stepIndex}`}
                                 >
                                   <span className="map-route-step-marker" aria-hidden="true">
-                                    {getRouteStepMarkerText(step)}
+                                    {step.icon ? (
+                                      <span className="material-symbols-outlined">{step.icon}</span>
+                                    ) : (
+                                      getRouteStepMarkerText(step)
+                                    )}
                                   </span>
                                   <span>{step.label}</span>
                                 </li>
@@ -2839,8 +2844,12 @@ function getRouteOptionBadges(
   return badges;
 }
 
-function createRoutePlaceStep(label: string, role?: RoutePlanStep['role']): RoutePlanStep {
-  return { kind: 'place', label, role };
+function createRoutePlaceStep(
+  label: string,
+  role?: RoutePlanStep['role'],
+  icon?: string,
+): RoutePlanStep {
+  return { kind: 'place', label, role, icon };
 }
 
 function createRouteWalkStep(label: string): RoutePlanStep {
@@ -2903,12 +2912,13 @@ function buildTransitRoutePlanOptions(input: {
     for (const line of input.transitLines.filter((item) => item.mode === mode.mode)) {
       for (const direction of ['forward', 'reverse'] as const) {
         const stops = getDirectionalLineStops(line, direction)
-          .map((stop, index): TransitRouteStop | undefined => {
+          .map((stop): Omit<TransitRouteStop, 'index'> | undefined => {
             const marker = findTransitStationMarker(stop.stationName, stationMarkerIndex);
             const center = marker ? getMarkerCenter(marker) : undefined;
-            return marker && center ? { center, index, marker, stop } : undefined;
+            return marker && center ? { center, marker, stop } : undefined;
           })
-          .filter((stop): stop is TransitRouteStop => Boolean(stop));
+          .filter((stop): stop is Omit<TransitRouteStop, 'index'> => Boolean(stop))
+          .map((stop, index): TransitRouteStop => ({ ...stop, index }));
 
         if (stops.length < 2) {
           continue;
@@ -2992,7 +3002,11 @@ function buildDirectTransitLineOption(
       createRouteWalkStep(
         `步行 ${formatRoutePlanDistance(accessDistance)} ${formatRouteStepMinutes(accessMinutes)}`,
       ),
-      createRoutePlaceStep(`${formatMarkerDisplayName(originStop.marker.label)} 进站`, 'boarding'),
+      createRoutePlaceStep(
+        `${formatMarkerDisplayName(originStop.marker.label)} 进站`,
+        'boarding',
+        candidate.icon,
+      ),
       createRouteTransitStep(
         `乘坐 ${candidate.line.name}（${candidate.terminalName}方向） ${stationSpan}站 ${formatRouteStepMinutes(
           transitMinutes,
@@ -3152,6 +3166,7 @@ function buildTransferTransitLineOptions(
           createRoutePlaceStep(
             `${formatMarkerDisplayName(originCandidate.originStop.marker.label)} 进站`,
             'boarding',
+            originCandidate.candidate.icon,
           ),
           createRouteTransitStep(
             `乘坐 ${originCandidate.candidate.line.name}（${originCandidate.candidate.terminalName}方向） ${firstStationSpan}站 ${formatRouteStepMinutes(
@@ -3164,7 +3179,11 @@ function buildTransferTransitLineOptions(
               transferWalkMinutes,
             )}`,
           ),
-          createRoutePlaceStep(`${formatMarkerDisplayName(transfer.toStop.marker.label)} 上车`, 'boarding'),
+          createRoutePlaceStep(
+            `${formatMarkerDisplayName(transfer.toStop.marker.label)} 上车`,
+            'boarding',
+            destinationCandidate.candidate.icon,
+          ),
           createRouteTransitStep(
             `乘坐 ${destinationCandidate.candidate.line.name}（${destinationCandidate.candidate.terminalName}方向） ${secondStationSpan}站 ${formatRouteStepMinutes(
               secondTransitMinutes,
