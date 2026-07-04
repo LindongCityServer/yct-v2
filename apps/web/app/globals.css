@@ -2132,6 +2132,65 @@ body .material-symbols-outlined {
   overflow-wrap: anywhere;
 }
 
+.map-poi-related-list {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.map-poi-related-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-height: 42px;
+  padding: var(--yct-space-2);
+  border: 0;
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.map-poi-related-item:hover {
+  color: var(--yct-color-primary);
+}
+
+.map-poi-related-item span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.map-poi-related-item strong,
+.map-poi-related-item small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-poi-related-item strong {
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.map-poi-related-item small {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.map-poi-related-item img {
+  justify-self: center;
+  max-width: 24px;
+  max-height: 24px;
+}
+
+.map-poi-related-item .map-marker-list-symbol {
+  justify-self: center;
+  font-size: 20px;
+}
+
 .map-transfer-line-list {
   display: flex;
   flex-wrap: wrap;

@@ -295,6 +295,11 @@ interface RoadRoutePath {
   nodes: RoadRouteNode[];
 }
 
+interface SecondaryPoiLink {
+  childLabel: string;
+  marker: PointMarker;
+}
+
 interface NearbySearchCenter {
   markerId: string;
   label: string;
@@ -577,6 +582,10 @@ export function MapStage() {
     () => pointMarkers.find((marker) => marker.id === focusedMarkerId),
     [focusedMarkerId, pointMarkers],
   );
+  const secondaryPoiIndex = useMemo(() => buildSecondaryPoiIndex(pointMarkers), [pointMarkers]);
+  const focusedSecondaryPois = focusedPointMarker
+    ? (secondaryPoiIndex.get(focusedPointMarker.id) ?? [])
+    : [];
   const pointOverlaySource = useMemo(
     () =>
       focusedPointMarker
@@ -1771,7 +1780,30 @@ export function MapStage() {
                     </>
                   ) : null}
                   {!isLinearDetailMarker(focusedMarker) && poiDetailTab === 'facilities' ? (
-                    <p>{focusedMarker.description ?? '暂无设施数据'}</p>
+                    focusedSecondaryPois.length > 0 ? (
+                      <div className="map-poi-related-list" aria-label="关联地点">
+                        {focusedSecondaryPois.map((item) => (
+                          <button
+                            className="map-poi-related-item"
+                            type="button"
+                            key={item.marker.id}
+                            onClick={() => focusMapMarker(item.marker)}
+                          >
+                            <MarkerListIcon marker={item.marker} tileBaseUrl={tileBaseUrl} />
+                            <span>
+                              <strong>{item.childLabel}</strong>
+                              <small>
+                                {item.marker.categoryId
+                                  ? (categoryById.get(item.marker.categoryId) ?? item.marker.categoryId)
+                                  : '关联地点'}
+                              </small>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p>{focusedMarker.description ?? '暂无设施数据'}</p>
+                    )
                   ) : null}
                 </div>
               </>
@@ -3753,6 +3785,83 @@ function isTransitStationPoi(marker: MapMarkerSnapshot['markers'][number]): bool
       marker.categoryId,
     ),
   );
+}
+
+function buildSecondaryPoiIndex(markers: PointMarker[]): Map<string, SecondaryPoiLink[]> {
+  const markersByName = new Map<string, PointMarker[]>();
+  for (const marker of markers) {
+    const key = normalizeMarkerSearchText(marker.label);
+    const values = markersByName.get(key) ?? [];
+    values.push(marker);
+    markersByName.set(key, values);
+  }
+
+  const index = new Map<string, SecondaryPoiLink[]>();
+  for (const marker of markers) {
+    const parsed = parseSecondaryPoiName(marker.label);
+    if (!parsed) {
+      continue;
+    }
+
+    const parentCandidates = markersByName
+      .get(normalizeMarkerSearchText(parsed.parentName))
+      ?.filter((candidate) => candidate.id !== marker.id);
+    if (!parentCandidates || parentCandidates.length === 0) {
+      continue;
+    }
+
+    const parent = findNearestParentPoi(marker, parentCandidates);
+    if (!parent) {
+      continue;
+    }
+
+    const links = index.get(parent.id) ?? [];
+    links.push({ childLabel: parsed.childName, marker });
+    index.set(parent.id, links);
+  }
+
+  for (const [parentId, links] of index) {
+    index.set(
+      parentId,
+      links.sort(
+        (left, right) =>
+          left.childLabel.localeCompare(right.childLabel, 'zh-CN') ||
+          formatMarkerDisplayName(left.marker.label).localeCompare(
+            formatMarkerDisplayName(right.marker.label),
+            'zh-CN',
+          ),
+      ),
+    );
+  }
+
+  return index;
+}
+
+function parseSecondaryPoiName(label: string): { parentName: string; childName: string } | undefined {
+  const displayName = formatMarkerDisplayName(label);
+  const separatorMatch = /[-－–—]/.exec(displayName);
+  if (!separatorMatch || separatorMatch.index <= 0) {
+    return undefined;
+  }
+
+  const parentName = displayName.slice(0, separatorMatch.index).trim();
+  const childName = displayName.slice(separatorMatch.index + separatorMatch[0].length).trim();
+  if (!parentName || !childName) {
+    return undefined;
+  }
+
+  return { parentName, childName };
+}
+
+function findNearestParentPoi(
+  child: PointMarker,
+  candidates: PointMarker[],
+): PointMarker | undefined {
+  return [...candidates].sort(
+    (left, right) =>
+      getCoordinateDistance(child.geometry.coordinates, left.geometry.coordinates) -
+      getCoordinateDistance(child.geometry.coordinates, right.geometry.coordinates),
+  )[0];
 }
 
 function MarkerListIcon({
