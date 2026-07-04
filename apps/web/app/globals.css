@@ -1483,6 +1483,8 @@ body .material-symbols-outlined {
 .map-route-step-timeline {
   --route-rail-color: color-mix(in srgb, var(--route-option-color) 82%, var(--yct-color-border));
   --route-step-color: var(--route-rail-color);
+  --route-origin-color: #078616;
+  --route-destination-color: #ffa800;
   display: grid;
   gap: 2px;
   margin: var(--yct-space-2) 0 0;
@@ -1532,21 +1534,17 @@ body .material-symbols-outlined {
 
 .map-route-step-timeline li.is-place {
   min-height: 34px;
-  color: #000000;
+  color: var(--yct-color-text);
   font-size: 16px;
   font-weight: 900;
   line-height: 1.25;
-}
-
-:root[data-color-scheme='dark'] .map-route-step-timeline li.is-place {
-  color: var(--yct-color-text);
 }
 
 .map-route-step-timeline li.is-origin .map-route-step-marker {
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  background: #078616;
+  background: var(--route-origin-color);
   box-shadow: none;
 }
 
@@ -1554,7 +1552,7 @@ body .material-symbols-outlined {
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  background: #ffa800;
+  background: var(--route-destination-color);
   box-shadow: none;
 }
 
@@ -4766,6 +4764,16 @@ body .material-symbols-outlined {
   font-weight: 900;
   letter-spacing: 0;
   line-height: 1;
+}
+
+.schedule-trip-time-block time sup {
+  display: inline-block;
+  margin-left: 4px;
+  color: var(--yct-color-text-secondary);
+  font-size: 0.42em;
+  font-weight: 850;
+  line-height: 1;
+  vertical-align: super;
 }
 
 .schedule-trip-time-block small {

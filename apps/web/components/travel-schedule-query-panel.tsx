@@ -517,7 +517,12 @@ function ScheduleTripCard({
         </div>
         <div className="schedule-trip-time-block is-arrival">
           <span>到达时间</span>
-          <time>{formatArrivalTime(trip)}</time>
+          <time>
+            {trip.arrivalTime ?? '待定'}
+            {trip.arrivalDayOffset && trip.arrivalDayOffset > 0 ? (
+              <sup>+{trip.arrivalDayOffset}天</sup>
+            ) : null}
+          </time>
           <small>
             {trip.destinationStationName ??
               trip.stationNames[trip.stationNames.length - 1] ??
