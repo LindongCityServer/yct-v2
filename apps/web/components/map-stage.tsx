@@ -5140,14 +5140,9 @@ function hideCollisionItemLabel(
 }
 
 function getMarkerCollisionBox(marker: OverlayCollisionItem): MarkerCollisionBox {
-  const labelWidth = Math.min(
-    120,
-    Math.max(42, normalizeMarkerDisplayText(marker.label).length * 12),
-  );
-  const labelHeight = Math.min(
-    120,
-    Math.max(36, normalizeMarkerDisplayText(marker.label).length * 13),
-  );
+  const labelLength = normalizeMarkerDisplayText(marker.label).length;
+  const labelWidth = Math.max(42, labelLength * 12);
+  const labelHeight = Math.max(36, labelLength * 13);
   const iconWidth = marker.hasIcon ? 24 : 0;
   const totalWidth = marker.showLabel
     ? marker.isVerticalLabel
