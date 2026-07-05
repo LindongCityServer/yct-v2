@@ -1,6 +1,6 @@
 # YCT Event Schema
 
-更新时间：2026-07-03
+更新时间：2026-07-05
 
 本文档记录雨城通 v2 第一阶段的领域事件。后端业务 Service 只负责本模块校验和写库，成功后发布事件；通知、Push、缓存失效、搜索索引、`ldpass` 同步等副作用由监听器处理。
 
@@ -52,6 +52,9 @@ export interface YctDomainEvent<TType extends string, TPayload> {
 | `OfflinePackageRequested`             | 用户请求自定义矩形离线包      | 离线包生成、体积检查；当前登录用户保存或刷新自定义范围时会写入服务端请求记录并发布该事件，真实生成流程后续由监听器承接                 |
 | `OfflinePackageRequestDeleted`        | 用户删除自定义矩形离线包请求  | 取消待生成任务、刷新账号侧离线范围列表；当前用于账号页删除离线范围时清理服务端请求记录                                                 |
 | `LdpassThemeScheduleSynced`           | 同步到 ldpass 主题计划        | 前端强调色刷新                                                                                                                         |
+| `LocalePreferenceUpdated`             | 用户语言偏好更新              | 账号偏好同步、前端缓存刷新；`locale` 可为 `system`，`resolvedLocale` 才是实际语言                                                       |
+| `TranslationCatalogPublished`         | 固定界面文案目录发布          | UI 文案缓存刷新、构建或运行时翻译目录索引刷新                                                                                           |
+| `EntityTranslationUpdated`            | 业务实体译名或别名更新        | 地图、线路、服务入口、运营内容的搜索索引刷新和管理员审计；不得由机器翻译直接发布公开译名                                               |
 | `TravelSchedulePublished`             | 统一班次版本发布              | 班次查询缓存、搜索索引、管理员审计                                                                                                     |
 | `TravelScheduleServiceProfileUpdated` | 可排班服务配置更新            | 客运大巴、轮渡、航班等统一班次服务的颜色、图标、排序缓存刷新和管理员审计                                                               |
 | `TicketInventoryHeld`                 | 票务库存或可售容量被占用      | 占座超时、订单草稿刷新                                                                                                                 |

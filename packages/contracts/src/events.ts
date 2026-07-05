@@ -1,6 +1,8 @@
 import type {
   AccentTone,
   ISODateTimeString,
+  LocaleCode,
+  LocalePreference,
   MapGeometry,
   RectangleBounds,
   ReviewDecision,
@@ -232,6 +234,34 @@ export interface LdpassThemeScheduleSyncedPayload {
   endsAt?: ISODateTimeString;
 }
 
+export interface LocalePreferenceUpdatedPayload {
+  userId?: string;
+  localDeviceId?: string;
+  locale: LocalePreference;
+  resolvedLocale?: LocaleCode;
+  previousLocale?: LocalePreference;
+  updatedAt: ISODateTimeString;
+  source: 'account_settings' | 'browser_default' | 'ldpass_profile' | 'system_migration';
+}
+
+export interface TranslationCatalogPublishedPayload {
+  catalogId: string;
+  revisionId: string;
+  locales: LocaleCode[];
+  namespaces: string[];
+  publishedAt: ISODateTimeString;
+  publishedBy: string;
+}
+
+export interface EntityTranslationUpdatedPayload {
+  entityType: 'poi' | 'transit_line' | 'transit_station' | 'service_entry' | 'operation_content';
+  entityId: string;
+  locale: LocaleCode;
+  fields: string[];
+  updatedAt: ISODateTimeString;
+  updatedBy: string;
+}
+
 export interface LdpassUserLinkedPayload {
   yctUserLinkId: string;
   ldpassUserId: string;
@@ -397,6 +427,9 @@ export type YctEventPayloadMap = {
   OfflinePackageRequested: OfflinePackageRequestedPayload;
   OfflinePackageRequestDeleted: OfflinePackageRequestDeletedPayload;
   LdpassThemeScheduleSynced: LdpassThemeScheduleSyncedPayload;
+  LocalePreferenceUpdated: LocalePreferenceUpdatedPayload;
+  TranslationCatalogPublished: TranslationCatalogPublishedPayload;
+  EntityTranslationUpdated: EntityTranslationUpdatedPayload;
   LdpassUserLinked: LdpassUserLinkedPayload;
   YctSessionStarted: YctSessionStartedPayload;
   YctSessionEnded: YctSessionEndedPayload;

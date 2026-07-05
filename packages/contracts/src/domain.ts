@@ -4,6 +4,8 @@ export type YctProfileId = string;
 export type AccentTone = 'teal' | 'red' | 'gray';
 export type ColorSchemePreference = 'light' | 'dark' | 'system';
 export type AccentPreferenceMode = 'follow_ldpass' | 'custom';
+export type LocaleCode = 'zh-CN' | 'zh-Hant' | 'en';
+export type LocalePreference = LocaleCode | 'system';
 
 export type TransportMode =
   'metro' | 'tram' | 'bus' | 'coach' | 'ferry' | 'railway' | 'walk' | 'custom';
