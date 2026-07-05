@@ -5,43 +5,22 @@ import { createApiMeta } from '../../../../lib/api-meta';
 import { readTransitLinePoiMarkers } from '../../../../lib/map-transit-line-markers';
 import { readPoiCategories } from '../../../../lib/poi-categories';
 import { listPublishedPublicPoiSubmissions } from '../../../../lib/poi-submission-store';
-import { readRuntimeConfig } from '../../../../lib/runtime-config';
+import { readRuntimeConfig, type RuntimeConfig } from '../../../../lib/runtime-config';
 import { createTimedCache } from '../../../../lib/server-cache';
 
 const providerMarkerSnapshotCache = createTimedCache<MapMarkerSnapshot>(60 * 1000);
 
 export async function GET() {
   const config = readRuntimeConfig();
+  const iconBaseUrl = config.unminedMapBaseUrl;
   const categories = await readPoiCategories().catch(() => []);
   const publishedPoiSubmissions = await listPublishedPublicPoiSubmissions();
   const transitLinePoiMarkers = await readTransitLinePoiMarkers().catch(() => []);
 
   try {
-    const provider = config.markerBdslmBaseUrl
-      ? new BdslmMarkerProvider({
-          id: 'bdslm-markers',
-          name: 'BDSLM 标记点',
-          baseUrl: config.markerBdslmBaseUrl,
-          fetchTimeoutMs: config.markerBdslmTimeoutMs,
-        })
-      : new UnminedCustomMarkerProvider({
-          id: 'unmined-custom-markers',
-          name: 'uNmINeD 静态标记',
-          baseUrl: config.unminedMapBaseUrl,
-          fetchTimeoutMs: config.markerBdslmTimeoutMs,
-        });
-
-    const snapshot = await providerMarkerSnapshotCache.read(
-      [
-        provider.id,
-        config.markerBdslmBaseUrl ?? config.unminedMapBaseUrl,
-        config.markerBdslmTimeoutMs,
-      ].join('|'),
-      async () =>
-        groupRoadEndpointMarkers(
-          normalizeMarkerSnapshotText(await provider.fetchMarkers('default')),
-        ),
-    );
+    const staticSnapshot = await readStaticMarkerSnapshot(config);
+    const playerSnapshot = await readPlayerMarkerSnapshot(config);
+    const snapshot = mergeMarkerSnapshots(staticSnapshot, playerSnapshot);
     const mergedSnapshot = normalizeMarkerSnapshotText(
       mergeLocalMapMarkers(snapshot, publishedPoiSubmissions, categories, transitLinePoiMarkers),
     );
@@ -49,22 +28,21 @@ export async function GET() {
     return NextResponse.json({
       meta: createApiMeta(
         'ready',
-        config.markerBdslmBaseUrl
-          ? [
-              localPoiMessage(publishedPoiSubmissions.length),
-              transitLinePoiMessage(transitLinePoiMarkers.length),
-            ]
-              .filter(Boolean)
-              .join(' ')
-          : [
-              '当前读取 map.shangxiaoguan.top 的静态标记快照。',
-              localPoiMessage(publishedPoiSubmissions.length),
-              transitLinePoiMessage(transitLinePoiMarkers.length),
-            ]
-              .filter(Boolean)
-              .join(' '),
+        [
+          '当前读取 map.shangxiaoguan.top 的静态地点标记快照。',
+          config.markerBdslmBaseUrl
+            ? playerSnapshot
+              ? `已合并 ${playerSnapshot.markers.length} 个实时玩家位置。`
+              : '实时玩家位置暂不可用。'
+            : undefined,
+          localPoiMessage(publishedPoiSubmissions.length),
+          transitLinePoiMessage(transitLinePoiMarkers.length),
+        ]
+          .filter(Boolean)
+          .join(' '),
       ),
       snapshot: mergedSnapshot,
+      iconBaseUrl,
     });
   } catch (error) {
     const localSnapshot = normalizeMarkerSnapshotText(
@@ -85,6 +63,7 @@ export async function GET() {
           `外部标记源暂不可用，当前仅显示 ${localSnapshot.markers.length} 个本地地图对象。`,
         ),
         snapshot: localSnapshot,
+        iconBaseUrl,
       });
     }
 
@@ -98,6 +77,7 @@ export async function GET() {
           fetchedAt: new Date().toISOString(),
           markers: [],
         } satisfies MapMarkerSnapshot,
+        iconBaseUrl,
       },
       { status: 502 },
     );
@@ -105,6 +85,51 @@ export async function GET() {
 }
 
 type Marker = MapMarkerSnapshot['markers'][number];
+
+async function readStaticMarkerSnapshot(config: RuntimeConfig): Promise<MapMarkerSnapshot> {
+  const provider = new UnminedCustomMarkerProvider({
+    id: 'unmined-custom-markers',
+    name: 'uNmINeD 静态标记',
+    baseUrl: config.unminedMapBaseUrl,
+    fetchTimeoutMs: config.markerBdslmTimeoutMs,
+  });
+
+  return providerMarkerSnapshotCache.read(
+    [provider.id, config.unminedMapBaseUrl, config.markerBdslmTimeoutMs].join('|'),
+    async () =>
+      groupRoadEndpointMarkers(normalizeMarkerSnapshotText(await provider.fetchMarkers('default'))),
+  );
+}
+
+async function readPlayerMarkerSnapshot(config: RuntimeConfig): Promise<MapMarkerSnapshot | null> {
+  if (!config.markerBdslmBaseUrl) {
+    return null;
+  }
+
+  const provider = new BdslmMarkerProvider({
+    id: 'bdslm-player-markers',
+    name: 'BDSLM 实时玩家位置',
+    baseUrl: config.markerBdslmBaseUrl,
+    fetchTimeoutMs: config.markerBdslmTimeoutMs,
+  });
+
+  return providerMarkerSnapshotCache
+    .read(
+      [provider.id, config.markerBdslmBaseUrl, config.markerBdslmTimeoutMs].join('|'),
+      async () => normalizeMarkerSnapshotText(await provider.fetchMarkers('default')),
+    )
+    .catch(() => null);
+}
+
+function mergeMarkerSnapshots(
+  staticSnapshot: MapMarkerSnapshot,
+  playerSnapshot: MapMarkerSnapshot | null,
+): MapMarkerSnapshot {
+  return {
+    fetchedAt: new Date().toISOString(),
+    markers: [...staticSnapshot.markers, ...(playerSnapshot?.markers ?? [])],
+  };
+}
 
 function groupRoadEndpointMarkers(snapshot: MapMarkerSnapshot): MapMarkerSnapshot {
   const roadGroups = new Map<string, Marker[]>();

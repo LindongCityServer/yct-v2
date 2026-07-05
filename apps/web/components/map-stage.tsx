@@ -20,6 +20,7 @@ import { readMapFavoriteMarkerIds, writeMapFavoriteMarkerIds } from '../lib/clie
 interface MarkerResponse {
   meta: ApiMeta;
   snapshot: MapMarkerSnapshot;
+  iconBaseUrl?: string;
 }
 
 interface MapView {
@@ -549,6 +550,7 @@ export function MapStage() {
   const activeTileProvider = tileResponse?.items[0];
   const tileTemplate = activeTileProvider?.tileTemplate;
   const tileBaseUrl = tileTemplate ? getTileBaseUrl(tileTemplate) : '';
+  const markerIconBaseUrl = markerResponse?.iconBaseUrl ?? tileBaseUrl;
   const tilesVisible = browseMode === 'satellite';
   const activeTileZoom = getTileZoom(mapView.zoom);
   const lastTileZoomRef = useRef(activeTileZoom);
@@ -722,7 +724,7 @@ export function MapStage() {
         markersVisible ? pointOverlaySource : [],
         mapView,
         viewportSize,
-        tileBaseUrl,
+        markerIconBaseUrl,
         focusedMarkerId,
         browseMode,
         representativePoiIds,
@@ -735,7 +737,7 @@ export function MapStage() {
       pointOverlaySource,
       representativePoiIds,
       mapView,
-      tileBaseUrl,
+      markerIconBaseUrl,
       viewportSize,
     ],
   );
@@ -783,9 +785,9 @@ export function MapStage() {
       projectLinearPoiMarkers(linearOverlaySource, mapView, viewportSize, {
         focusedMarkerId,
         hideRoadEndpoints: true,
-        iconBaseUrl: tileBaseUrl,
+        iconBaseUrl: markerIconBaseUrl,
       }),
-    [focusedMarkerId, linearOverlaySource, mapView, tileBaseUrl, viewportSize],
+    [focusedMarkerId, linearOverlaySource, mapView, markerIconBaseUrl, viewportSize],
   );
   const { markers: projectedMarkers, linearPois: projectedLinearPois } = useMemo(
     () =>
@@ -1613,7 +1615,7 @@ export function MapStage() {
               endpointQuery={routeEndpointQuery}
               options={routePlanOptions}
               selectedOptionId={selectedRouteOption?.id}
-              tileBaseUrl={tileBaseUrl}
+              iconBaseUrl={markerIconBaseUrl}
               onBeginEndpointEdit={beginRouteEndpointEdit}
               onClear={() => {
                 setRoutePlanDraft(null);
@@ -1716,7 +1718,7 @@ export function MapStage() {
                         const center = getMarkerCenter(marker);
                         const content = (
                           <>
-                            <MarkerListIcon marker={marker} tileBaseUrl={tileBaseUrl} />
+                            <MarkerListIcon marker={marker} iconBaseUrl={markerIconBaseUrl} />
                             <span>{formatMarkerDisplayName(marker.label)}</span>
                             <span className="muted">{formatMarkerDetail(marker)}</span>
                           </>
@@ -1777,7 +1779,7 @@ export function MapStage() {
             aria-labelledby="map-poi-detail-title"
           >
             <div className="map-poi-detail-header">
-              <MarkerListIcon marker={focusedMarker} tileBaseUrl={tileBaseUrl} />
+              <MarkerListIcon marker={focusedMarker} iconBaseUrl={markerIconBaseUrl} />
               <div>
                 <h2 id="map-poi-detail-title">{formatMarkerDisplayName(focusedMarker.label)}</h2>
                 <span>{focusedMarkerCategoryName ?? focusedMarker.categoryId ?? '地图对象'}</span>
@@ -1919,7 +1921,10 @@ export function MapStage() {
                                   key={item.marker.id}
                                   onClick={() => focusMapMarker(item.marker)}
                                 >
-                                  <MarkerListIcon marker={item.marker} tileBaseUrl={tileBaseUrl} />
+                                  <MarkerListIcon
+                                    marker={item.marker}
+                                    iconBaseUrl={markerIconBaseUrl}
+                                  />
                                   <span>
                                     <strong>{item.childLabel}</strong>
                                     <small>
@@ -2646,7 +2651,7 @@ function RoutePlanDraftCard({
   endpointQuery,
   options,
   selectedOptionId,
-  tileBaseUrl,
+  iconBaseUrl,
   onBeginEndpointEdit,
   onClear,
   onEndpointQueryChange,
@@ -2666,7 +2671,7 @@ function RoutePlanDraftCard({
   endpointQuery: string;
   options: RoutePlanOption[];
   selectedOptionId?: string;
-  tileBaseUrl: string;
+  iconBaseUrl: string;
   onBeginEndpointEdit: (endpoint: RouteEndpointKind) => void;
   onClear: () => void;
   onEndpointQueryChange: (value: string) => void;
@@ -2787,7 +2792,7 @@ function RoutePlanDraftCard({
                       key={marker.id}
                       onClick={() => onSelectEndpointCandidate(editingEndpoint, marker)}
                     >
-                      <MarkerListIcon marker={marker} tileBaseUrl={tileBaseUrl} />
+                      <MarkerListIcon marker={marker} iconBaseUrl={iconBaseUrl} />
                       <span>{formatMarkerDisplayName(marker.label)}</span>
                       <small>{formatMarkerDetail(marker)}</small>
                     </button>
@@ -4280,13 +4285,13 @@ function findNearestParentPoi(
 
 function MarkerListIcon({
   marker,
-  tileBaseUrl,
+  iconBaseUrl,
 }: Readonly<{
   marker: SidebarMarker;
-  tileBaseUrl: string;
+  iconBaseUrl: string;
 }>) {
   if (marker.iconFileName && !isTransparentRoadIcon(marker.iconFileName)) {
-    return <img src={toMarkerIconUrl(marker.iconFileName, tileBaseUrl)} alt="" draggable={false} />;
+    return <img src={toMarkerIconUrl(marker.iconFileName, iconBaseUrl)} alt="" draggable={false} />;
   }
 
   return (

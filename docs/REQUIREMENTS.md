@@ -64,9 +64,10 @@
 - 图标：统一使用 Material Symbols Outlined，可通过 CDN 引入，生产环境需要降级方案；不要再使用 `material-symbols-rounded`，避免部分图标的填充态不可辨识。
 - 地图瓦片：
   - 当前较新的 HTTP 瓦片源：`http://ld.cmsy.xyz:19136/`。
+  - `http://ld.cmsy.xyz:19136` 仅提供实时更新的瓦片图和玩家位置，不作为地点标记或精细静态瓦片图来源。
   - 当前工程已为较新 HTTP 瓦片源提供 `/api/map/tile-proxy` 同源代理；前端瓦片模板应指向代理地址，真实 HTTP 模板只保存在服务端环境变量中。
   - 若 HTTPS 主站产生混合内容风险，可切换到 `https://map.shangxiaoguan.top` 下的静态地图资源；该资源效果较好且无混合内容风险，但可能不反映最新地图状态。
-- 当前地图标记点：`https://map.shangxiaoguan.top/`。
+- 当前地点标记点和渲染后的精细静态瓦片图：`https://map.shangxiaoguan.top/`。
 - POI 分类图标：可参考 `https://map.shangxiaoguan.top` 下的各类 `png` 文件；注意部分业务分类可能对应多个图标文件，需要建立分类到图标的映射表。
 - App 和网站图标源文件目录：`assets/brand/`。用户后续把源文件放入该目录；生成后的 Web/PWA 图标输出到 `apps/web/public/icons/`。
 - 第一阶段地图数据配置：
@@ -197,7 +198,7 @@
 - 线路迁移需要兼容公交和地铁格式差异：公交顶层可能是对象表，停靠点可带 `oneWay`、`status`；地铁/有轨停靠点可带 `travelTime`、`platformSide`、`fareZone`、`labelOffset`、`trainPosition`。这些字段应作为线路-站点关系属性保存，不应丢弃到纯站点表里。
 - 旧站部分站点只有线网图坐标或完全没有 Minecraft 世界坐标；导入快照允许坐标为空，并通过校验提醒记录，不能为了满足类型而写入假坐标。
 - 地图瓦片和实时标记点必须通过适配器接入，不能把当前临东 URL 写死在核心业务里。
-- 当前 `ld.cmsy.xyz:19136` 不能提供 HTTPS，生产主站若使用 HTTPS，会有混合内容风险。第一阶段 `TileProvider` 需要支持“较新 HTTP 瓦片源”和“安全 HTTPS 静态瓦片源”两套配置，按部署环境选择；HTTP 瓦片、玩家标记等动态地图数据需要通过 YCT 后端代理处理，瓦片图也可以优先使用现有静态 HTTPS 源作为安全默认源。
+- 当前 `ld.cmsy.xyz:19136` 不能提供 HTTPS，且仅提供实时瓦片图和玩家位置，生产主站若使用 HTTPS 会有混合内容风险。第一阶段 `TileProvider` 需要支持“较新 HTTP 瓦片源”和“安全 HTTPS 静态瓦片源”两套配置，按部署环境选择；HTTP 瓦片、玩家位置等动态地图数据需要通过 YCT 后端代理处理，地点标记和精细静态瓦片图继续来自 `map.shangxiaoguan.top`，瓦片图也可以优先使用现有静态 HTTPS 源作为安全默认源。
 - 当前 `map.shangxiaoguan.top` 资源可直接接入，不涉及跨域问题；仍需用适配器封装，便于未来迁移。若切换到该 HTTPS 静态瓦片源，需要在界面上标记地图更新时间或数据来源。
 - `map.shangxiaoguan.top` 当前为 uNmINeD + OpenLayers 静态输出，瓦片路径不是标准 Web XYZ，而是 `tiles/zoom.{z}/{xd}/{yd}/tile.{x}.{y}.{format}`。完整渲染必须通过专门的 uNmINeD `TileProvider` / `CoordinateTransform` 处理，不能直接当 `{z}/{x}/{y}.png` 使用。
 - 不存在瓦片的区域必须透明处理，不能显示破图、错误占位或大块不自然底色；前端瓦片层需要继续基于 uNmINeD region 索引或 Provider 能力判断是否请求/渲染该 tile。
@@ -903,7 +904,7 @@ CheckedIn -> RefundBlocked 或 ManualReview
 - 面性标记优先评估多个矩形组合，显示层可视性能再决定是否转换为多边形。
 - 如果 HTTP 瓦片产生混合内容风险，可以切换到 `https://map.shangxiaoguan.top` 的静态资源；HTTP 瓦片较新，HTTPS 静态瓦片更安全但可能不反映最新情况。
 - POI 分类可参考 `map.shangxiaoguan.top` 下的 PNG 文件；分类与图标允许一对多。
-- HTTP 瓦片图、玩家标记等可能触发混合内容或跨域/鉴权风险的数据，应通过 YCT 后端代理处理；瓦片图也可以优先考虑直接使用现有静态 HTTPS 源作为安全默认源。
+- HTTP 源只负责实时瓦片图和玩家位置，可能触发混合内容或跨域/鉴权风险的数据应通过 YCT 后端代理处理；地点标记和精细静态瓦片图仍来自 `map.shangxiaoguan.top`，瓦片图也可以优先考虑直接使用现有静态 HTTPS 源作为安全默认源。
 - 后台标记数据转为道路图采用“手工连接 + 自动抽取”结合：管理员可以手工连接节点、补充通行规则和权重，系统也可以从线性道路标记、道路端点、同名道路和空间邻近关系自动生成候选边。
 - 线路型 POI 可以按需拆出方向子 POI；每条线路或方向是否手工填写途径坐标，还是遵守道路级规划按途径站点生成轨迹，由该线路的数据质量和运营需求决定。
 - 面性地点数据同时兼容多个矩形和多边形两种方式；显示层统一转换为多边形或合并轮廓展示，编辑层保留原始矩形/多边形来源，便于回溯和再编辑。
