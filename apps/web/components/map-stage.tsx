@@ -2124,33 +2124,6 @@ export function MapStage() {
 
         {hasMapOverlay ? (
           <div className="map-marker-layer" aria-label="地图标记示意层">
-            {projectedGuideMarkers.map((marker) => (
-              <div
-                className={`map-guide-marker is-${marker.kind}`}
-                key={marker.id}
-                style={
-                  {
-                    '--marker-left': `${marker.left}px`,
-                    '--marker-top': `${marker.top}px`,
-                  } as CSSProperties
-                }
-                title={marker.label}
-                aria-hidden="true"
-              >
-                {marker.kind === 'default-anchor' ? (
-                  <span className="map-guide-marker-dot" />
-                ) : (
-                  <span className="map-guide-marker-pin">
-                    <span className="material-symbols-outlined map-guide-marker-icon">
-                      location_on
-                    </span>
-                    <span className="map-guide-marker-pin-label">
-                      {marker.kind === 'route-origin' ? '起' : '终'}
-                    </span>
-                  </span>
-                )}
-              </div>
-            ))}
             {visibleProjectedRoadTraces.length ? (
               <div className="map-road-trace-layer" aria-hidden="true">
                 {visibleProjectedRoadTraces.map((trace) => (
@@ -2184,6 +2157,33 @@ export function MapStage() {
                 />
               </div>
             ) : null}
+            {projectedGuideMarkers.map((marker) => (
+              <div
+                className={`map-guide-marker is-${marker.kind}`}
+                key={marker.id}
+                style={
+                  {
+                    '--marker-left': `${marker.left}px`,
+                    '--marker-top': `${marker.top}px`,
+                  } as CSSProperties
+                }
+                title={marker.label}
+                aria-hidden="true"
+              >
+                {marker.kind === 'default-anchor' ? (
+                  <span className="map-guide-marker-dot" />
+                ) : (
+                  <span className="map-guide-marker-pin">
+                    <span className="material-symbols-outlined map-guide-marker-icon">
+                      location_on
+                    </span>
+                    <span className="map-guide-marker-pin-label">
+                      {marker.kind === 'route-origin' ? '起' : '终'}
+                    </span>
+                  </span>
+                )}
+              </div>
+            ))}
             {visibleProjectedLinearPois.map((marker) => {
               const sourceMarker = linearOverlaySource.find((item) => item.id === marker.id);
               const focusLinearMarker = () => {
