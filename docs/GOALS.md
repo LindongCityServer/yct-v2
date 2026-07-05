@@ -479,7 +479,7 @@ DESIGN.md
 - 已处理第一版：统一班次查询新增只读票务可售性预检；`/api/travel/schedules` 会在真实班次上返回 `ticketing` 状态，`/api/travel/ticketing/availability?tripInstanceId=...` 可单独查询。预检读取 `.yct-data/ticketing-catalog-store.json` 中真实配置的票种和库存，没有配置时只返回不可售原因，不生成默认票种、模拟库存或真实订单。
 - 已处理第一版：新增 `POST /api/travel/ticketing/orders` 订单草稿创建入口；接口要求真实 `ldpass` Active 用户，并且必须存在真实票种与库存池，成功时写入 `.yct-data/ticket-order-store.json` 的 `draft` 订单和 15 分钟库存占用，并发布 `TicketInventoryHeld` / `TicketOrderCreated` 事件。统一班次查询前台会在 `ticketing.status === 'order_available'` 时启用“创建草稿”按钮，调用该接口创建订单草稿并提示库存占用到期时间；缺少票种或库存时仍返回 409，不落库、不发事件。
 - 已处理第一版：新增 `GET /api/travel/ticketing/orders` 当前用户订单草稿列表，以及 `POST /api/travel/ticketing/orders/:orderId/cancel` 取消草稿订单；取消只允许当前用户自己的 `draft` / `pending_issue` 订单，会释放对应库存占用并发布 `TicketOrderCancelled` 事件。统一班次查询页和账号设置页已提供票务草稿面板，可查看占座中的草稿、刷新列表并取消草稿释放库存；账号页没有当前查询上下文时会使用订单号后缀兜底显示，不把未知班次标题伪造成真实数据。
-- 已处理第一版：新增 `GET /api/travel/ticketing/orders/:orderId` 当前用户订单详情读取入口，以及 `/travel/ticketing/orders/[orderId]` 二级详情页。详情页只显示订单自身、库存占用、状态和时间戳，并保留取消草稿操作；当前不展示支付、票券、条形码或核销凭证，避免把草稿订单误认为真实电子票。
+- 已处理第一版：新增 `GET /api/travel/ticketing/orders/:orderId` 当前用户订单详情读取入口，以及 `/travel/ticketing/orders/[orderId]` 二级详情页。详情页只显示订单自身、完整订单 ID、库存占用 ID、库存池、状态和时间戳，并保留取消草稿操作；当前不展示支付、票券、条形码或核销凭证，避免把草稿订单误认为真实电子票。
 - 已处理第一版：顶部账号徽标已把当前 Active 用户的待处理票务订单数纳入合并计数，统计范围为 `draft`、`pending_issue` 和 `manual_review`；管理员待办仍只对管理员账号计算和返回。
 - 已处理第一版：票务订单创建或取消成功后，前端会派发本地订单状态变更事件，顶部账号入口会重新读取 `/api/account/status`，让合并徽标及时反映待处理票务订单变化。
 - 已处理第一版：票务订单工作流在列表、详情、计数和创建草稿前会清理过期占座；已过期的 `draft` 订单会回写为 `expired`，库存占用回写为 `expired` 并发布系统触发的 `TicketOrderCancelled` 事件，原因使用 `inventory_expired`。内部计划任务 runner 也会主动执行这项清理并返回清理统计。

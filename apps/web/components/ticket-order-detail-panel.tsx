@@ -85,7 +85,11 @@ export function TicketOrderDetailPanel({
         </span>
         <h2>{statusText || '订单详情暂不可用'}</h2>
         <div className="settings-action-row">
-          <button className="secondary-action-button" type="button" onClick={() => void refreshOrder()}>
+          <button
+            className="secondary-action-button"
+            type="button"
+            onClick={() => void refreshOrder()}
+          >
             <span className="material-symbols-outlined" aria-hidden="true">
               refresh
             </span>
@@ -119,13 +123,16 @@ export function TicketOrderDetailPanel({
       </div>
 
       <dl className="ticket-order-detail-grid">
+        <DetailItem label="订单 ID" value={order.orderId} />
         <DetailItem label="服务类型" value={formatTicketServiceKind(order.serviceKind)} />
         <DetailItem label="乘车人数" value={`${order.passengerCount} 人`} />
         <DetailItem label="班次 ID" value={order.tripInstanceId} />
         <DetailItem label="票种 ID" value={order.fareProductId} />
         <DetailItem label="创建时间" value={formatDateTime(order.createdAt)} />
         <DetailItem label="更新时间" value={formatDateTime(order.updatedAt)} />
-        {order.cancelledAt ? <DetailItem label="取消时间" value={formatDateTime(order.cancelledAt)} /> : null}
+        {order.cancelledAt ? (
+          <DetailItem label="取消时间" value={formatDateTime(order.cancelledAt)} />
+        ) : null}
         {order.cancellationReason ? (
           <DetailItem label="取消原因" value={formatCancellationReason(order.cancellationReason)} />
         ) : null}
@@ -140,6 +147,7 @@ export function TicketOrderDetailPanel({
         </div>
         {inventoryHold ? (
           <dl className="ticket-order-detail-grid">
+            <DetailItem label="占用 ID" value={inventoryHold.inventoryHoldId} />
             <DetailItem label="占用状态" value={formatInventoryHoldStatus(inventoryHold.status)} />
             <DetailItem label="占用数量" value={`${inventoryHold.quantity} 张`} />
             <DetailItem label="占用到期" value={formatTicketHoldExpiresAt(inventoryHold.expiresAt)} />
@@ -154,7 +162,11 @@ export function TicketOrderDetailPanel({
       </section>
 
       <div className="settings-action-row">
-        <button className="secondary-action-button" type="button" onClick={() => void refreshOrder()}>
+        <button
+          className="secondary-action-button"
+          type="button"
+          onClick={() => void refreshOrder()}
+        >
           <span className="material-symbols-outlined" aria-hidden="true">
             refresh
           </span>
@@ -214,7 +226,9 @@ function formatDateTime(value: string): string {
   });
 }
 
-function formatCancellationReason(reason: NonNullable<TicketOrderListItem['order']['cancellationReason']>): string {
+function formatCancellationReason(
+  reason: NonNullable<TicketOrderListItem['order']['cancellationReason']>,
+): string {
   const labels: Record<NonNullable<TicketOrderListItem['order']['cancellationReason']>, string> = {
     admin_cancelled: '管理员取消',
     inventory_expired: '占座过期',
@@ -225,7 +239,9 @@ function formatCancellationReason(reason: NonNullable<TicketOrderListItem['order
   return labels[reason] ?? reason;
 }
 
-function formatInventoryHoldStatus(status: NonNullable<TicketOrderListItem['inventoryHold']>['status']): string {
+function formatInventoryHoldStatus(
+  status: NonNullable<TicketOrderListItem['inventoryHold']>['status'],
+): string {
   const labels: Record<NonNullable<TicketOrderListItem['inventoryHold']>['status'], string> = {
     cancelled: '已取消',
     confirmed: '已确认',
