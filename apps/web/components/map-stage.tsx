@@ -670,20 +670,29 @@ export function MapStage() {
     const availableCategoryIds = new Set(
       [...pointMarkers, ...endpointGroupMarkers, ...transitLineMarkers]
         .map((marker) => marker.categoryId)
-        .filter(Boolean),
+        .filter((categoryId): categoryId is string => Boolean(categoryId)),
     );
-    const categories =
+    const configuredCategories =
       categoryResponse?.items
         .filter((category) => availableCategoryIds.has(category.id))
         .sort(
           (left, right) =>
             left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'zh-CN'),
         ) ?? [];
+    const configuredCategoryIds = new Set(configuredCategories.map((category) => category.id));
+    const inferredCategories = Array.from(availableCategoryIds)
+      .filter((categoryId) => !configuredCategoryIds.has(categoryId))
+      .map((categoryId) => ({
+        id: categoryId,
+        name: getMarkerCategoryFallbackName(categoryId),
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
 
     return [
       { id: 'all', name: '全部' },
       { id: favoriteMarkerCategoryId, name: '收藏' },
-      ...categories,
+      ...configuredCategories,
+      ...inferredCategories,
     ];
   }, [categoryResponse, endpointGroupMarkers, pointMarkers, transitLineMarkers]);
   const sidebarMarkers = useMemo(() => {
@@ -931,7 +940,8 @@ export function MapStage() {
   const focusedMarkerCenter =
     focusedMarker && isCenterableMarker(focusedMarker) ? getMarkerCenter(focusedMarker) : undefined;
   const focusedMarkerCategoryName = focusedMarker?.categoryId
-    ? categoryById.get(focusedMarker.categoryId)
+    ? (categoryById.get(focusedMarker.categoryId) ??
+      getMarkerCategoryFallbackName(focusedMarker.categoryId))
     : undefined;
   const focusedMarkerConnections =
     focusedMarker && isTransitStationPoi(focusedMarker)
@@ -1964,7 +1974,7 @@ export function MapStage() {
                                     <small>
                                       {item.marker.categoryId
                                         ? (categoryById.get(item.marker.categoryId) ??
-                                          item.marker.categoryId)
+                                          getMarkerCategoryFallbackName(item.marker.categoryId))
                                         : '关联地点'}
                                     </small>
                                   </span>
@@ -4064,6 +4074,14 @@ async function copyTextToClipboard(value: string) {
   }
 
   throw new Error(`Clipboard API is unavailable for ${value.length} characters`);
+}
+
+function getMarkerCategoryFallbackName(categoryId: string): string {
+  if (categoryId === 'player') {
+    return '在线玩家';
+  }
+
+  return categoryId;
 }
 
 function getMapMarkerListEmptyText(input: {
