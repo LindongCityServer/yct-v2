@@ -908,7 +908,7 @@ export function MapStage() {
       }
 
       const traceSource = focusedTransitLineMarker
-        ? dedupeMarkersById([focusedTransitLineMarker, ...metroTransitLineMarkers])
+        ? dedupeMarkersById([...metroTransitLineMarkers, focusedTransitLineMarker])
         : metroTransitLineMarkers;
 
       return projectTransitLineTraces(traceSource, mapView, viewportSize, focusedMarkerId).slice(
