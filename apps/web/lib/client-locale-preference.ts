@@ -2,6 +2,7 @@ import type { LocaleCode, LocalePreference, UserLocalePreference } from '@yct/co
 import { appPath } from './app-paths';
 
 const localePreferenceStorageKey = 'yct.localePreference.v1';
+export const localePreferenceChangedEventName = 'yct:locale-preference-changed';
 
 export const supportedLocaleCodes = ['zh-CN', 'zh-Hant', 'en'] as const satisfies readonly LocaleCode[];
 export const supportedLocalePreferences = [
@@ -36,12 +37,14 @@ export function writeLocalLocalePreference(locale: LocalePreference): ClientLoca
   }
 
   window.localStorage.setItem(localePreferenceStorageKey, locale);
-  return {
+  const state: ClientLocalePreferenceState = {
     locale,
     resolvedLocale: resolveClientLocalePreference(locale),
     updatedAt: new Date().toISOString(),
     source: 'local',
   };
+  window.dispatchEvent(new CustomEvent(localePreferenceChangedEventName, { detail: state }));
+  return state;
 }
 
 export async function fetchServerLocalePreference(): Promise<ClientLocalePreferenceState | undefined> {

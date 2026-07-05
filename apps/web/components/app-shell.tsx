@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { useI18n } from '../lib/client-i18n';
 import { ticketOrderStateChangedEventName } from '../lib/client-ticket-orders';
 import {
   readTripReminderState,
@@ -15,11 +16,13 @@ export type PrimaryNavKey = 'operations' | 'map' | 'travel' | 'services';
 export type AppShellVariant = 'default' | 'map';
 
 const navItems = [
-  { key: 'operations', label: '运营', icon: 'article', href: '/' },
-  { key: 'map', label: '探索', icon: 'map', href: '/map' },
-  { key: 'travel', label: '出行', icon: 'directions_bus', href: '/travel' },
-  { key: 'services', label: '服务', icon: 'apps', href: '/services' },
+  { key: 'operations', labelKey: 'nav.operations', icon: 'article', href: '/' },
+  { key: 'map', labelKey: 'nav.map', icon: 'map', href: '/map' },
+  { key: 'travel', labelKey: 'nav.travel', icon: 'directions_bus', href: '/travel' },
+  { key: 'services', labelKey: 'nav.services', icon: 'apps', href: '/services' },
 ] as const;
+
+type Translate = ReturnType<typeof useI18n>['t'];
 
 interface AccountStatusResponse {
   accountStatus: 'not_configured' | 'anonymous' | 'active' | 'readonly' | 'unavailable';
@@ -58,6 +61,7 @@ export function AppShell({
   const [accountStatus, setAccountStatus] = useState<AccountStatusResponse | null>(null);
   const [localPendingSyncCount, setLocalPendingSyncCount] = useState(0);
   const noticeTimer = useRef<number | null>(null);
+  const { t } = useI18n();
 
   useEffect(
     () => () => {
@@ -135,7 +139,7 @@ export function AppShell({
   const openGlobalSearch = () => {
     router.push(appPath('/search'));
   };
-  const accountBadge = mergeTopbarBadge(accountStatus?.badge, localPendingSyncCount);
+  const accountBadge = mergeTopbarBadge(accountStatus?.badge, localPendingSyncCount, t);
 
   return (
     <main
@@ -151,13 +155,13 @@ export function AppShell({
         <button
           className="icon-button desktop-menu"
           type="button"
-          aria-label={navOpen ? '收起主导航' : '展开主导航'}
+          aria-label={navOpen ? t('nav.collapse') : t('nav.expand')}
           aria-expanded={navOpen}
           onClick={() => setNavOpen((current) => !current)}
         >
           <span className="material-symbols-outlined">menu</span>
         </button>
-        <Link className="brand" href={appPath('/')} aria-label="雨城通首页">
+        <Link className="brand" href={appPath('/')} aria-label={t('brand.home')}>
           <img
             className="brand-logo brand-logo-wordmark"
             src={appPath('/icons/yct-logo-wordmark.svg')}
@@ -174,15 +178,15 @@ export function AppShell({
           <button
             className="pill-button"
             type="button"
-            onClick={() => showTopbarNotice('乘车码需要登录后使用')}
+            onClick={() => showTopbarNotice(t('quickAction.rideCodeLoginRequired'))}
           >
             <span className="material-symbols-outlined">qr_code_2</span>
-            <span>乘车码</span>
+            <span>{t('quickAction.rideCode')}</span>
           </button>
           <button
             className="icon-button"
             type="button"
-            aria-label="搜索"
+            aria-label={t('search.open')}
             onClick={openGlobalSearch}
           >
             <span className="material-symbols-outlined">search</span>
@@ -190,8 +194,8 @@ export function AppShell({
           <Link
             className={accountButtonClassName(accountStatus, accountBadge)}
             href={appPath('/account')}
-            aria-label={accountButtonAriaLabel(accountStatus, accountBadge)}
-            title={accountButtonAriaLabel(accountStatus, accountBadge)}
+            aria-label={accountButtonAriaLabel(accountStatus, accountBadge, t)}
+            title={accountButtonAriaLabel(accountStatus, accountBadge, t)}
           >
             {accountStatus?.avatarUrl ? (
               <img className="topbar-account-avatar" src={accountStatus.avatarUrl} alt="" />
@@ -219,7 +223,7 @@ export function AppShell({
 
       <div className="workspace">
         <div className="sidebar-stack">
-          <aside className="rail" aria-label="主导航">
+          <aside className="rail" aria-label={t('nav.label')}>
             {navItems.map((item) => (
               <Link
                 className={active === item.key ? 'rail-item is-active' : 'rail-item'}
@@ -227,7 +231,7 @@ export function AppShell({
                 key={item.key}
               >
                 <span className="material-symbols-outlined">{item.icon}</span>
-                <span>{item.label}</span>
+                <span>{t(item.labelKey)}</span>
               </Link>
             ))}
           </aside>
@@ -240,7 +244,7 @@ export function AppShell({
         </section>
       </div>
 
-      <nav className="bottom-nav" aria-label="主导航">
+      <nav className="bottom-nav" aria-label={t('nav.label')}>
         {navItems.map((item) => (
           <Link
             className={active === item.key ? 'bottom-nav-item is-active' : 'bottom-nav-item'}
@@ -248,7 +252,7 @@ export function AppShell({
             key={item.key}
           >
             <span className="material-symbols-outlined">{item.icon}</span>
-            <span>{item.label}</span>
+            <span>{t(item.labelKey)}</span>
           </Link>
         ))}
       </nav>
@@ -276,39 +280,45 @@ function accountButtonClassName(
 function accountButtonAriaLabel(
   status: AccountStatusResponse | null,
   badge: TopbarBadgeSummary,
+  t: Translate,
 ): string {
   if (!status) {
     const badgeText = badge.kind === 'none' ? '' : `，${badge.label}`;
-    return `账号设置${badgeText}`;
+    return `${t('account.settings')}${badgeText}`;
   }
 
   const statusText: Record<AccountStatusResponse['accountStatus'], string> = {
-    not_configured: '临东通未配置',
-    anonymous: '未登录',
-    active: status.username ? `已登录：${status.username}` : '已登录',
-    readonly: status.username ? `只读账号：${status.username}` : '只读账号',
-    unavailable: '账号状态暂不可用',
+    not_configured: t('account.status.notConfigured'),
+    anonymous: t('account.status.anonymous'),
+    active: status.username ? `${t('status.loggedIn')}：${status.username}` : t('status.loggedIn'),
+    readonly: status.username
+      ? `${t('account.status.readonly')}：${status.username}`
+      : t('account.status.readonly'),
+    unavailable: t('account.status.unavailable'),
   };
   const badgeText = badge.kind === 'none' ? '' : `，${badge.label}`;
-  return `账号设置：${statusText[status.accountStatus]}${badgeText}`;
+  return `${t('account.settings')}：${statusText[status.accountStatus]}${badgeText}`;
 }
 
 function mergeTopbarBadge(
   accountBadge: AccountStatusResponse['badge'] | undefined,
   localPendingSyncCount: number,
+  t: Translate,
 ): TopbarBadgeSummary {
   const accountCount = accountBadge?.kind === 'count' ? accountBadge.count : 0;
   const count = accountCount + localPendingSyncCount;
   const labels = [
     accountBadge && accountBadge.kind !== 'none' ? accountBadge.label : undefined,
-    localPendingSyncCount > 0 ? `${localPendingSyncCount} 个本地行程待同步` : undefined,
+    localPendingSyncCount > 0
+      ? t('sync.localTripsPending', { count: localPendingSyncCount })
+      : undefined,
   ].filter((label): label is string => Boolean(label));
 
   if (count > 0) {
     return {
       kind: 'count',
       count,
-      label: labels.join('，') || `${count} 个待处理事项`,
+      label: labels.join('，') || t('status.pendingItems', { count }),
     };
   }
 
@@ -319,7 +329,7 @@ function mergeTopbarBadge(
   return {
     kind: 'none',
     count: 0,
-    label: '无待办',
+    label: t('status.noPending'),
   };
 }
 
