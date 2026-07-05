@@ -107,7 +107,7 @@ function buildLineDescription(
   const parts = [
     profile?.label ?? line.mode,
     `${line.stationSourceIds.length} 站`,
-    coordinateCount > 0 ? `已记录 ${coordinateCount} 个途径坐标` : '待补线路坐标',
+    coordinateCount > 0 ? `站点坐标直连 ${coordinateCount} 个点` : '待补线路坐标',
   ];
 
   return parts.join(' · ');

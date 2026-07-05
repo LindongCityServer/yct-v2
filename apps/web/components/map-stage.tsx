@@ -5973,7 +5973,7 @@ function formatGeometryDetail(marker: CenterableMarker): string {
   }
 
   if (marker.categoryId === 'transit-line') {
-    return `线路对象，${marker.geometry.coordinates.length} 个途经坐标`;
+    return `线路对象，${marker.geometry.coordinates.length} 个站点坐标直连点`;
   }
 
   return `线性对象端点组，${marker.geometry.coordinates.length} 个端点`;
@@ -5990,7 +5990,7 @@ function formatMarkerDetail(marker: SidebarMarker): string {
 
   if (marker.categoryId === 'transit-line') {
     return marker.geometry.coordinates.length > 0
-      ? `线路坐标 ${marker.geometry.coordinates.length} 个`
+      ? `站点坐标直连 ${marker.geometry.coordinates.length} 个点`
       : '待补线路坐标';
   }
 
