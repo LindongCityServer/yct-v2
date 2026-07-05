@@ -674,12 +674,16 @@ export function MapStage() {
     () => transitLineMarkers.find((marker) => marker.id === focusedMarkerId),
     [focusedMarkerId, transitLineMarkers],
   );
+  const transitLineLookup = useMemo(
+    () => buildTransitLineLookup(transitOverview),
+    [transitOverview],
+  );
   const metroTransitLineMarkers = useMemo(
     () =>
       transitLineMarkers.filter(
-        (marker) => findTransitLineByMarker(marker, transitOverview)?.mode === 'metro',
+        (marker) => findTransitLineByMarker(marker, transitLineLookup)?.mode === 'metro',
       ),
-    [transitLineMarkers, transitOverview],
+    [transitLineLookup, transitLineMarkers],
   );
   const focusedPointMarker = useMemo(
     () => pointMarkers.find((marker) => marker.id === focusedMarkerId),
@@ -1010,7 +1014,7 @@ export function MapStage() {
       : [];
   const focusedTransitLine =
     focusedMarker && isTransitLineMarker(focusedMarker)
-      ? findTransitLineByMarker(focusedMarker, transitOverview)
+      ? findTransitLineByMarker(focusedMarker, transitLineLookup)
       : undefined;
   const scaleBarInfo = useMemo(
     () => buildScaleBarInfo(mapView, viewportSize),
@@ -4515,16 +4519,25 @@ function findStationConnections(
   return collected.sort(compareTransitConnections);
 }
 
-function findTransitLineByMarker(
-  marker: TransitLineMarker,
+function buildTransitLineLookup(
   overview: TransitOverviewResponse | null,
-): TransitOverviewLine | undefined {
-  if (!overview) {
-    return undefined;
+): ReadonlyMap<string, TransitOverviewLine> {
+  const lookup = new Map<string, TransitOverviewLine>();
+
+  for (const line of overview?.lines ?? []) {
+    lookup.set(line.id, line);
+    lookup.set(line.name, line);
   }
 
+  return lookup;
+}
+
+function findTransitLineByMarker(
+  marker: TransitLineMarker,
+  lookup: ReadonlyMap<string, TransitOverviewLine>,
+): TransitOverviewLine | undefined {
   const markerLineId = marker.id.replace(/^transit-line-/, '');
-  return overview.lines.find((line) => line.id === markerLineId || line.name === marker.label);
+  return lookup.get(markerLineId) ?? lookup.get(marker.label);
 }
 
 function compareTransitConnections(
