@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import type { ApiListResponse, TileProviderDescriptor } from '@yct/contracts';
 import { tileProviderConfigSchema } from '@yct/schemas';
 import { createApiMeta } from '../../../../lib/api-meta';
+import {
+  buildMapTileProxyTemplate,
+  buildUnminedTileTemplate,
+} from '../../../../lib/map-tile-templates';
 import { readRuntimeConfig } from '../../../../lib/runtime-config';
 
 export function GET() {
@@ -11,15 +15,15 @@ export function GET() {
   if (config.tileFreshHttpTemplate) {
     const provider = tileProviderConfigSchema.parse({
       id: 'lindong-fresh-http',
-      name: '临东较新 HTTP 瓦片',
-      sourceKind: 'fresh-http',
-      tileTemplate: config.tileFreshHttpTemplate,
+      name: '临东较新瓦片',
+      sourceKind: 'proxied',
+      tileTemplate: buildMapTileProxyTemplate('fresh-http'),
     });
 
     items.push({
       ...provider,
       freshness: {
-        note: '该源较新，但 HTTPS 主站可能产生混合内容风险。',
+        note: '该源较新，已通过 YCT 后端代理同源加载以避免 HTTPS 混合内容风险。',
       },
     });
   }
@@ -66,9 +70,4 @@ export function GET() {
   };
 
   return NextResponse.json(response);
-}
-
-function buildUnminedTileTemplate(baseUrl: string): string {
-  const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-  return `${normalizedBaseUrl}tiles/zoom.{z}/{xd}/{yd}/tile.{x}.{y}.jpeg`;
 }

@@ -64,6 +64,7 @@
 - 图标：统一使用 Material Symbols Outlined，可通过 CDN 引入，生产环境需要降级方案；不要再使用 `material-symbols-rounded`，避免部分图标的填充态不可辨识。
 - 地图瓦片：
   - 当前较新的 HTTP 瓦片源：`http://ld.cmsy.xyz:19136/`。
+  - 当前工程已为较新 HTTP 瓦片源提供 `/api/map/tile-proxy` 同源代理；前端瓦片模板应指向代理地址，真实 HTTP 模板只保存在服务端环境变量中。
   - 若 HTTPS 主站产生混合内容风险，可切换到 `https://map.shangxiaoguan.top` 下的静态地图资源；该资源效果较好且无混合内容风险，但可能不反映最新地图状态。
 - 当前地图标记点：`https://map.shangxiaoguan.top/`。
 - POI 分类图标：可参考 `https://map.shangxiaoguan.top` 下的各类 `png` 文件；注意部分业务分类可能对应多个图标文件，需要建立分类到图标的映射表。
