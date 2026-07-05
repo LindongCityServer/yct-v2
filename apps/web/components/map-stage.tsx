@@ -905,8 +905,17 @@ export function MapStage() {
     () => categoryResponse?.items.filter((category) => category.acceptsPublicSubmissions) ?? [],
     [categoryResponse],
   );
+  const tileSourceText = activeTileProvider
+    ? [
+        `当前瓦片源：${activeTileProvider.name}`,
+        activeTileProvider.freshness?.note,
+      ]
+        .filter(Boolean)
+        .join('。')
+    : undefined;
   const dataSourceText =
-    markerResponse?.meta.message ?? activeTileProvider?.freshness?.note ?? '地图数据正在读取。';
+    [markerResponse?.meta.message, tileSourceText].filter(Boolean).join('\n') ||
+    '地图数据正在读取。';
   const updateSelectedTileProviderId = (providerId: string) => {
     setSelectedTileProviderId(providerId);
     writeSelectedMapTileProviderId(providerId);
