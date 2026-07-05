@@ -823,6 +823,13 @@ body .material-symbols-outlined {
   vector-effect: non-scaling-stroke;
 }
 
+.map-transit-trace.is-selected {
+  stroke-width: 12;
+  opacity: 0.96;
+  filter: drop-shadow(0 2px 5px rgba(17, 24, 23, 0.28))
+    drop-shadow(0 0 10px color-mix(in srgb, var(--transit-trace-color) 54%, transparent));
+}
+
 .map-route-trace {
   --route-trace-color: var(--yct-color-primary);
   fill: none;
