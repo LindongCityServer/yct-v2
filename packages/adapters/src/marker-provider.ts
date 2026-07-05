@@ -281,7 +281,7 @@ export class BdslmMarkerProvider implements MarkerProvider {
               type: 'Point',
               coordinates: [marker.x, marker.z],
             },
-            iconFileName: marker.image,
+            symbolIcon: 'person_pin_circle',
           })),
       };
     } finally {

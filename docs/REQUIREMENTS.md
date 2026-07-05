@@ -68,6 +68,7 @@
   - 当前工程已为较新 HTTP 瓦片源提供 `/api/map/tile-proxy` 同源代理；前端瓦片模板应指向代理地址，真实 HTTP 模板只保存在服务端环境变量中。
   - 若 HTTPS 主站产生混合内容风险，可切换到 `https://map.shangxiaoguan.top` 下的静态地图资源；该资源效果较好且无混合内容风险，但可能不反映最新地图状态。
 - 当前地点标记点和渲染后的精细静态瓦片图：`https://map.shangxiaoguan.top/`。
+- 实时玩家位置：通过 BDSLM HTTP 源获取坐标和名称，但前端第一阶段使用 Material Symbols 符号标记展示，不把 HTTP 源返回的相对图片名当作地点图标文件使用。
 - POI 分类图标：可参考 `https://map.shangxiaoguan.top` 下的各类 `png` 文件；注意部分业务分类可能对应多个图标文件，需要建立分类到图标的映射表。
 - App 和网站图标源文件目录：`assets/brand/`。用户后续把源文件放入该目录；生成后的 Web/PWA 图标输出到 `apps/web/public/icons/`。
 - 第一阶段地图数据配置：
