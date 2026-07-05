@@ -351,6 +351,34 @@ const defaultRouteTransportModes: EnabledRouteTransportModes = {
 };
 
 const favoriteMarkerCategoryId = 'favorites';
+const markerCategoryFallbackNames: Record<string, string> = {
+  airport: '机场',
+  'bus-stop': '公交站',
+  'coach-station': '客运站',
+  commerce: '商业',
+  dining: '餐饮',
+  education: '教育',
+  facility: '设施',
+  'ferry-port': '轮渡码头',
+  industry: '产业设施',
+  'map-marker': '地图标记',
+  medical: '医疗',
+  'metro-entrance': '地铁出入口',
+  'metro-station': '地铁站',
+  museum: '展馆',
+  park: '公园绿地',
+  parking: '停车',
+  player: '在线玩家',
+  'public-service': '公共服务',
+  railway: '铁路',
+  'railway-station': '铁路车站',
+  residence: '居住区',
+  road: '道路',
+  scenery: '景点',
+  sports: '体育',
+  'tram-station': '有轨电车站',
+  'transit-line': '线路',
+};
 
 const routeTransportModeOptions: RouteTransportModeOption[] = [
   { mode: 'walk', label: '步行', icon: 'directions_walk', color: '#4B5B57' },
@@ -4077,11 +4105,7 @@ async function copyTextToClipboard(value: string) {
 }
 
 function getMarkerCategoryFallbackName(categoryId: string): string {
-  if (categoryId === 'player') {
-    return '在线玩家';
-  }
-
-  return categoryId;
+  return markerCategoryFallbackNames[categoryId] ?? categoryId;
 }
 
 function getMapMarkerListEmptyText(input: {
