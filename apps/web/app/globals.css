@@ -5634,6 +5634,42 @@ body .material-symbols-outlined {
   --icon-fill: 1;
 }
 
+.map-tile-provider-select {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-width: 0;
+  color: var(--yct-color-text-secondary);
+}
+
+.map-tile-provider-select > .material-symbols-outlined {
+  justify-self: center;
+  color: var(--yct-color-primary);
+  font-size: 22px;
+}
+
+.map-tile-provider-select strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--yct-color-text);
+  font-size: 13px;
+}
+
+.map-tile-provider-select select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 var(--yct-space-2);
+  border: 1px solid var(--yct-color-border-subtle);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
+  color: var(--yct-color-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+}
+
 .map-layer-note {
   margin: 0;
   color: var(--yct-color-text-muted);

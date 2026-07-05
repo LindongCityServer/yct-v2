@@ -392,6 +392,7 @@ export function MapStage() {
   const [tileResponse, setTileResponse] = useState<ApiListResponse<TileProviderDescriptor> | null>(
     null,
   );
+  const [selectedTileProviderId, setSelectedTileProviderId] = useState('');
   const [markerResponse, setMarkerResponse] = useState<MarkerResponse | null>(null);
   const [transitOverview, setTransitOverview] = useState<TransitOverviewResponse | null>(null);
   const [categoryResponse, setCategoryResponse] = useState<ApiListResponse<PoiCategory> | null>(
@@ -547,7 +548,22 @@ export function MapStage() {
     return () => resizeObserver.disconnect();
   }, []);
 
-  const activeTileProvider = tileResponse?.items[0];
+  const tileProviders = useMemo(() => tileResponse?.items ?? [], [tileResponse]);
+  useEffect(() => {
+    if (tileProviders.length === 0) {
+      if (selectedTileProviderId) {
+        setSelectedTileProviderId('');
+      }
+      return;
+    }
+
+    if (!tileProviders.some((provider) => provider.id === selectedTileProviderId)) {
+      setSelectedTileProviderId(tileProviders[0].id);
+    }
+  }, [selectedTileProviderId, tileProviders]);
+
+  const activeTileProvider =
+    tileProviders.find((provider) => provider.id === selectedTileProviderId) ?? tileProviders[0];
   const tileTemplate = activeTileProvider?.tileTemplate;
   const tileBaseUrl = tileTemplate ? getTileBaseUrl(tileTemplate) : '';
   const markerIconBaseUrl = markerResponse?.iconBaseUrl ?? tileBaseUrl;
@@ -2250,6 +2266,27 @@ export function MapStage() {
               </button>
             ))}
           </div>
+          {browseMode === 'satellite' && tileProviders.length > 1 ? (
+            <label className="map-tile-provider-select">
+              <span className="material-symbols-outlined" aria-hidden="true">
+                map
+              </span>
+              <span>
+                <strong>瓦片源</strong>
+                <select
+                  value={activeTileProvider?.id ?? ''}
+                  onChange={(event) => setSelectedTileProviderId(event.currentTarget.value)}
+                  aria-label="瓦片源"
+                >
+                  {tileProviders.map((provider) => (
+                    <option value={provider.id} key={provider.id}>
+                      {provider.name}
+                    </option>
+                  ))}
+                </select>
+              </span>
+            </label>
+          ) : null}
           <p className="map-layer-note">
             {browseMode === 'satellite'
               ? `加载${activeTileProvider?.name ?? '地图瓦片'}，仅叠加关键道路。`
