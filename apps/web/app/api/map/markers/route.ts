@@ -13,13 +13,17 @@ const providerMarkerSnapshotCache = createTimedCache<MapMarkerSnapshot>(60 * 100
 export async function GET() {
   const config = readRuntimeConfig();
   const iconBaseUrl = config.unminedMapBaseUrl;
-  const categories = await readPoiCategories().catch(() => []);
-  const publishedPoiSubmissions = await listPublishedPublicPoiSubmissions();
-  const transitLinePoiMarkers = await readTransitLinePoiMarkers().catch(() => []);
+  const [categories, publishedPoiSubmissions, transitLinePoiMarkers] = await Promise.all([
+    readPoiCategories().catch(() => []),
+    listPublishedPublicPoiSubmissions(),
+    readTransitLinePoiMarkers().catch(() => []),
+  ]);
 
   try {
-    const staticSnapshot = await readStaticMarkerSnapshot(config);
-    const playerSnapshot = await readPlayerMarkerSnapshot(config);
+    const [staticSnapshot, playerSnapshot] = await Promise.all([
+      readStaticMarkerSnapshot(config),
+      readPlayerMarkerSnapshot(config),
+    ]);
     const snapshot = mergeMarkerSnapshots(staticSnapshot, playerSnapshot);
     const mergedSnapshot = normalizeMarkerSnapshotText(
       mergeLocalMapMarkers(snapshot, publishedPoiSubmissions, categories, transitLinePoiMarkers),
