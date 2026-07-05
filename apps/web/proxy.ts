@@ -6,11 +6,13 @@ const staticAssetPattern =
 export function proxy(request: NextRequest) {
   const response = NextResponse.next();
   const pathname = request.nextUrl.pathname;
+  const isServiceWorker = pathname.endsWith('/sw.js') || pathname === '/sw.js';
 
   if (
-    !pathname.includes('/_next/static/') &&
-    !pathname.includes('/_next/image') &&
-    !staticAssetPattern.test(pathname)
+    isServiceWorker ||
+    (!pathname.includes('/_next/static/') &&
+      !pathname.includes('/_next/image') &&
+      !staticAssetPattern.test(pathname))
   ) {
     response.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
     response.headers.set('Pragma', 'no-cache');
