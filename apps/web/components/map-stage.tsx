@@ -674,6 +674,13 @@ export function MapStage() {
     () => transitLineMarkers.find((marker) => marker.id === focusedMarkerId),
     [focusedMarkerId, transitLineMarkers],
   );
+  const metroTransitLineMarkers = useMemo(
+    () =>
+      transitLineMarkers.filter(
+        (marker) => findTransitLineByMarker(marker, transitOverview)?.mode === 'metro',
+      ),
+    [transitLineMarkers, transitOverview],
+  );
   const focusedPointMarker = useMemo(
     () => pointMarkers.find((marker) => marker.id === focusedMarkerId),
     [focusedMarkerId, pointMarkers],
@@ -895,11 +902,28 @@ export function MapStage() {
     [browseMode, browseModeRoadTraceSource, focusedMarkerId, mapView, viewportSize],
   );
   const projectedTransitTraces = useMemo(
-    () =>
-      linearFeaturesVisible && focusedTransitLineMarker
-        ? projectTransitLineTraces([focusedTransitLineMarker], mapView, viewportSize).slice(0, 4)
-        : [],
-    [focusedTransitLineMarker, linearFeaturesVisible, mapView, viewportSize],
+    () => {
+      if (!linearFeaturesVisible) {
+        return [];
+      }
+
+      const traceSource = focusedTransitLineMarker
+        ? dedupeMarkersById([focusedTransitLineMarker, ...metroTransitLineMarkers])
+        : metroTransitLineMarkers;
+
+      return projectTransitLineTraces(traceSource, mapView, viewportSize, focusedMarkerId).slice(
+        0,
+        48,
+      );
+    },
+    [
+      focusedMarkerId,
+      focusedTransitLineMarker,
+      linearFeaturesVisible,
+      mapView,
+      metroTransitLineMarkers,
+      viewportSize,
+    ],
   );
   const publicPoiCategories = useMemo(
     () => categoryResponse?.items.filter((category) => category.acceptsPublicSubmissions) ?? [],
@@ -973,7 +997,7 @@ export function MapStage() {
   );
   const visibleProjectedLinearPois = routeResultActive ? [] : projectedLinearPois;
   const visibleProjectedRoadTraces = routeResultActive ? [] : projectedRoadTraces;
-  const visibleProjectedTransitTraces = routeResultActive ? [] : projectedTransitTraces;
+  const visibleProjectedTransitTraces = projectedTransitTraces;
   const focusedMarkerCenter =
     focusedMarker && isCenterableMarker(focusedMarker) ? getMarkerCenter(focusedMarker) : undefined;
   const focusedMarkerCategoryName = focusedMarker?.categoryId
@@ -2100,15 +2124,6 @@ export function MapStage() {
 
         {hasMapOverlay ? (
           <div className="map-marker-layer" aria-label="地图标记示意层">
-            {selectedRouteTrace ? (
-              <div className="map-route-trace-layer" aria-hidden="true">
-                <TraceLayerView
-                  trace={selectedRouteTrace}
-                  kind="route"
-                  title={`${selectedRouteOption?.title ?? '路线方案'} · 初步估算`}
-                />
-              </div>
-            ) : null}
             {projectedGuideMarkers.map((marker) => (
               <div
                 className={`map-guide-marker is-${marker.kind}`}
@@ -2158,6 +2173,15 @@ export function MapStage() {
                     title={`${trace.label} · ${trace.pointCount} 个途经站`}
                   />
                 ))}
+              </div>
+            ) : null}
+            {selectedRouteTrace ? (
+              <div className="map-route-trace-layer" aria-hidden="true">
+                <TraceLayerView
+                  trace={selectedRouteTrace}
+                  kind="route"
+                  title={`${selectedRouteOption?.title ?? '路线方案'} · 初步估算`}
+                />
               </div>
             ) : null}
             {visibleProjectedLinearPois.map((marker) => {
@@ -2618,7 +2642,9 @@ function TraceLayerView({
           .join(' ')
       : kind === 'route'
         ? 'map-route-trace is-selected'
-        : 'map-transit-trace is-selected';
+        : ['map-transit-trace', trace.isSelected ? 'is-selected' : '']
+            .filter(Boolean)
+            .join(' ');
 
   return (
     <svg
@@ -4835,6 +4861,7 @@ function projectTransitLineTraces(
   markers: TransitLineMarker[],
   view: MapView,
   size: ViewportSize,
+  focusedMarkerId?: string | null,
 ): ProjectedRoadTrace[] {
   if (size.width <= 0 || size.height <= 0) {
     return [];
@@ -4871,7 +4898,7 @@ function projectTransitLineTraces(
         top: traceProjection.top,
         width: traceProjection.width,
         height: traceProjection.height,
-        isSelected: true,
+        isSelected: marker.id === focusedMarkerId,
       },
     ];
   });
