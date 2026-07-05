@@ -101,6 +101,42 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.p
 
 把 `artifacts/yct-web-*` 上传到服务器并解压到部署目录。不要把新包直接覆盖解压到仍保留旧 `.next` 文件的目录里；Next.js 的 `server.js`、`.next/server` 和 `.next/static` 必须来自同一次构建，否则会出现页面能打开但客户端 chunk 404、路线规划或周边地点等交互失效的问题。推荐做法是先停止旧进程，再解压到一个空目录，确认可用后切换反代；如果只能使用原目录，先备份并清空旧目录中除持久数据外的部署文件。
 
+如果只能继续使用 `C:\wwwroot\yct-v2` 这个原目录，可以按下面的方式先保留运行时数据，再清空旧 standalone 文件。执行前务必确认旧进程已经停止：
+
+```powershell
+$deployRoot = "C:\wwwroot\yct-v2"
+$backupRoot = "C:\wwwroot\yct-v2-backup-$(Get-Date -Format yyyyMMdd-HHmmss)"
+$artifact = "C:\Users\Administrator\Downloads\yct-web-20260705-230243.zip"
+
+if (-not (Test-Path -LiteralPath $deployRoot)) {
+  New-Item -ItemType Directory -Force -Path $deployRoot | Out-Null
+}
+
+New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
+foreach ($relativePath in @(".env", ".yct-data", "apps\web\public\content-assets")) {
+  $source = Join-Path $deployRoot $relativePath
+  if (Test-Path -LiteralPath $source) {
+    $target = Join-Path $backupRoot $relativePath
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+    Move-Item -LiteralPath $source -Destination $target -Force
+  }
+}
+
+Get-ChildItem -LiteralPath $deployRoot -Force | Remove-Item -Recurse -Force
+Expand-Archive -LiteralPath $artifact -DestinationPath $deployRoot -Force
+
+foreach ($relativePath in @(".env", ".yct-data", "apps\web\public\content-assets")) {
+  $source = Join-Path $backupRoot $relativePath
+  if (Test-Path -LiteralPath $source) {
+    $target = Join-Path $deployRoot $relativePath
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+    Move-Item -LiteralPath $source -Destination $target -Force
+  }
+}
+```
+
+这段命令只适合在确认 `$deployRoot` 是部署目录时使用；不要把 `$deployRoot` 设为磁盘根目录、用户目录或 `wwwroot` 总目录。
+
 zip 包可以直接右键解压，`tar.gz` 包可以用：
 
 ```powershell
@@ -130,6 +166,16 @@ https://yct.shangxiaoguan.top/v2/_next/static/...
 ```
 
 如果页面 HTML 里出现 `/_next/static/...` 或 `/api/...` 这类没有 `/v2` 的同源链接，通常表示运行的不是按 `/v2` 构建的包，或云端进程仍指向旧构建。
+
+### 新老用户看到版本不一致
+
+如果新访客更容易看到新版，而已经访问过的浏览器仍看到旧版，优先按下面顺序排查：
+
+1. 云端是否仍在运行旧进程。用 `Get-NetTCPConnection -LocalPort 3300` 找到 PID，再确认对应命令行是否指向本次解压目录。
+2. 部署目录是否混有旧 `.next/static`。如果 `.next/server` 与 `.next/static` 来自不同构建，客户端 chunk 会随机新旧混用。
+3. 反向代理或 CDN 是否缓存了 HTML/RSC。临时测试阶段建议不要缓存 `/v2` 下的 HTML、RSC 和 API，只允许 `_next/static` 长缓存。
+4. 浏览器是否保留旧 Service Worker 或旧 `yct-*` Cache。生产包会继续注册 PWA；如果怀疑旧缓存，可以在浏览器开发者工具里 unregister 当前站点 Service Worker 并清理 Cache Storage 后重试。
+5. 是否按 `/v2` 构建但以根路径启动，或反过来。构建参数 `-BasePath v2`、启动参数 `-BasePath v2` 和宝塔反代路径必须一致。
 
 ### 端口无法监听
 

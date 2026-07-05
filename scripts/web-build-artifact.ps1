@@ -446,6 +446,7 @@ Notes:
 - Keep server-side runtime stores, uploaded content assets, logs, and backups outside the deployment directory.
 - If the reverse proxy is mounted at /v2, build and start with BasePath /v2. If it is mounted at the site root later, rebuild with an empty BasePath.
 - Stop the old process before deployment and unpack this bundle into an empty deployment directory, or clean the old standalone files first. Do not merge it over an old .next directory: server.js, .next/server, and .next/static must come from the same build.
+- If returning users still see an older version, check that the old Node process is stopped, the deployment directory does not contain stale .next/static files, and the reverse proxy or browser Service Worker is not serving cached HTML/RSC responses.
 - After deployment, /v2/map, /v2/api/map/markers, and the /v2/_next/static assets referenced by the page HTML should all return 200.
 "@
 
