@@ -891,7 +891,7 @@ CheckedIn -> RefundBlocked 或 ManualReview
 - 顶部头像入口需要区分登录状态，并按需显示计数徽标，例如待审核、未读通知、管理员待办。
 - 计数徽标需要合并显示；前台只显示一个徽标，详情在账号/通知面板内展开。
 - 后续规划多语言支持，初步目标为简体中文、繁体中文和英语。界面固定文案可以走 i18n key；地名、站名、组织名等专有名词需要独立翻译字段、别名表或按服务器配置维护，不能默认用机器翻译覆盖真实业务数据。第一版边界、事件、状态机和测试要点见 `docs/I18N_PLAN.md`。
-- 当前工程第一版已提供登录用户语言偏好 API `/api/account/locale-preference`，支持保存 `system`、`zh-CN`、`zh-Hant`、`en`，并发布 `LocalePreferenceUpdated` 事件；前端已有匿名本地偏好和登录同步工具。尚未接入账号页控件或实际 UI 翻译目录。
+- 当前工程第一版已提供登录用户语言偏好 API `/api/account/locale-preference`，支持保存 `system`、`zh-CN`、`zh-Hant`、`en`，并发布 `LocalePreferenceUpdated` 事件；前端已有匿名本地偏好、登录同步工具和账号页语言偏好控件，控件会更新页面 `lang`。尚未接入实际 UI 翻译目录。
 
 ### 13.2 地图与数据
 

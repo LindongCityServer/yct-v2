@@ -3,6 +3,7 @@
 import type {
   ApiItemResponse,
   ApiListResponse,
+  LocalePreference,
   RectangleBounds,
   TicketOrderListItem,
   TripReminder,
@@ -55,6 +56,13 @@ import {
   readMapFavoriteState,
   type MapFavoriteState,
 } from '../lib/client-map-favorites';
+import {
+  fetchServerLocalePreference,
+  readLocalLocalePreference,
+  updateServerLocalePreference,
+  writeLocalLocalePreference,
+  type ClientLocalePreferenceState,
+} from '../lib/client-locale-preference';
 import { notifyTicketOrderStateChanged } from '../lib/client-ticket-orders';
 import { TicketOrderDraftPanel } from './ticket-order-draft-panel';
 
@@ -75,6 +83,13 @@ const motionOptions: Array<{ value: MotionMode; label: string }> = [
   { value: 'system', label: '跟随系统' },
   { value: 'full', label: '开启' },
   { value: 'reduced', label: '关闭' },
+];
+
+const localeOptions: Array<{ value: LocalePreference; label: string }> = [
+  { value: 'system', label: '跟随系统' },
+  { value: 'zh-CN', label: '简体' },
+  { value: 'zh-Hant', label: '繁體' },
+  { value: 'en', label: 'English' },
 ];
 
 type PwaInstallStatus = 'checking' | 'installed' | 'installable' | 'manual' | 'unsupported';
@@ -199,6 +214,8 @@ export function AccountSettingsPanel({
   const [themeMode, setThemeMode] = useState<ThemeMode>('system');
   const [accentMode, setAccentMode] = useState<AccentMode>('ldpass');
   const [motionMode, setMotionMode] = useState<MotionMode>('system');
+  const [localeMode, setLocaleMode] = useState<LocalePreference>('system');
+  const [localeStatusText, setLocaleStatusText] = useState('');
   const [notificationEnabled, setNotificationEnabled] = useState(false);
   const [pushDeviceStatusText, setPushDeviceStatusText] = useState('');
   const [isSyncingPushDevice, setIsSyncingPushDevice] = useState(false);
@@ -299,11 +316,18 @@ export function AccountSettingsPanel({
       setCancellingTicketOrderId(null);
     }
   };
+  const applyLocalePreferenceState = (preference: ClientLocalePreferenceState) => {
+    setLocaleMode(preference.locale);
+    document.documentElement.lang = preference.resolvedLocale;
+  };
 
   useEffect(() => {
     setThemeMode(readThemeMode());
     setAccentMode(readAccentMode());
     setMotionMode(readMotionMode());
+    const localLocalePreference = readLocalLocalePreference();
+    applyLocalePreferenceState(localLocalePreference);
+    setLocaleStatusText(formatLocaleStatus(localLocalePreference));
     setNotificationEnabled(window.localStorage.getItem('yct.notifications.enabled') === 'true');
     setNotificationTypes(readNotificationTypePreferences());
     setQuietStart(window.localStorage.getItem('yct.notifications.quietStart') ?? '23:00');
@@ -313,6 +337,23 @@ export function AccountSettingsPanel({
     syncOfflinePackageState();
     if (auth.session?.user) {
       void refreshTicketOrders();
+
+      void fetchServerLocalePreference()
+        .then((preference) => {
+          if (!preference) {
+            return;
+          }
+
+          const localPreference = writeLocalLocalePreference(preference.locale);
+          applyLocalePreferenceState({
+            ...localPreference,
+            resolvedLocale: preference.resolvedLocale,
+            updatedAt: preference.updatedAt,
+            source: 'server',
+          });
+          setLocaleStatusText(formatLocaleStatus(preference));
+        })
+        .catch(() => undefined);
 
       void readServerTripReminders()
         .then((reminders) => {
@@ -403,6 +444,25 @@ export function AccountSettingsPanel({
   const updateMotionMode = (mode: MotionMode) => {
     setMotionMode(mode);
     applyMotionMode(mode);
+  };
+
+  const updateLocaleMode = (locale: LocalePreference) => {
+    const localPreference = writeLocalLocalePreference(locale);
+    applyLocalePreferenceState(localPreference);
+    setLocaleStatusText(formatLocaleStatus(localPreference));
+
+    if (!auth.session?.user) {
+      return;
+    }
+
+    void updateServerLocalePreference(locale)
+      .then((preference) => {
+        applyLocalePreferenceState(preference);
+        setLocaleStatusText(formatLocaleStatus(preference));
+      })
+      .catch(() => {
+        setLocaleStatusText('已保存到本设备');
+      });
   };
 
   const updateNotificationEnabled = (enabled: boolean) => {
@@ -770,7 +830,10 @@ export function AccountSettingsPanel({
             <span className="material-symbols-outlined" aria-hidden="true">
               palette
             </span>
-            <span id="theme-settings-title">主题与强调色</span>
+            <span id="theme-settings-title">外观与语言</span>
+            {localeStatusText ? (
+              <span className="settings-inline-status">{localeStatusText}</span>
+            ) : null}
           </div>
           <div className="settings-control-grid">
             <SegmentedControl
@@ -784,6 +847,12 @@ export function AccountSettingsPanel({
               options={accentOptions}
               value={accentMode}
               onChange={updateAccentMode}
+            />
+            <SegmentedControl
+              label="语言"
+              options={localeOptions}
+              value={localeMode}
+              onChange={updateLocaleMode}
             />
           </div>
         </section>
@@ -1309,6 +1378,21 @@ function authStatusMessage(status: AuthStatus): string {
   };
 
   return messages[status];
+}
+
+function formatLocaleStatus(preference: ClientLocalePreferenceState): string {
+  const resolvedLabels = {
+    'zh-CN': '简体中文',
+    'zh-Hant': '繁體中文',
+    en: 'English',
+  } satisfies Record<ClientLocalePreferenceState['resolvedLocale'], string>;
+  const sourceLabels: Record<ClientLocalePreferenceState['source'], string> = {
+    default: '默认',
+    local: '本机',
+    server: '账号',
+  };
+
+  return `${sourceLabels[preference.source]} · ${resolvedLabels[preference.resolvedLocale]}`;
 }
 
 function SegmentedControl<TValue extends string>({
