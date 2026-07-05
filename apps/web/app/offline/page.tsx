@@ -13,7 +13,7 @@ export default function OfflinePage() {
         <p>
           可以继续打开近期访问过的运营信息、线路、站点详情和服务入口。恢复联网后，雨城通会重新读取最新数据。
         </p>
-        <div className="settings-action-row" aria-label="离线可用入口">
+        <div className="settings-action-row" aria-label="离线相关入口">
           <Link className="secondary-action-button" href={appPath('/')}>
             <span className="material-symbols-outlined" aria-hidden="true">
               article
@@ -36,7 +36,7 @@ export default function OfflinePage() {
             <span className="material-symbols-outlined" aria-hidden="true">
               download_for_offline
             </span>
-            <span>离线管理</span>
+            <span>联网后管理</span>
           </Link>
         </div>
         <p className="settings-row-note">
