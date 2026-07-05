@@ -264,13 +264,19 @@ function getDirectionalStationStops(
           stationName,
           sequence,
         }));
-  const filteredStops =
-    direction === 'forward'
-      ? sourceStops.filter((stop) => stop.oneWay !== 'up')
-      : sourceStops.filter((stop) => stop.oneWay !== 'down');
+  const filteredStops = sourceStops.filter((stop) =>
+    isStationStopVisibleInDirection(stop, direction),
+  );
   const sortedStops = [...filteredStops].sort((left, right) => left.sequence - right.sequence);
 
   return direction === 'forward' ? sortedStops : sortedStops.reverse();
+}
+
+function isStationStopVisibleInDirection(
+  stop: TransitLineStopSummary,
+  direction: DirectionKey,
+): boolean {
+  return direction === 'forward' ? stop.oneWay !== 'up' : stop.oneWay !== 'down';
 }
 
 function formatDirectionTerminalName(name: string): string {

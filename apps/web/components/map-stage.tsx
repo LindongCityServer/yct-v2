@@ -4259,13 +4259,19 @@ function getDirectionalLineStops(
           sequence,
         }));
 
-  const filteredStops =
-    direction === 'forward'
-      ? sourceStops.filter((stop) => stop.oneWay !== 'up')
-      : sourceStops.filter((stop) => stop.oneWay !== 'down');
+  const filteredStops = sourceStops.filter((stop) =>
+    isTransitLineStopVisibleInDirection(stop, direction),
+  );
 
   const sortedStops = [...filteredStops].sort((left, right) => left.sequence - right.sequence);
   return direction === 'forward' ? sortedStops : sortedStops.reverse();
+}
+
+function isTransitLineStopVisibleInDirection(
+  stop: TransitLineStopForMap,
+  direction: 'forward' | 'reverse',
+): boolean {
+  return direction === 'forward' ? stop.oneWay !== 'up' : stop.oneWay !== 'down';
 }
 
 function isPointMarker(marker: MapMarkerSnapshot['markers'][number]): marker is PointMarker {
