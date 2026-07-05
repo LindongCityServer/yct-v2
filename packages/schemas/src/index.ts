@@ -1,5 +1,6 @@
 export * from './common';
 export * from './content';
+export * from './i18n';
 export * from './imports';
 export * from './map';
 export * from './notifications';

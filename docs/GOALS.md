@@ -569,6 +569,7 @@ DESIGN.md
 - 已处理第一版：`/travel/schedules` 的 `schedule-trip-card` 参考用户 2026-07-03 附图重排，顶部显示交通方式图标、真实班次号/线路和票价，主体强调出发时间、运行/经停和到达时间，移动端继续保持三段式票据布局；底部保留添加提醒、保存记录、旧版参考和票务状态操作，运营方和车型/船型/机型字段仍只展示真实数据或待公布状态。
 - 已处理第一版：`/account` 通知与免打扰区域文案拆清楚，总开关控制本设备是否接收推送，分类决定允许哪些类型推送，免打扰时段只负责静默或延后提醒。
 - 已处理规划第一版：新增 `docs/I18N_PLAN.md`，明确多语言第一阶段支持 `zh-CN`、`zh-Hant` 和 `en`，固定界面文案走翻译目录，地名、组织名、站名等业务数据必须走正式译名字段、别名表、后台维护或审核投稿，不能先用机器翻译直接替换。契约层已补 `LocalePreferenceUpdated`、`TranslationCatalogPublished` 和 `EntityTranslationUpdated` 事件，后续用于账号偏好同步、翻译目录发布、实体译名审核和搜索索引刷新。
+- 已处理第一版：新增登录用户语言偏好服务端基础能力，`GET/POST /api/account/locale-preference` 读取或更新 `system`、`zh-CN`、`zh-Hant`、`en` 偏好；数据暂存到 `.yct-data/locale-preference-store.json`，更新成功发布 `LocalePreferenceUpdated` 事件。当前只落账号侧偏好和解析后的 `resolvedLocale`，尚不切换全站 UI 文案。
 - 管理员侧测试流程需要文档化；已新增 `docs/ADMIN_TESTING.md` 记录当前如何配置 `ldpass`、初始化管理员、进入后台页面和验证 API 边界。
 
 2026-07-03 本地开发站点打开缓慢排查，当前进展：

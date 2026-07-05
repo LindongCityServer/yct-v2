@@ -20,6 +20,7 @@ export interface RuntimeConfig {
   poiSubmissionImageUploadDir: string;
   offlinePackageStorePath: string;
   eventOutboxStorePath: string;
+  localePreferenceStorePath: string;
   notificationPreferenceStorePath: string;
   pushSubscriptionStorePath: string;
   pushDeliveryStorePath: string;
@@ -101,6 +102,9 @@ export function readRuntimeConfig(): RuntimeConfig {
     eventOutboxStorePath:
       emptyToUndefined(process.env.YCT_EVENT_OUTBOX_STORE_PATH) ??
       '.yct-data/event-outbox-store.json',
+    localePreferenceStorePath:
+      emptyToUndefined(process.env.YCT_LOCALE_PREFERENCE_STORE_PATH) ??
+      '.yct-data/locale-preference-store.json',
     notificationPreferenceStorePath:
       emptyToUndefined(process.env.YCT_NOTIFICATION_PREFERENCE_STORE_PATH) ??
       '.yct-data/notification-preference-store.json',

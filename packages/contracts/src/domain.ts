@@ -748,6 +748,14 @@ export interface UserPushPreference {
   updatedAt: ISODateTimeString;
 }
 
+export interface UserLocalePreference {
+  userId: string;
+  ldpassUserId: string;
+  locale: LocalePreference;
+  resolvedLocale: LocaleCode;
+  updatedAt: ISODateTimeString;
+}
+
 export type PushDeviceSubscriptionStatus = 'active' | 'revoked';
 
 export interface PushDeviceSubscription {
