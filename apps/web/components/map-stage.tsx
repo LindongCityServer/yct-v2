@@ -16,6 +16,10 @@ import type {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { readMapFavoriteMarkerIds, writeMapFavoriteMarkerIds } from '../lib/client-map-favorites';
+import {
+  readSelectedMapTileProviderId,
+  writeSelectedMapTileProviderId,
+} from '../lib/client-map-settings';
 
 interface MarkerResponse {
   meta: ApiMeta;
@@ -451,6 +455,13 @@ export function MapStage() {
   }, []);
 
   useEffect(() => {
+    const storedTileProviderId = readSelectedMapTileProviderId();
+    if (storedTileProviderId) {
+      setSelectedTileProviderId(storedTileProviderId);
+    }
+  }, []);
+
+  useEffect(() => {
     setPoiActionStatus('');
   }, [focusedMarkerId]);
 
@@ -553,12 +564,15 @@ export function MapStage() {
     if (tileProviders.length === 0) {
       if (selectedTileProviderId) {
         setSelectedTileProviderId('');
+        writeSelectedMapTileProviderId('');
       }
       return;
     }
 
     if (!tileProviders.some((provider) => provider.id === selectedTileProviderId)) {
-      setSelectedTileProviderId(tileProviders[0].id);
+      const fallbackProviderId = tileProviders[0].id;
+      setSelectedTileProviderId(fallbackProviderId);
+      writeSelectedMapTileProviderId(fallbackProviderId);
     }
   }, [selectedTileProviderId, tileProviders]);
 
@@ -856,6 +870,10 @@ export function MapStage() {
   );
   const dataSourceText =
     markerResponse?.meta.message ?? activeTileProvider?.freshness?.note ?? '地图数据正在读取。';
+  const updateSelectedTileProviderId = (providerId: string) => {
+    setSelectedTileProviderId(providerId);
+    writeSelectedMapTileProviderId(providerId);
+  };
   const categoryById = useMemo(
     () => new Map((categoryResponse?.items ?? []).map((category) => [category.id, category.name])),
     [categoryResponse],
@@ -2275,7 +2293,7 @@ export function MapStage() {
                 <strong>瓦片源</strong>
                 <select
                   value={activeTileProvider?.id ?? ''}
-                  onChange={(event) => setSelectedTileProviderId(event.currentTarget.value)}
+                  onChange={(event) => updateSelectedTileProviderId(event.currentTarget.value)}
                   aria-label="瓦片源"
                 >
                   {tileProviders.map((provider) => (
