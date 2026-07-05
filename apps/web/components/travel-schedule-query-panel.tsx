@@ -598,7 +598,7 @@ function ScheduleTripCard({
           <time>
             {trip.arrivalTime ?? '待定'}
             {trip.arrivalDayOffset && trip.arrivalDayOffset > 0 ? (
-              <sup>+{trip.arrivalDayOffset}天</sup>
+              <sup className="schedule-trip-day-offset">+{trip.arrivalDayOffset}天</sup>
             ) : null}
           </time>
           <small>

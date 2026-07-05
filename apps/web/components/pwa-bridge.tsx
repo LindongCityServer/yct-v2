@@ -3,6 +3,8 @@
 import { useEffect } from 'react';
 import { appPath } from '../lib/app-paths';
 
+const serviceWorkerVersion = process.env.NEXT_PUBLIC_YCT_BUILD_ID ?? 'dev';
+
 export function PwaBridge() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) {
@@ -44,7 +46,7 @@ export function PwaBridge() {
     let cancelled = false;
 
     navigator.serviceWorker
-      .register(appPath('/sw.js'), {
+      .register(appPath(`/sw.js?v=${encodeURIComponent(serviceWorkerVersion)}`), {
         scope: appPath('/'),
       })
       .then((registration) => {

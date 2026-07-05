@@ -28,6 +28,23 @@ function Normalize-YctBasePath {
   return "/$trimmed"
 }
 
+function Normalize-YctBuildId {
+  param([string]$Value)
+
+  $trimmed = ([string]$Value).Trim()
+  if ([string]::IsNullOrWhiteSpace($trimmed)) {
+    return Get-Date -Format "yyyyMMdd-HHmmss"
+  }
+
+  $normalized = $trimmed -replace "[^A-Za-z0-9._-]", "-"
+  $normalized = $normalized.Trim("-")
+  if ([string]::IsNullOrWhiteSpace($normalized)) {
+    return Get-Date -Format "yyyyMMdd-HHmmss"
+  }
+
+  return $normalized
+}
+
 function Resolve-YctOutputPath {
   param(
     [Parameter(Mandatory = $true)][string]$Root,
@@ -338,6 +355,12 @@ function Assert-YctStagedWebAssetConsistency {
 
 $root = Get-YctRepoRoot
 $basePathValue = Normalize-YctBasePath -Value $BasePath
+$rawBuildId = if (-not [string]::IsNullOrWhiteSpace($env:YCT_BUILD_ID)) {
+  $env:YCT_BUILD_ID
+} else {
+  $env:NEXT_PUBLIC_YCT_BUILD_ID
+}
+$buildId = Normalize-YctBuildId -Value $rawBuildId
 $webRoot = Join-Path $root "apps\web"
 $nextRoot = Join-Path $webRoot ".next"
 $standaloneRoot = Join-Path $nextRoot "standalone"
@@ -353,9 +376,11 @@ if (-not $SkipBuild) {
   $pnpm = Get-YctPnpmCommand
   $previousPublicBasePath = $env:NEXT_PUBLIC_YCT_BASE_PATH
   $previousServerBasePath = $env:YCT_BASE_PATH
+  $previousBuildId = $env:NEXT_PUBLIC_YCT_BUILD_ID
   try {
     $env:NEXT_PUBLIC_YCT_BASE_PATH = $basePathValue
     $env:YCT_BASE_PATH = $basePathValue
+    $env:NEXT_PUBLIC_YCT_BUILD_ID = $buildId
     & $pnpm --filter "@yct/web" build
     if ($LASTEXITCODE -ne 0) {
       throw "Next.js build failed with exit code $LASTEXITCODE."
@@ -363,6 +388,7 @@ if (-not $SkipBuild) {
   } finally {
     $env:NEXT_PUBLIC_YCT_BASE_PATH = $previousPublicBasePath
     $env:YCT_BASE_PATH = $previousServerBasePath
+    $env:NEXT_PUBLIC_YCT_BUILD_ID = $previousBuildId
   }
 }
 
@@ -396,6 +422,15 @@ if ($SkipStaging) {
   New-Item -ItemType Directory -Force -Path $standaloneNextRoot | Out-Null
   Copy-Item -LiteralPath $staticRoot -Destination $standaloneNextRoot -Recurse -Force
   Copy-YctPublicAssets -Source $publicRoot -Destination (Join-Path $standaloneWebRoot "public")
+  $stagedServiceWorkerPath = Join-Path $standaloneWebRoot "public\sw.js"
+  if (Test-Path -LiteralPath $stagedServiceWorkerPath) {
+    $serviceWorker = [System.IO.File]::ReadAllText(
+      $stagedServiceWorkerPath,
+      [System.Text.Encoding]::UTF8
+    )
+    $serviceWorker = $serviceWorker -replace "const YCT_SW_VERSION = '[^']*';", "const YCT_SW_VERSION = '$buildId';"
+    Write-YctUtf8File -Path $stagedServiceWorkerPath -Content $serviceWorker
+  }
   Copy-YctNextRuntimeDependencies -Root $root -DestinationNodeModules $standaloneWebNodeModules
 
   $startScript = @"
@@ -436,6 +471,7 @@ if (`$normalizedBasePath -and -not `$normalizedBasePath.StartsWith("/")) {
 Yuchengtong web standalone deployment
 
 Build base path: $basePathValue
+Build id: $buildId
 Required Node.js: >=20.9.0. The current repository uses Next.js 16, so Node.js 18.6.0 on the server should be upgraded before running this bundle.
 
 Start command example:

@@ -4972,16 +4972,21 @@ body .material-symbols-outlined {
   font-weight: 900;
   letter-spacing: 0;
   line-height: 1;
+  white-space: nowrap;
 }
 
-.schedule-trip-time-block time sup {
-  display: inline-block;
-  margin-left: 4px;
+.schedule-trip-time-block time .schedule-trip-day-offset {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.18em;
   color: var(--yct-color-text-secondary);
-  font-size: 0.42em;
-  font-weight: 850;
+  font-size: 0.28em;
+  font-weight: 800;
   line-height: 1;
-  vertical-align: super;
+  white-space: nowrap;
+  transform: translateY(-1.25em);
+  transform-origin: left center;
+  vertical-align: baseline;
 }
 
 .schedule-trip-time-block small {
