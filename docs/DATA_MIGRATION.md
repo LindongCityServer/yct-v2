@@ -108,6 +108,7 @@
 - 地铁/有轨的 `coordinates.x/y` 只作为线网图坐标保存到 `diagramX/diagramY`，不等同于 Minecraft 世界坐标。
 - 地方铁路 `local_railway_data.js` 当前结构与地铁/有轨相近，但没有颜色、票价和运营方，导入时保留为空，不补假字段。
 - 客运 `ltcx/route.txt` 是按 `[班次]` 分块的班次文本。迁移时按“线路名 + 途径站”聚合为 `coach` 模式的 `TransitLine`，将多个发车时间保存到 `departureTimes`，同时保留 `firstLastBus`、`fare`、`operator`、`bookingUrl`。
+- 旧客运数据中的历史站名别名会统一规范化展示，例如 `临东站（SB站）` 会映射为 `临东站汽车客运枢纽站`；导入层和读取层都会兜底处理，避免线路概览、地图线路型 POI、班次卡片出现不同名称。
 - 客运大屏逐班次同样来自 `ltcx/route.txt`，但会通过 `parseLegacyCoachScreenTripSource` 保留 `tripId`、`departureTime`、`lineName`、`stationNames`、`fare`、`operator`、`bookingUrl` 和可选 `runtimeText`，避免大屏所需的班次粒度被线路聚合丢掉。
 - 客运 `ltcx/stop.txt` 是按 `[时段]` / `[原因]` 分块的公告文本。迁移为 `TransitServiceNotice`，保留 `periodText` 与 `reason`，能解析 `YYYY 年 M 月 D 日 HH:mm-HH:mm` 时生成 `startsAt` / `endsAt`。
 - 客运大屏 `station.txt` 是两行一组的 `站点编号 / 站名`；`tickets.txt` 和 `rttime.txt` 是 `[字段] 值` 分块文本。检票口按 `车站 + 线路` 匹配，运行时间按 `线路 + 区间` 匹配，`减价` 保留为文本，暂不在 YCT 内推导真实票价规则。

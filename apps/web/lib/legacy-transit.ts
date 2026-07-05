@@ -6,6 +6,7 @@ import type {
   TransitStationSnapshot,
 } from '@yct/contracts';
 import {
+  normalizeLegacyCoachStationName,
   parseLegacyCoachRouteSource,
   parseLegacyTransitSource,
   type LegacyTransitMode,
@@ -325,7 +326,9 @@ export function buildTransitOverview(
       line.stationSourceIds[line.stationSourceIds.length - 1] ?? '',
     );
     const stationNames = line.stationSourceIds
-      .map((stationSourceId) => stationById.get(stationSourceId)?.name)
+      .map((stationSourceId) =>
+        normalizeTransitStationName(line.mode, stationById.get(stationSourceId)?.name),
+      )
       .filter((stationName): stationName is string => Boolean(stationName));
     const stationStops = buildTransitLineStopSummaries(line, stationById);
 
@@ -343,8 +346,8 @@ export function buildTransitOverview(
       stopMetadataCount: countStopMetadata(line.stops),
       stationNames,
       stationStops,
-      firstStationName: firstStation?.name,
-      lastStationName: lastStation?.name,
+      firstStationName: normalizeTransitStationName(line.mode, firstStation?.name),
+      lastStationName: normalizeTransitStationName(line.mode, lastStation?.name),
       sourcePath: line.sourcePath,
     };
   });
@@ -370,7 +373,10 @@ function buildTransitLineStopSummaries(
 
   return stops
     .map((stop): TransitLineStopSummary | undefined => {
-      const stationName = stationById.get(stop.stationSourceId)?.name;
+      const stationName = normalizeTransitStationName(
+        line.mode,
+        stationById.get(stop.stationSourceId)?.name,
+      );
       if (!stationName) {
         return undefined;
       }
@@ -385,6 +391,17 @@ function buildTransitLineStopSummaries(
     })
     .filter((stop): stop is TransitLineStopSummary => Boolean(stop))
     .sort((left, right) => left.sequence - right.sequence);
+}
+
+function normalizeTransitStationName(
+  mode: LegacyTransitMode,
+  stationName: string | undefined,
+): string | undefined {
+  if (!stationName) {
+    return undefined;
+  }
+
+  return mode === 'coach' ? normalizeLegacyCoachStationName(stationName) : stationName;
 }
 
 function mergeAliases(left: string[], right: string[]): string[] {

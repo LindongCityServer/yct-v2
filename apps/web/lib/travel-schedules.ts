@@ -12,6 +12,7 @@ import type {
   TravelScheduleTimeScope,
   TravelTripInstance,
 } from '@yct/contracts';
+import { normalizeLegacyCoachStationName } from '@yct/legacy-import';
 import { createApiMeta } from './api-meta';
 import { readRuntimeConfig } from './runtime-config';
 import { readTransitScreenSnapshot } from './transit-screen';
@@ -212,7 +213,7 @@ function buildCoachTripInstances(
   const stationNameById = new Map(
     snapshot.stations.map((station) => [
       station.stationId,
-      normalizeCoachStationName(station.name),
+      normalizeLegacyCoachStationName(station.name),
     ]),
   );
   const gatesByLine = groupGatesByLine(snapshot.gates);
@@ -220,7 +221,7 @@ function buildCoachTripInstances(
 
   return snapshot.trips.map((trip) => {
     const gateText = formatGates(gatesByLine.get(trip.lineName) ?? [], stationNameById);
-    const stationNames = trip.stationNames.map(normalizeCoachStationName);
+    const stationNames = trip.stationNames.map(normalizeLegacyCoachStationName);
 
     return {
       tripInstanceId: trip.sourceId,
@@ -243,11 +244,6 @@ function buildCoachTripInstances(
       sourcePath: trip.sourcePath,
     };
   });
-}
-
-function normalizeCoachStationName(value: string): string {
-  const trimmed = value.trim();
-  return trimmed === '临东站（SB站）' ? '临东站汽车客运枢纽站' : trimmed;
 }
 
 async function readFlightTrips(

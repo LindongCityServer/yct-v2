@@ -174,8 +174,9 @@ https://yct.shangxiaoguan.top/v2/_next/static/...
 1. 云端是否仍在运行旧进程。用 `Get-NetTCPConnection -LocalPort 3300` 找到 PID，再确认对应命令行是否指向本次解压目录。
 2. 部署目录是否混有旧 `.next/static`。如果 `.next/server` 与 `.next/static` 来自不同构建，客户端 chunk 会随机新旧混用。
 3. 反向代理或 CDN 是否缓存了 HTML/RSC。临时测试阶段建议不要缓存 `/v2` 下的 HTML、RSC 和 API，只允许 `_next/static` 长缓存。
-4. 浏览器是否保留旧 Service Worker 或旧 `yct-*` Cache。生产包会继续注册 PWA；如果怀疑旧缓存，可以在浏览器开发者工具里 unregister 当前站点 Service Worker 并清理 Cache Storage 后重试。
-5. 是否按 `/v2` 构建但以根路径启动，或反过来。构建参数 `-BasePath v2`、启动参数 `-BasePath v2` 和宝塔反代路径必须一致。
+4. 应用会对 HTML、RSC 和 API 设置 `Cache-Control: no-store, max-age=0, must-revalidate`，但如果宝塔/Nginx 仍额外拼接 `max-age=43200` 一类规则，建议在反代层单独关闭 `/v2` 页面缓存，避免旧 HTML 引用已不存在的旧 chunk。
+5. 浏览器是否保留旧 Service Worker 或旧 `yct-*` Cache。生产包会继续注册 PWA；如果怀疑旧缓存，可以在浏览器开发者工具里 unregister 当前站点 Service Worker 并清理 Cache Storage 后重试。
+6. 是否按 `/v2` 构建但以根路径启动，或反过来。构建参数 `-BasePath v2`、启动参数 `-BasePath v2` 和宝塔反代路径必须一致。
 
 ### 端口无法监听
 

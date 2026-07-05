@@ -257,7 +257,10 @@ export function parseLegacyCoachRouteSource(input: {
   const lines = Array.from(groupedRoutes.values()).map((routes, index) => {
     const firstRoute = routes[0];
     const routeName = firstRoute?.routeName ?? `未命名客运线路 ${index + 1}`;
-    const stationNames = splitCoachStations(firstRoute?.viaText ?? routeName);
+    const stationNames = splitCoachStations(firstRoute?.viaText ?? routeName).map(
+      normalizeLegacyCoachStationName,
+    );
+    const normalizedViaText = stationNames.join(' - ');
     const stationSourceIds = stationNames.map((stationName) => {
       const stationId = buildLegacySourceId('coach-station', stationName);
       if (!stationMap.has(stationId)) {
@@ -279,7 +282,7 @@ export function parseLegacyCoachRouteSource(input: {
     return legacyTransitLineImportItemSchema.parse({
       sourceId: buildLegacySourceId(
         input.sourcePrefix ?? 'coach',
-        `${routeName}-${firstRoute?.viaText ?? ''}`,
+        `${routeName}-${normalizedViaText}`,
         index,
       ),
       mode: 'coach',
@@ -376,7 +379,7 @@ export function parseLegacyCoachScreenTripSource(input: {
         tripId: record.tripId,
         departureTime: normalizeCoachDepartureTime(record.departureTime ?? ''),
         lineName: record.routeName,
-        stationNames: splitCoachStations(record.viaText ?? ''),
+        stationNames: splitCoachStations(record.viaText ?? '').map(normalizeLegacyCoachStationName),
         fare: record.fare?.replace(/\s+/g, ''),
         operator: record.operator,
         bookingUrl: record.bookingUrl,
@@ -806,6 +809,19 @@ function splitCoachStations(value: string): string[] {
     .filter(Boolean);
 
   return stations.length > 0 ? stations : [value.trim()].filter(Boolean);
+}
+
+export function normalizeLegacyCoachStationName(value: string): string {
+  const normalized = value.trim().replace(/\s+/g, '');
+  if (
+    normalized === '临东站（SB站）' ||
+    normalized === '临东站(SB站)' ||
+    normalized === '临东站SB站'
+  ) {
+    return '临东站汽车客运枢纽站';
+  }
+
+  return value.trim();
 }
 
 function uniqueValues(values: Array<string | undefined>): string[] {
