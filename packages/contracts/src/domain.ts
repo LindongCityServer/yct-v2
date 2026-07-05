@@ -756,6 +756,13 @@ export interface UserLocalePreference {
   updatedAt: ISODateTimeString;
 }
 
+export interface UserMapFavorites {
+  userId: string;
+  ldpassUserId: string;
+  markerIds: string[];
+  updatedAt: ISODateTimeString;
+}
+
 export type PushDeviceSubscriptionStatus = 'active' | 'revoked';
 
 export interface PushDeviceSubscription {

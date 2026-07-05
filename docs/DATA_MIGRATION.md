@@ -43,7 +43,7 @@
 
 航班查询数据源当前可通过 `YCT_FLIGHT_DATA_URL` 配置，默认读取 `https://haojin.guanmu233.cn/data/flight_data.txt`。解析器按 `【航班号】〈航线备注〉«运行日»〔执飞机型〕『航空公司』《地点出发/经停/到达》{时间}#+天数#@位置@ ... §票价§《航班结束》` 结构读取，只纳入“临东金桦”起飞、经停、到达的航班，以及航空公司为“临东航空”的航班；其他航班不迁入 YCT 查询结果。当前运行时对外部航班源做短重试以缓解 `ECONNRESET` 等瞬时失败，但长期仍应迁入 YCT 后台数据源或稳定抓取快照。
 
-浏览器本地班次记录保存在 `yct.travelScheduleHistory.v1`，只记录统一班次查询结果快照和提醒关联时间，最多保留最近 50 条。它不能作为旧订单或新版票务订单迁移来源；当前登录同步只提交行程提醒快照，不同步班次记录。旧站 `orders` 只读导入的 `legacy_order` 提醒同步到账号前会先向用户确认，拒绝时仍可同步非旧站提醒；确认状态保存在本机 `yct.tripReminders.legacySyncConsentAt`，账号页可撤销本地同意。登录状态下撤销会通过 `/api/account/trip-reminders` 删除账号侧 `legacy_order` 提醒副本，成功后把本机旧站提醒标回待同步；细粒度去重、冲突策略和正式迁移文案仍待后续实现。
+浏览器本地班次记录保存在 `yct.travelScheduleHistory.v1`，只记录统一班次查询结果快照和提醒关联时间，最多保留最近 50 条。它不能作为旧订单或新版票务订单迁移来源；当前登录同步只提交行程提醒快照，不同步班次记录。地图收藏保存在 `yct.mapFavorites.v1`，登录用户进入账号页时会与 `/api/account/map-favorites` 的账号侧 markerId 列表做并集合并，并写回 `.yct-data/map-favorite-store.json`；它只同步 markerId，不复制地点快照，也不作为旧站订单迁移来源。旧站 `orders` 只读导入的 `legacy_order` 提醒同步到账号前会先向用户确认，拒绝时仍可同步非旧站提醒；确认状态保存在本机 `yct.tripReminders.legacySyncConsentAt`，账号页可撤销本地同意。登录状态下撤销会通过 `/api/account/trip-reminders` 删除账号侧 `legacy_order` 提醒副本，成功后把本机旧站提醒标回待同步；细粒度去重、冲突策略和正式迁移文案仍待后续实现。
 
 统一班次与票务平台重写后，旧客运 `ltcx` 文本需要同时进入新版 `ScheduleService`、`TripInstance`、`FareProduct` 和停运提醒模型。旧站订单只允许作为历史或提醒来源迁移，不能直接视为新版真实票务订单；轮渡、航班后续也应通过同一套导入/适配器接口进入查询订票平台。
 

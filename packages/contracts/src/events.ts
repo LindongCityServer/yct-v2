@@ -262,6 +262,13 @@ export interface EntityTranslationUpdatedPayload {
   updatedBy: string;
 }
 
+export interface MapFavoritesUpdatedPayload {
+  userId: string;
+  markerIds: string[];
+  updatedAt: ISODateTimeString;
+  source: 'account_settings' | 'map_action' | 'sync';
+}
+
 export interface LdpassUserLinkedPayload {
   yctUserLinkId: string;
   ldpassUserId: string;
@@ -430,6 +437,7 @@ export type YctEventPayloadMap = {
   LocalePreferenceUpdated: LocalePreferenceUpdatedPayload;
   TranslationCatalogPublished: TranslationCatalogPublishedPayload;
   EntityTranslationUpdated: EntityTranslationUpdatedPayload;
+  MapFavoritesUpdated: MapFavoritesUpdatedPayload;
   LdpassUserLinked: LdpassUserLinkedPayload;
   YctSessionStarted: YctSessionStartedPayload;
   YctSessionEnded: YctSessionEndedPayload;

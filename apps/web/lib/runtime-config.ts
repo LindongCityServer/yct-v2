@@ -21,6 +21,7 @@ export interface RuntimeConfig {
   offlinePackageStorePath: string;
   eventOutboxStorePath: string;
   localePreferenceStorePath: string;
+  mapFavoriteStorePath: string;
   notificationPreferenceStorePath: string;
   pushSubscriptionStorePath: string;
   pushDeliveryStorePath: string;
@@ -105,6 +106,9 @@ export function readRuntimeConfig(): RuntimeConfig {
     localePreferenceStorePath:
       emptyToUndefined(process.env.YCT_LOCALE_PREFERENCE_STORE_PATH) ??
       '.yct-data/locale-preference-store.json',
+    mapFavoriteStorePath:
+      emptyToUndefined(process.env.YCT_MAP_FAVORITE_STORE_PATH) ??
+      '.yct-data/map-favorite-store.json',
     notificationPreferenceStorePath:
       emptyToUndefined(process.env.YCT_NOTIFICATION_PREFERENCE_STORE_PATH) ??
       '.yct-data/notification-preference-store.json',

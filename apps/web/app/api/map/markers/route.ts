@@ -7,26 +7,40 @@ import { readPoiCategories } from '../../../../lib/poi-categories';
 import { listPublishedPublicPoiSubmissions } from '../../../../lib/poi-submission-store';
 import { readRuntimeConfig, type RuntimeConfig } from '../../../../lib/runtime-config';
 import { createTimedCache } from '../../../../lib/server-cache';
+import { readTransitOverview } from '../../../../lib/transit-data';
+import type { TransitOverview, TransitLineSummary } from '../../../../lib/legacy-transit';
 
 const providerMarkerSnapshotCache = createTimedCache<MapMarkerSnapshot>(60 * 1000);
 
 export async function GET() {
   const config = readRuntimeConfig();
   const iconBaseUrl = config.unminedMapBaseUrl;
-  const [categories, publishedPoiSubmissions, transitLinePoiMarkers] = await Promise.all([
-    readPoiCategories().catch(() => []),
-    listPublishedPublicPoiSubmissions(),
-    readTransitLinePoiMarkers().catch(() => []),
-  ]);
+  const [categories, publishedPoiSubmissions, transitLinePoiMarkers, transitOverview] =
+    await Promise.all([
+      readPoiCategories().catch(() => []),
+      listPublishedPublicPoiSubmissions(),
+      readTransitLinePoiMarkers().catch(() => []),
+      readTransitOverview().catch(() => null),
+    ]);
 
   try {
     const [staticSnapshot, playerSnapshot] = await Promise.all([
       readStaticMarkerSnapshot(config),
       readPlayerMarkerSnapshot(config),
     ]);
+    const resolvedTransitLineMarkers = resolveTransitLineMarkerCoordinates(
+      transitLinePoiMarkers,
+      transitOverview,
+      staticSnapshot,
+    );
     const snapshot = mergeMarkerSnapshots(staticSnapshot, playerSnapshot);
     const mergedSnapshot = normalizeMarkerSnapshotText(
-      mergeLocalMapMarkers(snapshot, publishedPoiSubmissions, categories, transitLinePoiMarkers),
+      mergeLocalMapMarkers(
+        snapshot,
+        publishedPoiSubmissions,
+        categories,
+        resolvedTransitLineMarkers,
+      ),
     );
 
     return NextResponse.json({
@@ -40,7 +54,7 @@ export async function GET() {
               : '实时玩家位置暂不可用。'
             : undefined,
           localPoiMessage(publishedPoiSubmissions.length),
-          transitLinePoiMessage(transitLinePoiMarkers.length),
+          transitLinePoiMessage(resolvedTransitLineMarkers.length),
         ]
           .filter(Boolean)
           .join(' '),
@@ -133,6 +147,152 @@ function mergeMarkerSnapshots(
     fetchedAt: new Date().toISOString(),
     markers: [...staticSnapshot.markers, ...(playerSnapshot?.markers ?? [])],
   };
+}
+
+function resolveTransitLineMarkerCoordinates(
+  markers: Marker[],
+  overview: TransitOverview | null,
+  markerSnapshot: MapMarkerSnapshot,
+): Marker[] {
+  if (!overview) {
+    return markers;
+  }
+
+  const lineById = new Map(overview.lines.map((line) => [line.id, line]));
+  const stationCoordinateIndex = buildStationCoordinateIndex(markerSnapshot.markers);
+
+  return markers.map((marker) => {
+    if (
+      marker.categoryId !== 'transit-line' ||
+      marker.geometry.type !== 'MultiPoint' ||
+      marker.geometry.coordinates.length > 1
+    ) {
+      return marker;
+    }
+
+    const lineId = marker.id.replace(/^transit-line-/, '');
+    const line = lineById.get(lineId);
+    if (!line) {
+      return marker;
+    }
+
+    const coordinates = dedupeCoordinates(
+      line.stationNames
+        .map((stationName) => findStationCoordinate(stationName, line, stationCoordinateIndex))
+        .filter((coordinate): coordinate is [number, number] => Boolean(coordinate)),
+    );
+
+    if (coordinates.length < 2) {
+      return marker;
+    }
+
+    return {
+      ...marker,
+      geometry: {
+        type: 'MultiPoint',
+        coordinates,
+      },
+      description: describeTransitLineCoordinates(marker.description, coordinates.length),
+    };
+  });
+}
+
+function buildStationCoordinateIndex(markers: Marker[]): Map<string, Marker[]> {
+  const index = new Map<string, Marker[]>();
+
+  for (const marker of markers) {
+    if (marker.geometry.type !== 'Point') {
+      continue;
+    }
+
+    const key = normalizeMarkerLabelText(marker.label);
+    if (!key) {
+      continue;
+    }
+
+    const group = index.get(key) ?? [];
+    group.push(marker);
+    index.set(key, group);
+  }
+
+  return index;
+}
+
+function findStationCoordinate(
+  stationName: string,
+  line: TransitLineSummary,
+  index: Map<string, Marker[]>,
+): [number, number] | undefined {
+  const candidates = index.get(normalizeMarkerLabelText(stationName)) ?? [];
+  const best = candidates
+    .filter(
+      (marker): marker is Marker & { geometry: Extract<Marker['geometry'], { type: 'Point' }> } =>
+        marker.geometry.type === 'Point',
+    )
+    .map((marker) => ({
+      marker,
+      score: getStationCoordinateScore(marker, line),
+    }))
+    .filter((candidate) => candidate.score > 0)
+    .sort((left, right) => right.score - left.score)[0];
+
+  return best?.marker.geometry.coordinates;
+}
+
+function getStationCoordinateScore(
+  marker: Marker & { geometry: Extract<Marker['geometry'], { type: 'Point' }> },
+  line: TransitLineSummary,
+): number {
+  const categoryId = marker.categoryId?.toLowerCase() ?? '';
+  const iconBaseName = getMarkerIconBaseName(marker.iconFileName);
+  const source = `${categoryId} ${iconBaseName}`;
+
+  if (line.mode === 'metro' && source.includes('metro')) {
+    return 100;
+  }
+
+  if (line.mode === 'tram' && (source.includes('tram') || source.includes('rail'))) {
+    return 95;
+  }
+
+  if (line.mode === 'bus' && (source.includes('bus') || source.includes('stop'))) {
+    return 90;
+  }
+
+  if (line.mode === 'coach' && (source.includes('coach') || source.includes('bus'))) {
+    return 90;
+  }
+
+  if (line.mode === 'railway' && (source.includes('railway') || source.includes('station'))) {
+    return 90;
+  }
+
+  if (source.includes('station') || source.includes('stop')) {
+    return 60;
+  }
+
+  if (categoryId === 'road' || iconBaseName === 'road' || iconBaseName === 'roadpoint') {
+    return 0;
+  }
+
+  return 20;
+}
+
+function describeTransitLineCoordinates(
+  description: string | undefined,
+  coordinateCount: number,
+): string {
+  const coordinateText = `站点坐标直连 ${coordinateCount} 个点`;
+  if (!description) {
+    return coordinateText;
+  }
+
+  const parts = description.split(' · ');
+  if (parts.length >= 3) {
+    return [...parts.slice(0, 2), coordinateText].join(' · ');
+  }
+
+  return `${description} · ${coordinateText}`;
 }
 
 function groupRoadEndpointMarkers(snapshot: MapMarkerSnapshot): MapMarkerSnapshot {

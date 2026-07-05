@@ -55,6 +55,7 @@ export interface YctDomainEvent<TType extends string, TPayload> {
 | `LocalePreferenceUpdated`             | 用户语言偏好更新              | 账号偏好同步、前端缓存刷新；`locale` 可为 `system`，`resolvedLocale` 才是实际语言                                                       |
 | `TranslationCatalogPublished`         | 固定界面文案目录发布          | UI 文案缓存刷新、构建或运行时翻译目录索引刷新                                                                                           |
 | `EntityTranslationUpdated`            | 业务实体译名或别名更新        | 地图、线路、服务入口、运营内容的搜索索引刷新和管理员审计；不得由机器翻译直接发布公开译名                                               |
+| `MapFavoritesUpdated`                 | 用户地图收藏列表更新          | 账号侧收藏同步、搜索/推荐缓存刷新和审计；payload 只包含 markerId，不复制地点快照                                                       |
 | `TravelSchedulePublished`             | 统一班次版本发布              | 班次查询缓存、搜索索引、管理员审计                                                                                                     |
 | `TravelScheduleServiceProfileUpdated` | 可排班服务配置更新            | 客运大巴、轮渡、航班等统一班次服务的颜色、图标、排序缓存刷新和管理员审计                                                               |
 | `TicketInventoryHeld`                 | 票务库存或可售容量被占用      | 占座超时、订单草稿刷新                                                                                                                 |

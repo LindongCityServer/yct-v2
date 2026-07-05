@@ -54,6 +54,7 @@ import { appPath } from '../lib/app-paths';
 import {
   clearMapFavoriteMarkers,
   readMapFavoriteState,
+  syncMapFavoritesWithAccount,
   type MapFavoriteState,
 } from '../lib/client-map-favorites';
 import {
@@ -352,6 +353,12 @@ export function AccountSettingsPanel({
             source: 'server',
           });
           setLocaleStatusText(formatLocaleStatus(preference));
+        })
+        .catch(() => undefined);
+
+      void syncMapFavoritesWithAccount()
+        .then((state) => {
+          setMapFavoriteSummary(state.summary);
         })
         .catch(() => undefined);
 

@@ -103,8 +103,13 @@ export const mapMarkerSourceConfigSchema = z.object({
   kind: z.enum(['bdslm', 'static-json', 'custom']),
 });
 
+export const mapFavoritesSchema = z.object({
+  markerIds: z.array(z.string().trim().min(1).max(220)).max(1000),
+});
+
 export type TileProviderConfigInput = z.infer<typeof tileProviderConfigSchema>;
 export type PoiCategoryInput = z.infer<typeof poiCategorySchema>;
 export type PoiSubmissionInput = z.infer<typeof poiSubmissionSchema>;
 export type PoiSubmissionReviewDecisionInput = z.infer<typeof poiSubmissionReviewDecisionSchema>;
 export type MapMarkerSourceConfigInput = z.infer<typeof mapMarkerSourceConfigSchema>;
+export type MapFavoritesInput = z.infer<typeof mapFavoritesSchema>;

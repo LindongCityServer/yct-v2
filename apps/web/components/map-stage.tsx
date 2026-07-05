@@ -11,7 +11,6 @@ import type {
   CSSProperties,
   FormEvent,
   PointerEvent as ReactPointerEvent,
-  WheelEvent,
 } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
@@ -439,6 +438,7 @@ export function MapStage() {
     zoom: mapDefaults.defaultZoom,
   });
   const mapViewRef = useRef<MapView>(mapView);
+  const viewportSizeRef = useRef<ViewportSize>(viewportSize);
   const [poiTitle, setPoiTitle] = useState('');
   const [poiCategoryId, setPoiCategoryId] = useState('');
   const [poiDescription, setPoiDescription] = useState('');
@@ -477,6 +477,47 @@ export function MapStage() {
   useEffect(() => {
     mapViewRef.current = mapView;
   }, [mapView]);
+
+  useEffect(() => {
+    viewportSizeRef.current = viewportSize;
+  }, [viewportSize]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) {
+      return undefined;
+    }
+
+    const handleNativeWheel = (event: globalThis.WheelEvent) => {
+      event.preventDefault();
+      const currentView = mapViewRef.current;
+      const currentSize = viewportSizeRef.current;
+      const zoomDelta = clamp(-event.deltaY / 320, -0.5, 0.5);
+      const nextZoom = clampZoom(currentView.zoom + zoomDelta);
+      if (nextZoom === currentView.zoom) {
+        return;
+      }
+
+      const rect = viewport.getBoundingClientRect();
+      const before = screenToWorld(
+        event.clientX - rect.left,
+        event.clientY - rect.top,
+        currentView,
+        currentSize,
+      );
+      const nextScale = getScale(nextZoom);
+      setMapView({
+        zoom: nextZoom,
+        centerX: before.x - (event.clientX - rect.left - currentSize.width / 2) / nextScale,
+        centerZ: before.z - (event.clientY - rect.top - currentSize.height / 2) / nextScale,
+      });
+    };
+
+    viewport.addEventListener('wheel', handleNativeWheel, { passive: false });
+    return () => {
+      viewport.removeEventListener('wheel', handleNativeWheel);
+    };
+  }, []);
 
   useEffect(() => {
     setFavoriteMarkerIds(new Set(readMapFavoriteMarkerIds()));
@@ -1384,29 +1425,6 @@ export function MapStage() {
     );
   };
 
-  const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const zoomDelta = clamp(-event.deltaY / 320, -0.5, 0.5);
-    const nextZoom = clampZoom(mapView.zoom + zoomDelta);
-    if (nextZoom === mapView.zoom) {
-      return;
-    }
-
-    const rect = event.currentTarget.getBoundingClientRect();
-    const before = screenToWorld(
-      event.clientX - rect.left,
-      event.clientY - rect.top,
-      mapView,
-      viewportSize,
-    );
-    const nextScale = getScale(nextZoom);
-    setMapView({
-      zoom: nextZoom,
-      centerX: before.x - (event.clientX - rect.left - viewportSize.width / 2) / nextScale,
-      centerZ: before.z - (event.clientY - rect.top - viewportSize.height / 2) / nextScale,
-    });
-  };
-
   const submitPoi = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPoiSubmitStatus('');
@@ -1683,7 +1701,7 @@ export function MapStage() {
     visibleProjectedTransitTraces.length > 0;
 
   return (
-    <section className="map-stage" aria-labelledby="map-title">
+    <section className={`map-stage is-mode-${browseMode}`} aria-labelledby="map-title">
       <h1 id="map-title" className="sr-only">
         地图探索
       </h1>
@@ -2069,7 +2087,6 @@ export function MapStage() {
         onPointerCancel={handlePointerUp}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerLeave}
-        onWheel={handleWheel}
       >
         {visibleTiles ? (
           <div className="unmined-tile-stack" aria-hidden="true">
@@ -2667,7 +2684,7 @@ function TraceLayerView({
         } as CSSProperties
       }
     >
-      <path className={pathClassName} d={trace.path}>
+      <path className={pathClassName} d={trace.path} style={{ stroke: trace.accentColor }}>
         <title>{title}</title>
       </path>
     </svg>
