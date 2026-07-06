@@ -3154,6 +3154,7 @@ function buildRoutePlanOptions(input: {
   const endpointAccessDistance = getRouteEndpointAccessDistance(draft);
   const directDistance = directCoreDistance + endpointAccessDistance;
   const routeOptionLimit = getRouteOptionLimit(input.enabledModes);
+  const roadGraph = buildRoadRouteGraph(input.roadMarkers);
 
   if (input.enabledModes.walk) {
     const directMinutes = estimateRouteMinutes(directDistance, 72);
@@ -3185,13 +3186,13 @@ function buildRoutePlanOptions(input: {
       note: '当前为直线步行估算；道路级导航发布后会改为沿道路、出入口和可通行规则规划。',
     });
 
-    const roadAssistedWalkOption = buildRoadAssistedWalkOption(draft, input.roadMarkers);
+    const roadAssistedWalkOption = buildRoadAssistedWalkOption(draft, roadGraph);
     if (roadAssistedWalkOption) {
       options.push(roadAssistedWalkOption);
     }
   }
 
-  options.push(...buildTransitRoutePlanOptions({ ...input, draft }));
+  options.push(...buildTransitRoutePlanOptions({ ...input, draft, roadGraph }));
 
   return options
     .sort(
@@ -3419,9 +3420,8 @@ function getRouteStepMarkerText(step: RoutePlanStep): string {
 
 function buildRoadAssistedWalkOption(
   draft: RoutePlanDraft,
-  roadMarkers: EndpointGroupMarker[],
+  graph: RoadRouteGraph | undefined,
 ): RoutePlanOption | undefined {
-  const graph = buildRoadRouteGraph(roadMarkers);
   if (!graph || graph.nodes.length < 2) {
     return undefined;
   }
@@ -3686,6 +3686,7 @@ function buildTransitRoutePlanOptions(input: {
   enabledModes: EnabledRouteTransportModes;
   modeProfiles: TransitModeProfileForMap[];
   pointMarkers: PointMarker[];
+  roadGraph?: RoadRouteGraph;
   transitLines: TransitOverviewLine[];
 }): RoutePlanOption[] {
   const profileByMode = new Map(input.modeProfiles.map((profile) => [profile.mode, profile]));
@@ -3728,9 +3729,9 @@ function buildTransitRoutePlanOptions(input: {
   }
 
   const directOptions = lineCandidates
-    .map((candidate) => buildDirectTransitLineOption(candidate, input.draft))
+    .map((candidate) => buildDirectTransitLineOption(candidate, input.draft, input.roadGraph))
     .filter((option): option is RoutePlanOption => Boolean(option));
-  const transferOptions = buildTransferTransitLineOptions(lineCandidates, input.draft);
+  const transferOptions = buildTransferTransitLineOptions(lineCandidates, input.draft, input.roadGraph);
 
   return [...directOptions, ...transferOptions]
     .sort(
@@ -3745,6 +3746,7 @@ function buildTransitRoutePlanOptions(input: {
 function buildDirectTransitLineOption(
   candidate: TransitLineDirectionCandidate,
   draft: RoutePlanDraft,
+  roadGraph?: RoadRouteGraph,
 ): RoutePlanOption | undefined {
   const originStop = findNearestRouteLineStop(draft.origin, candidate.stops);
   const destinationStop = findNearestRouteLineStop(draft.destination, candidate.stops);
@@ -3759,7 +3761,8 @@ function buildDirectTransitLineOption(
   const accessDistance = getCoordinateDistance(draft.origin, originStop.center);
   const egressDistance = getCoordinateDistance(draft.destination, destinationStop.center);
   const endpointAccessDistance = getRouteEndpointAccessDistance(draft);
-  const transitDistance = getTransitSegmentDistance(segmentStops);
+  const transitRoute = buildTransitSegmentRoute(segmentStops, candidate.mode.mode, roadGraph);
+  const transitDistance = transitRoute.distance;
   const accessMinutes = estimateRouteMinutes(accessDistance, 72);
   const egressMinutes = estimateRouteMinutes(egressDistance, 72);
   const endpointAccessMinutes = estimateRouteMinutes(endpointAccessDistance, 72);
@@ -3772,7 +3775,7 @@ function buildDirectTransitLineOption(
   const stationSpan = Math.max(1, destinationStop.index - originStop.index);
   const coordinates = buildRouteTraceCoordinates(draft, [
     draft.origin,
-    ...segmentStops.map((stop) => stop.center),
+    ...transitRoute.coordinates,
     draft.destination,
   ]);
   const traceSegments = compactRouteTraceSegments([
@@ -3783,7 +3786,7 @@ function buildDirectTransitLineOption(
     ]),
     createRouteTraceSegment(
       'transit',
-      segmentStops.map((stop) => stop.center),
+      transitRoute.coordinates,
       candidate.color,
     ),
     createRouteTraceSegment('walk', [
@@ -3839,13 +3842,14 @@ function buildDirectTransitLineOption(
       ...createRouteEndpointAccessSteps(draft, 'destination'),
       createRoutePlaceStep(`到达 ${draft.destinationLabel}`, 'destination'),
     ],
-    note: '已按真实线路站序生成候选；站间耗时优先使用旧数据 travelTime，缺失时仍按距离估算。',
+    note: getTransitRoutePlanNote(candidate.mode.mode, transitRoute.usesRoadGraph),
   };
 }
 
 function buildTransferTransitLineOptions(
   candidates: TransitLineDirectionCandidate[],
   draft: RoutePlanDraft,
+  roadGraph?: RoadRouteGraph,
 ): RoutePlanOption[] {
   const originCandidates = candidates
     .map((candidate) => ({
@@ -3920,8 +3924,18 @@ function buildTransferTransitLineOptions(
         draft.destination,
         destinationCandidate.destinationStop.center,
       );
-      const firstTransitDistance = getTransitSegmentDistance(firstSegment);
-      const secondTransitDistance = getTransitSegmentDistance(secondSegment);
+      const firstTransitRoute = buildTransitSegmentRoute(
+        firstSegment,
+        originCandidate.candidate.mode.mode,
+        roadGraph,
+      );
+      const secondTransitRoute = buildTransitSegmentRoute(
+        secondSegment,
+        destinationCandidate.candidate.mode.mode,
+        roadGraph,
+      );
+      const firstTransitDistance = firstTransitRoute.distance;
+      const secondTransitDistance = secondTransitRoute.distance;
       const endpointAccessDistance = getRouteEndpointAccessDistance(draft);
       const transferDistance =
         transfer.fromStop.marker.id === transfer.toStop.marker.id
@@ -3946,6 +3960,9 @@ function buildTransferTransitLineOptions(
         1,
         destinationCandidate.destinationStop.index - transfer.toStop.index,
       );
+      const noteMode = shouldUseRoadGraphForTransitMode(originCandidate.candidate.mode.mode)
+        ? originCandidate.candidate.mode.mode
+        : destinationCandidate.candidate.mode.mode;
       const estimatedMinutes =
         endpointAccessMinutes +
         accessMinutes +
@@ -3956,9 +3973,9 @@ function buildTransferTransitLineOptions(
         4;
       const coordinates = buildRouteTraceCoordinates(draft, [
         draft.origin,
-        ...firstSegment.map((stop) => stop.center),
+        ...firstTransitRoute.coordinates,
         transfer.toStop.center,
-        ...secondSegment.slice(1).map((stop) => stop.center),
+        ...secondTransitRoute.coordinates,
         draft.destination,
       ]);
       const traceSegments = compactRouteTraceSegments([
@@ -3969,13 +3986,13 @@ function buildTransferTransitLineOptions(
         ]),
         createRouteTraceSegment(
           'transit',
-          firstSegment.map((stop) => stop.center),
+          firstTransitRoute.coordinates,
           originCandidate.candidate.color,
         ),
         createRouteTraceSegment('transfer', [transfer.fromStop.center, transfer.toStop.center]),
         createRouteTraceSegment(
           'transit',
-          secondSegment.map((stop) => stop.center),
+          secondTransitRoute.coordinates,
           destinationCandidate.candidate.color,
         ),
         createRouteTraceSegment('walk', [
@@ -4058,7 +4075,11 @@ function buildTransferTransitLineOptions(
           ...createRouteEndpointAccessSteps(draft, 'destination'),
           createRoutePlaceStep(`到达 ${draft.destinationLabel}`, 'destination'),
         ],
-        note: '已按真实线路站序组合一次换乘候选；换乘距离和缺失站间耗时仍为估算。',
+        note: getTransitRoutePlanNote(
+          noteMode,
+          firstTransitRoute.usesRoadGraph || secondTransitRoute.usesRoadGraph,
+          '已按真实线路站序组合一次换乘候选；换乘距离和缺失站间耗时仍为估算。',
+        ),
       });
     }
   }
@@ -4133,6 +4154,113 @@ function findTransferStopPair(input: {
         left.toStop.index -
         (right.fromStop.index + right.toStop.index),
     )[0];
+}
+
+function buildTransitSegmentRoute(
+  stops: TransitRouteStop[],
+  mode: RouteTransportMode,
+  roadGraph?: RoadRouteGraph,
+): { coordinates: Array<[number, number]>; distance: number; usesRoadGraph: boolean } {
+  if (stops.length < 2) {
+    return {
+      coordinates: stops.map((stop) => stop.center),
+      distance: 0,
+      usesRoadGraph: false,
+    };
+  }
+
+  if (!shouldUseRoadGraphForTransitMode(mode) || !roadGraph) {
+    return {
+      coordinates: stops.map((stop) => stop.center),
+      distance: getTransitSegmentDistance(stops),
+      usesRoadGraph: false,
+    };
+  }
+
+  const coordinates: Array<[number, number]> = [];
+  let distance = 0;
+  let usesRoadGraph = false;
+
+  for (let index = 1; index < stops.length; index += 1) {
+    const previous = stops[index - 1];
+    const current = stops[index];
+    if (!previous || !current) {
+      continue;
+    }
+
+    const roadSegment = findRoadRouteBetweenCoordinates(previous.center, current.center, roadGraph);
+    const segmentCoordinates = roadSegment?.coordinates ?? [previous.center, current.center];
+    appendRouteSegmentCoordinates(coordinates, segmentCoordinates);
+    distance += roadSegment?.distance ?? getCoordinateDistance(previous.center, current.center);
+    usesRoadGraph ||= Boolean(roadSegment);
+  }
+
+  return {
+    coordinates: dedupeConsecutiveCoordinates(coordinates),
+    distance,
+    usesRoadGraph,
+  };
+}
+
+function shouldUseRoadGraphForTransitMode(mode: RouteTransportMode): boolean {
+  return mode === 'bus' || mode === 'coach';
+}
+
+function findRoadRouteBetweenCoordinates(
+  origin: [number, number],
+  destination: [number, number],
+  graph: RoadRouteGraph,
+): { coordinates: Array<[number, number]>; distance: number } | undefined {
+  const originRoadNode = findNearestRoadRouteNode(origin, graph.nodes);
+  const destinationRoadNode = findNearestRoadRouteNode(destination, graph.nodes);
+  if (!originRoadNode || !destinationRoadNode || originRoadNode.id === destinationRoadNode.id) {
+    return undefined;
+  }
+
+  const roadPath = findRoadRoutePath(graph, originRoadNode.id, destinationRoadNode.id);
+  if (!roadPath || roadPath.nodes.length < 2) {
+    return undefined;
+  }
+
+  const accessDistance = getCoordinateDistance(origin, originRoadNode.coordinate);
+  const egressDistance = getCoordinateDistance(destinationRoadNode.coordinate, destination);
+  return {
+    coordinates: dedupeConsecutiveCoordinates([
+      origin,
+      originRoadNode.coordinate,
+      ...roadPath.nodes.map((node) => node.coordinate),
+      destinationRoadNode.coordinate,
+      destination,
+    ]),
+    distance: accessDistance + roadPath.distance + egressDistance,
+  };
+}
+
+function appendRouteSegmentCoordinates(
+  target: Array<[number, number]>,
+  coordinates: Array<[number, number]>,
+) {
+  for (const coordinate of coordinates) {
+    const previous = target.at(-1);
+    if (previous && previous[0] === coordinate[0] && previous[1] === coordinate[1]) {
+      continue;
+    }
+    target.push(coordinate);
+  }
+}
+
+function getTransitRoutePlanNote(
+  mode: RouteTransportMode,
+  usesRoadGraph: boolean,
+  fallbackNote = '已按真实线路站序生成候选；站间耗时优先使用旧数据 travelTime，缺失时仍按距离估算。',
+): string {
+  if (!shouldUseRoadGraphForTransitMode(mode)) {
+    return fallbackNote;
+  }
+
+  return usesRoadGraph
+    ? '公交/客运站间已优先沿旧地图道路端点图生成，并按 50 格规则连通相邻道路；无法连通的片段回退为直线估算。站间耗时优先使用旧数据 travelTime。'
+    : '已尝试使用旧地图道路端点图生成公交/客运站间路径；当前路网缺失或不连通的片段仍按直线估算。站间耗时优先使用旧数据 travelTime。';
 }
 
 function getTransitSegmentDistance(stops: TransitRouteStop[]): number {
