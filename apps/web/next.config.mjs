@@ -10,6 +10,33 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_YCT_BASE_PATH: normalizedBasePath,
   },
+  async headers() {
+    const serviceWorkerHeaders = [
+      {
+        key: 'Cache-Control',
+        value: 'no-store, max-age=0, must-revalidate',
+      },
+      {
+        key: 'Pragma',
+        value: 'no-cache',
+      },
+      {
+        key: 'Expires',
+        value: '0',
+      },
+    ];
+
+    return [
+      {
+        source: '/sw.js',
+        headers: serviceWorkerHeaders,
+      },
+      {
+        source: '/:path*/sw.js',
+        headers: serviceWorkerHeaders,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
