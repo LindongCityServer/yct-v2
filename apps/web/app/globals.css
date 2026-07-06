@@ -2519,15 +2519,20 @@ body .material-symbols-outlined {
   place-items: center;
   width: 76px;
   aspect-ratio: 4 / 3;
+  overflow: hidden;
   border-radius: var(--yct-radius-md);
   background: var(--yct-color-surface-muted);
-  background-position: center;
-  background-size: cover;
   color: color-mix(in srgb, var(--yct-color-text) 54%, transparent);
 }
 
 .feed-item-cover.has-image {
   background-color: var(--yct-color-surface-muted);
+}
+
+.feed-item-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .feed-item-copy {

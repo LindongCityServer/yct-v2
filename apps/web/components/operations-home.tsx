@@ -149,7 +149,15 @@ function FeedList({ items }: Readonly<{ items: OperationsFeedItem[] }>) {
             aria-hidden="true"
             style={buildFeedCoverStyle(item)}
           >
-            {item.coverImageUrl ? null : (
+            {item.coverImageUrl ? (
+              <img
+                src={appPath(item.coverImageUrl)}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                fetchPriority="low"
+              />
+            ) : (
               <span className="material-symbols-outlined">
                 {item.coverColor ? 'article' : 'image'}
               </span>
@@ -173,10 +181,6 @@ function FeedList({ items }: Readonly<{ items: OperationsFeedItem[] }>) {
 }
 
 function buildFeedCoverStyle(item: OperationsFeedItem): CSSProperties | undefined {
-  if (item.coverImageUrl) {
-    return { backgroundImage: `url("${appPath(item.coverImageUrl)}")` };
-  }
-
   if (item.coverColor) {
     return { backgroundColor: item.coverColor };
   }
