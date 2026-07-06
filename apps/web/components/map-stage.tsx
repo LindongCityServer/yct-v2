@@ -369,6 +369,18 @@ interface RoadAccessCandidate {
   startNodeId: string;
 }
 
+interface RoutePlanningCache {
+  accessCandidatesByPair: Map<string, RoadAccessCandidate[]>;
+  pathByNodePair: Map<string, RoadRoutePath | undefined>;
+  roadRouteByPair: Map<string, ResolvedRoadRoute | null>;
+}
+
+interface ResolvedRoadRoute {
+  coordinates: Array<[number, number]>;
+  details: RoutePlanStepDetail[];
+  distance: number;
+}
+
 interface SecondaryPoiLink {
   childLabel: string;
   marker: PointMarker;
@@ -3367,12 +3379,14 @@ function buildRoutePlanOptions(input: {
   const endpointAccessDistance = getRouteEndpointAccessDistance(draft);
   const routeOptionLimit = getRouteOptionLimit(input.enabledModes);
   const roadGraph = input.roadGraph;
+  const routeCache = createRoutePlanningCache();
 
   if (input.enabledModes.walk) {
     const directWalkRoute = buildWalkRouteBetweenCoordinates(
       draft.origin,
       draft.destination,
       roadGraph,
+      routeCache,
     );
     const directDistance = directWalkRoute.distance + endpointAccessDistance;
     const directMinutes = estimateRouteMinutes(directDistance, 72);
@@ -3412,7 +3426,7 @@ function buildRoutePlanOptions(input: {
     });
   }
 
-  options.push(...buildTransitRoutePlanOptions({ ...input, draft, roadGraph }));
+  options.push(...buildTransitRoutePlanOptions({ ...input, draft, roadGraph, routeCache }));
 
   return options
     .sort(
@@ -3422,6 +3436,14 @@ function buildRoutePlanOptions(input: {
         left.title.localeCompare(right.title, 'zh-CN'),
     )
     .slice(0, routeOptionLimit);
+}
+
+function createRoutePlanningCache(): RoutePlanningCache {
+  return {
+    accessCandidatesByPair: new Map(),
+    pathByNodePair: new Map(),
+    roadRouteByPair: new Map(),
+  };
 }
 
 function getRouteOptionLimit(enabledModes: EnabledRouteTransportModes): number {
@@ -4172,11 +4194,14 @@ function buildRoadRouteStepDetails(
     const lastGroup = groups.at(-1);
     if (
       lastGroup &&
-      lastGroup.kind === segment.kind &&
       lastGroup.label === segment.label &&
-      segment.kind === 'road'
+      (
+        (lastGroup.kind === 'road' && segment.kind === 'road') ||
+        (lastGroup.kind === 'connection' && segment.kind === 'road')
+      )
     ) {
       lastGroup.distance += distance;
+      lastGroup.kind = 'road';
       lastGroup.vector = vector;
     } else {
       groups.push({
@@ -4221,6 +4246,7 @@ function buildWalkRouteBetweenCoordinates(
   origin: [number, number],
   destination: [number, number],
   roadGraph?: RoadRouteGraph,
+  routeCache?: RoutePlanningCache,
 ): {
   coordinates: Array<[number, number]>;
   details: RoutePlanStepDetail[];
@@ -4228,7 +4254,7 @@ function buildWalkRouteBetweenCoordinates(
   usesRoadGraph: boolean;
 } {
   const roadRoute = roadGraph
-    ? findRoadRouteBetweenCoordinates(origin, destination, roadGraph)
+    ? findRoadRouteBetweenCoordinates(origin, destination, roadGraph, routeCache)
     : undefined;
   if (roadRoute) {
     return {
@@ -4338,6 +4364,7 @@ function buildTransitRoutePlanOptions(input: {
   modeProfiles: TransitModeProfileForMap[];
   pointMarkers: PointMarker[];
   roadGraph?: RoadRouteGraph;
+  routeCache: RoutePlanningCache;
   transitLines: TransitOverviewLine[];
 }): RoutePlanOption[] {
   const profileByMode = new Map(input.modeProfiles.map((profile) => [profile.mode, profile]));
@@ -4384,9 +4411,21 @@ function buildTransitRoutePlanOptions(input: {
   }
 
   const directOptions = lineCandidates
-    .map((candidate) => buildDirectTransitLineOption(candidate, input.draft, input.roadGraph))
+    .map((candidate) =>
+      buildDirectTransitLineOption(
+        candidate,
+        input.draft,
+        input.roadGraph,
+        input.routeCache,
+      ),
+    )
     .filter((option): option is RoutePlanOption => Boolean(option));
-  const transferOptions = buildTransferTransitLineOptions(lineCandidates, input.draft, input.roadGraph);
+  const transferOptions = buildTransferTransitLineOptions(
+    lineCandidates,
+    input.draft,
+    input.roadGraph,
+    input.routeCache,
+  );
 
   return [...directOptions, ...transferOptions]
     .sort(
@@ -4402,6 +4441,7 @@ function buildDirectTransitLineOption(
   candidate: TransitLineDirectionCandidate,
   draft: RoutePlanDraft,
   roadGraph?: RoadRouteGraph,
+  routeCache?: RoutePlanningCache,
 ): RoutePlanOption | undefined {
   const originStop = findNearestRouteLineStop(draft.origin, candidate.stops);
   const destinationStop = findNearestRouteLineStop(draft.destination, candidate.stops);
@@ -4413,12 +4453,27 @@ function buildDirectTransitLineOption(
   }
 
   const segmentStops = candidate.stops.slice(originStop.index, destinationStop.index + 1);
-  const accessRoute = buildWalkRouteBetweenCoordinates(draft.origin, originStop.center, roadGraph);
-  const egressRoute = buildWalkRouteBetweenCoordinates(destinationStop.center, draft.destination, roadGraph);
+  const accessRoute = buildWalkRouteBetweenCoordinates(
+    draft.origin,
+    originStop.center,
+    roadGraph,
+    routeCache,
+  );
+  const egressRoute = buildWalkRouteBetweenCoordinates(
+    destinationStop.center,
+    draft.destination,
+    roadGraph,
+    routeCache,
+  );
   const accessDistance = accessRoute.distance;
   const egressDistance = egressRoute.distance;
   const endpointAccessDistance = getRouteEndpointAccessDistance(draft);
-  const transitRoute = buildTransitSegmentRoute(segmentStops, candidate.mode.mode, roadGraph);
+  const transitRoute = buildTransitSegmentRoute(
+    segmentStops,
+    candidate.mode.mode,
+    roadGraph,
+    routeCache,
+  );
   const transitDistance = transitRoute.distance;
   const accessMinutes = estimateRouteMinutes(accessDistance, 72);
   const egressMinutes = estimateRouteMinutes(egressDistance, 72);
@@ -4512,6 +4567,7 @@ function buildTransferTransitLineOptions(
   candidates: TransitLineDirectionCandidate[],
   draft: RoutePlanDraft,
   roadGraph?: RoadRouteGraph,
+  routeCache?: RoutePlanningCache,
 ): RoutePlanOption[] {
   const originCandidates = candidates
     .map((candidate) => ({
@@ -4585,16 +4641,19 @@ function buildTransferTransitLineOptions(
         draft.origin,
         originCandidate.originStop.center,
         roadGraph,
+        routeCache,
       );
       const egressRoute = buildWalkRouteBetweenCoordinates(
         destinationCandidate.destinationStop.center,
         draft.destination,
         roadGraph,
+        routeCache,
       );
       const transferRoute = buildWalkRouteBetweenCoordinates(
         transfer.fromStop.center,
         transfer.toStop.center,
         roadGraph,
+        routeCache,
       );
       const accessDistance = accessRoute.distance;
       const egressDistance = egressRoute.distance;
@@ -4602,11 +4661,13 @@ function buildTransferTransitLineOptions(
         firstSegment,
         originCandidate.candidate.mode.mode,
         roadGraph,
+        routeCache,
       );
       const secondTransitRoute = buildTransitSegmentRoute(
         secondSegment,
         destinationCandidate.candidate.mode.mode,
         roadGraph,
+        routeCache,
       );
       const firstTransitDistance = firstTransitRoute.distance;
       const secondTransitDistance = secondTransitRoute.distance;
@@ -4881,6 +4942,7 @@ function buildTransitSegmentRoute(
   stops: TransitRouteStop[],
   mode: RouteTransportMode,
   roadGraph?: RoadRouteGraph,
+  routeCache?: RoutePlanningCache,
 ): { coordinates: Array<[number, number]>; distance: number; usesRoadGraph: boolean } {
   if (stops.length < 2) {
     return {
@@ -4909,7 +4971,12 @@ function buildTransitSegmentRoute(
       continue;
     }
 
-    const roadSegment = findRoadRouteBetweenCoordinates(previous.center, current.center, roadGraph);
+    const roadSegment = findRoadRouteBetweenCoordinates(
+      previous.center,
+      current.center,
+      roadGraph,
+      routeCache,
+    );
     const segmentCoordinates = roadSegment?.coordinates ?? [previous.center, current.center];
     appendRouteSegmentCoordinates(coordinates, segmentCoordinates);
     distance += roadSegment?.distance ?? getCoordinateDistance(previous.center, current.center);
@@ -4931,25 +4998,33 @@ function findRoadRouteBetweenCoordinates(
   origin: [number, number],
   destination: [number, number],
   graph: RoadRouteGraph,
-): {
-  coordinates: Array<[number, number]>;
-  details: RoutePlanStepDetail[];
-  distance: number;
-} | undefined {
-  const originAccessCandidates = findRoadAccessCandidates(origin, destination, graph);
-  const destinationAccessCandidates = findRoadAccessCandidates(destination, origin, graph);
+  routeCache?: RoutePlanningCache,
+): ResolvedRoadRoute | undefined {
+  const routeCacheKey = getRoadRouteCacheKey(origin, destination);
+  const cachedRoute = routeCache?.roadRouteByPair.get(routeCacheKey);
+  if (cachedRoute !== undefined) {
+    return cachedRoute ?? undefined;
+  }
+
+  const originAccessCandidates = findRoadAccessCandidates(
+    origin,
+    destination,
+    graph,
+    routeCache,
+  );
+  const destinationAccessCandidates = findRoadAccessCandidates(
+    destination,
+    origin,
+    graph,
+    routeCache,
+  );
   if (originAccessCandidates.length === 0 || destinationAccessCandidates.length === 0) {
+    routeCache?.roadRouteByPair.set(routeCacheKey, null);
     return undefined;
   }
 
-  const pathCache = new Map<string, RoadRoutePath | undefined>();
-  let bestRoute:
-    | {
-        coordinates: Array<[number, number]>;
-        details: RoutePlanStepDetail[];
-        distance: number;
-      }
-    | undefined;
+  const pathCache = routeCache?.pathByNodePair ?? new Map<string, RoadRoutePath | undefined>();
+  let bestRoute: ResolvedRoadRoute | undefined;
 
   for (const originAccess of originAccessCandidates) {
     for (const destinationAccess of destinationAccessCandidates) {
@@ -4986,6 +5061,7 @@ function findRoadRouteBetweenCoordinates(
     }
   }
 
+  routeCache?.roadRouteByPair.set(routeCacheKey, bestRoute ?? null);
   return bestRoute;
 }
 
@@ -4993,8 +5069,15 @@ function findRoadAccessCandidates(
   point: [number, number],
   target: [number, number],
   graph: RoadRouteGraph,
+  routeCache?: RoutePlanningCache,
   limit = 6,
 ): RoadAccessCandidate[] {
+  const accessCacheKey = `${formatCoordinateCacheKey(point)}->${formatCoordinateCacheKey(target)}:${limit}`;
+  const cachedCandidates = routeCache?.accessCandidatesByPair.get(accessCacheKey);
+  if (cachedCandidates) {
+    return cachedCandidates;
+  }
+
   const candidates = graph.roadSegments
     .map((segment) => {
       const projection = projectPointToRoadSegment(point, segment);
@@ -5022,7 +5105,17 @@ function findRoadAccessCandidates(
     }
   }
 
-  return Array.from(deduped.values());
+  const result = Array.from(deduped.values());
+  routeCache?.accessCandidatesByPair.set(accessCacheKey, result);
+  return result;
+}
+
+function getRoadRouteCacheKey(origin: [number, number], destination: [number, number]): string {
+  return `${formatCoordinateCacheKey(origin)}->${formatCoordinateCacheKey(destination)}`;
+}
+
+function formatCoordinateCacheKey(coordinate: [number, number]): string {
+  return `${coordinate[0].toFixed(2)},${coordinate[1].toFixed(2)}`;
 }
 
 function projectPointToRoadSegment(
