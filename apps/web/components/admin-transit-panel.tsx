@@ -442,12 +442,36 @@ export function AdminTransitPanel() {
               <div className="transit-revision-validation" aria-label="校验结果">
                 <span>错误 {revision.validation.errorCount}</span>
                 <span>提醒 {revision.validation.warningCount}</span>
-                {[...revision.validation.errors, ...revision.validation.warnings]
+                {getValidationIssues(revision)
                   .slice(0, 3)
-                  .map((message) => (
-                    <span key={message}>{message}</span>
+                  .map((issue) => (
+                    <span key={`${issue.severity}-${issue.kind}`}>{issue.message}</span>
                   ))}
               </div>
+              {getValidationIssues(revision).length > 0 ? (
+                <ul className="transit-validation-issue-list" aria-label="详细校验问题">
+                  {getValidationIssues(revision)
+                    .slice(0, 5)
+                    .map((issue) => (
+                      <li
+                        className={
+                          issue.severity === 'error'
+                            ? 'transit-validation-issue is-error'
+                            : 'transit-validation-issue is-warning'
+                        }
+                        key={`${revision.revisionId}-${issue.severity}-${issue.kind}`}
+                      >
+                        <strong>
+                          {formatValidationIssueKind(issue.kind)} · {issue.count}
+                        </strong>
+                        <span>{issue.message}</span>
+                        {issue.examples.length > 0 ? (
+                          <small>例如：{issue.examples.join('；')}</small>
+                        ) : null}
+                      </li>
+                    ))}
+                </ul>
+              ) : null}
               <div className="transit-revision-preview" aria-label="线路预览">
                 {revision.lines.slice(0, 6).map((line) => (
                   <span key={line.sourceId}>{line.name}</span>
@@ -518,4 +542,44 @@ function statusLabel(status: TransitDataRevisionStatus): string {
   };
 
   return labels[status];
+}
+
+function getValidationIssues(revision: TransitDataRevision) {
+  if (revision.validation.issues?.length) {
+    return revision.validation.issues;
+  }
+
+  return [
+    ...revision.validation.errors.map((message) => ({
+      count: 1,
+      examples: [] as string[],
+      kind: 'broken_line' as const,
+      message,
+      severity: 'error' as const,
+    })),
+    ...revision.validation.warnings.map((message) => ({
+      count: 1,
+      examples: [] as string[],
+      kind: 'missing_world_coordinate' as const,
+      message,
+      severity: 'warning' as const,
+    })),
+  ];
+}
+
+function formatValidationIssueKind(
+  kind: NonNullable<TransitDataRevision['validation']['issues']>[number]['kind'],
+): string {
+  const labels: Record<
+    NonNullable<TransitDataRevision['validation']['issues']>[number]['kind'],
+    string
+  > = {
+    broken_line: '线路断点',
+    duplicate_station_name: '重名站点',
+    missing_world_coordinate: '缺少坐标',
+    one_way_station: '单向站点',
+    orphan_station: '孤立站点',
+  };
+
+  return labels[kind];
 }

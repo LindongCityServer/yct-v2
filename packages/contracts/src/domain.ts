@@ -274,7 +274,21 @@ export interface TransitDataValidationResult {
   errorCount: number;
   warningCount: number;
   errors: string[];
+  issues?: TransitDataValidationIssue[];
   warnings: string[];
+}
+
+export interface TransitDataValidationIssue {
+  count: number;
+  examples: string[];
+  kind:
+    | 'broken_line'
+    | 'duplicate_station_name'
+    | 'missing_world_coordinate'
+    | 'one_way_station'
+    | 'orphan_station';
+  message: string;
+  severity: 'error' | 'warning';
 }
 
 export interface TransitDataRevision {

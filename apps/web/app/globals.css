@@ -3337,6 +3337,43 @@ body .material-symbols-outlined {
   color: var(--yct-color-text);
 }
 
+.transit-validation-issue-list {
+  display: grid;
+  gap: var(--yct-space-2);
+  margin-top: var(--yct-space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.transit-validation-issue {
+  display: grid;
+  gap: 4px;
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+}
+
+.transit-validation-issue.is-error {
+  background: color-mix(in srgb, var(--yct-color-error) 10%, var(--yct-color-surface-panel));
+}
+
+.transit-validation-issue.is-warning {
+  background: color-mix(in srgb, var(--yct-color-tertiary) 10%, var(--yct-color-surface-panel));
+}
+
+.transit-validation-issue strong {
+  color: var(--yct-color-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.transit-validation-issue span,
+.transit-validation-issue small {
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .transit-mode-profile-editor {
   display: grid;
   gap: var(--yct-space-3);

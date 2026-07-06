@@ -423,6 +423,7 @@ DESIGN.md
 - 旧线路解析入口已重构为完整快照读取：继续从旧站 `metro_data.js`、`tram_data.js`、`bus_data.js`、`local_railway_data.js` 和 `ltcx/route.txt` 拉取真实数据，并保留停靠点级属性；客运班次聚合为 `coach` 模式的 `TransitLine`，同时保留首末班、班次数、票价、公司和来源链接字段。
 - 新增后台 API：`/api/admin/transit/datasets`、`/submit`、`/review`、`/publish`；后台 API 需要真实 `ldpass` 会话和本地管理员成员记录。
 - 新增 `/admin/transit` 线路后台页面，可导入旧站最新线路、查看摘要和校验提示、预览部分线路并执行提交、通过、驳回和发布。
+- 已处理第一版：交通数据校验结果已从简单错误/提醒计数升级为结构化 issue 列表；当前后台会单独报告线路断点、重名站点、孤立站点、单向站点和缺少 Minecraft 坐标，并展示部分样例，方便在没有可视化编辑器前先做版本筛查。当前仍属于导入快照后的只读校验，不支持直接在后台页内修复。
 - 新增公开 API `/api/transit/overview`；出行页和线路详情页优先读取已发布交通数据版本，没有发布版时继续退回旧站直读，避免现有体验中断。
 - 新增客运公告解析：`ltcx/stop.txt` 迁移为 `TransitServiceNotice`，公开 API 为 `/api/transit/service-notices`；出行页会展示当前/未来客运提醒，历史提醒折叠显示，避免过期公告冒充当前强提醒。
 - 新增地铁站点详情解析：`metro_station_detail.js` 迁移为 `TransitStationDetailSnapshot`，公开 API 为 `/api/transit/station-details`；线路详情页会按站名展示出入口、设施、换乘和周边站摘要，并对已有详情的站点链接到 `/travel/stations/[lineName]/[stationName]` 二级页。

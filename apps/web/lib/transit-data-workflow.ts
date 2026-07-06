@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type {
   TransitDataRevision,
+  TransitDataValidationIssue,
   TransitModeSnapshotSummary,
   YctEventPayloadMap,
   YctEventType,
@@ -188,48 +189,124 @@ function validateTransitSnapshot(snapshot: {
   lines: TransitDataRevision['lines'];
   stations: TransitDataRevision['stations'];
 }): TransitDataRevision['validation'] {
-  const errors: string[] = [];
-  const warnings: string[] = [];
+  const issues: TransitDataValidationIssue[] = [];
 
   if (snapshot.lines.length === 0) {
-    errors.push('没有读取到任何线路。');
+    issues.push(createTransitValidationIssue({
+      count: 1,
+      examples: [],
+      kind: 'broken_line',
+      message: '没有读取到任何线路。',
+      severity: 'error',
+    }));
   }
 
   if (snapshot.stations.length === 0) {
-    errors.push('没有读取到任何站点。');
+    issues.push(createTransitValidationIssue({
+      count: 1,
+      examples: [],
+      kind: 'orphan_station',
+      message: '没有读取到任何站点。',
+      severity: 'error',
+    }));
   }
 
-  const stationIds = new Set(snapshot.stations.map((station) => station.sourceId));
-  const brokenLines = snapshot.lines.filter((line) =>
-    line.stationSourceIds.some((stationSourceId) => !stationIds.has(stationSourceId)),
-  );
+  const stationById = new Map(snapshot.stations.map((station) => [station.sourceId, station]));
+  const brokenLines = snapshot.lines
+    .map((line) => ({
+      line,
+      missingStations: line.stationSourceIds.filter((stationSourceId) => !stationById.has(stationSourceId)),
+    }))
+    .filter((item) => item.missingStations.length > 0 || item.line.stationSourceIds.length < 2);
   if (brokenLines.length > 0) {
-    errors.push(`有 ${brokenLines.length} 条线路引用了不存在的站点。`);
+    issues.push(createTransitValidationIssue({
+      count: brokenLines.length,
+      examples: brokenLines
+        .slice(0, 6)
+        .map(({ line, missingStations }) =>
+          missingStations.length > 0
+            ? `${line.name} 缺少站点 ${missingStations.slice(0, 2).join('、')}`
+            : `${line.name} 站点数量不足`,
+        ),
+      kind: 'broken_line',
+      message: `有 ${brokenLines.length} 条线路存在断点或缺少站点引用。`,
+      severity: 'error',
+    }));
   }
 
-  const missingWorldCoordinateCount = snapshot.stations.filter(
+  const missingWorldCoordinateStations = snapshot.stations.filter(
     (station) => station.x === undefined || station.z === undefined,
-  ).length;
-  if (missingWorldCoordinateCount > 0) {
-    warnings.push(
-      `${missingWorldCoordinateCount} 个站点缺少 Minecraft 世界坐标，地图级路线规划前需要补齐。`,
-    );
+  );
+  if (missingWorldCoordinateStations.length > 0) {
+    issues.push(createTransitValidationIssue({
+      count: missingWorldCoordinateStations.length,
+      examples: missingWorldCoordinateStations
+        .slice(0, 6)
+        .map((station) => station.name),
+      kind: 'missing_world_coordinate',
+      message: `${missingWorldCoordinateStations.length} 个站点缺少 Minecraft 世界坐标，地图级路线规划前需要补齐。`,
+      severity: 'warning',
+    }));
   }
 
-  const duplicateLineNames = countDuplicates(
-    snapshot.lines.map((line) => `${line.mode}:${line.name}`),
+  const duplicateStationGroups = findDuplicateValueGroups(
+    snapshot.stations.map((station) => ({
+      key: normalizeTransitStationName(station.name),
+      label: station.name,
+    })),
   );
-  if (duplicateLineNames > 0) {
-    warnings.push(
-      `${duplicateLineNames} 个线路名称在同一交通方式下重复，需要人工确认是否为上下行或重名线路。`,
-    );
+  if (duplicateStationGroups.length > 0) {
+    issues.push(createTransitValidationIssue({
+      count: duplicateStationGroups.length,
+      examples: duplicateStationGroups
+        .slice(0, 6)
+        .map((group) => `${group.label}（${group.count} 个）`),
+      kind: 'duplicate_station_name',
+      message: `${duplicateStationGroups.length} 组站点名称重复，需要人工确认是否为同站多标、上下行拆分或误导入。`,
+      severity: 'warning',
+    }));
   }
+
+  const referencedStationIds = new Set(
+    snapshot.lines.flatMap((line) => line.stationSourceIds),
+  );
+  const orphanStations = snapshot.stations.filter(
+    (station) => !referencedStationIds.has(station.sourceId),
+  );
+  if (orphanStations.length > 0) {
+    issues.push(createTransitValidationIssue({
+      count: orphanStations.length,
+      examples: orphanStations.slice(0, 6).map((station) => station.name),
+      kind: 'orphan_station',
+      message: `${orphanStations.length} 个站点没有被任何线路引用，发布前需要确认是否漏导线路或存在废弃站点。`,
+      severity: 'warning',
+    }));
+  }
+
+  const oneWayStations = getOneWayStationExamples(snapshot.lines, stationById);
+  if (oneWayStations.length > 0) {
+    issues.push(createTransitValidationIssue({
+      count: oneWayStations.length,
+      examples: oneWayStations.slice(0, 6),
+      kind: 'one_way_station',
+      message: `${oneWayStations.length} 个站点在线路中以单向停靠形式出现，地图与路线规划需要注意方向差异。`,
+      severity: 'warning',
+    }));
+  }
+
+  const errors = issues
+    .filter((issue) => issue.severity === 'error')
+    .map((issue) => issue.message);
+  const warnings = issues
+    .filter((issue) => issue.severity === 'warning')
+    .map((issue) => issue.message);
 
   return {
     checkedAt: new Date().toISOString(),
     errorCount: errors.length,
     warningCount: warnings.length,
     errors,
+    issues,
     warnings,
   };
 }
@@ -247,18 +324,62 @@ function countTransitItems(summary: TransitModeSnapshotSummary[]): {
   );
 }
 
-function countDuplicates(values: string[]): number {
-  const seen = new Set<string>();
-  const duplicates = new Set<string>();
+function createTransitValidationIssue(
+  input: TransitDataValidationIssue,
+): TransitDataValidationIssue {
+  return {
+    ...input,
+    examples: input.examples.filter(Boolean),
+  };
+}
+
+function findDuplicateValueGroups(values: Array<{ key: string; label: string }>): Array<{
+  count: number;
+  label: string;
+}> {
+  const counts = new Map<string, { count: number; label: string }>();
   for (const value of values) {
-    if (seen.has(value)) {
-      duplicates.add(value);
-    } else {
-      seen.add(value);
+    if (!value.key) {
+      continue;
+    }
+    const current = counts.get(value.key) ?? { count: 0, label: value.label };
+    current.count += 1;
+    counts.set(value.key, current);
+  }
+
+  return Array.from(counts.values())
+    .filter((item) => item.count > 1)
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, 'zh-CN'));
+}
+
+function normalizeTransitStationName(value: string): string {
+  return value.replace(/\s+/g, '').trim().toLocaleLowerCase('zh-CN');
+}
+
+function getOneWayStationExamples(
+  lines: TransitDataRevision['lines'],
+  stationById: Map<string, TransitDataRevision['stations'][number]>,
+): string[] {
+  const examples = new Set<string>();
+  for (const line of lines) {
+    for (const stop of line.stops) {
+      if (!stop.oneWay) {
+        continue;
+      }
+
+      const station = stationById.get(stop.stationSourceId);
+      examples.add(
+        `${station?.name ?? stop.stationSourceId} · ${line.name} · ${
+          stop.oneWay === 'down' ? '顺向单向' : '反向单向'
+        }`,
+      );
+      if (examples.size >= 12) {
+        return Array.from(examples);
+      }
     }
   }
 
-  return duplicates.size;
+  return Array.from(examples);
 }
 
 function notFound(): TransitDataActionResult {
