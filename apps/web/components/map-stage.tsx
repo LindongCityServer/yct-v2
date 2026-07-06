@@ -160,6 +160,7 @@ interface ProjectedRoadTrace {
   id: string;
   label: string;
   path: string;
+  segments?: ProjectedRouteTraceSegment[];
   viewBox: string;
   accentColor?: string;
   pointCount: number;
@@ -172,6 +173,11 @@ interface ProjectedRoadTrace {
   roadKind?: RoadMarkerKind;
   isSelected: boolean;
   isMuted?: boolean;
+}
+
+interface ProjectedRouteTraceSegment {
+  color: string;
+  path: string;
 }
 
 interface TraceBounds {
@@ -266,6 +272,7 @@ interface RoutePlanOption {
   icon: string;
   color: string;
   coordinates: Array<[number, number]>;
+  traceSegments?: RoutePlanTraceSegment[];
   markerIds: string[];
   estimatedDistance: number;
   estimatedMinutes: number;
@@ -281,6 +288,12 @@ interface RoutePlanStep {
   label: string;
   icon?: string;
   role?: 'origin' | 'destination' | 'boarding' | 'alighting' | 'transfer';
+}
+
+interface RoutePlanTraceSegment {
+  color: string;
+  coordinates: Array<[number, number]>;
+  kind: 'walk' | 'transit' | 'transfer';
 }
 
 interface RoadRouteNode {
@@ -388,6 +401,8 @@ const routeTransportModeOptions: RouteTransportModeOption[] = [
   { mode: 'ferry', label: '轮渡', icon: 'directions_boat', color: 'var(--yct-color-ferry)' },
   { mode: 'railway', label: '铁路', icon: 'train', color: 'var(--yct-color-railway)' },
 ];
+
+const routeWalkTraceColor = '#168f78';
 
 const highPriorityTransitCategoryIds = new Set([
   'metro-station',
@@ -2684,9 +2699,22 @@ function TraceLayerView({
         } as CSSProperties
       }
     >
-      <path className={pathClassName} d={trace.path} style={{ stroke: trace.accentColor }}>
-        <title>{title}</title>
-      </path>
+      {kind === 'route' && trace.segments?.length ? (
+        trace.segments.map((segment, index) => (
+          <path
+            className={pathClassName}
+            d={segment.path}
+            key={`${trace.id}-segment-${index}`}
+            style={{ stroke: segment.color }}
+          >
+            <title>{title}</title>
+          </path>
+        ))
+      ) : (
+        <path className={pathClassName} d={trace.path} style={{ stroke: trace.accentColor }}>
+          <title>{title}</title>
+        </path>
+      )}
     </svg>
   );
 }
@@ -3129,13 +3157,15 @@ function buildRoutePlanOptions(input: {
 
   if (input.enabledModes.walk) {
     const directMinutes = estimateRouteMinutes(directDistance, 72);
+    const directCoordinates = buildRouteTraceCoordinates(draft, [draft.origin, draft.destination]);
     options.push({
       id: 'walk-direct',
       title: '步行直达',
       summary: `${formatRoutePlanDistance(directDistance)} · 直线估算`,
       icon: 'directions_walk',
       color: routeTransportModeOptions.find((option) => option.mode === 'walk')?.color ?? '#4B5B57',
-      coordinates: buildRouteTraceCoordinates(draft, [draft.origin, draft.destination]),
+      coordinates: directCoordinates,
+      traceSegments: [createRouteTraceSegment('walk', directCoordinates)],
       markerIds: getRouteEndpointMarkerIds(draft),
       estimatedDistance: directDistance,
       estimatedMinutes: directMinutes,
@@ -3301,6 +3331,22 @@ function buildRouteTraceCoordinates(
   ]);
 }
 
+function createRouteTraceSegment(
+  kind: RoutePlanTraceSegment['kind'],
+  coordinates: Array<[number, number]>,
+  color = routeWalkTraceColor,
+): RoutePlanTraceSegment {
+  return {
+    kind,
+    color,
+    coordinates: dedupeConsecutiveCoordinates(coordinates),
+  };
+}
+
+function compactRouteTraceSegments(segments: RoutePlanTraceSegment[]): RoutePlanTraceSegment[] {
+  return segments.filter((segment) => segment.coordinates.length >= 2);
+}
+
 function getRouteEndpointAccessDistance(draft: RoutePlanDraft): number {
   return (
     getRouteSingleEndpointAccessDistance(draft, 'origin') +
@@ -3402,6 +3448,13 @@ function buildRoadAssistedWalkOption(
   const walkColor =
     routeTransportModeOptions.find((option) => option.mode === 'walk')?.color ?? '#4B5B57';
   const roadNames = Array.from(new Set(roadPath.nodes.map((node) => node.roadLabel))).slice(0, 3);
+  const coordinates = buildRouteTraceCoordinates(draft, [
+    draft.origin,
+    originRoadNode.coordinate,
+    ...roadPath.nodes.map((node) => node.coordinate),
+    destinationRoadNode.coordinate,
+    draft.destination,
+  ]);
 
   return {
     id: `walk-road-${originRoadNode.id}-${destinationRoadNode.id}`,
@@ -3409,13 +3462,8 @@ function buildRoadAssistedWalkOption(
     summary: `${formatRoutePlanDistance(walkingDistance)} · ${roadNames.join('、') || '道路端点'}`,
     icon: 'conversion_path',
     color: walkColor,
-    coordinates: buildRouteTraceCoordinates(draft, [
-      draft.origin,
-      originRoadNode.coordinate,
-      ...roadPath.nodes.map((node) => node.coordinate),
-      destinationRoadNode.coordinate,
-      draft.destination,
-    ]),
+    coordinates,
+    traceSegments: [createRouteTraceSegment('walk', coordinates)],
     markerIds: getRouteEndpointMarkerIds(draft),
     estimatedDistance: walkingDistance,
     estimatedMinutes:
@@ -3722,6 +3770,28 @@ function buildDirectTransitLineOption(
   );
   const estimatedMinutes = endpointAccessMinutes + accessMinutes + egressMinutes + transitMinutes;
   const stationSpan = Math.max(1, destinationStop.index - originStop.index);
+  const coordinates = buildRouteTraceCoordinates(draft, [
+    draft.origin,
+    ...segmentStops.map((stop) => stop.center),
+    draft.destination,
+  ]);
+  const traceSegments = compactRouteTraceSegments([
+    createRouteTraceSegment('walk', [
+      ...(draft.originRaw ? [draft.originRaw] : []),
+      draft.origin,
+      originStop.center,
+    ]),
+    createRouteTraceSegment(
+      'transit',
+      segmentStops.map((stop) => stop.center),
+      candidate.color,
+    ),
+    createRouteTraceSegment('walk', [
+      destinationStop.center,
+      draft.destination,
+      ...(draft.destinationRaw ? [draft.destinationRaw] : []),
+    ]),
+  ]);
 
   return {
     id: `${candidate.mode.mode}-${candidate.line.id}-${candidate.direction}-${originStop.marker.id}-${destinationStop.marker.id}`,
@@ -3731,11 +3801,8 @@ function buildDirectTransitLineOption(
     )}步行`,
     icon: candidate.icon,
     color: candidate.color,
-    coordinates: buildRouteTraceCoordinates(draft, [
-      draft.origin,
-      ...segmentStops.map((stop) => stop.center),
-      draft.destination,
-    ]),
+    coordinates,
+    traceSegments,
     markerIds: dedupeValues([
       ...getRouteEndpointMarkerIds(draft),
       ...segmentStops.map((stop) => stop.marker.id),
@@ -3887,6 +3954,36 @@ function buildTransferTransitLineOptions(
         firstTransitMinutes +
         secondTransitMinutes +
         4;
+      const coordinates = buildRouteTraceCoordinates(draft, [
+        draft.origin,
+        ...firstSegment.map((stop) => stop.center),
+        transfer.toStop.center,
+        ...secondSegment.slice(1).map((stop) => stop.center),
+        draft.destination,
+      ]);
+      const traceSegments = compactRouteTraceSegments([
+        createRouteTraceSegment('walk', [
+          ...(draft.originRaw ? [draft.originRaw] : []),
+          draft.origin,
+          originCandidate.originStop.center,
+        ]),
+        createRouteTraceSegment(
+          'transit',
+          firstSegment.map((stop) => stop.center),
+          originCandidate.candidate.color,
+        ),
+        createRouteTraceSegment('transfer', [transfer.fromStop.center, transfer.toStop.center]),
+        createRouteTraceSegment(
+          'transit',
+          secondSegment.map((stop) => stop.center),
+          destinationCandidate.candidate.color,
+        ),
+        createRouteTraceSegment('walk', [
+          destinationCandidate.destinationStop.center,
+          draft.destination,
+          ...(draft.destinationRaw ? [draft.destinationRaw] : []),
+        ]),
+      ]);
 
       options.push({
         id: `transfer-${originCandidate.candidate.line.id}-${destinationCandidate.candidate.line.id}-${originCandidate.originStop.marker.id}-${transfer.fromStop.marker.id}-${destinationCandidate.destinationStop.marker.id}`,
@@ -3896,12 +3993,8 @@ function buildTransferTransitLineOptions(
         )}步行`,
         icon: 'transfer_within_a_station',
         color: originCandidate.candidate.color,
-        coordinates: buildRouteTraceCoordinates(draft, [
-          draft.origin,
-          ...firstSegment.map((stop) => stop.center),
-          ...secondSegment.slice(1).map((stop) => stop.center),
-          draft.destination,
-        ]),
+        coordinates,
+        traceSegments,
         markerIds: dedupeValues([
           ...getRouteEndpointMarkerIds(draft),
           ...firstSegment.map((stop) => stop.marker.id),
@@ -4960,11 +5053,24 @@ function projectRoutePlanTrace(
   if (!traceProjection || !traceBoundsIntersectsViewport(bounds, size)) {
     return undefined;
   }
+  const segments = option.traceSegments
+    ?.map((segment): ProjectedRouteTraceSegment | undefined => {
+      if (segment.coordinates.length < 2) {
+        return undefined;
+      }
+
+      return {
+        color: segment.color,
+        path: buildTracePath(segment.coordinates, view, size, traceProjection.left, traceProjection.top),
+      };
+    })
+    .filter((segment): segment is ProjectedRouteTraceSegment => Boolean(segment));
 
   return {
     id: `route-option-${option.id}`,
     label: option.title,
     path: traceProjection.path,
+    segments: segments && segments.length > 0 ? segments : undefined,
     viewBox: traceProjection.viewBox,
     accentColor: option.color,
     pointCount: option.coordinates.length,
@@ -5000,18 +5106,30 @@ function buildTraceProjection(
   const height = Math.max(1, bounds.maxTop - bounds.minTop + padding * 2);
 
   return {
-    path: points
-      .map(
-        (point, index) =>
-          `${index === 0 ? 'M' : 'L'} ${roundSvg(point.left - left)} ${roundSvg(point.top - top)}`,
-      )
-      .join(' '),
+    path: buildTracePath(coordinates, view, size, left, top),
     viewBox: `0 0 ${roundSvg(width)} ${roundSvg(height)}`,
     left,
     top,
     width,
     height,
   };
+}
+
+function buildTracePath(
+  coordinates: Array<[number, number]>,
+  view: MapView,
+  size: ViewportSize,
+  left: number,
+  top: number,
+): string {
+  const scale = getScale(view.zoom);
+  return coordinates
+    .map(([x, z], index) => {
+      const pointLeft = size.width / 2 + (x - view.centerX) * scale;
+      const pointTop = size.height / 2 + (z - view.centerZ) * scale;
+      return `${index === 0 ? 'M' : 'L'} ${roundSvg(pointLeft - left)} ${roundSvg(pointTop - top)}`;
+    })
+    .join(' ');
 }
 
 function traceBoundsIntersectsViewport(bounds: TraceBounds, size: ViewportSize): boolean {
