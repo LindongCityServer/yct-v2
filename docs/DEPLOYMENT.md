@@ -99,6 +99,32 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.p
 
 ## 云服务器运行
 
+### 推荐目录布局
+
+推荐把解压后的部署目录直接作为运行根目录，并把真实环境变量文件和运行时数据放在同一层级。以 `C:\wwwroot\yct-v2` 为例：
+
+```text
+C:\wwwroot\yct-v2\
+├─ start-yct-web.ps1
+├─ DEPLOYMENT.txt
+├─ .env                         # 推荐放这里
+├─ .env.production              # 如果你习惯拆环境文件，也放这里
+├─ .yct-data\
+├─ apps\
+│  └─ web\
+│     ├─ server.js
+│     ├─ .next\
+│     └─ public\
+│        ├─ content-assets\     # 运行时上传素材，需要持久化
+│        ├─ icons\
+│        └─ legacy-assets\      # 如果打包机已有该目录，会随部署包进入
+└─ package.json
+```
+
+`.env`、`.env.production`、`.env.local` 这类真实环境变量文件，推荐都放在部署根目录，也就是和 `start-yct-web.ps1`、`.yct-data` 同级，而不是放到 `apps\web` 里。这样当前备份/替换脚本、手工启动命令和绝大多数进程管理方式都更一致。
+
+如果后续改用 PM2、Windows 服务或宝塔守护进程，除了保留这些文件在部署根目录，还要确保“工作目录”就是部署根目录，或者把同样的环境变量显式写进进程管理器配置；不要假设进程管理器一定会自动读取某个 `.env` 文件。
+
 把 `artifacts/yct-web-*` 上传到服务器并解压到部署目录。不要把新包直接覆盖解压到仍保留旧 `.next` 文件的目录里；Next.js 的 `server.js`、`.next/server` 和 `.next/static` 必须来自同一次构建，否则会出现页面能打开但客户端 chunk 404、路线规划或周边地点等交互失效的问题。推荐做法是先停止旧进程，再解压到一个空目录，确认可用后切换反代；如果只能使用原目录，先备份并清空旧目录中除持久数据外的部署文件。
 
 如果只能继续使用 `C:\wwwroot\yct-v2` 这个原目录，可以按下面的方式先保留运行时数据，再清空旧 standalone 文件。执行前务必确认旧进程已经停止：
@@ -113,7 +139,14 @@ if (-not (Test-Path -LiteralPath $deployRoot)) {
 }
 
 New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
-foreach ($relativePath in @(".env", ".yct-data", "apps\web\public\content-assets")) {
+foreach ($relativePath in @(
+  ".env",
+  ".env.production",
+  ".env.local",
+  ".env.production.local",
+  ".yct-data",
+  "apps\web\public\content-assets"
+)) {
   $source = Join-Path $deployRoot $relativePath
   if (Test-Path -LiteralPath $source) {
     $target = Join-Path $backupRoot $relativePath
@@ -125,7 +158,14 @@ foreach ($relativePath in @(".env", ".yct-data", "apps\web\public\content-assets
 Get-ChildItem -LiteralPath $deployRoot -Force | Remove-Item -Recurse -Force
 Expand-Archive -LiteralPath $artifact -DestinationPath $deployRoot -Force
 
-foreach ($relativePath in @(".env", ".yct-data", "apps\web\public\content-assets")) {
+foreach ($relativePath in @(
+  ".env",
+  ".env.production",
+  ".env.local",
+  ".env.production.local",
+  ".yct-data",
+  "apps\web\public\content-assets"
+)) {
   $source = Join-Path $backupRoot $relativePath
   if (Test-Path -LiteralPath $source) {
     $target = Join-Path $deployRoot $relativePath
@@ -136,6 +176,27 @@ foreach ($relativePath in @(".env", ".yct-data", "apps\web\public\content-assets
 ```
 
 这段命令只适合在确认 `$deployRoot` 是部署目录时使用；不要把 `$deployRoot` 设为磁盘根目录、用户目录或 `wwwroot` 总目录。
+
+### 需要迁移哪些数据
+
+如果你是在“旧版 YCT v2 部署目录”上做原地升级，默认至少要保留这两类内容：
+
+1. `.yct-data`
+2. `apps\web\public\content-assets`
+
+只复制 `.yct-data` 并不总是足够，因为内容后台上传的图片素材默认不在 `.yct-data` 里，而是在 `apps\web\public\content-assets`。如果不一起保留，历史内容和审核通过的素材链接可能会丢图。
+
+可以按下面理解：
+
+- `.yct-data`：账号映射、管理员成员、交通数据版本、POI 投稿、提醒、通知、票务草稿、离线范围请求等本地仓储。
+- `apps\web\public\content-assets`：内容后台上传的真实图片和附件。
+- `apps\web\public\legacy-assets`：如果它来自你本地打包机的 `public` 目录，通常已经包含在部署包里；只有当云端还保留了“没有重新打进包的额外旧资源”时，才需要额外手工保留。
+
+所以，对大多数当前部署来说：
+
+- 如果你从一个旧的 YCT v2 目录升级到新的 YCT v2 目录，至少复制 `.yct-data` 和 `apps\web\public\content-assets`。
+- 如果这是第一次把 v2 部署到云端，`.yct-data` 可以先让系统按需创建，但 `.env` 仍然必须手工放好。
+- 如果你确认当前没有任何后台上传素材，理论上只复制 `.yct-data` 也能跑，但我不建议把这个当默认流程。
 
 zip 包可以直接右键解压，`tar.gz` 包可以用：
 
@@ -256,7 +317,7 @@ node >=20.9.0
 
 以下内容应该保存在服务器持久目录或后续数据库/对象存储中，不随每次部署覆盖：
 
-- `.env` 和真实密钥。
+- 部署根目录下的 `.env`、`.env.production`、`.env.local` 等真实环境变量文件。
 - `.yct-data` 本地运行时仓储。
 - 后台上传素材目录 `apps/web/public/content-assets`。
 - 日志、备份和导入中间文件。

@@ -489,9 +489,10 @@ Start command example:
 
 Notes:
 - Do not upload local .env files or .yct-data into this bundle.
-- Keep server-side runtime stores, uploaded content assets, logs, and backups outside the deployment directory.
+- Keep real environment files (.env, .env.production, .env.local), server-side runtime stores, uploaded content assets, logs, and backups outside the deployment bundle. In the extracted deployment directory, place those environment files at the same level as start-yct-web.ps1 and .yct-data.
 - If the reverse proxy is mounted at /v2, build and start with BasePath /v2. If it is mounted at the site root later, rebuild with an empty BasePath.
 - Stop the old process before deployment and unpack this bundle into an empty deployment directory, or clean the old standalone files first. Do not merge it over an old .next directory: server.js, .next/server, and .next/static must come from the same build.
+- When replacing an existing deployment in place, preserve at least .yct-data and apps\web\public\content-assets from the old directory before clearing files. Copying only .yct-data is not enough if the site already contains uploaded content assets.
 - If returning users still see an older version, check that the old Node process is stopped, the deployment directory does not contain stale .next/static files, and the reverse proxy or browser Service Worker is not serving cached HTML/RSC responses.
 - After deployment, /v2/map, /v2/api/map/markers, /v2/sw.js, and the /v2/_next/static assets referenced by the page HTML should all return 200. The first line of /v2/sw.js should contain: const YCT_SW_VERSION = '$buildId';
 "@
