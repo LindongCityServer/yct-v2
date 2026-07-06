@@ -47,11 +47,13 @@ interface TopbarBadgeSummary {
 export function AppShell({
   active,
   pageTitle,
+  pageTitleKey,
   variant = 'default',
   children,
 }: Readonly<{
   active?: PrimaryNavKey;
   pageTitle?: string;
+  pageTitleKey?: CommonMessageKey;
   variant?: AppShellVariant;
   children: ReactNode;
 }>) {
@@ -140,6 +142,7 @@ export function AppShell({
     router.push(appPath('/search'));
   };
   const accountBadge = mergeTopbarBadge(accountStatus?.badge, localPendingSyncCount, t);
+  const renderedPageTitle = pageTitleKey ? t(pageTitleKey) : pageTitle;
 
   return (
     <main
@@ -173,7 +176,7 @@ export function AppShell({
             alt="雨城通"
           />
         </Link>
-        {pageTitle ? <span className="topbar-page-title">{pageTitle}</span> : null}
+        {renderedPageTitle ? <span className="topbar-page-title">{renderedPageTitle}</span> : null}
         <div className="topbar-actions">
           <button
             className="pill-button"

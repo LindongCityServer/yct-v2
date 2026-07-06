@@ -945,7 +945,9 @@ export function MapStage() {
     return selectedRoadTrace ? [selectedRoadTrace] : [];
   }, [focusedMarkerId, roadTraceSource]);
   const browseModeRoadTraceSource = useMemo(() => {
-    if (!linearFeaturesVisible) {
+    const shouldForceRoadReference =
+      browseMode === 'road-network' || browseMode === 'traffic';
+    if (!linearFeaturesVisible && !shouldForceRoadReference) {
       return [];
     }
 
@@ -954,11 +956,19 @@ export function MapStage() {
     return dedupeMarkersById([...selectedRoadTraceSource, ...baseSource]);
   }, [browseMode, linearFeaturesVisible, roadTraceSource, selectedRoadTraceSource]);
   const projectedRoadTraces = useMemo(
-    () =>
-      projectRoadTraceMarkers(browseModeRoadTraceSource, mapView, viewportSize, focusedMarkerId, {
-        isMuted: browseMode === 'traffic' || browseMode === 'satellite',
-        suppressLargeOverlap: browseMode !== 'satellite',
-      }).slice(0, 160),
+    () => {
+      const traces = projectRoadTraceMarkers(
+        browseModeRoadTraceSource,
+        mapView,
+        viewportSize,
+        focusedMarkerId,
+        {
+          isMuted: browseMode === 'traffic' || browseMode === 'satellite',
+          suppressLargeOverlap: false,
+        },
+      );
+      return browseMode === 'satellite' ? traces.slice(0, 160) : traces;
+    },
     [browseMode, browseModeRoadTraceSource, focusedMarkerId, mapView, viewportSize],
   );
   const projectedTransitTraces = useMemo(

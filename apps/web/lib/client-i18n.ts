@@ -35,6 +35,7 @@ export type CommonMessageKey =
   | 'page.operations'
   | 'page.scheduleSearch'
   | 'page.search'
+  | 'page.services'
   | 'page.ticketOrder'
   | 'page.travelScreen'
   | 'quickAction.rideCode'
@@ -67,6 +68,12 @@ export type CommonMessageKey =
   | 'settings.theme.label'
   | 'settings.theme.light'
   | 'settings.theme.system'
+  | 'services.category.operations'
+  | 'services.category.other'
+  | 'services.category.serverSites'
+  | 'services.category.toolbox'
+  | 'services.empty'
+  | 'services.itemCount'
   | 'search.category.all'
   | 'search.category.lines'
   | 'search.category.operations'
@@ -125,6 +132,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'page.operations': '运营信息',
     'page.scheduleSearch': '班次查询',
     'page.search': '搜索',
+    'page.services': '更多服务',
     'page.ticketOrder': '票务订单',
     'page.travelScreen': '智运大屏',
     'quickAction.rideCode': '乘车码',
@@ -157,6 +165,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.theme.label': '主题',
     'settings.theme.light': '浅色',
     'settings.theme.system': '跟随系统',
+    'services.category.operations': '运营及周边',
+    'services.category.other': '其他服务',
+    'services.category.serverSites': '服务器网站',
+    'services.category.toolbox': '工具箱',
+    'services.empty': '暂无服务入口',
+    'services.itemCount': '{count} 项',
     'search.category.all': '全部',
     'search.category.lines': '线路',
     'search.category.operations': '运营',
@@ -212,6 +226,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'page.operations': '營運資訊',
     'page.scheduleSearch': '班次查詢',
     'page.search': '搜尋',
+    'page.services': '更多服務',
     'page.ticketOrder': '票務訂單',
     'page.travelScreen': '智運大屏',
     'quickAction.rideCode': '乘車碼',
@@ -244,6 +259,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.theme.label': '主題',
     'settings.theme.light': '淺色',
     'settings.theme.system': '跟隨系統',
+    'services.category.operations': '營運及周邊',
+    'services.category.other': '其他服務',
+    'services.category.serverSites': '伺服器網站',
+    'services.category.toolbox': '工具箱',
+    'services.empty': '暫無服務入口',
+    'services.itemCount': '{count} 項',
     'search.category.all': '全部',
     'search.category.lines': '線路',
     'search.category.operations': '營運',
@@ -281,24 +302,25 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'nav.expand': 'Expand main navigation',
     'nav.label': 'Main navigation',
     'nav.map': 'Explore',
-    'nav.operations': 'Operations',
+    'nav.operations': 'Updates',
     'nav.services': 'Services',
     'nav.travel': 'Travel',
     'offline.actions': 'Offline shortcuts',
     'offline.description':
-      'You can continue opening recently visited operations, lines, station details, and service entries. YCT will refresh the latest data after the connection is restored.',
+      'You can continue opening recently visited updates, lines, station details, and service entries. YCT will refresh the latest data after the connection is restored.',
     'offline.manageAfterOnline': 'Manage online',
     'offline.map': 'Map Explore',
     'offline.note':
       'If these shortcuts cannot open, the content has not been cached yet. Once online, refresh the cache or update custom offline areas in account settings.',
-    'offline.operations': 'Operations',
+    'offline.operations': 'Updates',
     'offline.schedules': 'Schedule Search',
     'offline.title': 'Network unavailable',
     'page.account': 'Account Settings',
     'page.offline': 'Offline',
-    'page.operations': 'Operations',
+    'page.operations': 'Updates',
     'page.scheduleSearch': 'Schedule Search',
     'page.search': 'Search',
+    'page.services': 'More Services',
     'page.ticketOrder': 'Ticket Order',
     'page.travelScreen': 'Operations Board',
     'quickAction.rideCode': 'Ride Code',
@@ -331,22 +353,28 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.theme.label': 'Theme',
     'settings.theme.light': 'Light',
     'settings.theme.system': 'Follow system',
+    'services.category.operations': 'Updates and Nearby',
+    'services.category.other': 'Other Services',
+    'services.category.serverSites': 'Server Sites',
+    'services.category.toolbox': 'Toolbox',
+    'services.empty': 'No service entries yet',
+    'services.itemCount': '{count} items',
     'search.category.all': 'All',
     'search.category.lines': 'Lines',
-    'search.category.operations': 'Operations',
+    'search.category.operations': 'Updates',
     'search.category.services': 'Services',
     'search.category.stations': 'Stations',
     'search.clear': 'Clear search',
-    'search.emptyPrompt': 'Enter a keyword to search operations, lines, stations, and services.',
+    'search.emptyPrompt': 'Enter a keyword to search updates, lines, stations, and services.',
     'search.facilityCount': '{count} facilities',
     'search.noCategoryResults': 'No matches in this category',
     'search.noMatch': 'No results matching "{query}"',
-    'search.placeholder': 'Search operations, lines, stations, and services',
+    'search.placeholder': 'Search updates, lines, stations, and services',
     'search.resultCount': '{count} results',
     'search.results': 'Search Results',
     'search.resultFilters': 'Search result categories',
     'search.resultGroup.lines': 'Lines',
-    'search.resultGroup.operations': 'Operations',
+    'search.resultGroup.operations': 'Updates',
     'search.resultGroup.services': 'Services and Tools',
     'search.resultGroup.stations': 'Stations',
     'search.stationExitCount': '{count} exits',
