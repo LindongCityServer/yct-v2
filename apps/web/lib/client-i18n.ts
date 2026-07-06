@@ -48,6 +48,26 @@ export type CommonMessageKey =
   | 'settings.theme.label'
   | 'settings.theme.light'
   | 'settings.theme.system'
+  | 'search.category.all'
+  | 'search.category.lines'
+  | 'search.category.operations'
+  | 'search.category.services'
+  | 'search.category.stations'
+  | 'search.clear'
+  | 'search.emptyPrompt'
+  | 'search.facilityCount'
+  | 'search.noCategoryResults'
+  | 'search.noMatch'
+  | 'search.placeholder'
+  | 'search.resultCount'
+  | 'search.results'
+  | 'search.resultGroup.lines'
+  | 'search.resultGroup.operations'
+  | 'search.resultGroup.services'
+  | 'search.resultGroup.stations'
+  | 'search.resultFilters'
+  | 'search.stopCount'
+  | 'search.stationExitCount'
   | 'status.loggedIn'
   | 'status.noPending'
   | 'status.pendingItems'
@@ -97,6 +117,26 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.theme.label': '主题',
     'settings.theme.light': '浅色',
     'settings.theme.system': '跟随系统',
+    'search.category.all': '全部',
+    'search.category.lines': '线路',
+    'search.category.operations': '运营',
+    'search.category.services': '服务',
+    'search.category.stations': '站点',
+    'search.clear': '清空搜索',
+    'search.emptyPrompt': '输入关键词后显示运营信息、线路、站点和服务结果',
+    'search.facilityCount': '{count} 项设施',
+    'search.noCategoryResults': '当前分类下暂无匹配结果',
+    'search.noMatch': '暂无匹配“{query}”的结果',
+    'search.placeholder': '搜索资讯、线路、站点和服务',
+    'search.resultCount': '{count} 项结果',
+    'search.results': '搜索结果',
+    'search.resultFilters': '搜索结果分类',
+    'search.resultGroup.lines': '线路',
+    'search.resultGroup.operations': '运营信息',
+    'search.resultGroup.services': '服务与工具',
+    'search.resultGroup.stations': '站点',
+    'search.stationExitCount': '{count} 个出入口',
+    'search.stopCount': '{count} 站',
     'status.loggedIn': '已登录',
     'status.noPending': '无待办',
     'status.pendingItems': '{count} 个待处理事项',
@@ -143,6 +183,26 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.theme.label': '主題',
     'settings.theme.light': '淺色',
     'settings.theme.system': '跟隨系統',
+    'search.category.all': '全部',
+    'search.category.lines': '線路',
+    'search.category.operations': '營運',
+    'search.category.services': '服務',
+    'search.category.stations': '站點',
+    'search.clear': '清空搜尋',
+    'search.emptyPrompt': '輸入關鍵字後顯示營運資訊、線路、站點和服務結果',
+    'search.facilityCount': '{count} 項設施',
+    'search.noCategoryResults': '目前分類下暫無符合結果',
+    'search.noMatch': '暫無符合「{query}」的結果',
+    'search.placeholder': '搜尋資訊、線路、站點和服務',
+    'search.resultCount': '{count} 項結果',
+    'search.results': '搜尋結果',
+    'search.resultFilters': '搜尋結果分類',
+    'search.resultGroup.lines': '線路',
+    'search.resultGroup.operations': '營運資訊',
+    'search.resultGroup.services': '服務與工具',
+    'search.resultGroup.stations': '站點',
+    'search.stationExitCount': '{count} 個出入口',
+    'search.stopCount': '{count} 站',
     'status.loggedIn': '已登入',
     'status.noPending': '無待辦',
     'status.pendingItems': '{count} 個待處理事項',
@@ -189,6 +249,26 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.theme.label': 'Theme',
     'settings.theme.light': 'Light',
     'settings.theme.system': 'Follow system',
+    'search.category.all': 'All',
+    'search.category.lines': 'Lines',
+    'search.category.operations': 'Operations',
+    'search.category.services': 'Services',
+    'search.category.stations': 'Stations',
+    'search.clear': 'Clear search',
+    'search.emptyPrompt': 'Enter a keyword to search operations, lines, stations, and services.',
+    'search.facilityCount': '{count} facilities',
+    'search.noCategoryResults': 'No matches in this category',
+    'search.noMatch': 'No results matching "{query}"',
+    'search.placeholder': 'Search operations, lines, stations, and services',
+    'search.resultCount': '{count} results',
+    'search.results': 'Search Results',
+    'search.resultFilters': 'Search result categories',
+    'search.resultGroup.lines': 'Lines',
+    'search.resultGroup.operations': 'Operations',
+    'search.resultGroup.services': 'Services and Tools',
+    'search.resultGroup.stations': 'Stations',
+    'search.stationExitCount': '{count} exits',
+    'search.stopCount': '{count} stops',
     'status.loggedIn': 'Signed in',
     'status.noPending': 'No pending items',
     'status.pendingItems': '{count} pending items',

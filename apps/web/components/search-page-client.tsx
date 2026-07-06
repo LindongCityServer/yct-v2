@@ -10,6 +10,7 @@ import type {
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import type { TransitOverview } from '../lib/legacy-transit';
 import { normalizeTitleForSearch, TitleWithBreaks } from './title-with-breaks';
 
@@ -66,6 +67,7 @@ export function SearchPageClient({
   serviceGroups: ServiceEntryGroup[];
   initialQuery: string;
 }>) {
+  const { t } = useI18n();
   const [query, setQuery] = useState(initialQuery);
   const [activeCategory, setActiveCategory] = useState<SearchCategory>('all');
   const normalizedQuery = normalizeTitleForSearch(query.trim());
@@ -164,6 +166,14 @@ export function SearchPageClient({
   const shouldShowLines = activeCategory === 'all' || activeCategory === 'lines';
   const shouldShowStations = activeCategory === 'all' || activeCategory === 'stations';
   const shouldShowServices = activeCategory === 'all' || activeCategory === 'services';
+  const translatedSearchCategories = useMemo(
+    () =>
+      searchCategories.map((category) => ({
+        ...category,
+        label: t(category.labelKey),
+      })),
+    [t],
+  );
 
   return (
     <div className="search-page-stack">
@@ -174,16 +184,16 @@ export function SearchPageClient({
         <input
           autoFocus
           type="search"
-          aria-label="搜索资讯、线路、站点和服务"
+          aria-label={t('search.placeholder')}
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
-          placeholder="搜索资讯、线路、站点和服务"
+          placeholder={t('search.placeholder')}
         />
         {query ? (
           <button
             className="search-clear-button"
             type="button"
-            aria-label="清空搜索"
+            aria-label={t('search.clear')}
             onClick={() => setQuery('')}
           >
             <span className="material-symbols-outlined" aria-hidden="true">
@@ -195,8 +205,10 @@ export function SearchPageClient({
 
       <section className="module-panel search-results-panel" aria-labelledby="search-title">
         <div className="section-heading">
-          <h1 id="search-title">搜索结果</h1>
-          {hasQuery ? <span className="muted">{totalResultCount} 项结果</span> : null}
+          <h1 id="search-title">{t('search.results')}</h1>
+          {hasQuery ? (
+            <span className="muted">{t('search.resultCount', { count: totalResultCount })}</span>
+          ) : null}
         </div>
 
         {!hasQuery ? (
@@ -204,12 +216,12 @@ export function SearchPageClient({
             <span className="material-symbols-outlined" aria-hidden="true">
               search
             </span>
-            <p>输入关键词后显示运营信息、线路、站点和服务结果</p>
+            <p>{t('search.emptyPrompt')}</p>
           </div>
         ) : hasResults ? (
           <>
-            <div className="category-strip search-filter-strip" aria-label="搜索结果分类">
-              {searchCategories.map((category) => {
+            <div className="category-strip search-filter-strip" aria-label={t('search.resultFilters')}>
+              {translatedSearchCategories.map((category) => {
                 const count = resultCounts[category.key];
                 return (
                   <button
@@ -242,7 +254,7 @@ export function SearchPageClient({
                     className="search-result-group"
                     aria-labelledby="search-operations-title"
                   >
-                    <h2 id="search-operations-title">运营信息</h2>
+                    <h2 id="search-operations-title">{t('search.resultGroup.operations')}</h2>
                     <div className="search-result-list">
                       {operationResults.map((item) => (
                         <Link
@@ -270,7 +282,7 @@ export function SearchPageClient({
 
                 {shouldShowLines && lineResults.length > 0 ? (
                   <section className="search-result-group" aria-labelledby="search-lines-title">
-                    <h2 id="search-lines-title">线路</h2>
+                    <h2 id="search-lines-title">{t('search.resultGroup.lines')}</h2>
                     <div className="search-result-list">
                       {lineResults.map((line) => (
                         <Link
@@ -289,7 +301,7 @@ export function SearchPageClient({
                               {modeLabel(line.mode, modeProfileByMode)}
                               {line.firstStationName && line.lastStationName
                                 ? ` · ${line.firstStationName} - ${line.lastStationName}`
-                                : ` · ${line.stationCount} 站`}
+                                : ` · ${t('search.stopCount', { count: line.stationCount })}`}
                             </span>
                           </span>
                         </Link>
@@ -300,7 +312,7 @@ export function SearchPageClient({
 
                 {shouldShowStations && stationResults.length > 0 ? (
                   <section className="search-result-group" aria-labelledby="search-stations-title">
-                    <h2 id="search-stations-title">站点</h2>
+                    <h2 id="search-stations-title">{t('search.resultGroup.stations')}</h2>
                     <div className="search-result-list">
                       {stationResults.map((detail) => (
                         <Link
@@ -319,9 +331,11 @@ export function SearchPageClient({
                             </strong>
                             <span className="muted">
                               {detail.lineName}
-                              {detail.exits.length > 0 ? ` · ${detail.exits.length} 个出入口` : ''}
+                              {detail.exits.length > 0
+                                ? ` · ${t('search.stationExitCount', { count: detail.exits.length })}`
+                                : ''}
                               {detail.facilities.length > 0
-                                ? ` · ${detail.facilities.length} 项设施`
+                                ? ` · ${t('search.facilityCount', { count: detail.facilities.length })}`
                                 : ''}
                             </span>
                           </span>
@@ -333,7 +347,7 @@ export function SearchPageClient({
 
                 {shouldShowServices && serviceResults.length > 0 ? (
                   <section className="search-result-group" aria-labelledby="search-services-title">
-                    <h2 id="search-services-title">服务与工具</h2>
+                    <h2 id="search-services-title">{t('search.resultGroup.services')}</h2>
                     <div className="search-result-list">
                       {serviceResults.map(({ entry, groupTitle }) => (
                         <a
@@ -366,7 +380,7 @@ export function SearchPageClient({
                 <span className="material-symbols-outlined" aria-hidden="true">
                   filter_alt_off
                 </span>
-                <p>当前分类下暂无匹配结果</p>
+                <p>{t('search.noCategoryResults')}</p>
               </div>
             )}
           </>
@@ -375,7 +389,7 @@ export function SearchPageClient({
             <span className="material-symbols-outlined" aria-hidden="true">
               inbox
             </span>
-            <p>暂无匹配“{query.trim()}”的结果</p>
+            <p>{t('search.noMatch', { query: query.trim() })}</p>
           </div>
         )}
       </section>
@@ -383,12 +397,12 @@ export function SearchPageClient({
   );
 }
 
-const searchCategories: Array<{ key: SearchCategory; label: string; icon: string }> = [
-  { key: 'all', label: '全部', icon: 'select_all' },
-  { key: 'operations', label: '运营', icon: 'article' },
-  { key: 'lines', label: '线路', icon: 'route' },
-  { key: 'stations', label: '站点', icon: 'subway' },
-  { key: 'services', label: '服务', icon: 'apps' },
+const searchCategories: Array<{ key: SearchCategory; labelKey: CommonMessageKey; icon: string }> = [
+  { key: 'all', labelKey: 'search.category.all', icon: 'select_all' },
+  { key: 'operations', labelKey: 'search.category.operations', icon: 'article' },
+  { key: 'lines', labelKey: 'search.category.lines', icon: 'route' },
+  { key: 'stations', labelKey: 'search.category.stations', icon: 'subway' },
+  { key: 'services', labelKey: 'search.category.services', icon: 'apps' },
 ];
 
 function toTime(value: string | undefined): number {
