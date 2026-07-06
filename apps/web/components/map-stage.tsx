@@ -12,7 +12,7 @@ import type {
   FormEvent,
   PointerEvent as ReactPointerEvent,
 } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { readMapFavoriteMarkerIds, writeMapFavoriteMarkerIds } from '../lib/client-map-favorites';
 import {
@@ -400,6 +400,7 @@ interface ScaleBarInfo {
 type LoadStatus = 'loading' | 'ready' | 'unavailable';
 type RoadMarkerKind = 'road' | 'highway';
 type MapBrowseMode = 'satellite' | 'road-network' | 'traffic';
+type RoutePlanStatus = 'idle' | 'loading' | 'ready';
 
 const mapBrowseModes: Array<{ value: MapBrowseMode; label: string; icon: string }> = [
   { value: 'satellite', label: '卫星', icon: 'satellite_alt' },
@@ -535,6 +536,8 @@ export function MapStage() {
   const [routeTransportModes, setRouteTransportModes] = useState<EnabledRouteTransportModes>(
     defaultRouteTransportModes,
   );
+  const [routePlanOptions, setRoutePlanOptions] = useState<RoutePlanOption[]>([]);
+  const [routePlanStatus, setRoutePlanStatus] = useState<RoutePlanStatus>('idle');
   const [selectedRouteOptionId, setSelectedRouteOptionId] = useState<string | null>(null);
   const [editingRouteEndpoint, setEditingRouteEndpoint] = useState<RouteEndpointKind | null>(null);
   const [routeEndpointQuery, setRouteEndpointQuery] = useState('');
@@ -543,6 +546,13 @@ export function MapStage() {
   const [favoriteMarkerIds, setFavoriteMarkerIds] = useState<Set<string>>(() => new Set());
   const [poiActionStatus, setPoiActionStatus] = useState('');
   const [sharedMarkerFocusApplied, setSharedMarkerFocusApplied] = useState(false);
+  const roadGraphCacheRef = useRef<{
+    graph?: RoadRouteGraph;
+    source: EndpointGroupMarker[] | null;
+  }>({
+    graph: undefined,
+    source: null,
+  });
 
   useEffect(() => {
     mapViewRef.current = mapView;
@@ -1084,32 +1094,69 @@ export function MapStage() {
     () => buildStationConnectionIndex(transitOverview),
     [transitOverview],
   );
-  const roadGraph = useMemo(
-    () => buildRoadRouteGraph(roadTraceSource),
-    [roadTraceSource],
-  );
-  const routePlanOptions = useMemo(
+  const routePlanRequest = useMemo(
     () =>
       routePlanDraft
-        ? buildRoutePlanOptions({
+        ? {
             draft: routePlanDraft,
             enabledModes: routeTransportModes,
             pointMarkers,
-            roadGraph,
             secondaryPoiIndex,
             transitLines: transitOverview?.lines ?? [],
             modeProfiles: transitOverview?.modeProfiles ?? [],
-          })
-        : [],
+          }
+        : null,
     [
       pointMarkers,
-      roadGraph,
       routePlanDraft,
       routeTransportModes,
       secondaryPoiIndex,
       transitOverview,
     ],
   );
+  useEffect(() => {
+    if (!routePlanDraft || !routePlanRequest) {
+      setRoutePlanOptions([]);
+      setRoutePlanStatus('idle');
+      return;
+    }
+
+    let cancelled = false;
+    setRoutePlanStatus('loading');
+    setRoutePlanOptions([]);
+
+    const timer = window.setTimeout(() => {
+      let roadGraph = roadGraphCacheRef.current.graph;
+      if (roadGraphCacheRef.current.source !== roadTraceSource) {
+        roadGraph = buildRoadRouteGraph(roadTraceSource);
+        roadGraphCacheRef.current = {
+          graph: roadGraph,
+          source: roadTraceSource,
+        };
+      }
+
+      const nextOptions = buildRoutePlanOptions({
+        ...routePlanRequest,
+        roadGraph,
+      });
+      if (cancelled) {
+        return;
+      }
+
+      startTransition(() => {
+        if (cancelled) {
+          return;
+        }
+        setRoutePlanOptions(nextOptions);
+        setRoutePlanStatus('ready');
+      });
+    }, 16);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [roadTraceSource, routePlanDraft, routePlanRequest]);
   const selectedRouteOption =
     routePlanOptions.find((option) => option.id === selectedRouteOptionId) ?? routePlanOptions[0];
   const selectedRouteTrace = useMemo(
@@ -1832,6 +1879,7 @@ export function MapStage() {
               endpointCandidates={routeEndpointCandidates}
               endpointQuery={routeEndpointQuery}
               options={routePlanOptions}
+              status={routePlanStatus}
               selectedOptionId={selectedRouteOption?.id}
               iconBaseUrl={markerIconBaseUrl}
               onBeginEndpointEdit={beginRouteEndpointEdit}
@@ -2928,6 +2976,7 @@ function RoutePlanDraftCard({
   endpointCandidates,
   endpointQuery,
   options,
+  status,
   selectedOptionId,
   iconBaseUrl,
   onBeginEndpointEdit,
@@ -2948,6 +2997,7 @@ function RoutePlanDraftCard({
   endpointCandidates: CenterableMarker[];
   endpointQuery: string;
   options: RoutePlanOption[];
+  status: RoutePlanStatus;
   selectedOptionId?: string;
   iconBaseUrl: string;
   onBeginEndpointEdit: (endpoint: RouteEndpointKind) => void;
@@ -2962,6 +3012,7 @@ function RoutePlanDraftCard({
   onUseMapCenter: () => void;
 }>) {
   const selectedOption = options.find((option) => option.id === selectedOptionId) ?? options[0];
+  const hasEnabledModes = routeTransportModeOptions.some((mode) => enabledModes[mode.mode]);
   const allModesEnabled = routeTransportModeOptions.every((mode) => enabledModes[mode.mode]);
   const [modeListExpanded, setModeListExpanded] = useState(false);
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(() => new Set());
@@ -3153,7 +3204,9 @@ function RoutePlanDraftCard({
                 ) : null}
               </div>
               <div className="map-route-option-list" aria-label="路线方案">
-                {options.length > 0 ? (
+                {status === 'loading' ? (
+                  <p className="map-route-plan-note">正在根据道路和交通方式规划候选路线…</p>
+                ) : options.length > 0 ? (
                   options.map((option, index) => {
                     const isSelected = option.id === selectedOption?.id;
                     const optionBadges = getRouteOptionBadges(option, options, index);
@@ -3282,10 +3335,16 @@ function RoutePlanDraftCard({
                     );
                   })
                 ) : (
-                  <p className="map-route-plan-note">请至少启用一种交通方式。</p>
+                  <p className="map-route-plan-note">
+                    {hasEnabledModes ? '暂未找到可用路线方案。' : '请至少启用一种交通方式。'}
+                  </p>
                 )}
               </div>
-              {selectedOption ? <p className="map-route-plan-note">{selectedOption.note}</p> : null}
+              {status === 'loading' ? (
+                <p className="map-route-plan-note">旧道路图较大时，首次规划可能需要几秒。</p>
+              ) : selectedOption ? (
+                <p className="map-route-plan-note">{selectedOption.note}</p>
+              ) : null}
             </>
           ) : null}
         </>
