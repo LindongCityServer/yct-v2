@@ -1056,7 +1056,7 @@ export function MapStage() {
     [projectedMarkers, rawProjectedMarkers, routeResultMarkerIds],
   );
   const visibleProjectedLinearPois = routeResultActive ? [] : projectedLinearPois;
-  const visibleProjectedRoadTraces = routeResultActive ? [] : projectedRoadTraces;
+  const visibleProjectedRoadTraces = projectedRoadTraces;
   const visibleProjectedTransitTraces = projectedTransitTraces;
   const focusedMarkerCenter =
     focusedMarker && isCenterableMarker(focusedMarker) ? getMarkerCenter(focusedMarker) : undefined;
