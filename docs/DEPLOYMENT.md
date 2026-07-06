@@ -95,7 +95,7 @@ pnpm web:artifact
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -SkipBuild -SkipStaging -ValidateOnly
 ```
 
-该校验会检查 staged HTML/RSC 引用的 `_next/static`、图标、manifest 和 service worker 是否存在；当 `BasePath` 为 `/v2` 时，也会拦截没有 `/v2` 前缀的同源静态资源链接。
+该校验会检查 staged HTML/RSC 引用的 `_next/static`、图标、manifest 和 service worker 是否存在；当脚本本次重新生成 staging 时，还会检查 `apps/web/public/sw.js` 的 `YCT_SW_VERSION` 是否已经被改写为本次构建号。当 `BasePath` 为 `/v2` 时，也会拦截没有 `/v2` 前缀的同源静态资源链接。
 
 ## 云服务器运行
 
@@ -162,8 +162,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 33
 ```text
 https://yct.shangxiaoguan.top/v2/map
 https://yct.shangxiaoguan.top/v2/api/map/markers
+https://yct.shangxiaoguan.top/v2/sw.js
 https://yct.shangxiaoguan.top/v2/_next/static/...
 ```
+
+可以用下面的命令快速核对云端 Service Worker 是否已经换成当前部署包里的版本：
+
+```powershell
+Get-Content .\apps\web\public\sw.js -TotalCount 1
+(Invoke-WebRequest -Uri "https://yct.shangxiaoguan.top/v2/sw.js?check=$(Get-Date -Format yyyyMMddHHmmss)" -UseBasicParsing -Headers @{ "Cache-Control" = "no-cache"; "Pragma" = "no-cache" }).Content.Split("`n")[0]
+```
+
+两行都应是形如 `const YCT_SW_VERSION = '20260706-xxxxxx';` 的同一个构建号。如果线上仍是旧版本号，优先检查部署目录是否被完整清空后解压、反代是否指向本次目录，以及宝塔/Nginx 是否对 `/v2/sw.js` 施加了额外缓存。
 
 如果页面 HTML 里出现 `/_next/static/...` 或 `/api/...` 这类没有 `/v2` 的同源链接，通常表示运行的不是按 `/v2` 构建的包，或云端进程仍指向旧构建。
 

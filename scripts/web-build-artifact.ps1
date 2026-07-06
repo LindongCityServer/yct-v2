@@ -286,7 +286,8 @@ function Convert-YctUrlPathToStagedPath {
 function Assert-YctStagedWebAssetConsistency {
   param(
     [Parameter(Mandatory = $true)][string]$StageRoot,
-    [Parameter(Mandatory = $true)][string]$BasePath
+    [Parameter(Mandatory = $true)][string]$BasePath,
+    [string]$BuildId = ""
   )
 
   $webRoot = Join-Path $StageRoot "apps\web"
@@ -350,6 +351,15 @@ function Assert-YctStagedWebAssetConsistency {
   if ($missingAssets.Count -gt 0) {
     $sample = ($missingAssets | Select-Object -First 12) -join [Environment]::NewLine
     throw "Staged output references assets that are not included in the deployment bundle:$([Environment]::NewLine)$sample"
+  }
+
+  $serviceWorkerPath = Join-Path $webRoot "public\sw.js"
+  if (-not [string]::IsNullOrWhiteSpace($BuildId) -and (Test-Path -LiteralPath $serviceWorkerPath)) {
+    $serviceWorker = [System.IO.File]::ReadAllText($serviceWorkerPath, [System.Text.Encoding]::UTF8)
+    $expectedVersionLine = "const YCT_SW_VERSION = '$BuildId';"
+    if (-not $serviceWorker.Contains($expectedVersionLine)) {
+      throw "Staged service worker version does not match the deployment build id. Expected line: $expectedVersionLine"
+    }
   }
 }
 
@@ -483,14 +493,15 @@ Notes:
 - If the reverse proxy is mounted at /v2, build and start with BasePath /v2. If it is mounted at the site root later, rebuild with an empty BasePath.
 - Stop the old process before deployment and unpack this bundle into an empty deployment directory, or clean the old standalone files first. Do not merge it over an old .next directory: server.js, .next/server, and .next/static must come from the same build.
 - If returning users still see an older version, check that the old Node process is stopped, the deployment directory does not contain stale .next/static files, and the reverse proxy or browser Service Worker is not serving cached HTML/RSC responses.
-- After deployment, /v2/map, /v2/api/map/markers, and the /v2/_next/static assets referenced by the page HTML should all return 200.
+- After deployment, /v2/map, /v2/api/map/markers, /v2/sw.js, and the /v2/_next/static assets referenced by the page HTML should all return 200. The first line of /v2/sw.js should contain: const YCT_SW_VERSION = '$buildId';
 "@
 
   Write-YctUtf8File -Path (Join-Path $stageRoot "start-yct-web.ps1") -Content $startScript
   Write-YctUtf8File -Path (Join-Path $stageRoot "DEPLOYMENT.txt") -Content $deploymentNotes
 }
 
-Assert-YctStagedWebAssetConsistency -StageRoot $stageRoot -BasePath $basePathValue
+$consistencyBuildId = if ($SkipStaging) { "" } else { $buildId }
+Assert-YctStagedWebAssetConsistency -StageRoot $stageRoot -BasePath $basePathValue -BuildId $consistencyBuildId
 
 if ($ValidateOnly) {
   $result = [pscustomobject]@{
@@ -498,6 +509,7 @@ if ($ValidateOnly) {
     StagingDirectory = $stageRoot
     SkippedStaging = [bool]$SkipStaging
     BasePath = $basePathValue
+    BuildId = if ($SkipStaging) { $null } else { $buildId }
     StartScript = "start-yct-web.ps1"
     NodeRequirement = ">=20.9.0"
   }
@@ -576,6 +588,7 @@ $result = [pscustomobject]@{
   StagingDirectory = $stageRoot
   SkippedStaging = [bool]$SkipStaging
   BasePath = $basePathValue
+  BuildId = $buildId
   StartScript = "start-yct-web.ps1"
   NodeRequirement = ">=20.9.0"
 }
