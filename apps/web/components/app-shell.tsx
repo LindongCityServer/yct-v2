@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
-import { useI18n } from '../lib/client-i18n';
+import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { ticketOrderStateChangedEventName } from '../lib/client-ticket-orders';
 import {
   readTripReminderState,
@@ -351,22 +351,27 @@ function formatBadgeCount(count: number): string {
 
 export function SecondaryShell({
   title,
+  titleKey,
   backHref = '/',
   legalVariant = 'none',
   children,
 }: Readonly<{
   title: string;
+  titleKey?: CommonMessageKey;
   backHref?: string;
   legalVariant?: 'none' | 'mobile' | 'always';
   children: ReactNode;
 }>) {
+  const { t } = useI18n();
+  const renderedTitle = titleKey ? t(titleKey) : title;
+
   return (
     <main className="secondary-shell">
       <header className="topbar secondary-topbar">
-        <Link className="icon-button" href={appPath(backHref)} aria-label="返回">
+        <Link className="icon-button" href={appPath(backHref)} aria-label={t('nav.back')}>
           <span className="material-symbols-outlined">arrow_back</span>
         </Link>
-        <h1 className="secondary-title">{title}</h1>
+        <h1 className="secondary-title">{renderedTitle}</h1>
         <div className="secondary-actions" />
       </header>
       <section className="secondary-content">{children}</section>

@@ -22,7 +22,7 @@ export default async function OperationDetailPage({
   }
 
   return (
-    <SecondaryShell title="运营信息">
+    <SecondaryShell title="运营信息" titleKey="page.operations">
       <article className="operation-detail">
         <header className="operation-detail-header">
           <div className="feed-item-meta">

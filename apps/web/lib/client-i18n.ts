@@ -15,12 +15,20 @@ export type CommonMessageKey =
   | 'account.status.unavailable'
   | 'brand.home'
   | 'nav.collapse'
+  | 'nav.back'
   | 'nav.expand'
   | 'nav.label'
   | 'nav.map'
   | 'nav.operations'
   | 'nav.services'
   | 'nav.travel'
+  | 'page.account'
+  | 'page.offline'
+  | 'page.operations'
+  | 'page.scheduleSearch'
+  | 'page.search'
+  | 'page.ticketOrder'
+  | 'page.travelScreen'
   | 'quickAction.rideCode'
   | 'quickAction.rideCodeLoginRequired'
   | 'search.open'
@@ -83,6 +91,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.status.readonly': '只读账号',
     'account.status.unavailable': '账号状态暂不可用',
     'brand.home': '雨城通首页',
+    'nav.back': '返回',
     'nav.collapse': '收起主导航',
     'nav.expand': '展开主导航',
     'nav.label': '主导航',
@@ -90,6 +99,13 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'nav.operations': '运营',
     'nav.services': '服务',
     'nav.travel': '出行',
+    'page.account': '账号设置',
+    'page.offline': '离线',
+    'page.operations': '运营信息',
+    'page.scheduleSearch': '班次查询',
+    'page.search': '搜索',
+    'page.ticketOrder': '票务订单',
+    'page.travelScreen': '智运大屏',
     'quickAction.rideCode': '乘车码',
     'quickAction.rideCodeLoginRequired': '乘车码需要登录后使用',
     'search.open': '搜索',
@@ -149,6 +165,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.status.readonly': '唯讀帳號',
     'account.status.unavailable': '帳號狀態暫不可用',
     'brand.home': '雨城通首頁',
+    'nav.back': '返回',
     'nav.collapse': '收合主導覽',
     'nav.expand': '展開主導覽',
     'nav.label': '主導覽',
@@ -156,6 +173,13 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'nav.operations': '營運',
     'nav.services': '服務',
     'nav.travel': '出行',
+    'page.account': '帳號設定',
+    'page.offline': '離線',
+    'page.operations': '營運資訊',
+    'page.scheduleSearch': '班次查詢',
+    'page.search': '搜尋',
+    'page.ticketOrder': '票務訂單',
+    'page.travelScreen': '智運大屏',
     'quickAction.rideCode': '乘車碼',
     'quickAction.rideCodeLoginRequired': '乘車碼需要登入後使用',
     'search.open': '搜尋',
@@ -215,6 +239,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.status.readonly': 'Read-only account',
     'account.status.unavailable': 'Account status unavailable',
     'brand.home': 'Yuchengtong Home',
+    'nav.back': 'Back',
     'nav.collapse': 'Collapse main navigation',
     'nav.expand': 'Expand main navigation',
     'nav.label': 'Main navigation',
@@ -222,6 +247,13 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'nav.operations': 'Operations',
     'nav.services': 'Services',
     'nav.travel': 'Travel',
+    'page.account': 'Account Settings',
+    'page.offline': 'Offline',
+    'page.operations': 'Operations',
+    'page.scheduleSearch': 'Schedule Search',
+    'page.search': 'Search',
+    'page.ticketOrder': 'Ticket Order',
+    'page.travelScreen': 'Operations Board',
     'quickAction.rideCode': 'Ride Code',
     'quickAction.rideCodeLoginRequired': 'Sign in to use the ride code',
     'search.open': 'Search',

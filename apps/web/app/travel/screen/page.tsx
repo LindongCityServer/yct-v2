@@ -8,7 +8,7 @@ export default async function TransitScreenPage() {
   const screen = await readTransitScreenSnapshot();
 
   return (
-    <SecondaryShell title="智运大屏" backHref="/travel">
+    <SecondaryShell title="智运大屏" titleKey="page.travelScreen" backHref="/travel">
       {screen.item && screen.meta.sourceStatus === 'ready' ? (
         <TransitScreenDetailPanel snapshot={screen.item} />
       ) : (

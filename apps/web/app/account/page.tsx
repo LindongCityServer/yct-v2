@@ -18,7 +18,7 @@ export default async function AccountPage({
     : (resolvedSearchParams?.auth ?? '');
 
   return (
-    <SecondaryShell title="账号设置" legalVariant="mobile">
+    <SecondaryShell title="账号设置" titleKey="page.account" legalVariant="mobile">
       <AccountSettingsPanel
         auth={{
           ldpassConfigured: Boolean(config.ldpassBaseUrl && config.ldpassClientId),

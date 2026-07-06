@@ -11,7 +11,7 @@ export default async function TicketOrderDetailPage({
   const { orderId } = await params;
 
   return (
-    <SecondaryShell title="票务订单" backHref="/account">
+    <SecondaryShell title="票务订单" titleKey="page.ticketOrder" backHref="/account">
       <TicketOrderDetailPanel orderId={decodeSegment(orderId)} />
     </SecondaryShell>
   );

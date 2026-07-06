@@ -23,7 +23,7 @@ export default async function SearchPage({
   const initialQuery = Array.isArray(q) ? (q[0] ?? '') : (q ?? '');
 
   return (
-    <SecondaryShell title="搜索">
+    <SecondaryShell title="搜索" titleKey="page.search">
       <SearchPageClient
         feed={feed}
         transit={transit}

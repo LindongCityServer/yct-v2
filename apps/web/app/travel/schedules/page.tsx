@@ -8,7 +8,7 @@ export default async function TravelSchedulesPage() {
   const schedules = await readTravelScheduleQuery();
 
   return (
-    <SecondaryShell title="班次查询" backHref="/travel">
+    <SecondaryShell title="班次查询" titleKey="page.scheduleSearch" backHref="/travel">
       {schedules.item ? (
         <TravelScheduleQueryPanel result={schedules.item} />
       ) : (

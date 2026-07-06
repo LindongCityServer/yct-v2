@@ -4,7 +4,7 @@ import { appPath } from '../../lib/app-paths';
 
 export default function OfflinePage() {
   return (
-    <SecondaryShell title="离线">
+    <SecondaryShell title="离线" titleKey="page.offline">
       <section className="module-panel offline-page-panel" aria-labelledby="offline-title">
         <span className="material-symbols-outlined" aria-hidden="true">
           cloud_off
