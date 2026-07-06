@@ -22,6 +22,14 @@ export type CommonMessageKey =
   | 'nav.operations'
   | 'nav.services'
   | 'nav.travel'
+  | 'offline.actions'
+  | 'offline.description'
+  | 'offline.manageAfterOnline'
+  | 'offline.map'
+  | 'offline.note'
+  | 'offline.operations'
+  | 'offline.schedules'
+  | 'offline.title'
   | 'page.account'
   | 'page.offline'
   | 'page.operations'
@@ -38,6 +46,9 @@ export type CommonMessageKey =
   | 'settings.accent.ldpass'
   | 'settings.accent.red'
   | 'settings.appearanceLanguage'
+  | 'settings.font.harmony'
+  | 'settings.font.label'
+  | 'settings.font.system'
   | 'settings.language.en'
   | 'settings.language.label'
   | 'settings.language.savedLocal'
@@ -99,6 +110,16 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'nav.operations': '运营',
     'nav.services': '服务',
     'nav.travel': '出行',
+    'offline.actions': '离线相关入口',
+    'offline.description':
+      '可以继续打开近期访问过的运营信息、线路、站点详情和服务入口。恢复联网后，雨城通会重新读取最新数据。',
+    'offline.manageAfterOnline': '联网后管理',
+    'offline.map': '地图探索',
+    'offline.note':
+      '如果这些入口无法打开，说明对应内容尚未被缓存。联网后可在账号设置中刷新缓存或更新自定义离线范围。',
+    'offline.operations': '运营信息',
+    'offline.schedules': '班次查询',
+    'offline.title': '当前网络不可用',
     'page.account': '账号设置',
     'page.offline': '离线',
     'page.operations': '运营信息',
@@ -115,6 +136,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.accent.ldpass': '跟随 ldpass',
     'settings.accent.red': '红色',
     'settings.appearanceLanguage': '外观与语言',
+    'settings.font.harmony': 'HarmonyOS Sans',
+    'settings.font.label': '字体',
+    'settings.font.system': '系统',
     'settings.language.en': 'English',
     'settings.language.label': '语言',
     'settings.language.savedLocal': '已保存到本设备',
@@ -173,6 +197,16 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'nav.operations': '營運',
     'nav.services': '服務',
     'nav.travel': '出行',
+    'offline.actions': '離線相關入口',
+    'offline.description':
+      '可以繼續開啟近期訪問過的營運資訊、線路、站點詳情和服務入口。恢復連線後，雨城通會重新讀取最新資料。',
+    'offline.manageAfterOnline': '連線後管理',
+    'offline.map': '地圖探索',
+    'offline.note':
+      '如果這些入口無法開啟，表示對應內容尚未被快取。連線後可在帳號設定中重新整理快取或更新自訂離線範圍。',
+    'offline.operations': '營運資訊',
+    'offline.schedules': '班次查詢',
+    'offline.title': '目前網路不可用',
     'page.account': '帳號設定',
     'page.offline': '離線',
     'page.operations': '營運資訊',
@@ -189,6 +223,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.accent.ldpass': '跟隨 ldpass',
     'settings.accent.red': '紅色',
     'settings.appearanceLanguage': '外觀與語言',
+    'settings.font.harmony': 'HarmonyOS Sans',
+    'settings.font.label': '字體',
+    'settings.font.system': '系統',
     'settings.language.en': 'English',
     'settings.language.label': '語言',
     'settings.language.savedLocal': '已儲存到本機',
@@ -247,6 +284,16 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'nav.operations': 'Operations',
     'nav.services': 'Services',
     'nav.travel': 'Travel',
+    'offline.actions': 'Offline shortcuts',
+    'offline.description':
+      'You can continue opening recently visited operations, lines, station details, and service entries. YCT will refresh the latest data after the connection is restored.',
+    'offline.manageAfterOnline': 'Manage online',
+    'offline.map': 'Map Explore',
+    'offline.note':
+      'If these shortcuts cannot open, the content has not been cached yet. Once online, refresh the cache or update custom offline areas in account settings.',
+    'offline.operations': 'Operations',
+    'offline.schedules': 'Schedule Search',
+    'offline.title': 'Network unavailable',
     'page.account': 'Account Settings',
     'page.offline': 'Offline',
     'page.operations': 'Operations',
@@ -263,6 +310,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.accent.ldpass': 'Follow ldpass',
     'settings.accent.red': 'Red',
     'settings.appearanceLanguage': 'Appearance and Language',
+    'settings.font.harmony': 'HarmonyOS Sans',
+    'settings.font.label': 'Font',
+    'settings.font.system': 'System',
     'settings.language.en': 'English',
     'settings.language.label': 'Language',
     'settings.language.savedLocal': 'Saved on this device',

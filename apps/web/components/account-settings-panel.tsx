@@ -42,12 +42,15 @@ import {
 } from '../lib/client-trip-reminders';
 import {
   type AccentMode,
+  type FontMode,
   type MotionMode,
   type ThemeMode,
   applyAccentMode,
+  applyFontMode,
   applyMotionMode,
   applyThemeMode,
   readAccentMode,
+  readFontMode,
   readMotionMode,
   readThemeMode,
 } from './preference-bridge';
@@ -86,6 +89,11 @@ const motionOptionKeys: Array<{ value: MotionMode; labelKey: CommonMessageKey }>
   { value: 'system', labelKey: 'settings.motion.system' },
   { value: 'full', labelKey: 'settings.motion.full' },
   { value: 'reduced', labelKey: 'settings.motion.reduced' },
+];
+
+const fontOptionKeys: Array<{ value: FontMode; labelKey: CommonMessageKey }> = [
+  { value: 'harmony', labelKey: 'settings.font.harmony' },
+  { value: 'system', labelKey: 'settings.font.system' },
 ];
 
 const localeOptionKeys: Array<{ value: LocalePreference; labelKey: CommonMessageKey }> = [
@@ -239,6 +247,14 @@ export function AccountSettingsPanel({
       })),
     [t],
   );
+  const fontOptions = useMemo(
+    () =>
+      fontOptionKeys.map((option) => ({
+        value: option.value,
+        label: t(option.labelKey),
+      })),
+    [t],
+  );
   const localeOptions = useMemo(
     () =>
       localeOptionKeys.map((option) => ({
@@ -250,6 +266,7 @@ export function AccountSettingsPanel({
   const [themeMode, setThemeMode] = useState<ThemeMode>('system');
   const [accentMode, setAccentMode] = useState<AccentMode>('ldpass');
   const [motionMode, setMotionMode] = useState<MotionMode>('system');
+  const [fontMode, setFontMode] = useState<FontMode>('harmony');
   const [localeMode, setLocaleMode] = useState<LocalePreference>('system');
   const [localeStatusState, setLocaleStatusState] = useState<ClientLocalePreferenceState | null>(
     null,
@@ -370,6 +387,7 @@ export function AccountSettingsPanel({
     setThemeMode(readThemeMode());
     setAccentMode(readAccentMode());
     setMotionMode(readMotionMode());
+    setFontMode(readFontMode());
     const localLocalePreference = readLocalLocalePreference();
     applyLocalePreferenceState(localLocalePreference);
     setLocaleStatusState(localLocalePreference);
@@ -497,6 +515,11 @@ export function AccountSettingsPanel({
   const updateMotionMode = (mode: MotionMode) => {
     setMotionMode(mode);
     applyMotionMode(mode);
+  };
+
+  const updateFontMode = (mode: FontMode) => {
+    setFontMode(mode);
+    applyFontMode(mode);
   };
 
   const updateLocaleMode = (locale: LocalePreference) => {
@@ -906,6 +929,12 @@ export function AccountSettingsPanel({
               options={accentOptions}
               value={accentMode}
               onChange={updateAccentMode}
+            />
+            <SegmentedControl
+              label={t('settings.font.label')}
+              options={fontOptions}
+              value={fontMode}
+              onChange={updateFontMode}
             />
             <SegmentedControl
               label={t('settings.language.label')}

@@ -5,11 +5,13 @@ import { useEffect } from 'react';
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type AccentMode = 'ldpass' | 'green' | 'red' | 'gray';
 export type MotionMode = 'system' | 'full' | 'reduced';
+export type FontMode = 'harmony' | 'system';
 
 export const preferenceKeys = {
   theme: 'yct.themeMode',
   accent: 'yct.accentMode',
   motion: 'yct.motionMode',
+  font: 'yct.fontMode',
 } as const;
 
 export function applyThemeMode(mode: ThemeMode) {
@@ -35,6 +37,15 @@ export function applyMotionMode(mode: MotionMode) {
   window.localStorage.setItem(preferenceKeys.motion, mode);
 }
 
+export function applyFontMode(mode: FontMode) {
+  if (mode === 'system') {
+    document.documentElement.dataset.font = mode;
+  } else {
+    delete document.documentElement.dataset.font;
+  }
+  window.localStorage.setItem(preferenceKeys.font, mode);
+}
+
 export function readThemeMode(): ThemeMode {
   const value = window.localStorage.getItem(preferenceKeys.theme);
   return value === 'light' || value === 'dark' || value === 'system' ? value : 'system';
@@ -52,10 +63,16 @@ export function readMotionMode(): MotionMode {
   return value === 'full' || value === 'reduced' || value === 'system' ? value : 'system';
 }
 
+export function readFontMode(): FontMode {
+  const value = window.localStorage.getItem(preferenceKeys.font);
+  return value === 'system' || value === 'harmony' ? value : 'harmony';
+}
+
 function applyStoredPreferences() {
   applyThemeMode(readThemeMode());
   applyAccentMode(readAccentMode());
   applyMotionMode(readMotionMode());
+  applyFontMode(readFontMode());
 }
 
 export function PreferenceBridge() {

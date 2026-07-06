@@ -165,7 +165,8 @@ components:
 
 ## Typography
 
-- **Headlines**：使用系统 sans 字体，700 权重，标题要短，不在紧凑面板里使用过大的字号。
+- **Font family**：默认使用随旧系统迁移的 `HarmonyOS Sans SC`，并在账号设置中允许用户切换回系统 sans 字体。
+- **Headlines**：使用当前字体 token，700 权重，标题要短，不在紧凑面板里使用过大的字号。
 - **Body**：正文以 16px / 14px 为主，行高 1.5，适合资讯列表、内容页和设置页。
 - **Labels**：按钮、导航和状态标签使用 14px 半粗体；元信息使用 12px caption。
 - **Letter spacing**：全部保持 `0px`，不使用负字距或装饰性大字距。
