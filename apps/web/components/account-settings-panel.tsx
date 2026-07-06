@@ -3,13 +3,14 @@
 import type {
   ApiItemResponse,
   ApiListResponse,
+  LocaleCode,
   LocalePreference,
   RectangleBounds,
   TicketOrderListItem,
   TripReminder,
   YctAccountSessionSnapshot,
 } from '@yct/contracts';
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   calculateBoundsArea,
   createOfflinePackage,
@@ -64,33 +65,34 @@ import {
   writeLocalLocalePreference,
   type ClientLocalePreferenceState,
 } from '../lib/client-locale-preference';
+import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { notifyTicketOrderStateChanged } from '../lib/client-ticket-orders';
 import { TicketOrderDraftPanel } from './ticket-order-draft-panel';
 
-const themeOptions: Array<{ value: ThemeMode; label: string }> = [
-  { value: 'system', label: '跟随系统' },
-  { value: 'light', label: '浅色' },
-  { value: 'dark', label: '深色' },
+const themeOptionKeys: Array<{ value: ThemeMode; labelKey: CommonMessageKey }> = [
+  { value: 'system', labelKey: 'settings.theme.system' },
+  { value: 'light', labelKey: 'settings.theme.light' },
+  { value: 'dark', labelKey: 'settings.theme.dark' },
 ];
 
-const accentOptions: Array<{ value: AccentMode; label: string }> = [
-  { value: 'ldpass', label: '跟随 ldpass' },
-  { value: 'green', label: '青绿' },
-  { value: 'red', label: '红色' },
-  { value: 'gray', label: '灰色' },
+const accentOptionKeys: Array<{ value: AccentMode; labelKey: CommonMessageKey }> = [
+  { value: 'ldpass', labelKey: 'settings.accent.ldpass' },
+  { value: 'green', labelKey: 'settings.accent.green' },
+  { value: 'red', labelKey: 'settings.accent.red' },
+  { value: 'gray', labelKey: 'settings.accent.gray' },
 ];
 
-const motionOptions: Array<{ value: MotionMode; label: string }> = [
-  { value: 'system', label: '跟随系统' },
-  { value: 'full', label: '开启' },
-  { value: 'reduced', label: '关闭' },
+const motionOptionKeys: Array<{ value: MotionMode; labelKey: CommonMessageKey }> = [
+  { value: 'system', labelKey: 'settings.motion.system' },
+  { value: 'full', labelKey: 'settings.motion.full' },
+  { value: 'reduced', labelKey: 'settings.motion.reduced' },
 ];
 
-const localeOptions: Array<{ value: LocalePreference; label: string }> = [
-  { value: 'system', label: '跟随系统' },
-  { value: 'zh-CN', label: '简体' },
-  { value: 'zh-Hant', label: '繁體' },
-  { value: 'en', label: 'English' },
+const localeOptionKeys: Array<{ value: LocalePreference; labelKey: CommonMessageKey }> = [
+  { value: 'system', labelKey: 'settings.language.system' },
+  { value: 'zh-CN', labelKey: 'settings.language.zhCN' },
+  { value: 'zh-Hant', labelKey: 'settings.language.zhHant' },
+  { value: 'en', labelKey: 'settings.language.en' },
 ];
 
 type PwaInstallStatus = 'checking' | 'installed' | 'installable' | 'manual' | 'unsupported';
@@ -209,14 +211,56 @@ export function AccountSettingsPanel({
     session?: YctAccountSessionSnapshot;
   };
 }>) {
+  const { t } = useI18n();
   const ticketOrderLockedText = auth.session?.readonlyUser
     ? '账号为只读状态，Active 后可查看订单草稿。'
     : '登录后可查看订单草稿。';
+  const themeOptions = useMemo(
+    () =>
+      themeOptionKeys.map((option) => ({
+        value: option.value,
+        label: t(option.labelKey),
+      })),
+    [t],
+  );
+  const accentOptions = useMemo(
+    () =>
+      accentOptionKeys.map((option) => ({
+        value: option.value,
+        label: t(option.labelKey),
+      })),
+    [t],
+  );
+  const motionOptions = useMemo(
+    () =>
+      motionOptionKeys.map((option) => ({
+        value: option.value,
+        label: t(option.labelKey),
+      })),
+    [t],
+  );
+  const localeOptions = useMemo(
+    () =>
+      localeOptionKeys.map((option) => ({
+        value: option.value,
+        label: t(option.labelKey),
+      })),
+    [t],
+  );
   const [themeMode, setThemeMode] = useState<ThemeMode>('system');
   const [accentMode, setAccentMode] = useState<AccentMode>('ldpass');
   const [motionMode, setMotionMode] = useState<MotionMode>('system');
   const [localeMode, setLocaleMode] = useState<LocalePreference>('system');
-  const [localeStatusText, setLocaleStatusText] = useState('');
+  const [localeStatusState, setLocaleStatusState] = useState<ClientLocalePreferenceState | null>(
+    null,
+  );
+  const [localeStatusFallbackKey, setLocaleStatusFallbackKey] =
+    useState<CommonMessageKey | null>(null);
+  const localeStatusText = localeStatusFallbackKey
+    ? t(localeStatusFallbackKey)
+    : localeStatusState
+      ? formatLocaleStatus(localeStatusState, t)
+      : '';
   const [notificationEnabled, setNotificationEnabled] = useState(false);
   const [pushDeviceStatusText, setPushDeviceStatusText] = useState('');
   const [isSyncingPushDevice, setIsSyncingPushDevice] = useState(false);
@@ -328,7 +372,8 @@ export function AccountSettingsPanel({
     setMotionMode(readMotionMode());
     const localLocalePreference = readLocalLocalePreference();
     applyLocalePreferenceState(localLocalePreference);
-    setLocaleStatusText(formatLocaleStatus(localLocalePreference));
+    setLocaleStatusState(localLocalePreference);
+    setLocaleStatusFallbackKey(null);
     setNotificationEnabled(window.localStorage.getItem('yct.notifications.enabled') === 'true');
     setNotificationTypes(readNotificationTypePreferences());
     setQuietStart(window.localStorage.getItem('yct.notifications.quietStart') ?? '23:00');
@@ -352,7 +397,8 @@ export function AccountSettingsPanel({
             updatedAt: preference.updatedAt,
             source: 'server',
           });
-          setLocaleStatusText(formatLocaleStatus(preference));
+          setLocaleStatusState(preference);
+          setLocaleStatusFallbackKey(null);
         })
         .catch(() => undefined);
 
@@ -456,7 +502,8 @@ export function AccountSettingsPanel({
   const updateLocaleMode = (locale: LocalePreference) => {
     const localPreference = writeLocalLocalePreference(locale);
     applyLocalePreferenceState(localPreference);
-    setLocaleStatusText(formatLocaleStatus(localPreference));
+    setLocaleStatusState(localPreference);
+    setLocaleStatusFallbackKey(null);
 
     if (!auth.session?.user) {
       return;
@@ -465,10 +512,11 @@ export function AccountSettingsPanel({
     void updateServerLocalePreference(locale)
       .then((preference) => {
         applyLocalePreferenceState(preference);
-        setLocaleStatusText(formatLocaleStatus(preference));
+        setLocaleStatusState(preference);
+        setLocaleStatusFallbackKey(null);
       })
       .catch(() => {
-        setLocaleStatusText('已保存到本设备');
+        setLocaleStatusFallbackKey('settings.language.savedLocal');
       });
   };
 
@@ -824,10 +872,14 @@ export function AccountSettingsPanel({
     <section className="module-panel" aria-labelledby="account-title">
       <div className="section-heading">
         <h1 id="account-title" className="sr-only">
-          账号设置
+          {t('account.settings')}
         </h1>
         <span className="muted">
-          {auth.session?.user ? '已登录' : auth.session?.readonlyUser ? '只读账号' : '未登录'}
+          {auth.session?.user
+            ? t('status.loggedIn')
+            : auth.session?.readonlyUser
+              ? t('account.status.readonly')
+              : t('account.status.anonymous')}
         </span>
       </div>
       <AccountAuthPanel auth={auth} />
@@ -837,26 +889,26 @@ export function AccountSettingsPanel({
             <span className="material-symbols-outlined" aria-hidden="true">
               palette
             </span>
-            <span id="theme-settings-title">外观与语言</span>
+            <span id="theme-settings-title">{t('settings.appearanceLanguage')}</span>
             {localeStatusText ? (
               <span className="settings-inline-status">{localeStatusText}</span>
             ) : null}
           </div>
           <div className="settings-control-grid">
             <SegmentedControl
-              label="主题"
+              label={t('settings.theme.label')}
               options={themeOptions}
               value={themeMode}
               onChange={updateThemeMode}
             />
             <SegmentedControl
-              label="强调色"
+              label={t('settings.accent.label')}
               options={accentOptions}
               value={accentMode}
               onChange={updateAccentMode}
             />
             <SegmentedControl
-              label="语言"
+              label={t('settings.language.label')}
               options={localeOptions}
               value={localeMode}
               onChange={updateLocaleMode}
@@ -872,10 +924,10 @@ export function AccountSettingsPanel({
             <span className="material-symbols-outlined" aria-hidden="true">
               animation
             </span>
-            <span id="motion-settings-title">动态效果</span>
+            <span id="motion-settings-title">{t('settings.motion.group')}</span>
           </div>
           <SegmentedControl
-            label="动态"
+            label={t('settings.motion.label')}
             options={motionOptions}
             value={motionMode}
             onChange={updateMotionMode}
@@ -1387,19 +1439,24 @@ function authStatusMessage(status: AuthStatus): string {
   return messages[status];
 }
 
-function formatLocaleStatus(preference: ClientLocalePreferenceState): string {
-  const resolvedLabels = {
-    'zh-CN': '简体中文',
-    'zh-Hant': '繁體中文',
-    en: 'English',
-  } satisfies Record<ClientLocalePreferenceState['resolvedLocale'], string>;
-  const sourceLabels: Record<ClientLocalePreferenceState['source'], string> = {
-    default: '默认',
-    local: '本机',
-    server: '账号',
+function formatLocaleStatus(
+  preference: ClientLocalePreferenceState,
+  t: (key: CommonMessageKey) => string,
+): string {
+  const resolvedLabelKeys = {
+    'zh-CN': 'settings.language.zhCN',
+    'zh-Hant': 'settings.language.zhHant',
+    en: 'settings.language.en',
+  } satisfies Record<LocaleCode, CommonMessageKey>;
+  const sourceLabelKeys: Record<ClientLocalePreferenceState['source'], CommonMessageKey> = {
+    default: 'settings.language.source.default',
+    local: 'settings.language.source.local',
+    server: 'settings.language.source.account',
   };
 
-  return `${sourceLabels[preference.source]} · ${resolvedLabels[preference.resolvedLocale]}`;
+  return `${t(sourceLabelKeys[preference.source])} · ${t(
+    resolvedLabelKeys[preference.resolvedLocale],
+  )}`;
 }
 
 function SegmentedControl<TValue extends string>({
