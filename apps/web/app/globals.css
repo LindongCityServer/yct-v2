@@ -1573,6 +1573,73 @@ body .material-symbols-outlined {
   font-size: 17px;
 }
 
+.map-route-step-content {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.map-route-step-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.map-route-step-main > span:first-child {
+  min-width: 0;
+}
+
+.map-route-step-expand {
+  --icon-fill: 1;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-text-muted) 10%, transparent);
+  color: var(--yct-color-text-secondary);
+  cursor: pointer;
+}
+
+.map-route-step-expand .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.map-route-step-detail-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 2px 0 6px;
+  list-style: none;
+}
+
+.map-route-step-detail-list li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 24px;
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.map-route-step-detail-list .material-symbols-outlined {
+  --icon-fill: 1;
+  color: var(--route-step-color);
+  font-size: 17px;
+}
+
+.map-route-step-detail-list small {
+  color: var(--yct-color-text-muted);
+  font: inherit;
+  white-space: nowrap;
+}
+
 .map-route-step-timeline li.is-place {
   min-height: 34px;
   color: var(--yct-color-text);

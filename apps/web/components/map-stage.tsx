@@ -285,9 +285,16 @@ interface RoutePlanOption {
 interface RoutePlanStep {
   kind: 'place' | 'walk' | 'transit' | 'transfer';
   color?: string;
+  details?: RoutePlanStepDetail[];
   label: string;
   icon?: string;
   role?: 'origin' | 'destination' | 'boarding' | 'alighting' | 'transfer';
+}
+
+interface RoutePlanStepDetail {
+  icon: string;
+  label: string;
+  meta?: string;
 }
 
 interface RoutePlanTraceSegment {
@@ -328,6 +335,11 @@ interface SecondaryPoiGroup {
   id: string;
   label: string;
   items: SecondaryPoiLink[];
+}
+
+interface SecondaryPoiParentLink {
+  childLabel: string;
+  parent: PointMarker;
 }
 
 interface NearbySearchCenter {
@@ -746,10 +758,17 @@ export function MapStage() {
     [focusedMarkerId, pointMarkers],
   );
   const secondaryPoiIndex = useMemo(() => buildSecondaryPoiIndex(pointMarkers), [pointMarkers]);
+  const secondaryPoiParentIndex = useMemo(
+    () => buildSecondaryPoiParentIndex(pointMarkers),
+    [pointMarkers],
+  );
   const representativePoiIds = useMemo(() => new Set(secondaryPoiIndex.keys()), [secondaryPoiIndex]);
   const focusedSecondaryPois = focusedPointMarker
     ? (secondaryPoiIndex.get(focusedPointMarker.id) ?? [])
     : [];
+  const focusedParentPoi = focusedPointMarker
+    ? secondaryPoiParentIndex.get(focusedPointMarker.id)
+    : undefined;
   const focusedSecondaryPoiGroups = useMemo(
     () => groupSecondaryPois(focusedSecondaryPois),
     [focusedSecondaryPois],
@@ -2007,6 +2026,20 @@ export function MapStage() {
                           <dt>类型</dt>
                           <dd>{formatGeometryDetail(focusedMarker)}</dd>
                         </div>
+                        {focusedParentPoi ? (
+                          <div>
+                            <dt>所属地点</dt>
+                            <dd>
+                              <button
+                                className="map-transfer-line-chip"
+                                type="button"
+                                onClick={() => focusMapMarker(focusedParentPoi.parent)}
+                              >
+                                {formatMarkerDisplayName(focusedParentPoi.parent.label)}
+                              </button>
+                            </dd>
+                          </div>
+                        ) : null}
                         {isTransitStationPoi(focusedMarker) ? (
                           <div>
                             <dt>接驳线路</dt>
@@ -2055,6 +2088,17 @@ export function MapStage() {
                         status={poiActionStatus}
                       />
                     </>
+                  ) : null}
+                  {isLinearDetailMarker(focusedMarker) ? (
+                    <PoiActionBar
+                      isFavorite={favoriteMarkerIds.has(focusedMarker.id)}
+                      marker={focusedMarker}
+                      onPlanRoute={() => createRoutePlanDraft(focusedMarker)}
+                      onSearchNearby={() => startNearbySearch(focusedMarker)}
+                      onShare={() => void shareMarker(focusedMarker)}
+                      onToggleFavorite={() => toggleFavoriteMarker(focusedMarker)}
+                      status={poiActionStatus}
+                    />
                   ) : null}
                   {!isLinearDetailMarker(focusedMarker) && poiDetailTab === 'facilities' ? (
                     focusedSecondaryPois.length > 0 ? (
@@ -2873,6 +2917,7 @@ function RoutePlanDraftCard({
   const selectedOption = options.find((option) => option.id === selectedOptionId) ?? options[0];
   const allModesEnabled = routeTransportModeOptions.every((mode) => enabledModes[mode.mode]);
   const [modeListExpanded, setModeListExpanded] = useState(false);
+  const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(() => new Set());
   const visibleRouteTransportModes = modeListExpanded
     ? routeTransportModeOptions
     : routeTransportModeOptions.slice(0, 3);
@@ -2880,6 +2925,22 @@ function RoutePlanDraftCard({
   const collapsedModesHaveEnabled = routeTransportModeOptions
     .slice(3)
     .some((mode) => enabledModes[mode.mode]);
+
+  useEffect(() => {
+    setExpandedStepIds(new Set());
+  }, [selectedOption?.id]);
+
+  const toggleRouteStepDetails = (stepId: string) => {
+    setExpandedStepIds((current) => {
+      const next = new Set(current);
+      if (next.has(stepId)) {
+        next.delete(stepId);
+      } else {
+        next.add(stepId);
+      }
+      return next;
+    });
+  };
 
   return (
     <section
@@ -3104,16 +3165,21 @@ function RoutePlanDraftCard({
                         {isSelected ? (
                           <ol className="map-route-step-timeline" aria-label="选中路线步骤">
                             {option.steps.map((step, stepIndex) => {
+                              const stepId = `${option.id}-${stepIndex}`;
                               const stepClassName = [
                                 `is-${step.kind}`,
                                 step.role ? `is-${step.role}` : '',
                               ]
                                 .filter(Boolean)
                                 .join(' ');
+                              const canExpand =
+                                (step.kind === 'walk' || step.kind === 'transit') &&
+                                Boolean(step.details?.length);
+                              const isExpanded = expandedStepIds.has(stepId);
                               return (
                                 <li
                                   className={stepClassName}
-                                  key={`${option.id}-${stepIndex}`}
+                                  key={stepId}
                                   style={
                                     {
                                       '--route-step-color': step.color ?? option.color,
@@ -3127,7 +3193,37 @@ function RoutePlanDraftCard({
                                       getRouteStepMarkerText(step)
                                     )}
                                   </span>
-                                  <span>{step.label}</span>
+                                  <span className="map-route-step-content">
+                                    <span className="map-route-step-main">
+                                      <span>{step.label}</span>
+                                      {canExpand ? (
+                                        <button
+                                          className="map-route-step-expand"
+                                          type="button"
+                                          aria-expanded={isExpanded}
+                                          aria-label={isExpanded ? '收起详细步骤' : '展开详细步骤'}
+                                          onClick={() => toggleRouteStepDetails(stepId)}
+                                        >
+                                          <span className="material-symbols-outlined" aria-hidden="true">
+                                            {isExpanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
+                                          </span>
+                                        </button>
+                                      ) : null}
+                                    </span>
+                                    {canExpand && isExpanded ? (
+                                      <ul className="map-route-step-detail-list">
+                                        {step.details?.map((detail, detailIndex) => (
+                                          <li key={`${stepId}-detail-${detailIndex}`}>
+                                            <span className="material-symbols-outlined" aria-hidden="true">
+                                              {detail.icon}
+                                            </span>
+                                            <span>{detail.label}</span>
+                                            {detail.meta ? <small>{detail.meta}</small> : null}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    ) : null}
+                                  </span>
                                 </li>
                               );
                             })}
@@ -3406,16 +3502,28 @@ function createRoutePlaceStep(
   return { kind: 'place', label, role, icon, color };
 }
 
-function createRouteWalkStep(label: string): RoutePlanStep {
-  return { kind: 'walk', label };
+function createRouteWalkStep(label: string, details?: RoutePlanStepDetail[]): RoutePlanStep {
+  return {
+    kind: 'walk',
+    label,
+    details: details?.length ? details : [createRouteStepDetail('directions_walk', label)],
+  };
 }
 
-function createRouteTransitStep(label: string, color?: string): RoutePlanStep {
-  return { kind: 'transit', label, color };
+function createRouteTransitStep(
+  label: string,
+  color?: string,
+  details?: RoutePlanStepDetail[],
+): RoutePlanStep {
+  return { kind: 'transit', label, color, details };
 }
 
 function createRouteTransferStep(label: string): RoutePlanStep {
   return { kind: 'transfer', label, role: 'transfer' };
+}
+
+function createRouteStepDetail(icon: string, label: string, meta?: string): RoutePlanStepDetail {
+  return { icon, label, meta };
 }
 
 function getRouteStepMarkerText(step: RoutePlanStep): string {
@@ -3490,6 +3598,7 @@ function buildRoadAssistedWalkOption(
         `沿道路端点估算 ${formatRoutePlanDistance(roadDistance)} ${formatRouteStepMinutes(
           roadMinutes,
         )}`,
+        buildRoadRouteStepDetails(roadPath.nodes),
       ),
       createRouteWalkStep(
         `步行 ${formatRoutePlanDistance(egressDistance)} ${formatRouteStepMinutes(egressMinutes)}`,
@@ -3646,6 +3755,70 @@ function findRoadRoutePath(
     .map((id) => graph.nodesById.get(id))
     .filter((node): node is RoadRouteNode => Boolean(node));
   return nodes.length >= 2 ? { distance, nodes } : undefined;
+}
+
+function buildRoadRouteStepDetails(nodes: RoadRouteNode[]): RoutePlanStepDetail[] {
+  const groups: Array<{
+    distance: number;
+    label: string;
+    vector: [number, number];
+  }> = [];
+
+  for (let index = 1; index < nodes.length; index += 1) {
+    const previous = nodes[index - 1];
+    const current = nodes[index];
+    if (!previous || !current) {
+      continue;
+    }
+
+    const distance = getCoordinateDistance(previous.coordinate, current.coordinate);
+    const label = current.roadLabel || previous.roadLabel || '道路';
+    const vector: [number, number] = [
+      current.coordinate[0] - previous.coordinate[0],
+      current.coordinate[1] - previous.coordinate[1],
+    ];
+    const lastGroup = groups.at(-1);
+    if (lastGroup && lastGroup.label === label) {
+      lastGroup.distance += distance;
+    } else {
+      groups.push({ distance, label, vector });
+    }
+  }
+
+  return groups.map((group, index) =>
+    createRouteStepDetail(
+      index === 0
+        ? 'directions_walk'
+        : getTurnInstructionIcon(groups[index - 1]?.vector, group.vector),
+      group.label,
+      `${formatRoutePlanDistance(group.distance)} ${formatRouteStepMinutes(
+        estimateRouteMinutes(group.distance, 64),
+      )}`,
+    ),
+  );
+}
+
+function getTurnInstructionIcon(
+  previous: [number, number] | undefined,
+  current: [number, number],
+): string {
+  if (!previous) {
+    return 'directions_walk';
+  }
+
+  const previousLength = Math.hypot(previous[0], previous[1]);
+  const currentLength = Math.hypot(current[0], current[1]);
+  if (previousLength === 0 || currentLength === 0) {
+    return 'straight';
+  }
+
+  const cross = previous[0] * current[1] - previous[1] * current[0];
+  const dot = previous[0] * current[0] + previous[1] * current[1];
+  const angle = Math.atan2(cross, dot);
+  if (Math.abs(angle) < 0.45) {
+    return 'straight';
+  }
+  return angle > 0 ? 'turn_right' : 'turn_left';
 }
 
 function findNearestUnvisitedRoadRouteNode(
@@ -3841,6 +4014,7 @@ function buildDirectTransitLineOption(
           transitMinutes,
         )}`,
         candidate.color,
+        buildTransitStopStepDetails(segmentStops),
       ),
       createRoutePlaceStep(
         `${formatMarkerDisplayName(destinationStop.marker.label)} 出站`,
@@ -4054,6 +4228,7 @@ function buildTransferTransitLineOptions(
               firstTransitMinutes,
             )}`,
             originCandidate.candidate.color,
+            buildTransitStopStepDetails(firstSegment),
           ),
           createRoutePlaceStep(`${formatMarkerDisplayName(transfer.fromStop.marker.label)} 换乘`, 'transfer'),
           createRouteTransferStep(
@@ -4072,6 +4247,7 @@ function buildTransferTransitLineOptions(
               secondTransitMinutes,
             )}`,
             destinationCandidate.candidate.color,
+            buildTransitStopStepDetails(secondSegment),
           ),
           createRoutePlaceStep(
             `${formatMarkerDisplayName(
@@ -4164,6 +4340,16 @@ function findTransferStopPair(input: {
         left.toStop.index -
         (right.fromStop.index + right.toStop.index),
     )[0];
+}
+
+function buildTransitStopStepDetails(stops: TransitRouteStop[]): RoutePlanStepDetail[] {
+  return stops.map((stop, index) =>
+    createRouteStepDetail(
+      index === 0 ? 'login' : index === stops.length - 1 ? 'logout' : 'radio_button_checked',
+      formatMarkerDisplayName(stop.marker.label),
+      index === 0 ? '上车站' : index === stops.length - 1 ? '下车站' : undefined,
+    ),
+  );
 }
 
 function buildTransitSegmentRoute(
@@ -4597,6 +4783,33 @@ function getSecondaryPoiGroupOrder(groupId: string): number {
 }
 
 function buildSecondaryPoiIndex(markers: PointMarker[]): Map<string, SecondaryPoiLink[]> {
+  const links = resolveSecondaryPoiLinks(markers);
+  const index = new Map<string, SecondaryPoiLink[]>();
+  for (const link of links) {
+    const values = index.get(link.parent.id) ?? [];
+    values.push({ childLabel: link.childLabel, marker: link.marker });
+    index.set(link.parent.id, values);
+  }
+
+  for (const [parentId, parentLinks] of index) {
+    index.set(parentId, sortSecondaryPoiLinks(parentLinks));
+  }
+
+  return index;
+}
+
+function buildSecondaryPoiParentIndex(markers: PointMarker[]): Map<string, SecondaryPoiParentLink> {
+  return new Map(
+    resolveSecondaryPoiLinks(markers).map((link) => [
+      link.marker.id,
+      { childLabel: link.childLabel, parent: link.parent },
+    ]),
+  );
+}
+
+function resolveSecondaryPoiLinks(
+  markers: PointMarker[],
+): Array<SecondaryPoiLink & { parent: PointMarker }> {
   const markersByName = new Map<string, PointMarker[]>();
   for (const marker of markers) {
     const key = normalizeMarkerSearchText(marker.label);
@@ -4605,7 +4818,7 @@ function buildSecondaryPoiIndex(markers: PointMarker[]): Map<string, SecondaryPo
     markersByName.set(key, values);
   }
 
-  const index = new Map<string, SecondaryPoiLink[]>();
+  const links: Array<SecondaryPoiLink & { parent: PointMarker }> = [];
   for (const marker of markers) {
     const parsed = parseSecondaryPoiName(marker.label);
     if (!parsed) {
@@ -4624,26 +4837,21 @@ function buildSecondaryPoiIndex(markers: PointMarker[]): Map<string, SecondaryPo
       continue;
     }
 
-    const links = index.get(parent.id) ?? [];
-    links.push({ childLabel: parsed.childName, marker });
-    index.set(parent.id, links);
+    links.push({ childLabel: parsed.childName, marker, parent });
   }
 
-  for (const [parentId, links] of index) {
-    index.set(
-      parentId,
-      links.sort(
-        (left, right) =>
-          left.childLabel.localeCompare(right.childLabel, 'zh-CN') ||
-          formatMarkerDisplayName(left.marker.label).localeCompare(
-            formatMarkerDisplayName(right.marker.label),
-            'zh-CN',
-          ),
+  return links;
+}
+
+function sortSecondaryPoiLinks(links: SecondaryPoiLink[]): SecondaryPoiLink[] {
+  return links.sort(
+    (left, right) =>
+      left.childLabel.localeCompare(right.childLabel, 'zh-CN') ||
+      formatMarkerDisplayName(left.marker.label).localeCompare(
+        formatMarkerDisplayName(right.marker.label),
+        'zh-CN',
       ),
-    );
-  }
-
-  return index;
+  );
 }
 
 function parseSecondaryPoiName(label: string): { parentName: string; childName: string } | undefined {

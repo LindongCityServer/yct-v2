@@ -5,27 +5,37 @@ import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { TitleWithBreaks } from './title-with-breaks';
 
 const categories = [
-  { key: 'all', label: '全部', icon: 'select_check_box', tone: 'primary' },
-  { key: '通知公告', label: '通知公告', icon: 'campaign', tone: 'primary' },
-  { key: '运营信息', label: '运营信息', icon: 'article', tone: 'primary' },
-  { key: '地铁运营', label: '地铁运营', icon: 'subway', tone: 'metro' },
-  { key: '公交运营', label: '公交运营', icon: 'directions_bus', tone: 'bus' },
-  { key: '有轨运营', label: '有轨运营', icon: 'tram', tone: 'tram' },
-  { key: '网站公告', label: '网站公告', icon: 'web', tone: 'primary' },
+  { key: 'all', labelKey: 'operations.category.all', icon: 'select_check_box', tone: 'primary' },
+  { key: '通知公告', labelKey: 'operations.category.notice', icon: 'campaign', tone: 'primary' },
+  { key: '运营信息', labelKey: 'operations.category.updates', icon: 'article', tone: 'primary' },
+  { key: '地铁运营', labelKey: 'operations.category.metro', icon: 'subway', tone: 'metro' },
+  { key: '公交运营', labelKey: 'operations.category.bus', icon: 'directions_bus', tone: 'bus' },
+  { key: '有轨运营', labelKey: 'operations.category.tram', icon: 'tram', tone: 'tram' },
+  { key: '网站公告', labelKey: 'operations.category.site', icon: 'web', tone: 'primary' },
 ] as const;
 
 type CategoryKey = (typeof categories)[number]['key'];
+type Translate = ReturnType<typeof useI18n>['t'];
+
+const categoryLabelKeyById = new Map<string, CommonMessageKey>(
+  categories
+    .filter((category) => category.key !== 'all')
+    .map((category) => [category.key, category.labelKey]),
+);
 
 export function OperationsHome({ feed }: Readonly<{ feed: ApiListResponse<OperationsFeedItem> }>) {
+  const { t } = useI18n();
   const [activeCategory, setActiveCategory] = useState<CategoryKey>('all');
   const now = useMemo(() => Date.now(), []);
 
   const activeLabel = useMemo(
-    () => categories.find((category) => category.key === activeCategory)?.label ?? '全部',
-    [activeCategory],
+    () =>
+      t(categories.find((category) => category.key === activeCategory)?.labelKey ?? 'operations.category.all'),
+    [activeCategory, t],
   );
 
   const sortedItems = useMemo(() => [...feed.items].sort(comparePublishedAtDesc), [feed.items]);
@@ -42,11 +52,13 @@ export function OperationsHome({ feed }: Readonly<{ feed: ApiListResponse<Operat
     sortedItems[0];
 
   const emptyText =
-    activeCategory === 'all' ? (feed.meta.message ?? '暂无运营信息') : `暂无${activeLabel}运营信息`;
+    activeCategory === 'all'
+      ? t('operations.emptyAll')
+      : t('operations.emptyCategory', { category: activeLabel });
 
   return (
     <div className="content-stack" aria-labelledby="operations-title">
-      <section className="hero-panel" aria-label="重点资讯">
+      <section className="hero-panel" aria-label={t('operations.featuredAria')}>
         {bannerItem ? (
           <Link
             className="hero-feature-link"
@@ -62,22 +74,22 @@ export function OperationsHome({ feed }: Readonly<{ feed: ApiListResponse<Operat
           </Link>
         ) : (
           <div className="hero-copy">
-            <p className="eyebrow">运营信息</p>
-            <h1 id="operations-title">运营信息</h1>
-            <p className="empty-copy">{feed.meta.message ?? '暂无已发布重点资讯'}</p>
+            <p className="eyebrow">{t('page.operations')}</p>
+            <h1 id="operations-title">{t('page.operations')}</h1>
+            <p className="empty-copy">{t('operations.emptyFeatured')}</p>
           </div>
         )}
       </section>
 
-      <section className="reminder-panel" aria-label="行程提醒">
+      <section className="reminder-panel" aria-label={t('operations.remindersAria')}>
         <div className="section-heading">
-          <h2>强提醒</h2>
-          <span className="muted">暂无行程提醒</span>
+          <h2>{t('operations.strongReminder')}</h2>
+          <span className="muted">{t('operations.noTripReminder')}</span>
         </div>
       </section>
 
-      <section className="feed-panel" aria-label="运营信息列表">
-        <div className="category-strip" aria-label="运营信息分类">
+      <section className="feed-panel" aria-label={t('operations.feedAria')}>
+        <div className="category-strip" aria-label={t('operations.categoryAria')}>
           {categories.map((category) => {
             const isActive = activeCategory === category.key;
             return (
@@ -89,21 +101,23 @@ export function OperationsHome({ feed }: Readonly<{ feed: ApiListResponse<Operat
                 onClick={() => setActiveCategory(category.key)}
               >
                 <span className="material-symbols-outlined">{category.icon}</span>
-                <span>{category.label}</span>
+                <span>{t(category.labelKey)}</span>
               </button>
             );
           })}
         </div>
         {currentItems.length > 0 || expiredItems.length > 0 ? (
           <>
-            {currentItems.length > 0 ? <FeedList items={currentItems} /> : null}
+            {currentItems.length > 0 ? <FeedList items={currentItems} t={t} /> : null}
             {expiredItems.length > 0 ? (
               <details className="expired-feed-group">
                 <summary>
-                  <span>过期消息</span>
-                  <span className="muted">{expiredItems.length} 条</span>
+                  <span>{t('operations.expired')}</span>
+                  <span className="muted">
+                    {t('operations.itemCount', { count: expiredItems.length })}
+                  </span>
                 </summary>
-                <FeedList items={expiredItems} />
+                <FeedList items={expiredItems} t={t} />
               </details>
             ) : null}
           </>
@@ -118,6 +132,11 @@ export function OperationsHome({ feed }: Readonly<{ feed: ApiListResponse<Operat
       </section>
     </div>
   );
+}
+
+function formatOperationsCategoryLabel(categoryId: string, t: Translate): string {
+  const labelKey = categoryLabelKeyById.get(categoryId);
+  return labelKey ? t(labelKey) : categoryId;
 }
 
 function buildHeroBackgroundStyle(item: OperationsFeedItem): CSSProperties | undefined {
@@ -135,7 +154,7 @@ function buildHeroBackgroundStyle(item: OperationsFeedItem): CSSProperties | und
   return undefined;
 }
 
-function FeedList({ items }: Readonly<{ items: OperationsFeedItem[] }>) {
+function FeedList({ items, t }: Readonly<{ items: OperationsFeedItem[]; t: Translate }>) {
   return (
     <div className="operations-feed-list">
       {items.map((item) => (
@@ -165,9 +184,11 @@ function FeedList({ items }: Readonly<{ items: OperationsFeedItem[] }>) {
           </div>
           <div className="feed-item-copy">
             <div className="feed-item-meta">
-              <span>{item.categoryId}</span>
+              <span>{formatOperationsCategoryLabel(item.categoryId, t)}</span>
               {item.displayDate ? <span>{item.displayDate}</span> : null}
-              {item.displayExpireDate ? <span>有效至 {item.displayExpireDate}</span> : null}
+              {item.displayExpireDate ? (
+                <span>{t('operations.validUntil', { date: item.displayExpireDate })}</span>
+              ) : null}
             </div>
             <h2>
               <TitleWithBreaks title={item.title} segments={item.titleSegments} />

@@ -287,7 +287,9 @@ export function SearchPageClient({
                       {lineResults.map((line) => (
                         <Link
                           className="search-result-item"
-                          href={appPath(`/map/lines/${encodeURIComponent(line.id)}`)}
+                          href={appPath(
+                            `/map?marker=${encodeURIComponent(`transit-line-${line.id}`)}`,
+                          )}
                           key={line.id}
                         >
                           <span className="material-symbols-outlined" aria-hidden="true">

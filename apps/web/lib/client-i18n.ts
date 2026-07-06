@@ -30,6 +30,25 @@ export type CommonMessageKey =
   | 'offline.operations'
   | 'offline.schedules'
   | 'offline.title'
+  | 'operations.category.all'
+  | 'operations.category.bus'
+  | 'operations.category.metro'
+  | 'operations.category.notice'
+  | 'operations.category.site'
+  | 'operations.category.tram'
+  | 'operations.category.updates'
+  | 'operations.categoryAria'
+  | 'operations.emptyAll'
+  | 'operations.emptyCategory'
+  | 'operations.emptyFeatured'
+  | 'operations.expired'
+  | 'operations.featuredAria'
+  | 'operations.feedAria'
+  | 'operations.itemCount'
+  | 'operations.noTripReminder'
+  | 'operations.remindersAria'
+  | 'operations.strongReminder'
+  | 'operations.validUntil'
   | 'page.account'
   | 'page.offline'
   | 'page.operations'
@@ -140,6 +159,25 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'offline.operations': '运营信息',
     'offline.schedules': '班次查询',
     'offline.title': '当前网络不可用',
+    'operations.category.all': '全部',
+    'operations.category.bus': '公交运营',
+    'operations.category.metro': '地铁运营',
+    'operations.category.notice': '通知公告',
+    'operations.category.site': '网站公告',
+    'operations.category.tram': '有轨运营',
+    'operations.category.updates': '运营信息',
+    'operations.categoryAria': '运营信息分类',
+    'operations.emptyAll': '暂无运营信息',
+    'operations.emptyCategory': '暂无{category}运营信息',
+    'operations.emptyFeatured': '暂无已发布重点资讯',
+    'operations.expired': '过期消息',
+    'operations.featuredAria': '重点资讯',
+    'operations.feedAria': '运营信息列表',
+    'operations.itemCount': '{count} 条',
+    'operations.noTripReminder': '暂无行程提醒',
+    'operations.remindersAria': '行程提醒',
+    'operations.strongReminder': '强提醒',
+    'operations.validUntil': '有效至 {date}',
     'page.account': '账号设置',
     'page.offline': '离线',
     'page.operations': '运营信息',
@@ -248,6 +286,25 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'offline.operations': '營運資訊',
     'offline.schedules': '班次查詢',
     'offline.title': '目前網路不可用',
+    'operations.category.all': '全部',
+    'operations.category.bus': '公交營運',
+    'operations.category.metro': '地鐵營運',
+    'operations.category.notice': '通知公告',
+    'operations.category.site': '網站公告',
+    'operations.category.tram': '有軌營運',
+    'operations.category.updates': '營運資訊',
+    'operations.categoryAria': '營運資訊分類',
+    'operations.emptyAll': '暫無營運資訊',
+    'operations.emptyCategory': '暫無{category}營運資訊',
+    'operations.emptyFeatured': '暫無已發布重點資訊',
+    'operations.expired': '過期消息',
+    'operations.featuredAria': '重點資訊',
+    'operations.feedAria': '營運資訊列表',
+    'operations.itemCount': '{count} 條',
+    'operations.noTripReminder': '暫無行程提醒',
+    'operations.remindersAria': '行程提醒',
+    'operations.strongReminder': '強提醒',
+    'operations.validUntil': '有效至 {date}',
     'page.account': '帳號設定',
     'page.offline': '離線',
     'page.operations': '營運資訊',
@@ -356,6 +413,25 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'offline.operations': 'Updates',
     'offline.schedules': 'Schedule Search',
     'offline.title': 'Network unavailable',
+    'operations.category.all': 'All',
+    'operations.category.bus': 'Bus Updates',
+    'operations.category.metro': 'Metro Updates',
+    'operations.category.notice': 'Notices',
+    'operations.category.site': 'Site Notices',
+    'operations.category.tram': 'Tram Updates',
+    'operations.category.updates': 'Updates',
+    'operations.categoryAria': 'Update categories',
+    'operations.emptyAll': 'No updates yet',
+    'operations.emptyCategory': 'No {category} yet',
+    'operations.emptyFeatured': 'No featured updates published yet',
+    'operations.expired': 'Expired Updates',
+    'operations.featuredAria': 'Featured update',
+    'operations.feedAria': 'Updates list',
+    'operations.itemCount': '{count} items',
+    'operations.noTripReminder': 'No trip reminders',
+    'operations.remindersAria': 'Trip reminders',
+    'operations.strongReminder': 'Important reminders',
+    'operations.validUntil': 'Valid until {date}',
     'page.account': 'Account Settings',
     'page.offline': 'Offline',
     'page.operations': 'Updates',
