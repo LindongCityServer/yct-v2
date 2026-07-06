@@ -311,19 +311,62 @@ interface RoadRouteNode {
 }
 
 interface RoadRouteEdge {
+  coordinates: Array<[number, number]>;
   distance: number;
+  kind: 'connection' | 'road';
+  label: string;
   to: string;
+}
+
+interface RoadRouteSegment {
+  end: [number, number];
+  endNodeId: string;
+  id: string;
+  roadId: string;
+  roadLabel: string;
+  start: [number, number];
+  startNodeId: string;
 }
 
 interface RoadRouteGraph {
   adjacency: Map<string, RoadRouteEdge[]>;
   nodes: RoadRouteNode[];
   nodesById: Map<string, RoadRouteNode>;
+  roadSegments: RoadRouteSegment[];
 }
 
 interface RoadRoutePath {
+  coordinates: Array<[number, number]>;
   distance: number;
   nodes: RoadRouteNode[];
+  segments: RoadRouteInstructionSegment[];
+}
+
+interface RoadRouteInstructionSegment {
+  coordinates: Array<[number, number]>;
+  kind: 'approach' | 'connection' | 'depart' | 'road';
+  label: string;
+}
+
+interface RoadConnectionCandidate {
+  distance: number;
+  leftCoordinate: [number, number];
+  leftRoadLabel: string;
+  leftSegmentId: string;
+  rightCoordinate: [number, number];
+  rightRoadLabel: string;
+  rightSegmentId: string;
+}
+
+interface RoadAccessCandidate {
+  coordinate: [number, number];
+  distanceToPoint: number;
+  endDistance: number;
+  endNodeId: string;
+  roadId: string;
+  roadLabel: string;
+  startDistance: number;
+  startNodeId: string;
 }
 
 interface SecondaryPoiLink {
@@ -1041,6 +1084,10 @@ export function MapStage() {
     () => buildStationConnectionIndex(transitOverview),
     [transitOverview],
   );
+  const roadGraph = useMemo(
+    () => buildRoadRouteGraph(roadTraceSource),
+    [roadTraceSource],
+  );
   const routePlanOptions = useMemo(
     () =>
       routePlanDraft
@@ -1048,7 +1095,7 @@ export function MapStage() {
             draft: routePlanDraft,
             enabledModes: routeTransportModes,
             pointMarkers,
-            roadMarkers: roadTraceSource,
+            roadGraph,
             secondaryPoiIndex,
             transitLines: transitOverview?.lines ?? [],
             modeProfiles: transitOverview?.modeProfiles ?? [],
@@ -1056,7 +1103,7 @@ export function MapStage() {
         : [],
     [
       pointMarkers,
-      roadTraceSource,
+      roadGraph,
       routePlanDraft,
       routeTransportModes,
       secondaryPoiIndex,
@@ -3173,7 +3220,9 @@ function RoutePlanDraftCard({
                                 .filter(Boolean)
                                 .join(' ');
                               const canExpand =
-                                (step.kind === 'walk' || step.kind === 'transit') &&
+                                (step.kind === 'walk' ||
+                                  step.kind === 'transit' ||
+                                  step.kind === 'transfer') &&
                                 Boolean(step.details?.length);
                               const isExpanded = expandedStepIds.has(stepId);
                               return (
@@ -3249,26 +3298,32 @@ function buildRoutePlanOptions(input: {
   draft: RoutePlanDraft;
   enabledModes: EnabledRouteTransportModes;
   pointMarkers: PointMarker[];
-  roadMarkers: EndpointGroupMarker[];
+  roadGraph?: RoadRouteGraph;
   secondaryPoiIndex: ReadonlyMap<string, SecondaryPoiLink[]>;
   transitLines: TransitOverviewLine[];
   modeProfiles: TransitModeProfileForMap[];
 }): RoutePlanOption[] {
   const draft = resolveRoutePlanDraftAccessPoints(input.draft, input.secondaryPoiIndex);
   const options: RoutePlanOption[] = [];
-  const directCoreDistance = getCoordinateDistance(draft.origin, draft.destination);
   const endpointAccessDistance = getRouteEndpointAccessDistance(draft);
-  const directDistance = directCoreDistance + endpointAccessDistance;
   const routeOptionLimit = getRouteOptionLimit(input.enabledModes);
-  const roadGraph = buildRoadRouteGraph(input.roadMarkers);
+  const roadGraph = input.roadGraph;
 
   if (input.enabledModes.walk) {
+    const directWalkRoute = buildWalkRouteBetweenCoordinates(
+      draft.origin,
+      draft.destination,
+      roadGraph,
+    );
+    const directDistance = directWalkRoute.distance + endpointAccessDistance;
     const directMinutes = estimateRouteMinutes(directDistance, 72);
-    const directCoordinates = buildRouteTraceCoordinates(draft, [draft.origin, draft.destination]);
+    const directCoordinates = buildRouteTraceCoordinates(draft, directWalkRoute.coordinates);
     options.push({
       id: 'walk-direct',
       title: '步行直达',
-      summary: `${formatRoutePlanDistance(directDistance)} · 直线估算`,
+      summary: `${formatRoutePlanDistance(directDistance)} · ${
+        directWalkRoute.usesRoadGraph ? '沿道路估算' : '直线估算'
+      }`,
       icon: 'directions_walk',
       color: routeTransportModeOptions.find((option) => option.mode === 'walk')?.color ?? '#4B5B57',
       coordinates: directCoordinates,
@@ -3282,20 +3337,20 @@ function buildRoutePlanOptions(input: {
         createRoutePlaceStep(`${draft.originLabel} 出发`, 'origin'),
         ...createRouteEndpointAccessSteps(draft, 'origin'),
         createRouteWalkStep(
-          `步行 ${formatRoutePlanDistance(directCoreDistance)} ${formatRouteStepMinutes(
-            estimateRouteMinutes(directCoreDistance, 72),
+          `${directWalkRoute.usesRoadGraph ? '沿道路步行' : '步行'} ${formatRoutePlanDistance(
+            directWalkRoute.distance,
+          )} ${formatRouteStepMinutes(
+            estimateRouteMinutes(directWalkRoute.distance, directWalkRoute.usesRoadGraph ? 64 : 72),
           )}`,
+          directWalkRoute.details,
         ),
         ...createRouteEndpointAccessSteps(draft, 'destination'),
         createRoutePlaceStep(`到达 ${draft.destinationLabel}`, 'destination'),
       ],
-      note: '当前为直线步行估算；道路级导航发布后会改为沿道路、出入口和可通行规则规划。',
+      note: directWalkRoute.usesRoadGraph
+        ? '步行默认优先使用旧地图道路端点图和 100 格连通候选；无法连通的片段会回退直线估算。'
+        : '当前未找到可连通道路图，步行暂按直线估算。',
     });
-
-    const roadAssistedWalkOption = buildRoadAssistedWalkOption(draft, roadGraph);
-    if (roadAssistedWalkOption) {
-      options.push(roadAssistedWalkOption);
-    }
   }
 
   options.push(...buildTransitRoutePlanOptions({ ...input, draft, roadGraph }));
@@ -3518,8 +3573,8 @@ function createRouteTransitStep(
   return { kind: 'transit', label, color, details };
 }
 
-function createRouteTransferStep(label: string): RoutePlanStep {
-  return { kind: 'transfer', label, role: 'transfer' };
+function createRouteTransferStep(label: string, details?: RoutePlanStepDetail[]): RoutePlanStep {
+  return { kind: 'transfer', label, role: 'transfer', details };
 }
 
 function createRouteStepDetail(icon: string, label: string, meta?: string): RoutePlanStepDetail {
@@ -3536,83 +3591,10 @@ function getRouteStepMarkerText(step: RoutePlanStep): string {
   return '';
 }
 
-function buildRoadAssistedWalkOption(
-  draft: RoutePlanDraft,
-  graph: RoadRouteGraph | undefined,
-): RoutePlanOption | undefined {
-  if (!graph || graph.nodes.length < 2) {
-    return undefined;
-  }
-
-  const originRoadNode = findNearestRoadRouteNode(draft.origin, graph.nodes);
-  const destinationRoadNode = findNearestRoadRouteNode(draft.destination, graph.nodes);
-  if (!originRoadNode || !destinationRoadNode || originRoadNode.id === destinationRoadNode.id) {
-    return undefined;
-  }
-
-  const roadPath = findRoadRoutePath(graph, originRoadNode.id, destinationRoadNode.id);
-  if (!roadPath || roadPath.nodes.length < 2) {
-    return undefined;
-  }
-
-  const accessDistance = getCoordinateDistance(draft.origin, originRoadNode.coordinate);
-  const egressDistance = getCoordinateDistance(draft.destination, destinationRoadNode.coordinate);
-  const roadDistance = roadPath.distance;
-  const endpointAccessDistance = getRouteEndpointAccessDistance(draft);
-  const accessMinutes = estimateRouteMinutes(accessDistance, 72);
-  const roadMinutes = estimateRouteMinutes(roadDistance, 64);
-  const egressMinutes = estimateRouteMinutes(egressDistance, 72);
-  const walkingDistance = endpointAccessDistance + accessDistance + roadDistance + egressDistance;
-  const walkColor =
-    routeTransportModeOptions.find((option) => option.mode === 'walk')?.color ?? '#4B5B57';
-  const roadNames = Array.from(new Set(roadPath.nodes.map((node) => node.roadLabel))).slice(0, 3);
-  const coordinates = buildRouteTraceCoordinates(draft, [
-    draft.origin,
-    originRoadNode.coordinate,
-    ...roadPath.nodes.map((node) => node.coordinate),
-    destinationRoadNode.coordinate,
-    draft.destination,
-  ]);
-
-  return {
-    id: `walk-road-${originRoadNode.id}-${destinationRoadNode.id}`,
-    title: '道路步行估算',
-    summary: `${formatRoutePlanDistance(walkingDistance)} · ${roadNames.join('、') || '道路端点'}`,
-    icon: 'conversion_path',
-    color: walkColor,
-    coordinates,
-    traceSegments: [createRouteTraceSegment('walk', coordinates)],
-    markerIds: getRouteEndpointMarkerIds(draft),
-    estimatedDistance: walkingDistance,
-    estimatedMinutes:
-      estimateRouteMinutes(endpointAccessDistance, 72) + accessMinutes + roadMinutes + egressMinutes,
-    transferCount: 0,
-    walkingDistance,
-    steps: [
-      createRoutePlaceStep(`${draft.originLabel} 出发`, 'origin'),
-      ...createRouteEndpointAccessSteps(draft, 'origin'),
-      createRouteWalkStep(
-        `步行接驳 ${formatRoutePlanDistance(accessDistance)} ${formatRouteStepMinutes(accessMinutes)}`,
-      ),
-      createRouteWalkStep(
-        `沿道路端点估算 ${formatRoutePlanDistance(roadDistance)} ${formatRouteStepMinutes(
-          roadMinutes,
-        )}`,
-        buildRoadRouteStepDetails(roadPath.nodes),
-      ),
-      createRouteWalkStep(
-        `步行 ${formatRoutePlanDistance(egressDistance)} ${formatRouteStepMinutes(egressMinutes)}`,
-      ),
-      ...createRouteEndpointAccessSteps(draft, 'destination'),
-      createRoutePlaceStep(`到达 ${draft.destinationLabel}`, 'destination'),
-    ],
-    note: '基于旧地图道路端点近似排序和 50 格连通候选生成，仅用于路线预览；正式道路级导航仍需要后台道路图、可通行规则和权重数据。',
-  };
-}
-
 function buildRoadRouteGraph(roadMarkers: EndpointGroupMarker[]): RoadRouteGraph | undefined {
   const nodes: RoadRouteNode[] = [];
   const adjacency = new Map<string, RoadRouteEdge[]>();
+  const baseRoadSegments: RoadRouteSegment[] = [];
 
   for (const marker of roadMarkers) {
     if (marker.geometry.coordinates.length < 2) {
@@ -3650,48 +3632,353 @@ function buildRoadRouteGraph(roadMarkers: EndpointGroupMarker[]): RoadRouteGraph
       const previous = roadNodes[index - 1];
       const current = roadNodes[index];
       if (previous && current) {
-        addRoadRouteGraphEdge(adjacency, previous.id, current.id, getCoordinateDistance(previous.coordinate, current.coordinate));
+        baseRoadSegments.push({
+          end: current.coordinate,
+          endNodeId: current.id,
+          id: `${previous.id}->${current.id}`,
+          roadId: previous.roadId,
+          roadLabel: previous.roadLabel,
+          start: previous.coordinate,
+          startNodeId: previous.id,
+        });
       }
     }
   }
 
-  const connectionThreshold = 50;
-  for (let leftIndex = 0; leftIndex < nodes.length; leftIndex += 1) {
-    for (let rightIndex = leftIndex + 1; rightIndex < nodes.length; rightIndex += 1) {
-      const left = nodes[leftIndex];
-      const right = nodes[rightIndex];
+  const connectionThreshold = 100;
+  const baseRoadSegmentsById = new Map(baseRoadSegments.map((segment) => [segment.id, segment]));
+  const connectionCandidates = collectRoadConnectionCandidates(
+    baseRoadSegments,
+    connectionThreshold,
+  );
+  const segmentPointsById = new Map<
+    string,
+    Array<{ coordinate: [number, number]; nodeId: string; ratio: number }>
+  >();
+  const resolvedConnections: Array<{
+    distance: number;
+    leftCoordinate: [number, number];
+    leftNodeId: string;
+    leftRoadLabel: string;
+    rightCoordinate: [number, number];
+    rightNodeId: string;
+    rightRoadLabel: string;
+  }> = [];
+  const resolvedConnectionKeys = new Set<string>();
+  const nodeIdsBySegmentPointKey = new Map<string, string>();
+  let virtualNodeIndex = 0;
+
+  const ensureSegmentPointNode = (
+    segment: RoadRouteSegment,
+    coordinate: [number, number],
+  ): { coordinate: [number, number]; nodeId: string; ratio: number } => {
+    if (areCoordinatesClose(segment.start, coordinate)) {
+      return { coordinate: segment.start, nodeId: segment.startNodeId, ratio: 0 };
+    }
+    if (areCoordinatesClose(segment.end, coordinate)) {
+      return { coordinate: segment.end, nodeId: segment.endNodeId, ratio: 1 };
+    }
+
+    const key = `${segment.id}:${coordinate[0].toFixed(3)}:${coordinate[1].toFixed(3)}`;
+    const existingNodeId = nodeIdsBySegmentPointKey.get(key);
+    if (existingNodeId) {
+      return {
+        coordinate,
+        nodeId: existingNodeId,
+        ratio: getRoadSegmentRatio(segment, coordinate),
+      };
+    }
+
+    const nodeId = `road-virtual:${virtualNodeIndex}`;
+    virtualNodeIndex += 1;
+    nodes.push({
+      coordinate,
+      id: nodeId,
+      roadId: segment.roadId,
+      roadLabel: segment.roadLabel,
+    });
+    nodesById.set(nodeId, nodes[nodes.length - 1]!);
+    adjacency.set(nodeId, []);
+    nodeIdsBySegmentPointKey.set(key, nodeId);
+    return {
+      coordinate,
+      nodeId,
+      ratio: getRoadSegmentRatio(segment, coordinate),
+    };
+  };
+
+  for (const candidate of connectionCandidates) {
+    const leftSegment = baseRoadSegmentsById.get(candidate.leftSegmentId);
+    const rightSegment = baseRoadSegmentsById.get(candidate.rightSegmentId);
+    if (!leftSegment || !rightSegment) {
+      continue;
+    }
+
+    const leftPoint = ensureSegmentPointNode(leftSegment, candidate.leftCoordinate);
+    const rightPoint = ensureSegmentPointNode(rightSegment, candidate.rightCoordinate);
+    const leftSegmentPoints = segmentPointsById.get(leftSegment.id) ?? [];
+    const rightSegmentPoints = segmentPointsById.get(rightSegment.id) ?? [];
+    leftSegmentPoints.push(leftPoint);
+    rightSegmentPoints.push(rightPoint);
+    segmentPointsById.set(leftSegment.id, leftSegmentPoints);
+    segmentPointsById.set(rightSegment.id, rightSegmentPoints);
+    const connectionKey = `${leftPoint.nodeId}->${rightPoint.nodeId}`;
+    if (resolvedConnectionKeys.has(connectionKey)) {
+      continue;
+    }
+    resolvedConnectionKeys.add(connectionKey);
+    resolvedConnections.push({
+      distance: candidate.distance,
+      leftCoordinate: leftPoint.coordinate,
+      leftNodeId: leftPoint.nodeId,
+      leftRoadLabel: candidate.leftRoadLabel,
+      rightCoordinate: rightPoint.coordinate,
+      rightNodeId: rightPoint.nodeId,
+      rightRoadLabel: candidate.rightRoadLabel,
+    });
+  }
+
+  const roadSegments: RoadRouteSegment[] = [];
+  for (const segment of baseRoadSegments) {
+    const segmentPoints = [
+      { coordinate: segment.start, nodeId: segment.startNodeId, ratio: 0 },
+      ...(segmentPointsById.get(segment.id) ?? []),
+      { coordinate: segment.end, nodeId: segment.endNodeId, ratio: 1 },
+    ]
+      .sort((left, right) => left.ratio - right.ratio)
+      .filter((point, index, array) => {
+        const previous = array[index - 1];
+        return !previous || previous.nodeId !== point.nodeId;
+      });
+
+    for (let index = 1; index < segmentPoints.length; index += 1) {
+      const previous = segmentPoints[index - 1];
+      const current = segmentPoints[index];
+      if (!previous || !current || areCoordinatesClose(previous.coordinate, current.coordinate)) {
+        continue;
+      }
+
+      const previousNode = nodesById.get(previous.nodeId);
+      const currentNode = nodesById.get(current.nodeId);
+      if (!previousNode || !currentNode) {
+        continue;
+      }
+
+      roadSegments.push({
+        end: current.coordinate,
+        endNodeId: current.nodeId,
+        id: `${segment.id}:${index - 1}`,
+        roadId: segment.roadId,
+        roadLabel: segment.roadLabel,
+        start: previous.coordinate,
+        startNodeId: previous.nodeId,
+      });
+      addRoadRouteGraphEdge(adjacency, previousNode, currentNode, {
+        coordinates: [previous.coordinate, current.coordinate],
+        distance: getCoordinateDistance(previous.coordinate, current.coordinate),
+        kind: 'road',
+        label: segment.roadLabel,
+        reverseLabel: segment.roadLabel,
+      });
+    }
+  }
+
+  for (const connection of resolvedConnections) {
+    const leftNode = nodesById.get(connection.leftNodeId);
+    const rightNode = nodesById.get(connection.rightNodeId);
+    if (!leftNode || !rightNode) {
+      continue;
+    }
+
+    addRoadRouteGraphEdge(adjacency, leftNode, rightNode, {
+      coordinates: [connection.leftCoordinate, connection.rightCoordinate],
+      distance: connection.distance,
+      kind: 'connection',
+      label: connection.rightRoadLabel,
+      reverseLabel: connection.leftRoadLabel,
+    });
+  }
+
+  return { adjacency, nodes, nodesById, roadSegments };
+}
+
+function collectRoadConnectionCandidates(
+  roadSegments: RoadRouteSegment[],
+  threshold: number,
+): RoadConnectionCandidate[] {
+  const connections: RoadConnectionCandidate[] = [];
+
+  for (let leftIndex = 0; leftIndex < roadSegments.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < roadSegments.length; rightIndex += 1) {
+      const left = roadSegments[leftIndex];
+      const right = roadSegments[rightIndex];
       if (!left || !right || left.roadId === right.roadId) {
         continue;
       }
 
-      const distance = getCoordinateDistance(left.coordinate, right.coordinate);
-      if (distance <= connectionThreshold) {
-        addRoadRouteGraphEdge(adjacency, left.id, right.id, distance);
+      const nearest = getNearestRoadSegmentConnection(left, right);
+      if (nearest.distance > threshold) {
+        continue;
       }
+
+      connections.push({
+        distance: nearest.distance,
+        leftCoordinate: nearest.leftCoordinate,
+        leftRoadLabel: left.roadLabel,
+        leftSegmentId: left.id,
+        rightCoordinate: nearest.rightCoordinate,
+        rightRoadLabel: right.roadLabel,
+        rightSegmentId: right.id,
+      });
     }
   }
 
-  return { adjacency, nodes, nodesById };
+  return connections;
+}
+
+function getNearestRoadSegmentConnection(
+  left: RoadRouteSegment,
+  right: RoadRouteSegment,
+): {
+  distance: number;
+  leftCoordinate: [number, number];
+  rightCoordinate: [number, number];
+} {
+  const intersection = getSegmentIntersectionPoint(left.start, left.end, right.start, right.end);
+  if (intersection) {
+    return {
+      distance: 0,
+      leftCoordinate: intersection,
+      rightCoordinate: intersection,
+    };
+  }
+
+  const candidates = [
+    {
+      leftCoordinate: left.start,
+      rightCoordinate: projectPointOntoSegment(right.start, right.end, left.start).coordinate,
+    },
+    {
+      leftCoordinate: left.end,
+      rightCoordinate: projectPointOntoSegment(right.start, right.end, left.end).coordinate,
+    },
+    {
+      leftCoordinate: projectPointOntoSegment(left.start, left.end, right.start).coordinate,
+      rightCoordinate: right.start,
+    },
+    {
+      leftCoordinate: projectPointOntoSegment(left.start, left.end, right.end).coordinate,
+      rightCoordinate: right.end,
+    },
+  ];
+
+  return candidates
+    .map((candidate) => ({
+      ...candidate,
+      distance: getCoordinateDistance(candidate.leftCoordinate, candidate.rightCoordinate),
+    }))
+    .sort((leftCandidate, rightCandidate) => leftCandidate.distance - rightCandidate.distance)[0]!;
+}
+
+function projectPointOntoSegment(
+  start: [number, number],
+  end: [number, number],
+  point: [number, number],
+): { coordinate: [number, number]; ratio: number } {
+  const deltaX = end[0] - start[0];
+  const deltaZ = end[1] - start[1];
+  const lengthSquared = deltaX * deltaX + deltaZ * deltaZ;
+  const ratio = lengthSquared
+    ? clampNumber(
+        ((point[0] - start[0]) * deltaX + (point[1] - start[1]) * deltaZ) / lengthSquared,
+        0,
+        1,
+      )
+    : 0;
+  return {
+    coordinate: interpolateCoordinate(start, end, ratio),
+    ratio,
+  };
+}
+
+function getSegmentIntersectionPoint(
+  leftStart: [number, number],
+  leftEnd: [number, number],
+  rightStart: [number, number],
+  rightEnd: [number, number],
+): [number, number] | undefined {
+  const leftVector: [number, number] = [
+    leftEnd[0] - leftStart[0],
+    leftEnd[1] - leftStart[1],
+  ];
+  const rightVector: [number, number] = [
+    rightEnd[0] - rightStart[0],
+    rightEnd[1] - rightStart[1],
+  ];
+  const denominator = leftVector[0] * rightVector[1] - leftVector[1] * rightVector[0];
+  if (Math.abs(denominator) < 0.000001) {
+    return undefined;
+  }
+
+  const delta: [number, number] = [
+    rightStart[0] - leftStart[0],
+    rightStart[1] - leftStart[1],
+  ];
+  const leftRatio = (delta[0] * rightVector[1] - delta[1] * rightVector[0]) / denominator;
+  const rightRatio = (delta[0] * leftVector[1] - delta[1] * leftVector[0]) / denominator;
+  if (
+    leftRatio < 0 ||
+    leftRatio > 1 ||
+    rightRatio < 0 ||
+    rightRatio > 1
+  ) {
+    return undefined;
+  }
+
+  return interpolateCoordinate(leftStart, leftEnd, leftRatio);
+}
+
+function getRoadSegmentRatio(
+  segment: RoadRouteSegment,
+  coordinate: [number, number],
+): number {
+  return projectPointOntoSegment(segment.start, segment.end, coordinate).ratio;
+}
+
+function areCoordinatesClose(
+  left: [number, number],
+  right: [number, number],
+  tolerance = 0.01,
+): boolean {
+  return getCoordinateDistance(left, right) <= tolerance;
 }
 
 function addRoadRouteGraphEdge(
   adjacency: Map<string, RoadRouteEdge[]>,
-  from: string,
-  to: string,
-  distance: number,
+  from: RoadRouteNode,
+  to: RoadRouteNode,
+  input: {
+    coordinates: Array<[number, number]>;
+    distance: number;
+    kind: 'connection' | 'road';
+    label: string;
+    reverseLabel?: string;
+  },
 ) {
-  adjacency.get(from)?.push({ to, distance });
-  adjacency.get(to)?.push({ to: from, distance });
-}
-
-function findNearestRoadRouteNode(
-  point: [number, number],
-  nodes: RoadRouteNode[],
-): RoadRouteNode | undefined {
-  return [...nodes].sort(
-    (left, right) =>
-      getCoordinateDistance(point, left.coordinate) - getCoordinateDistance(point, right.coordinate),
-  )[0];
+  adjacency.get(from.id)?.push({
+    coordinates: input.coordinates,
+    distance: input.distance,
+    kind: input.kind,
+    label: input.label,
+    to: to.id,
+  });
+  adjacency.get(to.id)?.push({
+    coordinates: [...input.coordinates].reverse() as Array<[number, number]>,
+    distance: input.distance,
+    kind: input.kind,
+    label: input.reverseLabel ?? input.label,
+    to: from.id,
+  });
 }
 
 function findRoadRoutePath(
@@ -3699,6 +3986,18 @@ function findRoadRoutePath(
   originId: string,
   destinationId: string,
 ): RoadRoutePath | undefined {
+  if (originId === destinationId) {
+    const node = graph.nodesById.get(originId);
+    return node
+      ? {
+          coordinates: [node.coordinate],
+          distance: 0,
+          nodes: [node],
+          segments: [],
+        }
+      : undefined;
+  }
+
   const distances = new Map<string, number>();
   const previous = new Map<string, string>();
   const unvisited = new Set(graph.nodes.map((node) => node.id));
@@ -3754,34 +4053,79 @@ function findRoadRoutePath(
     .reverse()
     .map((id) => graph.nodesById.get(id))
     .filter((node): node is RoadRouteNode => Boolean(node));
-  return nodes.length >= 2 ? { distance, nodes } : undefined;
-}
+  if (nodes.length < 2) {
+    return undefined;
+  }
 
-function buildRoadRouteStepDetails(nodes: RoadRouteNode[]): RoutePlanStepDetail[] {
-  const groups: Array<{
-    distance: number;
-    label: string;
-    vector: [number, number];
-  }> = [];
-
-  for (let index = 1; index < nodes.length; index += 1) {
-    const previous = nodes[index - 1];
-    const current = nodes[index];
-    if (!previous || !current) {
+  const coordinates: Array<[number, number]> = [];
+  const segments: RoadRouteInstructionSegment[] = [];
+  for (let index = 1; index < pathIds.length; index += 1) {
+    const previousId = pathIds[index - 1];
+    const currentId = pathIds[index];
+    const edge = previousId
+      ? graph.adjacency.get(previousId)?.find((item) => item.to === currentId)
+      : undefined;
+    if (!edge) {
       continue;
     }
 
-    const distance = getCoordinateDistance(previous.coordinate, current.coordinate);
-    const label = current.roadLabel || previous.roadLabel || '道路';
+    appendRouteSegmentCoordinates(coordinates, edge.coordinates);
+    segments.push({
+      coordinates: edge.coordinates,
+      kind: edge.kind,
+      label: edge.label,
+    });
+  }
+
+  return { coordinates, distance, nodes, segments };
+}
+
+function buildRoadRouteStepDetails(
+  segments: RoadRouteInstructionSegment[],
+): RoutePlanStepDetail[] {
+  const groups: Array<{
+    distance: number;
+    label: string;
+    kind: RoadRouteInstructionSegment['kind'];
+    vector: [number, number];
+  }> = [];
+
+  for (const segment of segments) {
+    if (segment.coordinates.length < 2) {
+      continue;
+    }
+
+    const distance = getCoordinateChainDistance(segment.coordinates);
+    if (distance <= 0) {
+      continue;
+    }
+
+    const start = segment.coordinates[0];
+    const end = segment.coordinates[segment.coordinates.length - 1];
+    if (!start || !end) {
+      continue;
+    }
+
     const vector: [number, number] = [
-      current.coordinate[0] - previous.coordinate[0],
-      current.coordinate[1] - previous.coordinate[1],
+      end[0] - start[0],
+      end[1] - start[1],
     ];
     const lastGroup = groups.at(-1);
-    if (lastGroup && lastGroup.label === label) {
+    if (
+      lastGroup &&
+      lastGroup.kind === segment.kind &&
+      lastGroup.label === segment.label &&
+      segment.kind === 'road'
+    ) {
       lastGroup.distance += distance;
+      lastGroup.vector = vector;
     } else {
-      groups.push({ distance, label, vector });
+      groups.push({
+        distance,
+        kind: segment.kind,
+        label: segment.label,
+        vector,
+      });
     }
   }
 
@@ -3790,12 +4134,77 @@ function buildRoadRouteStepDetails(nodes: RoadRouteNode[]): RoutePlanStepDetail[
       index === 0
         ? 'directions_walk'
         : getTurnInstructionIcon(groups[index - 1]?.vector, group.vector),
-      group.label,
+      formatRoadRouteStepLabel(group.kind, group.label),
       `${formatRoutePlanDistance(group.distance)} ${formatRouteStepMinutes(
-        estimateRouteMinutes(group.distance, 64),
+        estimateRouteMinutes(group.distance, group.kind === 'road' || group.kind === 'connection' ? 64 : 72),
       )}`,
     ),
   );
+}
+
+function formatRoadRouteStepLabel(
+  kind: RoadRouteInstructionSegment['kind'],
+  label: string,
+): string {
+  if (kind === 'approach') {
+    return `接近 ${label}`;
+  }
+  if (kind === 'connection') {
+    return `连接到 ${label}`;
+  }
+  if (kind === 'depart') {
+    return '前往终点';
+  }
+  return label;
+}
+
+function buildWalkRouteBetweenCoordinates(
+  origin: [number, number],
+  destination: [number, number],
+  roadGraph?: RoadRouteGraph,
+): {
+  coordinates: Array<[number, number]>;
+  details: RoutePlanStepDetail[];
+  distance: number;
+  usesRoadGraph: boolean;
+} {
+  const roadRoute = roadGraph
+    ? findRoadRouteBetweenCoordinates(origin, destination, roadGraph)
+    : undefined;
+  if (roadRoute) {
+    return {
+      coordinates: roadRoute.coordinates,
+      distance: roadRoute.distance,
+      details: roadRoute.details,
+      usesRoadGraph: true,
+    };
+  }
+
+  const distance = getCoordinateDistance(origin, destination);
+  const minutes = estimateRouteMinutes(distance, 72);
+  return {
+    coordinates: [origin, destination],
+    distance,
+    details: [
+      createRouteStepDetail(
+        'directions_walk',
+        '直线步行',
+        `${formatRoutePlanDistance(distance)} ${formatRouteStepMinutes(minutes)}`,
+      ),
+    ],
+    usesRoadGraph: false,
+  };
+}
+
+function getCoordinateChainDistance(coordinates: Array<[number, number]>): number {
+  return coordinates.slice(1).reduce((total, coordinate, index) => {
+    const previous = coordinates[index];
+    return previous ? total + getCoordinateDistance(previous, coordinate) : total;
+  }, 0);
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function getTurnInstructionIcon(
@@ -3886,7 +4295,11 @@ function buildTransitRoutePlanOptions(input: {
       for (const direction of ['forward', 'reverse'] as const) {
         const stops = getDirectionalLineStops(line, direction)
           .map((stop): Omit<TransitRouteStop, 'index'> | undefined => {
-            const marker = findTransitStationMarker(stop.stationName, stationMarkerIndex);
+            const marker = findTransitStationMarker(
+              stop.stationName,
+              stationMarkerIndex,
+              mode.mode,
+            );
             const center = marker ? getMarkerCenter(marker) : undefined;
             return marker && center ? { center, marker, stop } : undefined;
           })
@@ -3941,8 +4354,10 @@ function buildDirectTransitLineOption(
   }
 
   const segmentStops = candidate.stops.slice(originStop.index, destinationStop.index + 1);
-  const accessDistance = getCoordinateDistance(draft.origin, originStop.center);
-  const egressDistance = getCoordinateDistance(draft.destination, destinationStop.center);
+  const accessRoute = buildWalkRouteBetweenCoordinates(draft.origin, originStop.center, roadGraph);
+  const egressRoute = buildWalkRouteBetweenCoordinates(destinationStop.center, draft.destination, roadGraph);
+  const accessDistance = accessRoute.distance;
+  const egressDistance = egressRoute.distance;
   const endpointAccessDistance = getRouteEndpointAccessDistance(draft);
   const transitRoute = buildTransitSegmentRoute(segmentStops, candidate.mode.mode, roadGraph);
   const transitDistance = transitRoute.distance;
@@ -3957,15 +4372,14 @@ function buildDirectTransitLineOption(
   const estimatedMinutes = endpointAccessMinutes + accessMinutes + egressMinutes + transitMinutes;
   const stationSpan = Math.max(1, destinationStop.index - originStop.index);
   const coordinates = buildRouteTraceCoordinates(draft, [
-    draft.origin,
+    ...accessRoute.coordinates,
     ...transitRoute.coordinates,
-    draft.destination,
+    ...egressRoute.coordinates,
   ]);
   const traceSegments = compactRouteTraceSegments([
     createRouteTraceSegment('walk', [
       ...(draft.originRaw ? [draft.originRaw] : []),
-      draft.origin,
-      originStop.center,
+      ...accessRoute.coordinates,
     ]),
     createRouteTraceSegment(
       'transit',
@@ -3973,8 +4387,7 @@ function buildDirectTransitLineOption(
       candidate.color,
     ),
     createRouteTraceSegment('walk', [
-      destinationStop.center,
-      draft.destination,
+      ...egressRoute.coordinates,
       ...(draft.destinationRaw ? [draft.destinationRaw] : []),
     ]),
   ]);
@@ -4001,7 +4414,10 @@ function buildDirectTransitLineOption(
       createRoutePlaceStep(`${draft.originLabel} 出发`, 'origin'),
       ...createRouteEndpointAccessSteps(draft, 'origin'),
       createRouteWalkStep(
-        `步行 ${formatRoutePlanDistance(accessDistance)} ${formatRouteStepMinutes(accessMinutes)}`,
+        `${accessRoute.usesRoadGraph ? '沿道路步行' : '步行'} ${formatRoutePlanDistance(
+          accessDistance,
+        )} ${formatRouteStepMinutes(accessMinutes)}`,
+        accessRoute.details,
       ),
       createRoutePlaceStep(
         `${formatMarkerDisplayName(originStop.marker.label)} 进站`,
@@ -4021,7 +4437,10 @@ function buildDirectTransitLineOption(
         'alighting',
       ),
       createRouteWalkStep(
-        `步行 ${formatRoutePlanDistance(egressDistance)} ${formatRouteStepMinutes(egressMinutes)}`,
+        `${egressRoute.usesRoadGraph ? '沿道路步行' : '步行'} ${formatRoutePlanDistance(
+          egressDistance,
+        )} ${formatRouteStepMinutes(egressMinutes)}`,
+        egressRoute.details,
       ),
       ...createRouteEndpointAccessSteps(draft, 'destination'),
       createRoutePlaceStep(`到达 ${draft.destinationLabel}`, 'destination'),
@@ -4103,11 +4522,23 @@ function buildTransferTransitLineOptions(
         continue;
       }
 
-      const accessDistance = getCoordinateDistance(draft.origin, originCandidate.originStop.center);
-      const egressDistance = getCoordinateDistance(
-        draft.destination,
-        destinationCandidate.destinationStop.center,
+      const accessRoute = buildWalkRouteBetweenCoordinates(
+        draft.origin,
+        originCandidate.originStop.center,
+        roadGraph,
       );
+      const egressRoute = buildWalkRouteBetweenCoordinates(
+        destinationCandidate.destinationStop.center,
+        draft.destination,
+        roadGraph,
+      );
+      const transferRoute = buildWalkRouteBetweenCoordinates(
+        transfer.fromStop.center,
+        transfer.toStop.center,
+        roadGraph,
+      );
+      const accessDistance = accessRoute.distance;
+      const egressDistance = egressRoute.distance;
       const firstTransitRoute = buildTransitSegmentRoute(
         firstSegment,
         originCandidate.candidate.mode.mode,
@@ -4122,9 +4553,7 @@ function buildTransferTransitLineOptions(
       const secondTransitDistance = secondTransitRoute.distance;
       const endpointAccessDistance = getRouteEndpointAccessDistance(draft);
       const transferDistance =
-        transfer.fromStop.marker.id === transfer.toStop.marker.id
-          ? 0
-          : getCoordinateDistance(transfer.fromStop.center, transfer.toStop.center);
+        transfer.fromStop.marker.id === transfer.toStop.marker.id ? 0 : transferRoute.distance;
       const accessMinutes = estimateRouteMinutes(accessDistance, 72);
       const egressMinutes = estimateRouteMinutes(egressDistance, 72);
       const endpointAccessMinutes = estimateRouteMinutes(endpointAccessDistance, 72);
@@ -4156,32 +4585,30 @@ function buildTransferTransitLineOptions(
         secondTransitMinutes +
         4;
       const coordinates = buildRouteTraceCoordinates(draft, [
-        draft.origin,
+        ...accessRoute.coordinates,
         ...firstTransitRoute.coordinates,
-        transfer.toStop.center,
+        ...transferRoute.coordinates,
         ...secondTransitRoute.coordinates,
-        draft.destination,
+        ...egressRoute.coordinates,
       ]);
       const traceSegments = compactRouteTraceSegments([
         createRouteTraceSegment('walk', [
           ...(draft.originRaw ? [draft.originRaw] : []),
-          draft.origin,
-          originCandidate.originStop.center,
+          ...accessRoute.coordinates,
         ]),
         createRouteTraceSegment(
           'transit',
           firstTransitRoute.coordinates,
           originCandidate.candidate.color,
         ),
-        createRouteTraceSegment('transfer', [transfer.fromStop.center, transfer.toStop.center]),
+        createRouteTraceSegment('transfer', transferRoute.coordinates),
         createRouteTraceSegment(
           'transit',
           secondTransitRoute.coordinates,
           destinationCandidate.candidate.color,
         ),
         createRouteTraceSegment('walk', [
-          destinationCandidate.destinationStop.center,
-          draft.destination,
+          ...egressRoute.coordinates,
           ...(draft.destinationRaw ? [draft.destinationRaw] : []),
         ]),
       ]);
@@ -4215,7 +4642,10 @@ function buildTransferTransitLineOptions(
           createRoutePlaceStep(`${draft.originLabel} 出发`, 'origin'),
           ...createRouteEndpointAccessSteps(draft, 'origin'),
           createRouteWalkStep(
-            `步行 ${formatRoutePlanDistance(accessDistance)} ${formatRouteStepMinutes(accessMinutes)}`,
+            `${accessRoute.usesRoadGraph ? '沿道路步行' : '步行'} ${formatRoutePlanDistance(
+              accessDistance,
+            )} ${formatRouteStepMinutes(accessMinutes)}`,
+            accessRoute.details,
           ),
           createRoutePlaceStep(
             `${formatMarkerDisplayName(originCandidate.originStop.marker.label)} 进站`,
@@ -4235,6 +4665,7 @@ function buildTransferTransitLineOptions(
             `换乘 步行 ${formatRoutePlanDistance(transferDistance)} ${formatRouteStepMinutes(
               transferWalkMinutes,
             )}`,
+            transferRoute.details,
           ),
           createRoutePlaceStep(
             `${formatMarkerDisplayName(transfer.toStop.marker.label)} 上车`,
@@ -4256,14 +4687,21 @@ function buildTransferTransitLineOptions(
             'alighting',
           ),
           createRouteWalkStep(
-            `步行 ${formatRoutePlanDistance(egressDistance)} ${formatRouteStepMinutes(egressMinutes)}`,
+            `${egressRoute.usesRoadGraph ? '沿道路步行' : '步行'} ${formatRoutePlanDistance(
+              egressDistance,
+            )} ${formatRouteStepMinutes(egressMinutes)}`,
+            egressRoute.details,
           ),
           ...createRouteEndpointAccessSteps(draft, 'destination'),
           createRoutePlaceStep(`到达 ${draft.destinationLabel}`, 'destination'),
         ],
         note: getTransitRoutePlanNote(
           noteMode,
-          firstTransitRoute.usesRoadGraph || secondTransitRoute.usesRoadGraph,
+          firstTransitRoute.usesRoadGraph ||
+            secondTransitRoute.usesRoadGraph ||
+            accessRoute.usesRoadGraph ||
+            transferRoute.usesRoadGraph ||
+            egressRoute.usesRoadGraph,
           '已按真实线路站序组合一次换乘候选；换乘距离和缺失站间耗时仍为估算。',
         ),
       });
@@ -4273,16 +4711,16 @@ function buildTransferTransitLineOptions(
   return options;
 }
 
-function buildTransitStationMarkerIndex(pointMarkers: PointMarker[]): Map<string, PointMarker> {
-  const index = new Map<string, PointMarker>();
+function buildTransitStationMarkerIndex(pointMarkers: PointMarker[]): Map<string, PointMarker[]> {
+  const index = new Map<string, PointMarker[]>();
   for (const marker of pointMarkers) {
     if (!isTransitStationPoi(marker)) {
       continue;
     }
     for (const key of getStationNameMatchKeys(marker.label)) {
-      if (!index.has(key)) {
-        index.set(key, marker);
-      }
+      const current = index.get(key) ?? [];
+      current.push(marker);
+      index.set(key, current);
     }
   }
   return index;
@@ -4290,15 +4728,43 @@ function buildTransitStationMarkerIndex(pointMarkers: PointMarker[]): Map<string
 
 function findTransitStationMarker(
   stationName: string,
-  stationMarkerIndex: Map<string, PointMarker>,
+  stationMarkerIndex: Map<string, PointMarker[]>,
+  mode: RouteTransportMode,
 ): PointMarker | undefined {
   for (const key of getStationNameMatchKeys(stationName)) {
-    const marker = stationMarkerIndex.get(key);
+    const marker = stationMarkerIndex
+      .get(key)
+      ?.find((item) => matchesTransitMarkerMode(item, mode));
     if (marker) {
       return marker;
     }
   }
   return undefined;
+}
+
+function matchesTransitMarkerMode(
+  marker: PointMarker,
+  mode: RouteTransportMode,
+): boolean {
+  if (mode === 'bus') {
+    return marker.categoryId === 'bus-stop';
+  }
+  if (mode === 'metro') {
+    return marker.categoryId === 'metro-station';
+  }
+  if (mode === 'tram') {
+    return marker.categoryId === 'tram-station';
+  }
+  if (mode === 'coach') {
+    return marker.categoryId === 'coach-station';
+  }
+  if (mode === 'railway') {
+    return marker.categoryId === 'railway-station';
+  }
+  if (mode === 'ferry') {
+    return marker.categoryId === 'ferry-port';
+  }
+  return marker.categoryId === 'airport';
 }
 
 function findNearestRouteLineStop(
@@ -4406,28 +4872,303 @@ function findRoadRouteBetweenCoordinates(
   origin: [number, number],
   destination: [number, number],
   graph: RoadRouteGraph,
-): { coordinates: Array<[number, number]>; distance: number } | undefined {
-  const originRoadNode = findNearestRoadRouteNode(origin, graph.nodes);
-  const destinationRoadNode = findNearestRoadRouteNode(destination, graph.nodes);
-  if (!originRoadNode || !destinationRoadNode || originRoadNode.id === destinationRoadNode.id) {
+): {
+  coordinates: Array<[number, number]>;
+  details: RoutePlanStepDetail[];
+  distance: number;
+} | undefined {
+  const originAccessCandidates = findRoadAccessCandidates(origin, destination, graph);
+  const destinationAccessCandidates = findRoadAccessCandidates(destination, origin, graph);
+  if (originAccessCandidates.length === 0 || destinationAccessCandidates.length === 0) {
     return undefined;
   }
 
-  const roadPath = findRoadRoutePath(graph, originRoadNode.id, destinationRoadNode.id);
-  if (!roadPath || roadPath.nodes.length < 2) {
-    return undefined;
+  const pathCache = new Map<string, RoadRoutePath | undefined>();
+  let bestRoute:
+    | {
+        coordinates: Array<[number, number]>;
+        details: RoutePlanStepDetail[];
+        distance: number;
+      }
+    | undefined;
+
+  for (const originAccess of originAccessCandidates) {
+    for (const destinationAccess of destinationAccessCandidates) {
+      const sameSegmentRoute = buildSameSegmentRoadRoute(
+        origin,
+        destination,
+        originAccess,
+        destinationAccess,
+      );
+      if (sameSegmentRoute && (!bestRoute || sameSegmentRoute.distance < bestRoute.distance)) {
+        bestRoute = sameSegmentRoute;
+      }
+
+      for (const originNodeId of [originAccess.startNodeId, originAccess.endNodeId]) {
+        for (const destinationNodeId of [
+          destinationAccess.startNodeId,
+          destinationAccess.endNodeId,
+        ]) {
+          const route = buildGraphRoadRouteCandidate({
+            destination,
+            destinationAccess,
+            destinationNodeId,
+            graph,
+            origin,
+            originAccess,
+            originNodeId,
+            pathCache,
+          });
+          if (route && (!bestRoute || route.distance < bestRoute.distance)) {
+            bestRoute = route;
+          }
+        }
+      }
+    }
   }
 
-  const accessDistance = getCoordinateDistance(origin, originRoadNode.coordinate);
-  const egressDistance = getCoordinateDistance(destinationRoadNode.coordinate, destination);
+  return bestRoute;
+}
+
+function findRoadAccessCandidates(
+  point: [number, number],
+  target: [number, number],
+  graph: RoadRouteGraph,
+  limit = 6,
+): RoadAccessCandidate[] {
+  const candidates = graph.roadSegments
+    .map((segment) => {
+      const projection = projectPointToRoadSegment(point, segment);
+      const directionPenalty = getRoadAccessDirectionPenalty(point, target, projection.coordinate);
+      return {
+        ...projection,
+        score: projection.distanceToPoint + directionPenalty,
+      };
+    })
+    .sort((left, right) => left.score - right.score);
+
+  const deduped = new Map<string, RoadAccessCandidate>();
+  for (const candidate of candidates) {
+    const key = [
+      candidate.startNodeId,
+      candidate.endNodeId,
+      candidate.coordinate[0].toFixed(2),
+      candidate.coordinate[1].toFixed(2),
+    ].join(':');
+    if (!deduped.has(key)) {
+      deduped.set(key, candidate);
+    }
+    if (deduped.size >= limit) {
+      break;
+    }
+  }
+
+  return Array.from(deduped.values());
+}
+
+function projectPointToRoadSegment(
+  point: [number, number],
+  segment: RoadRouteSegment,
+): RoadAccessCandidate {
+  const deltaX = segment.end[0] - segment.start[0];
+  const deltaZ = segment.end[1] - segment.start[1];
+  const lengthSquared = deltaX * deltaX + deltaZ * deltaZ;
+  const ratio = lengthSquared
+    ? clampNumber(
+        ((point[0] - segment.start[0]) * deltaX + (point[1] - segment.start[1]) * deltaZ) /
+          lengthSquared,
+        0,
+        1,
+      )
+    : 0;
+  const coordinate = interpolateCoordinate(segment.start, segment.end, ratio);
+  const totalDistance = getCoordinateDistance(segment.start, segment.end);
+  const startDistance = totalDistance * ratio;
   return {
-    coordinates: dedupeConsecutiveCoordinates([
-      origin,
-      originRoadNode.coordinate,
-      ...roadPath.nodes.map((node) => node.coordinate),
-      destinationRoadNode.coordinate,
-      destination,
-    ]),
+    coordinate,
+    distanceToPoint: getCoordinateDistance(point, coordinate),
+    endDistance: totalDistance - startDistance,
+    endNodeId: segment.endNodeId,
+    roadId: segment.roadId,
+    roadLabel: segment.roadLabel,
+    startDistance,
+    startNodeId: segment.startNodeId,
+  };
+}
+
+function getRoadAccessDirectionPenalty(
+  point: [number, number],
+  target: [number, number],
+  accessPoint: [number, number],
+): number {
+  const accessVector: [number, number] = [
+    accessPoint[0] - point[0],
+    accessPoint[1] - point[1],
+  ];
+  const targetVector: [number, number] = [
+    target[0] - point[0],
+    target[1] - point[1],
+  ];
+  const accessLength = Math.hypot(accessVector[0], accessVector[1]);
+  const targetLength = Math.hypot(targetVector[0], targetVector[1]);
+  if (accessLength === 0 || targetLength === 0) {
+    return 0;
+  }
+
+  const cosine =
+    (accessVector[0] * targetVector[0] + accessVector[1] * targetVector[1]) /
+    (accessLength * targetLength);
+  return (1 - clampNumber(cosine, -1, 1)) * 18;
+}
+
+function buildSameSegmentRoadRoute(
+  origin: [number, number],
+  destination: [number, number],
+  originAccess: RoadAccessCandidate,
+  destinationAccess: RoadAccessCandidate,
+):
+  | {
+      coordinates: Array<[number, number]>;
+      details: RoutePlanStepDetail[];
+      distance: number;
+    }
+  | undefined {
+  const sameSegment =
+    originAccess.roadId === destinationAccess.roadId &&
+    originAccess.startNodeId === destinationAccess.startNodeId &&
+    originAccess.endNodeId === destinationAccess.endNodeId;
+  if (!sameSegment) {
+    return undefined;
+  }
+
+  const roadDistance = Math.abs(originAccess.startDistance - destinationAccess.startDistance);
+  const instructionSegments: RoadRouteInstructionSegment[] = [];
+  if (getCoordinateDistance(origin, originAccess.coordinate) > 0.01) {
+    instructionSegments.push({
+      coordinates: [origin, originAccess.coordinate],
+      kind: 'approach',
+      label: originAccess.roadLabel,
+    });
+  }
+  if (roadDistance > 0.01) {
+    instructionSegments.push({
+      coordinates: [originAccess.coordinate, destinationAccess.coordinate],
+      kind: 'road',
+      label: originAccess.roadLabel,
+    });
+  }
+  if (getCoordinateDistance(destinationAccess.coordinate, destination) > 0.01) {
+    instructionSegments.push({
+      coordinates: [destinationAccess.coordinate, destination],
+      kind: 'depart',
+      label: destinationAccess.roadLabel,
+    });
+  }
+
+  const coordinates = dedupeConsecutiveCoordinates([
+    origin,
+    originAccess.coordinate,
+    destinationAccess.coordinate,
+    destination,
+  ]);
+  const distance =
+    originAccess.distanceToPoint + roadDistance + destinationAccess.distanceToPoint;
+
+  return {
+    coordinates,
+    details: buildRoadRouteStepDetails(instructionSegments),
+    distance,
+  };
+}
+
+function buildGraphRoadRouteCandidate(input: {
+  destination: [number, number];
+  destinationAccess: RoadAccessCandidate;
+  destinationNodeId: string;
+  graph: RoadRouteGraph;
+  origin: [number, number];
+  originAccess: RoadAccessCandidate;
+  originNodeId: string;
+  pathCache: Map<string, RoadRoutePath | undefined>;
+}):
+  | {
+      coordinates: Array<[number, number]>;
+      details: RoutePlanStepDetail[];
+      distance: number;
+    }
+  | undefined {
+  const originNode = input.graph.nodesById.get(input.originNodeId);
+  const destinationNode = input.graph.nodesById.get(input.destinationNodeId);
+  if (!originNode || !destinationNode) {
+    return undefined;
+  }
+
+  const pathCacheKey = `${input.originNodeId}->${input.destinationNodeId}`;
+  if (!input.pathCache.has(pathCacheKey)) {
+    input.pathCache.set(
+      pathCacheKey,
+      findRoadRoutePath(input.graph, input.originNodeId, input.destinationNodeId),
+    );
+  }
+  const roadPath = input.pathCache.get(pathCacheKey);
+  if (!roadPath) {
+    return undefined;
+  }
+
+  const instructionSegments: RoadRouteInstructionSegment[] = [];
+  if (getCoordinateDistance(input.origin, input.originAccess.coordinate) > 0.01) {
+    instructionSegments.push({
+      coordinates: [input.origin, input.originAccess.coordinate],
+      kind: 'approach',
+      label: input.originAccess.roadLabel,
+    });
+  }
+  if (
+    input.originAccess.coordinate[0] !== originNode.coordinate[0] ||
+    input.originAccess.coordinate[1] !== originNode.coordinate[1]
+  ) {
+    instructionSegments.push({
+      coordinates: [input.originAccess.coordinate, originNode.coordinate],
+      kind: 'road',
+      label: input.originAccess.roadLabel,
+    });
+  }
+  instructionSegments.push(...roadPath.segments);
+  if (
+    destinationNode.coordinate[0] !== input.destinationAccess.coordinate[0] ||
+    destinationNode.coordinate[1] !== input.destinationAccess.coordinate[1]
+  ) {
+    instructionSegments.push({
+      coordinates: [destinationNode.coordinate, input.destinationAccess.coordinate],
+      kind: 'road',
+      label: input.destinationAccess.roadLabel,
+    });
+  }
+  if (getCoordinateDistance(input.destinationAccess.coordinate, input.destination) > 0.01) {
+    instructionSegments.push({
+      coordinates: [input.destinationAccess.coordinate, input.destination],
+      kind: 'depart',
+      label: input.destinationAccess.roadLabel,
+    });
+  }
+
+  const accessDistance =
+    input.originAccess.distanceToPoint +
+    getCoordinateDistance(input.originAccess.coordinate, originNode.coordinate);
+  const egressDistance =
+    getCoordinateDistance(destinationNode.coordinate, input.destinationAccess.coordinate) +
+    input.destinationAccess.distanceToPoint;
+  const coordinates = dedupeConsecutiveCoordinates([
+    input.origin,
+    input.originAccess.coordinate,
+    ...roadPath.coordinates,
+    input.destinationAccess.coordinate,
+    input.destination,
+  ]);
+
+  return {
+    coordinates,
+    details: buildRoadRouteStepDetails(instructionSegments),
     distance: accessDistance + roadPath.distance + egressDistance,
   };
 }
@@ -4455,7 +5196,7 @@ function getTransitRoutePlanNote(
   }
 
   return usesRoadGraph
-    ? '公交/客运站间已优先沿旧地图道路端点图生成，并按 50 格规则连通相邻道路；无法连通的片段回退为直线估算。站间耗时优先使用旧数据 travelTime。'
+    ? '公交/客运站间已优先沿旧地图道路端点图生成，并按 100 格规则连通相邻道路；无法连通的片段回退为直线估算。站间耗时优先使用旧数据 travelTime。'
     : '已尝试使用旧地图道路端点图生成公交/客运站间路径；当前路网缺失或不连通的片段仍按直线估算。站间耗时优先使用旧数据 travelTime。';
 }
 
@@ -4724,9 +5465,15 @@ function isLinearDetailMarker(marker: MapMarkerSnapshot['markers'][number]): boo
 function isTransitStationPoi(marker: MapMarkerSnapshot['markers'][number]): boolean {
   return Boolean(
     marker.categoryId &&
-    ['metro-station', 'bus-stop', 'tram-station', 'railway-station', 'coach-station'].includes(
-      marker.categoryId,
-    ),
+    [
+      'airport',
+      'bus-stop',
+      'coach-station',
+      'ferry-port',
+      'metro-station',
+      'railway-station',
+      'tram-station',
+    ].includes(marker.categoryId),
   );
 }
 
