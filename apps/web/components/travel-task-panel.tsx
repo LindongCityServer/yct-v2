@@ -1,6 +1,9 @@
+'use client';
+
 import type { ApiItemResponse, TransitScreenSnapshot } from '@yct/contracts';
 import Link from 'next/link';
 import { appPath } from '../lib/app-paths';
+import { useI18n } from '../lib/client-i18n';
 import type { TransitOverview } from '../lib/legacy-transit';
 
 export function TravelTaskPanel({
@@ -10,6 +13,7 @@ export function TravelTaskPanel({
   overview: TransitOverview;
   screen: ApiItemResponse<TransitScreenSnapshot>;
 }>) {
+  const { t } = useI18n();
   const coachLines = overview.lines.filter((line) => line.mode === 'coach');
   const screenSnapshot = screen.meta.sourceStatus === 'ready' ? screen.item : undefined;
   const tripCount = screenSnapshot
@@ -24,33 +28,33 @@ export function TravelTaskPanel({
     <section className="travel-task-panel" aria-labelledby="travel-task-title">
       <div className="section-heading">
         <div>
-          <h2 id="travel-task-title">出行服务</h2>
-          <span className="muted">班次查询、客运展示与后续票务入口</span>
+          <h2 id="travel-task-title">{t('travel.services.title')}</h2>
+          <span className="muted">{t('travel.services.subtitle')}</span>
         </div>
       </div>
 
       <div className="travel-task-grid">
         <TravelTaskCard
           icon="departure_board"
-          title="班次查询"
-          detail={`客运 ${tripCount} 个班次，${stationCount} 个车站；轮渡与航班预留统一入口`}
+          title={t('travel.schedules.title')}
+          detail={t('travel.schedules.detail', { tripCount, stationCount })}
           href={appPath('/travel/schedules')}
-          actionLabel="查询班次"
+          actionLabel={t('travel.schedules.action')}
           tone="coach"
         />
         <TravelTaskCard
           icon="analytics"
-          title="智运大屏"
-          detail={`${gateCount} 个检票口数据，展示近期客运班次与运营提示`}
+          title={t('travel.screen.title')}
+          detail={t('travel.screen.detail', { gateCount })}
           href={appPath('/travel/screen')}
-          actionLabel="查看大屏"
+          actionLabel={t('travel.screen.action')}
           tone="ticket"
         />
         <TravelTaskCard
           icon="confirmation_number"
-          title="票券与订单"
-          detail="真实电子票、检票、退票和乘车码后续接入临东通"
-          actionLabel="待接入"
+          title={t('travel.ticketing.title')}
+          detail={t('travel.ticketing.detail')}
+          actionLabel={t('travel.ticketing.action')}
           disabled
           tone="future"
         />

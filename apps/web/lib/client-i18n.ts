@@ -37,6 +37,7 @@ export type CommonMessageKey =
   | 'page.search'
   | 'page.services'
   | 'page.ticketOrder'
+  | 'page.travel'
   | 'page.travelScreen'
   | 'quickAction.rideCode'
   | 'quickAction.rideCodeLoginRequired'
@@ -97,7 +98,19 @@ export type CommonMessageKey =
   | 'status.loggedIn'
   | 'status.noPending'
   | 'status.pendingItems'
-  | 'sync.localTripsPending';
+  | 'sync.localTripsPending'
+  | 'travel.schedules.action'
+  | 'travel.schedules.detail'
+  | 'travel.schedules.title'
+  | 'travel.screen.action'
+  | 'travel.screen.detail'
+  | 'travel.screen.title'
+  | 'travel.services.subtitle'
+  | 'travel.services.title'
+  | 'travel.subtitle'
+  | 'travel.ticketing.action'
+  | 'travel.ticketing.detail'
+  | 'travel.ticketing.title';
 
 type CommonCatalog = Record<CommonMessageKey, string>;
 
@@ -134,6 +147,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'page.search': '搜索',
     'page.services': '更多服务',
     'page.ticketOrder': '票务订单',
+    'page.travel': '出行',
     'page.travelScreen': '智运大屏',
     'quickAction.rideCode': '乘车码',
     'quickAction.rideCodeLoginRequired': '乘车码需要登录后使用',
@@ -195,6 +209,19 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'status.noPending': '无待办',
     'status.pendingItems': '{count} 个待处理事项',
     'sync.localTripsPending': '{count} 个本地行程待同步',
+    'travel.schedules.action': '查询班次',
+    'travel.schedules.detail':
+      '客运 {tripCount} 个班次，{stationCount} 个车站；轮渡与航班预留统一入口',
+    'travel.schedules.title': '班次查询',
+    'travel.screen.action': '查看大屏',
+    'travel.screen.detail': '{gateCount} 个检票口数据，展示近期客运班次与运营提示',
+    'travel.screen.title': '智运大屏',
+    'travel.services.subtitle': '班次查询、客运展示与后续票务入口',
+    'travel.services.title': '出行服务',
+    'travel.subtitle': '提醒、班次与后续票务',
+    'travel.ticketing.action': '待接入',
+    'travel.ticketing.detail': '真实电子票、检票、退票和乘车码后续接入临东通',
+    'travel.ticketing.title': '票券与订单',
   },
   'zh-Hant': {
     'account.settings': '帳號設定',
@@ -228,6 +255,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'page.search': '搜尋',
     'page.services': '更多服務',
     'page.ticketOrder': '票務訂單',
+    'page.travel': '出行',
     'page.travelScreen': '智運大屏',
     'quickAction.rideCode': '乘車碼',
     'quickAction.rideCodeLoginRequired': '乘車碼需要登入後使用',
@@ -289,6 +317,19 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'status.noPending': '無待辦',
     'status.pendingItems': '{count} 個待處理事項',
     'sync.localTripsPending': '{count} 個本機行程待同步',
+    'travel.schedules.action': '查詢班次',
+    'travel.schedules.detail':
+      '客運 {tripCount} 個班次，{stationCount} 個車站；輪渡與航班預留統一入口',
+    'travel.schedules.title': '班次查詢',
+    'travel.screen.action': '查看大屏',
+    'travel.screen.detail': '{gateCount} 個檢票口資料，展示近期客運班次與營運提示',
+    'travel.screen.title': '智運大屏',
+    'travel.services.subtitle': '班次查詢、客運展示與後續票務入口',
+    'travel.services.title': '出行服務',
+    'travel.subtitle': '提醒、班次與後續票務',
+    'travel.ticketing.action': '待接入',
+    'travel.ticketing.detail': '真實電子票、檢票、退票和乘車碼後續接入臨東通',
+    'travel.ticketing.title': '票券與訂單',
   },
   en: {
     'account.settings': 'Account Settings',
@@ -322,6 +363,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'page.search': 'Search',
     'page.services': 'More Services',
     'page.ticketOrder': 'Ticket Order',
+    'page.travel': 'Travel',
     'page.travelScreen': 'Operations Board',
     'quickAction.rideCode': 'Ride Code',
     'quickAction.rideCodeLoginRequired': 'Sign in to use the ride code',
@@ -342,8 +384,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.language.source.default': 'Default',
     'settings.language.source.local': 'Local',
     'settings.language.system': 'Follow system',
-    'settings.language.zhCN': 'Simplified Chinese',
-    'settings.language.zhHant': 'Traditional Chinese',
+    'settings.language.zhCN': '简体中文',
+    'settings.language.zhHant': '繁體中文',
     'settings.motion.full': 'On',
     'settings.motion.group': 'Motion',
     'settings.motion.label': 'Motion',
@@ -383,6 +425,21 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'status.noPending': 'No pending items',
     'status.pendingItems': '{count} pending items',
     'sync.localTripsPending': '{count} local trips to sync',
+    'travel.schedules.action': 'Search schedules',
+    'travel.schedules.detail':
+      'Coach: {tripCount} trips and {stationCount} stations. Ferry and flight entries are reserved for the unified platform.',
+    'travel.schedules.title': 'Schedule Search',
+    'travel.screen.action': 'View board',
+    'travel.screen.detail':
+      '{gateCount} check-in gates with recent coach trips and update notices.',
+    'travel.screen.title': 'Operations Board',
+    'travel.services.subtitle': 'Schedule search, coach board, and future ticketing entry points',
+    'travel.services.title': 'Travel Services',
+    'travel.subtitle': 'Reminders, schedules, and future ticketing',
+    'travel.ticketing.action': 'Planned',
+    'travel.ticketing.detail':
+      'Real e-tickets, check-in, refunds, and ride code integration will connect to ldpass later.',
+    'travel.ticketing.title': 'Tickets and Orders',
   },
 };
 

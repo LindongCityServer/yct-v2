@@ -1525,13 +1525,14 @@ export function MapStage() {
     if (!destination) {
       return;
     }
+    const origin: [number, number] = [mapDefaults.centerX, mapDefaults.centerZ];
 
     setRoutePlanDraft({
       destinationId: marker.id,
-      originLabel: formatPoint([mapView.centerX, mapView.centerZ]),
+      originLabel: '当前地点',
       destinationLabel: formatMarkerDisplayName(marker.label),
       destination,
-      origin: [mapView.centerX, mapView.centerZ],
+      origin,
     });
     setRoutePlanCollapsed(false);
     setSelectedRouteOptionId(null);
@@ -1685,10 +1686,6 @@ export function MapStage() {
       viewportSize,
       32,
     );
-    if (defaultAnchor && !routePlanDraft) {
-      markers.push(defaultAnchor);
-    }
-
     if (routePlanDraft) {
       const routeOrigin = projectCoordinateMarker(
         'route-origin',
@@ -1712,6 +1709,9 @@ export function MapStage() {
       if (routeDestination) {
         markers.push(routeDestination);
       }
+    }
+    if (defaultAnchor) {
+      markers.push(defaultAnchor);
     }
 
     return markers;
