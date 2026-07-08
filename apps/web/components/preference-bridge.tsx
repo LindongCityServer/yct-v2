@@ -1,6 +1,14 @@
 'use client';
 
 import { useEffect } from 'react';
+import {
+  fetchServerLocalePreference,
+  localePreferenceChangedEventName,
+  localePreferenceStorageKey,
+  readLocalLocalePreference,
+  writeLocalLocalePreference,
+  type ClientLocalePreferenceState,
+} from '../lib/client-locale-preference';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type AccentMode = 'ldpass' | 'green' | 'red' | 'gray';
@@ -46,6 +54,10 @@ export function applyFontMode(mode: FontMode) {
   window.localStorage.setItem(preferenceKeys.font, mode);
 }
 
+export function applyLocalePreferenceState(state: ClientLocalePreferenceState) {
+  document.documentElement.lang = state.resolvedLocale;
+}
+
 export function readThemeMode(): ThemeMode {
   const value = window.localStorage.getItem(preferenceKeys.theme);
   return value === 'light' || value === 'dark' || value === 'system' ? value : 'system';
@@ -73,11 +85,13 @@ function applyStoredPreferences() {
   applyAccentMode(readAccentMode());
   applyMotionMode(readMotionMode());
   applyFontMode(readFontMode());
+  applyLocalePreferenceState(readLocalLocalePreference());
 }
 
 export function PreferenceBridge() {
   useEffect(() => {
     applyStoredPreferences();
+    let ignoreServerLocale = false;
 
     const handleStorage = (event: StorageEvent) => {
       if (
@@ -87,10 +101,37 @@ export function PreferenceBridge() {
       ) {
         applyStoredPreferences();
       }
+
+      if (event.key === localePreferenceStorageKey) {
+        applyLocalePreferenceState(readLocalLocalePreference());
+      }
+    };
+
+    const handleLocalePreferenceChanged = (event: Event) => {
+      const state =
+        event instanceof CustomEvent ? (event.detail as ClientLocalePreferenceState | undefined) : undefined;
+      applyLocalePreferenceState(state ?? readLocalLocalePreference());
     };
 
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+    window.addEventListener(localePreferenceChangedEventName, handleLocalePreferenceChanged);
+
+    void fetchServerLocalePreference()
+      .then((preference) => {
+        if (!preference || ignoreServerLocale) {
+          return;
+        }
+
+        writeLocalLocalePreference(preference.locale);
+        applyLocalePreferenceState(preference);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      ignoreServerLocale = true;
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener(localePreferenceChangedEventName, handleLocalePreferenceChanged);
+    };
   }, []);
 
   return null;

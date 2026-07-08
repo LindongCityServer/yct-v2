@@ -47,6 +47,7 @@ export const yctTokens = {
   motion: {
     durationFast: '120ms',
     durationStandard: '180ms',
+    durationSpinner: '1100ms',
     easingStandard: 'cubic-bezier(0.2, 0, 0, 1)',
   },
 } as const;

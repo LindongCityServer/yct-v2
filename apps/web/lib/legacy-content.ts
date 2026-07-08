@@ -118,6 +118,7 @@ function mapLegacyContentItem(
     displayExpireDate: item.expireDate,
     excerpt: item.summary,
     showInBanner: Boolean(item.showInBanner),
+    customTags: undefined,
     tags: inferTags([normalizedTitle, item.summary, item.categoryId].filter(Boolean).join(' ')),
     coverColor,
     coverImageUrl: coverImageUrl ?? resolveLegacyAssetDisplayUrl(legacyImageAsset),

@@ -1,6 +1,7 @@
 param(
   [int]$Port = 3300,
   [string]$HostName = "127.0.0.1",
+  [string]$BasePath = "",
   [int]$TimeoutSeconds = 45
 )
 
@@ -25,7 +26,7 @@ function Convert-YctScriptOutput {
 
 $stopResult = Convert-YctScriptOutput -Lines (& $stopScript -Port $Port -HostName $HostName)
 Clear-YctNextDevManifestCache -Root (Get-YctRepoRoot)
-$startResult = Convert-YctScriptOutput -Lines (& $startScript -Port $Port -HostName $HostName -TimeoutSeconds $TimeoutSeconds)
+$startResult = Convert-YctScriptOutput -Lines (& $startScript -Port $Port -HostName $HostName -BasePath $BasePath -TimeoutSeconds $TimeoutSeconds)
 
 $result = [pscustomobject]@{
   Status = "restarted"

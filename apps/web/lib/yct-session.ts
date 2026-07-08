@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { LdpassClientSessionResponse, YctAccountSessionSnapshot } from '@yct/contracts';
 
 export const yctAuthStateCookieName = 'yct.ldpass_state';
+export const yctAuthReturnOriginCookieName = 'yct.ldpass_return_origin';
 export const yctSessionCookieName = 'yct.account_snapshot';
 
 const authStateMaxAgeSeconds = 10 * 60;
@@ -97,11 +98,11 @@ export function sessionCookieOptions(secure: boolean) {
   };
 }
 
-export function expiredCookieOptions() {
+export function expiredCookieOptions(secure = false) {
   return {
     httpOnly: true,
     sameSite: 'lax' as const,
-    secure: false,
+    secure,
     path: '/',
     maxAge: 0,
   };
@@ -109,4 +110,18 @@ export function expiredCookieOptions() {
 
 export function isSecureRequest(url: URL): boolean {
   return url.protocol === 'https:';
+}
+
+export function normalizeStoredReturnOrigin(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    return url.origin;
+  } catch {
+    return undefined;
+  }
 }

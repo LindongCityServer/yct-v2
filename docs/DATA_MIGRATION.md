@@ -63,10 +63,11 @@
 - `YCT_TICKET_ORDER_STORE_PATH=.yct-data/ticket-order-store.json`：统一票务订单草稿与库存占用的本地仓储路径；第一版只在真实 `ldpass` Active 用户、真实票种和真实库存池都存在时写入 `draft` 订单，不承载真实票券或核销凭证。
 - `YCT_EVENT_OUTBOX_STORE_PATH=.yct-data/event-outbox-store.json`：单机开发阶段的领域事件 Outbox 本地仓储路径；当前用于持久化事件审计、连接共享内存事件总线，并支持通过 `/api/internal/events/process` 重放待处理或失败事件，后续替换为数据库 Transactional Outbox。
 - `YCT_PUSH_DELIVERY_STORE_PATH=.yct-data/push-delivery-store.json`：账号侧行程提醒触发的 Push 投递队列和送达审计本地仓储路径。
+- `YCT_INTERNAL_TASK_RUN_STORE_PATH=.yct-data/internal-task-run-store.json`：统一内部任务结果摘要的本地仓储路径；当前会保留最近数轮轻量历史（默认 8 条，不保存整份通知明细），后台“运营提醒投递预览”会读取它来回显最近一次以及最近几次手动或定时运行的公告同步、事件重放、通知处理和票务清理结果。
 - `YCT_WEB_PUSH_PUBLIC_KEY` / `NEXT_PUBLIC_YCT_WEB_PUSH_PUBLIC_KEY`、`YCT_WEB_PUSH_PRIVATE_KEY`、`YCT_WEB_PUSH_SUBJECT`：服务端 Web Push VAPID 配置；缺少任一项时内部投递任务只会延后队列并记录原因，不会伪造已送达。
 - `NEXT_PUBLIC_YCT_PUSH_DEFAULT_ENABLED_TYPES` / `YCT_PUSH_DEFAULT_ENABLED_TYPES=trip,operations,ticket,check_in`：账号页和服务端新用户通知偏好的默认预选类型，留空或无有效项时默认四类都预选。
 - `YCT_PUSH_DELIVERY_MIN_INTERVAL_MS=300000`：同一用户同一通知类型的服务端 Push 最小投递间隔，默认 5 分钟；设为 `0` 可关闭该开发期限频策略。
-- `YCT_INTERNAL_TASK_TOKEN`：内部任务接口 `/api/internal/events/process`、`/api/internal/notifications/process` 与统一 runner `/api/internal/tasks/run` 的调用令牌；统一 runner 会重放事件 Outbox、处理到期 Push 投递队列，并清理过期票务占座。
+- `YCT_INTERNAL_TASK_TOKEN`：内部任务接口 `/api/internal/events/process`、`/api/internal/notifications/process`、`/api/internal/operations/reminders/sync` 与统一 runner `/api/internal/tasks/run` 的调用令牌；统一 runner 现在会先同步旧客运公告源、在发现公告签名变化时请求重算运营提醒投递，然后重放事件 Outbox、处理到期 Push 投递队列，并清理过期票务占座。
 - `YCT_CONTENT_ASSET_UPLOAD_DIR=apps/web/public/content-assets`：内容后台上传素材的本地落盘目录；该目录属于运行时文件，不进入 Git，后续可替换为对象存储或共享资产目录。
 - `YCT_LEGACY_ASSET_DOWNLOAD_REPORT_PATH=.yct-data/legacy-assets-download-report.json`：旧内容资源下载报告路径，供内容后台展示最近一次真实下载失败项；如果服务进程运行目录与下载脚本运行目录不同，需要显式配置到同一个报告文件。
 

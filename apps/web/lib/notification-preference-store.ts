@@ -20,6 +20,11 @@ export async function findPushPreferenceByUserId(
   return snapshot.preferences.find((preference) => preference.userId === userId);
 }
 
+export async function listPushPreferences(): Promise<UserPushPreference[]> {
+  const snapshot = await readSnapshot();
+  return [...snapshot.preferences].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
 export async function upsertPushPreference(
   preference: UserPushPreference,
 ): Promise<UserPushPreference> {

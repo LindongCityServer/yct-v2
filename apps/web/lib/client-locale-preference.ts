@@ -1,7 +1,7 @@
 import type { LocaleCode, LocalePreference, UserLocalePreference } from '@yct/contracts';
 import { appPath } from './app-paths';
 
-const localePreferenceStorageKey = 'yct.localePreference.v1';
+export const localePreferenceStorageKey = 'yct.localePreference.v1';
 export const localePreferenceChangedEventName = 'yct:locale-preference-changed';
 
 export const supportedLocaleCodes = ['zh-CN', 'zh-Hant', 'en'] as const satisfies readonly LocaleCode[];
@@ -50,6 +50,7 @@ export function writeLocalLocalePreference(locale: LocalePreference): ClientLoca
 export async function fetchServerLocalePreference(): Promise<ClientLocalePreferenceState | undefined> {
   const response = await fetch(appPath('/api/account/locale-preference'), {
     method: 'GET',
+    cache: 'no-store',
     credentials: 'same-origin',
   });
 

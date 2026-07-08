@@ -57,6 +57,27 @@ export function readInternalTaskString(source: unknown, key: string): string | u
   return typeof rawValue === 'string' && rawValue.trim() ? rawValue.trim() : undefined;
 }
 
+export function readInternalTaskBoolean(source: unknown, key: string): boolean | undefined {
+  const rawValue = readInternalTaskValue(source, key);
+  if (typeof rawValue === 'boolean') {
+    return rawValue;
+  }
+
+  if (typeof rawValue !== 'string') {
+    return undefined;
+  }
+
+  const normalized = rawValue.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on') {
+    return true;
+  }
+  if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'off') {
+    return false;
+  }
+
+  return undefined;
+}
+
 function readInternalTaskValue(source: unknown, key: string): unknown {
   if (source instanceof URLSearchParams) {
     return source.get(key) ?? undefined;

@@ -7,21 +7,29 @@ import type {
   YctEventType,
 } from '@yct/contracts';
 import {
+  cancelPushDeliveriesByIds,
   cancelPendingPushDeliveries,
+  cancelPendingPushDeliveriesExcept,
   deferPushDelivery,
   findLatestSentPushDelivery,
   listDuePushDeliveries,
+  listPushDeliveries,
   markPushDeliveryFailed,
   markPushDeliverySent,
   markPushDeliverySkipped,
   upsertPushDelivery,
 } from './notification-delivery-store';
-import { findPushPreferenceByUserId } from './notification-preference-store';
 import {
+  findPushPreferenceByUserId,
+  listPushPreferences,
+} from './notification-preference-store';
+import {
+  listActivePushSubscriptions,
   listActivePushSubscriptionsForUser,
   revokePushSubscription,
 } from './push-subscription-store';
 import { createYctEvent, emitAppEvent } from './app-event-bus';
+import { listOperationsStrongReminderCandidates } from './operations-reminders';
 import { readRuntimeConfig } from './runtime-config';
 import { sendWebPushDelivery } from './web-push-sender';
 
@@ -44,7 +52,12 @@ export async function queueTripReminderPushDelivery(
 
   if (!preference?.enabled || !preference.enabledTypes.includes('trip')) {
     const { delivery } = await upsertPushDelivery({
-      sourceKey: createSourceKey(userId, event.payload.reminderId, 'preference'),
+      sourceKey: createSourceKey(
+        'trip_reminder',
+        userId,
+        event.payload.reminderId,
+        'preference',
+      ),
       sourceType: 'trip_reminder',
       sourceId: event.payload.reminderId,
       userId,
@@ -62,7 +75,12 @@ export async function queueTripReminderPushDelivery(
   const subscriptions = await listActivePushSubscriptionsForUser(userId);
   if (subscriptions.length === 0) {
     const { delivery } = await upsertPushDelivery({
-      sourceKey: createSourceKey(userId, event.payload.reminderId, 'no-subscription'),
+      sourceKey: createSourceKey(
+        'trip_reminder',
+        userId,
+        event.payload.reminderId,
+        'no-subscription',
+      ),
       sourceType: 'trip_reminder',
       sourceId: event.payload.reminderId,
       userId,
@@ -80,7 +98,12 @@ export async function queueTripReminderPushDelivery(
   const deliveries: PushDelivery[] = [];
   for (const subscription of subscriptions) {
     const { delivery, created } = await upsertPushDelivery({
-      sourceKey: createSourceKey(userId, event.payload.reminderId, subscription.subscriptionId),
+      sourceKey: createSourceKey(
+        'trip_reminder',
+        userId,
+        event.payload.reminderId,
+        subscription.subscriptionId,
+      ),
       sourceType: 'trip_reminder',
       sourceId: event.payload.reminderId,
       userId,
@@ -116,6 +139,218 @@ export async function cancelTripReminderPushDeliveries(
     sourceIds: event.payload.reminderIds,
     cancelledAt: event.payload.deletedAt,
   });
+}
+
+export async function queueOperationsReminderPushDeliveries(
+  _event: Extract<
+    YctEvent,
+    { type: 'OperationsStrongReminderRulesUpdated' | 'OperationsReminderDeliveryRefreshRequested' }
+  >,
+): Promise<PushDelivery[]> {
+  const nowIso = new Date().toISOString();
+  const [candidateResponse, preferences, subscriptions, existingDeliveries] = await Promise.all([
+    listOperationsStrongReminderCandidates({ includeFuture: true }),
+    listPushPreferences(),
+    listActivePushSubscriptions(),
+    listPushDeliveries({ sourceType: 'operations' }),
+  ]);
+  const candidates = candidateResponse.items;
+  const activeRuleIds = candidates.map((item) => item.ruleId);
+
+  if (candidates.length === 0) {
+    await cancelPushDeliveriesByIds({
+      deliveryIds: existingDeliveries.map((delivery) => delivery.deliveryId),
+      cancelledAt: nowIso,
+    });
+    return [];
+  }
+
+  const targetPreferences = preferences.filter(
+    (preference) => preference.enabled && preference.enabledTypes.includes('operations'),
+  );
+  const preferenceByUserId = new Map(
+    targetPreferences.map((preference) => [preference.userId, preference]),
+  );
+  const subscriptionsByUserId = new Map<string, typeof subscriptions>();
+  for (const subscription of subscriptions) {
+    const group = subscriptionsByUserId.get(subscription.userId);
+    if (group) {
+      group.push(subscription);
+    } else {
+      subscriptionsByUserId.set(subscription.userId, [subscription]);
+    }
+  }
+
+  const userIds = Array.from(preferenceByUserId.keys());
+  await cancelObsoleteOperationsDeliveries({
+    deliveries: existingDeliveries,
+    candidateRuleIds: new Set(activeRuleIds),
+    targetUserIds: new Set(userIds),
+    activeSubscriptionIdsByUser: new Map(
+      Array.from(subscriptionsByUserId.entries()).map(([userId, items]) => [
+        userId,
+        new Set(items.map((item) => item.subscriptionId)),
+      ]),
+    ),
+    cancelledAt: nowIso,
+  });
+  const deliveries: PushDelivery[] = [];
+
+  for (const candidate of candidates) {
+    const dueAt = resolveOperationsReminderDueAt(candidate, nowIso);
+    const payload = {
+      title: candidate.title.trim(),
+      body: candidate.summary?.trim() || '你关注的运营信息有一条新的重要提醒，请及时查看。',
+      url: candidate.href || '/operations',
+      tag: `yct-operations-${candidate.ruleId}`,
+    };
+
+    for (const userId of userIds) {
+      const userSubscriptions = subscriptionsByUserId.get(userId) ?? [];
+      if (userSubscriptions.length === 0) {
+        const { delivery } = await upsertPushDelivery({
+          sourceKey: createSourceKey('operations', userId, candidate.ruleId, 'no-subscription'),
+          sourceType: 'operations',
+          sourceId: candidate.ruleId,
+          userId,
+          notificationType: 'operations',
+          status: 'skipped',
+          payload,
+          dueAt,
+          now: nowIso,
+          lastErrorCode: 'no_active_push_subscription',
+          lastErrorMessage: '用户没有可用的浏览器 Push 设备订阅。',
+        });
+        deliveries.push(delivery);
+        continue;
+      }
+
+      for (const subscription of userSubscriptions) {
+        const { delivery, created } = await upsertPushDelivery({
+          sourceKey: createSourceKey(
+            'operations',
+            userId,
+            candidate.ruleId,
+            subscription.subscriptionId,
+          ),
+          sourceType: 'operations',
+          sourceId: candidate.ruleId,
+          userId,
+          subscriptionId: subscription.subscriptionId,
+          notificationType: 'operations',
+          status: 'queued',
+          payload,
+          dueAt,
+          now: nowIso,
+        });
+        deliveries.push(delivery);
+
+        if (created) {
+          await emitDeliveryEvent('PushDeliveryQueued', userId, {
+            deliveryId: delivery.deliveryId,
+            userId,
+            sourceType: delivery.sourceType,
+            sourceId: delivery.sourceId,
+            dueAt: delivery.dueAt,
+          });
+        }
+      }
+    }
+  }
+
+  return deliveries;
+}
+
+export async function refreshOperationsReminderPushDeliveriesForUser(
+  userId: string,
+): Promise<PushDelivery[]> {
+  const nowIso = new Date().toISOString();
+  const [candidateResponse, preference, subscriptions, existingDeliveries] = await Promise.all([
+    listOperationsStrongReminderCandidates({ includeFuture: true }),
+    findPushPreferenceByUserId(userId),
+    listActivePushSubscriptionsForUser(userId),
+    listPushDeliveries({ sourceType: 'operations', userId }),
+  ]);
+  const candidates = candidateResponse.items;
+  const activeRuleIds = new Set(candidates.map((item) => item.ruleId));
+  const operationsEnabled =
+    Boolean(preference?.enabled) && Boolean(preference?.enabledTypes.includes('operations'));
+
+  await cancelObsoleteOperationsDeliveries({
+    deliveries: existingDeliveries,
+    candidateRuleIds: activeRuleIds,
+    targetUserIds: operationsEnabled ? new Set([userId]) : new Set<string>(),
+    activeSubscriptionIdsByUser: new Map([
+      [userId, new Set(subscriptions.map((item) => item.subscriptionId))],
+    ]),
+    cancelledAt: nowIso,
+  });
+
+  if (!operationsEnabled || candidates.length === 0) {
+    return [];
+  }
+
+  const deliveries: PushDelivery[] = [];
+  for (const candidate of candidates) {
+    const dueAt = resolveOperationsReminderDueAt(candidate, nowIso);
+    const payload = {
+      title: candidate.title.trim(),
+      body: candidate.summary?.trim() || '你关注的运营信息有一条新的重要提醒，请及时查看。',
+      url: candidate.href || '/operations',
+      tag: `yct-operations-${candidate.ruleId}`,
+    };
+
+    if (subscriptions.length === 0) {
+      const { delivery } = await upsertPushDelivery({
+        sourceKey: createSourceKey('operations', userId, candidate.ruleId, 'no-subscription'),
+        sourceType: 'operations',
+        sourceId: candidate.ruleId,
+        userId,
+        notificationType: 'operations',
+        status: 'skipped',
+        payload,
+        dueAt,
+        now: nowIso,
+        lastErrorCode: 'no_active_push_subscription',
+        lastErrorMessage: '用户没有可用的浏览器 Push 设备订阅。',
+      });
+      deliveries.push(delivery);
+      continue;
+    }
+
+    for (const subscription of subscriptions) {
+      const { delivery, created } = await upsertPushDelivery({
+        sourceKey: createSourceKey(
+          'operations',
+          userId,
+          candidate.ruleId,
+          subscription.subscriptionId,
+        ),
+        sourceType: 'operations',
+        sourceId: candidate.ruleId,
+        userId,
+        subscriptionId: subscription.subscriptionId,
+        notificationType: 'operations',
+        status: 'queued',
+        payload,
+        dueAt,
+        now: nowIso,
+      });
+      deliveries.push(delivery);
+
+      if (created) {
+        await emitDeliveryEvent('PushDeliveryQueued', userId, {
+          deliveryId: delivery.deliveryId,
+          userId,
+          sourceType: delivery.sourceType,
+          sourceId: delivery.sourceId,
+          dueAt: delivery.dueAt,
+        });
+      }
+    }
+  }
+
+  return deliveries;
 }
 
 export async function processDuePushDeliveries(
@@ -292,8 +527,62 @@ async function emitDeliveryEvent<TType extends YctEventType>(
   );
 }
 
-function createSourceKey(userId: string, reminderId: string, target: string): string {
-  return `trip_reminder:${userId}:${reminderId}:${target}`;
+function createSourceKey(
+  sourceType: 'trip_reminder' | 'operations',
+  userId: string,
+  sourceId: string,
+  target: string,
+): string {
+  return `${sourceType}:${userId}:${sourceId}:${target}`;
+}
+
+function resolveOperationsReminderDueAt(
+  candidate: { startsAt?: string },
+  fallbackNow: string,
+): string {
+  const startsAt = candidate.startsAt ? new Date(candidate.startsAt).getTime() : Number.NaN;
+  const now = new Date(fallbackNow).getTime();
+  if (Number.isFinite(startsAt) && startsAt > now) {
+    return candidate.startsAt ?? fallbackNow;
+  }
+
+  return fallbackNow;
+}
+
+async function cancelObsoleteOperationsDeliveries(input: {
+  deliveries: PushDelivery[];
+  candidateRuleIds: Set<string>;
+  targetUserIds: Set<string>;
+  activeSubscriptionIdsByUser: Map<string, Set<string>>;
+  cancelledAt: string;
+}): Promise<void> {
+  const obsoleteDeliveryIds = input.deliveries
+    .filter((delivery) => {
+      if (delivery.sourceType !== 'operations') {
+        return false;
+      }
+      if (!input.candidateRuleIds.has(delivery.sourceId)) {
+        return true;
+      }
+      if (!input.targetUserIds.has(delivery.userId)) {
+        return true;
+      }
+      const activeSubscriptions = input.activeSubscriptionIdsByUser.get(delivery.userId);
+      if (delivery.subscriptionId) {
+        if (!activeSubscriptions?.has(delivery.subscriptionId)) {
+          return true;
+        }
+      } else if (activeSubscriptions && activeSubscriptions.size > 0) {
+        return true;
+      }
+      return false;
+    })
+    .map((delivery) => delivery.deliveryId);
+
+  await cancelPushDeliveriesByIds({
+    deliveryIds: obsoleteDeliveryIds,
+    cancelledAt: input.cancelledAt,
+  });
 }
 
 async function readRateLimitDeferredUntil(

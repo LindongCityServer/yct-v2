@@ -1,11 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { appBasePath } from './lib/app-paths';
 
 const staticAssetPattern =
   /\.(?:avif|css|gif|ico|jpg|jpeg|js|json|map|png|svg|txt|webmanifest|webp|woff2?)$/i;
 
 export function proxy(request: NextRequest) {
-  const response = NextResponse.next();
   const pathname = request.nextUrl.pathname;
+  const rewrittenPathname = resolveRewrittenPathname(pathname);
+  const response = rewrittenPathname
+    ? NextResponse.rewrite(createRewriteUrl(request, rewrittenPathname))
+    : NextResponse.next();
   const isServiceWorker = pathname.endsWith('/sw.js') || pathname === '/sw.js';
 
   if (
@@ -19,6 +23,28 @@ export function proxy(request: NextRequest) {
   }
 
   return response;
+}
+
+function resolveRewrittenPathname(pathname: string): string | undefined {
+  if (!appBasePath) {
+    return undefined;
+  }
+
+  if (pathname === appBasePath) {
+    return '/';
+  }
+
+  if (pathname.startsWith(`${appBasePath}/`)) {
+    return pathname.slice(appBasePath.length) || '/';
+  }
+
+  return undefined;
+}
+
+function createRewriteUrl(request: NextRequest, rewrittenPathname: string): URL {
+  const rewriteUrl = request.nextUrl.clone();
+  rewriteUrl.pathname = rewrittenPathname;
+  return rewriteUrl;
 }
 
 export const config = {

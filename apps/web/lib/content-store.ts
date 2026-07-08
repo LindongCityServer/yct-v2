@@ -7,6 +7,8 @@ import { readRuntimeConfig } from './runtime-config';
 export interface StoredContentMetadata {
   excerpt?: string;
   showInBanner: boolean;
+  bannerSortOrder?: number;
+  customTags?: string[];
   coverColor?: string;
   coverImageUrl?: string;
   expiresAt?: ISODateTimeString;
@@ -36,7 +38,16 @@ export async function listContentRecords(): Promise<StoredContentRecord[]> {
 
 export async function listPublishedContentRecords(): Promise<StoredContentRecord[]> {
   const records = await listContentRecords();
-  return records.filter((record) => record.revision.status === 'published');
+  const now = Date.now();
+  return records.filter((record) => {
+    if (record.revision.status !== 'published') {
+      return false;
+    }
+
+    const publishedAt = record.revision.publishedAt ?? record.updatedAt;
+    const publishedTime = new Date(publishedAt).getTime();
+    return Number.isNaN(publishedTime) || publishedTime <= now;
+  });
 }
 
 export async function findContentRecord(

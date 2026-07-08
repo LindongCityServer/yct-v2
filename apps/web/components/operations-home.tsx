@@ -1,6 +1,10 @@
 'use client';
 
-import type { ApiListResponse, OperationsFeedItem } from '@yct/contracts';
+import type {
+  ApiListResponse,
+  OperationsFeedItem,
+  OperationsStrongReminderItem,
+} from '@yct/contracts';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
@@ -27,10 +31,17 @@ const categoryLabelKeyById = new Map<string, CommonMessageKey>(
     .map((category) => [category.key, category.labelKey]),
 );
 
-export function OperationsHome({ feed }: Readonly<{ feed: ApiListResponse<OperationsFeedItem> }>) {
+export function OperationsHome({
+  feed,
+  reminders,
+}: Readonly<{
+  feed: ApiListResponse<OperationsFeedItem>;
+  reminders: ApiListResponse<OperationsStrongReminderItem>;
+}>) {
   const { t } = useI18n();
   const [activeCategory, setActiveCategory] = useState<CategoryKey>('all');
   const now = useMemo(() => Date.now(), []);
+  const activeReminders = reminders.items;
 
   const activeLabel = useMemo(
     () =>
@@ -46,10 +57,7 @@ export function OperationsHome({ feed }: Readonly<{ feed: ApiListResponse<Operat
   );
   const currentItems = filteredItems.filter((item) => !isExpiredItem(item, now));
   const expiredItems = filteredItems.filter((item) => isExpiredItem(item, now));
-  const bannerItem =
-    sortedItems.find((item) => item.showInBanner && !isExpiredItem(item, now)) ??
-    sortedItems.find((item) => item.showInBanner) ??
-    sortedItems[0];
+  const bannerItem = useMemo(() => pickFeaturedOperationsItem(sortedItems, now), [now, sortedItems]);
 
   const emptyText =
     activeCategory === 'all'
@@ -63,8 +71,17 @@ export function OperationsHome({ feed }: Readonly<{ feed: ApiListResponse<Operat
           <Link
             className="hero-feature-link"
             href={appPath(`/operations/${encodeURIComponent(bannerItem.id)}`)}
-            style={buildHeroBackgroundStyle(bannerItem)}
+            style={buildHeroFallbackStyle(bannerItem)}
           >
+            {bannerItem.coverImageUrl ? (
+              <img
+                className="hero-feature-image"
+                src={appPath(bannerItem.coverImageUrl)}
+                alt=""
+                decoding="async"
+                fetchPriority="high"
+              />
+            ) : null}
             <div className="hero-copy">
               <p className="eyebrow">{bannerItem.categoryId}</p>
               <h1 id="operations-title" className="hero-title">
@@ -84,8 +101,13 @@ export function OperationsHome({ feed }: Readonly<{ feed: ApiListResponse<Operat
       <section className="reminder-panel" aria-label={t('operations.remindersAria')}>
         <div className="section-heading">
           <h2>{t('operations.strongReminder')}</h2>
-          <span className="muted">{t('operations.noTripReminder')}</span>
+          <span className="muted">
+            {activeReminders.length > 0
+              ? t('operations.itemCount', { count: activeReminders.length })
+              : t('operations.noStrongReminder')}
+          </span>
         </div>
+        {activeReminders.length > 0 ? <ReminderList items={activeReminders} /> : null}
       </section>
 
       <section className="feed-panel" aria-label={t('operations.feedAria')}>
@@ -134,19 +156,65 @@ export function OperationsHome({ feed }: Readonly<{ feed: ApiListResponse<Operat
   );
 }
 
+function ReminderList({ items }: Readonly<{ items: OperationsStrongReminderItem[] }>) {
+  return (
+    <div className="operations-reminder-list">
+      {items.map((item) => (
+        <ReminderCard item={item} key={item.id} />
+      ))}
+    </div>
+  );
+}
+
+function ReminderCard({ item }: Readonly<{ item: OperationsStrongReminderItem }>) {
+  const className = ['operations-reminder-item', `tone-${item.tone}`].join(' ');
+  const windowText = item.displayEndDate
+    ? `有效至 ${item.displayEndDate}`
+    : item.displayStartDate
+      ? `开始于 ${item.displayStartDate}`
+      : undefined;
+  const icon = iconForReminderTone(item.tone);
+  const content = (
+    <>
+      <div className="operations-reminder-copy">
+        <div className="operations-reminder-meta">
+          {item.label ? <span className="operations-reminder-label">{item.label}</span> : null}
+          {windowText ? <span className="muted">{windowText}</span> : null}
+        </div>
+        <strong>{item.title}</strong>
+        {item.summary ? <p>{item.summary}</p> : null}
+      </div>
+      <span className="material-symbols-outlined" aria-hidden="true">
+        {icon}
+      </span>
+    </>
+  );
+
+  if (!item.href) {
+    return <article className={className}>{content}</article>;
+  }
+
+  if (/^https?:\/\//i.test(item.href)) {
+    return (
+      <a className={className} href={item.href} target="_blank" rel="noreferrer">
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <Link className={className} href={item.href}>
+      {content}
+    </Link>
+  );
+}
+
 function formatOperationsCategoryLabel(categoryId: string, t: Translate): string {
   const labelKey = categoryLabelKeyById.get(categoryId);
   return labelKey ? t(labelKey) : categoryId;
 }
 
-function buildHeroBackgroundStyle(item: OperationsFeedItem): CSSProperties | undefined {
-  if (item.coverImageUrl) {
-    const coverImageUrl = appPath(item.coverImageUrl);
-    return {
-      backgroundImage: `linear-gradient(to top, rgba(17, 24, 23, 0.78), rgba(17, 24, 23, 0.28) 54%, rgba(17, 24, 23, 0.04)), url("${coverImageUrl}")`,
-    };
-  }
-
+function buildHeroFallbackStyle(item: OperationsFeedItem): CSSProperties | undefined {
   if (item.coverColor) {
     return { backgroundColor: item.coverColor };
   }
@@ -211,6 +279,48 @@ function buildFeedCoverStyle(item: OperationsFeedItem): CSSProperties | undefine
 
 function comparePublishedAtDesc(left: OperationsFeedItem, right: OperationsFeedItem): number {
   return toTime(right.publishedAt) - toTime(left.publishedAt);
+}
+
+function iconForReminderTone(tone: OperationsStrongReminderItem['tone']): string {
+  switch (tone) {
+    case 'metro':
+      return 'subway';
+    case 'bus':
+    case 'coach':
+      return 'directions_bus';
+    case 'tram':
+      return 'tram';
+    case 'ferry':
+      return 'directions_boat';
+    case 'flight':
+      return 'flight_takeoff';
+    case 'railway':
+      return 'train';
+    case 'warning':
+      return 'warning';
+    case 'danger':
+      return 'crisis_alert';
+    default:
+      return 'notifications_active';
+  }
+}
+
+function compareBannerPriority(left: OperationsFeedItem, right: OperationsFeedItem): number {
+  const leftOrder = left.bannerSortOrder ?? Number.POSITIVE_INFINITY;
+  const rightOrder = right.bannerSortOrder ?? Number.POSITIVE_INFINITY;
+  if (leftOrder !== rightOrder) {
+    return leftOrder - rightOrder;
+  }
+
+  return comparePublishedAtDesc(left, right);
+}
+
+export function pickFeaturedOperationsItem(
+  items: OperationsFeedItem[],
+  now: number,
+): OperationsFeedItem | undefined {
+  const bannerCandidates = items.filter((item) => item.showInBanner).sort(compareBannerPriority);
+  return bannerCandidates.find((item) => !isExpiredItem(item, now)) ?? bannerCandidates[0] ?? items[0];
 }
 
 function isExpiredItem(item: OperationsFeedItem, now: number): boolean {

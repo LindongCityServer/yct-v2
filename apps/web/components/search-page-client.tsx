@@ -83,7 +83,7 @@ export function SearchPageClient({
 
     return feed.items
       .filter((item) =>
-        [item.title, item.excerpt, item.categoryId]
+        [item.title, item.excerpt, item.categoryId, ...(item.customTags ?? [])]
           .filter(Boolean)
           .some((value) => normalizeTitleForSearch(value ?? '').includes(normalizedQuery)),
       )

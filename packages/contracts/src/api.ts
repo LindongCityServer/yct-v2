@@ -1,4 +1,11 @@
-import type { ContentAsset, ContentSummary, ISODateTimeString, ServiceEntry } from './domain';
+import type {
+  ContentAsset,
+  ContentSummary,
+  ISODateTimeString,
+  OperationsStrongReminderSourceKind,
+  OperationsStrongReminderTone,
+  ServiceEntry,
+} from './domain';
 
 export type DataSourceStatus = 'ready' | 'not_configured' | 'unavailable';
 
@@ -26,6 +33,8 @@ export interface OperationsFeedItem extends ContentSummary {
   expiresAt?: string;
   displayExpireDate?: string;
   showInBanner: boolean;
+  bannerSortOrder?: number;
+  customTags?: string[];
   tags: OperationsFeedTag[];
   coverColor?: string;
   coverImageUrl?: string;
@@ -39,6 +48,22 @@ export interface OperationsFeedItem extends ContentSummary {
 export interface OperationsContentDetail extends OperationsFeedItem {
   markdown: string;
   sourceKind: 'legacy_content_data' | 'local_content_store';
+}
+
+export interface OperationsStrongReminderItem {
+  id: string;
+  ruleId: string;
+  sourceKind: OperationsStrongReminderSourceKind;
+  tone: OperationsStrongReminderTone;
+  label?: string;
+  title: string;
+  summary?: string;
+  href?: string;
+  contentId?: string;
+  startsAt?: ISODateTimeString;
+  endsAt?: ISODateTimeString;
+  displayStartDate?: string;
+  displayEndDate?: string;
 }
 
 export interface ServiceEntryGroup {

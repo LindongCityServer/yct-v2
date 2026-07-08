@@ -38,6 +38,7 @@ export async function upsertPushDelivery(input: {
   const snapshot = await readSnapshot();
   const now = input.now ?? new Date().toISOString();
   const existing = snapshot.deliveries.find((delivery) => delivery.sourceKey === input.sourceKey);
+  const status = existing?.status === 'sent' ? existing.status : input.status;
   const delivery: PushDelivery = {
     deliveryId: existing?.deliveryId ?? createDeliveryId(input.sourceKey),
     sourceKey: input.sourceKey,
@@ -46,19 +47,30 @@ export async function upsertPushDelivery(input: {
     userId: input.userId,
     subscriptionId: input.subscriptionId,
     notificationType: input.notificationType,
-    status: existing?.status === 'sent' ? existing.status : input.status,
+    status,
     payload: input.payload,
     dueAt: input.dueAt,
     attempts: existing?.attempts ?? 0,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
-    sentAt: existing?.sentAt,
-    failedAt: existing?.failedAt,
-    deferredUntil: existing?.deferredUntil,
-    skippedAt: input.status === 'skipped' ? (existing?.skippedAt ?? now) : existing?.skippedAt,
-    cancelledAt: existing?.cancelledAt,
-    lastErrorCode: input.lastErrorCode ?? existing?.lastErrorCode,
-    lastErrorMessage: input.lastErrorMessage ?? existing?.lastErrorMessage,
+    sentAt: status === 'sent' ? existing?.sentAt : undefined,
+    failedAt: status === 'failed' ? existing?.failedAt : undefined,
+    deferredUntil: status === 'deferred' ? existing?.deferredUntil : undefined,
+    skippedAt:
+      status === 'skipped'
+        ? existing?.status === 'skipped'
+          ? existing.skippedAt ?? now
+          : now
+        : undefined,
+    cancelledAt: status === 'cancelled' ? existing?.cancelledAt : undefined,
+    lastErrorCode:
+      status === 'skipped' || status === 'failed' || status === 'deferred'
+        ? input.lastErrorCode ?? existing?.lastErrorCode
+        : undefined,
+    lastErrorMessage:
+      status === 'skipped' || status === 'failed' || status === 'deferred'
+        ? input.lastErrorMessage ?? existing?.lastErrorMessage
+        : undefined,
   };
 
   await writeSnapshot({
@@ -97,6 +109,29 @@ export async function listPushDeliveriesForUser(userId: string): Promise<PushDel
   return snapshot.deliveries
     .filter((delivery) => delivery.userId === userId)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+export async function listPushDeliveries(
+  input: {
+    sourceType?: PushDeliverySourceType;
+    userId?: string;
+    limit?: number;
+  } = {},
+): Promise<PushDelivery[]> {
+  const snapshot = await readSnapshot();
+  const deliveries = snapshot.deliveries
+    .filter((delivery) => {
+      if (input.sourceType && delivery.sourceType !== input.sourceType) {
+        return false;
+      }
+      if (input.userId && delivery.userId !== input.userId) {
+        return false;
+      }
+      return true;
+    })
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+
+  return input.limit && input.limit > 0 ? deliveries.slice(0, input.limit) : deliveries;
 }
 
 export async function findLatestSentPushDelivery(input: {
@@ -215,6 +250,86 @@ export async function cancelPendingPushDeliveries(input: {
       delivery.sourceType !== input.sourceType ||
       !sourceIds.has(delivery.sourceId) ||
       (delivery.status !== 'queued' && delivery.status !== 'deferred')
+    ) {
+      return delivery;
+    }
+
+    const next: PushDelivery = {
+      ...delivery,
+      status: 'cancelled',
+      updatedAt: cancelledAt,
+      cancelledAt,
+    };
+    cancelled.push(next);
+    return next;
+  });
+
+  if (cancelled.length > 0) {
+    await writeSnapshot({
+      version: 1,
+      deliveries,
+    });
+  }
+
+  return cancelled;
+}
+
+export async function cancelPendingPushDeliveriesExcept(input: {
+  sourceType: PushDeliverySourceType;
+  keepSourceIds: string[];
+  cancelledAt?: ISODateTimeString;
+}): Promise<PushDelivery[]> {
+  const keepSourceIds = new Set(input.keepSourceIds);
+  const cancelledAt = input.cancelledAt ?? new Date().toISOString();
+  const snapshot = await readSnapshot();
+  const cancelled: PushDelivery[] = [];
+  const deliveries = snapshot.deliveries.map((delivery) => {
+    if (
+      delivery.sourceType !== input.sourceType ||
+      keepSourceIds.has(delivery.sourceId) ||
+      (delivery.status !== 'queued' && delivery.status !== 'deferred')
+    ) {
+      return delivery;
+    }
+
+    const next: PushDelivery = {
+      ...delivery,
+      status: 'cancelled',
+      updatedAt: cancelledAt,
+      cancelledAt,
+    };
+    cancelled.push(next);
+    return next;
+  });
+
+  if (cancelled.length > 0) {
+    await writeSnapshot({
+      version: 1,
+      deliveries,
+    });
+  }
+
+  return cancelled;
+}
+
+export async function cancelPushDeliveriesByIds(input: {
+  deliveryIds: string[];
+  cancelledAt?: ISODateTimeString;
+}): Promise<PushDelivery[]> {
+  if (input.deliveryIds.length === 0) {
+    return [];
+  }
+
+  const deliveryIds = new Set(input.deliveryIds);
+  const cancelledAt = input.cancelledAt ?? new Date().toISOString();
+  const snapshot = await readSnapshot();
+  const cancelled: PushDelivery[] = [];
+  const deliveries = snapshot.deliveries.map((delivery) => {
+    if (
+      !deliveryIds.has(delivery.deliveryId) ||
+      (delivery.status !== 'queued' &&
+        delivery.status !== 'deferred' &&
+        delivery.status !== 'skipped')
     ) {
       return delivery;
     }

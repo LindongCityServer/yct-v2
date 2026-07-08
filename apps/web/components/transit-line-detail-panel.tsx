@@ -5,8 +5,11 @@ import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
 import type { TransitModeProfile, TransitStationDetailSnapshot } from '@yct/contracts';
 import { appPath } from '../lib/app-paths';
+import { useI18n } from '../lib/client-i18n';
 import type { TransitLineStopSummary, TransitLineSummary } from '../lib/legacy-transit';
 import { TitleWithBreaks } from './title-with-breaks';
+
+type Translate = ReturnType<typeof useI18n>['t'];
 
 const fallbackModeProfiles: TransitModeProfile[] = [
   { mode: 'metro', label: '地铁', color: '#2584E8', icon: 'subway', sortOrder: 0, enabled: true },
@@ -58,11 +61,12 @@ export function TransitLineDetailPanel({
   modeProfiles?: TransitModeProfile[];
   stationDetails?: TransitStationDetailSnapshot[];
 }>) {
+  const { t } = useI18n();
   const [direction, setDirection] = useState<DirectionKey>('forward');
   const modeProfileByMode = useMemo(() => buildModeProfileMap(modeProfiles), [modeProfiles]);
   const lineProfile = modeProfileByMode.get(line.mode);
   const lineColor = line.color ?? lineProfile?.color ?? fallbackModeProfile(line.mode).color;
-  const directionLabels = getDirectionLabels(line);
+  const directionLabels = getDirectionLabels(line, t);
   const detailByStationName = useMemo(
     () => new Map(stationDetails.map((detail) => [detail.stationName, detail])),
     [stationDetails],
@@ -77,25 +81,25 @@ export function TransitLineDetailPanel({
       className="transit-line-detail"
       style={{ '--line-detail-color': lineColor } as CSSProperties}
     >
-      <section className="line-detail-card line-detail-identity-card" aria-label="线路概览">
+      <section className="line-detail-card line-detail-identity-card" aria-label={t('lineDetail.overviewAria')}>
         <div className="line-detail-title-row">
           <span className="line-mode-icon material-symbols-outlined" aria-hidden="true">
             {modeIcon(line.mode, modeProfileByMode)}
           </span>
-          <LineBadge line={line} modeProfile={lineProfile} />
+          <LineBadge line={line} modeProfile={lineProfile} t={t} />
         </div>
         <dl className="line-attribute-list">
           <div>
-            <dt>首末车时间</dt>
-            <dd>{formatFirstLastBus(line)}</dd>
+            <dt>{t('lineDetail.firstLast')}</dt>
+            <dd>{formatFirstLastBus(line, t)}</dd>
           </div>
           <div>
-            <dt>运营单位</dt>
-            <dd>{line.operator ?? '待补充'}</dd>
+            <dt>{t('lineDetail.operator')}</dt>
+            <dd>{line.operator ?? t('lineDetail.toBeAdded')}</dd>
           </div>
           <div>
-            <dt>其他线路属性</dt>
-            <dd>{formatExtraAttributes(line)}</dd>
+            <dt>{t('lineDetail.extraAttributes')}</dt>
+            <dd>{formatExtraAttributes(line, t)}</dd>
           </div>
         </dl>
       </section>
@@ -104,7 +108,7 @@ export function TransitLineDetailPanel({
         className="line-detail-card station-sequence"
         aria-labelledby="station-sequence-title"
       >
-        <div className="line-direction-switch" role="tablist" aria-label="线路方向">
+        <div className="line-direction-switch" role="tablist" aria-label={t('lineDetail.directionAria')}>
           <button
             className={direction === 'forward' ? 'is-active' : ''}
             type="button"
@@ -125,7 +129,7 @@ export function TransitLineDetailPanel({
           </button>
         </div>
         <h2 id="station-sequence-title" className="sr-only">
-          站点列表
+          {t('lineDetail.stationList')}
         </h2>
         {stationStops.length > 0 ? (
           <ol className="station-timeline">
@@ -151,10 +155,10 @@ export function TransitLineDetailPanel({
                     </strong>
                     {stop.oneWay ? (
                       <span className="station-stop-direction">
-                        {stop.oneWay === 'down' ? '仅正向' : '仅反向'}
+                        {formatTransitStopOneWayLabel(stop.oneWay, t)}
                       </span>
                     ) : null}
-                    <StationDetailSummary detail={detailByStationName.get(stationName)} />
+                    <StationDetailSummary detail={detailByStationName.get(stationName)} t={t} />
                   </span>
                 </li>
               );
@@ -165,13 +169,13 @@ export function TransitLineDetailPanel({
             <span className="material-symbols-outlined" aria-hidden="true">
               route
             </span>
-            <p>这条线路暂未导入站点列表</p>
+            <p>{t('lineDetail.stationListEmpty')}</p>
           </div>
         )}
       </section>
 
       {line.sourcePath ? (
-        <p className="operation-source-note">数据来源：{line.sourcePath}</p>
+        <p className="operation-source-note">{t('lineDetail.source', { source: line.sourcePath })}</p>
       ) : null}
     </article>
   );
@@ -179,8 +183,10 @@ export function TransitLineDetailPanel({
 
 function StationDetailSummary({
   detail,
+  t,
 }: Readonly<{
   detail?: TransitStationDetailSnapshot;
+  t: Translate;
 }>) {
   if (!detail) {
     return null;
@@ -188,11 +194,19 @@ function StationDetailSummary({
 
   const transferLines = detail.transfers.map((transfer) => transfer.line).filter(Boolean);
   const items = [
-    detail.exits.length > 0 ? `${detail.exits.length} 个出入口` : undefined,
-    detail.facilities.length > 0 ? `${countFacilityTypes(detail)} 类设施` : undefined,
-    transferLines.length > 0 ? `换乘 ${Array.from(new Set(transferLines)).join('、')}` : undefined,
+    detail.exits.length > 0
+      ? t('lineDetail.summary.exits', { count: detail.exits.length })
+      : undefined,
+    detail.facilities.length > 0
+      ? t('lineDetail.summary.facilities', { count: countFacilityTypes(detail) })
+      : undefined,
+    transferLines.length > 0
+      ? t('lineDetail.summary.transfer', { lines: Array.from(new Set(transferLines)).join('、') })
+      : undefined,
     detail.surroundingStationNames.length > 0
-      ? `周边 ${detail.surroundingStationNames.length} 站`
+      ? t('lineDetail.summary.surrounding', {
+          count: detail.surroundingStationNames.length,
+        })
       : undefined,
   ].filter((item): item is string => Boolean(item));
 
@@ -210,9 +224,11 @@ function countFacilityTypes(detail: TransitStationDetailSnapshot): number {
 function LineBadge({
   line,
   modeProfile,
+  t,
 }: Readonly<{
   line: TransitLineSummary;
   modeProfile?: TransitModeProfile;
+  t: Translate;
 }>) {
   const tone = line.color ?? modeProfile?.color ?? fallbackModeProfile(line.mode).color;
   const metroMatch = line.mode === 'metro' ? line.name.match(/^(\d+)(.*)$/) : null;
@@ -225,7 +241,7 @@ function LineBadge({
       >
         <span className="line-metro-token">{metroMatch[1]}</span>
         <span>
-          <TitleWithBreaks title={metroMatch[2] || '号线'} />
+          <TitleWithBreaks title={metroMatch[2] || t('lineDetail.metroSuffix')} />
         </span>
       </span>
     );
@@ -243,13 +259,13 @@ function LineBadge({
   );
 }
 
-function getDirectionLabels(line: TransitLineSummary): Record<DirectionKey, string> {
-  const first = line.firstStationName ?? '第一站';
-  const last = line.lastStationName ?? '最后一站';
+function getDirectionLabels(line: TransitLineSummary, t: Translate): Record<DirectionKey, string> {
+  const first = line.firstStationName ?? t('lineDetail.firstStation');
+  const last = line.lastStationName ?? t('lineDetail.lastStation');
 
   return {
-    forward: `${formatDirectionTerminalName(last)}方向`,
-    reverse: `${formatDirectionTerminalName(first)}方向`,
+    forward: t('lineDetail.directionTo', { station: formatDirectionTerminalName(last) }),
+    reverse: t('lineDetail.directionTo', { station: formatDirectionTerminalName(first) }),
   };
 }
 
@@ -279,11 +295,19 @@ function isStationStopVisibleInDirection(
   return direction === 'forward' ? stop.oneWay !== 'up' : stop.oneWay !== 'down';
 }
 
+function formatTransitStopOneWayLabel(
+  oneWay: TransitLineStopSummary['oneWay'],
+  t: Translate,
+): string {
+  // 旧版 YCT 数据中 down 表示和数据记录方向相同，up 表示反向。
+  return oneWay === 'down' ? t('lineDetail.oneWay.forward') : t('lineDetail.oneWay.reverse');
+}
+
 function formatDirectionTerminalName(name: string): string {
   return name.replace(/\s+/g, '').replace(/\|/g, '');
 }
 
-function formatFirstLastBus(line: TransitLineSummary): string {
+function formatFirstLastBus(line: TransitLineSummary, t: Translate): string {
   const first = line.firstLastBus?.first;
   const last = line.firstLastBus?.last;
 
@@ -291,15 +315,19 @@ function formatFirstLastBus(line: TransitLineSummary): string {
     return `${first}-${last}`;
   }
 
-  return first ?? last ?? '待补充';
+  return first ?? last ?? t('lineDetail.toBeAdded');
 }
 
-function formatExtraAttributes(line: TransitLineSummary): string {
+function formatExtraAttributes(line: TransitLineSummary, t: Translate): string {
   const values = [
-    line.fare ? `票价 ${line.fare}` : undefined,
-    line.departureTimes?.length ? `${line.departureTimes.length} 个班次` : undefined,
-    line.stopMetadataCount > 0 ? `${line.stopMetadataCount} 项停靠属性` : undefined,
-    `${line.stationCount} 站`,
+    line.fare ? t('lineDetail.extra.fare', { fare: line.fare }) : undefined,
+    line.departureTimes?.length
+      ? t('lineDetail.extra.departures', { count: line.departureTimes.length })
+      : undefined,
+    line.stopMetadataCount > 0
+      ? t('lineDetail.extra.stopMetadata', { count: line.stopMetadataCount })
+      : undefined,
+    t('lineDetail.extra.stations', { count: line.stationCount }),
   ].filter((value): value is string => Boolean(value));
 
   return values.join(' · ');

@@ -3,6 +3,7 @@ import { LdpassIdentityProvider } from '@yct/adapters';
 import { findActiveAdminByLdpassUserId } from '../../../../lib/admin-membership-store';
 import { listContentAssetRecords } from '../../../../lib/content-asset-store';
 import { listContentRecords } from '../../../../lib/content-store';
+import { markResponseNoStore } from '../../../../lib/http-cache';
 import { listPoiSubmissions } from '../../../../lib/poi-submission-store';
 import { readRuntimeConfig } from '../../../../lib/runtime-config';
 import { listServiceEntries } from '../../../../lib/service-entry-store';
@@ -41,15 +42,17 @@ export async function GET(request: NextRequest) {
   const config = readRuntimeConfig();
 
   if (!config.ldpassBaseUrl || !config.ldpassClientId) {
-    return NextResponse.json({
-      accountStatus: 'not_configured',
-      badge: {
-        kind: 'dot',
-        count: 0,
-        label: '临东通登录尚未配置',
-      },
-      message: 'LDPASS_BASE_URL 或 LDPASS_CLIENT_ID 尚未配置。',
-    } satisfies AccountStatusResponse);
+    return markResponseNoStore(
+      NextResponse.json({
+        accountStatus: 'not_configured',
+        badge: {
+          kind: 'dot',
+          count: 0,
+          label: '临东通登录尚未配置',
+        },
+        message: 'LDPASS_BASE_URL 或 LDPASS_CLIENT_ID 尚未配置。',
+      } satisfies AccountStatusResponse),
+    );
   }
 
   const provider = new LdpassIdentityProvider({
@@ -64,14 +67,16 @@ export async function GET(request: NextRequest) {
     });
 
     if (!session.authenticated || (!session.user && !session.readonlyUser)) {
-      return NextResponse.json({
-        accountStatus: 'anonymous',
-        badge: {
-          kind: 'none',
-          count: 0,
-          label: '未登录',
-        },
-      } satisfies AccountStatusResponse);
+      return markResponseNoStore(
+        NextResponse.json({
+          accountStatus: 'anonymous',
+          badge: {
+            kind: 'none',
+            count: 0,
+            label: '未登录',
+          },
+        } satisfies AccountStatusResponse),
+      );
     }
 
     if (session.user) {
@@ -93,76 +98,84 @@ export async function GET(request: NextRequest) {
         pendingTicketOrderCount > 0 ? `${pendingTicketOrderCount} 个待处理票务订单` : undefined,
       ].filter(Boolean);
 
-      return NextResponse.json({
-        accountStatus: 'active',
-        username: session.user.username,
-        avatarUrl: session.user.avatarUrl ?? session.user.avatarFallbackUrl,
-        badge:
-          totalBadgeCount > 0
+      return markResponseNoStore(
+        NextResponse.json({
+          accountStatus: 'active',
+          username: session.user.username,
+          avatarUrl: session.user.avatarUrl ?? session.user.avatarFallbackUrl,
+          badge:
+            totalBadgeCount > 0
+              ? {
+                  kind: 'count',
+                  count: totalBadgeCount,
+                  label: badgeLabels.join('，'),
+                }
+              : {
+                  kind: 'none',
+                  count: 0,
+                  label: '已登录',
+                },
+          admin: membership
             ? {
-                kind: 'count',
-                count: totalBadgeCount,
-                label: badgeLabels.join('，'),
+                role: membership.role,
+                pendingReviewCount,
+                pendingReview: pendingReview ?? {
+                  contents: 0,
+                  contentAssets: 0,
+                  services: 0,
+                  transit: 0,
+                  poi: 0,
+                },
               }
-            : {
-                kind: 'none',
-                count: 0,
-                label: '已登录',
-              },
-        admin: membership
-          ? {
-              role: membership.role,
-              pendingReviewCount,
-              pendingReview: pendingReview ?? {
-                contents: 0,
-                contentAssets: 0,
-                services: 0,
-                transit: 0,
-                poi: 0,
-              },
-            }
-          : undefined,
-        ticketing: {
-          pendingOrderCount: pendingTicketOrderCount,
-        },
-      } satisfies AccountStatusResponse);
+            : undefined,
+          ticketing: {
+            pendingOrderCount: pendingTicketOrderCount,
+          },
+        } satisfies AccountStatusResponse),
+      );
     }
 
     const readonlyUser = session.readonlyUser;
     if (!readonlyUser) {
-      return NextResponse.json({
-        accountStatus: 'anonymous',
-        badge: {
-          kind: 'none',
-          count: 0,
-          label: '未登录',
-        },
-      } satisfies AccountStatusResponse);
+      return markResponseNoStore(
+        NextResponse.json({
+          accountStatus: 'anonymous',
+          badge: {
+            kind: 'none',
+            count: 0,
+            label: '未登录',
+          },
+        } satisfies AccountStatusResponse),
+      );
     }
 
-    return NextResponse.json({
-      accountStatus: 'readonly',
-      username: readonlyUser.username,
-      avatarUrl: readonlyUser.avatarUrl ?? readonlyUser.avatarFallbackUrl,
-      badge: {
-        kind: 'dot',
-        count: 0,
-        label: '只读账号',
-      },
-      message: `临东通账号状态为 ${readonlyUser.status}。`,
-    } satisfies AccountStatusResponse);
-  } catch {
-    return NextResponse.json(
-      {
-        accountStatus: 'unavailable',
+    return markResponseNoStore(
+      NextResponse.json({
+        accountStatus: 'readonly',
+        username: readonlyUser.username,
+        avatarUrl: readonlyUser.avatarUrl ?? readonlyUser.avatarFallbackUrl,
         badge: {
           kind: 'dot',
           count: 0,
-          label: '账号状态暂不可用',
+          label: '只读账号',
         },
-        message: '无法读取临东通会话。',
-      } satisfies AccountStatusResponse,
-      { status: 502 },
+        message: `临东通账号状态为 ${readonlyUser.status}。`,
+      } satisfies AccountStatusResponse),
+    );
+  } catch {
+    return markResponseNoStore(
+      NextResponse.json(
+        {
+          accountStatus: 'unavailable',
+          badge: {
+            kind: 'dot',
+            count: 0,
+            label: '账号状态暂不可用',
+          },
+          message: '无法读取临东通会话。',
+        } satisfies AccountStatusResponse,
+        { status: 502 },
+      ),
     );
   }
 }

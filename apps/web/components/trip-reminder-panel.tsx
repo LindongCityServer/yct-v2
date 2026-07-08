@@ -1,6 +1,6 @@
 'use client';
 
-import type { TripReminder } from '@yct/contracts';
+import type { TripReminder, TripReminderStatus } from '@yct/contracts';
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   createTripReminder,
@@ -8,11 +8,13 @@ import {
   formatTripReminderTime,
   readTripReminderState,
   splitTripReminders,
-  statusLabel,
   toDatetimeLocalValue,
   updateTripReminderStatus,
   type TripReminderState,
 } from '../lib/client-trip-reminders';
+import { useI18n } from '../lib/client-i18n';
+
+type Translate = ReturnType<typeof useI18n>['t'];
 
 const emptyDraft = {
   title: '',
@@ -22,6 +24,7 @@ const emptyDraft = {
 };
 
 export function TripReminderPanel() {
+  const { t } = useI18n();
   const [state, setState] = useState<TripReminderState | null>(null);
   const [draft, setDraft] = useState({ ...emptyDraft, remindAt: '' });
   const [errorText, setErrorText] = useState('');
@@ -64,13 +67,13 @@ export function TripReminderPanel() {
       !draft.arrival.trim() &&
       !draft.lineName.trim()
     ) {
-      setErrorText('至少填写标题、线路或起终点之一。');
+      setErrorText(t('tripReminder.error.missingContent'));
       return;
     }
 
     const remindAt = new Date(draft.remindAt);
     if (!draft.remindAt || Number.isNaN(remindAt.getTime())) {
-      setErrorText('请选择有效的提醒时间。');
+      setErrorText(t('tripReminder.error.invalidTime'));
       return;
     }
 
@@ -100,27 +103,32 @@ export function TripReminderPanel() {
     <div className="trip-reminder-panel" aria-labelledby="trip-reminder-title">
       <div className="section-heading">
         <div>
-          <h2 id="trip-reminder-title">行程提醒</h2>
+          <h2 id="trip-reminder-title">{t('tripReminder.title')}</h2>
           <span className="muted">
             {state
-              ? `${state.summary.scheduled} 个即将进行，${state.summary.history} 个历史记录`
-              : '正在读取本地行程'}
+              ? t('tripReminder.summary', {
+                  scheduled: state.summary.scheduled,
+                  history: state.summary.history,
+                })
+              : t('tripReminder.loading')}
           </span>
         </div>
         <div className="trip-heading-actions">
-          <span className="trip-local-badge">{state?.summary.localOnly ?? 0} 个本地记录</span>
+          <span className="trip-local-badge">
+            {t('tripReminder.localBadge', { count: state?.summary.localOnly ?? 0 })}
+          </span>
           <button className="primary-action-button" type="button" onClick={() => setFormOpen(true)}>
             <span className="material-symbols-outlined" aria-hidden="true">
               add_alarm
             </span>
-            <span>添加提醒</span>
+            <span>{t('tripReminder.add')}</span>
           </button>
         </div>
       </div>
 
       {state?.legacyImportedCount ? (
         <p className="trip-import-notice">
-          已从旧站本地 <code>orders</code> 导入 {state.legacyImportedCount} 条行程记录。
+          {t('tripReminder.imported', { count: state.legacyImportedCount, source: 'orders' })}
         </p>
       ) : null}
 
@@ -134,12 +142,12 @@ export function TripReminderPanel() {
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="section-heading">
-              <h3 id="trip-reminder-form-title">添加行程提醒</h3>
+              <h3 id="trip-reminder-form-title">{t('tripReminder.formTitle')}</h3>
               <button
                 className="icon-action-button"
                 type="button"
                 onClick={() => setFormOpen(false)}
-                aria-label="关闭"
+                aria-label={t('tripReminder.close')}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
                   close
@@ -148,16 +156,16 @@ export function TripReminderPanel() {
             </div>
             <form className="trip-reminder-form" onSubmit={createReminder}>
               <label>
-                <span>标题</span>
+                <span>{t('tripReminder.field.title')}</span>
                 <input
                   autoFocus
                   value={draft.title}
                   onChange={(event) => updateDraft('title', event.currentTarget.value)}
-                  placeholder="例如：去大学城"
+                  placeholder={t('tripReminder.placeholder.title')}
                 />
               </label>
               <label>
-                <span>提醒时间</span>
+                <span>{t('tripReminder.field.remindAt')}</span>
                 <input
                   type="datetime-local"
                   value={draft.remindAt}
@@ -165,34 +173,34 @@ export function TripReminderPanel() {
                 />
               </label>
               <label>
-                <span>出发</span>
+                <span>{t('tripReminder.field.departure')}</span>
                 <input
                   value={draft.departure}
                   onChange={(event) => updateDraft('departure', event.currentTarget.value)}
-                  placeholder="可选"
+                  placeholder={t('tripReminder.placeholder.optional')}
                 />
               </label>
               <label>
-                <span>到达</span>
+                <span>{t('tripReminder.field.arrival')}</span>
                 <input
                   value={draft.arrival}
                   onChange={(event) => updateDraft('arrival', event.currentTarget.value)}
-                  placeholder="可选"
+                  placeholder={t('tripReminder.placeholder.optional')}
                 />
               </label>
               <label>
-                <span>线路</span>
+                <span>{t('tripReminder.field.lineName')}</span>
                 <input
                   value={draft.lineName}
                   onChange={(event) => updateDraft('lineName', event.currentTarget.value)}
-                  placeholder="可选"
+                  placeholder={t('tripReminder.placeholder.optional')}
                 />
               </label>
               <button className="primary-action-button" type="submit">
                 <span className="material-symbols-outlined" aria-hidden="true">
                   add_alarm
                 </span>
-                <span>添加提醒</span>
+                <span>{t('tripReminder.add')}</span>
               </button>
             </form>
             {errorText ? <p className="form-error-text">{errorText}</p> : null}
@@ -201,22 +209,24 @@ export function TripReminderPanel() {
       ) : null}
 
       <TripReminderList
-        title="即将进行"
+        title={t('tripReminder.activeTitle')}
         reminders={split.active}
-        emptyText="暂无即将进行的行程。"
+        emptyText={t('tripReminder.activeEmpty')}
         onComplete={updateStatus}
         onCancel={updateStatus}
         onDelete={removeReminder}
+        t={t}
       />
 
       <TripReminderList
-        title="历史行程"
+        title={t('tripReminder.historyTitle')}
         reminders={split.history}
-        emptyText="暂无历史行程。"
+        emptyText={t('tripReminder.historyEmpty')}
         compact
         onComplete={updateStatus}
         onCancel={updateStatus}
         onDelete={removeReminder}
+        t={t}
       />
     </div>
   );
@@ -230,6 +240,7 @@ function TripReminderList({
   onComplete,
   onCancel,
   onDelete,
+  t,
 }: Readonly<{
   title: string;
   reminders: TripReminder[];
@@ -238,6 +249,7 @@ function TripReminderList({
   onComplete: (reminder: TripReminder, status: 'completed') => void;
   onCancel: (reminder: TripReminder, status: 'cancelled') => void;
   onDelete: (reminder: TripReminder) => void;
+  t: Translate;
 }>) {
   return (
     <section
@@ -251,13 +263,16 @@ function TripReminderList({
             <article className="trip-reminder-item" key={reminder.id}>
               <div className="trip-reminder-main">
                 <span className="trip-status-chip" data-status={reminder.status}>
-                  {statusLabel(reminder.status)}
+                  {formatTripReminderStatusLabel(reminder.status, t)}
                 </span>
                 <h4>{reminder.title}</h4>
-                <p>{routeText(reminder)}</p>
+                <p>{routeText(reminder, t)}</p>
                 <span className="muted">
                   {formatTripReminderTime(reminder.remindAt)}
-                  {reminder.source === 'legacy_order' ? ' · 旧站导入' : ' · 本地保存'}
+                  {' · '}
+                  {reminder.source === 'legacy_order'
+                    ? t('tripReminder.source.legacy')
+                    : t('tripReminder.source.local')}
                 </span>
               </div>
               <div className="trip-reminder-actions">
@@ -267,7 +282,7 @@ function TripReminderList({
                       className="icon-action-button"
                       type="button"
                       onClick={() => onComplete(reminder, 'completed')}
-                      aria-label="标记完成"
+                      aria-label={t('tripReminder.action.complete')}
                     >
                       <span className="material-symbols-outlined" aria-hidden="true">
                         task_alt
@@ -277,7 +292,7 @@ function TripReminderList({
                       className="icon-action-button"
                       type="button"
                       onClick={() => onCancel(reminder, 'cancelled')}
-                      aria-label="取消提醒"
+                      aria-label={t('tripReminder.action.cancel')}
                     >
                       <span className="material-symbols-outlined" aria-hidden="true">
                         notifications_off
@@ -289,7 +304,7 @@ function TripReminderList({
                   className="icon-action-button"
                   type="button"
                   onClick={() => onDelete(reminder)}
-                  aria-label="删除记录"
+                  aria-label={t('tripReminder.action.delete')}
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">
                     delete
@@ -311,10 +326,10 @@ function TripReminderList({
   );
 }
 
-function routeText(reminder: TripReminder): string {
+function routeText(reminder: TripReminder, t: Translate): string {
   const route = reminder.route;
   if (!route) {
-    return '未填写路线信息';
+    return t('tripReminder.routeMissing');
   }
 
   const parts = [
@@ -325,5 +340,20 @@ function routeText(reminder: TripReminder): string {
     route.detail,
   ].filter(Boolean);
 
-  return parts.length > 0 ? parts.join(' · ') : '未填写路线信息';
+  return parts.length > 0 ? parts.join(' · ') : t('tripReminder.routeMissing');
+}
+
+function formatTripReminderStatusLabel(status: TripReminderStatus, t: Translate): string {
+  const labels: Record<TripReminderStatus, string> = {
+    scheduled: t('tripReminder.status.scheduled'),
+    notification_queued: t('tripReminder.status.notificationQueued'),
+    notified: t('tripReminder.status.notified'),
+    sent: t('tripReminder.status.sent'),
+    ongoing: t('tripReminder.status.ongoing'),
+    completed: t('tripReminder.status.completed'),
+    cancelled: t('tripReminder.status.cancelled'),
+    expired: t('tripReminder.status.expired'),
+  };
+
+  return labels[status];
 }

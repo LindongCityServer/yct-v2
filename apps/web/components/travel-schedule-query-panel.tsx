@@ -14,7 +14,7 @@ import type {
   TravelTicketingAvailability,
   TravelTripInstance,
 } from '@yct/contracts';
-import { type CSSProperties, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { notifyTicketOrderStateChanged } from '../lib/client-ticket-orders';
 import {
@@ -24,14 +24,20 @@ import {
   type TravelScheduleHistoryState,
 } from '../lib/client-schedule-history';
 import { createTripReminder, formatTripReminderTime } from '../lib/client-trip-reminders';
+import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { TicketOrderDraftPanel } from './ticket-order-draft-panel';
 
 type ServiceFilter = TicketableServiceKind | 'all';
+type Translate = ReturnType<typeof useI18n>['t'];
 
-const timeOptions: Array<{ value: TravelScheduleTimeScope; label: string; icon: string }> = [
-  { value: 'all', label: '全部', icon: 'format_list_bulleted' },
-  { value: 'upcoming', label: '即将', icon: 'schedule' },
-  { value: 'past', label: '已过', icon: 'history' },
+const timeOptions: Array<{
+  value: TravelScheduleTimeScope;
+  labelKey: CommonMessageKey;
+  icon: string;
+}> = [
+  { value: 'all', labelKey: 'travelSchedule.time.all', icon: 'format_list_bulleted' },
+  { value: 'upcoming', labelKey: 'travelSchedule.time.upcoming', icon: 'schedule' },
+  { value: 'past', labelKey: 'travelSchedule.time.past', icon: 'history' },
 ];
 
 export function TravelScheduleQueryPanel({
@@ -39,6 +45,7 @@ export function TravelScheduleQueryPanel({
 }: Readonly<{
   result: TravelScheduleQueryResult;
 }>) {
+  const { t } = useI18n();
   const [serviceFilter, setServiceFilter] = useState<ServiceFilter>('all');
   const [stationFilter, setStationFilter] = useState('all');
   const [originFilter, setOriginFilter] = useState('all');
@@ -63,28 +70,30 @@ export function TravelScheduleQueryPanel({
 
       if (response.status === 401) {
         setTicketOrders([]);
-        setTicketOrderStatusText('登录后可查看订单草稿。');
+        setTicketOrderStatusText(t('travelSchedule.order.loginRequired'));
         return;
       }
 
       if (!response.ok || !data.items) {
-        throw new Error(data.message ?? '订单草稿读取失败');
+        throw new Error(data.message ?? t('travelSchedule.order.readFailed'));
       }
 
       setTicketOrders(data.items);
-      setTicketOrderStatusText(data.items.length > 0 ? '' : '暂无订单草稿。');
+      setTicketOrderStatusText(data.items.length > 0 ? '' : t('travelSchedule.order.empty'));
     } catch (error) {
       setTicketOrders([]);
-      setTicketOrderStatusText(error instanceof Error ? error.message : '订单草稿读取失败');
+      setTicketOrderStatusText(
+        error instanceof Error ? error.message : t('travelSchedule.order.readFailed'),
+      );
     }
   };
   const cancelTicketOrder = async (orderId: string) => {
-    if (!window.confirm('要取消这个订单草稿并释放库存占用吗？')) {
+    if (!window.confirm(t('travelSchedule.order.cancelConfirm'))) {
       return;
     }
 
     setCancellingOrderId(orderId);
-    setTicketOrderStatusText('正在取消订单草稿');
+    setTicketOrderStatusText(t('travelSchedule.order.canceling'));
     try {
       const response = await fetch(
         appPath(`/api/travel/ticketing/orders/${encodeURIComponent(orderId)}/cancel`),
@@ -94,14 +103,16 @@ export function TravelScheduleQueryPanel({
         message?: string;
       };
       if (!response.ok || !data.item) {
-        throw new Error(data.message ?? '订单草稿取消失败');
+        throw new Error(data.message ?? t('travelSchedule.order.cancelFailed'));
       }
 
-      setTicketOrderStatusText('已取消订单草稿');
+      setTicketOrderStatusText(t('travelSchedule.order.cancelDone'));
       await refreshTicketOrders();
       notifyTicketOrderStateChanged();
     } catch (error) {
-      setTicketOrderStatusText(error instanceof Error ? error.message : '订单草稿取消失败');
+      setTicketOrderStatusText(
+        error instanceof Error ? error.message : t('travelSchedule.order.cancelFailed'),
+      );
     } finally {
       setCancellingOrderId(null);
     }
@@ -152,7 +163,7 @@ export function TravelScheduleQueryPanel({
   const emptyMessage =
     serviceFilter !== 'all' && selectedService?.status !== 'active'
       ? selectedService?.message
-      : '没有匹配的班次';
+      : t('travelSchedule.empty.noMatch');
   const selectHistoryItem = (item: TravelScheduleHistoryItem) => {
     setServiceFilter(item.serviceKind);
     setStationFilter('all');
@@ -162,7 +173,7 @@ export function TravelScheduleQueryPanel({
     setQuery(item.tripCode ?? item.lineName);
   };
   const clearHistory = () => {
-    if (!window.confirm('要清空本地班次查询历史吗？行程提醒不会被删除。')) {
+    if (!window.confirm(t('travelSchedule.history.clearConfirm'))) {
       return;
     }
 
@@ -174,14 +185,17 @@ export function TravelScheduleQueryPanel({
     <section className="module-panel travel-schedule-panel" aria-labelledby="schedule-title">
       <div className="section-heading">
         <div>
-          <h2 id="schedule-title">统一班次查询</h2>
+          <h2 id="schedule-title">{t('travelSchedule.title')}</h2>
           <span className="muted">
-            {filteredTrips.length} / {result.trips.length} 个可查询班次
+            {t('travelSchedule.resultCount', {
+              count: filteredTrips.length,
+              total: result.trips.length,
+            })}
           </span>
         </div>
       </div>
 
-      <div className="schedule-service-strip" aria-label="交通方式">
+      <div className="schedule-service-strip" aria-label={t('travelSchedule.service.aria')}>
         <button
           className={serviceFilter === 'all' ? 'is-active' : ''}
           type="button"
@@ -192,7 +206,7 @@ export function TravelScheduleQueryPanel({
           <span className="material-symbols-outlined" aria-hidden="true">
             travel_explore
           </span>
-          <span>全部</span>
+          <span>{t('travelSchedule.service.all')}</span>
           <strong>{result.trips.length}</strong>
         </button>
         {result.services.map((service) => (
@@ -205,23 +219,23 @@ export function TravelScheduleQueryPanel({
         ))}
       </div>
 
-      <div className="schedule-filter-panel" aria-label="班次筛选">
+      <div className="schedule-filter-panel" aria-label={t('travelSchedule.filters.aria')}>
         <div className="search-box schedule-search-box">
           <span className="material-symbols-outlined" aria-hidden="true">
             search
           </span>
           <input
             type="search"
-            aria-label="搜索班次、线路、车站、检票口或运营方"
+            aria-label={t('travelSchedule.search.aria')}
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
-            placeholder="搜索班次、线路、车站或运营方"
+            placeholder={t('travelSchedule.search.placeholder')}
           />
           {query ? (
             <button
               className="search-clear-button"
               type="button"
-              aria-label="清空班次搜索"
+              aria-label={t('travelSchedule.search.clear')}
               onClick={() => setQuery('')}
             >
               <span className="material-symbols-outlined" aria-hidden="true">
@@ -233,12 +247,12 @@ export function TravelScheduleQueryPanel({
 
         <div className="schedule-filter-row">
           <label>
-            <span>经过</span>
+            <span>{t('travelSchedule.filter.via')}</span>
             <select
               value={stationFilter}
               onChange={(event) => setStationFilter(event.currentTarget.value)}
             >
-              <option value="all">任意车站</option>
+              <option value="all">{t('travelSchedule.filter.anyStation')}</option>
               {result.stationOptions.map((stationName) => (
                 <option value={stationName} key={stationName}>
                   {stationName}
@@ -248,12 +262,12 @@ export function TravelScheduleQueryPanel({
           </label>
 
           <label>
-            <span>起点</span>
+            <span>{t('travelSchedule.filter.origin')}</span>
             <select
               value={originFilter}
               onChange={(event) => setOriginFilter(event.currentTarget.value)}
             >
-              <option value="all">任意起点</option>
+              <option value="all">{t('travelSchedule.filter.anyOrigin')}</option>
               {result.stationOptions.map((stationName) => (
                 <option value={stationName} key={stationName}>
                   {stationName}
@@ -263,12 +277,12 @@ export function TravelScheduleQueryPanel({
           </label>
 
           <label>
-            <span>终点</span>
+            <span>{t('travelSchedule.filter.destination')}</span>
             <select
               value={destinationFilter}
               onChange={(event) => setDestinationFilter(event.currentTarget.value)}
             >
-              <option value="all">任意终点</option>
+              <option value="all">{t('travelSchedule.filter.anyDestination')}</option>
               {result.stationOptions.map((stationName) => (
                 <option value={stationName} key={stationName}>
                   {stationName}
@@ -278,7 +292,7 @@ export function TravelScheduleQueryPanel({
           </label>
 
           <label>
-            <span>日期</span>
+            <span>{t('travelSchedule.filter.date')}</span>
             <input
               type="date"
               value={serviceDate}
@@ -286,7 +300,7 @@ export function TravelScheduleQueryPanel({
             />
           </label>
 
-          <div className="schedule-time-filter" aria-label="时间筛选">
+          <div className="schedule-time-filter" aria-label={t('travelSchedule.time.aria')}>
             {timeOptions.map((option) => (
               <button
                 className={timeFilter === option.value ? 'is-active' : ''}
@@ -298,7 +312,7 @@ export function TravelScheduleQueryPanel({
                 <span className="material-symbols-outlined" aria-hidden="true">
                   {option.icon}
                 </span>
-                <span>{option.label}</span>
+                <span>{t(option.labelKey)}</span>
               </button>
             ))}
           </div>
@@ -315,7 +329,7 @@ export function TravelScheduleQueryPanel({
       <ScheduleServiceNoticePanel notices={serviceNotices} serviceDate={serviceDate} />
 
       {result.notice ? (
-        <section className="screen-detail-notice" aria-label="班次公告">
+        <section className="screen-detail-notice" aria-label={t('travelSchedule.notice.aria')}>
           <span className="material-symbols-outlined" aria-hidden="true">
             campaign
           </span>
@@ -333,7 +347,7 @@ export function TravelScheduleQueryPanel({
       />
 
       {filteredTrips.length > 0 ? (
-        <div className="schedule-trip-list" aria-label="班次列表">
+        <div className="schedule-trip-list" aria-label={t('travelSchedule.tripList.aria')}>
           {filteredTrips.map((trip) => (
             <ScheduleTripCard
               trip={trip}
@@ -364,6 +378,8 @@ function ScheduleServiceNoticePanel({
   notices: TransitServiceNotice[];
   serviceDate: string;
 }>) {
+  const { t } = useI18n();
+
   if (notices.length === 0) {
     return null;
   }
@@ -372,9 +388,10 @@ function ScheduleServiceNoticePanel({
     <section className="schedule-service-notice-panel" aria-labelledby="schedule-notice-title">
       <div className="section-heading">
         <div>
-          <h3 id="schedule-notice-title">客运提醒</h3>
+          <h3 id="schedule-notice-title">{t('travelSchedule.notice.title')}</h3>
           <span className="muted">
-            {formatScheduleNoticeDate(serviceDate)} · {notices.length} 条
+            {formatScheduleNoticeDate(serviceDate)} ·{' '}
+            {t('travelSchedule.notice.count', { count: notices.length })}
           </span>
         </div>
       </div>
@@ -405,6 +422,8 @@ function ServiceFilterButton({
   active: boolean;
   onClick: () => void;
 }>) {
+  const { t } = useI18n();
+
   return (
     <button
       className={active ? 'is-active' : ''}
@@ -419,7 +438,9 @@ function ServiceFilterButton({
         {service.icon}
       </span>
       <span>{service.label}</span>
-      <strong>{service.status === 'active' ? service.tripCount : '未接入'}</strong>
+      <strong>
+        {service.status === 'active' ? service.tripCount : t('travelSchedule.service.unavailable')}
+      </strong>
     </button>
   );
 }
@@ -435,6 +456,8 @@ function ScheduleLocalHistoryPanel({
   onSelect: (item: TravelScheduleHistoryItem) => void;
   onClear: () => void;
 }>) {
+  const { t } = useI18n();
+
   if (!state?.items.length) {
     return null;
   }
@@ -443,23 +466,26 @@ function ScheduleLocalHistoryPanel({
     <section className="schedule-history-panel" aria-labelledby="schedule-history-title">
       <div className="schedule-history-heading">
         <div>
-          <h3 id="schedule-history-title">本地班次记录</h3>
+          <h3 id="schedule-history-title">{t('travelSchedule.history.title')}</h3>
           <span className="muted">
-            {state.summary.total} 条，{state.summary.reminderLinked} 条已关联提醒
+            {t('travelSchedule.history.summary', {
+              count: state.summary.total,
+              reminderCount: state.summary.reminderLinked,
+            })}
           </span>
         </div>
         <button
           className="icon-action-button"
           type="button"
           onClick={onClear}
-          aria-label="清空班次记录"
+          aria-label={t('travelSchedule.history.clear')}
         >
           <span className="material-symbols-outlined" aria-hidden="true">
             delete_sweep
           </span>
         </button>
       </div>
-      <div className="schedule-history-list" aria-label="最近班次记录">
+      <div className="schedule-history-list" aria-label={t('travelSchedule.history.recentAria')}>
         {state.items.slice(0, 5).map((item) => (
           <button
             className="schedule-history-item"
@@ -474,7 +500,7 @@ function ScheduleLocalHistoryPanel({
             </span>
             <span>
               <strong>{formatHistoryItemTitle(item)}</strong>
-              <small>{formatHistoryItemDetail(item)}</small>
+              <small>{renderHistoryItemDetail(item)}</small>
             </span>
           </button>
         ))}
@@ -496,6 +522,7 @@ function ScheduleTripCard({
   onHistoryChange: () => void;
   onTicketOrderChange: () => void;
 }>) {
+  const { t } = useI18n();
   const [message, setMessage] = useState('');
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
 
@@ -513,21 +540,25 @@ function ScheduleTripCard({
     });
     saveTravelScheduleHistory(trip, 'reminder');
     onHistoryChange();
-    setMessage(`已添加 ${formatTripReminderTime(remindAt.toISOString())} 的本地提醒`);
+    setMessage(
+      t('travelSchedule.feedback.reminderAdded', {
+        time: formatTripReminderTime(remindAt.toISOString()),
+      }),
+    );
   };
   const saveHistory = () => {
     saveTravelScheduleHistory(trip, 'saved');
     onHistoryChange();
-    setMessage('已保存到本地班次记录');
+    setMessage(t('travelSchedule.feedback.historySaved'));
   };
   const createOrderDraft = async () => {
     if (trip.ticketing?.status !== 'order_available') {
-      setMessage(trip.ticketing?.message ?? '当前班次暂不可创建订单草稿');
+      setMessage(trip.ticketing?.message ?? t('travelSchedule.order.unavailable'));
       return;
     }
 
     setIsCreatingOrder(true);
-    setMessage('正在创建订单草稿');
+    setMessage(t('travelSchedule.order.creating'));
     try {
       const response = await fetch(appPath('/api/travel/ticketing/orders'), {
         method: 'POST',
@@ -544,18 +575,18 @@ function ScheduleTripCard({
         message?: string;
       };
       if (!response.ok || !data.item) {
-        throw new Error(data.message ?? '订单草稿创建失败');
+        throw new Error(data.message ?? t('travelSchedule.order.createFailed'));
       }
 
       setMessage(
-        `已创建订单草稿，库存占用至 ${formatTicketHoldExpiresAt(
-          data.item.inventoryHold.expiresAt,
-        )}`,
+        t('travelSchedule.order.created', {
+          expiresAt: formatTicketHoldExpiresAt(data.item.inventoryHold.expiresAt),
+        }),
       );
       onTicketOrderChange();
       notifyTicketOrderStateChanged();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '订单草稿创建失败');
+      setMessage(error instanceof Error ? error.message : t('travelSchedule.order.createFailed'));
     } finally {
       setIsCreatingOrder(false);
     }
@@ -578,25 +609,29 @@ function ScheduleTripCard({
           <span>{trip.serviceLabel}</span>
         </div>
         <div className="schedule-trip-fare">
-          <span>票价</span>
-          <strong>{trip.fareText ?? '待公布'}</strong>
+          <span>{t('travelSchedule.trip.fare')}</span>
+          <strong>{trip.fareText ?? t('travelSchedule.trip.toBeAnnounced')}</strong>
         </div>
       </div>
 
       <div className="schedule-trip-journey">
         <div className="schedule-trip-time-block">
-          <span>出发时间</span>
+          <span>{t('travelSchedule.trip.departureTime')}</span>
           <time>{trip.departureTime}</time>
-          <small>{trip.originStationName ?? trip.stationNames[0] ?? '出发地点待公布'}</small>
+          <small>
+            {trip.originStationName ??
+              trip.stationNames[0] ??
+              t('travelSchedule.trip.departureUnknown')}
+          </small>
         </div>
         <div className="schedule-trip-duration">
-          <span>{trip.runtimeText ?? '运行时间待公布'}</span>
-          <strong>{formatStopSummary(trip)}</strong>
+          <span>{trip.runtimeText ?? t('travelSchedule.trip.runtimeUnknown')}</span>
+          <strong>{formatStopSummary(trip, t)}</strong>
         </div>
         <div className="schedule-trip-time-block is-arrival">
-          <span>到达时间</span>
+          <span>{t('travelSchedule.trip.arrivalTime')}</span>
           <time>
-            {trip.arrivalTime ?? '待定'}
+            {trip.arrivalTime ?? t('travelSchedule.trip.timeUnknown')}
             {trip.arrivalDayOffset && trip.arrivalDayOffset > 0 ? (
               <sup className="schedule-trip-day-offset">+{trip.arrivalDayOffset}天</sup>
             ) : null}
@@ -604,7 +639,7 @@ function ScheduleTripCard({
           <small>
             {trip.destinationStationName ??
               trip.stationNames[trip.stationNames.length - 1] ??
-              '到达地点待公布'}
+              t('travelSchedule.trip.arrivalUnknown')}
           </small>
         </div>
       </div>
@@ -619,27 +654,36 @@ function ScheduleTripCard({
       </div>
       <dl className="screen-detail-trip-meta schedule-trip-meta">
         <MetaItem
-          label={getLocationMetaLabel(trip.serviceKind)}
-          value={trip.gateText ?? '待公布'}
+          label={getLocationMetaLabel(trip.serviceKind, t)}
+          value={trip.gateText ?? t('travelSchedule.trip.toBeAnnounced')}
         />
         {trip.operatingDays?.length ? (
-          <MetaItem label="运行日" value={formatOperatingDays(trip.operatingDays)} />
+          <MetaItem
+            label={t('travelSchedule.trip.operatingDays')}
+            value={formatOperatingDays(trip.operatingDays, t)}
+          />
         ) : null}
-        <MetaItem label="运营" value={trip.operator ?? '待公布'} />
-        <MetaItem label={getVehicleMetaLabel(trip.serviceKind)} value={formatVehicleText(trip)} />
+        <MetaItem
+          label={t('travelSchedule.trip.operator')}
+          value={trip.operator ?? t('travelSchedule.trip.toBeAnnounced')}
+        />
+        <MetaItem
+          label={getVehicleMetaLabel(trip.serviceKind, t)}
+          value={formatVehicleText(trip, t)}
+        />
       </dl>
       <div className="schedule-trip-actions">
         <button className="secondary-action-button is-primary" type="button" onClick={addReminder}>
           <span className="material-symbols-outlined" aria-hidden="true">
             add_alarm
           </span>
-          <span>添加提醒</span>
+          <span>{t('travelSchedule.action.addReminder')}</span>
         </button>
         <button className="secondary-action-button" type="button" onClick={saveHistory}>
           <span className="material-symbols-outlined" aria-hidden="true">
             bookmark_add
           </span>
-          <span>保存记录</span>
+          <span>{t('travelSchedule.action.saveRecord')}</span>
         </button>
         {trip.bookingUrl ? (
           <a
@@ -651,7 +695,7 @@ function ScheduleTripCard({
             <span className="material-symbols-outlined" aria-hidden="true">
               open_in_new
             </span>
-            <span>旧版参考</span>
+            <span>{t('travelSchedule.action.legacyReference')}</span>
           </a>
         ) : null}
         <TicketingStatusButton
@@ -674,7 +718,8 @@ function TicketingStatusButton({
   onCreateOrder: () => void;
   ticketing?: TravelTicketingAvailability;
 }>) {
-  const state = getTicketingButtonState(ticketing);
+  const { t } = useI18n();
+  const state = getTicketingButtonState(ticketing, t);
 
   return (
     <button
@@ -687,12 +732,15 @@ function TicketingStatusButton({
       <span className="material-symbols-outlined" aria-hidden="true">
         {busy ? 'progress_activity' : state.icon}
       </span>
-      <span>{busy ? '创建中' : state.label}</span>
+      <span>{busy ? t('travelSchedule.ticketing.creating') : state.label}</span>
     </button>
   );
 }
 
-function getTicketingButtonState(ticketing: TravelTicketingAvailability | undefined): {
+function getTicketingButtonState(
+  ticketing: TravelTicketingAvailability | undefined,
+  t: Translate,
+): {
   canCreate: boolean;
   icon: string;
   label: string;
@@ -702,8 +750,8 @@ function getTicketingButtonState(ticketing: TravelTicketingAvailability | undefi
     return {
       canCreate: false,
       icon: 'confirmation_number',
-      label: '新票务待接入',
-      message: '新版票务状态尚未返回。',
+      label: t('travelSchedule.ticketing.pending'),
+      message: t('travelSchedule.ticketing.statusMissing'),
     };
   }
 
@@ -711,7 +759,7 @@ function getTicketingButtonState(ticketing: TravelTicketingAvailability | undefi
     return {
       canCreate: true,
       icon: 'confirmation_number',
-      label: '创建草稿',
+      label: t('travelSchedule.ticketing.createDraft'),
       message: ticketing.message,
     };
   }
@@ -720,7 +768,7 @@ function getTicketingButtonState(ticketing: TravelTicketingAvailability | undefi
     return {
       canCreate: false,
       icon: 'open_in_new',
-      label: '旧版参考可用',
+      label: t('travelSchedule.ticketing.legacyReference'),
       message: ticketing.message,
     };
   }
@@ -729,7 +777,7 @@ function getTicketingButtonState(ticketing: TravelTicketingAvailability | undefi
     return {
       canCreate: false,
       icon: 'inventory_2',
-      label: '库存待配置',
+      label: t('travelSchedule.ticketing.inventoryPending'),
       message: ticketing.message,
     };
   }
@@ -738,7 +786,7 @@ function getTicketingButtonState(ticketing: TravelTicketingAvailability | undefi
     return {
       canCreate: false,
       icon: 'event_busy',
-      label: '暂无余票',
+      label: t('travelSchedule.ticketing.soldOut'),
       message: ticketing.message,
     };
   }
@@ -747,7 +795,7 @@ function getTicketingButtonState(ticketing: TravelTicketingAvailability | undefi
     return {
       canCreate: false,
       icon: 'sync_problem',
-      label: '暂不可订',
+      label: t('travelSchedule.ticketing.unavailable'),
       message: ticketing.message,
     };
   }
@@ -755,7 +803,7 @@ function getTicketingButtonState(ticketing: TravelTicketingAvailability | undefi
   return {
     canCreate: false,
     icon: 'confirmation_number',
-    label: '新票务待接入',
+    label: t('travelSchedule.ticketing.pending'),
     message: ticketing.message,
   };
 }
@@ -1025,31 +1073,36 @@ function formatHistoryItemTitle(item: TravelScheduleHistoryItem): string {
   return item.tripCode ? `${item.lineName} 班次 ${item.tripCode}` : item.lineName;
 }
 
-function formatHistoryItemDetail(item: TravelScheduleHistoryItem): string {
-  return [
+function renderHistoryItemDetail(item: TravelScheduleHistoryItem): ReactNode {
+  const parts: Array<ReactNode | undefined> = [
     item.serviceLabel,
     item.departureTime,
-    item.arrivalTime ? `到达 ${formatHistoryArrivalTime(item)}` : undefined,
+    item.arrivalTime ? (
+      <span>
+        到达 {item.arrivalTime}
+        {item.arrivalDayOffset && item.arrivalDayOffset > 0 ? (
+          <sup className="schedule-history-day-offset">+{item.arrivalDayOffset}天</sup>
+        ) : null}
+      </span>
+    ) : undefined,
     formatHistoryEndpoints(item),
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  ];
+  const visibleParts = parts.filter(
+    (part) => part !== undefined && part !== null && part !== false,
+  );
+
+  return visibleParts.map((part, index) => (
+    <span className="schedule-history-detail-part" key={index}>
+      {index > 0 ? <span aria-hidden="true"> · </span> : null}
+      {part}
+    </span>
+  ));
 }
 
 function formatHistoryEndpoints(item: TravelScheduleHistoryItem): string {
   const first = item.originStationName ?? item.stationNames[0];
   const last = item.destinationStationName ?? item.stationNames[item.stationNames.length - 1];
   return first && last ? `${first} - ${last}` : `${item.stationNames.length} 站`;
-}
-
-function formatHistoryArrivalTime(item: TravelScheduleHistoryItem): string {
-  if (!item.arrivalTime) {
-    return '待公布';
-  }
-
-  return item.arrivalDayOffset && item.arrivalDayOffset > 0
-    ? `${item.arrivalTime} +${item.arrivalDayOffset}天`
-    : item.arrivalTime;
 }
 
 function formatTicketHoldExpiresAt(value: string): string {
@@ -1078,19 +1131,22 @@ function formatTripHeading(trip: TravelTripInstance): string {
   return trip.lineName ? `${prefix} - ${trip.lineName}` : prefix;
 }
 
-function formatStopSummary(trip: TravelTripInstance): string {
+function formatStopSummary(trip: TravelTripInstance, t: Translate): string {
   if (trip.routeNote) {
     return trip.routeNote;
   }
 
   if (trip.stationNames.length <= 2) {
-    return '直达';
+    return t('travelSchedule.trip.direct');
   }
 
   const middleStations = trip.stationNames.slice(1, -1);
   return middleStations.length > 2
-    ? `经停 ${middleStations.slice(0, 2).join('、')} 等 ${middleStations.length} 站`
-    : `经停 ${middleStations.join('、')}`;
+    ? t('travelSchedule.trip.viaMany', {
+        stations: middleStations.slice(0, 2).join('、'),
+        count: middleStations.length,
+      })
+    : t('travelSchedule.trip.via', { stations: middleStations.join('、') });
 }
 
 function getServiceIcon(kind: TicketableServiceKind): string {
@@ -1113,32 +1169,35 @@ function getServiceIcon(kind: TicketableServiceKind): string {
   return 'route';
 }
 
-function getVehicleMetaLabel(kind: TicketableServiceKind): string {
+function getVehicleMetaLabel(kind: TicketableServiceKind, t?: Translate): string {
   if (kind === 'flight') {
-    return '机型';
+    return t ? t('travelSchedule.trip.aircraftType') : '机型';
   }
 
   if (kind === 'ferry') {
-    return '船型';
+    return t ? t('travelSchedule.trip.vesselType') : '船型';
   }
 
-  return '车型';
+  return t ? t('travelSchedule.trip.vehicleType') : '车型';
 }
 
-function formatVehicleText(trip: TravelTripInstance): string {
-  return [trip.vehicleTypeText, trip.vehicleModelText].filter(Boolean).join(' / ') || '待公布';
+function formatVehicleText(trip: TravelTripInstance, t?: Translate): string {
+  return (
+    [trip.vehicleTypeText, trip.vehicleModelText].filter(Boolean).join(' / ') ||
+    (t ? t('travelSchedule.trip.toBeAnnounced') : '待公布')
+  );
 }
 
-function getLocationMetaLabel(kind: TicketableServiceKind): string {
+function getLocationMetaLabel(kind: TicketableServiceKind, t?: Translate): string {
   if (kind === 'flight') {
-    return '值机/到达';
+    return t ? t('travelSchedule.trip.checkInArrival') : '值机/到达';
   }
 
   if (kind === 'ferry') {
-    return '登船口';
+    return t ? t('travelSchedule.trip.boardingGate') : '登船口';
   }
 
-  return '检票口';
+  return t ? t('travelSchedule.trip.gate') : '检票口';
 }
 
 function formatArrivalTime(trip: TravelTripInstance): string {
@@ -1150,23 +1209,26 @@ function formatArrivalTime(trip: TravelTripInstance): string {
   return dayOffset && dayOffset > 0 ? `${trip.arrivalTime} +${dayOffset}天` : trip.arrivalTime;
 }
 
-function formatOperatingDays(days: string[]): string {
+function formatOperatingDays(days: string[], t: Translate): string {
   const normalized = days.map((day) => day.trim()).filter(Boolean);
   const dayLabels: Record<string, string> = {
-    MON: '周一',
-    TUE: '周二',
-    WED: '周三',
-    THU: '周四',
-    FRI: '周五',
-    SAT: '周六',
-    SUN: '周日',
+    MON: t('travelSchedule.weekday.mon'),
+    TUE: t('travelSchedule.weekday.tue'),
+    WED: t('travelSchedule.weekday.wed'),
+    THU: t('travelSchedule.weekday.thu'),
+    FRI: t('travelSchedule.weekday.fri'),
+    SAT: t('travelSchedule.weekday.sat'),
+    SUN: t('travelSchedule.weekday.sun'),
   };
   const allDays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
   if (allDays.every((day) => normalized.includes(day))) {
-    return '每日';
+    return t('travelSchedule.weekday.everyday');
   }
 
-  return normalized.map((day) => dayLabels[day] ?? day).join('、') || '待公布';
+  return (
+    normalized.map((day) => dayLabels[day] ?? day).join('、') ||
+    t('travelSchedule.trip.toBeAnnounced')
+  );
 }
 
 function formatScheduleReminderTitle(trip: TravelTripInstance): string {

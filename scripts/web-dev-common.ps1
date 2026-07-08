@@ -15,6 +15,31 @@ function Get-YctPnpmCommand {
   return $command.Source
 }
 
+function Normalize-YctBasePath {
+  param([string]$Value = "")
+
+  $trimmed = ([string]$Value).Trim().TrimEnd("/")
+  if ([string]::IsNullOrWhiteSpace($trimmed) -or $trimmed -eq "/") {
+    return ""
+  }
+
+  if ($trimmed.StartsWith("/")) {
+    return $trimmed
+  }
+
+  return "/$trimmed"
+}
+
+function New-YctDevEnvCommandPrefix {
+  param([string]$BasePath = "")
+
+  $normalizedBasePath = Normalize-YctBasePath -Value $BasePath
+  return @(
+    "set `"YCT_BASE_PATH=$normalizedBasePath`"",
+    "set `"NEXT_PUBLIC_YCT_BASE_PATH=$normalizedBasePath`""
+  ) -join " && "
+}
+
 function Get-YctWebDevLogPaths {
   param(
     [Parameter(Mandatory = $true)][string]$Root,
@@ -26,6 +51,7 @@ function Get-YctWebDevLogPaths {
     Directory = $logDir
     Output = Join-Path $logDir "next-$Port.out.log"
     Error = Join-Path $logDir "next-$Port.err.log"
+    Meta = Join-Path $logDir "next-$Port.meta.json"
   }
 }
 
@@ -141,6 +167,35 @@ function Clear-YctLogFile {
   }
 
   throw "Log file is still locked and cannot be cleared: $Path"
+}
+
+function Write-YctWebDevMeta {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][psobject]$Meta
+  )
+
+  $parent = Split-Path -Parent $Path
+  if (-not [string]::IsNullOrWhiteSpace($parent)) {
+    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+  }
+
+  $json = $Meta | ConvertTo-Json -Depth 6
+  [System.IO.File]::WriteAllText($Path, $json + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
+}
+
+function Read-YctWebDevMeta {
+  param([Parameter(Mandatory = $true)][string]$Path)
+
+  if (-not (Test-Path -LiteralPath $Path)) {
+    return $null
+  }
+
+  try {
+    return (Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json)
+  } catch {
+    return $null
+  }
 }
 
 function Clear-YctNextDevCache {

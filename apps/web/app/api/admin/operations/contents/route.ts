@@ -1,16 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { contentRevisionDraftSchema } from '@yct/schemas';
-import { z } from 'zod';
 import { requireYctAdmin } from '../../../../../lib/admin-auth';
+import { adminContentDraftSchema } from '../../../../../lib/admin-content-draft-schema';
 import { createContentDraft, listAdminContentRecords } from '../../../../../lib/content-workflow';
-
-const createContentSchema = contentRevisionDraftSchema.extend({
-  excerpt: z.string().trim().max(500).optional(),
-  showInBanner: z.boolean().default(false),
-  coverColor: z.string().trim().max(120).optional(),
-  coverImageUrl: z.string().url().optional(),
-  expiresAt: z.string().datetime({ offset: true }).optional(),
-});
 
 export async function GET(request: NextRequest) {
   const admin = await requireYctAdmin(request);
@@ -31,7 +22,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const parsed = createContentSchema.safeParse(body);
+  const parsed = adminContentDraftSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       {
@@ -52,6 +43,8 @@ export async function POST(request: NextRequest) {
     metadata: {
       excerpt: parsed.data.excerpt,
       showInBanner: parsed.data.showInBanner,
+      bannerSortOrder: parsed.data.bannerSortOrder,
+      customTags: parsed.data.customTags,
       coverColor: parsed.data.coverColor,
       coverImageUrl: parsed.data.coverImageUrl,
       expiresAt: parsed.data.expiresAt,

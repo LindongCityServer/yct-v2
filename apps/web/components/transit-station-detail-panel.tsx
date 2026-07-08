@@ -1,5 +1,10 @@
+'use client';
+
 import type { TransitStationDetailSnapshot } from '@yct/contracts';
 import type { TransitLineSummary } from '../lib/legacy-transit';
+import { useI18n } from '../lib/client-i18n';
+
+type Translate = ReturnType<typeof useI18n>['t'];
 
 export function TransitStationDetailPanel({
   detail,
@@ -8,6 +13,8 @@ export function TransitStationDetailPanel({
   detail: TransitStationDetailSnapshot;
   line?: TransitLineSummary;
 }>) {
+  const { t } = useI18n();
+
   return (
     <article className="station-detail-page">
       <section className="station-detail-hero" aria-labelledby="station-detail-title">
@@ -19,14 +26,14 @@ export function TransitStationDetailPanel({
           <span className="material-symbols-outlined" aria-hidden="true">
             {line?.mode === 'metro' ? 'subway' : 'train'}
           </span>
-          <span>{detail.overGround ? '地面站' : '地下站'}</span>
+          <span>{detail.overGround ? t('stationDetail.ground') : t('stationDetail.underground')}</span>
         </span>
       </section>
 
       <section className="station-detail-section" aria-labelledby="station-layer-title">
         <div className="section-heading">
-          <h3 id="station-layer-title">站内层级</h3>
-          <span className="muted">{detail.layers.length} 层</span>
+          <h3 id="station-layer-title">{t('stationDetail.layers.title')}</h3>
+          <span className="muted">{t('stationDetail.layers.count', { count: detail.layers.length })}</span>
         </div>
         {detail.layers.length > 0 ? (
           <div className="station-layer-list">
@@ -38,34 +45,36 @@ export function TransitStationDetailPanel({
             ))}
           </div>
         ) : (
-          <EmptyStationBlock label="暂无站内层级数据" icon="layers_clear" />
+          <EmptyStationBlock label={t('stationDetail.layers.empty')} icon="layers_clear" />
         )}
       </section>
 
       <section className="station-detail-section" aria-labelledby="station-exit-title">
         <div className="section-heading">
-          <h3 id="station-exit-title">出入口</h3>
-          <span className="muted">{detail.exits.length} 个</span>
+          <h3 id="station-exit-title">{t('stationDetail.exits.title')}</h3>
+          <span className="muted">{t('stationDetail.exits.count', { count: detail.exits.length })}</span>
         </div>
         {detail.exits.length > 0 ? (
           <div className="station-exit-grid">
             {detail.exits.map((exit) => (
               <div className="station-exit-item" key={exit.code}>
                 <strong>{exit.code}</strong>
-                <span>{exit.description ?? '暂无描述'}</span>
-                <span className="muted">{formatExitMeta(exit.floor, exit.direction)}</span>
+                <span>{exit.description ?? t('stationDetail.exits.noDescription')}</span>
+                <span className="muted">{formatExitMeta(exit.floor, exit.direction, t)}</span>
               </div>
             ))}
           </div>
         ) : (
-          <EmptyStationBlock label="暂无出入口数据" icon="door_open" />
+          <EmptyStationBlock label={t('stationDetail.exits.empty')} icon="door_open" />
         )}
       </section>
 
       <section className="station-detail-section" aria-labelledby="station-facility-title">
         <div className="section-heading">
-          <h3 id="station-facility-title">站内设施</h3>
-          <span className="muted">{detail.facilities.length} 项</span>
+          <h3 id="station-facility-title">{t('stationDetail.facilities.title')}</h3>
+          <span className="muted">
+            {t('stationDetail.facilities.count', { count: detail.facilities.length })}
+          </span>
         </div>
         {detail.facilities.length > 0 ? (
           <div className="station-facility-list">
@@ -79,21 +88,23 @@ export function TransitStationDetailPanel({
                 </span>
                 <span>
                   <strong>{facility.type}</strong>
-                  <span className="muted">{formatFacilityMeta(facility)}</span>
+                  <span className="muted">{formatFacilityMeta(facility, t)}</span>
                 </span>
               </div>
             ))}
           </div>
         ) : (
-          <EmptyStationBlock label="暂无设施数据" icon="info" />
+          <EmptyStationBlock label={t('stationDetail.facilities.empty')} icon="info" />
         )}
       </section>
 
       <section className="station-detail-section" aria-labelledby="station-transfer-title">
         <div className="section-heading">
-          <h3 id="station-transfer-title">换乘与周边</h3>
+          <h3 id="station-transfer-title">{t('stationDetail.related.title')}</h3>
           <span className="muted">
-            {detail.transfers.length + detail.surroundingStationNames.length} 项
+            {t('stationDetail.related.count', {
+              count: detail.transfers.length + detail.surroundingStationNames.length,
+            })}
           </span>
         </div>
         <div className="station-related-grid">
@@ -103,8 +114,8 @@ export function TransitStationDetailPanel({
                 sync_alt
               </span>
               <div>
-                <strong>换乘线路</strong>
-                <p>{formatTransfers(detail.transfers)}</p>
+                <strong>{t('stationDetail.related.transfers')}</strong>
+                <p>{formatTransfers(detail.transfers, t)}</p>
               </div>
             </div>
           ) : null}
@@ -114,19 +125,21 @@ export function TransitStationDetailPanel({
                 near_me
               </span>
               <div>
-                <strong>周边站点</strong>
+                <strong>{t('stationDetail.related.surrounding')}</strong>
                 <p>{detail.surroundingStationNames.join('、')}</p>
               </div>
             </div>
           ) : null}
           {detail.transfers.length === 0 && detail.surroundingStationNames.length === 0 ? (
-            <EmptyStationBlock label="暂无换乘或周边站点数据" icon="near_me_disabled" />
+            <EmptyStationBlock label={t('stationDetail.related.empty')} icon="near_me_disabled" />
           ) : null}
         </div>
       </section>
 
       {detail.sourcePath ? (
-        <p className="operation-source-note">数据来源：{detail.sourcePath}</p>
+        <p className="operation-source-note">
+          {t('stationDetail.source', { source: detail.sourcePath })}
+        </p>
       ) : null}
     </article>
   );
@@ -146,37 +159,50 @@ function EmptyStationBlock({ label, icon }: Readonly<{ label: string; icon: stri
   );
 }
 
-function formatExitMeta(floor: string | undefined, direction: string | undefined): string {
-  const directionLabel = direction === 'upwards' ? '上行' : direction === 'downwards' ? '下行' : '';
-  return [floor, directionLabel].filter(Boolean).join(' · ') || '方向待补';
+function formatExitMeta(
+  floor: string | undefined,
+  direction: string | undefined,
+  t: Translate,
+): string {
+  const directionLabel =
+    direction === 'upwards'
+      ? t('stationDetail.direction.up')
+      : direction === 'downwards'
+        ? t('stationDetail.direction.down')
+        : '';
+  return [floor, directionLabel].filter(Boolean).join(' · ') || t('stationDetail.direction.unknown');
 }
 
-function formatFacilityMeta(facility: Facility): string {
+function formatFacilityMeta(facility: Facility, t: Translate): string {
   return (
     [
       facility.floor,
-      facility.endFloor ? `至 ${facility.endFloor}` : undefined,
-      Number.isFinite(facility.location) ? `位置 ${facility.location}` : undefined,
+      facility.endFloor ? t('stationDetail.facilities.toFloor', { floor: facility.endFloor }) : undefined,
+      Number.isFinite(facility.location)
+        ? t('stationDetail.location', { location: facility.location ?? '' })
+        : undefined,
       facility.direction,
       facility.oneWay,
     ]
       .filter(Boolean)
-      .join(' · ') || '位置待补'
+      .join(' · ') || t('stationDetail.facilities.locationUnknown')
   );
 }
 
-function formatTransfers(transfers: Transfer[]): string {
+function formatTransfers(transfers: Transfer[], t: Translate): string {
   return transfers
     .map((transfer) =>
-      [transfer.line, transfer.floor, transfer.direction, formatLocation(transfer.location)]
+      [transfer.line, transfer.floor, transfer.direction, formatLocation(transfer.location, t)]
         .filter(Boolean)
         .join(' · '),
     )
     .join('；');
 }
 
-function formatLocation(location: number | undefined): string | undefined {
-  return Number.isFinite(location) ? `位置 ${location}` : undefined;
+function formatLocation(location: number | undefined, t: Translate): string | undefined {
+  return Number.isFinite(location)
+    ? t('stationDetail.location', { location: location ?? '' })
+    : undefined;
 }
 
 function facilityIcon(type: string): string {

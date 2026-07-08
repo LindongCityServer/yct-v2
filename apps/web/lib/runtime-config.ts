@@ -8,6 +8,8 @@ export interface RuntimeConfig {
   yctUserLinkStorePath: string;
   adminStorePath: string;
   contentStorePath: string;
+  operationsReminderRuleStorePath: string;
+  operationsReminderSourceStateStorePath: string;
   contentAssetStorePath: string;
   contentAssetUploadDir: string;
   serviceEntryStorePath: string;
@@ -25,6 +27,7 @@ export interface RuntimeConfig {
   notificationPreferenceStorePath: string;
   pushSubscriptionStorePath: string;
   pushDeliveryStorePath: string;
+  internalTaskRunStorePath: string;
   webPushSubject?: string;
   webPushPublicKey?: string;
   webPushPrivateKey?: string;
@@ -67,6 +70,12 @@ export function readRuntimeConfig(): RuntimeConfig {
       emptyToUndefined(process.env.YCT_ADMIN_STORE_PATH) ?? '.yct-data/admin-memberships.json',
     contentStorePath:
       emptyToUndefined(process.env.YCT_CONTENT_STORE_PATH) ?? '.yct-data/content-store.json',
+    operationsReminderRuleStorePath:
+      emptyToUndefined(process.env.YCT_OPERATIONS_REMINDER_RULE_STORE_PATH) ??
+      '.yct-data/operations-reminder-rule-store.json',
+    operationsReminderSourceStateStorePath:
+      emptyToUndefined(process.env.YCT_OPERATIONS_REMINDER_SOURCE_STATE_STORE_PATH) ??
+      '.yct-data/operations-reminder-source-state.json',
     contentAssetStorePath:
       emptyToUndefined(process.env.YCT_CONTENT_ASSET_STORE_PATH) ??
       '.yct-data/content-asset-store.json',
@@ -118,6 +127,9 @@ export function readRuntimeConfig(): RuntimeConfig {
     pushDeliveryStorePath:
       emptyToUndefined(process.env.YCT_PUSH_DELIVERY_STORE_PATH) ??
       '.yct-data/push-delivery-store.json',
+    internalTaskRunStorePath:
+      emptyToUndefined(process.env.YCT_INTERNAL_TASK_RUN_STORE_PATH) ??
+      '.yct-data/internal-task-run-store.json',
     webPushSubject: emptyToUndefined(process.env.YCT_WEB_PUSH_SUBJECT),
     webPushPublicKey:
       emptyToUndefined(process.env.YCT_WEB_PUSH_PUBLIC_KEY) ??

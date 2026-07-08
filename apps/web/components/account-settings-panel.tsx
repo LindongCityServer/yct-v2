@@ -205,6 +205,8 @@ type AuthStatus =
   | 'readonly'
   | 'logged_out'
   | 'state_invalid'
+  | 'session_unavailable_localhost'
+  | 'session_cookie_missing'
   | 'session_unavailable'
   | 'session_error'
   | 'ldpass_not_configured';
@@ -885,8 +887,8 @@ export function AccountSettingsPanel({
     }
   };
 
-  const notificationMasterStatus = notificationEnabled ? '推送开启' : '推送关闭';
-  const notificationMasterLabel = `本设备推送总开关，当前${notificationEnabled ? '已开启' : '已关闭'}`;
+  const notificationMasterStatus = notificationEnabled ? '本设备推送已开启' : '本设备推送已关闭';
+  const notificationMasterLabel = `本设备推送通知总开关，当前${notificationEnabled ? '已开启' : '已关闭'}`;
   const ticketDraftCount =
     ticketOrders?.filter((item) => item.order.status === 'draft' || item.order.status === 'pending_issue')
       .length ?? 0;
@@ -971,7 +973,7 @@ export function AccountSettingsPanel({
             <span className="material-symbols-outlined" aria-hidden="true">
               notifications
             </span>
-            <span id="notification-settings-title">通知类型与免打扰</span>
+            <span id="notification-settings-title">推送通知与免打扰时段</span>
             <span className="settings-inline-status">{notificationMasterStatus}</span>
             <label
               className="switch-control notification-master-switch"
@@ -987,11 +989,11 @@ export function AccountSettingsPanel({
             </label>
           </div>
           <p className="settings-row-note">
-            总开关控制本设备是否接收推送；下方分类决定哪些提醒允许推送，免打扰时段只用于静默或延后这些提醒。
+            总开关只控制本设备是否接收 Push；下方分类决定哪些提醒允许推送；免打扰时段不会关闭分类，只会静默或延后这些提醒。
           </p>
           <div className="time-control-row">
             <label>
-              <span>免打扰开始</span>
+              <span>免打扰开始时间</span>
               <input
                 type="time"
                 value={quietStart}
@@ -999,7 +1001,7 @@ export function AccountSettingsPanel({
               />
             </label>
             <label>
-              <span>免打扰结束</span>
+              <span>免打扰结束时间</span>
               <input
                 type="time"
                 value={quietEnd}
@@ -1007,7 +1009,7 @@ export function AccountSettingsPanel({
               />
             </label>
           </div>
-          <div className="notification-type-grid" aria-label="允许接收的通知类型">
+          <div className="notification-type-grid" aria-label="允许推送的提醒类型">
             {notificationTypeOptions.map((option) => (
               <label className="notification-type-toggle" key={option.key}>
                 <input
@@ -1460,6 +1462,10 @@ function authStatusMessage(status: AuthStatus): string {
     readonly: '当前账号只能进入只读账号页。',
     logged_out: '已退出雨城通本地会话。',
     state_invalid: '登录状态校验失败，请重新发起登录。',
+    session_unavailable_localhost:
+      '当前回跳地址是 localhost/127.0.0.1，本地站点无法直接读取临东通共享会话。请改用共享域名测试，或将本地服务切到已接入的同域测试环境。',
+    session_cookie_missing:
+      '雨城通没有收到临东通共享登录 Cookie。请确认临东通生产环境已配置 AUTH_COOKIE_DOMAIN=.shangxiaoguan.top，重启临东通并重新登录后再试。',
     session_unavailable: '未能从临东通读取有效账号信息。',
     session_error: '临东通会话读取失败，请稍后重试。',
     ldpass_not_configured: '临东通登录尚未配置。',

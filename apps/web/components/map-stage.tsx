@@ -7,18 +7,20 @@ import type {
   PoiCategory,
   TileProviderDescriptor,
 } from '@yct/contracts';
+import { useSearchParams } from 'next/navigation';
 import type {
   CSSProperties,
   FormEvent,
   PointerEvent as ReactPointerEvent,
 } from 'react';
-import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { readMapFavoriteMarkerIds, writeMapFavoriteMarkerIds } from '../lib/client-map-favorites';
 import {
   readSelectedMapTileProviderId,
   writeSelectedMapTileProviderId,
 } from '../lib/client-map-settings';
+import { useI18n } from '../lib/client-i18n';
 
 interface MarkerResponse {
   meta: ApiMeta;
@@ -293,6 +295,7 @@ interface RoutePlanStep {
 
 interface RoutePlanStepDetail {
   icon: string;
+  kind?: 'process' | 'place_origin' | 'place_pass' | 'place_destination';
   label: string;
   meta?: string;
 }
@@ -431,6 +434,8 @@ const defaultRouteTransportModes: EnabledRouteTransportModes = {
 };
 
 const favoriteMarkerCategoryId = 'favorites';
+type Translate = ReturnType<typeof useI18n>['t'];
+
 const markerCategoryFallbackNames: Record<string, string> = {
   airport: '机场',
   'bus-stop': '公交站',
@@ -461,7 +466,7 @@ const markerCategoryFallbackNames: Record<string, string> = {
 };
 
 const routeTransportModeOptions: RouteTransportModeOption[] = [
-  { mode: 'walk', label: '步行', icon: 'directions_walk', color: '#4B5B57' },
+  { mode: 'walk', label: '步行', icon: 'directions_walk', color: 'var(--yct-color-text-secondary)' },
   { mode: 'bus', label: '公交', icon: 'directions_bus', color: 'var(--yct-color-tertiary)' },
   { mode: 'metro', label: '地铁', icon: 'subway', color: 'var(--yct-color-secondary)' },
   { mode: 'tram', label: '有轨', icon: 'tram', color: 'var(--yct-color-tram)' },
@@ -470,7 +475,7 @@ const routeTransportModeOptions: RouteTransportModeOption[] = [
   { mode: 'railway', label: '铁路', icon: 'train', color: 'var(--yct-color-railway)' },
 ];
 
-const routeWalkTraceColor = '#168f78';
+const routeWalkTraceColor = 'var(--yct-color-text-secondary)';
 
 const highPriorityTransitCategoryIds = new Set([
   'metro-station',
@@ -496,6 +501,8 @@ const mapDefaults = {
 type PoiDetailTab = 'summary' | 'facilities';
 
 export function MapStage() {
+  const { t } = useI18n();
+  const searchParams = useSearchParams();
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const activePointersRef = useRef<Map<number, ActivePointer>>(new Map());
@@ -557,7 +564,9 @@ export function MapStage() {
   const [poiDetailCollapsed, setPoiDetailCollapsed] = useState(false);
   const [favoriteMarkerIds, setFavoriteMarkerIds] = useState<Set<string>>(() => new Set());
   const [poiActionStatus, setPoiActionStatus] = useState('');
-  const [sharedMarkerFocusApplied, setSharedMarkerFocusApplied] = useState(false);
+  const [appliedSharedMarkerFocusKey, setAppliedSharedMarkerFocusKey] = useState<string | null>(
+    null,
+  );
   const roadGraphCacheRef = useRef<{
     graph?: RoadRouteGraph;
     source: EndpointGroupMarker[] | null;
@@ -761,6 +770,10 @@ export function MapStage() {
     () => markerSnapshot.filter(isTransitLineMarker),
     [markerSnapshot],
   );
+  const sharedMarkerFocusKey = useMemo(
+    () => readMapSharedFocusKey(searchParams),
+    [searchParams],
+  );
   const centerableMarkers = useMemo(
     () => markerSnapshot.filter(isCenterableMarker),
     [markerSnapshot],
@@ -868,12 +881,12 @@ export function MapStage() {
       .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
 
     return [
-      { id: 'all', name: '全部' },
-      { id: favoriteMarkerCategoryId, name: '收藏' },
+      { id: 'all', name: t('map.category.all') },
+      { id: favoriteMarkerCategoryId, name: t('map.category.favorites') },
       ...configuredCategories,
       ...inferredCategories,
     ];
-  }, [categoryResponse, endpointGroupMarkers, pointMarkers, transitLineMarkers]);
+  }, [categoryResponse, endpointGroupMarkers, pointMarkers, t, transitLineMarkers]);
   const sidebarMarkers = useMemo(() => {
     const queryMode = Boolean(markerQuery.trim());
     const nearbyMode = !queryMode && nearbySearchCenter;
@@ -1332,31 +1345,37 @@ export function MapStage() {
     });
   };
 
-  const focusMapMarker = (marker: SidebarMarker) => {
+  const focusMapMarker = useCallback((marker: CenterableMarker) => {
     setMapView((current) => fitMarkerToMapView(marker, current, viewportSize));
     setFocusedMarkerId(marker.id);
     setPoiDetailTab('summary');
     setPoiDetailCollapsed(false);
     setNearbySearchCenter(null);
-  };
+  }, [viewportSize]);
 
   useEffect(() => {
-    if (sharedMarkerFocusApplied || markerSnapshot.length === 0) {
+    if (!sharedMarkerFocusKey) {
+      if (appliedSharedMarkerFocusKey) {
+        setAppliedSharedMarkerFocusKey(null);
+      }
       return;
     }
 
-    const markerId = new URLSearchParams(window.location.search).get('marker');
-    if (!markerId) {
-      setSharedMarkerFocusApplied(true);
+    if (appliedSharedMarkerFocusKey === sharedMarkerFocusKey || markerSnapshot.length === 0) {
       return;
     }
 
-    const marker = markerSnapshot.find((item) => item.id === markerId);
+    const marker = findMapMarkerBySharedFocusKey(markerSnapshot, sharedMarkerFocusKey);
     if (marker && isCenterableMarker(marker)) {
       focusMapMarker(marker);
     }
-    setSharedMarkerFocusApplied(true);
-  }, [focusMapMarker, markerSnapshot, sharedMarkerFocusApplied]);
+    setAppliedSharedMarkerFocusKey(sharedMarkerFocusKey);
+  }, [
+    appliedSharedMarkerFocusKey,
+    focusMapMarker,
+    markerSnapshot,
+    sharedMarkerFocusKey,
+  ]);
 
   const toggleFavoriteMarker = (marker: CenterableMarker) => {
     const label = formatMarkerDisplayName(marker.label);
@@ -1364,10 +1383,10 @@ export function MapStage() {
 
     if (next.has(marker.id)) {
       next.delete(marker.id);
-      setPoiActionStatus(`已取消收藏 ${label}`);
+      setPoiActionStatus(t('map.poi.unfavoriteStatus', { name: label }));
     } else {
       next.add(marker.id);
-      setPoiActionStatus(`已收藏 ${label}`);
+      setPoiActionStatus(t('map.poi.favoriteStatus', { name: label }));
     }
 
     setFavoriteMarkerIds(next);
@@ -1381,22 +1400,22 @@ export function MapStage() {
     try {
       if (navigator.share) {
         await navigator.share({
-          title: `${label} - 雨城通地图`,
-          text: `在雨城通地图中查看 ${label}`,
+          title: t('map.poi.shareTitle', { name: label }),
+          text: t('map.poi.shareText', { name: label }),
           url,
         });
-        setPoiActionStatus('已打开系统分享面板');
+        setPoiActionStatus(t('map.poi.shareOpened'));
         return;
       }
 
       await copyTextToClipboard(url);
-      setPoiActionStatus('已复制地点链接');
+      setPoiActionStatus(t('map.poi.copyStatus'));
     } catch {
       try {
         await copyTextToClipboard(url);
-        setPoiActionStatus('已复制地点链接');
+        setPoiActionStatus(t('map.poi.copyStatus'));
       } catch {
-        setPoiActionStatus('当前浏览器暂不支持分享或复制');
+        setPoiActionStatus(t('map.poi.shareUnavailable'));
       }
     }
   };
@@ -1853,10 +1872,10 @@ export function MapStage() {
   return (
     <section className={`map-stage is-mode-${browseMode}`} aria-labelledby="map-title">
       <h1 id="map-title" className="sr-only">
-        地图探索
+        {t('map.title')}
       </h1>
 
-      <aside className="map-control-stack map-sidebar-stack" aria-label="地图操作">
+      <aside className="map-control-stack map-sidebar-stack" aria-label={t('map.title')}>
         <div className="map-panel-section">
           <div className="search-box map-search-box">
             <span className="material-symbols-outlined" aria-hidden="true">
@@ -1864,16 +1883,16 @@ export function MapStage() {
             </span>
             <input
               type="search"
-              aria-label="筛选地图标记"
+              aria-label={t('map.search.aria')}
               value={markerQuery}
               onChange={(event) => updateMarkerQuery(event.currentTarget.value)}
-              placeholder="搜索地点或标记"
+              placeholder={t('map.search.placeholder')}
             />
             {markerQuery ? (
               <button
                 className="search-clear-button"
                 type="button"
-                aria-label="清空地图搜索"
+                aria-label={t('map.search.clear')}
                 onClick={() => updateMarkerQuery('')}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
@@ -1933,12 +1952,14 @@ export function MapStage() {
                 </span>
                 <span>
                   {markerQuery.trim()
-                    ? '搜索结果'
+                    ? t('map.markerList.results')
                     : nearbySearchCenter
-                      ? `${nearbySearchCenter.label}周边`
-                      : '地图标记'}
+                      ? t('map.markerList.nearby', { name: nearbySearchCenter.label })
+                      : t('map.markerList.default')}
                 </span>
-                <span className="muted">{sidebarMarkers.length} 个</span>
+                <span className="muted">
+                  {t('map.markerList.count', { count: sidebarMarkers.length })}
+                </span>
               </button>
               {markerListExpanded ? (
                 <>
@@ -1947,9 +1968,9 @@ export function MapStage() {
                       <span className="material-symbols-outlined" aria-hidden="true">
                         travel_explore
                       </span>
-                      <span>按距离显示 {nearbySearchCenter.label} 周边标记</span>
+                      <span>{t('map.nearby.note', { name: nearbySearchCenter.label })}</span>
                       <button type="button" onClick={() => setNearbySearchCenter(null)}>
-                        退出
+                        {t('map.nearby.exit')}
                       </button>
                     </div>
                   ) : null}
@@ -1960,7 +1981,7 @@ export function MapStage() {
                         : 'map-category-filter'
                     }
                   >
-                    <div className="map-category-strip" aria-label="筛选地图标记分类">
+                    <div className="map-category-strip" aria-label={t('map.categoryFilter.aria')}>
                       {markerListCategoryOptions.map((category) => (
                         <button
                           className={
@@ -1981,7 +2002,11 @@ export function MapStage() {
                         className="map-category-toggle"
                         type="button"
                         aria-expanded={markerCategoryExpanded}
-                        aria-label={markerCategoryExpanded ? '收起分类筛选' : '展开分类筛选'}
+                        aria-label={
+                          markerCategoryExpanded
+                            ? t('map.categoryFilter.collapse')
+                            : t('map.categoryFilter.expand')
+                        }
                         onClick={() => setMarkerCategoryExpanded((current) => !current)}
                       >
                         <span className="material-symbols-outlined" aria-hidden="true">
@@ -2040,6 +2065,7 @@ export function MapStage() {
                           loadStatus,
                           markerListCategoryId,
                           nearbySearchCenter,
+                          t,
                         })}
                       </p>
                     )}
@@ -2060,12 +2086,16 @@ export function MapStage() {
               <MarkerListIcon marker={focusedMarker} iconBaseUrl={markerIconBaseUrl} />
               <div>
                 <h2 id="map-poi-detail-title">{formatMarkerDisplayName(focusedMarker.label)}</h2>
-                <span>{focusedMarkerCategoryName ?? focusedMarker.categoryId ?? '地图对象'}</span>
+                <span>
+                  {focusedMarkerCategoryName ??
+                    focusedMarker.categoryId ??
+                    t('map.poi.objectFallback')}
+                </span>
               </div>
               <button
                 className="icon-action-button"
                 type="button"
-                aria-label={poiDetailCollapsed ? '展开地点信息' : '收起地点信息'}
+                aria-label={poiDetailCollapsed ? t('map.poi.expand') : t('map.poi.collapse')}
                 aria-expanded={!poiDetailCollapsed}
                 onClick={() => setPoiDetailCollapsed((current) => !current)}
               >
@@ -2076,7 +2106,7 @@ export function MapStage() {
               <button
                 className="icon-action-button"
                 type="button"
-                aria-label="关闭地点信息"
+                aria-label={t('map.poi.close')}
                 onClick={() => setFocusedMarkerId(null)}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
@@ -2087,10 +2117,10 @@ export function MapStage() {
             {!poiDetailCollapsed ? (
               <>
                 {!isLinearDetailMarker(focusedMarker) ? (
-                  <div className="map-poi-detail-tabs" aria-label="地点信息分类">
+                  <div className="map-poi-detail-tabs" aria-label={t('map.poi.tabsAria')}>
                     {[
-                      ['summary', '简介'],
-                      ['facilities', '设施/出入口'],
+                      ['summary', t('map.poi.summary')],
+                      ['facilities', t('map.poi.facilities')],
                     ].map(([tab, label]) => (
                       <button
                         className={poiDetailTab === tab ? 'is-active' : ''}
@@ -2193,6 +2223,7 @@ export function MapStage() {
                         onShare={() => void shareMarker(focusedMarker)}
                         onToggleFavorite={() => toggleFavoriteMarker(focusedMarker)}
                         status={poiActionStatus}
+                        t={t}
                       />
                     </>
                   ) : null}
@@ -2205,6 +2236,7 @@ export function MapStage() {
                       onShare={() => void shareMarker(focusedMarker)}
                       onToggleFavorite={() => toggleFavoriteMarker(focusedMarker)}
                       status={poiActionStatus}
+                      t={t}
                     />
                   ) : null}
                   {!isLinearDetailMarker(focusedMarker) && poiDetailTab === 'facilities' ? (
@@ -2242,6 +2274,38 @@ export function MapStage() {
                             </div>
                           </section>
                         ))}
+                      </div>
+                    ) : focusedParentPoi ? (
+                      <div className="map-poi-related-list" aria-label="所属地点">
+                        <section className="map-poi-related-group">
+                          <h4>
+                            <span>所属地点</span>
+                            <small>1 个</small>
+                          </h4>
+                          <div className="map-poi-related-group-items">
+                            <button
+                              className="map-poi-related-item"
+                              type="button"
+                              onClick={() => focusMapMarker(focusedParentPoi.parent)}
+                            >
+                              <MarkerListIcon
+                                marker={focusedParentPoi.parent}
+                                iconBaseUrl={markerIconBaseUrl}
+                              />
+                              <span>
+                                <strong>{formatMarkerDisplayName(focusedParentPoi.parent.label)}</strong>
+                                <small>
+                                  {focusedParentPoi.parent.categoryId
+                                    ? (categoryById.get(focusedParentPoi.parent.categoryId) ??
+                                      getMarkerCategoryFallbackName(
+                                        focusedParentPoi.parent.categoryId,
+                                      ))
+                                    : '父地点'}
+                                </small>
+                              </span>
+                            </button>
+                          </div>
+                        </section>
                       </div>
                     ) : (
                       <p>{focusedMarker.description ?? '暂无设施数据'}</p>
@@ -2950,7 +3014,7 @@ function TransitLineMapDetail({
               <span className="map-line-station-node" aria-hidden="true" />
               <span>
                 {formatMarkerDisplayName(stop.stationName)}
-                {stop.oneWay ? <small>{stop.oneWay === 'down' ? '仅正向' : '仅反向'}</small> : null}
+                {stop.oneWay ? <small>{formatTransitStopOneWayLabel(stop.oneWay)}</small> : null}
               </span>
             </li>
           ))}
@@ -3026,6 +3090,14 @@ function RoutePlanDraftCard({
   const selectedOption = options.find((option) => option.id === selectedOptionId) ?? options[0];
   const hasEnabledModes = routeTransportModeOptions.some((mode) => enabledModes[mode.mode]);
   const allModesEnabled = routeTransportModeOptions.every((mode) => enabledModes[mode.mode]);
+  const isPlanning = status === 'loading' && !editingEndpoint;
+  const cardClassName = [
+    'map-route-plan-card',
+    collapsed ? 'is-collapsed' : '',
+    isPlanning ? 'is-loading' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
   const [modeListExpanded, setModeListExpanded] = useState(false);
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(() => new Set());
   const visibleRouteTransportModes = modeListExpanded
@@ -3054,8 +3126,9 @@ function RoutePlanDraftCard({
 
   return (
     <section
-      className={collapsed ? 'map-route-plan-card is-collapsed' : 'map-route-plan-card'}
+      className={cardClassName}
       aria-label="路线规划"
+      aria-busy={isPlanning}
     >
       <div className="map-route-plan-top">
         <div className="map-route-endpoint-list">
@@ -3131,6 +3204,15 @@ function RoutePlanDraftCard({
       </div>
       {!collapsed ? (
         <>
+          {isPlanning ? (
+            <div className="map-route-plan-loading" role="status">
+              <span className="material-symbols-outlined" aria-hidden="true">
+                progress_activity
+              </span>
+              <span>正在计算路线方案</span>
+              <small>首次构建道路图可能需要几秒</small>
+            </div>
+          ) : null}
           {editingEndpoint ? (
             <div className="map-route-endpoint-candidates" aria-label="路线端点候选">
               <div className="map-route-endpoint-candidate-heading">
@@ -3309,7 +3391,7 @@ function RoutePlanDraftCard({
                                   </span>
                                   <span className="map-route-step-content">
                                     <span className="map-route-step-main">
-                                      <span>{step.label}</span>
+                                      <span className="map-route-step-label">{step.label}</span>
                                       {canExpand ? (
                                         <button
                                           className="map-route-step-expand"
@@ -3331,7 +3413,15 @@ function RoutePlanDraftCard({
                                             <span className="material-symbols-outlined" aria-hidden="true">
                                               {detail.icon}
                                             </span>
-                                            <span>{detail.label}</span>
+                                            <span
+                                              className={
+                                                detail.kind
+                                                  ? `map-route-step-detail-label is-${detail.kind}`
+                                                  : 'map-route-step-detail-label'
+                                              }
+                                            >
+                                              {detail.label}
+                                            </span>
                                             {detail.meta ? <small>{detail.meta}</small> : null}
                                           </li>
                                         ))}
@@ -3398,7 +3488,9 @@ function buildRoutePlanOptions(input: {
         directWalkRoute.usesRoadGraph ? '沿道路估算' : '直线估算'
       }`,
       icon: 'directions_walk',
-      color: routeTransportModeOptions.find((option) => option.mode === 'walk')?.color ?? '#4B5B57',
+      color:
+        routeTransportModeOptions.find((option) => option.mode === 'walk')?.color ??
+        'var(--yct-color-text-secondary)',
       coordinates: directCoordinates,
       traceSegments: [createRouteTraceSegment('walk', directCoordinates)],
       markerIds: getRouteEndpointMarkerIds(draft),
@@ -3658,8 +3750,13 @@ function createRouteTransferStep(label: string, details?: RoutePlanStepDetail[])
   return { kind: 'transfer', label, role: 'transfer', details };
 }
 
-function createRouteStepDetail(icon: string, label: string, meta?: string): RoutePlanStepDetail {
-  return { icon, label, meta };
+function createRouteStepDetail(
+  icon: string,
+  label: string,
+  meta?: string,
+  kind?: RoutePlanStepDetail['kind'],
+): RoutePlanStepDetail {
+  return { icon, label, meta, kind };
 }
 
 function getRouteStepMarkerText(step: RoutePlanStep): string {
@@ -4222,6 +4319,7 @@ function buildRoadRouteStepDetails(
       `${formatRoutePlanDistance(group.distance)} ${formatRouteStepMinutes(
         estimateRouteMinutes(group.distance, group.kind === 'road' || group.kind === 'connection' ? 64 : 72),
       )}`,
+      'process',
     ),
   );
 }
@@ -4275,6 +4373,7 @@ function buildWalkRouteBetweenCoordinates(
         'directions_walk',
         '直线步行',
         `${formatRoutePlanDistance(distance)} ${formatRouteStepMinutes(minutes)}`,
+        'process',
       ),
     ],
     usesRoadGraph: false,
@@ -4549,6 +4648,8 @@ function buildDirectTransitLineOption(
       createRoutePlaceStep(
         `${formatMarkerDisplayName(destinationStop.marker.label)} 出站`,
         'alighting',
+        undefined,
+        candidate.color,
       ),
       createRouteWalkStep(
         `${egressRoute.usesRoadGraph ? '沿道路步行' : '步行'} ${formatRoutePlanDistance(
@@ -4780,7 +4881,12 @@ function buildTransferTransitLineOptions(
             originCandidate.candidate.color,
             buildTransitStopStepDetails(firstSegment),
           ),
-          createRoutePlaceStep(`${formatMarkerDisplayName(transfer.fromStop.marker.label)} 换乘`, 'transfer'),
+          createRoutePlaceStep(
+            `${formatMarkerDisplayName(transfer.fromStop.marker.label)} 换乘`,
+            'transfer',
+            undefined,
+            originCandidate.candidate.color,
+          ),
           createRouteTransferStep(
             `换乘 步行 ${formatRoutePlanDistance(transferDistance)} ${formatRouteStepMinutes(
               transferWalkMinutes,
@@ -4805,6 +4911,8 @@ function buildTransferTransitLineOptions(
               destinationCandidate.destinationStop.marker.label,
             )} 出站`,
             'alighting',
+            undefined,
+            destinationCandidate.candidate.color,
           ),
           createRouteWalkStep(
             `${egressRoute.usesRoadGraph ? '沿道路步行' : '步行'} ${formatRoutePlanDistance(
@@ -4929,11 +5037,12 @@ function findTransferStopPair(input: {
 }
 
 function buildTransitStopStepDetails(stops: TransitRouteStop[]): RoutePlanStepDetail[] {
-  return stops.map((stop, index) =>
+  return stops.slice(1, -1).map((stop) =>
     createRouteStepDetail(
-      index === 0 ? 'login' : index === stops.length - 1 ? 'logout' : 'radio_button_checked',
+      'radio_button_checked',
       formatMarkerDisplayName(stop.marker.label),
-      index === 0 ? '上车站' : index === stops.length - 1 ? '下车站' : undefined,
+      undefined,
+      'place_pass',
     ),
   );
 }
@@ -5461,6 +5570,43 @@ function buildMapMarkerShareUrl(marker: CenterableMarker): string {
   return url.toString();
 }
 
+function readMapSharedFocusKey(searchParams: Pick<URLSearchParams, 'get'>): string | null {
+  const markerKey = normalizeMapSharedFocusValue(searchParams.get('marker'));
+  if (markerKey) {
+    return markerKey;
+  }
+
+  const lineKey = normalizeMapSharedFocusValue(
+    searchParams.get('line') ?? searchParams.get('lineId'),
+  );
+  return lineKey ? ensureTransitLineFocusKey(lineKey) : null;
+}
+
+function normalizeMapSharedFocusValue(value: string | null): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function ensureTransitLineFocusKey(value: string): string {
+  return value.startsWith('transit-line-') ? value : `transit-line-${value}`;
+}
+
+function findMapMarkerBySharedFocusKey(
+  markers: MapMarkerSnapshot['markers'],
+  focusKey: string,
+): MapMarkerSnapshot['markers'][number] | undefined {
+  const exactMarker = markers.find((marker) => marker.id === focusKey);
+  if (exactMarker) {
+    return exactMarker;
+  }
+
+  const transitLineId = focusKey.replace(/^transit-line-/, '');
+  return markers.find(
+    (marker) =>
+      isTransitLineMarker(marker) && marker.id.replace(/^transit-line-/, '') === transitLineId,
+  );
+}
+
 async function copyTextToClipboard(value: string) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(value);
@@ -5478,20 +5624,21 @@ function getMapMarkerListEmptyText(input: {
   loadStatus: LoadStatus;
   markerListCategoryId: string;
   nearbySearchCenter: NearbySearchCenter | null;
+  t: Translate;
 }): string {
   if (input.loadStatus === 'loading') {
-    return '正在读取地图标记';
+    return input.t('map.empty.loading');
   }
 
   if (input.nearbySearchCenter) {
-    return '周边暂无可显示标记';
+    return input.t('map.empty.nearby');
   }
 
   if (input.markerListCategoryId === favoriteMarkerCategoryId) {
-    return '暂无收藏地点';
+    return input.t('map.empty.favorites');
   }
 
-  return '暂无匹配标记';
+  return input.t('map.empty.noMatch');
 }
 
 function PoiActionBar({
@@ -5502,6 +5649,7 @@ function PoiActionBar({
   onShare,
   onToggleFavorite,
   status,
+  t,
 }: Readonly<{
   isFavorite: boolean;
   marker: CenterableMarker;
@@ -5510,20 +5658,21 @@ function PoiActionBar({
   onShare: () => void;
   onToggleFavorite: () => void;
   status: string;
+  t: Translate;
 }>) {
   return (
     <>
-      <div className="map-poi-action-bar" aria-label="地点操作">
+      <div className="map-poi-action-bar" aria-label={t('map.poi.actions')}>
         <button className="secondary-action-button is-primary" type="button" onClick={onPlanRoute}>
           <span className="material-symbols-outlined" aria-hidden="true">
             directions
           </span>
-          <span>查看路线</span>
+          <span>{t('map.poi.route')}</span>
         </button>
         <button
           className="icon-action-button"
           type="button"
-          aria-label={`搜索 ${marker.label} 周边`}
+          aria-label={t('map.poi.nearbyAria', { name: marker.label })}
           onClick={onSearchNearby}
         >
           <span className="material-symbols-outlined" aria-hidden="true">
@@ -5534,7 +5683,9 @@ function PoiActionBar({
           className={`icon-action-button${isFavorite ? ' is-active' : ''}`}
           type="button"
           aria-pressed={isFavorite}
-          aria-label={`${isFavorite ? '取消收藏' : '收藏'} ${marker.label}`}
+          aria-label={t(isFavorite ? 'map.poi.unfavoriteAria' : 'map.poi.favoriteAria', {
+            name: marker.label,
+          })}
           onClick={onToggleFavorite}
         >
           <span className="material-symbols-outlined" aria-hidden="true">
@@ -5544,7 +5695,7 @@ function PoiActionBar({
         <button
           className="icon-action-button"
           type="button"
-          aria-label={`分享 ${marker.label}`}
+          aria-label={t('map.poi.shareAria', { name: marker.label })}
           onClick={onShare}
         >
           <span className="material-symbols-outlined" aria-hidden="true">
@@ -5582,6 +5733,11 @@ function isTransitLineStopVisibleInDirection(
   direction: 'forward' | 'reverse',
 ): boolean {
   return direction === 'forward' ? stop.oneWay !== 'up' : stop.oneWay !== 'down';
+}
+
+function formatTransitStopOneWayLabel(oneWay: TransitLineStopForMap['oneWay']): string {
+  // Legacy YCT data uses "down" for the recorded order and "up" for the reverse order.
+  return oneWay === 'down' ? '仅正向' : '仅反向';
 }
 
 function isPointMarker(marker: MapMarkerSnapshot['markers'][number]): marker is PointMarker {

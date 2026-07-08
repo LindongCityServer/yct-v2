@@ -19,6 +19,19 @@ export type ContentRevisionStatus =
 export type ContentAssetStatus = 'pending_review' | 'approved' | 'rejected' | 'archived';
 export type ContentAssetKind = 'image' | 'attachment';
 export type ContentPublishMode = 'immediate' | 'scheduled';
+export type OperationsStrongReminderSourceKind = 'manual' | 'content' | 'service_notice';
+export type OperationsStrongReminderTone =
+  | 'primary'
+  | 'metro'
+  | 'bus'
+  | 'coach'
+  | 'tram'
+  | 'ferry'
+  | 'flight'
+  | 'railway'
+  | 'custom'
+  | 'warning'
+  | 'danger';
 
 export interface ContentSummary {
   id: string;
@@ -63,6 +76,24 @@ export interface ContentAsset {
   reviewedBy?: string;
   reviewedAt?: ISODateTimeString;
   reviewReason?: string;
+}
+
+export interface OperationsStrongReminderRule {
+  id: string;
+  sourceKind: OperationsStrongReminderSourceKind;
+  enabled: boolean;
+  sortOrder: number;
+  tone?: OperationsStrongReminderTone;
+  label?: string;
+  title?: string;
+  summary?: string;
+  href?: string;
+  contentId?: string;
+  startsAt?: ISODateTimeString;
+  endsAt?: ISODateTimeString;
+  createdAt?: ISODateTimeString;
+  updatedAt?: ISODateTimeString;
+  updatedBy?: string;
 }
 
 export type ReviewDecision = 'approved' | 'rejected';

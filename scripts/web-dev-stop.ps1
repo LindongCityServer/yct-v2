@@ -8,6 +8,7 @@ param(
 
 $root = Get-YctRepoRoot
 $processes = Get-YctWebDevProcessInfo -Root $root -Port $Port -HostName $HostName
+$logs = Get-YctWebDevLogPaths -Root $root -Port $Port
 $candidates = @($processes | Where-Object { $_.IsYctCandidate })
 $blocked = @($processes | Where-Object { -not $_.IsYctCandidate })
 $stopped = @()
@@ -25,6 +26,10 @@ if (@($blocked).Count -gt 0) {
 $isClosed = Wait-YctWebDevPort -Port $Port -HostName $HostName -TimeoutSeconds $TimeoutSeconds
 if (-not $isClosed) {
   throw "Tried to stop the YCT web dev server, but port $Port is still listening."
+}
+
+if (Test-Path -LiteralPath $logs.Meta) {
+  Remove-Item -LiteralPath $logs.Meta -Force
 }
 
 $result = [pscustomobject]@{

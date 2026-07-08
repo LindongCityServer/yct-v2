@@ -1,49 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { replayPendingAppEvents } from '../../../../../lib/app-event-bus';
 import {
   authorizeInternalTaskRequest,
+  readInternalTaskBoolean,
   readInternalTaskJsonBody,
   readInternalTaskLimit,
   readInternalTaskString,
 } from '../../../../../lib/internal-task-auth';
-import { ensureNotificationDeliveryListenersRegistered } from '../../../../../lib/notification-delivery-listeners';
-import { processDuePushDeliveries } from '../../../../../lib/notification-delivery-workflow';
-import { processExpiredTicketOrders } from '../../../../../lib/ticket-order-workflow';
+import { runInternalTasks as runInternalTasksWorkflow } from '../../../../../lib/internal-task-runner';
 
 export async function GET(request: NextRequest) {
-  return runInternalTasks(request, request.nextUrl.searchParams);
+  return handleInternalTasksRequest(request, request.nextUrl.searchParams);
 }
 
 export async function POST(request: NextRequest) {
   const body = await readInternalTaskJsonBody(request);
-  return runInternalTasks(request, body);
+  return handleInternalTasksRequest(request, body);
 }
 
-async function runInternalTasks(request: NextRequest, source: unknown) {
+async function handleInternalTasksRequest(request: NextRequest, source: unknown) {
   const unauthorized = authorizeInternalTaskRequest(request, '内部计划任务 runner');
   if (unauthorized) {
     return unauthorized;
   }
 
-  ensureNotificationDeliveryListenersRegistered();
   const sharedLimit = readInternalTaskLimit(source);
   const eventLimit = readInternalTaskLimit(source, 'eventLimit') ?? sharedLimit;
   const pushLimit = readInternalTaskLimit(source, 'pushLimit') ?? sharedLimit;
   const now = readInternalTaskString(source, 'now');
-
-  const events = await replayPendingAppEvents(eventLimit);
-  const notifications = await processDuePushDeliveries({
-    limit: pushLimit,
+  const syncOperationsReminders = readInternalTaskBoolean(source, 'syncOperationsReminders') ?? true;
+  const forceOperationsReminderRefresh =
+    readInternalTaskBoolean(source, 'forceOperationsReminderRefresh') ?? false;
+  const actorId = readInternalTaskString(source, 'actorId');
+  const result = await runInternalTasksWorkflow({
+    actorId,
+    actorType: 'system',
+    eventLimit,
+    pushLimit,
     now,
-  });
-  const ticketing = await processExpiredTicketOrders({
-    now,
+    syncOperationsReminders,
+    forceOperationsReminderRefresh,
   });
 
-  return NextResponse.json({
-    processedAt: new Date().toISOString(),
-    events,
-    notifications,
-    ticketing,
-  });
+  return NextResponse.json(result);
 }

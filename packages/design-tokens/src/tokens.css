@@ -39,6 +39,7 @@
   --yct-shadow-floating: 0 18px 48px rgba(17, 24, 23, 0.14);
   --yct-motion-duration-fast: 120ms;
   --yct-motion-duration-standard: 180ms;
+  --yct-motion-duration-spinner: 1100ms;
   --yct-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -53,12 +54,14 @@
 :root[data-motion='reduced'] {
   --yct-motion-duration-fast: 0ms;
   --yct-motion-duration-standard: 0ms;
+  --yct-motion-duration-spinner: 0ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-motion='full']) {
     --yct-motion-duration-fast: 0ms;
     --yct-motion-duration-standard: 0ms;
+    --yct-motion-duration-spinner: 0ms;
   }
 }
 

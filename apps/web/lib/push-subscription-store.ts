@@ -23,6 +23,13 @@ export async function listActivePushSubscriptionsForUser(
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
+export async function listActivePushSubscriptions(): Promise<PushDeviceSubscription[]> {
+  const snapshot = await readSnapshot();
+  return snapshot.subscriptions
+    .filter((subscription) => subscription.status === 'active')
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
 export async function upsertPushSubscription(input: {
   userId: string;
   ldpassUserId: string;

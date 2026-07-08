@@ -4,6 +4,7 @@ import {
   readUserLocalePreference,
   updateUserLocalePreference,
 } from '../../../../lib/locale-preference-workflow';
+import { markResponseNoStore } from '../../../../lib/http-cache';
 import { requireActiveLdpassUser } from '../../../../lib/user-auth';
 
 export async function GET(request: NextRequest) {
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
     acceptLanguage: request.headers.get('accept-language'),
   });
 
-  return NextResponse.json({ item });
+  return markResponseNoStore(NextResponse.json({ item }));
 }
 
 export async function POST(request: NextRequest) {
@@ -47,5 +48,5 @@ export async function POST(request: NextRequest) {
     acceptLanguage: request.headers.get('accept-language'),
   });
 
-  return NextResponse.json({ item });
+  return markResponseNoStore(NextResponse.json({ item }));
 }

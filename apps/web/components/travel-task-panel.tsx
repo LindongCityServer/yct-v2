@@ -43,6 +43,14 @@ export function TravelTaskPanel({
           tone="coach"
         />
         <TravelTaskCard
+          icon="map"
+          title={t('travel.map.title')}
+          detail={t('travel.map.detail')}
+          href={appPath('/map')}
+          actionLabel={t('travel.map.action')}
+          tone="map"
+        />
+        <TravelTaskCard
           icon="analytics"
           title={t('travel.screen.title')}
           detail={t('travel.screen.detail', { gateCount })}
@@ -80,7 +88,7 @@ function TravelTaskCard({
   actionLabel: string;
   external?: boolean;
   disabled?: boolean;
-  tone: 'coach' | 'ticket' | 'future';
+  tone: 'coach' | 'ticket' | 'map' | 'future';
 }>) {
   const content = (
     <>

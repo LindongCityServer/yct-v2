@@ -1,6 +1,7 @@
 param(
   [int]$Port = 3300,
   [string]$HostName = "127.0.0.1",
+  [string]$BasePath = "",
   [int]$TimeoutSeconds = 45
 )
 
@@ -22,9 +23,13 @@ if (@($existing).Count -gt 0) {
 New-Item -ItemType Directory -Force -Path $logs.Directory | Out-Null
 Clear-YctLogFile -Path $logs.Output
 Clear-YctLogFile -Path $logs.Error
+if (Test-Path -LiteralPath $logs.Meta) {
+  Remove-Item -LiteralPath $logs.Meta -Force
+}
 
 $pnpm = Get-YctPnpmCommand
-$commandLine = "`"$pnpm`" --filter @yct/web exec next dev --webpack --hostname $HostName --port $Port > `"$($logs.Output)`" 2> `"$($logs.Error)`""
+$envPrefix = New-YctDevEnvCommandPrefix -BasePath $BasePath
+$commandLine = "$envPrefix && `"$pnpm`" --filter @yct/web exec next dev --webpack --hostname $HostName --port $Port > `"$($logs.Output)`" 2> `"$($logs.Error)`""
 $cmdArguments = "/d /s /c `"$commandLine`""
 
 $process = Start-Process `
@@ -44,9 +49,18 @@ if (-not $isReady) {
 $result = [pscustomobject]@{
   Status = "started"
   Url = "http://$HostName`:$Port"
+  BasePath = (Normalize-YctBasePath -Value $BasePath)
   LauncherProcessId = $process.Id
   OutputLog = $logs.Output
   ErrorLog = $logs.Error
 }
+
+Write-YctWebDevMeta -Path $logs.Meta -Meta ([pscustomobject]@{
+  Port = $Port
+  HostName = $HostName
+  BasePath = (Normalize-YctBasePath -Value $BasePath)
+  LauncherProcessId = $process.Id
+  StartedAt = (Get-Date).ToString("o")
+})
 
 Write-Output ($result | ConvertTo-Json -Depth 4)

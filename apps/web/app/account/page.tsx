@@ -37,6 +37,8 @@ function normalizeAuthStatus(value: string) {
     'readonly',
     'logged_out',
     'state_invalid',
+    'session_unavailable_localhost',
+    'session_cookie_missing',
     'session_unavailable',
     'session_error',
     'ldpass_not_configured',

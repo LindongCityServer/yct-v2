@@ -7,11 +7,14 @@ import type {
   YctEventType,
 } from '@yct/contracts';
 import { publishDomainEvent } from './app-event-bus';
+import { ensureNotificationDeliveryListenersRegistered } from './notification-delivery-listeners';
 import {
   createDefaultPushPreference,
   findPushPreferenceByUserId,
   upsertPushPreference,
 } from './notification-preference-store';
+
+ensureNotificationDeliveryListenersRegistered();
 
 export async function readUserPushPreference(input: {
   userId: string;

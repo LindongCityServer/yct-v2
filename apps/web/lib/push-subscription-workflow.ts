@@ -1,11 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type { PushDeviceSubscription, YctEventPayloadMap, YctEventType } from '@yct/contracts';
 import { publishDomainEvent } from './app-event-bus';
+import { ensureNotificationDeliveryListenersRegistered } from './notification-delivery-listeners';
 import {
   listActivePushSubscriptionsForUser,
   revokePushSubscription,
   upsertPushSubscription,
 } from './push-subscription-store';
+
+ensureNotificationDeliveryListenersRegistered();
 
 export async function listUserPushSubscriptions(userId: string): Promise<PushDeviceSubscription[]> {
   return listActivePushSubscriptionsForUser(userId);

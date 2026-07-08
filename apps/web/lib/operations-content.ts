@@ -93,6 +93,8 @@ async function readLocalOperationsDetails(): Promise<ApiListResponse<OperationsC
         displayExpireDate: record.metadata.expiresAt?.slice(0, 10),
         excerpt: record.metadata.excerpt ?? buildExcerpt(record.revision.markdown),
         showInBanner: record.metadata.showInBanner,
+        bannerSortOrder: record.metadata.bannerSortOrder,
+        customTags: record.metadata.customTags,
         tags: inferTags(
           [title, record.metadata.excerpt, record.revision.categoryId].filter(Boolean).join(' '),
         ),

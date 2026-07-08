@@ -162,7 +162,7 @@ function buildDefaultServiceEntries(): ServiceEntry[] {
     {
       id: 'default-legacy-lab',
       title: '实验室',
-      description: '旧版实验性工具集合，包含地图预览、生成器等入口。',
+      description: '旧版工具入口集合，包含地图预览和生成器等入口。',
       categoryId: 'toolbox',
       icon: 'science',
       href: `${legacyBaseUrl}/lab/`,

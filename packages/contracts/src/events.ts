@@ -7,6 +7,7 @@ import type {
   RectangleBounds,
   ReviewDecision,
   ServiceEntryCategory,
+  OperationsStrongReminderSourceKind,
   TicketableServiceKind,
   TransitModeProfile,
   TransitModeSnapshotSummary,
@@ -42,6 +43,14 @@ export interface ContentSubmittedPayload {
   categoryId: string;
 }
 
+export interface ContentDraftUpdatedPayload {
+  contentId: string;
+  revisionId: string;
+  title: string;
+  categoryId: string;
+  previousStatus: 'draft' | 'rejected';
+}
+
 export interface ContentReviewedPayload {
   contentId: string;
   revisionId: string;
@@ -54,6 +63,17 @@ export interface ContentPublishedPayload {
   contentId: string;
   revisionId: string;
   publishedAt: ISODateTimeString;
+}
+
+export interface ContentArchivedPayload {
+  contentId: string;
+  revisionId: string;
+  previousStatus:
+    | 'draft'
+    | 'pending_review'
+    | 'approved'
+    | 'rejected'
+    | 'published';
 }
 
 export interface ContentAssetImportedPayload {
@@ -308,6 +328,26 @@ export interface ServiceEntryPublishedPayload {
   publishedAt: ISODateTimeString;
 }
 
+export interface OperationsStrongReminderRulesUpdatedPayload {
+  ruleIds: string[];
+  ruleCount: number;
+  activeRuleCount: number;
+  updatedBy: string;
+  updatedAt: ISODateTimeString;
+  sourceKinds: OperationsStrongReminderSourceKind[];
+}
+
+export interface OperationsReminderDeliveryRefreshRequestedPayload {
+  requestedBy: string;
+  requestedAt: ISODateTimeString;
+  reason:
+    | 'admin_manual_refresh'
+    | 'debug_rebuild'
+    | 'service_notice_sync'
+    | 'content_state_changed'
+    | 'content_visibility_sync';
+}
+
 export interface TravelSchedulePublishedPayload {
   scheduleServiceId: string;
   serviceKind: TicketableServiceKind;
@@ -408,9 +448,11 @@ export interface AdminInitializedPayload {
 }
 
 export type YctEventPayloadMap = {
+  ContentDraftUpdated: ContentDraftUpdatedPayload;
   ContentSubmitted: ContentSubmittedPayload;
   ContentReviewed: ContentReviewedPayload;
   ContentPublished: ContentPublishedPayload;
+  ContentArchived: ContentArchivedPayload;
   ContentAssetImported: ContentAssetImportedPayload;
   ContentAssetUploaded: ContentAssetUploadedPayload;
   ContentAssetReviewed: ContentAssetReviewedPayload;
@@ -444,6 +486,8 @@ export type YctEventPayloadMap = {
   ServiceEntrySubmitted: ServiceEntrySubmittedPayload;
   ServiceEntryReviewed: ServiceEntryReviewedPayload;
   ServiceEntryPublished: ServiceEntryPublishedPayload;
+  OperationsStrongReminderRulesUpdated: OperationsStrongReminderRulesUpdatedPayload;
+  OperationsReminderDeliveryRefreshRequested: OperationsReminderDeliveryRefreshRequestedPayload;
   TravelSchedulePublished: TravelSchedulePublishedPayload;
   TravelScheduleServiceProfileUpdated: TravelScheduleServiceProfileUpdatedPayload;
   TicketInventoryHeld: TicketInventoryHeldPayload;

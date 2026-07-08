@@ -20,6 +20,9 @@ import {
   updateContentRecord,
   withRevisionStatus,
 } from './content-store';
+import { ensureOperationsReminderRefreshListenersRegistered } from './operations-reminder-refresh-listeners';
+
+ensureOperationsReminderRefreshListenersRegistered();
 
 export interface ContentActionResult {
   ok: boolean;
@@ -53,6 +56,71 @@ export async function createContentDraft(input: {
     assetIds,
   });
   return { ok: true, record };
+}
+
+export async function updateContentDraft(input: {
+  contentId: string;
+  title: string;
+  categoryId: string;
+  markdown: string;
+  assetIds: string[];
+  metadata: StoredContentMetadata;
+  actorId: string;
+}): Promise<ContentActionResult> {
+  const record = await findContentRecord(input.contentId);
+  if (!record) {
+    return notFound();
+  }
+
+  const editableStatuses = new Set<ContentRevisionStatus>(['draft', 'rejected']);
+  if (!editableStatuses.has(record.revision.status)) {
+    return invalidTransition('只有草稿或已驳回的内容可以继续编辑。');
+  }
+
+  const markdownAssetRecords = await findContentAssetRecordsByPublicPaths(
+    extractContentAssetPaths(input.markdown),
+  );
+  const assetIds = mergeAssetIds([
+    ...input.assetIds,
+    ...markdownAssetRecords.map((assetRecord) => assetRecord.asset.id),
+  ]);
+  const previousStatus = record.revision.status as 'draft' | 'rejected';
+  const nextStatus =
+    record.revision.status === 'rejected'
+      ? transitionContentRevisionStatus(record.revision.status, 'draft').status
+      : record.revision.status;
+
+  const updated = await updateContentRecord(input.contentId, (current) => ({
+    ...current,
+    revision: {
+      ...current.revision,
+      title: input.title,
+      categoryId: input.categoryId,
+      markdown: input.markdown,
+      assetIds,
+      status: nextStatus,
+      submittedAt: nextStatus === 'draft' ? undefined : current.revision.submittedAt,
+      reviewedAt: nextStatus === 'draft' ? undefined : current.revision.reviewedAt,
+      reviewedBy: nextStatus === 'draft' ? undefined : current.revision.reviewedBy,
+      reviewReason: nextStatus === 'draft' ? undefined : current.revision.reviewReason,
+      publishedAt: nextStatus === 'draft' ? undefined : current.revision.publishedAt,
+      scheduledAt: nextStatus === 'draft' ? undefined : current.revision.scheduledAt,
+    },
+    metadata: mergeContentMetadata(current.metadata, input.metadata),
+    updatedAt: new Date().toISOString(),
+  }));
+
+  if (updated) {
+    await emitEvent('ContentDraftUpdated', input.actorId, {
+      contentId: updated.contentId,
+      revisionId: updated.revision.id,
+      title: updated.revision.title,
+      categoryId: updated.revision.categoryId,
+      previousStatus,
+    });
+  }
+
+  return { ok: true, record: updated };
 }
 
 export async function submitContentRevision(input: {
@@ -177,6 +245,36 @@ export async function publishContentRevision(input: {
   return { ok: true, record: updated };
 }
 
+export async function archiveContentRevision(input: {
+  contentId: string;
+  actorId: string;
+}): Promise<ContentActionResult> {
+  const record = await findContentRecord(input.contentId);
+  if (!record) {
+    return notFound();
+  }
+
+  const previousStatus = record.revision.status as Exclude<ContentRevisionStatus, 'archived'>;
+  const transition = transitionContentRevisionStatus(previousStatus, 'archived');
+  if (!transition.ok) {
+    return invalidTransition(transition.reason);
+  }
+
+  const updated = await updateContentRecord(input.contentId, (current) =>
+    withRevisionStatus(current, 'archived'),
+  );
+
+  if (updated) {
+    await emitEvent('ContentArchived', input.actorId, {
+      contentId: updated.contentId,
+      revisionId: updated.revision.id,
+      previousStatus,
+    });
+  }
+
+  return { ok: true, record: updated };
+}
+
 function notFound(): ContentActionResult {
   return {
     ok: false,
@@ -212,6 +310,22 @@ function extractContentAssetPaths(markdown: string): string[] {
 
 function mergeAssetIds(assetIds: string[]): string[] {
   return Array.from(new Set(assetIds.map((assetId) => assetId.trim()).filter(Boolean)));
+}
+
+function mergeContentMetadata(
+  current: StoredContentMetadata,
+  patch: StoredContentMetadata,
+): StoredContentMetadata {
+  return {
+    ...current,
+    excerpt: patch.excerpt,
+    showInBanner: patch.showInBanner,
+    bannerSortOrder: patch.bannerSortOrder,
+    customTags: patch.customTags,
+    coverColor: patch.coverColor,
+    coverImageUrl: patch.coverImageUrl,
+    expiresAt: patch.expiresAt,
+  };
 }
 
 async function emitEvent<TType extends YctEventType>(

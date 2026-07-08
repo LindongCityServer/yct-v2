@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { notifyTicketOrderStateChanged } from '../lib/client-ticket-orders';
+import { useI18n } from '../lib/client-i18n';
 import {
   formatTicketHoldExpiresAt,
   formatTicketOrderStatus,
@@ -17,11 +18,12 @@ export function TicketOrderDetailPanel({
   orderId: string;
 }>) {
   const [item, setItem] = useState<TicketOrderListItem | null>(null);
-  const [statusText, setStatusText] = useState('正在读取订单详情');
+  const { locale, t } = useI18n();
+  const [statusText, setStatusText] = useState(() => t('ticketOrderDetail.loading'));
   const [isCancelling, setIsCancelling] = useState(false);
 
   const refreshOrder = async () => {
-    setStatusText('正在读取订单详情');
+    setStatusText(t('ticketOrderDetail.loading'));
     try {
       const response = await fetch(
         appPath(`/api/travel/ticketing/orders/${encodeURIComponent(orderId)}`),
@@ -32,24 +34,24 @@ export function TicketOrderDetailPanel({
       };
 
       if (!response.ok || !data.item) {
-        throw new Error(data.message ?? '订单详情读取失败');
+        throw new Error(data.message ?? t('ticketOrderDetail.readFailed'));
       }
 
       setItem(data.item);
       setStatusText('');
     } catch (error) {
       setItem(null);
-      setStatusText(error instanceof Error ? error.message : '订单详情读取失败');
+      setStatusText(error instanceof Error ? error.message : t('ticketOrderDetail.readFailed'));
     }
   };
 
   const cancelOrder = async () => {
-    if (!window.confirm('要取消这个订单草稿并释放库存占用吗？')) {
+    if (!window.confirm(t('ticketOrderDetail.cancelConfirm'))) {
       return;
     }
 
     setIsCancelling(true);
-    setStatusText('正在取消订单草稿');
+    setStatusText(t('ticketOrderDraft.canceling'));
     try {
       const response = await fetch(
         appPath(`/api/travel/ticketing/orders/${encodeURIComponent(orderId)}/cancel`),
@@ -60,14 +62,14 @@ export function TicketOrderDetailPanel({
       };
 
       if (!response.ok || !data.item) {
-        throw new Error(data.message ?? '订单草稿取消失败');
+        throw new Error(data.message ?? t('ticketOrderDetail.cancelFailed'));
       }
 
       setItem(data.item);
-      setStatusText('已取消订单草稿');
+      setStatusText(t('ticketOrderDetail.cancelDone'));
       notifyTicketOrderStateChanged();
     } catch (error) {
-      setStatusText(error instanceof Error ? error.message : '订单草稿取消失败');
+      setStatusText(error instanceof Error ? error.message : t('ticketOrderDetail.cancelFailed'));
     } finally {
       setIsCancelling(false);
     }
@@ -83,7 +85,7 @@ export function TicketOrderDetailPanel({
         <span className="material-symbols-outlined" aria-hidden="true">
           receipt_long
         </span>
-        <h2>{statusText || '订单详情暂不可用'}</h2>
+        <h2>{statusText || t('ticketOrderDetail.unavailable')}</h2>
         <div className="settings-action-row">
           <button
             className="secondary-action-button"
@@ -93,13 +95,13 @@ export function TicketOrderDetailPanel({
             <span className="material-symbols-outlined" aria-hidden="true">
               refresh
             </span>
-            <span>重新读取</span>
+            <span>{t('ticketOrderDetail.retry')}</span>
           </button>
           <Link className="secondary-action-button" href={appPath('/account')}>
             <span className="material-symbols-outlined" aria-hidden="true">
               manage_accounts
             </span>
-            <span>返回账号</span>
+            <span>{t('ticketOrderDetail.backAccount')}</span>
           </Link>
         </div>
       </section>
@@ -116,48 +118,68 @@ export function TicketOrderDetailPanel({
           receipt_long
         </span>
         <div>
-          <h2 id="ticket-order-detail-title">订单 {order.orderId.slice(-8).toUpperCase()}</h2>
-          <p>这里展示服务端订单草稿和占座状态，不代表已出票或可核销凭证。</p>
+          <h2 id="ticket-order-detail-title">
+            {t('ticketOrderDetail.orderTitle', { id: order.orderId.slice(-8).toUpperCase() })}
+          </h2>
+          <p>{t('ticketOrderDetail.description')}</p>
         </div>
-        <span className="ticket-order-status-badge">{formatTicketOrderStatus(order.status)}</span>
+        <span className="ticket-order-status-badge">{formatTicketOrderStatus(order.status, t)}</span>
       </div>
 
       <dl className="ticket-order-detail-grid">
-        <DetailItem label="订单 ID" value={order.orderId} />
-        <DetailItem label="服务类型" value={formatTicketServiceKind(order.serviceKind)} />
-        <DetailItem label="乘车人数" value={`${order.passengerCount} 人`} />
-        <DetailItem label="班次 ID" value={order.tripInstanceId} />
-        <DetailItem label="票种 ID" value={order.fareProductId} />
-        <DetailItem label="创建时间" value={formatDateTime(order.createdAt)} />
-        <DetailItem label="更新时间" value={formatDateTime(order.updatedAt)} />
+        <DetailItem label={t('ticketOrderDetail.field.orderId')} value={order.orderId} />
+        <DetailItem
+          label={t('ticketOrderDetail.field.serviceKind')}
+          value={formatTicketServiceKind(order.serviceKind, t)}
+        />
+        <DetailItem
+          label={t('ticketOrderDetail.field.passengerCount')}
+          value={t('ticketOrderDraft.passengerCount', { count: order.passengerCount })}
+        />
+        <DetailItem label={t('ticketOrderDetail.field.tripId')} value={order.tripInstanceId} />
+        <DetailItem label={t('ticketOrderDetail.field.fareProductId')} value={order.fareProductId} />
+        <DetailItem label={t('ticketOrderDetail.field.createdAt')} value={formatDateTime(order.createdAt, locale)} />
+        <DetailItem label={t('ticketOrderDetail.field.updatedAt')} value={formatDateTime(order.updatedAt, locale)} />
         {order.cancelledAt ? (
-          <DetailItem label="取消时间" value={formatDateTime(order.cancelledAt)} />
+          <DetailItem label={t('ticketOrderDetail.field.cancelledAt')} value={formatDateTime(order.cancelledAt, locale)} />
         ) : null}
         {order.cancellationReason ? (
-          <DetailItem label="取消原因" value={formatCancellationReason(order.cancellationReason)} />
+          <DetailItem
+            label={t('ticketOrderDetail.field.cancellationReason')}
+            value={formatCancellationReason(order.cancellationReason, t)}
+          />
         ) : null}
       </dl>
 
-      <section className="ticket-order-hold-panel" aria-label="库存占用">
+      <section className="ticket-order-hold-panel" aria-label={t('ticketOrderDetail.hold.aria')}>
         <div className="ticket-order-subheading">
           <span className="material-symbols-outlined" aria-hidden="true">
             inventory_2
           </span>
-          <h3>库存占用</h3>
+          <h3>{t('ticketOrderDetail.hold.title')}</h3>
         </div>
         {inventoryHold ? (
           <dl className="ticket-order-detail-grid">
-            <DetailItem label="占用 ID" value={inventoryHold.inventoryHoldId} />
-            <DetailItem label="占用状态" value={formatInventoryHoldStatus(inventoryHold.status)} />
-            <DetailItem label="占用数量" value={`${inventoryHold.quantity} 张`} />
-            <DetailItem label="占用到期" value={formatTicketHoldExpiresAt(inventoryHold.expiresAt)} />
-            <DetailItem label="库存池 ID" value={inventoryHold.inventoryPoolId} />
+            <DetailItem label={t('ticketOrderDetail.hold.id')} value={inventoryHold.inventoryHoldId} />
+            <DetailItem
+              label={t('ticketOrderDetail.hold.status')}
+              value={formatInventoryHoldStatus(inventoryHold.status, t)}
+            />
+            <DetailItem
+              label={t('ticketOrderDetail.hold.quantity')}
+              value={t('ticketOrderDetail.hold.quantityValue', { count: inventoryHold.quantity })}
+            />
+            <DetailItem
+              label={t('ticketOrderDetail.hold.expiresAt')}
+              value={formatTicketHoldExpiresAt(inventoryHold.expiresAt, locale)}
+            />
+            <DetailItem label={t('ticketOrderDetail.hold.poolId')} value={inventoryHold.inventoryPoolId} />
             {inventoryHold.releasedAt ? (
-              <DetailItem label="释放时间" value={formatDateTime(inventoryHold.releasedAt)} />
+              <DetailItem label={t('ticketOrderDetail.hold.releasedAt')} value={formatDateTime(inventoryHold.releasedAt, locale)} />
             ) : null}
           </dl>
         ) : (
-          <p className="muted">当前订单没有库存占用记录。</p>
+          <p className="muted">{t('ticketOrderDetail.hold.none')}</p>
         )}
       </section>
 
@@ -170,7 +192,7 @@ export function TicketOrderDetailPanel({
           <span className="material-symbols-outlined" aria-hidden="true">
             refresh
           </span>
-          <span>刷新状态</span>
+          <span>{t('ticketOrderDetail.refresh')}</span>
         </button>
         <button
           className="secondary-action-button"
@@ -181,19 +203,21 @@ export function TicketOrderDetailPanel({
           <span className="material-symbols-outlined" aria-hidden="true">
             cancel
           </span>
-          <span>{isCancelling ? '取消中' : '取消草稿'}</span>
+          <span>
+            {isCancelling ? t('ticketOrderDraft.canceling') : t('ticketOrderDraft.cancelDraft')}
+          </span>
         </button>
         <Link className="secondary-action-button" href={appPath('/travel/schedules')}>
           <span className="material-symbols-outlined" aria-hidden="true">
             departure_board
           </span>
-          <span>查询班次</span>
+          <span>{t('travel.schedules.action')}</span>
         </Link>
         <Link className="secondary-action-button" href={appPath('/account')}>
           <span className="material-symbols-outlined" aria-hidden="true">
             manage_accounts
           </span>
-          <span>账号设置</span>
+          <span>{t('account.settings')}</span>
         </Link>
       </div>
 
@@ -211,13 +235,15 @@ function DetailItem({ label, value }: Readonly<{ label: string; value: string }>
   );
 }
 
-function formatDateTime(value: string): string {
+type Translate = ReturnType<typeof useI18n>['t'];
+
+function formatDateTime(value: string, locale = 'zh-CN'): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value;
   }
 
-  return date.toLocaleString('zh-CN', {
+  return date.toLocaleString(locale, {
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
@@ -228,26 +254,28 @@ function formatDateTime(value: string): string {
 
 function formatCancellationReason(
   reason: NonNullable<TicketOrderListItem['order']['cancellationReason']>,
+  t: Translate,
 ): string {
   const labels: Record<NonNullable<TicketOrderListItem['order']['cancellationReason']>, string> = {
-    admin_cancelled: '管理员取消',
-    inventory_expired: '占座过期',
-    issue_failed: '出票失败',
-    system: '系统取消',
-    user_cancelled: '用户取消',
+    admin_cancelled: t('ticketCancellation.adminCancelled'),
+    inventory_expired: t('ticketCancellation.inventoryExpired'),
+    issue_failed: t('ticketCancellation.issueFailed'),
+    system: t('ticketCancellation.system'),
+    user_cancelled: t('ticketCancellation.userCancelled'),
   };
   return labels[reason] ?? reason;
 }
 
 function formatInventoryHoldStatus(
   status: NonNullable<TicketOrderListItem['inventoryHold']>['status'],
+  t: Translate,
 ): string {
   const labels: Record<NonNullable<TicketOrderListItem['inventoryHold']>['status'], string> = {
-    cancelled: '已取消',
-    confirmed: '已确认',
-    expired: '已过期',
-    held: '占用中',
-    released: '已释放',
+    cancelled: t('inventoryHoldStatus.cancelled'),
+    confirmed: t('inventoryHoldStatus.confirmed'),
+    expired: t('inventoryHoldStatus.expired'),
+    held: t('inventoryHoldStatus.held'),
+    released: t('inventoryHoldStatus.released'),
   };
   return labels[status] ?? status;
 }

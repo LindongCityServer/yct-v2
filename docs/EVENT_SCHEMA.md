@@ -1,6 +1,6 @@
 # YCT Event Schema
 
-更新时间：2026-07-05
+更新时间：2026-07-07
 
 本文档记录雨城通 v2 第一阶段的领域事件。后端业务 Service 只负责本模块校验和写库，成功后发布事件；通知、Push、缓存失效、搜索索引、`ldpass` 同步等副作用由监听器处理。
 
@@ -26,9 +26,11 @@ export interface YctDomainEvent<TType extends string, TPayload> {
 
 | 事件                                  | 触发节点                      | 主要用途                                                                                                                               |
 | ------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `ContentDraftUpdated`                 | 内容草稿保存或驳回后重开编辑  | 编辑器回填、审计、缓存刷新；当前后台重新载入草稿或驳回内容并保存时会发布该事件                                                         |
 | `ContentSubmitted`                    | 内容修订提交审核              | 审核待办、站内通知                                                                                                                     |
 | `ContentReviewed`                     | 管理员审核内容                | 通知投稿者、记录审计                                                                                                                   |
 | `ContentPublished`                    | 内容版本发布                  | 刷新首页、搜索索引、缓存                                                                                                               |
+| `ContentArchived`                     | 内容被归档或下线              | 从公开入口撤下、刷新首页与搜索缓存、记录审计                                                                                           |
 | `ContentAssetImported`                | 内容素材从旧清单或适配器导入  | 素材审核待办、来源追踪、审计                                                                                                           |
 | `ContentAssetUploaded`                | 管理员上传内容素材            | 素材审核待办、去重、来源追踪、审计                                                                                                     |
 | `ContentAssetReviewed`                | 管理员审核内容素材            | 内容发布校验、通知投稿者、记录审计                                                                                                     |
@@ -56,6 +58,8 @@ export interface YctDomainEvent<TType extends string, TPayload> {
 | `TranslationCatalogPublished`         | 固定界面文案目录发布          | UI 文案缓存刷新、构建或运行时翻译目录索引刷新                                                                                           |
 | `EntityTranslationUpdated`            | 业务实体译名或别名更新        | 地图、线路、服务入口、运营内容的搜索索引刷新和管理员审计；不得由机器翻译直接发布公开译名                                               |
 | `MapFavoritesUpdated`                 | 用户地图收藏列表更新          | 账号侧收藏同步、搜索/推荐缓存刷新和审计；payload 只包含 markerId，不复制地点快照                                                       |
+| `OperationsStrongReminderRulesUpdated` | 首页强提醒规则整体更新        | 首页强提醒面板刷新、推送编排候选刷新和管理员审计；当前首页强提醒第一版每次保存规则集时会发布该事件，并由通知监听器刷新 `operations` 类型 Push 投递记录 |
+| `OperationsReminderDeliveryRefreshRequested` | 请求重算运营提醒投递 | 触发 `operations` 类型 Push 投递重算、排障和后台测试；当前 `/admin/operations` 的“重算投递”按钮、内部公告源同步任务、被首页强提醒规则引用的运营内容发布/归档事件，以及内部任务对“定时发布内容到点可见 / 过期不可见”的可见性同步，都会发布该事件 |
 | `TravelSchedulePublished`             | 统一班次版本发布              | 班次查询缓存、搜索索引、管理员审计                                                                                                     |
 | `TravelScheduleServiceProfileUpdated` | 可排班服务配置更新            | 客运大巴、轮渡、航班等统一班次服务的颜色、图标、排序缓存刷新和管理员审计                                                               |
 | `TicketInventoryHeld`                 | 票务库存或可售容量被占用      | 占座超时、订单草稿刷新                                                                                                                 |

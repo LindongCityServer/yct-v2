@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { LdpassIdentityProvider } from '@yct/adapters';
+import { markResponseNoStore } from '../../../../../lib/http-cache';
 import { readRuntimeConfig } from '../../../../../lib/runtime-config';
 
 const loginUrlQuerySchema = z.object({
@@ -11,12 +12,14 @@ const loginUrlQuerySchema = z.object({
 export async function GET(request: NextRequest) {
   const config = readRuntimeConfig();
   if (!config.ldpassBaseUrl || !config.ldpassClientId) {
-    return NextResponse.json(
-      {
-        error: 'ldpass_not_configured',
-        message: 'LDPASS_BASE_URL 或 LDPASS_CLIENT_ID 尚未配置。',
-      },
-      { status: 503 },
+    return markResponseNoStore(
+      NextResponse.json(
+        {
+          error: 'ldpass_not_configured',
+          message: 'LDPASS_BASE_URL 或 LDPASS_CLIENT_ID 尚未配置。',
+        },
+        { status: 503 },
+      ),
     );
   }
 
@@ -26,13 +29,15 @@ export async function GET(request: NextRequest) {
   });
 
   if (!parsed.success) {
-    return NextResponse.json(
-      {
-        error: 'invalid_query',
-        message: 'redirect_uri 和 state 参数不符合要求。',
-        issues: parsed.error.issues,
-      },
-      { status: 400 },
+    return markResponseNoStore(
+      NextResponse.json(
+        {
+          error: 'invalid_query',
+          message: 'redirect_uri 和 state 参数不符合要求。',
+          issues: parsed.error.issues,
+        },
+        { status: 400 },
+      ),
     );
   }
 
@@ -46,5 +51,5 @@ export async function GET(request: NextRequest) {
     state: parsed.data.state,
   });
 
-  return NextResponse.json({ loginUrl });
+  return markResponseNoStore(NextResponse.json({ loginUrl }));
 }
