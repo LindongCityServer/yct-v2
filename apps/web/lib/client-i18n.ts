@@ -80,6 +80,13 @@ export type CommonMessageKey =
   | 'map.empty.loading'
   | 'map.empty.nearby'
   | 'map.empty.noMatch'
+  | 'map.empty.unavailable'
+  | 'map.geometry.linearObject'
+  | 'map.geometry.pointMarker'
+  | 'map.geometry.roadEndpointCount'
+  | 'map.geometry.transitLineDetail'
+  | 'map.geometry.transitLineObject'
+  | 'map.geometry.transitLinePending'
   | 'map.markerList.count'
   | 'map.markerList.default'
   | 'map.markerList.nearby'
@@ -106,8 +113,16 @@ export type CommonMessageKey =
   | 'map.layer.submitPoi'
   | 'map.layer.tileProvider'
   | 'map.layer.tileProviderAria'
+  | 'map.lineDetail.fare'
+  | 'map.lineDetail.stations'
   | 'map.nearby.exit'
   | 'map.nearby.note'
+  | 'map.overlay.aria'
+  | 'map.overlay.linearPoiTitle'
+  | 'map.overlay.markerTitle'
+  | 'map.overlay.roadTraceTitle'
+  | 'map.overlay.transitTraceTitle'
+  | 'map.overlay.viewMarker'
   | 'map.poi.actions'
   | 'map.poi.close'
   | 'map.poi.collapse'
@@ -168,6 +183,9 @@ export type CommonMessageKey =
   | 'map.search.aria'
   | 'map.search.clear'
   | 'map.search.placeholder'
+  | 'map.toolbar.reset'
+  | 'map.toolbar.zoomIn'
+  | 'map.toolbar.zoomOut'
   | 'map.title'
   | 'map.route.alight'
   | 'map.route.aria'
@@ -254,6 +272,11 @@ export type CommonMessageKey =
   | 'map.route.walkStraight'
   | 'map.route.walkToAccess'
   | 'map.route.walkWithDistance'
+  | 'map.roadDetail.description'
+  | 'map.roadDetail.endpointCount'
+  | 'map.roadDetail.endpointCountValue'
+  | 'map.roadDetail.traceHighlighted'
+  | 'map.roadDetail.traceStatus'
   | 'nav.collapse'
   | 'nav.back'
   | 'nav.expand'
@@ -654,6 +677,13 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.empty.loading': '正在读取地图标记',
     'map.empty.nearby': '周边暂无可显示标记',
     'map.empty.noMatch': '暂无匹配标记',
+    'map.empty.unavailable': '暂无可显示地图标记',
+    'map.geometry.linearObject': '线性对象端点组，{count} 个端点',
+    'map.geometry.pointMarker': '点标记',
+    'map.geometry.roadEndpointCount': '道路端点 {count} 个',
+    'map.geometry.transitLineDetail': '站点坐标直连 {count} 个点',
+    'map.geometry.transitLineObject': '线路对象，{count} 个站点坐标直连点',
+    'map.geometry.transitLinePending': '待补线路坐标',
     'map.hud.aria': '地图比例尺与坐标',
     'map.hud.cursor': '移动光标查看坐标',
     'map.hud.scale.blocks': '{value} 格',
@@ -680,8 +710,16 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.layer.submitPoi': '投稿 POI',
     'map.layer.tileProvider': '瓦片源',
     'map.layer.tileProviderAria': '瓦片源',
+    'map.lineDetail.fare': '票价',
+    'map.lineDetail.stations': '站点',
     'map.nearby.exit': '退出',
     'map.nearby.note': '按距离显示 {name} 周边标记',
+    'map.overlay.aria': '地图标记示意层',
+    'map.overlay.linearPoiTitle': '{name} · {count} 个端点',
+    'map.overlay.markerTitle': '{name}（{x}, {z}）',
+    'map.overlay.roadTraceTitle': '{name} · 近似线，{count} 个端点',
+    'map.overlay.transitTraceTitle': '{name} · {count} 个途经站',
+    'map.overlay.viewMarker': '查看 {name}',
     'map.poi.actions': '地点操作',
     'map.poi.close': '关闭地点信息',
     'map.poi.collapse': '收起地点信息',
@@ -744,6 +782,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.search.aria': '筛选地图标记',
     'map.search.clear': '清空地图搜索',
     'map.search.placeholder': '搜索地点或标记',
+    'map.toolbar.reset': '回到默认视图',
+    'map.toolbar.zoomIn': '放大地图',
+    'map.toolbar.zoomOut': '缩小地图',
     'map.title': '地图探索',
     'map.route.alight': '{name} 出站',
     'map.route.aria': '路线规划',
@@ -830,6 +871,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.walkStraight': '直线步行',
     'map.route.walkToAccess': '步行至 {access} {distance} {duration}',
     'map.route.walkWithDistance': '步行 {distance} {duration}',
+    'map.roadDetail.description':
+      '这是一组从旧地图道路端点归并出的线性地点，当前轨迹为近似展示。',
+    'map.roadDetail.endpointCount': '端点数量',
+    'map.roadDetail.endpointCountValue': '{count} 个',
+    'map.roadDetail.traceHighlighted': '已在地图上高亮近似轨迹',
+    'map.roadDetail.traceStatus': '轨迹状态',
     'nav.back': '返回',
     'nav.collapse': '收起主导航',
     'nav.expand': '展开主导航',
@@ -1230,6 +1277,13 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.empty.loading': '正在讀取地圖標記',
     'map.empty.nearby': '周邊暫無可顯示標記',
     'map.empty.noMatch': '暫無符合標記',
+    'map.empty.unavailable': '暫無可顯示地圖標記',
+    'map.geometry.linearObject': '線性物件端點組，{count} 個端點',
+    'map.geometry.pointMarker': '點標記',
+    'map.geometry.roadEndpointCount': '道路端點 {count} 個',
+    'map.geometry.transitLineDetail': '站點座標直連 {count} 個點',
+    'map.geometry.transitLineObject': '線路物件，{count} 個站點座標直連點',
+    'map.geometry.transitLinePending': '待補線路座標',
     'map.hud.aria': '地圖比例尺與座標',
     'map.hud.cursor': '移動游標查看座標',
     'map.hud.scale.blocks': '{value} 格',
@@ -1256,8 +1310,16 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.layer.submitPoi': '投稿 POI',
     'map.layer.tileProvider': '瓦片源',
     'map.layer.tileProviderAria': '瓦片源',
+    'map.lineDetail.fare': '票價',
+    'map.lineDetail.stations': '站點',
     'map.nearby.exit': '退出',
     'map.nearby.note': '按距離顯示 {name} 周邊標記',
+    'map.overlay.aria': '地圖標記示意層',
+    'map.overlay.linearPoiTitle': '{name} · {count} 個端點',
+    'map.overlay.markerTitle': '{name}（{x}, {z}）',
+    'map.overlay.roadTraceTitle': '{name} · 近似線，{count} 個端點',
+    'map.overlay.transitTraceTitle': '{name} · {count} 個途經站',
+    'map.overlay.viewMarker': '查看 {name}',
     'map.poi.actions': '地點操作',
     'map.poi.close': '關閉地點資訊',
     'map.poi.collapse': '收起地點資訊',
@@ -1321,6 +1383,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.search.aria': '篩選地圖標記',
     'map.search.clear': '清空地圖搜尋',
     'map.search.placeholder': '搜尋地點或標記',
+    'map.toolbar.reset': '回到預設視圖',
+    'map.toolbar.zoomIn': '放大地圖',
+    'map.toolbar.zoomOut': '縮小地圖',
     'map.title': '地圖探索',
     'map.route.alight': '{name} 出站',
     'map.route.aria': '路線規劃',
@@ -1407,6 +1472,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.walkStraight': '直線步行',
     'map.route.walkToAccess': '步行至 {access} {distance} {duration}',
     'map.route.walkWithDistance': '步行 {distance} {duration}',
+    'map.roadDetail.description':
+      '這是一組從舊地圖道路端點歸併出的線性地點，目前軌跡為近似展示。',
+    'map.roadDetail.endpointCount': '端點數量',
+    'map.roadDetail.endpointCountValue': '{count} 個',
+    'map.roadDetail.traceHighlighted': '已在地圖上高亮近似軌跡',
+    'map.roadDetail.traceStatus': '軌跡狀態',
     'nav.back': '返回',
     'nav.collapse': '收合主導覽',
     'nav.expand': '展開主導覽',
@@ -1807,6 +1878,13 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.empty.loading': 'Loading map markers',
     'map.empty.nearby': 'No nearby markers to show',
     'map.empty.noMatch': 'No matching markers',
+    'map.empty.unavailable': 'No map markers to show',
+    'map.geometry.linearObject': 'Linear object endpoint group, {count} endpoints',
+    'map.geometry.pointMarker': 'Point marker',
+    'map.geometry.roadEndpointCount': '{count} road endpoints',
+    'map.geometry.transitLineDetail': '{count} stop coordinate points connected directly',
+    'map.geometry.transitLineObject': 'Line object, {count} stop coordinate points',
+    'map.geometry.transitLinePending': 'Line coordinates pending',
     'map.hud.aria': 'Map scale and coordinates',
     'map.hud.cursor': 'Move the pointer to inspect coordinates',
     'map.hud.scale.blocks': '{value} blocks',
@@ -1833,8 +1911,16 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.layer.submitPoi': 'Submit POI',
     'map.layer.tileProvider': 'Tile source',
     'map.layer.tileProviderAria': 'Tile source',
+    'map.lineDetail.fare': 'Fare',
+    'map.lineDetail.stations': 'Stops',
     'map.nearby.exit': 'Exit',
     'map.nearby.note': 'Showing markers near {name} by distance',
+    'map.overlay.aria': 'Map marker overlay',
+    'map.overlay.linearPoiTitle': '{name} · {count} endpoints',
+    'map.overlay.markerTitle': '{name} ({x}, {z})',
+    'map.overlay.roadTraceTitle': '{name} · approximate line, {count} endpoints',
+    'map.overlay.transitTraceTitle': '{name} · {count} stops',
+    'map.overlay.viewMarker': 'View {name}',
     'map.poi.actions': 'Place actions',
     'map.poi.close': 'Close place details',
     'map.poi.collapse': 'Collapse place details',
@@ -1900,6 +1986,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.search.aria': 'Filter map markers',
     'map.search.clear': 'Clear map search',
     'map.search.placeholder': 'Search places or markers',
+    'map.toolbar.reset': 'Reset to default view',
+    'map.toolbar.zoomIn': 'Zoom in',
+    'map.toolbar.zoomOut': 'Zoom out',
     'map.title': 'Map Explore',
     'map.route.alight': 'Exit at {name}',
     'map.route.aria': 'Route planner',
@@ -1986,6 +2075,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.walkStraight': 'Straight-line walk',
     'map.route.walkToAccess': 'Walk to {access} {distance} {duration}',
     'map.route.walkWithDistance': 'Walk {distance} {duration}',
+    'map.roadDetail.description':
+      'This linear place is derived from legacy map road endpoints. The visible trace is approximate.',
+    'map.roadDetail.endpointCount': 'Endpoint count',
+    'map.roadDetail.endpointCountValue': '{count}',
+    'map.roadDetail.traceHighlighted': 'Approximate trace highlighted on the map',
+    'map.roadDetail.traceStatus': 'Trace status',
     'nav.back': 'Back',
     'nav.collapse': 'Collapse main navigation',
     'nav.expand': 'Expand main navigation',

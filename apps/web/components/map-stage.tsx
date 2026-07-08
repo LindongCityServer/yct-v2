@@ -386,6 +386,11 @@ interface ResolvedRoadRoute {
   distance: number;
 }
 
+interface RoadRouteAccessOptions {
+  destinationAccessCandidates?: RoadAccessCandidate[];
+  originAccessCandidates?: RoadAccessCandidate[];
+}
+
 interface ResolvedWalkRoute {
   coordinates: Array<[number, number]>;
   details: RoutePlanStepDetail[];
@@ -408,6 +413,7 @@ interface SecondaryPoiGroup {
 
 interface SecondaryPoiParentLink {
   childLabel: string;
+  marker: PointMarker;
   parent: PointMarker;
 }
 
@@ -523,6 +529,7 @@ const routeTransportModeOptions: RouteTransportModeOption[] = [
 ];
 
 const routeWalkTraceColor = 'var(--yct-color-primary)';
+const routePlanRecalculateDelayMs = 260;
 
 const tileProviderNameKeys: Partial<Record<TileProviderDescriptor['id'], CommonMessageKey>> = {
   'lindong-fresh-http': 'map.source.provider.lindongFreshHttp',
@@ -654,13 +661,6 @@ export function MapStage() {
     null,
   );
   const [appliedSharedRoutePlanKey, setAppliedSharedRoutePlanKey] = useState<string | null>(null);
-  const roadGraphCacheRef = useRef<{
-    graph?: RoadRouteGraph;
-    source: EndpointGroupMarker[] | null;
-  }>({
-    graph: undefined,
-    source: null,
-  });
 
   useEffect(() => {
     mapViewRef.current = mapView;
@@ -1127,6 +1127,14 @@ export function MapStage() {
     () => endpointGroupMarkers.filter((marker) => getRoadMarkerKind(marker)),
     [endpointGroupMarkers],
   );
+  const roadRoutingGraph = useMemo(() => buildRoadRouteGraph(roadTraceSource), [roadTraceSource]);
+  const markerRoadAccessIndex = useMemo(
+    () =>
+      roadRoutingGraph
+        ? buildMarkerRoadAccessIndex(pointMarkers, roadRoutingGraph)
+        : new Map<string, RoadAccessCandidate[]>(),
+    [pointMarkers, roadRoutingGraph],
+  );
   const selectedRoadTraceSource = useMemo(() => {
     const selectedRoadTrace = focusedMarkerId
       ? roadTraceSource.find((marker) => marker.id === focusedMarkerId)
@@ -1229,6 +1237,7 @@ export function MapStage() {
         ? {
             draft: routePlanDraft,
             enabledModes: routeTransportModes,
+            markerRoadAccessIndex,
             pointMarkers,
             secondaryPoiIndex,
             secondaryPoiParentIndex,
@@ -1237,6 +1246,7 @@ export function MapStage() {
           }
         : null,
     [
+      markerRoadAccessIndex,
       pointMarkers,
       routePlanDraft,
       routeTransportModes,
@@ -1257,18 +1267,9 @@ export function MapStage() {
     setRoutePlanOptions([]);
 
     const timer = window.setTimeout(() => {
-      let roadGraph = roadGraphCacheRef.current.graph;
-      if (roadGraphCacheRef.current.source !== roadTraceSource) {
-        roadGraph = buildRoadRouteGraph(roadTraceSource);
-        roadGraphCacheRef.current = {
-          graph: roadGraph,
-          source: roadTraceSource,
-        };
-      }
-
       const nextOptions = buildRoutePlanOptions({
         ...routePlanRequest,
-        roadGraph,
+        roadGraph: roadRoutingGraph,
         t,
       });
       if (cancelled) {
@@ -1282,13 +1283,13 @@ export function MapStage() {
         setRoutePlanOptions(nextOptions);
         setRoutePlanStatus('ready');
       });
-    }, 16);
+    }, routePlanRecalculateDelayMs);
 
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [roadTraceSource, routePlanDraft, routePlanRequest, t]);
+  }, [roadRoutingGraph, routePlanDraft, routePlanRequest, t]);
   useEffect(() => {
     if (!routePlanShareStatus) {
       return undefined;
@@ -2217,7 +2218,7 @@ export function MapStage() {
                           <>
                             <MarkerListIcon marker={marker} iconBaseUrl={markerIconBaseUrl} />
                             <span>{formatMarkerDisplayName(marker.label)}</span>
-                            <span className="muted">{formatMarkerDetail(marker)}</span>
+                            <span className="muted">{formatMarkerDetail(marker, t)}</span>
                           </>
                         );
 
@@ -2333,9 +2334,10 @@ export function MapStage() {
                     <TransitLineMapDetail
                       line={focusedTransitLine}
                       lineColor={focusedMarker.accentColor}
+                      t={t}
                     />
                   ) : isRoadEndpointGroupMarker(focusedMarker) ? (
-                    <RoadMapDetail marker={focusedMarker} />
+                    <RoadMapDetail marker={focusedMarker} t={t} />
                   ) : poiDetailTab === 'summary' ? (
                     <>
                       {focusedMarker.imageUrl ? (
@@ -2355,7 +2357,7 @@ export function MapStage() {
                         ) : null}
                         <div>
                           <dt>类型</dt>
-                          <dd>{formatGeometryDetail(focusedMarker)}</dd>
+                          <dd>{formatGeometryDetail(focusedMarker, t)}</dd>
                         </div>
                         {focusedParentPoi ? (
                           <div>
@@ -2601,7 +2603,7 @@ export function MapStage() {
         </div>
 
         {hasMapOverlay ? (
-          <div className="map-marker-layer" aria-label="地图标记示意层">
+          <div className="map-marker-layer" aria-label={t('map.overlay.aria')}>
             {visibleProjectedRoadTraces.length ? (
               <div className="map-road-trace-layer" aria-hidden="true">
                 {visibleProjectedRoadTraces.map((trace) => (
@@ -2609,7 +2611,10 @@ export function MapStage() {
                     trace={trace}
                     kind="road"
                     key={trace.id}
-                    title={`${trace.label} · 近似线，${trace.pointCount} 个端点`}
+                    title={t('map.overlay.roadTraceTitle', {
+                      count: trace.pointCount,
+                      name: trace.label,
+                    })}
                   />
                 ))}
               </div>
@@ -2621,7 +2626,10 @@ export function MapStage() {
                     trace={trace}
                     kind="transit"
                     key={trace.id}
-                    title={`${trace.label} · ${trace.pointCount} 个途经站`}
+                    title={t('map.overlay.transitTraceTitle', {
+                      count: trace.pointCount,
+                      name: trace.label,
+                    })}
                   />
                 ))}
               </div>
@@ -2658,7 +2666,9 @@ export function MapStage() {
                       location_on
                     </span>
                     <span className="map-guide-marker-pin-label">
-                      {marker.kind === 'route-origin' ? '起' : '终'}
+                      {marker.kind === 'route-origin'
+                        ? t('map.route.marker.origin')
+                        : t('map.route.marker.destination')}
                     </span>
                   </span>
                 )}
@@ -2678,7 +2688,7 @@ export function MapStage() {
                     <button
                       className="map-linear-poi-endpoint"
                       type="button"
-                      aria-label={`查看 ${marker.label}`}
+                      aria-label={t('map.overlay.viewMarker', { name: marker.label })}
                       key={endpoint.id}
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={focusLinearMarker}
@@ -2715,7 +2725,10 @@ export function MapStage() {
                           '--linear-poi-color': marker.accentColor,
                         } as CSSProperties
                       }
-                      title={`${marker.label} · ${marker.endpointCount} 个端点`}
+                      title={t('map.overlay.linearPoiTitle', {
+                        count: marker.endpointCount,
+                        name: marker.label,
+                      })}
                     >
                       {marker.iconUrl ? (
                         <img src={marker.iconUrl} alt="" draggable={false} />
@@ -2747,7 +2760,7 @@ export function MapStage() {
                   .filter(Boolean)
                   .join(' ')}
                 type="button"
-                aria-label={`查看 ${marker.label}`}
+                aria-label={t('map.overlay.viewMarker', { name: marker.label })}
                 key={marker.id}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={() => {
@@ -2762,7 +2775,11 @@ export function MapStage() {
                     '--marker-top': `${marker.top}px`,
                   } as CSSProperties
                 }
-                title={`${marker.label} (${marker.x}, ${marker.z})`}
+                title={t('map.overlay.markerTitle', {
+                  name: marker.label,
+                  x: marker.x,
+                  z: marker.z,
+                })}
               >
                 {marker.iconUrl ? <img src={marker.iconUrl} alt="" draggable={false} /> : null}
                 <span className="material-symbols-outlined" aria-hidden="true">
@@ -2779,7 +2796,11 @@ export function MapStage() {
             <span className="material-symbols-outlined" aria-hidden="true">
               map
             </span>
-            <p>{loadStatus === 'loading' ? '正在读取地图标记' : '暂无可显示地图标记'}</p>
+            <p>
+              {loadStatus === 'loading'
+                ? t('map.empty.loading')
+                : t('map.empty.unavailable')}
+            </p>
           </div>
         )}
       </div>
@@ -2788,7 +2809,7 @@ export function MapStage() {
         <button
           className="icon-button"
           type="button"
-          aria-label="放大地图"
+          aria-label={t('map.toolbar.zoomIn')}
           onClick={() => zoomBy(0.5)}
         >
           <span className="material-symbols-outlined">add</span>
@@ -2796,12 +2817,17 @@ export function MapStage() {
         <button
           className="icon-button"
           type="button"
-          aria-label="缩小地图"
+          aria-label={t('map.toolbar.zoomOut')}
           onClick={() => zoomBy(-0.5)}
         >
           <span className="material-symbols-outlined">remove</span>
         </button>
-        <button className="icon-button" type="button" aria-label="回到默认视图" onClick={resetView}>
+        <button
+          className="icon-button"
+          type="button"
+          aria-label={t('map.toolbar.reset')}
+          onClick={resetView}
+        >
           <span className="material-symbols-outlined">my_location</span>
         </button>
         <button
@@ -3189,14 +3215,17 @@ function TraceLayerView({
 function TransitLineMapDetail({
   line,
   lineColor,
-}: Readonly<{ line: TransitOverviewLine; lineColor?: string }>) {
+  t,
+}: Readonly<{ line: TransitOverviewLine; lineColor?: string; t: Translate }>) {
   const [direction, setDirection] = useState<'forward' | 'reverse'>('forward');
   const stationStops = getDirectionalLineStops(line, direction);
   const firstStationName = stationStops[0]?.stationName ?? line.firstStationName;
   const lastStationName =
     stationStops[stationStops.length - 1]?.stationName ?? line.lastStationName;
-  const forwardDirectionName = line.lastStationName ?? line.stationNames.at(-1) ?? '正向';
-  const reverseDirectionName = line.firstStationName ?? line.stationNames[0] ?? '反向';
+  const forwardDirectionName =
+    line.lastStationName ?? line.stationNames.at(-1) ?? t('lineDetail.lastStation');
+  const reverseDirectionName =
+    line.firstStationName ?? line.stationNames[0] ?? t('lineDetail.firstStation');
 
   return (
     <div
@@ -3209,27 +3238,31 @@ function TransitLineMapDetail({
     >
       <dl>
         <div>
-          <dt>首末车时间</dt>
+          <dt>{t('lineDetail.firstLast')}</dt>
           <dd>{formatTransitLineTime(line)}</dd>
         </div>
         <div>
-          <dt>运营单位</dt>
-          <dd>{line.operator ?? '待补充'}</dd>
+          <dt>{t('lineDetail.operator')}</dt>
+          <dd>{line.operator ?? t('lineDetail.toBeAdded')}</dd>
         </div>
         <div>
-          <dt>票价</dt>
-          <dd>{line.fare ?? '待补充'}</dd>
+          <dt>{t('map.lineDetail.fare')}</dt>
+          <dd>{line.fare ?? t('lineDetail.toBeAdded')}</dd>
         </div>
         <div>
-          <dt>站点</dt>
+          <dt>{t('map.lineDetail.stations')}</dt>
           <dd>
             {firstStationName && lastStationName
               ? `${firstStationName} → ${lastStationName}`
-              : `${stationStops.length} 站`}
+              : t('lineDetail.extra.stations', { count: stationStops.length })}
           </dd>
         </div>
       </dl>
-      <div className="map-line-direction-switch" role="tablist" aria-label="线路方向">
+      <div
+        className="map-line-direction-switch"
+        role="tablist"
+        aria-label={t('lineDetail.directionAria')}
+      >
         <button
           className={direction === 'forward' ? 'is-active' : ''}
           type="button"
@@ -3237,7 +3270,9 @@ function TransitLineMapDetail({
           aria-selected={direction === 'forward'}
           onClick={() => setDirection('forward')}
         >
-          {formatMarkerDisplayName(forwardDirectionName)}方向
+          {t('lineDetail.directionTo', {
+            station: formatMarkerDisplayName(forwardDirectionName),
+          })}
         </button>
         <button
           className={direction === 'reverse' ? 'is-active' : ''}
@@ -3246,7 +3281,9 @@ function TransitLineMapDetail({
           aria-selected={direction === 'reverse'}
           onClick={() => setDirection('reverse')}
         >
-          {formatMarkerDisplayName(reverseDirectionName)}方向
+          {t('lineDetail.directionTo', {
+            station: formatMarkerDisplayName(reverseDirectionName),
+          })}
         </button>
       </div>
       {stationStops.length > 0 ? (
@@ -3262,24 +3299,28 @@ function TransitLineMapDetail({
           ))}
         </ol>
       ) : (
-        <p>这条线路暂未导入站点列表。</p>
+        <p>{t('lineDetail.stationListEmpty')}</p>
       )}
     </div>
   );
 }
 
-function RoadMapDetail({ marker }: Readonly<{ marker: EndpointGroupMarker }>) {
+function RoadMapDetail({ marker, t }: Readonly<{ marker: EndpointGroupMarker; t: Translate }>) {
   return (
     <div className="map-linear-detail">
-      <p>这是一组从旧地图道路端点归并出的线性地点，当前轨迹为近似展示。</p>
+      <p>{t('map.roadDetail.description')}</p>
       <dl>
         <div>
-          <dt>端点数量</dt>
-          <dd>{marker.geometry.coordinates.length} 个</dd>
+          <dt>{t('map.roadDetail.endpointCount')}</dt>
+          <dd>
+            {t('map.roadDetail.endpointCountValue', {
+              count: marker.geometry.coordinates.length,
+            })}
+          </dd>
         </div>
         <div>
-          <dt>轨迹状态</dt>
-          <dd>已在地图上高亮近似轨迹</dd>
+          <dt>{t('map.roadDetail.traceStatus')}</dt>
+          <dd>{t('map.roadDetail.traceHighlighted')}</dd>
         </div>
       </dl>
     </div>
@@ -3489,7 +3530,7 @@ function RoutePlanDraftCard({
                     >
                       <MarkerListIcon marker={marker} iconBaseUrl={iconBaseUrl} />
                       <span>{formatMarkerDisplayName(marker.label)}</span>
-                      <small>{formatMarkerDetail(marker)}</small>
+                      <small>{formatMarkerDetail(marker, t)}</small>
                     </button>
                   ))
                 ) : (
@@ -3721,6 +3762,7 @@ function RoutePlanDraftCard({
 function buildRoutePlanOptions(input: {
   draft: RoutePlanDraft;
   enabledModes: EnabledRouteTransportModes;
+  markerRoadAccessIndex: ReadonlyMap<string, RoadAccessCandidate[]>;
   pointMarkers: PointMarker[];
   roadGraph?: RoadRouteGraph;
   secondaryPoiIndex: ReadonlyMap<string, SecondaryPoiLink[]>;
@@ -3739,6 +3781,16 @@ function buildRoutePlanOptions(input: {
   const routeOptionLimit = getRouteOptionLimit(input.enabledModes);
   const roadGraph = input.roadGraph;
   const routeCache = createRoutePlanningCache();
+  const originRoadAccessCandidates = getRouteEndpointRoadAccessCandidates(
+    draft,
+    'origin',
+    input.markerRoadAccessIndex,
+  );
+  const destinationRoadAccessCandidates = getRouteEndpointRoadAccessCandidates(
+    draft,
+    'destination',
+    input.markerRoadAccessIndex,
+  );
 
   if (input.enabledModes.walk) {
     const directWalkRoute = buildWalkRouteBetweenCoordinates(
@@ -3747,9 +3799,15 @@ function buildRoutePlanOptions(input: {
       roadGraph,
       routeCache,
       input.t,
+      {
+        destinationAccessCandidates: destinationRoadAccessCandidates,
+        originAccessCandidates: originRoadAccessCandidates,
+      },
     );
     const directDistance = directWalkRoute.distance + endpointAccessDistance;
-    const directMinutes = estimateRouteMinutes(directDistance, 72);
+    const directMinutes =
+      estimateResolvedWalkRouteMinutes(directWalkRoute) +
+      estimateRouteMinutes(endpointAccessDistance, 72);
     const directCoordinates = buildRouteTraceCoordinates(draft, directWalkRoute.coordinates);
     options.push({
       id: 'walk-direct',
@@ -3870,6 +3928,7 @@ function resolveRoutePlanDraftAccessPoints(
     secondaryPoiIndex,
     secondaryPoiParentIndex,
     targetCoordinate: draft.destination,
+    targetId: draft.destinationId,
   });
   const destination = resolveRouteEndpointAccessPoint({
     endpointCoordinate: draft.destination,
@@ -3877,6 +3936,7 @@ function resolveRoutePlanDraftAccessPoints(
     secondaryPoiIndex,
     secondaryPoiParentIndex,
     targetCoordinate: origin.coordinate,
+    targetId: draft.originId,
   });
 
   return {
@@ -3898,13 +3958,36 @@ function resolveRouteEndpointAccessPoint(input: {
   secondaryPoiIndex: ReadonlyMap<string, SecondaryPoiLink[]>;
   secondaryPoiParentIndex: ReadonlyMap<string, SecondaryPoiParentLink>;
   targetCoordinate: [number, number];
+  targetId?: string;
 }): { coordinate: [number, number]; accessId?: string; accessLabel?: string } {
+  if (
+    input.endpointId &&
+    input.targetId &&
+    areRouteEndpointsParentAndChild(
+      input.endpointId,
+      input.targetId,
+      input.secondaryPoiParentIndex,
+    )
+  ) {
+    return { coordinate: input.endpointCoordinate };
+  }
+
   const parentEndpointChildPois = input.endpointId
     ? input.secondaryPoiIndex.get(input.endpointId)
     : undefined;
   const childParent = input.endpointId
     ? input.secondaryPoiParentIndex.get(input.endpointId)
     : undefined;
+  if (
+    childParent &&
+    isRouteAccessSecondaryPoi({
+      childLabel: childParent.childLabel,
+      marker: childParent.marker,
+      parent: childParent.parent,
+    })
+  ) {
+    return { coordinate: input.endpointCoordinate };
+  }
   const childEndpointSiblingPois = childParent
     ? input.secondaryPoiIndex
         .get(childParent.parent.id)
@@ -3953,6 +4036,16 @@ function resolveRouteEndpointAccessPoint(input: {
     accessId: selected.link.marker.id,
     accessLabel: selected.link.childLabel || formatMarkerDisplayName(selected.link.marker.label),
   };
+}
+
+function areRouteEndpointsParentAndChild(
+  leftId: string,
+  rightId: string,
+  secondaryPoiParentIndex: ReadonlyMap<string, SecondaryPoiParentLink>,
+): boolean {
+  const leftParent = secondaryPoiParentIndex.get(leftId)?.parent.id;
+  const rightParent = secondaryPoiParentIndex.get(rightId)?.parent.id;
+  return leftParent === rightId || rightParent === leftId;
 }
 
 function isRouteAccessSecondaryPoi(link: SecondaryPoiLink): boolean {
@@ -4748,9 +4841,10 @@ function buildWalkRouteBetweenCoordinates(
   roadGraph?: RoadRouteGraph,
   routeCache?: RoutePlanningCache,
   t?: Translate,
+  accessOptions?: RoadRouteAccessOptions,
 ): ResolvedWalkRoute {
   const roadRoute = roadGraph
-    ? findRoadRouteBetweenCoordinates(origin, destination, roadGraph, routeCache, t)
+    ? findRoadRouteBetweenCoordinates(origin, destination, roadGraph, routeCache, t, accessOptions)
     : undefined;
   if (roadRoute) {
     return {
@@ -4779,8 +4873,10 @@ function buildWalkRouteBetweenCoordinates(
 }
 
 function buildWalkRouteToTransitStop(input: {
+  markerRoadAccessIndex: ReadonlyMap<string, RoadAccessCandidate[]>;
   mode: RouteTransportMode;
   origin: [number, number];
+  originRoadAccessCandidates?: RoadAccessCandidate[];
   roadGraph?: RoadRouteGraph;
   routeCache?: RoutePlanningCache;
   secondaryPoiIndex: ReadonlyMap<string, SecondaryPoiLink[]>;
@@ -4800,6 +4896,10 @@ function buildWalkRouteToTransitStop(input: {
       input.roadGraph,
       input.routeCache,
       input.t,
+      {
+        destinationAccessCandidates: input.markerRoadAccessIndex.get(input.stop.marker.id),
+        originAccessCandidates: input.originRoadAccessCandidates,
+      },
     );
   }
 
@@ -4809,6 +4909,10 @@ function buildWalkRouteToTransitStop(input: {
     input.roadGraph,
     input.routeCache,
     input.t,
+    {
+      destinationAccessCandidates: input.markerRoadAccessIndex.get(access.markerId),
+      originAccessCandidates: input.originRoadAccessCandidates,
+    },
   );
   return appendTransitStopAccessSegment({
     access,
@@ -4823,6 +4927,8 @@ function buildWalkRouteToTransitStop(input: {
 
 function buildWalkRouteFromTransitStop(input: {
   destination: [number, number];
+  destinationRoadAccessCandidates?: RoadAccessCandidate[];
+  markerRoadAccessIndex: ReadonlyMap<string, RoadAccessCandidate[]>;
   mode: RouteTransportMode;
   roadGraph?: RoadRouteGraph;
   routeCache?: RoutePlanningCache;
@@ -4843,6 +4949,10 @@ function buildWalkRouteFromTransitStop(input: {
       input.roadGraph,
       input.routeCache,
       input.t,
+      {
+        destinationAccessCandidates: input.destinationRoadAccessCandidates,
+        originAccessCandidates: input.markerRoadAccessIndex.get(input.stop.marker.id),
+      },
     );
   }
 
@@ -4852,6 +4962,10 @@ function buildWalkRouteFromTransitStop(input: {
     input.roadGraph,
     input.routeCache,
     input.t,
+    {
+      destinationAccessCandidates: input.destinationRoadAccessCandidates,
+      originAccessCandidates: input.markerRoadAccessIndex.get(access.markerId),
+    },
   );
   return prependTransitStopAccessSegment({
     access,
@@ -5000,8 +5114,12 @@ function getTurnInstructionIcon(
   const cross = previous[0] * current[1] - previous[1] * current[0];
   const dot = previous[0] * current[0] + previous[1] * current[1];
   const angle = Math.atan2(cross, dot);
-  if (Math.abs(angle) < 0.45) {
+  const absoluteAngle = Math.abs(angle);
+  if (absoluteAngle < 0.35) {
     return 'straight';
+  }
+  if (absoluteAngle < 1.05) {
+    return angle > 0 ? 'turn_slight_right' : 'turn_slight_left';
   }
   return angle > 0 ? 'turn_right' : 'turn_left';
 }
@@ -5052,6 +5170,7 @@ interface TransitLineDirectionCandidate {
 function buildTransitRoutePlanOptions(input: {
   draft: RoutePlanDraft;
   enabledModes: EnabledRouteTransportModes;
+  markerRoadAccessIndex: ReadonlyMap<string, RoadAccessCandidate[]>;
   modeProfiles: TransitModeProfileForMap[];
   pointMarkers: PointMarker[];
   roadGraph?: RoadRouteGraph;
@@ -5109,6 +5228,7 @@ function buildTransitRoutePlanOptions(input: {
         candidate,
         input.draft,
         input.t,
+        input.markerRoadAccessIndex,
         input.secondaryPoiIndex,
         input.roadGraph,
         input.routeCache,
@@ -5119,6 +5239,7 @@ function buildTransitRoutePlanOptions(input: {
     lineCandidates,
     input.draft,
     input.t,
+    input.markerRoadAccessIndex,
     input.secondaryPoiIndex,
     input.roadGraph,
     input.routeCache,
@@ -5138,6 +5259,7 @@ function buildDirectTransitLineOption(
   candidate: TransitLineDirectionCandidate,
   draft: RoutePlanDraft,
   t: Translate,
+  markerRoadAccessIndex: ReadonlyMap<string, RoadAccessCandidate[]>,
   secondaryPoiIndex: ReadonlyMap<string, SecondaryPoiLink[]>,
   roadGraph?: RoadRouteGraph,
   routeCache?: RoutePlanningCache,
@@ -5152,9 +5274,21 @@ function buildDirectTransitLineOption(
   }
 
   const segmentStops = candidate.stops.slice(originStop.index, destinationStop.index + 1);
+  const originRoadAccessCandidates = getRouteEndpointRoadAccessCandidates(
+    draft,
+    'origin',
+    markerRoadAccessIndex,
+  );
+  const destinationRoadAccessCandidates = getRouteEndpointRoadAccessCandidates(
+    draft,
+    'destination',
+    markerRoadAccessIndex,
+  );
   const accessRoute = buildWalkRouteToTransitStop({
+    markerRoadAccessIndex,
     mode: candidate.mode.mode,
     origin: draft.origin,
+    originRoadAccessCandidates,
     roadGraph,
     routeCache,
     secondaryPoiIndex,
@@ -5163,6 +5297,8 @@ function buildDirectTransitLineOption(
   });
   const egressRoute = buildWalkRouteFromTransitStop({
     destination: draft.destination,
+    destinationRoadAccessCandidates,
+    markerRoadAccessIndex,
     mode: candidate.mode.mode,
     roadGraph,
     routeCache,
@@ -5176,12 +5312,13 @@ function buildDirectTransitLineOption(
   const transitRoute = buildTransitSegmentRoute(
     segmentStops,
     candidate.mode.mode,
+    markerRoadAccessIndex,
     roadGraph,
     routeCache,
   );
   const transitDistance = transitRoute.distance;
-  const accessMinutes = estimateRouteMinutes(accessDistance, 72);
-  const egressMinutes = estimateRouteMinutes(egressDistance, 72);
+  const accessMinutes = estimateResolvedWalkRouteMinutes(accessRoute);
+  const egressMinutes = estimateResolvedWalkRouteMinutes(egressRoute);
   const endpointAccessMinutes = estimateRouteMinutes(endpointAccessDistance, 72);
   const transitMinutes = estimateTransitSegmentMinutes(
     segmentStops,
@@ -5294,6 +5431,7 @@ function buildTransferTransitLineOptions(
   candidates: TransitLineDirectionCandidate[],
   draft: RoutePlanDraft,
   t: Translate,
+  markerRoadAccessIndex: ReadonlyMap<string, RoadAccessCandidate[]>,
   secondaryPoiIndex: ReadonlyMap<string, SecondaryPoiLink[]>,
   roadGraph?: RoadRouteGraph,
   routeCache?: RoutePlanningCache,
@@ -5337,6 +5475,16 @@ function buildTransferTransitLineOptions(
     )
     .slice(0, 12);
   const options: RoutePlanOption[] = [];
+  const originRoadAccessCandidates = getRouteEndpointRoadAccessCandidates(
+    draft,
+    'origin',
+    markerRoadAccessIndex,
+  );
+  const destinationRoadAccessCandidates = getRouteEndpointRoadAccessCandidates(
+    draft,
+    'destination',
+    markerRoadAccessIndex,
+  );
 
   for (const originCandidate of originCandidates) {
     for (const destinationCandidate of destinationCandidates) {
@@ -5367,8 +5515,10 @@ function buildTransferTransitLineOptions(
       }
 
       const accessRoute = buildWalkRouteToTransitStop({
+        markerRoadAccessIndex,
         mode: originCandidate.candidate.mode.mode,
         origin: draft.origin,
+        originRoadAccessCandidates,
         roadGraph,
         routeCache,
         secondaryPoiIndex,
@@ -5377,6 +5527,8 @@ function buildTransferTransitLineOptions(
       });
       const egressRoute = buildWalkRouteFromTransitStop({
         destination: draft.destination,
+        destinationRoadAccessCandidates,
+        markerRoadAccessIndex,
         mode: destinationCandidate.candidate.mode.mode,
         roadGraph,
         routeCache,
@@ -5390,18 +5542,24 @@ function buildTransferTransitLineOptions(
         roadGraph,
         routeCache,
         t,
+        {
+          destinationAccessCandidates: markerRoadAccessIndex.get(transfer.toStop.marker.id),
+          originAccessCandidates: markerRoadAccessIndex.get(transfer.fromStop.marker.id),
+        },
       );
       const accessDistance = accessRoute.distance;
       const egressDistance = egressRoute.distance;
       const firstTransitRoute = buildTransitSegmentRoute(
         firstSegment,
         originCandidate.candidate.mode.mode,
+        markerRoadAccessIndex,
         roadGraph,
         routeCache,
       );
       const secondTransitRoute = buildTransitSegmentRoute(
         secondSegment,
         destinationCandidate.candidate.mode.mode,
+        markerRoadAccessIndex,
         roadGraph,
         routeCache,
       );
@@ -5410,10 +5568,11 @@ function buildTransferTransitLineOptions(
       const endpointAccessDistance = getRouteEndpointAccessDistance(draft);
       const transferDistance =
         transfer.fromStop.marker.id === transfer.toStop.marker.id ? 0 : transferRoute.distance;
-      const accessMinutes = estimateRouteMinutes(accessDistance, 72);
-      const egressMinutes = estimateRouteMinutes(egressDistance, 72);
+      const accessMinutes = estimateResolvedWalkRouteMinutes(accessRoute);
+      const egressMinutes = estimateResolvedWalkRouteMinutes(egressRoute);
       const endpointAccessMinutes = estimateRouteMinutes(endpointAccessDistance, 72);
-      const transferWalkMinutes = estimateRouteMinutes(transferDistance, 72);
+      const transferWalkMinutes =
+        transferDistance > 0 ? estimateResolvedWalkRouteMinutes(transferRoute) : 0;
       const firstTransitMinutes = estimateTransitSegmentMinutes(
         firstSegment,
         firstTransitDistance,
@@ -5701,6 +5860,7 @@ function buildTransitStopStepDetails(stops: TransitRouteStop[]): RoutePlanStepDe
 function buildTransitSegmentRoute(
   stops: TransitRouteStop[],
   mode: RouteTransportMode,
+  markerRoadAccessIndex: ReadonlyMap<string, RoadAccessCandidate[]>,
   roadGraph?: RoadRouteGraph,
   routeCache?: RoutePlanningCache,
 ): { coordinates: Array<[number, number]>; distance: number; usesRoadGraph: boolean } {
@@ -5736,6 +5896,11 @@ function buildTransitSegmentRoute(
       current.center,
       roadGraph,
       routeCache,
+      undefined,
+      {
+        destinationAccessCandidates: markerRoadAccessIndex.get(current.marker.id),
+        originAccessCandidates: markerRoadAccessIndex.get(previous.marker.id),
+      },
     );
     const segmentCoordinates = roadSegment?.coordinates ?? [previous.center, current.center];
     appendRouteSegmentCoordinates(coordinates, segmentCoordinates);
@@ -5760,25 +5925,22 @@ function findRoadRouteBetweenCoordinates(
   graph: RoadRouteGraph,
   routeCache?: RoutePlanningCache,
   t?: Translate,
+  accessOptions?: RoadRouteAccessOptions,
 ): ResolvedRoadRoute | undefined {
-  const routeCacheKey = getRoadRouteCacheKey(origin, destination);
+  const routeCacheKey = getRoadRouteCacheKey(origin, destination, accessOptions);
   const cachedRoute = routeCache?.roadRouteByPair.get(routeCacheKey);
   if (cachedRoute !== undefined) {
     return cachedRoute ?? undefined;
   }
 
-  const originAccessCandidates = findRoadAccessCandidates(
-    origin,
-    destination,
-    graph,
-    routeCache,
-  );
-  const destinationAccessCandidates = findRoadAccessCandidates(
-    destination,
-    origin,
-    graph,
-    routeCache,
-  );
+  const originAccessCandidates =
+    accessOptions?.originAccessCandidates?.length
+      ? accessOptions.originAccessCandidates
+      : findRoadAccessCandidates(origin, destination, graph, routeCache);
+  const destinationAccessCandidates =
+    accessOptions?.destinationAccessCandidates?.length
+      ? accessOptions.destinationAccessCandidates
+      : findRoadAccessCandidates(destination, origin, graph, routeCache);
   if (originAccessCandidates.length === 0 || destinationAccessCandidates.length === 0) {
     routeCache?.roadRouteByPair.set(routeCacheKey, null);
     return undefined;
@@ -5893,8 +6055,31 @@ function findRoadAccessCandidates(
   return result;
 }
 
-function getRoadRouteCacheKey(origin: [number, number], destination: [number, number]): string {
-  return `${formatCoordinateCacheKey(origin)}->${formatCoordinateCacheKey(destination)}`;
+function getRoadRouteCacheKey(
+  origin: [number, number],
+  destination: [number, number],
+  accessOptions?: RoadRouteAccessOptions,
+): string {
+  return [
+    `${formatCoordinateCacheKey(origin)}->${formatCoordinateCacheKey(destination)}`,
+    formatRoadAccessCandidatesCacheKey(accessOptions?.originAccessCandidates),
+    formatRoadAccessCandidatesCacheKey(accessOptions?.destinationAccessCandidates),
+  ].join('|');
+}
+
+function formatRoadAccessCandidatesCacheKey(
+  candidates: RoadAccessCandidate[] | undefined,
+): string {
+  if (!candidates || candidates.length === 0) {
+    return '*';
+  }
+
+  return candidates
+    .map(
+      (candidate) =>
+        `${candidate.roadId}:${candidate.coordinate[0].toFixed(2)},${candidate.coordinate[1].toFixed(2)}`,
+    )
+    .join(';');
 }
 
 function formatCoordinateCacheKey(coordinate: [number, number]): string {
@@ -5929,6 +6114,52 @@ function projectPointToRoadSegment(
     startDistance,
     startNodeId: segment.startNodeId,
   };
+}
+
+function buildMarkerRoadAccessIndex(
+  markers: PointMarker[],
+  graph: RoadRouteGraph,
+): Map<string, RoadAccessCandidate[]> {
+  const index = new Map<string, RoadAccessCandidate[]>();
+  for (const marker of markers) {
+    const center = getMarkerCenter(marker);
+    if (!center) {
+      continue;
+    }
+
+    const candidates = buildMarkerRoadAccessCandidates(center, graph);
+    if (candidates.length > 0) {
+      index.set(marker.id, candidates);
+    }
+  }
+
+  return index;
+}
+
+function buildMarkerRoadAccessCandidates(
+  point: [number, number],
+  graph: RoadRouteGraph,
+): RoadAccessCandidate[] {
+  const nearestByRoad = new Map<string, RoadAccessCandidate>();
+  for (const segment of graph.roadSegments) {
+    const projection = projectPointToRoadSegment(point, segment);
+    const existing = nearestByRoad.get(segment.roadId);
+    if (!existing || projection.distanceToPoint < existing.distanceToPoint) {
+      nearestByRoad.set(segment.roadId, projection);
+    }
+  }
+
+  const sorted = Array.from(nearestByRoad.values()).sort(
+    (left, right) => left.distanceToPoint - right.distanceToPoint,
+  );
+  const nearest = sorted[0];
+  if (!nearest) {
+    return [];
+  }
+
+  return sorted
+    .filter((candidate, index) => index === 0 || candidate.distanceToPoint <= 50)
+    .slice(0, 8);
 }
 
 function getRoadAccessDirectionPenalty(
@@ -6198,6 +6429,18 @@ function getRouteEndpointMarkerIds(draft: RoutePlanDraft): string[] {
   ].filter((id): id is string => Boolean(id)));
 }
 
+function getRouteEndpointRoadAccessCandidates(
+  draft: RoutePlanDraft,
+  endpoint: RouteEndpointKind,
+  markerRoadAccessIndex: ReadonlyMap<string, RoadAccessCandidate[]>,
+): RoadAccessCandidate[] | undefined {
+  const markerId =
+    endpoint === 'origin'
+      ? draft.originAccessId ?? draft.originId
+      : draft.destinationAccessId ?? draft.destinationId;
+  return markerId ? markerRoadAccessIndex.get(markerId) : undefined;
+}
+
 function findNearestRouteStation<T extends { center: [number, number] }>(
   point: [number, number],
   candidates: T[],
@@ -6216,6 +6459,12 @@ function getCoordinateDistance(left: [number, number], right: [number, number]):
 
 function estimateRouteMinutes(distance: number, blocksPerMinute: number): number {
   return Math.max(1, Math.round(distance / blocksPerMinute));
+}
+
+function estimateResolvedWalkRouteMinutes(route: ResolvedWalkRoute): number {
+  return route.distance <= 0
+    ? 0
+    : estimateRouteMinutes(route.distance, route.usesRoadGraph ? 64 : 72);
 }
 
 function getTransitSpeedFactor(mode: RouteTransportMode): number {
@@ -6655,7 +6904,7 @@ function buildSecondaryPoiParentIndex(markers: PointMarker[]): Map<string, Secon
   return new Map(
     resolveSecondaryPoiLinks(markers).map((link) => [
       link.marker.id,
-      { childLabel: link.childLabel, parent: link.parent },
+      { childLabel: link.childLabel, marker: link.marker, parent: link.parent },
     ]),
   );
 }
@@ -8327,19 +8576,23 @@ function getMarkerDistanceToCoordinates(
   return squaredDistance(center, coordinates);
 }
 
-function formatGeometryDetail(marker: CenterableMarker): string {
+function formatGeometryDetail(marker: CenterableMarker, t: Translate): string {
   if (marker.geometry.type === 'Point') {
-    return '点标记';
+    return t('map.geometry.pointMarker');
   }
 
   if (marker.categoryId === 'transit-line') {
-    return `线路对象，${marker.geometry.coordinates.length} 个站点坐标直连点`;
+    return t('map.geometry.transitLineObject', {
+      count: marker.geometry.coordinates.length,
+    });
   }
 
-  return `线性对象端点组，${marker.geometry.coordinates.length} 个端点`;
+  return t('map.geometry.linearObject', {
+    count: marker.geometry.coordinates.length,
+  });
 }
 
-function formatMarkerDetail(marker: SidebarMarker): string {
+function formatMarkerDetail(marker: SidebarMarker, t: Translate): string {
   if (marker.description) {
     return marker.description;
   }
@@ -8350,11 +8603,15 @@ function formatMarkerDetail(marker: SidebarMarker): string {
 
   if (marker.categoryId === 'transit-line') {
     return marker.geometry.coordinates.length > 0
-      ? `站点坐标直连 ${marker.geometry.coordinates.length} 个点`
-      : '待补线路坐标';
+      ? t('map.geometry.transitLineDetail', {
+          count: marker.geometry.coordinates.length,
+        })
+      : t('map.geometry.transitLinePending');
   }
 
-  return `道路端点 ${marker.geometry.coordinates.length} 个`;
+  return t('map.geometry.roadEndpointCount', {
+    count: marker.geometry.coordinates.length,
+  });
 }
 
 function dedupeMarkersById<T extends { id: string }>(markers: T[]): T[] {
