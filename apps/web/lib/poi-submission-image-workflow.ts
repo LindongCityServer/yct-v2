@@ -93,6 +93,11 @@ function validatePoiSubmissionImage(input: {
     return invalidUpload('上传图片不能超过 8MB。');
   }
 
+  const detectedMimeType = detectPoiImageMimeType(input.bytes);
+  if (!detectedMimeType || detectedMimeType !== mimeType) {
+    return invalidUpload('上传图片内容与文件类型不匹配。');
+  }
+
   return { ok: true };
 }
 
@@ -103,6 +108,43 @@ function invalidUpload(message: string): PoiSubmissionImageUploadResult {
     error: 'invalid_poi_submission_image_upload',
     message,
   };
+}
+
+function detectPoiImageMimeType(bytes: Uint8Array): string | undefined {
+  if (startsWithBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
+    return 'image/png';
+  }
+
+  if (startsWithBytes(bytes, [0xff, 0xd8, 0xff])) {
+    return 'image/jpeg';
+  }
+
+  const header = readAscii(bytes, 0, 12);
+  if (header.startsWith('GIF87a') || header.startsWith('GIF89a')) {
+    return 'image/gif';
+  }
+
+  if (header.startsWith('RIFF') && header.slice(8, 12) === 'WEBP') {
+    return 'image/webp';
+  }
+
+  if (readAscii(bytes, 4, 8) === 'ftyp' && readAscii(bytes, 8, 40).includes('avif')) {
+    return 'image/avif';
+  }
+
+  return undefined;
+}
+
+function startsWithBytes(bytes: Uint8Array, signature: number[]): boolean {
+  if (bytes.byteLength < signature.length) {
+    return false;
+  }
+
+  return signature.every((value, index) => bytes[index] === value);
+}
+
+function readAscii(bytes: Uint8Array, start: number, end: number): string {
+  return String.fromCharCode(...bytes.slice(start, Math.min(end, bytes.byteLength)));
 }
 
 async function emitEvent<TType extends YctEventType>(

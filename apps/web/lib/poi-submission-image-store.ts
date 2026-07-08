@@ -92,6 +92,11 @@ function resolveUploadDir(): string {
 }
 
 function inferExtension(fileName: string, mimeType: string): string {
+  const extensionFromMimeType = extensionByMimeType[mimeType.toLowerCase()];
+  if (extensionFromMimeType) {
+    return extensionFromMimeType;
+  }
+
   const extension = path.extname(fileName).toLowerCase();
   if (Object.hasOwn(mimeTypeByExtension, extension)) {
     return extension === '.jpeg' ? '.jpg' : extension;
