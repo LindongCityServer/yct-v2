@@ -289,7 +289,7 @@ export function AccountSettingsPanel({
   const [quietEnd, setQuietEnd] = useState('07:00');
   const [installStatus, setInstallStatus] = useState<PwaInstallStatus>('checking');
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [cacheStatusText, setCacheStatusText] = useState('正在检查');
+  const [cacheStatusText, setCacheStatusText] = useState(t('account.pwa.cacheChecking'));
   const [tripSummary, setTripSummary] = useState<TripReminderState['summary'] | null>(null);
   const [scheduleHistorySummary, setScheduleHistorySummary] = useState<
     TravelScheduleHistoryState['summary'] | null
@@ -482,7 +482,7 @@ export function AccountSettingsPanel({
     }
 
     setInstallStatus(readPwaInstallStatus());
-    void refreshPwaCacheStatus(setCacheStatusText);
+    void refreshPwaCacheStatus(setCacheStatusText, t);
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
@@ -648,15 +648,15 @@ export function AccountSettingsPanel({
   };
 
   const warmPwaCache = async () => {
-    setCacheStatusText('正在刷新');
+    setCacheStatusText(t('account.pwa.cacheRefreshing'));
     await warmAppShellCache();
-    await refreshPwaCacheStatus(setCacheStatusText);
+    await refreshPwaCacheStatus(setCacheStatusText, t);
   };
 
   const clearPwaCache = async () => {
-    setCacheStatusText('正在清理');
+    setCacheStatusText(t('account.pwa.cacheClearing'));
     await clearYctCaches();
-    await refreshPwaCacheStatus(setCacheStatusText);
+    await refreshPwaCacheStatus(setCacheStatusText, t);
   };
 
   const updateOfflinePackageDraft = (key: keyof typeof offlinePackageDraft, value: string) => {
@@ -732,7 +732,7 @@ export function AccountSettingsPanel({
       }
       await warmOfflinePackageCache();
       updateOfflinePackageStatus(offlinePackage.packageId, 'base_cache_refreshed');
-      await refreshPwaCacheStatus(setCacheStatusText);
+      await refreshPwaCacheStatus(setCacheStatusText, t);
     } catch (error) {
       updateOfflinePackageStatus(
         offlinePackage.packageId,
@@ -1157,14 +1157,14 @@ export function AccountSettingsPanel({
             <span className="material-symbols-outlined" aria-hidden="true">
               download_for_offline
             </span>
-            <span id="offline-settings-title">安装与离线</span>
-            <span className="settings-inline-status">{installStatusLabel(installStatus)}</span>
+            <span id="offline-settings-title">{t('account.pwa.title')}</span>
+            <span className="settings-inline-status">{installStatusLabel(installStatus, t)}</span>
           </div>
           <p className="settings-row-note">
-            <strong>安装雨城通：</strong>
-            把 YCT 添加到主屏幕，快速查看运营信息、线路和站点详情。支持缓存已下载的自定义范围离线包，并在你允许后接收行程、运营、订票和检票提醒。
+            <strong>{t('account.pwa.descriptionPrefix')}</strong>
+            {t('account.pwa.description')}
           </p>
-          <p className="settings-row-note">{installStatusDescription(installStatus)}</p>
+          <p className="settings-row-note">{installStatusDescription(installStatus, t)}</p>
           <div className="settings-action-row">
             <button
               className="secondary-action-button"
@@ -1175,19 +1175,19 @@ export function AccountSettingsPanel({
               <span className="material-symbols-outlined" aria-hidden="true">
                 install_mobile
               </span>
-              <span>安装雨城通</span>
+              <span>{t('account.pwa.action.install')}</span>
             </button>
             <button className="secondary-action-button" type="button" onClick={warmPwaCache}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 cached
               </span>
-              <span>刷新缓存</span>
+              <span>{t('account.pwa.action.refreshCache')}</span>
             </button>
             <button className="secondary-action-button" type="button" onClick={clearPwaCache}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 delete
               </span>
-              <span>清理缓存</span>
+              <span>{t('account.pwa.action.clearCache')}</span>
             </button>
             <button
               className="secondary-action-button"
@@ -1587,28 +1587,31 @@ function isPwaStandalone(): boolean {
   );
 }
 
-function installStatusLabel(status: PwaInstallStatus): string {
-  const labels: Record<PwaInstallStatus, string> = {
-    checking: '检查中',
-    installed: '已安装',
-    installable: '可安装',
-    manual: '可添加',
-    unsupported: '不可用',
+function installStatusLabel(status: PwaInstallStatus, t: ReturnType<typeof useI18n>['t']): string {
+  const labelKeys: Record<PwaInstallStatus, CommonMessageKey> = {
+    checking: 'account.pwa.status.checking',
+    installed: 'account.pwa.status.installed',
+    installable: 'account.pwa.status.installable',
+    manual: 'account.pwa.status.manual',
+    unsupported: 'account.pwa.status.unsupported',
   };
 
-  return labels[status];
+  return t(labelKeys[status]);
 }
 
-function installStatusDescription(status: PwaInstallStatus): string {
-  const descriptions: Record<PwaInstallStatus, string> = {
-    checking: '正在检查当前浏览器是否支持安装入口。',
-    installed: '当前已经以独立应用方式打开，后续可继续在这里管理离线缓存。',
-    installable: '当前浏览器支持直接安装，点击“安装雨城通”即可打开安装确认。',
-    manual: '当前浏览器需要通过菜单添加到主屏幕或安装为应用；在 Safari 中可使用分享菜单里的“添加到主屏幕”。',
-    unsupported: '当前浏览器不支持安装入口，仍可继续使用网页和近期内容缓存。',
+function installStatusDescription(
+  status: PwaInstallStatus,
+  t: ReturnType<typeof useI18n>['t'],
+): string {
+  const descriptionKeys: Record<PwaInstallStatus, CommonMessageKey> = {
+    checking: 'account.pwa.statusDescription.checking',
+    installed: 'account.pwa.statusDescription.installed',
+    installable: 'account.pwa.statusDescription.installable',
+    manual: 'account.pwa.statusDescription.manual',
+    unsupported: 'account.pwa.statusDescription.unsupported',
   };
 
-  return descriptions[status];
+  return t(descriptionKeys[status]);
 }
 
 function readNotificationTypePreferences(): NotificationTypePreferences {
@@ -1982,9 +1985,12 @@ async function clearYctCaches(): Promise<void> {
   await Promise.all(keys.filter((key) => key.startsWith('yct-')).map((key) => caches.delete(key)));
 }
 
-async function refreshPwaCacheStatus(setStatusText: (value: string) => void): Promise<void> {
+async function refreshPwaCacheStatus(
+  setStatusText: (value: string) => void,
+  t: ReturnType<typeof useI18n>['t'],
+): Promise<void> {
   if (!('caches' in window)) {
-    setStatusText('缓存不可用');
+    setStatusText(t('account.pwa.cacheUnavailable'));
     return;
   }
 
@@ -1995,7 +2001,9 @@ async function refreshPwaCacheStatus(setStatusText: (value: string) => void): Pr
     itemCount += (await cache.keys()).length;
   }
 
-  setStatusText(itemCount > 0 ? `已缓存 ${itemCount} 项` : '暂无缓存');
+  setStatusText(
+    itemCount > 0 ? t('account.pwa.cacheItems', { count: itemCount }) : t('account.pwa.cacheEmpty'),
+  );
 }
 
 function parseOfflinePackageBounds(draft: typeof emptyOfflinePackageDraft): RectangleBounds | null {

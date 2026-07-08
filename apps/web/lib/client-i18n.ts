@@ -117,6 +117,28 @@ export type CommonMessageKey =
   | 'account.notification.title'
   | 'account.notification.tripDescription'
   | 'account.notification.tripLabel'
+  | 'account.pwa.action.clearCache'
+  | 'account.pwa.action.install'
+  | 'account.pwa.action.refreshCache'
+  | 'account.pwa.cacheChecking'
+  | 'account.pwa.cacheClearing'
+  | 'account.pwa.cacheEmpty'
+  | 'account.pwa.cacheItems'
+  | 'account.pwa.cacheRefreshing'
+  | 'account.pwa.cacheUnavailable'
+  | 'account.pwa.description'
+  | 'account.pwa.descriptionPrefix'
+  | 'account.pwa.status.checking'
+  | 'account.pwa.status.installed'
+  | 'account.pwa.status.installable'
+  | 'account.pwa.status.manual'
+  | 'account.pwa.status.unsupported'
+  | 'account.pwa.statusDescription.checking'
+  | 'account.pwa.statusDescription.installed'
+  | 'account.pwa.statusDescription.installable'
+  | 'account.pwa.statusDescription.manual'
+  | 'account.pwa.statusDescription.unsupported'
+  | 'account.pwa.title'
   | 'account.settings'
   | 'account.status.anonymous'
   | 'account.status.notConfigured'
@@ -847,6 +869,30 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.notification.title': '推送通知与免打扰时段',
     'account.notification.tripDescription': '出发、到站、历史行程相关提醒',
     'account.notification.tripLabel': '行程提醒',
+    'account.pwa.action.clearCache': '清理缓存',
+    'account.pwa.action.install': '安装雨城通',
+    'account.pwa.action.refreshCache': '刷新缓存',
+    'account.pwa.cacheChecking': '正在检查',
+    'account.pwa.cacheClearing': '正在清理',
+    'account.pwa.cacheEmpty': '暂无缓存',
+    'account.pwa.cacheItems': '已缓存 {count} 项',
+    'account.pwa.cacheRefreshing': '正在刷新',
+    'account.pwa.cacheUnavailable': '缓存不可用',
+    'account.pwa.description':
+      '把 YCT 添加到主屏幕，快速查看运营信息、线路和站点详情。支持缓存已下载的自定义范围离线包，并在你允许后接收行程、运营、订票和检票提醒。',
+    'account.pwa.descriptionPrefix': '安装雨城通：',
+    'account.pwa.status.checking': '检查中',
+    'account.pwa.status.installed': '已安装',
+    'account.pwa.status.installable': '可安装',
+    'account.pwa.status.manual': '可添加',
+    'account.pwa.status.unsupported': '不可用',
+    'account.pwa.statusDescription.checking': '正在检查当前浏览器是否支持安装入口。',
+    'account.pwa.statusDescription.installed': '当前已经以独立应用方式打开，后续可继续在这里管理离线缓存。',
+    'account.pwa.statusDescription.installable': '当前浏览器支持直接安装，点击“安装雨城通”即可打开安装确认。',
+    'account.pwa.statusDescription.manual':
+      '当前浏览器需要通过菜单添加到主屏幕或安装为应用；在 Safari 中可使用分享菜单里的“添加到主屏幕”。',
+    'account.pwa.statusDescription.unsupported': '当前浏览器不支持安装入口，仍可继续使用网页和近期内容缓存。',
+    'account.pwa.title': '安装与离线',
     'account.settings': '账号设置',
     'account.status.anonymous': '未登录',
     'account.status.notConfigured': '临东通未配置',
@@ -1606,6 +1652,30 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.notification.title': '推送通知與免打擾時段',
     'account.notification.tripDescription': '出發、到站、歷史行程相關提醒',
     'account.notification.tripLabel': '行程提醒',
+    'account.pwa.action.clearCache': '清理快取',
+    'account.pwa.action.install': '安裝雨城通',
+    'account.pwa.action.refreshCache': '重新整理快取',
+    'account.pwa.cacheChecking': '正在檢查',
+    'account.pwa.cacheClearing': '正在清理',
+    'account.pwa.cacheEmpty': '暫無快取',
+    'account.pwa.cacheItems': '已快取 {count} 項',
+    'account.pwa.cacheRefreshing': '正在重新整理',
+    'account.pwa.cacheUnavailable': '快取不可用',
+    'account.pwa.description':
+      '把 YCT 加入主畫面，快速查看營運資訊、線路和站點詳情。支援快取已下載的自訂範圍離線包，並在你允許後接收行程、營運、訂票和檢票提醒。',
+    'account.pwa.descriptionPrefix': '安裝雨城通：',
+    'account.pwa.status.checking': '檢查中',
+    'account.pwa.status.installed': '已安裝',
+    'account.pwa.status.installable': '可安裝',
+    'account.pwa.status.manual': '可加入',
+    'account.pwa.status.unsupported': '不可用',
+    'account.pwa.statusDescription.checking': '正在檢查目前瀏覽器是否支援安裝入口。',
+    'account.pwa.statusDescription.installed': '目前已經以獨立應用方式開啟，後續可繼續在這裡管理離線快取。',
+    'account.pwa.statusDescription.installable': '目前瀏覽器支援直接安裝，點擊「安裝雨城通」即可開啟安裝確認。',
+    'account.pwa.statusDescription.manual':
+      '目前瀏覽器需要透過選單加入主畫面或安裝為應用；在 Safari 中可使用分享選單裡的「加入主畫面」。',
+    'account.pwa.statusDescription.unsupported': '目前瀏覽器不支援安裝入口，仍可繼續使用網頁和近期內容快取。',
+    'account.pwa.title': '安裝與離線',
     'account.settings': '帳號設定',
     'account.status.anonymous': '未登入',
     'account.status.notConfigured': '臨東通未設定',
@@ -2369,6 +2439,34 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.notification.title': 'Push Notifications and Quiet Hours',
     'account.notification.tripDescription': 'Departure, arrival, and trip history reminders',
     'account.notification.tripLabel': 'Trip reminders',
+    'account.pwa.action.clearCache': 'Clear cache',
+    'account.pwa.action.install': 'Install Yuchengtong',
+    'account.pwa.action.refreshCache': 'Refresh cache',
+    'account.pwa.cacheChecking': 'Checking',
+    'account.pwa.cacheClearing': 'Clearing',
+    'account.pwa.cacheEmpty': 'No cache yet',
+    'account.pwa.cacheItems': '{count} cached items',
+    'account.pwa.cacheRefreshing': 'Refreshing',
+    'account.pwa.cacheUnavailable': 'Cache unavailable',
+    'account.pwa.description':
+      'Add YCT to the home screen for quick access to updates, lines, and station details. Downloaded custom offline areas can be cached, and after you allow it, YCT can receive trip, operations, ticketing, and check-in reminders.',
+    'account.pwa.descriptionPrefix': 'Install Yuchengtong:',
+    'account.pwa.status.checking': 'Checking',
+    'account.pwa.status.installed': 'Installed',
+    'account.pwa.status.installable': 'Installable',
+    'account.pwa.status.manual': 'Add manually',
+    'account.pwa.status.unsupported': 'Unavailable',
+    'account.pwa.statusDescription.checking':
+      'Checking whether this browser supports an install entry.',
+    'account.pwa.statusDescription.installed':
+      'This site is already open as a standalone app. You can continue managing offline cache here.',
+    'account.pwa.statusDescription.installable':
+      'This browser supports direct installation. Choose "Install Yuchengtong" to open the install confirmation.',
+    'account.pwa.statusDescription.manual':
+      'This browser needs the menu to add the site to the home screen or install it as an app. In Safari, use the Share menu and choose "Add to Home Screen".',
+    'account.pwa.statusDescription.unsupported':
+      'This browser does not support an install entry, but the web page and recent content cache still work.',
+    'account.pwa.title': 'Install and Offline',
     'account.settings': 'Account Settings',
     'account.status.anonymous': 'Not signed in',
     'account.status.notConfigured': 'Ldpass is not configured',
