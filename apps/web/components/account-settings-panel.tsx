@@ -222,8 +222,8 @@ export function AccountSettingsPanel({
 }>) {
   const { locale, t } = useI18n();
   const ticketOrderLockedText = auth.session?.readonlyUser
-    ? '账号为只读状态，Active 后可查看订单草稿。'
-    : '登录后可查看订单草稿。';
+    ? t('account.ticketDraft.readonly')
+    : t('travelSchedule.order.loginRequired');
   const themeOptions = useMemo(
     () =>
       themeOptionKeys.map((option) => ({
@@ -308,7 +308,7 @@ export function AccountSettingsPanel({
   const [refreshingPackageId, setRefreshingPackageId] = useState<string | null>(null);
   const [ticketOrders, setTicketOrders] = useState<TicketOrderListItem[] | null>(null);
   const [ticketOrderStatusText, setTicketOrderStatusText] = useState(
-    auth.session?.user ? '正在读取订单草稿' : ticketOrderLockedText,
+    auth.session?.user ? t('ticketOrderDraft.loading') : ticketOrderLockedText,
   );
   const [cancellingTicketOrderId, setCancellingTicketOrderId] = useState<string | null>(null);
   const syncTripSummary = () => {
@@ -326,7 +326,7 @@ export function AccountSettingsPanel({
       return;
     }
 
-    setTicketOrderStatusText('正在读取订单草稿');
+    setTicketOrderStatusText(t('ticketOrderDraft.loading'));
     try {
       const response = await fetch(appPath('/api/travel/ticketing/orders'), { cache: 'no-store' });
       const data = (await response.json()) as Partial<ApiListResponse<TicketOrderListItem>> & {
@@ -335,28 +335,30 @@ export function AccountSettingsPanel({
 
       if (response.status === 401) {
         setTicketOrders([]);
-        setTicketOrderStatusText('登录后可查看订单草稿。');
+        setTicketOrderStatusText(t('travelSchedule.order.loginRequired'));
         return;
       }
 
       if (!response.ok || !data.items) {
-        throw new Error(data.message ?? '订单草稿读取失败');
+        throw new Error(data.message ?? t('travelSchedule.order.readFailed'));
       }
 
       setTicketOrders(data.items);
-      setTicketOrderStatusText(data.items.length > 0 ? '' : '暂无订单草稿。');
+      setTicketOrderStatusText(data.items.length > 0 ? '' : t('ticketOrderDraft.empty'));
     } catch (error) {
       setTicketOrders([]);
-      setTicketOrderStatusText(error instanceof Error ? error.message : '订单草稿读取失败');
+      setTicketOrderStatusText(
+        error instanceof Error ? error.message : t('travelSchedule.order.readFailed'),
+      );
     }
   };
   const cancelTicketOrder = async (orderId: string) => {
-    if (!window.confirm('要取消这个订单草稿并释放库存占用吗？')) {
+    if (!window.confirm(t('ticketOrderDetail.cancelConfirm'))) {
       return;
     }
 
     setCancellingTicketOrderId(orderId);
-    setTicketOrderStatusText('正在取消订单草稿');
+    setTicketOrderStatusText(t('travelSchedule.order.canceling'));
     try {
       const response = await fetch(
         appPath(`/api/travel/ticketing/orders/${encodeURIComponent(orderId)}/cancel`),
@@ -367,14 +369,16 @@ export function AccountSettingsPanel({
       };
 
       if (!response.ok || !data.item) {
-        throw new Error(data.message ?? '订单草稿取消失败');
+        throw new Error(data.message ?? t('ticketOrderDetail.cancelFailed'));
       }
 
-      setTicketOrderStatusText('已取消订单草稿');
+      setTicketOrderStatusText(t('ticketOrderDetail.cancelDone'));
       await refreshTicketOrders();
       notifyTicketOrderStateChanged();
     } catch (error) {
-      setTicketOrderStatusText(error instanceof Error ? error.message : '订单草稿取消失败');
+      setTicketOrderStatusText(
+        error instanceof Error ? error.message : t('ticketOrderDetail.cancelFailed'),
+      );
     } finally {
       setCancellingTicketOrderId(null);
     }
@@ -1133,17 +1137,17 @@ export function AccountSettingsPanel({
             <span className="material-symbols-outlined" aria-hidden="true">
               confirmation_number
             </span>
-            <span id="ticket-order-settings-title">票务草稿</span>
+            <span id="ticket-order-settings-title">{t('ticketOrderDraft.title')}</span>
             <span className="settings-inline-status">
-              {ticketOrders === null ? '读取中' : `${ticketDraftCount} 个`}
+              {ticketOrders === null
+                ? t('ticketOrderDraft.loading')
+                : t('account.ticketDraft.count', { count: ticketDraftCount })}
             </span>
           </div>
           <TicketOrderDraftPanel
             cancellingOrderId={cancellingTicketOrderId}
             orders={ticketOrders}
             statusText={ticketOrderStatusText}
-            title="占座草稿"
-            description="这里展示本账号仍在占座或待出票的草稿；取消后会释放库存占用。"
             onCancel={(orderId) => void cancelTicketOrder(orderId)}
             onRefresh={() => void refreshTicketOrders()}
           />

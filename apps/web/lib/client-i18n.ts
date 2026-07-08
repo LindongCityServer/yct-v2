@@ -140,6 +140,8 @@ export type CommonMessageKey =
   | 'account.pwa.statusDescription.unsupported'
   | 'account.pwa.title'
   | 'account.settings'
+  | 'account.ticketDraft.count'
+  | 'account.ticketDraft.readonly'
   | 'account.status.anonymous'
   | 'account.status.notConfigured'
   | 'account.status.readonly'
@@ -894,6 +896,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.pwa.statusDescription.unsupported': '当前浏览器不支持安装入口，仍可继续使用网页和近期内容缓存。',
     'account.pwa.title': '安装与离线',
     'account.settings': '账号设置',
+    'account.ticketDraft.count': '{count} 个',
+    'account.ticketDraft.readonly': '账号为只读状态，Active 后可查看订单草稿。',
     'account.status.anonymous': '未登录',
     'account.status.notConfigured': '临东通未配置',
     'account.status.readonly': '只读账号',
@@ -1677,6 +1681,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.pwa.statusDescription.unsupported': '目前瀏覽器不支援安裝入口，仍可繼續使用網頁和近期內容快取。',
     'account.pwa.title': '安裝與離線',
     'account.settings': '帳號設定',
+    'account.ticketDraft.count': '{count} 個',
+    'account.ticketDraft.readonly': '帳號為唯讀狀態，Active 後可查看訂單草稿。',
     'account.status.anonymous': '未登入',
     'account.status.notConfigured': '臨東通未設定',
     'account.status.readonly': '唯讀帳號',
@@ -2468,6 +2474,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       'This browser does not support an install entry, but the web page and recent content cache still work.',
     'account.pwa.title': 'Install and Offline',
     'account.settings': 'Account Settings',
+    'account.ticketDraft.count': '{count}',
+    'account.ticketDraft.readonly': 'This account is read-only. Order drafts are available after Active status.',
     'account.status.anonymous': 'Not signed in',
     'account.status.notConfigured': 'Ldpass is not configured',
     'account.status.readonly': 'Read-only account',
