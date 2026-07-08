@@ -20,7 +20,7 @@ import {
   readSelectedMapTileProviderId,
   writeSelectedMapTileProviderId,
 } from '../lib/client-map-settings';
-import { useI18n } from '../lib/client-i18n';
+import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 
 interface MarkerResponse {
   meta: ApiMeta;
@@ -474,6 +474,35 @@ const markerCategoryFallbackNames: Record<string, string> = {
   'transit-line': '线路',
 };
 
+const markerCategoryMessageKeys: Record<string, CommonMessageKey> = {
+  airport: 'map.categoryName.airport',
+  'bus-stop': 'map.categoryName.busStop',
+  'coach-station': 'map.categoryName.coachStation',
+  commerce: 'map.categoryName.commerce',
+  dining: 'map.categoryName.dining',
+  education: 'map.categoryName.education',
+  facility: 'map.categoryName.facility',
+  'ferry-port': 'map.categoryName.ferryPort',
+  industry: 'map.categoryName.industry',
+  'map-marker': 'map.categoryName.mapMarker',
+  medical: 'map.categoryName.medical',
+  'metro-entrance': 'map.categoryName.metroEntrance',
+  'metro-station': 'map.categoryName.metroStation',
+  museum: 'map.categoryName.museum',
+  park: 'map.categoryName.park',
+  parking: 'map.categoryName.parking',
+  player: 'map.categoryName.player',
+  'public-service': 'map.categoryName.publicService',
+  railway: 'map.categoryName.railway',
+  'railway-station': 'map.categoryName.railwayStation',
+  residence: 'map.categoryName.residence',
+  road: 'map.categoryName.road',
+  scenery: 'map.categoryName.scenery',
+  sports: 'map.categoryName.sports',
+  'tram-station': 'map.categoryName.tramStation',
+  'transit-line': 'map.categoryName.transitLine',
+};
+
 const routeTransportModeOptions: RouteTransportModeOption[] = [
   { mode: 'walk', label: '步行', icon: 'directions_walk', color: 'var(--yct-color-text-secondary)' },
   { mode: 'bus', label: '公交', icon: 'directions_bus', color: 'var(--yct-color-tertiary)' },
@@ -488,6 +517,14 @@ const routeWalkTraceColor = 'var(--yct-color-text-secondary)';
 
 function getRouteTransportModeLabel(mode: RouteTransportMode, t: Translate): string {
   return t(`map.route.mode.${mode}` as Parameters<Translate>[0]);
+}
+
+function getTransitModeDisplayLabel(mode: string, fallback: string, t: Translate): string {
+  return isRouteTransportMode(mode) ? getRouteTransportModeLabel(mode, t) : fallback;
+}
+
+function isRouteTransportMode(mode: string): mode is RouteTransportMode {
+  return routeTransportModeOptions.some((option) => option.mode === mode);
 }
 
 const highPriorityTransitCategoryIds = new Set([
@@ -877,19 +914,23 @@ export function MapStage() {
         .map((marker) => marker.categoryId)
         .filter((categoryId): categoryId is string => Boolean(categoryId)),
     );
-    const configuredCategories =
-      categoryResponse?.items
-        .filter((category) => availableCategoryIds.has(category.id))
-        .sort(
-          (left, right) =>
-            left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'zh-CN'),
+  const configuredCategories =
+    categoryResponse?.items
+      .filter((category) => availableCategoryIds.has(category.id))
+      .map((category) => ({
+        ...category,
+        name: getMarkerCategoryDisplayName(category.id, t, category.name),
+      }))
+      .sort(
+        (left, right) =>
+          left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'zh-CN'),
         ) ?? [];
     const configuredCategoryIds = new Set(configuredCategories.map((category) => category.id));
     const inferredCategories = Array.from(availableCategoryIds)
       .filter((categoryId) => !configuredCategoryIds.has(categoryId))
       .map((categoryId) => ({
         id: categoryId,
-        name: getMarkerCategoryFallbackName(categoryId),
+        name: getMarkerCategoryDisplayName(categoryId, t),
       }))
       .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
 
@@ -1125,12 +1166,18 @@ export function MapStage() {
     writeSelectedMapTileProviderId(providerId);
   };
   const categoryById = useMemo(
-    () => new Map((categoryResponse?.items ?? []).map((category) => [category.id, category.name])),
-    [categoryResponse],
+    () =>
+      new Map(
+        (categoryResponse?.items ?? []).map((category) => [
+          category.id,
+          getMarkerCategoryDisplayName(category.id, t, category.name),
+        ]),
+      ),
+    [categoryResponse, t],
   );
   const stationConnectionIndex = useMemo(
-    () => buildStationConnectionIndex(transitOverview),
-    [transitOverview],
+    () => buildStationConnectionIndex(transitOverview, t),
+    [transitOverview, t],
   );
   const routePlanRequest = useMemo(
     () =>
@@ -1140,6 +1187,7 @@ export function MapStage() {
             enabledModes: routeTransportModes,
             pointMarkers,
             secondaryPoiIndex,
+            secondaryPoiParentIndex,
             transitLines: transitOverview?.lines ?? [],
             modeProfiles: transitOverview?.modeProfiles ?? [],
           }
@@ -1149,6 +1197,7 @@ export function MapStage() {
       routePlanDraft,
       routeTransportModes,
       secondaryPoiIndex,
+      secondaryPoiParentIndex,
       transitOverview,
     ],
   );
@@ -1224,7 +1273,7 @@ export function MapStage() {
     focusedMarker && isCenterableMarker(focusedMarker) ? getMarkerCenter(focusedMarker) : undefined;
   const focusedMarkerCategoryName = focusedMarker?.categoryId
     ? (categoryById.get(focusedMarker.categoryId) ??
-      getMarkerCategoryFallbackName(focusedMarker.categoryId))
+      getMarkerCategoryDisplayName(focusedMarker.categoryId, t))
     : undefined;
   const focusedMarkerConnections =
     focusedMarker && isTransitStationPoi(focusedMarker)
@@ -2280,7 +2329,7 @@ export function MapStage() {
                                     <small>
                                       {item.marker.categoryId
                                         ? (categoryById.get(item.marker.categoryId) ??
-                                          getMarkerCategoryFallbackName(item.marker.categoryId))
+                                          getMarkerCategoryDisplayName(item.marker.categoryId, t))
                                         : '关联地点'}
                                     </small>
                                   </span>
@@ -2312,8 +2361,9 @@ export function MapStage() {
                                 <small>
                                   {focusedParentPoi.parent.categoryId
                                     ? (categoryById.get(focusedParentPoi.parent.categoryId) ??
-                                      getMarkerCategoryFallbackName(
+                                      getMarkerCategoryDisplayName(
                                         focusedParentPoi.parent.categoryId,
+                                        t,
                                       ))
                                     : '父地点'}
                                 </small>
@@ -3492,11 +3542,16 @@ function buildRoutePlanOptions(input: {
   pointMarkers: PointMarker[];
   roadGraph?: RoadRouteGraph;
   secondaryPoiIndex: ReadonlyMap<string, SecondaryPoiLink[]>;
+  secondaryPoiParentIndex: ReadonlyMap<string, SecondaryPoiParentLink>;
   t: Translate;
   transitLines: TransitOverviewLine[];
   modeProfiles: TransitModeProfileForMap[];
 }): RoutePlanOption[] {
-  const draft = resolveRoutePlanDraftAccessPoints(input.draft, input.secondaryPoiIndex);
+  const draft = resolveRoutePlanDraftAccessPoints(
+    input.draft,
+    input.secondaryPoiIndex,
+    input.secondaryPoiParentIndex,
+  );
   const options: RoutePlanOption[] = [];
   const endpointAccessDistance = getRouteEndpointAccessDistance(draft);
   const routeOptionLimit = getRouteOptionLimit(input.enabledModes);
@@ -3625,17 +3680,20 @@ function getRouteOptionBadges(
 function resolveRoutePlanDraftAccessPoints(
   draft: RoutePlanDraft,
   secondaryPoiIndex: ReadonlyMap<string, SecondaryPoiLink[]>,
+  secondaryPoiParentIndex: ReadonlyMap<string, SecondaryPoiParentLink>,
 ): RoutePlanDraft {
   const origin = resolveRouteEndpointAccessPoint({
     endpointCoordinate: draft.origin,
     endpointId: draft.originId,
     secondaryPoiIndex,
+    secondaryPoiParentIndex,
     targetCoordinate: draft.destination,
   });
   const destination = resolveRouteEndpointAccessPoint({
     endpointCoordinate: draft.destination,
     endpointId: draft.destinationId,
     secondaryPoiIndex,
+    secondaryPoiParentIndex,
     targetCoordinate: origin.coordinate,
   });
 
@@ -3656,9 +3714,21 @@ function resolveRouteEndpointAccessPoint(input: {
   endpointCoordinate: [number, number];
   endpointId?: string;
   secondaryPoiIndex: ReadonlyMap<string, SecondaryPoiLink[]>;
+  secondaryPoiParentIndex: ReadonlyMap<string, SecondaryPoiParentLink>;
   targetCoordinate: [number, number];
 }): { coordinate: [number, number]; accessId?: string; accessLabel?: string } {
-  const allChildPois = input.endpointId ? input.secondaryPoiIndex.get(input.endpointId) : undefined;
+  const parentEndpointChildPois = input.endpointId
+    ? input.secondaryPoiIndex.get(input.endpointId)
+    : undefined;
+  const childParent = input.endpointId
+    ? input.secondaryPoiParentIndex.get(input.endpointId)
+    : undefined;
+  const childEndpointSiblingPois = childParent
+    ? input.secondaryPoiIndex
+        .get(childParent.parent.id)
+        ?.filter((link) => link.marker.id !== input.endpointId)
+    : undefined;
+  const allChildPois = parentEndpointChildPois ?? childEndpointSiblingPois;
   const accessChildPois = allChildPois?.filter(isRouteAccessSecondaryPoi);
   const childPois = accessChildPois && accessChildPois.length > 0 ? accessChildPois : allChildPois;
   if (!childPois || childPois.length === 0) {
@@ -3689,6 +3759,10 @@ function resolveRouteEndpointAccessPoint(input: {
   const selected = candidates[0];
 
   if (!selected) {
+    return { coordinate: input.endpointCoordinate };
+  }
+
+  if (selected.link.marker.id === input.endpointId) {
     return { coordinate: input.endpointCoordinate };
   }
 
@@ -4790,7 +4864,7 @@ function buildTransitRoutePlanOptions(input: {
           icon: profile?.icon ?? mode.icon,
           line,
           mode,
-          modeLabel: profile?.label ?? getRouteTransportModeLabel(mode.mode, input.t),
+          modeLabel: getRouteTransportModeLabel(mode.mode, input.t),
           stops,
           terminalName: stops.at(-1)?.stop.stationName ?? line.lastStationName ?? line.name,
         });
@@ -5528,7 +5602,7 @@ function findRoadAccessCandidates(
   target: [number, number],
   graph: RoadRouteGraph,
   routeCache?: RoutePlanningCache,
-  limit = 6,
+  limit = 12,
 ): RoadAccessCandidate[] {
   const accessCacheKey = `${formatCoordinateCacheKey(point)}->${formatCoordinateCacheKey(target)}:${limit}`;
   const cachedCandidates = routeCache?.accessCandidatesByPair.get(accessCacheKey);
@@ -5536,16 +5610,20 @@ function findRoadAccessCandidates(
     return cachedCandidates;
   }
 
-  const candidates = graph.roadSegments
-    .map((segment) => {
-      const projection = projectPointToRoadSegment(point, segment);
-      const directionPenalty = getRoadAccessDirectionPenalty(point, target, projection.coordinate);
-      return {
-        ...projection,
-        score: projection.distanceToPoint + directionPenalty,
-      };
-    })
-    .sort((left, right) => left.score - right.score);
+  const scoredCandidates = graph.roadSegments.map((segment) => {
+    const projection = projectPointToRoadSegment(point, segment);
+    const directionPenalty = getRoadAccessDirectionPenalty(point, target, projection.coordinate);
+    return {
+      ...projection,
+      score: projection.distanceToPoint + directionPenalty,
+    };
+  });
+  const candidates = [
+    ...[...scoredCandidates].sort((left, right) => left.score - right.score).slice(0, limit),
+    ...[...scoredCandidates]
+      .sort((left, right) => left.distanceToPoint - right.distanceToPoint)
+      .slice(0, limit),
+  ];
 
   const deduped = new Map<string, RoadAccessCandidate>();
   for (const candidate of candidates) {
@@ -5984,6 +6062,15 @@ function getMarkerCategoryFallbackName(categoryId: string): string {
   return markerCategoryFallbackNames[categoryId] ?? categoryId;
 }
 
+function getMarkerCategoryDisplayName(
+  categoryId: string,
+  t: Translate,
+  fallbackName?: string,
+): string {
+  const messageKey = markerCategoryMessageKeys[categoryId];
+  return messageKey ? t(messageKey) : (fallbackName ?? getMarkerCategoryFallbackName(categoryId));
+}
+
 function getMapMarkerListEmptyText(input: {
   loadStatus: LoadStatus;
   markerListCategoryId: string;
@@ -6343,6 +6430,7 @@ function filterMarkers<T extends { label: string }>(markers: T[], query: string)
 
 function buildStationConnectionIndex(
   overview: TransitOverviewResponse | null,
+  t: Translate,
 ): Map<string, TransitLineConnection[]> {
   if (!overview) {
     return new Map();
@@ -6355,13 +6443,13 @@ function buildStationConnectionIndex(
 
   for (const line of overview.lines ?? []) {
     const profile = profileByMode.get(line.mode);
-    const connection: TransitLineConnection = {
-      id: line.id,
-      mode: line.mode,
-      modeLabel: profile?.label ?? line.mode,
-      name: line.name,
-      color: line.color ?? profile?.color,
-      sortOrder: profile?.sortOrder ?? 999,
+      const connection: TransitLineConnection = {
+        id: line.id,
+        mode: line.mode,
+        modeLabel: getTransitModeDisplayLabel(line.mode, profile?.label ?? line.mode, t),
+        name: line.name,
+        color: line.color ?? profile?.color,
+        sortOrder: profile?.sortOrder ?? 999,
     };
 
     for (const stationName of line.stationNames ?? []) {

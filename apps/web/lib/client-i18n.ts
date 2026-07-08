@@ -7,7 +7,36 @@ import {
   readLocalLocalePreference,
 } from './client-locale-preference';
 
+type MapCategoryMessageKey =
+  | 'map.categoryName.airport'
+  | 'map.categoryName.busStop'
+  | 'map.categoryName.coachStation'
+  | 'map.categoryName.commerce'
+  | 'map.categoryName.dining'
+  | 'map.categoryName.education'
+  | 'map.categoryName.facility'
+  | 'map.categoryName.ferryPort'
+  | 'map.categoryName.industry'
+  | 'map.categoryName.mapMarker'
+  | 'map.categoryName.medical'
+  | 'map.categoryName.metroEntrance'
+  | 'map.categoryName.metroStation'
+  | 'map.categoryName.museum'
+  | 'map.categoryName.park'
+  | 'map.categoryName.parking'
+  | 'map.categoryName.player'
+  | 'map.categoryName.publicService'
+  | 'map.categoryName.railway'
+  | 'map.categoryName.railwayStation'
+  | 'map.categoryName.residence'
+  | 'map.categoryName.road'
+  | 'map.categoryName.scenery'
+  | 'map.categoryName.sports'
+  | 'map.categoryName.tramStation'
+  | 'map.categoryName.transitLine';
+
 export type CommonMessageKey =
+  | MapCategoryMessageKey
   | 'account.settings'
   | 'account.status.anonymous'
   | 'account.status.notConfigured'
@@ -529,6 +558,32 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.categoryFilter.aria': '筛选地图标记分类',
     'map.categoryFilter.collapse': '收起分类筛选',
     'map.categoryFilter.expand': '展开分类筛选',
+    'map.categoryName.airport': '机场',
+    'map.categoryName.busStop': '公交站',
+    'map.categoryName.coachStation': '客运站',
+    'map.categoryName.commerce': '商业',
+    'map.categoryName.dining': '餐饮',
+    'map.categoryName.education': '教育',
+    'map.categoryName.facility': '设施',
+    'map.categoryName.ferryPort': '轮渡码头',
+    'map.categoryName.industry': '产业设施',
+    'map.categoryName.mapMarker': '地图标记',
+    'map.categoryName.medical': '医疗',
+    'map.categoryName.metroEntrance': '地铁出入口',
+    'map.categoryName.metroStation': '地铁站',
+    'map.categoryName.museum': '展馆',
+    'map.categoryName.park': '公园绿地',
+    'map.categoryName.parking': '停车',
+    'map.categoryName.player': '在线玩家',
+    'map.categoryName.publicService': '公共服务',
+    'map.categoryName.railway': '铁路',
+    'map.categoryName.railwayStation': '铁路车站',
+    'map.categoryName.residence': '居住区',
+    'map.categoryName.road': '道路',
+    'map.categoryName.scenery': '景点',
+    'map.categoryName.sports': '体育',
+    'map.categoryName.tramStation': '有轨电车站',
+    'map.categoryName.transitLine': '线路',
     'map.empty.favorites': '暂无收藏地点',
     'map.empty.loading': '正在读取地图标记',
     'map.empty.nearby': '周边暂无可显示标记',
@@ -1011,6 +1066,32 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.categoryFilter.aria': '篩選地圖標記分類',
     'map.categoryFilter.collapse': '收合分類篩選',
     'map.categoryFilter.expand': '展開分類篩選',
+    'map.categoryName.airport': '機場',
+    'map.categoryName.busStop': '公車站',
+    'map.categoryName.coachStation': '客運站',
+    'map.categoryName.commerce': '商業',
+    'map.categoryName.dining': '餐飲',
+    'map.categoryName.education': '教育',
+    'map.categoryName.facility': '設施',
+    'map.categoryName.ferryPort': '輪渡碼頭',
+    'map.categoryName.industry': '產業設施',
+    'map.categoryName.mapMarker': '地圖標記',
+    'map.categoryName.medical': '醫療',
+    'map.categoryName.metroEntrance': '地鐵出入口',
+    'map.categoryName.metroStation': '地鐵站',
+    'map.categoryName.museum': '展館',
+    'map.categoryName.park': '公園綠地',
+    'map.categoryName.parking': '停車',
+    'map.categoryName.player': '線上玩家',
+    'map.categoryName.publicService': '公共服務',
+    'map.categoryName.railway': '鐵路',
+    'map.categoryName.railwayStation': '鐵路車站',
+    'map.categoryName.residence': '居住區',
+    'map.categoryName.road': '道路',
+    'map.categoryName.scenery': '景點',
+    'map.categoryName.sports': '體育',
+    'map.categoryName.tramStation': '有軌電車站',
+    'map.categoryName.transitLine': '線路',
     'map.empty.favorites': '暫無收藏地點',
     'map.empty.loading': '正在讀取地圖標記',
     'map.empty.nearby': '周邊暫無可顯示標記',
@@ -1493,6 +1574,32 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.categoryFilter.aria': 'Filter map marker categories',
     'map.categoryFilter.collapse': 'Collapse category filters',
     'map.categoryFilter.expand': 'Expand category filters',
+    'map.categoryName.airport': 'Airport',
+    'map.categoryName.busStop': 'Bus Stop',
+    'map.categoryName.coachStation': 'Coach Station',
+    'map.categoryName.commerce': 'Commerce',
+    'map.categoryName.dining': 'Dining',
+    'map.categoryName.education': 'Education',
+    'map.categoryName.facility': 'Facility',
+    'map.categoryName.ferryPort': 'Ferry Port',
+    'map.categoryName.industry': 'Industrial Facility',
+    'map.categoryName.mapMarker': 'Map Marker',
+    'map.categoryName.medical': 'Medical',
+    'map.categoryName.metroEntrance': 'Metro Entrance',
+    'map.categoryName.metroStation': 'Metro Station',
+    'map.categoryName.museum': 'Museum',
+    'map.categoryName.park': 'Park',
+    'map.categoryName.parking': 'Parking',
+    'map.categoryName.player': 'Online Player',
+    'map.categoryName.publicService': 'Public Service',
+    'map.categoryName.railway': 'Railway',
+    'map.categoryName.railwayStation': 'Railway Station',
+    'map.categoryName.residence': 'Residential Area',
+    'map.categoryName.road': 'Road',
+    'map.categoryName.scenery': 'Scenic Spot',
+    'map.categoryName.sports': 'Sports',
+    'map.categoryName.tramStation': 'Tram Stop',
+    'map.categoryName.transitLine': 'Line',
     'map.empty.favorites': 'No favorite places yet',
     'map.empty.loading': 'Loading map markers',
     'map.empty.nearby': 'No nearby markers to show',
