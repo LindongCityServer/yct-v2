@@ -63,7 +63,7 @@ export function AppShell({
   const [accountStatus, setAccountStatus] = useState<AccountStatusResponse | null>(null);
   const [localPendingSyncCount, setLocalPendingSyncCount] = useState(0);
   const noticeTimer = useRef<number | null>(null);
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
 
   useEffect(
     () => () => {
@@ -143,6 +143,15 @@ export function AppShell({
   };
   const accountBadge = mergeTopbarBadge(accountStatus?.badge, localPendingSyncCount, t);
   const renderedPageTitle = pageTitleKey ? t(pageTitleKey) : pageTitle;
+  const useSymbolBrand =
+    active === 'map' ||
+    active === 'travel' ||
+    active === 'services' ||
+    (active === 'operations' && locale === 'en');
+  const topbarPageTitle =
+    active === 'operations' && locale === 'en' && !renderedPageTitle
+      ? 'Yuchengtong'
+      : renderedPageTitle;
 
   return (
     <main
@@ -164,19 +173,23 @@ export function AppShell({
         >
           <span className="material-symbols-outlined">menu</span>
         </button>
-        <Link className="brand" href={appPath('/')} aria-label={t('brand.home')}>
+        <Link
+          className={useSymbolBrand ? 'brand is-symbol-brand' : 'brand is-wordmark-brand'}
+          href={appPath('/')}
+          aria-label={t('brand.home')}
+        >
           <img
             className="brand-logo brand-logo-wordmark"
             src={appPath('/icons/yct-logo-wordmark.svg')}
-            alt="雨城通"
+            alt={locale === 'en' ? 'Yuchengtong' : '雨城通'}
           />
           <img
             className="brand-logo brand-logo-symbol"
             src={appPath('/icons/yct-logo.svg')}
-            alt="雨城通"
+            alt={locale === 'en' ? 'Yuchengtong' : '雨城通'}
           />
         </Link>
-        {renderedPageTitle ? <span className="topbar-page-title">{renderedPageTitle}</span> : null}
+        {topbarPageTitle ? <span className="topbar-page-title">{topbarPageTitle}</span> : null}
         <div className="topbar-actions">
           <button
             className="pill-button"

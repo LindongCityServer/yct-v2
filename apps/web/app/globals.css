@@ -160,6 +160,22 @@ body .material-symbols-outlined {
   height: 22px;
 }
 
+.brand.is-symbol-brand .brand-logo-wordmark {
+  display: none;
+}
+
+.brand.is-symbol-brand .brand-logo-symbol {
+  display: block;
+}
+
+.brand.is-wordmark-brand .brand-logo-wordmark {
+  display: block;
+}
+
+.brand.is-wordmark-brand .brand-logo-symbol {
+  display: none;
+}
+
 .topbar-page-title {
   min-width: 0;
   overflow: hidden;
@@ -6352,14 +6368,6 @@ body .material-symbols-outlined {
 
   .brand {
     height: 25px;
-  }
-
-  .brand-logo-wordmark {
-    display: none;
-  }
-
-  .brand-logo-symbol {
-    display: block;
   }
 
   .topbar-page-title {
