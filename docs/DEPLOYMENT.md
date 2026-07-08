@@ -282,7 +282,7 @@ foreach ($relativePath in @(
 
 可以按下面理解：
 
-- `.yct-data`：账号映射、管理员成员、交通数据版本、POI 投稿、提醒、通知、票务草稿、离线范围请求等本地仓储。
+- `.yct-data`：账号映射、管理员成员、交通数据版本、POI 投稿、POI 投稿图片、提醒、通知、票务草稿、离线范围请求等本地仓储；当前 POI 投稿图片默认在 `.yct-data/poi-submission-images`。
 - `apps\web\public\content-assets`：内容后台上传的真实图片和附件。
 - `apps\web\public\legacy-assets`：如果它来自你本地打包机的 `public` 目录，通常已经包含在部署包里；只有当云端还保留了“没有重新打进包的额外旧资源”时，才需要额外手工保留。
 
@@ -476,7 +476,7 @@ node >=20.9.0
 以下内容应该保存在服务器持久目录或后续数据库/对象存储中，不随每次部署覆盖：
 
 - 部署根目录下的 `.env`、`.env.production`、`.env.local` 等真实环境变量文件。
-- `.yct-data` 本地运行时仓储。
+- `.yct-data` 本地运行时仓储，其中包含 POI 投稿图片目录 `.yct-data/poi-submission-images`。
 - 后台上传素材目录 `apps/web/public/content-assets`。
 - 日志、备份和导入中间文件。
 
