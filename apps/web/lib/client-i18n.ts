@@ -476,6 +476,7 @@ export type CommonMessageKey =
   | 'travelSchedule.trip.arrivalUnknown'
   | 'travelSchedule.trip.boardingGate'
   | 'travelSchedule.trip.checkInArrival'
+  | 'travelSchedule.trip.dayOffset'
   | 'travelSchedule.trip.departureTime'
   | 'travelSchedule.trip.departureUnknown'
   | 'travelSchedule.trip.direct'
@@ -986,6 +987,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travelSchedule.trip.arrivalUnknown': '到达地点待公布',
     'travelSchedule.trip.boardingGate': '登船口',
     'travelSchedule.trip.checkInArrival': '值机/到达',
+    'travelSchedule.trip.dayOffset': '+{count}天',
     'travelSchedule.trip.departureTime': '出发时间',
     'travelSchedule.trip.departureUnknown': '出发地点待公布',
     'travelSchedule.trip.direct': '直达',
@@ -1494,6 +1496,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travelSchedule.trip.arrivalUnknown': '到達地點待公布',
     'travelSchedule.trip.boardingGate': '登船口',
     'travelSchedule.trip.checkInArrival': '值機/到達',
+    'travelSchedule.trip.dayOffset': '+{count}天',
     'travelSchedule.trip.departureTime': '出發時間',
     'travelSchedule.trip.departureUnknown': '出發地點待公布',
     'travelSchedule.trip.direct': '直達',
@@ -2005,6 +2008,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travelSchedule.trip.arrivalUnknown': 'Arrival place to be announced',
     'travelSchedule.trip.boardingGate': 'Boarding gate',
     'travelSchedule.trip.checkInArrival': 'Check-in / arrival',
+    'travelSchedule.trip.dayOffset': '+{count}d',
     'travelSchedule.trip.departureTime': 'Departure Time',
     'travelSchedule.trip.departureUnknown': 'Departure place to be announced',
     'travelSchedule.trip.direct': 'Direct',

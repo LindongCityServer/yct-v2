@@ -5477,17 +5477,14 @@ body .material-symbols-outlined {
 }
 
 .schedule-trip-time-block time .schedule-trip-day-offset {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 0.18em;
+  display: inline-block;
+  margin-left: 0.14em;
   color: var(--yct-color-text-secondary);
-  font-size: 0.28em;
+  font-size: 0.32em;
   font-weight: 800;
-  line-height: 1;
+  line-height: 0;
   white-space: nowrap;
-  transform: translateY(-1.25em);
-  transform-origin: left center;
-  vertical-align: baseline;
+  vertical-align: super;
 }
 
 .schedule-trip-time-block small {

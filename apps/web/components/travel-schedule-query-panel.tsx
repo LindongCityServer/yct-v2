@@ -500,7 +500,7 @@ function ScheduleLocalHistoryPanel({
             </span>
             <span>
               <strong>{formatHistoryItemTitle(item)}</strong>
-              <small>{renderHistoryItemDetail(item)}</small>
+              <small>{renderHistoryItemDetail(item, t)}</small>
             </span>
           </button>
         ))}
@@ -534,7 +534,7 @@ function ScheduleTripCard({
       arrival: trip.destinationStationName,
       lineName: trip.lineName,
       transportMode: toReminderTransportMode(trip.serviceKind),
-      detail: formatScheduleReminderDetail(trip),
+      detail: formatScheduleReminderDetail(trip, t),
       remindAt: toDatetimeLocalValue(remindAt),
       source: 'schedule',
     });
@@ -633,7 +633,11 @@ function ScheduleTripCard({
           <time>
             {trip.arrivalTime ?? t('travelSchedule.trip.timeUnknown')}
             {trip.arrivalDayOffset && trip.arrivalDayOffset > 0 ? (
-              <sup className="schedule-trip-day-offset">+{trip.arrivalDayOffset}天</sup>
+              <ScheduleDayOffset
+                className="schedule-trip-day-offset"
+                t={t}
+                value={trip.arrivalDayOffset}
+              />
             ) : null}
           </time>
           <small>
@@ -1073,7 +1077,7 @@ function formatHistoryItemTitle(item: TravelScheduleHistoryItem): string {
   return item.tripCode ? `${item.lineName} 班次 ${item.tripCode}` : item.lineName;
 }
 
-function renderHistoryItemDetail(item: TravelScheduleHistoryItem): ReactNode {
+function renderHistoryItemDetail(item: TravelScheduleHistoryItem, t: Translate): ReactNode {
   const parts: Array<ReactNode | undefined> = [
     item.serviceLabel,
     item.departureTime,
@@ -1081,7 +1085,11 @@ function renderHistoryItemDetail(item: TravelScheduleHistoryItem): ReactNode {
       <span>
         到达 {item.arrivalTime}
         {item.arrivalDayOffset && item.arrivalDayOffset > 0 ? (
-          <sup className="schedule-history-day-offset">+{item.arrivalDayOffset}天</sup>
+          <ScheduleDayOffset
+            className="schedule-history-day-offset"
+            t={t}
+            value={item.arrivalDayOffset}
+          />
         ) : null}
       </span>
     ) : undefined,
@@ -1097,6 +1105,18 @@ function renderHistoryItemDetail(item: TravelScheduleHistoryItem): ReactNode {
       {part}
     </span>
   ));
+}
+
+function ScheduleDayOffset({
+  className,
+  t,
+  value,
+}: Readonly<{
+  className: string;
+  t: Translate;
+  value: number;
+}>) {
+  return <sup className={className}>{formatScheduleDayOffset(value, t)}</sup>;
 }
 
 function formatHistoryEndpoints(item: TravelScheduleHistoryItem): string {
@@ -1200,13 +1220,19 @@ function getLocationMetaLabel(kind: TicketableServiceKind, t?: Translate): strin
   return t ? t('travelSchedule.trip.gate') : '检票口';
 }
 
-function formatArrivalTime(trip: TravelTripInstance): string {
+function formatArrivalTime(trip: TravelTripInstance, t?: Translate): string {
   const dayOffset = trip.arrivalDayOffset;
   if (!trip.arrivalTime) {
-    return '待公布';
+    return t ? t('travelSchedule.trip.toBeAnnounced') : '待公布';
   }
 
-  return dayOffset && dayOffset > 0 ? `${trip.arrivalTime} +${dayOffset}天` : trip.arrivalTime;
+  return dayOffset && dayOffset > 0
+    ? `${trip.arrivalTime} ${formatScheduleDayOffset(dayOffset, t)}`
+    : trip.arrivalTime;
+}
+
+function formatScheduleDayOffset(value: number, t?: Translate): string {
+  return t ? t('travelSchedule.trip.dayOffset', { count: value }) : `+${value}天`;
 }
 
 function formatOperatingDays(days: string[], t: Translate): string {
@@ -1237,16 +1263,16 @@ function formatScheduleReminderTitle(trip: TravelTripInstance): string {
     : `${trip.lineName} ${trip.departureTime} 班次`;
 }
 
-function formatScheduleReminderDetail(trip: TravelTripInstance): string {
+function formatScheduleReminderDetail(trip: TravelTripInstance, t?: Translate): string {
   return [
     trip.tripCode ? `班次 ${trip.tripCode}` : undefined,
     `发车 ${trip.departureTime}`,
-    trip.arrivalTime ? `到达 ${formatArrivalTime(trip)}` : undefined,
-    trip.gateText ? `${getLocationMetaLabel(trip.serviceKind)} ${trip.gateText}` : undefined,
+    trip.arrivalTime ? `到达 ${formatArrivalTime(trip, t)}` : undefined,
+    trip.gateText ? `${getLocationMetaLabel(trip.serviceKind, t)} ${trip.gateText}` : undefined,
     trip.fareText ? `票价 ${trip.fareText}` : undefined,
     trip.operator,
-    formatVehicleText(trip) !== '待公布'
-      ? `${getVehicleMetaLabel(trip.serviceKind)} ${formatVehicleText(trip)}`
+    formatVehicleText(trip, t) !== (t ? t('travelSchedule.trip.toBeAnnounced') : '待公布')
+      ? `${getVehicleMetaLabel(trip.serviceKind, t)} ${formatVehicleText(trip, t)}`
       : undefined,
   ]
     .filter(Boolean)
