@@ -5849,15 +5849,14 @@ function findRoadAccessCandidates(
       score: projection.distanceToPoint + directionPenalty,
     };
   });
-  const candidates = [
-    ...[...scoredCandidates].sort((left, right) => left.score - right.score).slice(0, limit),
-    ...[...scoredCandidates]
-      .sort((left, right) => left.distanceToPoint - right.distanceToPoint)
-      .slice(0, limit),
-  ];
-
+  const scoreCandidates = [...scoredCandidates]
+    .sort((left, right) => left.score - right.score)
+    .slice(0, limit);
+  const distanceCandidates = [...scoredCandidates]
+    .sort((left, right) => left.distanceToPoint - right.distanceToPoint)
+    .slice(0, limit);
   const deduped = new Map<string, RoadAccessCandidate>();
-  for (const candidate of candidates) {
+  const addCandidate = (candidate: RoadAccessCandidate) => {
     const key = [
       candidate.startNodeId,
       candidate.endNodeId,
@@ -5867,6 +5866,23 @@ function findRoadAccessCandidates(
     if (!deduped.has(key)) {
       deduped.set(key, candidate);
     }
+  };
+
+  const scoreQuota = Math.ceil(limit * 0.6);
+  for (const candidate of scoreCandidates) {
+    addCandidate(candidate);
+    if (deduped.size >= scoreQuota) {
+      break;
+    }
+  }
+  for (const candidate of distanceCandidates) {
+    addCandidate(candidate);
+    if (deduped.size >= limit) {
+      break;
+    }
+  }
+  for (const candidate of scoreCandidates) {
+    addCandidate(candidate);
     if (deduped.size >= limit) {
       break;
     }
