@@ -323,11 +323,13 @@ interface RoadRouteEdge {
 
 interface RoadRouteSegment {
   end: [number, number];
+  endIsRoadTerminus: boolean;
   endNodeId: string;
   id: string;
   roadId: string;
   roadLabel: string;
   start: [number, number];
+  startIsRoadTerminus: boolean;
   startNodeId: string;
 }
 
@@ -4160,11 +4162,13 @@ function buildRoadRouteGraph(roadMarkers: EndpointGroupMarker[]): RoadRouteGraph
       if (previous && current) {
         baseRoadSegments.push({
           end: current.coordinate,
+          endIsRoadTerminus: index === roadNodes.length - 1,
           endNodeId: current.id,
           id: `${previous.id}->${current.id}`,
           roadId: previous.roadId,
           roadLabel: previous.roadLabel,
           start: previous.coordinate,
+          startIsRoadTerminus: index === 1,
           startNodeId: previous.id,
         });
       }
@@ -4292,11 +4296,13 @@ function buildRoadRouteGraph(roadMarkers: EndpointGroupMarker[]): RoadRouteGraph
 
       roadSegments.push({
         end: current.coordinate,
+        endIsRoadTerminus: segment.endIsRoadTerminus && current.ratio === 1,
         endNodeId: current.nodeId,
         id: `${segment.id}:${index - 1}`,
         roadId: segment.roadId,
         roadLabel: segment.roadLabel,
         start: previous.coordinate,
+        startIsRoadTerminus: segment.startIsRoadTerminus && previous.ratio === 0,
         startNodeId: previous.nodeId,
       });
       addRoadRouteGraphEdge(adjacency, previousNode, currentNode, {
@@ -4332,7 +4338,7 @@ function collectRoadConnectionCandidates(
   roadSegments: RoadRouteSegment[],
   threshold: number,
 ): RoadConnectionCandidate[] {
-  const connections: RoadConnectionCandidate[] = [];
+  const connections = new Map<string, RoadConnectionCandidate>();
 
   for (let leftIndex = 0; leftIndex < roadSegments.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < roadSegments.length; rightIndex += 1) {
@@ -4342,68 +4348,113 @@ function collectRoadConnectionCandidates(
         continue;
       }
 
-      const nearest = getNearestRoadSegmentConnection(left, right);
-      if (nearest.distance > threshold) {
-        continue;
-      }
+      for (const candidate of getRoadSegmentConnectionCandidates(left, right, threshold)) {
+        const key = [
+          left.id,
+          right.id,
+          candidate.leftCoordinate[0].toFixed(2),
+          candidate.leftCoordinate[1].toFixed(2),
+          candidate.rightCoordinate[0].toFixed(2),
+          candidate.rightCoordinate[1].toFixed(2),
+        ].join(':');
+        if (connections.has(key)) {
+          continue;
+        }
 
-      connections.push({
-        distance: nearest.distance,
-        leftCoordinate: nearest.leftCoordinate,
-        leftRoadLabel: left.roadLabel,
-        leftSegmentId: left.id,
-        rightCoordinate: nearest.rightCoordinate,
-        rightRoadLabel: right.roadLabel,
-        rightSegmentId: right.id,
-      });
+        connections.set(key, {
+          distance: candidate.distance,
+          leftCoordinate: candidate.leftCoordinate,
+          leftRoadLabel: left.roadLabel,
+          leftSegmentId: left.id,
+          rightCoordinate: candidate.rightCoordinate,
+          rightRoadLabel: right.roadLabel,
+          rightSegmentId: right.id,
+        });
+      }
     }
   }
 
-  return connections;
+  return Array.from(connections.values()).sort(
+    (left, right) => left.distance - right.distance,
+  );
 }
 
-function getNearestRoadSegmentConnection(
+function getRoadSegmentConnectionCandidates(
   left: RoadRouteSegment,
   right: RoadRouteSegment,
-): {
+  threshold: number,
+): Array<{
   distance: number;
   leftCoordinate: [number, number];
   rightCoordinate: [number, number];
-} {
+}> {
   const intersection = getSegmentIntersectionPoint(left.start, left.end, right.start, right.end);
   if (intersection) {
-    return {
-      distance: 0,
-      leftCoordinate: intersection,
-      rightCoordinate: intersection,
-    };
+    return [
+      {
+        distance: 0,
+        leftCoordinate: intersection,
+        rightCoordinate: intersection,
+      },
+    ];
   }
 
-  const candidates = [
-    {
+  const candidates: Array<{
+    leftCoordinate: [number, number];
+    rightCoordinate: [number, number];
+  }> = [];
+  if (left.startIsRoadTerminus) {
+    candidates.push({
       leftCoordinate: left.start,
       rightCoordinate: projectPointOntoSegment(right.start, right.end, left.start).coordinate,
-    },
-    {
+    });
+  }
+  if (left.endIsRoadTerminus) {
+    candidates.push({
       leftCoordinate: left.end,
       rightCoordinate: projectPointOntoSegment(right.start, right.end, left.end).coordinate,
-    },
-    {
+    });
+  }
+  if (right.startIsRoadTerminus) {
+    candidates.push({
       leftCoordinate: projectPointOntoSegment(left.start, left.end, right.start).coordinate,
       rightCoordinate: right.start,
-    },
-    {
+    });
+  }
+  if (right.endIsRoadTerminus) {
+    candidates.push({
       leftCoordinate: projectPointOntoSegment(left.start, left.end, right.end).coordinate,
       rightCoordinate: right.end,
-    },
-  ];
+    });
+  }
 
-  return candidates
+  const deduped = new Map<
+    string,
+    {
+      distance: number;
+      leftCoordinate: [number, number];
+      rightCoordinate: [number, number];
+    }
+  >();
+  for (const candidate of candidates
     .map((candidate) => ({
       ...candidate,
       distance: getCoordinateDistance(candidate.leftCoordinate, candidate.rightCoordinate),
     }))
-    .sort((leftCandidate, rightCandidate) => leftCandidate.distance - rightCandidate.distance)[0]!;
+    .filter((candidate) => candidate.distance <= threshold)
+    .sort((leftCandidate, rightCandidate) => leftCandidate.distance - rightCandidate.distance)) {
+    const key = [
+      candidate.leftCoordinate[0].toFixed(2),
+      candidate.leftCoordinate[1].toFixed(2),
+      candidate.rightCoordinate[0].toFixed(2),
+      candidate.rightCoordinate[1].toFixed(2),
+    ].join(':');
+    if (!deduped.has(key)) {
+      deduped.set(key, candidate);
+    }
+  }
+
+  return Array.from(deduped.values());
 }
 
 function projectPointOntoSegment(
