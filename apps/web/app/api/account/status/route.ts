@@ -9,6 +9,7 @@ import { readRuntimeConfig } from '../../../../lib/runtime-config';
 import { listServiceEntries } from '../../../../lib/service-entry-store';
 import { countPendingTicketOrdersForLdpassUser } from '../../../../lib/ticket-order-workflow';
 import { listTransitDataRevisions } from '../../../../lib/transit-data-store';
+import { buildMinotarAvatarUrl } from '../../../../lib/yct-session';
 
 interface AccountBadgeSummary {
   kind: 'none' | 'count' | 'dot';
@@ -102,7 +103,10 @@ export async function GET(request: NextRequest) {
         NextResponse.json({
           accountStatus: 'active',
           username: session.user.username,
-          avatarUrl: session.user.avatarUrl ?? session.user.avatarFallbackUrl,
+          avatarUrl:
+            session.user.avatarUrl ??
+            buildMinotarAvatarUrl(session.user.serverAccountName ?? session.user.username) ??
+            session.user.avatarFallbackUrl,
           badge:
             totalBadgeCount > 0
               ? {
@@ -153,7 +157,10 @@ export async function GET(request: NextRequest) {
       NextResponse.json({
         accountStatus: 'readonly',
         username: readonlyUser.username,
-        avatarUrl: readonlyUser.avatarUrl ?? readonlyUser.avatarFallbackUrl,
+        avatarUrl:
+          readonlyUser.avatarUrl ??
+          buildMinotarAvatarUrl(readonlyUser.username) ??
+          readonlyUser.avatarFallbackUrl,
         badge: {
           kind: 'dot',
           count: 0,

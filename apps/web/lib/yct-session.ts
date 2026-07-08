@@ -17,6 +17,11 @@ export function createYctSessionSnapshot(
   linkedAt = new Date().toISOString(),
 ): YctAccountSessionSnapshot | undefined {
   if (session.authenticated && session.user) {
+    const avatarFallbackUrl = buildMinotarAvatarUrl(
+      session.user.serverAccountName ?? session.user.username,
+    );
+    const avatarUrl = session.user.avatarUrl ?? avatarFallbackUrl ?? session.user.avatarFallbackUrl;
+
     return {
       authenticated: true,
       linkedAt,
@@ -26,13 +31,17 @@ export function createYctSessionSnapshot(
         status: session.user.status,
         serverAccountName: session.user.serverAccountName,
         serverAccountVerified: session.user.serverAccountVerified,
-        avatarUrl: session.user.avatarUrl,
-        avatarFallbackUrl: session.user.avatarFallbackUrl,
+        avatarUrl,
+        avatarFallbackUrl: avatarFallbackUrl ?? session.user.avatarFallbackUrl,
       },
     };
   }
 
   if (session.readonlyUser) {
+    const avatarFallbackUrl = buildMinotarAvatarUrl(session.readonlyUser.username);
+    const avatarUrl =
+      session.readonlyUser.avatarUrl ?? avatarFallbackUrl ?? session.readonlyUser.avatarFallbackUrl;
+
     return {
       authenticated: false,
       linkedAt,
@@ -40,8 +49,8 @@ export function createYctSessionSnapshot(
         ldpassUserId: session.readonlyUser.id,
         username: session.readonlyUser.username,
         status: session.readonlyUser.status,
-        avatarUrl: session.readonlyUser.avatarUrl,
-        avatarFallbackUrl: session.readonlyUser.avatarFallbackUrl,
+        avatarUrl,
+        avatarFallbackUrl: avatarFallbackUrl ?? session.readonlyUser.avatarFallbackUrl,
       },
     };
   }
@@ -72,10 +81,41 @@ export function parseYctSessionSnapshot(
       return undefined;
     }
 
-    return parsed;
+    return withAvatarFallback(parsed);
   } catch {
     return undefined;
   }
+}
+
+function withAvatarFallback(snapshot: YctAccountSessionSnapshot): YctAccountSessionSnapshot {
+  if (snapshot.user) {
+    const fallbackUrl = buildMinotarAvatarUrl(
+      snapshot.user.serverAccountName ?? snapshot.user.username,
+    );
+    return {
+      ...snapshot,
+      user: {
+        ...snapshot.user,
+        avatarUrl: snapshot.user.avatarUrl ?? fallbackUrl ?? snapshot.user.avatarFallbackUrl,
+        avatarFallbackUrl: fallbackUrl ?? snapshot.user.avatarFallbackUrl,
+      },
+    };
+  }
+
+  if (snapshot.readonlyUser) {
+    const fallbackUrl = buildMinotarAvatarUrl(snapshot.readonlyUser.username);
+    return {
+      ...snapshot,
+      readonlyUser: {
+        ...snapshot.readonlyUser,
+        avatarUrl:
+          snapshot.readonlyUser.avatarUrl ?? fallbackUrl ?? snapshot.readonlyUser.avatarFallbackUrl,
+        avatarFallbackUrl: fallbackUrl ?? snapshot.readonlyUser.avatarFallbackUrl,
+      },
+    };
+  }
+
+  return snapshot;
 }
 
 export function authStateCookieOptions(secure: boolean) {
@@ -110,6 +150,15 @@ export function expiredCookieOptions(secure = false) {
 
 export function isSecureRequest(url: URL): boolean {
   return url.protocol === 'https:';
+}
+
+export function buildMinotarAvatarUrl(username: string | null | undefined): string | undefined {
+  const normalized = username?.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  return `https://minotar.net/helm/${encodeURIComponent(normalized)}`;
 }
 
 export function normalizeStoredReturnOrigin(value: string | undefined): string | undefined {
