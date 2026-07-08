@@ -262,7 +262,6 @@ type RouteTransportMode = 'walk' | 'bus' | 'metro' | 'tram' | 'coach' | 'ferry' 
 
 interface RouteTransportModeOption {
   mode: RouteTransportMode;
-  label: string;
   icon: string;
   color: string;
 }
@@ -576,13 +575,13 @@ const markerCategoryMessageKeys: Record<string, CommonMessageKey> = {
 };
 
 const routeTransportModeOptions: RouteTransportModeOption[] = [
-  { mode: 'walk', label: '步行', icon: 'directions_walk', color: 'var(--yct-color-text-secondary)' },
-  { mode: 'bus', label: '公交', icon: 'directions_bus', color: 'var(--yct-color-tertiary)' },
-  { mode: 'metro', label: '地铁', icon: 'subway', color: 'var(--yct-color-secondary)' },
-  { mode: 'tram', label: '有轨', icon: 'tram', color: 'var(--yct-color-tram)' },
-  { mode: 'coach', label: '客运', icon: 'airport_shuttle', color: 'var(--yct-color-coach)' },
-  { mode: 'ferry', label: '轮渡', icon: 'directions_boat', color: 'var(--yct-color-ferry)' },
-  { mode: 'railway', label: '铁路', icon: 'train', color: 'var(--yct-color-railway)' },
+  { mode: 'walk', icon: 'directions_walk', color: 'var(--yct-color-text-secondary)' },
+  { mode: 'bus', icon: 'directions_bus', color: 'var(--yct-color-tertiary)' },
+  { mode: 'metro', icon: 'subway', color: 'var(--yct-color-secondary)' },
+  { mode: 'tram', icon: 'tram', color: 'var(--yct-color-tram)' },
+  { mode: 'coach', icon: 'airport_shuttle', color: 'var(--yct-color-coach)' },
+  { mode: 'ferry', icon: 'directions_boat', color: 'var(--yct-color-ferry)' },
+  { mode: 'railway', icon: 'train', color: 'var(--yct-color-railway)' },
 ];
 
 const routeWalkTraceColor = 'var(--yct-color-primary)';
