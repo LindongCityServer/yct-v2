@@ -1366,9 +1366,10 @@ function AccountAuthPanel({
     session?: YctAccountSessionSnapshot;
   };
 }>) {
+  const { t } = useI18n();
   const user = auth.session?.user;
   const readonlyUser = auth.session?.readonlyUser;
-  const statusMessage = auth.status ? authStatusMessage(auth.status) : undefined;
+  const statusMessage = auth.status ? authStatusMessage(auth.status, t) : undefined;
 
   return (
     <section className="account-auth-panel" aria-labelledby="account-auth-title">
@@ -1382,21 +1383,27 @@ function AccountAuthPanel({
         </span>
         <div>
           <h2 id="account-auth-title">
-            {user?.username ?? readonlyUser?.username ?? '临东通账号'}
+            {user?.username ?? readonlyUser?.username ?? t('account.auth.defaultTitle')}
           </h2>
           {user ? (
             <p className="muted">
               {user.serverAccountVerified
-                ? `服务器账号已验证${user.serverAccountName ? `：${user.serverAccountName}` : ''}`
-                : '服务器账号未验证'}
+                ? user.serverAccountName
+                  ? t('account.auth.serverVerifiedWithName', {
+                      name: user.serverAccountName,
+                    })
+                  : t('account.auth.serverVerified')
+                : t('account.auth.serverUnverified')}
             </p>
           ) : readonlyUser ? (
-            <p className="muted">账号状态：{readonlyUser.status}</p>
+            <p className="muted">
+              {t('account.auth.readonlyStatus', { status: readonlyUser.status })}
+            </p>
           ) : (
             <p className="muted">
               {auth.ldpassConfigured
-                ? '使用临东通账号登录后可同步历史、偏好和后续票券状态。'
-                : '临东通登录尚未配置。'}
+                ? t('account.auth.introConfigured')
+                : t('account.auth.introNotConfigured')}
             </p>
           )}
         </div>
@@ -1415,25 +1422,25 @@ function AccountAuthPanel({
               <span className="material-symbols-outlined" aria-hidden="true">
                 admin_panel_settings
               </span>
-              <span>内容后台</span>
+              <span>{t('account.auth.adminOperations')}</span>
             </a>
             <a className="secondary-action-button" href={appPath('/admin/services')}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 dashboard_customize
               </span>
-              <span>服务后台</span>
+              <span>{t('account.auth.adminServices')}</span>
             </a>
             <a className="secondary-action-button" href={appPath('/admin/transit')}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 route
               </span>
-              <span>线路后台</span>
+              <span>{t('account.auth.adminTransit')}</span>
             </a>
             <a className="secondary-action-button" href={appPath('/admin/map-poi')}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 add_location_alt
               </span>
-              <span>POI 后台</span>
+              <span>{t('account.auth.adminPoi')}</span>
             </a>
             {auth.ldpassBaseUrl ? (
               <a
@@ -1445,14 +1452,14 @@ function AccountAuthPanel({
                 <span className="material-symbols-outlined" aria-hidden="true">
                   open_in_new
                 </span>
-                <span>临东通账号</span>
+                <span>{t('account.auth.ldpassAccount')}</span>
               </a>
             ) : null}
             <a className="secondary-action-button" href={appPath('/api/auth/logout')}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 logout
               </span>
-              <span>退出雨城通</span>
+              <span>{t('account.auth.logout')}</span>
             </a>
           </>
         ) : (
@@ -1468,7 +1475,7 @@ function AccountAuthPanel({
             <span className="material-symbols-outlined" aria-hidden="true">
               login
             </span>
-            <span>使用临东通登录</span>
+            <span>{t('account.auth.login')}</span>
           </a>
         )}
       </div>
@@ -1476,22 +1483,20 @@ function AccountAuthPanel({
   );
 }
 
-function authStatusMessage(status: AuthStatus): string {
-  const messages: Record<AuthStatus, string> = {
-    login_success: '已完成临东通登录。',
-    readonly: '当前账号只能进入只读账号页。',
-    logged_out: '已退出雨城通本地会话。',
-    state_invalid: '登录状态校验失败，请重新发起登录。',
-    session_unavailable_localhost:
-      '当前回跳地址是 localhost/127.0.0.1，本地站点无法直接读取临东通共享会话。请改用共享域名测试，或将本地服务切到已接入的同域测试环境。',
-    session_cookie_missing:
-      '雨城通没有收到临东通共享登录 Cookie。请确认临东通生产环境已配置 AUTH_COOKIE_DOMAIN=.shangxiaoguan.top，重启临东通并重新登录后再试。',
-    session_unavailable: '未能从临东通读取有效账号信息。',
-    session_error: '临东通会话读取失败，请稍后重试。',
-    ldpass_not_configured: '临东通登录尚未配置。',
+function authStatusMessage(status: AuthStatus, t: ReturnType<typeof useI18n>['t']): string {
+  const messageKeys: Record<AuthStatus, CommonMessageKey> = {
+    ldpass_not_configured: 'account.authStatus.ldpassNotConfigured',
+    logged_out: 'account.authStatus.loggedOut',
+    login_success: 'account.authStatus.loginSuccess',
+    readonly: 'account.authStatus.readonly',
+    session_cookie_missing: 'account.authStatus.sessionCookieMissing',
+    session_error: 'account.authStatus.sessionError',
+    session_unavailable: 'account.authStatus.sessionUnavailable',
+    session_unavailable_localhost: 'account.authStatus.sessionUnavailableLocalhost',
+    state_invalid: 'account.authStatus.stateInvalid',
   };
 
-  return messages[status];
+  return t(messageKeys[status]);
 }
 
 function formatLocaleStatus(

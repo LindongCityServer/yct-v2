@@ -70,6 +70,29 @@ export type CommonMessageKey =
   | 'account.offlinePackage.summary.refreshed'
   | 'account.offlinePackage.summary.total'
   | 'account.offlinePackage.title'
+  | 'account.auth.adminOperations'
+  | 'account.auth.adminPoi'
+  | 'account.auth.adminServices'
+  | 'account.auth.adminTransit'
+  | 'account.auth.defaultTitle'
+  | 'account.auth.introConfigured'
+  | 'account.auth.introNotConfigured'
+  | 'account.auth.ldpassAccount'
+  | 'account.auth.login'
+  | 'account.auth.logout'
+  | 'account.auth.readonlyStatus'
+  | 'account.auth.serverUnverified'
+  | 'account.auth.serverVerified'
+  | 'account.auth.serverVerifiedWithName'
+  | 'account.authStatus.ldpassNotConfigured'
+  | 'account.authStatus.loggedOut'
+  | 'account.authStatus.loginSuccess'
+  | 'account.authStatus.readonly'
+  | 'account.authStatus.sessionCookieMissing'
+  | 'account.authStatus.sessionError'
+  | 'account.authStatus.sessionUnavailable'
+  | 'account.authStatus.sessionUnavailableLocalhost'
+  | 'account.authStatus.stateInvalid'
   | 'account.settings'
   | 'account.status.anonymous'
   | 'account.status.notConfigured'
@@ -750,6 +773,31 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.offlinePackage.strategyNote':
       '自定义范围当前记录边界并刷新公开基础数据，真实瓦片离线包仍等待体积上限和生成策略确认。',
     'account.offlinePackage.title': '新建离线范围',
+    'account.auth.adminOperations': '内容后台',
+    'account.auth.adminPoi': 'POI 后台',
+    'account.auth.adminServices': '服务后台',
+    'account.auth.adminTransit': '线路后台',
+    'account.auth.defaultTitle': '临东通账号',
+    'account.auth.introConfigured': '使用临东通账号登录后可同步历史、偏好和后续票券状态。',
+    'account.auth.introNotConfigured': '临东通登录尚未配置。',
+    'account.auth.ldpassAccount': '临东通账号',
+    'account.auth.login': '使用临东通登录',
+    'account.auth.logout': '退出雨城通',
+    'account.auth.readonlyStatus': '账号状态：{status}',
+    'account.auth.serverUnverified': '服务器账号未验证',
+    'account.auth.serverVerified': '服务器账号已验证',
+    'account.auth.serverVerifiedWithName': '服务器账号已验证：{name}',
+    'account.authStatus.ldpassNotConfigured': '临东通登录尚未配置。',
+    'account.authStatus.loggedOut': '已退出雨城通本地会话。',
+    'account.authStatus.loginSuccess': '已完成临东通登录。',
+    'account.authStatus.readonly': '当前账号只能进入只读账号页。',
+    'account.authStatus.sessionCookieMissing':
+      '雨城通没有收到临东通共享登录 Cookie。请确认临东通生产环境已配置 AUTH_COOKIE_DOMAIN=.shangxiaoguan.top，重启临东通并重新登录后再试。',
+    'account.authStatus.sessionError': '临东通会话读取失败，请稍后重试。',
+    'account.authStatus.sessionUnavailable': '未能从临东通读取有效账号信息。',
+    'account.authStatus.sessionUnavailableLocalhost':
+      '当前回跳地址是 localhost/127.0.0.1，本地站点无法直接读取临东通共享会话。请改用共享域名测试，或将本地服务切到已接入的同域测试环境。',
+    'account.authStatus.stateInvalid': '登录状态校验失败，请重新发起登录。',
     'account.settings': '账号设置',
     'account.status.anonymous': '未登录',
     'account.status.notConfigured': '临东通未配置',
@@ -1459,6 +1507,31 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.offlinePackage.strategyNote':
       '自訂範圍目前記錄邊界並重新整理公開基礎資料，真正的瓦片離線包仍等待體積上限和生成策略確認。',
     'account.offlinePackage.title': '新增離線範圍',
+    'account.auth.adminOperations': '內容後台',
+    'account.auth.adminPoi': 'POI 後台',
+    'account.auth.adminServices': '服務後台',
+    'account.auth.adminTransit': '線路後台',
+    'account.auth.defaultTitle': '臨東通帳號',
+    'account.auth.introConfigured': '使用臨東通帳號登入後可同步歷史、偏好和後續票券狀態。',
+    'account.auth.introNotConfigured': '臨東通登入尚未設定。',
+    'account.auth.ldpassAccount': '臨東通帳號',
+    'account.auth.login': '使用臨東通登入',
+    'account.auth.logout': '登出雨城通',
+    'account.auth.readonlyStatus': '帳號狀態：{status}',
+    'account.auth.serverUnverified': '伺服器帳號未驗證',
+    'account.auth.serverVerified': '伺服器帳號已驗證',
+    'account.auth.serverVerifiedWithName': '伺服器帳號已驗證：{name}',
+    'account.authStatus.ldpassNotConfigured': '臨東通登入尚未設定。',
+    'account.authStatus.loggedOut': '已登出雨城通本機會話。',
+    'account.authStatus.loginSuccess': '已完成臨東通登入。',
+    'account.authStatus.readonly': '目前帳號只能進入唯讀帳號頁。',
+    'account.authStatus.sessionCookieMissing':
+      '雨城通沒有收到臨東通共享登入 Cookie。請確認臨東通生產環境已設定 AUTH_COOKIE_DOMAIN=.shangxiaoguan.top，重啟臨東通並重新登入後再試。',
+    'account.authStatus.sessionError': '臨東通會話讀取失敗，請稍後再試。',
+    'account.authStatus.sessionUnavailable': '未能從臨東通讀取有效帳號資訊。',
+    'account.authStatus.sessionUnavailableLocalhost':
+      '目前回跳地址是 localhost/127.0.0.1，本機站點無法直接讀取臨東通共享會話。請改用共享網域測試，或將本機服務切到已接入的同域測試環境。',
+    'account.authStatus.stateInvalid': '登入狀態校驗失敗，請重新發起登入。',
     'account.settings': '帳號設定',
     'account.status.anonymous': '未登入',
     'account.status.notConfigured': '臨東通未設定',
@@ -2171,6 +2244,32 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.offlinePackage.strategyNote':
       'Custom areas currently store boundaries and refresh public base data. Real tile offline packs still need size limits and generation rules.',
     'account.offlinePackage.title': 'New Offline Area',
+    'account.auth.adminOperations': 'Content Admin',
+    'account.auth.adminPoi': 'POI Admin',
+    'account.auth.adminServices': 'Service Admin',
+    'account.auth.adminTransit': 'Transit Admin',
+    'account.auth.defaultTitle': 'Ldpass account',
+    'account.auth.introConfigured':
+      'Sign in with Ldpass to sync history, preferences, and future ticket status.',
+    'account.auth.introNotConfigured': 'Ldpass sign-in is not configured.',
+    'account.auth.ldpassAccount': 'Ldpass account',
+    'account.auth.login': 'Sign in with Ldpass',
+    'account.auth.logout': 'Sign out of Yuchengtong',
+    'account.auth.readonlyStatus': 'Account status: {status}',
+    'account.auth.serverUnverified': 'Server account not verified',
+    'account.auth.serverVerified': 'Server account verified',
+    'account.auth.serverVerifiedWithName': 'Server account verified: {name}',
+    'account.authStatus.ldpassNotConfigured': 'Ldpass sign-in is not configured.',
+    'account.authStatus.loggedOut': 'Signed out of the local Yuchengtong session.',
+    'account.authStatus.loginSuccess': 'Ldpass sign-in completed.',
+    'account.authStatus.readonly': 'This account can only open the read-only account page.',
+    'account.authStatus.sessionCookieMissing':
+      'Yuchengtong did not receive the shared Ldpass login cookie. Confirm AUTH_COOKIE_DOMAIN=.shangxiaoguan.top is configured in production Ldpass, restart Ldpass, and sign in again.',
+    'account.authStatus.sessionError': 'Failed to read the Ldpass session. Try again later.',
+    'account.authStatus.sessionUnavailable': 'Could not read valid account information from Ldpass.',
+    'account.authStatus.sessionUnavailableLocalhost':
+      'The callback address is localhost/127.0.0.1, so the local site cannot read the shared Ldpass session directly. Use the shared domain for testing, or move the local service to an integrated same-domain test environment.',
+    'account.authStatus.stateInvalid': 'Login state validation failed. Start sign-in again.',
     'account.settings': 'Account Settings',
     'account.status.anonymous': 'Not signed in',
     'account.status.notConfigured': 'Ldpass is not configured',
