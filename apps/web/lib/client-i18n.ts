@@ -81,6 +81,85 @@ export type CommonMessageKey =
   | 'map.search.clear'
   | 'map.search.placeholder'
   | 'map.title'
+  | 'map.route.alight'
+  | 'map.route.aria'
+  | 'map.route.arrive'
+  | 'map.route.badge.fastest'
+  | 'map.route.badge.fewestTransfers'
+  | 'map.route.badge.leastWalking'
+  | 'map.route.board'
+  | 'map.route.close'
+  | 'map.route.collapse'
+  | 'map.route.defaultView'
+  | 'map.route.depart'
+  | 'map.route.destination'
+  | 'map.route.directTitle'
+  | 'map.route.distance.blocks'
+  | 'map.route.duration.short'
+  | 'map.route.duration.step'
+  | 'map.route.edit'
+  | 'map.route.endpointCandidatesAria'
+  | 'map.route.expand'
+  | 'map.route.featuresAria'
+  | 'map.route.input.destination'
+  | 'map.route.input.origin'
+  | 'map.route.loadingDetail'
+  | 'map.route.loadingNote'
+  | 'map.route.loadingTitle'
+  | 'map.route.marker.destination'
+  | 'map.route.marker.origin'
+  | 'map.route.metroEnterViaAccess'
+  | 'map.route.metroExitViaAccess'
+  | 'map.route.mode.all'
+  | 'map.route.mode.bus'
+  | 'map.route.mode.coach'
+  | 'map.route.mode.collapse'
+  | 'map.route.mode.ferry'
+  | 'map.route.mode.metro'
+  | 'map.route.mode.more'
+  | 'map.route.mode.railway'
+  | 'map.route.mode.tram'
+  | 'map.route.mode.walk'
+  | 'map.route.modeAria'
+  | 'map.route.noEndpointCandidates'
+  | 'map.route.noModes'
+  | 'map.route.noOptions'
+  | 'map.route.optionFallback'
+  | 'map.route.optionsAria'
+  | 'map.route.origin'
+  | 'map.route.planning'
+  | 'map.route.ride'
+  | 'map.route.road.approach'
+  | 'map.route.road.connection'
+  | 'map.route.road.depart'
+  | 'map.route.selectDestination'
+  | 'map.route.selectOrigin'
+  | 'map.route.stationCount'
+  | 'map.route.stepDetails.collapse'
+  | 'map.route.stepDetails.expand'
+  | 'map.route.stepsAria'
+  | 'map.route.summary.directEstimate'
+  | 'map.route.summary.roadEstimate'
+  | 'map.route.summary.walking'
+  | 'map.route.swap'
+  | 'map.route.traceTitle'
+  | 'map.route.transferAction'
+  | 'map.route.transferBoard'
+  | 'map.route.transferTitle'
+  | 'map.route.transferWalk'
+  | 'map.route.transitNote.default'
+  | 'map.route.transitNote.fallbackRoad'
+  | 'map.route.transitNote.road'
+  | 'map.route.transitNote.transfer'
+  | 'map.route.useMapCenter'
+  | 'map.route.walkDirect'
+  | 'map.route.walkFromAccess'
+  | 'map.route.walkNote.direct'
+  | 'map.route.walkNote.road'
+  | 'map.route.walkRoadWithDistance'
+  | 'map.route.walkStraight'
+  | 'map.route.walkToAccess'
+  | 'map.route.walkWithDistance'
   | 'nav.collapse'
   | 'nav.back'
   | 'nav.expand'
@@ -484,6 +563,85 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.search.clear': '清空地图搜索',
     'map.search.placeholder': '搜索地点或标记',
     'map.title': '地图探索',
+    'map.route.alight': '{name} 出站',
+    'map.route.aria': '路线规划',
+    'map.route.arrive': '到达 {name}',
+    'map.route.badge.fastest': '最快到达',
+    'map.route.badge.fewestTransfers': '最少换乘',
+    'map.route.badge.leastWalking': '最少步行',
+    'map.route.board': '{name} 进站',
+    'map.route.close': '关闭路线规划',
+    'map.route.collapse': '收起路线规划',
+    'map.route.defaultView': '默认视图',
+    'map.route.depart': '{name} 出发',
+    'map.route.destination': '终点',
+    'map.route.directTitle': '{mode}直达',
+    'map.route.distance.blocks': '{count} 格',
+    'map.route.duration.short': '约 {count} 分',
+    'map.route.duration.step': '{count}分钟',
+    'map.route.edit': '修改',
+    'map.route.endpointCandidatesAria': '路线端点候选',
+    'map.route.expand': '展开路线规划',
+    'map.route.featuresAria': '路线特征',
+    'map.route.input.destination': '输入路线终点',
+    'map.route.input.origin': '输入路线起点',
+    'map.route.loadingDetail': '首次构建道路图可能需要几秒',
+    'map.route.loadingNote': '旧道路图较大时，首次规划可能需要几秒。',
+    'map.route.loadingTitle': '正在计算路线方案',
+    'map.route.marker.destination': '终',
+    'map.route.marker.origin': '起',
+    'map.route.metroEnterViaAccess': '经 {access} 进站',
+    'map.route.metroExitViaAccess': '经 {access} 出站',
+    'map.route.mode.all': '全部',
+    'map.route.mode.bus': '公交',
+    'map.route.mode.coach': '客运',
+    'map.route.mode.collapse': '收起',
+    'map.route.mode.ferry': '轮渡',
+    'map.route.mode.metro': '地铁',
+    'map.route.mode.more': '更多{count}',
+    'map.route.mode.railway': '铁路',
+    'map.route.mode.tram': '有轨',
+    'map.route.mode.walk': '步行',
+    'map.route.modeAria': '路线交通方式',
+    'map.route.noEndpointCandidates': '没有匹配的可定位标记。',
+    'map.route.noModes': '请至少启用一种交通方式。',
+    'map.route.noOptions': '暂未找到可用路线方案。',
+    'map.route.optionFallback': '路线方案',
+    'map.route.optionsAria': '路线方案',
+    'map.route.origin': '起点',
+    'map.route.planning': '正在根据道路和交通方式规划候选路线…',
+    'map.route.ride': '乘坐 {line}（{direction}方向） {stops}站 {duration}',
+    'map.route.road.approach': '接近 {road}',
+    'map.route.road.connection': '连接到 {road}',
+    'map.route.road.depart': '前往终点',
+    'map.route.selectDestination': '选择终点',
+    'map.route.selectOrigin': '选择起点',
+    'map.route.stationCount': '{count}站',
+    'map.route.stepDetails.collapse': '收起详细步骤',
+    'map.route.stepDetails.expand': '展开详细步骤',
+    'map.route.stepsAria': '选中路线步骤',
+    'map.route.summary.directEstimate': '直线估算',
+    'map.route.summary.roadEstimate': '沿道路估算',
+    'map.route.summary.walking': '步行',
+    'map.route.swap': '交换起终点',
+    'map.route.traceTitle': '{title} · 初步估算',
+    'map.route.transferAction': '{name} 换乘',
+    'map.route.transferBoard': '{name} 上车',
+    'map.route.transferTitle': '{firstMode}+{secondMode}换乘',
+    'map.route.transferWalk': '换乘 步行 {distance} {duration}',
+    'map.route.transitNote.default': '已按真实线路站序生成候选；站间耗时优先使用旧数据 travelTime，缺失时仍按距离估算。',
+    'map.route.transitNote.fallbackRoad': '已尝试使用旧地图道路端点图生成公交/客运站间路径；当前路网缺失或不连通的片段仍按直线估算。站间耗时优先使用旧数据 travelTime。',
+    'map.route.transitNote.road': '公交/客运站间已优先沿旧地图道路端点图生成，并按 100 格规则连通相邻道路；无法连通的片段回退为直线估算。站间耗时优先使用旧数据 travelTime。',
+    'map.route.transitNote.transfer': '已按真实线路站序组合一次换乘候选；换乘距离和缺失站间耗时仍为估算。',
+    'map.route.useMapCenter': '使用地图中心',
+    'map.route.walkDirect': '步行直达',
+    'map.route.walkFromAccess': '经 {access} 步行至终点 {distance} {duration}',
+    'map.route.walkNote.direct': '当前未找到可连通道路图，步行暂按直线估算。',
+    'map.route.walkNote.road': '步行默认优先使用旧地图道路端点图和 100 格连通候选；无法连通的片段会回退直线估算。',
+    'map.route.walkRoadWithDistance': '沿道路步行 {distance} {duration}',
+    'map.route.walkStraight': '直线步行',
+    'map.route.walkToAccess': '步行至 {access} {distance} {duration}',
+    'map.route.walkWithDistance': '步行 {distance} {duration}',
     'nav.back': '返回',
     'nav.collapse': '收起主导航',
     'nav.expand': '展开主导航',
@@ -887,6 +1045,85 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.search.clear': '清空地圖搜尋',
     'map.search.placeholder': '搜尋地點或標記',
     'map.title': '地圖探索',
+    'map.route.alight': '{name} 出站',
+    'map.route.aria': '路線規劃',
+    'map.route.arrive': '到達 {name}',
+    'map.route.badge.fastest': '最快到達',
+    'map.route.badge.fewestTransfers': '最少換乘',
+    'map.route.badge.leastWalking': '最少步行',
+    'map.route.board': '{name} 進站',
+    'map.route.close': '關閉路線規劃',
+    'map.route.collapse': '收合路線規劃',
+    'map.route.defaultView': '預設視圖',
+    'map.route.depart': '{name} 出發',
+    'map.route.destination': '終點',
+    'map.route.directTitle': '{mode}直達',
+    'map.route.distance.blocks': '{count} 格',
+    'map.route.duration.short': '約 {count} 分',
+    'map.route.duration.step': '{count}分鐘',
+    'map.route.edit': '修改',
+    'map.route.endpointCandidatesAria': '路線端點候選',
+    'map.route.expand': '展開路線規劃',
+    'map.route.featuresAria': '路線特徵',
+    'map.route.input.destination': '輸入路線終點',
+    'map.route.input.origin': '輸入路線起點',
+    'map.route.loadingDetail': '首次建立道路圖可能需要幾秒',
+    'map.route.loadingNote': '舊道路圖較大時，首次規劃可能需要幾秒。',
+    'map.route.loadingTitle': '正在計算路線方案',
+    'map.route.marker.destination': '終',
+    'map.route.marker.origin': '起',
+    'map.route.metroEnterViaAccess': '經 {access} 進站',
+    'map.route.metroExitViaAccess': '經 {access} 出站',
+    'map.route.mode.all': '全部',
+    'map.route.mode.bus': '公交',
+    'map.route.mode.coach': '客運',
+    'map.route.mode.collapse': '收合',
+    'map.route.mode.ferry': '輪渡',
+    'map.route.mode.metro': '地鐵',
+    'map.route.mode.more': '更多{count}',
+    'map.route.mode.railway': '鐵路',
+    'map.route.mode.tram': '有軌',
+    'map.route.mode.walk': '步行',
+    'map.route.modeAria': '路線交通方式',
+    'map.route.noEndpointCandidates': '沒有符合的可定位標記。',
+    'map.route.noModes': '請至少啟用一種交通方式。',
+    'map.route.noOptions': '暫未找到可用路線方案。',
+    'map.route.optionFallback': '路線方案',
+    'map.route.optionsAria': '路線方案',
+    'map.route.origin': '起點',
+    'map.route.planning': '正在根據道路和交通方式規劃候選路線…',
+    'map.route.ride': '乘坐 {line}（{direction}方向） {stops}站 {duration}',
+    'map.route.road.approach': '接近 {road}',
+    'map.route.road.connection': '連接到 {road}',
+    'map.route.road.depart': '前往終點',
+    'map.route.selectDestination': '選擇終點',
+    'map.route.selectOrigin': '選擇起點',
+    'map.route.stationCount': '{count}站',
+    'map.route.stepDetails.collapse': '收起詳細步驟',
+    'map.route.stepDetails.expand': '展開詳細步驟',
+    'map.route.stepsAria': '選中路線步驟',
+    'map.route.summary.directEstimate': '直線估算',
+    'map.route.summary.roadEstimate': '沿道路估算',
+    'map.route.summary.walking': '步行',
+    'map.route.swap': '交換起終點',
+    'map.route.traceTitle': '{title} · 初步估算',
+    'map.route.transferAction': '{name} 換乘',
+    'map.route.transferBoard': '{name} 上車',
+    'map.route.transferTitle': '{firstMode}+{secondMode}換乘',
+    'map.route.transferWalk': '換乘 步行 {distance} {duration}',
+    'map.route.transitNote.default': '已按真實線路站序生成候選；站間耗時優先使用舊資料 travelTime，缺失時仍按距離估算。',
+    'map.route.transitNote.fallbackRoad': '已嘗試使用舊地圖道路端點圖生成公交/客運站間路徑；目前路網缺失或不連通的片段仍按直線估算。站間耗時優先使用舊資料 travelTime。',
+    'map.route.transitNote.road': '公交/客運站間已優先沿舊地圖道路端點圖生成，並按 100 格規則連通相鄰道路；無法連通的片段回退為直線估算。站間耗時優先使用舊資料 travelTime。',
+    'map.route.transitNote.transfer': '已按真實線路站序組合一次換乘候選；換乘距離和缺失站間耗時仍為估算。',
+    'map.route.useMapCenter': '使用地圖中心',
+    'map.route.walkDirect': '步行直達',
+    'map.route.walkFromAccess': '經 {access} 步行至終點 {distance} {duration}',
+    'map.route.walkNote.direct': '目前未找到可連通道路圖，步行暫按直線估算。',
+    'map.route.walkNote.road': '步行預設優先使用舊地圖道路端點圖和 100 格連通候選；無法連通的片段會回退直線估算。',
+    'map.route.walkRoadWithDistance': '沿道路步行 {distance} {duration}',
+    'map.route.walkStraight': '直線步行',
+    'map.route.walkToAccess': '步行至 {access} {distance} {duration}',
+    'map.route.walkWithDistance': '步行 {distance} {duration}',
     'nav.back': '返回',
     'nav.collapse': '收合主導覽',
     'nav.expand': '展開主導覽',
@@ -1290,6 +1527,85 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.search.clear': 'Clear map search',
     'map.search.placeholder': 'Search places or markers',
     'map.title': 'Map Explore',
+    'map.route.alight': 'Exit at {name}',
+    'map.route.aria': 'Route planner',
+    'map.route.arrive': 'Arrive at {name}',
+    'map.route.badge.fastest': 'Fastest',
+    'map.route.badge.fewestTransfers': 'Fewest transfers',
+    'map.route.badge.leastWalking': 'Least walking',
+    'map.route.board': 'Board at {name}',
+    'map.route.close': 'Close route planner',
+    'map.route.collapse': 'Collapse route planner',
+    'map.route.defaultView': 'Default view',
+    'map.route.depart': 'Depart from {name}',
+    'map.route.destination': 'Destination',
+    'map.route.directTitle': 'Direct {mode}',
+    'map.route.distance.blocks': '{count} blocks',
+    'map.route.duration.short': 'about {count} min',
+    'map.route.duration.step': '{count} min',
+    'map.route.edit': 'Edit',
+    'map.route.endpointCandidatesAria': 'Route endpoint candidates',
+    'map.route.expand': 'Expand route planner',
+    'map.route.featuresAria': 'Route features',
+    'map.route.input.destination': 'Enter route destination',
+    'map.route.input.origin': 'Enter route origin',
+    'map.route.loadingDetail': 'Building the road graph for the first time may take a few seconds',
+    'map.route.loadingNote': 'The legacy road graph is large, so the first route may take a few seconds.',
+    'map.route.loadingTitle': 'Calculating route options',
+    'map.route.marker.destination': 'E',
+    'map.route.marker.origin': 'S',
+    'map.route.metroEnterViaAccess': 'Enter via {access}',
+    'map.route.metroExitViaAccess': 'Exit via {access}',
+    'map.route.mode.all': 'All',
+    'map.route.mode.bus': 'Bus',
+    'map.route.mode.coach': 'Coach',
+    'map.route.mode.collapse': 'Collapse',
+    'map.route.mode.ferry': 'Ferry',
+    'map.route.mode.metro': 'Metro',
+    'map.route.mode.more': '+{count} more',
+    'map.route.mode.railway': 'Rail',
+    'map.route.mode.tram': 'Tram',
+    'map.route.mode.walk': 'Walk',
+    'map.route.modeAria': 'Route transport modes',
+    'map.route.noEndpointCandidates': 'No matching locatable markers.',
+    'map.route.noModes': 'Enable at least one transport mode.',
+    'map.route.noOptions': 'No available route options yet.',
+    'map.route.optionFallback': 'Route option',
+    'map.route.optionsAria': 'Route options',
+    'map.route.origin': 'Origin',
+    'map.route.planning': 'Planning candidate routes from roads and transport modes...',
+    'map.route.ride': 'Take {line} toward {direction}, {stops} stops, {duration}',
+    'map.route.road.approach': 'Approach {road}',
+    'map.route.road.connection': 'Connect to {road}',
+    'map.route.road.depart': 'Head to destination',
+    'map.route.selectDestination': 'Select destination',
+    'map.route.selectOrigin': 'Select origin',
+    'map.route.stationCount': '{count} stops',
+    'map.route.stepDetails.collapse': 'Collapse detailed steps',
+    'map.route.stepDetails.expand': 'Expand detailed steps',
+    'map.route.stepsAria': 'Selected route steps',
+    'map.route.summary.directEstimate': 'straight-line estimate',
+    'map.route.summary.roadEstimate': 'road-based estimate',
+    'map.route.summary.walking': ' walking',
+    'map.route.swap': 'Swap origin and destination',
+    'map.route.traceTitle': '{title} · preliminary estimate',
+    'map.route.transferAction': 'Transfer at {name}',
+    'map.route.transferBoard': 'Board at {name}',
+    'map.route.transferTitle': '{firstMode} + {secondMode} transfer',
+    'map.route.transferWalk': 'Transfer walk {distance} {duration}',
+    'map.route.transitNote.default': 'Candidate routes are generated from real line stop order; travelTime is preferred for inter-stop duration, and missing data is still estimated from distance.',
+    'map.route.transitNote.fallbackRoad': 'YCT tried to route bus/coach inter-stop paths through the legacy road graph; missing or disconnected road segments still fall back to straight-line estimates. Inter-stop duration prefers legacy travelTime data.',
+    'map.route.transitNote.road': 'Bus/coach inter-stop paths prefer the legacy road endpoint graph and connect nearby roads within 100 blocks; disconnected segments fall back to straight-line estimates. Inter-stop duration prefers legacy travelTime data.',
+    'map.route.transitNote.transfer': 'One-transfer candidates are composed from real line stop order; transfer distance and missing inter-stop duration are still estimated.',
+    'map.route.useMapCenter': 'Use map center',
+    'map.route.walkDirect': 'Walk directly',
+    'map.route.walkFromAccess': 'Walk from {access} to destination {distance} {duration}',
+    'map.route.walkNote.direct': 'No connected road graph was found, so walking is estimated as a straight line for now.',
+    'map.route.walkNote.road': 'Walking prefers the legacy road endpoint graph and 100-block connection candidates; disconnected segments fall back to straight-line estimates.',
+    'map.route.walkRoadWithDistance': 'Walk along roads {distance} {duration}',
+    'map.route.walkStraight': 'Straight-line walk',
+    'map.route.walkToAccess': 'Walk to {access} {distance} {duration}',
+    'map.route.walkWithDistance': 'Walk {distance} {duration}',
     'nav.back': 'Back',
     'nav.collapse': 'Collapse main navigation',
     'nav.expand': 'Expand main navigation',
