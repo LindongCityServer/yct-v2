@@ -101,6 +101,7 @@ export function OperationsHome({
                 className="hero-feature-image"
                 src={appPath(bannerItem.coverImageUrl)}
                 alt=""
+                loading="eager"
                 decoding="async"
                 fetchPriority="high"
               />
@@ -151,7 +152,9 @@ export function OperationsHome({
                   src={appPath(`/icons/social/${link.iconFile}`)}
                   alt=""
                   aria-hidden="true"
+                  loading="lazy"
                   decoding="async"
+                  fetchPriority="low"
                 />
                 <span>{t(link.labelKey)}</span>
               </a>
