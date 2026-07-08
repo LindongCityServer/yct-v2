@@ -3226,7 +3226,7 @@ function MapShareDialog({
           style={{ '--map-share-color': payload.color } as CSSProperties}
         >
           <div className="map-share-preview-heading">
-            <span className="map-share-preview-icon" aria-hidden="true">
+            <span className="material-symbols-outlined map-share-preview-icon" aria-hidden="true">
               {payload.icon}
             </span>
             <span>
@@ -3243,28 +3243,35 @@ function MapShareDialog({
           ) : null}
           {payload.steps.length > 0 ? (
             <ol className="map-route-step-timeline map-share-preview-steps">
-              {payload.steps.map((step, index) => (
-                <li
-                  className={`is-${step.kind}${step.role ? ` is-${step.role}` : ''}`}
-                  key={`${step.kind}-${step.label}-${index}`}
-                  style={{ '--route-step-color': step.color ?? payload.color } as CSSProperties}
-                >
-                  <span className="map-route-step-marker" aria-hidden="true">
-                    {getRouteStepMarkerText(step, t) ||
-                      (step.kind === 'place' && step.role === 'boarding' ? '>' : '')}
-                  </span>
-                  <span className="map-route-step-content">
-                    <span className="map-route-step-main">
-                      <span className="map-route-step-label">{step.label}</span>
+              {payload.steps.map((step, index) => {
+                const markerIcon = getRouteShareStepMarkerIcon(step);
+
+                return (
+                  <li
+                    className={`is-${step.kind}${step.role ? ` is-${step.role}` : ''}`}
+                    key={`${step.kind}-${step.label}-${index}`}
+                    style={{ '--route-step-color': step.color ?? payload.color } as CSSProperties}
+                  >
+                    <span className="map-route-step-marker" aria-hidden="true">
+                      {markerIcon ? (
+                        <span className="material-symbols-outlined">{markerIcon}</span>
+                      ) : (
+                        getRouteStepMarkerText(step, t)
+                      )}
                     </span>
-                    {step.kind === 'walk' && step.details?.length ? (
-                      <ul className="map-route-step-detail-list">
-                        {step.details.map((detail, detailIndex) => {
-                          const symbol = getRouteDetailShareSymbol(detail.icon);
-                          return (
+                    <span className="map-route-step-content">
+                      <span className="map-route-step-main">
+                        <span className="map-route-step-label">{step.label}</span>
+                      </span>
+                      {step.kind === 'walk' && step.details?.length ? (
+                        <ul className="map-route-step-detail-list">
+                          {step.details.map((detail, detailIndex) => (
                             <li key={`${step.kind}-${step.label}-detail-${detailIndex}`}>
-                              <span className="map-share-detail-symbol" aria-hidden="true">
-                                {symbol}
+                              <span
+                                className="material-symbols-outlined map-share-detail-symbol"
+                                aria-hidden="true"
+                              >
+                                {detail.icon}
                               </span>
                               <span
                                 className={
@@ -3277,13 +3284,13 @@ function MapShareDialog({
                               </span>
                               {detail.meta ? <small>{detail.meta}</small> : null}
                             </li>
-                          );
-                        })}
-                      </ul>
-                    ) : null}
-                  </span>
-                </li>
-              ))}
+                          ))}
+                        </ul>
+                      ) : null}
+                    </span>
+                  </li>
+                );
+              })}
             </ol>
           ) : null}
           <footer className="map-share-preview-footer">
@@ -6770,7 +6777,7 @@ function buildMapSharePayload(target: MapShareTarget, t: Translate): MapSharePay
     return {
       color: 'var(--yct-color-primary)',
       eyebrow: category,
-      icon: '>',
+      icon: 'location_on',
       meta: [formatMarkerDetail(target.marker, t), coordinateText].filter(Boolean),
       steps: [],
       text: [
@@ -6824,7 +6831,7 @@ function buildMapSharePayload(target: MapShareTarget, t: Translate): MapSharePay
   return {
     color: target.option?.color ?? 'var(--yct-color-primary)',
     eyebrow: t('map.route.share'),
-    icon: '>',
+    icon: target.option?.icon ?? 'route',
     meta: optionSummary,
     steps,
     text,
@@ -6855,6 +6862,30 @@ function getRouteShareStepTextSymbol(step: RoutePlanStep): string {
   return '↓';
 }
 
+function getRouteShareStepMarkerIcon(step: MapShareStep): string | undefined {
+  if (step.kind !== 'place') {
+    return undefined;
+  }
+
+  if (step.role === 'origin') {
+    return 'trip_origin';
+  }
+
+  if (step.role === 'destination') {
+    return 'flag';
+  }
+
+  if (step.role === 'transfer') {
+    return 'radio_button_unchecked';
+  }
+
+  if (step.role === 'alighting') {
+    return 'exit_to_app';
+  }
+
+  return step.icon ?? (step.role === 'boarding' ? 'directions_bus' : undefined);
+}
+
 function formatShareRouteDetailLabel(detail: RoutePlanStepDetail, t: Translate): string {
   const turnInstruction = getTurnInstructionText(detail.icon, t);
   if (!turnInstruction) {
@@ -6876,30 +6907,6 @@ function formatShareRouteDetailLabel(detail: RoutePlanStepDetail, t: Translate):
   }
 
   return `${turnInstruction} ${t('map.route.road.enter', { road: detail.label })}`;
-}
-
-function getRouteDetailShareSymbol(icon: string): string {
-  if (icon.includes('slight_left')) {
-    return '↖';
-  }
-
-  if (icon.includes('slight_right')) {
-    return '↗';
-  }
-
-  if (icon.includes('left')) {
-    return '↰';
-  }
-
-  if (icon.includes('right')) {
-    return '↱';
-  }
-
-  if (icon.includes('straight') || icon.includes('north')) {
-    return '↑';
-  }
-
-  return '';
 }
 
 async function runMapShareAction({

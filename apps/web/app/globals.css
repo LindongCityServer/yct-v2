@@ -6484,20 +6484,25 @@ body .material-symbols-outlined {
 }
 
 .map-share-preview-icon {
+  --icon-fill: 1;
   background: transparent;
   color: var(--map-share-color);
   font-size: 30px;
-  font-weight: 900;
   line-height: 1;
   text-align: center;
 }
 
 .map-share-detail-symbol {
+  --icon-fill: 1;
   display: inline-grid;
   place-items: center;
   color: var(--route-step-color);
-  font-size: 16px;
-  font-weight: 800;
+  font-size: 17px;
+}
+
+.map-share-preview-steps li.is-alighting .map-route-step-marker .material-symbols-outlined,
+.map-share-preview-steps li.is-transfer.is-place .map-route-step-marker .material-symbols-outlined {
+  color: var(--route-step-color);
 }
 
 .map-share-preview-meta {
