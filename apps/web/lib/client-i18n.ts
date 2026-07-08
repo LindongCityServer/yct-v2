@@ -84,6 +84,28 @@ export type CommonMessageKey =
   | 'map.markerList.default'
   | 'map.markerList.nearby'
   | 'map.markerList.results'
+  | 'map.hud.aria'
+  | 'map.hud.cursor'
+  | 'map.hud.scale.blocks'
+  | 'map.hud.scale.kilometers'
+  | 'map.layer.aria'
+  | 'map.layer.linearFeatures'
+  | 'map.layer.linearFeaturesHidden'
+  | 'map.layer.linearFeaturesVisible'
+  | 'map.layer.markers'
+  | 'map.layer.markersHidden'
+  | 'map.layer.markersVisible'
+  | 'map.layer.modeAria'
+  | 'map.layer.mode.roadNetwork'
+  | 'map.layer.mode.satellite'
+  | 'map.layer.mode.traffic'
+  | 'map.layer.noteRoadNetwork'
+  | 'map.layer.noteSatellite'
+  | 'map.layer.noteTraffic'
+  | 'map.layer.open'
+  | 'map.layer.submitPoi'
+  | 'map.layer.tileProvider'
+  | 'map.layer.tileProviderAria'
   | 'map.nearby.exit'
   | 'map.nearby.note'
   | 'map.poi.actions'
@@ -106,6 +128,43 @@ export type CommonMessageKey =
   | 'map.poi.tabsAria'
   | 'map.poi.unfavoriteAria'
   | 'map.poi.unfavoriteStatus'
+  | 'map.poiSubmit.category'
+  | 'map.poiSubmit.close'
+  | 'map.poiSubmit.description'
+  | 'map.poiSubmit.descriptionPlaceholder'
+  | 'map.poiSubmit.href'
+  | 'map.poiSubmit.hrefPlaceholder'
+  | 'map.poiSubmit.imageFile'
+  | 'map.poiSubmit.imageUploadFailed'
+  | 'map.poiSubmit.imageUrl'
+  | 'map.poiSubmit.imageUrlPlaceholder'
+  | 'map.poiSubmit.invalid'
+  | 'map.poiSubmit.name'
+  | 'map.poiSubmit.namePlaceholder'
+  | 'map.poiSubmit.pickCancel'
+  | 'map.poiSubmit.pickDone'
+  | 'map.poiSubmit.pickHint'
+  | 'map.poiSubmit.pickOnMap'
+  | 'map.poiSubmit.pickPrompt'
+  | 'map.poiSubmit.submit'
+  | 'map.poiSubmit.submitFailed'
+  | 'map.poiSubmit.submitting'
+  | 'map.poiSubmit.success'
+  | 'map.poiSubmit.title'
+  | 'map.poiSubmit.x'
+  | 'map.poiSubmit.z'
+  | 'map.source.loading'
+  | 'map.source.objectCount'
+  | 'map.source.provider.lindongFreshHttp'
+  | 'map.source.provider.lindongSafeHttpsStatic'
+  | 'map.source.provider.lindongUnminedStatic'
+  | 'map.source.providerNote.lindongFreshHttp'
+  | 'map.source.providerNote.lindongSafeHttpsStatic'
+  | 'map.source.providerNote.lindongUnminedStatic'
+  | 'map.source.tileFallback'
+  | 'map.source.tileProvider'
+  | 'map.source.tooltipLoading'
+  | 'map.source.unavailable'
   | 'map.search.aria'
   | 'map.search.clear'
   | 'map.search.placeholder'
@@ -163,6 +222,12 @@ export type CommonMessageKey =
   | 'map.route.road.depart'
   | 'map.route.selectDestination'
   | 'map.route.selectOrigin'
+  | 'map.route.copyStatus'
+  | 'map.route.share'
+  | 'map.route.shareOpened'
+  | 'map.route.shareText'
+  | 'map.route.shareTitle'
+  | 'map.route.shareUnavailable'
   | 'map.route.stationCount'
   | 'map.route.stepDetails.collapse'
   | 'map.route.stepDetails.expand'
@@ -589,10 +654,32 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.empty.loading': '正在读取地图标记',
     'map.empty.nearby': '周边暂无可显示标记',
     'map.empty.noMatch': '暂无匹配标记',
+    'map.hud.aria': '地图比例尺与坐标',
+    'map.hud.cursor': '移动光标查看坐标',
+    'map.hud.scale.blocks': '{value} 格',
+    'map.hud.scale.kilometers': '{value} km',
     'map.markerList.count': '{count} 个',
     'map.markerList.default': '地图标记',
     'map.markerList.nearby': '{name}周边',
     'map.markerList.results': '搜索结果',
+    'map.layer.aria': '图层与投稿',
+    'map.layer.linearFeatures': '线条与标签',
+    'map.layer.linearFeaturesHidden': '已隐藏道路/线路覆盖',
+    'map.layer.linearFeaturesVisible': '显示道路/线路覆盖',
+    'map.layer.markers': '标记点',
+    'map.layer.markersHidden': '已隐藏地点标记',
+    'map.layer.markersVisible': '显示地点标记',
+    'map.layer.modeAria': '地图浏览模式',
+    'map.layer.mode.roadNetwork': '路网',
+    'map.layer.mode.satellite': '卫星',
+    'map.layer.mode.traffic': '交通',
+    'map.layer.noteRoadNetwork': '关闭瓦片，突出道路网络和道路文字。',
+    'map.layer.noteSatellite': '加载{name}，仅叠加关键道路。',
+    'map.layer.noteTraffic': '关闭瓦片，突出公共交通站点并淡化道路。',
+    'map.layer.open': '图层与投稿',
+    'map.layer.submitPoi': '投稿 POI',
+    'map.layer.tileProvider': '瓦片源',
+    'map.layer.tileProviderAria': '瓦片源',
     'map.nearby.exit': '退出',
     'map.nearby.note': '按距离显示 {name} 周边标记',
     'map.poi.actions': '地点操作',
@@ -615,6 +702,45 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.tabsAria': '地点信息分类',
     'map.poi.unfavoriteAria': '取消收藏 {name}',
     'map.poi.unfavoriteStatus': '已取消收藏 {name}',
+    'map.poiSubmit.category': '分类',
+    'map.poiSubmit.close': '关闭投稿窗口',
+    'map.poiSubmit.description': '地点简介',
+    'map.poiSubmit.descriptionPlaceholder': '可填写地点用途、开放状态、出入口说明等',
+    'map.poiSubmit.href': '相关链接',
+    'map.poiSubmit.hrefPlaceholder': 'https://...',
+    'map.poiSubmit.imageFile': '上传图片',
+    'map.poiSubmit.imageUploadFailed': '图片上传失败',
+    'map.poiSubmit.imageUrl': '图片链接',
+    'map.poiSubmit.imageUrlPlaceholder': 'https://.../photo.png',
+    'map.poiSubmit.invalid': '请填写名称、分类和有效坐标。',
+    'map.poiSubmit.name': '地点名称',
+    'map.poiSubmit.namePlaceholder': '地点名称',
+    'map.poiSubmit.pickCancel': '取消',
+    'map.poiSubmit.pickDone': '已选择坐标 {point}。',
+    'map.poiSubmit.pickHint': '轻点地图空白处设置投稿坐标',
+    'map.poiSubmit.pickOnMap': '在地图上选点',
+    'map.poiSubmit.pickPrompt': '请在地图空白处轻点，选择投稿 POI 的坐标。',
+    'map.poiSubmit.submit': '提交审核',
+    'map.poiSubmit.submitFailed': '投稿提交失败',
+    'map.poiSubmit.submitting': '提交中',
+    'map.poiSubmit.success': '已提交，等待管理员审核。',
+    'map.poiSubmit.title': '投稿公开 POI',
+    'map.poiSubmit.x': 'X 坐标',
+    'map.poiSubmit.z': 'Z 坐标',
+    'map.source.loading': '地图数据读取中',
+    'map.source.objectCount': '{count} 个对象',
+    'map.source.provider.lindongFreshHttp': 'Lindong 较新瓦片',
+    'map.source.provider.lindongSafeHttpsStatic': 'Lindong HTTPS 静态瓦片',
+    'map.source.provider.lindongUnminedStatic': 'Lindong uNmINeD 静态瓦片',
+    'map.source.providerNote.lindongFreshHttp':
+      '该源较新，已通过 YCT 后端代理同源加载以避免 HTTPS 混合内容风险。',
+    'map.source.providerNote.lindongSafeHttpsStatic': '该源无混合内容风险，但可能不反映最新地图状态。',
+    'map.source.providerNote.lindongUnminedStatic':
+      '该源来自 map.shangxiaoguan.top 的 HTTPS 静态地图，后续需接入 uNmINeD 坐标转换后完整渲染。',
+    'map.source.tileFallback': '地图瓦片',
+    'map.source.tileProvider': '当前瓦片源：{name}',
+    'map.source.tooltipLoading': '地图数据正在读取。',
+    'map.source.unavailable': '地图数据暂不可用',
     'map.search.aria': '筛选地图标记',
     'map.search.clear': '清空地图搜索',
     'map.search.placeholder': '搜索地点或标记',
@@ -672,6 +798,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.road.depart': '前往终点',
     'map.route.selectDestination': '选择终点',
     'map.route.selectOrigin': '选择起点',
+    'map.route.copyStatus': '已复制路线链接',
+    'map.route.share': '分享路线',
+    'map.route.shareOpened': '已打开系统分享面板',
+    'map.route.shareText': '查看 {route} 的路线规划',
+    'map.route.shareTitle': '分享雨城通路线规划',
+    'map.route.shareUnavailable': '分享不可用，请手动复制当前链接。',
     'map.route.stationCount': '{count}站',
     'map.route.stepDetails.collapse': '收起详细步骤',
     'map.route.stepDetails.expand': '展开详细步骤',
@@ -1098,10 +1230,32 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.empty.loading': '正在讀取地圖標記',
     'map.empty.nearby': '周邊暫無可顯示標記',
     'map.empty.noMatch': '暫無符合標記',
+    'map.hud.aria': '地圖比例尺與座標',
+    'map.hud.cursor': '移動游標查看座標',
+    'map.hud.scale.blocks': '{value} 格',
+    'map.hud.scale.kilometers': '{value} km',
     'map.markerList.count': '{count} 個',
     'map.markerList.default': '地圖標記',
     'map.markerList.nearby': '{name}周邊',
     'map.markerList.results': '搜尋結果',
+    'map.layer.aria': '圖層與投稿',
+    'map.layer.linearFeatures': '線條與標籤',
+    'map.layer.linearFeaturesHidden': '已隱藏道路/線路覆蓋',
+    'map.layer.linearFeaturesVisible': '顯示道路/線路覆蓋',
+    'map.layer.markers': '標記點',
+    'map.layer.markersHidden': '已隱藏地點標記',
+    'map.layer.markersVisible': '顯示地點標記',
+    'map.layer.modeAria': '地圖瀏覽模式',
+    'map.layer.mode.roadNetwork': '路網',
+    'map.layer.mode.satellite': '衛星',
+    'map.layer.mode.traffic': '交通',
+    'map.layer.noteRoadNetwork': '關閉瓦片，突出道路網路和道路文字。',
+    'map.layer.noteSatellite': '載入{name}，僅疊加關鍵道路。',
+    'map.layer.noteTraffic': '關閉瓦片，突出公共交通站點並淡化道路。',
+    'map.layer.open': '圖層與投稿',
+    'map.layer.submitPoi': '投稿 POI',
+    'map.layer.tileProvider': '瓦片源',
+    'map.layer.tileProviderAria': '瓦片源',
     'map.nearby.exit': '退出',
     'map.nearby.note': '按距離顯示 {name} 周邊標記',
     'map.poi.actions': '地點操作',
@@ -1124,6 +1278,46 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.tabsAria': '地點資訊分類',
     'map.poi.unfavoriteAria': '取消收藏 {name}',
     'map.poi.unfavoriteStatus': '已取消收藏 {name}',
+    'map.poiSubmit.category': '分類',
+    'map.poiSubmit.close': '關閉投稿視窗',
+    'map.poiSubmit.description': '地點簡介',
+    'map.poiSubmit.descriptionPlaceholder': '可填寫地點用途、開放狀態、出入口說明等',
+    'map.poiSubmit.href': '相關連結',
+    'map.poiSubmit.hrefPlaceholder': 'https://...',
+    'map.poiSubmit.imageFile': '上傳圖片',
+    'map.poiSubmit.imageUploadFailed': '圖片上傳失敗',
+    'map.poiSubmit.imageUrl': '圖片連結',
+    'map.poiSubmit.imageUrlPlaceholder': 'https://.../photo.png',
+    'map.poiSubmit.invalid': '請填寫名稱、分類和有效座標。',
+    'map.poiSubmit.name': '地點名稱',
+    'map.poiSubmit.namePlaceholder': '地點名稱',
+    'map.poiSubmit.pickCancel': '取消',
+    'map.poiSubmit.pickDone': '已選擇座標 {point}。',
+    'map.poiSubmit.pickHint': '輕點地圖空白處設定投稿座標',
+    'map.poiSubmit.pickOnMap': '在地圖上選點',
+    'map.poiSubmit.pickPrompt': '請在地圖空白處輕點，選擇投稿 POI 的座標。',
+    'map.poiSubmit.submit': '提交審核',
+    'map.poiSubmit.submitFailed': '投稿提交失敗',
+    'map.poiSubmit.submitting': '提交中',
+    'map.poiSubmit.success': '已提交，等待管理員審核。',
+    'map.poiSubmit.title': '投稿公開 POI',
+    'map.poiSubmit.x': 'X 座標',
+    'map.poiSubmit.z': 'Z 座標',
+    'map.source.loading': '地圖資料讀取中',
+    'map.source.objectCount': '{count} 個物件',
+    'map.source.provider.lindongFreshHttp': 'Lindong 較新瓦片',
+    'map.source.provider.lindongSafeHttpsStatic': 'Lindong HTTPS 靜態瓦片',
+    'map.source.provider.lindongUnminedStatic': 'Lindong uNmINeD 靜態瓦片',
+    'map.source.providerNote.lindongFreshHttp':
+      '該源較新，已透過 YCT 後端代理同源載入以避免 HTTPS 混合內容風險。',
+    'map.source.providerNote.lindongSafeHttpsStatic':
+      '該源無混合內容風險，但可能不反映最新地圖狀態。',
+    'map.source.providerNote.lindongUnminedStatic':
+      '該源來自 map.shangxiaoguan.top 的 HTTPS 靜態地圖，後續需接入 uNmINeD 座標轉換後完整渲染。',
+    'map.source.tileFallback': '地圖瓦片',
+    'map.source.tileProvider': '目前瓦片源：{name}',
+    'map.source.tooltipLoading': '地圖資料正在讀取。',
+    'map.source.unavailable': '地圖資料暫不可用',
     'map.search.aria': '篩選地圖標記',
     'map.search.clear': '清空地圖搜尋',
     'map.search.placeholder': '搜尋地點或標記',
@@ -1181,6 +1375,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.road.depart': '前往終點',
     'map.route.selectDestination': '選擇終點',
     'map.route.selectOrigin': '選擇起點',
+    'map.route.copyStatus': '已複製路線連結',
+    'map.route.share': '分享路線',
+    'map.route.shareOpened': '已開啟系統分享面板',
+    'map.route.shareText': '查看 {route} 的路線規劃',
+    'map.route.shareTitle': '分享雨城通路線規劃',
+    'map.route.shareUnavailable': '分享不可用，請手動複製目前連結。',
     'map.route.stationCount': '{count}站',
     'map.route.stepDetails.collapse': '收起詳細步驟',
     'map.route.stepDetails.expand': '展開詳細步驟',
@@ -1607,10 +1807,32 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.empty.loading': 'Loading map markers',
     'map.empty.nearby': 'No nearby markers to show',
     'map.empty.noMatch': 'No matching markers',
+    'map.hud.aria': 'Map scale and coordinates',
+    'map.hud.cursor': 'Move the pointer to inspect coordinates',
+    'map.hud.scale.blocks': '{value} blocks',
+    'map.hud.scale.kilometers': '{value} km',
     'map.markerList.count': '{count} items',
     'map.markerList.default': 'Map Markers',
     'map.markerList.nearby': 'Near {name}',
     'map.markerList.results': 'Search Results',
+    'map.layer.aria': 'Layers and submissions',
+    'map.layer.linearFeatures': 'Lines and labels',
+    'map.layer.linearFeaturesHidden': 'Road and line overlays hidden',
+    'map.layer.linearFeaturesVisible': 'Road and line overlays visible',
+    'map.layer.markers': 'Markers',
+    'map.layer.markersHidden': 'Place markers hidden',
+    'map.layer.markersVisible': 'Place markers visible',
+    'map.layer.modeAria': 'Map browsing mode',
+    'map.layer.mode.roadNetwork': 'Roads',
+    'map.layer.mode.satellite': 'Satellite',
+    'map.layer.mode.traffic': 'Transit',
+    'map.layer.noteRoadNetwork': 'Tiles are off. The road network and road labels are emphasized.',
+    'map.layer.noteSatellite': 'Loading {name} with key roads overlaid.',
+    'map.layer.noteTraffic': 'Tiles are off. Transit stops are emphasized and roads are muted.',
+    'map.layer.open': 'Layers and submissions',
+    'map.layer.submitPoi': 'Submit POI',
+    'map.layer.tileProvider': 'Tile source',
+    'map.layer.tileProviderAria': 'Tile source',
     'map.nearby.exit': 'Exit',
     'map.nearby.note': 'Showing markers near {name} by distance',
     'map.poi.actions': 'Place actions',
@@ -1633,6 +1855,48 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.tabsAria': 'Place detail sections',
     'map.poi.unfavoriteAria': 'Remove {name} from favorites',
     'map.poi.unfavoriteStatus': 'Removed {name} from favorites',
+    'map.poiSubmit.category': 'Category',
+    'map.poiSubmit.close': 'Close submission dialog',
+    'map.poiSubmit.description': 'Place description',
+    'map.poiSubmit.descriptionPlaceholder':
+      'Add use, opening status, entrance notes, and other context',
+    'map.poiSubmit.href': 'Related link',
+    'map.poiSubmit.hrefPlaceholder': 'https://...',
+    'map.poiSubmit.imageFile': 'Upload image',
+    'map.poiSubmit.imageUploadFailed': 'Image upload failed',
+    'map.poiSubmit.imageUrl': 'Image URL',
+    'map.poiSubmit.imageUrlPlaceholder': 'https://.../photo.png',
+    'map.poiSubmit.invalid': 'Enter a name, category, and valid coordinates.',
+    'map.poiSubmit.name': 'Place name',
+    'map.poiSubmit.namePlaceholder': 'Place name',
+    'map.poiSubmit.pickCancel': 'Cancel',
+    'map.poiSubmit.pickDone': 'Selected coordinates {point}.',
+    'map.poiSubmit.pickHint': 'Tap an empty map area to set submission coordinates',
+    'map.poiSubmit.pickOnMap': 'Pick on map',
+    'map.poiSubmit.pickPrompt':
+      'Tap an empty map area to choose coordinates for the POI submission.',
+    'map.poiSubmit.submit': 'Submit for review',
+    'map.poiSubmit.submitFailed': 'POI submission failed',
+    'map.poiSubmit.submitting': 'Submitting',
+    'map.poiSubmit.success': 'Submitted. Waiting for admin review.',
+    'map.poiSubmit.title': 'Submit Public POI',
+    'map.poiSubmit.x': 'X coordinate',
+    'map.poiSubmit.z': 'Z coordinate',
+    'map.source.loading': 'Loading map data',
+    'map.source.objectCount': '{count} objects',
+    'map.source.provider.lindongFreshHttp': 'Lindong newer tiles',
+    'map.source.provider.lindongSafeHttpsStatic': 'Lindong HTTPS static tiles',
+    'map.source.provider.lindongUnminedStatic': 'Lindong uNmINeD static tiles',
+    'map.source.providerNote.lindongFreshHttp':
+      'This source is newer and is proxied through the YCT backend to avoid HTTPS mixed-content issues.',
+    'map.source.providerNote.lindongSafeHttpsStatic':
+      'This source avoids mixed-content issues, but may not reflect the latest map state.',
+    'map.source.providerNote.lindongUnminedStatic':
+      'This source comes from the HTTPS static map on map.shangxiaoguan.top; full uNmINeD coordinate conversion and rendering still need follow-up work.',
+    'map.source.tileFallback': 'map tiles',
+    'map.source.tileProvider': 'Current tile source: {name}',
+    'map.source.tooltipLoading': 'Map data is still loading.',
+    'map.source.unavailable': 'Map data is temporarily unavailable',
     'map.search.aria': 'Filter map markers',
     'map.search.clear': 'Clear map search',
     'map.search.placeholder': 'Search places or markers',
@@ -1690,6 +1954,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.road.depart': 'Head to destination',
     'map.route.selectDestination': 'Select destination',
     'map.route.selectOrigin': 'Select origin',
+    'map.route.copyStatus': 'Route link copied',
+    'map.route.share': 'Share route',
+    'map.route.shareOpened': 'System share panel opened',
+    'map.route.shareText': 'View the route plan for {route}',
+    'map.route.shareTitle': 'Share Yuchengtong route plan',
+    'map.route.shareUnavailable': 'Sharing is unavailable. Copy the current link manually.',
     'map.route.stationCount': '{count} stops',
     'map.route.stepDetails.collapse': 'Collapse detailed steps',
     'map.route.stepDetails.expand': 'Expand detailed steps',

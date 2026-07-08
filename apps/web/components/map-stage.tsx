@@ -415,6 +415,13 @@ interface NearbySearchCenter {
   coordinates: [number, number];
 }
 
+interface SharedRoutePlanState {
+  draft: RoutePlanDraft;
+  enabledModes: EnabledRouteTransportModes;
+  key: string;
+  selectedOptionId?: string;
+}
+
 interface ScaleBarInfo {
   distance: number;
   pixelWidth: number;
@@ -426,10 +433,10 @@ type RoadMarkerKind = 'road' | 'highway';
 type MapBrowseMode = 'satellite' | 'road-network' | 'traffic';
 type RoutePlanStatus = 'idle' | 'loading' | 'ready';
 
-const mapBrowseModes: Array<{ value: MapBrowseMode; label: string; icon: string }> = [
-  { value: 'satellite', label: '卫星', icon: 'satellite_alt' },
-  { value: 'road-network', label: '路网', icon: 'conversion_path' },
-  { value: 'traffic', label: '交通', icon: 'commute' },
+const mapBrowseModes: Array<{ value: MapBrowseMode; labelKey: CommonMessageKey; icon: string }> = [
+  { value: 'satellite', labelKey: 'map.layer.mode.satellite', icon: 'satellite_alt' },
+  { value: 'road-network', labelKey: 'map.layer.mode.roadNetwork', icon: 'conversion_path' },
+  { value: 'traffic', labelKey: 'map.layer.mode.traffic', icon: 'commute' },
 ];
 
 const defaultRouteTransportModes: EnabledRouteTransportModes = {
@@ -513,10 +520,35 @@ const routeTransportModeOptions: RouteTransportModeOption[] = [
   { mode: 'railway', label: '铁路', icon: 'train', color: 'var(--yct-color-railway)' },
 ];
 
-const routeWalkTraceColor = 'var(--yct-color-text-secondary)';
+const routeWalkTraceColor = 'var(--yct-color-primary)';
+
+const tileProviderNameKeys: Partial<Record<TileProviderDescriptor['id'], CommonMessageKey>> = {
+  'lindong-fresh-http': 'map.source.provider.lindongFreshHttp',
+  'lindong-safe-https-static': 'map.source.provider.lindongSafeHttpsStatic',
+  'lindong-unmined-static': 'map.source.provider.lindongUnminedStatic',
+};
+
+const tileProviderNoteKeys: Partial<Record<TileProviderDescriptor['id'], CommonMessageKey>> = {
+  'lindong-fresh-http': 'map.source.providerNote.lindongFreshHttp',
+  'lindong-safe-https-static': 'map.source.providerNote.lindongSafeHttpsStatic',
+  'lindong-unmined-static': 'map.source.providerNote.lindongUnminedStatic',
+};
 
 function getRouteTransportModeLabel(mode: RouteTransportMode, t: Translate): string {
   return t(`map.route.mode.${mode}` as Parameters<Translate>[0]);
+}
+
+function getLocalizedTileProviderName(provider: TileProviderDescriptor, t: Translate): string {
+  const messageKey = tileProviderNameKeys[provider.id];
+  return messageKey ? t(messageKey) : provider.name;
+}
+
+function getLocalizedTileProviderNote(provider: TileProviderDescriptor, t: Translate): string | undefined {
+  const messageKey = tileProviderNoteKeys[provider.id];
+  if (messageKey) {
+    return t(messageKey);
+  }
+  return provider.freshness?.note;
 }
 
 function getTransitModeDisplayLabel(mode: string, fallback: string, t: Translate): string {
@@ -610,6 +642,8 @@ export function MapStage() {
   const [selectedRouteOptionId, setSelectedRouteOptionId] = useState<string | null>(null);
   const [editingRouteEndpoint, setEditingRouteEndpoint] = useState<RouteEndpointKind | null>(null);
   const [routeEndpointQuery, setRouteEndpointQuery] = useState('');
+  const [routePlanShareStatus, setRoutePlanShareStatus] = useState('');
+  const [poiCoordinatePickMode, setPoiCoordinatePickMode] = useState(false);
   const [nearbySearchCenter, setNearbySearchCenter] = useState<NearbySearchCenter | null>(null);
   const [poiDetailCollapsed, setPoiDetailCollapsed] = useState(false);
   const [favoriteMarkerIds, setFavoriteMarkerIds] = useState<Set<string>>(() => new Set());
@@ -617,6 +651,7 @@ export function MapStage() {
   const [appliedSharedMarkerFocusKey, setAppliedSharedMarkerFocusKey] = useState<string | null>(
     null,
   );
+  const [appliedSharedRoutePlanKey, setAppliedSharedRoutePlanKey] = useState<string | null>(null);
   const roadGraphCacheRef = useRef<{
     graph?: RoadRouteGraph;
     source: EndpointGroupMarker[] | null;
@@ -824,6 +859,7 @@ export function MapStage() {
     () => readMapSharedFocusKey(searchParams),
     [searchParams],
   );
+  const sharedRoutePlan = useMemo(() => readMapSharedRoutePlan(searchParams), [searchParams]);
   const centerableMarkers = useMemo(
     () => markerSnapshot.filter(isCenterableMarker),
     [markerSnapshot],
@@ -1150,17 +1186,23 @@ export function MapStage() {
     () => categoryResponse?.items.filter((category) => category.acceptsPublicSubmissions) ?? [],
     [categoryResponse],
   );
+  const activeTileProviderName = activeTileProvider
+    ? getLocalizedTileProviderName(activeTileProvider, t)
+    : undefined;
+  const activeTileProviderNote = activeTileProvider
+    ? getLocalizedTileProviderNote(activeTileProvider, t)
+    : undefined;
   const tileSourceText = activeTileProvider
     ? [
-        `当前瓦片源：${activeTileProvider.name}`,
-        activeTileProvider.freshness?.note,
+        t('map.source.tileProvider', { name: activeTileProviderName ?? activeTileProvider.name }),
+        activeTileProviderNote,
       ]
         .filter(Boolean)
         .join('。')
     : undefined;
   const dataSourceText =
     [markerResponse?.meta.message, tileSourceText].filter(Boolean).join('\n') ||
-    '地图数据正在读取。';
+    t('map.source.tooltipLoading');
   const updateSelectedTileProviderId = (providerId: string) => {
     setSelectedTileProviderId(providerId);
     writeSelectedMapTileProviderId(providerId);
@@ -1245,6 +1287,14 @@ export function MapStage() {
       window.clearTimeout(timer);
     };
   }, [roadTraceSource, routePlanDraft, routePlanRequest, t]);
+  useEffect(() => {
+    if (!routePlanShareStatus) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => setRoutePlanShareStatus(''), 3200);
+    return () => window.clearTimeout(timer);
+  }, [routePlanShareStatus]);
   const selectedRouteOption =
     routePlanOptions.find((option) => option.id === selectedRouteOptionId) ?? routePlanOptions[0];
   const selectedRouteTrace = useMemo(
@@ -1284,8 +1334,8 @@ export function MapStage() {
       ? findTransitLineByMarker(focusedMarker, transitLineLookup)
       : undefined;
   const scaleBarInfo = useMemo(
-    () => buildScaleBarInfo(mapView, viewportSize),
-    [mapView, viewportSize],
+    () => buildScaleBarInfo(mapView, viewportSize, t),
+    [mapView, t, viewportSize],
   );
   const visibleTiles = useMemo<TileLayer | null>(
     () =>
@@ -1440,6 +1490,32 @@ export function MapStage() {
     sharedMarkerFocusKey,
   ]);
 
+  useEffect(() => {
+    if (!sharedRoutePlan) {
+      if (appliedSharedRoutePlanKey) {
+        setAppliedSharedRoutePlanKey(null);
+      }
+      return;
+    }
+
+    if (appliedSharedRoutePlanKey === sharedRoutePlan.key) {
+      return;
+    }
+
+    setRoutePlanDraft(sharedRoutePlan.draft);
+    setRouteTransportModes(sharedRoutePlan.enabledModes);
+    setSelectedRouteOptionId(sharedRoutePlan.selectedOptionId ?? null);
+    setRoutePlanCollapsed(false);
+    setEditingRouteEndpoint(null);
+    setRouteEndpointQuery('');
+    setNearbySearchCenter(null);
+    setFocusedMarkerId(null);
+    setMapView((current) =>
+      fitRouteDraftToMapView(sharedRoutePlan.draft, current, viewportSize),
+    );
+    setAppliedSharedRoutePlanKey(sharedRoutePlan.key);
+  }, [appliedSharedRoutePlanKey, sharedRoutePlan, viewportSize]);
+
   const toggleFavoriteMarker = (marker: CenterableMarker) => {
     const label = formatMarkerDisplayName(marker.label);
     const next = new Set(favoriteMarkerIds);
@@ -1479,6 +1555,41 @@ export function MapStage() {
         setPoiActionStatus(t('map.poi.copyStatus'));
       } catch {
         setPoiActionStatus(t('map.poi.shareUnavailable'));
+      }
+    }
+  };
+
+  const shareRoutePlan = async () => {
+    if (!routePlanDraft) {
+      return;
+    }
+
+    const url = buildRoutePlanShareUrl(
+      routePlanDraft,
+      routeTransportModes,
+      selectedRouteOption?.id,
+    );
+    const routeTitle = `${routePlanDraft.originLabel} → ${routePlanDraft.destinationLabel}`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: t('map.route.shareTitle'),
+          text: t('map.route.shareText', { route: routeTitle }),
+          url,
+        });
+        setRoutePlanShareStatus(t('map.route.shareOpened'));
+        return;
+      }
+
+      await copyTextToClipboard(url);
+      setRoutePlanShareStatus(t('map.route.copyStatus'));
+    } catch {
+      try {
+        await copyTextToClipboard(url);
+        setRoutePlanShareStatus(t('map.route.copyStatus'));
+      } catch {
+        setRoutePlanShareStatus(t('map.route.shareUnavailable'));
       }
     }
   };
@@ -1557,7 +1668,7 @@ export function MapStage() {
     updateCursorWorld(event);
     event.currentTarget.setPointerCapture(event.pointerId);
     activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    tapRef.current = editingRouteEndpoint
+    tapRef.current = editingRouteEndpoint || poiCoordinatePickMode
       ? {
           pointerId: event.pointerId,
           startX: event.clientX,
@@ -1614,19 +1725,21 @@ export function MapStage() {
     const tap = tapRef.current;
     if (tap?.pointerId === event.pointerId) {
       tapRef.current = null;
-      if (!wasPinching && editingRouteEndpoint) {
+      if (!wasPinching && (editingRouteEndpoint || poiCoordinatePickMode)) {
         const rect = event.currentTarget.getBoundingClientRect();
-        applyRouteEndpointCoordinate(
-          editingRouteEndpoint,
-          toCoordinatePair(
-            screenToWorld(
-              event.clientX - rect.left,
-              event.clientY - rect.top,
-              mapViewRef.current,
-              viewportSize,
-            ),
+        const coordinates = toCoordinatePair(
+          screenToWorld(
+            event.clientX - rect.left,
+            event.clientY - rect.top,
+            mapViewRef.current,
+            viewportSize,
           ),
         );
+        if (editingRouteEndpoint) {
+          applyRouteEndpointCoordinate(editingRouteEndpoint, coordinates);
+        } else {
+          applyPoiCoordinateFromMap(coordinates);
+        }
       }
     }
 
@@ -1657,6 +1770,20 @@ export function MapStage() {
     );
   };
 
+  const beginPoiCoordinatePick = () => {
+    setPoiCoordinatePickMode(true);
+    setPoiSubmitDialogOpen(false);
+    setPoiSubmitStatus(t('map.poiSubmit.pickPrompt'));
+  };
+
+  const applyPoiCoordinateFromMap = (coordinates: [number, number]) => {
+    setPoiX(String(Math.round(coordinates[0])));
+    setPoiZ(String(Math.round(coordinates[1])));
+    setPoiCoordinatePickMode(false);
+    setPoiSubmitDialogOpen(true);
+    setPoiSubmitStatus(t('map.poiSubmit.pickDone', { point: formatPoint(coordinates) }));
+  };
+
   const submitPoi = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPoiSubmitStatus('');
@@ -1664,7 +1791,7 @@ export function MapStage() {
     const z = Number(poiZ);
 
     if (!poiTitle.trim() || !poiCategoryId || !Number.isFinite(x) || !Number.isFinite(z)) {
-      setPoiSubmitStatus('请填写名称、分类和有效坐标。');
+      setPoiSubmitStatus(t('map.poiSubmit.invalid'));
       return;
     }
 
@@ -1683,7 +1810,7 @@ export function MapStage() {
           message?: string;
         };
         if (!imageResponse.ok || !imageData.imageUrl) {
-          setPoiSubmitStatus(imageData.message ?? '图片上传失败');
+          setPoiSubmitStatus(imageData.message ?? t('map.poiSubmit.imageUploadFailed'));
           return;
         }
 
@@ -1708,7 +1835,7 @@ export function MapStage() {
       });
       const data = (await response.json()) as { message?: string };
       if (!response.ok) {
-        setPoiSubmitStatus(data.message ?? '投稿提交失败');
+        setPoiSubmitStatus(data.message ?? t('map.poiSubmit.submitFailed'));
         return;
       }
 
@@ -1720,7 +1847,7 @@ export function MapStage() {
       setPoiImageFileInputKey((current) => current + 1);
       setPoiX('');
       setPoiZ('');
-      setPoiSubmitStatus('已提交，等待管理员审核。');
+      setPoiSubmitStatus(t('map.poiSubmit.success'));
       setPoiSubmitDialogOpen(false);
     } finally {
       setPoiSubmitBusy(false);
@@ -1993,6 +2120,7 @@ export function MapStage() {
               }
               onSelectOption={setSelectedRouteOptionId}
               onSelectEndpointCandidate={applyRouteEndpointMarker}
+              onShare={() => void shareRoutePlan()}
               onSwapEndpoints={swapRoutePlanEndpoints}
               onToggleCollapsed={() => setRoutePlanCollapsed((current) => !current)}
               onToggleMode={(mode) =>
@@ -2420,14 +2548,36 @@ export function MapStage() {
           </span>
           <span>
             {loadStatus === 'loading'
-              ? '地图数据读取中'
+              ? t('map.source.loading')
               : loadStatus === 'ready'
-                ? `${pointMarkers.length + endpointGroupMarkers.length + transitLineMarkers.length} 个对象`
-                : '地图数据暂不可用'}
+                ? t('map.source.objectCount', {
+                    count: pointMarkers.length + endpointGroupMarkers.length + transitLineMarkers.length,
+                  })
+                : t('map.source.unavailable')}
           </span>
         </div>
 
-        <div className="map-hud" aria-label="地图比例尺与坐标">
+        {poiCoordinatePickMode ? (
+          <div className="map-coordinate-pick-hint" role="status">
+            <span className="material-symbols-outlined" aria-hidden="true">
+              add_location_alt
+            </span>
+            <span>{t('map.poiSubmit.pickHint')}</span>
+            <button
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => {
+                setPoiCoordinatePickMode(false);
+                setPoiSubmitDialogOpen(true);
+                setPoiSubmitStatus('');
+              }}
+            >
+              {t('map.poiSubmit.pickCancel')}
+            </button>
+          </div>
+        ) : null}
+
+        <div className="map-hud" aria-label={t('map.hud.aria')}>
           <div className="map-scale-control">
             <span
               className="map-scale-track"
@@ -2443,7 +2593,7 @@ export function MapStage() {
             <span>
               {cursorWorld
                 ? `X ${formatMapCoordinate(cursorWorld.x)} / Z ${formatMapCoordinate(cursorWorld.z)}`
-                : '移动光标查看坐标'}
+                : t('map.hud.cursor')}
             </span>
           </div>
         </div>
@@ -2655,7 +2805,7 @@ export function MapStage() {
         <button
           className={layerPanelOpen ? 'icon-button is-active' : 'icon-button'}
           type="button"
-          aria-label="图层与投稿"
+          aria-label={t('map.layer.open')}
           aria-expanded={layerPanelOpen}
           aria-controls="map-layer-panel"
           onClick={() => setLayerPanelOpen((current) => !current)}
@@ -2665,8 +2815,8 @@ export function MapStage() {
       </div>
 
       {layerPanelOpen ? (
-        <aside className="map-layer-panel" id="map-layer-panel" aria-label="图层与投稿">
-          <div className="map-browse-mode-control" role="tablist" aria-label="地图浏览模式">
+        <aside className="map-layer-panel" id="map-layer-panel" aria-label={t('map.layer.aria')}>
+          <div className="map-browse-mode-control" role="tablist" aria-label={t('map.layer.modeAria')}>
             {mapBrowseModes.map((mode) => (
               <button
                 className={browseMode === mode.value ? 'is-active' : ''}
@@ -2679,7 +2829,7 @@ export function MapStage() {
                 <span className="material-symbols-outlined" aria-hidden="true">
                   {mode.icon}
                 </span>
-                <span>{mode.label}</span>
+                <span>{t(mode.labelKey)}</span>
               </button>
             ))}
           </div>
@@ -2689,15 +2839,15 @@ export function MapStage() {
                 map
               </span>
               <span>
-                <strong>瓦片源</strong>
+                <strong>{t('map.layer.tileProvider')}</strong>
                 <select
                   value={activeTileProvider?.id ?? ''}
                   onChange={(event) => updateSelectedTileProviderId(event.currentTarget.value)}
-                  aria-label="瓦片源"
+                  aria-label={t('map.layer.tileProviderAria')}
                 >
                   {tileProviders.map((provider) => (
                     <option value={provider.id} key={provider.id}>
-                      {provider.name}
+                      {getLocalizedTileProviderName(provider, t)}
                     </option>
                   ))}
                 </select>
@@ -2706,10 +2856,12 @@ export function MapStage() {
           ) : null}
           <p className="map-layer-note">
             {browseMode === 'satellite'
-              ? `加载${activeTileProvider?.name ?? '地图瓦片'}，仅叠加关键道路。`
+              ? t('map.layer.noteSatellite', {
+                  name: activeTileProviderName ?? activeTileProvider?.name ?? t('map.source.tileFallback'),
+                })
               : browseMode === 'road-network'
-                ? '关闭瓦片，突出道路网络和道路文字。'
-                : '关闭瓦片，突出公共交通站点并淡化道路。'}
+                ? t('map.layer.noteRoadNetwork')
+                : t('map.layer.noteTraffic')}
           </p>
           <div className="map-layer-option-list">
             <label className="map-layer-toggle">
@@ -2717,8 +2869,10 @@ export function MapStage() {
                 location_on
               </span>
               <span>
-                <strong>标记点</strong>
-                <small>{markersVisible ? '显示地点标记' : '已隐藏地点标记'}</small>
+                <strong>{t('map.layer.markers')}</strong>
+                <small>
+                  {markersVisible ? t('map.layer.markersVisible') : t('map.layer.markersHidden')}
+                </small>
               </span>
               <input
                 type="checkbox"
@@ -2731,8 +2885,12 @@ export function MapStage() {
                 route
               </span>
               <span>
-                <strong>线条与标签</strong>
-                <small>{linearFeaturesVisible ? '显示道路/线路覆盖' : '已隐藏道路/线路覆盖'}</small>
+                <strong>{t('map.layer.linearFeatures')}</strong>
+                <small>
+                  {linearFeaturesVisible
+                    ? t('map.layer.linearFeaturesVisible')
+                    : t('map.layer.linearFeaturesHidden')}
+                </small>
               </span>
               <input
                 type="checkbox"
@@ -2750,7 +2908,7 @@ export function MapStage() {
             <span className="material-symbols-outlined" aria-hidden="true">
               add_location_alt
             </span>
-            <span>投稿 POI</span>
+            <span>{t('map.layer.submitPoi')}</span>
           </button>
           {poiSubmitStatus ? <p className="map-source-note">{poiSubmitStatus}</p> : null}
         </aside>
@@ -2769,12 +2927,12 @@ export function MapStage() {
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="section-heading">
-              <h2 id="map-poi-submit-title">投稿公开 POI</h2>
+              <h2 id="map-poi-submit-title">{t('map.poiSubmit.title')}</h2>
               <button
                 className="icon-action-button"
                 type="button"
                 onClick={() => setPoiSubmitDialogOpen(false)}
-                aria-label="关闭投稿窗口"
+                aria-label={t('map.poiSubmit.close')}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
                   close
@@ -2783,21 +2941,21 @@ export function MapStage() {
             </div>
             <form className="map-poi-submit-form" onSubmit={submitPoi}>
               <label>
-                <span>地点名称</span>
+                <span>{t('map.poiSubmit.name')}</span>
                 <input
                   autoFocus
                   value={poiTitle}
                   onChange={(event) => setPoiTitle(event.currentTarget.value)}
-                  placeholder="地点名称"
-                  aria-label="地点名称"
+                  placeholder={t('map.poiSubmit.namePlaceholder')}
+                  aria-label={t('map.poiSubmit.name')}
                 />
               </label>
               <label>
-                <span>分类</span>
+                <span>{t('map.poiSubmit.category')}</span>
                 <select
                   value={poiCategoryId}
                   onChange={(event) => setPoiCategoryId(event.currentTarget.value)}
-                  aria-label="POI 分类"
+                  aria-label={t('map.poiSubmit.category')}
                 >
                   {publicPoiCategories.map((category) => (
                     <option value={category.id} key={category.id}>
@@ -2807,66 +2965,76 @@ export function MapStage() {
                 </select>
               </label>
               <label>
-                <span>地点简介</span>
+                <span>{t('map.poiSubmit.description')}</span>
                 <textarea
                   value={poiDescription}
                   onChange={(event) => setPoiDescription(event.currentTarget.value)}
-                  placeholder="可填写地点用途、开放状态、出入口说明等"
-                  aria-label="地点简介"
+                  placeholder={t('map.poiSubmit.descriptionPlaceholder')}
+                  aria-label={t('map.poiSubmit.description')}
                   maxLength={1000}
                 />
               </label>
               <label>
-                <span>相关链接</span>
+                <span>{t('map.poiSubmit.href')}</span>
                 <input
                   type="url"
                   value={poiHref}
                   onChange={(event) => setPoiHref(event.currentTarget.value)}
-                  placeholder="https://..."
-                  aria-label="相关链接"
+                  placeholder={t('map.poiSubmit.hrefPlaceholder')}
+                  aria-label={t('map.poiSubmit.href')}
                 />
               </label>
               <label>
-                <span>上传图片</span>
+                <span>{t('map.poiSubmit.imageFile')}</span>
                 <input
                   key={poiImageFileInputKey}
                   type="file"
                   accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
                   onChange={(event) => setPoiImageFile(event.currentTarget.files?.[0] ?? null)}
-                  aria-label="上传图片"
+                  aria-label={t('map.poiSubmit.imageFile')}
                 />
               </label>
               <label>
-                <span>图片链接</span>
+                <span>{t('map.poiSubmit.imageUrl')}</span>
                 <input
                   type="url"
                   value={poiImageUrl}
                   onChange={(event) => setPoiImageUrl(event.currentTarget.value)}
-                  placeholder="https://.../photo.png"
-                  aria-label="图片链接"
+                  placeholder={t('map.poiSubmit.imageUrlPlaceholder')}
+                  aria-label={t('map.poiSubmit.imageUrl')}
                 />
               </label>
               <div className="map-poi-coordinate-row">
                 <label>
-                  <span>X 坐标</span>
+                  <span>{t('map.poiSubmit.x')}</span>
                   <input
                     type="number"
                     value={poiX}
                     onChange={(event) => setPoiX(event.currentTarget.value)}
                     placeholder="X"
-                    aria-label="X 坐标"
+                    aria-label={t('map.poiSubmit.x')}
                   />
                 </label>
                 <label>
-                  <span>Z 坐标</span>
+                  <span>{t('map.poiSubmit.z')}</span>
                   <input
                     type="number"
                     value={poiZ}
                     onChange={(event) => setPoiZ(event.currentTarget.value)}
                     placeholder="Z"
-                    aria-label="Z 坐标"
+                    aria-label={t('map.poiSubmit.z')}
                   />
                 </label>
+                <button
+                  className="secondary-action-button"
+                  type="button"
+                  onClick={beginPoiCoordinatePick}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    add_location_alt
+                  </span>
+                  <span>{t('map.poiSubmit.pickOnMap')}</span>
+                </button>
               </div>
               <button
                 className="secondary-action-button is-primary"
@@ -2876,11 +3044,16 @@ export function MapStage() {
                 <span className="material-symbols-outlined" aria-hidden="true">
                   upload
                 </span>
-                <span>{poiSubmitBusy ? '提交中' : '提交审核'}</span>
+                <span>{poiSubmitBusy ? t('map.poiSubmit.submitting') : t('map.poiSubmit.submit')}</span>
               </button>
             </form>
             {poiSubmitStatus ? <p className="map-source-note">{poiSubmitStatus}</p> : null}
           </section>
+        </div>
+      ) : null}
+      {routePlanShareStatus ? (
+        <div className="map-toast" role="status">
+          {routePlanShareStatus}
         </div>
       ) : null}
       <MapStageLegal />
@@ -3129,6 +3302,7 @@ function RoutePlanDraftCard({
   onSetAllModes,
   onSelectOption,
   onSelectEndpointCandidate,
+  onShare,
   onSwapEndpoints,
   onToggleCollapsed,
   onToggleMode,
@@ -3151,6 +3325,7 @@ function RoutePlanDraftCard({
   onSetAllModes: (enabled: boolean) => void;
   onSelectOption: (optionId: string) => void;
   onSelectEndpointCandidate: (endpoint: RouteEndpointKind, marker: CenterableMarker) => void;
+  onShare: () => void;
   onSwapEndpoints: () => void;
   onToggleCollapsed: () => void;
   onToggleMode: (mode: RouteTransportMode) => void;
@@ -3249,11 +3424,6 @@ function RoutePlanDraftCard({
           </div>
         </div>
         <div className="map-route-plan-header-actions">
-          <button type="button" aria-label={t('map.route.swap')} onClick={onSwapEndpoints}>
-            <span className="material-symbols-outlined" aria-hidden="true">
-              swap_vert
-            </span>
-          </button>
           <button
             type="button"
             aria-label={collapsed ? t('map.route.expand') : t('map.route.collapse')}
@@ -3267,6 +3437,16 @@ function RoutePlanDraftCard({
           <button type="button" aria-label={t('map.route.close')} onClick={onClear}>
             <span className="material-symbols-outlined" aria-hidden="true">
               close
+            </span>
+          </button>
+          <button type="button" aria-label={t('map.route.swap')} onClick={onSwapEndpoints}>
+            <span className="material-symbols-outlined" aria-hidden="true">
+              swap_vert
+            </span>
+          </button>
+          <button type="button" aria-label={t('map.route.share')} onClick={onShare}>
+            <span className="material-symbols-outlined" aria-hidden="true">
+              share
             </span>
           </button>
         </div>
@@ -6012,6 +6192,35 @@ function buildMapMarkerShareUrl(marker: CenterableMarker): string {
   return url.toString();
 }
 
+function buildRoutePlanShareUrl(
+  draft: RoutePlanDraft,
+  enabledModes: EnabledRouteTransportModes,
+  selectedOptionId?: string,
+): string {
+  const url = new URL(appPath('/map'), window.location.origin);
+  url.searchParams.set('route', '1');
+  url.searchParams.set('origin', formatCoordinateParam(draft.origin));
+  url.searchParams.set('destination', formatCoordinateParam(draft.destination));
+  url.searchParams.set('originLabel', draft.originLabel);
+  url.searchParams.set('destinationLabel', draft.destinationLabel);
+  if (draft.originId) {
+    url.searchParams.set('originId', draft.originId);
+  }
+  if (draft.destinationId) {
+    url.searchParams.set('destinationId', draft.destinationId);
+  }
+  const modes = routeTransportModeOptions
+    .filter((mode) => enabledModes[mode.mode])
+    .map((mode) => mode.mode);
+  if (modes.length > 0) {
+    url.searchParams.set('modes', modes.join(','));
+  }
+  if (selectedOptionId) {
+    url.searchParams.set('option', selectedOptionId);
+  }
+  return url.toString();
+}
+
 function readMapSharedFocusKey(searchParams: Pick<URLSearchParams, 'get'>): string | null {
   const markerKey = normalizeMapSharedFocusValue(searchParams.get('marker'));
   if (markerKey) {
@@ -6022,6 +6231,69 @@ function readMapSharedFocusKey(searchParams: Pick<URLSearchParams, 'get'>): stri
     searchParams.get('line') ?? searchParams.get('lineId'),
   );
   return lineKey ? ensureTransitLineFocusKey(lineKey) : null;
+}
+
+function readMapSharedRoutePlan(
+  searchParams: Pick<URLSearchParams, 'get' | 'toString'>,
+): SharedRoutePlanState | null {
+  if (searchParams.get('route') !== '1') {
+    return null;
+  }
+
+  const origin = parseCoordinateParam(searchParams.get('origin'));
+  const destination = parseCoordinateParam(searchParams.get('destination'));
+  if (!origin || !destination) {
+    return null;
+  }
+
+  const draft: RoutePlanDraft = {
+    destination,
+    destinationId: normalizeMapSharedFocusValue(searchParams.get('destinationId')) ?? undefined,
+    destinationLabel:
+      normalizeMapSharedFocusValue(searchParams.get('destinationLabel')) ??
+      formatPoint(destination),
+    origin,
+    originId: normalizeMapSharedFocusValue(searchParams.get('originId')) ?? undefined,
+    originLabel:
+      normalizeMapSharedFocusValue(searchParams.get('originLabel')) ?? formatPoint(origin),
+  };
+
+  return {
+    draft,
+    enabledModes: parseRouteTransportModes(searchParams.get('modes')),
+    key: searchParams.toString(),
+    selectedOptionId: normalizeMapSharedFocusValue(searchParams.get('option')) ?? undefined,
+  };
+}
+
+function formatCoordinateParam([x, z]: [number, number]): string {
+  return `${roundCoordinateForParam(x)},${roundCoordinateForParam(z)}`;
+}
+
+function roundCoordinateForParam(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+function parseCoordinateParam(value: string | null): [number, number] | null {
+  const parts = value?.split(',').map((part) => Number(part.trim()));
+  if (!parts || parts.length !== 2) {
+    return null;
+  }
+  const [x, z] = parts;
+  return Number.isFinite(x) && Number.isFinite(z) ? [x, z] : null;
+}
+
+function parseRouteTransportModes(value: string | null): EnabledRouteTransportModes {
+  const enabledModes = { ...defaultRouteTransportModes };
+  if (!value?.trim()) {
+    return enabledModes;
+  }
+
+  const selectedModes = new Set(value.split(',').map((mode) => mode.trim()));
+  for (const mode of routeTransportModeOptions) {
+    enabledModes[mode.mode] = selectedModes.has(mode.mode);
+  }
+  return enabledModes;
 }
 
 function normalizeMapSharedFocusValue(value: string | null): string | null {
@@ -7517,7 +7789,7 @@ function toCoordinatePair(point: { x: number; z: number }): [number, number] {
   return [point.x, point.z];
 }
 
-function buildScaleBarInfo(view: MapView, size: ViewportSize): ScaleBarInfo {
+function buildScaleBarInfo(view: MapView, size: ViewportSize, t: Translate): ScaleBarInfo {
   const scale = getScale(view.zoom);
   const targetPixels = clamp(size.width * 0.18, 72, 140);
   const rawDistance = targetPixels / scale;
@@ -7526,7 +7798,7 @@ function buildScaleBarInfo(view: MapView, size: ViewportSize): ScaleBarInfo {
   return {
     distance,
     pixelWidth: Math.max(36, distance * scale),
-    label: formatScaleDistance(distance),
+    label: formatScaleDistance(distance, t),
   };
 }
 
@@ -7546,12 +7818,12 @@ function chooseNiceScaleDistance(rawDistance: number): number {
   );
 }
 
-function formatScaleDistance(distance: number): string {
+function formatScaleDistance(distance: number, t: Translate): string {
   if (distance >= 1000) {
-    return `${formatCompactNumber(distance / 1000)} km`;
+    return t('map.hud.scale.kilometers', { value: formatCompactNumber(distance / 1000) });
   }
 
-  return `${formatCompactNumber(distance)} 格`;
+  return t('map.hud.scale.blocks', { value: formatCompactNumber(distance) });
 }
 
 function formatTransitLineTime(line: TransitOverviewLine): string {
@@ -7582,6 +7854,17 @@ function fitMarkerToMapView(
       marker.geometry.type === 'MultiPoint'
         ? getZoomToFitCoordinates(marker.geometry.coordinates, size, 120, current.zoom)
         : Math.max(current.zoom, 0),
+  };
+}
+
+function fitRouteDraftToMapView(draft: RoutePlanDraft, current: MapView, size: ViewportSize): MapView {
+  const coordinates = [draft.origin, draft.destination];
+  const bounds = getCoordinateBounds(coordinates);
+  return {
+    ...current,
+    centerX: (bounds.minX + bounds.maxX) / 2,
+    centerZ: (bounds.minZ + bounds.maxZ) / 2,
+    zoom: getZoomToFitCoordinates(coordinates, size, 120, current.zoom),
   };
 }
 
