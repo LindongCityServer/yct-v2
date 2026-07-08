@@ -126,13 +126,24 @@ export type CommonMessageKey =
   | 'map.poi.actions'
   | 'map.poi.close'
   | 'map.poi.collapse'
+  | 'map.poi.connections'
+  | 'map.poi.coordinate'
+  | 'map.poi.count'
   | 'map.poi.copyStatus'
   | 'map.poi.expand'
   | 'map.poi.facilities'
   | 'map.poi.favoriteAria'
   | 'map.poi.favoriteStatus'
+  | 'map.poi.imageAlt'
   | 'map.poi.nearbyAria'
+  | 'map.poi.noConnections'
+  | 'map.poi.noFacilities'
   | 'map.poi.objectFallback'
+  | 'map.poi.openDetail'
+  | 'map.poi.parent'
+  | 'map.poi.parentFallback'
+  | 'map.poi.relatedPlaceFallback'
+  | 'map.poi.relatedPlaces'
   | 'map.poi.route'
   | 'map.poi.shareAria'
   | 'map.poi.shareOpened'
@@ -141,6 +152,7 @@ export type CommonMessageKey =
   | 'map.poi.shareUnavailable'
   | 'map.poi.summary'
   | 'map.poi.tabsAria'
+  | 'map.poi.type'
   | 'map.poi.unfavoriteAria'
   | 'map.poi.unfavoriteStatus'
   | 'map.poiSubmit.category'
@@ -754,13 +766,24 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.actions': '地点操作',
     'map.poi.close': '关闭地点信息',
     'map.poi.collapse': '收起地点信息',
+    'map.poi.connections': '接驳线路',
+    'map.poi.coordinate': '坐标',
+    'map.poi.count': '{count} 个',
     'map.poi.copyStatus': '已复制地点链接',
     'map.poi.expand': '展开地点信息',
     'map.poi.facilities': '设施/出入口',
     'map.poi.favoriteAria': '收藏 {name}',
     'map.poi.favoriteStatus': '已收藏 {name}',
+    'map.poi.imageAlt': '{name} 图片',
     'map.poi.nearbyAria': '搜索 {name} 周边',
+    'map.poi.noConnections': '暂无已知接驳线路',
+    'map.poi.noFacilities': '暂无设施数据',
     'map.poi.objectFallback': '地图对象',
+    'map.poi.openDetail': '打开详情',
+    'map.poi.parent': '所属地点',
+    'map.poi.parentFallback': '父地点',
+    'map.poi.relatedPlaceFallback': '关联地点',
+    'map.poi.relatedPlaces': '关联地点',
     'map.poi.route': '查看路线',
     'map.poi.shareAria': '分享 {name}',
     'map.poi.shareOpened': '已打开系统分享面板',
@@ -769,6 +792,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.shareUnavailable': '当前浏览器暂不支持分享或复制',
     'map.poi.summary': '简介',
     'map.poi.tabsAria': '地点信息分类',
+    'map.poi.type': '类型',
     'map.poi.unfavoriteAria': '取消收藏 {name}',
     'map.poi.unfavoriteStatus': '已取消收藏 {name}',
     'map.poiSubmit.category': '分类',
@@ -1385,13 +1409,24 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.actions': '地點操作',
     'map.poi.close': '關閉地點資訊',
     'map.poi.collapse': '收起地點資訊',
+    'map.poi.connections': '接駁線路',
+    'map.poi.coordinate': '座標',
+    'map.poi.count': '{count} 個',
     'map.poi.copyStatus': '已複製地點連結',
     'map.poi.expand': '展開地點資訊',
     'map.poi.facilities': '設施/出入口',
     'map.poi.favoriteAria': '收藏 {name}',
     'map.poi.favoriteStatus': '已收藏 {name}',
+    'map.poi.imageAlt': '{name} 圖片',
     'map.poi.nearbyAria': '搜尋 {name} 周邊',
+    'map.poi.noConnections': '暫無已知接駁線路',
+    'map.poi.noFacilities': '暫無設施資料',
     'map.poi.objectFallback': '地圖物件',
+    'map.poi.openDetail': '開啟詳情',
+    'map.poi.parent': '所屬地點',
+    'map.poi.parentFallback': '父地點',
+    'map.poi.relatedPlaceFallback': '關聯地點',
+    'map.poi.relatedPlaces': '關聯地點',
     'map.poi.route': '查看路線',
     'map.poi.shareAria': '分享 {name}',
     'map.poi.shareOpened': '已開啟系統分享面板',
@@ -1400,6 +1435,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.shareUnavailable': '目前瀏覽器暫不支援分享或複製',
     'map.poi.summary': '簡介',
     'map.poi.tabsAria': '地點資訊分類',
+    'map.poi.type': '類型',
     'map.poi.unfavoriteAria': '取消收藏 {name}',
     'map.poi.unfavoriteStatus': '已取消收藏 {name}',
     'map.poiSubmit.category': '分類',
@@ -2017,13 +2053,24 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.actions': 'Place actions',
     'map.poi.close': 'Close place details',
     'map.poi.collapse': 'Collapse place details',
+    'map.poi.connections': 'Connecting lines',
+    'map.poi.coordinate': 'Coordinates',
+    'map.poi.count': '{count} items',
     'map.poi.copyStatus': 'Copied place link',
     'map.poi.expand': 'Expand place details',
     'map.poi.facilities': 'Facilities and Exits',
     'map.poi.favoriteAria': 'Favorite {name}',
     'map.poi.favoriteStatus': 'Added {name} to favorites',
+    'map.poi.imageAlt': '{name} image',
     'map.poi.nearbyAria': 'Search near {name}',
+    'map.poi.noConnections': 'No known connecting lines',
+    'map.poi.noFacilities': 'No facility data',
     'map.poi.objectFallback': 'Map object',
+    'map.poi.openDetail': 'Open details',
+    'map.poi.parent': 'Parent place',
+    'map.poi.parentFallback': 'Parent place',
+    'map.poi.relatedPlaceFallback': 'Related place',
+    'map.poi.relatedPlaces': 'Related places',
     'map.poi.route': 'Directions',
     'map.poi.shareAria': 'Share {name}',
     'map.poi.shareOpened': 'Opened the system share sheet',
@@ -2032,6 +2079,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.shareUnavailable': 'This browser does not support sharing or copying yet',
     'map.poi.summary': 'Overview',
     'map.poi.tabsAria': 'Place detail sections',
+    'map.poi.type': 'Type',
     'map.poi.unfavoriteAria': 'Remove {name} from favorites',
     'map.poi.unfavoriteStatus': 'Removed {name} from favorites',
     'map.poiSubmit.category': 'Category',

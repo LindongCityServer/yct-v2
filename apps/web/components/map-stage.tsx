@@ -2397,24 +2397,26 @@ export function MapStage() {
                         <img
                           className="map-poi-detail-image"
                           src={appPath(focusedMarker.imageUrl)}
-                          alt={`${formatMarkerDisplayName(focusedMarker.label)} 图片`}
+                          alt={t('map.poi.imageAlt', {
+                            name: formatMarkerDisplayName(focusedMarker.label),
+                          })}
                         />
                       ) : null}
                       {focusedMarker.description ? <p>{focusedMarker.description}</p> : null}
                       <dl>
                         {focusedMarkerCenter ? (
                           <div>
-                            <dt>坐标</dt>
+                            <dt>{t('map.poi.coordinate')}</dt>
                             <dd>{formatPoint(focusedMarkerCenter)}</dd>
                           </div>
                         ) : null}
                         <div>
-                          <dt>类型</dt>
+                          <dt>{t('map.poi.type')}</dt>
                           <dd>{formatGeometryDetail(focusedMarker, t)}</dd>
                         </div>
                         {focusedParentPoi ? (
                           <div>
-                            <dt>所属地点</dt>
+                            <dt>{t('map.poi.parent')}</dt>
                             <dd>
                               <button
                                 className="map-transfer-line-chip"
@@ -2428,7 +2430,7 @@ export function MapStage() {
                         ) : null}
                         {isTransitStationPoi(focusedMarker) ? (
                           <div>
-                            <dt>接驳线路</dt>
+                            <dt>{t('map.poi.connections')}</dt>
                             <dd>
                               {focusedMarkerConnections.length > 0 ? (
                                 <span className="map-transfer-line-list">
@@ -2450,7 +2452,7 @@ export function MapStage() {
                                   ))}
                                 </span>
                               ) : (
-                                '暂无已知接驳线路'
+                                t('map.poi.noConnections')
                               )}
                             </dd>
                           </div>
@@ -2461,7 +2463,7 @@ export function MapStage() {
                           <span className="material-symbols-outlined" aria-hidden="true">
                             open_in_new
                           </span>
-                          <span>打开详情</span>
+                          <span>{t('map.poi.openDetail')}</span>
                         </a>
                       ) : null}
                       <PoiActionBar
@@ -2490,12 +2492,12 @@ export function MapStage() {
                   ) : null}
                   {!isLinearDetailMarker(focusedMarker) && poiDetailTab === 'facilities' ? (
                     focusedSecondaryPois.length > 0 ? (
-                      <div className="map-poi-related-list" aria-label="关联地点">
+                      <div className="map-poi-related-list" aria-label={t('map.poi.relatedPlaces')}>
                         {focusedSecondaryPoiGroups.map((group) => (
                           <section className="map-poi-related-group" key={group.id}>
                             <h4>
                               <span>{group.label}</span>
-                              <small>{group.items.length} 个</small>
+                              <small>{t('map.poi.count', { count: group.items.length })}</small>
                             </h4>
                             <div className="map-poi-related-group-items">
                               {group.items.map((item) => (
@@ -2515,7 +2517,7 @@ export function MapStage() {
                                       {item.marker.categoryId
                                         ? (categoryById.get(item.marker.categoryId) ??
                                           getMarkerCategoryDisplayName(item.marker.categoryId, t))
-                                        : '关联地点'}
+                                        : t('map.poi.relatedPlaceFallback')}
                                     </small>
                                   </span>
                                 </button>
@@ -2525,11 +2527,11 @@ export function MapStage() {
                         ))}
                       </div>
                     ) : focusedParentPoi ? (
-                      <div className="map-poi-related-list" aria-label="所属地点">
+                      <div className="map-poi-related-list" aria-label={t('map.poi.parent')}>
                         <section className="map-poi-related-group">
                           <h4>
-                            <span>所属地点</span>
-                            <small>1 个</small>
+                            <span>{t('map.poi.parent')}</span>
+                            <small>{t('map.poi.count', { count: 1 })}</small>
                           </h4>
                           <div className="map-poi-related-group-items">
                             <button
@@ -2550,7 +2552,7 @@ export function MapStage() {
                                         focusedParentPoi.parent.categoryId,
                                         t,
                                       ))
-                                    : '父地点'}
+                                    : t('map.poi.parentFallback')}
                                 </small>
                               </span>
                             </button>
@@ -2558,7 +2560,7 @@ export function MapStage() {
                         </section>
                       </div>
                     ) : (
-                      <p>{focusedMarker.description ?? '暂无设施数据'}</p>
+                      <p>{focusedMarker.description ?? t('map.poi.noFacilities')}</p>
                     )
                   ) : null}
                 </div>
