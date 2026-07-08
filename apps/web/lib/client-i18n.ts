@@ -221,6 +221,7 @@ export type CommonMessageKey =
   | 'map.toolbar.zoomIn'
   | 'map.toolbar.zoomOut'
   | 'map.title'
+  | 'siteLegal.aria'
   | 'siteLegal.disclaimer'
   | 'siteLegal.icp'
   | 'siteLegal.police'
@@ -233,6 +234,7 @@ export type CommonMessageKey =
   | 'map.route.board'
   | 'map.route.close'
   | 'map.route.collapse'
+  | 'map.route.currentLocation'
   | 'map.route.defaultView'
   | 'map.route.depart'
   | 'map.route.destination'
@@ -869,6 +871,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.toolbar.zoomIn': '放大地图',
     'map.toolbar.zoomOut': '缩小地图',
     'map.title': '地图探索',
+    'siteLegal.aria': '备案信息',
     'siteLegal.disclaimer': '本站部分代码使用人工智能技术生成，上述地名、组织名均为虚构。',
     'siteLegal.icp': '辽ICP备2021004959号-1',
     'siteLegal.police': '辽公网安备21100502000117号',
@@ -881,6 +884,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.board': '{name} 进站',
     'map.route.close': '关闭路线规划',
     'map.route.collapse': '收起路线规划',
+    'map.route.currentLocation': '当前地点',
     'map.route.defaultView': '默认视图',
     'map.route.depart': '{name} 出发',
     'map.route.destination': '终点',
@@ -1519,6 +1523,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.toolbar.zoomIn': '放大地圖',
     'map.toolbar.zoomOut': '縮小地圖',
     'map.title': '地圖探索',
+    'siteLegal.aria': '備案資訊',
     'siteLegal.disclaimer': '本站部分程式碼使用人工智慧技術生成，上述地名、組織名均為虛構。',
     'siteLegal.icp': '遼ICP備2021004959號-1',
     'siteLegal.police': '遼公網安備21100502000117號',
@@ -1531,6 +1536,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.board': '{name} 進站',
     'map.route.close': '關閉路線規劃',
     'map.route.collapse': '收合路線規劃',
+    'map.route.currentLocation': '目前地點',
     'map.route.defaultView': '預設視圖',
     'map.route.depart': '{name} 出發',
     'map.route.destination': '終點',
@@ -2171,6 +2177,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.toolbar.zoomIn': 'Zoom in',
     'map.toolbar.zoomOut': 'Zoom out',
     'map.title': 'Map Explore',
+    'siteLegal.aria': 'Site filing information',
     'siteLegal.disclaimer':
       'Parts of this site were generated with artificial intelligence; the place and organization names above are fictional.',
     'siteLegal.icp': 'Liaoning ICP No. 2021004959-1',
@@ -2184,6 +2191,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.board': 'Board at {name}',
     'map.route.close': 'Close route planner',
     'map.route.collapse': 'Collapse route planner',
+    'map.route.currentLocation': 'Current location',
     'map.route.defaultView': 'Default view',
     'map.route.depart': 'Depart from {name}',
     'map.route.destination': 'Destination',

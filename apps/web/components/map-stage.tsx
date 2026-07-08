@@ -1919,7 +1919,7 @@ export function MapStage() {
 
     setRoutePlanDraft({
       destinationId: marker.id,
-      originLabel: '当前地点',
+      originLabel: t('map.route.currentLocation'),
       destinationLabel: formatMarkerDisplayName(marker.label),
       destination,
       origin,
@@ -3348,7 +3348,7 @@ function MapStageLegal() {
   const { t } = useI18n();
 
   return (
-    <footer className="map-legal" aria-label="备案信息">
+    <footer className="map-legal" aria-label={t('siteLegal.aria')}>
       <p>{t('siteLegal.disclaimer')}</p>
       <p>
         <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">
