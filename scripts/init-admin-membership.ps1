@@ -22,6 +22,49 @@ function Resolve-YctAdminStorePath {
   return [System.IO.Path]::GetFullPath((Join-Path (Get-Location).Path $candidate))
 }
 
+function Import-YctEnvFiles {
+  param([string]$Root)
+
+  $envFiles = @(".env", ".env.production", ".env.local", ".env.production.local")
+  foreach ($fileName in $envFiles) {
+    $envPath = Join-Path $Root $fileName
+    if (-not (Test-Path -LiteralPath $envPath)) {
+      continue
+    }
+
+    $lines = [System.IO.File]::ReadAllLines($envPath, [System.Text.Encoding]::UTF8)
+    foreach ($line in $lines) {
+      if ([string]::IsNullOrWhiteSpace($line)) {
+        continue
+      }
+
+      $trimmedLine = $line.Trim()
+      if ($trimmedLine.StartsWith("#")) {
+        continue
+      }
+
+      $match = [System.Text.RegularExpressions.Regex]::Match(
+        $line,
+        '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$'
+      )
+      if (-not $match.Success) {
+        continue
+      }
+
+      $key = $match.Groups[1].Value.Trim()
+      $value = $match.Groups[2].Value.Trim()
+      if (
+        ($value.StartsWith('"') -and $value.EndsWith('"')) -or
+        ($value.StartsWith("'") -and $value.EndsWith("'"))
+      ) {
+        $value = $value.Substring(1, $value.Length - 2)
+      }
+
+      [Environment]::SetEnvironmentVariable($key, $value, "Process")
+    }
+  }
+}
+
 function Get-YctStringValue {
   param(
     [object]$Object,
@@ -44,6 +87,11 @@ function Get-YctStringValue {
 $normalizedLdpassUserId = $LdpassUserId.Trim()
 if ([string]::IsNullOrWhiteSpace($normalizedLdpassUserId)) {
   throw "LdpassUserId cannot be empty."
+}
+
+Import-YctEnvFiles -Root (Get-Location).Path
+if ([string]::IsNullOrWhiteSpace([string]$StorePath)) {
+  $StorePath = [string]$env:YCT_ADMIN_STORE_PATH
 }
 
 $adminStorePath = Resolve-YctAdminStorePath -Path $StorePath
