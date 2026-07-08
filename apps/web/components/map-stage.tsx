@@ -3528,7 +3528,9 @@ function TransitLineMapDetail({
               <span className="map-line-station-node" aria-hidden="true" />
               <span>
                 {formatMarkerDisplayName(stop.stationName)}
-                {stop.oneWay ? <small>{formatTransitStopOneWayLabel(stop.oneWay)}</small> : null}
+                {stop.oneWay ? (
+                  <small>{formatTransitStopOneWayLabel(stop.oneWay, t)}</small>
+                ) : null}
               </span>
             </li>
           ))}
@@ -7385,9 +7387,14 @@ function isTransitLineStopVisibleInDirection(
   return direction === 'forward' ? stop.oneWay !== 'up' : stop.oneWay !== 'down';
 }
 
-function formatTransitStopOneWayLabel(oneWay: TransitLineStopForMap['oneWay']): string {
-  // Legacy YCT data uses "down" for the recorded order and "up" for the reverse order.
-  return oneWay === 'down' ? '仅正向' : '仅反向';
+function formatTransitStopOneWayLabel(
+  oneWay: TransitLineStopForMap['oneWay'],
+  t: Translate,
+): string {
+  // 旧 YCT 数据中 down 表示数据记载方向，up 表示反向。
+  return oneWay === 'down'
+    ? t('lineDetail.oneWay.forward')
+    : t('lineDetail.oneWay.reverse');
 }
 
 function isPointMarker(marker: MapMarkerSnapshot['markers'][number]): marker is PointMarker {
