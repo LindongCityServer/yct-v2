@@ -2847,6 +2847,54 @@ body .material-symbols-outlined {
   gap: var(--yct-space-2);
 }
 
+.operations-feed-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+  margin-bottom: var(--yct-space-3);
+}
+
+.operations-feed-toolbar h2 {
+  margin: 0;
+  color: var(--yct-color-text);
+  font-size: 18px;
+  font-weight: 760;
+  line-height: 1.2;
+}
+
+.operations-social-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+}
+
+.operations-social-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-1);
+  min-height: 32px;
+  padding: 4px var(--yct-space-2);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.operations-social-link:hover {
+  background: color-mix(in srgb, var(--yct-color-primary) 10%, var(--yct-color-surface-muted));
+  color: var(--yct-color-text);
+}
+
+.operations-social-link img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
 .category-chip {
   --category-chip-active-tone: var(--yct-color-text-secondary);
   --category-chip-active-background: color-mix(
@@ -6389,14 +6437,20 @@ body .material-symbols-outlined {
 }
 
 .map-share-preview-icon {
-  display: grid;
-  place-items: center;
   background: transparent;
   color: var(--map-share-color);
-  font-size: 34px;
+  font-size: 30px;
+  font-weight: 900;
   line-height: 1;
   text-align: center;
-  font-variation-settings: 'FILL' 1;
+}
+
+.map-share-detail-symbol {
+  display: inline-grid;
+  place-items: center;
+  color: var(--route-step-color);
+  font-size: 16px;
+  font-weight: 800;
 }
 
 .map-share-preview-meta {

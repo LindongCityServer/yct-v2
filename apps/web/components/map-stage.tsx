@@ -3225,7 +3225,7 @@ function MapShareDialog({
           style={{ '--map-share-color': payload.color } as CSSProperties}
         >
           <div className="map-share-preview-heading">
-            <span className="map-share-preview-icon material-symbols-outlined" aria-hidden="true">
+            <span className="map-share-preview-icon" aria-hidden="true">
               {payload.icon}
             </span>
             <span>
@@ -3249,11 +3249,8 @@ function MapShareDialog({
                   style={{ '--route-step-color': step.color ?? payload.color } as CSSProperties}
                 >
                   <span className="map-route-step-marker" aria-hidden="true">
-                    {step.icon ? (
-                      <span className="material-symbols-outlined">{step.icon}</span>
-                    ) : (
-                      getRouteStepMarkerText(step, t)
-                    )}
+                    {getRouteStepMarkerText(step, t) ||
+                      (step.kind === 'place' && step.role === 'boarding' ? '>' : '')}
                   </span>
                   <span className="map-route-step-content">
                     <span className="map-route-step-main">
@@ -3261,23 +3258,26 @@ function MapShareDialog({
                     </span>
                     {step.kind === 'walk' && step.details?.length ? (
                       <ul className="map-route-step-detail-list">
-                        {step.details.map((detail, detailIndex) => (
-                          <li key={`${step.kind}-${step.label}-detail-${detailIndex}`}>
-                            <span className="material-symbols-outlined" aria-hidden="true">
-                              {detail.icon}
-                            </span>
-                            <span
-                              className={
-                                detail.kind
-                                  ? `map-route-step-detail-label is-${detail.kind}`
-                                  : 'map-route-step-detail-label'
-                              }
-                            >
-                              {detail.label}
-                            </span>
-                            {detail.meta ? <small>{detail.meta}</small> : null}
-                          </li>
-                        ))}
+                        {step.details.map((detail, detailIndex) => {
+                          const symbol = getRouteDetailShareSymbol(detail.icon);
+                          return (
+                            <li key={`${step.kind}-${step.label}-detail-${detailIndex}`}>
+                              <span className="map-share-detail-symbol" aria-hidden="true">
+                                {symbol}
+                              </span>
+                              <span
+                                className={
+                                  detail.kind
+                                    ? `map-route-step-detail-label is-${detail.kind}`
+                                    : 'map-route-step-detail-label'
+                                }
+                              >
+                                {formatShareRouteDetailLabel(detail, t)}
+                              </span>
+                              {detail.meta ? <small>{detail.meta}</small> : null}
+                            </li>
+                          );
+                        })}
                       </ul>
                     ) : null}
                   </span>
@@ -5068,6 +5068,23 @@ function formatRoadRouteStepLabel(
   return label;
 }
 
+function getTurnInstructionText(icon: string, t?: Translate): string | undefined {
+  switch (icon) {
+    case 'straight':
+      return t ? t('map.route.turn.straight') : '直行';
+    case 'turn_left':
+      return t ? t('map.route.turn.left') : '左转';
+    case 'turn_right':
+      return t ? t('map.route.turn.right') : '右转';
+    case 'turn_slight_left':
+      return t ? t('map.route.turn.slightLeft') : '向左前方';
+    case 'turn_slight_right':
+      return t ? t('map.route.turn.slightRight') : '向右前方';
+    default:
+      return undefined;
+  }
+}
+
 function buildWalkRouteBetweenCoordinates(
   origin: [number, number],
   destination: [number, number],
@@ -6750,7 +6767,7 @@ function buildMapSharePayload(target: MapShareTarget, t: Translate): MapSharePay
     return {
       color: 'var(--yct-color-primary)',
       eyebrow: category,
-      icon: 'location_on',
+      icon: '>',
       meta: [formatMarkerDetail(target.marker, t), coordinateText].filter(Boolean),
       steps: [],
       text: [
@@ -6804,7 +6821,7 @@ function buildMapSharePayload(target: MapShareTarget, t: Translate): MapSharePay
   return {
     color: target.option?.color ?? 'var(--yct-color-primary)',
     eyebrow: t('map.route.share'),
-    icon: target.option?.icon ?? 'directions',
+    icon: '>',
     meta: optionSummary,
     steps,
     text,
@@ -6833,6 +6850,53 @@ function getRouteShareStepTextSymbol(step: RoutePlanStep): string {
   }
 
   return '↓';
+}
+
+function formatShareRouteDetailLabel(detail: RoutePlanStepDetail, t: Translate): string {
+  const turnInstruction = getTurnInstructionText(detail.icon, t);
+  if (!turnInstruction) {
+    return detail.label;
+  }
+
+  const departLabel = t('map.route.road.depart');
+  if (detail.label === departLabel) {
+    return `${turnInstruction} ${departLabel}`;
+  }
+
+  const connectionPrefix = t('map.route.road.connection', { road: '' }).trim();
+  const approachPrefix = t('map.route.road.approach', { road: '' }).trim();
+  if (
+    (connectionPrefix && detail.label.startsWith(connectionPrefix)) ||
+    (approachPrefix && detail.label.startsWith(approachPrefix))
+  ) {
+    return `${turnInstruction} ${detail.label}`;
+  }
+
+  return `${turnInstruction} ${t('map.route.road.enter', { road: detail.label })}`;
+}
+
+function getRouteDetailShareSymbol(icon: string): string {
+  if (icon.includes('slight_left')) {
+    return '↖';
+  }
+
+  if (icon.includes('slight_right')) {
+    return '↗';
+  }
+
+  if (icon.includes('left')) {
+    return '↰';
+  }
+
+  if (icon.includes('right')) {
+    return '↱';
+  }
+
+  if (icon.includes('straight') || icon.includes('north')) {
+    return '↑';
+  }
+
+  return '';
 }
 
 async function runMapShareAction({
@@ -6902,6 +6966,7 @@ async function createMapShareImageBlob(previewElement: HTMLElement): Promise<Blo
   const blob = await toBlob(previewElement, {
     cacheBust: true,
     pixelRatio: Math.min(window.devicePixelRatio || 2, 3),
+    skipFonts: true,
   });
 
   if (!blob) {

@@ -22,6 +22,29 @@ const categories = [
   { key: '网站公告', labelKey: 'operations.category.site', icon: 'web', tone: 'primary' },
 ] as const;
 
+const operationsSocialLinks = [
+  {
+    href: 'https://jq.qq.com/?_wv=1027&k=2ohkcKQI',
+    iconFile: 'qq.png',
+    labelKey: 'operations.social.qq',
+  },
+  {
+    href: 'https://space.bilibili.com/106279202',
+    iconFile: 'bilibili.png',
+    labelKey: 'operations.social.bilibili',
+  },
+  {
+    href: 'https://wiki.shangxiaoguan.top/images/d/d2/%E4%B8%B4%E4%B8%9C%E5%BE%AE%E5%BF%97.png',
+    iconFile: 'wechat.png',
+    labelKey: 'operations.social.wechat',
+  },
+  {
+    href: 'https://pd.qq.com/g/58ocn0s744',
+    iconFile: 'qq_pd.png',
+    labelKey: 'operations.social.qqChannel',
+  },
+] as const;
+
 type CategoryKey = (typeof categories)[number]['key'];
 type Translate = ReturnType<typeof useI18n>['t'];
 
@@ -111,6 +134,30 @@ export function OperationsHome({
       </section>
 
       <section className="feed-panel" aria-label={t('operations.feedAria')}>
+        <div className="operations-feed-toolbar">
+          <h2>{t('operations.latestTitle')}</h2>
+          <nav className="operations-social-links" aria-label={t('operations.socialAria')}>
+            {operationsSocialLinks.map((link) => (
+              <a
+                className="operations-social-link"
+                href={link.href}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={t(link.labelKey)}
+                title={t(link.labelKey)}
+                key={link.href}
+              >
+                <img
+                  src={appPath(`/icons/social/${link.iconFile}`)}
+                  alt=""
+                  aria-hidden="true"
+                  decoding="async"
+                />
+                <span>{t(link.labelKey)}</span>
+              </a>
+            ))}
+          </nav>
+        </div>
         <div className="category-strip" aria-label={t('operations.categoryAria')}>
           {categories.map((category) => {
             const isActive = activeCategory === category.key;

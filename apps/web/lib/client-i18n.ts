@@ -257,6 +257,7 @@ export type CommonMessageKey =
   | 'map.route.road.approach'
   | 'map.route.road.connection'
   | 'map.route.road.depart'
+  | 'map.route.road.enter'
   | 'map.route.selectDestination'
   | 'map.route.selectOrigin'
   | 'map.route.copyStatus'
@@ -281,6 +282,11 @@ export type CommonMessageKey =
   | 'map.route.transitNote.default'
   | 'map.route.transitNote.fallbackRoad'
   | 'map.route.transitNote.road'
+  | 'map.route.turn.left'
+  | 'map.route.turn.right'
+  | 'map.route.turn.slightLeft'
+  | 'map.route.turn.slightRight'
+  | 'map.route.turn.straight'
   | 'map.route.transitNote.transfer'
   | 'map.route.useMapCenter'
   | 'map.route.walkDirect'
@@ -327,9 +333,15 @@ export type CommonMessageKey =
   | 'operations.featuredAria'
   | 'operations.feedAria'
   | 'operations.itemCount'
+  | 'operations.latestTitle'
   | 'operations.noStrongReminder'
   | 'operations.noTripReminder'
   | 'operations.remindersAria'
+  | 'operations.social.bilibili'
+  | 'operations.social.qq'
+  | 'operations.social.qqChannel'
+  | 'operations.social.wechat'
+  | 'operations.socialAria'
   | 'operations.strongReminder'
   | 'operations.validUntil'
   | 'page.account'
@@ -875,6 +887,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.road.approach': '接近 {road}',
     'map.route.road.connection': '连接到 {road}',
     'map.route.road.depart': '前往终点',
+    'map.route.road.enter': '进入{road}',
     'map.route.selectDestination': '选择终点',
     'map.route.selectOrigin': '选择起点',
     'map.route.copyStatus': '已复制路线链接',
@@ -900,6 +913,11 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.transitNote.fallbackRoad': '已尝试使用旧地图道路端点图生成公交/客运站间路径；当前路网缺失或不连通的片段仍按直线估算。站间耗时优先使用旧数据 travelTime。',
     'map.route.transitNote.road': '公交/客运站间已优先沿旧地图道路端点图生成，并按 100 格规则连通相邻道路；无法连通的片段回退为直线估算。站间耗时优先使用旧数据 travelTime。',
     'map.route.transitNote.transfer': '已按真实线路站序组合一次换乘候选；换乘距离和缺失站间耗时仍为估算。',
+    'map.route.turn.left': '左转',
+    'map.route.turn.right': '右转',
+    'map.route.turn.slightLeft': '向左前方',
+    'map.route.turn.slightRight': '向右前方',
+    'map.route.turn.straight': '直行',
     'map.route.useMapCenter': '使用地图中心',
     'map.route.walkDirect': '步行直达',
     'map.route.walkFromAccess': '经 {access} 步行至终点 {distance} {duration}',
@@ -948,9 +966,15 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operations.featuredAria': '重点资讯',
     'operations.feedAria': '运营信息列表',
     'operations.itemCount': '{count} 条',
+    'operations.latestTitle': '最新资讯',
     'operations.noStrongReminder': '暂无生效的强提醒',
     'operations.noTripReminder': '暂无行程提醒',
     'operations.remindersAria': '强提醒面板',
+    'operations.social.bilibili': 'Bilibili',
+    'operations.social.qq': 'QQ 群',
+    'operations.social.qqChannel': 'QQ 频道',
+    'operations.social.wechat': '微信',
+    'operations.socialAria': '社交与社区链接',
     'operations.strongReminder': '强提醒',
     'operations.validUntil': '有效至 {date}',
     'page.account': '账号设置',
@@ -1495,6 +1519,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.road.approach': '接近 {road}',
     'map.route.road.connection': '連接到 {road}',
     'map.route.road.depart': '前往終點',
+    'map.route.road.enter': '進入{road}',
     'map.route.selectDestination': '選擇終點',
     'map.route.selectOrigin': '選擇起點',
     'map.route.copyStatus': '已複製路線連結',
@@ -1520,6 +1545,11 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.transitNote.fallbackRoad': '已嘗試使用舊地圖道路端點圖生成公交/客運站間路徑；目前路網缺失或不連通的片段仍按直線估算。站間耗時優先使用舊資料 travelTime。',
     'map.route.transitNote.road': '公交/客運站間已優先沿舊地圖道路端點圖生成，並按 100 格規則連通相鄰道路；無法連通的片段回退為直線估算。站間耗時優先使用舊資料 travelTime。',
     'map.route.transitNote.transfer': '已按真實線路站序組合一次換乘候選；換乘距離和缺失站間耗時仍為估算。',
+    'map.route.turn.left': '左轉',
+    'map.route.turn.right': '右轉',
+    'map.route.turn.slightLeft': '向左前方',
+    'map.route.turn.slightRight': '向右前方',
+    'map.route.turn.straight': '直行',
     'map.route.useMapCenter': '使用地圖中心',
     'map.route.walkDirect': '步行直達',
     'map.route.walkFromAccess': '經 {access} 步行至終點 {distance} {duration}',
@@ -1568,9 +1598,15 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operations.featuredAria': '重點資訊',
     'operations.feedAria': '營運資訊列表',
     'operations.itemCount': '{count} 條',
+    'operations.latestTitle': '最新資訊',
     'operations.noStrongReminder': '暫無生效的強提醒',
     'operations.noTripReminder': '暫無行程提醒',
     'operations.remindersAria': '強提醒面板',
+    'operations.social.bilibili': 'Bilibili',
+    'operations.social.qq': 'QQ 群',
+    'operations.social.qqChannel': 'QQ 頻道',
+    'operations.social.wechat': '微信',
+    'operations.socialAria': '社交與社群連結',
     'operations.strongReminder': '強提醒',
     'operations.validUntil': '有效至 {date}',
     'page.account': '帳號設定',
@@ -2118,6 +2154,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.road.approach': 'Approach {road}',
     'map.route.road.connection': 'Connect to {road}',
     'map.route.road.depart': 'Head to destination',
+    'map.route.road.enter': 'to {road}',
     'map.route.selectDestination': 'Select destination',
     'map.route.selectOrigin': 'Select origin',
     'map.route.copyStatus': 'Route link copied',
@@ -2143,6 +2180,11 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.transitNote.fallbackRoad': 'YCT tried to route bus/coach inter-stop paths through the legacy road graph; missing or disconnected road segments still fall back to straight-line estimates. Inter-stop duration prefers legacy travelTime data.',
     'map.route.transitNote.road': 'Bus/coach inter-stop paths prefer the legacy road endpoint graph and connect nearby roads within 100 blocks; disconnected segments fall back to straight-line estimates. Inter-stop duration prefers legacy travelTime data.',
     'map.route.transitNote.transfer': 'One-transfer candidates are composed from real line stop order; transfer distance and missing inter-stop duration are still estimated.',
+    'map.route.turn.left': 'Turn left',
+    'map.route.turn.right': 'Turn right',
+    'map.route.turn.slightLeft': 'Bear left',
+    'map.route.turn.slightRight': 'Bear right',
+    'map.route.turn.straight': 'Continue straight',
     'map.route.useMapCenter': 'Use map center',
     'map.route.walkDirect': 'Walk directly',
     'map.route.walkFromAccess': 'Walk from {access} to destination {distance} {duration}',
@@ -2191,9 +2233,15 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operations.featuredAria': 'Featured update',
     'operations.feedAria': 'Updates list',
     'operations.itemCount': '{count} items',
+    'operations.latestTitle': 'Latest Updates',
     'operations.noStrongReminder': 'No active reminders',
     'operations.noTripReminder': 'No trip reminders',
     'operations.remindersAria': 'Important reminders',
+    'operations.social.bilibili': 'Bilibili',
+    'operations.social.qq': 'QQ Group',
+    'operations.social.qqChannel': 'QQ Channel',
+    'operations.social.wechat': 'WeChat',
+    'operations.socialAria': 'Social and community links',
     'operations.strongReminder': 'Important reminders',
     'operations.validUntil': 'Valid until {date}',
     'page.account': 'Account Settings',
