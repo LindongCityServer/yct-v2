@@ -22,6 +22,14 @@
   font-weight: 700 900;
 }
 
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  src: url('./fonts/material-symbols/MaterialSymbolsOutlined.woff2') format('woff2');
+  font-display: block;
+  font-style: normal;
+  font-weight: 100 700;
+}
+
 :root {
   --yct-font-family-system: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --yct-font-family-harmony: 'HarmonyOS Sans SC', var(--yct-font-family-system);

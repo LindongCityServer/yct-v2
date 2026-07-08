@@ -61,7 +61,7 @@
 
 ### 2.3 外部资源
 
-- 图标：统一使用 Material Symbols Outlined，可通过 CDN 引入，生产环境需要降级方案；不要再使用 `material-symbols-rounded`，避免部分图标的填充态不可辨识。
+- 图标：统一使用 Material Symbols Outlined，本地嵌入可变字体文件作为生产默认方案；不要再使用 `material-symbols-rounded`，避免部分图标的填充态不可辨识。
 - 地图瓦片：
   - 当前较新的 HTTP 瓦片源：`http://ld.cmsy.xyz:19136/`。
   - `http://ld.cmsy.xyz:19136` 仅提供实时更新的瓦片图和玩家位置，不作为地点标记或精细静态瓦片图来源。

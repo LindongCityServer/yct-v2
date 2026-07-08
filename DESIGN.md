@@ -227,7 +227,7 @@ components:
 - **PWA Install Copy**：安装入口可使用文案“安装雨城通。把 YCT 添加到主屏幕，快速查看运营信息、线路和站点详情。支持缓存已下载的自定义范围离线包，并在你允许后接收行程、运营、订票和检票提醒。”
 - **Theme Settings**：账号设置中提供浅色、深色、跟随系统和强调色选择。默认强调色跟随 `ldpass` 主题计划；如果用户选择自定义强调色，本地选择优先生效。
 
-图标优先使用 Material Symbols Outlined CDN；不要使用 `material-symbols-rounded`，避免部分图标无法清晰区分 `FILL` 填充状态。CDN 不可用时页面功能不能被阻塞。
+图标使用随项目本地嵌入的 Material Symbols Outlined；不要使用 `material-symbols-rounded`，避免部分图标无法清晰区分 `FILL` 填充状态。本地字体需要保留可变字体能力，继续通过 `font-variation-settings: 'FILL' 1` 表达选中态填充。
 
 品牌、App 和网站图标源文件统一放在 `assets/brand/`，生成后的 Web/PWA 图标输出到 `apps/web/public/icons/`。提交源文件前不要把私有运维信息或外部账号密钥放进图标目录。
 
