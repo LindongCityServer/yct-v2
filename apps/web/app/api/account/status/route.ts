@@ -9,7 +9,7 @@ import { readRuntimeConfig } from '../../../../lib/runtime-config';
 import { listServiceEntries } from '../../../../lib/service-entry-store';
 import { countPendingTicketOrdersForLdpassUser } from '../../../../lib/ticket-order-workflow';
 import { listTransitDataRevisions } from '../../../../lib/transit-data-store';
-import { buildMinotarAvatarUrl } from '../../../../lib/yct-session';
+import { buildMinotarAvatarUrl, resolveYctAvatarUrl } from '../../../../lib/yct-session';
 
 interface AccountBadgeSummary {
   kind: 'none' | 'count' | 'dot';
@@ -103,10 +103,13 @@ export async function GET(request: NextRequest) {
         NextResponse.json({
           accountStatus: 'active',
           username: session.user.username,
-          avatarUrl:
-            session.user.avatarUrl ??
-            buildMinotarAvatarUrl(session.user.serverAccountName ?? session.user.username) ??
-            session.user.avatarFallbackUrl,
+          avatarUrl: resolveYctAvatarUrl({
+            avatarFallbackUrl: session.user.avatarFallbackUrl,
+            avatarUrl: session.user.avatarUrl,
+            minotarUrl: buildMinotarAvatarUrl(
+              session.user.serverAccountName ?? session.user.username,
+            ),
+          }),
           badge:
             totalBadgeCount > 0
               ? {
@@ -157,10 +160,11 @@ export async function GET(request: NextRequest) {
       NextResponse.json({
         accountStatus: 'readonly',
         username: readonlyUser.username,
-        avatarUrl:
-          readonlyUser.avatarUrl ??
-          buildMinotarAvatarUrl(readonlyUser.username) ??
-          readonlyUser.avatarFallbackUrl,
+        avatarUrl: resolveYctAvatarUrl({
+          avatarFallbackUrl: readonlyUser.avatarFallbackUrl,
+          avatarUrl: readonlyUser.avatarUrl,
+          minotarUrl: buildMinotarAvatarUrl(readonlyUser.username),
+        }),
         badge: {
           kind: 'dot',
           count: 0,

@@ -20,7 +20,11 @@ export function createYctSessionSnapshot(
     const avatarFallbackUrl = buildMinotarAvatarUrl(
       session.user.serverAccountName ?? session.user.username,
     );
-    const avatarUrl = session.user.avatarUrl ?? avatarFallbackUrl ?? session.user.avatarFallbackUrl;
+    const avatarUrl = resolveYctAvatarUrl({
+      avatarFallbackUrl: session.user.avatarFallbackUrl,
+      avatarUrl: session.user.avatarUrl,
+      minotarUrl: avatarFallbackUrl,
+    });
 
     return {
       authenticated: true,
@@ -39,8 +43,11 @@ export function createYctSessionSnapshot(
 
   if (session.readonlyUser) {
     const avatarFallbackUrl = buildMinotarAvatarUrl(session.readonlyUser.username);
-    const avatarUrl =
-      session.readonlyUser.avatarUrl ?? avatarFallbackUrl ?? session.readonlyUser.avatarFallbackUrl;
+    const avatarUrl = resolveYctAvatarUrl({
+      avatarFallbackUrl: session.readonlyUser.avatarFallbackUrl,
+      avatarUrl: session.readonlyUser.avatarUrl,
+      minotarUrl: avatarFallbackUrl,
+    });
 
     return {
       authenticated: false,
@@ -96,7 +103,11 @@ function withAvatarFallback(snapshot: YctAccountSessionSnapshot): YctAccountSess
       ...snapshot,
       user: {
         ...snapshot.user,
-        avatarUrl: snapshot.user.avatarUrl ?? fallbackUrl ?? snapshot.user.avatarFallbackUrl,
+        avatarUrl: resolveYctAvatarUrl({
+          avatarFallbackUrl: snapshot.user.avatarFallbackUrl,
+          avatarUrl: snapshot.user.avatarUrl,
+          minotarUrl: fallbackUrl,
+        }),
         avatarFallbackUrl: fallbackUrl ?? snapshot.user.avatarFallbackUrl,
       },
     };
@@ -108,8 +119,11 @@ function withAvatarFallback(snapshot: YctAccountSessionSnapshot): YctAccountSess
       ...snapshot,
       readonlyUser: {
         ...snapshot.readonlyUser,
-        avatarUrl:
-          snapshot.readonlyUser.avatarUrl ?? fallbackUrl ?? snapshot.readonlyUser.avatarFallbackUrl,
+        avatarUrl: resolveYctAvatarUrl({
+          avatarFallbackUrl: snapshot.readonlyUser.avatarFallbackUrl,
+          avatarUrl: snapshot.readonlyUser.avatarUrl,
+          minotarUrl: fallbackUrl,
+        }),
         avatarFallbackUrl: fallbackUrl ?? snapshot.readonlyUser.avatarFallbackUrl,
       },
     };
@@ -159,6 +173,35 @@ export function buildMinotarAvatarUrl(username: string | null | undefined): stri
   }
 
   return `https://minotar.net/helm/${encodeURIComponent(normalized)}`;
+}
+
+export function resolveYctAvatarUrl(input: {
+  avatarFallbackUrl?: string | null;
+  avatarUrl?: string | null;
+  minotarUrl?: string;
+}): string | undefined {
+  if (input.avatarUrl && !isLegacyMinecraftAvatarUrl(input.avatarUrl)) {
+    return input.avatarUrl;
+  }
+
+  if (input.minotarUrl) {
+    return input.minotarUrl;
+  }
+
+  if (input.avatarFallbackUrl && !isLegacyMinecraftAvatarUrl(input.avatarFallbackUrl)) {
+    return input.avatarFallbackUrl;
+  }
+
+  return input.avatarUrl ?? input.avatarFallbackUrl ?? undefined;
+}
+
+function isLegacyMinecraftAvatarUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.hostname === 'mc-heads.net' || url.hostname.endsWith('.mc-heads.net');
+  } catch {
+    return value.includes('mc-heads.net');
+  }
 }
 
 export function normalizeStoredReturnOrigin(value: string | undefined): string | undefined {
