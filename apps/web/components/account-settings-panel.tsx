@@ -112,33 +112,33 @@ const pushSubscriptionEndpointKey = 'yct.pushSubscription.endpoint';
 const webPushPublicKey = process.env.NEXT_PUBLIC_YCT_WEB_PUSH_PUBLIC_KEY?.trim() ?? '';
 const notificationTypeOptions: Array<{
   key: NotificationTypeKey;
-  label: string;
-  description: string;
+  descriptionKey: CommonMessageKey;
   icon: string;
+  labelKey: CommonMessageKey;
 }> = [
   {
     key: 'trip_reminder',
-    label: '行程提醒',
-    description: '出发、到站、历史行程相关提醒',
+    descriptionKey: 'account.notification.tripDescription',
     icon: 'event_upcoming',
+    labelKey: 'account.notification.tripLabel',
   },
   {
     key: 'operations',
-    label: '运营提醒',
-    description: '公告、线路调整和运营状态',
+    descriptionKey: 'account.notification.operationsDescription',
     icon: 'campaign',
+    labelKey: 'account.notification.operationsLabel',
   },
   {
     key: 'ticket',
-    label: '票务状态',
-    description: '订票、退票和票券状态变化',
+    descriptionKey: 'account.notification.ticketDescription',
     icon: 'confirmation_number',
+    labelKey: 'account.notification.ticketLabel',
   },
   {
     key: 'checkin',
-    label: '检票提醒',
-    description: '检票、核销和乘车码相关提醒',
+    descriptionKey: 'account.notification.checkinDescription',
     icon: 'qr_code_scanner',
+    labelKey: 'account.notification.checkinLabel',
   },
 ];
 
@@ -556,7 +556,7 @@ export function AccountSettingsPanel({
     if (auth.session?.user) {
       void syncBrowserPushDevice(enabled);
     } else if (enabled) {
-      setPushDeviceStatusText('登录后可把本设备加入服务端 Push 订阅');
+      setPushDeviceStatusText(t('account.notification.statusLoginRequired'));
     } else {
       setPushDeviceStatusText('');
     }
@@ -568,17 +568,29 @@ export function AccountSettingsPanel({
     }
 
     setIsSyncingPushDevice(true);
-    setPushDeviceStatusText(enabled ? '正在登记本设备 Push 订阅' : '正在撤销本设备 Push 订阅');
+    setPushDeviceStatusText(
+      enabled
+        ? t('account.notification.statusRegistering')
+        : t('account.notification.statusRevoking'),
+    );
     try {
       if (enabled) {
         const endpoint = await ensureBrowserPushSubscription();
-        setPushDeviceStatusText(`本设备已加入 Push 订阅：${readEndpointHost(endpoint)}`);
+        setPushDeviceStatusText(
+          t('account.notification.statusRegistered', { host: readEndpointHost(endpoint) }),
+        );
       } else {
         const revoked = await revokeBrowserPushSubscription();
-        setPushDeviceStatusText(revoked ? '已撤销本设备 Push 订阅' : '已关闭通知偏好');
+        setPushDeviceStatusText(
+          revoked
+            ? t('account.notification.statusRevoked')
+            : t('account.notification.statusDisabledPreference'),
+        );
       }
     } catch (error) {
-      setPushDeviceStatusText(error instanceof Error ? error.message : '本设备 Push 订阅同步失败');
+      setPushDeviceStatusText(
+        error instanceof Error ? error.message : t('account.notification.statusSyncFailed'),
+      );
     } finally {
       setIsSyncingPushDevice(false);
     }
@@ -886,8 +898,12 @@ export function AccountSettingsPanel({
     }
   };
 
-  const notificationMasterStatus = notificationEnabled ? '本设备推送已开启' : '本设备推送已关闭';
-  const notificationMasterLabel = `本设备推送通知总开关，当前${notificationEnabled ? '已开启' : '已关闭'}`;
+  const notificationMasterStatus = notificationEnabled
+    ? t('account.notification.enabled')
+    : t('account.notification.disabled');
+  const notificationMasterLabel = notificationEnabled
+    ? t('account.notification.masterLabelEnabled')
+    : t('account.notification.masterLabelDisabled');
   const ticketDraftCount =
     ticketOrders?.filter((item) => item.order.status === 'draft' || item.order.status === 'pending_issue')
       .length ?? 0;
@@ -972,7 +988,7 @@ export function AccountSettingsPanel({
             <span className="material-symbols-outlined" aria-hidden="true">
               notifications
             </span>
-            <span id="notification-settings-title">推送通知与免打扰时段</span>
+            <span id="notification-settings-title">{t('account.notification.title')}</span>
             <span className="settings-inline-status">{notificationMasterStatus}</span>
             <label
               className="switch-control notification-master-switch"
@@ -987,12 +1003,10 @@ export function AccountSettingsPanel({
               <span />
             </label>
           </div>
-          <p className="settings-row-note">
-            总开关只控制本设备是否接收 Push；下方分类决定哪些提醒允许推送；免打扰时段不会关闭分类，只会静默或延后这些提醒。
-          </p>
+          <p className="settings-row-note">{t('account.notification.note')}</p>
           <div className="time-control-row">
             <label>
-              <span>免打扰开始时间</span>
+              <span>{t('account.notification.quietStart')}</span>
               <input
                 type="time"
                 value={quietStart}
@@ -1000,7 +1014,7 @@ export function AccountSettingsPanel({
               />
             </label>
             <label>
-              <span>免打扰结束时间</span>
+              <span>{t('account.notification.quietEnd')}</span>
               <input
                 type="time"
                 value={quietEnd}
@@ -1008,7 +1022,7 @@ export function AccountSettingsPanel({
               />
             </label>
           </div>
-          <div className="notification-type-grid" aria-label="允许推送的提醒类型">
+          <div className="notification-type-grid" aria-label={t('account.notification.gridAria')}>
             {notificationTypeOptions.map((option) => (
               <label className="notification-type-toggle" key={option.key}>
                 <input
@@ -1023,8 +1037,8 @@ export function AccountSettingsPanel({
                   {option.icon}
                 </span>
                 <span>
-                  <strong>{option.label}</strong>
-                  <small>{option.description}</small>
+                  <strong>{t(option.labelKey)}</strong>
+                  <small>{t(option.descriptionKey)}</small>
                 </span>
               </label>
             ))}

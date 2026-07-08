@@ -93,6 +93,30 @@ export type CommonMessageKey =
   | 'account.authStatus.sessionUnavailable'
   | 'account.authStatus.sessionUnavailableLocalhost'
   | 'account.authStatus.stateInvalid'
+  | 'account.notification.checkinDescription'
+  | 'account.notification.checkinLabel'
+  | 'account.notification.disabled'
+  | 'account.notification.enabled'
+  | 'account.notification.gridAria'
+  | 'account.notification.masterLabelDisabled'
+  | 'account.notification.masterLabelEnabled'
+  | 'account.notification.note'
+  | 'account.notification.operationsDescription'
+  | 'account.notification.operationsLabel'
+  | 'account.notification.quietEnd'
+  | 'account.notification.quietStart'
+  | 'account.notification.statusDisabledPreference'
+  | 'account.notification.statusLoginRequired'
+  | 'account.notification.statusRegistered'
+  | 'account.notification.statusRegistering'
+  | 'account.notification.statusRevoked'
+  | 'account.notification.statusRevoking'
+  | 'account.notification.statusSyncFailed'
+  | 'account.notification.ticketDescription'
+  | 'account.notification.ticketLabel'
+  | 'account.notification.title'
+  | 'account.notification.tripDescription'
+  | 'account.notification.tripLabel'
   | 'account.settings'
   | 'account.status.anonymous'
   | 'account.status.notConfigured'
@@ -798,6 +822,31 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.authStatus.sessionUnavailableLocalhost':
       '当前回跳地址是 localhost/127.0.0.1，本地站点无法直接读取临东通共享会话。请改用共享域名测试，或将本地服务切到已接入的同域测试环境。',
     'account.authStatus.stateInvalid': '登录状态校验失败，请重新发起登录。',
+    'account.notification.checkinDescription': '检票、核销和乘车码相关提醒',
+    'account.notification.checkinLabel': '检票提醒',
+    'account.notification.disabled': '本设备推送已关闭',
+    'account.notification.enabled': '本设备推送已开启',
+    'account.notification.gridAria': '允许推送的提醒类型',
+    'account.notification.masterLabelDisabled': '本设备推送通知总开关，当前已关闭',
+    'account.notification.masterLabelEnabled': '本设备推送通知总开关，当前已开启',
+    'account.notification.note':
+      '总开关只控制本设备是否接收 Push；下方分类决定哪些提醒允许推送；免打扰时段不会关闭分类，只会静默或延后这些提醒。',
+    'account.notification.operationsDescription': '公告、线路调整和运营状态',
+    'account.notification.operationsLabel': '运营提醒',
+    'account.notification.quietEnd': '免打扰结束时间',
+    'account.notification.quietStart': '免打扰开始时间',
+    'account.notification.statusDisabledPreference': '已关闭通知偏好',
+    'account.notification.statusLoginRequired': '登录后可把本设备加入服务端 Push 订阅',
+    'account.notification.statusRegistered': '本设备已加入 Push 订阅：{host}',
+    'account.notification.statusRegistering': '正在登记本设备 Push 订阅',
+    'account.notification.statusRevoked': '已撤销本设备 Push 订阅',
+    'account.notification.statusRevoking': '正在撤销本设备 Push 订阅',
+    'account.notification.statusSyncFailed': '本设备 Push 订阅同步失败',
+    'account.notification.ticketDescription': '订票、退票和票券状态变化',
+    'account.notification.ticketLabel': '票务状态',
+    'account.notification.title': '推送通知与免打扰时段',
+    'account.notification.tripDescription': '出发、到站、历史行程相关提醒',
+    'account.notification.tripLabel': '行程提醒',
     'account.settings': '账号设置',
     'account.status.anonymous': '未登录',
     'account.status.notConfigured': '临东通未配置',
@@ -1532,6 +1581,31 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.authStatus.sessionUnavailableLocalhost':
       '目前回跳地址是 localhost/127.0.0.1，本機站點無法直接讀取臨東通共享會話。請改用共享網域測試，或將本機服務切到已接入的同域測試環境。',
     'account.authStatus.stateInvalid': '登入狀態校驗失敗，請重新發起登入。',
+    'account.notification.checkinDescription': '檢票、核銷和乘車碼相關提醒',
+    'account.notification.checkinLabel': '檢票提醒',
+    'account.notification.disabled': '本裝置推送已關閉',
+    'account.notification.enabled': '本裝置推送已開啟',
+    'account.notification.gridAria': '允許推送的提醒類型',
+    'account.notification.masterLabelDisabled': '本裝置推送通知總開關，目前已關閉',
+    'account.notification.masterLabelEnabled': '本裝置推送通知總開關，目前已開啟',
+    'account.notification.note':
+      '總開關只控制本裝置是否接收 Push；下方分類決定哪些提醒允許推送；免打擾時段不會關閉分類，只會靜默或延後這些提醒。',
+    'account.notification.operationsDescription': '公告、線路調整和營運狀態',
+    'account.notification.operationsLabel': '營運提醒',
+    'account.notification.quietEnd': '免打擾結束時間',
+    'account.notification.quietStart': '免打擾開始時間',
+    'account.notification.statusDisabledPreference': '已關閉通知偏好',
+    'account.notification.statusLoginRequired': '登入後可把本裝置加入服務端 Push 訂閱',
+    'account.notification.statusRegistered': '本裝置已加入 Push 訂閱：{host}',
+    'account.notification.statusRegistering': '正在登記本裝置 Push 訂閱',
+    'account.notification.statusRevoked': '已撤銷本裝置 Push 訂閱',
+    'account.notification.statusRevoking': '正在撤銷本裝置 Push 訂閱',
+    'account.notification.statusSyncFailed': '本裝置 Push 訂閱同步失敗',
+    'account.notification.ticketDescription': '訂票、退票和票券狀態變化',
+    'account.notification.ticketLabel': '票務狀態',
+    'account.notification.title': '推送通知與免打擾時段',
+    'account.notification.tripDescription': '出發、到站、歷史行程相關提醒',
+    'account.notification.tripLabel': '行程提醒',
     'account.settings': '帳號設定',
     'account.status.anonymous': '未登入',
     'account.status.notConfigured': '臨東通未設定',
@@ -2270,6 +2344,31 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.authStatus.sessionUnavailableLocalhost':
       'The callback address is localhost/127.0.0.1, so the local site cannot read the shared Ldpass session directly. Use the shared domain for testing, or move the local service to an integrated same-domain test environment.',
     'account.authStatus.stateInvalid': 'Login state validation failed. Start sign-in again.',
+    'account.notification.checkinDescription': 'Check-in, redemption, and ride code reminders',
+    'account.notification.checkinLabel': 'Check-in',
+    'account.notification.disabled': 'Device push off',
+    'account.notification.enabled': 'Device push on',
+    'account.notification.gridAria': 'Allowed push notification types',
+    'account.notification.masterLabelDisabled': 'Device push notification master switch, currently off',
+    'account.notification.masterLabelEnabled': 'Device push notification master switch, currently on',
+    'account.notification.note':
+      'The master switch only controls whether this device receives Push. Categories below decide which reminder types may push. Quiet hours do not disable categories; they silence or delay those reminders.',
+    'account.notification.operationsDescription': 'Announcements, line changes, and operations status',
+    'account.notification.operationsLabel': 'Updates',
+    'account.notification.quietEnd': 'Quiet hours end',
+    'account.notification.quietStart': 'Quiet hours start',
+    'account.notification.statusDisabledPreference': 'Notification preference disabled',
+    'account.notification.statusLoginRequired': 'Sign in to add this device to server Push subscriptions',
+    'account.notification.statusRegistered': 'This device joined Push subscriptions: {host}',
+    'account.notification.statusRegistering': 'Registering this device for Push',
+    'account.notification.statusRevoked': 'This device Push subscription was revoked',
+    'account.notification.statusRevoking': 'Revoking this device Push subscription',
+    'account.notification.statusSyncFailed': 'Device Push subscription sync failed',
+    'account.notification.ticketDescription': 'Booking, refund, and ticket status changes',
+    'account.notification.ticketLabel': 'Ticketing',
+    'account.notification.title': 'Push Notifications and Quiet Hours',
+    'account.notification.tripDescription': 'Departure, arrival, and trip history reminders',
+    'account.notification.tripLabel': 'Trip reminders',
     'account.settings': 'Account Settings',
     'account.status.anonymous': 'Not signed in',
     'account.status.notConfigured': 'Ldpass is not configured',
