@@ -183,10 +183,29 @@ export type CommonMessageKey =
   | 'map.search.aria'
   | 'map.search.clear'
   | 'map.search.placeholder'
+  | 'map.routingStatus.projecting'
+  | 'map.share.actions'
+  | 'map.share.close'
+  | 'map.share.footerDisclaimer'
+  | 'map.share.footerPrefix'
+  | 'map.share.footerText'
+  | 'map.share.image'
+  | 'map.share.imageDownloaded'
+  | 'map.share.imageShared'
+  | 'map.share.link'
+  | 'map.share.linkCopied'
+  | 'map.share.processing'
+  | 'map.share.text'
+  | 'map.share.textCopied'
+  | 'map.share.title'
+  | 'map.share.unavailable'
   | 'map.toolbar.reset'
   | 'map.toolbar.zoomIn'
   | 'map.toolbar.zoomOut'
   | 'map.title'
+  | 'siteLegal.disclaimer'
+  | 'siteLegal.icp'
+  | 'siteLegal.police'
   | 'map.route.alight'
   | 'map.route.aria'
   | 'map.route.arrive'
@@ -782,10 +801,29 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.search.aria': '筛选地图标记',
     'map.search.clear': '清空地图搜索',
     'map.search.placeholder': '搜索地点或标记',
+    'map.routingStatus.projecting': '正在准备道路接入点',
+    'map.share.actions': '分享方式',
+    'map.share.close': '关闭分享面板',
+    'map.share.footerDisclaimer': '上述地名、组织名均为虚构',
+    'map.share.footerPrefix': '来自',
+    'map.share.footerText': '来自雨城通',
+    'map.share.image': '分享图',
+    'map.share.imageDownloaded': '分享图已下载',
+    'map.share.imageShared': '已打开图片分享面板',
+    'map.share.link': '复制链接',
+    'map.share.linkCopied': '已复制分享链接',
+    'map.share.processing': '处理中',
+    'map.share.text': '复制文字版',
+    'map.share.textCopied': '已复制文字版内容',
+    'map.share.title': '分享',
+    'map.share.unavailable': '当前浏览器暂不支持该分享方式',
     'map.toolbar.reset': '回到默认视图',
     'map.toolbar.zoomIn': '放大地图',
     'map.toolbar.zoomOut': '缩小地图',
     'map.title': '地图探索',
+    'siteLegal.disclaimer': '本站部分代码使用人工智能技术生成，上述地名、组织名均为虚构。',
+    'siteLegal.icp': '辽ICP备2021004959号-1',
+    'siteLegal.police': '辽公网安备21100502000117号',
     'map.route.alight': '{name} 出站',
     'map.route.aria': '路线规划',
     'map.route.arrive': '到达 {name}',
@@ -1383,10 +1421,29 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.search.aria': '篩選地圖標記',
     'map.search.clear': '清空地圖搜尋',
     'map.search.placeholder': '搜尋地點或標記',
+    'map.routingStatus.projecting': '正在準備道路接入點',
+    'map.share.actions': '分享方式',
+    'map.share.close': '關閉分享面板',
+    'map.share.footerDisclaimer': '上述地名、組織名均為虛構',
+    'map.share.footerPrefix': '來自',
+    'map.share.footerText': '來自雨城通',
+    'map.share.image': '分享圖',
+    'map.share.imageDownloaded': '分享圖已下載',
+    'map.share.imageShared': '已開啟圖片分享面板',
+    'map.share.link': '複製連結',
+    'map.share.linkCopied': '已複製分享連結',
+    'map.share.processing': '處理中',
+    'map.share.text': '複製文字版',
+    'map.share.textCopied': '已複製文字版內容',
+    'map.share.title': '分享',
+    'map.share.unavailable': '目前瀏覽器暫不支援此分享方式',
     'map.toolbar.reset': '回到預設視圖',
     'map.toolbar.zoomIn': '放大地圖',
     'map.toolbar.zoomOut': '縮小地圖',
     'map.title': '地圖探索',
+    'siteLegal.disclaimer': '本站部分程式碼使用人工智慧技術生成，上述地名、組織名均為虛構。',
+    'siteLegal.icp': '遼ICP備2021004959號-1',
+    'siteLegal.police': '遼公網安備21100502000117號',
     'map.route.alight': '{name} 出站',
     'map.route.aria': '路線規劃',
     'map.route.arrive': '到達 {name}',
@@ -1986,10 +2043,30 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.search.aria': 'Filter map markers',
     'map.search.clear': 'Clear map search',
     'map.search.placeholder': 'Search places or markers',
+    'map.routingStatus.projecting': 'Preparing road access points',
+    'map.share.actions': 'Share format',
+    'map.share.close': 'Close share panel',
+    'map.share.footerDisclaimer': 'The place and organization names above are fictional',
+    'map.share.footerPrefix': 'From',
+    'map.share.footerText': 'From Yuchengtong',
+    'map.share.image': 'Share image',
+    'map.share.imageDownloaded': 'Share image downloaded',
+    'map.share.imageShared': 'Image share panel opened',
+    'map.share.link': 'Copy link',
+    'map.share.linkCopied': 'Share link copied',
+    'map.share.processing': 'Processing',
+    'map.share.text': 'Copy text',
+    'map.share.textCopied': 'Text version copied',
+    'map.share.title': 'Share',
+    'map.share.unavailable': 'This share format is not supported in the current browser',
     'map.toolbar.reset': 'Reset to default view',
     'map.toolbar.zoomIn': 'Zoom in',
     'map.toolbar.zoomOut': 'Zoom out',
     'map.title': 'Map Explore',
+    'siteLegal.disclaimer':
+      'Parts of this site were generated with artificial intelligence; the place and organization names above are fictional.',
+    'siteLegal.icp': 'Liaoning ICP No. 2021004959-1',
+    'siteLegal.police': 'Liaoning public security filing No. 21100502000117',
     'map.route.alight': 'Exit at {name}',
     'map.route.aria': 'Route planner',
     'map.route.arrive': 'Arrive at {name}',

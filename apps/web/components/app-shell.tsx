@@ -406,19 +406,21 @@ export function SecondaryShell({
 }
 
 function SiteLegal({ className = '' }: Readonly<{ className?: string }>) {
+  const { t } = useI18n();
+
   return (
     <footer className={['site-legal', className].filter(Boolean).join(' ')}>
-      <p>本站部分代码使用人工智能技术生成，上述地名、组织名均为虚构。</p>
+      <p>{t('siteLegal.disclaimer')}</p>
       <p>
         <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">
-          辽ICP备2021004959号-1
+          {t('siteLegal.icp')}
         </a>
         <a
           href="https://beian.mps.gov.cn/#/query/webSearch?code=21100502000117"
           target="_blank"
           rel="noreferrer"
         >
-          辽公网安备21100502000117号
+          {t('siteLegal.police')}
         </a>
       </p>
     </footer>

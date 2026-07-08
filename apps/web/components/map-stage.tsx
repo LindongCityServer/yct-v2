@@ -3,6 +3,7 @@
 import type {
   ApiListResponse,
   ApiMeta,
+  LocaleCode,
   MapMarkerSnapshot,
   PoiCategory,
   TileProviderDescriptor,
@@ -14,6 +15,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from 'react';
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toBlob } from 'html-to-image';
 import { appPath } from '../lib/app-paths';
 import { readMapFavoriteMarkerIds, writeMapFavoriteMarkerIds } from '../lib/client-map-favorites';
 import {
@@ -380,6 +382,47 @@ interface RoutePlanningCache {
   roadRouteByPair: Map<string, ResolvedRoadRoute | null>;
 }
 
+interface RoadRoutingSnapshot {
+  graph?: RoadRouteGraph;
+  markerRoadAccessIndex: Map<string, RoadAccessCandidate[]>;
+}
+
+type RoadRoutingStatus = 'loading' | 'ready';
+
+type MapShareMode = 'link' | 'text' | 'image';
+
+type MapShareTarget =
+  | {
+      kind: 'marker';
+      marker: CenterableMarker;
+    }
+  | {
+      draft: RoutePlanDraft;
+      enabledModes: EnabledRouteTransportModes;
+      kind: 'route';
+      option?: RoutePlanOption;
+    };
+
+interface MapSharePayload {
+  color: string;
+  eyebrow: string;
+  icon: string;
+  meta: string[];
+  steps: MapShareStep[];
+  text: string;
+  title: string;
+  url: string;
+}
+
+interface MapShareStep {
+  color?: string;
+  details?: RoutePlanStepDetail[];
+  icon?: string;
+  kind: RoutePlanStep['kind'];
+  label: string;
+  role?: RoutePlanStep['role'];
+}
+
 interface ResolvedRoadRoute {
   coordinates: Array<[number, number]>;
   details: RoutePlanStepDetail[];
@@ -459,6 +502,20 @@ const defaultRouteTransportModes: EnabledRouteTransportModes = {
 
 const favoriteMarkerCategoryId = 'favorites';
 type Translate = ReturnType<typeof useI18n>['t'];
+
+const mapShareModes: MapShareMode[] = ['link', 'text', 'image'];
+
+const mapShareModeIcons: Record<MapShareMode, string> = {
+  image: 'image',
+  link: 'link',
+  text: 'article',
+};
+
+const mapShareModeLabelKeys: Record<MapShareMode, CommonMessageKey> = {
+  image: 'map.share.image',
+  link: 'map.share.link',
+  text: 'map.share.text',
+};
 
 const markerCategoryFallbackNames: Record<string, string> = {
   airport: '机场',
@@ -592,7 +649,7 @@ const mapDefaults = {
 type PoiDetailTab = 'summary' | 'facilities';
 
 export function MapStage() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const searchParams = useSearchParams();
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -651,7 +708,12 @@ export function MapStage() {
   const [selectedRouteOptionId, setSelectedRouteOptionId] = useState<string | null>(null);
   const [editingRouteEndpoint, setEditingRouteEndpoint] = useState<RouteEndpointKind | null>(null);
   const [routeEndpointQuery, setRouteEndpointQuery] = useState('');
-  const [routePlanShareStatus, setRoutePlanShareStatus] = useState('');
+  const [shareTarget, setShareTarget] = useState<MapShareTarget | null>(null);
+  const [shareActionStatus, setShareActionStatus] = useState('');
+  const [roadRoutingStatus, setRoadRoutingStatus] = useState<RoadRoutingStatus>('ready');
+  const [roadRoutingSnapshot, setRoadRoutingSnapshot] = useState<RoadRoutingSnapshot>(() => ({
+    markerRoadAccessIndex: new Map(),
+  }));
   const [poiCoordinatePickMode, setPoiCoordinatePickMode] = useState(false);
   const [nearbySearchCenter, setNearbySearchCenter] = useState<NearbySearchCenter | null>(null);
   const [poiDetailCollapsed, setPoiDetailCollapsed] = useState(false);
@@ -1127,14 +1189,44 @@ export function MapStage() {
     () => endpointGroupMarkers.filter((marker) => getRoadMarkerKind(marker)),
     [endpointGroupMarkers],
   );
-  const roadRoutingGraph = useMemo(() => buildRoadRouteGraph(roadTraceSource), [roadTraceSource]);
-  const markerRoadAccessIndex = useMemo(
-    () =>
-      roadRoutingGraph
-        ? buildMarkerRoadAccessIndex(pointMarkers, roadRoutingGraph)
-        : new Map<string, RoadAccessCandidate[]>(),
-    [pointMarkers, roadRoutingGraph],
-  );
+  useEffect(() => {
+    let cancelled = false;
+
+    if (loadStatus !== 'ready') {
+      setRoadRoutingStatus('ready');
+      setRoadRoutingSnapshot({ markerRoadAccessIndex: new Map() });
+      return undefined;
+    }
+
+    setRoadRoutingStatus('loading');
+
+    const timer = window.setTimeout(() => {
+      const graph = buildRoadRouteGraph(roadTraceSource);
+      const markerRoadAccessIndex = graph
+        ? buildMarkerRoadAccessIndex(pointMarkers, graph)
+        : new Map<string, RoadAccessCandidate[]>();
+
+      if (cancelled) {
+        return;
+      }
+
+      startTransition(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setRoadRoutingSnapshot({ graph, markerRoadAccessIndex });
+        setRoadRoutingStatus('ready');
+      });
+    }, 16);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [loadStatus, pointMarkers, roadTraceSource]);
+  const roadRoutingGraph = roadRoutingSnapshot.graph;
+  const markerRoadAccessIndex = roadRoutingSnapshot.markerRoadAccessIndex;
   const selectedRoadTraceSource = useMemo(() => {
     const selectedRoadTrace = focusedMarkerId
       ? roadTraceSource.find((marker) => marker.id === focusedMarkerId)
@@ -1266,6 +1358,12 @@ export function MapStage() {
     setRoutePlanStatus('loading');
     setRoutePlanOptions([]);
 
+    if (roadRoutingStatus === 'loading') {
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const timer = window.setTimeout(() => {
       const nextOptions = buildRoutePlanOptions({
         ...routePlanRequest,
@@ -1289,15 +1387,15 @@ export function MapStage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [roadRoutingGraph, routePlanDraft, routePlanRequest, t]);
+  }, [roadRoutingGraph, roadRoutingStatus, routePlanDraft, routePlanRequest, t]);
   useEffect(() => {
-    if (!routePlanShareStatus) {
+    if (!shareActionStatus) {
       return undefined;
     }
 
-    const timer = window.setTimeout(() => setRoutePlanShareStatus(''), 3200);
+    const timer = window.setTimeout(() => setShareActionStatus(''), 3200);
     return () => window.clearTimeout(timer);
-  }, [routePlanShareStatus]);
+  }, [shareActionStatus]);
   const selectedRouteOption =
     routePlanOptions.find((option) => option.id === selectedRouteOptionId) ?? routePlanOptions[0];
   const selectedRouteTrace = useMemo(
@@ -1535,66 +1633,21 @@ export function MapStage() {
     writeMapFavoriteMarkerIds([...next]);
   };
 
-  const shareMarker = async (marker: CenterableMarker) => {
-    const label = formatMarkerDisplayName(marker.label);
-    const url = buildMapMarkerShareUrl(marker);
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: t('map.poi.shareTitle', { name: label }),
-          text: t('map.poi.shareText', { name: label }),
-          url,
-        });
-        setPoiActionStatus(t('map.poi.shareOpened'));
-        return;
-      }
-
-      await copyTextToClipboard(url);
-      setPoiActionStatus(t('map.poi.copyStatus'));
-    } catch {
-      try {
-        await copyTextToClipboard(url);
-        setPoiActionStatus(t('map.poi.copyStatus'));
-      } catch {
-        setPoiActionStatus(t('map.poi.shareUnavailable'));
-      }
-    }
+  const shareMarker = (marker: CenterableMarker) => {
+    setShareTarget({ kind: 'marker', marker });
   };
 
-  const shareRoutePlan = async () => {
+  const shareRoutePlan = () => {
     if (!routePlanDraft) {
       return;
     }
 
-    const url = buildRoutePlanShareUrl(
-      routePlanDraft,
-      routeTransportModes,
-      selectedRouteOption?.id,
-    );
-    const routeTitle = `${routePlanDraft.originLabel} → ${routePlanDraft.destinationLabel}`;
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: t('map.route.shareTitle'),
-          text: t('map.route.shareText', { route: routeTitle }),
-          url,
-        });
-        setRoutePlanShareStatus(t('map.route.shareOpened'));
-        return;
-      }
-
-      await copyTextToClipboard(url);
-      setRoutePlanShareStatus(t('map.route.copyStatus'));
-    } catch {
-      try {
-        await copyTextToClipboard(url);
-        setRoutePlanShareStatus(t('map.route.copyStatus'));
-      } catch {
-        setRoutePlanShareStatus(t('map.route.shareUnavailable'));
-      }
-    }
+    setShareTarget({
+      draft: routePlanDraft,
+      enabledModes: routeTransportModes,
+      kind: 'route',
+      option: selectedRouteOption,
+    });
   };
 
   const focusTransitLineById = (lineId: string) => {
@@ -2561,6 +2614,15 @@ export function MapStage() {
           </span>
         </div>
 
+        {loadStatus === 'ready' && roadRoutingStatus === 'loading' ? (
+          <div className="map-routing-status" role="status">
+            <span className="material-symbols-outlined" aria-hidden="true">
+              route
+            </span>
+            <span>{t('map.routingStatus.projecting')}</span>
+          </div>
+        ) : null}
+
         {poiCoordinatePickMode ? (
           <div className="map-coordinate-pick-hint" role="status">
             <span className="material-symbols-outlined" aria-hidden="true">
@@ -3079,13 +3141,182 @@ export function MapStage() {
           </section>
         </div>
       ) : null}
-      {routePlanShareStatus ? (
+      {shareTarget ? (
+        <MapShareDialog
+          locale={locale}
+          target={shareTarget}
+          t={t}
+          onClose={() => setShareTarget(null)}
+          onComplete={setShareActionStatus}
+        />
+      ) : null}
+      {shareActionStatus ? (
         <div className="map-toast" role="status">
-          {routePlanShareStatus}
+          {shareActionStatus}
         </div>
       ) : null}
       <MapStageLegal />
     </section>
+  );
+}
+
+function MapShareDialog({
+  locale,
+  target,
+  t,
+  onClose,
+  onComplete,
+}: Readonly<{
+  locale: LocaleCode;
+  target: MapShareTarget;
+  t: Translate;
+  onClose: () => void;
+  onComplete: (status: string) => void;
+}>) {
+  const previewRef = useRef<HTMLElement | null>(null);
+  const [busyMode, setBusyMode] = useState<MapShareMode | null>(null);
+  const payload = useMemo(() => buildMapSharePayload(target, t), [target, t]);
+  const useWordmarkLogo = locale !== 'en';
+
+  const performShare = async (mode: MapShareMode) => {
+    setBusyMode(mode);
+
+    try {
+      const status = await runMapShareAction({
+        mode,
+        payload,
+        previewElement: previewRef.current,
+        t,
+      });
+      onComplete(status);
+      onClose();
+    } catch {
+      onComplete(t('map.share.unavailable'));
+    } finally {
+      setBusyMode(null);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop map-share-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="modal-panel map-share-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="map-share-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="section-heading">
+          <h2 id="map-share-title">{t('map.share.title')}</h2>
+          <button
+            className="icon-action-button"
+            type="button"
+            onClick={onClose}
+            aria-label={t('map.share.close')}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              close
+            </span>
+          </button>
+        </div>
+        <article
+          className="map-share-preview"
+          ref={previewRef}
+          style={{ '--map-share-color': payload.color } as CSSProperties}
+        >
+          <div className="map-share-preview-heading">
+            <span className="map-share-preview-icon material-symbols-outlined" aria-hidden="true">
+              {payload.icon}
+            </span>
+            <span>
+              <small>{payload.eyebrow}</small>
+              <strong>{payload.title}</strong>
+            </span>
+          </div>
+          {payload.meta.length > 0 ? (
+            <div className="map-share-preview-meta">
+              {payload.meta.map((item) => (
+                <span key={item}>{item}</span>
+              ))}
+            </div>
+          ) : null}
+          {payload.steps.length > 0 ? (
+            <ol className="map-route-step-timeline map-share-preview-steps">
+              {payload.steps.map((step, index) => (
+                <li
+                  className={`is-${step.kind}${step.role ? ` is-${step.role}` : ''}`}
+                  key={`${step.kind}-${step.label}-${index}`}
+                  style={{ '--route-step-color': step.color ?? payload.color } as CSSProperties}
+                >
+                  <span className="map-route-step-marker" aria-hidden="true">
+                    {step.icon ? (
+                      <span className="material-symbols-outlined">{step.icon}</span>
+                    ) : (
+                      getRouteStepMarkerText(step, t)
+                    )}
+                  </span>
+                  <span className="map-route-step-content">
+                    <span className="map-route-step-main">
+                      <span className="map-route-step-label">{step.label}</span>
+                    </span>
+                    {step.kind === 'walk' && step.details?.length ? (
+                      <ul className="map-route-step-detail-list">
+                        {step.details.map((detail, detailIndex) => (
+                          <li key={`${step.kind}-${step.label}-detail-${detailIndex}`}>
+                            <span className="material-symbols-outlined" aria-hidden="true">
+                              {detail.icon}
+                            </span>
+                            <span
+                              className={
+                                detail.kind
+                                  ? `map-route-step-detail-label is-${detail.kind}`
+                                  : 'map-route-step-detail-label'
+                              }
+                            >
+                              {detail.label}
+                            </span>
+                            {detail.meta ? <small>{detail.meta}</small> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : null}
+          <footer className="map-share-preview-footer">
+            <span>{t('map.share.footerPrefix')}</span>
+            {useWordmarkLogo ? (
+              <img src={appPath('/icons/yct-logo-wordmark.svg')} alt="雨城通" />
+            ) : (
+              <span className="map-share-preview-footer-brand">
+                <img src={appPath('/icons/yct-logo.svg')} alt="" aria-hidden="true" />
+                <strong>Yuchengtong</strong>
+              </span>
+            )}
+            <small>{t('map.share.footerDisclaimer')}</small>
+          </footer>
+          <p className="map-share-preview-url">{payload.url}</p>
+        </article>
+        <div className="map-share-actions" aria-label={t('map.share.actions')}>
+          {mapShareModes.map((mode) => (
+            <button
+              className={mode === 'image' ? 'secondary-action-button is-primary' : 'secondary-action-button'}
+              type="button"
+              key={mode}
+              disabled={busyMode !== null}
+              onClick={() => void performShare(mode)}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                {mapShareModeIcons[mode]}
+              </span>
+              <span>{busyMode === mode ? t('map.share.processing') : t(mapShareModeLabelKeys[mode])}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -3112,19 +3343,21 @@ function isCenterableMarker(
 }
 
 function MapStageLegal() {
+  const { t } = useI18n();
+
   return (
     <footer className="map-legal" aria-label="备案信息">
-      <p>本站部分代码使用人工智能技术生成，上述地名、组织名均为虚构。</p>
+      <p>{t('siteLegal.disclaimer')}</p>
       <p>
         <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">
-          辽ICP备2021004959号-1
+          {t('siteLegal.icp')}
         </a>
         <a
           href="https://beian.mps.gov.cn/#/query/webSearch?code=21100502000117"
           target="_blank"
           rel="noreferrer"
         >
-          辽公网安备21100502000117号
+          {t('siteLegal.police')}
         </a>
       </p>
     </footer>
@@ -6502,9 +6735,206 @@ function formatRouteStepMinutes(minutes: number, t?: Translate): string {
   return t ? t('map.route.duration.step', { count }) : `${count}分钟`;
 }
 
+function buildMapSharePayload(target: MapShareTarget, t: Translate): MapSharePayload {
+  if (target.kind === 'marker') {
+    const label = formatMarkerDisplayName(target.marker.label);
+    const coordinate = getCenterableMarkerPrimaryCoordinate(target.marker);
+    const url = buildMapMarkerShareUrl(target.marker);
+    const category = target.marker.categoryId
+      ? getMarkerCategoryDisplayName(target.marker.categoryId, t)
+      : formatMarkerDetail(target.marker, t);
+    const coordinateText = coordinate
+      ? `X ${formatMapCoordinate(coordinate[0])} / Z ${formatMapCoordinate(coordinate[1])}`
+      : '';
+
+    return {
+      color: 'var(--yct-color-primary)',
+      eyebrow: category,
+      icon: 'location_on',
+      meta: [formatMarkerDetail(target.marker, t), coordinateText].filter(Boolean),
+      steps: [],
+      text: [
+        t('map.poi.shareText', { name: label }),
+        formatMarkerDetail(target.marker, t),
+        t('map.share.footerText'),
+        t('map.share.footerDisclaimer'),
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      title: t('map.poi.shareTitle', { name: label }),
+      url,
+    };
+  }
+
+  const routeTitle = `${target.draft.originLabel} → ${target.draft.destinationLabel}`;
+  const url = buildRoutePlanShareUrl(
+    target.draft,
+    target.enabledModes,
+    target.option?.id,
+  );
+  const optionSummary = target.option
+    ? [
+        target.option.title,
+        target.option.summary,
+        `${formatRoutePlanMinutes(target.option.estimatedMinutes, t)} · ${formatRoutePlanDistance(
+          target.option.walkingDistance,
+          t,
+        )}`,
+      ]
+    : [];
+  const steps =
+    target.option?.steps.map((step) => ({
+      color: step.color,
+      details: step.details,
+      icon: step.icon,
+      kind: step.kind,
+      label: step.label,
+      role: step.role,
+    })) ?? [];
+  const text = [
+    t('map.route.shareText', { route: routeTitle }),
+    ...optionSummary,
+    target.option ? formatRouteShareStepTextList(target.option) : '',
+    t('map.share.footerText'),
+    t('map.share.footerDisclaimer'),
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return {
+    color: target.option?.color ?? 'var(--yct-color-primary)',
+    eyebrow: t('map.route.share'),
+    icon: target.option?.icon ?? 'directions',
+    meta: optionSummary,
+    steps,
+    text,
+    title: routeTitle,
+    url,
+  };
+}
+
+function formatRouteShareStepTextList(option: RoutePlanOption): string {
+  return option.steps
+    .map((step) => `${getRouteShareStepTextSymbol(step)} ${step.label}`)
+    .join('\n');
+}
+
+function getRouteShareStepTextSymbol(step: RoutePlanStep): string {
+  if (step.role === 'origin') {
+    return '●';
+  }
+
+  if (step.role === 'destination') {
+    return '●';
+  }
+
+  if (step.kind === 'place') {
+    return '○';
+  }
+
+  return '↓';
+}
+
+async function runMapShareAction({
+  mode,
+  payload,
+  previewElement,
+  t,
+}: Readonly<{
+  mode: MapShareMode;
+  payload: MapSharePayload;
+  previewElement: HTMLElement | null;
+  t: Translate;
+}>): Promise<string> {
+  if (mode === 'link') {
+    await copyTextOrUseSystemShare(payload.url, {
+      text: payload.text,
+      title: payload.title,
+      url: payload.url,
+    });
+    return t('map.share.linkCopied');
+  }
+
+  if (mode === 'text') {
+    await copyTextOrUseSystemShare(payload.text, {
+      text: payload.text,
+      title: payload.title,
+      url: payload.url,
+    });
+    return t('map.share.textCopied');
+  }
+
+  if (!previewElement) {
+    throw new Error('Share preview is not mounted');
+  }
+
+  const imageBlob = await createMapShareImageBlob(previewElement);
+  const file = new File([imageBlob], 'yuchengtong-share.png', { type: 'image/png' });
+  if (navigator.canShare?.({ files: [file] })) {
+    await navigator.share({
+      files: [file],
+      text: payload.text,
+      title: payload.title,
+    });
+    return t('map.share.imageShared');
+  }
+
+  downloadBlob(imageBlob, 'yuchengtong-share.png');
+  return t('map.share.imageDownloaded');
+}
+
+async function copyTextOrUseSystemShare(value: string, shareData: ShareData): Promise<void> {
+  try {
+    await copyTextToClipboard(value);
+    return;
+  } catch {
+    if (navigator.share) {
+      await navigator.share(shareData);
+      return;
+    }
+  }
+
+  throw new Error(`Sharing is unavailable for ${value.length} characters`);
+}
+
+async function createMapShareImageBlob(previewElement: HTMLElement): Promise<Blob> {
+  await document.fonts?.ready;
+  const blob = await toBlob(previewElement, {
+    cacheBust: true,
+    pixelRatio: Math.min(window.devicePixelRatio || 2, 3),
+  });
+
+  if (!blob) {
+    throw new Error('Failed to create share image');
+  }
+
+  return blob;
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  link.rel = 'noreferrer';
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function getCenterableMarkerPrimaryCoordinate(marker: CenterableMarker): [number, number] | null {
+  if (marker.geometry.type === 'Point') {
+    return marker.geometry.coordinates;
+  }
+
+  const coordinate = marker.geometry.coordinates[0];
+  return coordinate ? [coordinate[0], coordinate[1]] : null;
+}
+
 function buildMapMarkerShareUrl(marker: CenterableMarker): string {
   const url = new URL(appPath('/map'), window.location.origin);
-  url.searchParams.set('marker', marker.id);
+  url.searchParams.set('ms', encodeBase64UrlText(marker.id));
   return url.toString();
 }
 
@@ -6514,37 +6944,38 @@ function buildRoutePlanShareUrl(
   selectedOptionId?: string,
 ): string {
   const url = new URL(appPath('/map'), window.location.origin);
-  url.searchParams.set('route', '1');
-  url.searchParams.set('origin', formatCoordinateParam(draft.origin));
-  url.searchParams.set('destination', formatCoordinateParam(draft.destination));
-  url.searchParams.set('originLabel', draft.originLabel);
-  url.searchParams.set('destinationLabel', draft.destinationLabel);
-  if (draft.originId) {
-    url.searchParams.set('originId', draft.originId);
-  }
-  if (draft.destinationId) {
-    url.searchParams.set('destinationId', draft.destinationId);
-  }
   const modes = routeTransportModeOptions
     .filter((mode) => enabledModes[mode.mode])
     .map((mode) => mode.mode);
-  if (modes.length > 0) {
-    url.searchParams.set('modes', modes.join(','));
-  }
-  if (selectedOptionId) {
-    url.searchParams.set('option', selectedOptionId);
-  }
+  const compactState = [
+    formatCoordinateParam(draft.origin),
+    formatCoordinateParam(draft.destination),
+    draft.originLabel !== formatPoint(draft.origin) ? draft.originLabel : '',
+    draft.destinationLabel !== formatPoint(draft.destination) ? draft.destinationLabel : '',
+    draft.originId ?? '',
+    draft.destinationId ?? '',
+    modes.join('.'),
+    selectedOptionId ?? '',
+  ];
+  url.searchParams.set('rs', encodeBase64UrlText(JSON.stringify(compactState)));
   return url.toString();
 }
 
 function readMapSharedFocusKey(searchParams: Pick<URLSearchParams, 'get'>): string | null {
-  const markerKey = normalizeMapSharedFocusValue(searchParams.get('marker'));
+  const compactMarkerKey = decodeBase64UrlText(searchParams.get('ms'));
+  if (compactMarkerKey) {
+    return compactMarkerKey;
+  }
+
+  const markerKey = normalizeMapSharedFocusValue(
+    searchParams.get('m') ?? searchParams.get('marker'),
+  );
   if (markerKey) {
     return markerKey;
   }
 
   const lineKey = normalizeMapSharedFocusValue(
-    searchParams.get('line') ?? searchParams.get('lineId'),
+    searchParams.get('l') ?? searchParams.get('line') ?? searchParams.get('lineId'),
   );
   return lineKey ? ensureTransitLineFocusKey(lineKey) : null;
 }
@@ -6552,34 +6983,147 @@ function readMapSharedFocusKey(searchParams: Pick<URLSearchParams, 'get'>): stri
 function readMapSharedRoutePlan(
   searchParams: Pick<URLSearchParams, 'get' | 'toString'>,
 ): SharedRoutePlanState | null {
-  if (searchParams.get('route') !== '1') {
+  const compactRoutePlan = readCompactRoutePlanShareState(searchParams.get('rs'), searchParams);
+  if (compactRoutePlan) {
+    return compactRoutePlan;
+  }
+
+  if ((searchParams.get('r') ?? searchParams.get('route')) !== '1') {
     return null;
   }
 
-  const origin = parseCoordinateParam(searchParams.get('origin'));
-  const destination = parseCoordinateParam(searchParams.get('destination'));
+  const origin = parseCoordinateParam(searchParams.get('o') ?? searchParams.get('origin'));
+  const destination = parseCoordinateParam(
+    searchParams.get('d') ?? searchParams.get('destination'),
+  );
   if (!origin || !destination) {
     return null;
   }
 
   const draft: RoutePlanDraft = {
     destination,
-    destinationId: normalizeMapSharedFocusValue(searchParams.get('destinationId')) ?? undefined,
+    destinationId:
+      normalizeMapSharedFocusValue(searchParams.get('di') ?? searchParams.get('destinationId')) ??
+      undefined,
     destinationLabel:
-      normalizeMapSharedFocusValue(searchParams.get('destinationLabel')) ??
+      normalizeMapSharedFocusValue(
+        searchParams.get('dl') ?? searchParams.get('destinationLabel'),
+      ) ??
       formatPoint(destination),
     origin,
-    originId: normalizeMapSharedFocusValue(searchParams.get('originId')) ?? undefined,
+    originId:
+      normalizeMapSharedFocusValue(searchParams.get('oi') ?? searchParams.get('originId')) ??
+      undefined,
     originLabel:
-      normalizeMapSharedFocusValue(searchParams.get('originLabel')) ?? formatPoint(origin),
+      normalizeMapSharedFocusValue(searchParams.get('ol') ?? searchParams.get('originLabel')) ??
+      formatPoint(origin),
   };
 
   return {
     draft,
-    enabledModes: parseRouteTransportModes(searchParams.get('modes')),
+    enabledModes: parseRouteTransportModes(searchParams.get('tm') ?? searchParams.get('modes')),
     key: searchParams.toString(),
-    selectedOptionId: normalizeMapSharedFocusValue(searchParams.get('option')) ?? undefined,
+    selectedOptionId:
+      normalizeMapSharedFocusValue(searchParams.get('op') ?? searchParams.get('option')) ??
+      undefined,
   };
+}
+
+function readCompactRoutePlanShareState(
+  value: string | null,
+  searchParams: Pick<URLSearchParams, 'toString'>,
+): SharedRoutePlanState | null {
+  const decoded = decodeBase64UrlText(value);
+  if (!decoded) {
+    return null;
+  }
+
+  try {
+    const state = JSON.parse(decoded) as unknown;
+    if (!Array.isArray(state)) {
+      return null;
+    }
+
+    const [
+      originValue,
+      destinationValue,
+      originLabelValue,
+      destinationLabelValue,
+      originIdValue,
+      destinationIdValue,
+      modesValue,
+      selectedOptionIdValue,
+    ] = state;
+    if (typeof originValue !== 'string' || typeof destinationValue !== 'string') {
+      return null;
+    }
+
+    const origin = parseCoordinateParam(originValue);
+    const destination = parseCoordinateParam(destinationValue);
+    if (!origin || !destination) {
+      return null;
+    }
+
+    return {
+      draft: {
+        destination,
+        destinationId:
+          typeof destinationIdValue === 'string'
+            ? normalizeMapSharedFocusValue(destinationIdValue) ?? undefined
+            : undefined,
+        destinationLabel:
+          typeof destinationLabelValue === 'string' && destinationLabelValue.trim()
+            ? destinationLabelValue
+            : formatPoint(destination),
+        origin,
+        originId:
+          typeof originIdValue === 'string'
+            ? normalizeMapSharedFocusValue(originIdValue) ?? undefined
+            : undefined,
+        originLabel:
+          typeof originLabelValue === 'string' && originLabelValue.trim()
+            ? originLabelValue
+            : formatPoint(origin),
+      },
+      enabledModes:
+        typeof modesValue === 'string'
+          ? parseRouteTransportModes(modesValue.replaceAll('.', ','))
+          : { ...defaultRouteTransportModes },
+      key: searchParams.toString(),
+      selectedOptionId:
+        typeof selectedOptionIdValue === 'string'
+          ? normalizeMapSharedFocusValue(selectedOptionIdValue) ?? undefined
+          : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function encodeBase64UrlText(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+}
+
+function decodeBase64UrlText(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const normalized = value.replaceAll('-', '+').replaceAll('_', '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return null;
+  }
 }
 
 function formatCoordinateParam([x, z]: [number, number]): string {
