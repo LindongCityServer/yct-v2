@@ -2396,7 +2396,7 @@ export function MapStage() {
                       {focusedMarker.imageUrl ? (
                         <img
                           className="map-poi-detail-image"
-                          src={focusedMarker.imageUrl}
+                          src={appPath(focusedMarker.imageUrl)}
                           alt={`${formatMarkerDisplayName(focusedMarker.label)} 图片`}
                         />
                       ) : null}

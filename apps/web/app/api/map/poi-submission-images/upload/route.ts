@@ -27,7 +27,6 @@ export async function POST(request: NextRequest) {
     fileName: file.name,
     mimeType: file.type,
     bytes: new Uint8Array(await file.arrayBuffer()),
-    siteUrl: request.nextUrl.origin,
   });
 
   if (!result.ok) {

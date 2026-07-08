@@ -81,12 +81,20 @@ export const poiCategorySchema = z.object({
   sortOrder: z.number().int().min(0).max(100_000),
 });
 
+const poiSubmissionImageUrlSchema = z.union([
+  urlSchema,
+  z
+    .string()
+    .trim()
+    .regex(/^\/api\/map\/poi-submission-images\/[a-f0-9]{24}\.(?:png|jpg|gif|webp|avif)$/),
+]);
+
 export const poiSubmissionSchema = z.object({
   title: nonEmptyTextSchema,
   categoryId: idSchema,
   description: z.string().trim().max(1000).optional(),
   href: urlSchema.optional(),
-  imageUrl: urlSchema.optional(),
+  imageUrl: poiSubmissionImageUrlSchema.optional(),
   geometry: mapGeometrySchema,
   visibility: z.enum(['private', 'public_pending_review']),
 });

@@ -1,13 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import type { YctEvent, YctEventPayloadMap, YctEventType } from '@yct/contracts';
-import { appPath } from './app-paths';
 import { publishDomainEvent } from './app-event-bus';
 import {
   isAllowedPoiImageMimeType,
   normalizePoiImageMimeType,
   storePoiSubmissionImageFile,
 } from './poi-submission-image-store';
-import { readRuntimeConfig } from './runtime-config';
 
 export interface PoiSubmissionImageUploadResult {
   ok: boolean;
@@ -29,7 +27,6 @@ export async function uploadPoiSubmissionImage(input: {
   fileName: string;
   mimeType: string;
   bytes: Uint8Array;
-  siteUrl?: string;
 }): Promise<PoiSubmissionImageUploadResult> {
   const validation = validatePoiSubmissionImage(input);
   if (!validation.ok) {
@@ -42,15 +39,10 @@ export async function uploadPoiSubmissionImage(input: {
     mimeType,
     bytes: input.bytes,
   });
-  const config = readRuntimeConfig();
-  const imageUrl = new URL(
-    appPath(storedFile.publicPath),
-    input.siteUrl ?? config.siteUrl,
-  ).toString();
   const image = {
     imageId: `poi_image_${storedFile.sha256.slice(0, 24)}`,
     fileName: input.fileName,
-    imageUrl,
+    imageUrl: storedFile.publicPath,
     mimeType,
     sizeBytes: storedFile.sizeBytes,
     sha256: storedFile.sha256,
