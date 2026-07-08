@@ -2496,7 +2496,7 @@ export function MapStage() {
                         {focusedSecondaryPoiGroups.map((group) => (
                           <section className="map-poi-related-group" key={group.id}>
                             <h4>
-                              <span>{group.label}</span>
+                              <span>{formatSecondaryPoiGroupLabel(group.id, group.label, t)}</span>
                               <small>{t('map.poi.count', { count: group.items.length })}</small>
                             </h4>
                             <div className="map-poi-related-group-items">
@@ -7493,6 +7493,19 @@ function getSecondaryPoiGroup(link: SecondaryPoiLink): Omit<SecondaryPoiGroup, '
 function getSecondaryPoiGroupOrder(groupId: string): number {
   const index = ['access', 'transport', 'building', 'scenery', 'facility', 'nearby'].indexOf(groupId);
   return index >= 0 ? index : 99;
+}
+
+function formatSecondaryPoiGroupLabel(groupId: string, fallback: string, t: Translate): string {
+  const labelKeyByGroupId: Record<string, CommonMessageKey> = {
+    access: 'map.poi.group.access',
+    building: 'map.poi.group.building',
+    facility: 'map.poi.group.facility',
+    nearby: 'map.poi.group.nearby',
+    scenery: 'map.poi.group.scenery',
+    transport: 'map.poi.group.transport',
+  };
+  const labelKey = labelKeyByGroupId[groupId];
+  return labelKey ? t(labelKey) : fallback;
 }
 
 function buildSecondaryPoiIndex(markers: PointMarker[]): Map<string, SecondaryPoiLink[]> {

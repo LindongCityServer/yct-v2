@@ -134,6 +134,12 @@ export type CommonMessageKey =
   | 'map.poi.facilities'
   | 'map.poi.favoriteAria'
   | 'map.poi.favoriteStatus'
+  | 'map.poi.group.access'
+  | 'map.poi.group.building'
+  | 'map.poi.group.facility'
+  | 'map.poi.group.nearby'
+  | 'map.poi.group.scenery'
+  | 'map.poi.group.transport'
   | 'map.poi.imageAlt'
   | 'map.poi.nearbyAria'
   | 'map.poi.noConnections'
@@ -774,6 +780,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.facilities': '设施/出入口',
     'map.poi.favoriteAria': '收藏 {name}',
     'map.poi.favoriteStatus': '已收藏 {name}',
+    'map.poi.group.access': '出入口',
+    'map.poi.group.building': '楼栋',
+    'map.poi.group.facility': '设施',
+    'map.poi.group.nearby': '周边',
+    'map.poi.group.scenery': '景点',
+    'map.poi.group.transport': '交通',
     'map.poi.imageAlt': '{name} 图片',
     'map.poi.nearbyAria': '搜索 {name} 周边',
     'map.poi.noConnections': '暂无已知接驳线路',
@@ -1417,6 +1429,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.facilities': '設施/出入口',
     'map.poi.favoriteAria': '收藏 {name}',
     'map.poi.favoriteStatus': '已收藏 {name}',
+    'map.poi.group.access': '出入口',
+    'map.poi.group.building': '樓棟',
+    'map.poi.group.facility': '設施',
+    'map.poi.group.nearby': '周邊',
+    'map.poi.group.scenery': '景點',
+    'map.poi.group.transport': '交通',
     'map.poi.imageAlt': '{name} 圖片',
     'map.poi.nearbyAria': '搜尋 {name} 周邊',
     'map.poi.noConnections': '暫無已知接駁線路',
@@ -2061,6 +2079,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.facilities': 'Facilities and Exits',
     'map.poi.favoriteAria': 'Favorite {name}',
     'map.poi.favoriteStatus': 'Added {name} to favorites',
+    'map.poi.group.access': 'Entrances and exits',
+    'map.poi.group.building': 'Buildings',
+    'map.poi.group.facility': 'Facilities',
+    'map.poi.group.nearby': 'Nearby',
+    'map.poi.group.scenery': 'Attractions',
+    'map.poi.group.transport': 'Transit',
     'map.poi.imageAlt': '{name} image',
     'map.poi.nearbyAria': 'Search near {name}',
     'map.poi.noConnections': 'No known connecting lines',
