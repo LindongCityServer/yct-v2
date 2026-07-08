@@ -90,7 +90,7 @@ export function AdminPoiPanel() {
               </p>
               {submission.description ? <p>{submission.description}</p> : null}
               {submission.href ? <p className="muted">链接：{submission.href}</p> : null}
-              {submission.imageUrl ? <p className="muted">图片：{submission.imageUrl}</p> : null}
+              {submission.imageUrl ? <PoiSubmissionImagePreview submission={submission} /> : null}
             </div>
             <div className="admin-content-actions">
               <button
@@ -120,6 +120,40 @@ export function AdminPoiPanel() {
       </div>
     </section>
   );
+}
+
+function PoiSubmissionImagePreview({
+  submission,
+}: Readonly<{ submission: PoiSubmission }>) {
+  if (!submission.imageUrl) {
+    return null;
+  }
+
+  const imageUrl = resolvePoiSubmissionImageUrl(submission.imageUrl);
+
+  return (
+    <a
+      className="admin-poi-image-preview"
+      href={imageUrl}
+      target="_blank"
+      rel="noreferrer"
+    >
+      <img
+        src={imageUrl}
+        alt={`${submission.title} 投稿图片`}
+        loading="lazy"
+        decoding="async"
+      />
+      <span className="admin-poi-image-preview-copy">
+        <span className="admin-poi-image-preview-title">投稿图片</span>
+        <small>{submission.imageUrl}</small>
+      </span>
+    </a>
+  );
+}
+
+function resolvePoiSubmissionImageUrl(value: string): string {
+  return value.startsWith('/') ? appPath(value) : value;
 }
 
 function statusLabel(status: PoiSubmissionStatus): string {
