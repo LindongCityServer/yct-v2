@@ -80,7 +80,7 @@ pnpm web:artifact
 
 - 运行 `@yct/web` 的生产构建。
 - 使用 Next.js standalone 输出作为部署主体。
-- 额外把 `deploy-yct-web.ps1` 和 `start-yct-web.ps1` 一起放进部署包根目录。
+- 额外把 `deploy-yct-web.ps1`、`start-yct-web.ps1`、`init-yct-admin.ps1`、运行时配置检查、烟雾检查和统一任务脚本一起放进部署包根目录。
 - 补齐 `apps/web/.next/static` 和 `apps/web/public`。
 - 补齐 pnpm workspace 下 Next standalone 可能漏掉的 `@next/*`、`@swc/*` 等运行时依赖。
 - 跳过本机上传素材目录 `apps/web/public/content-assets`。
@@ -145,6 +145,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -
 ```
 
 这个脚本会按生产环境优先级检查 `.env`、`.env.production`、`.env.local`、`.env.production.local`，只输出配置项是否存在、来源文件、推导出的回调地址和告警，不会打印敏感值。部署包根目录也会附带同名脚本，解压后无需依赖仓库源码或 `tsx`。
+
+如果需要在只有 standalone 部署包、没有 pnpm 的服务器上指定首位或追加雨城通管理员，可在部署根目录运行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\init-yct-admin.ps1 -LdpassUserId "<ldpassUserId>"
+```
+
+脚本默认写入 `.yct-data\admin-memberships.json`；如果配置了 `YCT_ADMIN_STORE_PATH`，则写入该变量指向的管理员成员文件。这个文件属于运行时数据，替换部署包时要随 `.yct-data` 一起保留，不要提交到 GitHub。
 
 如果当前重点是在排查 `ldpass` 登录回跳是否仍落到 `localhost:3300`，建议在启动前后都做这两个最小检查：
 

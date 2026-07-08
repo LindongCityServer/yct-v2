@@ -543,6 +543,9 @@ Deployment smoke check example:
 Unified internal task runner example:
   powershell -NoProfile -ExecutionPolicy Bypass -File .\run-yct-internal-tasks.ps1 -Origin http://127.0.0.1:3300 -BasePath "$startBasePathArgument"
 
+Initialize a YCT administrator without pnpm:
+  powershell -NoProfile -ExecutionPolicy Bypass -File .\init-yct-admin.ps1 -LdpassUserId "<ldpassUserId>"
+
 Start command example:
   powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath "$startBasePathArgument" -NodePath "C:\node-v22\node.exe"
 
@@ -551,6 +554,7 @@ Notes:
 - Keep real environment files (.env, .env.production, .env.local), server-side runtime stores, uploaded content assets, logs, and backups outside the deployment bundle. In the extracted deployment directory, place those environment files at the same level as start-yct-web.ps1 and .yct-data. start-yct-web.ps1 will import them before launching the standalone server.
 - start-yct-web.ps1 loads .env -> .env.production -> .env.local -> .env.production.local, and later files override earlier ones. These values also override inherited shell / PM2 environment variables for the same keys so stale localhost settings do not leak into production.
 - deploy-yct-web.ps1 will automatically preserve .env, .env.production, .env.local, .env.production.local, .yct-data, and apps\web\public\content-assets from the old deployment directory before replacing files.
+- init-yct-admin.ps1 writes .yct-data\admin-memberships.json by default, or YCT_ADMIN_STORE_PATH when that environment variable is set. This file is runtime data and must not be committed.
 - If the reverse proxy is mounted at /v2, build and start with BasePath /v2. If it is mounted at the site root later, rebuild with an empty BasePath.
 - Stop the old process before deployment and unpack this bundle into an empty deployment directory, or clean the old standalone files first. Do not merge it over an old .next directory: server.js, .next/server, and .next/static must come from the same build.
 - When replacing an existing deployment in place, preserve at least .yct-data and apps\web\public\content-assets from the old directory before clearing files. Copying only .yct-data is not enough if the site already contains uploaded content assets.
@@ -564,6 +568,7 @@ Notes:
   Copy-Item -LiteralPath (Join-Path $root "scripts\check-runtime-config.ps1") -Destination (Join-Path $stageRoot "check-runtime-config.ps1") -Force
   Copy-Item -LiteralPath (Join-Path $root "scripts\check-web-deployment-smoke.ps1") -Destination (Join-Path $stageRoot "check-yct-web-smoke.ps1") -Force
   Copy-Item -LiteralPath (Join-Path $root "scripts\run-web-internal-tasks.ps1") -Destination (Join-Path $stageRoot "run-yct-internal-tasks.ps1") -Force
+  Copy-Item -LiteralPath (Join-Path $root "scripts\init-admin-membership.ps1") -Destination (Join-Path $stageRoot "init-yct-admin.ps1") -Force
   Write-YctUtf8File -Path (Join-Path $stageRoot "DEPLOYMENT.txt") -Content $deploymentNotes
 }
 
@@ -582,6 +587,7 @@ if ($ValidateOnly) {
     ConfigCheckScript = "check-runtime-config.ps1"
     SmokeCheckScript = "check-yct-web-smoke.ps1"
     InternalTaskScript = "run-yct-internal-tasks.ps1"
+    InitAdminScript = "init-yct-admin.ps1"
     NodeRequirement = ">=20.9.0"
   }
 
@@ -665,6 +671,7 @@ $result = [pscustomobject]@{
   ConfigCheckScript = "check-runtime-config.ps1"
   SmokeCheckScript = "check-yct-web-smoke.ps1"
   InternalTaskScript = "run-yct-internal-tasks.ps1"
+  InitAdminScript = "init-yct-admin.ps1"
   NodeRequirement = ">=20.9.0"
 }
 

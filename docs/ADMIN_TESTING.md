@@ -25,6 +25,14 @@ pnpm admin:init <ldpassUserId>
 
 该命令会写入 `.yct-data/admin-memberships.json`。这个文件属于运行时数据，不应提交到 GitHub。
 
+如果当前只有 standalone 部署包，没有 pnpm、tsx 或源码脚本，可以在部署包解压后的目录运行随包附带的 PowerShell 脚本：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\init-yct-admin.ps1 -LdpassUserId "<ldpassUserId>"
+```
+
+该脚本默认写入当前目录下 `.yct-data/admin-memberships.json`；如果 `.env` 或进程环境设置了 `YCT_ADMIN_STORE_PATH`，则应写入该变量指向的位置。管理员成员文件是运行时数据，替换部署包时需要和 `.env`、`.yct-data` 一起保留或迁移。
+
 ## 3. 启动与登录
 
 本地预览统一使用固定脚本：
