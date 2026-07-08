@@ -37,6 +37,39 @@ type MapCategoryMessageKey =
 
 export type CommonMessageKey =
   | MapCategoryMessageKey
+  | 'account.offlinePackage.area'
+  | 'account.offlinePackage.bounds'
+  | 'account.offlinePackage.close'
+  | 'account.offlinePackage.delete'
+  | 'account.offlinePackage.deleteAria'
+  | 'account.offlinePackage.deleteConfirm'
+  | 'account.offlinePackage.description'
+  | 'account.offlinePackage.empty'
+  | 'account.offlinePackage.error.emptyArea'
+  | 'account.offlinePackage.error.invalidBounds'
+  | 'account.offlinePackage.error.missingName'
+  | 'account.offlinePackage.lastRefreshed'
+  | 'account.offlinePackage.listAria'
+  | 'account.offlinePackage.maxX'
+  | 'account.offlinePackage.maxZ'
+  | 'account.offlinePackage.minX'
+  | 'account.offlinePackage.minZ'
+  | 'account.offlinePackage.name'
+  | 'account.offlinePackage.namePlaceholder'
+  | 'account.offlinePackage.newRange'
+  | 'account.offlinePackage.refresh'
+  | 'account.offlinePackage.refreshing'
+  | 'account.offlinePackage.save'
+  | 'account.offlinePackage.strategyNote'
+  | 'account.offlinePackage.status.baseCacheRefreshed'
+  | 'account.offlinePackage.status.refreshFailed'
+  | 'account.offlinePackage.status.registered'
+  | 'account.offlinePackage.status.requestFailed'
+  | 'account.offlinePackage.status.serverRequested'
+  | 'account.offlinePackage.summary.area'
+  | 'account.offlinePackage.summary.refreshed'
+  | 'account.offlinePackage.summary.total'
+  | 'account.offlinePackage.title'
   | 'account.settings'
   | 'account.status.anonymous'
   | 'account.status.notConfigured'
@@ -648,6 +681,30 @@ export type CommonMessageKey =
   | 'travel.screen.action'
   | 'travel.screen.detail'
   | 'travel.screen.title'
+  | 'travel.screenDetail.empty'
+  | 'travel.screenDetail.fare'
+  | 'travel.screenDetail.filterAria'
+  | 'travel.screenDetail.gate'
+  | 'travel.screenDetail.line'
+  | 'travel.screenDetail.listAria'
+  | 'travel.screenDetail.noticeAria'
+  | 'travel.screenDetail.operator'
+  | 'travel.screenDetail.past'
+  | 'travel.screenDetail.routes'
+  | 'travel.screenDetail.runtime'
+  | 'travel.screenDetail.search'
+  | 'travel.screenDetail.searchClear'
+  | 'travel.screenDetail.station'
+  | 'travel.screenDetail.stationCount'
+  | 'travel.screenDetail.stationFlowAria'
+  | 'travel.screenDetail.stations'
+  | 'travel.screenDetail.summaryAria'
+  | 'travel.screenDetail.timeFilterAria'
+  | 'travel.screenDetail.title'
+  | 'travel.screenDetail.total'
+  | 'travel.screenDetail.trip'
+  | 'travel.screenDetail.trips'
+  | 'travel.screenDetail.upcoming'
   | 'travel.services.subtitle'
   | 'travel.services.title'
   | 'travel.subtitle'
@@ -659,6 +716,40 @@ type CommonCatalog = Record<CommonMessageKey, string>;
 
 const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
   'zh-CN': {
+    'account.offlinePackage.area': '面积 {area} 方块',
+    'account.offlinePackage.bounds': 'X {minX} 至 {maxX}，Z {minZ} 至 {maxZ}',
+    'account.offlinePackage.close': '关闭',
+    'account.offlinePackage.delete': '删除',
+    'account.offlinePackage.deleteAria': '删除 {name}',
+    'account.offlinePackage.deleteConfirm': '要删除离线范围“{name}”吗？',
+    'account.offlinePackage.description': '使用 Minecraft 世界坐标记录一个矩形范围。',
+    'account.offlinePackage.empty': '还没有自定义离线范围。',
+    'account.offlinePackage.error.emptyArea': '离线范围需要同时具有宽度和高度。',
+    'account.offlinePackage.error.invalidBounds': '请输入有效的 Minecraft X/Z 矩形坐标。',
+    'account.offlinePackage.error.missingName': '请给这个离线范围起一个名称。',
+    'account.offlinePackage.lastRefreshed': '上次刷新 {time}',
+    'account.offlinePackage.listAria': '自定义离线范围',
+    'account.offlinePackage.maxX': '最大 X',
+    'account.offlinePackage.maxZ': '最大 Z',
+    'account.offlinePackage.minX': '最小 X',
+    'account.offlinePackage.minZ': '最小 Z',
+    'account.offlinePackage.name': '名称',
+    'account.offlinePackage.namePlaceholder': '例如：大学城周边',
+    'account.offlinePackage.newRange': '新建范围',
+    'account.offlinePackage.refresh': '刷新范围',
+    'account.offlinePackage.refreshing': '刷新中',
+    'account.offlinePackage.save': '保存范围',
+    'account.offlinePackage.status.baseCacheRefreshed': '基础缓存已刷新',
+    'account.offlinePackage.status.refreshFailed': '刷新失败',
+    'account.offlinePackage.status.registered': '待生成',
+    'account.offlinePackage.status.requestFailed': '请求失败',
+    'account.offlinePackage.status.serverRequested': '已请求生成',
+    'account.offlinePackage.summary.area': '{area} 方块范围',
+    'account.offlinePackage.summary.refreshed': '{count} 个已刷新基础缓存',
+    'account.offlinePackage.summary.total': '{count} 个自定义范围',
+    'account.offlinePackage.strategyNote':
+      '自定义范围当前记录边界并刷新公开基础数据，真实瓦片离线包仍等待体积上限和生成策略确认。',
+    'account.offlinePackage.title': '新建离线范围',
     'account.settings': '账号设置',
     'account.status.anonymous': '未登录',
     'account.status.notConfigured': '临东通未配置',
@@ -1302,6 +1393,30 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travel.screen.action': '查看大屏',
     'travel.screen.detail': '{gateCount} 个检票口数据，展示近期客运班次与运营提示',
     'travel.screen.title': '智运大屏',
+    'travel.screenDetail.empty': '没有匹配的班次',
+    'travel.screenDetail.fare': '票价',
+    'travel.screenDetail.filterAria': '班次筛选',
+    'travel.screenDetail.gate': '检票口',
+    'travel.screenDetail.line': '线路',
+    'travel.screenDetail.listAria': '班次列表',
+    'travel.screenDetail.noticeAria': '大屏公告',
+    'travel.screenDetail.operator': '运营',
+    'travel.screenDetail.past': '已过',
+    'travel.screenDetail.routes': '线路',
+    'travel.screenDetail.runtime': '运行',
+    'travel.screenDetail.search': '搜索班次、线路、车站或检票口',
+    'travel.screenDetail.searchClear': '清空班次搜索',
+    'travel.screenDetail.station': '车站',
+    'travel.screenDetail.stationCount': '{count} 站',
+    'travel.screenDetail.stationFlowAria': '{line} 停靠站',
+    'travel.screenDetail.stations': '车站',
+    'travel.screenDetail.summaryAria': '客运大屏数据摘要',
+    'travel.screenDetail.timeFilterAria': '时间筛选',
+    'travel.screenDetail.title': '班次查询',
+    'travel.screenDetail.total': '全部',
+    'travel.screenDetail.trip': '班次',
+    'travel.screenDetail.trips': '{shown} / {total} 个班次',
+    'travel.screenDetail.upcoming': '即将',
     'travel.services.subtitle': '班次查询、线路站点、客运展示与后续票务入口',
     'travel.services.title': '出行服务',
     'travel.subtitle': '提醒、班次与后续票务',
@@ -1310,6 +1425,40 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travel.ticketing.title': '票券与订单',
   },
   'zh-Hant': {
+    'account.offlinePackage.area': '面積 {area} 方塊',
+    'account.offlinePackage.bounds': 'X {minX} 至 {maxX}，Z {minZ} 至 {maxZ}',
+    'account.offlinePackage.close': '關閉',
+    'account.offlinePackage.delete': '刪除',
+    'account.offlinePackage.deleteAria': '刪除 {name}',
+    'account.offlinePackage.deleteConfirm': '要刪除離線範圍「{name}」嗎？',
+    'account.offlinePackage.description': '使用 Minecraft 世界座標記錄一個矩形範圍。',
+    'account.offlinePackage.empty': '還沒有自訂離線範圍。',
+    'account.offlinePackage.error.emptyArea': '離線範圍需要同時具有寬度和高度。',
+    'account.offlinePackage.error.invalidBounds': '請輸入有效的 Minecraft X/Z 矩形座標。',
+    'account.offlinePackage.error.missingName': '請給這個離線範圍起一個名稱。',
+    'account.offlinePackage.lastRefreshed': '上次重新整理 {time}',
+    'account.offlinePackage.listAria': '自訂離線範圍',
+    'account.offlinePackage.maxX': '最大 X',
+    'account.offlinePackage.maxZ': '最大 Z',
+    'account.offlinePackage.minX': '最小 X',
+    'account.offlinePackage.minZ': '最小 Z',
+    'account.offlinePackage.name': '名稱',
+    'account.offlinePackage.namePlaceholder': '例如：大學城周邊',
+    'account.offlinePackage.newRange': '新增範圍',
+    'account.offlinePackage.refresh': '重新整理範圍',
+    'account.offlinePackage.refreshing': '重新整理中',
+    'account.offlinePackage.save': '儲存範圍',
+    'account.offlinePackage.status.baseCacheRefreshed': '基礎快取已重新整理',
+    'account.offlinePackage.status.refreshFailed': '重新整理失敗',
+    'account.offlinePackage.status.registered': '待生成',
+    'account.offlinePackage.status.requestFailed': '請求失敗',
+    'account.offlinePackage.status.serverRequested': '已請求生成',
+    'account.offlinePackage.summary.area': '{area} 方塊範圍',
+    'account.offlinePackage.summary.refreshed': '{count} 個已重新整理基礎快取',
+    'account.offlinePackage.summary.total': '{count} 個自訂範圍',
+    'account.offlinePackage.strategyNote':
+      '自訂範圍目前記錄邊界並重新整理公開基礎資料，真正的瓦片離線包仍等待體積上限和生成策略確認。',
+    'account.offlinePackage.title': '新增離線範圍',
     'account.settings': '帳號設定',
     'account.status.anonymous': '未登入',
     'account.status.notConfigured': '臨東通未設定',
@@ -1954,6 +2103,30 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travel.screen.action': '查看大屏',
     'travel.screen.detail': '{gateCount} 個檢票口資料，展示近期客運班次與營運提示',
     'travel.screen.title': '智運大屏',
+    'travel.screenDetail.empty': '沒有符合條件的班次',
+    'travel.screenDetail.fare': '票價',
+    'travel.screenDetail.filterAria': '班次篩選',
+    'travel.screenDetail.gate': '檢票口',
+    'travel.screenDetail.line': '線路',
+    'travel.screenDetail.listAria': '班次列表',
+    'travel.screenDetail.noticeAria': '大屏公告',
+    'travel.screenDetail.operator': '營運',
+    'travel.screenDetail.past': '已過',
+    'travel.screenDetail.routes': '線路',
+    'travel.screenDetail.runtime': '運行',
+    'travel.screenDetail.search': '搜尋班次、線路、車站或檢票口',
+    'travel.screenDetail.searchClear': '清空班次搜尋',
+    'travel.screenDetail.station': '車站',
+    'travel.screenDetail.stationCount': '{count} 站',
+    'travel.screenDetail.stationFlowAria': '{line} 停靠站',
+    'travel.screenDetail.stations': '車站',
+    'travel.screenDetail.summaryAria': '客運大屏資料摘要',
+    'travel.screenDetail.timeFilterAria': '時間篩選',
+    'travel.screenDetail.title': '班次查詢',
+    'travel.screenDetail.total': '全部',
+    'travel.screenDetail.trip': '班次',
+    'travel.screenDetail.trips': '{shown} / {total} 個班次',
+    'travel.screenDetail.upcoming': '即將',
     'travel.services.subtitle': '班次查詢、線路站點、客運展示與後續票務入口',
     'travel.services.title': '出行服務',
     'travel.subtitle': '提醒、班次與後續票務',
@@ -1962,6 +2135,42 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travel.ticketing.title': '票券與訂單',
   },
   en: {
+    'account.offlinePackage.area': 'Area {area} blocks',
+    'account.offlinePackage.bounds': 'X {minX} to {maxX}, Z {minZ} to {maxZ}',
+    'account.offlinePackage.close': 'Close',
+    'account.offlinePackage.delete': 'Delete',
+    'account.offlinePackage.deleteAria': 'Delete {name}',
+    'account.offlinePackage.deleteConfirm': 'Delete offline area "{name}"?',
+    'account.offlinePackage.description':
+      'Save a rectangular area with Minecraft world coordinates.',
+    'account.offlinePackage.empty': 'No custom offline areas yet.',
+    'account.offlinePackage.error.emptyArea': 'The offline area needs both width and height.',
+    'account.offlinePackage.error.invalidBounds':
+      'Enter valid Minecraft X/Z rectangle coordinates.',
+    'account.offlinePackage.error.missingName': 'Name this offline area first.',
+    'account.offlinePackage.lastRefreshed': 'Last refreshed {time}',
+    'account.offlinePackage.listAria': 'Custom offline areas',
+    'account.offlinePackage.maxX': 'Max X',
+    'account.offlinePackage.maxZ': 'Max Z',
+    'account.offlinePackage.minX': 'Min X',
+    'account.offlinePackage.minZ': 'Min Z',
+    'account.offlinePackage.name': 'Name',
+    'account.offlinePackage.namePlaceholder': 'Example: Around University Town',
+    'account.offlinePackage.newRange': 'New area',
+    'account.offlinePackage.refresh': 'Refresh area',
+    'account.offlinePackage.refreshing': 'Refreshing',
+    'account.offlinePackage.save': 'Save area',
+    'account.offlinePackage.status.baseCacheRefreshed': 'Base cache refreshed',
+    'account.offlinePackage.status.refreshFailed': 'Refresh failed',
+    'account.offlinePackage.status.registered': 'Queued',
+    'account.offlinePackage.status.requestFailed': 'Request failed',
+    'account.offlinePackage.status.serverRequested': 'Generation requested',
+    'account.offlinePackage.summary.area': '{area} block area',
+    'account.offlinePackage.summary.refreshed': '{count} base caches refreshed',
+    'account.offlinePackage.summary.total': '{count} custom areas',
+    'account.offlinePackage.strategyNote':
+      'Custom areas currently store boundaries and refresh public base data. Real tile offline packs still need size limits and generation rules.',
+    'account.offlinePackage.title': 'New Offline Area',
     'account.settings': 'Account Settings',
     'account.status.anonymous': 'Not signed in',
     'account.status.notConfigured': 'Ldpass is not configured',
@@ -2613,6 +2822,30 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travel.screen.detail':
       '{gateCount} check-in gates with recent coach trips and update notices.',
     'travel.screen.title': 'Operations Board',
+    'travel.screenDetail.empty': 'No matching trips',
+    'travel.screenDetail.fare': 'Fare',
+    'travel.screenDetail.filterAria': 'Trip filters',
+    'travel.screenDetail.gate': 'Gate',
+    'travel.screenDetail.line': 'Line',
+    'travel.screenDetail.listAria': 'Trip list',
+    'travel.screenDetail.noticeAria': 'Board notice',
+    'travel.screenDetail.operator': 'Operator',
+    'travel.screenDetail.past': 'Past',
+    'travel.screenDetail.routes': 'Lines',
+    'travel.screenDetail.runtime': 'Runtime',
+    'travel.screenDetail.search': 'Search trips, lines, stations, or gates',
+    'travel.screenDetail.searchClear': 'Clear trip search',
+    'travel.screenDetail.station': 'Station',
+    'travel.screenDetail.stationCount': '{count} stops',
+    'travel.screenDetail.stationFlowAria': '{line} stops',
+    'travel.screenDetail.stations': 'Stations',
+    'travel.screenDetail.summaryAria': 'Operations board data summary',
+    'travel.screenDetail.timeFilterAria': 'Time filter',
+    'travel.screenDetail.title': 'Schedule Search',
+    'travel.screenDetail.total': 'All',
+    'travel.screenDetail.trip': 'Trips',
+    'travel.screenDetail.trips': '{shown} / {total} trips',
+    'travel.screenDetail.upcoming': 'Upcoming',
     'travel.services.subtitle':
       'Schedule search, line and station map, coach board, and future ticketing entry points',
     'travel.services.title': 'Travel Services',

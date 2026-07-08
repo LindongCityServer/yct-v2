@@ -2,6 +2,7 @@
 
 import type { TransitScreenGate, TransitScreenSnapshot, TransitScreenTrip } from '@yct/contracts';
 import { useMemo, useState } from 'react';
+import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 
 type TimeFilter = 'all' | 'upcoming' | 'past';
 
@@ -10,6 +11,7 @@ export function TransitScreenDetailPanel({
 }: Readonly<{
   snapshot: TransitScreenSnapshot;
 }>) {
+  const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [lineFilter, setLineFilter] = useState('all');
   const [stationFilter, setStationFilter] = useState('all');
@@ -41,7 +43,7 @@ export function TransitScreenDetailPanel({
           return true;
         }
 
-        return buildSearchText(trip, gatesByLine.get(trip.lineName), stationNameById).includes(
+        return buildSearchText(trip, gatesByLine.get(trip.lineName), stationNameById, t).includes(
           normalizedQuery,
         );
       })
@@ -54,42 +56,46 @@ export function TransitScreenDetailPanel({
     snapshot.trips,
     stationFilter,
     stationNameById,
+    t,
     timeFilter,
   ]);
 
   return (
     <section className="module-panel transit-screen-detail" aria-labelledby="screen-detail-title">
       <div className="section-heading">
-        <h2 id="screen-detail-title">班次查询</h2>
+        <h2 id="screen-detail-title">{t('travel.screenDetail.title')}</h2>
         <span className="muted">
-          {filteredTrips.length} / {snapshot.trips.length} 个班次
+          {t('travel.screenDetail.trips', {
+            shown: filteredTrips.length,
+            total: snapshot.trips.length,
+          })}
         </span>
       </div>
 
-      <div className="screen-detail-summary" aria-label="客运大屏数据摘要">
-        <SummaryItem label="车站" value={snapshot.stations.length} />
-        <SummaryItem label="班次" value={snapshot.trips.length} />
-        <SummaryItem label="线路" value={lineOptions.length} />
-        <SummaryItem label="检票口" value={snapshot.gates.length} />
+      <div className="screen-detail-summary" aria-label={t('travel.screenDetail.summaryAria')}>
+        <SummaryItem label={t('travel.screenDetail.stations')} value={snapshot.stations.length} />
+        <SummaryItem label={t('travel.screenDetail.trip')} value={snapshot.trips.length} />
+        <SummaryItem label={t('travel.screenDetail.routes')} value={lineOptions.length} />
+        <SummaryItem label={t('travel.screenDetail.gate')} value={snapshot.gates.length} />
       </div>
 
-      <div className="screen-filter-panel" aria-label="班次筛选">
+      <div className="screen-filter-panel" aria-label={t('travel.screenDetail.filterAria')}>
         <div className="search-box screen-search-box">
           <span className="material-symbols-outlined" aria-hidden="true">
             search
           </span>
           <input
             type="search"
-            aria-label="搜索班次、线路、车站或检票口"
+            aria-label={t('travel.screenDetail.search')}
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
-            placeholder="搜索班次、线路、车站或检票口"
+            placeholder={t('travel.screenDetail.search')}
           />
           {query ? (
             <button
               className="search-clear-button"
               type="button"
-              aria-label="清空班次搜索"
+              aria-label={t('travel.screenDetail.searchClear')}
               onClick={() => setQuery('')}
             >
               <span className="material-symbols-outlined" aria-hidden="true">
@@ -101,12 +107,12 @@ export function TransitScreenDetailPanel({
 
         <div className="screen-filter-grid">
           <label>
-            <span>线路</span>
+            <span>{t('travel.screenDetail.line')}</span>
             <select
               value={lineFilter}
               onChange={(event) => setLineFilter(event.currentTarget.value)}
             >
-              <option value="all">全部线路</option>
+              <option value="all">{t('travel.screenDetail.total')}</option>
               {lineOptions.map((lineName) => (
                 <option value={lineName} key={lineName}>
                   {lineName}
@@ -115,12 +121,12 @@ export function TransitScreenDetailPanel({
             </select>
           </label>
           <label>
-            <span>车站</span>
+            <span>{t('travel.screenDetail.station')}</span>
             <select
               value={stationFilter}
               onChange={(event) => setStationFilter(event.currentTarget.value)}
             >
-              <option value="all">全部车站</option>
+              <option value="all">{t('travel.screenDetail.total')}</option>
               {stationOptions.map((stationName) => (
                 <option value={stationName} key={stationName}>
                   {stationName}
@@ -130,7 +136,7 @@ export function TransitScreenDetailPanel({
           </label>
         </div>
 
-        <div className="screen-time-filter" aria-label="时间筛选">
+        <div className="screen-time-filter" aria-label={t('travel.screenDetail.timeFilterAria')}>
           {timeOptions.map((option) => (
             <button
               className={timeFilter === option.value ? 'is-active' : ''}
@@ -141,14 +147,14 @@ export function TransitScreenDetailPanel({
               <span className="material-symbols-outlined" aria-hidden="true">
                 {option.icon}
               </span>
-              <span>{option.label}</span>
+              <span>{t(option.labelKey)}</span>
             </button>
           ))}
         </div>
       </div>
 
       {snapshot.notice ? (
-        <section className="screen-detail-notice" aria-label="大屏公告">
+        <section className="screen-detail-notice" aria-label={t('travel.screenDetail.noticeAria')}>
           <span className="material-symbols-outlined" aria-hidden="true">
             campaign
           </span>
@@ -157,12 +163,13 @@ export function TransitScreenDetailPanel({
       ) : null}
 
       {filteredTrips.length > 0 ? (
-        <div className="screen-detail-trip-list" aria-label="班次列表">
+        <div className="screen-detail-trip-list" aria-label={t('travel.screenDetail.listAria')}>
           {filteredTrips.map((trip) => (
             <TripItem
               trip={trip}
               gates={gatesByLine.get(trip.lineName) ?? []}
               stationNameById={stationNameById}
+              t={t}
               key={trip.sourceId}
             />
           ))}
@@ -172,7 +179,7 @@ export function TransitScreenDetailPanel({
           <span className="material-symbols-outlined" aria-hidden="true">
             event_busy
           </span>
-          <p>没有匹配的班次</p>
+          <p>{t('travel.screenDetail.empty')}</p>
         </div>
       )}
     </section>
@@ -183,10 +190,12 @@ function TripItem({
   trip,
   gates,
   stationNameById,
+  t,
 }: Readonly<{
   trip: TransitScreenTrip;
   gates: TransitScreenGate[];
   stationNameById: Map<string, string>;
+  t: ReturnType<typeof useI18n>['t'];
 }>) {
   return (
     <article className="screen-detail-trip-item">
@@ -196,18 +205,33 @@ function TripItem({
       </div>
       <div className="screen-detail-trip-main">
         <h3>{trip.lineName}</h3>
-        <p>{formatTripStations(trip)}</p>
-        <div className="screen-station-flow" aria-label={`${trip.lineName} 停靠站`}>
+        <p>{formatTripStations(trip, t)}</p>
+        <div
+          className="screen-station-flow"
+          aria-label={t('travel.screenDetail.stationFlowAria', { line: trip.lineName })}
+        >
           {trip.stationNames.map((stationName) => (
             <span key={stationName}>{stationName}</span>
           ))}
         </div>
       </div>
       <dl className="screen-detail-trip-meta">
-        <MetaItem label="检票口" value={formatGates(gates, stationNameById)} />
-        <MetaItem label="运行" value={trip.runtimeText ?? '待公布'} />
-        <MetaItem label="票价" value={trip.fare ?? '待公布'} />
-        <MetaItem label="运营" value={trip.operator ?? '待公布'} />
+        <MetaItem
+          label={t('travel.screenDetail.gate')}
+          value={formatGates(gates, stationNameById, t)}
+        />
+        <MetaItem
+          label={t('travel.screenDetail.runtime')}
+          value={trip.runtimeText ?? t('lineDetail.toBeAdded')}
+        />
+        <MetaItem
+          label={t('travel.screenDetail.fare')}
+          value={trip.fare ?? t('lineDetail.toBeAdded')}
+        />
+        <MetaItem
+          label={t('travel.screenDetail.operator')}
+          value={trip.operator ?? t('lineDetail.toBeAdded')}
+        />
       </dl>
     </article>
   );
@@ -231,10 +255,10 @@ function MetaItem({ label, value }: Readonly<{ label: string; value: string }>) 
   );
 }
 
-const timeOptions: Array<{ value: TimeFilter; label: string; icon: string }> = [
-  { value: 'all', label: '全部', icon: 'format_list_bulleted' },
-  { value: 'upcoming', label: '即将', icon: 'schedule' },
-  { value: 'past', label: '已过', icon: 'history' },
+const timeOptions: Array<{ value: TimeFilter; labelKey: CommonMessageKey; icon: string }> = [
+  { value: 'all', labelKey: 'travel.screenDetail.total', icon: 'format_list_bulleted' },
+  { value: 'upcoming', labelKey: 'travel.screenDetail.upcoming', icon: 'schedule' },
+  { value: 'past', labelKey: 'travel.screenDetail.past', icon: 'history' },
 ];
 
 function uniqueSorted(values: string[]): string[] {
@@ -297,6 +321,7 @@ function buildSearchText(
   trip: TransitScreenTrip,
   gates: TransitScreenGate[] | undefined,
   stationNameById: Map<string, string>,
+  t: ReturnType<typeof useI18n>['t'],
 ): string {
   return [
     trip.tripId,
@@ -306,22 +331,28 @@ function buildSearchText(
     trip.fare,
     trip.operator,
     trip.runtimeText,
-    gates ? formatGates(gates, stationNameById) : undefined,
+    gates ? formatGates(gates, stationNameById, t) : undefined,
   ]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
 }
 
-function formatTripStations(trip: TransitScreenTrip): string {
+function formatTripStations(trip: TransitScreenTrip, t: ReturnType<typeof useI18n>['t']): string {
   const first = trip.stationNames[0];
   const last = trip.stationNames[trip.stationNames.length - 1];
-  return first && last ? `${first} - ${last}` : `${trip.stationNames.length} 站`;
+  return first && last
+    ? `${first} - ${last}`
+    : t('travel.screenDetail.stationCount', { count: trip.stationNames.length });
 }
 
-function formatGates(gates: TransitScreenGate[], stationNameById: Map<string, string>): string {
+function formatGates(
+  gates: TransitScreenGate[],
+  stationNameById: Map<string, string>,
+  t: ReturnType<typeof useI18n>['t'],
+): string {
   if (gates.length === 0) {
-    return '待公布';
+    return t('lineDetail.toBeAdded');
   }
 
   return gates

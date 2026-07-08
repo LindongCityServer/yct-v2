@@ -15,14 +15,13 @@ import {
   calculateBoundsArea,
   createOfflinePackage,
   deleteOfflinePackage,
-  formatBounds,
   mergeOfflinePackagesFromAccount,
-  offlinePackageStatusLabel,
   readOfflinePackageState,
   updateOfflinePackageStatus,
   type AccountOfflinePackageRequest,
   type OfflinePackageRecord,
   type OfflinePackageState,
+  type OfflinePackageStatus,
 } from '../lib/client-offline-packages';
 import {
   clearTravelScheduleHistory,
@@ -221,7 +220,7 @@ export function AccountSettingsPanel({
     session?: YctAccountSessionSnapshot;
   };
 }>) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const ticketOrderLockedText = auth.session?.readonlyUser
     ? '账号为只读状态，Active 后可查看订单草稿。'
     : '登录后可查看订单草稿。';
@@ -661,17 +660,17 @@ export function AccountSettingsPanel({
 
     const bounds = parseOfflinePackageBounds(offlinePackageDraft);
     if (!offlinePackageDraft.name.trim()) {
-      setOfflinePackageError('请给这个离线范围起一个名称。');
+      setOfflinePackageError(t('account.offlinePackage.error.missingName'));
       return;
     }
 
     if (!bounds) {
-      setOfflinePackageError('请输入有效的 Minecraft X/Z 矩形坐标。');
+      setOfflinePackageError(t('account.offlinePackage.error.invalidBounds'));
       return;
     }
 
     if (calculateBoundsArea(bounds) <= 0) {
-      setOfflinePackageError('离线范围需要同时具有宽度和高度。');
+      setOfflinePackageError(t('account.offlinePackage.error.emptyArea'));
       return;
     }
 
@@ -736,7 +735,7 @@ export function AccountSettingsPanel({
   };
 
   const removeOfflinePackage = async (offlinePackage: OfflinePackageRecord) => {
-    if (!window.confirm(`要删除离线范围“${offlinePackage.name}”吗？`)) {
+    if (!window.confirm(t('account.offlinePackage.deleteConfirm', { name: offlinePackage.name }))) {
       return;
     }
 
@@ -1184,19 +1183,32 @@ export function AccountSettingsPanel({
               <span className="material-symbols-outlined" aria-hidden="true">
                 add_location_alt
               </span>
-              <span>新建范围</span>
+              <span>{t('account.offlinePackage.newRange')}</span>
             </button>
           </div>
           <div className="offline-package-summary">
-            <span>{offlinePackageState?.summary.total ?? 0} 个自定义范围</span>
-            <span>{offlinePackageState?.summary.refreshed ?? 0} 个已刷新基础缓存</span>
-            <span>{formatArea(offlinePackageState?.summary.totalArea ?? 0)} 方块范围</span>
+            <span>
+              {t('account.offlinePackage.summary.total', {
+                count: offlinePackageState?.summary.total ?? 0,
+              })}
+            </span>
+            <span>
+              {t('account.offlinePackage.summary.refreshed', {
+                count: offlinePackageState?.summary.refreshed ?? 0,
+              })}
+            </span>
+            <span>
+              {t('account.offlinePackage.summary.area', {
+                area: formatArea(offlinePackageState?.summary.totalArea ?? 0, locale),
+              })}
+            </span>
           </div>
           <span className="muted">
             {cacheStatusText}
-            。自定义范围当前记录边界并刷新公开基础数据，真实瓦片离线包仍等待体积上限和生成策略确认。
+            {' · '}
+            {t('account.offlinePackage.strategyNote')}
           </span>
-          <div className="offline-package-list" aria-label="自定义离线范围">
+          <div className="offline-package-list" aria-label={t('account.offlinePackage.listAria')}>
             {offlinePackageState?.packages.length ? (
               offlinePackageState.packages.map((offlinePackage) => (
                 <article className="offline-package-item" key={offlinePackage.packageId}>
@@ -1204,14 +1216,18 @@ export function AccountSettingsPanel({
                     <div>
                       <h3>{offlinePackage.name}</h3>
                       <span className={`offline-package-status is-${offlinePackage.status}`}>
-                        {offlinePackageStatusLabel(offlinePackage.status)}
+                        {formatOfflinePackageStatus(offlinePackage.status, t)}
                       </span>
                     </div>
-                    <p>{formatBounds(offlinePackage.bounds)}</p>
+                    <p>{formatOfflinePackageBounds(offlinePackage.bounds, t)}</p>
                     <small>
-                      面积 {formatArea(calculateBoundsArea(offlinePackage.bounds))} 方块
+                      {t('account.offlinePackage.area', {
+                        area: formatArea(calculateBoundsArea(offlinePackage.bounds), locale),
+                      })}
                       {offlinePackage.lastRefreshedAt
-                        ? ` · 上次刷新 ${formatDateTime(offlinePackage.lastRefreshedAt)}`
+                        ? ` · ${t('account.offlinePackage.lastRefreshed', {
+                            time: formatDateTime(offlinePackage.lastRefreshedAt, locale),
+                          })}`
                         : ''}
                       {offlinePackage.errorMessage ? ` · ${offlinePackage.errorMessage}` : ''}
                     </small>
@@ -1227,14 +1243,18 @@ export function AccountSettingsPanel({
                         sync
                       </span>
                       <span>
-                        {refreshingPackageId === offlinePackage.packageId ? '刷新中' : '刷新范围'}
+                        {refreshingPackageId === offlinePackage.packageId
+                          ? t('account.offlinePackage.refreshing')
+                          : t('account.offlinePackage.refresh')}
                       </span>
                     </button>
                     <button
                       className="icon-action-button"
                       type="button"
                       onClick={() => void removeOfflinePackage(offlinePackage)}
-                      aria-label={`删除 ${offlinePackage.name}`}
+                      aria-label={t('account.offlinePackage.deleteAria', {
+                        name: offlinePackage.name,
+                      })}
                     >
                       <span className="material-symbols-outlined" aria-hidden="true">
                         delete
@@ -1244,7 +1264,7 @@ export function AccountSettingsPanel({
                 </article>
               ))
             ) : (
-              <p className="offline-package-empty">还没有自定义离线范围。</p>
+              <p className="offline-package-empty">{t('account.offlinePackage.empty')}</p>
             )}
           </div>
         </section>
@@ -1265,14 +1285,14 @@ export function AccountSettingsPanel({
           >
             <div className="section-heading">
               <div>
-                <h2 id="offline-package-form-title">新建离线范围</h2>
-                <span className="muted">使用 Minecraft 世界坐标记录一个矩形范围。</span>
+                <h2 id="offline-package-form-title">{t('account.offlinePackage.title')}</h2>
+                <span className="muted">{t('account.offlinePackage.description')}</span>
               </div>
               <button
                 className="icon-action-button"
                 type="button"
                 onClick={() => setOfflinePackageFormOpen(false)}
-                aria-label="关闭"
+                aria-label={t('account.offlinePackage.close')}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
                   close
@@ -1281,16 +1301,16 @@ export function AccountSettingsPanel({
             </div>
             <form className="offline-package-form" onSubmit={submitOfflinePackage}>
               <label className="offline-package-name-field">
-                <span>名称</span>
+                <span>{t('account.offlinePackage.name')}</span>
                 <input
                   autoFocus
                   value={offlinePackageDraft.name}
                   onChange={(event) => updateOfflinePackageDraft('name', event.currentTarget.value)}
-                  placeholder="例如：大学城周边"
+                  placeholder={t('account.offlinePackage.namePlaceholder')}
                 />
               </label>
               <label>
-                <span>最小 X</span>
+                <span>{t('account.offlinePackage.minX')}</span>
                 <input
                   inputMode="decimal"
                   value={offlinePackageDraft.minX}
@@ -1298,7 +1318,7 @@ export function AccountSettingsPanel({
                 />
               </label>
               <label>
-                <span>最小 Z</span>
+                <span>{t('account.offlinePackage.minZ')}</span>
                 <input
                   inputMode="decimal"
                   value={offlinePackageDraft.minZ}
@@ -1306,7 +1326,7 @@ export function AccountSettingsPanel({
                 />
               </label>
               <label>
-                <span>最大 X</span>
+                <span>{t('account.offlinePackage.maxX')}</span>
                 <input
                   inputMode="decimal"
                   value={offlinePackageDraft.maxX}
@@ -1314,7 +1334,7 @@ export function AccountSettingsPanel({
                 />
               </label>
               <label>
-                <span>最大 Z</span>
+                <span>{t('account.offlinePackage.maxZ')}</span>
                 <input
                   inputMode="decimal"
                   value={offlinePackageDraft.maxZ}
@@ -1325,7 +1345,7 @@ export function AccountSettingsPanel({
                 <span className="material-symbols-outlined" aria-hidden="true">
                   add_location_alt
                 </span>
-                <span>保存范围</span>
+                <span>{t('account.offlinePackage.save')}</span>
               </button>
             </form>
             {offlinePackageError ? <p className="form-error-text">{offlinePackageError}</p> : null}
@@ -1987,19 +2007,55 @@ function parseCoordinate(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function formatArea(area: number): string {
-  return new Intl.NumberFormat('zh-CN', {
+function formatOfflinePackageStatus(
+  status: OfflinePackageStatus,
+  t: ReturnType<typeof useI18n>['t'],
+): string {
+  const statusKeys: Record<OfflinePackageStatus, CommonMessageKey> = {
+    base_cache_refreshed: 'account.offlinePackage.status.baseCacheRefreshed',
+    refresh_failed: 'account.offlinePackage.status.refreshFailed',
+    registered: 'account.offlinePackage.status.registered',
+    request_failed: 'account.offlinePackage.status.requestFailed',
+    server_requested: 'account.offlinePackage.status.serverRequested',
+  };
+
+  return t(statusKeys[status]);
+}
+
+function formatOfflinePackageBounds(
+  bounds: RectangleBounds,
+  t: ReturnType<typeof useI18n>['t'],
+): string {
+  const minX = Math.min(bounds.minX, bounds.maxX);
+  const maxX = Math.max(bounds.minX, bounds.maxX);
+  const minZ = Math.min(bounds.minZ, bounds.maxZ);
+  const maxZ = Math.max(bounds.minZ, bounds.maxZ);
+
+  return t('account.offlinePackage.bounds', {
+    maxX: formatCoordinate(maxX),
+    maxZ: formatCoordinate(maxZ),
+    minX: formatCoordinate(minX),
+    minZ: formatCoordinate(minZ),
+  });
+}
+
+function formatCoordinate(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+function formatArea(area: number, locale: LocaleCode): string {
+  return new Intl.NumberFormat(locale, {
     maximumFractionDigits: 0,
   }).format(area);
 }
 
-function formatDateTime(value: string): string {
+function formatDateTime(value: string, locale: LocaleCode): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value;
   }
 
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat(locale, {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
