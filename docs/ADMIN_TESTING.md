@@ -25,6 +25,12 @@
 pnpm admin:init <ldpassUserId>
 ```
 
+如果服务器只有 `npm` 可用但仍保留源码和 `node_modules`，需要使用 `npm run` 形式传参：
+
+```powershell
+npm run admin:init -- <ldpassUserId>
+```
+
 该命令会写入 `.yct-data/admin-memberships.json`。这个文件属于运行时数据，不应提交到 GitHub。
 
 如果当前只有 standalone 部署包，没有 pnpm、tsx 或源码脚本，可以在部署包解压后的目录运行随包附带的 PowerShell 脚本：

@@ -154,6 +154,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\init-yct-admin.ps1 -Ldpass
 
 脚本默认写入 `.yct-data\admin-memberships.json`；如果配置了 `YCT_ADMIN_STORE_PATH`，则写入该变量指向的管理员成员文件。这个文件属于运行时数据，替换部署包时要随 `.yct-data` 一起保留，不要提交到 GitHub。
 
+如果是在源码目录而不是 standalone 包内操作，`pnpm admin:init <ldpassUserId>` 和 `npm run admin:init -- <ldpassUserId>` 都可以；不要使用 `npm admin:init <ldpassUserId>`，那会被 npm 当成不存在的内置命令。
+
 如果当前重点是在排查 `ldpass` 登录回跳是否仍落到 `localhost:3300`，建议在启动前后都做这两个最小检查：
 
 1. 运行 `check-runtime-config.ps1`，确认推导出的 `redirect_uri` 是 `https://yct.shangxiaoguan.top/v2/auth/ldpass/callback` 而不是 `localhost:3300`。
