@@ -1,6 +1,6 @@
 # 管理员侧测试说明
 
-更新时间：2026-07-07
+更新时间：2026-07-08
 
 本文档记录当前阶段如何测试雨城通 v2 的后台功能。后台身份来自真实 `ldpass` 会话，YCT 只维护本地管理员成员记录；当前不提供假登录、模拟管理员或绕过 `ldpass` 的测试入口。
 
@@ -19,6 +19,8 @@
 
 拿到测试用户的 `ldpassUserId` 后，在项目根目录运行：
 
+这里的 `ldpassUserId` 必须是 `client-session` 返回的 `user.id`。`username`、邮箱、服务器账号名都不会被后台权限校验读取，填这些值即使写进成员文件，运行中的后台仍会返回“当前临东通账号不是雨城通管理员”。
+
 ```powershell
 pnpm admin:init <ldpassUserId>
 ```
@@ -31,7 +33,7 @@ pnpm admin:init <ldpassUserId>
 powershell -NoProfile -ExecutionPolicy Bypass -File .\init-yct-admin.ps1 -LdpassUserId "<ldpassUserId>"
 ```
 
-该脚本默认写入当前目录下 `.yct-data/admin-memberships.json`；如果 `.env` 或进程环境设置了 `YCT_ADMIN_STORE_PATH`，则应写入该变量指向的位置。管理员成员文件是运行时数据，替换部署包时需要和 `.env`、`.yct-data` 一起保留或迁移。
+该脚本默认写入当前目录下 `.yct-data/admin-memberships.json`；如果部署目录下的 `.env`、`.env.production`、`.env.local` 或进程环境设置了 `YCT_ADMIN_STORE_PATH`，脚本会先读取这些环境文件，再写入该变量指向的位置。管理员成员文件是运行时数据，替换部署包时需要和 `.env`、`.yct-data` 一起保留或迁移。
 
 ## 3. 启动与登录
 
