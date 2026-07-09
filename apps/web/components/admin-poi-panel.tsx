@@ -41,6 +41,15 @@ const statusFilterOptions: Array<{ value: StatusFilter; label: string }> = [
   { value: 'draft', label: '草稿' },
 ];
 
+const poiRejectReasonPresets = [
+  '坐标位置偏离实际地点，请重新选点后提交。',
+  '地点分类不准确，请选择更合适的分类后提交。',
+  '地点名称不符合当前地图命名规范，请调整后提交。',
+  '简介或链接信息不足，无法确认地点用途或来源。',
+  '投稿图片无法确认来源或与地点不匹配，请更换后提交。',
+  '该地点疑似已存在，请确认后避免重复投稿。',
+];
+
 export function AdminPoiPanel() {
   const [submissions, setSubmissions] = useState<PoiSubmission[]>([]);
   const [categories, setCategories] = useState<PoiCategory[]>([]);
@@ -720,6 +729,20 @@ function RejectPoiDialog({
             maxLength={500}
           />
         </label>
+        <div className="admin-poi-reject-presets" aria-label="常用驳回原因">
+          {poiRejectReasonPresets.map((preset) => (
+            <button
+              type="button"
+              key={preset}
+              onClick={() => {
+                setReason(preset);
+                setError('');
+              }}
+            >
+              {preset}
+            </button>
+          ))}
+        </div>
         {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
         <div className="admin-content-actions">
           <button type="button" onClick={onClose} disabled={isBusy}>

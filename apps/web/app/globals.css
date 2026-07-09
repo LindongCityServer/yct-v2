@@ -3948,6 +3948,24 @@ body .material-symbols-outlined {
   min-height: 42px;
 }
 
+.admin-poi-reject-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-1);
+}
+
+.admin-poi-reject-presets button {
+  min-height: 30px;
+  max-width: 100%;
+  padding: 0 var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  text-align: left;
+}
+
 .admin-poi-edit-coordinate {
   display: grid;
   gap: var(--yct-space-2);
