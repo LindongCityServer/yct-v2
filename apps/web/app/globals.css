@@ -3844,7 +3844,8 @@ body .material-symbols-outlined {
   background: var(--yct-color-surface);
 }
 
-.admin-poi-reject-dialog label {
+.admin-poi-reject-dialog label,
+.admin-poi-edit-dialog label {
   display: grid;
   gap: var(--yct-space-2);
   color: var(--yct-color-text-muted);
@@ -3852,14 +3853,26 @@ body .material-symbols-outlined {
   font-weight: 650;
 }
 
-.admin-poi-reject-dialog textarea {
-  min-height: 140px;
+.admin-poi-reject-dialog textarea,
+.admin-poi-edit-dialog textarea,
+.admin-poi-edit-dialog input,
+.admin-poi-edit-dialog select {
   padding: var(--yct-space-3);
   border: 1px solid var(--yct-color-border);
   border-radius: var(--yct-radius-md);
   background: var(--yct-color-surface);
   color: var(--yct-color-text);
+}
+
+.admin-poi-reject-dialog textarea,
+.admin-poi-edit-dialog textarea {
+  min-height: 140px;
   resize: vertical;
+}
+
+.admin-poi-edit-dialog input,
+.admin-poi-edit-dialog select {
+  min-height: 42px;
 }
 
 .admin-poi-dialog-error {

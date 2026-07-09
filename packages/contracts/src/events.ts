@@ -121,6 +121,13 @@ export interface PoiSubmissionImageUploadedPayload {
   sha256: string;
 }
 
+export interface PoiSubmissionUpdatedPayload {
+  poiId: string;
+  updatedBy: string;
+  updatedAt: ISODateTimeString;
+  changedFields: Array<'title' | 'categoryId' | 'description' | 'href'>;
+}
+
 export interface PoiReviewedPayload {
   poiId: string;
   revisionId?: string;
@@ -489,6 +496,7 @@ export type YctEventPayloadMap = {
   ContentAssetReviewed: ContentAssetReviewedPayload;
   PoiSubmissionImageUploaded: PoiSubmissionImageUploadedPayload;
   PoiSubmitted: PoiSubmittedPayload;
+  PoiSubmissionUpdated: PoiSubmissionUpdatedPayload;
   PoiReviewed: PoiReviewedPayload;
   PoiPublished: PoiPublishedPayload;
   PoiCategoryProfileUpdated: PoiCategoryProfileUpdatedPayload;

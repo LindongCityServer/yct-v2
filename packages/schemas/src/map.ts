@@ -139,6 +139,13 @@ export const poiSubmissionReviewDecisionSchema = z.object({
   reason: z.string().trim().max(500).optional(),
 });
 
+export const poiSubmissionAdminUpdateSchema = z.object({
+  title: nonEmptyTextSchema,
+  categoryId: idSchema,
+  description: z.string().trim().max(1000).optional(),
+  href: z.union([urlSchema, z.literal('')]).optional(),
+});
+
 export const mapMarkerSourceConfigSchema = z.object({
   id: idSchema,
   name: nonEmptyTextSchema,
@@ -155,5 +162,6 @@ export type PoiCategoryInput = z.infer<typeof poiCategorySchema>;
 export type PoiCategoryProfileUpdateInput = z.infer<typeof poiCategoryProfileUpdateSchema>;
 export type PoiSubmissionInput = z.infer<typeof poiSubmissionSchema>;
 export type PoiSubmissionReviewDecisionInput = z.infer<typeof poiSubmissionReviewDecisionSchema>;
+export type PoiSubmissionAdminUpdateInput = z.infer<typeof poiSubmissionAdminUpdateSchema>;
 export type MapMarkerSourceConfigInput = z.infer<typeof mapMarkerSourceConfigSchema>;
 export type MapFavoritesInput = z.infer<typeof mapFavoritesSchema>;

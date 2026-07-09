@@ -128,6 +128,63 @@ export async function reviewPoiSubmission(input: {
   return { ok: true, submission: updated };
 }
 
+export async function updatePoiSubmissionByAdmin(input: {
+  poiId: string;
+  actorId: string;
+  title: string;
+  categoryId: string;
+  description?: string;
+  href?: string;
+}): Promise<PoiSubmissionActionResult> {
+  const submission = await findLocalPoiSubmission(input.poiId);
+  if (!submission) {
+    return notFound();
+  }
+
+  if (submission.status !== 'pending_review') {
+    return {
+      ok: false,
+      status: 409,
+      error: 'invalid_poi_submission_state',
+      message: '当前仅允许修正待审核的 POI 投稿。',
+    };
+  }
+
+  const patch = {
+    title: input.title.trim(),
+    categoryId: input.categoryId.trim(),
+    description: normalizeOptionalText(input.description),
+    href: normalizeOptionalText(input.href),
+  };
+  const changedFields = getChangedPoiSubmissionFields(submission, patch);
+  if (changedFields.length === 0) {
+    return { ok: true, submission };
+  }
+
+  const updated = await updateLocalPoiSubmission(input.poiId, (current) => ({
+    ...current,
+    ...patch,
+  }));
+
+  if (updated) {
+    await emitEvent(
+      'PoiSubmissionUpdated',
+      {
+        type: 'admin',
+        id: input.actorId,
+      },
+      {
+        poiId: updated.id,
+        updatedBy: input.actorId,
+        updatedAt: new Date().toISOString(),
+        changedFields,
+      },
+    );
+  }
+
+  return { ok: true, submission: updated };
+}
+
 export async function publishPoiSubmission(input: {
   poiId: string;
   actorId: string;
@@ -188,6 +245,20 @@ function invalidTransition(reason?: string): PoiSubmissionActionResult {
     error: 'invalid_poi_submission_state',
     message: reason ?? '当前 POI 投稿状态不允许执行该操作。',
   };
+}
+
+function normalizeOptionalText(value: string | undefined): string | undefined {
+  const normalized = value?.trim() ?? '';
+  return normalized || undefined;
+}
+
+function getChangedPoiSubmissionFields(
+  submission: PoiSubmission,
+  patch: Pick<PoiSubmission, 'title' | 'categoryId' | 'description' | 'href'>,
+): Array<'title' | 'categoryId' | 'description' | 'href'> {
+  return (['title', 'categoryId', 'description', 'href'] as const).filter(
+    (field) => (submission[field] ?? '') !== (patch[field] ?? ''),
+  );
 }
 
 async function emitEvent<TType extends YctEventType>(

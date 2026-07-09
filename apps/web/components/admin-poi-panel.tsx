@@ -20,6 +20,13 @@ interface PoiConflictHint {
   distanceBlocks: number | null;
 }
 
+interface PoiSubmissionEditInput {
+  title: string;
+  categoryId: string;
+  description: string;
+  href: string;
+}
+
 const defaultMarkerIconBaseUrl = 'https://map.shangxiaoguan.top/';
 
 const statusFilterOptions: Array<{ value: StatusFilter; label: string }> = [
@@ -46,6 +53,7 @@ export function AdminPoiPanel() {
   const [query, setQuery] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const [rejectTarget, setRejectTarget] = useState<PoiSubmission | null>(null);
+  const [editTarget, setEditTarget] = useState<PoiSubmission | null>(null);
 
   const categoryById = useMemo(() => {
     const entries = categories.map((category) => [category.id, category] as const);
@@ -224,6 +232,35 @@ export function AdminPoiPanel() {
     }
   };
 
+  const updateSubmission = async (
+    poiId: string,
+    input: PoiSubmissionEditInput,
+  ): Promise<string | null> => {
+    setIsBusy(true);
+    try {
+      const response = await fetch(
+        appPath(`/api/admin/map/poi-submissions/${encodeURIComponent(poiId)}`),
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+      );
+      const data = (await response.json()) as PoiSubmission & { message?: string };
+      if (!response.ok) {
+        return data.message ?? 'POI 投稿修正失败';
+      }
+
+      setSubmissions((current) =>
+        current.map((submission) => (submission.id === poiId ? data : submission)),
+      );
+      setStatusText(`已修正 ${data.title} 的投稿资料`);
+      return null;
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const resetFilters = () => {
     setStatusFilter('todo');
     setCategoryFilter('all');
@@ -323,6 +360,7 @@ export function AdminPoiPanel() {
             isExpanded={expandedIds.has(submission.id)}
             key={submission.id}
             onCopy={(message) => setStatusText(message)}
+            onEdit={() => setEditTarget(submission)}
             onReject={() => setRejectTarget(submission)}
             onRunAction={runAction}
             onToggleExpanded={() => toggleExpanded(submission.id)}
@@ -342,6 +380,22 @@ export function AdminPoiPanel() {
           onSubmit={async (reason) => {
             await runAction(rejectTarget.id, 'reject', reason);
             setRejectTarget(null);
+          }}
+        />
+      ) : null}
+
+      {editTarget ? (
+        <EditPoiSubmissionDialog
+          categories={categories}
+          isBusy={isBusy}
+          submission={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSubmit={async (input) => {
+            const error = await updateSubmission(editTarget.id, input);
+            if (!error) {
+              setEditTarget(null);
+            }
+            return error;
           }}
         />
       ) : null}
@@ -369,6 +423,7 @@ function PoiSubmissionReviewItem({
   isBusy,
   isExpanded,
   onCopy,
+  onEdit,
   onReject,
   onRunAction,
   onToggleExpanded,
@@ -380,6 +435,7 @@ function PoiSubmissionReviewItem({
   isBusy: boolean;
   isExpanded: boolean;
   onCopy: (message: string) => void;
+  onEdit: () => void;
   onReject: () => void;
   onRunAction: (poiId: string, action: 'approve' | 'reject' | 'publish', reason?: string) => void;
   onToggleExpanded: () => void;
@@ -465,6 +521,13 @@ function PoiSubmissionReviewItem({
           }
         >
           复制几何
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || submission.status !== 'pending_review'}
+          onClick={onEdit}
+        >
+          修正资料
         </button>
         <button
           type="button"
@@ -624,6 +687,120 @@ function RejectPoiDialog({
           </button>
           <button type="submit" disabled={isBusy}>
             确认驳回
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function EditPoiSubmissionDialog({
+  categories,
+  isBusy,
+  onClose,
+  onSubmit,
+  submission,
+}: Readonly<{
+  categories: PoiCategory[];
+  isBusy: boolean;
+  onClose: () => void;
+  onSubmit: (input: PoiSubmissionEditInput) => Promise<string | null>;
+  submission: PoiSubmission;
+}>) {
+  const [form, setForm] = useState<PoiSubmissionEditInput>(() => ({
+    title: submission.title,
+    categoryId: submission.categoryId,
+    description: submission.description ?? '',
+    href: submission.href ?? '',
+  }));
+  const [error, setError] = useState('');
+
+  const updateForm = (patch: Partial<PoiSubmissionEditInput>) => {
+    setForm((current) => ({ ...current, ...patch }));
+    setError('');
+  };
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!form.title.trim()) {
+      setError('请填写地点名称。');
+      return;
+    }
+
+    if (!form.categoryId.trim()) {
+      setError('请选择地点分类。');
+      return;
+    }
+
+    const submitError = await onSubmit({
+      title: form.title.trim(),
+      categoryId: form.categoryId.trim(),
+      description: form.description.trim(),
+      href: form.href.trim(),
+    });
+    if (submitError) {
+      setError(submitError);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <form
+        className="modal-panel admin-poi-edit-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-poi-edit-title"
+        onMouseDown={(event) => event.stopPropagation()}
+        onSubmit={submit}
+      >
+        <div className="section-heading">
+          <h2 id="admin-poi-edit-title">修正 POI 投稿</h2>
+          <span className="muted">仅限待审核投稿的基础资料</span>
+        </div>
+        <label>
+          <span>地点名称</span>
+          <input
+            value={form.title}
+            onChange={(event) => updateForm({ title: event.currentTarget.value })}
+            maxLength={200}
+          />
+        </label>
+        <label>
+          <span>分类</span>
+          <select
+            value={form.categoryId}
+            onChange={(event) => updateForm({ categoryId: event.currentTarget.value })}
+          >
+            {categories.map((category) => (
+              <option value={category.id} key={category.id}>
+                {formatCategoryName(category.id, category)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>简介</span>
+          <textarea
+            value={form.description}
+            onChange={(event) => updateForm({ description: event.currentTarget.value })}
+            maxLength={1000}
+          />
+        </label>
+        <label>
+          <span>链接</span>
+          <input
+            value={form.href}
+            onChange={(event) => updateForm({ href: event.currentTarget.value })}
+            placeholder="https://..."
+          />
+        </label>
+        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
+        <div className="admin-content-actions">
+          <button type="button" onClick={onClose} disabled={isBusy}>
+            取消
+          </button>
+          <button type="submit" disabled={isBusy}>
+            保存修正
           </button>
         </div>
       </form>
