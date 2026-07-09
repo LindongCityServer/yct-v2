@@ -83,8 +83,8 @@ pnpm web:artifact
 - 额外把 `deploy-yct-web.ps1`、`start-yct-web.ps1`、`init-yct-admin.ps1`、运行时配置检查、烟雾检查和统一任务脚本一起放进部署包根目录。
 - 补齐 `apps/web/.next/static` 和 `apps/web/public`。
 - 补齐 pnpm workspace 下 Next standalone 可能漏掉的 `@next/*`、`@swc/*` 等运行时依赖。
-- 跳过本机上传素材目录 `apps/web/public/content-assets`。
-- 不打包 `.env`、`.env.*`、`.yct-data`、日志和本地缓存。
+- 跳过本机上传素材目录 `apps/web/public/content-assets`，运行时静态资源目录 `runtime-assets` 也由部署脚本从旧部署目录保留。
+- 不打包 `.env`、`.env.*`、`.yct-data`、`runtime-assets`、日志和本地缓存。
 - 在 `artifacts/` 下生成 `yct-web-时间戳.zip`、`yct-web-时间戳.tar.gz` 或 `yct-web-时间戳.tar`。
 - 压缩时先写入临时文件，成功后再改名为最终产物，避免失败时留下看似可用的坏包。
 - 在 Windows 上生成 zip 时优先使用 7-Zip，避免 `tar.exe -a` 或 `Compress-Archive` 处理大量文件时非常慢；需要更稳定的大包压缩时仍可使用 `tar.gz`。
@@ -196,7 +196,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\run-yct-internal-tasks.ps1
 - `-ForceOperationsReminderRefresh`：即使公告签名没变化，也强制触发一次运营提醒重算。
 - `-Now 2026-07-07T12:00:00+08:00`：为通知和票务过期处理注入调试时间。
 
-把 `artifacts/yct-web-*` 上传到服务器后，推荐先解压到一个新的临时目录，再从这个临时目录执行包内的 `deploy-yct-web.ps1`。这个脚本会自动把旧部署目录中的环境文件、`.yct-data` 和 `apps\web\public\content-assets` 迁走，替换部署文件，再把这些持久数据放回去。
+把 `artifacts/yct-web-*` 上传到服务器后，推荐先解压到一个新的临时目录，再从这个临时目录执行包内的 `deploy-yct-web.ps1`。这个脚本会自动把旧部署目录中的环境文件、`.yct-data`、`runtime-assets` 和 `apps\web\public\content-assets` 迁走，替换部署文件，再把这些持久数据放回去。
 
 推荐命令：
 
@@ -217,6 +217,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -Target
 - `.env.local`
 - `.env.production.local`
 - `.yct-data`
+- `runtime-assets`
 - `apps\web\public\content-assets`
 
 执行前仍然要确认旧进程已经停止，并且新包已经解压到一个和正式部署目录不同的新目录里。不要把新包直接覆盖解压到仍保留旧 `.next` 文件的目录里；Next.js 的 `server.js`、`.next/server` 和 `.next/static` 必须来自同一次构建，否则会出现页面能打开但客户端 chunk 404、路线规划或周边地点等交互失效的问题。
@@ -239,6 +240,7 @@ foreach ($relativePath in @(
   ".env.local",
   ".env.production.local",
   ".yct-data",
+  "runtime-assets",
   "apps\web\public\content-assets"
 )) {
   $source = Join-Path $deployRoot $relativePath
@@ -258,6 +260,7 @@ foreach ($relativePath in @(
   ".env.local",
   ".env.production.local",
   ".yct-data",
+  "runtime-assets",
   "apps\web\public\content-assets"
 )) {
   $source = Join-Path $backupRoot $relativePath
@@ -273,7 +276,7 @@ foreach ($relativePath in @(
 
 ### 需要迁移哪些数据
 
-如果你是在“旧版 YCT v2 部署目录”上做原地升级，默认至少要保留这两类内容：
+如果你是在“旧版 YCT v2 部署目录”上做原地升级，默认至少要保留这三类内容：
 
 1. `.yct-data`
 2. `runtime-assets`
@@ -487,5 +490,5 @@ node >=20.9.0
 
 - 增加正式生产启动/停止脚本，和当前 `web:dev:*` 脚本区分。
 - 将 `.yct-data` 替换为数据库与 Transactional Outbox。
-- 将后台上传素材迁移到对象存储或共享静态资源目录。下一阶段优先考虑在部署包根目录下放置与 `start-yct-web.ps1`、`deploy-yct-web.ps1` 平级的运行时静态资源目录，例如 `runtime-assets\content-assets`、`runtime-assets\poi-icons` 和后续可能的 `runtime-assets\legacy-assets`；部署脚本负责从旧目录迁移、回填和保留这些目录，应用通过配置生成公开 URL。这样替换 standalone 包时不需要反复把上传素材塞回 `apps\web\public` 内部目录，也更适合多版本并行解压和切换。
+- 将后台上传素材迁移到对象存储或共享静态资源目录。当前部署脚本已经会保留与 `start-yct-web.ps1`、`deploy-yct-web.ps1` 平级的 `runtime-assets` 目录，POI 分类图标默认写入 `runtime-assets\poi-icons`；下一阶段再把内容素材、旧资源和后续可能的 `legacy-assets` 逐步迁到同类运行时静态资源目录，并由应用通过配置生成公开 URL。这样替换 standalone 包时不需要反复把上传素材塞回 `apps\web\public` 内部目录，也更适合多版本并行解压和切换。
 - 增加 GitHub Actions 构建 artifact，避免本机手动打包。

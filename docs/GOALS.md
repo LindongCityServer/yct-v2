@@ -607,7 +607,7 @@ DESIGN.md
 - 已补充管理后台走查：新增 `docs/ADMIN_BACKOFFICE_REVIEW.md`，重点评估 POI 后台当前“调试列表”形态的缺口，明确先做状态/分类/关键词筛选、分类图标与名称展示、驳回理由弹窗和详情展开，再推进地图审核工作台、几何编辑、重复检测、图片素材审核和正式数据治理。
 - 已处理第一版：POI 后台审核列表新增待审核/待发布/已发布/当前结果摘要、状态筛选、分类筛选、关键词搜索、分类图标与分类名展示、投稿详情展开和带理由的驳回弹窗；`/api/map/poi-categories` 同步返回图标基础 URL，便于后台展示分类默认图标。完整分类图标增删改、一类多图标管理、地图内嵌审核、几何编辑、重复检测、区域代表 POI、水域/道路高度约束、交通线路后台协同和地点多语种维护仍按 `docs/ADMIN_BACKOFFICE_REVIEW.md` 后续阶段推进。
 - 已处理补充：POI 分类后台新增本地覆盖配置第一版，管理员可在 `/admin/map-poi` 展开“分类与图标配置”，编辑分类名称、排序、公开投稿开关、默认图标和一类多图标文件列表；配置写入 `.yct-data/poi-category-profile-store.json`，公共 `/api/map/poi-categories` 会返回基础分类与管理员覆盖后的合并结果，并发布 `PoiCategoryProfileUpdated` 事件。分类行已支持上传图标文件，文件默认落盘到部署目录下 `runtime-assets/poi-icons`，通过 `/api/map/poi-icons/<file>` 读取并发布 `PoiCategoryIconUploaded` 事件。后续仍需补真实图标删除、批量预览、可读性检查和完整运行时静态资源迁移脚本。
-- 已记录部署方向：后台上传素材、POI 图标等运行时静态资源后续优先迁移到部署包根目录下与启动脚本平级的 `runtime-assets` 类目录，由部署脚本负责保留、迁移和回填，避免 standalone 包替换时继续把运行时文件塞回 `apps/web/public` 内部。
+- 已处理部署补充：部署脚本默认会保留并回填部署包根目录下与启动脚本平级的 `runtime-assets` 目录；POI 分类图标当前默认写入 `runtime-assets/poi-icons`，替换 standalone 包时不再需要手工额外搬这一类运行时图标。后台内容素材仍暂存 `apps/web/public/content-assets`，后续再逐步迁入同类运行时静态资源目录或对象存储。
 
 2026-07-03 本地开发站点打开缓慢排查，当前进展：
 

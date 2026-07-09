@@ -10,6 +10,7 @@ param(
     ".env.local",
     ".env.production.local",
     ".yct-data",
+    "runtime-assets",
     "apps\\web\\public\\content-assets"
   ),
   [switch]$StartAfterDeploy,
