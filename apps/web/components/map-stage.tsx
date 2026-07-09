@@ -15,7 +15,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from 'react';
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { toBlob } from 'html-to-image';
+import { getFontEmbedCSS, toBlob } from 'html-to-image';
 import { appPath } from '../lib/app-paths';
 import { readMapFavoriteMarkerIds, writeMapFavoriteMarkerIds } from '../lib/client-map-favorites';
 import {
@@ -2726,12 +2726,7 @@ export function MapStage() {
                 ) : (
                   <span className="map-guide-marker-pin">
                     <span className="material-symbols-outlined map-guide-marker-icon">
-                      location_on
-                    </span>
-                    <span className="map-guide-marker-pin-label">
-                      {marker.kind === 'route-origin'
-                        ? t('map.route.marker.origin')
-                        : t('map.route.marker.destination')}
+                      {marker.kind === 'route-origin' ? 'origin' : 'flag'}
                     </span>
                   </span>
                 )}
@@ -3663,7 +3658,9 @@ function RoutePlanDraftCard({
       <div className="map-route-plan-top">
         <div className="map-route-endpoint-list">
           <div className="map-route-endpoint-row">
-            <span className="map-route-endpoint-dot is-origin" aria-hidden="true" />
+            <span className="material-symbols-outlined map-route-endpoint-icon is-origin" aria-hidden="true">
+              origin
+            </span>
             {editingEndpoint === 'origin' ? (
               <input
                 autoFocus
@@ -3686,7 +3683,12 @@ function RoutePlanDraftCard({
             </button>
           </div>
           <div className="map-route-endpoint-row">
-            <span className="map-route-endpoint-dot is-destination" aria-hidden="true" />
+            <span
+              className="material-symbols-outlined map-route-endpoint-icon is-destination"
+              aria-hidden="true"
+            >
+              flag
+            </span>
             {editingEndpoint === 'destination' ? (
               <input
                 autoFocus
@@ -4413,7 +4415,9 @@ function createRoutePlaceStep(
   icon?: string,
   color?: string,
 ): RoutePlanStep {
-  return { kind: 'place', label, role, icon, color };
+  const resolvedIcon =
+    icon ?? (role === 'origin' ? 'origin' : role === 'destination' ? 'flag' : undefined);
+  return { kind: 'place', label, role, icon: resolvedIcon, color };
 }
 
 function createRouteWalkStep(label: string, details?: RoutePlanStepDetail[]): RoutePlanStep {
@@ -6868,7 +6872,7 @@ function getRouteShareStepMarkerIcon(step: MapShareStep): string | undefined {
   }
 
   if (step.role === 'origin') {
-    return 'trip_origin';
+    return 'origin';
   }
 
   if (step.role === 'destination') {
@@ -6973,10 +6977,14 @@ async function copyTextOrUseSystemShare(value: string, shareData: ShareData): Pr
 
 async function createMapShareImageBlob(previewElement: HTMLElement): Promise<Blob> {
   await document.fonts?.ready;
+  const fontEmbedCSS = await getFontEmbedCSS(previewElement, {
+    preferredFontFormat: 'woff2',
+  });
   const blob = await toBlob(previewElement, {
     cacheBust: true,
+    fontEmbedCSS,
     pixelRatio: Math.min(window.devicePixelRatio || 2, 3),
-    skipFonts: true,
+    preferredFontFormat: 'woff2',
   });
 
   if (!blob) {
