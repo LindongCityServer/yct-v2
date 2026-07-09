@@ -328,6 +328,19 @@ export interface ServiceEntryPublishedPayload {
   publishedAt: ISODateTimeString;
 }
 
+export interface PoiCategoryProfileUpdatedPayload {
+  categories: Array<{
+    id: string;
+    name: string;
+    iconFileNames: string[];
+    defaultIconFileName: string;
+    acceptsPublicSubmissions: boolean;
+    sortOrder: number;
+  }>;
+  updatedBy: string;
+  updatedAt: ISODateTimeString;
+}
+
 export interface OperationsStrongReminderRulesUpdatedPayload {
   ruleIds: string[];
   ruleCount: number;
@@ -460,6 +473,7 @@ export type YctEventPayloadMap = {
   PoiSubmitted: PoiSubmittedPayload;
   PoiReviewed: PoiReviewedPayload;
   PoiPublished: PoiPublishedPayload;
+  PoiCategoryProfileUpdated: PoiCategoryProfileUpdatedPayload;
   TransitDataRevisionImported: TransitDataRevisionImportedPayload;
   TransitDataRevisionSubmitted: TransitDataRevisionSubmittedPayload;
   TransitDataRevisionReviewed: TransitDataRevisionReviewedPayload;

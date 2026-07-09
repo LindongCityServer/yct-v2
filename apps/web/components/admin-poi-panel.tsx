@@ -133,7 +133,7 @@ export function AdminPoiPanel() {
   };
 
   const loadCategories = async () => {
-    const response = await fetch(appPath('/api/map/poi-categories'), { cache: 'no-store' });
+    const response = await fetch(appPath('/api/admin/map/poi-categories'), { cache: 'no-store' });
     const data = (await response.json()) as {
       items?: PoiCategory[];
       iconBaseUrl?: string;
@@ -271,6 +271,15 @@ export function AdminPoiPanel() {
           重置筛选
         </button>
       </div>
+
+      <PoiCategoryProfileEditor
+        categories={categories}
+        iconBaseUrl={categoryIconBaseUrl}
+        onSaved={(message) => {
+          setStatusText(message);
+          void loadCategories();
+        }}
+      />
 
       <div className="admin-content-list" aria-label="POI 投稿记录">
         {filteredSubmissions.map((submission) => (
@@ -561,6 +570,156 @@ function RejectPoiDialog({
   );
 }
 
+interface PoiCategoryDraft {
+  id: string;
+  name: string;
+  acceptsPublicSubmissions: boolean;
+  sortOrder: number;
+  defaultIconFileName: string;
+  iconFileNamesText: string;
+}
+
+function PoiCategoryProfileEditor({
+  categories,
+  iconBaseUrl,
+  onSaved,
+}: Readonly<{
+  categories: PoiCategory[];
+  iconBaseUrl: string;
+  onSaved: (message: string) => void;
+}>) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [drafts, setDrafts] = useState<PoiCategoryDraft[]>(() => createCategoryDrafts(categories));
+  const [localStatus, setLocalStatus] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setDrafts(createCategoryDrafts(categories));
+  }, [categories]);
+
+  const updateDraft = (categoryId: string, patch: Partial<PoiCategoryDraft>) => {
+    setDrafts((current) =>
+      current.map((draft) => (draft.id === categoryId ? { ...draft, ...patch } : draft)),
+    );
+  };
+
+  const saveCategories = async () => {
+    setIsSaving(true);
+    setLocalStatus('');
+    try {
+      const payload = {
+        categories: drafts.map(categoryDraftToInput),
+      };
+      const response = await fetch(appPath('/api/admin/map/poi-categories'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = (await response.json()) as { message?: string; issues?: unknown[] };
+      if (!response.ok) {
+        setLocalStatus(data.message ?? '分类配置保存失败');
+        return;
+      }
+
+      onSaved('POI 分类配置已保存');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <section className="admin-poi-category-config" aria-labelledby="admin-poi-category-title">
+      <div className="admin-poi-category-config-header">
+        <div>
+          <h2 id="admin-poi-category-title">分类与图标配置</h2>
+          <p className="muted">
+            管理分类名称、默认图标、图标文件列表、排序和是否开放公开投稿。
+          </p>
+        </div>
+        <button type="button" onClick={() => setIsOpen((value) => !value)}>
+          {isOpen ? '收起配置' : '展开配置'}
+        </button>
+      </div>
+      {isOpen ? (
+        <>
+          <div className="admin-poi-category-grid">
+            {drafts.map((draft) => (
+              <article className="admin-poi-category-row" key={draft.id}>
+                <PoiCategoryIcon
+                  category={categoryDraftToInput(draft)}
+                  iconBaseUrl={iconBaseUrl}
+                />
+                <label>
+                  <span>分类 ID</span>
+                  <input value={draft.id} disabled />
+                </label>
+                <label>
+                  <span>名称</span>
+                  <input
+                    value={draft.name}
+                    onChange={(event) => updateDraft(draft.id, { name: event.currentTarget.value })}
+                  />
+                </label>
+                <label>
+                  <span>排序</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100000"
+                    value={draft.sortOrder}
+                    onChange={(event) =>
+                      updateDraft(draft.id, { sortOrder: Number(event.currentTarget.value) })
+                    }
+                  />
+                </label>
+                <label>
+                  <span>默认图标</span>
+                  <input
+                    value={draft.defaultIconFileName}
+                    onChange={(event) =>
+                      updateDraft(draft.id, { defaultIconFileName: event.currentTarget.value })
+                    }
+                  />
+                </label>
+                <label className="admin-poi-category-icons">
+                  <span>图标文件列表</span>
+                  <textarea
+                    value={draft.iconFileNamesText}
+                    onChange={(event) =>
+                      updateDraft(draft.id, { iconFileNamesText: event.currentTarget.value })
+                    }
+                  />
+                </label>
+                <label className="checkbox-row admin-poi-category-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={draft.acceptsPublicSubmissions}
+                    onChange={(event) =>
+                      updateDraft(draft.id, {
+                        acceptsPublicSubmissions: event.currentTarget.checked,
+                      })
+                    }
+                  />
+                  <span>允许公开投稿</span>
+                </label>
+              </article>
+            ))}
+          </div>
+          <div className="admin-content-actions">
+            <button type="button" onClick={() => setDrafts(createCategoryDrafts(categories))}>
+              重置当前配置
+            </button>
+            <button type="button" disabled={isSaving || drafts.length === 0} onClick={saveCategories}>
+              保存分类配置
+            </button>
+          </div>
+          {localStatus ? <p className="muted">{localStatus}</p> : null}
+        </>
+      ) : null}
+    </section>
+  );
+}
+
 function PoiCategoryIcon({
   category,
   iconBaseUrl,
@@ -767,6 +926,49 @@ function formatDate(value: string): string {
 
 function formatCategoryName(categoryId: string, category?: PoiCategory): string {
   return category?.name && category.name !== categoryId ? `${category.name} (${categoryId})` : categoryId;
+}
+
+function createCategoryDrafts(categories: PoiCategory[]): PoiCategoryDraft[] {
+  return [...categories]
+    .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'zh-CN'))
+    .map((category) => ({
+      id: category.id,
+      name: category.name,
+      acceptsPublicSubmissions: category.acceptsPublicSubmissions,
+      sortOrder: category.sortOrder,
+      defaultIconFileName: category.iconMapping.defaultIconFileName,
+      iconFileNamesText: category.iconMapping.iconFileNames.join('\n'),
+    }));
+}
+
+function categoryDraftToInput(draft: PoiCategoryDraft): PoiCategory {
+  const iconFileNames = splitIconFileNames(draft.iconFileNamesText);
+  const defaultIconFileName =
+    draft.defaultIconFileName.trim() || iconFileNames[0] || `${draft.id}.png`;
+  const normalizedIconFileNames = Array.from(new Set([defaultIconFileName, ...iconFileNames]));
+
+  return {
+    id: draft.id,
+    name: draft.name.trim() || draft.id,
+    acceptsPublicSubmissions: draft.acceptsPublicSubmissions,
+    sortOrder: Number.isFinite(draft.sortOrder) ? Math.max(0, Math.floor(draft.sortOrder)) : 0,
+    iconMapping: {
+      categoryId: draft.id,
+      defaultIconFileName,
+      iconFileNames: normalizedIconFileNames,
+    },
+  };
+}
+
+function splitIconFileNames(value: string): string[] {
+  return Array.from(
+    new Set(
+      value
+        .split(/[\n,，;；]+/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
 }
 
 function matchesStatusFilter(status: PoiSubmissionStatus, filter: StatusFilter): boolean {

@@ -81,6 +81,41 @@ export const poiCategorySchema = z.object({
   sortOrder: z.number().int().min(0).max(100_000),
 });
 
+export const poiCategoryProfileUpdateSchema = z.object({
+  categories: z
+    .array(poiCategorySchema)
+    .max(200)
+    .superRefine((categories, context) => {
+      const seenIds = new Set<string>();
+      categories.forEach((category, index) => {
+        if (seenIds.has(category.id)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'POI 分类 ID 不能重复',
+            path: [index, 'id'],
+          });
+        }
+        seenIds.add(category.id);
+
+        if (category.iconMapping.categoryId !== category.id) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: '图标映射分类 ID 必须与分类 ID 一致',
+            path: [index, 'iconMapping', 'categoryId'],
+          });
+        }
+
+        if (!category.iconMapping.iconFileNames.includes(category.iconMapping.defaultIconFileName)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: '默认图标必须包含在分类图标列表中',
+            path: [index, 'iconMapping', 'defaultIconFileName'],
+          });
+        }
+      });
+    }),
+});
+
 const poiSubmissionImageUrlSchema = z.union([
   urlSchema,
   z
@@ -117,6 +152,7 @@ export const mapFavoritesSchema = z.object({
 
 export type TileProviderConfigInput = z.infer<typeof tileProviderConfigSchema>;
 export type PoiCategoryInput = z.infer<typeof poiCategorySchema>;
+export type PoiCategoryProfileUpdateInput = z.infer<typeof poiCategoryProfileUpdateSchema>;
 export type PoiSubmissionInput = z.infer<typeof poiSubmissionSchema>;
 export type PoiSubmissionReviewDecisionInput = z.infer<typeof poiSubmissionReviewDecisionSchema>;
 export type MapMarkerSourceConfigInput = z.infer<typeof mapMarkerSourceConfigSchema>;

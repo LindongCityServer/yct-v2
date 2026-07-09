@@ -484,5 +484,5 @@ node >=20.9.0
 
 - 增加正式生产启动/停止脚本，和当前 `web:dev:*` 脚本区分。
 - 将 `.yct-data` 替换为数据库与 Transactional Outbox。
-- 将后台上传素材迁移到对象存储或共享静态资源目录。
+- 将后台上传素材迁移到对象存储或共享静态资源目录。下一阶段优先考虑在部署包根目录下放置与 `start-yct-web.ps1`、`deploy-yct-web.ps1` 平级的运行时静态资源目录，例如 `runtime-assets\content-assets`、`runtime-assets\poi-icons` 和后续可能的 `runtime-assets\legacy-assets`；部署脚本负责从旧目录迁移、回填和保留这些目录，应用通过配置生成公开 URL。这样替换 standalone 包时不需要反复把上传素材塞回 `apps\web\public` 内部目录，也更适合多版本并行解压和切换。
 - 增加 GitHub Actions 构建 artifact，避免本机手动打包。
