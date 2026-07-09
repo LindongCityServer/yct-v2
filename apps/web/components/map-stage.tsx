@@ -407,6 +407,8 @@ interface RoadRoutingSnapshot {
 
 type RoadRoutingStatus = 'loading' | 'ready';
 
+type RoadRouteStrategy = 'shortest' | 'fewer-turns';
+
 type MapShareMode = 'link' | 'text' | 'image';
 
 type MapShareTarget =
@@ -4101,16 +4103,17 @@ function buildRoutePlanOptions(input: {
   );
 
   if (input.enabledModes.walk) {
+    const directWalkAccessOptions = {
+      destinationAccessCandidates: destinationRoadAccessCandidates,
+      originAccessCandidates: originRoadAccessCandidates,
+    };
     const directWalkRoute = buildWalkRouteBetweenCoordinates(
       draft.origin,
       draft.destination,
       roadGraph,
       routeCache,
       input.t,
-      {
-        destinationAccessCandidates: destinationRoadAccessCandidates,
-        originAccessCandidates: originRoadAccessCandidates,
-      },
+      directWalkAccessOptions,
     );
     const directDistance = directWalkRoute.distance + endpointAccessDistance;
     const directMinutes =
@@ -4169,6 +4172,62 @@ function buildRoutePlanOptions(input: {
         ? input.t('map.route.walkNote.road')
         : input.t('map.route.walkNote.direct'),
     });
+
+    const fewerTurnWalkRoute = buildWalkRouteBetweenCoordinates(
+      draft.origin,
+      draft.destination,
+      roadGraph,
+      routeCache,
+      input.t,
+      directWalkAccessOptions,
+      'fewer-turns',
+    );
+    if (shouldAddFewerTurnWalkRoute(directWalkRoute, fewerTurnWalkRoute)) {
+      const fewerTurnDistance = fewerTurnWalkRoute.distance + endpointAccessDistance;
+      const fewerTurnMinutes =
+        estimateResolvedWalkRouteMinutes(fewerTurnWalkRoute) +
+        estimateRouteMinutes(endpointAccessDistance, 72);
+      const fewerTurnCoordinates = buildRouteTraceCoordinates(draft, fewerTurnWalkRoute.coordinates);
+      options.push({
+        id: 'walk-fewer-turns',
+        title: input.t('map.route.walkFewerTurns'),
+        summary: `${formatRoutePlanDistance(fewerTurnDistance, input.t)} · ${input.t(
+          'map.route.summary.roadEstimate',
+        )}`,
+        icon: 'conversion_path',
+        color:
+          routeTransportModeOptions.find((option) => option.mode === 'walk')?.color ??
+          'var(--yct-color-text-secondary)',
+        coordinates: fewerTurnCoordinates,
+        traceSegments: [createRouteTraceSegment('walk', fewerTurnCoordinates)],
+        roadLabels: createRouteRoadLabelsFromSegments(fewerTurnWalkRoute.roadSegments),
+        markerIds: getRouteEndpointMarkerIds(draft),
+        estimatedDistance: fewerTurnDistance,
+        estimatedMinutes: fewerTurnMinutes,
+        transferCount: 0,
+        walkingDistance: fewerTurnDistance,
+        steps: [
+          createRoutePlaceStep(input.t('map.route.depart', { name: draft.originLabel }), 'origin'),
+          ...createRouteEndpointAccessSteps(draft, 'origin', input.t),
+          createRouteWalkStep(
+            input.t('map.route.walkRoadWithDistance', {
+              distance: formatRoutePlanDistance(fewerTurnWalkRoute.distance, input.t),
+              duration: formatRouteStepMinutes(
+                estimateRouteMinutes(fewerTurnWalkRoute.distance, 64),
+                input.t,
+              ),
+            }),
+            fewerTurnWalkRoute.details,
+          ),
+          ...createRouteEndpointAccessSteps(draft, 'destination', input.t),
+          createRoutePlaceStep(
+            input.t('map.route.arrive', { name: draft.destinationLabel }),
+            'destination',
+          ),
+        ],
+        note: input.t('map.route.walkNote.road'),
+      });
+    }
   }
 
   options.push(...buildTransitRoutePlanOptions({ ...input, draft, roadGraph, routeCache }));
@@ -4189,6 +4248,41 @@ function createRoutePlanningCache(): RoutePlanningCache {
     pathByNodePair: new Map(),
     roadRouteByPair: new Map(),
   };
+}
+
+function shouldAddFewerTurnWalkRoute(
+  directRoute: ResolvedWalkRoute,
+  fewerTurnRoute: ResolvedWalkRoute,
+): boolean {
+  if (!directRoute.usesRoadGraph || !fewerTurnRoute.usesRoadGraph) {
+    return false;
+  }
+
+  if (areCoordinateChainsEquivalent(directRoute.coordinates, fewerTurnRoute.coordinates)) {
+    return false;
+  }
+
+  const directTurns = countRoadRouteTurns(directRoute.roadSegments ?? []);
+  const fewerTurns = countRoadRouteTurns(fewerTurnRoute.roadSegments ?? []);
+  if (fewerTurns >= directTurns) {
+    return false;
+  }
+
+  return fewerTurnRoute.distance <= directRoute.distance * 1.55 + 240;
+}
+
+function areCoordinateChainsEquivalent(
+  left: Array<[number, number]>,
+  right: Array<[number, number]>,
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((coordinate, index) => {
+    const other = right[index];
+    return Boolean(other && getCoordinateDistance(coordinate, other) < 0.5);
+  });
 }
 
 function getRouteOptionLimit(enabledModes: EnabledRouteTransportModes): number {
@@ -5007,7 +5101,12 @@ function findRoadRoutePath(
   graph: RoadRouteGraph,
   originId: string,
   destinationId: string,
+  strategy: RoadRouteStrategy = 'shortest',
 ): RoadRoutePath | undefined {
+  if (strategy === 'fewer-turns') {
+    return findFewerTurnRoadRoutePath(graph, originId, destinationId);
+  }
+
   if (originId === destinationId) {
     const node = graph.nodesById.get(originId);
     return node
@@ -5100,6 +5199,182 @@ function findRoadRoutePath(
   }
 
   return { coordinates, distance, nodes, segments };
+}
+
+function findFewerTurnRoadRoutePath(
+  graph: RoadRouteGraph,
+  originId: string,
+  destinationId: string,
+): RoadRoutePath | undefined {
+  const originNode = graph.nodesById.get(originId);
+  if (!originNode) {
+    return undefined;
+  }
+  if (originId === destinationId) {
+    return {
+      coordinates: [originNode.coordinate],
+      distance: 0,
+      nodes: [originNode],
+      segments: [],
+    };
+  }
+
+  type State = {
+    distance: number;
+    edge?: RoadRouteEdge;
+    key: string;
+    nodeId: string;
+    previousKey?: string;
+    score: number;
+  };
+
+  const startKey = `${originId}|`;
+  const states = new Map<string, State>([
+    [
+      startKey,
+      {
+        distance: 0,
+        key: startKey,
+        nodeId: originId,
+        score: 0,
+      },
+    ],
+  ]);
+  const unsettled = new Set([startKey]);
+  const settled = new Set<string>();
+  let destinationKey: string | undefined;
+
+  while (unsettled.size > 0) {
+    const currentKey = findNearestUnsettledRoadRouteState(unsettled, states);
+    if (!currentKey) {
+      break;
+    }
+    unsettled.delete(currentKey);
+    settled.add(currentKey);
+
+    const current = states.get(currentKey);
+    if (!current) {
+      continue;
+    }
+    if (current.nodeId === destinationId) {
+      destinationKey = currentKey;
+      break;
+    }
+
+    for (const edge of graph.adjacency.get(current.nodeId) ?? []) {
+      const nextKey = `${edge.to}|${current.nodeId}`;
+      if (settled.has(nextKey)) {
+        continue;
+      }
+
+      const turnPenalty = current.edge ? getRoadRouteTurnPenalty(current.edge, edge) : 0;
+      const nextScore = current.score + edge.distance + turnPenalty;
+      const existing = states.get(nextKey);
+      if (existing && existing.score <= nextScore) {
+        continue;
+      }
+
+      states.set(nextKey, {
+        distance: current.distance + edge.distance,
+        edge,
+        key: nextKey,
+        nodeId: edge.to,
+        previousKey: currentKey,
+        score: nextScore,
+      });
+      unsettled.add(nextKey);
+    }
+  }
+
+  if (!destinationKey) {
+    return undefined;
+  }
+
+  const edges: RoadRouteEdge[] = [];
+  const pathNodeIds: string[] = [];
+  let currentKey: string | undefined = destinationKey;
+  while (currentKey) {
+    const state = states.get(currentKey);
+    if (!state) {
+      return undefined;
+    }
+    pathNodeIds.push(state.nodeId);
+    if (state.edge) {
+      edges.push(state.edge);
+    }
+    currentKey = state.previousKey;
+  }
+
+  const nodes = pathNodeIds
+    .reverse()
+    .map((id) => graph.nodesById.get(id))
+    .filter((node): node is RoadRouteNode => Boolean(node));
+  const orderedEdges = edges.reverse();
+  if (nodes.length < 2 || orderedEdges.length === 0) {
+    return undefined;
+  }
+
+  const coordinates: Array<[number, number]> = [];
+  const segments: RoadRouteInstructionSegment[] = [];
+  let distance = 0;
+  for (const edge of orderedEdges) {
+    appendRouteSegmentCoordinates(coordinates, edge.coordinates);
+    distance += edge.distance;
+    segments.push({
+      coordinates: edge.coordinates,
+      kind: edge.kind,
+      label: edge.label,
+    });
+  }
+
+  return { coordinates, distance, nodes, segments };
+}
+
+function findNearestUnsettledRoadRouteState(
+  unsettled: Set<string>,
+  states: Map<string, { score: number }>,
+): string | undefined {
+  let bestKey: string | undefined;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const key of unsettled) {
+    const score = states.get(key)?.score ?? Number.POSITIVE_INFINITY;
+    if (score < bestScore) {
+      bestKey = key;
+      bestScore = score;
+    }
+  }
+  return bestKey;
+}
+
+function getRoadRouteTurnPenalty(previousEdge: RoadRouteEdge, nextEdge: RoadRouteEdge): number {
+  const previousVector = getCoordinateChainVector(previousEdge.coordinates);
+  const nextVector = getCoordinateChainVector(nextEdge.coordinates);
+  const previousLength = Math.hypot(previousVector[0], previousVector[1]);
+  const nextLength = Math.hypot(nextVector[0], nextVector[1]);
+  if (previousLength === 0 || nextLength === 0) {
+    return 0;
+  }
+
+  const cosine = clampNumber(
+    (previousVector[0] * nextVector[0] + previousVector[1] * nextVector[1]) /
+      (previousLength * nextLength),
+    -1,
+    1,
+  );
+  const angle = Math.acos(cosine);
+  const anglePenalty = Math.pow(angle / Math.PI, 1.25) * 920;
+  const roadChangePenalty = previousEdge.label === nextEdge.label ? 0 : 120;
+  const connectionPenalty = nextEdge.kind === 'connection' ? 80 : 0;
+  return anglePenalty + roadChangePenalty + connectionPenalty;
+}
+
+function getCoordinateChainVector(coordinates: Array<[number, number]>): [number, number] {
+  const start = coordinates[0];
+  const end = coordinates.at(-1);
+  if (!start || !end) {
+    return [0, 0];
+  }
+  return [end[0] - start[0], end[1] - start[1]];
 }
 
 function buildRoadRouteStepDetails(
@@ -5211,9 +5486,18 @@ function buildWalkRouteBetweenCoordinates(
   routeCache?: RoutePlanningCache,
   t?: Translate,
   accessOptions?: RoadRouteAccessOptions,
+  strategy: RoadRouteStrategy = 'shortest',
 ): ResolvedWalkRoute {
   const roadRoute = roadGraph
-    ? findRoadRouteBetweenCoordinates(origin, destination, roadGraph, routeCache, t, accessOptions)
+    ? findRoadRouteBetweenCoordinates(
+        origin,
+        destination,
+        roadGraph,
+        routeCache,
+        t,
+        accessOptions,
+        strategy,
+      )
     : undefined;
   if (roadRoute) {
     return {
@@ -6326,8 +6610,9 @@ function findRoadRouteBetweenCoordinates(
   routeCache?: RoutePlanningCache,
   t?: Translate,
   accessOptions?: RoadRouteAccessOptions,
+  strategy: RoadRouteStrategy = 'shortest',
 ): ResolvedRoadRoute | undefined {
-  const routeCacheKey = getRoadRouteCacheKey(origin, destination, accessOptions);
+  const routeCacheKey = getRoadRouteCacheKey(origin, destination, accessOptions, strategy);
   const cachedRoute = routeCache?.roadRouteByPair.get(routeCacheKey);
   if (cachedRoute !== undefined) {
     return cachedRoute ?? undefined;
@@ -6348,6 +6633,7 @@ function findRoadRouteBetweenCoordinates(
 
   const pathCache = routeCache?.pathByNodePair ?? new Map<string, RoadRoutePath | undefined>();
   let bestRoute: ResolvedRoadRoute | undefined;
+  let bestRouteScore = Number.POSITIVE_INFINITY;
 
   for (const originAccess of originAccessCandidates) {
     for (const destinationAccess of destinationAccessCandidates) {
@@ -6358,8 +6644,12 @@ function findRoadRouteBetweenCoordinates(
         destinationAccess,
         t,
       );
-      if (sameSegmentRoute && (!bestRoute || sameSegmentRoute.distance < bestRoute.distance)) {
+      const sameSegmentScore = sameSegmentRoute
+        ? getRoadRouteStrategyScore(sameSegmentRoute, strategy)
+        : Number.POSITIVE_INFINITY;
+      if (sameSegmentRoute && sameSegmentScore < bestRouteScore) {
         bestRoute = sameSegmentRoute;
+        bestRouteScore = sameSegmentScore;
       }
 
       for (const originNodeId of [originAccess.startNodeId, originAccess.endNodeId]) {
@@ -6376,10 +6666,15 @@ function findRoadRouteBetweenCoordinates(
             originAccess,
             originNodeId,
             pathCache,
+            strategy,
             t,
           });
-          if (route && (!bestRoute || route.distance < bestRoute.distance)) {
+          const routeScore = route
+            ? getRoadRouteStrategyScore(route, strategy)
+            : Number.POSITIVE_INFINITY;
+          if (route && routeScore < bestRouteScore) {
             bestRoute = route;
+            bestRouteScore = routeScore;
           }
         }
       }
@@ -6388,6 +6683,56 @@ function findRoadRouteBetweenCoordinates(
 
   routeCache?.roadRouteByPair.set(routeCacheKey, bestRoute ?? null);
   return bestRoute;
+}
+
+function getRoadRouteStrategyScore(
+  route: Pick<ResolvedRoadRoute, 'distance' | 'roadSegments'>,
+  strategy: RoadRouteStrategy,
+): number {
+  if (strategy === 'shortest') {
+    return route.distance;
+  }
+
+  return route.distance + countRoadRouteTurns(route.roadSegments) * 520;
+}
+
+function countRoadRouteTurns(segments: readonly RoadRouteInstructionSegment[]): number {
+  let turns = 0;
+  let previousVector: [number, number] | undefined;
+  let previousLabel: string | undefined;
+
+  for (const segment of segments) {
+    if (segment.coordinates.length < 2) {
+      continue;
+    }
+
+    const vector = getCoordinateChainVector(segment.coordinates);
+    const vectorLength = Math.hypot(vector[0], vector[1]);
+    if (vectorLength === 0) {
+      continue;
+    }
+
+    if (previousVector) {
+      const previousLength = Math.hypot(previousVector[0], previousVector[1]);
+      const cosine = previousLength
+        ? clampNumber(
+            (previousVector[0] * vector[0] + previousVector[1] * vector[1]) /
+              (previousLength * vectorLength),
+            -1,
+            1,
+          )
+        : 1;
+      const angle = Math.acos(cosine);
+      if (angle > Math.PI / 7 || (previousLabel && previousLabel !== segment.label)) {
+        turns += 1;
+      }
+    }
+
+    previousVector = vector;
+    previousLabel = segment.label;
+  }
+
+  return turns;
 }
 
 function findRoadAccessCandidates(
@@ -6459,8 +6804,10 @@ function getRoadRouteCacheKey(
   origin: [number, number],
   destination: [number, number],
   accessOptions?: RoadRouteAccessOptions,
+  strategy: RoadRouteStrategy = 'shortest',
 ): string {
   return [
+    strategy,
     `${formatCoordinateCacheKey(origin)}->${formatCoordinateCacheKey(destination)}`,
     formatRoadAccessCandidatesCacheKey(accessOptions?.originAccessCandidates),
     formatRoadAccessCandidatesCacheKey(accessOptions?.destinationAccessCandidates),
@@ -6659,6 +7006,7 @@ function buildGraphRoadRouteCandidate(input: {
   originAccess: RoadAccessCandidate;
   originNodeId: string;
   pathCache: Map<string, RoadRoutePath | undefined>;
+  strategy: RoadRouteStrategy;
   t?: Translate;
 }):
   | {
@@ -6674,11 +7022,11 @@ function buildGraphRoadRouteCandidate(input: {
     return undefined;
   }
 
-  const pathCacheKey = `${input.originNodeId}->${input.destinationNodeId}`;
+  const pathCacheKey = `${input.strategy}:${input.originNodeId}->${input.destinationNodeId}`;
   if (!input.pathCache.has(pathCacheKey)) {
     input.pathCache.set(
       pathCacheKey,
-      findRoadRoutePath(input.graph, input.originNodeId, input.destinationNodeId),
+      findRoadRoutePath(input.graph, input.originNodeId, input.destinationNodeId, input.strategy),
     );
   }
   const roadPath = input.pathCache.get(pathCacheKey);

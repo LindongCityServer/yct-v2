@@ -446,6 +446,7 @@ export type CommonMessageKey =
   | 'map.route.transitNote.transfer'
   | 'map.route.useMapCenter'
   | 'map.route.walkDirect'
+  | 'map.route.walkFewerTurns'
   | 'map.route.walkFromAccess'
   | 'map.route.walkNote.direct'
   | 'map.route.walkNote.road'
@@ -1269,6 +1270,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.turn.straight': '直行',
     'map.route.useMapCenter': '使用地图中心',
     'map.route.walkDirect': '步行直达',
+    'map.route.walkFewerTurns': '少转弯步行',
     'map.route.walkFromAccess': '经 {access} 步行至终点 {distance} {duration}',
     'map.route.walkNote.direct': '当前未找到可连通道路图，步行暂按直线估算。',
     'map.route.walkNote.road': '步行默认优先使用旧地图道路端点图和 100 格连通候选；无法连通的片段会回退直线估算。',
@@ -2094,6 +2096,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.turn.straight': '直行',
     'map.route.useMapCenter': '使用地圖中心',
     'map.route.walkDirect': '步行直達',
+    'map.route.walkFewerTurns': '少轉彎步行',
     'map.route.walkFromAccess': '經 {access} 步行至終點 {distance} {duration}',
     'map.route.walkNote.direct': '目前未找到可連通道路圖，步行暫按直線估算。',
     'map.route.walkNote.road': '步行預設優先使用舊地圖道路端點圖和 100 格連通候選；無法連通的片段會回退直線估算。',
@@ -2930,6 +2933,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.turn.straight': 'Continue straight',
     'map.route.useMapCenter': 'Use map center',
     'map.route.walkDirect': 'Walk directly',
+    'map.route.walkFewerTurns': 'Fewer-turn walk',
     'map.route.walkFromAccess': 'Walk from {access} to destination {distance} {duration}',
     'map.route.walkNote.direct': 'No connected road graph was found, so walking is estimated as a straight line for now.',
     'map.route.walkNote.road': 'Walking prefers the legacy road endpoint graph and 100-block connection candidates; disconnected segments fall back to straight-line estimates.',
