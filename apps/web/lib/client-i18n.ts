@@ -499,6 +499,7 @@ export type CommonMessageKey =
   | 'operations.social.qqChannel'
   | 'operations.social.wechat'
   | 'operations.socialAria'
+  | 'operations.startsAt'
   | 'operations.strongReminder'
   | 'operations.validUntil'
   | 'page.account'
@@ -1326,6 +1327,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operations.social.qqChannel': 'QQ 频道',
     'operations.social.wechat': '微信',
     'operations.socialAria': '社交与社区链接',
+    'operations.startsAt': '开始于 {date}',
     'operations.strongReminder': '强提醒',
     'operations.validUntil': '有效至 {date}',
     'page.account': '账号设置',
@@ -2152,6 +2154,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operations.social.qqChannel': 'QQ 頻道',
     'operations.social.wechat': '微信',
     'operations.socialAria': '社交與社群連結',
+    'operations.startsAt': '開始於 {date}',
     'operations.strongReminder': '強提醒',
     'operations.validUntil': '有效至 {date}',
     'page.account': '帳號設定',
@@ -2989,6 +2992,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operations.social.qqChannel': 'QQ Channel',
     'operations.social.wechat': 'WeChat',
     'operations.socialAria': 'Social and community links',
+    'operations.startsAt': 'Starts at {date}',
     'operations.strongReminder': 'Important reminders',
     'operations.validUntil': 'Valid until {date}',
     'page.account': 'Account Settings',

@@ -131,7 +131,7 @@ export function OperationsHome({
               : t('operations.noStrongReminder')}
           </span>
         </div>
-        {activeReminders.length > 0 ? <ReminderList items={activeReminders} /> : null}
+        {activeReminders.length > 0 ? <ReminderList items={activeReminders} t={t} /> : null}
       </section>
 
       <section className="feed-panel" aria-label={t('operations.feedAria')}>
@@ -206,22 +206,28 @@ export function OperationsHome({
   );
 }
 
-function ReminderList({ items }: Readonly<{ items: OperationsStrongReminderItem[] }>) {
+function ReminderList({
+  items,
+  t,
+}: Readonly<{ items: OperationsStrongReminderItem[]; t: Translate }>) {
   return (
     <div className="operations-reminder-list">
       {items.map((item) => (
-        <ReminderCard item={item} key={item.id} />
+        <ReminderCard item={item} key={item.id} t={t} />
       ))}
     </div>
   );
 }
 
-function ReminderCard({ item }: Readonly<{ item: OperationsStrongReminderItem }>) {
+function ReminderCard({
+  item,
+  t,
+}: Readonly<{ item: OperationsStrongReminderItem; t: Translate }>) {
   const className = ['operations-reminder-item', `tone-${item.tone}`].join(' ');
   const windowText = item.displayEndDate
-    ? `有效至 ${item.displayEndDate}`
+    ? t('operations.validUntil', { date: item.displayEndDate })
     : item.displayStartDate
-      ? `开始于 ${item.displayStartDate}`
+      ? t('operations.startsAt', { date: item.displayStartDate })
       : undefined;
   const icon = iconForReminderTone(item.tone);
   const content = (
