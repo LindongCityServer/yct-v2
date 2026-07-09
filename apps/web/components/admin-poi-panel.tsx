@@ -2,6 +2,7 @@
 
 import type {
   MapGeometry,
+  MapMarkerSnapshot,
   PoiCategory,
   PoiSubmission,
   PoiSubmissionStatus,
@@ -11,6 +12,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 
 type StatusFilter = PoiSubmissionStatus | 'all' | 'todo';
+type MapMarker = MapMarkerSnapshot['markers'][number];
+
+interface PoiConflictHint {
+  marker: MapMarker;
+  reasons: string[];
+  distanceBlocks: number | null;
+}
 
 const defaultMarkerIconBaseUrl = 'https://map.shangxiaoguan.top/';
 
@@ -28,6 +36,7 @@ const statusFilterOptions: Array<{ value: StatusFilter; label: string }> = [
 export function AdminPoiPanel() {
   const [submissions, setSubmissions] = useState<PoiSubmission[]>([]);
   const [categories, setCategories] = useState<PoiCategory[]>([]);
+  const [mapMarkers, setMapMarkers] = useState<MapMarker[]>([]);
   const [categoryIconBaseUrl, setCategoryIconBaseUrl] = useState(defaultMarkerIconBaseUrl);
   const [statusText, setStatusText] = useState('正在读取 POI 投稿');
   const [categoryStatusText, setCategoryStatusText] = useState('正在读取 POI 分类');
@@ -119,6 +128,13 @@ export function AdminPoiPanel() {
     [categoryById, categoryFilter, query, sortedSubmissions, statusFilter],
   );
 
+  const conflictHintsBySubmissionId = useMemo(() => {
+    const entries = submissions.map(
+      (submission) => [submission.id, buildPoiConflictHints(submission, mapMarkers)] as const,
+    );
+    return new Map(entries);
+  }, [mapMarkers, submissions]);
+
   const loadSubmissions = async () => {
     const response = await fetch(appPath('/api/admin/map/poi-submissions'), { cache: 'no-store' });
     const data = (await response.json()) as { items?: PoiSubmission[]; message?: string };
@@ -152,9 +168,25 @@ export function AdminPoiPanel() {
     setCategoryStatusText(items.length ? `已读取 ${items.length} 个分类` : '暂无可用 POI 分类');
   };
 
+  const loadMapMarkers = async () => {
+    const response = await fetch(appPath('/api/map/markers'), { cache: 'no-store' });
+    const data = (await response.json()) as {
+      snapshot?: MapMarkerSnapshot;
+      message?: string;
+      meta?: { message?: string };
+    };
+    if (!response.ok) {
+      setStatusText(data.meta?.message ?? data.message ?? '地图标记快照暂不可用，无法生成重复提示。');
+      return;
+    }
+
+    setMapMarkers(data.snapshot?.markers ?? []);
+  };
+
   useEffect(() => {
     void loadSubmissions();
     void loadCategories();
+    void loadMapMarkers();
   }, []);
 
   const runAction = async (
@@ -286,6 +318,7 @@ export function AdminPoiPanel() {
           <PoiSubmissionReviewItem
             category={categoryById.get(submission.categoryId)}
             iconBaseUrl={categoryIconBaseUrl}
+            conflictHints={conflictHintsBySubmissionId.get(submission.id) ?? []}
             isBusy={isBusy}
             isExpanded={expandedIds.has(submission.id)}
             key={submission.id}
@@ -331,6 +364,7 @@ function AdminPoiMetric({
 
 function PoiSubmissionReviewItem({
   category,
+  conflictHints,
   iconBaseUrl,
   isBusy,
   isExpanded,
@@ -341,6 +375,7 @@ function PoiSubmissionReviewItem({
   submission,
 }: Readonly<{
   category?: PoiCategory;
+  conflictHints: PoiConflictHint[];
   iconBaseUrl: string;
   isBusy: boolean;
   isExpanded: boolean;
@@ -389,6 +424,7 @@ function PoiSubmissionReviewItem({
           {submission.reviewReason ? ` · ${submission.reviewReason}` : ''}
         </p>
         {submission.description ? <p>{submission.description}</p> : null}
+        {conflictHints.length > 0 ? <PoiConflictHintList hints={conflictHints} /> : null}
         {isExpanded ? (
           <PoiSubmissionDetail
             category={category}
@@ -453,6 +489,31 @@ function PoiSubmissionReviewItem({
         </button>
       </div>
     </article>
+  );
+}
+
+function PoiConflictHintList({ hints }: Readonly<{ hints: PoiConflictHint[] }>) {
+  return (
+    <div className="admin-poi-conflict-list" aria-label="可能重复或冲突的地图标记">
+      <strong>可能冲突</strong>
+      <div>
+        {hints.map((hint) => (
+          <a
+            className="admin-poi-conflict-chip"
+            href={buildMarkerFocusHref(hint.marker)}
+            key={hint.marker.id}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span>{hint.marker.label}</span>
+            <small>
+              {hint.reasons.join('、')}
+              {hint.distanceBlocks !== null ? ` · 约 ${Math.round(hint.distanceBlocks)} 格` : ''}
+            </small>
+          </a>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1072,6 +1133,65 @@ function formatDate(value: string): string {
 
 function formatCategoryName(categoryId: string, category?: PoiCategory): string {
   return category?.name && category.name !== categoryId ? `${category.name} (${categoryId})` : categoryId;
+}
+
+function buildPoiConflictHints(submission: PoiSubmission, markers: MapMarker[]): PoiConflictHint[] {
+  const submissionCoordinate = getGeometryRepresentativeCoordinate(submission.geometry);
+  const normalizedSubmissionTitle = normalizeSearchText(submission.title);
+  const ownPublishedMarkerId = `poi-${submission.id}`;
+
+  return markers
+    .filter((marker) => marker.id !== ownPublishedMarkerId)
+    .map((marker) => {
+      const markerCoordinate = getGeometryRepresentativeCoordinate(marker.geometry);
+      const distanceBlocks =
+        submissionCoordinate && markerCoordinate
+          ? distanceBetweenCoordinates(submissionCoordinate, markerCoordinate)
+          : null;
+      const normalizedMarkerTitle = normalizeSearchText(marker.label);
+      const isSameName =
+        normalizedMarkerTitle.length > 0 && normalizedMarkerTitle === normalizedSubmissionTitle;
+      const isNearby = distanceBlocks !== null && distanceBlocks <= 120;
+      const isSameCategoryNearby =
+        marker.categoryId === submission.categoryId && distanceBlocks !== null && distanceBlocks <= 220;
+      const reasons = [
+        isSameName ? '同名' : '',
+        isNearby ? '近距离' : '',
+        isSameCategoryNearby ? '同分类附近' : '',
+      ].filter(Boolean);
+
+      return reasons.length > 0
+        ? ({
+            marker,
+            reasons,
+            distanceBlocks,
+          } satisfies PoiConflictHint)
+        : null;
+    })
+    .filter((hint): hint is PoiConflictHint => Boolean(hint))
+    .sort(comparePoiConflictHints)
+    .slice(0, 5);
+}
+
+function comparePoiConflictHints(left: PoiConflictHint, right: PoiConflictHint): number {
+  const leftSameName = left.reasons.includes('同名') ? 0 : 1;
+  const rightSameName = right.reasons.includes('同名') ? 0 : 1;
+  if (leftSameName !== rightSameName) {
+    return leftSameName - rightSameName;
+  }
+
+  return (left.distanceBlocks ?? Number.POSITIVE_INFINITY)
+    - (right.distanceBlocks ?? Number.POSITIVE_INFINITY)
+    || left.marker.label.localeCompare(right.marker.label, 'zh-CN');
+}
+
+function distanceBetweenCoordinates(left: [number, number], right: [number, number]): number {
+  return Math.hypot(left[0] - right[0], left[1] - right[1]);
+}
+
+function buildMarkerFocusHref(marker: MapMarker): string {
+  const params = new URLSearchParams({ marker: marker.id });
+  return `${appPath('/map')}?${params.toString()}`;
 }
 
 function createCategoryDrafts(categories: PoiCategory[]): PoiCategoryDraft[] {

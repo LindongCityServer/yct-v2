@@ -3742,6 +3742,53 @@ body .material-symbols-outlined {
   color: var(--yct-color-success-strong, #0d6b49);
 }
 
+.admin-poi-conflict-list {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-2);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in oklab, var(--yct-color-warning, #b87900) 10%, var(--yct-color-surface-panel));
+}
+
+.admin-poi-conflict-list > strong {
+  color: var(--yct-color-warning-strong, #8a5a00);
+  font-size: 13px;
+}
+
+.admin-poi-conflict-list > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-1);
+}
+
+.admin-poi-conflict-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-1);
+  max-width: 100%;
+  padding: var(--yct-space-1) var(--yct-space-2);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text-secondary);
+  text-decoration: none;
+}
+
+.admin-poi-conflict-chip span,
+.admin-poi-conflict-chip small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-poi-conflict-chip span {
+  color: var(--yct-color-text);
+}
+
+.admin-poi-conflict-chip small {
+  color: var(--yct-color-text-muted);
+}
+
 .admin-poi-detail {
   display: grid;
   gap: var(--yct-space-2);
