@@ -157,7 +157,7 @@ interface ProjectedGuideMarker {
   label: string;
   left: number;
   top: number;
-  kind: 'default-anchor' | 'route-origin' | 'route-destination';
+  kind: 'default-anchor' | 'route-origin' | 'route-destination' | 'shared-coordinate';
 }
 
 interface ProjectedRoadTrace {
@@ -495,6 +495,12 @@ interface SharedRoutePlanState {
   selectedOptionId?: string;
 }
 
+interface SharedCoordinateFocusState {
+  coordinate: [number, number];
+  key: string;
+  label?: string;
+}
+
 interface ScaleBarInfo {
   distance: number;
   pixelWidth: number;
@@ -745,6 +751,9 @@ export function MapStage() {
     null,
   );
   const [appliedSharedRoutePlanKey, setAppliedSharedRoutePlanKey] = useState<string | null>(null);
+  const [appliedSharedCoordinateFocusKey, setAppliedSharedCoordinateFocusKey] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     mapViewRef.current = mapView;
@@ -946,6 +955,10 @@ export function MapStage() {
     [searchParams],
   );
   const sharedRoutePlan = useMemo(() => readMapSharedRoutePlan(searchParams), [searchParams]);
+  const sharedCoordinateFocus = useMemo(
+    () => readMapSharedCoordinateFocus(searchParams),
+    [searchParams],
+  );
   const centerableMarkers = useMemo(
     () => markerSnapshot.filter(isCenterableMarker),
     [markerSnapshot],
@@ -1666,6 +1679,32 @@ export function MapStage() {
     setAppliedSharedRoutePlanKey(sharedRoutePlan.key);
   }, [appliedSharedRoutePlanKey, sharedRoutePlan, viewportSize]);
 
+  useEffect(() => {
+    if (!sharedCoordinateFocus) {
+      if (appliedSharedCoordinateFocusKey) {
+        setAppliedSharedCoordinateFocusKey(null);
+      }
+      return;
+    }
+
+    if (appliedSharedCoordinateFocusKey === sharedCoordinateFocus.key) {
+      return;
+    }
+
+    setFocusedMarkerId(null);
+    setRoutePlanDraft(null);
+    setEditingRouteEndpoint(null);
+    setRouteEndpointQuery('');
+    setNearbySearchCenter(null);
+    setMapView((current) => ({
+      ...current,
+      centerX: sharedCoordinateFocus.coordinate[0],
+      centerZ: sharedCoordinateFocus.coordinate[1],
+      zoom: Math.max(current.zoom, mapDefaults.defaultZoom),
+    }));
+    setAppliedSharedCoordinateFocusKey(sharedCoordinateFocus.key);
+  }, [appliedSharedCoordinateFocusKey, sharedCoordinateFocus]);
+
   const toggleFavoriteMarker = (marker: CenterableMarker) => {
     const label = formatMarkerDisplayName(marker.label);
     const next = new Set(favoriteMarkerIds);
@@ -2148,13 +2187,25 @@ export function MapStage() {
       if (routeDestination) {
         markers.push(routeDestination);
       }
+    } else if (sharedCoordinateFocus) {
+      const sharedMarker = projectCoordinateMarker(
+        'shared-coordinate',
+        sharedCoordinateFocus.label ?? formatPoint(sharedCoordinateFocus.coordinate),
+        sharedCoordinateFocus.coordinate,
+        mapView,
+        viewportSize,
+        40,
+      );
+      if (sharedMarker) {
+        markers.push(sharedMarker);
+      }
     }
     if (defaultAnchor) {
       markers.push(defaultAnchor);
     }
 
     return markers;
-  }, [mapView, routePlanDraft, t, viewportSize]);
+  }, [mapView, routePlanDraft, sharedCoordinateFocus, t, viewportSize]);
 
   const hasMapOverlay =
     projectedGuideMarkers.length > 0 ||
@@ -2791,7 +2842,7 @@ export function MapStage() {
                 ) : (
                   <span className="map-guide-marker-pin">
                     <span className="material-symbols-outlined map-guide-marker-icon">
-                      {marker.kind === 'route-origin' ? 'location_on' : 'flag'}
+                      {marker.kind === 'route-destination' ? 'flag' : 'location_on'}
                     </span>
                   </span>
                 )}
@@ -7549,6 +7600,33 @@ function readMapSharedFocusKey(searchParams: Pick<URLSearchParams, 'get'>): stri
     searchParams.get('l') ?? searchParams.get('line') ?? searchParams.get('lineId'),
   );
   return lineKey ? ensureTransitLineFocusKey(lineKey) : null;
+}
+
+function readMapSharedCoordinateFocus(
+  searchParams: Pick<URLSearchParams, 'get' | 'toString'>,
+): SharedCoordinateFocusState | null {
+  const compactCoordinate = parseCoordinateParam(
+    searchParams.get('c') ?? searchParams.get('coordinate'),
+  );
+  const xValue = searchParams.get('x');
+  const zValue = searchParams.get('z');
+  const x = xValue === null ? Number.NaN : Number(xValue);
+  const z = zValue === null ? Number.NaN : Number(zValue);
+  const coordinate =
+    compactCoordinate ??
+    (Number.isFinite(x) && Number.isFinite(z) ? ([x, z] as [number, number]) : null);
+  if (!coordinate) {
+    return null;
+  }
+  const label =
+    normalizeMapSharedFocusValue(searchParams.get('label') ?? searchParams.get('name')) ??
+    undefined;
+
+  return {
+    coordinate,
+    key: searchParams.toString(),
+    label,
+  };
 }
 
 function readMapSharedRoutePlan(

@@ -841,7 +841,8 @@ body .material-symbols-outlined {
 }
 
 .map-guide-marker.is-route-origin,
-.map-guide-marker.is-route-destination {
+.map-guide-marker.is-route-destination,
+.map-guide-marker.is-shared-coordinate {
   z-index: 5;
   transform: translate(-50%, -100%);
 }
@@ -864,7 +865,8 @@ body .material-symbols-outlined {
 }
 
 .map-guide-marker.is-route-origin .map-guide-marker-icon,
-.map-guide-marker.is-route-destination .map-guide-marker-icon {
+.map-guide-marker.is-route-destination .map-guide-marker-icon,
+.map-guide-marker.is-shared-coordinate .map-guide-marker-icon {
   font-size: 34px;
 }
 
@@ -874,6 +876,10 @@ body .material-symbols-outlined {
 
 .map-guide-marker.is-route-destination {
   color: #ffa800;
+}
+
+.map-guide-marker.is-shared-coordinate {
+  color: var(--yct-color-accent);
 }
 
 .map-guide-marker-pin {
@@ -3684,7 +3690,11 @@ body .material-symbols-outlined {
   gap: var(--yct-space-2);
 }
 
-.admin-content-actions button {
+.admin-content-actions button,
+.admin-action-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 34px;
   padding: 0 var(--yct-space-3);
   border: 1px solid var(--yct-color-border);
@@ -3692,6 +3702,7 @@ body .material-symbols-outlined {
   background: var(--yct-color-surface-panel);
   color: var(--yct-color-text-secondary);
   font-weight: 600;
+  text-decoration: none;
 }
 
 .admin-content-actions input[type='datetime-local'] {

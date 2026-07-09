@@ -76,49 +76,118 @@ export function AdminPoiPanel() {
 
       <div className="admin-content-list" aria-label="POI 投稿记录">
         {sortedSubmissions.map((submission) => (
-          <article className="admin-content-item" key={submission.id}>
-            <div>
-              <strong>{submission.title}</strong>
-              <p className="muted">
-                {submission.categoryId} · {statusLabel(submission.status)} ·{' '}
-                {geometryLabel(submission.geometry)}
-              </p>
-              <p className="muted">
-                投稿人：{submission.submittedBy}
-                {submission.submittedAt ? ` · ${formatDate(submission.submittedAt)}` : ''}
-                {submission.reviewReason ? ` · ${submission.reviewReason}` : ''}
-              </p>
-              {submission.description ? <p>{submission.description}</p> : null}
-              {submission.href ? <p className="muted">链接：{submission.href}</p> : null}
-              {submission.imageUrl ? <PoiSubmissionImagePreview submission={submission} /> : null}
-            </div>
-            <div className="admin-content-actions">
-              <button
-                type="button"
-                disabled={isBusy || submission.status !== 'pending_review'}
-                onClick={() => runAction(submission.id, 'approve')}
-              >
-                通过
-              </button>
-              <button
-                type="button"
-                disabled={isBusy || submission.status !== 'pending_review'}
-                onClick={() => runAction(submission.id, 'reject')}
-              >
-                驳回
-              </button>
-              <button
-                type="button"
-                disabled={isBusy || submission.status !== 'approved'}
-                onClick={() => runAction(submission.id, 'publish')}
-              >
-                发布
-              </button>
-            </div>
-          </article>
+          <PoiSubmissionReviewItem
+            isBusy={isBusy}
+            key={submission.id}
+            onCopy={(message) => setStatusText(message)}
+            onRunAction={runAction}
+            submission={submission}
+          />
         ))}
       </div>
     </section>
+  );
+}
+
+function PoiSubmissionReviewItem({
+  isBusy,
+  onCopy,
+  onRunAction,
+  submission,
+}: Readonly<{
+  isBusy: boolean;
+  onCopy: (message: string) => void;
+  onRunAction: (poiId: string, action: 'approve' | 'reject' | 'publish') => void;
+  submission: PoiSubmission;
+}>) {
+  const representativeCoordinate = getGeometryRepresentativeCoordinate(submission.geometry);
+  const mapHref = representativeCoordinate
+    ? buildSubmissionMapHref(submission, representativeCoordinate)
+    : appPath('/map');
+
+  const copyText = async (text: string, successMessage: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      onCopy(successMessage);
+    } catch {
+      onCopy('浏览器未允许写入剪贴板，可手动复制页面中的坐标或几何信息。');
+    }
+  };
+
+  return (
+    <article className="admin-content-item">
+      <div>
+        <strong>{submission.title}</strong>
+        <p className="muted">
+          {submission.categoryId} · {statusLabel(submission.status)} ·{' '}
+          {geometryLabel(submission.geometry)}
+        </p>
+        {representativeCoordinate ? (
+          <p className="muted">
+            代表坐标：{formatCoordinatePair(representativeCoordinate)}
+          </p>
+        ) : null}
+        <p className="muted">
+          投稿人：{submission.submittedBy}
+          {submission.submittedAt ? ` · ${formatDate(submission.submittedAt)}` : ''}
+          {submission.reviewReason ? ` · ${submission.reviewReason}` : ''}
+        </p>
+        {submission.description ? <p>{submission.description}</p> : null}
+        {submission.href ? <p className="muted">链接：{submission.href}</p> : null}
+        {submission.imageUrl ? <PoiSubmissionImagePreview submission={submission} /> : null}
+      </div>
+      <div className="admin-content-actions">
+        <a className="admin-action-link" href={mapHref} target="_blank" rel="noreferrer">
+          地图查看
+        </a>
+        <button
+          type="button"
+          disabled={!representativeCoordinate}
+          onClick={() =>
+            representativeCoordinate
+              ? void copyText(
+                  formatCoordinatePair(representativeCoordinate),
+                  `已复制 ${submission.title} 的代表坐标。`,
+                )
+              : undefined
+          }
+        >
+          复制坐标
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            void copyText(
+              JSON.stringify(submission.geometry, null, 2),
+              `已复制 ${submission.title} 的几何 JSON。`,
+            )
+          }
+        >
+          复制几何
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || submission.status !== 'pending_review'}
+          onClick={() => onRunAction(submission.id, 'approve')}
+        >
+          通过
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || submission.status !== 'pending_review'}
+          onClick={() => onRunAction(submission.id, 'reject')}
+        >
+          驳回
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || submission.status !== 'approved'}
+          onClick={() => onRunAction(submission.id, 'publish')}
+        >
+          发布
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -154,6 +223,99 @@ function PoiSubmissionImagePreview({
 
 function resolvePoiSubmissionImageUrl(value: string): string {
   return value.startsWith('/') ? appPath(value) : value;
+}
+
+function buildSubmissionMapHref(
+  submission: PoiSubmission,
+  coordinate: [number, number],
+): string {
+  const params = new URLSearchParams({
+    label: submission.title,
+    x: roundCoordinateForQuery(coordinate[0]),
+    z: roundCoordinateForQuery(coordinate[1]),
+  });
+  return `${appPath('/map')}?${params.toString()}`;
+}
+
+function getGeometryRepresentativeCoordinate(geometry: MapGeometry): [number, number] | null {
+  if (geometry.type === 'Point') {
+    return geometry.coordinates;
+  }
+
+  if (geometry.type === 'Rectangle') {
+    return getBoundsCenter([geometry.bounds]);
+  }
+
+  if (geometry.type === 'MultiRectangle') {
+    return getBoundsCenter(geometry.rectangles);
+  }
+
+  const coordinates = flattenGeometryCoordinates(geometry);
+  if (coordinates.length === 0) {
+    return null;
+  }
+
+  return getCoordinateBoundsCenter(coordinates);
+}
+
+function flattenGeometryCoordinates(geometry: MapGeometry): Array<[number, number]> {
+  if (geometry.type === 'MultiPoint' || geometry.type === 'LineString') {
+    return geometry.coordinates;
+  }
+
+  if (geometry.type === 'Polygon') {
+    return geometry.coordinates.flat();
+  }
+
+  if (geometry.type === 'MultiPolygon') {
+    return geometry.coordinates.flat(2);
+  }
+
+  return [];
+}
+
+function getBoundsCenter(bounds: Array<{
+  minX: number;
+  minZ: number;
+  maxX: number;
+  maxZ: number;
+}>): [number, number] | null {
+  if (bounds.length === 0) {
+    return null;
+  }
+
+  const points = bounds.flatMap((item) => [
+    [item.minX, item.minZ] as [number, number],
+    [item.maxX, item.maxZ] as [number, number],
+  ]);
+  return getCoordinateBoundsCenter(points);
+}
+
+function getCoordinateBoundsCenter(coordinates: Array<[number, number]>): [number, number] {
+  const bounds = coordinates.reduce(
+    (current, [x, z]) => ({
+      maxX: Math.max(current.maxX, x),
+      maxZ: Math.max(current.maxZ, z),
+      minX: Math.min(current.minX, x),
+      minZ: Math.min(current.minZ, z),
+    }),
+    {
+      maxX: Number.NEGATIVE_INFINITY,
+      maxZ: Number.NEGATIVE_INFINITY,
+      minX: Number.POSITIVE_INFINITY,
+      minZ: Number.POSITIVE_INFINITY,
+    },
+  );
+
+  return [(bounds.minX + bounds.maxX) / 2, (bounds.minZ + bounds.maxZ) / 2];
+}
+
+function formatCoordinatePair([x, z]: [number, number]): string {
+  return `${Math.round(x)}, ${Math.round(z)}`;
+}
+
+function roundCoordinateForQuery(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
 function statusLabel(status: PoiSubmissionStatus): string {
