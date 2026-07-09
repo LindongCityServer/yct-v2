@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LdpassIdentityProvider } from '@yct/adapters';
-import { findActiveAdminByLdpassUserId } from '../../../../lib/admin-membership-store';
+import { resolveYctAdminMembershipForLdpassUser } from '../../../../lib/admin-identity';
 import { listContentAssetRecords } from '../../../../lib/content-asset-store';
 import { listContentRecords } from '../../../../lib/content-store';
 import { markResponseNoStore } from '../../../../lib/http-cache';
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (session.user) {
-      const membership = await findActiveAdminByLdpassUserId(session.user.id);
+      const membership = await resolveYctAdminMembershipForLdpassUser(session.user);
       const [pendingReview, pendingTicketOrderCount] = await Promise.all([
         membership ? readAdminPendingReviewSummary() : undefined,
         countPendingTicketOrdersForLdpassUser(session.user.id),

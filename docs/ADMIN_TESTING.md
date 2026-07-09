@@ -1,8 +1,8 @@
 # 管理员侧测试说明
 
-更新时间：2026-07-08
+更新时间：2026-07-09
 
-本文档记录当前阶段如何测试雨城通 v2 的后台功能。后台身份来自真实 `ldpass` 会话，YCT 只维护本地管理员成员记录；当前不提供假登录、模拟管理员或绕过 `ldpass` 的测试入口。
+本文档记录当前阶段如何测试雨城通 v2 的后台功能。后台身份来自真实 `ldpass` 会话；YCT 会同时接受本地管理员成员记录，以及 `ldpass` 会话中角色为 `admin` / `super_admin` 的 Active 用户。当前不提供假登录、模拟管理员或绕过 `ldpass` 的测试入口。
 
 ## 1. 前置条件
 
@@ -20,6 +20,8 @@
 拿到测试用户的 `ldpassUserId` 后，在项目根目录运行：
 
 这里的 `ldpassUserId` 必须是 `client-session` 返回的 `user.id`。`username`、邮箱、服务器账号名都不会被后台权限校验读取，填这些值即使写进成员文件，运行中的后台仍会返回“当前临东通账号不是雨城通管理员”。
+
+如果测试账号本身已经是 `ldpass` 的 `admin` 或 `super_admin`，则不需要额外运行本地初始化脚本；YCT 会把该会话继承为雨城通管理员。其中 `ldpass` 的 `super_admin` 映射为 YCT `super_admin`，`ldpass` 的 `admin` 映射为 YCT `admin`。本地成员文件仍可用于授予非 `ldpass` 管理员的账号进入 YCT 后台。
 
 ```powershell
 pnpm admin:init <ldpassUserId>
@@ -97,7 +99,7 @@ curl.exe -I "https://yct.shangxiaoguan.top/v2/api/auth/ldpass/start?check=$(Get-
 - `/admin/transit`：旧线路数据导入、审核、发布，以及交通方式/可排班服务 Profile。
 - `/admin/map-poi`：公开 POI 投稿审核和发布。
 
-这些页面都需要真实 `ldpass` 登录态和本地管理员成员记录。未登录、未配置 `ldpass` 或非管理员用户访问时，应看到鉴权失败或权限不足，而不是后台数据。
+这些页面都需要真实 `ldpass` 登录态，并满足“YCT 本地管理员成员”或“`ldpass` 管理员角色”之一。未登录、未配置 `ldpass` 或非管理员用户访问时，应看到鉴权失败或权限不足，而不是后台数据。
 
 ## 5. 最小验证路径
 
@@ -127,7 +129,7 @@ curl.exe -I "https://yct.shangxiaoguan.top/v2/api/auth/ldpass/start?check=$(Get-
 
 ## 7. 当前限制
 
-- 第一阶段管理员角色暂不细分，只有本地管理员成员判断。
+- 第一阶段管理员角色暂不拆分到具体业务域；权限来源为 YCT 本地管理员成员与 `ldpass` 管理员角色的并集。
 - 管理员 PIN 二次确认来源仍待确认。
 - 本地 `.yct-data` 仓储只适合开发和单机验证，后续需要替换为数据库和 Transactional Outbox。
 - 票务订单草稿接口已存在，但前台不直接启用购票按钮；真实票券、核销、退票和对账仍待接入 `ldpass`。

@@ -1,6 +1,6 @@
 # YCT 与 ldpass 接入说明草案
 
-更新时间：2026-07-07
+更新时间：2026-07-09
 
 本文档记录雨城通 v2（Yuchengtong / YCT）需要接入 `ldpass` 的模块、接入方式、需要的数据、建议接口格式和仍待确认的问题。
 
@@ -9,8 +9,8 @@
 ## 1. 接入原则
 
 - YCT 不保存 `ldpass` 密码，不复制 `ldpass` 的账号安全体系。
-- 登录身份来自 `ldpass`，YCT 只保存本地用户映射、偏好、历史、管理员角色和业务状态。
-- YCT 管理员权限由 YCT 自己维护角色表，不直接等同于 `ldpass` 管理员。
+- 登录身份来自 `ldpass`，YCT 只保存本地用户映射、偏好、历史、补充管理员成员和业务状态。
+- YCT 管理员权限由本地管理员成员与 `ldpass` 管理员角色共同决定：本地成员表用于授权非 `ldpass` 管理员；`ldpass` 的 `admin` / `super_admin` Active 用户自动具备 YCT 后台权限。
 - 乘车码、电子票、检票、退票等长期凭证能力优先接入 `ldpass` 卡包/票券系统。
 - 所有跨系统状态同步都必须有事件、审计和可重试机制。
 
@@ -376,7 +376,10 @@ export interface YctThemePreference {
 
 ## 5. 管理员权限
 
-登录身份来自 `ldpass`，YCT 后台权限由本地维护。
+登录身份来自 `ldpass`，YCT 后台权限由两部分组成：
+
+- YCT 本地管理员成员表：用于把指定 `ldpassUserId` 授权为 YCT `admin` 或 `super_admin`。
+- `ldpass` 管理员角色继承：如果 `client-session` 返回的 Active 用户 `role` 为 `admin` 或 `super_admin`，即使没有本地成员记录，也允许进入 YCT 后台；`ldpass` 的 `admin` 映射为 YCT `admin`，`ldpass` 的 `super_admin` 映射为 YCT `super_admin`。
 
 第一阶段管理员角色先不拆分，仅区分普通管理员和超级管理员。后续如果后台规模扩大，再拆出内容审核、交通数据、POI、服务入口、票务等细粒度权限。
 
@@ -396,7 +399,7 @@ export interface YctAdminMembership {
 
 首位管理员来源建议：
 
-- 已确认：后台命令行初始化首位超级管理员，命令绑定指定 `ldpassUserId` 为 `super_admin`。
+- 已确认：后台命令行初始化首位超级管理员，命令绑定指定 `ldpassUserId` 为 `super_admin`；如果首位管理员本身已是 `ldpass` 管理员，则可直接继承权限。
 - 备选：私有环境变量配置首批 `ldpassUserId` 白名单。
 
 管理员敏感操作可以增加 PIN 二次确认。PIN 来源待确认：

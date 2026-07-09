@@ -331,7 +331,7 @@
 - 第一阶段使用 `ldpass` 已有轻量登录回跳和 `client-session` 校验。
 - 雨城通后端只保存 `ldpassUserId` 映射、偏好、历史和权限快照，不保存 ldpass 密码。
 - 当前工程过渡实现：`YctUserLink` 本地映射保存到 `.yct-data/yct-user-links.json`，可通过 `YCT_USER_LINK_STORE_PATH` 覆盖；登录回跳、后台鉴权和 POI 投稿鉴权都会以真实 `ldpass` 会话为依据补写或刷新映射。`yct.account_snapshot` Cookie 仅用于账号页展示，不作为业务写接口授权依据。
-- YCT 管理员权限由 YCT 自己维护角色表；登录身份来自 `ldpass`，后台权限不直接等同于 `ldpass` 角色。
+- YCT 管理员权限来自 YCT 本地管理员成员与 `ldpass` 管理员角色的并集；登录身份仍来自 `ldpass`，本地成员表用于授权非 `ldpass` 管理员进入 YCT 后台。
 - 后续若要开放给第三方或移动端，再评估标准 OIDC Provider。
 
 ## 4. 后台与审核边界
@@ -940,7 +940,7 @@ CheckedIn -> RefundBlocked 或 ManualReview
 已确认：
 
 - YCT 只允许 `ldpass` 用户作为登录用户；需要账号身份的业务接口只接受有效登录态。
-- YCT 管理员权限由 YCT 自己维护角色表。
+- YCT 管理员权限来自本地管理员成员与 `ldpass` 管理员角色的并集。
 - 匿名用户允许保存本地历史和行程提醒。
 - 匿名用户不允许创建私有 POI，不允许创建行程订单。
 - 旧订单和旧行程需要在用户明确同意后再迁移到登录账号。
@@ -1016,12 +1016,12 @@ CheckedIn -> RefundBlocked 或 ManualReview
 - 方案 C：YCT 自建后台账号和密码。独立性强，但会重复造账号安全体系，不推荐作为长期方案。
 - 方案 D：完全继承 `ldpass` 管理员角色。实现简单，但 YCT 权限边界会被 `ldpass` 角色牵动，不利于细分内容、线路、POI 等后台权限。
 
-已确认采用方案 A，并将首位超级管理员初始化放在后台命令行完成。
+已确认采用方案 A 和方案 D 的混合策略：YCT 后台保留本地 `AdminRole` 成员表，首位或补充管理员仍可通过命令行绑定指定 `ldpassUserId`；同时 `ldpass` 角色为 `admin` 或 `super_admin` 的 Active 用户自动具备 YCT 后台权限。
 
 当前工程过渡实现：
 
 - `pnpm admin:init <ldpassUserId>` 会把首位或指定管理员写入 `.yct-data/admin-memberships.json`。
-- 后台 API 使用真实 `ldpass` 登录态校验身份，并检查本地管理员成员记录。
+- 后台 API 使用真实 `ldpass` 登录态校验身份，并检查本地管理员成员记录或 `ldpass` 管理员角色。
 - `.yct-data` 属于私有运行数据，不进入 GitHub 仓库；后续接入数据库后应迁移到正式 `AdminMembership` 表。
 
 仍待确认：

@@ -179,7 +179,7 @@ MVP 完成标准：
 - 外部系统通过 Provider/Adapter 接入。
 - 旧 JS 数据导入时不能直接执行上传内容。
 - 账号系统第一阶段优先依赖 `ldpass`，雨城通只保存本地映射和业务偏好。
-- YCT 管理员权限由 YCT 自己维护角色表，不直接等同 `ldpass` 管理员。
+- YCT 管理员权限来自 YCT 本地管理员成员与 `ldpass` 管理员角色的并集：本地成员表用于授权非 `ldpass` 管理员；`ldpass` 的 `admin` / `super_admin` Active 用户自动继承 YCT 后台权限。
 - 非 Active 的 `ldpass` 用户允许进入只读账号页。
 - 管理员角色第一阶段先不拆分。
 - 投稿用户只需要验证服务器账号。
@@ -373,7 +373,7 @@ DESIGN.md
 - 新增 `/api/auth/ldpass/start`：生成一次性 `state`，写入 HttpOnly Cookie，并跳转到 `ldpass` 登录页。
 - 新增 `/auth/ldpass/callback`：校验回跳 `state`，读取 `ldpass` `client-session`，并在拿到真实 Active 账号后写入 `.yct-data/yct-user-links.json` 本地用户映射和 YCT 本地账号快照 Cookie；只读账号只写展示快照，不创建可写用户映射。
 - 新增 `/api/auth/logout`：清理 YCT 本地登录状态并发布 `YctSessionEnded` 事件；是否联动退出 `ldpass` 仍待后续确认。
-- 新增 `/api/account/status`：读取 `ldpass` 会话并区分未配置、未登录、Active 登录、只读账号和会话不可用；只有匹配 YCT 本地管理员成员时才合并内容、服务入口、交通数据和 POI 的待审核计数。头像优先使用 `ldpass` 自定义头像，但若返回旧 `mc-heads.net` 地址则强制改用 `https://minotar.net/helm/<user>`；缺省时同样按服务器账号名或用户名回退到 Minotar，前端头像框已改为更适合 Minecraft 头像的圆角矩形。
+- 新增 `/api/account/status`：读取 `ldpass` 会话并区分未配置、未登录、Active 登录、只读账号和会话不可用；匹配 YCT 本地管理员成员，或 `ldpass` 会话角色为 `admin` / `super_admin` 时，合并内容、服务入口、交通数据和 POI 的待审核计数。头像优先使用 `ldpass` 自定义头像，但若返回旧 `mc-heads.net` 地址则强制改用 `https://minotar.net/helm/<user>`；缺省时同样按服务器账号名或用户名回退到 Minotar，前端头像框已改为更适合 Minecraft 头像的圆角矩形。
 - 顶部头像入口已接入账号状态：普通登录显示登录态，只读/异常/未配置显示状态点，管理员待审核数量与浏览器本地待同步行程提醒数量合并为单一计数徽标；本地行程提醒写入、删除或清空时会发出轻量前端事件刷新标题栏。
 - 已处理补充：标题栏品牌图由页面和语言共同决定，运营首页在中文界面使用带文字 `wordmark`，英文界面使用 `symbol` 并显示 `Yuchengtong` 页面标题；地图、出行、更多服务页面始终使用 `symbol` 并显示当前页面标题。
 - 账号设置页已接入登录状态展示、临东通账号入口、退出入口和未配置提示。
@@ -383,10 +383,10 @@ DESIGN.md
 
 2026-07-02 已推进内容审核发布闭环：
 
-- 新增本地管理员成员仓储 `.yct-data/admin-memberships.json`，并新增 `pnpm admin:init <ldpassUserId>` 初始化超级管理员。
+- 新增本地管理员成员仓储 `.yct-data/admin-memberships.json`，并新增 `pnpm admin:init <ldpassUserId>` 初始化超级管理员；此外 `ldpass` 的 `admin` / `super_admin` Active 用户会自动继承 YCT 后台权限。
 - 新增本地内容仓储 `.yct-data/content-store.json`，作为数据库接入前的开发/单机持久化 Repository；该目录已加入 `.gitignore`。
 - 新增内容工作流服务：创建草稿、提交审核、审核通过/驳回、发布；状态流转复用 `@yct/domain`，成功后发布 `ContentSubmitted`、`ContentReviewed`、`ContentPublished` 事件。
-- 新增后台 API：`/api/admin/operations/contents`、`/submit`、`/review`、`/publish`；后台 API 需要真实 `ldpass` 会话和本地管理员成员记录。
+- 新增后台 API：`/api/admin/operations/contents`、`/submit`、`/review`、`/publish`；后台 API 需要真实 `ldpass` 会话，并接受 YCT 本地管理员成员或 `ldpass` 管理员角色。
 - 新增 `/admin/operations` 内容后台页面，可创建 Markdown 草稿并执行提交、通过、驳回和发布。
 - 首页、搜索页、运营详情页与 `/api/operations/feed` 已合并读取本地已发布内容和旧站内容；草稿和待审核内容不会进入前台。
 - 运营详情页已接入白名单 Markdown 渲染，支持标题、段落、列表、引用、站内/HTTPS 链接、加粗、行内代码和图片；旧资源迁移后的 `原始图片：/legacy-assets/...` 会作为图片块展示，但新增图片素材仍必须走上传和管理员审核。
@@ -429,7 +429,7 @@ DESIGN.md
 - 新增本地服务入口仓储 `.yct-data/service-entry-store.json`，并新增 `YCT_SERVICE_ENTRY_STORE_PATH` 配置；该目录不进入仓库，后续可替换为数据库 Repository。
 - 新增服务入口工作流：创建草稿、提交审核、审核通过/驳回、发布；成功后发布 `ServiceEntrySubmitted`、`ServiceEntryReviewed`、`ServiceEntryPublished` 事件。
 - 新增公开 API `/api/services/entries`，返回按“运营及周边、服务器网站、工具箱、其他服务”归组的服务入口。
-- 新增后台 API：`/api/admin/services/entries`、`/submit`、`/review`、`/publish`；后台 API 需要真实 `ldpass` 会话和本地管理员成员记录。
+- 新增后台 API：`/api/admin/services/entries`、`/submit`、`/review`、`/publish`；后台 API 需要真实 `ldpass` 会话，并接受 YCT 本地管理员成员或 `ldpass` 管理员角色。
 - 新增 `/admin/services` 服务入口后台页面，可配置名称、描述、图标、分类、链接、打开方式、可见性和排序。
 - 账号设置页在登录后增加“服务后台”入口，未登录用户仍只看到登录与本地偏好。
 - 默认工具箱入口已加入旧站 `/lab/`“实验室”，作为旧版实验性工具集合总入口；旧页实际包含动态线路图、地图搜索、地图预览、数据编辑器、公交站牌生成器、路牌生成器、楼牌生成器、电报纸生成器和设计系统入口。当前同时拆出已验证可访问的具体旧工具入口：动态线路图、地图搜索、地图预览、数据编辑器、物料展示、公交站牌生成器、路牌生成器、楼牌生成器和电报纸生成器。
@@ -441,7 +441,7 @@ DESIGN.md
 - 新增交通数据状态机：`imported` / `validation_failed` -> `pending_review` -> `approved` / `rejected` -> `published` -> `superseded`，发布新版时会把旧发布版标记为 `superseded`。
 - 新增本地交通数据仓储 `.yct-data/transit-data-store.json`，并新增 `YCT_TRANSIT_DATA_STORE_PATH` 配置；它是数据库接入前的单机 Repository。
 - 旧线路解析入口已重构为完整快照读取：继续从旧站 `metro_data.js`、`tram_data.js`、`bus_data.js`、`local_railway_data.js` 和 `ltcx/route.txt` 拉取真实数据，并保留停靠点级属性；客运班次聚合为 `coach` 模式的 `TransitLine`，同时保留首末班、班次数、票价、公司和来源链接字段。
-- 新增后台 API：`/api/admin/transit/datasets`、`/submit`、`/review`、`/publish`；后台 API 需要真实 `ldpass` 会话和本地管理员成员记录。
+- 新增后台 API：`/api/admin/transit/datasets`、`/submit`、`/review`、`/publish`；后台 API 需要真实 `ldpass` 会话，并接受 YCT 本地管理员成员或 `ldpass` 管理员角色。
 - 新增 `/admin/transit` 线路后台页面，可导入旧站最新线路、查看摘要和校验提示、预览部分线路并执行提交、通过、驳回和发布。
 - 已处理第一版：交通数据校验结果已从简单错误/提醒计数升级为结构化 issue 列表；当前后台会单独报告线路断点、重名站点、孤立站点、单向站点和缺少 Minecraft 坐标，并展示部分样例，方便在没有可视化编辑器前先做版本筛查。当前仍属于导入快照后的只读校验，不支持直接在后台页内修复。
 - 新增公开 API `/api/transit/overview`；出行页和线路详情页优先读取已发布交通数据版本，没有发布版时继续退回旧站直读，避免现有体验中断。

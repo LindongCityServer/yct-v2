@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LdpassIdentityProvider } from '@yct/adapters';
 import type { YctAdminMembership } from '@yct/contracts';
-import { findActiveAdminByLdpassUserId } from './admin-membership-store';
+import { resolveYctAdminMembershipForLdpassUser } from './admin-identity';
 import { ensureYctUserLinkForLdpassSession } from './auth-workflow';
 import { readRuntimeConfig } from './runtime-config';
 
@@ -57,7 +57,7 @@ export async function requireYctAdmin(request: NextRequest): Promise<AdminAuthRe
       };
     }
 
-    const membership = await findActiveAdminByLdpassUserId(session.user.id);
+    const membership = await resolveYctAdminMembershipForLdpassUser(session.user);
     if (!membership) {
       return {
         ok: false,
