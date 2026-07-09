@@ -797,7 +797,17 @@ function PoiCategoryProfileEditor({
                         className={`admin-poi-category-icon-chip${isDefault ? ' is-default' : ''}`}
                         key={iconValue}
                       >
-                        <img src={toMarkerIconUrl(iconValue, iconBaseUrl)} alt="" draggable={false} />
+                        <span className="admin-poi-category-icon-swatch-group" aria-hidden="true">
+                          {['light', 'dark', 'map'].map((tone) => (
+                            <span
+                              className={`admin-poi-category-icon-swatch is-${tone}`}
+                              key={tone}
+                              title={iconPreviewToneLabel(tone)}
+                            >
+                              <img src={toMarkerIconUrl(iconValue, iconBaseUrl)} alt="" draggable={false} />
+                            </span>
+                          ))}
+                        </span>
                         <code>{iconValue}</code>
                         {isDefault ? <small>默认</small> : null}
                         {uploadedFileName ? (
@@ -1121,6 +1131,18 @@ function extractUploadedPoiIconFileName(value: string): string | null {
   } catch {
     return null;
   }
+}
+
+function iconPreviewToneLabel(tone: string): string {
+  if (tone === 'dark') {
+    return '深色背景预览';
+  }
+
+  if (tone === 'map') {
+    return '地图底色预览';
+  }
+
+  return '浅色背景预览';
 }
 
 function matchesStatusFilter(status: PoiSubmissionStatus, filter: StatusFilter): boolean {

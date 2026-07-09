@@ -3908,7 +3908,7 @@ body .material-symbols-outlined {
 
 .admin-poi-category-icon-chip {
   display: inline-grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--yct-space-1);
   max-width: min(100%, 520px);
@@ -3923,9 +3923,40 @@ body .material-symbols-outlined {
   color: var(--yct-color-text);
 }
 
-.admin-poi-category-icon-chip img {
-  width: 24px;
-  height: 24px;
+.admin-poi-category-icon-swatch-group {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 28px);
+  gap: 3px;
+}
+
+.admin-poi-category-icon-swatch {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--yct-radius-sm);
+  box-shadow: inset 0 0 0 1px var(--yct-color-border);
+}
+
+.admin-poi-category-icon-swatch.is-light {
+  background: #f7faf9;
+}
+
+.admin-poi-category-icon-swatch.is-dark {
+  background: #17211f;
+}
+
+.admin-poi-category-icon-swatch.is-map {
+  background:
+    linear-gradient(90deg, rgb(116 139 131 / 55%) 0 4px, transparent 4px 100%),
+    linear-gradient(0deg, rgb(116 139 131 / 45%) 0 4px, transparent 4px 100%),
+    linear-gradient(135deg, #8caf62, #d5d8ca 48%, #78906a);
+  background-size: 100% 100%, 100% 100%, 100% 100%;
+}
+
+.admin-poi-category-icon-swatch img {
+  width: 22px;
+  height: 22px;
   object-fit: contain;
 }
 
