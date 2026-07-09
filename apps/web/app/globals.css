@@ -3527,6 +3527,47 @@ body .material-symbols-outlined {
   gap: var(--yct-space-2);
 }
 
+.admin-poi-toolbar {
+  align-items: end;
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+}
+
+.admin-poi-toolbar label {
+  display: grid;
+  gap: var(--yct-space-1);
+  min-width: 160px;
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.admin-poi-toolbar select,
+.admin-poi-toolbar input {
+  min-height: 38px;
+  min-width: 0;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+}
+
+.admin-poi-toolbar button {
+  min-height: 38px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  font-weight: 650;
+}
+
+.admin-poi-search {
+  flex: 1 1 240px;
+}
+
 .admin-editor label {
   display: grid;
   gap: var(--yct-space-1);
@@ -3634,6 +3675,148 @@ body .material-symbols-outlined {
   padding: var(--yct-space-3) var(--yct-space-4);
   border-radius: var(--yct-radius-lg);
   background: var(--yct-color-surface);
+}
+
+.admin-poi-item {
+  align-items: start;
+}
+
+.admin-poi-main {
+  display: grid;
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+.admin-poi-title-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--yct-space-2);
+  align-items: center;
+}
+
+.admin-poi-category-icon,
+.admin-poi-category-symbol {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+}
+
+.admin-poi-category-icon {
+  object-fit: contain;
+}
+
+.admin-poi-category-symbol {
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-muted);
+}
+
+.admin-poi-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0 var(--yct-space-2);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-poi-status-chip.is-pending_review {
+  background: color-mix(in oklab, var(--yct-color-warning, #b87900) 18%, transparent);
+  color: var(--yct-color-warning-strong, #8a5a00);
+}
+
+.admin-poi-status-chip.is-approved {
+  background: color-mix(in oklab, var(--yct-color-primary) 16%, transparent);
+  color: var(--yct-color-primary);
+}
+
+.admin-poi-status-chip.is-published {
+  background: color-mix(in oklab, var(--yct-color-success, #168a5d) 16%, transparent);
+  color: var(--yct-color-success-strong, #0d6b49);
+}
+
+.admin-poi-detail {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.admin-poi-detail dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--yct-space-2);
+  margin: 0;
+}
+
+.admin-poi-detail dt {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.admin-poi-detail dd {
+  margin: 2px 0 0;
+  color: var(--yct-color-text);
+  overflow-wrap: anywhere;
+}
+
+.admin-poi-detail details {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.admin-poi-detail summary {
+  cursor: pointer;
+  color: var(--yct-color-text-secondary);
+  font-weight: 650;
+}
+
+.admin-poi-detail pre {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text-secondary);
+  white-space: pre-wrap;
+}
+
+.admin-poi-empty {
+  padding: var(--yct-space-4);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+}
+
+.admin-poi-reject-dialog label {
+  display: grid;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.admin-poi-reject-dialog textarea {
+  min-height: 140px;
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text);
+  resize: vertical;
+}
+
+.admin-poi-dialog-error {
+  color: var(--yct-color-danger, #b42318);
 }
 
 .admin-content-item strong {

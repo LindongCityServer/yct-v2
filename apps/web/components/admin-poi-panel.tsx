@@ -1,13 +1,47 @@
 'use client';
 
-import type { MapGeometry, PoiSubmission, PoiSubmissionStatus } from '@yct/contracts';
+import type {
+  MapGeometry,
+  PoiCategory,
+  PoiSubmission,
+  PoiSubmissionStatus,
+} from '@yct/contracts';
+import type { FormEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 
+type StatusFilter = PoiSubmissionStatus | 'all' | 'todo';
+
+const defaultMarkerIconBaseUrl = 'https://map.shangxiaoguan.top/';
+
+const statusFilterOptions: Array<{ value: StatusFilter; label: string }> = [
+  { value: 'all', label: '全部状态' },
+  { value: 'todo', label: '待处理' },
+  { value: 'pending_review', label: '待审核' },
+  { value: 'approved', label: '待发布' },
+  { value: 'rejected', label: '已驳回' },
+  { value: 'published', label: '已发布' },
+  { value: 'archived', label: '已归档' },
+  { value: 'draft', label: '草稿' },
+];
+
 export function AdminPoiPanel() {
   const [submissions, setSubmissions] = useState<PoiSubmission[]>([]);
+  const [categories, setCategories] = useState<PoiCategory[]>([]);
+  const [categoryIconBaseUrl, setCategoryIconBaseUrl] = useState(defaultMarkerIconBaseUrl);
   const [statusText, setStatusText] = useState('正在读取 POI 投稿');
+  const [categoryStatusText, setCategoryStatusText] = useState('正在读取 POI 分类');
   const [isBusy, setIsBusy] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('todo');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [query, setQuery] = useState('');
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+  const [rejectTarget, setRejectTarget] = useState<PoiSubmission | null>(null);
+
+  const categoryById = useMemo(() => {
+    const entries = categories.map((category) => [category.id, category] as const);
+    return new Map(entries);
+  }, [categories]);
 
   const sortedSubmissions = useMemo(
     () =>
@@ -20,6 +54,71 @@ export function AdminPoiPanel() {
     [submissions],
   );
 
+  const categoryOptions = useMemo(() => {
+    const usedCategoryIds = new Set(submissions.map((submission) => submission.categoryId));
+    const knownOptions = categories
+      .filter((category) => usedCategoryIds.has(category.id))
+      .map((category) => ({
+        id: category.id,
+        label: category.name || category.id,
+        sortOrder: category.sortOrder,
+      }));
+    const knownIds = new Set(knownOptions.map((option) => option.id));
+    const unknownOptions = Array.from(usedCategoryIds)
+      .filter((categoryId) => !knownIds.has(categoryId))
+      .map((categoryId) => ({ id: categoryId, label: categoryId, sortOrder: 100_000 }));
+
+    return [...knownOptions, ...unknownOptions].sort(
+      (left, right) => left.sortOrder - right.sortOrder || left.label.localeCompare(right.label, 'zh-CN'),
+    );
+  }, [categories, submissions]);
+
+  const statusCounts = useMemo(() => {
+    const counts = new Map<PoiSubmissionStatus, number>();
+    for (const submission of submissions) {
+      counts.set(submission.status, (counts.get(submission.status) ?? 0) + 1);
+    }
+    return counts;
+  }, [submissions]);
+
+  const filteredSubmissions = useMemo(
+    () =>
+      sortedSubmissions.filter((submission) => {
+        if (!matchesStatusFilter(submission.status, statusFilter)) {
+          return false;
+        }
+
+        if (categoryFilter !== 'all' && submission.categoryId !== categoryFilter) {
+          return false;
+        }
+
+        const normalizedQuery = normalizeSearchText(query);
+        if (!normalizedQuery) {
+          return true;
+        }
+
+        const category = categoryById.get(submission.categoryId);
+        const haystack = normalizeSearchText(
+          [
+            submission.title,
+            submission.categoryId,
+            category?.name,
+            statusLabel(submission.status),
+            geometryLabel(submission.geometry),
+            submission.description,
+            submission.href,
+            submission.submittedBy,
+            submission.reviewReason,
+          ]
+            .filter(Boolean)
+            .join(' '),
+        );
+
+        return haystack.includes(normalizedQuery);
+      }),
+    [categoryById, categoryFilter, query, sortedSubmissions, statusFilter],
+  );
+
   const loadSubmissions = async () => {
     const response = await fetch(appPath('/api/admin/map/poi-submissions'), { cache: 'no-store' });
     const data = (await response.json()) as { items?: PoiSubmission[]; message?: string };
@@ -28,15 +127,41 @@ export function AdminPoiPanel() {
       return;
     }
 
-    setSubmissions(data.items ?? []);
-    setStatusText(data.items?.length ? `已读取 ${data.items.length} 条 POI 投稿` : '暂无 POI 投稿');
+    const items = data.items ?? [];
+    setSubmissions(items);
+    setStatusText(items.length ? `已读取 ${items.length} 条 POI 投稿` : '暂无 POI 投稿');
+  };
+
+  const loadCategories = async () => {
+    const response = await fetch(appPath('/api/map/poi-categories'), { cache: 'no-store' });
+    const data = (await response.json()) as {
+      items?: PoiCategory[];
+      iconBaseUrl?: string;
+      meta?: { message?: string };
+      message?: string;
+    };
+
+    if (!response.ok) {
+      setCategoryStatusText(data.meta?.message ?? data.message ?? 'POI 分类暂不可用');
+      return;
+    }
+
+    const items = data.items ?? [];
+    setCategories(items);
+    setCategoryIconBaseUrl(data.iconBaseUrl ?? defaultMarkerIconBaseUrl);
+    setCategoryStatusText(items.length ? `已读取 ${items.length} 个分类` : '暂无可用 POI 分类');
   };
 
   useEffect(() => {
     void loadSubmissions();
+    void loadCategories();
   }, []);
 
-  const runAction = async (poiId: string, action: 'approve' | 'reject' | 'publish') => {
+  const runAction = async (
+    poiId: string,
+    action: 'approve' | 'reject' | 'publish',
+    reason?: string,
+  ) => {
     setIsBusy(true);
     try {
       const endpoint =
@@ -47,7 +172,7 @@ export function AdminPoiPanel() {
         action === 'approve'
           ? { decision: 'approved' }
           : action === 'reject'
-            ? { decision: 'rejected', reason: '后台退回' }
+            ? { decision: 'rejected', reason: reason?.trim() }
             : {};
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -67,37 +192,153 @@ export function AdminPoiPanel() {
     }
   };
 
+  const resetFilters = () => {
+    setStatusFilter('todo');
+    setCategoryFilter('all');
+    setQuery('');
+  };
+
+  const toggleExpanded = (poiId: string) => {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(poiId)) {
+        next.delete(poiId);
+      } else {
+        next.add(poiId);
+      }
+      return next;
+    });
+  };
+
+  const pendingCount = statusCounts.get('pending_review') ?? 0;
+  const approvedCount = statusCounts.get('approved') ?? 0;
+  const publishedCount = statusCounts.get('published') ?? 0;
+
   return (
     <section className="module-panel admin-operations-panel" aria-labelledby="admin-poi-title">
       <div className="section-heading">
         <h1 id="admin-poi-title">POI 投稿审核</h1>
-        <span className="muted">{statusText}</span>
+        <span className="muted">
+          {statusText}
+          {categoryStatusText ? ` · ${categoryStatusText}` : ''}
+        </span>
+      </div>
+
+      <div className="admin-report-summary admin-poi-summary" aria-label="POI 投稿摘要">
+        <AdminPoiMetric label="待审核" value={pendingCount} tone={pendingCount > 0 ? 'warning' : undefined} />
+        <AdminPoiMetric label="待发布" value={approvedCount} tone={approvedCount > 0 ? 'accent' : undefined} />
+        <AdminPoiMetric label="已发布" value={publishedCount} />
+        <AdminPoiMetric label="当前结果" value={filteredSubmissions.length} />
+      </div>
+
+      <div className="admin-toolbar admin-poi-toolbar" aria-label="POI 投稿筛选">
+        <label>
+          <span>状态</span>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.currentTarget.value as StatusFilter)}
+          >
+            {statusFilterOptions.map((option) => (
+              <option value={option.value} key={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>分类</span>
+          <select
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.currentTarget.value)}
+          >
+            <option value="all">全部分类</option>
+            {categoryOptions.map((option) => (
+              <option value={option.id} key={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="admin-poi-search">
+          <span>搜索</span>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            placeholder="标题、分类、投稿人、链接"
+          />
+        </label>
+        <button type="button" onClick={resetFilters}>
+          重置筛选
+        </button>
       </div>
 
       <div className="admin-content-list" aria-label="POI 投稿记录">
-        {sortedSubmissions.map((submission) => (
+        {filteredSubmissions.map((submission) => (
           <PoiSubmissionReviewItem
+            category={categoryById.get(submission.categoryId)}
+            iconBaseUrl={categoryIconBaseUrl}
             isBusy={isBusy}
+            isExpanded={expandedIds.has(submission.id)}
             key={submission.id}
             onCopy={(message) => setStatusText(message)}
+            onReject={() => setRejectTarget(submission)}
             onRunAction={runAction}
+            onToggleExpanded={() => toggleExpanded(submission.id)}
             submission={submission}
           />
         ))}
+        {filteredSubmissions.length === 0 ? (
+          <p className="muted admin-poi-empty">当前筛选条件下没有 POI 投稿。</p>
+        ) : null}
       </div>
+
+      {rejectTarget ? (
+        <RejectPoiDialog
+          isBusy={isBusy}
+          submission={rejectTarget}
+          onClose={() => setRejectTarget(null)}
+          onSubmit={async (reason) => {
+            await runAction(rejectTarget.id, 'reject', reason);
+            setRejectTarget(null);
+          }}
+        />
+      ) : null}
     </section>
   );
 }
 
+function AdminPoiMetric({
+  label,
+  tone,
+  value,
+}: Readonly<{ label: string; tone?: 'accent' | 'warning'; value: number }>) {
+  return (
+    <div className={['admin-report-metric', tone ? `is-${tone}` : ''].filter(Boolean).join(' ')}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
 function PoiSubmissionReviewItem({
+  category,
+  iconBaseUrl,
   isBusy,
+  isExpanded,
   onCopy,
+  onReject,
   onRunAction,
+  onToggleExpanded,
   submission,
 }: Readonly<{
+  category?: PoiCategory;
+  iconBaseUrl: string;
   isBusy: boolean;
+  isExpanded: boolean;
   onCopy: (message: string) => void;
-  onRunAction: (poiId: string, action: 'approve' | 'reject' | 'publish') => void;
+  onReject: () => void;
+  onRunAction: (poiId: string, action: 'approve' | 'reject' | 'publish', reason?: string) => void;
+  onToggleExpanded: () => void;
   submission: PoiSubmission;
 }>) {
   const representativeCoordinate = getGeometryRepresentativeCoordinate(submission.geometry);
@@ -115,17 +356,23 @@ function PoiSubmissionReviewItem({
   };
 
   return (
-    <article className="admin-content-item">
-      <div>
-        <strong>{submission.title}</strong>
-        <p className="muted">
-          {submission.categoryId} · {statusLabel(submission.status)} ·{' '}
-          {geometryLabel(submission.geometry)}
-        </p>
+    <article className={['admin-content-item', 'admin-poi-item', isExpanded ? 'is-expanded' : ''].join(' ')}>
+      <div className="admin-poi-main">
+        <div className="admin-poi-title-row">
+          <PoiCategoryIcon category={category} iconBaseUrl={iconBaseUrl} />
+          <div>
+            <strong>{submission.title}</strong>
+            <p className="muted">
+              {formatCategoryName(submission.categoryId, category)} · {statusLabel(submission.status)} ·{' '}
+              {geometryLabel(submission.geometry)}
+            </p>
+          </div>
+          <span className={`admin-poi-status-chip is-${submission.status}`}>
+            {statusLabel(submission.status)}
+          </span>
+        </div>
         {representativeCoordinate ? (
-          <p className="muted">
-            代表坐标：{formatCoordinatePair(representativeCoordinate)}
-          </p>
+          <p className="muted">代表坐标：{formatCoordinatePair(representativeCoordinate)}</p>
         ) : null}
         <p className="muted">
           投稿人：{submission.submittedBy}
@@ -133,10 +380,19 @@ function PoiSubmissionReviewItem({
           {submission.reviewReason ? ` · ${submission.reviewReason}` : ''}
         </p>
         {submission.description ? <p>{submission.description}</p> : null}
-        {submission.href ? <p className="muted">链接：{submission.href}</p> : null}
+        {isExpanded ? (
+          <PoiSubmissionDetail
+            category={category}
+            representativeCoordinate={representativeCoordinate}
+            submission={submission}
+          />
+        ) : null}
         {submission.imageUrl ? <PoiSubmissionImagePreview submission={submission} /> : null}
       </div>
       <div className="admin-content-actions">
+        <button type="button" onClick={onToggleExpanded}>
+          {isExpanded ? '收起详情' : '展开详情'}
+        </button>
         <a className="admin-action-link" href={mapHref} target="_blank" rel="noreferrer">
           地图查看
         </a>
@@ -175,7 +431,7 @@ function PoiSubmissionReviewItem({
         <button
           type="button"
           disabled={isBusy || submission.status !== 'pending_review'}
-          onClick={() => onRunAction(submission.id, 'reject')}
+          onClick={onReject}
         >
           驳回
         </button>
@@ -188,6 +444,143 @@ function PoiSubmissionReviewItem({
         </button>
       </div>
     </article>
+  );
+}
+
+function PoiSubmissionDetail({
+  category,
+  representativeCoordinate,
+  submission,
+}: Readonly<{
+  category?: PoiCategory;
+  representativeCoordinate: [number, number] | null;
+  submission: PoiSubmission;
+}>) {
+  return (
+    <div className="admin-poi-detail">
+      <dl>
+        <div>
+          <dt>投稿 ID</dt>
+          <dd>{submission.id}</dd>
+        </div>
+        <div>
+          <dt>分类</dt>
+          <dd>
+            {formatCategoryName(submission.categoryId, category)}
+            {category ? ` · ${category.acceptsPublicSubmissions ? '允许公开投稿' : '不允许公开投稿'}` : ''}
+          </dd>
+        </div>
+        <div>
+          <dt>几何</dt>
+          <dd>{geometryLabel(submission.geometry)}</dd>
+        </div>
+        <div>
+          <dt>代表坐标</dt>
+          <dd>{representativeCoordinate ? formatCoordinatePair(representativeCoordinate) : '暂无'}</dd>
+        </div>
+        <div>
+          <dt>链接</dt>
+          <dd>{submission.href ? <a href={submission.href}>{submission.href}</a> : '未填写'}</dd>
+        </div>
+        <div>
+          <dt>审核</dt>
+          <dd>
+            {submission.reviewedBy ? `${submission.reviewedBy} · ${submission.reviewedAt ? formatDate(submission.reviewedAt) : '已审核'}` : '尚未审核'}
+          </dd>
+        </div>
+      </dl>
+      <details>
+        <summary>几何 JSON</summary>
+        <pre>{JSON.stringify(submission.geometry, null, 2)}</pre>
+      </details>
+    </div>
+  );
+}
+
+function RejectPoiDialog({
+  isBusy,
+  onClose,
+  onSubmit,
+  submission,
+}: Readonly<{
+  isBusy: boolean;
+  onClose: () => void;
+  onSubmit: (reason: string) => Promise<void>;
+  submission: PoiSubmission;
+}>) {
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedReason = reason.trim();
+    if (!normalizedReason) {
+      setError('请填写驳回理由，方便投稿者修正。');
+      return;
+    }
+    await onSubmit(normalizedReason);
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <form
+        className="modal-panel admin-poi-reject-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-poi-reject-title"
+        onMouseDown={(event) => event.stopPropagation()}
+        onSubmit={submit}
+      >
+        <div className="section-heading">
+          <h2 id="admin-poi-reject-title">驳回 POI 投稿</h2>
+          <span className="muted">{submission.title}</span>
+        </div>
+        <label>
+          <span>驳回理由</span>
+          <textarea
+            value={reason}
+            onChange={(event) => {
+              setReason(event.currentTarget.value);
+              setError('');
+            }}
+            placeholder="例如：坐标偏离实际地点、分类不正确、图片无法确认来源……"
+            maxLength={500}
+          />
+        </label>
+        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
+        <div className="admin-content-actions">
+          <button type="button" onClick={onClose} disabled={isBusy}>
+            取消
+          </button>
+          <button type="submit" disabled={isBusy}>
+            确认驳回
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function PoiCategoryIcon({
+  category,
+  iconBaseUrl,
+}: Readonly<{ category?: PoiCategory; iconBaseUrl: string }>) {
+  const iconFileName = category?.iconMapping.defaultIconFileName;
+  if (iconFileName) {
+    return (
+      <img
+        className="admin-poi-category-icon"
+        src={toMarkerIconUrl(iconFileName, iconBaseUrl)}
+        alt=""
+        draggable={false}
+      />
+    );
+  }
+
+  return (
+    <span className="material-symbols-outlined admin-poi-category-symbol" aria-hidden="true">
+      location_on
+    </span>
   );
 }
 
@@ -322,7 +715,7 @@ function statusLabel(status: PoiSubmissionStatus): string {
   const labels: Record<PoiSubmissionStatus, string> = {
     draft: '草稿',
     pending_review: '待审核',
-    approved: '已通过',
+    approved: '待发布',
     rejected: '已驳回',
     published: '已发布',
     archived: '已归档',
@@ -344,11 +737,23 @@ function geometryLabel(geometry: MapGeometry): string {
     return `线 ${geometry.coordinates.length} 点`;
   }
 
+  if (geometry.type === 'Rectangle') {
+    return '矩形区域';
+  }
+
   if (geometry.type === 'MultiRectangle') {
     return `矩形组 ${geometry.rectangles.length} 个`;
   }
 
-  return geometry.type;
+  if (geometry.type === 'Polygon') {
+    return `多边形 ${geometry.coordinates[0]?.length ?? 0} 点`;
+  }
+
+  if (geometry.type === 'MultiPolygon') {
+    return `多重多边形 ${geometry.coordinates.length} 个`;
+  }
+
+  return '未知几何';
 }
 
 function formatDate(value: string): string {
@@ -358,4 +763,36 @@ function formatDate(value: string): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
+}
+
+function formatCategoryName(categoryId: string, category?: PoiCategory): string {
+  return category?.name && category.name !== categoryId ? `${category.name} (${categoryId})` : categoryId;
+}
+
+function matchesStatusFilter(status: PoiSubmissionStatus, filter: StatusFilter): boolean {
+  if (filter === 'all') {
+    return true;
+  }
+
+  if (filter === 'todo') {
+    return status === 'pending_review' || status === 'approved';
+  }
+
+  return status === filter;
+}
+
+function normalizeSearchText(value: string): string {
+  return value.toLowerCase().replace(/[\s　|]+/g, '');
+}
+
+function toMarkerIconUrl(fileName: string, baseUrl: string): string {
+  if (/^https?:\/\//i.test(fileName)) {
+    return fileName;
+  }
+
+  if (!baseUrl) {
+    return fileName;
+  }
+
+  return new URL(fileName.replace(/^\/+/, ''), baseUrl).toString();
 }
