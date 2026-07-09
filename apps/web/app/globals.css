@@ -3847,6 +3847,48 @@ body .material-symbols-outlined {
   overflow-wrap: anywhere;
 }
 
+.admin-poi-geometry-preview {
+  display: grid;
+  gap: var(--yct-space-1);
+  justify-items: start;
+}
+
+.admin-poi-geometry-preview svg {
+  width: min(240px, 100%);
+  height: auto;
+  border-radius: var(--yct-radius-md);
+  background:
+    linear-gradient(var(--yct-map-grid-primary, rgb(22 143 120 / 8%)) 1px, transparent 1px),
+    linear-gradient(90deg, var(--yct-map-grid-secondary, rgb(37 132 232 / 8%)) 1px, transparent 1px),
+    var(--yct-color-surface);
+  background-size: 24px 24px;
+}
+
+.admin-poi-geometry-preview small {
+  color: var(--yct-color-text-muted);
+}
+
+.admin-poi-geometry-preview-shape {
+  fill: color-mix(in srgb, var(--yct-color-primary) 18%, transparent);
+  stroke: var(--yct-color-primary);
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.admin-poi-geometry-preview-line {
+  fill: none;
+  stroke: var(--yct-color-primary);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+}
+
+.admin-poi-geometry-preview-point {
+  fill: var(--yct-color-primary);
+  stroke: var(--yct-color-surface-panel);
+  stroke-width: 2;
+}
+
 .admin-poi-detail details {
   display: grid;
   gap: var(--yct-space-2);

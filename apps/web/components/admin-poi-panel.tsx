@@ -592,6 +592,7 @@ function PoiSubmissionDetail({
 }>) {
   return (
     <div className="admin-poi-detail">
+      <PoiGeometryPreview geometry={submission.geometry} />
       <dl>
         <div>
           <dt>投稿 ID</dt>
@@ -627,6 +628,44 @@ function PoiSubmissionDetail({
         <summary>几何 JSON</summary>
         <pre>{JSON.stringify(submission.geometry, null, 2)}</pre>
       </details>
+    </div>
+  );
+}
+
+function PoiGeometryPreview({ geometry }: Readonly<{ geometry: MapGeometry }>) {
+  const preview = buildGeometryPreview(geometry);
+  if (!preview) {
+    return null;
+  }
+
+  return (
+    <div className="admin-poi-geometry-preview">
+      <svg viewBox="0 0 180 128" role="img" aria-label={`${geometryLabel(geometry)} 预览`}>
+        {preview.polygons.map((polygon, index) => (
+          <polygon
+            className="admin-poi-geometry-preview-shape"
+            key={`polygon-${index}`}
+            points={polygon}
+          />
+        ))}
+        {preview.lines.map((line, index) => (
+          <polyline
+            className="admin-poi-geometry-preview-line"
+            key={`line-${index}`}
+            points={line}
+          />
+        ))}
+        {preview.points.map((point, index) => (
+          <circle
+            className="admin-poi-geometry-preview-point"
+            cx={point[0]}
+            cy={point[1]}
+            key={`point-${index}`}
+            r="4"
+          />
+        ))}
+      </svg>
+      <small>几何形状预览 · {geometryLabel(geometry)}</small>
     </div>
   );
 }
@@ -1224,6 +1263,93 @@ function buildSubmissionMapHref(
   return `${appPath('/map')}?${params.toString()}`;
 }
 
+interface GeometryPreviewModel {
+  points: Array<[number, number]>;
+  lines: string[];
+  polygons: string[];
+}
+
+function buildGeometryPreview(geometry: MapGeometry): GeometryPreviewModel | null {
+  const coordinateSets = getGeometryPreviewCoordinateSets(geometry);
+  const allCoordinates = coordinateSets.flatMap((set) => set.coordinates);
+  if (allCoordinates.length === 0) {
+    return null;
+  }
+
+  const bounds = getCoordinateBounds(allCoordinates);
+  const project = (coordinate: [number, number]) =>
+    projectGeometryPreviewCoordinate(coordinate, bounds);
+  const points: Array<[number, number]> = [];
+  const lines: string[] = [];
+  const polygons: string[] = [];
+
+  for (const set of coordinateSets) {
+    const projected = set.coordinates.map(project);
+    const pointsValue = projected
+      .map(([x, y]) => `${roundPreviewValue(x)},${roundPreviewValue(y)}`)
+      .join(' ');
+    if (set.kind === 'point') {
+      points.push(...projected);
+    } else if (set.kind === 'line') {
+      lines.push(pointsValue);
+      points.push(...projected);
+    } else {
+      polygons.push(pointsValue);
+    }
+  }
+
+  return { points, lines, polygons };
+}
+
+function getGeometryPreviewCoordinateSets(
+  geometry: MapGeometry,
+): Array<{ kind: 'point' | 'line' | 'polygon'; coordinates: Array<[number, number]> }> {
+  if (geometry.type === 'Point') {
+    return [{ kind: 'point', coordinates: [geometry.coordinates] }];
+  }
+
+  if (geometry.type === 'MultiPoint') {
+    return [{ kind: 'point', coordinates: geometry.coordinates }];
+  }
+
+  if (geometry.type === 'LineString') {
+    return [{ kind: 'line', coordinates: geometry.coordinates }];
+  }
+
+  if (geometry.type === 'Rectangle') {
+    return [{ kind: 'polygon', coordinates: rectangleBoundsToCoordinates(geometry.bounds) }];
+  }
+
+  if (geometry.type === 'MultiRectangle') {
+    return geometry.rectangles.map((bounds) => ({
+      kind: 'polygon',
+      coordinates: rectangleBoundsToCoordinates(bounds),
+    }));
+  }
+
+  if (geometry.type === 'Polygon') {
+    return geometry.coordinates.map((coordinates) => ({ kind: 'polygon', coordinates }));
+  }
+
+  return geometry.coordinates.flatMap((polygon) =>
+    polygon.map((coordinates) => ({ kind: 'polygon' as const, coordinates })),
+  );
+}
+
+function rectangleBoundsToCoordinates(bounds: {
+  minX: number;
+  minZ: number;
+  maxX: number;
+  maxZ: number;
+}): Array<[number, number]> {
+  return [
+    [bounds.minX, bounds.minZ],
+    [bounds.maxX, bounds.minZ],
+    [bounds.maxX, bounds.maxZ],
+    [bounds.minX, bounds.maxZ],
+  ];
+}
+
 function getGeometryRepresentativeCoordinate(geometry: MapGeometry): [number, number] | null {
   if (geometry.type === 'Point') {
     return geometry.coordinates;
@@ -1295,6 +1421,52 @@ function getCoordinateBoundsCenter(coordinates: Array<[number, number]>): [numbe
   );
 
   return [(bounds.minX + bounds.maxX) / 2, (bounds.minZ + bounds.maxZ) / 2];
+}
+
+function getCoordinateBounds(coordinates: Array<[number, number]>): {
+  minX: number;
+  minZ: number;
+  maxX: number;
+  maxZ: number;
+} {
+  return coordinates.reduce(
+    (current, [x, z]) => ({
+      maxX: Math.max(current.maxX, x),
+      maxZ: Math.max(current.maxZ, z),
+      minX: Math.min(current.minX, x),
+      minZ: Math.min(current.minZ, z),
+    }),
+    {
+      maxX: Number.NEGATIVE_INFINITY,
+      maxZ: Number.NEGATIVE_INFINITY,
+      minX: Number.POSITIVE_INFINITY,
+      minZ: Number.POSITIVE_INFINITY,
+    },
+  );
+}
+
+function projectGeometryPreviewCoordinate(
+  coordinate: [number, number],
+  bounds: { minX: number; minZ: number; maxX: number; maxZ: number },
+): [number, number] {
+  const width = 180;
+  const height = 128;
+  const padding = 14;
+  const spanX = Math.max(1, bounds.maxX - bounds.minX);
+  const spanZ = Math.max(1, bounds.maxZ - bounds.minZ);
+  const scale = Math.min((width - padding * 2) / spanX, (height - padding * 2) / spanZ);
+  const contentWidth = spanX * scale;
+  const contentHeight = spanZ * scale;
+  const offsetX = (width - contentWidth) / 2;
+  const offsetY = (height - contentHeight) / 2;
+  return [
+    offsetX + (coordinate[0] - bounds.minX) * scale,
+    offsetY + (coordinate[1] - bounds.minZ) * scale,
+  ];
+}
+
+function roundPreviewValue(value: number): string {
+  return value.toFixed(2).replace(/\.?0+$/, '');
 }
 
 function formatCoordinatePair([x, z]: [number, number]): string {
