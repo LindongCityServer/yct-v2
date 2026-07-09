@@ -780,6 +780,13 @@ body .material-symbols-outlined {
 }
 
 .map-stage {
+  --yct-map-empty-background: #dbe0e1;
+  --yct-map-grid-primary: rgba(22, 143, 120, 0.08);
+  --yct-map-grid-secondary: rgba(37, 132, 232, 0.08);
+  --yct-map-tile-filter: none;
+  --yct-map-road-trace-color: #65706d;
+  --yct-map-road-trace-shadow: rgba(17, 24, 23, 0.2);
+  --yct-map-road-trace-muted-shadow: rgba(17, 24, 23, 0.12);
   position: relative;
   height: var(--yct-map-stage-height);
   min-height: var(--yct-map-stage-height);
@@ -787,10 +794,33 @@ body .material-symbols-outlined {
   border: 0;
   border-radius: 0;
   background:
-    linear-gradient(rgba(22, 143, 120, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(37, 132, 232, 0.08) 1px, transparent 1px),
+    linear-gradient(var(--yct-map-grid-primary) 1px, transparent 1px),
+    linear-gradient(90deg, var(--yct-map-grid-secondary) 1px, transparent 1px),
     var(--yct-color-surface-panel);
   background-size: 42px 42px;
+}
+
+:root[data-color-scheme='dark'] .map-stage {
+  --yct-map-empty-background: #202827;
+  --yct-map-grid-primary: rgb(80 181 160 / 12%);
+  --yct-map-grid-secondary: rgb(90 145 214 / 10%);
+  --yct-map-tile-filter: brightness(0.72) saturate(0.82) contrast(1.06);
+  --yct-map-road-trace-color: #9aa8a4;
+  --yct-map-road-trace-shadow: rgba(0, 0, 0, 0.38);
+  --yct-map-road-trace-muted-shadow: rgba(0, 0, 0, 0.24);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-color-scheme='system'] .map-stage,
+  :root:not([data-color-scheme]) .map-stage {
+    --yct-map-empty-background: #202827;
+    --yct-map-grid-primary: rgb(80 181 160 / 12%);
+    --yct-map-grid-secondary: rgb(90 145 214 / 10%);
+    --yct-map-tile-filter: brightness(0.72) saturate(0.82) contrast(1.06);
+    --yct-map-road-trace-color: #9aa8a4;
+    --yct-map-road-trace-shadow: rgba(0, 0, 0, 0.38);
+    --yct-map-road-trace-muted-shadow: rgba(0, 0, 0, 0.24);
+  }
 }
 
 .map-stage-loading {
@@ -813,7 +843,7 @@ body .material-symbols-outlined {
   height: 100%;
   min-height: var(--yct-map-stage-height);
   padding-bottom: 0;
-  background: #dbe0e1;
+  background: var(--yct-map-empty-background);
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -922,6 +952,7 @@ body .material-symbols-outlined {
   width: var(--tile-display-size, 256px);
   height: var(--tile-display-size, 256px);
   image-rendering: auto;
+  filter: var(--yct-map-tile-filter);
   transition:
     left 160ms ease,
     top 160ms ease,
@@ -965,14 +996,14 @@ body .material-symbols-outlined {
 }
 
 .map-road-trace {
-  --road-trace-color: #65706d;
+  --road-trace-color: var(--yct-map-road-trace-color);
   fill: none;
   stroke: var(--road-trace-color);
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 10;
   opacity: 0.72;
-  filter: drop-shadow(0 2px 3px rgba(17, 24, 23, 0.2));
+  filter: drop-shadow(0 2px 3px var(--yct-map-road-trace-shadow));
   vector-effect: non-scaling-stroke;
 }
 
@@ -984,13 +1015,13 @@ body .material-symbols-outlined {
 .map-road-trace.is-muted {
   stroke-width: 7;
   opacity: 0.34;
-  filter: drop-shadow(0 1px 2px rgba(17, 24, 23, 0.12));
+  filter: drop-shadow(0 1px 2px var(--yct-map-road-trace-muted-shadow));
 }
 
 .map-road-trace.is-selected {
   stroke-width: 14;
   opacity: 0.92;
-  filter: drop-shadow(0 2px 4px rgba(17, 24, 23, 0.28))
+  filter: drop-shadow(0 2px 4px var(--yct-map-road-trace-shadow))
     drop-shadow(0 0 8px color-mix(in srgb, var(--road-trace-color) 44%, transparent));
 }
 
@@ -1006,7 +1037,7 @@ body .material-symbols-outlined {
   stroke-linejoin: round;
   stroke-width: 5;
   opacity: 0.82;
-  filter: drop-shadow(0 1px 2px rgba(17, 24, 23, 0.2))
+  filter: drop-shadow(0 1px 2px var(--yct-map-road-trace-shadow))
     drop-shadow(0 0 5px color-mix(in srgb, var(--transit-trace-color) 36%, transparent));
   vector-effect: non-scaling-stroke;
 }
@@ -1019,7 +1050,7 @@ body .material-symbols-outlined {
 .map-transit-trace.is-selected {
   stroke-width: 9;
   opacity: 0.96;
-  filter: drop-shadow(0 2px 5px rgba(17, 24, 23, 0.28))
+  filter: drop-shadow(0 2px 5px var(--yct-map-road-trace-shadow))
     drop-shadow(0 0 10px color-mix(in srgb, var(--transit-trace-color) 54%, transparent));
 }
 
