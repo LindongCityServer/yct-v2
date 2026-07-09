@@ -16,6 +16,7 @@ import type {
 } from 'react';
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getFontEmbedCSS, toBlob } from 'html-to-image';
+import LZString from 'lz-string';
 import { appPath } from '../lib/app-paths';
 import { readMapFavoriteMarkerIds, writeMapFavoriteMarkerIds } from '../lib/client-map-favorites';
 import {
@@ -494,6 +495,17 @@ interface SharedRoutePlanState {
   key: string;
   selectedOptionId?: string;
 }
+
+type CompactRoutePlanShareState = [
+  origin: string,
+  destination: string,
+  originLabel: string,
+  destinationLabel: string,
+  originId: string,
+  destinationId: string,
+  modes: string,
+  selectedOptionId: string,
+];
 
 interface SharedCoordinateFocusState {
   coordinate: [number, number];
@@ -7566,20 +7578,8 @@ function buildRoutePlanShareUrl(
   selectedOptionId?: string,
 ): string {
   const url = new URL(appPath('/map'), window.location.origin);
-  const modes = routeTransportModeOptions
-    .filter((mode) => enabledModes[mode.mode])
-    .map((mode) => mode.mode);
-  const compactState = [
-    formatCoordinateParam(draft.origin),
-    formatCoordinateParam(draft.destination),
-    draft.originLabel !== formatPoint(draft.origin) ? draft.originLabel : '',
-    draft.destinationLabel !== formatPoint(draft.destination) ? draft.destinationLabel : '',
-    draft.originId ?? '',
-    draft.destinationId ?? '',
-    modes.join('.'),
-    selectedOptionId ?? '',
-  ];
-  url.searchParams.set('rs', encodeBase64UrlText(JSON.stringify(compactState)));
+  const compactState = buildCompactRoutePlanShareState(draft, enabledModes, selectedOptionId);
+  setCompactRoutePlanShareSearchParam(url, compactState);
   return url.toString();
 }
 
@@ -7632,7 +7632,15 @@ function readMapSharedCoordinateFocus(
 function readMapSharedRoutePlan(
   searchParams: Pick<URLSearchParams, 'get' | 'toString'>,
 ): SharedRoutePlanState | null {
-  const compactRoutePlan = readCompactRoutePlanShareState(searchParams.get('rs'), searchParams);
+  const compressedRoutePlan = readCompressedRoutePlanShareState(
+    searchParams.get('rsc'),
+    searchParams,
+  );
+  if (compressedRoutePlan) {
+    return compressedRoutePlan;
+  }
+
+  const compactRoutePlan = readBase64RoutePlanShareState(searchParams.get('rs'), searchParams);
   if (compactRoutePlan) {
     return compactRoutePlan;
   }
@@ -7678,7 +7686,60 @@ function readMapSharedRoutePlan(
   };
 }
 
-function readCompactRoutePlanShareState(
+function buildCompactRoutePlanShareState(
+  draft: RoutePlanDraft,
+  enabledModes: EnabledRouteTransportModes,
+  selectedOptionId?: string,
+): CompactRoutePlanShareState {
+  const modes = routeTransportModeOptions
+    .filter((mode) => enabledModes[mode.mode])
+    .map((mode) => mode.mode);
+
+  return [
+    formatCoordinateParam(draft.origin),
+    formatCoordinateParam(draft.destination),
+    draft.originLabel !== formatPoint(draft.origin) ? draft.originLabel : '',
+    draft.destinationLabel !== formatPoint(draft.destination) ? draft.destinationLabel : '',
+    draft.originId ?? '',
+    draft.destinationId ?? '',
+    modes.join('.'),
+    selectedOptionId ?? '',
+  ];
+}
+
+function setCompactRoutePlanShareSearchParam(
+  url: URL,
+  state: CompactRoutePlanShareState,
+) {
+  const json = JSON.stringify(state);
+  const compressed = LZString.compressToEncodedURIComponent(json);
+  const base64 = encodeBase64UrlText(json);
+  if (`rsc=${compressed}`.length < `rs=${base64}`.length) {
+    url.searchParams.set('rsc', compressed);
+  } else {
+    url.searchParams.set('rs', base64);
+  }
+}
+
+function readCompressedRoutePlanShareState(
+  value: string | null,
+  searchParams: Pick<URLSearchParams, 'toString'>,
+): SharedRoutePlanState | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return readRoutePlanShareStateJson(
+      LZString.decompressFromEncodedURIComponent(value),
+      searchParams,
+    );
+  } catch {
+    return null;
+  }
+}
+
+function readBase64RoutePlanShareState(
   value: string | null,
   searchParams: Pick<URLSearchParams, 'toString'>,
 ): SharedRoutePlanState | null {
@@ -7687,8 +7748,19 @@ function readCompactRoutePlanShareState(
     return null;
   }
 
+  return readRoutePlanShareStateJson(decoded, searchParams);
+}
+
+function readRoutePlanShareStateJson(
+  value: string | null,
+  searchParams: Pick<URLSearchParams, 'toString'>,
+): SharedRoutePlanState | null {
+  if (!value) {
+    return null;
+  }
+
   try {
-    const state = JSON.parse(decoded) as unknown;
+    const state = JSON.parse(value) as unknown;
     if (!Array.isArray(state)) {
       return null;
     }
