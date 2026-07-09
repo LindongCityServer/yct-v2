@@ -3604,7 +3604,7 @@ function TransitLineMapDetail({
       <dl>
         <div>
           <dt>{t('lineDetail.firstLast')}</dt>
-          <dd>{formatTransitLineTime(line)}</dd>
+          <dd>{formatTransitLineTime(line, t)}</dd>
         </div>
         <div>
           <dt>{t('lineDetail.operator')}</dt>
@@ -9687,14 +9687,16 @@ function formatScaleDistance(distance: number, t: Translate): string {
   return t('map.hud.scale.blocks', { value: formatCompactNumber(distance) });
 }
 
-function formatTransitLineTime(line: TransitOverviewLine): string {
+function formatTransitLineTime(line: TransitOverviewLine, t: Translate): string {
   const first = line.firstLastBus?.first;
   const last = line.firstLastBus?.last;
   if (first || last) {
-    return `${first ?? '待补'}-${last ?? '待补'}`;
+    return `${first ?? t('lineDetail.toBeAdded')}-${last ?? t('lineDetail.toBeAdded')}`;
   }
 
-  return line.departureTimes?.length ? `${line.departureTimes.length} 个班次` : '待补充';
+  return line.departureTimes?.length
+    ? t('lineDetail.extra.departures', { count: line.departureTimes.length })
+    : t('lineDetail.toBeAdded');
 }
 
 function fitMarkerToMapView(
