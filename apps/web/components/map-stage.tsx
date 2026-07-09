@@ -678,6 +678,7 @@ const lowPriorityTrafficCategoryIds = new Set(['bus-stop', 'residence', 'industr
 
 const tileSize = 256;
 const representativePoiPriorityBoost = 24;
+const markerRoadAccessProjectionRange = 50;
 const mapDefaults = {
   minZoom: -7,
   maxZoom: 3,
@@ -5615,7 +5616,10 @@ function buildWalkRouteToTransitStop(input: {
       input.routeCache,
       input.t,
       {
-        destinationAccessCandidates: input.markerRoadAccessIndex.get(input.stop.marker.id),
+        destinationAccessCandidates: getIndexedMarkerRoadAccessCandidates(
+          input.markerRoadAccessIndex,
+          input.stop.marker.id,
+        ),
         originAccessCandidates: input.originRoadAccessCandidates,
       },
     );
@@ -5628,7 +5632,10 @@ function buildWalkRouteToTransitStop(input: {
     input.routeCache,
     input.t,
     {
-      destinationAccessCandidates: input.markerRoadAccessIndex.get(access.markerId),
+      destinationAccessCandidates: getIndexedMarkerRoadAccessCandidates(
+        input.markerRoadAccessIndex,
+        access.markerId,
+      ),
       originAccessCandidates: input.originRoadAccessCandidates,
     },
   );
@@ -5669,7 +5676,10 @@ function buildWalkRouteFromTransitStop(input: {
       input.t,
       {
         destinationAccessCandidates: input.destinationRoadAccessCandidates,
-        originAccessCandidates: input.markerRoadAccessIndex.get(input.stop.marker.id),
+        originAccessCandidates: getIndexedMarkerRoadAccessCandidates(
+          input.markerRoadAccessIndex,
+          input.stop.marker.id,
+        ),
       },
     );
   }
@@ -5682,7 +5692,10 @@ function buildWalkRouteFromTransitStop(input: {
     input.t,
     {
       destinationAccessCandidates: input.destinationRoadAccessCandidates,
-      originAccessCandidates: input.markerRoadAccessIndex.get(access.markerId),
+      originAccessCandidates: getIndexedMarkerRoadAccessCandidates(
+        input.markerRoadAccessIndex,
+        access.markerId,
+      ),
     },
   );
   return prependTransitStopAccessSegment({
@@ -6272,8 +6285,14 @@ function buildTransferTransitLineOptions(
         routeCache,
         t,
         {
-          destinationAccessCandidates: markerRoadAccessIndex.get(transfer.toStop.marker.id),
-          originAccessCandidates: markerRoadAccessIndex.get(transfer.fromStop.marker.id),
+          destinationAccessCandidates: getIndexedMarkerRoadAccessCandidates(
+            markerRoadAccessIndex,
+            transfer.toStop.marker.id,
+          ),
+          originAccessCandidates: getIndexedMarkerRoadAccessCandidates(
+            markerRoadAccessIndex,
+            transfer.fromStop.marker.id,
+          ),
         },
       );
       const accessDistance = accessRoute.distance;
@@ -6645,8 +6664,14 @@ function buildTransitSegmentRoute(
       routeCache,
       undefined,
       {
-        destinationAccessCandidates: markerRoadAccessIndex.get(current.marker.id),
-        originAccessCandidates: markerRoadAccessIndex.get(previous.marker.id),
+        destinationAccessCandidates: getIndexedMarkerRoadAccessCandidates(
+          markerRoadAccessIndex,
+          current.marker.id,
+        ),
+        originAccessCandidates: getIndexedMarkerRoadAccessCandidates(
+          markerRoadAccessIndex,
+          previous.marker.id,
+        ),
       },
     );
     const segmentCoordinates = roadSegment?.coordinates ?? [previous.center, current.center];
@@ -6682,11 +6707,11 @@ function findRoadRouteBetweenCoordinates(
   }
 
   const originAccessCandidates =
-    accessOptions?.originAccessCandidates?.length
+    accessOptions?.originAccessCandidates !== undefined
       ? accessOptions.originAccessCandidates
       : findRoadAccessCandidates(origin, destination, graph, routeCache);
   const destinationAccessCandidates =
-    accessOptions?.destinationAccessCandidates?.length
+    accessOptions?.destinationAccessCandidates !== undefined
       ? accessOptions.destinationAccessCandidates
       : findRoadAccessCandidates(destination, origin, graph, routeCache);
   if (originAccessCandidates.length === 0 || destinationAccessCandidates.length === 0) {
@@ -6959,16 +6984,9 @@ function buildMarkerRoadAccessCandidates(
     }
   }
 
-  const sorted = Array.from(nearestByRoad.values()).sort(
-    (left, right) => left.distanceToPoint - right.distanceToPoint,
-  );
-  const nearest = sorted[0];
-  if (!nearest) {
-    return [];
-  }
-
-  return sorted
-    .filter((candidate, index) => index === 0 || candidate.distanceToPoint <= 50)
+  return Array.from(nearestByRoad.values())
+    .filter((candidate) => candidate.distanceToPoint <= markerRoadAccessProjectionRange)
+    .sort((left, right) => left.distanceToPoint - right.distanceToPoint)
     .slice(0, 8);
 }
 
@@ -7253,7 +7271,16 @@ function getRouteEndpointRoadAccessCandidates(
     endpoint === 'origin'
       ? draft.originAccessId ?? draft.originId
       : draft.destinationAccessId ?? draft.destinationId;
-  return markerId ? markerRoadAccessIndex.get(markerId) : undefined;
+  return markerId
+    ? getIndexedMarkerRoadAccessCandidates(markerRoadAccessIndex, markerId)
+    : undefined;
+}
+
+function getIndexedMarkerRoadAccessCandidates(
+  markerRoadAccessIndex: ReadonlyMap<string, RoadAccessCandidate[]>,
+  markerId: string,
+): RoadAccessCandidate[] {
+  return markerRoadAccessIndex.get(markerId) ?? [];
 }
 
 function findNearestRouteStation<T extends { center: [number, number] }>(
