@@ -163,6 +163,7 @@ interface ProjectedGuideMarker {
 interface ProjectedRoadTrace {
   id: string;
   label: string;
+  labels?: ProjectedRouteRoadLabel[];
   path: string;
   segments?: ProjectedRouteTraceSegment[];
   viewBox: string;
@@ -182,6 +183,14 @@ interface ProjectedRoadTrace {
 interface ProjectedRouteTraceSegment {
   color: string;
   path: string;
+}
+
+interface ProjectedRouteRoadLabel {
+  color?: string;
+  id: string;
+  label: string;
+  left: number;
+  top: number;
 }
 
 interface TraceBounds {
@@ -277,12 +286,22 @@ interface RoutePlanOption {
   coordinates: Array<[number, number]>;
   traceSegments?: RoutePlanTraceSegment[];
   markerIds: string[];
+  labelMarkerIds?: string[];
   estimatedDistance: number;
   estimatedMinutes: number;
   transferCount: number;
   walkingDistance: number;
   steps: RoutePlanStep[];
   note: string;
+  roadLabels?: RoutePlanRoadLabel[];
+  suppressLabelMarkerIds?: string[];
+}
+
+interface RoutePlanRoadLabel {
+  color?: string;
+  coordinates: Array<[number, number]>;
+  id: string;
+  label: string;
 }
 
 interface RoutePlanStep {
@@ -426,6 +445,7 @@ interface ResolvedRoadRoute {
   coordinates: Array<[number, number]>;
   details: RoutePlanStepDetail[];
   distance: number;
+  roadSegments: RoadRouteInstructionSegment[];
 }
 
 interface RoadRouteAccessOptions {
@@ -438,6 +458,7 @@ interface ResolvedWalkRoute {
   details: RoutePlanStepDetail[];
   distance: number;
   markerIds?: string[];
+  roadSegments?: RoadRouteInstructionSegment[];
   usesRoadGraph: boolean;
 }
 
@@ -1102,26 +1123,60 @@ export function MapStage() {
     }
   }, [markerListCategoryId, markerListCategoryOptions]);
 
-  const rawProjectedMarkers = useMemo(
+  const selectedRouteOption =
+    routePlanOptions.find((option) => option.id === selectedRouteOptionId) ?? routePlanOptions[0];
+  const routeResultActive = Boolean(routePlanDraft && selectedRouteOption && !editingRouteEndpoint);
+  const routeResultMarkerIds = useMemo(
+    () => (routeResultActive ? new Set(selectedRouteOption?.markerIds ?? []) : undefined),
+    [routeResultActive, selectedRouteOption],
+  );
+  const routeLabelMarkerIds = useMemo(
+    () => (routeResultActive ? new Set(selectedRouteOption?.labelMarkerIds ?? []) : undefined),
+    [routeResultActive, selectedRouteOption],
+  );
+  const routeSuppressLabelMarkerIds = useMemo(
     () =>
-      projectPointMarkers(
-        markersVisible ? pointOverlaySource : [],
+      routeResultActive ? new Set(selectedRouteOption?.suppressLabelMarkerIds ?? []) : undefined,
+    [routeResultActive, selectedRouteOption],
+  );
+  const pointProjectionSource = useMemo(() => {
+    const baseSource = markersVisible ? pointOverlaySource : [];
+    if (!routeResultMarkerIds) {
+      return baseSource;
+    }
+
+    const routeMarkers = pointMarkers.filter((marker) => routeResultMarkerIds.has(marker.id));
+    return dedupeMarkersById([...baseSource, ...routeMarkers]);
+  }, [markersVisible, pointMarkers, pointOverlaySource, routeResultMarkerIds]);
+  const rawProjectedMarkers = useMemo(
+    () => {
+      const projected = projectPointMarkers(
+        pointProjectionSource,
         mapView,
         viewportSize,
         markerIconBaseUrl,
         focusedMarkerId,
         browseMode,
         representativePoiIds,
-      ).slice(0, 220),
+        {
+          forceLabelMarkerIds: routeLabelMarkerIds,
+          suppressLabelMarkerIds: routeSuppressLabelMarkerIds,
+        },
+      );
+      return routeResultMarkerIds ? projected : projected.slice(0, 220);
+    },
     [
       browseMode,
       focusedMarkerId,
       markerQuery,
       markersVisible,
-      pointOverlaySource,
+      pointProjectionSource,
       representativePoiIds,
       mapView,
       markerIconBaseUrl,
+      routeResultMarkerIds,
+      routeLabelMarkerIds,
+      routeSuppressLabelMarkerIds,
       viewportSize,
     ],
   );
@@ -1395,19 +1450,12 @@ export function MapStage() {
     const timer = window.setTimeout(() => setShareActionStatus(''), 3200);
     return () => window.clearTimeout(timer);
   }, [shareActionStatus]);
-  const selectedRouteOption =
-    routePlanOptions.find((option) => option.id === selectedRouteOptionId) ?? routePlanOptions[0];
   const selectedRouteTrace = useMemo(
     () =>
       selectedRouteOption
         ? projectRoutePlanTrace(selectedRouteOption, mapView, viewportSize)
         : undefined,
     [mapView, selectedRouteOption, viewportSize],
-  );
-  const routeResultActive = Boolean(routePlanDraft && selectedRouteOption && !editingRouteEndpoint);
-  const routeResultMarkerIds = useMemo(
-    () => (routeResultActive ? new Set(selectedRouteOption?.markerIds ?? []) : undefined),
-    [routeResultActive, selectedRouteOption],
   );
   const visibleProjectedMarkers = useMemo(
     () =>
@@ -2706,6 +2754,21 @@ export function MapStage() {
                     title: selectedRouteOption?.title ?? t('map.route.optionFallback'),
                   })}
                 />
+                {selectedRouteTrace.labels?.map((label) => (
+                  <span
+                    className="map-route-road-label"
+                    key={label.id}
+                    style={
+                      {
+                        '--label-left': `${label.left}px`,
+                        '--label-top': `${label.top}px`,
+                        '--route-road-label-color': label.color ?? routeWalkTraceColor,
+                      } as CSSProperties
+                    }
+                  >
+                    {label.label}
+                  </span>
+                ))}
               </div>
             ) : null}
             {projectedGuideMarkers.map((marker) => (
@@ -2726,7 +2789,7 @@ export function MapStage() {
                 ) : (
                   <span className="map-guide-marker-pin">
                     <span className="material-symbols-outlined map-guide-marker-icon">
-                      {marker.kind === 'route-origin' ? 'origin' : 'flag'}
+                      {marker.kind === 'route-origin' ? 'location_on' : 'flag'}
                     </span>
                   </span>
                 )}
@@ -3659,7 +3722,7 @@ function RoutePlanDraftCard({
         <div className="map-route-endpoint-list">
           <div className="map-route-endpoint-row">
             <span className="material-symbols-outlined map-route-endpoint-icon is-origin" aria-hidden="true">
-              origin
+              location_on
             </span>
             {editingEndpoint === 'origin' ? (
               <input
@@ -4054,6 +4117,7 @@ function buildRoutePlanOptions(input: {
       estimateResolvedWalkRouteMinutes(directWalkRoute) +
       estimateRouteMinutes(endpointAccessDistance, 72);
     const directCoordinates = buildRouteTraceCoordinates(draft, directWalkRoute.coordinates);
+    const directRoadLabels = createRouteRoadLabelsFromSegments(directWalkRoute.roadSegments);
     options.push({
       id: 'walk-direct',
       title: input.t('map.route.walkDirect'),
@@ -4068,6 +4132,7 @@ function buildRoutePlanOptions(input: {
         'var(--yct-color-text-secondary)',
       coordinates: directCoordinates,
       traceSegments: [createRouteTraceSegment('walk', directCoordinates)],
+      roadLabels: directRoadLabels,
       markerIds: getRouteEndpointMarkerIds(draft),
       estimatedDistance: directDistance,
       estimatedMinutes: directMinutes,
@@ -4335,6 +4400,46 @@ function createRouteTraceSegment(
   };
 }
 
+function createRouteRoadLabelsFromSegments(
+  segments: readonly RoadRouteInstructionSegment[] | undefined,
+  color = routeWalkTraceColor,
+): RoutePlanRoadLabel[] {
+  const labels: RoutePlanRoadLabel[] = [];
+
+  for (const [index, segment] of (segments ?? []).entries()) {
+    if (segment.kind !== 'road') {
+      continue;
+    }
+
+    if (segment.coordinates.length < 2) {
+      continue;
+    }
+
+    const label = formatMarkerDisplayName(segment.label);
+    if (!label) {
+      continue;
+    }
+
+    const distance = getCoordinateChainDistance(segment.coordinates);
+    if (distance <= 0) {
+      continue;
+    }
+
+    labels.push({
+      color,
+      coordinates: segment.coordinates,
+      id: `route-road-label-${encodeURIComponent(label)}-${index}`,
+      label,
+    });
+  }
+
+  return labels;
+}
+
+function combineRouteRoadLabels(...groups: Array<RoutePlanRoadLabel[] | undefined>): RoutePlanRoadLabel[] {
+  return groups.flatMap((group) => group ?? []);
+}
+
 function compactRouteTraceSegments(segments: RoutePlanTraceSegment[]): RoutePlanTraceSegment[] {
   return segments.filter((segment) => segment.coordinates.length >= 2);
 }
@@ -4416,7 +4521,7 @@ function createRoutePlaceStep(
   color?: string,
 ): RoutePlanStep {
   const resolvedIcon =
-    icon ?? (role === 'origin' ? 'origin' : role === 'destination' ? 'flag' : undefined);
+    icon ?? (role === 'origin' ? 'location_on' : role === 'destination' ? 'flag' : undefined);
   return { kind: 'place', label, role, icon: resolvedIcon, color };
 }
 
@@ -5115,6 +5220,7 @@ function buildWalkRouteBetweenCoordinates(
       coordinates: roadRoute.coordinates,
       distance: roadRoute.distance,
       details: roadRoute.details,
+      roadSegments: roadRoute.roadSegments,
       usesRoadGraph: true,
     };
   }
@@ -5132,6 +5238,7 @@ function buildWalkRouteBetweenCoordinates(
         'process',
       ),
     ],
+    roadSegments: [],
     usesRoadGraph: false,
   };
 }
@@ -5611,6 +5718,14 @@ function buildDirectTransitLineOption(
       ...(draft.destinationRaw ? [draft.destinationRaw] : []),
     ]),
   ]);
+  const labelMarkerIds = dedupeValues([originStop.marker.id, destinationStop.marker.id]);
+  const suppressLabelMarkerIds = segmentStops
+    .map((stop) => stop.marker.id)
+    .filter((id) => !labelMarkerIds.includes(id));
+  const roadLabels = combineRouteRoadLabels(
+    createRouteRoadLabelsFromSegments(accessRoute.roadSegments),
+    createRouteRoadLabelsFromSegments(egressRoute.roadSegments),
+  );
 
   return {
     id: `${candidate.mode.mode}-${candidate.line.id}-${candidate.direction}-${originStop.marker.id}-${destinationStop.marker.id}`,
@@ -5627,12 +5742,15 @@ function buildDirectTransitLineOption(
     color: candidate.color,
     coordinates,
     traceSegments,
+    roadLabels,
     markerIds: dedupeValues([
       ...getRouteEndpointMarkerIds(draft),
       ...(accessRoute.markerIds ?? []),
       ...segmentStops.map((stop) => stop.marker.id),
       ...(egressRoute.markerIds ?? []),
     ]),
+    labelMarkerIds,
+    suppressLabelMarkerIds,
     estimatedDistance: endpointAccessDistance + accessDistance + egressDistance + transitDistance,
     estimatedMinutes,
     transferCount: 0,
@@ -5891,6 +6009,21 @@ function buildTransferTransitLineOptions(
           ...(draft.destinationRaw ? [draft.destinationRaw] : []),
         ]),
       ]);
+      const labelMarkerIds = dedupeValues([
+        originCandidate.originStop.marker.id,
+        transfer.fromStop.marker.id,
+        transfer.toStop.marker.id,
+        destinationCandidate.destinationStop.marker.id,
+      ]);
+      const suppressLabelMarkerIds = dedupeValues([
+        ...firstSegment.map((stop) => stop.marker.id),
+        ...secondSegment.map((stop) => stop.marker.id),
+      ]).filter((id) => !labelMarkerIds.includes(id));
+      const roadLabels = combineRouteRoadLabels(
+        createRouteRoadLabelsFromSegments(accessRoute.roadSegments),
+        createRouteRoadLabelsFromSegments(transferRoute.roadSegments),
+        createRouteRoadLabelsFromSegments(egressRoute.roadSegments),
+      );
 
       options.push({
         id: `transfer-${originCandidate.candidate.line.id}-${destinationCandidate.candidate.line.id}-${originCandidate.originStop.marker.id}-${transfer.fromStop.marker.id}-${destinationCandidate.destinationStop.marker.id}`,
@@ -5906,6 +6039,7 @@ function buildTransferTransitLineOptions(
         color: originCandidate.candidate.color,
         coordinates,
         traceSegments,
+        roadLabels,
         markerIds: dedupeValues([
           ...getRouteEndpointMarkerIds(draft),
           ...(accessRoute.markerIds ?? []),
@@ -5913,6 +6047,8 @@ function buildTransferTransitLineOptions(
           ...secondSegment.map((stop) => stop.marker.id),
           ...(egressRoute.markerIds ?? []),
         ]),
+        labelMarkerIds,
+        suppressLabelMarkerIds,
         estimatedDistance:
           endpointAccessDistance +
           accessDistance +
@@ -6462,6 +6598,7 @@ function buildSameSegmentRoadRoute(
       coordinates: Array<[number, number]>;
       details: RoutePlanStepDetail[];
       distance: number;
+      roadSegments: RoadRouteInstructionSegment[];
     }
   | undefined {
   const sameSegment =
@@ -6509,6 +6646,7 @@ function buildSameSegmentRoadRoute(
     coordinates,
     details: buildRoadRouteStepDetails(instructionSegments, t),
     distance,
+    roadSegments: instructionSegments,
   };
 }
 
@@ -6527,6 +6665,7 @@ function buildGraphRoadRouteCandidate(input: {
       coordinates: Array<[number, number]>;
       details: RoutePlanStepDetail[];
       distance: number;
+      roadSegments: RoadRouteInstructionSegment[];
     }
   | undefined {
   const originNode = input.graph.nodesById.get(input.originNodeId);
@@ -6602,6 +6741,7 @@ function buildGraphRoadRouteCandidate(input: {
     coordinates,
     details: buildRoadRouteStepDetails(instructionSegments, input.t),
     distance: accessDistance + roadPath.distance + egressDistance,
+    roadSegments: instructionSegments,
   };
 }
 
@@ -6872,7 +7012,7 @@ function getRouteShareStepMarkerIcon(step: MapShareStep): string | undefined {
   }
 
   if (step.role === 'origin') {
-    return 'origin';
+    return 'location_on';
   }
 
   if (step.role === 'destination') {
@@ -7943,6 +8083,10 @@ function projectPointMarkers(
   focusedMarkerId: string | null,
   browseMode: MapBrowseMode,
   representativePoiIds: ReadonlySet<string>,
+  options?: {
+    forceLabelMarkerIds?: ReadonlySet<string>;
+    suppressLabelMarkerIds?: ReadonlySet<string>;
+  },
 ): ProjectedMarker[] {
   if (size.width <= 0 || size.height <= 0) {
     return [];
@@ -7952,9 +8096,12 @@ function projectPointMarkers(
   const projected = markers
     .map((marker) => {
       const [x, z] = marker.geometry.coordinates;
+      const forceLabel = Boolean(options?.forceLabelMarkerIds?.has(marker.id));
+      const suppressLabel = Boolean(options?.suppressLabelMarkerIds?.has(marker.id));
       const priority =
         getMarkerPriorityForBrowseMode(marker, browseMode) +
-        (representativePoiIds.has(marker.id) ? representativePoiPriorityBoost : 0);
+        (representativePoiIds.has(marker.id) ? representativePoiPriorityBoost : 0) +
+        (forceLabel ? 1000 : 0);
       return {
         id: marker.id,
         label: formatMarkerDisplayName(marker.label),
@@ -7968,9 +8115,12 @@ function projectPointMarkers(
             ? toMarkerIconUrl(marker.iconFileName, iconBaseUrl)
             : undefined,
         symbolIcon: marker.symbolIcon,
-        showLabel:
-          marker.id === focusedMarkerId ||
-          shouldShowMarkerLabelForBrowseMode(marker, browseMode, priority),
+        showLabel: forceLabel
+          ? true
+          : suppressLabel
+            ? false
+            : marker.id === focusedMarkerId ||
+              shouldShowMarkerLabelForBrowseMode(marker, browseMode, priority),
         priority,
         roadKind: getRoadMarkerKind(marker),
       };
@@ -8159,10 +8309,12 @@ function projectRoutePlanTrace(
       };
     })
     .filter((segment): segment is ProjectedRouteTraceSegment => Boolean(segment));
+  const labels = projectRouteRoadLabels(option.roadLabels, view, size);
 
   return {
     id: `route-option-${option.id}`,
     label: option.title,
+    labels: labels.length > 0 ? labels : undefined,
     path: traceProjection.path,
     segments: segments && segments.length > 0 ? segments : undefined,
     viewBox: traceProjection.viewBox,
@@ -8176,6 +8328,188 @@ function projectRoutePlanTrace(
     height: traceProjection.height,
     isSelected: true,
   };
+}
+
+function projectRouteRoadLabels(
+  labels: RoutePlanRoadLabel[] | undefined,
+  view: MapView,
+  size: ViewportSize,
+): ProjectedRouteRoadLabel[] {
+  if (!labels?.length || size.width <= 0 || size.height <= 0) {
+    return [];
+  }
+
+  const scale = getScale(view.zoom);
+  const groupsByLabel = new Map<
+    string,
+    {
+      color?: string;
+      id: string;
+      label: string;
+      segments: Array<{
+        start: { left: number; top: number };
+        end: { left: number; top: number };
+        length: number;
+      }>;
+      visibleLength: number;
+    }
+  >();
+
+  for (const label of labels) {
+    const visibleSegments = getVisibleProjectedRouteLabelSegments(
+      label.coordinates.map(([x, z]) => ({
+        left: size.width / 2 + (x - view.centerX) * scale,
+        top: size.height / 2 + (z - view.centerZ) * scale,
+      })),
+      size,
+    );
+    const visibleLength = visibleSegments.reduce((total, segment) => total + segment.length, 0);
+    if (visibleLength <= 0) {
+      continue;
+    }
+
+    const group = groupsByLabel.get(label.label) ?? {
+      color: label.color,
+      id: label.id,
+      label: label.label,
+      segments: [],
+      visibleLength: 0,
+    };
+    group.segments.push(...visibleSegments);
+    group.visibleLength += visibleLength;
+    groupsByLabel.set(label.label, group);
+  }
+
+  return [...groupsByLabel.values()].flatMap((group) => {
+    if (group.visibleLength < 72) {
+      return [];
+    }
+    const position = getProjectedRouteLabelPointAtDistance(group.segments, group.visibleLength / 2);
+    if (!position) {
+      return [];
+    }
+
+    return [
+      {
+        color: group.color,
+        id: group.id,
+        label: group.label,
+        left: position.left,
+        top: position.top,
+      },
+    ];
+  });
+}
+
+function getVisibleProjectedRouteLabelSegments(
+  points: Array<{ left: number; top: number }>,
+  size: ViewportSize,
+): Array<{ start: { left: number; top: number }; end: { left: number; top: number }; length: number }> {
+  const segments: Array<{
+    start: { left: number; top: number };
+    end: { left: number; top: number };
+    length: number;
+  }> = [];
+
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1];
+    const end = points[index];
+    if (!start || !end) {
+      continue;
+    }
+
+    const clipped = clipProjectedSegmentToViewport(start, end, size, 12);
+    if (!clipped) {
+      continue;
+    }
+
+    const length = Math.hypot(clipped.end.left - clipped.start.left, clipped.end.top - clipped.start.top);
+    if (length <= 0) {
+      continue;
+    }
+    segments.push({ ...clipped, length });
+  }
+
+  return segments;
+}
+
+function clipProjectedSegmentToViewport(
+  start: { left: number; top: number },
+  end: { left: number; top: number },
+  size: ViewportSize,
+  padding: number,
+): { start: { left: number; top: number }; end: { left: number; top: number } } | undefined {
+  const minLeft = padding;
+  const maxLeft = Math.max(minLeft, size.width - padding);
+  const minTop = padding;
+  const maxTop = Math.max(minTop, size.height - padding);
+  const deltaLeft = end.left - start.left;
+  const deltaTop = end.top - start.top;
+  let startRatio = 0;
+  let endRatio = 1;
+
+  const clip = (denominator: number, numerator: number): boolean => {
+    if (denominator === 0) {
+      return numerator <= 0;
+    }
+    const ratio = numerator / denominator;
+    if (denominator < 0) {
+      if (ratio > endRatio) {
+        return false;
+      }
+      if (ratio > startRatio) {
+        startRatio = ratio;
+      }
+      return true;
+    }
+    if (ratio < startRatio) {
+      return false;
+    }
+    if (ratio < endRatio) {
+      endRatio = ratio;
+    }
+    return true;
+  };
+
+  if (
+    !clip(-deltaLeft, start.left - minLeft) ||
+    !clip(deltaLeft, maxLeft - start.left) ||
+    !clip(-deltaTop, start.top - minTop) ||
+    !clip(deltaTop, maxTop - start.top)
+  ) {
+    return undefined;
+  }
+
+  return {
+    start: {
+      left: start.left + startRatio * deltaLeft,
+      top: start.top + startRatio * deltaTop,
+    },
+    end: {
+      left: start.left + endRatio * deltaLeft,
+      top: start.top + endRatio * deltaTop,
+    },
+  };
+}
+
+function getProjectedRouteLabelPointAtDistance(
+  segments: Array<{ start: { left: number; top: number }; end: { left: number; top: number }; length: number }>,
+  targetDistance: number,
+): { left: number; top: number } | undefined {
+  let travelled = 0;
+  for (const segment of segments) {
+    if (travelled + segment.length >= targetDistance) {
+      const ratio = clampNumber((targetDistance - travelled) / segment.length, 0, 1);
+      return {
+        left: segment.start.left + (segment.end.left - segment.start.left) * ratio,
+        top: segment.start.top + (segment.end.top - segment.start.top) * ratio,
+      };
+    }
+    travelled += segment.length;
+  }
+
+  const fallback = segments.at(-1);
+  return fallback?.end;
 }
 
 function buildTraceProjection(

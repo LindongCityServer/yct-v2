@@ -842,7 +842,8 @@ body .material-symbols-outlined {
 
 .map-guide-marker.is-route-origin,
 .map-guide-marker.is-route-destination {
-  transform: translate(-50%, -50%);
+  z-index: 5;
+  transform: translate(-50%, -100%);
 }
 
 .map-guide-marker-dot {
@@ -860,6 +861,11 @@ body .material-symbols-outlined {
   --icon-fill: 1;
   filter: drop-shadow(0 4px 10px rgba(17, 24, 23, 0.28));
   font-size: 26px;
+}
+
+.map-guide-marker.is-route-origin .map-guide-marker-icon,
+.map-guide-marker.is-route-destination .map-guide-marker-icon {
+  font-size: 34px;
 }
 
 .map-guide-marker.is-route-origin {
@@ -1979,6 +1985,22 @@ body .material-symbols-outlined {
   transform: translateX(-50%);
   backdrop-filter: blur(16px);
   pointer-events: none;
+}
+
+.map-route-road-label {
+  position: absolute;
+  left: var(--label-left);
+  top: var(--label-top);
+  z-index: 2;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+  -webkit-text-stroke: 2px rgba(17, 24, 23, 0.82);
+  paint-order: stroke fill;
+  text-shadow: 0 1px 2px rgba(17, 24, 23, 0.64);
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
 }
 
 .map-source-note {
