@@ -604,6 +604,7 @@ DESIGN.md
 - 已处理补充：Material Symbols Outlined 已从 Google Fonts 外链改为项目本地嵌入的可变 `woff2` 字体，移除运行时 `fonts.googleapis.com` / `fonts.gstatic.com` 依赖，保留 `FILL` 可变填充态以支持选中图标样式。
 - 已处理第一版：新增语言偏好基础能力，`GET/POST /api/account/locale-preference` 读取或更新登录用户的 `system`、`zh-CN`、`zh-Hant`、`en` 偏好；数据暂存到 `.yct-data/locale-preference-store.json`，更新成功发布 `LocalePreferenceUpdated` 事件。前端新增 `client-locale-preference` 工具和账号页语言偏好控件，用于匿名本地偏好和登录同步，并更新页面 `lang`。全局 `PreferenceBridge` 已接入语言偏好初始化：页面进入后会应用本机偏好、拉取账号侧偏好并同步到本地，已接入 `useI18n` 的客户端固定文案会随偏好切换；未接入翻译目录的地图、后台和业务数据名称仍按主语言回退。
 - 管理员侧测试流程需要文档化；已新增 `docs/ADMIN_TESTING.md` 记录当前如何配置 `ldpass`、初始化管理员、进入后台页面和验证 API 边界。
+- 已补充管理后台走查：新增 `docs/ADMIN_BACKOFFICE_REVIEW.md`，重点评估 POI 后台当前“调试列表”形态的缺口，明确先做状态/分类/关键词筛选、分类图标与名称展示、驳回理由弹窗和详情展开，再推进地图审核工作台、几何编辑、重复检测、图片素材审核和正式数据治理。
 
 2026-07-03 本地开发站点打开缓慢排查，当前进展：
 
