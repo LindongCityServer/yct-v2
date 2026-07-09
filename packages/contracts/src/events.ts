@@ -341,6 +341,15 @@ export interface PoiCategoryProfileUpdatedPayload {
   updatedAt: ISODateTimeString;
 }
 
+export interface PoiCategoryIconUploadedPayload {
+  iconId: string;
+  fileName: string;
+  iconUrl: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+}
+
 export interface OperationsStrongReminderRulesUpdatedPayload {
   ruleIds: string[];
   ruleCount: number;
@@ -474,6 +483,7 @@ export type YctEventPayloadMap = {
   PoiReviewed: PoiReviewedPayload;
   PoiPublished: PoiPublishedPayload;
   PoiCategoryProfileUpdated: PoiCategoryProfileUpdatedPayload;
+  PoiCategoryIconUploaded: PoiCategoryIconUploadedPayload;
   TransitDataRevisionImported: TransitDataRevisionImportedPayload;
   TransitDataRevisionSubmitted: TransitDataRevisionSubmittedPayload;
   TransitDataRevisionReviewed: TransitDataRevisionReviewedPayload;

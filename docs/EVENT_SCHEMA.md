@@ -39,6 +39,7 @@ export interface YctDomainEvent<TType extends string, TPayload> {
 | `PoiReviewed`                         | 管理员审核 POI                | 地图数据发布、通知投稿者                                                                                                               |
 | `PoiPublished`                        | 已审核 POI 发布为公开标记     | 地图标记缓存刷新、搜索索引、通知投稿者                                                                                                 |
 | `PoiCategoryProfileUpdated`           | 管理员更新 POI 分类和图标配置 | 分类缓存刷新、地图投稿表单刷新、搜索索引和管理员审计；当前第一版写入本地分类覆盖配置并支持一类多图标文件名管理                         |
+| `PoiCategoryIconUploaded`             | 管理员上传 POI 分类图标       | 图标来源追踪、分类配置引用和管理员审计；当前文件默认落盘到 `runtime-assets/poi-icons` 并通过 `/api/map/poi-icons/<file>` 读取           |
 | `TransitDataRevisionImported`         | 旧站或适配器数据导入为快照    | 校验报告、审计、导入历史                                                                                                               |
 | `TransitDataRevisionSubmitted`        | 线路/站点/班次数据提交        | 交通数据审核和预览                                                                                                                     |
 | `TransitDataRevisionReviewed`         | 管理员审核交通数据版本        | 通知提交者、记录审计                                                                                                                   |

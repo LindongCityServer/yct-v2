@@ -9904,6 +9904,10 @@ function toMarkerIconUrl(fileName: string, baseUrl: string): string {
     return fileName;
   }
 
+  if (fileName.startsWith('/')) {
+    return appPath(fileName);
+  }
+
   if (!baseUrl) {
     return fileName;
   }

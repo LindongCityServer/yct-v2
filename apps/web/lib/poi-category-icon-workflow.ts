@@ -1,0 +1,162 @@
+import { randomUUID } from 'node:crypto';
+import type { YctEvent, YctEventPayloadMap, YctEventType } from '@yct/contracts';
+import { publishDomainEvent } from './app-event-bus';
+import {
+  isAllowedPoiCategoryIconMimeType,
+  normalizePoiCategoryIconMimeType,
+  storePoiCategoryIconFile,
+} from './poi-category-icon-store';
+
+export interface PoiCategoryIconUploadResult {
+  ok: boolean;
+  status?: number;
+  error?: string;
+  message?: string;
+  icon?: {
+    iconId: string;
+    fileName: string;
+    iconUrl: string;
+    mimeType: string;
+    sizeBytes: number;
+    sha256: string;
+  };
+}
+
+export async function uploadPoiCategoryIcon(input: {
+  actorId: string;
+  fileName: string;
+  mimeType: string;
+  bytes: Uint8Array;
+}): Promise<PoiCategoryIconUploadResult> {
+  const validation = validatePoiCategoryIcon(input);
+  if (!validation.ok) {
+    return validation;
+  }
+
+  const mimeType = normalizePoiCategoryIconMimeType(input.fileName, input.mimeType);
+  const storedFile = await storePoiCategoryIconFile({
+    fileName: input.fileName,
+    mimeType,
+    bytes: input.bytes,
+  });
+  const icon = {
+    iconId: `poi_icon_${storedFile.sha256.slice(0, 24)}`,
+    fileName: storedFile.fileName,
+    iconUrl: storedFile.publicPath,
+    mimeType,
+    sizeBytes: storedFile.sizeBytes,
+    sha256: storedFile.sha256,
+  };
+
+  await emitEvent(
+    'PoiCategoryIconUploaded',
+    {
+      type: 'admin',
+      id: input.actorId,
+    },
+    icon,
+  );
+
+  return {
+    ok: true,
+    icon,
+  };
+}
+
+function validatePoiCategoryIcon(input: {
+  fileName: string;
+  mimeType: string;
+  bytes: Uint8Array;
+}): PoiCategoryIconUploadResult {
+  const mimeType = normalizePoiCategoryIconMimeType(input.fileName, input.mimeType);
+  if (!input.fileName.trim()) {
+    return invalidUpload('文件名不能为空。');
+  }
+
+  if (input.fileName.trim().length > 200) {
+    return invalidUpload('文件名不能超过 200 个字符。');
+  }
+
+  if (!mimeType) {
+    return invalidUpload('无法识别上传图标类型。');
+  }
+
+  if (!isAllowedPoiCategoryIconMimeType(mimeType)) {
+    return invalidUpload('当前只允许上传 PNG、JPEG、GIF、WebP 或 AVIF 图标。');
+  }
+
+  if (input.bytes.byteLength === 0) {
+    return invalidUpload('上传图标不能为空。');
+  }
+
+  if (input.bytes.byteLength > 1024 * 1024) {
+    return invalidUpload('上传图标不能超过 1MB。');
+  }
+
+  const detectedMimeType = detectPoiImageMimeType(input.bytes);
+  if (!detectedMimeType || detectedMimeType !== mimeType) {
+    return invalidUpload('上传图标内容与文件类型不匹配。');
+  }
+
+  return { ok: true };
+}
+
+function invalidUpload(message: string): PoiCategoryIconUploadResult {
+  return {
+    ok: false,
+    status: 400,
+    error: 'invalid_poi_category_icon_upload',
+    message,
+  };
+}
+
+function detectPoiImageMimeType(bytes: Uint8Array): string | undefined {
+  if (startsWithBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
+    return 'image/png';
+  }
+
+  if (startsWithBytes(bytes, [0xff, 0xd8, 0xff])) {
+    return 'image/jpeg';
+  }
+
+  const header = readAscii(bytes, 0, 12);
+  if (header.startsWith('GIF87a') || header.startsWith('GIF89a')) {
+    return 'image/gif';
+  }
+
+  if (header.startsWith('RIFF') && header.slice(8, 12) === 'WEBP') {
+    return 'image/webp';
+  }
+
+  if (readAscii(bytes, 4, 8) === 'ftyp' && readAscii(bytes, 8, 40).includes('avif')) {
+    return 'image/avif';
+  }
+
+  return undefined;
+}
+
+function startsWithBytes(bytes: Uint8Array, signature: number[]): boolean {
+  if (bytes.byteLength < signature.length) {
+    return false;
+  }
+
+  return signature.every((value, index) => bytes[index] === value);
+}
+
+function readAscii(bytes: Uint8Array, start: number, end: number): string {
+  return String.fromCharCode(...bytes.slice(start, Math.min(end, bytes.byteLength)));
+}
+
+async function emitEvent<TType extends YctEventType>(
+  type: TType,
+  actor: YctEvent<TType>['actor'],
+  payload: YctEventPayloadMap[TType],
+): Promise<void> {
+  await publishDomainEvent({
+    eventId: `event_${randomUUID()}`,
+    type,
+    occurredAt: new Date().toISOString(),
+    actor,
+    payload,
+  });
+}

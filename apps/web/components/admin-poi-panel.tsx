@@ -592,6 +592,7 @@ function PoiCategoryProfileEditor({
   const [drafts, setDrafts] = useState<PoiCategoryDraft[]>(() => createCategoryDrafts(categories));
   const [localStatus, setLocalStatus] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [uploadingCategoryId, setUploadingCategoryId] = useState<string | null>(null);
 
   useEffect(() => {
     setDrafts(createCategoryDrafts(categories));
@@ -624,6 +625,48 @@ function PoiCategoryProfileEditor({
       onSaved('POI 分类配置已保存');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const uploadCategoryIcon = async (categoryId: string, file: File | undefined) => {
+    if (!file) {
+      return;
+    }
+
+    setUploadingCategoryId(categoryId);
+    setLocalStatus('');
+    try {
+      const formData = new FormData();
+      formData.set('file', file);
+      const response = await fetch(appPath('/api/admin/map/poi-category-icons/upload'), {
+        method: 'POST',
+        body: formData,
+      });
+      const data = (await response.json()) as { iconUrl?: string; message?: string };
+      if (!response.ok || !data.iconUrl) {
+        setLocalStatus(data.message ?? '图标上传失败');
+        return;
+      }
+
+      const iconUrl = data.iconUrl;
+      setDrafts((current) =>
+        current.map((draft) => {
+          if (draft.id !== categoryId) {
+            return draft;
+          }
+
+          const icons = splitIconFileNames(draft.iconFileNamesText);
+          const nextIcons = Array.from(new Set([...icons, iconUrl]));
+          return {
+            ...draft,
+            defaultIconFileName: draft.defaultIconFileName.trim() || iconUrl,
+            iconFileNamesText: nextIcons.join('\n'),
+          };
+        }),
+      );
+      setLocalStatus(`已上传图标：${iconUrl}`);
+    } finally {
+      setUploadingCategoryId(null);
     }
   };
 
@@ -688,6 +731,19 @@ function PoiCategoryProfileEditor({
                     onChange={(event) =>
                       updateDraft(draft.id, { iconFileNamesText: event.currentTarget.value })
                     }
+                  />
+                </label>
+                <label className="admin-poi-category-upload">
+                  <span>上传图标</span>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
+                    disabled={uploadingCategoryId === draft.id}
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      void uploadCategoryIcon(draft.id, file);
+                      event.currentTarget.value = '';
+                    }}
                   />
                 </label>
                 <label className="checkbox-row admin-poi-category-checkbox">
@@ -990,6 +1046,10 @@ function normalizeSearchText(value: string): string {
 function toMarkerIconUrl(fileName: string, baseUrl: string): string {
   if (/^https?:\/\//i.test(fileName)) {
     return fileName;
+  }
+
+  if (fileName.startsWith('/')) {
+    return appPath(fileName);
   }
 
   if (!baseUrl) {

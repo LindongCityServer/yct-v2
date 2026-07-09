@@ -276,19 +276,21 @@ foreach ($relativePath in @(
 如果你是在“旧版 YCT v2 部署目录”上做原地升级，默认至少要保留这两类内容：
 
 1. `.yct-data`
-2. `apps\web\public\content-assets`
+2. `runtime-assets`
+3. `apps\web\public\content-assets`
 
 只复制 `.yct-data` 并不总是足够，因为内容后台上传的图片素材默认不在 `.yct-data` 里，而是在 `apps\web\public\content-assets`。如果不一起保留，历史内容和审核通过的素材链接可能会丢图。
 
 可以按下面理解：
 
 - `.yct-data`：账号映射、管理员成员、交通数据版本、POI 投稿、POI 投稿图片、提醒、通知、票务草稿、离线范围请求等本地仓储；当前 POI 投稿图片默认在 `.yct-data/poi-submission-images`。
+- `runtime-assets`：部署包根目录下的运行时静态资源；当前 POI 分类图标默认在 `runtime-assets/poi-icons`。
 - `apps\web\public\content-assets`：内容后台上传的真实图片和附件。
 - `apps\web\public\legacy-assets`：如果它来自你本地打包机的 `public` 目录，通常已经包含在部署包里；只有当云端还保留了“没有重新打进包的额外旧资源”时，才需要额外手工保留。
 
 所以，对大多数当前部署来说：
 
-- 如果你从一个旧的 YCT v2 目录升级到新的 YCT v2 目录，至少复制 `.yct-data` 和 `apps\web\public\content-assets`。
+- 如果你从一个旧的 YCT v2 目录升级到新的 YCT v2 目录，至少复制 `.yct-data`、`runtime-assets` 和 `apps\web\public\content-assets`。
 - 如果这是第一次把 v2 部署到云端，`.yct-data` 可以先让系统按需创建，但 `.env` 仍然必须手工放好。
 - 如果你确认当前没有任何后台上传素材，理论上只复制 `.yct-data` 也能跑，但我不建议把这个当默认流程。
 
@@ -477,6 +479,7 @@ node >=20.9.0
 
 - 部署根目录下的 `.env`、`.env.production`、`.env.local` 等真实环境变量文件。
 - `.yct-data` 本地运行时仓储，其中包含 POI 投稿图片目录 `.yct-data/poi-submission-images`。
+- `runtime-assets` 运行时静态资源目录；当前 POI 分类图标默认写入 `runtime-assets/poi-icons`，后续内容素材、旧资源和其他上传文件也会逐步迁入同类目录。
 - 后台上传素材目录 `apps/web/public/content-assets`。
 - 日志、备份和导入中间文件。
 

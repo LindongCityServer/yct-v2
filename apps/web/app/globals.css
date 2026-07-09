@@ -3893,8 +3893,13 @@ body .material-symbols-outlined {
 }
 
 .admin-poi-category-icons,
+.admin-poi-category-upload,
 .admin-poi-category-checkbox {
   grid-column: 2 / -1;
+}
+
+.admin-poi-category-upload input[type='file'] {
+  padding: var(--yct-space-2);
 }
 
 .admin-content-item strong {
