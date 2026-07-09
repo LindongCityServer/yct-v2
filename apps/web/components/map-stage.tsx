@@ -6955,7 +6955,11 @@ function buildMarkerRoadAccessIndex(
   markers: PointMarker[],
   graph: RoadRouteGraph,
 ): Map<string, RoadAccessCandidate[]> {
-  const index = new Map<string, RoadAccessCandidate[]>();
+  const rawIndex = new Map<string, RoadAccessCandidate[]>();
+  const projectionOwners = new Map<
+    string,
+    { distanceToPoint: number; markerId: string }
+  >();
   for (const marker of markers) {
     const center = getMarkerCenter(marker);
     if (!center) {
@@ -6964,7 +6968,34 @@ function buildMarkerRoadAccessIndex(
 
     const candidates = buildMarkerRoadAccessCandidates(center, graph);
     if (candidates.length > 0) {
-      index.set(marker.id, candidates);
+      rawIndex.set(marker.id, candidates);
+      for (const candidate of candidates) {
+        const key = getRoadAccessProjectionOwnershipKey(candidate);
+        const currentOwner = projectionOwners.get(key);
+        if (
+          !currentOwner ||
+          candidate.distanceToPoint < currentOwner.distanceToPoint ||
+          (candidate.distanceToPoint === currentOwner.distanceToPoint &&
+            marker.id < currentOwner.markerId)
+        ) {
+          projectionOwners.set(key, {
+            distanceToPoint: candidate.distanceToPoint,
+            markerId: marker.id,
+          });
+        }
+      }
+    }
+  }
+
+  const index = new Map<string, RoadAccessCandidate[]>();
+  for (const [markerId, candidates] of rawIndex) {
+    const ownedCandidates = candidates.filter(
+      (candidate) =>
+        projectionOwners.get(getRoadAccessProjectionOwnershipKey(candidate))?.markerId ===
+        markerId,
+    );
+    if (ownedCandidates.length > 0) {
+      index.set(markerId, ownedCandidates);
     }
   }
 
@@ -6984,10 +7015,20 @@ function buildMarkerRoadAccessCandidates(
     }
   }
 
-  return Array.from(nearestByRoad.values())
-    .filter((candidate) => candidate.distanceToPoint <= markerRoadAccessProjectionRange)
-    .sort((left, right) => left.distanceToPoint - right.distanceToPoint)
+  const sorted = Array.from(nearestByRoad.values()).sort(
+    (left, right) => left.distanceToPoint - right.distanceToPoint,
+  );
+
+  return sorted
+    .filter(
+      (candidate, index) =>
+        index === 0 || candidate.distanceToPoint <= markerRoadAccessProjectionRange,
+    )
     .slice(0, 8);
+}
+
+function getRoadAccessProjectionOwnershipKey(candidate: RoadAccessCandidate): string {
+  return `${candidate.coordinate[0].toFixed(2)},${candidate.coordinate[1].toFixed(2)}`;
 }
 
 function getRoadAccessDirectionPenalty(
