@@ -48,6 +48,7 @@ export async function PATCH(
     categoryId: parsed.data.categoryId,
     description: parsed.data.description,
     href: parsed.data.href || undefined,
+    geometry: parsed.data.geometry,
   });
 
   if (!result.ok) {

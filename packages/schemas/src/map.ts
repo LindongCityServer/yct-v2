@@ -53,6 +53,11 @@ export const mapGeometrySchema = z.discriminatedUnion('type', [
   }),
 ]);
 
+const pointMapGeometrySchema = z.object({
+  type: z.literal('Point'),
+  coordinates: coordinateSchema,
+});
+
 export const tileProviderConfigSchema = z.object({
   id: idSchema,
   name: nonEmptyTextSchema,
@@ -144,6 +149,7 @@ export const poiSubmissionAdminUpdateSchema = z.object({
   categoryId: idSchema,
   description: z.string().trim().max(1000).optional(),
   href: z.union([urlSchema, z.literal('')]).optional(),
+  geometry: pointMapGeometrySchema.optional(),
 });
 
 export const mapMarkerSourceConfigSchema = z.object({

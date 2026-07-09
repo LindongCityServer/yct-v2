@@ -125,7 +125,7 @@ export interface PoiSubmissionUpdatedPayload {
   poiId: string;
   updatedBy: string;
   updatedAt: ISODateTimeString;
-  changedFields: Array<'title' | 'categoryId' | 'description' | 'href'>;
+  changedFields: Array<'title' | 'categoryId' | 'description' | 'href' | 'geometry'>;
 }
 
 export interface PoiReviewedPayload {

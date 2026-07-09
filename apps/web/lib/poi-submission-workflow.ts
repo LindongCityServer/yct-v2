@@ -135,6 +135,7 @@ export async function updatePoiSubmissionByAdmin(input: {
   categoryId: string;
   description?: string;
   href?: string;
+  geometry?: Extract<MapGeometry, { type: 'Point' }>;
 }): Promise<PoiSubmissionActionResult> {
   const submission = await findLocalPoiSubmission(input.poiId);
   if (!submission) {
@@ -155,7 +156,17 @@ export async function updatePoiSubmissionByAdmin(input: {
     categoryId: input.categoryId.trim(),
     description: normalizeOptionalText(input.description),
     href: normalizeOptionalText(input.href),
+    geometry: input.geometry ?? submission.geometry,
   };
+  if (input.geometry && submission.geometry.type !== 'Point') {
+    return {
+      ok: false,
+      status: 409,
+      error: 'poi_submission_geometry_edit_unsupported',
+      message: '当前简化修正入口只允许调整点状 POI 坐标。',
+    };
+  }
+
   const changedFields = getChangedPoiSubmissionFields(submission, patch);
   if (changedFields.length === 0) {
     return { ok: true, submission };
@@ -254,11 +265,20 @@ function normalizeOptionalText(value: string | undefined): string | undefined {
 
 function getChangedPoiSubmissionFields(
   submission: PoiSubmission,
-  patch: Pick<PoiSubmission, 'title' | 'categoryId' | 'description' | 'href'>,
-): Array<'title' | 'categoryId' | 'description' | 'href'> {
-  return (['title', 'categoryId', 'description', 'href'] as const).filter(
+  patch: Pick<PoiSubmission, 'title' | 'categoryId' | 'description' | 'href'> & {
+    geometry: MapGeometry;
+  },
+): Array<'title' | 'categoryId' | 'description' | 'href' | 'geometry'> {
+  const textFields = (['title', 'categoryId', 'description', 'href'] as const).filter(
     (field) => (submission[field] ?? '') !== (patch[field] ?? ''),
   );
+  const geometryChanged =
+    submission.geometry.type === 'Point' &&
+    patch.geometry.type === 'Point' &&
+    (submission.geometry.coordinates[0] !== patch.geometry.coordinates[0] ||
+      submission.geometry.coordinates[1] !== patch.geometry.coordinates[1]);
+
+  return geometryChanged ? [...textFields, 'geometry'] : textFields;
 }
 
 async function emitEvent<TType extends YctEventType>(

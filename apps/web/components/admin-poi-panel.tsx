@@ -25,6 +25,7 @@ interface PoiSubmissionEditInput {
   categoryId: string;
   description: string;
   href: string;
+  geometry?: Extract<MapGeometry, { type: 'Point' }>;
 }
 
 const defaultMarkerIconBaseUrl = 'https://map.shangxiaoguan.top/';
@@ -713,6 +714,9 @@ function EditPoiSubmissionDialog({
     description: submission.description ?? '',
     href: submission.href ?? '',
   }));
+  const pointCoordinate = submission.geometry.type === 'Point' ? submission.geometry.coordinates : null;
+  const [pointX, setPointX] = useState(pointCoordinate ? String(pointCoordinate[0]) : '');
+  const [pointZ, setPointZ] = useState(pointCoordinate ? String(pointCoordinate[1]) : '');
   const [error, setError] = useState('');
 
   const updateForm = (patch: Partial<PoiSubmissionEditInput>) => {
@@ -732,11 +736,20 @@ function EditPoiSubmissionDialog({
       return;
     }
 
+    const nextGeometry = pointCoordinate
+      ? readPointGeometryFromForm(pointX, pointZ)
+      : undefined;
+    if (pointCoordinate && !nextGeometry) {
+      setError('请填写有效的 X/Z 坐标。');
+      return;
+    }
+
     const submitError = await onSubmit({
       title: form.title.trim(),
       categoryId: form.categoryId.trim(),
       description: form.description.trim(),
       href: form.href.trim(),
+      geometry: nextGeometry,
     });
     if (submitError) {
       setError(submitError);
@@ -794,6 +807,44 @@ function EditPoiSubmissionDialog({
             placeholder="https://..."
           />
         </label>
+        {pointCoordinate ? (
+          <div className="admin-poi-edit-coordinate">
+            <div className="admin-poi-edit-coordinate-fields">
+              <label>
+                <span>X 坐标</span>
+                <input
+                  inputMode="decimal"
+                  value={pointX}
+                  onChange={(event) => {
+                    setPointX(event.currentTarget.value);
+                    setError('');
+                  }}
+                />
+              </label>
+              <label>
+                <span>Z 坐标</span>
+                <input
+                  inputMode="decimal"
+                  value={pointZ}
+                  onChange={(event) => {
+                    setPointZ(event.currentTarget.value);
+                    setError('');
+                  }}
+                />
+              </label>
+            </div>
+            <a
+              className="admin-action-link"
+              href={buildSubmissionMapHref(submission, readPointGeometryFromForm(pointX, pointZ)?.coordinates ?? pointCoordinate)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              打开地图辅助选点
+            </a>
+          </div>
+        ) : (
+          <p className="muted">当前仅支持点状 POI 在此处修正坐标；线和面需要后续地图编辑器。</p>
+        )}
         {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
         <div className="admin-content-actions">
           <button type="button" onClick={onClose} disabled={isBusy}>
@@ -1364,6 +1415,20 @@ function comparePoiConflictHints(left: PoiConflictHint, right: PoiConflictHint):
 
 function distanceBetweenCoordinates(left: [number, number], right: [number, number]): number {
   return Math.hypot(left[0] - right[0], left[1] - right[1]);
+}
+
+function readPointGeometryFromForm(
+  xValue: string,
+  zValue: string,
+): Extract<MapGeometry, { type: 'Point' }> | undefined {
+  const x = Number(xValue);
+  const z = Number(zValue);
+  return Number.isFinite(x) && Number.isFinite(z)
+    ? {
+        type: 'Point',
+        coordinates: [x, z],
+      }
+    : undefined;
 }
 
 function buildMarkerFocusHref(marker: MapMarker): string {
