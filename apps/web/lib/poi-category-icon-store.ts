@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { readRuntimeConfig } from './runtime-config';
 
@@ -70,6 +70,44 @@ export async function readPoiCategoryIconFile(fileName: string): Promise<{
   };
 }
 
+export async function deletePoiCategoryIconFile(fileName: string): Promise<{
+  fileName: string;
+  filePath: string;
+  deleted: boolean;
+}> {
+  if (!isSafeStoredPoiIconFileName(fileName)) {
+    throw new Error('invalid_poi_category_icon_name');
+  }
+
+  const filePath = path.join(/*turbopackIgnore: true*/ resolveUploadDir(), fileName);
+
+  try {
+    await unlink(filePath);
+    return { fileName, filePath, deleted: true };
+  } catch (error) {
+    if (isNodeErrnoException(error) && error.code === 'ENOENT') {
+      return { fileName, filePath, deleted: false };
+    }
+    throw error;
+  }
+}
+
+export function normalizeStoredPoiIconFileName(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const pathMatch = /\/api\/map\/poi-icons\/([^/?#]+)/.exec(trimmed);
+  const candidate = pathMatch?.[1] ?? trimmed.split(/[?#]/, 1)[0] ?? '';
+  try {
+    const fileName = decodeURIComponent(candidate);
+    return isSafeStoredPoiIconFileName(fileName) ? fileName : null;
+  } catch {
+    return null;
+  }
+}
+
 export function normalizePoiCategoryIconMimeType(fileName: string, mimeType: string): string {
   const trimmed = mimeType.trim().toLowerCase();
   if (trimmed) {
@@ -108,6 +146,10 @@ function inferStoredMimeType(fileName: string): string {
   return mimeTypeByExtension[path.extname(fileName).toLowerCase()] ?? 'application/octet-stream';
 }
 
-function isSafeStoredPoiIconFileName(fileName: string): boolean {
+export function isSafeStoredPoiIconFileName(fileName: string): boolean {
   return /^[a-f0-9]{24}\.(?:png|jpg|gif|webp|avif)$/.test(fileName);
+}
+
+function isNodeErrnoException(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error;
 }

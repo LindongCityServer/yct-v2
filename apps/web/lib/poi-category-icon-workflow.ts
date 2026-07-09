@@ -2,10 +2,17 @@ import { randomUUID } from 'node:crypto';
 import type { YctEvent, YctEventPayloadMap, YctEventType } from '@yct/contracts';
 import { publishDomainEvent } from './app-event-bus';
 import {
+  deletePoiCategoryIconFile,
   isAllowedPoiCategoryIconMimeType,
+  normalizeStoredPoiIconFileName,
   normalizePoiCategoryIconMimeType,
   storePoiCategoryIconFile,
 } from './poi-category-icon-store';
+import {
+  listPoiCategoryProfiles,
+  replacePoiCategoryProfiles,
+} from './poi-category-profile-store';
+import { clearPoiCategoryCache } from './poi-categories';
 
 export interface PoiCategoryIconUploadResult {
   ok: boolean;
@@ -19,6 +26,19 @@ export interface PoiCategoryIconUploadResult {
     mimeType: string;
     sizeBytes: number;
     sha256: string;
+  };
+}
+
+export interface PoiCategoryIconDeleteResult {
+  ok: boolean;
+  status?: number;
+  error?: string;
+  message?: string;
+  icon?: {
+    iconId: string;
+    fileName: string;
+    fileDeleted: boolean;
+    removedCategoryIds: string[];
   };
 }
 
@@ -55,6 +75,113 @@ export async function uploadPoiCategoryIcon(input: {
       id: input.actorId,
     },
     icon,
+  );
+
+  return {
+    ok: true,
+    icon,
+  };
+}
+
+export async function deletePoiCategoryIcon(input: {
+  actorId: string;
+  iconFileName: string;
+}): Promise<PoiCategoryIconDeleteResult> {
+  const fileName = normalizeStoredPoiIconFileName(input.iconFileName);
+  if (!fileName) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'invalid_poi_category_icon_name',
+      message: '只能删除通过后台上传的 POI 分类图标。',
+    };
+  }
+
+  const profileCategories = await listPoiCategoryProfiles();
+  const blockedCategories = profileCategories.filter((category) => {
+    const icons = category.iconMapping.iconFileNames.filter((icon) => icon !== fileName);
+    return category.iconMapping.iconFileNames.includes(fileName) && icons.length === 0;
+  });
+
+  if (blockedCategories.length > 0) {
+    return {
+      ok: false,
+      status: 409,
+      error: 'poi_category_icon_in_use_as_last_icon',
+      message: `请先为这些分类设置其他图标：${blockedCategories
+        .map((category) => category.name || category.id)
+        .join('、')}`,
+    };
+  }
+
+  const removedCategoryIds: string[] = [];
+  const nextCategories = profileCategories.map((category) => {
+    if (!category.iconMapping.iconFileNames.includes(fileName)) {
+      return category;
+    }
+
+    const iconFileNames = category.iconMapping.iconFileNames.filter((icon) => icon !== fileName);
+    removedCategoryIds.push(category.id);
+    return {
+      ...category,
+      iconMapping: {
+        ...category.iconMapping,
+        defaultIconFileName:
+          category.iconMapping.defaultIconFileName === fileName
+            ? iconFileNames[0]
+            : category.iconMapping.defaultIconFileName,
+        iconFileNames,
+      },
+    };
+  });
+
+  const updatedAt = new Date().toISOString();
+  const categories = removedCategoryIds.length > 0
+    ? await replacePoiCategoryProfiles(nextCategories)
+    : profileCategories;
+  const deletedFile = await deletePoiCategoryIconFile(fileName);
+  clearPoiCategoryCache();
+
+  if (removedCategoryIds.length > 0) {
+    await emitEvent(
+      'PoiCategoryProfileUpdated',
+      {
+        type: 'admin',
+        id: input.actorId,
+      },
+      {
+        categories: categories.map((category) => ({
+          id: category.id,
+          name: category.name,
+          iconFileNames: category.iconMapping.iconFileNames,
+          defaultIconFileName: category.iconMapping.defaultIconFileName,
+          acceptsPublicSubmissions: category.acceptsPublicSubmissions,
+          sortOrder: category.sortOrder,
+        })),
+        updatedBy: input.actorId,
+        updatedAt,
+      },
+    );
+  }
+
+  const icon = {
+    iconId: buildPoiCategoryIconId(fileName),
+    fileName,
+    fileDeleted: deletedFile.deleted,
+    removedCategoryIds,
+  };
+
+  await emitEvent(
+    'PoiCategoryIconDeleted',
+    {
+      type: 'admin',
+      id: input.actorId,
+    },
+    {
+      ...icon,
+      deletedBy: input.actorId,
+      deletedAt: updatedAt,
+    },
   );
 
   return {
@@ -108,6 +235,10 @@ function invalidUpload(message: string): PoiCategoryIconUploadResult {
     error: 'invalid_poi_category_icon_upload',
     message,
   };
+}
+
+function buildPoiCategoryIconId(fileName: string): string {
+  return `poi_icon_${fileName.replace(/\.[^.]+$/, '')}`;
 }
 
 function detectPoiImageMimeType(bytes: Uint8Array): string | undefined {

@@ -350,6 +350,15 @@ export interface PoiCategoryIconUploadedPayload {
   sha256: string;
 }
 
+export interface PoiCategoryIconDeletedPayload {
+  iconId: string;
+  fileName: string;
+  fileDeleted: boolean;
+  removedCategoryIds: string[];
+  deletedBy: string;
+  deletedAt: ISODateTimeString;
+}
+
 export interface OperationsStrongReminderRulesUpdatedPayload {
   ruleIds: string[];
   ruleCount: number;
@@ -484,6 +493,7 @@ export type YctEventPayloadMap = {
   PoiPublished: PoiPublishedPayload;
   PoiCategoryProfileUpdated: PoiCategoryProfileUpdatedPayload;
   PoiCategoryIconUploaded: PoiCategoryIconUploadedPayload;
+  PoiCategoryIconDeleted: PoiCategoryIconDeletedPayload;
   TransitDataRevisionImported: TransitDataRevisionImportedPayload;
   TransitDataRevisionSubmitted: TransitDataRevisionSubmittedPayload;
   TransitDataRevisionReviewed: TransitDataRevisionReviewedPayload;

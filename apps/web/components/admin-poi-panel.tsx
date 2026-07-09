@@ -593,6 +593,7 @@ function PoiCategoryProfileEditor({
   const [localStatus, setLocalStatus] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingCategoryId, setUploadingCategoryId] = useState<string | null>(null);
+  const [deletingIconKey, setDeletingIconKey] = useState<string | null>(null);
 
   useEffect(() => {
     setDrafts(createCategoryDrafts(categories));
@@ -670,6 +671,59 @@ function PoiCategoryProfileEditor({
     }
   };
 
+  const deleteCategoryIcon = async (categoryId: string, iconValue: string) => {
+    const uploadedFileName = extractUploadedPoiIconFileName(iconValue);
+    if (!uploadedFileName) {
+      setLocalStatus('只能删除通过后台上传的运行时图标。');
+      return;
+    }
+
+    if (!window.confirm(`确认删除图标 ${uploadedFileName}？这会同步移除分类配置中的引用。`)) {
+      return;
+    }
+
+    const deleteKey = `${categoryId}:${iconValue}`;
+    setDeletingIconKey(deleteKey);
+    setLocalStatus('');
+    try {
+      const response = await fetch(appPath('/api/admin/map/poi-category-icons'), {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ iconFileName: iconValue }),
+      });
+      const data = (await response.json()) as {
+        fileName?: string;
+        fileDeleted?: boolean;
+        message?: string;
+        removedCategoryIds?: string[];
+      };
+      if (!response.ok) {
+        setLocalStatus(data.message ?? '图标删除失败');
+        return;
+      }
+
+      const deletedFileName = data.fileName ?? uploadedFileName;
+      setDrafts((current) =>
+        current.map((draft) => {
+          const icons = splitIconFileNames(draft.iconFileNamesText).filter(
+            (icon) => extractUploadedPoiIconFileName(icon) !== deletedFileName,
+          );
+          return {
+            ...draft,
+            defaultIconFileName:
+              extractUploadedPoiIconFileName(draft.defaultIconFileName) === deletedFileName
+                ? icons[0] ?? ''
+                : draft.defaultIconFileName,
+            iconFileNamesText: icons.join('\n'),
+          };
+        }),
+      );
+      onSaved(data.fileDeleted === false ? '图标引用已移除，文件此前已不存在' : 'POI 分类图标已删除');
+    } finally {
+      setDeletingIconKey(null);
+    }
+  };
+
   return (
     <section className="admin-poi-category-config" aria-labelledby="admin-poi-category-title">
       <div className="admin-poi-category-config-header">
@@ -733,6 +787,32 @@ function PoiCategoryProfileEditor({
                     }
                   />
                 </label>
+                <div className="admin-poi-category-icon-list" aria-label={`${draft.name} 图标预览`}>
+                  {splitIconFileNames(draft.iconFileNamesText).map((iconValue) => {
+                    const uploadedFileName = extractUploadedPoiIconFileName(iconValue);
+                    const isDefault = draft.defaultIconFileName.trim() === iconValue;
+                    const deleteKey = `${draft.id}:${iconValue}`;
+                    return (
+                      <span
+                        className={`admin-poi-category-icon-chip${isDefault ? ' is-default' : ''}`}
+                        key={iconValue}
+                      >
+                        <img src={toMarkerIconUrl(iconValue, iconBaseUrl)} alt="" draggable={false} />
+                        <code>{iconValue}</code>
+                        {isDefault ? <small>默认</small> : null}
+                        {uploadedFileName ? (
+                          <button
+                            type="button"
+                            disabled={deletingIconKey === deleteKey}
+                            onClick={() => void deleteCategoryIcon(draft.id, iconValue)}
+                          >
+                            删除
+                          </button>
+                        ) : null}
+                      </span>
+                    );
+                  })}
+                </div>
                 <label className="admin-poi-category-upload">
                   <span>上传图标</span>
                   <input
@@ -1025,6 +1105,22 @@ function splitIconFileNames(value: string): string[] {
         .filter(Boolean),
     ),
   );
+}
+
+function extractUploadedPoiIconFileName(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const pathMatch = /\/api\/map\/poi-icons\/([^/?#]+)/.exec(trimmed);
+  const candidate = pathMatch?.[1] ?? trimmed.split(/[?#]/, 1)[0] ?? '';
+  try {
+    const fileName = decodeURIComponent(candidate);
+    return /^[a-f0-9]{24}\.(?:png|jpg|gif|webp|avif)$/.test(fileName) ? fileName : null;
+  } catch {
+    return null;
+  }
 }
 
 function matchesStatusFilter(status: PoiSubmissionStatus, filter: StatusFilter): boolean {
