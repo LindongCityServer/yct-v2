@@ -93,6 +93,38 @@ export type CommonMessageKey =
   | 'account.authStatus.sessionUnavailable'
   | 'account.authStatus.sessionUnavailableLocalhost'
   | 'account.authStatus.stateInvalid'
+  | 'account.history.action.clearLocal'
+  | 'account.history.action.manageTrips'
+  | 'account.history.action.revokeLegacy'
+  | 'account.history.action.revokingLegacy'
+  | 'account.history.action.searchSchedules'
+  | 'account.history.action.sync'
+  | 'account.history.action.syncing'
+  | 'account.history.action.viewMap'
+  | 'account.history.clearConfirm'
+  | 'account.history.legacyRevokeConfirmLocal'
+  | 'account.history.legacyRevokeConfirmWithAccount'
+  | 'account.history.legacyRevokeDeleteFailed'
+  | 'account.history.legacyRevokeDeleted'
+  | 'account.history.legacyRevokeDeleting'
+  | 'account.history.legacyRevokeDone'
+  | 'account.history.legacyRevokeNoCopies'
+  | 'account.history.legacySyncConfirm'
+  | 'account.history.legacySyncKept'
+  | 'account.history.loadedFromAccount'
+  | 'account.history.loading'
+  | 'account.history.mapFavorites'
+  | 'account.history.noSyncNeeded'
+  | 'account.history.pendingSync'
+  | 'account.history.scheduleRecords'
+  | 'account.history.syncDone'
+  | 'account.history.syncDoneWithSkipped'
+  | 'account.history.syncFailed'
+  | 'account.history.syncing'
+  | 'account.history.title'
+  | 'account.history.total'
+  | 'account.history.tripHistory'
+  | 'account.history.upcomingTrips'
   | 'account.notification.checkinDescription'
   | 'account.notification.checkinLabel'
   | 'account.notification.disabled'
@@ -846,6 +878,45 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.authStatus.sessionUnavailableLocalhost':
       '当前回跳地址是 localhost/127.0.0.1，本地站点无法直接读取临东通共享会话。请改用共享域名测试，或将本地服务切到已接入的同域测试环境。',
     'account.authStatus.stateInvalid': '登录状态校验失败，请重新发起登录。',
+    'account.history.action.clearLocal': '清空本地',
+    'account.history.action.manageTrips': '管理行程',
+    'account.history.action.revokeLegacy': '撤销旧站同步',
+    'account.history.action.revokingLegacy': '撤销中',
+    'account.history.action.searchSchedules': '查询班次',
+    'account.history.action.sync': '同步提醒',
+    'account.history.action.syncing': '同步中',
+    'account.history.action.viewMap': '查看地图',
+    'account.history.clearConfirm':
+      '要清空雨城通新版本地行程提醒、历史记录、班次查询记录和地图收藏吗？旧站 orders 原始数据不会被删除。',
+    'account.history.legacyRevokeConfirmLocal':
+      '撤销后，后续同步账号时会再次询问是否同步旧站 orders 导入的记录。',
+    'account.history.legacyRevokeConfirmWithAccount':
+      '撤销后，会删除账号中由旧站 orders 同步来的提醒副本，并保留本机旧站记录。后续同步账号时会再次询问。',
+    'account.history.legacyRevokeDeleteFailed': '已撤销本地同意，账号副本删除失败',
+    'account.history.legacyRevokeDeleted':
+      '已撤销旧站记录同步同意，并删除 {count} 个账号侧旧站提醒副本',
+    'account.history.legacyRevokeDeleting': '正在删除账号中的旧站提醒副本',
+    'account.history.legacyRevokeDone': '已撤销旧站记录同步同意',
+    'account.history.legacyRevokeNoCopies':
+      '已撤销旧站记录同步同意，账号中没有需要删除的旧站提醒副本',
+    'account.history.legacySyncConfirm':
+      '这次同步包含 {count} 条从旧站 orders 只读导入的记录。同步后它们只会作为账号侧行程提醒快照，不代表新版票务订单、票券或核销凭证。是否同意同步这些旧站记录？',
+    'account.history.legacySyncKept': '已保留旧站记录在本机，未同步到账号',
+    'account.history.loadedFromAccount': '已载入账号中的 {count} 个提醒',
+    'account.history.loading': '读取中',
+    'account.history.mapFavorites': '{count} 个地图收藏',
+    'account.history.noSyncNeeded': '没有需要同步的提醒',
+    'account.history.pendingSync': '{count} 个待同步',
+    'account.history.scheduleRecords': '{count} 条班次记录',
+    'account.history.syncDone': '已同步 {count} 个提醒',
+    'account.history.syncDoneWithSkipped':
+      '已同步 {count} 个提醒，保留 {skipped} 条旧站记录在本机',
+    'account.history.syncFailed': '行程提醒同步失败',
+    'account.history.syncing': '正在同步提醒',
+    'account.history.title': '本地历史',
+    'account.history.total': '{count} 条',
+    'account.history.tripHistory': '{count} 个历史行程',
+    'account.history.upcomingTrips': '{count} 个即将进行',
     'account.notification.checkinDescription': '检票、核销和乘车码相关提醒',
     'account.notification.checkinLabel': '检票提醒',
     'account.notification.disabled': '本设备推送已关闭',
@@ -1631,6 +1702,45 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.authStatus.sessionUnavailableLocalhost':
       '目前回跳地址是 localhost/127.0.0.1，本機站點無法直接讀取臨東通共享會話。請改用共享網域測試，或將本機服務切到已接入的同域測試環境。',
     'account.authStatus.stateInvalid': '登入狀態校驗失敗，請重新發起登入。',
+    'account.history.action.clearLocal': '清空本機',
+    'account.history.action.manageTrips': '管理行程',
+    'account.history.action.revokeLegacy': '撤銷舊站同步',
+    'account.history.action.revokingLegacy': '撤銷中',
+    'account.history.action.searchSchedules': '查詢班次',
+    'account.history.action.sync': '同步提醒',
+    'account.history.action.syncing': '同步中',
+    'account.history.action.viewMap': '查看地圖',
+    'account.history.clearConfirm':
+      '要清空雨城通新版本機行程提醒、歷史記錄、班次查詢記錄和地圖收藏嗎？舊站 orders 原始資料不會被刪除。',
+    'account.history.legacyRevokeConfirmLocal':
+      '撤銷後，後續同步帳號時會再次詢問是否同步舊站 orders 匯入的記錄。',
+    'account.history.legacyRevokeConfirmWithAccount':
+      '撤銷後，會刪除帳號中由舊站 orders 同步來的提醒副本，並保留本機舊站記錄。後續同步帳號時會再次詢問。',
+    'account.history.legacyRevokeDeleteFailed': '已撤銷本機同意，帳號副本刪除失敗',
+    'account.history.legacyRevokeDeleted':
+      '已撤銷舊站記錄同步同意，並刪除 {count} 個帳號側舊站提醒副本',
+    'account.history.legacyRevokeDeleting': '正在刪除帳號中的舊站提醒副本',
+    'account.history.legacyRevokeDone': '已撤銷舊站記錄同步同意',
+    'account.history.legacyRevokeNoCopies':
+      '已撤銷舊站記錄同步同意，帳號中沒有需要刪除的舊站提醒副本',
+    'account.history.legacySyncConfirm':
+      '這次同步包含 {count} 條從舊站 orders 唯讀匯入的記錄。同步後它們只會作為帳號側行程提醒快照，不代表新版票務訂單、票券或核銷憑證。是否同意同步這些舊站記錄？',
+    'account.history.legacySyncKept': '已保留舊站記錄在本機，未同步到帳號',
+    'account.history.loadedFromAccount': '已載入帳號中的 {count} 個提醒',
+    'account.history.loading': '讀取中',
+    'account.history.mapFavorites': '{count} 個地圖收藏',
+    'account.history.noSyncNeeded': '沒有需要同步的提醒',
+    'account.history.pendingSync': '{count} 個待同步',
+    'account.history.scheduleRecords': '{count} 條班次記錄',
+    'account.history.syncDone': '已同步 {count} 個提醒',
+    'account.history.syncDoneWithSkipped':
+      '已同步 {count} 個提醒，保留 {skipped} 條舊站記錄在本機',
+    'account.history.syncFailed': '行程提醒同步失敗',
+    'account.history.syncing': '正在同步提醒',
+    'account.history.title': '本機歷史',
+    'account.history.total': '{count} 條',
+    'account.history.tripHistory': '{count} 個歷史行程',
+    'account.history.upcomingTrips': '{count} 個即將進行',
     'account.notification.checkinDescription': '檢票、核銷和乘車碼相關提醒',
     'account.notification.checkinLabel': '檢票提醒',
     'account.notification.disabled': '本裝置推送已關閉',
@@ -2420,6 +2530,46 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.authStatus.sessionUnavailableLocalhost':
       'The callback address is localhost/127.0.0.1, so the local site cannot read the shared Ldpass session directly. Use the shared domain for testing, or move the local service to an integrated same-domain test environment.',
     'account.authStatus.stateInvalid': 'Login state validation failed. Start sign-in again.',
+    'account.history.action.clearLocal': 'Clear local',
+    'account.history.action.manageTrips': 'Manage trips',
+    'account.history.action.revokeLegacy': 'Revoke legacy sync',
+    'account.history.action.revokingLegacy': 'Revoking',
+    'account.history.action.searchSchedules': 'Search schedules',
+    'account.history.action.sync': 'Sync reminders',
+    'account.history.action.syncing': 'Syncing',
+    'account.history.action.viewMap': 'Open map',
+    'account.history.clearConfirm':
+      'Clear local Yuchengtong v2 trip reminders, history, schedule records, and map favorites? Original legacy orders data will not be deleted.',
+    'account.history.legacyRevokeConfirmLocal':
+      'After revoking, YCT will ask again before syncing records imported from legacy orders.',
+    'account.history.legacyRevokeConfirmWithAccount':
+      'After revoking, copies synced from legacy orders will be deleted from the account while local legacy records stay on this device. YCT will ask again before the next account sync.',
+    'account.history.legacyRevokeDeleteFailed':
+      'Local consent revoked, but account copy deletion failed',
+    'account.history.legacyRevokeDeleted':
+      'Legacy record sync consent revoked, and {count} account-side legacy reminder copies deleted',
+    'account.history.legacyRevokeDeleting': 'Deleting account-side legacy reminder copies',
+    'account.history.legacyRevokeDone': 'Legacy record sync consent revoked',
+    'account.history.legacyRevokeNoCopies':
+      'Legacy record sync consent revoked. No account-side legacy reminder copies needed deletion',
+    'account.history.legacySyncConfirm':
+      'This sync includes {count} read-only records imported from legacy orders. After syncing, they are account-side trip reminder snapshots only, not v2 ticket orders, tickets, or check-in credentials. Sync these legacy records?',
+    'account.history.legacySyncKept': 'Legacy records kept locally and not synced to the account',
+    'account.history.loadedFromAccount': 'Loaded {count} reminders from the account',
+    'account.history.loading': 'Loading',
+    'account.history.mapFavorites': '{count} map favorites',
+    'account.history.noSyncNeeded': 'No reminders need syncing',
+    'account.history.pendingSync': '{count} pending sync',
+    'account.history.scheduleRecords': '{count} schedule records',
+    'account.history.syncDone': 'Synced {count} reminders',
+    'account.history.syncDoneWithSkipped':
+      'Synced {count} reminders and kept {skipped} legacy records local',
+    'account.history.syncFailed': 'Failed to sync trip reminders',
+    'account.history.syncing': 'Syncing reminders',
+    'account.history.title': 'Local History',
+    'account.history.total': '{count}',
+    'account.history.tripHistory': '{count} history trips',
+    'account.history.upcomingTrips': '{count} upcoming',
     'account.notification.checkinDescription': 'Check-in, redemption, and ride code reminders',
     'account.notification.checkinLabel': 'Check-in',
     'account.notification.disabled': 'Device push off',

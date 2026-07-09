@@ -438,7 +438,9 @@ export function AccountSettingsPanel({
           }
 
           mergeTripRemindersFromAccount(reminders);
-          setTripSyncStatusText(`已载入账号中的 ${reminders.length} 个提醒`);
+          setTripSyncStatusText(
+            t('account.history.loadedFromAccount', { count: reminders.length }),
+          );
           syncTripSummary();
         })
         .catch(() => undefined);
@@ -768,11 +770,7 @@ export function AccountSettingsPanel({
   };
 
   const clearLocalHistory = () => {
-    if (
-      !window.confirm(
-        '要清空雨城通新版本地行程提醒、历史记录、班次查询记录和地图收藏吗？旧站 orders 原始数据不会被删除。',
-      )
-    ) {
+    if (!window.confirm(t('account.history.clearConfirm'))) {
       return;
     }
 
@@ -788,8 +786,8 @@ export function AccountSettingsPanel({
     if (
       !window.confirm(
         canDeleteAccountCopies
-          ? '撤销后，会删除账号中由旧站 orders 同步来的提醒副本，并保留本机旧站记录。后续同步账号时会再次询问。'
-          : '撤销后，后续同步账号时会再次询问是否同步旧站 orders 导入的记录。',
+          ? t('account.history.legacyRevokeConfirmWithAccount')
+          : t('account.history.legacyRevokeConfirmLocal'),
       )
     ) {
       return;
@@ -798,26 +796,26 @@ export function AccountSettingsPanel({
     revokeLegacyTripReminderSyncConsent();
     setLegacyTripSyncConsentGranted(false);
     if (!canDeleteAccountCopies) {
-      setTripSyncStatusText('已撤销旧站记录同步同意');
+      setTripSyncStatusText(t('account.history.legacyRevokeDone'));
       return;
     }
 
     setIsRevokingLegacyTripSyncConsent(true);
-    setTripSyncStatusText('正在删除账号中的旧站提醒副本');
+    setTripSyncStatusText(t('account.history.legacyRevokeDeleting'));
     try {
       const result = await deleteServerTripReminderCopies({ source: 'legacy_order' });
       markTripRemindersUnsynced({ source: 'legacy_order' });
       syncTripSummary();
       setTripSyncStatusText(
         result.deletedCount > 0
-          ? `已撤销旧站记录同步同意，并删除 ${result.deletedCount} 个账号侧旧站提醒副本`
-          : '已撤销旧站记录同步同意，账号中没有需要删除的旧站提醒副本',
+          ? t('account.history.legacyRevokeDeleted', { count: result.deletedCount })
+          : t('account.history.legacyRevokeNoCopies'),
       );
     } catch (error) {
       setTripSyncStatusText(
         error instanceof Error
-          ? `已撤销本地同意，账号副本删除失败：${error.message}`
-          : '已撤销本地同意，账号副本删除失败',
+          ? `${t('account.history.legacyRevokeDeleteFailed')}：${error.message}`
+          : t('account.history.legacyRevokeDeleteFailed'),
       );
     } finally {
       setIsRevokingLegacyTripSyncConsent(false);
@@ -842,7 +840,7 @@ export function AccountSettingsPanel({
 
     if (legacyReminders.length > 0 && !legacyTripSyncConsentGranted) {
       const accepted = window.confirm(
-        `这次同步包含 ${legacyReminders.length} 条从旧站 orders 只读导入的记录。同步后它们只会作为账号侧行程提醒快照，不代表新版票务订单、票券或核销凭证。是否同意同步这些旧站记录？`,
+        t('account.history.legacySyncConfirm', { count: legacyReminders.length }),
       );
 
       if (accepted) {
@@ -851,19 +849,19 @@ export function AccountSettingsPanel({
       } else {
         reminders = regularReminders;
         if (reminders.length === 0) {
-          setTripSyncStatusText('已保留旧站记录在本机，未同步到账号');
+          setTripSyncStatusText(t('account.history.legacySyncKept'));
           return;
         }
       }
     }
 
     if (reminders.length === 0) {
-      setTripSyncStatusText('没有需要同步的提醒');
+      setTripSyncStatusText(t('account.history.noSyncNeeded'));
       return;
     }
 
     setIsSyncingTripReminders(true);
-    setTripSyncStatusText('正在同步提醒');
+    setTripSyncStatusText(t('account.history.syncing'));
     try {
       const response = await fetch(appPath('/api/account/trip-reminders'), {
         method: 'POST',
@@ -879,7 +877,7 @@ export function AccountSettingsPanel({
       };
 
       if (!response.ok || !data.syncedAt) {
-        throw new Error(data.message ?? '行程提醒同步失败');
+        throw new Error(data.message ?? t('account.history.syncFailed'));
       }
 
       const syncedUserId = data.reminders?.find((reminder) => reminder.userId)?.userId;
@@ -891,12 +889,15 @@ export function AccountSettingsPanel({
       const skippedLegacyCount = unsyncedReminders.length - reminders.length;
       setTripSyncStatusText(
         skippedLegacyCount > 0
-          ? `已同步 ${reminders.length} 个提醒，保留 ${skippedLegacyCount} 条旧站记录在本机`
-          : `已同步 ${reminders.length} 个提醒`,
+          ? t('account.history.syncDoneWithSkipped', {
+              count: reminders.length,
+              skipped: skippedLegacyCount,
+            })
+          : t('account.history.syncDone', { count: reminders.length }),
       );
       syncTripSummary();
     } catch (error) {
-      setTripSyncStatusText(error instanceof Error ? error.message : '行程提醒同步失败');
+      setTripSyncStatusText(error instanceof Error ? error.message : t('account.history.syncFailed'));
     } finally {
       setIsSyncingTripReminders(false);
     }
@@ -1062,38 +1063,45 @@ export function AccountSettingsPanel({
             <span className="material-symbols-outlined" aria-hidden="true">
               history
             </span>
-            <span id="history-settings-title">本地历史</span>
+            <span id="history-settings-title">{t('account.history.title')}</span>
             <span className="settings-inline-status">
               {tripSummary && scheduleHistorySummary && mapFavoriteSummary
-                ? `${tripSummary.total + scheduleHistorySummary.total + mapFavoriteSummary.total} 条`
-                : '读取中'}
+                ? t('account.history.total', {
+                    count:
+                      tripSummary.total + scheduleHistorySummary.total + mapFavoriteSummary.total,
+                  })
+                : t('account.history.loading')}
             </span>
           </div>
           <div className="settings-history-summary">
-            <span>{tripSummary?.scheduled ?? 0} 个即将进行</span>
-            <span>{tripSummary?.history ?? 0} 个历史行程</span>
-            <span>{scheduleHistorySummary?.total ?? 0} 条班次记录</span>
-            <span>{mapFavoriteSummary?.total ?? 0} 个地图收藏</span>
-            <span>{tripSummary?.localOnly ?? 0} 个待同步</span>
+            <span>{t('account.history.upcomingTrips', { count: tripSummary?.scheduled ?? 0 })}</span>
+            <span>{t('account.history.tripHistory', { count: tripSummary?.history ?? 0 })}</span>
+            <span>
+              {t('account.history.scheduleRecords', {
+                count: scheduleHistorySummary?.total ?? 0,
+              })}
+            </span>
+            <span>{t('account.history.mapFavorites', { count: mapFavoriteSummary?.total ?? 0 })}</span>
+            <span>{t('account.history.pendingSync', { count: tripSummary?.localOnly ?? 0 })}</span>
           </div>
           <div className="settings-action-row">
             <a className="secondary-action-button" href={appPath('/travel')}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 event_upcoming
               </span>
-              <span>管理行程</span>
+              <span>{t('account.history.action.manageTrips')}</span>
             </a>
             <a className="secondary-action-button" href={appPath('/travel/schedules')}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 departure_board
               </span>
-              <span>查询班次</span>
+              <span>{t('account.history.action.searchSchedules')}</span>
             </a>
             <a className="secondary-action-button" href={appPath('/map')}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 map
               </span>
-              <span>查看地图</span>
+              <span>{t('account.history.action.viewMap')}</span>
             </a>
             <button
               className="secondary-action-button"
@@ -1106,7 +1114,11 @@ export function AccountSettingsPanel({
               <span className="material-symbols-outlined" aria-hidden="true">
                 cloud_sync
               </span>
-              <span>{isSyncingTripReminders ? '同步中' : '同步提醒'}</span>
+              <span>
+                {isSyncingTripReminders
+                  ? t('account.history.action.syncing')
+                  : t('account.history.action.sync')}
+              </span>
             </button>
             <button
               className="secondary-action-button"
@@ -1117,13 +1129,17 @@ export function AccountSettingsPanel({
               <span className="material-symbols-outlined" aria-hidden="true">
                 rule
               </span>
-              <span>{isRevokingLegacyTripSyncConsent ? '撤销中' : '撤销旧站同步'}</span>
+              <span>
+                {isRevokingLegacyTripSyncConsent
+                  ? t('account.history.action.revokingLegacy')
+                  : t('account.history.action.revokeLegacy')}
+              </span>
             </button>
             <button className="secondary-action-button" type="button" onClick={clearLocalHistory}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 delete_sweep
               </span>
-              <span>清空本地</span>
+              <span>{t('account.history.action.clearLocal')}</span>
             </button>
           </div>
           {tripSyncStatusText ? <span className="muted">{tripSyncStatusText}</span> : null}
