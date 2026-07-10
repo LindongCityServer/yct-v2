@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { readRuntimeConfig } from './runtime-config';
 
@@ -10,6 +10,14 @@ export interface StoredPoiSubmissionImageFile {
   mimeType: string;
   sha256: string;
   sizeBytes: number;
+}
+
+export interface StoredPoiSubmissionImageMetadata {
+  fileName: string;
+  publicPath: string;
+  mimeType: string;
+  sizeBytes: number;
+  updatedAt: string;
 }
 
 const extensionByMimeType: Record<string, string> = {
@@ -70,6 +78,25 @@ export async function readPoiSubmissionImageFile(fileName: string): Promise<{
   };
 }
 
+export async function readPoiSubmissionImageMetadataByPublicPath(
+  publicPath: string,
+): Promise<StoredPoiSubmissionImageMetadata | undefined> {
+  const fileName = extractStoredPoiImageFileName(publicPath);
+  if (!fileName) {
+    return undefined;
+  }
+
+  const filePath = path.join(/*turbopackIgnore: true*/ resolveUploadDir(), fileName);
+  const fileStat = await stat(filePath);
+  return {
+    fileName,
+    publicPath,
+    mimeType: inferStoredMimeType(fileName),
+    sizeBytes: fileStat.size,
+    updatedAt: fileStat.mtime.toISOString(),
+  };
+}
+
 export function normalizePoiImageMimeType(fileName: string, mimeType: string): string {
   const trimmed = mimeType.trim().toLowerCase();
   if (trimmed) {
@@ -111,4 +138,10 @@ function inferStoredMimeType(fileName: string): string {
 
 function isSafeStoredPoiImageFileName(fileName: string): boolean {
   return /^[a-f0-9]{24}\.(?:png|jpg|gif|webp|avif)$/.test(fileName);
+}
+
+function extractStoredPoiImageFileName(publicPath: string): string | undefined {
+  const match = publicPath.match(/^\/api\/map\/poi-submission-images\/([^/?#]+)$/);
+  const fileName = match?.[1] ? decodeURIComponent(match[1]) : undefined;
+  return fileName && isSafeStoredPoiImageFileName(fileName) ? fileName : undefined;
 }

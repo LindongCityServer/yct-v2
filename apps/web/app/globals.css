@@ -4455,6 +4455,34 @@ body .material-symbols-outlined {
   white-space: nowrap;
 }
 
+.admin-poi-image-metadata {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+}
+
+.admin-poi-image-metadata div {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: var(--yct-space-1);
+  min-width: 0;
+}
+
+.admin-poi-image-metadata dt,
+.admin-poi-image-metadata dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.admin-poi-image-metadata dd {
+  overflow: hidden;
+  color: var(--yct-color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .admin-content-actions {
   display: flex;
   flex-wrap: wrap;

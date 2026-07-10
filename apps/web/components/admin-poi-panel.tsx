@@ -14,6 +14,18 @@ import { appPath } from '../lib/app-paths';
 type StatusFilter = PoiSubmissionStatus | 'all' | 'todo';
 type MapMarker = MapMarkerSnapshot['markers'][number];
 
+interface PoiSubmissionImageMetadata {
+  fileName: string;
+  publicPath: string;
+  mimeType: string;
+  sizeBytes: number;
+  updatedAt: string;
+}
+
+type AdminPoiSubmission = PoiSubmission & {
+  imageMetadata?: PoiSubmissionImageMetadata;
+};
+
 interface PoiConflictHint {
   marker: MapMarker;
   reasons: string[];
@@ -72,7 +84,7 @@ const poiRejectReasonPresets = [
 ];
 
 export function AdminPoiPanel() {
-  const [submissions, setSubmissions] = useState<PoiSubmission[]>([]);
+  const [submissions, setSubmissions] = useState<AdminPoiSubmission[]>([]);
   const [categories, setCategories] = useState<PoiCategory[]>([]);
   const [mapMarkers, setMapMarkers] = useState<MapMarker[]>([]);
   const [conflictDecisions, setConflictDecisions] = useState<PoiConflictDecision[]>([]);
@@ -192,7 +204,7 @@ export function AdminPoiPanel() {
 
   const loadSubmissions = async () => {
     const response = await fetch(appPath('/api/admin/map/poi-submissions'), { cache: 'no-store' });
-    const data = (await response.json()) as { items?: PoiSubmission[]; message?: string };
+    const data = (await response.json()) as { items?: AdminPoiSubmission[]; message?: string };
     if (!response.ok) {
       setStatusText(data.message ?? 'POI 后台暂不可用');
       return;
@@ -1645,12 +1657,13 @@ function PoiCategoryIcon({
 
 function PoiSubmissionImagePreview({
   submission,
-}: Readonly<{ submission: PoiSubmission }>) {
+}: Readonly<{ submission: AdminPoiSubmission }>) {
   if (!submission.imageUrl) {
     return null;
   }
 
   const imageUrl = resolvePoiSubmissionImageUrl(submission.imageUrl);
+  const metadata = submission.imageMetadata;
 
   return (
     <a
@@ -1667,7 +1680,28 @@ function PoiSubmissionImagePreview({
       />
       <span className="admin-poi-image-preview-copy">
         <span className="admin-poi-image-preview-title">投稿图片</span>
-        <small>{submission.imageUrl}</small>
+        {metadata ? (
+          <dl className="admin-poi-image-metadata">
+            <div>
+              <dt>文件</dt>
+              <dd>{metadata.fileName}</dd>
+            </div>
+            <div>
+              <dt>类型</dt>
+              <dd>{metadata.mimeType}</dd>
+            </div>
+            <div>
+              <dt>大小</dt>
+              <dd>{formatFileSize(metadata.sizeBytes)}</dd>
+            </div>
+            <div>
+              <dt>更新时间</dt>
+              <dd>{formatDate(metadata.updatedAt)}</dd>
+            </div>
+          </dl>
+        ) : (
+          <small>{submission.imageUrl.startsWith('/') ? '本地图片元数据暂不可用' : '外部图片链接，无法读取本地元数据'}</small>
+        )}
       </span>
     </a>
   );
@@ -2037,6 +2071,18 @@ function clamp(value: number, min: number, max: number): number {
 
 function formatCoordinatePair([x, z]: [number, number]): string {
   return `${Math.round(x)}, ${Math.round(z)}`;
+}
+
+function formatFileSize(sizeBytes: number): string {
+  if (sizeBytes < 1024) {
+    return `${sizeBytes} B`;
+  }
+
+  if (sizeBytes < 1024 * 1024) {
+    return `${(sizeBytes / 1024).toFixed(1).replace(/\.0$/, '')} KB`;
+  }
+
+  return `${(sizeBytes / 1024 / 1024).toFixed(1).replace(/\.0$/, '')} MB`;
 }
 
 function roundCoordinateForQuery(value: number): string {
