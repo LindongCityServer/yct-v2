@@ -15,6 +15,7 @@ import {
   updateLocalPoiSubmission,
   withPoiSubmissionStatus,
 } from './poi-submission-store';
+import { listPoiSubmissionImageReviews } from './poi-submission-image-review-store';
 
 export interface PoiSubmissionActionResult {
   ok: boolean;
@@ -210,6 +211,15 @@ export async function publishPoiSubmission(input: {
     return invalidTransition(transition.reason);
   }
 
+  if (submission.imageUrl) {
+    const imageReview = (await listPoiSubmissionImageReviews()).find(
+      (review) => review.submissionId === submission.id && review.imageUrl === submission.imageUrl,
+    );
+    if (imageReview?.decision === 'rejected') {
+      return invalidImageReview();
+    }
+  }
+
   const publishedAt = new Date().toISOString();
   const updated = await updateLocalPoiSubmission(input.poiId, (current) =>
     withPoiSubmissionStatus(current, 'published', {
@@ -255,6 +265,15 @@ function invalidTransition(reason?: string): PoiSubmissionActionResult {
     status: 409,
     error: 'invalid_poi_submission_state',
     message: reason ?? '当前 POI 投稿状态不允许执行该操作。',
+  };
+}
+
+function invalidImageReview(): PoiSubmissionActionResult {
+  return {
+    ok: false,
+    status: 409,
+    error: 'poi_submission_image_rejected',
+    message: '投稿图片已被标记为不合格，请先更换图片或重置图片审核状态后再发布。',
   };
 }
 

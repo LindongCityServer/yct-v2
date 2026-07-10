@@ -4074,6 +4074,15 @@ body .material-symbols-outlined {
   line-height: 1.7;
 }
 
+.admin-poi-publish-blocker {
+  margin: 0;
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-danger, #b42318) 12%, transparent);
+  color: var(--yct-color-danger, #b42318);
+  line-height: 1.7;
+}
+
 .admin-poi-publish-summary {
   display: grid;
   gap: var(--yct-space-2);

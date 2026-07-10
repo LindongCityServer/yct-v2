@@ -111,7 +111,7 @@ export function AdminPoiPanel() {
   const [query, setQuery] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const [rejectTarget, setRejectTarget] = useState<PoiSubmission | null>(null);
-  const [publishTarget, setPublishTarget] = useState<PoiSubmission | null>(null);
+  const [publishTarget, setPublishTarget] = useState<AdminPoiSubmission | null>(null);
   const [editTarget, setEditTarget] = useState<PoiSubmission | null>(null);
 
   const categoryById = useMemo(() => {
@@ -564,6 +564,11 @@ export function AdminPoiPanel() {
         <PublishPoiDialog
           category={categoryById.get(publishTarget.categoryId)}
           conflictHints={conflictHintsBySubmissionId.get(publishTarget.id) ?? []}
+          imageReview={
+            publishTarget.imageUrl
+              ? imageReviewByKey.get(imageReviewKey(publishTarget.id, publishTarget.imageUrl))
+              : undefined
+          }
           isBusy={isBusy}
           submission={publishTarget}
           onClose={() => setPublishTarget(null)}
@@ -1014,6 +1019,7 @@ function PoiGeometryPreview({ geometry }: Readonly<{ geometry: MapGeometry }>) {
 function PublishPoiDialog({
   category,
   conflictHints,
+  imageReview,
   isBusy,
   onClose,
   onConfirm,
@@ -1021,17 +1027,19 @@ function PublishPoiDialog({
 }: Readonly<{
   category?: PoiCategory;
   conflictHints: PoiConflictHint[];
+  imageReview?: PoiSubmissionImageReview;
   isBusy: boolean;
   onClose: () => void;
   onConfirm: () => Promise<void>;
-  submission: PoiSubmission;
+  submission: AdminPoiSubmission;
 }>) {
   const [isConfirmed, setIsConfirmed] = useState(false);
   const representativeCoordinate = getGeometryRepresentativeCoordinate(submission.geometry);
+  const hasRejectedImage = imageReview?.decision === 'rejected';
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!isConfirmed) {
+    if (!isConfirmed || hasRejectedImage) {
       return;
     }
     await onConfirm();
@@ -1054,6 +1062,11 @@ function PublishPoiDialog({
         <p className="admin-poi-publish-warning">
           发布后该 POI 会对所有用户可见，并参与地图搜索、附近地点和路线规划候选。请先确认坐标、分类、图片来源和重复提示。
         </p>
+        {hasRejectedImage ? (
+          <p className="admin-poi-publish-blocker">
+            投稿图片已被标记为不合格。请先更换图片，或重置图片审核状态后再发布。
+          </p>
+        ) : null}
         <dl className="admin-poi-publish-summary">
           <div>
             <dt>分类</dt>
@@ -1069,7 +1082,13 @@ function PublishPoiDialog({
           </div>
           <div>
             <dt>投稿图片</dt>
-            <dd>{submission.imageUrl ? '有图片，需确认来源和内容匹配' : '未提交图片'}</dd>
+            <dd>
+              {submission.imageUrl
+                ? imageReview
+                  ? imageReviewLabel(imageReview.decision)
+                  : '有图片，尚未标记审核状态'
+                : '未提交图片'}
+            </dd>
           </div>
           <div>
             <dt>重复提示</dt>
@@ -1088,7 +1107,7 @@ function PublishPoiDialog({
           <button type="button" onClick={onClose} disabled={isBusy}>
             取消
           </button>
-          <button type="submit" disabled={isBusy || !isConfirmed}>
+          <button type="submit" disabled={isBusy || !isConfirmed || hasRejectedImage}>
             确认发布
           </button>
         </div>
