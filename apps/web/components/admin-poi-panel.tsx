@@ -20,6 +20,13 @@ interface PoiConflictHint {
   distanceBlocks: number | null;
 }
 
+interface PoiAuditContextMarker {
+  marker: MapMarker;
+  coordinate: [number, number];
+  distanceBlocks: number;
+  relation: 'same-category' | 'road' | 'station' | 'nearby';
+}
+
 interface PoiSubmissionEditInput {
   title: string;
   categoryId: string;
@@ -150,6 +157,13 @@ export function AdminPoiPanel() {
   const conflictHintsBySubmissionId = useMemo(() => {
     const entries = submissions.map(
       (submission) => [submission.id, buildPoiConflictHints(submission, mapMarkers)] as const,
+    );
+    return new Map(entries);
+  }, [mapMarkers, submissions]);
+
+  const auditContextMarkersBySubmissionId = useMemo(() => {
+    const entries = submissions.map(
+      (submission) => [submission.id, buildPoiAuditContextMarkers(submission, mapMarkers)] as const,
     );
     return new Map(entries);
   }, [mapMarkers, submissions]);
@@ -366,6 +380,7 @@ export function AdminPoiPanel() {
         {filteredSubmissions.map((submission) => (
           <PoiSubmissionReviewItem
             category={categoryById.get(submission.categoryId)}
+            contextMarkers={auditContextMarkersBySubmissionId.get(submission.id) ?? []}
             iconBaseUrl={categoryIconBaseUrl}
             conflictHints={conflictHintsBySubmissionId.get(submission.id) ?? []}
             isBusy={isBusy}
@@ -449,6 +464,7 @@ function AdminPoiMetric({
 
 function PoiSubmissionReviewItem({
   category,
+  contextMarkers,
   conflictHints,
   iconBaseUrl,
   isBusy,
@@ -462,6 +478,7 @@ function PoiSubmissionReviewItem({
   submission,
 }: Readonly<{
   category?: PoiCategory;
+  contextMarkers: PoiAuditContextMarker[];
   conflictHints: PoiConflictHint[];
   iconBaseUrl: string;
   isBusy: boolean;
@@ -517,6 +534,7 @@ function PoiSubmissionReviewItem({
         {isExpanded ? (
           <PoiSubmissionDetail
             category={category}
+            contextMarkers={contextMarkers}
             representativeCoordinate={representativeCoordinate}
             submission={submission}
           />
@@ -615,15 +633,18 @@ function PoiConflictHintList({ hints }: Readonly<{ hints: PoiConflictHint[] }>) 
 
 function PoiSubmissionDetail({
   category,
+  contextMarkers,
   representativeCoordinate,
   submission,
 }: Readonly<{
   category?: PoiCategory;
+  contextMarkers: PoiAuditContextMarker[];
   representativeCoordinate: [number, number] | null;
   submission: PoiSubmission;
 }>) {
   return (
     <div className="admin-poi-detail">
+      <PoiAuditMapPreview contextMarkers={contextMarkers} submission={submission} />
       <PoiGeometryPreview geometry={submission.geometry} />
       <dl>
         <div>
@@ -660,6 +681,80 @@ function PoiSubmissionDetail({
         <summary>几何 JSON</summary>
         <pre>{JSON.stringify(submission.geometry, null, 2)}</pre>
       </details>
+    </div>
+  );
+}
+
+function PoiAuditMapPreview({
+  contextMarkers,
+  submission,
+}: Readonly<{
+  contextMarkers: PoiAuditContextMarker[];
+  submission: PoiSubmission;
+}>) {
+  const preview = buildPoiAuditMapPreview(submission.geometry, contextMarkers);
+  if (!preview) {
+    return null;
+  }
+
+  const topMarkers = contextMarkers.slice(0, 4);
+
+  return (
+    <div className="admin-poi-audit-map">
+      <div className="admin-poi-audit-map-header">
+        <strong>审核地图预览</strong>
+        <span>{contextMarkers.length ? `附近参考 ${contextMarkers.length} 个` : '暂无附近参考标记'}</span>
+      </div>
+      <svg viewBox="0 0 220 152" role="img" aria-label={`${submission.title} 审核地图预览`}>
+        <rect className="admin-poi-audit-map-grid" x="0" y="0" width="220" height="152" />
+        {preview.polygons.map((polygon, index) => (
+          <polygon
+            className="admin-poi-audit-map-submission-shape"
+            key={`submission-polygon-${index}`}
+            points={polygon}
+          />
+        ))}
+        {preview.lines.map((line, index) => (
+          <polyline
+            className="admin-poi-audit-map-submission-line"
+            key={`submission-line-${index}`}
+            points={line}
+          />
+        ))}
+        {preview.contextMarkers.map((marker) => (
+          <g
+            className={`admin-poi-audit-map-context-marker is-${marker.relation}`}
+            key={marker.marker.id}
+            transform={`translate(${roundPreviewValue(marker.point[0])} ${roundPreviewValue(marker.point[1])})`}
+          >
+            <circle r="4.5" />
+            <title>
+              {marker.marker.label} · {Math.round(marker.distanceBlocks)} 格
+            </title>
+          </g>
+        ))}
+        {preview.points.map((point, index) => (
+          <circle
+            className="admin-poi-audit-map-submission-point"
+            cx={point[0]}
+            cy={point[1]}
+            key={`submission-point-${index}`}
+            r="5"
+          />
+        ))}
+      </svg>
+      {topMarkers.length ? (
+        <div className="admin-poi-audit-map-markers" aria-label="附近参考标记">
+          {topMarkers.map((item) => (
+            <span className={`admin-poi-audit-map-marker is-${item.relation}`} key={item.marker.id}>
+              <span>{item.marker.label}</span>
+              <small>
+                {auditContextRelationLabel(item.relation)} · {Math.round(item.distanceBlocks)} 格
+              </small>
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1401,6 +1496,54 @@ interface GeometryPreviewModel {
   polygons: string[];
 }
 
+interface PoiAuditMapPreviewModel extends GeometryPreviewModel {
+  contextMarkers: Array<PoiAuditContextMarker & { point: [number, number] }>;
+}
+
+function buildPoiAuditMapPreview(
+  geometry: MapGeometry,
+  contextMarkers: PoiAuditContextMarker[],
+): PoiAuditMapPreviewModel | null {
+  const coordinateSets = getGeometryPreviewCoordinateSets(geometry);
+  const submissionCoordinates = coordinateSets.flatMap((set) => set.coordinates);
+  const contextCoordinates = contextMarkers.map((item) => item.coordinate);
+  const allCoordinates = [...submissionCoordinates, ...contextCoordinates];
+  if (allCoordinates.length === 0) {
+    return null;
+  }
+
+  const bounds = expandCoordinateBounds(getCoordinateBounds(allCoordinates), 80);
+  const project = (coordinate: [number, number]) => projectAuditMapPreviewCoordinate(coordinate, bounds);
+  const points: Array<[number, number]> = [];
+  const lines: string[] = [];
+  const polygons: string[] = [];
+
+  for (const set of coordinateSets) {
+    const projected = set.coordinates.map(project);
+    const pointsValue = projected
+      .map(([x, y]) => `${roundPreviewValue(x)},${roundPreviewValue(y)}`)
+      .join(' ');
+    if (set.kind === 'point') {
+      points.push(...projected);
+    } else if (set.kind === 'line') {
+      lines.push(pointsValue);
+      points.push(...projected);
+    } else {
+      polygons.push(pointsValue);
+    }
+  }
+
+  return {
+    contextMarkers: contextMarkers.map((item) => ({
+      ...item,
+      point: project(item.coordinate),
+    })),
+    lines,
+    points,
+    polygons,
+  };
+}
+
 function buildGeometryPreview(geometry: MapGeometry): GeometryPreviewModel | null {
   const coordinateSets = getGeometryPreviewCoordinateSets(geometry);
   const allCoordinates = coordinateSets.flatMap((set) => set.coordinates);
@@ -1577,6 +1720,42 @@ function getCoordinateBounds(coordinates: Array<[number, number]>): {
   );
 }
 
+function expandCoordinateBounds(
+  bounds: { minX: number; minZ: number; maxX: number; maxZ: number },
+  minSpan: number,
+): { minX: number; minZ: number; maxX: number; maxZ: number } {
+  const spanX = Math.max(minSpan, bounds.maxX - bounds.minX);
+  const spanZ = Math.max(minSpan, bounds.maxZ - bounds.minZ);
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+  return {
+    maxX: centerX + spanX / 2,
+    maxZ: centerZ + spanZ / 2,
+    minX: centerX - spanX / 2,
+    minZ: centerZ - spanZ / 2,
+  };
+}
+
+function projectAuditMapPreviewCoordinate(
+  coordinate: [number, number],
+  bounds: { minX: number; minZ: number; maxX: number; maxZ: number },
+): [number, number] {
+  const width = 220;
+  const height = 152;
+  const padding = 16;
+  const spanX = Math.max(1, bounds.maxX - bounds.minX);
+  const spanZ = Math.max(1, bounds.maxZ - bounds.minZ);
+  const scale = Math.min((width - padding * 2) / spanX, (height - padding * 2) / spanZ);
+  const contentWidth = spanX * scale;
+  const contentHeight = spanZ * scale;
+  const offsetX = (width - contentWidth) / 2;
+  const offsetY = (height - contentHeight) / 2;
+  return [
+    offsetX + (coordinate[0] - bounds.minX) * scale,
+    offsetY + (coordinate[1] - bounds.minZ) * scale,
+  ];
+}
+
 function projectGeometryPreviewCoordinate(
   coordinate: [number, number],
   bounds: { minX: number; minZ: number; maxX: number; maxZ: number },
@@ -1703,6 +1882,124 @@ function buildPoiConflictHints(submission: PoiSubmission, markers: MapMarker[]):
     .filter((hint): hint is PoiConflictHint => Boolean(hint))
     .sort(comparePoiConflictHints)
     .slice(0, 5);
+}
+
+function buildPoiAuditContextMarkers(
+  submission: PoiSubmission,
+  markers: MapMarker[],
+): PoiAuditContextMarker[] {
+  const submissionCoordinate = getGeometryRepresentativeCoordinate(submission.geometry);
+  if (!submissionCoordinate) {
+    return [];
+  }
+
+  const ownPublishedMarkerId = `poi-${submission.id}`;
+  return markers
+    .filter((marker) => marker.id !== ownPublishedMarkerId)
+    .map((marker) => {
+      const coordinate = getGeometryRepresentativeCoordinate(marker.geometry);
+      if (!coordinate) {
+        return null;
+      }
+
+      const distanceBlocks = distanceBetweenCoordinates(submissionCoordinate, coordinate);
+      if (distanceBlocks > 640) {
+        return null;
+      }
+
+      return {
+        coordinate,
+        distanceBlocks,
+        marker,
+        relation: getPoiAuditContextRelation(submission, marker),
+      } satisfies PoiAuditContextMarker;
+    })
+    .filter((item): item is PoiAuditContextMarker => Boolean(item))
+    .sort(comparePoiAuditContextMarkers)
+    .slice(0, 10);
+}
+
+function getPoiAuditContextRelation(
+  submission: PoiSubmission,
+  marker: MapMarker,
+): PoiAuditContextMarker['relation'] {
+  if (marker.categoryId && marker.categoryId === submission.categoryId) {
+    return 'same-category';
+  }
+
+  if (isRoadReferenceMarker(marker)) {
+    return 'road';
+  }
+
+  if (isTransitStationReferenceMarker(marker)) {
+    return 'station';
+  }
+
+  return 'nearby';
+}
+
+function comparePoiAuditContextMarkers(
+  left: PoiAuditContextMarker,
+  right: PoiAuditContextMarker,
+): number {
+  const leftPriority = auditContextRelationPriority(left.relation);
+  const rightPriority = auditContextRelationPriority(right.relation);
+  if (leftPriority !== rightPriority) {
+    return leftPriority - rightPriority;
+  }
+
+  return left.distanceBlocks - right.distanceBlocks
+    || left.marker.label.localeCompare(right.marker.label, 'zh-CN');
+}
+
+function auditContextRelationPriority(relation: PoiAuditContextMarker['relation']): number {
+  if (relation === 'same-category') {
+    return 0;
+  }
+
+  if (relation === 'road') {
+    return 1;
+  }
+
+  if (relation === 'station') {
+    return 2;
+  }
+
+  return 3;
+}
+
+function auditContextRelationLabel(relation: PoiAuditContextMarker['relation']): string {
+  if (relation === 'same-category') {
+    return '同分类';
+  }
+
+  if (relation === 'road') {
+    return '道路参考';
+  }
+
+  if (relation === 'station') {
+    return '站点参考';
+  }
+
+  return '附近地点';
+}
+
+function isRoadReferenceMarker(marker: Pick<MapMarker, 'categoryId' | 'iconFileName' | 'symbolIcon'>): boolean {
+  const text = [marker.categoryId, marker.iconFileName, marker.symbolIcon]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return /\b(road|roadpoint|highway)\b/.test(text);
+}
+
+function isTransitStationReferenceMarker(
+  marker: Pick<MapMarker, 'categoryId' | 'iconFileName' | 'symbolIcon'>,
+): boolean {
+  const text = [marker.categoryId, marker.iconFileName, marker.symbolIcon]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return /(station|metro|subway|bus|tram|rail|ferry)/.test(text);
 }
 
 function comparePoiConflictHints(left: PoiConflictHint, right: PoiConflictHint): number {
