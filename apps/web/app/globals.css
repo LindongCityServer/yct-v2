@@ -4134,6 +4134,65 @@ body .material-symbols-outlined {
   gap: var(--yct-space-2);
 }
 
+.admin-poi-coordinate-picker {
+  display: grid;
+  gap: var(--yct-space-2);
+  width: 100%;
+  padding: var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text-secondary);
+  text-align: left;
+}
+
+.admin-poi-coordinate-picker svg {
+  width: 100%;
+  min-height: 152px;
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-primary) 6%, var(--yct-color-surface-panel));
+}
+
+.admin-poi-coordinate-picker span {
+  font-size: 12px;
+}
+
+.admin-poi-coordinate-picker-grid {
+  fill: transparent;
+  stroke: color-mix(in srgb, var(--yct-color-border) 58%, transparent);
+  stroke-dasharray: 4 6;
+}
+
+.admin-poi-coordinate-picker-context {
+  fill: var(--yct-color-text-muted);
+  opacity: 0.72;
+}
+
+.admin-poi-coordinate-picker-context.is-same-category {
+  fill: var(--yct-color-primary);
+}
+
+.admin-poi-coordinate-picker-context.is-road {
+  fill: #64706d;
+}
+
+.admin-poi-coordinate-picker-context.is-station {
+  fill: #2f80ed;
+}
+
+.admin-poi-coordinate-picker-original {
+  fill: transparent;
+  stroke: var(--yct-color-text-muted);
+  stroke-dasharray: 3 3;
+  stroke-width: 2;
+}
+
+.admin-poi-coordinate-picker-current {
+  fill: var(--yct-color-primary);
+  stroke: var(--yct-color-surface-panel);
+  stroke-width: 2.5;
+}
+
 .admin-poi-dialog-error {
   color: var(--yct-color-danger, #b42318);
 }

@@ -7,7 +7,7 @@ import type {
   PoiSubmission,
   PoiSubmissionStatus,
 } from '@yct/contracts';
-import type { FormEvent } from 'react';
+import type { FormEvent, MouseEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 
@@ -433,6 +433,7 @@ export function AdminPoiPanel() {
       {editTarget ? (
         <EditPoiSubmissionDialog
           categories={categories}
+          contextMarkers={auditContextMarkersBySubmissionId.get(editTarget.id) ?? []}
           isBusy={isBusy}
           submission={editTarget}
           onClose={() => setEditTarget(null)}
@@ -963,12 +964,14 @@ function RejectPoiDialog({
 
 function EditPoiSubmissionDialog({
   categories,
+  contextMarkers,
   isBusy,
   onClose,
   onSubmit,
   submission,
 }: Readonly<{
   categories: PoiCategory[];
+  contextMarkers: PoiAuditContextMarker[];
   isBusy: boolean;
   onClose: () => void;
   onSubmit: (input: PoiSubmissionEditInput) => Promise<string | null>;
@@ -984,6 +987,9 @@ function EditPoiSubmissionDialog({
   const [pointX, setPointX] = useState(pointCoordinate ? String(pointCoordinate[0]) : '');
   const [pointZ, setPointZ] = useState(pointCoordinate ? String(pointCoordinate[1]) : '');
   const [error, setError] = useState('');
+  const currentPointCoordinate = pointCoordinate
+    ? readPointGeometryFromForm(pointX, pointZ)?.coordinates ?? pointCoordinate
+    : null;
 
   const updateForm = (patch: Partial<PoiSubmissionEditInput>) => {
     setForm((current) => ({ ...current, ...patch }));
@@ -1099,9 +1105,19 @@ function EditPoiSubmissionDialog({
                 />
               </label>
             </div>
+            <PoiPointCoordinatePicker
+              contextMarkers={contextMarkers}
+              currentCoordinate={currentPointCoordinate ?? pointCoordinate}
+              originalCoordinate={pointCoordinate}
+              onPick={(coordinate) => {
+                setPointX(roundCoordinateForQuery(coordinate[0]));
+                setPointZ(roundCoordinateForQuery(coordinate[1]));
+                setError('');
+              }}
+            />
             <a
               className="admin-action-link"
-              href={buildSubmissionMapHref(submission, readPointGeometryFromForm(pointX, pointZ)?.coordinates ?? pointCoordinate)}
+              href={buildSubmissionMapHref(submission, currentPointCoordinate ?? pointCoordinate)}
               target="_blank"
               rel="noreferrer"
             >
@@ -1122,6 +1138,66 @@ function EditPoiSubmissionDialog({
         </div>
       </form>
     </div>
+  );
+}
+
+function PoiPointCoordinatePicker({
+  contextMarkers,
+  currentCoordinate,
+  onPick,
+  originalCoordinate,
+}: Readonly<{
+  contextMarkers: PoiAuditContextMarker[];
+  currentCoordinate: [number, number];
+  onPick: (coordinate: [number, number]) => void;
+  originalCoordinate: [number, number];
+}>) {
+  const model = buildPoiPointCoordinatePickerModel(currentCoordinate, originalCoordinate, contextMarkers);
+
+  const pickCoordinate = (event: MouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const viewPoint: [number, number] = [
+      ((event.clientX - rect.left) / rect.width) * 220,
+      ((event.clientY - rect.top) / rect.height) * 152,
+    ];
+    onPick(unprojectAuditMapPreviewCoordinate(viewPoint, model.bounds));
+  };
+
+  return (
+    <button
+      className="admin-poi-coordinate-picker"
+      type="button"
+      onClick={pickCoordinate}
+      aria-label="在坐标预览中点选新的 POI 坐标"
+    >
+      <svg viewBox="0 0 220 152" aria-hidden="true">
+        <rect className="admin-poi-coordinate-picker-grid" x="0" y="0" width="220" height="152" />
+        {model.contextMarkers.map((marker) => (
+          <circle
+            className={`admin-poi-coordinate-picker-context is-${marker.relation}`}
+            cx={marker.point[0]}
+            cy={marker.point[1]}
+            key={marker.marker.id}
+            r="4"
+          />
+        ))}
+        <circle
+          className="admin-poi-coordinate-picker-original"
+          cx={model.originalPoint[0]}
+          cy={model.originalPoint[1]}
+          r="6"
+        />
+        <circle
+          className="admin-poi-coordinate-picker-current"
+          cx={model.currentPoint[0]}
+          cy={model.currentPoint[1]}
+          r="5"
+        />
+      </svg>
+      <span>
+        点击预览区域回填坐标 · 当前 {formatCoordinatePair(currentCoordinate)}
+      </span>
+    </button>
   );
 }
 
@@ -1500,6 +1576,36 @@ interface PoiAuditMapPreviewModel extends GeometryPreviewModel {
   contextMarkers: Array<PoiAuditContextMarker & { point: [number, number] }>;
 }
 
+interface PoiPointCoordinatePickerModel {
+  bounds: { minX: number; minZ: number; maxX: number; maxZ: number };
+  contextMarkers: Array<PoiAuditContextMarker & { point: [number, number] }>;
+  currentPoint: [number, number];
+  originalPoint: [number, number];
+}
+
+function buildPoiPointCoordinatePickerModel(
+  currentCoordinate: [number, number],
+  originalCoordinate: [number, number],
+  contextMarkers: PoiAuditContextMarker[],
+): PoiPointCoordinatePickerModel {
+  const contextCoordinates = contextMarkers.map((item) => item.coordinate);
+  const bounds = expandCoordinateBounds(
+    getCoordinateBounds([currentCoordinate, originalCoordinate, ...contextCoordinates]),
+    120,
+  );
+  const project = (coordinate: [number, number]) => projectAuditMapPreviewCoordinate(coordinate, bounds);
+
+  return {
+    bounds,
+    contextMarkers: contextMarkers.map((item) => ({
+      ...item,
+      point: project(item.coordinate),
+    })),
+    currentPoint: project(currentCoordinate),
+    originalPoint: project(originalCoordinate),
+  };
+}
+
 function buildPoiAuditMapPreview(
   geometry: MapGeometry,
   contextMarkers: PoiAuditContextMarker[],
@@ -1756,6 +1862,28 @@ function projectAuditMapPreviewCoordinate(
   ];
 }
 
+function unprojectAuditMapPreviewCoordinate(
+  point: [number, number],
+  bounds: { minX: number; minZ: number; maxX: number; maxZ: number },
+): [number, number] {
+  const width = 220;
+  const height = 152;
+  const padding = 16;
+  const spanX = Math.max(1, bounds.maxX - bounds.minX);
+  const spanZ = Math.max(1, bounds.maxZ - bounds.minZ);
+  const scale = Math.min((width - padding * 2) / spanX, (height - padding * 2) / spanZ);
+  const contentWidth = spanX * scale;
+  const contentHeight = spanZ * scale;
+  const offsetX = (width - contentWidth) / 2;
+  const offsetY = (height - contentHeight) / 2;
+  const x = bounds.minX + (point[0] - offsetX) / scale;
+  const z = bounds.minZ + (point[1] - offsetY) / scale;
+  return [
+    clamp(x, bounds.minX, bounds.maxX),
+    clamp(z, bounds.minZ, bounds.maxZ),
+  ];
+}
+
 function projectGeometryPreviewCoordinate(
   coordinate: [number, number],
   bounds: { minX: number; minZ: number; maxX: number; maxZ: number },
@@ -1778,6 +1906,10 @@ function projectGeometryPreviewCoordinate(
 
 function roundPreviewValue(value: number): string {
   return value.toFixed(2).replace(/\.?0+$/, '');
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function formatCoordinatePair([x, z]: [number, number]): string {
