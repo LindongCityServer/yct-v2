@@ -16,6 +16,7 @@ import {
   withPoiSubmissionStatus,
 } from './poi-submission-store';
 import { listPoiSubmissionImageReviews } from './poi-submission-image-review-store';
+import { listPoiConflictDecisions } from './poi-conflict-decision-store';
 
 export interface PoiSubmissionActionResult {
   ok: boolean;
@@ -220,6 +221,13 @@ export async function publishPoiSubmission(input: {
     }
   }
 
+  const hasDuplicateDecision = (await listPoiConflictDecisions()).some(
+    (decision) => decision.submissionId === submission.id && decision.decision === 'duplicate',
+  );
+  if (hasDuplicateDecision) {
+    return invalidConflictDecision();
+  }
+
   const publishedAt = new Date().toISOString();
   const updated = await updateLocalPoiSubmission(input.poiId, (current) =>
     withPoiSubmissionStatus(current, 'published', {
@@ -274,6 +282,15 @@ function invalidImageReview(): PoiSubmissionActionResult {
     status: 409,
     error: 'poi_submission_image_rejected',
     message: '投稿图片已被标记为不合格，请先更换图片或重置图片审核状态后再发布。',
+  };
+}
+
+function invalidConflictDecision(): PoiSubmissionActionResult {
+  return {
+    ok: false,
+    status: 409,
+    error: 'poi_submission_conflict_duplicate',
+    message: '该 POI 仍有冲突提示被标记为待合并，请先完成合并、重置判断或改为忽略后再发布。',
   };
 }
 

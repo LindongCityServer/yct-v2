@@ -563,6 +563,9 @@ export function AdminPoiPanel() {
       {publishTarget ? (
         <PublishPoiDialog
           category={categoryById.get(publishTarget.categoryId)}
+          conflictDecisions={conflictDecisions.filter(
+            (decision) => decision.submissionId === publishTarget.id,
+          )}
           conflictHints={conflictHintsBySubmissionId.get(publishTarget.id) ?? []}
           imageReview={
             publishTarget.imageUrl
@@ -1018,6 +1021,7 @@ function PoiGeometryPreview({ geometry }: Readonly<{ geometry: MapGeometry }>) {
 
 function PublishPoiDialog({
   category,
+  conflictDecisions,
   conflictHints,
   imageReview,
   isBusy,
@@ -1026,6 +1030,7 @@ function PublishPoiDialog({
   submission,
 }: Readonly<{
   category?: PoiCategory;
+  conflictDecisions: PoiConflictDecision[];
   conflictHints: PoiConflictHint[];
   imageReview?: PoiSubmissionImageReview;
   isBusy: boolean;
@@ -1036,10 +1041,14 @@ function PublishPoiDialog({
   const [isConfirmed, setIsConfirmed] = useState(false);
   const representativeCoordinate = getGeometryRepresentativeCoordinate(submission.geometry);
   const hasRejectedImage = imageReview?.decision === 'rejected';
+  const duplicateDecisionCount = conflictDecisions.filter(
+    (decision) => decision.decision === 'duplicate',
+  ).length;
+  const hasDuplicateDecision = duplicateDecisionCount > 0;
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!isConfirmed || hasRejectedImage) {
+    if (!isConfirmed || hasRejectedImage || hasDuplicateDecision) {
       return;
     }
     await onConfirm();
@@ -1067,6 +1076,11 @@ function PublishPoiDialog({
             投稿图片已被标记为不合格。请先更换图片，或重置图片审核状态后再发布。
           </p>
         ) : null}
+        {hasDuplicateDecision ? (
+          <p className="admin-poi-publish-blocker">
+            仍有 {duplicateDecisionCount} 条冲突提示被标记为待合并。请先完成合并、重置判断或改为忽略后再发布。
+          </p>
+        ) : null}
         <dl className="admin-poi-publish-summary">
           <div>
             <dt>分类</dt>
@@ -1092,7 +1106,13 @@ function PublishPoiDialog({
           </div>
           <div>
             <dt>重复提示</dt>
-            <dd>{conflictHints.length ? `发现 ${conflictHints.length} 条可能冲突提示` : '未发现明显冲突提示'}</dd>
+            <dd>
+              {conflictHints.length
+                ? duplicateDecisionCount
+                  ? `发现 ${conflictHints.length} 条可能冲突提示，其中 ${duplicateDecisionCount} 条待合并`
+                  : `发现 ${conflictHints.length} 条可能冲突提示`
+                : '未发现明显冲突提示'}
+            </dd>
           </div>
         </dl>
         <label className="admin-poi-publish-confirm">
@@ -1107,7 +1127,10 @@ function PublishPoiDialog({
           <button type="button" onClick={onClose} disabled={isBusy}>
             取消
           </button>
-          <button type="submit" disabled={isBusy || !isConfirmed || hasRejectedImage}>
+          <button
+            type="submit"
+            disabled={isBusy || !isConfirmed || hasRejectedImage || hasDuplicateDecision}
+          >
             确认发布
           </button>
         </div>
