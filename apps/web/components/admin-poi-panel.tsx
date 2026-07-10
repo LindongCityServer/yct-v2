@@ -463,6 +463,16 @@ export function AdminPoiPanel() {
   const pendingCount = statusCounts.get('pending_review') ?? 0;
   const approvedCount = statusCounts.get('approved') ?? 0;
   const publishedCount = statusCounts.get('published') ?? 0;
+  const rejectedImageCount = submissions.filter(
+    (submission) =>
+      submission.imageUrl &&
+      imageReviewByKey.get(imageReviewKey(submission.id, submission.imageUrl))?.decision === 'rejected',
+  ).length;
+  const duplicateConflictCount = new Set(
+    conflictDecisions
+      .filter((decision) => decision.decision === 'duplicate')
+      .map((decision) => decision.submissionId),
+  ).size;
 
   return (
     <section className="module-panel admin-operations-panel" aria-labelledby="admin-poi-title">
@@ -475,8 +485,26 @@ export function AdminPoiPanel() {
       </div>
 
       <div className="admin-report-summary admin-poi-summary" aria-label="POI 投稿摘要">
-        <AdminPoiMetric label="待审核" value={pendingCount} tone={pendingCount > 0 ? 'warning' : undefined} />
-        <AdminPoiMetric label="待发布" value={approvedCount} tone={approvedCount > 0 ? 'accent' : undefined} />
+        <AdminPoiMetric
+          label="待审核"
+          value={pendingCount}
+          tone={pendingCount > 0 ? 'warning' : undefined}
+        />
+        <AdminPoiMetric
+          label="待发布"
+          value={approvedCount}
+          tone={approvedCount > 0 ? 'accent' : undefined}
+        />
+        <AdminPoiMetric
+          label="图片不合格"
+          value={rejectedImageCount}
+          tone={rejectedImageCount > 0 ? 'warning' : undefined}
+        />
+        <AdminPoiMetric
+          label="待合并"
+          value={duplicateConflictCount}
+          tone={duplicateConflictCount > 0 ? 'warning' : undefined}
+        />
         <AdminPoiMetric label="已发布" value={publishedCount} />
         <AdminPoiMetric label="当前结果" value={filteredSubmissions.length} />
       </div>
