@@ -3991,6 +3991,51 @@ body .material-symbols-outlined {
   color: var(--yct-color-text-muted);
 }
 
+.admin-poi-hierarchy-hint {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-lg);
+  background: color-mix(in srgb, var(--yct-color-primary) 8%, var(--yct-color-surface));
+}
+
+.admin-poi-hierarchy-hint > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--yct-space-1);
+}
+
+.admin-poi-hierarchy-hint > div:first-child span {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+}
+
+.admin-poi-hierarchy-hint dl {
+  display: grid;
+  gap: var(--yct-space-1);
+  margin: 0;
+}
+
+.admin-poi-hierarchy-hint dl div {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: var(--yct-space-2);
+}
+
+.admin-poi-hierarchy-hint dt,
+.admin-poi-hierarchy-hint dd {
+  margin: 0;
+}
+
+.admin-poi-hierarchy-hint dt {
+  color: var(--yct-color-text-muted);
+}
+
+.admin-poi-hierarchy-hint dd {
+  color: var(--yct-color-text-secondary);
+}
+
 .admin-poi-geometry-preview {
   display: grid;
   gap: var(--yct-space-1);

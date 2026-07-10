@@ -66,6 +66,12 @@ interface PoiAuditContextMarker {
   relation: 'same-category' | 'road' | 'station' | 'nearby';
 }
 
+interface PoiHierarchyHint {
+  parentLabel: string;
+  childLabel: string;
+  parentMarkers: MapMarker[];
+}
+
 interface PoiSubmissionEditInput {
   title: string;
   categoryId: string;
@@ -219,6 +225,13 @@ export function AdminPoiPanel() {
   const auditContextMarkersBySubmissionId = useMemo(() => {
     const entries = submissions.map(
       (submission) => [submission.id, buildPoiAuditContextMarkers(submission, mapMarkers)] as const,
+    );
+    return new Map(entries);
+  }, [mapMarkers, submissions]);
+
+  const hierarchyHintBySubmissionId = useMemo(() => {
+    const entries = submissions.map(
+      (submission) => [submission.id, buildPoiHierarchyHint(submission, mapMarkers)] as const,
     );
     return new Map(entries);
   }, [mapMarkers, submissions]);
@@ -530,6 +543,7 @@ export function AdminPoiPanel() {
             isExpanded={expandedIds.has(submission.id)}
             imageReview={submission.imageUrl ? imageReviewByKey.get(imageReviewKey(submission.id, submission.imageUrl)) : undefined}
             key={submission.id}
+            hierarchyHint={hierarchyHintBySubmissionId.get(submission.id)}
             onCopy={(message) => setStatusText(message)}
             onConflictDecision={(hint, decision) => void updateConflictDecision(submission, hint, decision)}
             onEdit={() => setEditTarget(submission)}
@@ -622,6 +636,7 @@ function PoiSubmissionReviewItem({
   conflictDecisionByKey,
   contextMarkers,
   conflictHints,
+  hierarchyHint,
   iconBaseUrl,
   isBusy,
   isExpanded,
@@ -640,6 +655,7 @@ function PoiSubmissionReviewItem({
   conflictDecisionByKey: Map<string, PoiConflictDecision>;
   contextMarkers: PoiAuditContextMarker[];
   conflictHints: PoiConflictHint[];
+  hierarchyHint?: PoiHierarchyHint | null;
   iconBaseUrl: string;
   isBusy: boolean;
   isExpanded: boolean;
@@ -706,6 +722,7 @@ function PoiSubmissionReviewItem({
           <PoiSubmissionDetail
             category={category}
             contextMarkers={contextMarkers}
+            hierarchyHint={hierarchyHint}
             representativeCoordinate={representativeCoordinate}
             submission={submission}
           />
@@ -856,17 +873,20 @@ function PoiConflictHintList({
 function PoiSubmissionDetail({
   category,
   contextMarkers,
+  hierarchyHint,
   representativeCoordinate,
   submission,
 }: Readonly<{
   category?: PoiCategory;
   contextMarkers: PoiAuditContextMarker[];
+  hierarchyHint?: PoiHierarchyHint | null;
   representativeCoordinate: [number, number] | null;
   submission: PoiSubmission;
 }>) {
   return (
     <div className="admin-poi-detail">
       <PoiAuditMapPreview contextMarkers={contextMarkers} submission={submission} />
+      {hierarchyHint ? <PoiHierarchyHintPanel hint={hierarchyHint} /> : null}
       <PoiGeometryPreview geometry={submission.geometry} />
       <dl>
         <div>
@@ -903,6 +923,35 @@ function PoiSubmissionDetail({
         <summary>几何 JSON</summary>
         <pre>{JSON.stringify(submission.geometry, null, 2)}</pre>
       </details>
+    </div>
+  );
+}
+
+function PoiHierarchyHintPanel({ hint }: Readonly<{ hint: PoiHierarchyHint }>) {
+  return (
+    <div className="admin-poi-hierarchy-hint">
+      <div>
+        <strong>可能父子地点</strong>
+        <span>来自旧地图命名规则</span>
+      </div>
+      <dl>
+        <div>
+          <dt>父地点</dt>
+          <dd>{hint.parentLabel}</dd>
+        </div>
+        <div>
+          <dt>子地点</dt>
+          <dd>{hint.childLabel}</dd>
+        </div>
+        <div>
+          <dt>父地点参考</dt>
+          <dd>
+            {hint.parentMarkers.length
+              ? hint.parentMarkers.slice(0, 3).map((marker) => marker.label).join('、')
+              : '未找到同名公开标记'}
+          </dd>
+        </div>
+      </dl>
     </div>
   );
 }
@@ -2422,6 +2471,40 @@ function buildPoiAuditContextMarkers(
     .filter((item): item is PoiAuditContextMarker => Boolean(item))
     .sort(comparePoiAuditContextMarkers)
     .slice(0, 10);
+}
+
+function buildPoiHierarchyHint(
+  submission: PoiSubmission,
+  markers: MapMarker[],
+): PoiHierarchyHint | null {
+  const parts = splitSecondaryPoiTitle(submission.title);
+  if (!parts) {
+    return null;
+  }
+
+  const normalizedParentLabel = normalizeSearchText(parts.parentLabel);
+  const parentMarkers = markers
+    .filter((marker) => normalizeSearchText(marker.label) === normalizedParentLabel)
+    .slice(0, 5);
+
+  return {
+    ...parts,
+    parentMarkers,
+  };
+}
+
+function splitSecondaryPoiTitle(
+  title: string,
+): Pick<PoiHierarchyHint, 'parentLabel' | 'childLabel'> | null {
+  const normalized = title.replace(/[－—–]/g, '-');
+  const separatorIndex = normalized.indexOf('-');
+  if (separatorIndex <= 0 || separatorIndex >= normalized.length - 1) {
+    return null;
+  }
+
+  const parentLabel = normalized.slice(0, separatorIndex).trim();
+  const childLabel = normalized.slice(separatorIndex + 1).trim();
+  return parentLabel && childLabel ? { parentLabel, childLabel } : null;
 }
 
 function getPoiAuditContextRelation(
