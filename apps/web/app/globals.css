@@ -4184,6 +4184,45 @@ body .material-symbols-outlined {
   gap: var(--yct-space-2);
 }
 
+.admin-poi-line-order-card {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+}
+
+.admin-poi-line-order-card dl {
+  display: grid;
+  gap: var(--yct-space-1);
+  margin: 0;
+}
+
+.admin-poi-line-order-card dl div {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: var(--yct-space-2);
+}
+
+.admin-poi-line-order-card dt,
+.admin-poi-line-order-card dd {
+  margin: 0;
+}
+
+.admin-poi-line-order-card dt {
+  color: var(--yct-color-text-muted);
+}
+
+.admin-poi-line-order-card button {
+  justify-self: start;
+  min-height: 34px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+}
+
 .admin-poi-coordinate-picker {
   display: grid;
   gap: var(--yct-space-2);

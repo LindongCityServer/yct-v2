@@ -137,7 +137,7 @@ export async function updatePoiSubmissionByAdmin(input: {
   categoryId: string;
   description?: string;
   href?: string;
-  geometry?: Extract<MapGeometry, { type: 'Point' }>;
+  geometry?: Extract<MapGeometry, { type: 'Point' | 'LineString' }>;
 }): Promise<PoiSubmissionActionResult> {
   const submission = await findLocalPoiSubmission(input.poiId);
   if (!submission) {
@@ -160,12 +160,16 @@ export async function updatePoiSubmissionByAdmin(input: {
     href: normalizeOptionalText(input.href),
     geometry: input.geometry ?? submission.geometry,
   };
-  if (input.geometry && submission.geometry.type !== 'Point') {
+  if (
+    input.geometry &&
+    (input.geometry.type !== submission.geometry.type ||
+      (input.geometry.type !== 'Point' && input.geometry.type !== 'LineString'))
+  ) {
     return {
       ok: false,
       status: 409,
       error: 'poi_submission_geometry_edit_unsupported',
-      message: '当前简化修正入口只允许调整点状 POI 坐标。',
+      message: '当前简化修正入口只允许调整点状 POI 坐标或反转线性 POI 点序。',
     };
   }
 
@@ -309,10 +313,7 @@ function getChangedPoiSubmissionFields(
     (field) => (submission[field] ?? '') !== (patch[field] ?? ''),
   );
   const geometryChanged =
-    submission.geometry.type === 'Point' &&
-    patch.geometry.type === 'Point' &&
-    (submission.geometry.coordinates[0] !== patch.geometry.coordinates[0] ||
-      submission.geometry.coordinates[1] !== patch.geometry.coordinates[1]);
+    JSON.stringify(submission.geometry) !== JSON.stringify(patch.geometry);
 
   return geometryChanged ? [...textFields, 'geometry'] : textFields;
 }

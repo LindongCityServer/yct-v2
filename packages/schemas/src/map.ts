@@ -58,6 +58,14 @@ const pointMapGeometrySchema = z.object({
   coordinates: coordinateSchema,
 });
 
+const editablePoiGeometrySchema = z.discriminatedUnion('type', [
+  pointMapGeometrySchema,
+  z.object({
+    type: z.literal('LineString'),
+    coordinates: z.array(coordinateSchema).min(2).max(2000),
+  }),
+]);
+
 export const tileProviderConfigSchema = z.object({
   id: idSchema,
   name: nonEmptyTextSchema,
@@ -149,7 +157,7 @@ export const poiSubmissionAdminUpdateSchema = z.object({
   categoryId: idSchema,
   description: z.string().trim().max(1000).optional(),
   href: z.union([urlSchema, z.literal('')]).optional(),
-  geometry: pointMapGeometrySchema.optional(),
+  geometry: editablePoiGeometrySchema.optional(),
 });
 
 export const poiConflictDecisionUpdateSchema = z.object({

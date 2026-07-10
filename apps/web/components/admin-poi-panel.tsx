@@ -71,7 +71,7 @@ interface PoiSubmissionEditInput {
   categoryId: string;
   description: string;
   href: string;
-  geometry?: Extract<MapGeometry, { type: 'Point' }>;
+  geometry?: Extract<MapGeometry, { type: 'Point' | 'LineString' }>;
 }
 
 const defaultMarkerIconBaseUrl = 'https://map.shangxiaoguan.top/';
@@ -1239,8 +1239,13 @@ function EditPoiSubmissionDialog({
     href: submission.href ?? '',
   }));
   const pointCoordinate = submission.geometry.type === 'Point' ? submission.geometry.coordinates : null;
+  const initialLineCoordinates =
+    submission.geometry.type === 'LineString' ? submission.geometry.coordinates : null;
   const [pointX, setPointX] = useState(pointCoordinate ? String(pointCoordinate[0]) : '');
   const [pointZ, setPointZ] = useState(pointCoordinate ? String(pointCoordinate[1]) : '');
+  const [lineCoordinates, setLineCoordinates] = useState<Array<[number, number]> | null>(
+    initialLineCoordinates ? [...initialLineCoordinates] : null,
+  );
   const [error, setError] = useState('');
   const currentPointCoordinate = pointCoordinate
     ? readPointGeometryFromForm(pointX, pointZ)?.coordinates ?? pointCoordinate
@@ -1265,7 +1270,12 @@ function EditPoiSubmissionDialog({
 
     const nextGeometry = pointCoordinate
       ? readPointGeometryFromForm(pointX, pointZ)
-      : undefined;
+      : lineCoordinates
+        ? ({
+            type: 'LineString',
+            coordinates: lineCoordinates,
+          } satisfies Extract<MapGeometry, { type: 'LineString' }>)
+        : undefined;
     if (pointCoordinate && !nextGeometry) {
       setError('请填写有效的 X/Z 坐标。');
       return;
@@ -1379,8 +1389,38 @@ function EditPoiSubmissionDialog({
               打开地图辅助选点
             </a>
           </div>
+        ) : lineCoordinates ? (
+          <div className="admin-poi-edit-coordinate">
+            <div className="admin-poi-line-order-card">
+              <strong>线性 POI 点序</strong>
+              <dl>
+                <div>
+                  <dt>点数</dt>
+                  <dd>{lineCoordinates.length}</dd>
+                </div>
+                <div>
+                  <dt>起点</dt>
+                  <dd>{formatCoordinatePair(lineCoordinates[0])}</dd>
+                </div>
+                <div>
+                  <dt>终点</dt>
+                  <dd>{formatCoordinatePair(lineCoordinates[lineCoordinates.length - 1])}</dd>
+                </div>
+              </dl>
+              <button
+                type="button"
+                onClick={() => {
+                  setLineCoordinates((current) => (current ? [...current].reverse() : current));
+                  setError('');
+                }}
+              >
+                反转点序
+              </button>
+            </div>
+            <p className="muted">当前仅支持反转线性 POI 的点序；补点、删点和道路吸附需要后续地图编辑器。</p>
+          </div>
         ) : (
-          <p className="muted">当前仅支持点状 POI 在此处修正坐标；线和面需要后续地图编辑器。</p>
+          <p className="muted">当前仅支持点状 POI 修正坐标、线性 POI 反转点序；区域几何需要后续地图编辑器。</p>
         )}
         {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
         <div className="admin-content-actions">
