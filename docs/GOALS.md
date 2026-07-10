@@ -612,6 +612,7 @@ DESIGN.md
 - 已处理补充：POI 后台支持管理员在待审核状态下修正标题、分类、简介、链接和点状 POI 的 X/Z 坐标；接口为 `PATCH /api/admin/map/poi-submissions/[poiId]`，会校验分类存在、限制仅 `pending_review` 可改，并发布 `PoiSubmissionUpdated` 事件。坐标修正弹窗提供地图辅助查看链接；完整内嵌地图选点控件、图片、父子关系、代表 POI 和线性/区域结构仍留给后续地图编辑器。
 - 已处理补充：POI 投稿详情新增轻量 SVG 几何预览，支持点、点组、线、矩形、矩形组、多边形和多重多边形的大致形状展示，减少线性/区域投稿只能查看 JSON 的审核负担；后续仍需要真正叠加底图和可编辑点序的地图几何编辑器。
 - 已处理补充：POI 分类后台新增本地覆盖配置第一版，管理员可在 `/admin/map-poi` 展开“分类与图标配置”，编辑分类名称、排序、公开投稿开关、默认图标和一类多图标文件列表；配置写入 `.yct-data/poi-category-profile-store.json`，公共 `/api/map/poi-categories` 会返回基础分类与管理员覆盖后的合并结果，并发布 `PoiCategoryProfileUpdated` 事件。分类行已支持上传图标文件，文件默认落盘到部署目录下 `runtime-assets/poi-icons`，通过 `/api/map/poi-icons/<file>` 读取并发布 `PoiCategoryIconUploaded` 事件；后台也支持删除运行时上传图标，删除时会清理分类配置引用、阻止某分类失去最后一个图标，并发布 `PoiCategoryIconDeleted` 事件。图标列表已增加浅色、深色和地图感底色的行内批量预览，先帮助管理员人工判断可读性；后续仍需补图标素材库、真实底图抽样、可读性评分和更多图标素材治理能力。
+- 已处理补充：POI 后台发布动作增加确认弹窗，明确发布后会进入公开地图并参与搜索、附近地点和路线规划候选；管理员需要勾选已核对坐标、分类、图片来源和重复提示后才能发布。当前仍沿用既有发布 API 和 `PoiPublished` 事件，后续高风险动作再接入 PIN 二次确认、发布预览和版本回滚。
 - 已处理部署补充：部署脚本默认会保留并回填部署包根目录下与启动脚本平级的 `runtime-assets` 目录；POI 分类图标当前默认写入 `runtime-assets/poi-icons`，替换 standalone 包时不再需要手工额外搬这一类运行时图标。后台内容素材仍暂存 `apps/web/public/content-assets`，后续再逐步迁入同类运行时静态资源目录或对象存储。
 
 2026-07-03 本地开发站点打开缓慢排查，当前进展：

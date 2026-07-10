@@ -63,6 +63,7 @@ export function AdminPoiPanel() {
   const [query, setQuery] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const [rejectTarget, setRejectTarget] = useState<PoiSubmission | null>(null);
+  const [publishTarget, setPublishTarget] = useState<PoiSubmission | null>(null);
   const [editTarget, setEditTarget] = useState<PoiSubmission | null>(null);
 
   const categoryById = useMemo(() => {
@@ -211,7 +212,7 @@ export function AdminPoiPanel() {
     poiId: string,
     action: 'approve' | 'reject' | 'publish',
     reason?: string,
-  ) => {
+  ): Promise<boolean> => {
     setIsBusy(true);
     try {
       const endpoint =
@@ -232,11 +233,12 @@ export function AdminPoiPanel() {
       const data = (await response.json()) as { message?: string };
       if (!response.ok) {
         setStatusText(data.message ?? '操作失败');
-        return;
+        return false;
       }
 
       setStatusText('操作已完成');
       await loadSubmissions();
+      return true;
     } finally {
       setIsBusy(false);
     }
@@ -371,6 +373,7 @@ export function AdminPoiPanel() {
             key={submission.id}
             onCopy={(message) => setStatusText(message)}
             onEdit={() => setEditTarget(submission)}
+            onPublish={() => setPublishTarget(submission)}
             onReject={() => setRejectTarget(submission)}
             onRunAction={runAction}
             onToggleExpanded={() => toggleExpanded(submission.id)}
@@ -388,8 +391,26 @@ export function AdminPoiPanel() {
           submission={rejectTarget}
           onClose={() => setRejectTarget(null)}
           onSubmit={async (reason) => {
-            await runAction(rejectTarget.id, 'reject', reason);
-            setRejectTarget(null);
+            const success = await runAction(rejectTarget.id, 'reject', reason);
+            if (success) {
+              setRejectTarget(null);
+            }
+          }}
+        />
+      ) : null}
+
+      {publishTarget ? (
+        <PublishPoiDialog
+          category={categoryById.get(publishTarget.categoryId)}
+          conflictHints={conflictHintsBySubmissionId.get(publishTarget.id) ?? []}
+          isBusy={isBusy}
+          submission={publishTarget}
+          onClose={() => setPublishTarget(null)}
+          onConfirm={async () => {
+            const success = await runAction(publishTarget.id, 'publish');
+            if (success) {
+              setPublishTarget(null);
+            }
           }}
         />
       ) : null}
@@ -434,6 +455,7 @@ function PoiSubmissionReviewItem({
   isExpanded,
   onCopy,
   onEdit,
+  onPublish,
   onReject,
   onRunAction,
   onToggleExpanded,
@@ -446,8 +468,9 @@ function PoiSubmissionReviewItem({
   isExpanded: boolean;
   onCopy: (message: string) => void;
   onEdit: () => void;
+  onPublish: () => void;
   onReject: () => void;
-  onRunAction: (poiId: string, action: 'approve' | 'reject' | 'publish', reason?: string) => void;
+  onRunAction: (poiId: string, action: 'approve' | 'reject', reason?: string) => Promise<boolean>;
   onToggleExpanded: () => void;
   submission: PoiSubmission;
 }>) {
@@ -542,7 +565,7 @@ function PoiSubmissionReviewItem({
         <button
           type="button"
           disabled={isBusy || submission.status !== 'pending_review'}
-          onClick={() => onRunAction(submission.id, 'approve')}
+          onClick={() => void onRunAction(submission.id, 'approve')}
         >
           通过
         </button>
@@ -556,7 +579,7 @@ function PoiSubmissionReviewItem({
         <button
           type="button"
           disabled={isBusy || submission.status !== 'approved'}
-          onClick={() => onRunAction(submission.id, 'publish')}
+          onClick={onPublish}
         >
           发布
         </button>
@@ -675,6 +698,92 @@ function PoiGeometryPreview({ geometry }: Readonly<{ geometry: MapGeometry }>) {
         ))}
       </svg>
       <small>几何形状预览 · {geometryLabel(geometry)}</small>
+    </div>
+  );
+}
+
+function PublishPoiDialog({
+  category,
+  conflictHints,
+  isBusy,
+  onClose,
+  onConfirm,
+  submission,
+}: Readonly<{
+  category?: PoiCategory;
+  conflictHints: PoiConflictHint[];
+  isBusy: boolean;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+  submission: PoiSubmission;
+}>) {
+  const [isConfirmed, setIsConfirmed] = useState(false);
+  const representativeCoordinate = getGeometryRepresentativeCoordinate(submission.geometry);
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!isConfirmed) {
+      return;
+    }
+    await onConfirm();
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <form
+        className="modal-panel admin-poi-publish-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-poi-publish-title"
+        onMouseDown={(event) => event.stopPropagation()}
+        onSubmit={submit}
+      >
+        <div className="section-heading">
+          <h2 id="admin-poi-publish-title">发布到公开地图</h2>
+          <span className="muted">{submission.title}</span>
+        </div>
+        <p className="admin-poi-publish-warning">
+          发布后该 POI 会对所有用户可见，并参与地图搜索、附近地点和路线规划候选。请先确认坐标、分类、图片来源和重复提示。
+        </p>
+        <dl className="admin-poi-publish-summary">
+          <div>
+            <dt>分类</dt>
+            <dd>{formatCategoryName(submission.categoryId, category)}</dd>
+          </div>
+          <div>
+            <dt>几何</dt>
+            <dd>{geometryLabel(submission.geometry)}</dd>
+          </div>
+          <div>
+            <dt>代表坐标</dt>
+            <dd>{representativeCoordinate ? formatCoordinatePair(representativeCoordinate) : '暂无'}</dd>
+          </div>
+          <div>
+            <dt>投稿图片</dt>
+            <dd>{submission.imageUrl ? '有图片，需确认来源和内容匹配' : '未提交图片'}</dd>
+          </div>
+          <div>
+            <dt>重复提示</dt>
+            <dd>{conflictHints.length ? `发现 ${conflictHints.length} 条可能冲突提示` : '未发现明显冲突提示'}</dd>
+          </div>
+        </dl>
+        <label className="admin-poi-publish-confirm">
+          <input
+            type="checkbox"
+            checked={isConfirmed}
+            onChange={(event) => setIsConfirmed(event.currentTarget.checked)}
+          />
+          <span>我已核对该 POI 的公开展示信息，确认可以发布。</span>
+        </label>
+        <div className="admin-content-actions">
+          <button type="button" onClick={onClose} disabled={isBusy}>
+            取消
+          </button>
+          <button type="submit" disabled={isBusy || !isConfirmed}>
+            确认发布
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
