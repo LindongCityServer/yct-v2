@@ -37,6 +37,7 @@ export interface YctDomainEvent<TType extends string, TPayload> {
 | `PoiSubmissionImageUploaded`          | 用户上传 POI 投稿图片         | POI 审核资料、图片来源追踪和审计；当前只记录生成的图片 URL、MIME、大小和哈希，不代表图片已公开审核通过                                 |
 | `PoiSubmitted`                        | 用户提交公开 POI              | POI 审核待办                                                                                                                           |
 | `PoiSubmissionUpdated`                | 管理员修正 POI 投稿资料       | 审核前资料修正、管理员审计和搜索预览刷新；当前仅允许修正待审核投稿的标题、分类、简介、链接和点状坐标                                   |
+| `PoiSubmissionImageReviewed`          | 管理员审核 POI 投稿图片       | 图片局部审核状态、公开发布校验和管理员审计；当前支持图片可用、图片不合格和重置审核状态                                                 |
 | `PoiReviewed`                         | 管理员审核 POI                | 地图数据发布、通知投稿者                                                                                                               |
 | `PoiPublished`                        | 已审核 POI 发布为公开标记     | 地图标记缓存刷新、搜索索引、通知投稿者                                                                                                 |
 | `PoiConflictDecisionUpdated`          | 管理员标记 POI 冲突提示       | 重复/相近地点审核状态、管理员审计和后续合并队列；当前支持忽略、待合并和重置三种判断                                                     |

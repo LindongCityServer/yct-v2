@@ -20,6 +20,7 @@ export interface RuntimeConfig {
   ticketOrderStorePath: string;
   poiSubmissionStorePath: string;
   poiSubmissionImageUploadDir: string;
+  poiSubmissionImageReviewStorePath: string;
   poiCategoryProfileStorePath: string;
   poiConflictDecisionStorePath: string;
   poiIconUploadDir: string;
@@ -109,6 +110,9 @@ export function readRuntimeConfig(): RuntimeConfig {
     poiSubmissionImageUploadDir:
       emptyToUndefined(process.env.YCT_POI_SUBMISSION_IMAGE_UPLOAD_DIR) ??
       '.yct-data/poi-submission-images',
+    poiSubmissionImageReviewStorePath:
+      emptyToUndefined(process.env.YCT_POI_SUBMISSION_IMAGE_REVIEW_STORE_PATH) ??
+      '.yct-data/poi-submission-image-review-store.json',
     poiCategoryProfileStorePath:
       emptyToUndefined(process.env.YCT_POI_CATEGORY_PROFILE_STORE_PATH) ??
       '.yct-data/poi-category-profile-store.json',

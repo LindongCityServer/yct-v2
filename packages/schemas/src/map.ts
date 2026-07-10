@@ -160,6 +160,13 @@ export const poiConflictDecisionUpdateSchema = z.object({
   decision: z.enum(['ignored', 'duplicate', 'unresolved']),
 });
 
+export const poiSubmissionImageReviewUpdateSchema = z.object({
+  submissionId: idSchema,
+  imageUrl: poiSubmissionImageUrlSchema,
+  decision: z.enum(['approved', 'rejected', 'unreviewed']),
+  reason: z.string().trim().max(500).optional(),
+});
+
 export const mapMarkerSourceConfigSchema = z.object({
   id: idSchema,
   name: nonEmptyTextSchema,
@@ -178,5 +185,6 @@ export type PoiSubmissionInput = z.infer<typeof poiSubmissionSchema>;
 export type PoiSubmissionReviewDecisionInput = z.infer<typeof poiSubmissionReviewDecisionSchema>;
 export type PoiSubmissionAdminUpdateInput = z.infer<typeof poiSubmissionAdminUpdateSchema>;
 export type PoiConflictDecisionUpdateInput = z.infer<typeof poiConflictDecisionUpdateSchema>;
+export type PoiSubmissionImageReviewUpdateInput = z.infer<typeof poiSubmissionImageReviewUpdateSchema>;
 export type MapMarkerSourceConfigInput = z.infer<typeof mapMarkerSourceConfigSchema>;
 export type MapFavoritesInput = z.infer<typeof mapFavoritesSchema>;

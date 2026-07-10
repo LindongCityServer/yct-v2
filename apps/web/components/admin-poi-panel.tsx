@@ -26,6 +26,19 @@ type AdminPoiSubmission = PoiSubmission & {
   imageMetadata?: PoiSubmissionImageMetadata;
 };
 
+type PoiSubmissionImageReviewDecision = 'approved' | 'rejected';
+type PoiSubmissionImageReviewInput = PoiSubmissionImageReviewDecision | 'unreviewed';
+
+interface PoiSubmissionImageReview {
+  id: string;
+  submissionId: string;
+  imageUrl: string;
+  decision: PoiSubmissionImageReviewDecision;
+  reason?: string;
+  reviewerId: string;
+  reviewedAt: string;
+}
+
 interface PoiConflictHint {
   marker: MapMarker;
   reasons: string[];
@@ -88,6 +101,7 @@ export function AdminPoiPanel() {
   const [categories, setCategories] = useState<PoiCategory[]>([]);
   const [mapMarkers, setMapMarkers] = useState<MapMarker[]>([]);
   const [conflictDecisions, setConflictDecisions] = useState<PoiConflictDecision[]>([]);
+  const [imageReviews, setImageReviews] = useState<PoiSubmissionImageReview[]>([]);
   const [categoryIconBaseUrl, setCategoryIconBaseUrl] = useState(defaultMarkerIconBaseUrl);
   const [statusText, setStatusText] = useState('正在读取 POI 投稿');
   const [categoryStatusText, setCategoryStatusText] = useState('正在读取 POI 分类');
@@ -195,6 +209,13 @@ export function AdminPoiPanel() {
     return new Map(entries);
   }, [conflictDecisions]);
 
+  const imageReviewByKey = useMemo(() => {
+    const entries = imageReviews.map(
+      (review) => [imageReviewKey(review.submissionId, review.imageUrl), review] as const,
+    );
+    return new Map(entries);
+  }, [imageReviews]);
+
   const auditContextMarkersBySubmissionId = useMemo(() => {
     const entries = submissions.map(
       (submission) => [submission.id, buildPoiAuditContextMarkers(submission, mapMarkers)] as const,
@@ -261,11 +282,23 @@ export function AdminPoiPanel() {
     setConflictDecisions(data.items ?? []);
   };
 
+  const loadImageReviews = async () => {
+    const response = await fetch(appPath('/api/admin/map/poi-submission-image-reviews'), { cache: 'no-store' });
+    const data = (await response.json()) as { items?: PoiSubmissionImageReview[]; message?: string };
+    if (!response.ok) {
+      setStatusText(data.message ?? 'POI 图片审核状态暂不可用。');
+      return;
+    }
+
+    setImageReviews(data.items ?? []);
+  };
+
   useEffect(() => {
     void loadSubmissions();
     void loadCategories();
     void loadMapMarkers();
     void loadConflictDecisions();
+    void loadImageReviews();
   }, []);
 
   const runAction = async (
@@ -359,6 +392,38 @@ export function AdminPoiPanel() {
 
       setConflictDecisions(data.items ?? []);
       setStatusText(decision === 'unresolved' ? '已重置冲突提示判断' : '已保存冲突提示判断');
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const updateImageReview = async (
+    submission: AdminPoiSubmission,
+    decision: PoiSubmissionImageReviewInput,
+  ) => {
+    if (!submission.imageUrl) {
+      return;
+    }
+
+    setIsBusy(true);
+    try {
+      const response = await fetch(appPath('/api/admin/map/poi-submission-image-reviews'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          submissionId: submission.id,
+          imageUrl: submission.imageUrl,
+          decision,
+        }),
+      });
+      const data = (await response.json()) as { items?: PoiSubmissionImageReview[]; message?: string };
+      if (!response.ok) {
+        setStatusText(data.message ?? 'POI 图片审核状态保存失败。');
+        return;
+      }
+
+      setImageReviews(data.items ?? []);
+      setStatusText(decision === 'unreviewed' ? '已重置图片审核状态' : '已保存图片审核状态');
     } finally {
       setIsBusy(false);
     }
@@ -463,10 +528,12 @@ export function AdminPoiPanel() {
             conflictHints={conflictHintsBySubmissionId.get(submission.id) ?? []}
             isBusy={isBusy}
             isExpanded={expandedIds.has(submission.id)}
+            imageReview={submission.imageUrl ? imageReviewByKey.get(imageReviewKey(submission.id, submission.imageUrl)) : undefined}
             key={submission.id}
             onCopy={(message) => setStatusText(message)}
             onConflictDecision={(hint, decision) => void updateConflictDecision(submission, hint, decision)}
             onEdit={() => setEditTarget(submission)}
+            onImageReview={(decision) => void updateImageReview(submission, decision)}
             onPublish={() => setPublishTarget(submission)}
             onReject={() => setRejectTarget(submission)}
             onRunAction={runAction}
@@ -550,9 +617,11 @@ function PoiSubmissionReviewItem({
   iconBaseUrl,
   isBusy,
   isExpanded,
+  imageReview,
   onCopy,
   onConflictDecision,
   onEdit,
+  onImageReview,
   onPublish,
   onReject,
   onRunAction,
@@ -566,9 +635,11 @@ function PoiSubmissionReviewItem({
   iconBaseUrl: string;
   isBusy: boolean;
   isExpanded: boolean;
+  imageReview?: PoiSubmissionImageReview;
   onCopy: (message: string) => void;
   onConflictDecision: (hint: PoiConflictHint, decision: PoiConflictDecisionInput) => void;
   onEdit: () => void;
+  onImageReview: (decision: PoiSubmissionImageReviewInput) => void;
   onPublish: () => void;
   onReject: () => void;
   onRunAction: (poiId: string, action: 'approve' | 'reject', reason?: string) => Promise<boolean>;
@@ -631,7 +702,14 @@ function PoiSubmissionReviewItem({
             submission={submission}
           />
         ) : null}
-        {submission.imageUrl ? <PoiSubmissionImagePreview submission={submission} /> : null}
+        {submission.imageUrl ? (
+          <PoiSubmissionImagePreview
+            imageReview={imageReview}
+            isBusy={isBusy}
+            onReview={onImageReview}
+            submission={submission}
+          />
+        ) : null}
       </div>
       <div className="admin-content-actions">
         <button type="button" onClick={onToggleExpanded}>
@@ -1656,8 +1734,16 @@ function PoiCategoryIcon({
 }
 
 function PoiSubmissionImagePreview({
+  imageReview,
+  isBusy,
+  onReview,
   submission,
-}: Readonly<{ submission: AdminPoiSubmission }>) {
+}: Readonly<{
+  imageReview?: PoiSubmissionImageReview;
+  isBusy: boolean;
+  onReview: (decision: PoiSubmissionImageReviewInput) => void;
+  submission: AdminPoiSubmission;
+}>) {
   if (!submission.imageUrl) {
     return null;
   }
@@ -1666,20 +1752,24 @@ function PoiSubmissionImagePreview({
   const metadata = submission.imageMetadata;
 
   return (
-    <a
-      className="admin-poi-image-preview"
-      href={imageUrl}
-      target="_blank"
-      rel="noreferrer"
-    >
-      <img
-        src={imageUrl}
-        alt={`${submission.title} 投稿图片`}
-        loading="lazy"
-        decoding="async"
-      />
-      <span className="admin-poi-image-preview-copy">
-        <span className="admin-poi-image-preview-title">投稿图片</span>
+    <article className="admin-poi-image-preview">
+      <a href={imageUrl} target="_blank" rel="noreferrer">
+        <img
+          src={imageUrl}
+          alt={`${submission.title} 投稿图片`}
+          loading="lazy"
+          decoding="async"
+        />
+      </a>
+      <div className="admin-poi-image-preview-copy">
+        <div className="admin-poi-image-preview-heading">
+          <span className="admin-poi-image-preview-title">投稿图片</span>
+          {imageReview ? (
+            <span className={`admin-poi-image-review-chip is-${imageReview.decision}`}>
+              {imageReviewLabel(imageReview.decision)}
+            </span>
+          ) : null}
+        </div>
         {metadata ? (
           <dl className="admin-poi-image-metadata">
             <div>
@@ -1702,8 +1792,24 @@ function PoiSubmissionImagePreview({
         ) : (
           <small>{submission.imageUrl.startsWith('/') ? '本地图片元数据暂不可用' : '外部图片链接，无法读取本地元数据'}</small>
         )}
-      </span>
-    </a>
+        <div className="admin-poi-image-review-actions">
+          {imageReview ? (
+            <button type="button" disabled={isBusy} onClick={() => onReview('unreviewed')}>
+              重置图片审核
+            </button>
+          ) : (
+            <>
+              <button type="button" disabled={isBusy} onClick={() => onReview('approved')}>
+                图片可用
+              </button>
+              <button type="button" disabled={isBusy} onClick={() => onReview('rejected')}>
+                图片不合格
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -2108,6 +2214,14 @@ function conflictDecisionKey(submissionId: string, markerId: string): string {
 
 function conflictDecisionLabel(decision: PoiConflictDecisionKind): string {
   return decision === 'ignored' ? '已忽略' : '待合并';
+}
+
+function imageReviewKey(submissionId: string, imageUrl: string): string {
+  return `${submissionId}\u0000${imageUrl}`;
+}
+
+function imageReviewLabel(decision: PoiSubmissionImageReviewDecision): string {
+  return decision === 'approved' ? '图片可用' : '图片不合格';
 }
 
 function geometryLabel(geometry: MapGeometry): string {

@@ -376,6 +376,15 @@ export interface PoiConflictDecisionUpdatedPayload {
   decidedAt: ISODateTimeString;
 }
 
+export interface PoiSubmissionImageReviewedPayload {
+  submissionId: string;
+  imageUrl: string;
+  decision: 'approved' | 'rejected' | 'unreviewed';
+  reviewerId: string;
+  reviewedAt: ISODateTimeString;
+  reason?: string;
+}
+
 export interface OperationsStrongReminderRulesUpdatedPayload {
   ruleIds: string[];
   ruleCount: number;
@@ -513,6 +522,7 @@ export type YctEventPayloadMap = {
   PoiCategoryIconUploaded: PoiCategoryIconUploadedPayload;
   PoiCategoryIconDeleted: PoiCategoryIconDeletedPayload;
   PoiConflictDecisionUpdated: PoiConflictDecisionUpdatedPayload;
+  PoiSubmissionImageReviewed: PoiSubmissionImageReviewedPayload;
   TransitDataRevisionImported: TransitDataRevisionImportedPayload;
   TransitDataRevisionSubmitted: TransitDataRevisionSubmittedPayload;
   TransitDataRevisionReviewed: TransitDataRevisionReviewedPayload;
