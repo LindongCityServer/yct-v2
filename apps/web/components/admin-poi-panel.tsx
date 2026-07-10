@@ -20,6 +20,20 @@ interface PoiConflictHint {
   distanceBlocks: number | null;
 }
 
+type PoiConflictDecisionKind = 'ignored' | 'duplicate';
+type PoiConflictDecisionInput = PoiConflictDecisionKind | 'unresolved';
+
+interface PoiConflictDecision {
+  id: string;
+  submissionId: string;
+  markerId: string;
+  markerLabel?: string;
+  submissionTitle?: string;
+  decision: PoiConflictDecisionKind;
+  decidedBy: string;
+  decidedAt: string;
+}
+
 interface PoiAuditContextMarker {
   marker: MapMarker;
   coordinate: [number, number];
@@ -61,6 +75,7 @@ export function AdminPoiPanel() {
   const [submissions, setSubmissions] = useState<PoiSubmission[]>([]);
   const [categories, setCategories] = useState<PoiCategory[]>([]);
   const [mapMarkers, setMapMarkers] = useState<MapMarker[]>([]);
+  const [conflictDecisions, setConflictDecisions] = useState<PoiConflictDecision[]>([]);
   const [categoryIconBaseUrl, setCategoryIconBaseUrl] = useState(defaultMarkerIconBaseUrl);
   const [statusText, setStatusText] = useState('正在读取 POI 投稿');
   const [categoryStatusText, setCategoryStatusText] = useState('正在读取 POI 分类');
@@ -161,6 +176,13 @@ export function AdminPoiPanel() {
     return new Map(entries);
   }, [mapMarkers, submissions]);
 
+  const conflictDecisionByKey = useMemo(() => {
+    const entries = conflictDecisions.map(
+      (decision) => [conflictDecisionKey(decision.submissionId, decision.markerId), decision] as const,
+    );
+    return new Map(entries);
+  }, [conflictDecisions]);
+
   const auditContextMarkersBySubmissionId = useMemo(() => {
     const entries = submissions.map(
       (submission) => [submission.id, buildPoiAuditContextMarkers(submission, mapMarkers)] as const,
@@ -216,10 +238,22 @@ export function AdminPoiPanel() {
     setMapMarkers(data.snapshot?.markers ?? []);
   };
 
+  const loadConflictDecisions = async () => {
+    const response = await fetch(appPath('/api/admin/map/poi-conflict-decisions'), { cache: 'no-store' });
+    const data = (await response.json()) as { items?: PoiConflictDecision[]; message?: string };
+    if (!response.ok) {
+      setStatusText(data.message ?? 'POI 冲突提示决策暂不可用。');
+      return;
+    }
+
+    setConflictDecisions(data.items ?? []);
+  };
+
   useEffect(() => {
     void loadSubmissions();
     void loadCategories();
     void loadMapMarkers();
+    void loadConflictDecisions();
   }, []);
 
   const runAction = async (
@@ -282,6 +316,37 @@ export function AdminPoiPanel() {
       );
       setStatusText(`已修正 ${data.title} 的投稿资料`);
       return null;
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const updateConflictDecision = async (
+    submission: PoiSubmission,
+    hint: PoiConflictHint,
+    decision: PoiConflictDecisionInput,
+  ) => {
+    setIsBusy(true);
+    try {
+      const response = await fetch(appPath('/api/admin/map/poi-conflict-decisions'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          submissionId: submission.id,
+          markerId: hint.marker.id,
+          markerLabel: hint.marker.label,
+          submissionTitle: submission.title,
+          decision,
+        }),
+      });
+      const data = (await response.json()) as { items?: PoiConflictDecision[]; message?: string };
+      if (!response.ok) {
+        setStatusText(data.message ?? 'POI 冲突提示决策保存失败。');
+        return;
+      }
+
+      setConflictDecisions(data.items ?? []);
+      setStatusText(decision === 'unresolved' ? '已重置冲突提示判断' : '已保存冲突提示判断');
     } finally {
       setIsBusy(false);
     }
@@ -380,6 +445,7 @@ export function AdminPoiPanel() {
         {filteredSubmissions.map((submission) => (
           <PoiSubmissionReviewItem
             category={categoryById.get(submission.categoryId)}
+            conflictDecisionByKey={conflictDecisionByKey}
             contextMarkers={auditContextMarkersBySubmissionId.get(submission.id) ?? []}
             iconBaseUrl={categoryIconBaseUrl}
             conflictHints={conflictHintsBySubmissionId.get(submission.id) ?? []}
@@ -387,6 +453,7 @@ export function AdminPoiPanel() {
             isExpanded={expandedIds.has(submission.id)}
             key={submission.id}
             onCopy={(message) => setStatusText(message)}
+            onConflictDecision={(hint, decision) => void updateConflictDecision(submission, hint, decision)}
             onEdit={() => setEditTarget(submission)}
             onPublish={() => setPublishTarget(submission)}
             onReject={() => setRejectTarget(submission)}
@@ -465,12 +532,14 @@ function AdminPoiMetric({
 
 function PoiSubmissionReviewItem({
   category,
+  conflictDecisionByKey,
   contextMarkers,
   conflictHints,
   iconBaseUrl,
   isBusy,
   isExpanded,
   onCopy,
+  onConflictDecision,
   onEdit,
   onPublish,
   onReject,
@@ -479,12 +548,14 @@ function PoiSubmissionReviewItem({
   submission,
 }: Readonly<{
   category?: PoiCategory;
+  conflictDecisionByKey: Map<string, PoiConflictDecision>;
   contextMarkers: PoiAuditContextMarker[];
   conflictHints: PoiConflictHint[];
   iconBaseUrl: string;
   isBusy: boolean;
   isExpanded: boolean;
   onCopy: (message: string) => void;
+  onConflictDecision: (hint: PoiConflictHint, decision: PoiConflictDecisionInput) => void;
   onEdit: () => void;
   onPublish: () => void;
   onReject: () => void;
@@ -531,7 +602,15 @@ function PoiSubmissionReviewItem({
           {submission.reviewReason ? ` · ${submission.reviewReason}` : ''}
         </p>
         {submission.description ? <p>{submission.description}</p> : null}
-        {conflictHints.length > 0 ? <PoiConflictHintList hints={conflictHints} /> : null}
+        {conflictHints.length > 0 ? (
+          <PoiConflictHintList
+            conflictDecisionByKey={conflictDecisionByKey}
+            hints={conflictHints}
+            isBusy={isBusy}
+            onDecision={onConflictDecision}
+            submission={submission}
+          />
+        ) : null}
         {isExpanded ? (
           <PoiSubmissionDetail
             category={category}
@@ -607,26 +686,70 @@ function PoiSubmissionReviewItem({
   );
 }
 
-function PoiConflictHintList({ hints }: Readonly<{ hints: PoiConflictHint[] }>) {
+function PoiConflictHintList({
+  conflictDecisionByKey,
+  hints,
+  isBusy,
+  onDecision,
+  submission,
+}: Readonly<{
+  conflictDecisionByKey: Map<string, PoiConflictDecision>;
+  hints: PoiConflictHint[];
+  isBusy: boolean;
+  onDecision: (hint: PoiConflictHint, decision: PoiConflictDecisionInput) => void;
+  submission: PoiSubmission;
+}>) {
   return (
     <div className="admin-poi-conflict-list" aria-label="可能重复或冲突的地图标记">
       <strong>可能冲突</strong>
       <div>
-        {hints.map((hint) => (
-          <a
-            className="admin-poi-conflict-chip"
-            href={buildMarkerFocusHref(hint.marker)}
-            key={hint.marker.id}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <span>{hint.marker.label}</span>
-            <small>
-              {hint.reasons.join('、')}
-              {hint.distanceBlocks !== null ? ` · 约 ${Math.round(hint.distanceBlocks)} 格` : ''}
-            </small>
-          </a>
-        ))}
+        {hints.map((hint) => {
+          const decision = conflictDecisionByKey.get(conflictDecisionKey(submission.id, hint.marker.id));
+          return (
+            <article className="admin-poi-conflict-chip" key={hint.marker.id}>
+              <a href={buildMarkerFocusHref(hint.marker)} target="_blank" rel="noreferrer">
+                <span>{hint.marker.label}</span>
+                <small>
+                  {hint.reasons.join('、')}
+                  {hint.distanceBlocks !== null ? ` · 约 ${Math.round(hint.distanceBlocks)} 格` : ''}
+                </small>
+              </a>
+              <div className="admin-poi-conflict-actions">
+                {decision ? (
+                  <>
+                    <span className={`admin-poi-conflict-decision is-${decision.decision}`}>
+                      {conflictDecisionLabel(decision.decision)}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => onDecision(hint, 'unresolved')}
+                    >
+                      重置
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => onDecision(hint, 'ignored')}
+                    >
+                      忽略
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => onDecision(hint, 'duplicate')}
+                    >
+                      待合并
+                    </button>
+                  </>
+                )}
+              </div>
+            </article>
+          );
+        })}
       </div>
     </div>
   );
@@ -1931,6 +2054,14 @@ function statusLabel(status: PoiSubmissionStatus): string {
   };
 
   return labels[status];
+}
+
+function conflictDecisionKey(submissionId: string, markerId: string): string {
+  return `${submissionId}\u0000${markerId}`;
+}
+
+function conflictDecisionLabel(decision: PoiConflictDecisionKind): string {
+  return decision === 'ignored' ? '已忽略' : '待合并';
 }
 
 function geometryLabel(geometry: MapGeometry): string {

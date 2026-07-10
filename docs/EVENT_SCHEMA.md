@@ -39,6 +39,7 @@ export interface YctDomainEvent<TType extends string, TPayload> {
 | `PoiSubmissionUpdated`                | 管理员修正 POI 投稿资料       | 审核前资料修正、管理员审计和搜索预览刷新；当前仅允许修正待审核投稿的标题、分类、简介、链接和点状坐标                                   |
 | `PoiReviewed`                         | 管理员审核 POI                | 地图数据发布、通知投稿者                                                                                                               |
 | `PoiPublished`                        | 已审核 POI 发布为公开标记     | 地图标记缓存刷新、搜索索引、通知投稿者                                                                                                 |
+| `PoiConflictDecisionUpdated`          | 管理员标记 POI 冲突提示       | 重复/相近地点审核状态、管理员审计和后续合并队列；当前支持忽略、待合并和重置三种判断                                                     |
 | `PoiCategoryProfileUpdated`           | 管理员更新 POI 分类和图标配置 | 分类缓存刷新、地图投稿表单刷新、搜索索引和管理员审计；当前第一版写入本地分类覆盖配置并支持一类多图标文件名管理                         |
 | `PoiCategoryIconUploaded`             | 管理员上传 POI 分类图标       | 图标来源追踪、分类配置引用和管理员审计；当前文件默认落盘到 `runtime-assets/poi-icons` 并通过 `/api/map/poi-icons/<file>` 读取           |
 | `PoiCategoryIconDeleted`              | 管理员删除 POI 分类图标       | 图标资源清理、分类配置引用清理和管理员审计；当前只允许删除后台上传的运行时图标，删除前会阻止分类失去最后一个可用图标                   |

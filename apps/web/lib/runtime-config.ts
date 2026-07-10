@@ -21,6 +21,7 @@ export interface RuntimeConfig {
   poiSubmissionStorePath: string;
   poiSubmissionImageUploadDir: string;
   poiCategoryProfileStorePath: string;
+  poiConflictDecisionStorePath: string;
   poiIconUploadDir: string;
   offlinePackageStorePath: string;
   eventOutboxStorePath: string;
@@ -111,6 +112,9 @@ export function readRuntimeConfig(): RuntimeConfig {
     poiCategoryProfileStorePath:
       emptyToUndefined(process.env.YCT_POI_CATEGORY_PROFILE_STORE_PATH) ??
       '.yct-data/poi-category-profile-store.json',
+    poiConflictDecisionStorePath:
+      emptyToUndefined(process.env.YCT_POI_CONFLICT_DECISION_STORE_PATH) ??
+      '.yct-data/poi-conflict-decision-store.json',
     poiIconUploadDir:
       emptyToUndefined(process.env.YCT_POI_ICON_UPLOAD_DIR) ?? 'runtime-assets/poi-icons',
     offlinePackageStorePath:

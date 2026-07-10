@@ -152,6 +152,14 @@ export const poiSubmissionAdminUpdateSchema = z.object({
   geometry: pointMapGeometrySchema.optional(),
 });
 
+export const poiConflictDecisionUpdateSchema = z.object({
+  submissionId: idSchema,
+  markerId: z.string().trim().min(1).max(220),
+  markerLabel: z.string().trim().max(200).optional(),
+  submissionTitle: z.string().trim().max(200).optional(),
+  decision: z.enum(['ignored', 'duplicate', 'unresolved']),
+});
+
 export const mapMarkerSourceConfigSchema = z.object({
   id: idSchema,
   name: nonEmptyTextSchema,
@@ -169,5 +177,6 @@ export type PoiCategoryProfileUpdateInput = z.infer<typeof poiCategoryProfileUpd
 export type PoiSubmissionInput = z.infer<typeof poiSubmissionSchema>;
 export type PoiSubmissionReviewDecisionInput = z.infer<typeof poiSubmissionReviewDecisionSchema>;
 export type PoiSubmissionAdminUpdateInput = z.infer<typeof poiSubmissionAdminUpdateSchema>;
+export type PoiConflictDecisionUpdateInput = z.infer<typeof poiConflictDecisionUpdateSchema>;
 export type MapMarkerSourceConfigInput = z.infer<typeof mapMarkerSourceConfigSchema>;
 export type MapFavoritesInput = z.infer<typeof mapFavoritesSchema>;

@@ -366,6 +366,16 @@ export interface PoiCategoryIconDeletedPayload {
   deletedAt: ISODateTimeString;
 }
 
+export interface PoiConflictDecisionUpdatedPayload {
+  submissionId: string;
+  markerId: string;
+  decision: 'ignored' | 'duplicate' | 'unresolved';
+  markerLabel?: string;
+  submissionTitle?: string;
+  decidedBy: string;
+  decidedAt: ISODateTimeString;
+}
+
 export interface OperationsStrongReminderRulesUpdatedPayload {
   ruleIds: string[];
   ruleCount: number;
@@ -502,6 +512,7 @@ export type YctEventPayloadMap = {
   PoiCategoryProfileUpdated: PoiCategoryProfileUpdatedPayload;
   PoiCategoryIconUploaded: PoiCategoryIconUploadedPayload;
   PoiCategoryIconDeleted: PoiCategoryIconDeletedPayload;
+  PoiConflictDecisionUpdated: PoiConflictDecisionUpdatedPayload;
   TransitDataRevisionImported: TransitDataRevisionImportedPayload;
   TransitDataRevisionSubmitted: TransitDataRevisionSubmittedPayload;
   TransitDataRevisionReviewed: TransitDataRevisionReviewedPayload;
