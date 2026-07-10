@@ -11,7 +11,7 @@ import type { FormEvent, MouseEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 
-type StatusFilter = PoiSubmissionStatus | 'all' | 'todo';
+type StatusFilter = PoiSubmissionStatus | 'all' | 'todo' | 'blocked';
 type MapMarker = MapMarkerSnapshot['markers'][number];
 
 interface PoiSubmissionImageMetadata {
@@ -85,6 +85,7 @@ const defaultMarkerIconBaseUrl = 'https://map.shangxiaoguan.top/';
 const statusFilterOptions: Array<{ value: StatusFilter; label: string }> = [
   { value: 'all', label: '全部状态' },
   { value: 'todo', label: '待处理' },
+  { value: 'blocked', label: '阻塞发布' },
   { value: 'pending_review', label: '待审核' },
   { value: 'approved', label: '待发布' },
   { value: 'rejected', label: '已驳回' },
@@ -163,10 +164,21 @@ export function AdminPoiPanel() {
     return counts;
   }, [submissions]);
 
+  const imageReviewByKey = useMemo(() => {
+    const entries = imageReviews.map(
+      (review) => [imageReviewKey(review.submissionId, review.imageUrl), review] as const,
+    );
+    return new Map(entries);
+  }, [imageReviews]);
+
   const filteredSubmissions = useMemo(
     () =>
       sortedSubmissions.filter((submission) => {
-        if (!matchesStatusFilter(submission.status, statusFilter)) {
+        if (
+          statusFilter === 'blocked'
+            ? !isPoiSubmissionPublishBlocked(submission, imageReviewByKey, conflictDecisions)
+            : !matchesStatusFilter(submission.status, statusFilter)
+        ) {
           return false;
         }
 
@@ -198,7 +210,15 @@ export function AdminPoiPanel() {
 
         return haystack.includes(normalizedQuery);
       }),
-    [categoryById, categoryFilter, query, sortedSubmissions, statusFilter],
+    [
+      categoryById,
+      categoryFilter,
+      conflictDecisions,
+      imageReviewByKey,
+      query,
+      sortedSubmissions,
+      statusFilter,
+    ],
   );
 
   const conflictHintsBySubmissionId = useMemo(() => {
@@ -214,13 +234,6 @@ export function AdminPoiPanel() {
     );
     return new Map(entries);
   }, [conflictDecisions]);
-
-  const imageReviewByKey = useMemo(() => {
-    const entries = imageReviews.map(
-      (review) => [imageReviewKey(review.submissionId, review.imageUrl), review] as const,
-    );
-    return new Map(entries);
-  }, [imageReviews]);
 
   const auditContextMarkersBySubmissionId = useMemo(() => {
     const entries = submissions.map(
@@ -2733,7 +2746,26 @@ function matchesStatusFilter(status: PoiSubmissionStatus, filter: StatusFilter):
     return status === 'pending_review' || status === 'approved';
   }
 
+  if (filter === 'blocked') {
+    return false;
+  }
+
   return status === filter;
+}
+
+function isPoiSubmissionPublishBlocked(
+  submission: AdminPoiSubmission,
+  imageReviewByKey: Map<string, PoiSubmissionImageReview>,
+  conflictDecisions: PoiConflictDecision[],
+): boolean {
+  const imageReview = submission.imageUrl
+    ? imageReviewByKey.get(imageReviewKey(submission.id, submission.imageUrl))
+    : undefined;
+  const hasRejectedImage = imageReview?.decision === 'rejected';
+  const hasDuplicateConflict = conflictDecisions.some(
+    (decision) => decision.submissionId === submission.id && decision.decision === 'duplicate',
+  );
+  return hasRejectedImage || hasDuplicateConflict;
 }
 
 function normalizeSearchText(value: string): string {
