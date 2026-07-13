@@ -1,0 +1,400 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "eventId": "event_c6dec2f1-530f-407d-b590-fe106f9a85ca",
+      "type": "ContentSubmitted",
+      "event": {
+        "eventId": "event_c6dec2f1-530f-407d-b590-fe106f9a85ca",
+        "type": "ContentSubmitted",
+        "occurredAt": "2026-07-12T11:06:42.457Z",
+        "profileId": "default",
+        "actor": {
+          "type": "admin",
+          "id": "codex-admin-check"
+        },
+        "payload": {
+          "contentId": "local_content_088c4a42-6893-4045-9799-2e92d40a1f31",
+          "revisionId": "local_revision_d050281c-df1f-4aba-8161-3dfa89feb4c3",
+          "title": "后台发布验证",
+          "categoryId": "运营信息"
+        }
+      },
+      "status": "dispatched",
+      "attempts": 1,
+      "createdAt": "2026-07-12T11:06:42.458Z",
+      "updatedAt": "2026-07-12T11:06:42.460Z",
+      "dispatchedAt": "2026-07-12T11:06:42.460Z"
+    },
+    {
+      "eventId": "event_09f3c6db-3d6d-403a-a951-bbb5e2e1d1a8",
+      "type": "ContentReviewed",
+      "event": {
+        "eventId": "event_09f3c6db-3d6d-403a-a951-bbb5e2e1d1a8",
+        "type": "ContentReviewed",
+        "occurredAt": "2026-07-12T11:06:42.466Z",
+        "profileId": "default",
+        "actor": {
+          "type": "admin",
+          "id": "codex-admin-check"
+        },
+        "payload": {
+          "contentId": "local_content_088c4a42-6893-4045-9799-2e92d40a1f31",
+          "revisionId": "local_revision_d050281c-df1f-4aba-8161-3dfa89feb4c3",
+          "decision": "approved",
+          "reviewerId": "codex-admin-check"
+        }
+      },
+      "status": "dispatched",
+      "attempts": 1,
+      "createdAt": "2026-07-12T11:06:42.467Z",
+      "updatedAt": "2026-07-12T11:06:42.468Z",
+      "dispatchedAt": "2026-07-12T11:06:42.468Z"
+    },
+    {
+      "eventId": "event_7fd9d27e-8aca-41ef-83c3-44c4172702ed",
+      "type": "ContentPublished",
+      "event": {
+        "eventId": "event_7fd9d27e-8aca-41ef-83c3-44c4172702ed",
+        "type": "ContentPublished",
+        "occurredAt": "2026-07-12T11:06:42.475Z",
+        "profileId": "default",
+        "actor": {
+          "type": "admin",
+          "id": "codex-admin-check"
+        },
+        "payload": {
+          "contentId": "local_content_088c4a42-6893-4045-9799-2e92d40a1f31",
+          "revisionId": "local_revision_d050281c-df1f-4aba-8161-3dfa89feb4c3",
+          "publishedAt": "2026-07-12T11:06:42.473Z"
+        }
+      },
+      "status": "dispatched",
+      "attempts": 1,
+      "createdAt": "2026-07-12T11:06:42.477Z",
+      "updatedAt": "2026-07-12T11:06:42.479Z",
+      "dispatchedAt": "2026-07-12T11:06:42.479Z"
+    },
+    {
+      "eventId": "event_e2bd44d1-e23b-448e-808d-e57041f4262b",
+      "type": "ContentSubmitted",
+      "event": {
+        "eventId": "event_e2bd44d1-e23b-448e-808d-e57041f4262b",
+        "type": "ContentSubmitted",
+        "occurredAt": "2026-07-12T11:06:42.487Z",
+        "profileId": "default",
+        "actor": {
+          "type": "admin",
+          "id": "codex-admin-check"
+        },
+        "payload": {
+          "contentId": "local_content_a3e8cb7e-38f7-48a6-a05b-22eaa2b63555",
+          "revisionId": "local_revision_8b663afb-aee9-49f7-b621-a80418525234",
+          "title": "后台定时发布验证",
+          "categoryId": "运营信息"
+        }
+      },
+      "status": "dispatched",
+      "attempts": 1,
+      "createdAt": "2026-07-12T11:06:42.488Z",
+      "updatedAt": "2026-07-12T11:06:42.490Z",
+      "dispatchedAt": "2026-07-12T11:06:42.490Z"
+    },
+    {
+      "eventId": "event_fd673aa8-4c13-4bb3-8663-eccc12758e56",
+      "type": "ContentReviewed",
+      "event": {
+        "eventId": "event_fd673aa8-4c13-4bb3-8663-eccc12758e56",
+        "type": "ContentReviewed",
+        "occurredAt": "2026-07-12T11:06:42.495Z",
+        "profileId": "default",
+        "actor": {
+          "type": "admin",
+          "id": "codex-admin-check"
+        },
+        "payload": {
+          "contentId": "local_content_a3e8cb7e-38f7-48a6-a05b-22eaa2b63555",
+          "revisionId": "local_revision_8b663afb-aee9-49f7-b621-a80418525234",
+          "decision": "approved",
+          "reviewerId": "codex-admin-check"
+        }
+      },
+      "status": "dispatched",
+      "attempts": 1,
+      "createdAt": "2026-07-12T11:06:42.496Z",
+      "updatedAt": "2026-07-12T11:06:42.499Z",
+      "dispatchedAt": "2026-07-12T11:06:42.499Z"
+    },
+    {
+      "eventId": "event_a51db94b-43fa-410e-9ec1-fb0bd0c2ff36",
+      "type": "ContentPublished",
+      "event": {
+        "eventId": "event_a51db94b-43fa-410e-9ec1-fb0bd0c2ff36",
+        "type": "ContentPublished",
+        "occurredAt": "2026-07-12T11:06:42.510Z",
+        "profileId": "default",
+        "actor": {
+          "type": "admin",
+          "id": "codex-admin-check"
+        },
+        "payload": {
+          "contentId": "local_content_a3e8cb7e-38f7-48a6-a05b-22eaa2b63555",
+          "revisionId": "local_revision_8b663afb-aee9-49f7-b621-a80418525234",
+          "publishedAt": "2030-01-02T03:04:00.000Z"
+        }
+      },
+      "status": "dispatched",
+      "attempts": 1,
+      "createdAt": "2026-07-12T11:06:42.511Z",
+      "updatedAt": "2026-07-12T11:06:42.513Z",
+      "dispatchedAt": "2026-07-12T11:06:42.513Z"
+    },
+    {
+      "eventId": "event_9a2fbceb-8721-4ccb-8891-7268924d3800",
+      "type": "ServiceEntryUpdated",
+      "event": {
+        "eventId": "event_9a2fbceb-8721-4ccb-8891-7268924d3800",
+        "type": "ServiceEntryUpdated",
+        "occurredAt": "2026-07-12T11:06:42.524Z",
+        "profileId": "default",
+        "actor": {
+          "type": "admin",
+          "id": "codex-admin-check"
+        },
+        "payload": {
+          "serviceEntryId": "local_service_ba7290fb-2b05-42c0-8dca-8b22b2fe0a07",
+          "updatedBy": "codex-admin-check",
+          "updatedAt": "2026-07-12T11:06:42.524Z",
+          "changedFields": [
+            "title",
+            "description",
+            "categoryId",
+            "icon",
+            "href",
+            "openMode",
+            "sortOrder"
+          ]
+        }
+      },
+      "status": "dispatched",
+      "attempts": 1,
+      "createdAt": "2026-07-12T11:06:42.525Z",
+      "updatedAt": "2026-07-12T11:06:42.526Z",
+      "dispatchedAt": "2026-07-12T11:06:42.526Z"
+    },
+    {
+      "eventId": "event_d8b09a5b-c3b3-4014-a32f-501dc9b4c852",
+      "type": "ServiceEntrySubmitted",
+      "event": {
+        "eventId": "event_d8b09a5b-c3b3-4014-a32f-501dc9b4c852",
+        "type": "ServiceEntrySubmitted",
+        "occurredAt": "2026-07-12T11:06:42.533Z",
+        "profileId": "default",
+        "actor": {
+          "type": "admin",
+          "id": "codex-admin-check"
+        },
+        "payload": {
+          "serviceEntryId": "local_service_ba7290fb-2b05-42c0-8dca-8b22b2fe0a07",
+          "title": "服务入口验证-已更新",
+          "categoryId": "other",
+          "href": "https://example.com/two"
+        }
+      },
+      "status": "dispatched",
+      "attempts": 1,
+      "createdAt": "2026-07-12T11:06:42.534Z",
+      "updatedAt": "2026-07-12T11:06:42.536Z",
+      "dispatchedAt": "2026-07-12T11:06:42.536Z"
+    },
+    {
+      "eventId": "event_8921052f-8a9e-49c7-963c-d9db6a3caefe",
+      "type": "ServiceEntryReviewed",
+      "event": {
+        "eventId": "event_8921052f-8a9e-49c7-963c-d9db6a3caefe",
+        "type": "ServiceEntryReviewed",
+        "occurredAt": "2026-07-12T11:06:42.541Z",
+        "profileId": "default",
+        "actor": {
+          "type": "admin",
+          "id": "codex-admin-check"
+        },
+        "payload": {
+          "serviceEntryId": "local_service_ba7290fb-2b05-42c0-8dca-8b22b2fe0a07",
+          "decision": "approved",
+          "reviewerId": "codex-admin-check"
+        }
+      },
+      "status": "dispatched",
+      "attempts": 1,
+      "createdAt": "2026-07-12T11:06:42.542Z",
+      "updatedAt": "2026-07-12T11:06:42.543Z",
+      "dispatchedAt": "2026-07-12T11:06:42.543Z"
+    },
+    {
+      "eventId": "event_0fa1e595-7a88-4f47-8b66-a93061c06bc7",
+      "type": "ServiceEntryPublished",
+      "event": {
+        "eventId": "event_0fa1e595-7a88-4f47-8b66-a93061c06bc7",
+        "type": "ServiceEntryPublished",
+        "occurredAt": "2026-07-12T11:06:42.549Z",
+        "profileId": "default",
+        "actor": {
+          "type": "admin",
+          "id": "codex-admin-check"
+        },
+        "payload": {
+          "serviceEntryId": "local_service_ba7290fb-2b05-42c0-8dca-8b22b2fe0a07",
+          "categoryId": "other",
+          "href": "https://example.com/two",
+          "publishedAt": "2026-07-12T11:06:42.547Z"
+        }
+      },
+      "status": "dispatched",
+      "attempts": 1,
+      "createdAt": "2026-07-12T11:06:42.550Z",
+      "updatedAt": "2026-07-12T11:06:42.552Z",
+      "dispatchedAt": "2026-07-12T11:06:42.552Z"
+    },
+    {
+      "eventId": "event_c791f089-2499-4cee-a571-b0ed8134260b",
+      "type": "ServiceEntryArchived",
+      "event": {
+        "eventId": "event_c791f089-2499-4cee-a571-b0ed8134260b",
+        "type": "ServiceEntryArchived",
+        "occurredAt": "2026-07-12T11:06:42.557Z",
+        "profileId": "default",
+        "actor": {
+          "type": "admin",
+          "id": "codex-admin-check"
+        },
+        "payload": {
+          "serviceEntryId": "local_service_ba7290fb-2b05-42c0-8dca-8b22b2fe0a07",
+          "previousStatus": "published",
+          "archivedBy": "codex-admin-check",
+          "archivedAt": "2026-07-12T11:06:42.555Z"
+        }
+      },
+      "status": "dispatched",
+      "attempts": 1,
+      "createdAt": "2026-07-12T11:06:42.558Z",
+      "updatedAt": "2026-07-12T11:06:42.559Z",
+      "dispatchedAt": "2026-07-12T11:06:42.559Z"
+    },
+    {
+      "eventId": "event_adde1d3d-7c1c-46cb-ac92-efed9ae1e57c",
+      "type": "PoiSubmitted",
+      "event": {
+        "eventId": "event_adde1d3d-7c1c-46cb-ac92-efed9ae1e57c",
+        "type": "PoiSubmitted",
+        "occurredAt": "2026-07-12T11:06:42.566Z",
+        "profileId": "default",
+        "actor": {
+          "type": "user",
+          "id": "poi-user-check"
+        },
+        "payload": {
+          "poiId": "local_poi_a9ae1e81-5178-439c-baab-cffdff22adaf",
+          "title": "POI 图标验证",
+          "categoryId": "poi-test",
+          "description": "验证单条图标覆写",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              100,
+              200
+            ]
+          }
+        }
+      },
+      "status": "dispatched",
+      "attempts": 1,
+      "createdAt": "2026-07-12T11:06:42.567Z",
+      "updatedAt": "2026-07-12T11:06:42.568Z",
+      "dispatchedAt": "2026-07-12T11:06:42.568Z"
+    },
+    {
+      "eventId": "event_8c733c1d-8254-491c-a5f1-4bd68a75c733",
+      "type": "PoiSubmissionUpdated",
+      "event": {
+        "eventId": "event_8c733c1d-8254-491c-a5f1-4bd68a75c733",
+        "type": "PoiSubmissionUpdated",
+        "occurredAt": "2026-07-12T11:06:42.574Z",
+        "profileId": "default",
+        "actor": {
+          "type": "admin",
+          "id": "codex-admin-check"
+        },
+        "payload": {
+          "poiId": "local_poi_a9ae1e81-5178-439c-baab-cffdff22adaf",
+          "updatedBy": "codex-admin-check",
+          "updatedAt": "2026-07-12T11:06:42.573Z",
+          "changedFields": [
+            "iconFileName"
+          ]
+        }
+      },
+      "status": "dispatched",
+      "attempts": 1,
+      "createdAt": "2026-07-12T11:06:42.574Z",
+      "updatedAt": "2026-07-12T11:06:42.576Z",
+      "dispatchedAt": "2026-07-12T11:06:42.576Z"
+    },
+    {
+      "eventId": "event_0340475d-0407-4888-ae7b-6d3cf178aa62",
+      "type": "PoiReviewed",
+      "event": {
+        "eventId": "event_0340475d-0407-4888-ae7b-6d3cf178aa62",
+        "type": "PoiReviewed",
+        "occurredAt": "2026-07-12T11:06:42.581Z",
+        "profileId": "default",
+        "actor": {
+          "type": "admin",
+          "id": "codex-admin-check"
+        },
+        "payload": {
+          "poiId": "local_poi_a9ae1e81-5178-439c-baab-cffdff22adaf",
+          "decision": "approved",
+          "reviewerId": "codex-admin-check"
+        }
+      },
+      "status": "dispatched",
+      "attempts": 1,
+      "createdAt": "2026-07-12T11:06:42.582Z",
+      "updatedAt": "2026-07-12T11:06:42.584Z",
+      "dispatchedAt": "2026-07-12T11:06:42.584Z"
+    },
+    {
+      "eventId": "event_13a848c5-0ff6-44e5-b403-d037b0ea14a5",
+      "type": "PoiPublished",
+      "event": {
+        "eventId": "event_13a848c5-0ff6-44e5-b403-d037b0ea14a5",
+        "type": "PoiPublished",
+        "occurredAt": "2026-07-12T11:06:42.590Z",
+        "profileId": "default",
+        "actor": {
+          "type": "admin",
+          "id": "codex-admin-check"
+        },
+        "payload": {
+          "poiId": "local_poi_a9ae1e81-5178-439c-baab-cffdff22adaf",
+          "categoryId": "poi-test",
+          "description": "验证单条图标覆写",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              100,
+              200
+            ]
+          },
+          "publishedAt": "2026-07-12T11:06:42.588Z"
+        }
+      },
+      "status": "dispatched",
+      "attempts": 1,
+      "createdAt": "2026-07-12T11:06:42.591Z",
+      "updatedAt": "2026-07-12T11:06:42.592Z",
+      "dispatchedAt": "2026-07-12T11:06:42.592Z"
+    }
+  ]
+}

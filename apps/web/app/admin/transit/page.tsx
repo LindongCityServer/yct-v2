@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 export default function AdminTransitPage() {
   return (
-    <SecondaryShell title="线路后台" backHref="/account">
+    <SecondaryShell title="线路与班次后台" backHref="/admin">
       <AdminTransitPanel />
     </SecondaryShell>
   );

@@ -361,6 +361,8 @@ DESIGN.md
 - 线路标识样式单独处理：地铁线路参考旧站 `bus_routemap` 中的地铁线路标识，其他方式使用线路色或交通方式语义色的圆角矩形背景配白色文字。
 - 已处理：交通方式 Profile 第一版可通过后台维护名称、默认色、Material Symbols 图标、排序和启用状态；地方铁路默认棕色，客运大巴默认黄绿色，轮渡默认青蓝色。当前使用 `.yct-data/transit-mode-profile-store.json` 作为数据库接入前的本地仓储，成功更新后发布 `TransitModeProfileUpdated` 事件；航班不属于当前地图 `TransitLine` Profile，但统一班次查询中默认使用蓝紫色语义色，后续票务 Profile 也需要支持配置。
 - 已处理第一版：统一班次/票务服务 Profile 与地图交通方式 Profile 分开维护，新增 `.yct-data/travel-service-profile-store.json`、管理员 API `/api/admin/travel/service-profiles` 和后台“可排班服务配置”区；客运大巴、轮渡、航班、地方铁路、自定义服务的名称、颜色、图标、排序和启用状态可被服务器 Profile 覆盖，成功更新后发布 `TravelScheduleServiceProfileUpdated` 事件。
+- 已处理第一版：统一班次后台新增 `.yct-data/travel-schedule-revision-store.json`、管理员 API `/api/admin/travel/schedule-revisions` 和后台“班次数据版本”区；管理员可把当前真实统一班次查询结果导入为版本快照，查看来源、服务接入状态、班次数、站点选项、校验结果和与当前发布版本的差异摘要，并走提交审核、审核通过/驳回、发布、恢复已替换版本和归档非发布版本事件流。发布或恢复后公开统一班次查询优先读取已发布快照，没有发布版本时回退实时来源，并发布 `TravelSchedulePublished`。
+- 已处理第一版：线路后台版本详情新增站点坐标核对区，管理员可在已导入、校验失败、待审核或已驳回版本中修正站点 Minecraft 世界坐标 X/Z；保存后重跑版本校验并发布 `TransitDataRevisionStationUpdated`，避免坐标修正绕过审核流。
 - `line-list-item` 已可点击进入线路详情二级页面；详情页先展示旧数据中的概览和站点序列，后续按新原型细化样式。
 - `/map` 已恢复用户可用的 `sidebar-stack` 操作栈；桌面端为侧边面板，移动端为底部抽屉，承载标记点筛选、图层和 POI 分类。
 - `/map` 地图操作面板已改为独立 `map-control-stack`，不再复用主导航的 `sidebar-stack` 类，降低侧边栏高度被全局导航样式覆盖的风险；移动端仍作为底部抽屉紧贴底部导航上方。

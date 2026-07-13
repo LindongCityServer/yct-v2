@@ -675,7 +675,11 @@ body .material-symbols-outlined {
   min-width: 0;
   padding: var(--yct-space-4);
   border-radius: var(--yct-radius-lg);
-  background: color-mix(in srgb, var(--operations-reminder-tone) 12%, var(--yct-color-surface-panel));
+  background: color-mix(
+    in srgb,
+    var(--operations-reminder-tone) 12%,
+    var(--yct-color-surface-panel)
+  );
   color: var(--yct-color-text);
 }
 
@@ -1891,7 +1895,10 @@ body .material-symbols-outlined {
 }
 
 .map-route-step-timeline li.is-walk .map-route-step-detail-list .material-symbols-outlined,
-.map-route-step-timeline li.is-transfer:not(.is-place) .map-route-step-detail-list .material-symbols-outlined {
+.map-route-step-timeline
+  li.is-transfer:not(.is-place)
+  .map-route-step-detail-list
+  .material-symbols-outlined {
   color: var(--yct-color-text-secondary);
 }
 
@@ -2007,7 +2014,9 @@ body .material-symbols-outlined {
 .map-toast {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--yct-bottom-nav-reserved-height, 0px) + 18px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(
+    var(--yct-bottom-nav-reserved-height, 0px) + 18px + env(safe-area-inset-bottom, 0px)
+  );
   z-index: 60;
   max-width: min(360px, calc(100vw - 32px));
   padding: var(--yct-space-2) var(--yct-space-3);
@@ -3255,6 +3264,26 @@ body .material-symbols-outlined {
   font-weight: 650;
 }
 
+.operation-tag.is-ok {
+  background: color-mix(in srgb, var(--yct-color-success, #067647) 12%, transparent);
+  color: var(--yct-color-success, #067647);
+}
+
+.operation-tag.is-warning {
+  background: color-mix(in srgb, var(--yct-color-warning, #b54708) 14%, transparent);
+  color: var(--yct-color-warning, #b54708);
+}
+
+.operation-tag.is-accent {
+  background: color-mix(in srgb, var(--yct-color-primary) 12%, transparent);
+  color: var(--yct-color-primary);
+}
+
+.operation-tag.is-danger {
+  background: color-mix(in srgb, var(--yct-color-danger, #b42318) 12%, transparent);
+  color: var(--yct-color-danger, #b42318);
+}
+
 .operation-detail-cover {
   display: grid;
   place-items: center;
@@ -3494,6 +3523,20 @@ body .material-symbols-outlined {
   gap: var(--yct-space-4);
 }
 
+.admin-home-panel {
+  display: grid;
+  gap: var(--yct-space-4);
+}
+
+.admin-home-grid {
+  --yct-service-entry-min: 220px;
+}
+
+.admin-home-entry {
+  min-height: 120px;
+  align-items: start;
+}
+
 .admin-reminder-note {
   margin: 0;
   font-size: 13px;
@@ -3599,6 +3642,45 @@ body .material-symbols-outlined {
   flex: 1 1 240px;
 }
 
+.admin-content-board {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.admin-content-toolbar {
+  align-items: end;
+}
+
+.admin-content-bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+  align-items: center;
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+}
+
+.admin-content-bulk-bar button {
+  min-height: 36px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  font-weight: 650;
+}
+
+.admin-content-bulk-bar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.admin-content-bulk-select {
+  font-weight: 700;
+}
+
 .admin-editor label {
   display: grid;
   gap: var(--yct-space-1);
@@ -3701,14 +3783,122 @@ body .material-symbols-outlined {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--yct-space-3);
-  align-items: center;
+  align-items: start;
   min-height: 70px;
   padding: var(--yct-space-3) var(--yct-space-4);
   border-radius: var(--yct-radius-lg);
   background: var(--yct-color-surface);
 }
 
+.admin-content-record-item {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.admin-content-review-snapshot {
+  display: grid;
+  gap: var(--yct-space-2);
+  margin-top: var(--yct-space-2);
+}
+
+.admin-content-review-snapshot h3 {
+  margin: 0;
+  font-size: 13px;
+  color: var(--yct-color-text-secondary);
+}
+
+.admin-content-review-tags {
+  gap: var(--yct-space-1);
+}
+
+.admin-content-review-items {
+  display: grid;
+  gap: var(--yct-space-1);
+}
+
+.admin-content-review-item {
+  margin: 0;
+  padding: var(--yct-space-2) var(--yct-space-3);
+  border-radius: var(--yct-radius-md);
+  font-size: 13px;
+  color: var(--yct-color-text-secondary);
+  background: color-mix(in srgb, var(--yct-color-primary) 7%, var(--yct-color-surface));
+}
+
+.admin-content-review-item.is-warning {
+  background: color-mix(in srgb, var(--yct-color-warning, #b54708) 10%, var(--yct-color-surface));
+  color: var(--yct-color-warning, #b54708);
+}
+
+.admin-content-review-item.is-danger {
+  background: color-mix(in srgb, var(--yct-color-danger, #b42318) 10%, var(--yct-color-surface));
+  color: var(--yct-color-danger, #b42318);
+}
+
+.admin-content-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-content-select input {
+  width: 18px;
+  height: 18px;
+}
+
+.admin-audit-event-item {
+  align-items: start;
+}
+
+.admin-audit-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 var(--yct-space-2);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.admin-audit-status.is-dispatched {
+  color: var(--yct-color-primary);
+}
+
+.admin-audit-status.is-failed {
+  color: var(--yct-color-error);
+}
+
+.admin-content-empty {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+  align-items: center;
+  justify-content: space-between;
+  min-height: 64px;
+  padding: var(--yct-space-3) var(--yct-space-4);
+  border: 1px dashed var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+}
+
+.admin-content-empty p {
+  margin: 0;
+}
+
+.admin-content-empty button {
+  min-height: 36px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  font-weight: 650;
+}
+
 .admin-poi-item {
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
 }
 
@@ -3778,7 +3968,11 @@ body .material-symbols-outlined {
   gap: var(--yct-space-2);
   padding: var(--yct-space-2);
   border-radius: var(--yct-radius-md);
-  background: color-mix(in oklab, var(--yct-color-warning, #b87900) 10%, var(--yct-color-surface-panel));
+  background: color-mix(
+    in oklab,
+    var(--yct-color-warning, #b87900) 10%,
+    var(--yct-color-surface-panel)
+  );
 }
 
 .admin-poi-conflict-list > strong {
@@ -3869,6 +4063,10 @@ body .material-symbols-outlined {
   background: var(--yct-color-surface-panel);
 }
 
+.admin-poi-detail-dialog {
+  width: min(920px, 100%);
+}
+
 .admin-poi-detail dl {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -3912,11 +4110,32 @@ body .material-symbols-outlined {
   font-size: 13px;
 }
 
+.admin-poi-audit-map-stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-primary) 7%, var(--yct-color-surface-panel));
+}
+
 .admin-poi-audit-map svg {
+  position: relative;
+  z-index: 1;
+  display: block;
   width: 100%;
   min-height: 152px;
   border-radius: var(--yct-radius-md);
-  background: color-mix(in srgb, var(--yct-color-primary) 7%, var(--yct-color-surface-panel));
+  background: transparent;
+}
+
+.admin-poi-audit-map-tiles {
+  position: absolute;
+  inset: 0;
+}
+
+.admin-poi-audit-map-tile {
+  position: absolute;
+  image-rendering: auto;
+  object-fit: cover;
 }
 
 .admin-poi-audit-map-grid {
@@ -3960,7 +4179,7 @@ body .material-symbols-outlined {
 }
 
 .admin-poi-audit-map-context-marker.is-station circle {
-  fill: #2f80ed;
+  fill: color-mix(in srgb, var(--yct-color-primary) 78%, #ffffff);
 }
 
 .admin-poi-audit-map-markers {
@@ -4048,7 +4267,11 @@ body .material-symbols-outlined {
   border-radius: var(--yct-radius-md);
   background:
     linear-gradient(var(--yct-map-grid-primary, rgb(22 143 120 / 8%)) 1px, transparent 1px),
-    linear-gradient(90deg, var(--yct-map-grid-secondary, rgb(37 132 232 / 8%)) 1px, transparent 1px),
+    linear-gradient(
+      90deg,
+      var(--yct-map-grid-secondary, rgb(37 132 232 / 8%)) 1px,
+      transparent 1px
+    ),
     var(--yct-color-surface);
   background-size: 24px 24px;
 }
@@ -4268,6 +4491,96 @@ body .material-symbols-outlined {
   color: var(--yct-color-text-secondary);
 }
 
+.admin-poi-coordinate-list-editor,
+.admin-poi-polygon-editor,
+.admin-poi-multi-polygon-editor {
+  gap: var(--yct-space-3);
+}
+
+.admin-poi-geometry-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+}
+
+.admin-poi-geometry-toolbar button,
+.admin-poi-coordinate-actions button,
+.admin-poi-rectangle-editor-heading button,
+.admin-poi-polygon-heading button {
+  min-height: 34px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  font-weight: 650;
+}
+
+.admin-poi-geometry-toolbar button:disabled,
+.admin-poi-coordinate-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.admin-poi-coordinate-table {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.admin-poi-coordinate-row {
+  display: grid;
+  grid-template-columns: 36px minmax(92px, 1fr) minmax(92px, 1fr) auto;
+  gap: var(--yct-space-2);
+  align-items: end;
+  padding: var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+}
+
+.admin-poi-coordinate-row > span {
+  align-self: center;
+  color: var(--yct-color-text-muted);
+  font-weight: 750;
+  text-align: center;
+}
+
+.admin-poi-coordinate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-1);
+}
+
+.admin-poi-coordinate-actions button {
+  min-height: 32px;
+  padding: 0 var(--yct-space-2);
+  font-size: 12px;
+}
+
+.admin-poi-rectangle-editor,
+.admin-poi-polygon-ring {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+}
+
+.admin-poi-rectangle-editor-heading,
+.admin-poi-polygon-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+}
+
+.admin-poi-rectangle-fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--yct-space-2);
+}
+
 .admin-poi-coordinate-picker {
   display: grid;
   gap: var(--yct-space-2);
@@ -4280,11 +4593,22 @@ body .material-symbols-outlined {
   text-align: left;
 }
 
+.admin-poi-coordinate-picker-stage {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-primary) 6%, var(--yct-color-surface-panel));
+}
+
 .admin-poi-coordinate-picker svg {
+  position: relative;
+  z-index: 1;
+  display: block;
   width: 100%;
   min-height: 152px;
   border-radius: var(--yct-radius-md);
-  background: color-mix(in srgb, var(--yct-color-primary) 6%, var(--yct-color-surface-panel));
+  background: transparent;
 }
 
 .admin-poi-coordinate-picker span {
@@ -4311,7 +4635,7 @@ body .material-symbols-outlined {
 }
 
 .admin-poi-coordinate-picker-context.is-station {
-  fill: #2f80ed;
+  fill: color-mix(in srgb, var(--yct-color-primary) 78%, #ffffff);
 }
 
 .admin-poi-coordinate-picker-original {
@@ -4337,6 +4661,51 @@ body .material-symbols-outlined {
   padding: var(--yct-space-4);
   border-radius: var(--yct-radius-lg);
   background: var(--yct-color-surface);
+}
+
+.admin-poi-legacy-marker-list {
+  display: grid;
+  gap: var(--yct-space-3);
+  margin-top: var(--yct-space-3);
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+}
+
+.admin-poi-legacy-marker-list h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.admin-poi-legacy-marker-item .admin-content-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.admin-poi-category-board {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.admin-poi-category-summary-item {
+  align-items: start;
+}
+
+.admin-poi-category-summary-main {
+  display: grid;
+  gap: var(--yct-space-2);
+  min-width: 0;
 }
 
 .admin-poi-category-config-header {
@@ -4366,9 +4735,18 @@ body .material-symbols-outlined {
   gap: var(--yct-space-2);
 }
 
+.admin-poi-category-dialog {
+  width: min(1200px, calc(100vw - 32px));
+  max-height: min(88vh, 980px);
+  overflow: auto;
+}
+
 .admin-poi-category-row {
   display: grid;
-  grid-template-columns: auto minmax(120px, 0.8fr) minmax(160px, 1fr) minmax(92px, 0.4fr) minmax(160px, 1fr);
+  grid-template-columns: auto minmax(120px, 0.8fr) minmax(160px, 1fr) minmax(92px, 0.4fr) minmax(
+      160px,
+      1fr
+    );
   gap: var(--yct-space-2);
   align-items: start;
   padding: var(--yct-space-3);
@@ -4455,7 +4833,7 @@ body .material-symbols-outlined {
 }
 
 .admin-poi-category-icon-swatch.is-dark {
-  background: #17211f;
+  background: color-mix(in srgb, var(--yct-color-text) 82%, var(--yct-color-surface));
 }
 
 .admin-poi-category-icon-swatch.is-map {
@@ -4463,7 +4841,10 @@ body .material-symbols-outlined {
     linear-gradient(90deg, rgb(116 139 131 / 55%) 0 4px, transparent 4px 100%),
     linear-gradient(0deg, rgb(116 139 131 / 45%) 0 4px, transparent 4px 100%),
     linear-gradient(135deg, #8caf62, #d5d8ca 48%, #78906a);
-  background-size: 100% 100%, 100% 100%, 100% 100%;
+  background-size:
+    100% 100%,
+    100% 100%,
+    100% 100%;
 }
 
 .admin-poi-category-icon-swatch img {
@@ -4626,7 +5007,10 @@ body .material-symbols-outlined {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-self: start;
+  justify-self: end;
   gap: var(--yct-space-2);
+  max-width: min(100%, 320px);
 }
 
 .admin-content-actions button,
@@ -4657,6 +5041,176 @@ body .material-symbols-outlined {
 .admin-content-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.46;
+}
+
+@media (max-width: 1280px) {
+  .admin-content-item,
+  .admin-content-record-item,
+  .transit-selected-version-card,
+  .travel-schedule-revision-item.transit-selected-version-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-content-actions {
+    justify-content: flex-start;
+    justify-self: start;
+    max-width: none;
+  }
+}
+
+.admin-content-editor-dialog,
+.admin-reminder-editor-dialog,
+.admin-content-publish-dialog,
+.admin-content-publish-dialog label,
+.admin-service-editor-dialog label {
+  display: grid;
+  gap: var(--yct-space-1);
+}
+
+.admin-content-editor-dialog,
+.admin-reminder-editor-dialog {
+  width: min(980px, 100%);
+}
+
+.admin-content-editor-dialog label,
+.admin-reminder-editor-dialog label,
+.admin-content-publish-dialog label,
+.admin-service-editor-dialog label {
+  display: grid;
+  gap: var(--yct-space-1);
+}
+
+.admin-content-editor-dialog label span,
+.admin-reminder-editor-dialog label span,
+.admin-content-publish-dialog label span,
+.admin-service-editor-dialog label span {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.admin-content-editor-dialog input,
+.admin-content-editor-dialog select,
+.admin-content-editor-dialog textarea,
+.admin-reminder-editor-dialog input,
+.admin-reminder-editor-dialog select,
+.admin-reminder-editor-dialog textarea,
+.admin-content-publish-dialog input,
+.admin-service-editor-dialog input,
+.admin-service-editor-dialog select,
+.admin-service-editor-dialog textarea {
+  min-width: 0;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+}
+
+.admin-content-editor-dialog input,
+.admin-content-editor-dialog select,
+.admin-reminder-editor-dialog input,
+.admin-reminder-editor-dialog select,
+.admin-content-publish-dialog input,
+.admin-service-editor-dialog input,
+.admin-service-editor-dialog select {
+  min-height: 40px;
+  padding: 0 var(--yct-space-3);
+}
+
+.admin-content-editor-dialog textarea,
+.admin-reminder-editor-dialog textarea,
+.admin-service-editor-dialog textarea {
+  min-height: 140px;
+  padding: var(--yct-space-3);
+  resize: vertical;
+}
+
+.admin-content-publish-summary {
+  display: grid;
+  gap: var(--yct-space-2);
+  margin: 0;
+}
+
+.admin-content-publish-summary div {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: var(--yct-space-2);
+}
+
+.admin-content-publish-summary dt,
+.admin-content-publish-summary dd {
+  margin: 0;
+}
+
+.admin-content-publish-summary dt {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+}
+
+.admin-content-publish-summary dd {
+  color: var(--yct-color-text);
+  font-size: 13px;
+}
+
+.admin-content-publish-blockers,
+.admin-content-publish-diff,
+.admin-content-publish-warnings {
+  display: grid;
+  gap: var(--yct-space-1);
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-md);
+}
+
+.admin-content-publish-blockers {
+  background: color-mix(in srgb, var(--yct-color-danger, #b42318) 10%, var(--yct-color-surface));
+  color: var(--yct-color-danger, #b42318);
+}
+
+.admin-content-publish-diff {
+  background: color-mix(in srgb, var(--yct-color-primary) 7%, var(--yct-color-surface));
+  color: var(--yct-color-text-secondary);
+}
+
+.admin-content-publish-warnings {
+  background: color-mix(in srgb, var(--yct-color-primary) 9%, var(--yct-color-surface));
+  color: var(--yct-color-text-secondary);
+}
+
+.admin-content-publish-blockers p,
+.admin-content-publish-diff p,
+.admin-content-publish-warnings p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.admin-content-publish-assets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-1);
+}
+
+.admin-services-board {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.admin-services-toolbar {
+  align-items: end;
+}
+
+.admin-services-segment {
+  flex: 1 1 360px;
+}
+
+.admin-service-item {
+  gap: var(--yct-space-3);
+}
+
+.admin-service-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--yct-space-2);
 }
 
 .admin-asset-report,
@@ -4813,6 +5367,33 @@ body .material-symbols-outlined {
   align-items: flex-start;
 }
 
+.transit-admin-toolbar label {
+  display: grid;
+  gap: var(--yct-space-1);
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.transit-admin-toolbar select,
+.transit-admin-toolbar input {
+  min-height: 38px;
+  min-width: 180px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text);
+}
+
+.transit-admin-search {
+  min-width: min(360px, 100%);
+}
+
+.transit-admin-search input {
+  width: 100%;
+}
+
 .transit-revision-summary,
 .transit-revision-validation,
 .transit-revision-preview {
@@ -4882,12 +5463,686 @@ body .material-symbols-outlined {
   line-height: 1.45;
 }
 
+.transit-revision-detail {
+  display: grid;
+  gap: var(--yct-space-3);
+  margin-top: var(--yct-space-3);
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+}
+
+.transit-revision-detail dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yct-space-2);
+  margin: 0;
+}
+
+.transit-revision-detail dl div {
+  display: grid;
+  gap: var(--yct-space-1);
+}
+
+.transit-revision-detail dt,
+.transit-revision-detail dd {
+  margin: 0;
+}
+
+.transit-revision-detail dt {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.transit-revision-mode-table,
+.transit-revision-line-table,
+.travel-schedule-admin-metrics,
+.travel-schedule-admin-services {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.transit-revision-mode-table {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.transit-revision-line-table,
+.travel-schedule-admin-services {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.transit-revision-mode-table span,
+.transit-revision-line-table span,
+.travel-schedule-admin-services span {
+  display: grid;
+  gap: var(--yct-space-1);
+  padding: var(--yct-space-2);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.transit-revision-line-table button {
+  min-height: 32px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text-secondary);
+  font-weight: 650;
+}
+
+.transit-revision-line-table button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.transit-revision-line-table .admin-content-actions,
+.travel-schedule-trip-row .admin-content-actions {
+  justify-content: flex-start;
+  justify-self: start;
+  max-width: none;
+}
+
+.transit-revision-mode-table small,
+.transit-revision-line-table small,
+.travel-schedule-admin-services small {
+  color: var(--yct-color-text-muted);
+}
+
+.transit-station-coordinate-table {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.transit-revision-geometry-preview {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+}
+
+.transit-revision-geometry-preview h3 {
+  margin: 0;
+}
+
+.transit-revision-geometry-stage {
+  position: relative;
+  overflow: hidden;
+  width: min(100%, 260px);
+  height: 160px;
+  min-height: 160px;
+  margin: 0 auto;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface);
+}
+
+.transit-revision-geometry-preview svg {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 260px;
+  height: 160px;
+  min-height: 160px;
+}
+
+.transit-revision-geometry-tiles {
+  position: absolute;
+  inset: 0;
+  opacity: 0.58;
+}
+
+.transit-revision-geometry-tiles img {
+  position: absolute;
+  image-rendering: pixelated;
+  user-select: none;
+}
+
+.transit-revision-geometry-grid {
+  fill: color-mix(in srgb, var(--yct-color-primary) 4%, transparent);
+}
+
+.transit-revision-geometry-line {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.78;
+}
+
+.transit-revision-geometry-station circle {
+  fill: var(--yct-color-surface);
+  stroke: var(--yct-color-primary);
+  stroke-width: 2;
+}
+
+.transit-station-coordinate-heading,
+.transit-station-coordinate-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--yct-space-2);
+  align-items: center;
+}
+
+.transit-station-coordinate-heading {
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+}
+
+.transit-station-coordinate-row {
+  padding: var(--yct-space-2);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.transit-station-coordinate-row span:first-child {
+  display: grid;
+  min-width: 0;
+}
+
+.transit-station-coordinate-row small {
+  color: var(--yct-color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.transit-station-coordinate-row button {
+  min-height: 32px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text-secondary);
+  font-weight: 650;
+}
+
+.transit-station-coordinate-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yct-space-3);
+}
+
+.transit-station-coordinate-form input {
+  min-height: 42px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text);
+}
+
+.transit-selected-version-card,
+.travel-schedule-revision-item.transit-selected-version-card {
+  align-items: start;
+}
+
+.transit-station-binding-card {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+}
+
+.transit-station-binding-card h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.transit-station-binding-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto auto;
+  gap: var(--yct-space-2);
+  align-items: end;
+}
+
+.transit-station-binding-toolbar label {
+  display: grid;
+  gap: var(--yct-space-1);
+}
+
+.transit-station-binding-toolbar input,
+.transit-station-binding-toolbar select {
+  min-height: 40px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text);
+}
+
+.transit-station-binding-toolbar button {
+  min-height: 40px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text-secondary);
+  font-weight: 650;
+}
+
+.transit-station-coordinate-picker {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-3);
+  border: 1px dashed var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+  text-align: left;
+}
+
+.transit-station-coordinate-picker-stage {
+  position: relative;
+  overflow: hidden;
+  width: min(100%, 260px);
+  height: 160px;
+  min-height: 160px;
+  margin: 0 auto;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface);
+}
+
+.transit-station-coordinate-picker-stage svg {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 260px;
+  height: 160px;
+  min-height: 160px;
+}
+
+.transit-station-coordinate-context {
+  fill: color-mix(in srgb, var(--yct-color-primary) 35%, var(--yct-color-surface));
+  stroke: var(--yct-color-surface);
+  stroke-width: 1.5;
+}
+
+.transit-station-coordinate-context.is-road {
+  fill: color-mix(in srgb, #a16207 45%, var(--yct-color-surface));
+}
+
+.transit-station-coordinate-context.is-station {
+  fill: color-mix(in srgb, var(--yct-color-primary) 48%, var(--yct-color-surface));
+}
+
+.transit-station-coordinate-context.is-poi,
+.transit-station-coordinate-context.is-bound-poi {
+  fill: color-mix(in srgb, var(--yct-color-success, #168a5d) 48%, var(--yct-color-surface));
+}
+
+.transit-station-coordinate-bound-poi {
+  fill: none;
+  stroke: var(--yct-color-success, #168a5d);
+  stroke-width: 2.5;
+  stroke-dasharray: 4 3;
+}
+
+.transit-station-coordinate-original {
+  fill: #ffffff;
+  stroke: var(--yct-color-text-secondary);
+  stroke-width: 2;
+}
+
+.transit-station-coordinate-current {
+  fill: var(--yct-color-primary);
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.admin-version-diff-card {
+  display: grid;
+  gap: var(--yct-space-2);
+  margin-top: var(--yct-space-3);
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: color-mix(in srgb, var(--yct-color-primary) 4%, var(--yct-color-surface));
+}
+
+.admin-version-diff-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+}
+
+.admin-version-diff-heading span {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.admin-version-diff-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: var(--yct-space-2);
+}
+
+.admin-version-diff-metrics span,
+.admin-version-diff-groups p {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: var(--yct-space-2);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.admin-version-diff-metrics small,
+.admin-version-diff-groups small {
+  color: var(--yct-color-text-muted);
+}
+
+.admin-version-diff-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--yct-space-2);
+}
+
+.admin-version-diff-groups span {
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .transit-mode-profile-editor {
   display: grid;
   gap: var(--yct-space-3);
   padding: var(--yct-space-4);
   border-radius: var(--yct-radius-lg);
   background: var(--yct-color-surface);
+}
+
+.travel-schedule-admin-summary {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+}
+
+.travel-schedule-revision-admin,
+.travel-schedule-revision-list {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.travel-schedule-revision-admin {
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+}
+
+.travel-schedule-revision-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--yct-space-3);
+  align-items: flex-start;
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface);
+}
+
+.travel-schedule-revision-item p {
+  margin: var(--yct-space-1) 0 0;
+}
+
+.travel-schedule-revision-services {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+  margin-top: var(--yct-space-2);
+}
+
+.travel-schedule-revision-services span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 var(--yct-space-2);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+}
+
+.travel-schedule-revision-services span[data-status='not_connected'] {
+  opacity: 0.68;
+}
+
+.travel-schedule-trip-detail {
+  display: grid;
+  gap: var(--yct-space-3);
+  margin-top: var(--yct-space-3);
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+}
+
+.travel-schedule-trip-detail h3 {
+  margin: 0;
+}
+
+.travel-schedule-trip-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+  align-items: end;
+}
+
+.travel-schedule-trip-toolbar label {
+  display: grid;
+  flex: 1 1 240px;
+  gap: var(--yct-space-1);
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.travel-schedule-trip-toolbar input {
+  min-height: 38px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text);
+}
+
+.travel-schedule-trip-toolbar button {
+  min-height: 36px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text-secondary);
+  font-weight: 650;
+}
+
+.travel-schedule-trip-table {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.travel-schedule-trip-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--yct-space-2);
+  align-items: center;
+  padding: var(--yct-space-2);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface);
+}
+
+.travel-schedule-trip-row button {
+  min-height: 32px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  font-weight: 650;
+}
+
+.travel-schedule-trip-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.schedule-trip-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yct-space-3);
+}
+
+.travel-schedule-admin-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.travel-schedule-admin-services span {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.travel-schedule-admin-services .material-symbols-outlined {
+  grid-row: span 2;
+  color: var(--yct-color-primary);
+}
+
+.travel-schedule-admin-services span[data-status='not_connected'] {
+  opacity: 0.68;
+}
+
+.transit-entity-list {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+}
+
+.transit-entity-list h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.transit-entity-table {
+  display: grid;
+  gap: var(--yct-space-2);
+  max-height: 520px;
+  overflow: auto;
+  padding-right: var(--yct-space-1);
+}
+
+.transit-entity-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--yct-space-2);
+  align-items: center;
+  padding: var(--yct-space-2);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface);
+}
+
+.transit-entity-row > div:first-child {
+  min-width: 0;
+}
+
+.transit-entity-row p {
+  margin: var(--yct-space-1) 0 0;
+}
+
+.admin-transit-dialog label {
+  display: grid;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.admin-transit-dialog input,
+.admin-transit-dialog textarea,
+.admin-transit-dialog select {
+  min-height: 140px;
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text);
+  resize: vertical;
+}
+
+.admin-transit-dialog input {
+  min-height: 42px;
+  resize: none;
+}
+
+.admin-transit-dialog select {
+  min-height: 42px;
+}
+
+.transit-line-order-preview {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.transit-line-order-map {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.transit-line-order-map-stage {
+  position: relative;
+  overflow: hidden;
+  width: min(100%, 260px);
+  height: 160px;
+  margin: 0 auto;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface);
+}
+
+.transit-line-order-map-stage svg {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 260px;
+  height: 160px;
+}
+
+.transit-line-order-map-segment {
+  fill: none;
+  stroke: var(--yct-color-primary);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.transit-line-order-map-segment.is-road {
+  stroke-dasharray: 7 4;
+}
+
+.transit-line-order-map-station circle {
+  fill: var(--yct-color-surface);
+  stroke: var(--yct-color-primary);
+  stroke-width: 2;
+}
+
+.transit-line-order-map-station.is-missing circle {
+  fill: var(--yct-color-surface);
+  stroke: var(--yct-color-error);
+  stroke-dasharray: 3 3;
 }
 
 .transit-mode-profile-grid {
@@ -5103,6 +6358,11 @@ body .material-symbols-outlined {
   color: var(--yct-color-primary);
   box-shadow: 0 2px 8px rgba(17, 24, 23, 0.12);
   font-weight: 700;
+}
+
+.admin-page-segmented-control {
+  width: 100%;
+  margin-bottom: var(--yct-space-3);
 }
 
 .time-control-row {
@@ -7787,6 +9047,51 @@ body .material-symbols-outlined {
   .trip-reminder-actions {
     width: 100%;
     justify-content: flex-end;
+  }
+
+  .admin-poi-coordinate-row,
+  .admin-poi-rectangle-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-poi-coordinate-row > span {
+    text-align: left;
+  }
+
+  .admin-poi-coordinate-actions,
+  .admin-poi-geometry-toolbar {
+    justify-content: flex-start;
+  }
+
+  .transit-admin-toolbar label,
+  .transit-admin-search,
+  .transit-admin-toolbar select,
+  .transit-admin-toolbar input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .transit-revision-detail dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .transit-station-coordinate-heading,
+  .transit-station-coordinate-row,
+  .transit-station-coordinate-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .transit-station-binding-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .travel-schedule-revision-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .travel-schedule-trip-row,
+  .schedule-trip-edit-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .transit-summary-strip {

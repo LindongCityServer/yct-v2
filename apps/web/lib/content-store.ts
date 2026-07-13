@@ -14,10 +14,23 @@ export interface StoredContentMetadata {
   expiresAt?: ISODateTimeString;
 }
 
+export interface StoredContentPublishSnapshot {
+  snapshotId: string;
+  revisionId: string;
+  title: string;
+  categoryId: string;
+  markdown: string;
+  assetIds: string[];
+  metadata: StoredContentMetadata;
+  publishedAt: ISODateTimeString;
+  publishedBy: string;
+}
+
 export interface StoredContentRecord {
   contentId: string;
   revision: ContentRevision;
   metadata: StoredContentMetadata;
+  publishHistory?: StoredContentPublishSnapshot[];
   createdAt: ISODateTimeString;
   updatedAt: ISODateTimeString;
 }

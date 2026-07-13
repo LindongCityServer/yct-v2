@@ -71,6 +71,7 @@ export type CommonMessageKey =
   | 'account.offlinePackage.summary.total'
   | 'account.offlinePackage.title'
   | 'account.auth.adminOperations'
+  | 'account.auth.adminPortal'
   | 'account.auth.adminPoi'
   | 'account.auth.adminServices'
   | 'account.auth.adminTransit'
@@ -856,6 +857,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       '自定义范围当前记录边界并刷新公开基础数据，真实瓦片离线包仍等待体积上限和生成策略确认。',
     'account.offlinePackage.title': '新建离线范围',
     'account.auth.adminOperations': '内容后台',
+    'account.auth.adminPortal': '管理后台',
     'account.auth.adminPoi': 'POI 后台',
     'account.auth.adminServices': '服务后台',
     'account.auth.adminTransit': '线路后台',
@@ -911,8 +913,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.history.pendingSync': '{count} 个待同步',
     'account.history.scheduleRecords': '{count} 条班次记录',
     'account.history.syncDone': '已同步 {count} 个提醒',
-    'account.history.syncDoneWithSkipped':
-      '已同步 {count} 个提醒，保留 {skipped} 条旧站记录在本机',
+    'account.history.syncDoneWithSkipped': '已同步 {count} 个提醒，保留 {skipped} 条旧站记录在本机',
     'account.history.syncFailed': '行程提醒同步失败',
     'account.history.syncing': '正在同步提醒',
     'account.history.title': '本地历史',
@@ -962,11 +963,14 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.pwa.status.manual': '可添加',
     'account.pwa.status.unsupported': '不可用',
     'account.pwa.statusDescription.checking': '正在检查当前浏览器是否支持安装入口。',
-    'account.pwa.statusDescription.installed': '当前已经以独立应用方式打开，后续可继续在这里管理离线缓存。',
-    'account.pwa.statusDescription.installable': '当前浏览器支持直接安装，点击“安装雨城通”即可打开安装确认。',
+    'account.pwa.statusDescription.installed':
+      '当前已经以独立应用方式打开，后续可继续在这里管理离线缓存。',
+    'account.pwa.statusDescription.installable':
+      '当前浏览器支持直接安装，点击“安装雨城通”即可打开安装确认。',
     'account.pwa.statusDescription.manual':
       '当前浏览器需要通过菜单添加到主屏幕或安装为应用；在 Safari 中可使用分享菜单里的“添加到主屏幕”。',
-    'account.pwa.statusDescription.unsupported': '当前浏览器不支持安装入口，仍可继续使用网页和近期内容缓存。',
+    'account.pwa.statusDescription.unsupported':
+      '当前浏览器不支持安装入口，仍可继续使用网页和近期内容缓存。',
     'account.pwa.title': '安装与离线',
     'account.settings': '账号设置',
     'account.ticketDraft.count': '{count} 个',
@@ -1152,7 +1156,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.source.provider.lindongUnminedStatic': 'Lindong uNmINeD 静态瓦片',
     'map.source.providerNote.lindongFreshHttp':
       '该源较新，已通过 YCT 后端代理同源加载以避免 HTTPS 混合内容风险。',
-    'map.source.providerNote.lindongSafeHttpsStatic': '该源无混合内容风险，但可能不反映最新地图状态。',
+    'map.source.providerNote.lindongSafeHttpsStatic':
+      '该源无混合内容风险，但可能不反映最新地图状态。',
     'map.source.providerNote.lindongUnminedStatic':
       '该源来自 map.shangxiaoguan.top 的 HTTPS 静态地图，后续需接入 uNmINeD 坐标转换后完整渲染。',
     'map.source.tileFallback': '地图瓦片',
@@ -1260,10 +1265,14 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.transferBoard': '{name} 上车',
     'map.route.transferTitle': '{firstMode}+{secondMode}换乘',
     'map.route.transferWalk': '换乘 步行 {distance} {duration}',
-    'map.route.transitNote.default': '已按真实线路站序生成候选；站间耗时优先使用旧数据 travelTime，缺失时仍按距离估算。',
-    'map.route.transitNote.fallbackRoad': '已尝试使用旧地图道路端点图生成公交/客运站间路径；当前路网缺失或不连通的片段仍按直线估算。站间耗时优先使用旧数据 travelTime。',
-    'map.route.transitNote.road': '公交/客运站间已优先沿旧地图道路端点图生成，并按 100 格规则连通相邻道路；无法连通的片段回退为直线估算。站间耗时优先使用旧数据 travelTime。',
-    'map.route.transitNote.transfer': '已按真实线路站序组合一次换乘候选；换乘距离和缺失站间耗时仍为估算。',
+    'map.route.transitNote.default':
+      '已按真实线路站序生成候选；站间耗时优先使用旧数据 travelTime，缺失时仍按距离估算。',
+    'map.route.transitNote.fallbackRoad':
+      '已尝试使用旧地图道路端点图生成公交/客运站间路径；当前路网缺失或不连通的片段仍按直线估算。站间耗时优先使用旧数据 travelTime。',
+    'map.route.transitNote.road':
+      '公交/客运站间已优先沿旧地图道路端点图生成，并按 100 格规则连通相邻道路；无法连通的片段回退为直线估算。站间耗时优先使用旧数据 travelTime。',
+    'map.route.transitNote.transfer':
+      '已按真实线路站序组合一次换乘候选；换乘距离和缺失站间耗时仍为估算。',
     'map.route.turn.left': '左转',
     'map.route.turn.right': '右转',
     'map.route.turn.slightLeft': '向左前方',
@@ -1274,13 +1283,13 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.walkFewerTurns': '少转弯步行',
     'map.route.walkFromAccess': '经 {access} 步行至终点 {distance} {duration}',
     'map.route.walkNote.direct': '当前未找到可连通道路图，步行暂按直线估算。',
-    'map.route.walkNote.road': '步行默认优先使用旧地图道路端点图和 100 格连通候选；无法连通的片段会回退直线估算。',
+    'map.route.walkNote.road':
+      '步行默认优先使用旧地图道路端点图和 100 格连通候选；无法连通的片段会回退直线估算。',
     'map.route.walkRoadWithDistance': '沿道路步行 {distance} {duration}',
     'map.route.walkStraight': '直线步行',
     'map.route.walkToAccess': '步行至 {access} {distance} {duration}',
     'map.route.walkWithDistance': '步行 {distance} {duration}',
-    'map.roadDetail.description':
-      '这是一组从旧地图道路端点归并出的线性地点，当前轨迹为近似展示。',
+    'map.roadDetail.description': '这是一组从旧地图道路端点归并出的线性地点，当前轨迹为近似展示。',
     'map.roadDetail.endpointCount': '端点数量',
     'map.roadDetail.endpointCountValue': '{count} 个',
     'map.roadDetail.traceHighlighted': '已在地图上高亮近似轨迹',
@@ -1346,7 +1355,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.accent.gray': '灰色',
     'settings.accent.green': '青绿',
     'settings.accent.label': '强调色',
-    'settings.accent.ldpass': '跟随 ldpass',
+    'settings.accent.ldpass': '跟随临东通',
     'settings.accent.red': '红色',
     'settings.appearanceLanguage': '外观与语言',
     'settings.font.harmony': 'HarmonyOS Sans',
@@ -1682,6 +1691,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       '自訂範圍目前記錄邊界並重新整理公開基礎資料，真正的瓦片離線包仍等待體積上限和生成策略確認。',
     'account.offlinePackage.title': '新增離線範圍',
     'account.auth.adminOperations': '內容後台',
+    'account.auth.adminPortal': '管理後台',
     'account.auth.adminPoi': 'POI 後台',
     'account.auth.adminServices': '服務後台',
     'account.auth.adminTransit': '線路後台',
@@ -1737,8 +1747,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.history.pendingSync': '{count} 個待同步',
     'account.history.scheduleRecords': '{count} 條班次記錄',
     'account.history.syncDone': '已同步 {count} 個提醒',
-    'account.history.syncDoneWithSkipped':
-      '已同步 {count} 個提醒，保留 {skipped} 條舊站記錄在本機',
+    'account.history.syncDoneWithSkipped': '已同步 {count} 個提醒，保留 {skipped} 條舊站記錄在本機',
     'account.history.syncFailed': '行程提醒同步失敗',
     'account.history.syncing': '正在同步提醒',
     'account.history.title': '本機歷史',
@@ -1788,11 +1797,14 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.pwa.status.manual': '可加入',
     'account.pwa.status.unsupported': '不可用',
     'account.pwa.statusDescription.checking': '正在檢查目前瀏覽器是否支援安裝入口。',
-    'account.pwa.statusDescription.installed': '目前已經以獨立應用方式開啟，後續可繼續在這裡管理離線快取。',
-    'account.pwa.statusDescription.installable': '目前瀏覽器支援直接安裝，點擊「安裝雨城通」即可開啟安裝確認。',
+    'account.pwa.statusDescription.installed':
+      '目前已經以獨立應用方式開啟，後續可繼續在這裡管理離線快取。',
+    'account.pwa.statusDescription.installable':
+      '目前瀏覽器支援直接安裝，點擊「安裝雨城通」即可開啟安裝確認。',
     'account.pwa.statusDescription.manual':
       '目前瀏覽器需要透過選單加入主畫面或安裝為應用；在 Safari 中可使用分享選單裡的「加入主畫面」。',
-    'account.pwa.statusDescription.unsupported': '目前瀏覽器不支援安裝入口，仍可繼續使用網頁和近期內容快取。',
+    'account.pwa.statusDescription.unsupported':
+      '目前瀏覽器不支援安裝入口，仍可繼續使用網頁和近期內容快取。',
     'account.pwa.title': '安裝與離線',
     'account.settings': '帳號設定',
     'account.ticketDraft.count': '{count} 個',
@@ -2087,10 +2099,14 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.transferBoard': '{name} 上車',
     'map.route.transferTitle': '{firstMode}+{secondMode}換乘',
     'map.route.transferWalk': '換乘 步行 {distance} {duration}',
-    'map.route.transitNote.default': '已按真實線路站序生成候選；站間耗時優先使用舊資料 travelTime，缺失時仍按距離估算。',
-    'map.route.transitNote.fallbackRoad': '已嘗試使用舊地圖道路端點圖生成公交/客運站間路徑；目前路網缺失或不連通的片段仍按直線估算。站間耗時優先使用舊資料 travelTime。',
-    'map.route.transitNote.road': '公交/客運站間已優先沿舊地圖道路端點圖生成，並按 100 格規則連通相鄰道路；無法連通的片段回退為直線估算。站間耗時優先使用舊資料 travelTime。',
-    'map.route.transitNote.transfer': '已按真實線路站序組合一次換乘候選；換乘距離和缺失站間耗時仍為估算。',
+    'map.route.transitNote.default':
+      '已按真實線路站序生成候選；站間耗時優先使用舊資料 travelTime，缺失時仍按距離估算。',
+    'map.route.transitNote.fallbackRoad':
+      '已嘗試使用舊地圖道路端點圖生成公交/客運站間路徑；目前路網缺失或不連通的片段仍按直線估算。站間耗時優先使用舊資料 travelTime。',
+    'map.route.transitNote.road':
+      '公交/客運站間已優先沿舊地圖道路端點圖生成，並按 100 格規則連通相鄰道路；無法連通的片段回退為直線估算。站間耗時優先使用舊資料 travelTime。',
+    'map.route.transitNote.transfer':
+      '已按真實線路站序組合一次換乘候選；換乘距離和缺失站間耗時仍為估算。',
     'map.route.turn.left': '左轉',
     'map.route.turn.right': '右轉',
     'map.route.turn.slightLeft': '向左前方',
@@ -2101,13 +2117,13 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.walkFewerTurns': '少轉彎步行',
     'map.route.walkFromAccess': '經 {access} 步行至終點 {distance} {duration}',
     'map.route.walkNote.direct': '目前未找到可連通道路圖，步行暫按直線估算。',
-    'map.route.walkNote.road': '步行預設優先使用舊地圖道路端點圖和 100 格連通候選；無法連通的片段會回退直線估算。',
+    'map.route.walkNote.road':
+      '步行預設優先使用舊地圖道路端點圖和 100 格連通候選；無法連通的片段會回退直線估算。',
     'map.route.walkRoadWithDistance': '沿道路步行 {distance} {duration}',
     'map.route.walkStraight': '直線步行',
     'map.route.walkToAccess': '步行至 {access} {distance} {duration}',
     'map.route.walkWithDistance': '步行 {distance} {duration}',
-    'map.roadDetail.description':
-      '這是一組從舊地圖道路端點歸併出的線性地點，目前軌跡為近似展示。',
+    'map.roadDetail.description': '這是一組從舊地圖道路端點歸併出的線性地點，目前軌跡為近似展示。',
     'map.roadDetail.endpointCount': '端點數量',
     'map.roadDetail.endpointCountValue': '{count} 個',
     'map.roadDetail.traceHighlighted': '已在地圖上高亮近似軌跡',
@@ -2173,7 +2189,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.accent.gray': '灰色',
     'settings.accent.green': '青綠',
     'settings.accent.label': '強調色',
-    'settings.accent.ldpass': '跟隨 ldpass',
+    'settings.accent.ldpass': '跟隨臨東通',
     'settings.accent.red': '紅色',
     'settings.appearanceLanguage': '外觀與語言',
     'settings.font.harmony': 'HarmonyOS Sans',
@@ -2511,30 +2527,32 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       'Custom areas currently store boundaries and refresh public base data. Real tile offline packs still need size limits and generation rules.',
     'account.offlinePackage.title': 'New Offline Area',
     'account.auth.adminOperations': 'Content Admin',
+    'account.auth.adminPortal': 'Admin Console',
     'account.auth.adminPoi': 'POI Admin',
     'account.auth.adminServices': 'Service Admin',
     'account.auth.adminTransit': 'Transit Admin',
-    'account.auth.defaultTitle': 'Ldpass account',
+    'account.auth.defaultTitle': 'LDPASS account',
     'account.auth.introConfigured':
-      'Sign in with Ldpass to sync history, preferences, and future ticket status.',
-    'account.auth.introNotConfigured': 'Ldpass sign-in is not configured.',
-    'account.auth.ldpassAccount': 'Ldpass account',
-    'account.auth.login': 'Sign in with Ldpass',
+      'Sign in with LDPASS to sync history, preferences, and future ticket status.',
+    'account.auth.introNotConfigured': 'LDPASS sign-in is not configured.',
+    'account.auth.ldpassAccount': 'LDPASS account',
+    'account.auth.login': 'Sign in with LDPASS',
     'account.auth.logout': 'Sign out of Yuchengtong',
     'account.auth.readonlyStatus': 'Account status: {status}',
     'account.auth.serverUnverified': 'Server account not verified',
     'account.auth.serverVerified': 'Server account verified',
     'account.auth.serverVerifiedWithName': 'Server account verified: {name}',
-    'account.authStatus.ldpassNotConfigured': 'Ldpass sign-in is not configured.',
+    'account.authStatus.ldpassNotConfigured': 'LDPASS sign-in is not configured.',
     'account.authStatus.loggedOut': 'Signed out of the local Yuchengtong session.',
-    'account.authStatus.loginSuccess': 'Ldpass sign-in completed.',
+    'account.authStatus.loginSuccess': 'LDPASS sign-in completed.',
     'account.authStatus.readonly': 'This account can only open the read-only account page.',
     'account.authStatus.sessionCookieMissing':
-      'Yuchengtong did not receive the shared Ldpass login cookie. Confirm AUTH_COOKIE_DOMAIN=.shangxiaoguan.top is configured in production Ldpass, restart Ldpass, and sign in again.',
-    'account.authStatus.sessionError': 'Failed to read the Ldpass session. Try again later.',
-    'account.authStatus.sessionUnavailable': 'Could not read valid account information from Ldpass.',
+      'Yuchengtong did not receive the shared LDPASS login cookie. Confirm AUTH_COOKIE_DOMAIN=.shangxiaoguan.top is configured in production LDPASS, restart LDPASS, and sign in again.',
+    'account.authStatus.sessionError': 'Failed to read the LDPASS session. Try again later.',
+    'account.authStatus.sessionUnavailable':
+      'Could not read valid account information from LDPASS.',
     'account.authStatus.sessionUnavailableLocalhost':
-      'The callback address is localhost/127.0.0.1, so the local site cannot read the shared Ldpass session directly. Use the shared domain for testing, or move the local service to an integrated same-domain test environment.',
+      'The callback address is localhost/127.0.0.1, so the local site cannot read the shared LDPASS session directly. Use the shared domain for testing, or move the local service to an integrated same-domain test environment.',
     'account.authStatus.stateInvalid': 'Login state validation failed. Start sign-in again.',
     'account.history.action.clearLocal': 'Clear local',
     'account.history.action.manageTrips': 'Manage trips',
@@ -2581,16 +2599,20 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.notification.disabled': 'Device push off',
     'account.notification.enabled': 'Device push on',
     'account.notification.gridAria': 'Allowed push notification types',
-    'account.notification.masterLabelDisabled': 'Device push notification master switch, currently off',
-    'account.notification.masterLabelEnabled': 'Device push notification master switch, currently on',
+    'account.notification.masterLabelDisabled':
+      'Device push notification master switch, currently off',
+    'account.notification.masterLabelEnabled':
+      'Device push notification master switch, currently on',
     'account.notification.note':
       'The master switch only controls whether this device receives Push. Categories below decide which reminder types may push. Quiet hours do not disable categories; they silence or delay those reminders.',
-    'account.notification.operationsDescription': 'Announcements, line changes, and operations status',
+    'account.notification.operationsDescription':
+      'Announcements, line changes, and operations status',
     'account.notification.operationsLabel': 'Updates',
     'account.notification.quietEnd': 'Quiet hours end',
     'account.notification.quietStart': 'Quiet hours start',
     'account.notification.statusDisabledPreference': 'Notification preference disabled',
-    'account.notification.statusLoginRequired': 'Sign in to add this device to server Push subscriptions',
+    'account.notification.statusLoginRequired':
+      'Sign in to add this device to server Push subscriptions',
     'account.notification.statusRegistered': 'This device joined Push subscriptions: {host}',
     'account.notification.statusRegistering': 'Registering this device for Push',
     'account.notification.statusRevoked': 'This device Push subscription was revoked',
@@ -2631,9 +2653,10 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.pwa.title': 'Install and Offline',
     'account.settings': 'Account Settings',
     'account.ticketDraft.count': '{count}',
-    'account.ticketDraft.readonly': 'This account is read-only. Order drafts are available after Active status.',
+    'account.ticketDraft.readonly':
+      'This account is read-only. Order drafts are available after Active status.',
     'account.status.anonymous': 'Not signed in',
-    'account.status.notConfigured': 'Ldpass is not configured',
+    'account.status.notConfigured': 'LDPASS is not configured',
     'account.status.readonly': 'Read-only account',
     'account.status.unavailable': 'Account status unavailable',
     'brand.home': 'Yuchengtong Home',
@@ -2848,9 +2871,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.title': 'Map Explore',
     'siteLegal.aria': 'Site filing information',
     'siteLegal.disclaimer':
-      'Parts of this site were generated with artificial intelligence; the place and organization names above are fictional.',
-    'siteLegal.icp': 'Liaoning ICP No. 2021004959-1',
-    'siteLegal.police': 'Liaoning public security filing No. 21100502000117',
+      'Parts of this site were generated with AI; places and organizations mentioned are fictional.',
+    'siteLegal.icp': '辽ICP备2021004959-1号',
+    'siteLegal.police': '辽公网安备21100502000117号',
     'map.route.alight': 'Exit at {name}',
     'map.route.aria': 'Route planner',
     'map.route.arrive': 'Arrive at {name}',
@@ -2875,7 +2898,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.input.destination': 'Enter route destination',
     'map.route.input.origin': 'Enter route origin',
     'map.route.loadingDetail': 'Building the road graph for the first time may take a few seconds',
-    'map.route.loadingNote': 'The legacy road graph is large, so the first route may take a few seconds.',
+    'map.route.loadingNote':
+      'The legacy road graph is large, so the first route may take a few seconds.',
     'map.route.loadingTitle': 'Calculating route options',
     'map.route.marker.destination': 'E',
     'map.route.marker.origin': 'S',
@@ -2925,10 +2949,14 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.transferBoard': 'Board at {name}',
     'map.route.transferTitle': '{firstMode} + {secondMode} transfer',
     'map.route.transferWalk': 'Transfer walk {distance} {duration}',
-    'map.route.transitNote.default': 'Candidate routes are generated from real line stop order; travelTime is preferred for inter-stop duration, and missing data is still estimated from distance.',
-    'map.route.transitNote.fallbackRoad': 'YCT tried to route bus/coach inter-stop paths through the legacy road graph; missing or disconnected road segments still fall back to straight-line estimates. Inter-stop duration prefers legacy travelTime data.',
-    'map.route.transitNote.road': 'Bus/coach inter-stop paths prefer the legacy road endpoint graph and connect nearby roads within 100 blocks; disconnected segments fall back to straight-line estimates. Inter-stop duration prefers legacy travelTime data.',
-    'map.route.transitNote.transfer': 'One-transfer candidates are composed from real line stop order; transfer distance and missing inter-stop duration are still estimated.',
+    'map.route.transitNote.default':
+      'Candidate routes are generated from real line stop order; travelTime is preferred for inter-stop duration, and missing data is still estimated from distance.',
+    'map.route.transitNote.fallbackRoad':
+      'YCT tried to route bus/coach inter-stop paths through the legacy road graph; missing or disconnected road segments still fall back to straight-line estimates. Inter-stop duration prefers legacy travelTime data.',
+    'map.route.transitNote.road':
+      'Bus/coach inter-stop paths prefer the legacy road endpoint graph and connect nearby roads within 100 blocks; disconnected segments fall back to straight-line estimates. Inter-stop duration prefers legacy travelTime data.',
+    'map.route.transitNote.transfer':
+      'One-transfer candidates are composed from real line stop order; transfer distance and missing inter-stop duration are still estimated.',
     'map.route.turn.left': 'Turn left',
     'map.route.turn.right': 'Turn right',
     'map.route.turn.slightLeft': 'Bear left',
@@ -2938,8 +2966,10 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.walkDirect': 'Walk directly',
     'map.route.walkFewerTurns': 'Fewer-turn walk',
     'map.route.walkFromAccess': 'Walk from {access} to destination {distance} {duration}',
-    'map.route.walkNote.direct': 'No connected road graph was found, so walking is estimated as a straight line for now.',
-    'map.route.walkNote.road': 'Walking prefers the legacy road endpoint graph and 100-block connection candidates; disconnected segments fall back to straight-line estimates.',
+    'map.route.walkNote.direct':
+      'No connected road graph was found, so walking is estimated as a straight line for now.',
+    'map.route.walkNote.road':
+      'Walking prefers the legacy road endpoint graph and 100-block connection candidates; disconnected segments fall back to straight-line estimates.',
     'map.route.walkRoadWithDistance': 'Walk along roads {distance} {duration}',
     'map.route.walkStraight': 'Straight-line walk',
     'map.route.walkToAccess': 'Walk to {access} {distance} {duration}',
@@ -3011,7 +3041,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.accent.gray': 'Gray',
     'settings.accent.green': 'Teal',
     'settings.accent.label': 'Accent',
-    'settings.accent.ldpass': 'Follow ldpass',
+    'settings.accent.ldpass': 'Follow LDPASS',
     'settings.accent.red': 'Red',
     'settings.appearanceLanguage': 'Appearance and Language',
     'settings.font.harmony': 'HarmonyOS Sans',
@@ -3212,8 +3242,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travelSchedule.notice.aria': 'Schedule notice',
     'travelSchedule.notice.count': '{count} items',
     'travelSchedule.notice.title': 'Coach Notices',
-    'travelSchedule.order.cancelConfirm':
-      'Cancel this order draft and release the held inventory?',
+    'travelSchedule.order.cancelConfirm': 'Cancel this order draft and release the held inventory?',
     'travelSchedule.order.cancelDone': 'Order draft cancelled',
     'travelSchedule.order.cancelFailed': 'Failed to cancel order draft',
     'travelSchedule.order.canceling': 'Cancelling order draft',
@@ -3314,13 +3343,15 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travel.subtitle': 'Reminders, schedules, and future ticketing',
     'travel.ticketing.action': 'Planned',
     'travel.ticketing.detail':
-      'Real e-tickets, check-in, refunds, and ride code integration will connect to ldpass later.',
+      'Real e-tickets, check-in, refunds, and ride code integration will connect to LDPASS later.',
     'travel.ticketing.title': 'Tickets and Orders',
   },
 };
 
 export function useI18n() {
-  const [locale, setLocale] = useState<LocaleCode>(() => readLocalLocalePreference().resolvedLocale);
+  const [locale, setLocale] = useState<LocaleCode>(
+    () => readLocalLocalePreference().resolvedLocale,
+  );
 
   useEffect(() => {
     const syncLocale = () => setLocale(readLocalLocalePreference().resolvedLocale);
@@ -3336,7 +3367,7 @@ export function useI18n() {
     () => ({
       locale,
       t: (key: CommonMessageKey, values: Record<string, string | number> = {}) =>
-        formatMessage(commonCatalogs[locale]?.[key] ?? commonCatalogs['zh-CN'][key], values),
+        formatMessage(commonCatalogs[locale]?.[key] ?? commonCatalogs['zh-CN'][key] ?? key, values),
     }),
     [locale],
   );

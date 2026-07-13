@@ -19,6 +19,10 @@ export async function readTransitLinePoiMarkers(): Promise<MapMarkerSnapshot['ma
   );
 }
 
+export function clearTransitLinePoiMarkerCache(): void {
+  transitLinePoiMarkerCache.clear();
+}
+
 async function readTransitLinePoiMarkersUncached(): Promise<MapMarkerSnapshot['markers']> {
   const snapshot = await readTransitSnapshotForMap();
   if (!snapshot) {

@@ -455,7 +455,7 @@ function mergeLocalMapMarkers(
       href: submission.href,
       imageUrl: submission.imageUrl,
       geometry: submission.geometry,
-      iconFileName: category?.iconMapping.defaultIconFileName,
+      iconFileName: submission.iconFileName ?? category?.iconMapping.defaultIconFileName,
     };
   });
 

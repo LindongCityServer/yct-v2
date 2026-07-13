@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "contentId": "local_content_088c4a42-6893-4045-9799-2e92d40a1f31",
+      "revision": {
+        "id": "local_revision_d050281c-df1f-4aba-8161-3dfa89feb4c3",
+        "contentId": "local_content_088c4a42-6893-4045-9799-2e92d40a1f31",
+        "title": "后台发布验证",
+        "categoryId": "运营信息",
+        "markdown": "正文",
+        "status": "published",
+        "assetIds": [],
+        "submittedBy": "codex-admin-check",
+        "submittedAt": "2026-07-12T11:06:42.453Z",
+        "reviewedBy": "codex-admin-check",
+        "reviewedAt": "2026-07-12T11:06:42.463Z",
+        "publishedAt": "2026-07-12T11:06:42.473Z"
+      },
+      "metadata": {
+        "showInBanner": false
+      },
+      "createdAt": "2026-07-12T11:06:42.446Z",
+      "updatedAt": "2026-07-12T11:06:42.474Z"
+    },
+    {
+      "contentId": "local_content_a3e8cb7e-38f7-48a6-a05b-22eaa2b63555",
+      "revision": {
+        "id": "local_revision_8b663afb-aee9-49f7-b621-a80418525234",
+        "contentId": "local_content_a3e8cb7e-38f7-48a6-a05b-22eaa2b63555",
+        "title": "后台定时发布验证",
+        "categoryId": "运营信息",
+        "markdown": "正文",
+        "status": "published",
+        "assetIds": [],
+        "submittedBy": "codex-admin-check",
+        "submittedAt": "2026-07-12T11:06:42.485Z",
+        "reviewedBy": "codex-admin-check",
+        "reviewedAt": "2026-07-12T11:06:42.493Z",
+        "scheduledAt": "2030-01-02T03:04:00.000Z",
+        "publishedAt": "2030-01-02T03:04:00.000Z"
+      },
+      "metadata": {
+        "showInBanner": true
+      },
+      "createdAt": "2026-07-12T11:06:42.482Z",
+      "updatedAt": "2026-07-12T11:06:42.508Z"
+    }
+  ]
+}

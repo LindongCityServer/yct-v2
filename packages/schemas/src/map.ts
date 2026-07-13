@@ -53,19 +53,6 @@ export const mapGeometrySchema = z.discriminatedUnion('type', [
   }),
 ]);
 
-const pointMapGeometrySchema = z.object({
-  type: z.literal('Point'),
-  coordinates: coordinateSchema,
-});
-
-const editablePoiGeometrySchema = z.discriminatedUnion('type', [
-  pointMapGeometrySchema,
-  z.object({
-    type: z.literal('LineString'),
-    coordinates: z.array(coordinateSchema).min(2).max(2000),
-  }),
-]);
-
 export const tileProviderConfigSchema = z.object({
   id: idSchema,
   name: nonEmptyTextSchema,
@@ -118,7 +105,9 @@ export const poiCategoryProfileUpdateSchema = z.object({
           });
         }
 
-        if (!category.iconMapping.iconFileNames.includes(category.iconMapping.defaultIconFileName)) {
+        if (
+          !category.iconMapping.iconFileNames.includes(category.iconMapping.defaultIconFileName)
+        ) {
           context.addIssue({
             code: z.ZodIssueCode.custom,
             message: '默认图标必须包含在分类图标列表中',
@@ -155,9 +144,10 @@ export const poiSubmissionReviewDecisionSchema = z.object({
 export const poiSubmissionAdminUpdateSchema = z.object({
   title: nonEmptyTextSchema,
   categoryId: idSchema,
+  iconFileName: z.union([z.string().trim().min(1).max(160), z.literal('')]).optional(),
   description: z.string().trim().max(1000).optional(),
   href: z.union([urlSchema, z.literal('')]).optional(),
-  geometry: editablePoiGeometrySchema.optional(),
+  geometry: mapGeometrySchema.optional(),
 });
 
 export const poiConflictDecisionUpdateSchema = z.object({
@@ -193,6 +183,8 @@ export type PoiSubmissionInput = z.infer<typeof poiSubmissionSchema>;
 export type PoiSubmissionReviewDecisionInput = z.infer<typeof poiSubmissionReviewDecisionSchema>;
 export type PoiSubmissionAdminUpdateInput = z.infer<typeof poiSubmissionAdminUpdateSchema>;
 export type PoiConflictDecisionUpdateInput = z.infer<typeof poiConflictDecisionUpdateSchema>;
-export type PoiSubmissionImageReviewUpdateInput = z.infer<typeof poiSubmissionImageReviewUpdateSchema>;
+export type PoiSubmissionImageReviewUpdateInput = z.infer<
+  typeof poiSubmissionImageReviewUpdateSchema
+>;
 export type MapMarkerSourceConfigInput = z.infer<typeof mapMarkerSourceConfigSchema>;
 export type MapFavoritesInput = z.infer<typeof mapFavoritesSchema>;

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type {
   MapGeometry,
   PoiSubmission,
+  PoiSubmissionStatus,
   YctEvent,
   YctEventPayloadMap,
   YctEventType,
@@ -135,41 +136,43 @@ export async function updatePoiSubmissionByAdmin(input: {
   actorId: string;
   title: string;
   categoryId: string;
+  iconFileName?: string;
   description?: string;
   href?: string;
-  geometry?: Extract<MapGeometry, { type: 'Point' | 'LineString' }>;
+  geometry?: MapGeometry;
 }): Promise<PoiSubmissionActionResult> {
   const submission = await findLocalPoiSubmission(input.poiId);
   if (!submission) {
     return notFound();
   }
 
-  if (submission.status !== 'pending_review') {
+  if (
+    submission.status !== 'pending_review' &&
+    submission.status !== 'approved' &&
+    submission.status !== 'published'
+  ) {
     return {
       ok: false,
       status: 409,
       error: 'invalid_poi_submission_state',
-      message: '当前仅允许修正待审核的 POI 投稿。',
+      message: '当前仅允许修正待审核、待发布或已发布的 POI 投稿。',
     };
   }
 
   const patch = {
     title: input.title.trim(),
     categoryId: input.categoryId.trim(),
+    iconFileName: normalizeOptionalText(input.iconFileName),
     description: normalizeOptionalText(input.description),
     href: normalizeOptionalText(input.href),
     geometry: input.geometry ?? submission.geometry,
   };
-  if (
-    input.geometry &&
-    (input.geometry.type !== submission.geometry.type ||
-      (input.geometry.type !== 'Point' && input.geometry.type !== 'LineString'))
-  ) {
+  if (input.geometry && input.geometry.type !== submission.geometry.type) {
     return {
       ok: false,
       status: 409,
       error: 'poi_submission_geometry_edit_unsupported',
-      message: '当前简化修正入口只允许调整点状 POI 坐标或反转线性 POI 点序。',
+      message: '当前修正入口只允许在原几何类型内调整，不支持转换 POI 几何类型。',
     };
   }
 
@@ -195,6 +198,56 @@ export async function updatePoiSubmissionByAdmin(input: {
         updatedBy: input.actorId,
         updatedAt: new Date().toISOString(),
         changedFields,
+      },
+    );
+  }
+
+  return { ok: true, submission: updated };
+}
+
+export async function archivePoiSubmissionByAdmin(input: {
+  poiId: string;
+  actorId: string;
+}): Promise<PoiSubmissionActionResult> {
+  const submission = await findLocalPoiSubmission(input.poiId);
+  if (!submission) {
+    return notFound();
+  }
+
+  if (submission.status !== 'approved' && submission.status !== 'published') {
+    return {
+      ok: false,
+      status: 409,
+      error: 'invalid_poi_submission_state',
+      message: '当前仅允许删除待发布或已发布的 POI 投稿。',
+    };
+  }
+
+  const previousStatus = submission.status as Exclude<PoiSubmissionStatus, 'archived'>;
+  const transition = transitionPoiSubmissionStatus(previousStatus, 'archived');
+  if (!transition.ok) {
+    return invalidTransition(transition.reason);
+  }
+
+  const archivedAt = new Date().toISOString();
+  const updated = await updateLocalPoiSubmission(input.poiId, (current) =>
+    withPoiSubmissionStatus(current, 'archived', {
+      visibility: current.status === 'published' ? 'public_pending_review' : current.visibility,
+    }),
+  );
+
+  if (updated) {
+    await emitEvent(
+      'PoiArchived',
+      {
+        type: 'admin',
+        id: input.actorId,
+      },
+      {
+        poiId: updated.id,
+        previousStatus,
+        archivedBy: input.actorId,
+        archivedAt,
       },
     );
   }
@@ -305,15 +358,14 @@ function normalizeOptionalText(value: string | undefined): string | undefined {
 
 function getChangedPoiSubmissionFields(
   submission: PoiSubmission,
-  patch: Pick<PoiSubmission, 'title' | 'categoryId' | 'description' | 'href'> & {
+  patch: Pick<PoiSubmission, 'title' | 'categoryId' | 'iconFileName' | 'description' | 'href'> & {
     geometry: MapGeometry;
   },
-): Array<'title' | 'categoryId' | 'description' | 'href' | 'geometry'> {
-  const textFields = (['title', 'categoryId', 'description', 'href'] as const).filter(
-    (field) => (submission[field] ?? '') !== (patch[field] ?? ''),
-  );
-  const geometryChanged =
-    JSON.stringify(submission.geometry) !== JSON.stringify(patch.geometry);
+): Array<'title' | 'categoryId' | 'iconFileName' | 'description' | 'href' | 'geometry'> {
+  const textFields = (
+    ['title', 'categoryId', 'iconFileName', 'description', 'href'] as const
+  ).filter((field) => (submission[field] ?? '') !== (patch[field] ?? ''));
+  const geometryChanged = JSON.stringify(submission.geometry) !== JSON.stringify(patch.geometry);
 
   return geometryChanged ? [...textFields, 'geometry'] : textFields;
 }

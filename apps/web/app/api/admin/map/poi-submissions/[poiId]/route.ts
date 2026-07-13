@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { poiSubmissionAdminUpdateSchema } from '@yct/schemas';
 import { requireYctAdmin } from '../../../../../../lib/admin-auth';
 import { findPoiCategory, readPoiCategories } from '../../../../../../lib/poi-categories';
-import { updatePoiSubmissionByAdmin } from '../../../../../../lib/poi-submission-workflow';
+import {
+  archivePoiSubmissionByAdmin,
+  updatePoiSubmissionByAdmin,
+} from '../../../../../../lib/poi-submission-workflow';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,6 +49,7 @@ export async function PATCH(
     actorId: admin.ldpassUserId,
     title: parsed.data.title,
     categoryId: parsed.data.categoryId,
+    iconFileName: parsed.data.iconFileName || undefined,
     description: parsed.data.description,
     href: parsed.data.href || undefined,
     geometry: parsed.data.geometry,
@@ -56,6 +60,38 @@ export async function PATCH(
   }
 
   return NextResponse.json(result.submission);
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: Readonly<{ params: Promise<{ poiId: string }> }>,
+) {
+  const admin = await requireYctAdmin(request);
+  if (!admin.ok) {
+    return admin.response;
+  }
+
+  const { poiId } = await params;
+  const result = await archivePoiSubmissionByAdmin({
+    poiId: decodeSegment(poiId),
+    actorId: admin.ldpassUserId,
+  });
+
+  if (!result.ok) {
+    return NextResponse.json(
+      {
+        error: result.error,
+        message: result.message,
+      },
+      { status: result.status ?? 400 },
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    id: result.submission?.id,
+    status: result.submission?.status,
+  });
 }
 
 function decodeSegment(value: string): string {

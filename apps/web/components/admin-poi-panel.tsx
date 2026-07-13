@@ -6,12 +6,16 @@ import type {
   PoiCategory,
   PoiSubmission,
   PoiSubmissionStatus,
+  RectangleBounds,
+  TileProviderDescriptor,
 } from '@yct/contracts';
 import type { FormEvent, MouseEvent } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 
 type StatusFilter = PoiSubmissionStatus | 'all' | 'todo' | 'blocked';
+type PoiAdminSection = 'submissions' | 'categories';
+type PoiCategoryBoardFilter = 'all' | 'public_enabled' | 'public_disabled';
 type MapMarker = MapMarkerSnapshot['markers'][number];
 
 interface PoiSubmissionImageMetadata {
@@ -75,9 +79,55 @@ interface PoiHierarchyHint {
 interface PoiSubmissionEditInput {
   title: string;
   categoryId: string;
+  iconFileName: string;
   description: string;
   href: string;
-  geometry?: Extract<MapGeometry, { type: 'Point' | 'LineString' }>;
+  geometry?: MapGeometry;
+}
+
+interface CoordinateDraft {
+  x: string;
+  z: string;
+}
+
+interface RectangleBoundsDraft {
+  minX: string;
+  minZ: string;
+  maxX: string;
+  maxZ: string;
+}
+
+type PoiGeometryDraft =
+  | { type: 'Point'; coordinate: CoordinateDraft }
+  | { type: 'MultiPoint'; coordinates: CoordinateDraft[] }
+  | { type: 'LineString'; coordinates: CoordinateDraft[] }
+  | { type: 'Rectangle'; bounds: RectangleBoundsDraft }
+  | { type: 'MultiRectangle'; rectangles: RectangleBoundsDraft[] }
+  | { type: 'Polygon'; rings: CoordinateDraft[][] }
+  | { type: 'MultiPolygon'; polygons: CoordinateDraft[][][] };
+
+interface PoiTileRegionResponse {
+  properties?: {
+    minRegionX: number;
+    minRegionZ: number;
+    maxRegionX: number;
+    maxRegionZ: number;
+  };
+  regions: Array<{
+    x: number;
+    z: number;
+    m: number[];
+  }>;
+}
+
+interface PoiTileRegionIndex {
+  properties: NonNullable<PoiTileRegionResponse['properties']>;
+  groups: Map<string, PoiTileRegionResponse['regions'][number]>;
+}
+
+interface PoiTilePreviewConfig {
+  tileTemplate?: string | null;
+  regionIndex?: PoiTileRegionIndex;
 }
 
 const defaultMarkerIconBaseUrl = 'https://map.shangxiaoguan.top/';
@@ -92,6 +142,15 @@ const statusFilterOptions: Array<{ value: StatusFilter; label: string }> = [
   { value: 'published', label: '已发布' },
   { value: 'archived', label: '已归档' },
   { value: 'draft', label: '草稿' },
+];
+const poiAdminSectionOptions: Array<{ value: PoiAdminSection; label: string }> = [
+  { value: 'submissions', label: '投稿审核' },
+  { value: 'categories', label: '分类 / 图标' },
+];
+const poiCategoryBoardFilterOptions: Array<{ value: PoiCategoryBoardFilter; label: string }> = [
+  { value: 'all', label: '全部分类' },
+  { value: 'public_enabled', label: '允许公开投稿' },
+  { value: 'public_disabled', label: '不允许公开投稿' },
 ];
 
 const poiRejectReasonPresets = [
@@ -110,16 +169,27 @@ export function AdminPoiPanel() {
   const [conflictDecisions, setConflictDecisions] = useState<PoiConflictDecision[]>([]);
   const [imageReviews, setImageReviews] = useState<PoiSubmissionImageReview[]>([]);
   const [categoryIconBaseUrl, setCategoryIconBaseUrl] = useState(defaultMarkerIconBaseUrl);
+  const [tilePreviewTemplate, setTilePreviewTemplate] = useState<string | null>(null);
+  const [tilePreviewRegionResponse, setTilePreviewRegionResponse] =
+    useState<PoiTileRegionResponse | null>(null);
   const [statusText, setStatusText] = useState('正在读取 POI 投稿');
   const [categoryStatusText, setCategoryStatusText] = useState('正在读取 POI 分类');
   const [isBusy, setIsBusy] = useState(false);
+  const [activeSection, setActiveSection] = useState<PoiAdminSection>('submissions');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('todo');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [query, setQuery] = useState('');
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+  const [categoryBoardFilter, setCategoryBoardFilter] = useState<PoiCategoryBoardFilter>('all');
+  const [categoryBoardQuery, setCategoryBoardQuery] = useState('');
+  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<Set<string>>(() => new Set());
+  const [detailTargetId, setDetailTargetId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<PoiSubmission | null>(null);
   const [publishTarget, setPublishTarget] = useState<AdminPoiSubmission | null>(null);
   const [editTarget, setEditTarget] = useState<PoiSubmission | null>(null);
+  const [bulkRejectTargets, setBulkRejectTargets] = useState<AdminPoiSubmission[] | null>(null);
+  const [bulkPublishTargets, setBulkPublishTargets] = useState<AdminPoiSubmission[] | null>(null);
+  const [isCategoryEditorOpen, setIsCategoryEditorOpen] = useState(false);
+  const [categoryEditorTargetId, setCategoryEditorTargetId] = useState<string | null>(null);
 
   const categoryById = useMemo(() => {
     const entries = categories.map((category) => [category.id, category] as const);
@@ -152,9 +222,44 @@ export function AdminPoiPanel() {
       .map((categoryId) => ({ id: categoryId, label: categoryId, sortOrder: 100_000 }));
 
     return [...knownOptions, ...unknownOptions].sort(
-      (left, right) => left.sortOrder - right.sortOrder || left.label.localeCompare(right.label, 'zh-CN'),
+      (left, right) =>
+        left.sortOrder - right.sortOrder || left.label.localeCompare(right.label, 'zh-CN'),
     );
   }, [categories, submissions]);
+  const sortedCategoryProfiles = useMemo(
+    () =>
+      [...categories].sort(
+        (left, right) =>
+          left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'zh-CN'),
+      ),
+    [categories],
+  );
+  const filteredCategoryProfiles = useMemo(() => {
+    const normalizedQuery = normalizeSearchText(categoryBoardQuery);
+    return sortedCategoryProfiles.filter((category) => {
+      if (categoryBoardFilter === 'public_enabled' && !category.acceptsPublicSubmissions) {
+        return false;
+      }
+
+      if (categoryBoardFilter === 'public_disabled' && category.acceptsPublicSubmissions) {
+        return false;
+      }
+
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      const searchableText = normalizeSearchText(
+        [
+          category.id,
+          category.name,
+          category.iconMapping.defaultIconFileName,
+          ...category.iconMapping.iconFileNames,
+        ].join(' '),
+      );
+      return searchableText.includes(normalizedQuery);
+    });
+  }, [categoryBoardFilter, categoryBoardQuery, sortedCategoryProfiles]);
 
   const statusCounts = useMemo(() => {
     const counts = new Map<PoiSubmissionStatus, number>();
@@ -220,6 +325,30 @@ export function AdminPoiPanel() {
       statusFilter,
     ],
   );
+  const legacyMapMarkers = useMemo(
+    () => mapMarkers.filter((marker) => isLegacyPoiMapMarker(marker)),
+    [mapMarkers],
+  );
+  const filteredLegacyMapMarkers = useMemo(() => {
+    const normalizedQuery = normalizeSearchText(query);
+    return legacyMapMarkers.filter((marker) => {
+      if (categoryFilter !== 'all' && marker.categoryId !== categoryFilter) {
+        return false;
+      }
+
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      const category = marker.categoryId ? categoryById.get(marker.categoryId) : undefined;
+      const haystack = normalizeSearchText(
+        [marker.label, marker.categoryId, category?.name, marker.description, marker.href]
+          .filter(Boolean)
+          .join(' '),
+      );
+      return haystack.includes(normalizedQuery);
+    });
+  }, [categoryById, categoryFilter, legacyMapMarkers, query]);
 
   const conflictHintsBySubmissionId = useMemo(() => {
     const entries = submissions.map(
@@ -230,7 +359,8 @@ export function AdminPoiPanel() {
 
   const conflictDecisionByKey = useMemo(() => {
     const entries = conflictDecisions.map(
-      (decision) => [conflictDecisionKey(decision.submissionId, decision.markerId), decision] as const,
+      (decision) =>
+        [conflictDecisionKey(decision.submissionId, decision.markerId), decision] as const,
     );
     return new Map(entries);
   }, [conflictDecisions]);
@@ -248,6 +378,17 @@ export function AdminPoiPanel() {
     );
     return new Map(entries);
   }, [mapMarkers, submissions]);
+  const tilePreviewConfig = useMemo<PoiTilePreviewConfig>(
+    () => ({
+      tileTemplate: tilePreviewTemplate,
+      regionIndex: buildPoiTileRegionIndex(tilePreviewRegionResponse),
+    }),
+    [tilePreviewRegionResponse, tilePreviewTemplate],
+  );
+  const detailTarget = useMemo(
+    () => submissions.find((submission) => submission.id === detailTargetId) ?? null,
+    [detailTargetId, submissions],
+  );
 
   const loadSubmissions = async () => {
     const response = await fetch(appPath('/api/admin/map/poi-submissions'), { cache: 'no-store' });
@@ -290,7 +431,9 @@ export function AdminPoiPanel() {
       meta?: { message?: string };
     };
     if (!response.ok) {
-      setStatusText(data.meta?.message ?? data.message ?? '地图标记快照暂不可用，无法生成重复提示。');
+      setStatusText(
+        data.meta?.message ?? data.message ?? '地图标记快照暂不可用，无法生成重复提示。',
+      );
       return;
     }
 
@@ -298,7 +441,9 @@ export function AdminPoiPanel() {
   };
 
   const loadConflictDecisions = async () => {
-    const response = await fetch(appPath('/api/admin/map/poi-conflict-decisions'), { cache: 'no-store' });
+    const response = await fetch(appPath('/api/admin/map/poi-conflict-decisions'), {
+      cache: 'no-store',
+    });
     const data = (await response.json()) as { items?: PoiConflictDecision[]; message?: string };
     if (!response.ok) {
       setStatusText(data.message ?? 'POI 冲突提示决策暂不可用。');
@@ -309,8 +454,13 @@ export function AdminPoiPanel() {
   };
 
   const loadImageReviews = async () => {
-    const response = await fetch(appPath('/api/admin/map/poi-submission-image-reviews'), { cache: 'no-store' });
-    const data = (await response.json()) as { items?: PoiSubmissionImageReview[]; message?: string };
+    const response = await fetch(appPath('/api/admin/map/poi-submission-image-reviews'), {
+      cache: 'no-store',
+    });
+    const data = (await response.json()) as {
+      items?: PoiSubmissionImageReview[];
+      message?: string;
+    };
     if (!response.ok) {
       setStatusText(data.message ?? 'POI 图片审核状态暂不可用。');
       return;
@@ -319,45 +469,211 @@ export function AdminPoiPanel() {
     setImageReviews(data.items ?? []);
   };
 
+  const loadTilePreviewConfig = async () => {
+    const response = await fetch(appPath('/api/map/tile-providers'), { cache: 'no-store' });
+    const data = (await response.json()) as { items?: TileProviderDescriptor[] };
+    if (!response.ok) {
+      return;
+    }
+
+    const preferredProvider =
+      data.items?.find((provider) => provider.sourceKind === 'safe-https-static') ??
+      data.items?.find((provider) => provider.id === 'lindong-unmined-static') ??
+      data.items?.[0];
+    setTilePreviewTemplate(preferredProvider?.tileTemplate ?? null);
+
+    if (!preferredProvider) {
+      return;
+    }
+
+    if (
+      preferredProvider.sourceKind !== 'safe-https-static' &&
+      preferredProvider.id !== 'lindong-unmined-static'
+    ) {
+      setTilePreviewRegionResponse(null);
+      return;
+    }
+
+    const regionResponse = await fetch(appPath('/api/map/unmined-regions'), { cache: 'no-store' });
+    if (!regionResponse.ok) {
+      setTilePreviewRegionResponse(null);
+      return;
+    }
+
+    const regionData = (await regionResponse.json()) as PoiTileRegionResponse;
+    setTilePreviewRegionResponse(regionData);
+  };
+
   useEffect(() => {
     void loadSubmissions();
     void loadCategories();
     void loadMapMarkers();
     void loadConflictDecisions();
     void loadImageReviews();
+    void loadTilePreviewConfig();
   }, []);
+
+  useEffect(() => {
+    setSelectedSubmissionIds((current) => {
+      if (current.size === 0) {
+        return current;
+      }
+
+      const existingIds = new Set(submissions.map((submission) => submission.id));
+      const next = new Set(Array.from(current).filter((id) => existingIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [submissions]);
+
+  const toggleSubmissionSelection = (poiId: string) => {
+    setSelectedSubmissionIds((current) => {
+      const next = new Set(current);
+      if (next.has(poiId)) {
+        next.delete(poiId);
+      } else {
+        next.add(poiId);
+      }
+      return next;
+    });
+  };
+
+  const toggleVisibleSubmissionSelection = () => {
+    setSelectedSubmissionIds((current) => {
+      const next = new Set(current);
+      if (isAllVisibleSelected) {
+        filteredSubmissions.forEach((submission) => next.delete(submission.id));
+      } else {
+        filteredSubmissions.forEach((submission) => next.add(submission.id));
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedSubmissionIds(new Set());
+  };
+
+  const sendPoiAction = async (
+    poiId: string,
+    action: 'approve' | 'reject' | 'publish' | 'archive',
+    reason?: string,
+  ): Promise<{ ok: boolean; message?: string }> => {
+    const endpoint =
+      action === 'archive'
+        ? appPath(`/api/admin/map/poi-submissions/${encodeURIComponent(poiId)}`)
+        : action === 'publish'
+          ? appPath(`/api/admin/map/poi-submissions/${encodeURIComponent(poiId)}/publish`)
+          : appPath(`/api/admin/map/poi-submissions/${encodeURIComponent(poiId)}/review`);
+    const body =
+      action === 'approve'
+        ? { decision: 'approved' }
+        : action === 'reject'
+          ? { decision: 'rejected', reason: reason?.trim() }
+          : {};
+    const response = await fetch(endpoint, {
+      method: action === 'archive' ? 'DELETE' : 'POST',
+      headers: action === 'archive' ? undefined : { 'Content-Type': 'application/json' },
+      body: action === 'archive' ? undefined : JSON.stringify(body),
+    });
+    const data = (await response.json()) as { message?: string };
+    return {
+      ok: response.ok,
+      message: response.ok ? undefined : (data.message ?? '操作失败'),
+    };
+  };
 
   const runAction = async (
     poiId: string,
-    action: 'approve' | 'reject' | 'publish',
+    action: 'approve' | 'reject' | 'publish' | 'archive',
     reason?: string,
   ): Promise<boolean> => {
     setIsBusy(true);
     try {
-      const endpoint =
-        action === 'publish'
-          ? appPath(`/api/admin/map/poi-submissions/${encodeURIComponent(poiId)}/publish`)
-          : appPath(`/api/admin/map/poi-submissions/${encodeURIComponent(poiId)}/review`);
-      const body =
-        action === 'approve'
-          ? { decision: 'approved' }
-          : action === 'reject'
-            ? { decision: 'rejected', reason: reason?.trim() }
-            : {};
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = (await response.json()) as { message?: string };
-      if (!response.ok) {
-        setStatusText(data.message ?? '操作失败');
+      const result = await sendPoiAction(poiId, action, reason);
+      if (!result.ok) {
+        setStatusText(result.message ?? '操作失败');
         return false;
       }
 
       setStatusText('操作已完成');
       await loadSubmissions();
       return true;
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const deleteSubmission = async (submission: AdminPoiSubmission): Promise<boolean> => {
+    const confirmed = window.confirm(
+      submission.status === 'published'
+        ? `确认删除已发布 POI“${submission.title}”？删除后会立即从公开地图移除，后台记录会保留为已归档。`
+        : `确认删除 POI 投稿“${submission.title}”？删除后记录会保留为已归档。`,
+    );
+    if (!confirmed) {
+      return false;
+    }
+
+    const success = await runAction(submission.id, 'archive');
+    if (success) {
+      setStatusText(`已删除 ${submission.title}，记录已归档。`);
+    }
+    return success;
+  };
+
+  const runBatchAction = async (
+    targets: AdminPoiSubmission[],
+    action: 'approve' | 'reject' | 'publish',
+    reason?: string,
+  ): Promise<boolean> => {
+    if (targets.length === 0) {
+      setStatusText('当前没有可执行批量操作的 POI 投稿。');
+      return false;
+    }
+
+    setIsBusy(true);
+    try {
+      const failed: Array<{ id: string; message: string }> = [];
+      let successCount = 0;
+
+      for (const submission of targets) {
+        const result = await sendPoiAction(submission.id, action, reason);
+        if (result.ok) {
+          successCount += 1;
+        } else {
+          failed.push({
+            id: submission.id,
+            message: `${submission.title}${result.message ? `（${result.message}）` : ''}`,
+          });
+        }
+      }
+
+      await loadSubmissions();
+      setSelectedSubmissionIds((current) => {
+        const next = new Set(current);
+        targets.forEach((submission) => {
+          if (!failed.some((item) => item.id === submission.id)) {
+            next.delete(submission.id);
+          }
+        });
+        return next;
+      });
+
+      if (failed.length === 0) {
+        setStatusText(`已批量${describePoiBatchAction(action)} ${successCount} 条 POI 投稿`);
+        return true;
+      }
+
+      setStatusText(
+        `批量${describePoiBatchAction(action)}完成：成功 ${successCount} 条，失败 ${failed.length} 条${
+          failed.length > 0
+            ? ` · ${failed
+                .slice(0, 2)
+                .map((item) => item.message)
+                .join('；')}`
+            : ''
+        }`,
+      );
+      return false;
     } finally {
       setIsBusy(false);
     }
@@ -385,7 +701,13 @@ export function AdminPoiPanel() {
       setSubmissions((current) =>
         current.map((submission) => (submission.id === poiId ? data : submission)),
       );
-      setStatusText(`已修正 ${data.title} 的投稿资料`);
+      setStatusText(
+        data.status === 'published'
+          ? `已修正 ${data.title} 的投稿资料，公开地图会同步读取最新版本。`
+          : data.status === 'approved'
+            ? `已修正 ${data.title} 的投稿资料，可继续直接发布。`
+            : `已修正 ${data.title} 的投稿资料`,
+      );
       return null;
     } finally {
       setIsBusy(false);
@@ -442,7 +764,10 @@ export function AdminPoiPanel() {
           decision,
         }),
       });
-      const data = (await response.json()) as { items?: PoiSubmissionImageReview[]; message?: string };
+      const data = (await response.json()) as {
+        items?: PoiSubmissionImageReview[];
+        message?: string;
+      };
       if (!response.ok) {
         setStatusText(data.message ?? 'POI 图片审核状态保存失败。');
         return;
@@ -461,16 +786,9 @@ export function AdminPoiPanel() {
     setQuery('');
   };
 
-  const toggleExpanded = (poiId: string) => {
-    setExpandedIds((current) => {
-      const next = new Set(current);
-      if (next.has(poiId)) {
-        next.delete(poiId);
-      } else {
-        next.add(poiId);
-      }
-      return next;
-    });
+  const resetCategoryBoardFilters = () => {
+    setCategoryBoardFilter('all');
+    setCategoryBoardQuery('');
   };
 
   const pendingCount = statusCounts.get('pending_review') ?? 0;
@@ -479,127 +797,335 @@ export function AdminPoiPanel() {
   const rejectedImageCount = submissions.filter(
     (submission) =>
       submission.imageUrl &&
-      imageReviewByKey.get(imageReviewKey(submission.id, submission.imageUrl))?.decision === 'rejected',
+      imageReviewByKey.get(imageReviewKey(submission.id, submission.imageUrl))?.decision ===
+        'rejected',
   ).length;
   const duplicateConflictCount = new Set(
     conflictDecisions
       .filter((decision) => decision.decision === 'duplicate')
       .map((decision) => decision.submissionId),
   ).size;
+  const selectedSubmissions = useMemo(
+    () => submissions.filter((submission) => selectedSubmissionIds.has(submission.id)),
+    [selectedSubmissionIds, submissions],
+  );
+  const selectedVisibleSubmissions = useMemo(
+    () => filteredSubmissions.filter((submission) => selectedSubmissionIds.has(submission.id)),
+    [filteredSubmissions, selectedSubmissionIds],
+  );
+  const selectedPendingReviewSubmissions = useMemo(
+    () => selectedSubmissions.filter((submission) => submission.status === 'pending_review'),
+    [selectedSubmissions],
+  );
+  const selectedApprovedSubmissions = useMemo(
+    () => selectedSubmissions.filter((submission) => submission.status === 'approved'),
+    [selectedSubmissions],
+  );
+  const selectedBlockedPublishSubmissions = useMemo(
+    () =>
+      selectedApprovedSubmissions.filter((submission) =>
+        isPoiSubmissionPublishBlocked(submission, imageReviewByKey, conflictDecisions),
+      ),
+    [conflictDecisions, imageReviewByKey, selectedApprovedSubmissions],
+  );
+  const selectedPublishReadySubmissions = useMemo(
+    () =>
+      selectedApprovedSubmissions.filter(
+        (submission) =>
+          !isPoiSubmissionPublishBlocked(submission, imageReviewByKey, conflictDecisions),
+      ),
+    [conflictDecisions, imageReviewByKey, selectedApprovedSubmissions],
+  );
+  const isAllVisibleSelected =
+    filteredSubmissions.length > 0 &&
+    filteredSubmissions.every((submission) => selectedSubmissionIds.has(submission.id));
+  const currentSectionStatusText =
+    activeSection === 'submissions'
+      ? statusText
+      : [categoryStatusText, statusText].filter(Boolean).join(' · ');
+  const categoryBoardMetrics = useMemo(
+    () => [
+      { label: '分类总数', value: categories.length },
+      {
+        label: '允许投稿',
+        value: categories.filter((category) => category.acceptsPublicSubmissions).length,
+        tone: categories.some((category) => category.acceptsPublicSubmissions)
+          ? ('accent' as const)
+          : undefined,
+      },
+      {
+        label: '禁止投稿',
+        value: categories.filter((category) => !category.acceptsPublicSubmissions).length,
+      },
+      {
+        label: '图标总数',
+        value: categories.reduce(
+          (total, category) => total + category.iconMapping.iconFileNames.length,
+          0,
+        ),
+      },
+      {
+        label: '多图标类',
+        value: categories.filter((category) => category.iconMapping.iconFileNames.length > 1)
+          .length,
+      },
+      { label: '当前结果', value: filteredCategoryProfiles.length },
+    ],
+    [categories, filteredCategoryProfiles.length],
+  );
 
   return (
     <section className="module-panel admin-operations-panel" aria-labelledby="admin-poi-title">
       <div className="section-heading">
-        <h1 id="admin-poi-title">POI 投稿审核</h1>
-        <span className="muted">
-          {statusText}
-          {categoryStatusText ? ` · ${categoryStatusText}` : ''}
-        </span>
+        <h1 id="admin-poi-title">POI 后台</h1>
+        <span className="muted">{currentSectionStatusText}</span>
       </div>
+      <fieldset className="segmented-control admin-page-segmented-control">
+        <legend>工作区</legend>
+        <div>
+          {poiAdminSectionOptions.map((option) => (
+            <button
+              className={activeSection === option.value ? 'is-active' : ''}
+              type="button"
+              aria-pressed={activeSection === option.value}
+              key={option.value}
+              onClick={() => setActiveSection(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
 
-      <div className="admin-report-summary admin-poi-summary" aria-label="POI 投稿摘要">
-        <AdminPoiMetric
-          label="待审核"
-          value={pendingCount}
-          tone={pendingCount > 0 ? 'warning' : undefined}
-        />
-        <AdminPoiMetric
-          label="待发布"
-          value={approvedCount}
-          tone={approvedCount > 0 ? 'accent' : undefined}
-        />
-        <AdminPoiMetric
-          label="图片不合格"
-          value={rejectedImageCount}
-          tone={rejectedImageCount > 0 ? 'warning' : undefined}
-        />
-        <AdminPoiMetric
-          label="待合并"
-          value={duplicateConflictCount}
-          tone={duplicateConflictCount > 0 ? 'warning' : undefined}
-        />
-        <AdminPoiMetric label="已发布" value={publishedCount} />
-        <AdminPoiMetric label="当前结果" value={filteredSubmissions.length} />
-      </div>
+      {activeSection === 'submissions' ? (
+        <>
+          <div className="admin-report-summary admin-poi-summary" aria-label="POI 投稿摘要">
+            <AdminPoiMetric
+              label="待审核"
+              value={pendingCount}
+              tone={pendingCount > 0 ? 'warning' : undefined}
+            />
+            <AdminPoiMetric
+              label="待发布"
+              value={approvedCount}
+              tone={approvedCount > 0 ? 'accent' : undefined}
+            />
+            <AdminPoiMetric
+              label="图片不合格"
+              value={rejectedImageCount}
+              tone={rejectedImageCount > 0 ? 'warning' : undefined}
+            />
+            <AdminPoiMetric
+              label="待合并"
+              value={duplicateConflictCount}
+              tone={duplicateConflictCount > 0 ? 'warning' : undefined}
+            />
+            <AdminPoiMetric label="已发布" value={publishedCount} />
+            <AdminPoiMetric label="旧标记点" value={filteredLegacyMapMarkers.length} />
+            <AdminPoiMetric label="当前结果" value={filteredSubmissions.length} />
+          </div>
 
-      <div className="admin-toolbar admin-poi-toolbar" aria-label="POI 投稿筛选">
-        <label>
-          <span>状态</span>
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.currentTarget.value as StatusFilter)}
-          >
-            {statusFilterOptions.map((option) => (
-              <option value={option.value} key={option.value}>
-                {option.label}
-              </option>
+          <div className="admin-toolbar admin-poi-toolbar" aria-label="POI 投稿筛选">
+            <label>
+              <span>状态</span>
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.currentTarget.value as StatusFilter)}
+              >
+                {statusFilterOptions.map((option) => (
+                  <option value={option.value} key={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>分类</span>
+              <select
+                value={categoryFilter}
+                onChange={(event) => setCategoryFilter(event.currentTarget.value)}
+              >
+                <option value="all">全部分类</option>
+                {categoryOptions.map((option) => (
+                  <option value={option.id} key={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="admin-poi-search">
+              <span>搜索</span>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.currentTarget.value)}
+                placeholder="标题、分类、投稿人、链接"
+              />
+            </label>
+            <button type="button" onClick={resetFilters}>
+              重置筛选
+            </button>
+          </div>
+
+          <div className="admin-content-bulk-bar" aria-label="POI 投稿批量操作">
+            <label className="checkbox-row admin-content-bulk-select">
+              <input
+                type="checkbox"
+                checked={isAllVisibleSelected}
+                disabled={filteredSubmissions.length === 0}
+                onChange={toggleVisibleSubmissionSelection}
+              />
+              <span>{`选择当前列表 ${selectedVisibleSubmissions.length}/${filteredSubmissions.length}`}</span>
+            </label>
+            <span className="muted">
+              {`已选 ${selectedSubmissions.length} 条，可通过 ${selectedPendingReviewSubmissions.length} 条，可发布 ${selectedPublishReadySubmissions.length} 条`}
+              {selectedBlockedPublishSubmissions.length > 0
+                ? `，其中 ${selectedBlockedPublishSubmissions.length} 条仍阻塞发布`
+                : ''}
+            </span>
+            <button
+              type="button"
+              disabled={isBusy || selectedPendingReviewSubmissions.length === 0}
+              onClick={() => void runBatchAction(selectedPendingReviewSubmissions, 'approve')}
+            >
+              批量通过
+            </button>
+            <button
+              type="button"
+              disabled={isBusy || selectedPendingReviewSubmissions.length === 0}
+              onClick={() => setBulkRejectTargets(selectedPendingReviewSubmissions)}
+            >
+              批量驳回
+            </button>
+            <button
+              type="button"
+              disabled={isBusy || selectedApprovedSubmissions.length === 0}
+              onClick={() => setBulkPublishTargets(selectedApprovedSubmissions)}
+            >
+              批量发布
+            </button>
+            <button
+              type="button"
+              disabled={isBusy || selectedSubmissions.length === 0}
+              onClick={clearSelection}
+            >
+              清空选择
+            </button>
+          </div>
+
+          <div className="admin-content-list" aria-label="POI 投稿记录">
+            {filteredSubmissions.map((submission) => (
+              <PoiSubmissionReviewItem
+                category={categoryById.get(submission.categoryId)}
+                conflictHints={conflictHintsBySubmissionId.get(submission.id) ?? []}
+                iconBaseUrl={categoryIconBaseUrl}
+                isBusy={isBusy}
+                imageReview={
+                  submission.imageUrl
+                    ? imageReviewByKey.get(imageReviewKey(submission.id, submission.imageUrl))
+                    : undefined
+                }
+                isSelected={selectedSubmissionIds.has(submission.id)}
+                key={submission.id}
+                hierarchyHint={hierarchyHintBySubmissionId.get(submission.id)}
+                onCopy={(message) => setStatusText(message)}
+                onDetail={() => setDetailTargetId(submission.id)}
+                onDelete={() => void deleteSubmission(submission)}
+                onEdit={() => setEditTarget(submission)}
+                onPublish={() => setPublishTarget(submission)}
+                onReject={() => setRejectTarget(submission)}
+                onRunAction={runAction}
+                onToggleSelected={() => toggleSubmissionSelection(submission.id)}
+                submission={submission}
+              />
             ))}
-          </select>
-        </label>
-        <label>
-          <span>分类</span>
-          <select
-            value={categoryFilter}
-            onChange={(event) => setCategoryFilter(event.currentTarget.value)}
-          >
-            <option value="all">全部分类</option>
-            {categoryOptions.map((option) => (
-              <option value={option.id} key={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="admin-poi-search">
-          <span>搜索</span>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-            placeholder="标题、分类、投稿人、链接"
-          />
-        </label>
-        <button type="button" onClick={resetFilters}>
-          重置筛选
-        </button>
-      </div>
+            {filteredSubmissions.length === 0 ? (
+              <p className="muted admin-poi-empty">当前筛选条件下没有 POI 投稿。</p>
+            ) : null}
+          </div>
+          <LegacyPoiMarkerList categoryById={categoryById} markers={filteredLegacyMapMarkers} />
+        </>
+      ) : (
+        <PoiCategoryBoard
+          categories={filteredCategoryProfiles}
+          iconBaseUrl={categoryIconBaseUrl}
+          isBusy={isBusy}
+          metrics={categoryBoardMetrics}
+          filterValue={categoryBoardFilter}
+          query={categoryBoardQuery}
+          totalCount={categories.length}
+          onEdit={() => {
+            setCategoryEditorTargetId(null);
+            setIsCategoryEditorOpen(true);
+          }}
+          onEditCategory={(categoryId) => {
+            setCategoryEditorTargetId(categoryId);
+            setIsCategoryEditorOpen(true);
+          }}
+          onFilterChange={setCategoryBoardFilter}
+          onQueryChange={setCategoryBoardQuery}
+          onResetFilters={resetCategoryBoardFilters}
+        />
+      )}
 
-      <PoiCategoryProfileEditor
-        categories={categories}
-        iconBaseUrl={categoryIconBaseUrl}
-        onSaved={(message) => {
-          setStatusText(message);
-          void loadCategories();
-        }}
-      />
+      {detailTarget ? (
+        <PoiSubmissionDetailDialog
+          category={categoryById.get(detailTarget.categoryId)}
+          conflictDecisionByKey={conflictDecisionByKey}
+          contextMarkers={auditContextMarkersBySubmissionId.get(detailTarget.id) ?? []}
+          conflictHints={conflictHintsBySubmissionId.get(detailTarget.id) ?? []}
+          hierarchyHint={hierarchyHintBySubmissionId.get(detailTarget.id)}
+          imageReview={
+            detailTarget.imageUrl
+              ? imageReviewByKey.get(imageReviewKey(detailTarget.id, detailTarget.imageUrl))
+              : undefined
+          }
+          isBusy={isBusy}
+          submission={detailTarget}
+          tilePreviewConfig={tilePreviewConfig}
+          onClose={() => setDetailTargetId(null)}
+          onConflictDecision={(hint, decision) =>
+            void updateConflictDecision(detailTarget, hint, decision)
+          }
+          onDelete={async () => {
+            const success = await deleteSubmission(detailTarget);
+            if (success) {
+              setDetailTargetId(null);
+            }
+          }}
+          onEdit={() => {
+            setDetailTargetId(null);
+            setEditTarget(detailTarget);
+          }}
+          onImageReview={(decision) => void updateImageReview(detailTarget, decision)}
+          onPublish={() => {
+            setDetailTargetId(null);
+            setPublishTarget(detailTarget);
+          }}
+          onReject={() => {
+            setDetailTargetId(null);
+            setRejectTarget(detailTarget);
+          }}
+          onRunAction={runAction}
+          onStatus={(message) => setStatusText(message)}
+        />
+      ) : null}
 
-      <div className="admin-content-list" aria-label="POI 投稿记录">
-        {filteredSubmissions.map((submission) => (
-          <PoiSubmissionReviewItem
-            category={categoryById.get(submission.categoryId)}
-            conflictDecisionByKey={conflictDecisionByKey}
-            contextMarkers={auditContextMarkersBySubmissionId.get(submission.id) ?? []}
-            iconBaseUrl={categoryIconBaseUrl}
-            conflictHints={conflictHintsBySubmissionId.get(submission.id) ?? []}
-            isBusy={isBusy}
-            isExpanded={expandedIds.has(submission.id)}
-            imageReview={submission.imageUrl ? imageReviewByKey.get(imageReviewKey(submission.id, submission.imageUrl)) : undefined}
-            key={submission.id}
-            hierarchyHint={hierarchyHintBySubmissionId.get(submission.id)}
-            onCopy={(message) => setStatusText(message)}
-            onConflictDecision={(hint, decision) => void updateConflictDecision(submission, hint, decision)}
-            onEdit={() => setEditTarget(submission)}
-            onImageReview={(decision) => void updateImageReview(submission, decision)}
-            onPublish={() => setPublishTarget(submission)}
-            onReject={() => setRejectTarget(submission)}
-            onRunAction={runAction}
-            onToggleExpanded={() => toggleExpanded(submission.id)}
-            submission={submission}
-          />
-        ))}
-        {filteredSubmissions.length === 0 ? (
-          <p className="muted admin-poi-empty">当前筛选条件下没有 POI 投稿。</p>
-        ) : null}
-      </div>
+      {isCategoryEditorOpen ? (
+        <PoiCategoryProfileDialog
+          categories={categories}
+          iconBaseUrl={categoryIconBaseUrl}
+          isBusy={isBusy}
+          selectedCategoryId={categoryEditorTargetId}
+          onClose={() => {
+            setIsCategoryEditorOpen(false);
+            setCategoryEditorTargetId(null);
+          }}
+          onSaved={(message) => {
+            setCategoryStatusText(message);
+            void loadCategories();
+          }}
+        />
+      ) : null}
 
       {rejectTarget ? (
         <RejectPoiDialog
@@ -611,6 +1137,18 @@ export function AdminPoiPanel() {
             if (success) {
               setRejectTarget(null);
             }
+          }}
+        />
+      ) : null}
+
+      {bulkRejectTargets ? (
+        <BulkRejectPoiDialog
+          isBusy={isBusy}
+          submissions={bulkRejectTargets}
+          onClose={() => setBulkRejectTargets(null)}
+          onSubmit={async (reason) => {
+            await runBatchAction(bulkRejectTargets, 'reject', reason);
+            setBulkRejectTargets(null);
           }}
         />
       ) : null}
@@ -639,12 +1177,27 @@ export function AdminPoiPanel() {
         />
       ) : null}
 
+      {bulkPublishTargets ? (
+        <BulkPublishPoiDialog
+          conflictDecisions={conflictDecisions}
+          imageReviewByKey={imageReviewByKey}
+          isBusy={isBusy}
+          submissions={bulkPublishTargets}
+          onClose={() => setBulkPublishTargets(null)}
+          onConfirm={async (targets) => {
+            await runBatchAction(targets, 'publish');
+            setBulkPublishTargets(null);
+          }}
+        />
+      ) : null}
+
       {editTarget ? (
         <EditPoiSubmissionDialog
           categories={categories}
           contextMarkers={auditContextMarkersBySubmissionId.get(editTarget.id) ?? []}
           isBusy={isBusy}
           submission={editTarget}
+          tilePreviewConfig={tilePreviewConfig}
           onClose={() => setEditTarget(null)}
           onSubmit={async (input) => {
             const error = await updateSubmission(editTarget.id, input);
@@ -672,49 +1225,256 @@ function AdminPoiMetric({
   );
 }
 
+function LegacyPoiMarkerList({
+  categoryById,
+  markers,
+}: Readonly<{
+  categoryById: Map<string, PoiCategory>;
+  markers: MapMarker[];
+}>) {
+  return (
+    <section className="admin-poi-legacy-marker-list" aria-label="旧有地图标记点">
+      <div className="section-heading">
+        <h2>旧有标记点</h2>
+        <span className="muted">{`${markers.length} 个旧地图对象，按当前筛选加载`}</span>
+      </div>
+      <div className="admin-content-list">
+        {markers.map((marker) => {
+          const coordinate = getGeometryRepresentativeCoordinate(marker.geometry);
+          const category = marker.categoryId ? categoryById.get(marker.categoryId) : undefined;
+          return (
+            <article className="admin-content-item admin-poi-legacy-marker-item" key={marker.id}>
+              <div>
+                <div className="admin-poi-title-row">
+                  <strong>{marker.label}</strong>
+                  <span className="admin-poi-status-chip is-published">旧标记点</span>
+                </div>
+                <p className="muted">
+                  {marker.categoryId ? formatCategoryName(marker.categoryId, category) : '未分类'} ·{' '}
+                  {geometryLabel(marker.geometry)}
+                </p>
+                {marker.description ? <p className="muted">{marker.description}</p> : null}
+              </div>
+              <div className="admin-content-actions">
+                {coordinate ? (
+                  <a
+                    href={buildLegacyMarkerMapHref(marker, coordinate)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    地图查看
+                  </a>
+                ) : null}
+              </div>
+            </article>
+          );
+        })}
+        {markers.length === 0 ? <p className="muted">当前筛选条件下没有旧有标记点。</p> : null}
+      </div>
+    </section>
+  );
+}
+
+function PoiCategoryBoard({
+  categories,
+  filterValue,
+  iconBaseUrl,
+  isBusy,
+  metrics,
+  onEdit,
+  onEditCategory,
+  onFilterChange,
+  onQueryChange,
+  onResetFilters,
+  query,
+  totalCount,
+}: Readonly<{
+  categories: PoiCategory[];
+  filterValue: PoiCategoryBoardFilter;
+  iconBaseUrl: string;
+  isBusy: boolean;
+  metrics: Array<{ label: string; tone?: 'accent' | 'warning'; value: number }>;
+  onEdit: () => void;
+  onEditCategory: (categoryId: string) => void;
+  onFilterChange: (value: PoiCategoryBoardFilter) => void;
+  onQueryChange: (value: string) => void;
+  onResetFilters: () => void;
+  query: string;
+  totalCount: number;
+}>) {
+  return (
+    <section className="admin-poi-category-board" aria-labelledby="admin-poi-category-board-title">
+      <div className="section-heading">
+        <h2 id="admin-poi-category-board-title">分类与图标</h2>
+        <span className="muted">{`${categories.length} / ${totalCount} 类`}</span>
+      </div>
+      <div className="admin-report-summary admin-poi-summary" aria-label="POI 分类摘要">
+        {metrics.map((metric) => (
+          <AdminPoiMetric
+            label={metric.label}
+            tone={metric.tone}
+            value={metric.value}
+            key={metric.label}
+          />
+        ))}
+      </div>
+      <div className="admin-toolbar admin-poi-toolbar" aria-label="POI 分类筛选">
+        <label>
+          <span>公开投稿</span>
+          <select
+            value={filterValue}
+            onChange={(event) =>
+              onFilterChange(event.currentTarget.value as PoiCategoryBoardFilter)
+            }
+          >
+            {poiCategoryBoardFilterOptions.map((option) => (
+              <option value={option.value} key={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="admin-poi-search">
+          <span>搜索</span>
+          <input
+            value={query}
+            onChange={(event) => onQueryChange(event.currentTarget.value)}
+            placeholder="分类名称、ID、默认图标"
+          />
+        </label>
+        <button type="button" onClick={onResetFilters}>
+          重置筛选
+        </button>
+        <button
+          className="secondary-action-button is-primary"
+          type="button"
+          disabled={isBusy}
+          onClick={onEdit}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            tune
+          </span>
+          <span>编辑分类与图标</span>
+        </button>
+      </div>
+      <div className="admin-content-list" aria-label="POI 分类记录">
+        {categories.map((category) => (
+          <article className="admin-content-item admin-poi-category-summary-item" key={category.id}>
+            <div className="admin-poi-category-summary-main">
+              <div className="admin-poi-title-row">
+                <PoiCategoryIcon category={category} iconBaseUrl={iconBaseUrl} />
+                <div>
+                  <strong>{category.name}</strong>
+                  <p className="muted">
+                    {category.id} · 排序 {category.sortOrder} · 默认图标{' '}
+                    {category.iconMapping.defaultIconFileName || '未设置'}
+                  </p>
+                </div>
+                <span
+                  className={`admin-poi-status-chip is-${
+                    category.acceptsPublicSubmissions ? 'approved' : 'rejected'
+                  }`}
+                >
+                  {category.acceptsPublicSubmissions ? '允许公开投稿' : '不允许公开投稿'}
+                </span>
+              </div>
+              <div className="operation-tag-list">
+                <span className="operation-tag">{`图标 ${category.iconMapping.iconFileNames.length}`}</span>
+                {category.iconMapping.iconFileNames.length > 1 ? (
+                  <span className="operation-tag is-accent">多图标配置</span>
+                ) : null}
+              </div>
+              <div
+                className="admin-content-publish-assets"
+                aria-label={`${category.name} 图标样例`}
+              >
+                {category.iconMapping.iconFileNames.slice(0, 3).map((iconValue) => (
+                  <span className="admin-poi-category-icon-chip" key={iconValue}>
+                    <span className="admin-poi-category-icon-swatch-group" aria-hidden="true">
+                      {['light', 'dark', 'map'].map((tone) => (
+                        <span className={`admin-poi-category-icon-swatch is-${tone}`} key={tone}>
+                          <img
+                            src={toMarkerIconUrl(iconValue, iconBaseUrl)}
+                            alt=""
+                            draggable={false}
+                          />
+                        </span>
+                      ))}
+                    </span>
+                    <code>{iconValue}</code>
+                    {category.iconMapping.defaultIconFileName === iconValue ? (
+                      <small>默认</small>
+                    ) : null}
+                  </span>
+                ))}
+                {category.iconMapping.iconFileNames.length > 3 ? (
+                  <span className="operation-tag">{`其余 ${category.iconMapping.iconFileNames.length - 3} 个`}</span>
+                ) : null}
+              </div>
+            </div>
+            <div className="admin-content-actions">
+              <button type="button" disabled={isBusy} onClick={() => onEditCategory(category.id)}>
+                编辑配置
+              </button>
+            </div>
+          </article>
+        ))}
+        {categories.length === 0 ? (
+          <div className="admin-content-empty">
+            <p className="muted">当前筛选条件下没有 POI 分类。</p>
+            <button type="button" onClick={onResetFilters}>
+              查看全部分类
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 function PoiSubmissionReviewItem({
   category,
-  conflictDecisionByKey,
-  contextMarkers,
   conflictHints,
   hierarchyHint,
   iconBaseUrl,
   isBusy,
-  isExpanded,
+  isSelected,
   imageReview,
   onCopy,
-  onConflictDecision,
+  onDetail,
+  onDelete,
   onEdit,
-  onImageReview,
   onPublish,
   onReject,
   onRunAction,
-  onToggleExpanded,
+  onToggleSelected,
   submission,
 }: Readonly<{
   category?: PoiCategory;
-  conflictDecisionByKey: Map<string, PoiConflictDecision>;
-  contextMarkers: PoiAuditContextMarker[];
   conflictHints: PoiConflictHint[];
   hierarchyHint?: PoiHierarchyHint | null;
   iconBaseUrl: string;
   isBusy: boolean;
-  isExpanded: boolean;
+  isSelected: boolean;
   imageReview?: PoiSubmissionImageReview;
   onCopy: (message: string) => void;
-  onConflictDecision: (hint: PoiConflictHint, decision: PoiConflictDecisionInput) => void;
+  onDetail: () => void;
+  onDelete: () => void;
   onEdit: () => void;
-  onImageReview: (decision: PoiSubmissionImageReviewInput) => void;
   onPublish: () => void;
   onReject: () => void;
   onRunAction: (poiId: string, action: 'approve' | 'reject', reason?: string) => Promise<boolean>;
-  onToggleExpanded: () => void;
+  onToggleSelected: () => void;
   submission: PoiSubmission;
 }>) {
   const representativeCoordinate = getGeometryRepresentativeCoordinate(submission.geometry);
   const mapHref = representativeCoordinate
     ? buildSubmissionMapHref(submission, representativeCoordinate)
     : appPath('/map');
+  const rejectedImage = imageReview?.decision === 'rejected';
+  const unreviewedImage = Boolean(submission.imageUrl) && !imageReview;
+  const hasConflicts = conflictHints.length > 0;
+  const conflictSummary = hasConflicts ? `${conflictHints.length} 条` : '';
 
   const copyText = async (text: string, successMessage: string) => {
     try {
@@ -726,20 +1486,42 @@ function PoiSubmissionReviewItem({
   };
 
   return (
-    <article className={['admin-content-item', 'admin-poi-item', isExpanded ? 'is-expanded' : ''].join(' ')}>
+    <article className="admin-content-item admin-poi-item">
+      <label className="admin-content-select">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={onToggleSelected}
+          aria-label={`选择 POI 投稿 ${submission.title}`}
+        />
+      </label>
       <div className="admin-poi-main">
         <div className="admin-poi-title-row">
-          <PoiCategoryIcon category={category} iconBaseUrl={iconBaseUrl} />
+          <PoiCategoryIcon
+            category={category}
+            iconBaseUrl={iconBaseUrl}
+            iconFileName={submission.iconFileName}
+          />
           <div>
             <strong>{submission.title}</strong>
             <p className="muted">
-              {formatCategoryName(submission.categoryId, category)} · {statusLabel(submission.status)} ·{' '}
-              {geometryLabel(submission.geometry)}
+              {formatCategoryName(submission.categoryId, category)} ·{' '}
+              {statusLabel(submission.status)} · {geometryLabel(submission.geometry)}
             </p>
           </div>
           <span className={`admin-poi-status-chip is-${submission.status}`}>
             {statusLabel(submission.status)}
           </span>
+        </div>
+        <div className="operation-tag-list">
+          <span className="operation-tag">{geometryLabel(submission.geometry)}</span>
+          {hasConflicts ? (
+            <span className="operation-tag is-warning">{`冲突 ${conflictSummary}`}</span>
+          ) : null}
+          {rejectedImage ? <span className="operation-tag is-warning">图片不合格</span> : null}
+          {unreviewedImage ? <span className="operation-tag">图片待审</span> : null}
+          {hierarchyHint ? <span className="operation-tag">疑似父子地点</span> : null}
+          {submission.description ? <span className="operation-tag">已填写简介</span> : null}
         </div>
         {representativeCoordinate ? (
           <p className="muted">代表坐标：{formatCoordinatePair(representativeCoordinate)}</p>
@@ -749,37 +1531,10 @@ function PoiSubmissionReviewItem({
           {submission.submittedAt ? ` · ${formatDate(submission.submittedAt)}` : ''}
           {submission.reviewReason ? ` · ${submission.reviewReason}` : ''}
         </p>
-        {submission.description ? <p>{submission.description}</p> : null}
-        {conflictHints.length > 0 ? (
-          <PoiConflictHintList
-            conflictDecisionByKey={conflictDecisionByKey}
-            hints={conflictHints}
-            isBusy={isBusy}
-            onDecision={onConflictDecision}
-            submission={submission}
-          />
-        ) : null}
-        {isExpanded ? (
-          <PoiSubmissionDetail
-            category={category}
-            contextMarkers={contextMarkers}
-            hierarchyHint={hierarchyHint}
-            representativeCoordinate={representativeCoordinate}
-            submission={submission}
-          />
-        ) : null}
-        {submission.imageUrl ? (
-          <PoiSubmissionImagePreview
-            imageReview={imageReview}
-            isBusy={isBusy}
-            onReview={onImageReview}
-            submission={submission}
-          />
-        ) : null}
       </div>
       <div className="admin-content-actions">
-        <button type="button" onClick={onToggleExpanded}>
-          {isExpanded ? '收起详情' : '展开详情'}
+        <button type="button" onClick={onDetail}>
+          查看详情
         </button>
         <a className="admin-action-link" href={mapHref} target="_blank" rel="noreferrer">
           地图查看
@@ -811,10 +1566,17 @@ function PoiSubmissionReviewItem({
         </button>
         <button
           type="button"
-          disabled={isBusy || submission.status !== 'pending_review'}
+          disabled={isBusy || !canEditPoiSubmission(submission.status)}
           onClick={onEdit}
         >
           修正资料
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || !canDeletePoiSubmission(submission.status)}
+          onClick={onDelete}
+        >
+          删除
         </button>
         <button
           type="button"
@@ -860,14 +1622,18 @@ function PoiConflictHintList({
       <strong>可能冲突</strong>
       <div>
         {hints.map((hint) => {
-          const decision = conflictDecisionByKey.get(conflictDecisionKey(submission.id, hint.marker.id));
+          const decision = conflictDecisionByKey.get(
+            conflictDecisionKey(submission.id, hint.marker.id),
+          );
           return (
             <article className="admin-poi-conflict-chip" key={hint.marker.id}>
               <a href={buildMarkerFocusHref(hint.marker)} target="_blank" rel="noreferrer">
                 <span>{hint.marker.label}</span>
                 <small>
                   {hint.reasons.join('、')}
-                  {hint.distanceBlocks !== null ? ` · 约 ${Math.round(hint.distanceBlocks)} 格` : ''}
+                  {hint.distanceBlocks !== null
+                    ? ` · 约 ${Math.round(hint.distanceBlocks)} 格`
+                    : ''}
                 </small>
               </a>
               <div className="admin-poi-conflict-actions">
@@ -911,22 +1677,194 @@ function PoiConflictHintList({
   );
 }
 
+function PoiSubmissionDetailDialog({
+  category,
+  conflictDecisionByKey,
+  contextMarkers,
+  conflictHints,
+  hierarchyHint,
+  imageReview,
+  isBusy,
+  onClose,
+  onConflictDecision,
+  onDelete,
+  onEdit,
+  onImageReview,
+  onPublish,
+  onReject,
+  onRunAction,
+  onStatus,
+  submission,
+  tilePreviewConfig,
+}: Readonly<{
+  category?: PoiCategory;
+  conflictDecisionByKey: Map<string, PoiConflictDecision>;
+  contextMarkers: PoiAuditContextMarker[];
+  conflictHints: PoiConflictHint[];
+  hierarchyHint?: PoiHierarchyHint | null;
+  imageReview?: PoiSubmissionImageReview;
+  isBusy: boolean;
+  onClose: () => void;
+  onConflictDecision: (hint: PoiConflictHint, decision: PoiConflictDecisionInput) => void;
+  onDelete: () => void;
+  onEdit: () => void;
+  onImageReview: (decision: PoiSubmissionImageReviewInput) => void;
+  onPublish: () => void;
+  onReject: () => void;
+  onRunAction: (poiId: string, action: 'approve' | 'reject', reason?: string) => Promise<boolean>;
+  onStatus: (message: string) => void;
+  submission: AdminPoiSubmission;
+  tilePreviewConfig: PoiTilePreviewConfig;
+}>) {
+  const representativeCoordinate = getGeometryRepresentativeCoordinate(submission.geometry);
+  const mapHref = representativeCoordinate
+    ? buildSubmissionMapHref(submission, representativeCoordinate)
+    : appPath('/map');
+
+  const copyText = async (text: string, successMessage: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      onStatus(successMessage);
+    } catch {
+      onStatus('浏览器未允许写入剪贴板，可手动复制页面中的坐标或几何信息。');
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="modal-panel admin-poi-detail-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-poi-detail-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="section-heading">
+          <h2 id="admin-poi-detail-title">POI 投稿详情</h2>
+          <span className="muted">{submission.title}</span>
+        </div>
+        <div className="admin-toolbar admin-poi-toolbar">
+          <button
+            type="button"
+            onClick={onEdit}
+            disabled={isBusy || !canEditPoiSubmission(submission.status)}
+          >
+            修正资料
+          </button>
+          <button
+            type="button"
+            disabled={isBusy || !canDeletePoiSubmission(submission.status)}
+            onClick={onDelete}
+          >
+            删除
+          </button>
+          <button
+            type="button"
+            disabled={isBusy || submission.status !== 'pending_review'}
+            onClick={() => void onRunAction(submission.id, 'approve')}
+          >
+            通过
+          </button>
+          <button
+            type="button"
+            disabled={isBusy || submission.status !== 'pending_review'}
+            onClick={onReject}
+          >
+            驳回
+          </button>
+          <button
+            type="button"
+            disabled={isBusy || submission.status !== 'approved'}
+            onClick={onPublish}
+          >
+            发布
+          </button>
+          <a className="admin-action-link" href={mapHref} target="_blank" rel="noreferrer">
+            地图查看
+          </a>
+          <button
+            type="button"
+            disabled={!representativeCoordinate}
+            onClick={() =>
+              representativeCoordinate
+                ? void copyText(
+                    formatCoordinatePair(representativeCoordinate),
+                    `已复制 ${submission.title} 的代表坐标。`,
+                  )
+                : undefined
+            }
+          >
+            复制坐标
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              void copyText(
+                JSON.stringify(submission.geometry, null, 2),
+                `已复制 ${submission.title} 的几何 JSON。`,
+              )
+            }
+          >
+            复制几何
+          </button>
+        </div>
+        {conflictHints.length > 0 ? (
+          <PoiConflictHintList
+            conflictDecisionByKey={conflictDecisionByKey}
+            hints={conflictHints}
+            isBusy={isBusy}
+            onDecision={onConflictDecision}
+            submission={submission}
+          />
+        ) : null}
+        {submission.imageUrl ? (
+          <PoiSubmissionImagePreview
+            imageReview={imageReview}
+            isBusy={isBusy}
+            onReview={onImageReview}
+            submission={submission}
+          />
+        ) : null}
+        <PoiSubmissionDetail
+          category={category}
+          contextMarkers={contextMarkers}
+          hierarchyHint={hierarchyHint}
+          representativeCoordinate={representativeCoordinate}
+          submission={submission}
+          tilePreviewConfig={tilePreviewConfig}
+        />
+        <div className="admin-content-actions">
+          <button type="button" onClick={onClose}>
+            关闭
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function PoiSubmissionDetail({
   category,
   contextMarkers,
   hierarchyHint,
   representativeCoordinate,
   submission,
+  tilePreviewConfig,
 }: Readonly<{
   category?: PoiCategory;
   contextMarkers: PoiAuditContextMarker[];
   hierarchyHint?: PoiHierarchyHint | null;
   representativeCoordinate: [number, number] | null;
   submission: PoiSubmission;
+  tilePreviewConfig: PoiTilePreviewConfig;
 }>) {
   return (
     <div className="admin-poi-detail">
-      <PoiAuditMapPreview contextMarkers={contextMarkers} submission={submission} />
+      <PoiAuditMapPreview
+        contextMarkers={contextMarkers}
+        submission={submission}
+        tilePreviewConfig={tilePreviewConfig}
+      />
       {hierarchyHint ? <PoiHierarchyHintPanel hint={hierarchyHint} /> : null}
       <PoiGeometryPreview geometry={submission.geometry} />
       <dl>
@@ -938,8 +1876,14 @@ function PoiSubmissionDetail({
           <dt>分类</dt>
           <dd>
             {formatCategoryName(submission.categoryId, category)}
-            {category ? ` · ${category.acceptsPublicSubmissions ? '允许公开投稿' : '不允许公开投稿'}` : ''}
+            {category
+              ? ` · ${category.acceptsPublicSubmissions ? '允许公开投稿' : '不允许公开投稿'}`
+              : ''}
           </dd>
+        </div>
+        <div>
+          <dt>展示图标</dt>
+          <dd>{submission.iconFileName || '跟随分类默认图标'}</dd>
         </div>
         <div>
           <dt>几何</dt>
@@ -947,7 +1891,9 @@ function PoiSubmissionDetail({
         </div>
         <div>
           <dt>代表坐标</dt>
-          <dd>{representativeCoordinate ? formatCoordinatePair(representativeCoordinate) : '暂无'}</dd>
+          <dd>
+            {representativeCoordinate ? formatCoordinatePair(representativeCoordinate) : '暂无'}
+          </dd>
         </div>
         <div>
           <dt>链接</dt>
@@ -956,7 +1902,9 @@ function PoiSubmissionDetail({
         <div>
           <dt>审核</dt>
           <dd>
-            {submission.reviewedBy ? `${submission.reviewedBy} · ${submission.reviewedAt ? formatDate(submission.reviewedAt) : '已审核'}` : '尚未审核'}
+            {submission.reviewedBy
+              ? `${submission.reviewedBy} · ${submission.reviewedAt ? formatDate(submission.reviewedAt) : '已审核'}`
+              : '尚未审核'}
           </dd>
         </div>
       </dl>
@@ -988,7 +1936,10 @@ function PoiHierarchyHintPanel({ hint }: Readonly<{ hint: PoiHierarchyHint }>) {
           <dt>父地点参考</dt>
           <dd>
             {hint.parentMarkers.length
-              ? hint.parentMarkers.slice(0, 3).map((marker) => marker.label).join('、')
+              ? hint.parentMarkers
+                  .slice(0, 3)
+                  .map((marker) => marker.label)
+                  .join('、')
               : '未找到同名公开标记'}
           </dd>
         </div>
@@ -1000,9 +1951,11 @@ function PoiHierarchyHintPanel({ hint }: Readonly<{ hint: PoiHierarchyHint }>) {
 function PoiAuditMapPreview({
   contextMarkers,
   submission,
+  tilePreviewConfig,
 }: Readonly<{
   contextMarkers: PoiAuditContextMarker[];
   submission: PoiSubmission;
+  tilePreviewConfig: PoiTilePreviewConfig;
 }>) {
   const preview = buildPoiAuditMapPreview(submission.geometry, contextMarkers);
   if (!preview) {
@@ -1015,46 +1968,51 @@ function PoiAuditMapPreview({
     <div className="admin-poi-audit-map">
       <div className="admin-poi-audit-map-header">
         <strong>审核地图预览</strong>
-        <span>{contextMarkers.length ? `附近参考 ${contextMarkers.length} 个` : '暂无附近参考标记'}</span>
+        <span>
+          {contextMarkers.length ? `附近参考 ${contextMarkers.length} 个` : '暂无附近参考标记'}
+        </span>
       </div>
-      <svg viewBox="0 0 220 152" role="img" aria-label={`${submission.title} 审核地图预览`}>
-        <rect className="admin-poi-audit-map-grid" x="0" y="0" width="220" height="152" />
-        {preview.polygons.map((polygon, index) => (
-          <polygon
-            className="admin-poi-audit-map-submission-shape"
-            key={`submission-polygon-${index}`}
-            points={polygon}
-          />
-        ))}
-        {preview.lines.map((line, index) => (
-          <polyline
-            className="admin-poi-audit-map-submission-line"
-            key={`submission-line-${index}`}
-            points={line}
-          />
-        ))}
-        {preview.contextMarkers.map((marker) => (
-          <g
-            className={`admin-poi-audit-map-context-marker is-${marker.relation}`}
-            key={marker.marker.id}
-            transform={`translate(${roundPreviewValue(marker.point[0])} ${roundPreviewValue(marker.point[1])})`}
-          >
-            <circle r="4.5" />
-            <title>
-              {marker.marker.label} · {Math.round(marker.distanceBlocks)} 格
-            </title>
-          </g>
-        ))}
-        {preview.points.map((point, index) => (
-          <circle
-            className="admin-poi-audit-map-submission-point"
-            cx={point[0]}
-            cy={point[1]}
-            key={`submission-point-${index}`}
-            r="5"
-          />
-        ))}
-      </svg>
+      <div className="admin-poi-audit-map-stage">
+        <PoiAuditTileLayer bounds={preview.bounds} tilePreviewConfig={tilePreviewConfig} />
+        <svg viewBox="0 0 220 152" role="img" aria-label={`${submission.title} 审核地图预览`}>
+          <rect className="admin-poi-audit-map-grid" x="0" y="0" width="220" height="152" />
+          {preview.polygons.map((polygon, index) => (
+            <polygon
+              className="admin-poi-audit-map-submission-shape"
+              key={`submission-polygon-${index}`}
+              points={polygon}
+            />
+          ))}
+          {preview.lines.map((line, index) => (
+            <polyline
+              className="admin-poi-audit-map-submission-line"
+              key={`submission-line-${index}`}
+              points={line}
+            />
+          ))}
+          {preview.contextMarkers.map((marker) => (
+            <g
+              className={`admin-poi-audit-map-context-marker is-${marker.relation}`}
+              key={marker.marker.id}
+              transform={`translate(${roundPreviewValue(marker.point[0])} ${roundPreviewValue(marker.point[1])})`}
+            >
+              <circle r="4.5" />
+              <title>
+                {marker.marker.label} · {Math.round(marker.distanceBlocks)} 格
+              </title>
+            </g>
+          ))}
+          {preview.points.map((point, index) => (
+            <circle
+              className="admin-poi-audit-map-submission-point"
+              cx={point[0]}
+              cy={point[1]}
+              key={`submission-point-${index}`}
+              r="5"
+            />
+          ))}
+        </svg>
+      </div>
       {topMarkers.length ? (
         <div className="admin-poi-audit-map-markers" aria-label="附近参考标记">
           {topMarkers.map((item) => (
@@ -1067,6 +2025,37 @@ function PoiAuditMapPreview({
           ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function PoiAuditTileLayer({
+  bounds,
+  tilePreviewConfig,
+}: Readonly<{
+  bounds: { minX: number; minZ: number; maxX: number; maxZ: number };
+  tilePreviewConfig: PoiTilePreviewConfig;
+}>) {
+  const tiles = buildPoiAuditPreviewTiles(bounds, tilePreviewConfig);
+  if (tiles.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="admin-poi-audit-map-tiles" aria-hidden="true">
+      {tiles.map((tile) => (
+        <img
+          className="admin-poi-audit-map-tile"
+          draggable={false}
+          key={tile.id}
+          loading="lazy"
+          onError={(event) => {
+            event.currentTarget.style.visibility = 'hidden';
+          }}
+          src={tile.url}
+          style={buildPoiTileStyle(tile)}
+        />
+      ))}
     </div>
   );
 }
@@ -1159,7 +2148,8 @@ function PublishPoiDialog({
           <span className="muted">{submission.title}</span>
         </div>
         <p className="admin-poi-publish-warning">
-          发布后该 POI 会对所有用户可见，并参与地图搜索、附近地点和路线规划候选。请先确认坐标、分类、图片来源和重复提示。
+          发布后该 POI
+          会对所有用户可见，并参与地图搜索、附近地点和路线规划候选。请先确认坐标、分类、图片来源和重复提示。
         </p>
         {hasRejectedImage ? (
           <p className="admin-poi-publish-blocker">
@@ -1168,7 +2158,8 @@ function PublishPoiDialog({
         ) : null}
         {hasDuplicateDecision ? (
           <p className="admin-poi-publish-blocker">
-            仍有 {duplicateDecisionCount} 条冲突提示被标记为待合并。请先完成合并、重置判断或改为忽略后再发布。
+            仍有 {duplicateDecisionCount}{' '}
+            条冲突提示被标记为待合并。请先完成合并、重置判断或改为忽略后再发布。
           </p>
         ) : null}
         <dl className="admin-poi-publish-summary">
@@ -1182,7 +2173,9 @@ function PublishPoiDialog({
           </div>
           <div>
             <dt>代表坐标</dt>
-            <dd>{representativeCoordinate ? formatCoordinatePair(representativeCoordinate) : '暂无'}</dd>
+            <dd>
+              {representativeCoordinate ? formatCoordinatePair(representativeCoordinate) : '暂无'}
+            </dd>
           </div>
           <div>
             <dt>投稿图片</dt>
@@ -1307,6 +2300,238 @@ function RejectPoiDialog({
   );
 }
 
+function BulkRejectPoiDialog({
+  isBusy,
+  onClose,
+  onSubmit,
+  submissions,
+}: Readonly<{
+  isBusy: boolean;
+  onClose: () => void;
+  onSubmit: (reason: string) => Promise<void>;
+  submissions: AdminPoiSubmission[];
+}>) {
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedReason = reason.trim();
+    if (!normalizedReason) {
+      setError('请填写统一驳回理由，方便投稿者批量修正。');
+      return;
+    }
+
+    await onSubmit(normalizedReason);
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <form
+        className="modal-panel admin-poi-reject-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-poi-bulk-reject-title"
+        onMouseDown={(event) => event.stopPropagation()}
+        onSubmit={submit}
+      >
+        <div className="section-heading">
+          <h2 id="admin-poi-bulk-reject-title">批量驳回 POI 投稿</h2>
+          <span className="muted">{`${submissions.length} 条待审核记录`}</span>
+        </div>
+        <p className="muted">
+          本次会对所选待审核投稿写入同一条驳回理由，适合坐标偏移、分类不准、图片问题这类统一退回场景。
+        </p>
+        <div className="admin-content-publish-assets" aria-label="批量驳回对象">
+          {submissions.slice(0, 10).map((submission) => (
+            <span className="operation-tag" key={submission.id}>
+              {submission.title}
+            </span>
+          ))}
+          {submissions.length > 10 ? (
+            <span className="operation-tag">{`其余 ${submissions.length - 10} 条`}</span>
+          ) : null}
+        </div>
+        <label>
+          <span>统一驳回理由</span>
+          <textarea
+            value={reason}
+            onChange={(event) => {
+              setReason(event.currentTarget.value);
+              setError('');
+            }}
+            placeholder="例如：坐标位置普遍偏移，需要重新选点后再次提交。"
+            maxLength={500}
+          />
+        </label>
+        <div className="admin-poi-reject-presets" aria-label="常用驳回原因">
+          {poiRejectReasonPresets.map((preset) => (
+            <button
+              type="button"
+              key={preset}
+              onClick={() => {
+                setReason(preset);
+                setError('');
+              }}
+            >
+              {preset}
+            </button>
+          ))}
+        </div>
+        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
+        <div className="admin-content-actions">
+          <button type="button" onClick={onClose} disabled={isBusy}>
+            取消
+          </button>
+          <button type="submit" disabled={isBusy}>
+            确认批量驳回
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function BulkPublishPoiDialog({
+  conflictDecisions,
+  imageReviewByKey,
+  isBusy,
+  onClose,
+  onConfirm,
+  submissions,
+}: Readonly<{
+  conflictDecisions: PoiConflictDecision[];
+  imageReviewByKey: Map<string, PoiSubmissionImageReview>;
+  isBusy: boolean;
+  onClose: () => void;
+  onConfirm: (targets: AdminPoiSubmission[]) => Promise<void>;
+  submissions: AdminPoiSubmission[];
+}>) {
+  const [isConfirmed, setIsConfirmed] = useState(false);
+  const publishReadyTargets = submissions.filter(
+    (submission) => !isPoiSubmissionPublishBlocked(submission, imageReviewByKey, conflictDecisions),
+  );
+  const blockedTargets = submissions.filter((submission) =>
+    isPoiSubmissionPublishBlocked(submission, imageReviewByKey, conflictDecisions),
+  );
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!isConfirmed || publishReadyTargets.length === 0 || blockedTargets.length > 0) {
+      return;
+    }
+
+    await onConfirm(publishReadyTargets);
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <form
+        className="modal-panel admin-poi-publish-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-poi-bulk-publish-title"
+        onMouseDown={(event) => event.stopPropagation()}
+        onSubmit={submit}
+      >
+        <div className="section-heading">
+          <h2 id="admin-poi-bulk-publish-title">批量发布到公开地图</h2>
+          <span className="muted">{`${submissions.length} 条待发布记录`}</span>
+        </div>
+        <p className="admin-poi-publish-warning">
+          批量发布会让所选 POI
+          立即进入公开地图。请先确认坐标、分类、图片来源和冲突提示已经逐条核对。
+        </p>
+        {blockedTargets.length > 0 ? (
+          <p className="admin-poi-publish-blocker">
+            当前所选记录里仍有 {blockedTargets.length}{' '}
+            条阻塞发布。请先处理图片不合格或待合并冲突后再执行批量发布。
+          </p>
+        ) : null}
+        <dl className="admin-poi-publish-summary">
+          <div>
+            <dt>所选记录</dt>
+            <dd>{submissions.length}</dd>
+          </div>
+          <div>
+            <dt>可发布</dt>
+            <dd>{publishReadyTargets.length}</dd>
+          </div>
+          <div>
+            <dt>阻塞发布</dt>
+            <dd>{blockedTargets.length}</dd>
+          </div>
+          <div>
+            <dt>含图片</dt>
+            <dd>{submissions.filter((submission) => Boolean(submission.imageUrl)).length}</dd>
+          </div>
+          <div>
+            <dt>冲突待合并</dt>
+            <dd>
+              {
+                submissions.filter((submission) =>
+                  conflictDecisions.some(
+                    (decision) =>
+                      decision.submissionId === submission.id && decision.decision === 'duplicate',
+                  ),
+                ).length
+              }
+            </dd>
+          </div>
+        </dl>
+        <div className="admin-content-publish-assets" aria-label="批量发布对象">
+          {publishReadyTargets.slice(0, 10).map((submission) => (
+            <span className="operation-tag" key={submission.id}>
+              {submission.title}
+            </span>
+          ))}
+          {publishReadyTargets.length > 10 ? (
+            <span className="operation-tag">{`其余 ${publishReadyTargets.length - 10} 条`}</span>
+          ) : null}
+        </div>
+        {blockedTargets.length > 0 ? (
+          <div className="admin-content-publish-blockers" aria-label="批量发布阻塞对象">
+            {blockedTargets.slice(0, 5).map((submission) => (
+              <p key={submission.id}>
+                {submission.title}
+                {submission.imageUrl &&
+                imageReviewByKey.get(imageReviewKey(submission.id, submission.imageUrl))
+                  ?.decision === 'rejected'
+                  ? '：图片不合格'
+                  : '：存在待合并冲突'}
+              </p>
+            ))}
+          </div>
+        ) : null}
+        <label className="admin-poi-publish-confirm">
+          <input
+            type="checkbox"
+            checked={isConfirmed}
+            onChange={(event) => setIsConfirmed(event.currentTarget.checked)}
+          />
+          <span>我已核对所选 POI 的公开展示信息，确认可以批量发布。</span>
+        </label>
+        <div className="admin-content-actions">
+          <button type="button" onClick={onClose} disabled={isBusy}>
+            取消
+          </button>
+          <button
+            type="submit"
+            disabled={
+              isBusy ||
+              !isConfirmed ||
+              publishReadyTargets.length === 0 ||
+              blockedTargets.length > 0
+            }
+          >
+            确认批量发布
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function EditPoiSubmissionDialog({
   categories,
   contextMarkers,
@@ -1314,6 +2539,7 @@ function EditPoiSubmissionDialog({
   onClose,
   onSubmit,
   submission,
+  tilePreviewConfig,
 }: Readonly<{
   categories: PoiCategory[];
   contextMarkers: PoiAuditContextMarker[];
@@ -1321,28 +2547,44 @@ function EditPoiSubmissionDialog({
   onClose: () => void;
   onSubmit: (input: PoiSubmissionEditInput) => Promise<string | null>;
   submission: PoiSubmission;
+  tilePreviewConfig: PoiTilePreviewConfig;
 }>) {
   const [form, setForm] = useState<PoiSubmissionEditInput>(() => ({
     title: submission.title,
     categoryId: submission.categoryId,
+    iconFileName: submission.iconFileName ?? '',
     description: submission.description ?? '',
     href: submission.href ?? '',
   }));
-  const pointCoordinate = submission.geometry.type === 'Point' ? submission.geometry.coordinates : null;
-  const initialLineCoordinates =
-    submission.geometry.type === 'LineString' ? submission.geometry.coordinates : null;
-  const [pointX, setPointX] = useState(pointCoordinate ? String(pointCoordinate[0]) : '');
-  const [pointZ, setPointZ] = useState(pointCoordinate ? String(pointCoordinate[1]) : '');
-  const [lineCoordinates, setLineCoordinates] = useState<Array<[number, number]> | null>(
-    initialLineCoordinates ? [...initialLineCoordinates] : null,
+  const [geometryDraft, setGeometryDraft] = useState<PoiGeometryDraft>(() =>
+    createPoiGeometryDraft(submission.geometry),
   );
   const [error, setError] = useState('');
-  const currentPointCoordinate = pointCoordinate
-    ? readPointGeometryFromForm(pointX, pointZ)?.coordinates ?? pointCoordinate
-    : null;
+  const originalPointCoordinate =
+    submission.geometry.type === 'Point' ? submission.geometry.coordinates : null;
+  const currentPointCoordinate =
+    geometryDraft.type === 'Point'
+      ? (parseCoordinateDraft(geometryDraft.coordinate) ?? originalPointCoordinate)
+      : null;
+  const selectedCategory = categories.find((category) => category.id === form.categoryId);
+  const iconOptions = selectedCategory?.iconMapping.iconFileNames ?? [];
 
   const updateForm = (patch: Partial<PoiSubmissionEditInput>) => {
-    setForm((current) => ({ ...current, ...patch }));
+    setForm((current) => {
+      const next = { ...current, ...patch };
+      if (patch.categoryId && patch.categoryId !== current.categoryId) {
+        const nextCategory = categories.find((category) => category.id === patch.categoryId);
+        next.iconFileName = nextCategory?.iconMapping.iconFileNames.includes(current.iconFileName)
+          ? current.iconFileName
+          : '';
+      }
+      return next;
+    });
+    setError('');
+  };
+
+  const updateGeometryDraft = (draft: PoiGeometryDraft) => {
+    setGeometryDraft(draft);
     setError('');
   };
 
@@ -1358,25 +2600,19 @@ function EditPoiSubmissionDialog({
       return;
     }
 
-    const nextGeometry = pointCoordinate
-      ? readPointGeometryFromForm(pointX, pointZ)
-      : lineCoordinates
-        ? ({
-            type: 'LineString',
-            coordinates: lineCoordinates,
-          } satisfies Extract<MapGeometry, { type: 'LineString' }>)
-        : undefined;
-    if (pointCoordinate && !nextGeometry) {
-      setError('请填写有效的 X/Z 坐标。');
+    const geometryResult = buildMapGeometryFromDraft(geometryDraft);
+    if (!geometryResult.geometry) {
+      setError(geometryResult.error ?? '请填写有效的几何坐标。');
       return;
     }
 
     const submitError = await onSubmit({
       title: form.title.trim(),
       categoryId: form.categoryId.trim(),
+      iconFileName: form.iconFileName.trim(),
       description: form.description.trim(),
       href: form.href.trim(),
-      geometry: nextGeometry,
+      geometry: geometryResult.geometry,
     });
     if (submitError) {
       setError(submitError);
@@ -1395,7 +2631,7 @@ function EditPoiSubmissionDialog({
       >
         <div className="section-heading">
           <h2 id="admin-poi-edit-title">修正 POI 投稿</h2>
-          <span className="muted">仅限待审核投稿的基础资料</span>
+          <span className="muted">{getPoiEditDialogHint(submission.status)}</span>
         </div>
         <label>
           <span>地点名称</span>
@@ -1419,6 +2655,20 @@ function EditPoiSubmissionDialog({
           </select>
         </label>
         <label>
+          <span>展示图标</span>
+          <select
+            value={form.iconFileName}
+            onChange={(event) => updateForm({ iconFileName: event.currentTarget.value })}
+          >
+            <option value="">跟随分类默认图标</option>
+            {iconOptions.map((iconValue) => (
+              <option value={iconValue} key={iconValue}>
+                {iconValue}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
           <span>简介</span>
           <textarea
             value={form.description}
@@ -1434,17 +2684,22 @@ function EditPoiSubmissionDialog({
             placeholder="https://..."
           />
         </label>
-        {pointCoordinate ? (
+        {geometryDraft.type === 'Point' && originalPointCoordinate ? (
           <div className="admin-poi-edit-coordinate">
             <div className="admin-poi-edit-coordinate-fields">
               <label>
                 <span>X 坐标</span>
                 <input
                   inputMode="decimal"
-                  value={pointX}
+                  value={geometryDraft.coordinate.x}
                   onChange={(event) => {
-                    setPointX(event.currentTarget.value);
-                    setError('');
+                    updateGeometryDraft({
+                      type: 'Point',
+                      coordinate: {
+                        ...geometryDraft.coordinate,
+                        x: event.currentTarget.value,
+                      },
+                    });
                   }}
                 />
               </label>
@@ -1452,65 +2707,81 @@ function EditPoiSubmissionDialog({
                 <span>Z 坐标</span>
                 <input
                   inputMode="decimal"
-                  value={pointZ}
+                  value={geometryDraft.coordinate.z}
                   onChange={(event) => {
-                    setPointZ(event.currentTarget.value);
-                    setError('');
+                    updateGeometryDraft({
+                      type: 'Point',
+                      coordinate: {
+                        ...geometryDraft.coordinate,
+                        z: event.currentTarget.value,
+                      },
+                    });
                   }}
                 />
               </label>
             </div>
             <PoiPointCoordinatePicker
               contextMarkers={contextMarkers}
-              currentCoordinate={currentPointCoordinate ?? pointCoordinate}
-              originalCoordinate={pointCoordinate}
+              currentCoordinate={currentPointCoordinate ?? originalPointCoordinate}
+              originalCoordinate={originalPointCoordinate}
+              tilePreviewConfig={tilePreviewConfig}
               onPick={(coordinate) => {
-                setPointX(roundCoordinateForQuery(coordinate[0]));
-                setPointZ(roundCoordinateForQuery(coordinate[1]));
-                setError('');
+                updateGeometryDraft({
+                  type: 'Point',
+                  coordinate: coordinateToDraft(coordinate),
+                });
               }}
             />
             <a
               className="admin-action-link"
-              href={buildSubmissionMapHref(submission, currentPointCoordinate ?? pointCoordinate)}
+              href={buildSubmissionMapHref(
+                submission,
+                currentPointCoordinate ?? originalPointCoordinate,
+              )}
               target="_blank"
               rel="noreferrer"
             >
               打开地图辅助选点
             </a>
           </div>
-        ) : lineCoordinates ? (
-          <div className="admin-poi-edit-coordinate">
-            <div className="admin-poi-line-order-card">
-              <strong>线性 POI 点序</strong>
-              <dl>
-                <div>
-                  <dt>点数</dt>
-                  <dd>{lineCoordinates.length}</dd>
-                </div>
-                <div>
-                  <dt>起点</dt>
-                  <dd>{formatCoordinatePair(lineCoordinates[0])}</dd>
-                </div>
-                <div>
-                  <dt>终点</dt>
-                  <dd>{formatCoordinatePair(lineCoordinates[lineCoordinates.length - 1])}</dd>
-                </div>
-              </dl>
-              <button
-                type="button"
-                onClick={() => {
-                  setLineCoordinates((current) => (current ? [...current].reverse() : current));
-                  setError('');
-                }}
-              >
-                反转点序
-              </button>
-            </div>
-            <p className="muted">当前仅支持反转线性 POI 的点序；补点、删点和道路吸附需要后续地图编辑器。</p>
-          </div>
+        ) : geometryDraft.type === 'MultiPoint' ? (
+          <PoiCoordinateListEditor
+            coordinates={geometryDraft.coordinates}
+            minPoints={2}
+            title="点组坐标"
+            onChange={(coordinates) => updateGeometryDraft({ type: 'MultiPoint', coordinates })}
+          />
+        ) : geometryDraft.type === 'LineString' ? (
+          <PoiCoordinateListEditor
+            coordinates={geometryDraft.coordinates}
+            minPoints={2}
+            title="线性 POI 点序"
+            onChange={(coordinates) => updateGeometryDraft({ type: 'LineString', coordinates })}
+          />
+        ) : geometryDraft.type === 'Rectangle' ? (
+          <PoiRectangleBoundsEditor
+            bounds={geometryDraft.bounds}
+            title="矩形区域边界"
+            onChange={(bounds) => updateGeometryDraft({ type: 'Rectangle', bounds })}
+          />
+        ) : geometryDraft.type === 'MultiRectangle' ? (
+          <PoiMultiRectangleEditor
+            rectangles={geometryDraft.rectangles}
+            onChange={(rectangles) => updateGeometryDraft({ type: 'MultiRectangle', rectangles })}
+          />
+        ) : geometryDraft.type === 'Polygon' ? (
+          <PoiPolygonEditor
+            rings={geometryDraft.rings}
+            title="多边形边界"
+            onChange={(rings) => updateGeometryDraft({ type: 'Polygon', rings })}
+          />
+        ) : geometryDraft.type === 'MultiPolygon' ? (
+          <PoiMultiPolygonEditor
+            polygons={geometryDraft.polygons}
+            onChange={(polygons) => updateGeometryDraft({ type: 'MultiPolygon', polygons })}
+          />
         ) : (
-          <p className="muted">当前仅支持点状 POI 修正坐标、线性 POI 反转点序；区域几何需要后续地图编辑器。</p>
+          <p className="muted">当前几何类型暂不支持在此弹窗修正。</p>
         )}
         {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
         <div className="admin-content-actions">
@@ -1526,21 +2797,354 @@ function EditPoiSubmissionDialog({
   );
 }
 
+function PoiCoordinateListEditor({
+  coordinates,
+  minPoints,
+  onChange,
+  title,
+}: Readonly<{
+  coordinates: CoordinateDraft[];
+  minPoints: number;
+  onChange: (coordinates: CoordinateDraft[]) => void;
+  title: string;
+}>) {
+  const updateCoordinate = (index: number, patch: Partial<CoordinateDraft>) => {
+    onChange(
+      coordinates.map((coordinate, currentIndex) =>
+        currentIndex === index ? { ...coordinate, ...patch } : coordinate,
+      ),
+    );
+  };
+
+  const moveCoordinate = (index: number, offset: -1 | 1) => {
+    const nextIndex = index + offset;
+    if (nextIndex < 0 || nextIndex >= coordinates.length) {
+      return;
+    }
+
+    const next = [...coordinates];
+    [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+    onChange(next);
+  };
+
+  const insertCoordinateAfter = (index: number) => {
+    const next = [...coordinates];
+    next.splice(index + 1, 0, createInsertedCoordinateDraft(coordinates, index));
+    onChange(next);
+  };
+
+  const removeCoordinate = (index: number) => {
+    if (coordinates.length <= minPoints) {
+      return;
+    }
+
+    onChange(coordinates.filter((_, currentIndex) => currentIndex !== index));
+  };
+
+  return (
+    <div className="admin-poi-edit-coordinate admin-poi-coordinate-list-editor">
+      <div className="admin-poi-line-order-card">
+        <strong>{title}</strong>
+        <dl>
+          <div>
+            <dt>点数</dt>
+            <dd>{coordinates.length}</dd>
+          </div>
+          <div>
+            <dt>首点</dt>
+            <dd>{formatDraftCoordinatePair(coordinates[0])}</dd>
+          </div>
+          <div>
+            <dt>末点</dt>
+            <dd>{formatDraftCoordinatePair(coordinates[coordinates.length - 1])}</dd>
+          </div>
+        </dl>
+        <div className="admin-poi-geometry-toolbar">
+          <button type="button" onClick={() => onChange([...coordinates].reverse())}>
+            反转点序
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange([...coordinates, createInsertedCoordinateDraft(coordinates)])}
+          >
+            添加点
+          </button>
+        </div>
+      </div>
+      <div className="admin-poi-coordinate-table" aria-label={title}>
+        {coordinates.map((coordinate, index) => (
+          <div className="admin-poi-coordinate-row" key={index}>
+            <span>{index + 1}</span>
+            <label>
+              <span>X</span>
+              <input
+                inputMode="decimal"
+                value={coordinate.x}
+                onChange={(event) => updateCoordinate(index, { x: event.currentTarget.value })}
+              />
+            </label>
+            <label>
+              <span>Z</span>
+              <input
+                inputMode="decimal"
+                value={coordinate.z}
+                onChange={(event) => updateCoordinate(index, { z: event.currentTarget.value })}
+              />
+            </label>
+            <div className="admin-poi-coordinate-actions">
+              <button
+                type="button"
+                disabled={index === 0}
+                onClick={() => moveCoordinate(index, -1)}
+              >
+                上移
+              </button>
+              <button
+                type="button"
+                disabled={index === coordinates.length - 1}
+                onClick={() => moveCoordinate(index, 1)}
+              >
+                下移
+              </button>
+              <button type="button" onClick={() => insertCoordinateAfter(index)}>
+                插入
+              </button>
+              <button
+                type="button"
+                disabled={coordinates.length <= minPoints}
+                onClick={() => removeCoordinate(index)}
+              >
+                删除
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="muted">
+        保存前会校验坐标数量和数值；道路吸附、瓦片叠加和站点图层仍属于后续地图工作台能力。
+      </p>
+    </div>
+  );
+}
+
+function PoiRectangleBoundsEditor({
+  bounds,
+  onChange,
+  onRemove,
+  title,
+}: Readonly<{
+  bounds: RectangleBoundsDraft;
+  onChange: (bounds: RectangleBoundsDraft) => void;
+  onRemove?: () => void;
+  title: string;
+}>) {
+  return (
+    <div className="admin-poi-rectangle-editor">
+      <div className="admin-poi-rectangle-editor-heading">
+        <strong>{title}</strong>
+        {onRemove ? (
+          <button type="button" onClick={onRemove}>
+            删除
+          </button>
+        ) : null}
+      </div>
+      <div className="admin-poi-rectangle-fields">
+        <label>
+          <span>最小 X</span>
+          <input
+            inputMode="decimal"
+            value={bounds.minX}
+            onChange={(event) => onChange({ ...bounds, minX: event.currentTarget.value })}
+          />
+        </label>
+        <label>
+          <span>最小 Z</span>
+          <input
+            inputMode="decimal"
+            value={bounds.minZ}
+            onChange={(event) => onChange({ ...bounds, minZ: event.currentTarget.value })}
+          />
+        </label>
+        <label>
+          <span>最大 X</span>
+          <input
+            inputMode="decimal"
+            value={bounds.maxX}
+            onChange={(event) => onChange({ ...bounds, maxX: event.currentTarget.value })}
+          />
+        </label>
+        <label>
+          <span>最大 Z</span>
+          <input
+            inputMode="decimal"
+            value={bounds.maxZ}
+            onChange={(event) => onChange({ ...bounds, maxZ: event.currentTarget.value })}
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function PoiMultiRectangleEditor({
+  onChange,
+  rectangles,
+}: Readonly<{
+  onChange: (rectangles: RectangleBoundsDraft[]) => void;
+  rectangles: RectangleBoundsDraft[];
+}>) {
+  return (
+    <div className="admin-poi-edit-coordinate">
+      {rectangles.map((bounds, index) => (
+        <PoiRectangleBoundsEditor
+          bounds={bounds}
+          key={index}
+          title={`矩形 ${index + 1}`}
+          onChange={(nextBounds) =>
+            onChange(
+              rectangles.map((item, currentIndex) => (currentIndex === index ? nextBounds : item)),
+            )
+          }
+          onRemove={
+            rectangles.length > 1
+              ? () => onChange(rectangles.filter((_, currentIndex) => currentIndex !== index))
+              : undefined
+          }
+        />
+      ))}
+      <div className="admin-poi-geometry-toolbar">
+        <button
+          type="button"
+          onClick={() => onChange([...rectangles, createNextRectangleDraft(rectangles)])}
+        >
+          添加矩形
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PoiPolygonEditor({
+  onChange,
+  onRemove,
+  rings,
+  title,
+}: Readonly<{
+  onChange: (rings: CoordinateDraft[][]) => void;
+  onRemove?: () => void;
+  rings: CoordinateDraft[][];
+  title: string;
+}>) {
+  return (
+    <div className="admin-poi-edit-coordinate admin-poi-polygon-editor">
+      <div className="admin-poi-polygon-heading">
+        <strong>{title}</strong>
+        {onRemove ? (
+          <button type="button" onClick={onRemove}>
+            删除多边形
+          </button>
+        ) : null}
+      </div>
+      {rings.map((ring, index) => (
+        <div className="admin-poi-polygon-ring" key={index}>
+          <div className="admin-poi-polygon-heading">
+            <span>{index === 0 ? '外边界' : `内环 ${index}`}</span>
+            {rings.length > 1 ? (
+              <button
+                type="button"
+                onClick={() => onChange(rings.filter((_, currentIndex) => currentIndex !== index))}
+              >
+                删除环
+              </button>
+            ) : null}
+          </div>
+          <PoiCoordinateListEditor
+            coordinates={ring}
+            minPoints={4}
+            title={`边界点序 ${index + 1}`}
+            onChange={(coordinates) =>
+              onChange(
+                rings.map((item, currentIndex) => (currentIndex === index ? coordinates : item)),
+              )
+            }
+          />
+        </div>
+      ))}
+      <div className="admin-poi-geometry-toolbar">
+        <button
+          type="button"
+          onClick={() => onChange([...rings, createDefaultPolygonRingDraft(rings.at(-1)?.[0])])}
+        >
+          添加内环
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PoiMultiPolygonEditor({
+  onChange,
+  polygons,
+}: Readonly<{
+  onChange: (polygons: CoordinateDraft[][][]) => void;
+  polygons: CoordinateDraft[][][];
+}>) {
+  return (
+    <div className="admin-poi-edit-coordinate admin-poi-multi-polygon-editor">
+      {polygons.map((rings, index) => (
+        <PoiPolygonEditor
+          key={index}
+          rings={rings}
+          title={`多边形 ${index + 1}`}
+          onChange={(nextRings) =>
+            onChange(
+              polygons.map((item, currentIndex) => (currentIndex === index ? nextRings : item)),
+            )
+          }
+          onRemove={
+            polygons.length > 1
+              ? () => onChange(polygons.filter((_, currentIndex) => currentIndex !== index))
+              : undefined
+          }
+        />
+      ))}
+      <div className="admin-poi-geometry-toolbar">
+        <button
+          type="button"
+          onClick={() =>
+            onChange([...polygons, [createDefaultPolygonRingDraft(polygons.at(-1)?.[0]?.[0])]])
+          }
+        >
+          添加多边形
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function PoiPointCoordinatePicker({
   contextMarkers,
   currentCoordinate,
   onPick,
   originalCoordinate,
+  tilePreviewConfig,
 }: Readonly<{
   contextMarkers: PoiAuditContextMarker[];
   currentCoordinate: [number, number];
   onPick: (coordinate: [number, number]) => void;
   originalCoordinate: [number, number];
+  tilePreviewConfig: PoiTilePreviewConfig;
 }>) {
-  const model = buildPoiPointCoordinatePickerModel(currentCoordinate, originalCoordinate, contextMarkers);
+  const model = buildPoiPointCoordinatePickerModel(
+    currentCoordinate,
+    originalCoordinate,
+    contextMarkers,
+  );
+  const stageRef = useRef<HTMLSpanElement | null>(null);
 
   const pickCoordinate = (event: MouseEvent<HTMLButtonElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
+    const rect =
+      stageRef.current?.getBoundingClientRect() ?? event.currentTarget.getBoundingClientRect();
     const viewPoint: [number, number] = [
       ((event.clientX - rect.left) / rect.width) * 220,
       ((event.clientY - rect.top) / rect.height) * 152,
@@ -1555,33 +3159,34 @@ function PoiPointCoordinatePicker({
       onClick={pickCoordinate}
       aria-label="在坐标预览中点选新的 POI 坐标"
     >
-      <svg viewBox="0 0 220 152" aria-hidden="true">
-        <rect className="admin-poi-coordinate-picker-grid" x="0" y="0" width="220" height="152" />
-        {model.contextMarkers.map((marker) => (
+      <span className="admin-poi-coordinate-picker-stage" aria-hidden="true" ref={stageRef}>
+        <PoiAuditTileLayer bounds={model.bounds} tilePreviewConfig={tilePreviewConfig} />
+        <svg viewBox="0 0 220 152">
+          <rect className="admin-poi-coordinate-picker-grid" x="0" y="0" width="220" height="152" />
+          {model.contextMarkers.map((marker) => (
+            <circle
+              className={`admin-poi-coordinate-picker-context is-${marker.relation}`}
+              cx={marker.point[0]}
+              cy={marker.point[1]}
+              key={marker.marker.id}
+              r="4"
+            />
+          ))}
           <circle
-            className={`admin-poi-coordinate-picker-context is-${marker.relation}`}
-            cx={marker.point[0]}
-            cy={marker.point[1]}
-            key={marker.marker.id}
-            r="4"
+            className="admin-poi-coordinate-picker-original"
+            cx={model.originalPoint[0]}
+            cy={model.originalPoint[1]}
+            r="6"
           />
-        ))}
-        <circle
-          className="admin-poi-coordinate-picker-original"
-          cx={model.originalPoint[0]}
-          cy={model.originalPoint[1]}
-          r="6"
-        />
-        <circle
-          className="admin-poi-coordinate-picker-current"
-          cx={model.currentPoint[0]}
-          cy={model.currentPoint[1]}
-          r="5"
-        />
-      </svg>
-      <span>
-        点击预览区域回填坐标 · 当前 {formatCoordinatePair(currentCoordinate)}
+          <circle
+            className="admin-poi-coordinate-picker-current"
+            cx={model.currentPoint[0]}
+            cy={model.currentPoint[1]}
+            r="5"
+          />
+        </svg>
       </span>
+      <span>点击预览区域回填坐标 · 当前 {formatCoordinatePair(currentCoordinate)}</span>
     </button>
   );
 }
@@ -1595,16 +3200,21 @@ interface PoiCategoryDraft {
   iconFileNamesText: string;
 }
 
-function PoiCategoryProfileEditor({
+function PoiCategoryProfileDialog({
   categories,
   iconBaseUrl,
+  isBusy,
+  selectedCategoryId,
+  onClose,
   onSaved,
 }: Readonly<{
   categories: PoiCategory[];
   iconBaseUrl: string;
+  isBusy: boolean;
+  selectedCategoryId: string | null;
+  onClose: () => void;
   onSaved: (message: string) => void;
 }>) {
-  const [isOpen, setIsOpen] = useState(false);
   const [drafts, setDrafts] = useState<PoiCategoryDraft[]>(() => createCategoryDrafts(categories));
   const [localStatus, setLocalStatus] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -1614,6 +3224,16 @@ function PoiCategoryProfileEditor({
   useEffect(() => {
     setDrafts(createCategoryDrafts(categories));
   }, [categories]);
+
+  const visibleDrafts = useMemo(
+    () => (selectedCategoryId ? drafts.filter((draft) => draft.id === selectedCategoryId) : drafts),
+    [drafts, selectedCategoryId],
+  );
+  const selectedCategoryDraft = useMemo(
+    () =>
+      selectedCategoryId ? (drafts.find((draft) => draft.id === selectedCategoryId) ?? null) : null,
+    [drafts, selectedCategoryId],
+  );
 
   const updateDraft = (categoryId: string, patch: Partial<PoiCategoryDraft>) => {
     setDrafts((current) =>
@@ -1728,170 +3348,188 @@ function PoiCategoryProfileEditor({
             ...draft,
             defaultIconFileName:
               extractUploadedPoiIconFileName(draft.defaultIconFileName) === deletedFileName
-                ? icons[0] ?? ''
+                ? (icons[0] ?? '')
                 : draft.defaultIconFileName,
             iconFileNamesText: icons.join('\n'),
           };
         }),
       );
-      onSaved(data.fileDeleted === false ? '图标引用已移除，文件此前已不存在' : 'POI 分类图标已删除');
+      onSaved(
+        data.fileDeleted === false ? '图标引用已移除，文件此前已不存在' : 'POI 分类图标已删除',
+      );
     } finally {
       setDeletingIconKey(null);
     }
   };
 
   return (
-    <section className="admin-poi-category-config" aria-labelledby="admin-poi-category-title">
-      <div className="admin-poi-category-config-header">
-        <div>
-          <h2 id="admin-poi-category-title">分类与图标配置</h2>
-          <p className="muted">
-            管理分类名称、默认图标、图标文件列表、排序和是否开放公开投稿。
-          </p>
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="modal-panel admin-poi-category-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-poi-category-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="section-heading">
+          <h2 id="admin-poi-category-title">
+            {selectedCategoryDraft ? `${selectedCategoryDraft.name} 分类配置` : '分类与图标配置'}
+          </h2>
+          <span className="muted">
+            {selectedCategoryDraft
+              ? '当前只显示所选分类的名称、图标、排序和公开投稿配置。'
+              : '管理分类名称、默认图标、图标文件列表、排序和是否开放公开投稿。'}
+          </span>
         </div>
-        <button type="button" onClick={() => setIsOpen((value) => !value)}>
-          {isOpen ? '收起配置' : '展开配置'}
-        </button>
-      </div>
-      {isOpen ? (
-        <>
-          <div className="admin-poi-category-grid">
-            {drafts.map((draft) => (
-              <article className="admin-poi-category-row" key={draft.id}>
-                <PoiCategoryIcon
-                  category={categoryDraftToInput(draft)}
-                  iconBaseUrl={iconBaseUrl}
+        <div className="admin-poi-category-grid">
+          {visibleDrafts.map((draft) => (
+            <article className="admin-poi-category-row" key={draft.id}>
+              <PoiCategoryIcon category={categoryDraftToInput(draft)} iconBaseUrl={iconBaseUrl} />
+              <label>
+                <span>分类 ID</span>
+                <input value={draft.id} disabled />
+              </label>
+              <label>
+                <span>名称</span>
+                <input
+                  value={draft.name}
+                  onChange={(event) => updateDraft(draft.id, { name: event.currentTarget.value })}
                 />
-                <label>
-                  <span>分类 ID</span>
-                  <input value={draft.id} disabled />
-                </label>
-                <label>
-                  <span>名称</span>
-                  <input
-                    value={draft.name}
-                    onChange={(event) => updateDraft(draft.id, { name: event.currentTarget.value })}
-                  />
-                </label>
-                <label>
-                  <span>排序</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100000"
-                    value={draft.sortOrder}
-                    onChange={(event) =>
-                      updateDraft(draft.id, { sortOrder: Number(event.currentTarget.value) })
-                    }
-                  />
-                </label>
-                <label>
-                  <span>默认图标</span>
-                  <input
-                    value={draft.defaultIconFileName}
-                    onChange={(event) =>
-                      updateDraft(draft.id, { defaultIconFileName: event.currentTarget.value })
-                    }
-                  />
-                </label>
-                <label className="admin-poi-category-icons">
-                  <span>图标文件列表</span>
-                  <textarea
-                    value={draft.iconFileNamesText}
-                    onChange={(event) =>
-                      updateDraft(draft.id, { iconFileNamesText: event.currentTarget.value })
-                    }
-                  />
-                </label>
-                <div className="admin-poi-category-icon-list" aria-label={`${draft.name} 图标预览`}>
-                  {splitIconFileNames(draft.iconFileNamesText).map((iconValue) => {
-                    const uploadedFileName = extractUploadedPoiIconFileName(iconValue);
-                    const isDefault = draft.defaultIconFileName.trim() === iconValue;
-                    const deleteKey = `${draft.id}:${iconValue}`;
-                    return (
-                      <span
-                        className={`admin-poi-category-icon-chip${isDefault ? ' is-default' : ''}`}
-                        key={iconValue}
-                      >
-                        <span className="admin-poi-category-icon-swatch-group" aria-hidden="true">
-                          {['light', 'dark', 'map'].map((tone) => (
-                            <span
-                              className={`admin-poi-category-icon-swatch is-${tone}`}
-                              key={tone}
-                              title={iconPreviewToneLabel(tone)}
-                            >
-                              <img src={toMarkerIconUrl(iconValue, iconBaseUrl)} alt="" draggable={false} />
-                            </span>
-                          ))}
-                        </span>
-                        <code>{iconValue}</code>
-                        {isDefault ? <small>默认</small> : null}
-                        {uploadedFileName ? (
-                          <button
-                            type="button"
-                            disabled={deletingIconKey === deleteKey}
-                            onClick={() => void deleteCategoryIcon(draft.id, iconValue)}
+              </label>
+              <label>
+                <span>排序</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100000"
+                  value={draft.sortOrder}
+                  onChange={(event) =>
+                    updateDraft(draft.id, { sortOrder: Number(event.currentTarget.value) })
+                  }
+                />
+              </label>
+              <label>
+                <span>默认图标</span>
+                <input
+                  value={draft.defaultIconFileName}
+                  onChange={(event) =>
+                    updateDraft(draft.id, { defaultIconFileName: event.currentTarget.value })
+                  }
+                />
+              </label>
+              <label className="admin-poi-category-icons">
+                <span>图标文件列表</span>
+                <textarea
+                  value={draft.iconFileNamesText}
+                  onChange={(event) =>
+                    updateDraft(draft.id, { iconFileNamesText: event.currentTarget.value })
+                  }
+                />
+              </label>
+              <div className="admin-poi-category-icon-list" aria-label={`${draft.name} 图标预览`}>
+                {splitIconFileNames(draft.iconFileNamesText).map((iconValue) => {
+                  const uploadedFileName = extractUploadedPoiIconFileName(iconValue);
+                  const isDefault = draft.defaultIconFileName.trim() === iconValue;
+                  const deleteKey = `${draft.id}:${iconValue}`;
+                  return (
+                    <span
+                      className={`admin-poi-category-icon-chip${isDefault ? ' is-default' : ''}`}
+                      key={iconValue}
+                    >
+                      <span className="admin-poi-category-icon-swatch-group" aria-hidden="true">
+                        {['light', 'dark', 'map'].map((tone) => (
+                          <span
+                            className={`admin-poi-category-icon-swatch is-${tone}`}
+                            key={tone}
+                            title={iconPreviewToneLabel(tone)}
                           >
-                            删除
-                          </button>
-                        ) : null}
+                            <img
+                              src={toMarkerIconUrl(iconValue, iconBaseUrl)}
+                              alt=""
+                              draggable={false}
+                            />
+                          </span>
+                        ))}
                       </span>
-                    );
-                  })}
-                </div>
-                <label className="admin-poi-category-upload">
-                  <span>上传图标</span>
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
-                    disabled={uploadingCategoryId === draft.id}
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0];
-                      void uploadCategoryIcon(draft.id, file);
-                      event.currentTarget.value = '';
-                    }}
-                  />
-                </label>
-                <label className="checkbox-row admin-poi-category-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={draft.acceptsPublicSubmissions}
-                    onChange={(event) =>
-                      updateDraft(draft.id, {
-                        acceptsPublicSubmissions: event.currentTarget.checked,
-                      })
-                    }
-                  />
-                  <span>允许公开投稿</span>
-                </label>
-              </article>
-            ))}
-          </div>
-          <div className="admin-content-actions">
-            <button type="button" onClick={() => setDrafts(createCategoryDrafts(categories))}>
-              重置当前配置
-            </button>
-            <button type="button" disabled={isSaving || drafts.length === 0} onClick={saveCategories}>
-              保存分类配置
-            </button>
-          </div>
-          {localStatus ? <p className="muted">{localStatus}</p> : null}
-        </>
-      ) : null}
-    </section>
+                      <code>{iconValue}</code>
+                      {isDefault ? <small>默认</small> : null}
+                      {uploadedFileName ? (
+                        <button
+                          type="button"
+                          disabled={deletingIconKey === deleteKey}
+                          onClick={() => void deleteCategoryIcon(draft.id, iconValue)}
+                        >
+                          删除
+                        </button>
+                      ) : null}
+                    </span>
+                  );
+                })}
+              </div>
+              <label className="admin-poi-category-upload">
+                <span>上传图标</span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
+                  disabled={uploadingCategoryId === draft.id}
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    void uploadCategoryIcon(draft.id, file);
+                    event.currentTarget.value = '';
+                  }}
+                />
+              </label>
+              <label className="checkbox-row admin-poi-category-checkbox">
+                <input
+                  type="checkbox"
+                  checked={draft.acceptsPublicSubmissions}
+                  onChange={(event) =>
+                    updateDraft(draft.id, {
+                      acceptsPublicSubmissions: event.currentTarget.checked,
+                    })
+                  }
+                />
+                <span>允许公开投稿</span>
+              </label>
+            </article>
+          ))}
+        </div>
+        <div className="admin-content-actions">
+          <button
+            type="button"
+            disabled={isSaving || isBusy}
+            onClick={() => setDrafts(createCategoryDrafts(categories))}
+          >
+            {selectedCategoryDraft ? '重置当前分类' : '重置当前配置'}
+          </button>
+          <button type="button" onClick={onClose} disabled={isSaving || isBusy}>
+            关闭
+          </button>
+          <button
+            type="button"
+            disabled={isSaving || visibleDrafts.length === 0 || isBusy}
+            onClick={saveCategories}
+          >
+            保存分类配置
+          </button>
+        </div>
+        {localStatus ? <p className="muted">{localStatus}</p> : null}
+      </section>
+    </div>
   );
 }
 
 function PoiCategoryIcon({
   category,
   iconBaseUrl,
-}: Readonly<{ category?: PoiCategory; iconBaseUrl: string }>) {
-  const iconFileName = category?.iconMapping.defaultIconFileName;
-  if (iconFileName) {
+  iconFileName,
+}: Readonly<{ category?: PoiCategory; iconBaseUrl: string; iconFileName?: string }>) {
+  const resolvedIconFileName = iconFileName || category?.iconMapping.defaultIconFileName;
+  if (resolvedIconFileName) {
     return (
       <img
         className="admin-poi-category-icon"
-        src={toMarkerIconUrl(iconFileName, iconBaseUrl)}
+        src={toMarkerIconUrl(resolvedIconFileName, iconBaseUrl)}
         alt=""
         draggable={false}
       />
@@ -1926,12 +3564,7 @@ function PoiSubmissionImagePreview({
   return (
     <article className="admin-poi-image-preview">
       <a href={imageUrl} target="_blank" rel="noreferrer">
-        <img
-          src={imageUrl}
-          alt={`${submission.title} 投稿图片`}
-          loading="lazy"
-          decoding="async"
-        />
+        <img src={imageUrl} alt={`${submission.title} 投稿图片`} loading="lazy" decoding="async" />
       </a>
       <div className="admin-poi-image-preview-copy">
         <div className="admin-poi-image-preview-heading">
@@ -1962,7 +3595,11 @@ function PoiSubmissionImagePreview({
             </div>
           </dl>
         ) : (
-          <small>{submission.imageUrl.startsWith('/') ? '本地图片元数据暂不可用' : '外部图片链接，无法读取本地元数据'}</small>
+          <small>
+            {submission.imageUrl.startsWith('/')
+              ? '本地图片元数据暂不可用'
+              : '外部图片链接，无法读取本地元数据'}
+          </small>
         )}
         <div className="admin-poi-image-review-actions">
           {imageReview ? (
@@ -1989,16 +3626,37 @@ function resolvePoiSubmissionImageUrl(value: string): string {
   return value.startsWith('/') ? appPath(value) : value;
 }
 
-function buildSubmissionMapHref(
-  submission: PoiSubmission,
-  coordinate: [number, number],
-): string {
+function buildSubmissionMapHref(submission: PoiSubmission, coordinate: [number, number]): string {
   const params = new URLSearchParams({
     label: submission.title,
     x: roundCoordinateForQuery(coordinate[0]),
     z: roundCoordinateForQuery(coordinate[1]),
   });
   return `${appPath('/map')}?${params.toString()}`;
+}
+
+function buildLegacyMarkerMapHref(marker: MapMarker, coordinate: [number, number]): string {
+  const params = new URLSearchParams({
+    label: marker.label,
+    x: roundCoordinateForQuery(coordinate[0]),
+    z: roundCoordinateForQuery(coordinate[1]),
+  });
+  return `${appPath('/map')}?${params.toString()}`;
+}
+
+function isLegacyPoiMapMarker(marker: MapMarker): boolean {
+  const categoryId = marker.categoryId?.toLowerCase() ?? '';
+  if (
+    marker.id.startsWith('poi-') ||
+    marker.id.startsWith('transit-line-') ||
+    categoryId === 'transit-line' ||
+    categoryId === 'road' ||
+    categoryId === 'player'
+  ) {
+    return false;
+  }
+
+  return Boolean(marker.label.trim());
 }
 
 interface GeometryPreviewModel {
@@ -2008,6 +3666,7 @@ interface GeometryPreviewModel {
 }
 
 interface PoiAuditMapPreviewModel extends GeometryPreviewModel {
+  bounds: { minX: number; minZ: number; maxX: number; maxZ: number };
   contextMarkers: Array<PoiAuditContextMarker & { point: [number, number] }>;
 }
 
@@ -2028,7 +3687,8 @@ function buildPoiPointCoordinatePickerModel(
     getCoordinateBounds([currentCoordinate, originalCoordinate, ...contextCoordinates]),
     120,
   );
-  const project = (coordinate: [number, number]) => projectAuditMapPreviewCoordinate(coordinate, bounds);
+  const project = (coordinate: [number, number]) =>
+    projectAuditMapPreviewCoordinate(coordinate, bounds);
 
   return {
     bounds,
@@ -2054,7 +3714,8 @@ function buildPoiAuditMapPreview(
   }
 
   const bounds = expandCoordinateBounds(getCoordinateBounds(allCoordinates), 80);
-  const project = (coordinate: [number, number]) => projectAuditMapPreviewCoordinate(coordinate, bounds);
+  const project = (coordinate: [number, number]) =>
+    projectAuditMapPreviewCoordinate(coordinate, bounds);
   const points: Array<[number, number]> = [];
   const lines: string[] = [];
   const polygons: string[] = [];
@@ -2075,6 +3736,7 @@ function buildPoiAuditMapPreview(
   }
 
   return {
+    bounds,
     contextMarkers: contextMarkers.map((item) => ({
       ...item,
       point: project(item.coordinate),
@@ -2083,6 +3745,203 @@ function buildPoiAuditMapPreview(
     points,
     polygons,
   };
+}
+
+interface PoiAuditMapView {
+  centerX: number;
+  centerZ: number;
+  scale: number;
+  zoom: number;
+}
+
+interface PoiVisibleTile {
+  displaySize: number;
+  id: string;
+  left: number;
+  top: number;
+  url: string;
+}
+
+const poiAuditPreviewWidth = 220;
+const poiAuditPreviewHeight = 152;
+const poiAuditPreviewPadding = 16;
+const poiPreviewTileSize = 256;
+const poiPreviewMinZoom = -7;
+const poiPreviewMaxZoom = 3;
+
+function buildPoiTileRegionIndex(
+  response: PoiTileRegionResponse | null,
+): PoiTileRegionIndex | undefined {
+  if (!response?.properties || response.regions.length === 0) {
+    return undefined;
+  }
+
+  return {
+    properties: response.properties,
+    groups: new Map(
+      response.regions.map((region) => [getPoiPreviewRegionKey(region.x, region.z), region]),
+    ),
+  };
+}
+
+function buildPoiAuditPreviewTiles(
+  bounds: { minX: number; minZ: number; maxX: number; maxZ: number },
+  config: PoiTilePreviewConfig,
+): PoiVisibleTile[] {
+  if (!config.tileTemplate) {
+    return [];
+  }
+
+  const view = buildPoiAuditMapView(bounds);
+  const tileZoom = clampPoiPreviewTileZoom(Math.round(view.zoom));
+  const tileScale = getPoiPreviewScale(tileZoom);
+  const tileDisplaySize = poiPreviewTileSize * (view.scale / tileScale);
+  const worldMinX = view.centerX - poiAuditPreviewWidth / (2 * view.scale);
+  const worldMaxX = view.centerX + poiAuditPreviewWidth / (2 * view.scale);
+  const worldMinZ = view.centerZ - poiAuditPreviewHeight / (2 * view.scale);
+  const worldMaxZ = view.centerZ + poiAuditPreviewHeight / (2 * view.scale);
+  const minTileX = Math.floor((worldMinX * tileScale) / poiPreviewTileSize) - 1;
+  const maxTileX = Math.floor((worldMaxX * tileScale) / poiPreviewTileSize) + 1;
+  const minTileZ = Math.floor((worldMinZ * tileScale) / poiPreviewTileSize) - 1;
+  const maxTileZ = Math.floor((worldMaxZ * tileScale) / poiPreviewTileSize) + 1;
+  const tiles: PoiVisibleTile[] = [];
+
+  for (let tileX = minTileX; tileX <= maxTileX; tileX += 1) {
+    for (let tileZ = minTileZ; tileZ <= maxTileZ; tileZ += 1) {
+      if (config.regionIndex && !hasPoiPreviewTile(tileX, tileZ, tileZoom, config.regionIndex)) {
+        continue;
+      }
+
+      tiles.push({
+        displaySize: tileDisplaySize,
+        id: `${tileZoom}:${tileX}:${tileZ}`,
+        left:
+          poiAuditPreviewWidth / 2 +
+          (tileX * poiPreviewTileSize * view.scale) / tileScale -
+          view.centerX * view.scale,
+        top:
+          poiAuditPreviewHeight / 2 +
+          (tileZ * poiPreviewTileSize * view.scale) / tileScale -
+          view.centerZ * view.scale,
+        url: buildPoiPreviewTileUrl(config.tileTemplate, tileZoom, tileX, tileZ),
+      });
+    }
+  }
+
+  return tiles;
+}
+
+function buildPoiTileStyle(tile: PoiVisibleTile) {
+  return {
+    height: `${(tile.displaySize / poiAuditPreviewHeight) * 100}%`,
+    left: `${(tile.left / poiAuditPreviewWidth) * 100}%`,
+    top: `${(tile.top / poiAuditPreviewHeight) * 100}%`,
+    width: `${(tile.displaySize / poiAuditPreviewWidth) * 100}%`,
+  };
+}
+
+function buildPoiAuditMapView(bounds: {
+  minX: number;
+  minZ: number;
+  maxX: number;
+  maxZ: number;
+}): PoiAuditMapView {
+  const spanX = Math.max(1, bounds.maxX - bounds.minX);
+  const spanZ = Math.max(1, bounds.maxZ - bounds.minZ);
+  const scale = Math.min(
+    (poiAuditPreviewWidth - poiAuditPreviewPadding * 2) / spanX,
+    (poiAuditPreviewHeight - poiAuditPreviewPadding * 2) / spanZ,
+  );
+
+  return {
+    centerX: (bounds.minX + bounds.maxX) / 2,
+    centerZ: (bounds.minZ + bounds.maxZ) / 2,
+    scale,
+    zoom: Math.log2(scale),
+  };
+}
+
+function hasPoiPreviewTile(
+  tileX: number,
+  tileZ: number,
+  zoomLevel: number,
+  regionIndex: PoiTileRegionIndex,
+): boolean {
+  const { properties } = regionIndex;
+  const zoomFactor = Math.pow(2, zoomLevel);
+  const worldMinX = properties.minRegionX * 512;
+  const worldMinZ = properties.minRegionZ * 512;
+  const worldWidth = (properties.maxRegionX + 1 - properties.minRegionX) * 512;
+  const worldHeight = (properties.maxRegionZ + 1 - properties.minRegionZ) * 512;
+  const minTileX = Math.floor((worldMinX * zoomFactor) / poiPreviewTileSize);
+  const minTileZ = Math.floor((worldMinZ * zoomFactor) / poiPreviewTileSize);
+  const maxTileX = Math.ceil(((worldMinX + worldWidth) * zoomFactor) / poiPreviewTileSize) - 1;
+  const maxTileZ = Math.ceil(((worldMinZ + worldHeight) * zoomFactor) / poiPreviewTileSize) - 1;
+
+  if (tileX < minTileX || tileZ < minTileZ || tileX > maxTileX || tileZ > maxTileZ) {
+    return false;
+  }
+
+  const tileBlockSize = poiPreviewTileSize / zoomFactor;
+  const tileRegionPoint = {
+    x: Math.floor((tileX * tileBlockSize) / 512),
+    z: Math.floor((tileZ * tileBlockSize) / 512),
+  };
+  const tileRegionSize = Math.ceil(tileBlockSize / 512);
+
+  for (let x = tileRegionPoint.x; x < tileRegionPoint.x + tileRegionSize; x += 1) {
+    for (let z = tileRegionPoint.z; z < tileRegionPoint.z + tileRegionSize; z += 1) {
+      if (hasPoiPreviewRegion(regionIndex, x, z)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function hasPoiPreviewRegion(regionIndex: PoiTileRegionIndex, x: number, z: number): boolean {
+  const group = {
+    x: Math.floor(x / 32),
+    z: Math.floor(z / 32),
+  };
+  const regionMap = regionIndex.groups.get(getPoiPreviewRegionKey(group.x, group.z));
+  if (!regionMap) {
+    return false;
+  }
+
+  const relX = x - group.x * 32;
+  const relZ = z - group.z * 32;
+  const index = relZ * 32 + relX;
+  const value = regionMap.m[Math.floor(index / 32)] ?? 0;
+  const bit = index % 32;
+  return (value & (1 << bit)) !== 0;
+}
+
+function getPoiPreviewRegionKey(x: number, z: number): string {
+  return `${x}:${z}`;
+}
+
+function buildPoiPreviewTileUrl(
+  template: string,
+  zoom: number,
+  tileX: number,
+  tileZ: number,
+): string {
+  return template
+    .replaceAll('{z}', String(zoom))
+    .replaceAll('{xd}', String(Math.floor(tileX / 10)))
+    .replaceAll('{yd}', String(Math.floor(tileZ / 10)))
+    .replaceAll('{x}', String(tileX))
+    .replaceAll('{y}', String(tileZ));
+}
+
+function getPoiPreviewScale(zoom: number): number {
+  return 2 ** zoom;
+}
+
+function clampPoiPreviewTileZoom(zoom: number): number {
+  return clamp(zoom, poiPreviewMinZoom, poiPreviewMaxZoom);
 }
 
 function buildGeometryPreview(geometry: MapGeometry): GeometryPreviewModel | null {
@@ -2203,12 +4062,14 @@ function flattenGeometryCoordinates(geometry: MapGeometry): Array<[number, numbe
   return [];
 }
 
-function getBoundsCenter(bounds: Array<{
-  minX: number;
-  minZ: number;
-  maxX: number;
-  maxZ: number;
-}>): [number, number] | null {
+function getBoundsCenter(
+  bounds: Array<{
+    minX: number;
+    minZ: number;
+    maxX: number;
+    maxZ: number;
+  }>,
+): [number, number] | null {
   if (bounds.length === 0) {
     return null;
   }
@@ -2313,10 +4174,7 @@ function unprojectAuditMapPreviewCoordinate(
   const offsetY = (height - contentHeight) / 2;
   const x = bounds.minX + (point[0] - offsetX) / scale;
   const z = bounds.minZ + (point[1] - offsetY) / scale;
-  return [
-    clamp(x, bounds.minX, bounds.maxX),
-    clamp(z, bounds.minZ, bounds.maxZ),
-  ];
+  return [clamp(x, bounds.minX, bounds.maxX), clamp(z, bounds.minZ, bounds.maxZ)];
 }
 
 function projectGeometryPreviewCoordinate(
@@ -2380,6 +4238,26 @@ function statusLabel(status: PoiSubmissionStatus): string {
   return labels[status];
 }
 
+function canEditPoiSubmission(status: PoiSubmissionStatus): boolean {
+  return status === 'pending_review' || status === 'approved' || status === 'published';
+}
+
+function canDeletePoiSubmission(status: PoiSubmissionStatus): boolean {
+  return status === 'approved' || status === 'published';
+}
+
+function getPoiEditDialogHint(status: PoiSubmissionStatus): string {
+  if (status === 'approved') {
+    return '当前为待发布投稿，保存后仍可直接发布，几何修正会保留原类型。';
+  }
+
+  if (status === 'published') {
+    return '当前为已发布 POI，保存后会直接同步公开地图，几何修正会保留原类型。';
+  }
+
+  return '当前为待审核投稿，几何修正会保留原类型。';
+}
+
 function conflictDecisionKey(submissionId: string, markerId: string): string {
   return `${submissionId}\u0000${markerId}`;
 }
@@ -2394,6 +4272,18 @@ function imageReviewKey(submissionId: string, imageUrl: string): string {
 
 function imageReviewLabel(decision: PoiSubmissionImageReviewDecision): string {
   return decision === 'approved' ? '图片可用' : '图片不合格';
+}
+
+function describePoiBatchAction(action: 'approve' | 'reject' | 'publish'): string {
+  if (action === 'approve') {
+    return '通过';
+  }
+
+  if (action === 'reject') {
+    return '驳回';
+  }
+
+  return '发布';
 }
 
 function geometryLabel(geometry: MapGeometry): string {
@@ -2438,7 +4328,9 @@ function formatDate(value: string): string {
 }
 
 function formatCategoryName(categoryId: string, category?: PoiCategory): string {
-  return category?.name && category.name !== categoryId ? `${category.name} (${categoryId})` : categoryId;
+  return category?.name && category.name !== categoryId
+    ? `${category.name} (${categoryId})`
+    : categoryId;
 }
 
 function buildPoiConflictHints(submission: PoiSubmission, markers: MapMarker[]): PoiConflictHint[] {
@@ -2459,7 +4351,9 @@ function buildPoiConflictHints(submission: PoiSubmission, markers: MapMarker[]):
         normalizedMarkerTitle.length > 0 && normalizedMarkerTitle === normalizedSubmissionTitle;
       const isNearby = distanceBlocks !== null && distanceBlocks <= 120;
       const isSameCategoryNearby =
-        marker.categoryId === submission.categoryId && distanceBlocks !== null && distanceBlocks <= 220;
+        marker.categoryId === submission.categoryId &&
+        distanceBlocks !== null &&
+        distanceBlocks <= 220;
       const reasons = [
         isSameName ? '同名' : '',
         isNearby ? '近距离' : '',
@@ -2577,8 +4471,10 @@ function comparePoiAuditContextMarkers(
     return leftPriority - rightPriority;
   }
 
-  return left.distanceBlocks - right.distanceBlocks
-    || left.marker.label.localeCompare(right.marker.label, 'zh-CN');
+  return (
+    left.distanceBlocks - right.distanceBlocks ||
+    left.marker.label.localeCompare(right.marker.label, 'zh-CN')
+  );
 }
 
 function auditContextRelationPriority(relation: PoiAuditContextMarker['relation']): number {
@@ -2613,7 +4509,9 @@ function auditContextRelationLabel(relation: PoiAuditContextMarker['relation']):
   return '附近地点';
 }
 
-function isRoadReferenceMarker(marker: Pick<MapMarker, 'categoryId' | 'iconFileName' | 'symbolIcon'>): boolean {
+function isRoadReferenceMarker(
+  marker: Pick<MapMarker, 'categoryId' | 'iconFileName' | 'symbolIcon'>,
+): boolean {
   const text = [marker.categoryId, marker.iconFileName, marker.symbolIcon]
     .filter(Boolean)
     .join(' ')
@@ -2638,9 +4536,11 @@ function comparePoiConflictHints(left: PoiConflictHint, right: PoiConflictHint):
     return leftSameName - rightSameName;
   }
 
-  return (left.distanceBlocks ?? Number.POSITIVE_INFINITY)
-    - (right.distanceBlocks ?? Number.POSITIVE_INFINITY)
-    || left.marker.label.localeCompare(right.marker.label, 'zh-CN');
+  return (
+    (left.distanceBlocks ?? Number.POSITIVE_INFINITY) -
+      (right.distanceBlocks ?? Number.POSITIVE_INFINITY) ||
+    left.marker.label.localeCompare(right.marker.label, 'zh-CN')
+  );
 }
 
 function distanceBetweenCoordinates(left: [number, number], right: [number, number]): number {
@@ -2668,7 +4568,10 @@ function buildMarkerFocusHref(marker: MapMarker): string {
 
 function createCategoryDrafts(categories: PoiCategory[]): PoiCategoryDraft[] {
   return [...categories]
-    .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'zh-CN'))
+    .sort(
+      (left, right) =>
+        left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'zh-CN'),
+    )
     .map((category) => ({
       id: category.id,
       name: category.name,
@@ -2735,6 +4638,227 @@ function iconPreviewToneLabel(tone: string): string {
   }
 
   return '浅色背景预览';
+}
+
+function createPoiGeometryDraft(geometry: MapGeometry): PoiGeometryDraft {
+  if (geometry.type === 'Point') {
+    return {
+      type: 'Point',
+      coordinate: coordinateToDraft(geometry.coordinates),
+    };
+  }
+
+  if (geometry.type === 'MultiPoint') {
+    return {
+      type: 'MultiPoint',
+      coordinates: geometry.coordinates.map(coordinateToDraft),
+    };
+  }
+
+  if (geometry.type === 'LineString') {
+    return {
+      type: 'LineString',
+      coordinates: geometry.coordinates.map(coordinateToDraft),
+    };
+  }
+
+  if (geometry.type === 'Rectangle') {
+    return {
+      type: 'Rectangle',
+      bounds: rectangleBoundsToDraft(geometry.bounds),
+    };
+  }
+
+  if (geometry.type === 'MultiRectangle') {
+    return {
+      type: 'MultiRectangle',
+      rectangles: geometry.rectangles.map(rectangleBoundsToDraft),
+    };
+  }
+
+  if (geometry.type === 'Polygon') {
+    return {
+      type: 'Polygon',
+      rings: geometry.coordinates.map((ring) => ring.map(coordinateToDraft)),
+    };
+  }
+
+  return {
+    type: 'MultiPolygon',
+    polygons: geometry.coordinates.map((polygon) =>
+      polygon.map((ring) => ring.map(coordinateToDraft)),
+    ),
+  };
+}
+
+function buildMapGeometryFromDraft(draft: PoiGeometryDraft): {
+  geometry?: MapGeometry;
+  error?: string;
+} {
+  if (draft.type === 'Point') {
+    const coordinate = parseCoordinateDraft(draft.coordinate);
+    return coordinate
+      ? { geometry: { type: 'Point', coordinates: coordinate } }
+      : { error: '请填写有效的点状 X/Z 坐标。' };
+  }
+
+  if (draft.type === 'MultiPoint') {
+    const coordinates = parseCoordinateDrafts(draft.coordinates, 2);
+    return coordinates
+      ? { geometry: { type: 'MultiPoint', coordinates } }
+      : { error: '点组至少需要 2 个有效坐标。' };
+  }
+
+  if (draft.type === 'LineString') {
+    const coordinates = parseCoordinateDrafts(draft.coordinates, 2);
+    return coordinates
+      ? { geometry: { type: 'LineString', coordinates } }
+      : { error: '线性 POI 至少需要 2 个有效坐标。' };
+  }
+
+  if (draft.type === 'Rectangle') {
+    const bounds = parseRectangleBoundsDraft(draft.bounds);
+    return bounds
+      ? { geometry: { type: 'Rectangle', bounds } }
+      : { error: '矩形区域需要有效边界，且最小值必须小于最大值。' };
+  }
+
+  if (draft.type === 'MultiRectangle') {
+    const rectangles = draft.rectangles.map(parseRectangleBoundsDraft);
+    return rectangles.length > 0 && rectangles.every(Boolean)
+      ? { geometry: { type: 'MultiRectangle', rectangles: rectangles as RectangleBounds[] } }
+      : { error: '矩形组至少需要 1 个有效矩形边界。' };
+  }
+
+  if (draft.type === 'Polygon') {
+    const rings = parsePolygonRingsDraft(draft.rings);
+    return rings
+      ? { geometry: { type: 'Polygon', coordinates: rings } }
+      : { error: '多边形至少需要 1 个边界环，每个环至少 4 个有效坐标。' };
+  }
+
+  const polygons = draft.polygons.map(parsePolygonRingsDraft);
+  return polygons.length > 0 && polygons.every(Boolean)
+    ? {
+        geometry: {
+          type: 'MultiPolygon',
+          coordinates: polygons as Array<Array<Array<[number, number]>>>,
+        },
+      }
+    : { error: '多重多边形至少需要 1 个多边形，每个边界环至少 4 个有效坐标。' };
+}
+
+function coordinateToDraft([x, z]: [number, number]): CoordinateDraft {
+  return {
+    x: roundCoordinateForQuery(x),
+    z: roundCoordinateForQuery(z),
+  };
+}
+
+function rectangleBoundsToDraft(bounds: RectangleBounds): RectangleBoundsDraft {
+  return {
+    minX: roundCoordinateForQuery(bounds.minX),
+    minZ: roundCoordinateForQuery(bounds.minZ),
+    maxX: roundCoordinateForQuery(bounds.maxX),
+    maxZ: roundCoordinateForQuery(bounds.maxZ),
+  };
+}
+
+function parseCoordinateDraft(draft: CoordinateDraft): [number, number] | null {
+  const x = Number(draft.x);
+  const z = Number(draft.z);
+  return Number.isFinite(x) && Number.isFinite(z) ? [x, z] : null;
+}
+
+function parseCoordinateDrafts(
+  drafts: CoordinateDraft[],
+  minPoints: number,
+): Array<[number, number]> | null {
+  const coordinates = drafts.map(parseCoordinateDraft);
+  return coordinates.length >= minPoints && coordinates.every(Boolean)
+    ? (coordinates as Array<[number, number]>)
+    : null;
+}
+
+function parseRectangleBoundsDraft(draft: RectangleBoundsDraft): RectangleBounds | null {
+  const minX = Number(draft.minX);
+  const minZ = Number(draft.minZ);
+  const maxX = Number(draft.maxX);
+  const maxZ = Number(draft.maxZ);
+  if (
+    !Number.isFinite(minX) ||
+    !Number.isFinite(minZ) ||
+    !Number.isFinite(maxX) ||
+    !Number.isFinite(maxZ) ||
+    minX >= maxX ||
+    minZ >= maxZ
+  ) {
+    return null;
+  }
+
+  return { minX, minZ, maxX, maxZ };
+}
+
+function parsePolygonRingsDraft(rings: CoordinateDraft[][]): Array<Array<[number, number]>> | null {
+  const parsedRings = rings.map((ring) => parseCoordinateDrafts(ring, 4));
+  return parsedRings.length > 0 && parsedRings.every(Boolean)
+    ? (parsedRings as Array<Array<[number, number]>>)
+    : null;
+}
+
+function createInsertedCoordinateDraft(
+  coordinates: CoordinateDraft[],
+  afterIndex?: number,
+): CoordinateDraft {
+  const left = afterIndex === undefined ? coordinates.at(-1) : coordinates[afterIndex];
+  const right = afterIndex === undefined ? undefined : coordinates[afterIndex + 1];
+  const leftCoordinate = left ? parseCoordinateDraft(left) : null;
+  const rightCoordinate = right ? parseCoordinateDraft(right) : null;
+
+  if (leftCoordinate && rightCoordinate) {
+    return coordinateToDraft([
+      (leftCoordinate[0] + rightCoordinate[0]) / 2,
+      (leftCoordinate[1] + rightCoordinate[1]) / 2,
+    ]);
+  }
+
+  if (leftCoordinate) {
+    return coordinateToDraft([leftCoordinate[0] + 1, leftCoordinate[1] + 1]);
+  }
+
+  return { x: '', z: '' };
+}
+
+function createNextRectangleDraft(rectangles: RectangleBoundsDraft[]): RectangleBoundsDraft {
+  const lastBounds = rectangles.at(-1);
+  const parsed = lastBounds ? parseRectangleBoundsDraft(lastBounds) : null;
+  if (!parsed) {
+    return { minX: '', minZ: '', maxX: '', maxZ: '' };
+  }
+
+  return rectangleBoundsToDraft({
+    minX: parsed.maxX,
+    minZ: parsed.minZ,
+    maxX: parsed.maxX + Math.max(1, parsed.maxX - parsed.minX),
+    maxZ: parsed.maxZ,
+  });
+}
+
+function createDefaultPolygonRingDraft(anchor?: CoordinateDraft): CoordinateDraft[] {
+  const coordinate = anchor ? parseCoordinateDraft(anchor) : null;
+  const center: [number, number] = coordinate ?? [0, 0];
+  const coordinates: Array<[number, number]> = [
+    [center[0] - 1, center[1] - 1],
+    [center[0] + 1, center[1] - 1],
+    [center[0] + 1, center[1] + 1],
+    [center[0] - 1, center[1] + 1],
+  ];
+  return coordinates.map(coordinateToDraft);
+}
+
+function formatDraftCoordinatePair(coordinate: CoordinateDraft | undefined): string {
+  const parsed = coordinate ? parseCoordinateDraft(coordinate) : null;
+  return parsed ? formatCoordinatePair(parsed) : '待填写';
 }
 
 function matchesStatusFilter(status: PoiSubmissionStatus, filter: StatusFilter): boolean {

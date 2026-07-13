@@ -153,6 +153,7 @@ export interface PoiSubmission {
   profileId: YctProfileId;
   title: string;
   categoryId: string;
+  iconFileName?: string;
   description?: string;
   href?: string;
   imageUrl?: string;
@@ -212,6 +213,21 @@ export interface TransitLineStopSnapshot {
   trainPosition?: number;
 }
 
+export type TransitLineSegmentPathMode = 'straight' | 'road';
+
+export interface TransitLineSegmentWaypointSnapshot {
+  x: number;
+  z: number;
+}
+
+export interface TransitLineSegmentPathSnapshot {
+  fromStationSourceId: string;
+  toStationSourceId: string;
+  mode: TransitLineSegmentPathMode;
+  waypoints: TransitLineSegmentWaypointSnapshot[];
+  note?: string;
+}
+
 export interface TransitLineSnapshot {
   sourceId: string;
   mode: Exclude<TransportMode, 'walk'>;
@@ -219,6 +235,7 @@ export interface TransitLineSnapshot {
   color?: string;
   stationSourceIds: string[];
   stops: TransitLineStopSnapshot[];
+  segmentPaths?: TransitLineSegmentPathSnapshot[];
   operator?: string;
   fare?: string;
   firstLastBus?: {
@@ -238,6 +255,8 @@ export interface TransitStationSnapshot {
   diagramY?: number;
   x?: number;
   z?: number;
+  boundPoiMarkerId?: string;
+  boundPoiLabel?: string;
   sourcePath?: string;
 }
 
@@ -505,6 +524,62 @@ export interface TravelScheduleQueryResult {
   sourceFiles: string[];
   serviceDate?: string;
   notice?: string;
+}
+
+export type TravelScheduleRevisionStatus =
+  | 'imported'
+  | 'validation_failed'
+  | 'pending_review'
+  | 'approved'
+  | 'rejected'
+  | 'published'
+  | 'superseded'
+  | 'archived';
+
+export interface TravelScheduleValidationIssue {
+  count: number;
+  examples: string[];
+  kind:
+    | 'no_active_service'
+    | 'no_trips'
+    | 'service_without_trips'
+    | 'source_unavailable'
+    | 'trip_without_station';
+  message: string;
+  severity: 'error' | 'warning';
+}
+
+export interface TravelScheduleValidationResult {
+  checkedAt: ISODateTimeString;
+  errorCount: number;
+  warningCount: number;
+  errors: string[];
+  issues?: TravelScheduleValidationIssue[];
+  warnings: string[];
+}
+
+export interface TravelScheduleRevision {
+  revisionId: string;
+  scheduleServiceId: string;
+  profileId: YctProfileId;
+  status: TravelScheduleRevisionStatus;
+  sourceProviderId: string;
+  sourceFiles: string[];
+  services: TravelScheduleServiceSummary[];
+  trips: TravelTripInstance[];
+  serviceNotices?: TransitServiceNotice[];
+  stationOptions: string[];
+  notice?: string;
+  validation: TravelScheduleValidationResult;
+  importedBy: string;
+  importedAt: ISODateTimeString;
+  submittedBy?: string;
+  submittedAt?: ISODateTimeString;
+  reviewedBy?: string;
+  reviewedAt?: ISODateTimeString;
+  reviewReason?: string;
+  publishedAt?: ISODateTimeString;
+  supersededAt?: ISODateTimeString;
 }
 
 export type TravelFareCurrency = 'CNY' | 'SERVER_CREDIT' | 'CUSTOM';

@@ -8,6 +8,7 @@ import type {
 import { publishDomainEvent } from './app-event-bus';
 import {
   createLocalServiceEntry,
+  deleteLocalServiceEntry,
   findLocalServiceEntry,
   listServiceEntries,
   updateLocalServiceEntry,
@@ -47,6 +48,60 @@ export async function createServiceEntryDraft(input: {
 }): Promise<ServiceEntryActionResult> {
   const entry = await createLocalServiceEntry(input);
   return { ok: true, entry };
+}
+
+export async function updateServiceEntry(input: {
+  serviceEntryId: string;
+  title: string;
+  description?: string;
+  categoryId: ServiceEntry['categoryId'];
+  icon: string;
+  href: string;
+  openMode: ServiceEntry['openMode'];
+  sortOrder: number;
+  actorId: string;
+}): Promise<ServiceEntryActionResult> {
+  const entry = await findLocalServiceEntry(input.serviceEntryId);
+  if (!entry) {
+    return notFound();
+  }
+
+  const patch = {
+    title: input.title.trim(),
+    description: normalizeOptionalText(input.description),
+    categoryId: input.categoryId,
+    icon: input.icon.trim(),
+    href: input.href.trim(),
+    openMode: input.openMode,
+    sortOrder: input.sortOrder,
+  };
+  const changedFields = getChangedServiceEntryFields(entry, patch);
+  if (changedFields.length === 0) {
+    return { ok: true, entry };
+  }
+
+  const updated = await updateLocalServiceEntry(input.serviceEntryId, (current) => {
+    const shouldReturnRejectedEntryToDraft = current.status === 'rejected';
+    return {
+      ...current,
+      ...patch,
+      status: shouldReturnRejectedEntryToDraft ? 'draft' : current.status,
+      reviewedBy: shouldReturnRejectedEntryToDraft ? undefined : current.reviewedBy,
+      reviewedAt: shouldReturnRejectedEntryToDraft ? undefined : current.reviewedAt,
+      reviewReason: shouldReturnRejectedEntryToDraft ? undefined : current.reviewReason,
+    };
+  });
+
+  if (updated) {
+    await emitEvent('ServiceEntryUpdated', input.actorId, {
+      serviceEntryId: updated.id,
+      updatedBy: input.actorId,
+      updatedAt: new Date().toISOString(),
+      changedFields,
+    });
+  }
+
+  return { ok: true, entry: updated };
 }
 
 export async function submitServiceEntry(input: {
@@ -154,6 +209,60 @@ export async function publishServiceEntry(input: {
   return { ok: true, entry: updated };
 }
 
+export async function archiveServiceEntry(input: {
+  serviceEntryId: string;
+  actorId: string;
+}): Promise<ServiceEntryActionResult> {
+  const entry = await findLocalServiceEntry(input.serviceEntryId);
+  if (!entry) {
+    return notFound();
+  }
+
+  const previousStatus = entry.status as Exclude<ServiceEntryStatus, 'archived'>;
+  const transition = transitionServiceEntryStatus(previousStatus, 'archived');
+  if (!transition.ok) {
+    return invalidTransition(transition.reason);
+  }
+
+  const archivedAt = new Date().toISOString();
+  const updated = await updateLocalServiceEntry(input.serviceEntryId, (current) =>
+    withServiceEntryStatus(current, 'archived'),
+  );
+
+  if (updated) {
+    await emitEvent('ServiceEntryArchived', input.actorId, {
+      serviceEntryId: updated.id,
+      previousStatus,
+      archivedBy: input.actorId,
+      archivedAt,
+    });
+  }
+
+  return { ok: true, entry: updated };
+}
+
+export async function deleteServiceEntry(input: {
+  serviceEntryId: string;
+  actorId: string;
+}): Promise<ServiceEntryActionResult> {
+  const entry = await findLocalServiceEntry(input.serviceEntryId);
+  if (!entry) {
+    return notFound();
+  }
+
+  const deleted = await deleteLocalServiceEntry(input.serviceEntryId);
+  if (deleted) {
+    await emitEvent('ServiceEntryDeleted', input.actorId, {
+      serviceEntryId: deleted.id,
+      previousStatus: deleted.status,
+      deletedBy: input.actorId,
+      deletedAt: new Date().toISOString(),
+    });
+  }
+
+  return { ok: true, entry: deleted };
+}
+
 function transitionServiceEntryStatus(current: ServiceEntryStatus, next: ServiceEntryStatus) {
   if (current === next) {
     return { ok: true };
@@ -185,6 +294,23 @@ function invalidTransition(reason?: string): ServiceEntryActionResult {
     error: 'invalid_service_entry_state',
     message: reason ?? '当前服务入口状态不允许执行该操作。',
   };
+}
+
+function getChangedServiceEntryFields(
+  entry: ServiceEntry,
+  patch: Pick<
+    ServiceEntry,
+    'title' | 'description' | 'categoryId' | 'icon' | 'href' | 'openMode' | 'sortOrder'
+  >,
+): Array<'title' | 'description' | 'categoryId' | 'icon' | 'href' | 'openMode' | 'sortOrder'> {
+  return (
+    ['title', 'description', 'categoryId', 'icon', 'href', 'openMode', 'sortOrder'] as const
+  ).filter((field) => (entry[field] ?? '') !== (patch[field] ?? ''));
+}
+
+function normalizeOptionalText(value: string | undefined): string | undefined {
+  const trimmed = value?.trim() ?? '';
+  return trimmed || undefined;
 }
 
 async function emitEvent<TType extends YctEventType>(

@@ -59,6 +59,7 @@
 - `YCT_LEGACY_DATA_FETCH_TIMEOUT_MS=8000`：远程旧站文件读取超时，默认 8 秒；线路快照会并行读取各旧数据源，公开交通和地图相关 API 会对旧数据派生结果做短 TTL 进程内缓存和进行中请求合并，避免本地开发站点因重复拉取/解析旧数据被拖慢。
 - `YCT_FLIGHT_DATA_URL=https://haojin.guanmu233.cn/data/flight_data.txt`：默认航班文本数据源；迁移到 YCT 后台或其他服务器时可替换为新的同格式 URL。
 - `YCT_TRAVEL_SERVICE_PROFILE_STORE_PATH=.yct-data/travel-service-profile-store.json`：统一班次/票务服务 Profile 本地仓储路径，维护客运大巴、轮渡、航班等可排班服务的名称、颜色、图标、排序和启用状态。
+- `YCT_TRAVEL_SCHEDULE_REVISION_STORE_PATH=.yct-data/travel-schedule-revision-store.json`：统一班次版本本地仓储路径，后台可把当前真实班次查询结果导入为版本快照，并走提交审核、审核和发布事件流；公开查询会优先读取已发布快照，没有发布版本时回退实时来源。
 - `YCT_TICKETING_CATALOG_STORE_PATH=.yct-data/ticketing-catalog-store.json`：统一票务目录本地仓储路径，第一版只读取真实配置的票种和库存池用于可售性预检；没有配置时返回不可售原因，不生成默认票种或模拟库存。
 - `YCT_TICKET_ORDER_STORE_PATH=.yct-data/ticket-order-store.json`：统一票务订单草稿与库存占用的本地仓储路径；第一版只在真实 `ldpass` Active 用户、真实票种和真实库存池都存在时写入 `draft` 订单，不承载真实票券或核销凭证。
 - `YCT_EVENT_OUTBOX_STORE_PATH=.yct-data/event-outbox-store.json`：单机开发阶段的领域事件 Outbox 本地仓储路径；当前用于持久化事件审计、连接共享内存事件总线，并支持通过 `/api/internal/events/process` 重放待处理或失败事件，后续替换为数据库 Transactional Outbox。

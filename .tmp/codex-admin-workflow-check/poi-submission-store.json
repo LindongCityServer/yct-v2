@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "submissions": [
+    {
+      "id": "local_poi_a9ae1e81-5178-439c-baab-cffdff22adaf",
+      "profileId": "default",
+      "title": "POI 图标验证",
+      "categoryId": "poi-test",
+      "description": "验证单条图标覆写",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100,
+          200
+        ]
+      },
+      "visibility": "public",
+      "status": "published",
+      "submittedBy": "poi-user-check",
+      "submittedAt": "2026-07-12T11:06:42.564Z",
+      "iconFileName": "custom-poi-icon.png",
+      "reviewedBy": "codex-admin-check",
+      "reviewedAt": "2026-07-12T11:06:42.579Z",
+      "publishedAt": "2026-07-12T11:06:42.588Z"
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import type {
   TransitScreenTrip,
   TravelScheduleQuery,
   TravelScheduleQueryResult,
+  TravelScheduleRevision,
   TravelScheduleServiceSummary,
   TravelScheduleServiceProfile,
   TravelScheduleTimeScope,
@@ -18,6 +19,7 @@ import { readRuntimeConfig } from './runtime-config';
 import { readTransitScreenSnapshot } from './transit-screen';
 import { readTransitServiceNotices } from './transit-service-notices';
 import { attachTicketingAvailability } from './travel-ticketing';
+import { findPublishedTravelScheduleRevision } from './travel-schedule-revision-store';
 import { readTravelServiceProfiles } from './travel-service-profile-store';
 import { createTimedCache } from './server-cache';
 
@@ -45,16 +47,33 @@ interface FlightSegment {
   position?: string;
 }
 
+type TravelScheduleReadSource = 'published_or_live' | 'live';
+
 export async function readTravelScheduleQuery(
   query: TravelScheduleQuery = {},
+  options: { source?: TravelScheduleReadSource } = {},
 ): Promise<ApiItemResponse<TravelScheduleQueryResult>> {
   const config = readRuntimeConfig();
-  return travelScheduleQueryCache.read(buildTravelScheduleQueryCacheKey(query, config), () =>
-    readTravelScheduleQueryUncached(query),
+  const source = options.source ?? 'published_or_live';
+  const publishedRevision =
+    source === 'published_or_live' ? await findPublishedTravelScheduleRevision() : undefined;
+  return travelScheduleQueryCache.read(
+    buildTravelScheduleQueryCacheKey(query, config, {
+      publishedRevision,
+      source,
+    }),
+    () =>
+      publishedRevision
+        ? readPublishedTravelScheduleQueryUncached(query, publishedRevision)
+        : readLiveTravelScheduleQueryUncached(query),
   );
 }
 
-async function readTravelScheduleQueryUncached(
+export function clearTravelScheduleQueryCache(): void {
+  travelScheduleQueryCache.clear();
+}
+
+async function readLiveTravelScheduleQueryUncached(
   query: TravelScheduleQuery = {},
 ): Promise<ApiItemResponse<TravelScheduleQueryResult>> {
   const [profiles, screen, serviceNotices] = await Promise.all([
@@ -131,6 +150,34 @@ async function readTravelScheduleQueryUncached(
       sourceFiles,
       serviceDate,
       notice: screen.item?.notice,
+    },
+  };
+}
+
+async function readPublishedTravelScheduleQueryUncached(
+  query: TravelScheduleQuery,
+  revision: TravelScheduleRevision,
+): Promise<ApiItemResponse<TravelScheduleQueryResult>> {
+  const serviceDate = normalizeServiceDate(query.serviceDate);
+  const filteredTrips = await attachTicketingAvailability(
+    filterTrips(revision.trips, { ...query, serviceDate }),
+  );
+
+  return {
+    meta: createApiMeta(
+      'ready',
+      `使用已发布班次版本 ${revision.revisionId}，发布时间 ${formatPublishedScheduleRevisionTime(
+        revision.publishedAt,
+      )}。`,
+    ),
+    item: {
+      services: revision.services,
+      trips: filteredTrips,
+      serviceNotices: revision.serviceNotices,
+      stationOptions: revision.stationOptions,
+      sourceFiles: revision.sourceFiles,
+      serviceDate,
+      notice: revision.notice,
     },
   };
 }
@@ -288,14 +335,22 @@ async function readFlightTrips(
 function buildTravelScheduleQueryCacheKey(
   query: TravelScheduleQuery,
   config: ReturnType<typeof readRuntimeConfig>,
+  input: {
+    publishedRevision?: TravelScheduleRevision;
+    source: TravelScheduleReadSource;
+  },
 ): string {
   return [
+    input.source,
+    input.publishedRevision?.revisionId ?? 'live',
+    input.publishedRevision?.publishedAt ?? '',
     config.legacyDataSource,
     config.legacyDataDir ?? '',
     config.legacyDataRemoteBaseUrl,
     config.legacyPublicBaseUrl,
     config.legacyDataFetchTimeoutMs,
     config.flightDataUrl,
+    config.travelScheduleRevisionStorePath,
     config.travelServiceProfileStorePath,
     config.ticketingCatalogStorePath,
     query.serviceKind ?? 'all',
@@ -699,6 +754,17 @@ function toDateInputValue(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function formatPublishedScheduleRevisionTime(value: string | undefined): string {
+  if (!value) {
+    return '未知';
+  }
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
 }
 
 function compareTrips(left: TravelTripInstance, right: TravelTripInstance): number {

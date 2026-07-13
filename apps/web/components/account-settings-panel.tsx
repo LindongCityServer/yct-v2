@@ -272,8 +272,9 @@ export function AccountSettingsPanel({
   const [localeStatusState, setLocaleStatusState] = useState<ClientLocalePreferenceState | null>(
     null,
   );
-  const [localeStatusFallbackKey, setLocaleStatusFallbackKey] =
-    useState<CommonMessageKey | null>(null);
+  const [localeStatusFallbackKey, setLocaleStatusFallbackKey] = useState<CommonMessageKey | null>(
+    null,
+  );
   const localeStatusText = localeStatusFallbackKey
     ? t(localeStatusFallbackKey)
     : localeStatusState
@@ -897,7 +898,9 @@ export function AccountSettingsPanel({
       );
       syncTripSummary();
     } catch (error) {
-      setTripSyncStatusText(error instanceof Error ? error.message : t('account.history.syncFailed'));
+      setTripSyncStatusText(
+        error instanceof Error ? error.message : t('account.history.syncFailed'),
+      );
     } finally {
       setIsSyncingTripReminders(false);
     }
@@ -910,8 +913,9 @@ export function AccountSettingsPanel({
     ? t('account.notification.masterLabelEnabled')
     : t('account.notification.masterLabelDisabled');
   const ticketDraftCount =
-    ticketOrders?.filter((item) => item.order.status === 'draft' || item.order.status === 'pending_issue')
-      .length ?? 0;
+    ticketOrders?.filter(
+      (item) => item.order.status === 'draft' || item.order.status === 'pending_issue',
+    ).length ?? 0;
 
   return (
     <section className="module-panel" aria-labelledby="account-title">
@@ -1074,14 +1078,18 @@ export function AccountSettingsPanel({
             </span>
           </div>
           <div className="settings-history-summary">
-            <span>{t('account.history.upcomingTrips', { count: tripSummary?.scheduled ?? 0 })}</span>
+            <span>
+              {t('account.history.upcomingTrips', { count: tripSummary?.scheduled ?? 0 })}
+            </span>
             <span>{t('account.history.tripHistory', { count: tripSummary?.history ?? 0 })}</span>
             <span>
               {t('account.history.scheduleRecords', {
                 count: scheduleHistorySummary?.total ?? 0,
               })}
             </span>
-            <span>{t('account.history.mapFavorites', { count: mapFavoriteSummary?.total ?? 0 })}</span>
+            <span>
+              {t('account.history.mapFavorites', { count: mapFavoriteSummary?.total ?? 0 })}
+            </span>
             <span>{t('account.history.pendingSync', { count: tripSummary?.localOnly ?? 0 })}</span>
           </div>
           <div className="settings-action-row">
@@ -1452,29 +1460,11 @@ function AccountAuthPanel({
       <div className="account-auth-actions">
         {user || readonlyUser ? (
           <>
-            <a className="secondary-action-button" href={appPath('/admin/operations')}>
+            <a className="secondary-action-button" href={appPath('/admin')}>
               <span className="material-symbols-outlined" aria-hidden="true">
                 admin_panel_settings
               </span>
-              <span>{t('account.auth.adminOperations')}</span>
-            </a>
-            <a className="secondary-action-button" href={appPath('/admin/services')}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                dashboard_customize
-              </span>
-              <span>{t('account.auth.adminServices')}</span>
-            </a>
-            <a className="secondary-action-button" href={appPath('/admin/transit')}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                route
-              </span>
-              <span>{t('account.auth.adminTransit')}</span>
-            </a>
-            <a className="secondary-action-button" href={appPath('/admin/map-poi')}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                add_location_alt
-              </span>
-              <span>{t('account.auth.adminPoi')}</span>
+              <span>{t('account.auth.adminPortal')}</span>
             </a>
             {auth.ldpassBaseUrl ? (
               <a

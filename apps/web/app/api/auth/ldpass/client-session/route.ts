@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       NextResponse.json(
         {
           error: 'ldpass_session_unavailable',
-          message: '无法读取 ldpass 会话。',
+          message: '无法读取临东通会话。',
           yctDiagnostics: diagnostics,
         },
         { status: 502 },

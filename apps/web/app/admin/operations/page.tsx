@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 export default function AdminOperationsPage() {
   return (
-    <SecondaryShell title="内容后台" backHref="/account">
+    <SecondaryShell title="内容后台" backHref="/admin">
       <AdminOperationsPanel />
     </SecondaryShell>
   );

@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "local_service_ba7290fb-2b05-42c0-8dca-8b22b2fe0a07",
+      "title": "服务入口验证-已更新",
+      "description": "更新后描述",
+      "categoryId": "other",
+      "icon": "explore",
+      "href": "https://example.com/two",
+      "openMode": "same_tab",
+      "sortOrder": 520,
+      "status": "archived",
+      "submittedBy": "codex-admin-check",
+      "submittedAt": "2026-07-12T11:06:42.530Z",
+      "reviewedBy": "codex-admin-check",
+      "reviewedAt": "2026-07-12T11:06:42.539Z",
+      "publishedAt": "2026-07-12T11:06:42.547Z"
+    }
+  ]
+}

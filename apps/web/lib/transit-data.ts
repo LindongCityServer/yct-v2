@@ -14,6 +14,10 @@ export async function readTransitOverview(): Promise<TransitOverview> {
   return transitOverviewCache.read('transit-overview', readTransitOverviewUncached);
 }
 
+export function clearTransitOverviewCache(): void {
+  transitOverviewCache.clear();
+}
+
 async function readTransitOverviewUncached(): Promise<TransitOverview> {
   const modeProfiles = await readTransitModeProfiles();
   const publishedRevision = await findPublishedTransitDataRevision();

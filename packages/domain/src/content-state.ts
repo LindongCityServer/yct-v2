@@ -70,6 +70,7 @@ export function canPublishContentRevision(input: {
   assetStatuses: ContentAssetStatus[];
   publishMode: ContentPublishMode;
   scheduledAt?: ISODateTimeString;
+  hasMeaningfulMarkdown?: boolean;
 }): StateTransitionResult<ContentRevisionStatus> {
   if (input.revisionStatus !== 'approved') {
     return {
@@ -85,6 +86,14 @@ export function canPublishContentRevision(input: {
       ok: false,
       status: input.revisionStatus,
       reason: '内容包含未审核通过的图片或附件',
+    };
+  }
+
+  if (input.hasMeaningfulMarkdown === false) {
+    return {
+      ok: false,
+      status: input.revisionStatus,
+      reason: '内容正文不能为空白',
     };
   }
 

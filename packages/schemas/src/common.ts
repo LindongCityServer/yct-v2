@@ -10,5 +10,6 @@ export const markdownSchema = z
   .string()
   .min(1)
   .max(120_000)
+  .refine((value) => value.trim().length > 0, 'Markdown 内容不能为空白')
   .refine((value) => !/<script[\s>]/i.test(value), 'Markdown 内容不能包含 script 标签')
   .refine((value) => !/<iframe[\s>]/i.test(value), 'Markdown 内容不能包含 iframe 标签');

@@ -4,13 +4,17 @@ import type {
   LocaleCode,
   LocalePreference,
   MapGeometry,
+  PoiSubmissionStatus,
   RectangleBounds,
   ReviewDecision,
   ServiceEntryCategory,
+  ServiceEntryStatus,
   OperationsStrongReminderSourceKind,
   TicketableServiceKind,
+  TransitDataRevisionStatus,
   TransitModeProfile,
   TransitModeSnapshotSummary,
+  TravelScheduleRevisionStatus,
   TravelScheduleServiceProfile,
   TripReminderSource,
   TileProviderSourceKind,
@@ -48,7 +52,7 @@ export interface ContentDraftUpdatedPayload {
   revisionId: string;
   title: string;
   categoryId: string;
-  previousStatus: 'draft' | 'rejected';
+  previousStatus: 'draft' | 'pending_review' | 'approved' | 'rejected' | 'published';
 }
 
 export interface ContentReviewedPayload {
@@ -68,12 +72,7 @@ export interface ContentPublishedPayload {
 export interface ContentArchivedPayload {
   contentId: string;
   revisionId: string;
-  previousStatus:
-    | 'draft'
-    | 'pending_review'
-    | 'approved'
-    | 'rejected'
-    | 'published';
+  previousStatus: 'draft' | 'pending_review' | 'approved' | 'rejected' | 'published';
 }
 
 export interface ContentAssetImportedPayload {
@@ -125,7 +124,9 @@ export interface PoiSubmissionUpdatedPayload {
   poiId: string;
   updatedBy: string;
   updatedAt: ISODateTimeString;
-  changedFields: Array<'title' | 'categoryId' | 'description' | 'href' | 'geometry'>;
+  changedFields: Array<
+    'title' | 'categoryId' | 'iconFileName' | 'description' | 'href' | 'geometry'
+  >;
 }
 
 export interface PoiReviewedPayload {
@@ -144,6 +145,13 @@ export interface PoiPublishedPayload {
   imageUrl?: string;
   geometry: MapGeometry;
   publishedAt: ISODateTimeString;
+}
+
+export interface PoiArchivedPayload {
+  poiId: string;
+  previousStatus: Exclude<PoiSubmissionStatus, 'archived'>;
+  archivedBy: string;
+  archivedAt: ISODateTimeString;
 }
 
 export interface TransitDataRevisionSubmittedPayload {
@@ -177,6 +185,85 @@ export interface TransitDataRevisionPublishedPayload {
   datasetId: string;
   revisionId: string;
   publishedAt: ISODateTimeString;
+  restoredFromStatus?: 'superseded';
+}
+
+export interface TransitDataRevisionArchivedPayload {
+  datasetId: string;
+  revisionId: string;
+  archivedBy: string;
+  archivedAt: ISODateTimeString;
+  previousStatus: TransitDataRevisionStatus;
+}
+
+export interface TransitDataRevisionStationUpdatedPayload {
+  datasetId: string;
+  revisionId: string;
+  stationSourceId: string;
+  stationName: string;
+  updatedBy: string;
+  updatedAt: ISODateTimeString;
+  previousCoordinate?: {
+    x?: number;
+    z?: number;
+  };
+  previousBoundPoi?: {
+    markerId?: string;
+    label?: string;
+  };
+  nextCoordinate: {
+    x: number;
+    z: number;
+  };
+  nextBoundPoi?: {
+    markerId?: string;
+    label?: string;
+  };
+}
+
+export interface TransitDataRevisionLineUpdatedPayload {
+  datasetId: string;
+  revisionId: string;
+  lineSourceId: string;
+  lineName: string;
+  updatedBy: string;
+  updatedAt: ISODateTimeString;
+  changedFields: Array<
+    | 'mode'
+    | 'name'
+    | 'color'
+    | 'stationSourceIds'
+    | 'stops'
+    | 'segmentPaths'
+    | 'operator'
+    | 'fare'
+    | 'firstLastBus'
+    | 'departureTimes'
+    | 'bookingUrl'
+  >;
+  stationCountBefore: number;
+  stationCountAfter: number;
+}
+
+export interface TransitDataRevisionLineCreatedPayload {
+  datasetId: string;
+  revisionId: string;
+  lineSourceId: string;
+  lineName: string;
+  mode: TransportMode;
+  stationCount: number;
+  createdBy: string;
+  createdAt: ISODateTimeString;
+}
+
+export interface TransitDataRevisionLineDeletedPayload {
+  datasetId: string;
+  revisionId: string;
+  lineSourceId: string;
+  lineName: string;
+  deletedBy: string;
+  deletedAt: ISODateTimeString;
+  stationCount: number;
 }
 
 export interface TransitModeProfileUpdatedPayload {
@@ -328,11 +415,34 @@ export interface ServiceEntryReviewedPayload {
   reason?: string;
 }
 
+export interface ServiceEntryUpdatedPayload {
+  serviceEntryId: string;
+  updatedBy: string;
+  updatedAt: ISODateTimeString;
+  changedFields: Array<
+    'title' | 'description' | 'categoryId' | 'icon' | 'href' | 'openMode' | 'sortOrder'
+  >;
+}
+
 export interface ServiceEntryPublishedPayload {
   serviceEntryId: string;
   categoryId: ServiceEntryCategory;
   href: string;
   publishedAt: ISODateTimeString;
+}
+
+export interface ServiceEntryArchivedPayload {
+  serviceEntryId: string;
+  previousStatus: Exclude<ServiceEntryStatus, 'archived'>;
+  archivedBy: string;
+  archivedAt: ISODateTimeString;
+}
+
+export interface ServiceEntryDeletedPayload {
+  serviceEntryId: string;
+  previousStatus: ServiceEntryStatus;
+  deletedBy: string;
+  deletedAt: ISODateTimeString;
 }
 
 export interface PoiCategoryProfileUpdatedPayload {
@@ -408,9 +518,101 @@ export interface OperationsReminderDeliveryRefreshRequestedPayload {
 export interface TravelSchedulePublishedPayload {
   scheduleServiceId: string;
   serviceKind: TicketableServiceKind;
+  serviceKinds: TicketableServiceKind[];
   revisionId: string;
   publishedAt: ISODateTimeString;
   tripInstanceCount: number;
+  restoredFromStatus?: 'superseded';
+}
+
+export interface TravelScheduleRevisionImportedPayload {
+  scheduleServiceId: string;
+  revisionId: string;
+  sourceProviderId: string;
+  sourceFiles: string[];
+  summary: {
+    serviceCount: number;
+    tripInstanceCount: number;
+    stationOptionCount: number;
+  };
+}
+
+export interface TravelScheduleRevisionSubmittedPayload {
+  scheduleServiceId: string;
+  revisionId: string;
+  sourceProviderId: string;
+  summary: {
+    serviceCount: number;
+    tripInstanceCount: number;
+    stationOptionCount: number;
+  };
+}
+
+export interface TravelScheduleRevisionReviewedPayload {
+  scheduleServiceId: string;
+  revisionId: string;
+  decision: ReviewDecision;
+  reviewerId: string;
+  reason?: string;
+  nextStatus: TravelScheduleRevisionStatus;
+}
+
+export interface TravelScheduleRevisionArchivedPayload {
+  scheduleServiceId: string;
+  revisionId: string;
+  archivedBy: string;
+  archivedAt: ISODateTimeString;
+  previousStatus: TravelScheduleRevisionStatus;
+}
+
+export interface TravelScheduleTripEditedPayload {
+  scheduleServiceId: string;
+  revisionId: string;
+  tripInstanceId: string;
+  updatedBy: string;
+  updatedAt: ISODateTimeString;
+  changedFields: Array<
+    | 'tripCode'
+    | 'serviceKind'
+    | 'departureTime'
+    | 'arrivalTime'
+    | 'arrivalDayOffset'
+    | 'lineName'
+    | 'routeNote'
+    | 'stationNames'
+    | 'originStationName'
+    | 'destinationStationName'
+    | 'fareText'
+    | 'operator'
+    | 'bookingUrl'
+    | 'runtimeText'
+    | 'gateText'
+    | 'vehicleTypeText'
+    | 'vehicleModelText'
+    | 'operatingDays'
+    | 'availability'
+    | 'sourcePath'
+  >;
+}
+
+export interface TravelScheduleTripCreatedPayload {
+  scheduleServiceId: string;
+  revisionId: string;
+  tripInstanceId: string;
+  serviceKind: TicketableServiceKind;
+  lineName: string;
+  createdBy: string;
+  createdAt: ISODateTimeString;
+}
+
+export interface TravelScheduleTripDeletedPayload {
+  scheduleServiceId: string;
+  revisionId: string;
+  tripInstanceId: string;
+  serviceKind: TicketableServiceKind;
+  lineName: string;
+  deletedBy: string;
+  deletedAt: ISODateTimeString;
 }
 
 export interface TravelScheduleServiceProfileUpdatedPayload {
@@ -518,6 +720,7 @@ export type YctEventPayloadMap = {
   PoiSubmissionUpdated: PoiSubmissionUpdatedPayload;
   PoiReviewed: PoiReviewedPayload;
   PoiPublished: PoiPublishedPayload;
+  PoiArchived: PoiArchivedPayload;
   PoiCategoryProfileUpdated: PoiCategoryProfileUpdatedPayload;
   PoiCategoryIconUploaded: PoiCategoryIconUploadedPayload;
   PoiCategoryIconDeleted: PoiCategoryIconDeletedPayload;
@@ -527,6 +730,11 @@ export type YctEventPayloadMap = {
   TransitDataRevisionSubmitted: TransitDataRevisionSubmittedPayload;
   TransitDataRevisionReviewed: TransitDataRevisionReviewedPayload;
   TransitDataRevisionPublished: TransitDataRevisionPublishedPayload;
+  TransitDataRevisionArchived: TransitDataRevisionArchivedPayload;
+  TransitDataRevisionStationUpdated: TransitDataRevisionStationUpdatedPayload;
+  TransitDataRevisionLineUpdated: TransitDataRevisionLineUpdatedPayload;
+  TransitDataRevisionLineCreated: TransitDataRevisionLineCreatedPayload;
+  TransitDataRevisionLineDeleted: TransitDataRevisionLineDeletedPayload;
   TransitModeProfileUpdated: TransitModeProfileUpdatedPayload;
   TileProviderSelected: TileProviderSelectedPayload;
   TripReminderScheduled: TripReminderScheduledPayload;
@@ -548,9 +756,19 @@ export type YctEventPayloadMap = {
   YctSessionEnded: YctSessionEndedPayload;
   ServiceEntrySubmitted: ServiceEntrySubmittedPayload;
   ServiceEntryReviewed: ServiceEntryReviewedPayload;
+  ServiceEntryUpdated: ServiceEntryUpdatedPayload;
   ServiceEntryPublished: ServiceEntryPublishedPayload;
+  ServiceEntryArchived: ServiceEntryArchivedPayload;
+  ServiceEntryDeleted: ServiceEntryDeletedPayload;
   OperationsStrongReminderRulesUpdated: OperationsStrongReminderRulesUpdatedPayload;
   OperationsReminderDeliveryRefreshRequested: OperationsReminderDeliveryRefreshRequestedPayload;
+  TravelScheduleRevisionImported: TravelScheduleRevisionImportedPayload;
+  TravelScheduleRevisionSubmitted: TravelScheduleRevisionSubmittedPayload;
+  TravelScheduleRevisionReviewed: TravelScheduleRevisionReviewedPayload;
+  TravelScheduleRevisionArchived: TravelScheduleRevisionArchivedPayload;
+  TravelScheduleTripEdited: TravelScheduleTripEditedPayload;
+  TravelScheduleTripCreated: TravelScheduleTripCreatedPayload;
+  TravelScheduleTripDeleted: TravelScheduleTripDeletedPayload;
   TravelSchedulePublished: TravelSchedulePublishedPayload;
   TravelScheduleServiceProfileUpdated: TravelScheduleServiceProfileUpdatedPayload;
   TicketInventoryHeld: TicketInventoryHeldPayload;

@@ -61,6 +61,31 @@ export async function listPendingOutboxEvents(limit = 50): Promise<EventOutboxRe
     .slice(0, limit);
 }
 
+export async function listOutboxEvents(
+  input: {
+    limit?: number;
+    status?: EventOutboxStatus | 'all';
+    type?: string;
+    entityId?: string;
+    actorId?: string;
+    search?: string;
+  } = {},
+): Promise<EventOutboxRecord[]> {
+  const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
+  const snapshot = await readSnapshot();
+  return snapshot.records
+    .filter(
+      (record) =>
+        (!input.status || input.status === 'all' || record.status === input.status) &&
+        matchesOutboxEventType(record, input.type) &&
+        matchesOutboxEventActor(record, input.actorId) &&
+        matchesOutboxEventEntity(record, input.entityId) &&
+        matchesOutboxEventSearch(record, input.search),
+    )
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .slice(0, limit);
+}
+
 export async function markOutboxEventDispatched(
   eventId: string,
 ): Promise<EventOutboxRecord | null> {
@@ -135,4 +160,96 @@ function resolveStorePath(): string {
   return path.isAbsolute(config.eventOutboxStorePath)
     ? config.eventOutboxStorePath
     : path.join(/*turbopackIgnore: true*/ process.cwd(), config.eventOutboxStorePath);
+}
+
+function matchesOutboxEventType(record: EventOutboxRecord, type?: string): boolean {
+  if (!type?.trim()) {
+    return true;
+  }
+
+  return record.type.toLowerCase().includes(type.trim().toLowerCase());
+}
+
+function matchesOutboxEventActor(record: EventOutboxRecord, actorId?: string): boolean {
+  if (!actorId?.trim()) {
+    return true;
+  }
+
+  const normalizedActorId = actorId.trim().toLowerCase();
+  const actorValues = [record.event.actor.type, record.event.actor.id]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+  return actorValues.some((value) => value.includes(normalizedActorId));
+}
+
+function matchesOutboxEventEntity(record: EventOutboxRecord, entityId?: string): boolean {
+  if (!entityId?.trim()) {
+    return true;
+  }
+
+  const normalizedEntityId = entityId.trim().toLowerCase();
+  return collectEntityPayloadValues(record.event.payload).some((value) =>
+    value.toLowerCase().includes(normalizedEntityId),
+  );
+}
+
+function matchesOutboxEventSearch(record: EventOutboxRecord, search?: string): boolean {
+  if (!search?.trim()) {
+    return true;
+  }
+
+  const normalizedSearch = search.trim().toLowerCase();
+  const searchableValues = [
+    record.type,
+    record.status,
+    record.event.actor.type,
+    record.event.actor.id,
+    ...collectPayloadSearchValues(record.event.payload),
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+  return searchableValues.some((value) => value.includes(normalizedSearch));
+}
+
+function collectEntityPayloadValues(payload: YctEvent['payload']): string[] {
+  return Object.entries(payload).flatMap(([key, value]) => {
+    if (!/id(s)?$/i.test(key) || value === undefined || value === null) {
+      return [];
+    }
+
+    if (typeof value === 'string' || typeof value === 'number') {
+      return [String(value)];
+    }
+
+    if (Array.isArray(value)) {
+      return value.flatMap((item) =>
+        typeof item === 'string' || typeof item === 'number' ? [String(item)] : [],
+      );
+    }
+
+    return [];
+  });
+}
+
+function collectPayloadSearchValues(payload: YctEvent['payload']): string[] {
+  return Object.entries(payload).flatMap(([key, value]) => {
+    if (value === undefined || value === null) {
+      return [];
+    }
+
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      return [`${key}:${String(value)}`];
+    }
+
+    if (Array.isArray(value)) {
+      const scalarValues = value.flatMap((item) =>
+        typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean'
+          ? [String(item)]
+          : [],
+      );
+      return scalarValues.length > 0 ? [`${key}:${scalarValues.join(' ')}`] : [];
+    }
+
+    return [];
+  });
 }

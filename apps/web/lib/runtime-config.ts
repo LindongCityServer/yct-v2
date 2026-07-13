@@ -15,6 +15,7 @@ export interface RuntimeConfig {
   serviceEntryStorePath: string;
   transitDataStorePath: string;
   transitModeProfileStorePath: string;
+  travelScheduleRevisionStorePath: string;
   travelServiceProfileStorePath: string;
   ticketingCatalogStorePath: string;
   ticketOrderStorePath: string;
@@ -95,6 +96,9 @@ export function readRuntimeConfig(): RuntimeConfig {
     transitModeProfileStorePath:
       emptyToUndefined(process.env.YCT_TRANSIT_MODE_PROFILE_STORE_PATH) ??
       '.yct-data/transit-mode-profile-store.json',
+    travelScheduleRevisionStorePath:
+      emptyToUndefined(process.env.YCT_TRAVEL_SCHEDULE_REVISION_STORE_PATH) ??
+      '.yct-data/travel-schedule-revision-store.json',
     travelServiceProfileStorePath:
       emptyToUndefined(process.env.YCT_TRAVEL_SERVICE_PROFILE_STORE_PATH) ??
       '.yct-data/travel-service-profile-store.json',

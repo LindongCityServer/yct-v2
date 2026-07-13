@@ -49,3 +49,24 @@ export function canPublishTransitDataRevision(input: {
 
   return { ok: true };
 }
+
+export function canRestoreTransitDataRevision(input: {
+  revisionStatus: TransitDataRevisionStatus;
+  validationErrorCount: number;
+}): { ok: true } | { ok: false; reason: string } {
+  if (input.revisionStatus !== 'superseded') {
+    return {
+      ok: false,
+      reason: '只有已被替换的交通数据版本可以恢复为当前发布版本。',
+    };
+  }
+
+  if (input.validationErrorCount > 0) {
+    return {
+      ok: false,
+      reason: '交通数据仍存在校验错误，不能恢复发布。',
+    };
+  }
+
+  return { ok: true };
+}

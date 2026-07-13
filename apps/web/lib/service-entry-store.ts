@@ -80,6 +80,20 @@ export async function updateLocalServiceEntry(
   return updated;
 }
 
+export async function deleteLocalServiceEntry(id: string): Promise<ServiceEntry | undefined> {
+  const snapshot = await readSnapshot();
+  const existing = snapshot.entries.find((entry) => entry.id === id);
+  if (!existing) {
+    return undefined;
+  }
+
+  await writeSnapshot({
+    ...snapshot,
+    entries: snapshot.entries.filter((entry) => entry.id !== id),
+  });
+  return existing;
+}
+
 export function withServiceEntryStatus(
   entry: ServiceEntry,
   status: ServiceEntryStatus,

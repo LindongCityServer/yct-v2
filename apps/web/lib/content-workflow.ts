@@ -72,9 +72,15 @@ export async function updateContentDraft(input: {
     return notFound();
   }
 
-  const editableStatuses = new Set<ContentRevisionStatus>(['draft', 'rejected']);
+  const editableStatuses = new Set<ContentRevisionStatus>([
+    'draft',
+    'pending_review',
+    'approved',
+    'rejected',
+    'published',
+  ]);
   if (!editableStatuses.has(record.revision.status)) {
-    return invalidTransition('只有草稿或已驳回的内容可以继续编辑。');
+    return invalidTransition('只有草稿、待审核、待发布、已发布或已驳回的内容可以继续编辑。');
   }
 
   const markdownAssetRecords = await findContentAssetRecordsByPublicPaths(
@@ -84,11 +90,34 @@ export async function updateContentDraft(input: {
     ...input.assetIds,
     ...markdownAssetRecords.map((assetRecord) => assetRecord.asset.id),
   ]);
-  const previousStatus = record.revision.status as 'draft' | 'rejected';
+  if (record.revision.status === 'published') {
+    const assetRecords = await findContentAssetRecordsByIds(assetIds);
+    const foundAssetIds = new Set(assetRecords.map((assetRecord) => assetRecord.asset.id));
+    const missingAssetIds = assetIds.filter((assetId) => !foundAssetIds.has(assetId));
+    if (missingAssetIds.length > 0) {
+      return invalidTransition(`内容引用了不存在的素材：${missingAssetIds.join('、')}`);
+    }
+
+    const publishCheck = canPublishContentRevision({
+      revisionStatus: 'approved',
+      assetStatuses: assetRecords.map((assetRecord) => assetRecord.asset.status),
+      publishMode: record.revision.scheduledAt ? 'scheduled' : 'immediate',
+      scheduledAt: record.revision.scheduledAt,
+      hasMeaningfulMarkdown: hasMeaningfulContentBody(input.markdown),
+    });
+    if (!publishCheck.ok) {
+      return invalidTransition(`当前已发布内容不能直接保存：${publishCheck.reason}`);
+    }
+  }
+
+  const previousStatus = record.revision.status as
+    'draft' | 'pending_review' | 'approved' | 'rejected' | 'published';
   const nextStatus =
-    record.revision.status === 'rejected'
-      ? transitionContentRevisionStatus(record.revision.status, 'draft').status
-      : record.revision.status;
+    record.revision.status === 'published'
+      ? 'published'
+      : record.revision.status === 'draft'
+        ? record.revision.status
+        : transitionContentRevisionStatus('rejected', 'draft').status;
 
   const updated = await updateContentRecord(input.contentId, (current) => ({
     ...current,
@@ -135,6 +164,9 @@ export async function submitContentRevision(input: {
   const transition = transitionContentRevisionStatus(record.revision.status, 'pending_review');
   if (!transition.ok) {
     return invalidTransition(transition.reason);
+  }
+  if (!hasMeaningfulContentBody(record.revision.markdown)) {
+    return invalidTransition('正文不能为空白内容，请至少补充可见正文后再提交审核。');
   }
 
   const now = new Date().toISOString();
@@ -213,12 +245,16 @@ export async function publishContentRevision(input: {
   if (missingAssetIds.length > 0) {
     return invalidTransition(`内容引用了不存在的素材：${missingAssetIds.join('、')}`);
   }
+  if (!hasMeaningfulContentBody(record.revision.markdown)) {
+    return invalidTransition('正文不能为空白内容，请先补充可见正文后再发布。');
+  }
 
   const publishCheck = canPublishContentRevision({
     revisionStatus: record.revision.status,
     assetStatuses: assetRecords.map((assetRecord) => assetRecord.asset.status),
     publishMode: input.mode,
     scheduledAt: input.scheduledAt,
+    hasMeaningfulMarkdown: hasMeaningfulContentBody(record.revision.markdown),
   });
 
   if (!publishCheck.ok) {
@@ -227,12 +263,30 @@ export async function publishContentRevision(input: {
 
   const now = new Date().toISOString();
   const publishedAt = input.mode === 'scheduled' ? (input.scheduledAt ?? now) : now;
-  const updated = await updateContentRecord(input.contentId, (current) =>
-    withRevisionStatus(current, 'published', {
+  const updated = await updateContentRecord(input.contentId, (current) => {
+    const nextRecord = withRevisionStatus(current, 'published', {
       scheduledAt: input.mode === 'scheduled' ? input.scheduledAt : undefined,
       publishedAt,
-    }),
-  );
+    });
+
+    return {
+      ...nextRecord,
+      publishHistory: [
+        ...(current.publishHistory ?? []),
+        {
+          snapshotId: `content_publish_snapshot_${randomUUID()}`,
+          revisionId: current.revision.id,
+          title: current.revision.title,
+          categoryId: current.revision.categoryId,
+          markdown: current.revision.markdown,
+          assetIds: current.revision.assetIds,
+          metadata: current.metadata,
+          publishedAt,
+          publishedBy: input.actorId,
+        },
+      ].slice(-20),
+    };
+  });
 
   if (updated) {
     await emitEvent('ContentPublished', input.actorId, {
@@ -310,6 +364,10 @@ function extractContentAssetPaths(markdown: string): string[] {
 
 function mergeAssetIds(assetIds: string[]): string[] {
   return Array.from(new Set(assetIds.map((assetId) => assetId.trim()).filter(Boolean)));
+}
+
+function hasMeaningfulContentBody(markdown: string): boolean {
+  return markdown.trim().length > 0;
 }
 
 function mergeContentMetadata(
