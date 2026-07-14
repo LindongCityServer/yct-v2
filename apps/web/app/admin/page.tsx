@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { SecondaryShell } from '../../components/app-shell';
+import { AdminHomeOverview } from '../../components/admin-home-overview';
 import { appPath } from '../../lib/app-paths';
 
 const adminEntries = [
@@ -7,7 +8,13 @@ const adminEntries = [
     href: appPath('/admin/operations'),
     icon: 'admin_panel_settings',
     title: '内容后台',
-    description: '管理内容、素材、首页强提醒和后台审计事件。',
+    description: '管理内容、素材、首页强提醒和运营展示。',
+  },
+  {
+    href: appPath('/admin/audit-events'),
+    icon: 'fact_check',
+    title: '审计事件',
+    description: '追踪后台事件、操作者、实体 ID、派发状态和失败原因。',
   },
   {
     href: appPath('/admin/services'),
@@ -39,6 +46,7 @@ export default function AdminHomePage() {
           <h1 id="admin-home-title">管理后台</h1>
           <span className="muted">按业务域进入对应后台，账号页只保留这个统一入口。</span>
         </div>
+        <AdminHomeOverview />
         <div className="service-entry-grid admin-home-grid" aria-label="后台入口">
           {adminEntries.map((entry) => (
             <Link className="service-entry admin-home-entry" href={entry.href} key={entry.href}>
