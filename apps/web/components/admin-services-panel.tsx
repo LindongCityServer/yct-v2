@@ -268,19 +268,28 @@ export function AdminServicesPanel() {
   const deleteEntry = async (entry: AdminServiceEntry) => {
     setIsBusy(true);
     try {
-      const response = await fetch(
-        appPath(`/api/admin/services/entries/${encodeURIComponent(entry.id)}`),
-        {
-          method: 'DELETE',
-        },
-      );
+      const response =
+        entry.status === 'published'
+          ? await fetch(
+              appPath(`/api/admin/services/entries/${encodeURIComponent(entry.id)}/archive`),
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}),
+              },
+            )
+          : await fetch(appPath(`/api/admin/services/entries/${encodeURIComponent(entry.id)}`), {
+              method: 'DELETE',
+            });
       const data = (await response.json()) as { message?: string };
       if (!response.ok) {
-        setStatusText(data.message ?? '删除服务入口失败');
+        setStatusText(data.message ?? '移除服务入口失败');
         return;
       }
 
-      setStatusText('服务入口已删除。');
+      setStatusText(
+        entry.status === 'published' ? '服务入口已从公开列表移除。' : '服务入口已删除。',
+      );
       await loadEntries();
     } finally {
       setIsBusy(false);
@@ -437,12 +446,12 @@ export function AdminServicesPanel() {
                   </button>
                   <button
                     type="button"
-                    disabled={isBusy}
+                    disabled={isBusy || entry.status === 'archived'}
                     onClick={() => {
                       if (
                         !window.confirm(
                           entry.status === 'published'
-                            ? `确认删除服务入口“${entry.title}”？删除后会立即从公开服务列表移除。`
+                            ? `确认移除已发布服务入口“${entry.title}”？移除后会立即从公开服务列表下线，并保留后台记录。`
                             : `确认删除服务入口“${entry.title}”？`,
                         )
                       ) {
@@ -452,7 +461,7 @@ export function AdminServicesPanel() {
                       void deleteEntry(entry);
                     }}
                   >
-                    删除
+                    {entry.status === 'published' ? '移除' : '删除'}
                   </button>
                 </div>
               )}
