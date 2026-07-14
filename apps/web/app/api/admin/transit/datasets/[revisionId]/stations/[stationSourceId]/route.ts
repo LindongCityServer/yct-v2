@@ -34,6 +34,11 @@ export async function PATCH(
     actorId: admin.ldpassUserId,
     x: parsed.data.x,
     z: parsed.data.z,
+    boundPoiRefs: parsed.data.boundPoiRefs?.map((ref) => ({
+      markerId: ref.markerId.trim(),
+      label: ref.label.trim(),
+      categoryId: ref.categoryId?.trim() || undefined,
+    })),
     boundPoiMarkerId: parsed.data.boundPoiMarkerId?.trim() || undefined,
     boundPoiLabel: parsed.data.boundPoiLabel?.trim() || undefined,
   });

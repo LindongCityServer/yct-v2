@@ -5,7 +5,7 @@ import {
   type TransitOverview,
 } from './legacy-transit';
 import { createTimedCache } from './server-cache';
-import { findPublishedTransitDataRevision } from './transit-data-store';
+import { readPublishedTransitEntitySnapshot } from './published-transit-read-model';
 import { readTransitModeProfiles } from './transit-mode-profile-store';
 
 const transitOverviewCache = createTimedCache<TransitOverview>(30 * 1000);
@@ -20,16 +20,19 @@ export function clearTransitOverviewCache(): void {
 
 async function readTransitOverviewUncached(): Promise<TransitOverview> {
   const modeProfiles = await readTransitModeProfiles();
-  const publishedRevision = await findPublishedTransitDataRevision();
-  if (publishedRevision) {
+  const publishedSnapshot = await readPublishedTransitEntitySnapshot();
+  if (publishedSnapshot) {
     return {
       ...buildTransitOverview(
         {
-          summary: publishedRevision.summary,
-          lines: publishedRevision.lines,
-          stations: publishedRevision.stations,
+          summary: publishedSnapshot.summary,
+          lines: publishedSnapshot.lines,
+          stations: publishedSnapshot.stations,
         },
-        createApiMeta('ready', `已发布交通数据版本：${publishedRevision.revisionId}`),
+        createApiMeta(
+          'ready',
+          `已发布 ${publishedSnapshot.lines.length} 条线路，来源批次 ${publishedSnapshot.sourceRevisionIds.length} 个。`,
+        ),
       ),
       modeProfiles,
     };

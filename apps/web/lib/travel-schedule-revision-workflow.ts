@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type {
   TicketableServiceKind,
+  TransitItemApprovalStatus,
   TravelTripInstance,
   TravelScheduleQueryResult,
   TravelScheduleRevision,
@@ -336,9 +337,7 @@ export async function updateTravelScheduleTrip(input: {
   );
 
   if (updated) {
-    if (updated.status === 'published') {
-      clearTravelScheduleQueryCache();
-    }
+    clearTravelScheduleQueryCache();
     await emitEvent('TravelScheduleTripEdited', input.actorId, {
       scheduleServiceId: updated.scheduleServiceId,
       revisionId: updated.revisionId,
@@ -381,9 +380,7 @@ export async function createTravelScheduleTrip(input: {
   );
 
   if (updated) {
-    if (updated.status === 'published') {
-      clearTravelScheduleQueryCache();
-    }
+    clearTravelScheduleQueryCache();
     await emitEvent('TravelScheduleTripCreated', input.actorId, {
       scheduleServiceId: updated.scheduleServiceId,
       revisionId: updated.revisionId,
@@ -423,7 +420,15 @@ export async function deleteTravelScheduleTrip(input: {
   }
 
   const deletedAt = new Date().toISOString();
-  const nextTrips = revision.trips.filter((item) => item.tripInstanceId !== input.tripInstanceId);
+  const tripStatus = getTravelScheduleTripApprovalStatus(trip, revision.status);
+  const nextTrips =
+    tripStatus === 'published'
+      ? revision.trips.map((item) =>
+          item.tripInstanceId === input.tripInstanceId
+            ? withTravelScheduleItemApprovalFields(item, 'archived', input.actorId, deletedAt)
+            : item,
+        )
+      : revision.trips.filter((item) => item.tripInstanceId !== input.tripInstanceId);
   const publishedValidationError = getPublishedTravelScheduleMutationError(revision, nextTrips);
   if (publishedValidationError) {
     return invalidTransition(publishedValidationError);
@@ -433,9 +438,7 @@ export async function deleteTravelScheduleTrip(input: {
   );
 
   if (updated) {
-    if (updated.status === 'published') {
-      clearTravelScheduleQueryCache();
-    }
+    clearTravelScheduleQueryCache();
     await emitEvent('TravelScheduleTripDeleted', input.actorId, {
       scheduleServiceId: updated.scheduleServiceId,
       revisionId: updated.revisionId,
@@ -444,6 +447,71 @@ export async function deleteTravelScheduleTrip(input: {
       lineName: trip.lineName,
       deletedBy: input.actorId,
       deletedAt,
+    });
+  }
+
+  return { ok: true, revision: updated };
+}
+
+export async function updateTravelScheduleTripApprovalStatus(input: {
+  revisionId: string;
+  actorId: string;
+  tripInstanceId: string;
+  action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive';
+  reason?: string;
+}): Promise<TravelScheduleRevisionActionResult> {
+  const revision = await findTravelScheduleRevision(input.revisionId);
+  if (!revision) {
+    return notFound();
+  }
+
+  const trip = revision.trips.find((item) => item.tripInstanceId === input.tripInstanceId);
+  if (!trip) {
+    return {
+      ok: false,
+      status: 404,
+      error: 'travel_schedule_trip_not_found',
+      message: '班次数据版本中不存在该班次。',
+    };
+  }
+
+  const previousStatus = getTravelScheduleTripApprovalStatus(trip, revision.status);
+  const nextStatus = getNextTravelScheduleItemApprovalStatus(previousStatus, input.action);
+  if (!nextStatus) {
+    return invalidTransition('当前班次状态不允许执行该审批动作。');
+  }
+
+  const changedAt = new Date().toISOString();
+  const nextTrips = revision.trips.map((item) =>
+    item.tripInstanceId === input.tripInstanceId
+      ? withTravelScheduleItemApprovalFields(
+          item,
+          nextStatus,
+          input.actorId,
+          changedAt,
+          input.reason,
+        )
+      : item,
+  );
+  const updated = await updateTravelScheduleRevision(input.revisionId, (current) => ({
+    ...current,
+    trips: nextTrips,
+  }));
+
+  if (updated) {
+    if (nextStatus === 'published' || nextStatus === 'archived') {
+      clearTravelScheduleQueryCache();
+    }
+    await emitEvent('TravelScheduleTripApprovalChanged', input.actorId, {
+      scheduleServiceId: updated.scheduleServiceId,
+      revisionId: updated.revisionId,
+      tripInstanceId: trip.tripInstanceId,
+      lineName: trip.lineName,
+      previousStatus,
+      nextStatus,
+      actorId: input.actorId,
+      changedAt,
+      reason: input.reason,
     });
   }
 
@@ -571,6 +639,7 @@ function buildCreatedTravelScheduleTrip(
 
   return {
     tripInstanceId: `manual_trip_${randomUUID()}`,
+    approvalStatus: 'imported',
     tripCode: optionalTrimmedString(patch.tripCode),
     serviceId: service?.serviceId,
     serviceKind: patch.serviceKind,
@@ -635,6 +704,82 @@ function canEditTravelScheduleRevisionTripStatus(status: TravelScheduleRevisionS
     status === 'published' ||
     status === 'rejected'
   );
+}
+
+function getTravelScheduleTripApprovalStatus(
+  trip: TravelTripInstance,
+  fallbackStatus: TravelScheduleRevisionStatus,
+): TransitItemApprovalStatus {
+  return trip.approvalStatus ?? normalizeTravelScheduleRevisionStatusForItem(fallbackStatus);
+}
+
+function normalizeTravelScheduleRevisionStatusForItem(
+  status: TravelScheduleRevisionStatus,
+): TransitItemApprovalStatus {
+  if (status === 'validation_failed') {
+    return 'imported';
+  }
+  if (status === 'superseded') {
+    return 'published';
+  }
+  return status;
+}
+
+function getNextTravelScheduleItemApprovalStatus(
+  current: TransitItemApprovalStatus,
+  action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive',
+): TransitItemApprovalStatus | null {
+  if (action === 'archive') {
+    return current === 'archived' || current === 'published' ? null : 'archived';
+  }
+  if (action === 'submit') {
+    return current === 'imported' || current === 'rejected' ? 'pending_review' : null;
+  }
+  if (action === 'approve') {
+    return current === 'pending_review' ? 'approved' : null;
+  }
+  if (action === 'reject') {
+    return current === 'pending_review' ? 'rejected' : null;
+  }
+  return current === 'approved' ? 'published' : null;
+}
+
+function withTravelScheduleItemApprovalFields<T extends object>(
+  item: T,
+  status: TransitItemApprovalStatus,
+  actorId: string,
+  changedAt: string,
+  reason?: string,
+): T & {
+  approvalStatus: TransitItemApprovalStatus;
+  submittedBy?: string;
+  submittedAt?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewReason?: string;
+  publishedAt?: string;
+  archivedAt?: string;
+} {
+  return {
+    ...item,
+    approvalStatus: status,
+    submittedBy:
+      status === 'pending_review' ? actorId : (item as { submittedBy?: string }).submittedBy,
+    submittedAt:
+      status === 'pending_review' ? changedAt : (item as { submittedAt?: string }).submittedAt,
+    reviewedBy:
+      status === 'approved' || status === 'rejected'
+        ? actorId
+        : (item as { reviewedBy?: string }).reviewedBy,
+    reviewedAt:
+      status === 'approved' || status === 'rejected'
+        ? changedAt
+        : (item as { reviewedAt?: string }).reviewedAt,
+    reviewReason: status === 'rejected' ? reason : (item as { reviewReason?: string }).reviewReason,
+    publishedAt:
+      status === 'published' ? changedAt : (item as { publishedAt?: string }).publishedAt,
+    archivedAt: status === 'archived' ? changedAt : (item as { archivedAt?: string }).archivedAt,
+  };
 }
 
 function getPublishedTravelScheduleMutationError(

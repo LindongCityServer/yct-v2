@@ -6,6 +6,9 @@ import type {
   TileProviderDescriptor,
   TransitDataRevision,
   TransitDataRevisionStatus,
+  TransitDepartureScheduleRule,
+  TransitItemApprovalStatus,
+  TransitLineRouteNodeSnapshot,
   TransitModeProfile,
   TravelScheduleQueryResult,
   TravelScheduleRevision,
@@ -17,12 +20,12 @@ import type { FormEvent, MouseEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 
-type TransitStatusFilter = TransitDataRevisionStatus | 'all' | 'todo' | 'blocked';
-type ScheduleStatusFilter = TravelScheduleRevisionStatus | 'all' | 'todo' | 'blocked';
+type TransitStatusFilter = TransitItemApprovalStatus | 'all' | 'todo' | 'legacy';
+type ScheduleStatusFilter = TransitItemApprovalStatus | 'all' | 'todo' | 'legacy';
 type TransitModeFilter = TransitDataRevision['lines'][number]['mode'] | 'all';
 type ScheduleServiceFilter = TravelScheduleServiceProfile['kind'] | 'all';
-type TransitAdminSection =
-  'transit_revisions' | 'schedule_revisions' | 'mode_profiles' | 'service_profiles';
+type TransitAdminSection = 'lines' | 'trips' | 'profiles';
+type TransitLineEditorTab = 'basic' | 'route' | 'schedule';
 type TransitRevisionStation = TransitDataRevision['stations'][number];
 type TransitRevisionLine = TransitDataRevision['lines'][number];
 type MapMarker = MapMarkerSnapshot['markers'][number];
@@ -31,6 +34,8 @@ interface TransitLineEditorSubmitPayload {
   mode: TransitRevisionLine['mode'];
   name: string;
   color?: string;
+  routeMode?: TransitRevisionLine['routeMode'];
+  routeNodes?: TransitLineRouteNodeSnapshot[];
   stationSourceIds: string[];
   oneWayStops?: Array<{
     stationSourceId: string;
@@ -42,12 +47,20 @@ interface TransitLineEditorSubmitPayload {
   firstBus?: string;
   lastBus?: string;
   departureTimes?: string[];
+  departureRules?: TransitDepartureScheduleRule[];
+  operatingDateRule?: string;
   bookingUrl?: string;
 }
 
 interface TransitStationPoiBindingOption {
   coordinate: [number, number];
   marker: MapMarker;
+}
+
+interface TransitStationPoiBindingRef {
+  categoryId?: string;
+  label: string;
+  markerId: string;
 }
 
 interface TransitStationAuditContextMarker {
@@ -57,43 +70,35 @@ interface TransitStationAuditContextMarker {
   relation: 'bound-poi' | 'poi' | 'road' | 'station' | 'nearby';
 }
 
-interface AdminVersionDiffSummary {
-  baselineLabel: string;
-  metrics: Array<{
-    label: string;
-    before: number | string;
-    after: number | string;
-  }>;
-  addedItems: string[];
-  removedItems: string[];
-  changedItems: string[];
-  notes: string[];
+interface TransitLineRouteNodeDraft {
+  id: string;
+  kind: 'station' | 'waypoint';
+  stationSourceId: string;
+  xText: string;
+  zText: string;
+  direction: 'both' | 'up' | 'down';
 }
 
 const transitStatusFilterOptions: Array<{ value: TransitStatusFilter; label: string }> = [
   { value: 'all', label: '全部状态' },
+  { value: 'legacy', label: '旧有数据' },
   { value: 'todo', label: '待处理' },
-  { value: 'blocked', label: '校验阻塞' },
   { value: 'imported', label: '已导入' },
-  { value: 'validation_failed', label: '校验失败' },
   { value: 'pending_review', label: '待审核' },
   { value: 'approved', label: '待发布' },
   { value: 'rejected', label: '已驳回' },
   { value: 'published', label: '已发布' },
-  { value: 'superseded', label: '已被替换' },
   { value: 'archived', label: '已归档' },
 ];
 const scheduleStatusFilterOptions: Array<{ value: ScheduleStatusFilter; label: string }> = [
   { value: 'all', label: '全部状态' },
+  { value: 'legacy', label: '旧有数据' },
   { value: 'todo', label: '待处理' },
-  { value: 'blocked', label: '校验阻塞' },
   { value: 'imported', label: '已导入' },
-  { value: 'validation_failed', label: '校验失败' },
   { value: 'pending_review', label: '待审核' },
   { value: 'approved', label: '待发布' },
   { value: 'rejected', label: '已驳回' },
   { value: 'published', label: '已发布' },
-  { value: 'superseded', label: '已被替换' },
   { value: 'archived', label: '已归档' },
 ];
 
@@ -111,6 +116,80 @@ const scheduleRejectReasonPresets = [
   '票务可售性、库存或票种配置需要先完成核对。',
 ];
 
+const supportedTransitModeProfiles: TransitModeProfile[] = [
+  { mode: 'metro', label: '地铁', color: '#2584E8', icon: 'subway', sortOrder: 0, enabled: true },
+  { mode: 'tram', label: '有轨', color: '#C64255', icon: 'tram', sortOrder: 1, enabled: true },
+  {
+    mode: 'bus',
+    label: '公交',
+    color: '#F59B22',
+    icon: 'directions_bus',
+    sortOrder: 2,
+    enabled: true,
+  },
+  {
+    mode: 'coach',
+    label: '客运',
+    color: '#8BBF35',
+    icon: 'airport_shuttle',
+    sortOrder: 3,
+    enabled: true,
+  },
+  {
+    mode: 'ferry',
+    label: '轮渡',
+    color: '#168AA5',
+    icon: 'directions_boat',
+    sortOrder: 4,
+    enabled: true,
+  },
+  {
+    mode: 'railway',
+    label: '地方铁路',
+    color: '#8B5E34',
+    icon: 'train',
+    sortOrder: 5,
+    enabled: true,
+  },
+  { mode: 'custom', label: '线路', color: '#168F78', icon: 'route', sortOrder: 6, enabled: true },
+];
+
+const supportedTravelServiceProfiles: TravelScheduleServiceProfile[] = [
+  {
+    kind: 'coach',
+    label: '客运',
+    color: '#8BBF35',
+    icon: 'airport_shuttle',
+    sortOrder: 0,
+    enabled: true,
+  },
+  {
+    kind: 'ferry',
+    label: '轮渡',
+    color: '#168AA5',
+    icon: 'directions_boat',
+    sortOrder: 1,
+    enabled: true,
+  },
+  {
+    kind: 'flight',
+    label: '航班',
+    color: '#6657D9',
+    icon: 'flight_takeoff',
+    sortOrder: 2,
+    enabled: true,
+  },
+  {
+    kind: 'railway',
+    label: '地方铁路',
+    color: '#8B5E34',
+    icon: 'train',
+    sortOrder: 3,
+    enabled: true,
+  },
+  { kind: 'custom', label: '自定义', color: '#168F78', icon: 'route', sortOrder: 4, enabled: true },
+];
+
 export function AdminTransitPanel() {
   const [revisions, setRevisions] = useState<TransitDataRevision[]>([]);
   const [modeProfiles, setModeProfiles] = useState<TransitModeProfile[]>([]);
@@ -118,29 +197,30 @@ export function AdminTransitPanel() {
   const [scheduleSummary, setScheduleSummary] = useState<TravelScheduleQueryResult | null>(null);
   const [scheduleRevisions, setScheduleRevisions] = useState<TravelScheduleRevision[]>([]);
   const [mapMarkers, setMapMarkers] = useState<MapMarker[]>([]);
-  const [statusText, setStatusText] = useState('正在读取交通数据版本');
+  const [statusText, setStatusText] = useState('正在读取线路');
   const [profileStatusText, setProfileStatusText] = useState('正在读取交通方式配置');
   const [serviceProfileStatusText, setServiceProfileStatusText] =
     useState('正在读取可排班服务配置');
   const [scheduleStatusText, setScheduleStatusText] = useState('正在读取统一班次摘要');
-  const [scheduleRevisionStatusText, setScheduleRevisionStatusText] =
-    useState('正在读取班次数据版本');
+  const [scheduleRevisionStatusText, setScheduleRevisionStatusText] = useState('正在读取班次');
   const [tilePreviewTemplate, setTilePreviewTemplate] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [profileBusy, setProfileBusy] = useState(false);
   const [serviceProfileBusy, setServiceProfileBusy] = useState(false);
   const [scheduleRevisionBusy, setScheduleRevisionBusy] = useState(false);
-  const [activeSection, setActiveSection] = useState<TransitAdminSection>('transit_revisions');
+  const [activeSection, setActiveSection] = useState<TransitAdminSection>('lines');
   const [statusFilter, setStatusFilter] = useState<TransitStatusFilter>('all');
   const [modeFilter, setModeFilter] = useState<TransitModeFilter>('all');
   const [query, setQuery] = useState('');
-  const [selectedTransitRevisionId, setSelectedTransitRevisionId] = useState('');
+  const [selectedTransitLineKeys, setSelectedTransitLineKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [scheduleStatusFilter, setScheduleStatusFilter] = useState<ScheduleStatusFilter>('all');
   const [scheduleServiceFilter, setScheduleServiceFilter] = useState<ScheduleServiceFilter>('all');
   const [scheduleQuery, setScheduleQuery] = useState('');
-  const [selectedScheduleRevisionId, setSelectedScheduleRevisionId] = useState('');
-  const [rejectTarget, setRejectTarget] = useState<TransitDataRevision | null>(null);
-  const [publishTarget, setPublishTarget] = useState<TransitDataRevision | null>(null);
+  const [selectedScheduleTripKeys, setSelectedScheduleTripKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [stationEditTarget, setStationEditTarget] = useState<{
     revision: TransitDataRevision;
     station: TransitRevisionStation;
@@ -150,12 +230,6 @@ export function AdminTransitPanel() {
     line: TransitRevisionLine;
   } | null>(null);
   const [lineCreateTarget, setLineCreateTarget] = useState<TransitDataRevision | null>(null);
-  const [scheduleRejectTarget, setScheduleRejectTarget] = useState<TravelScheduleRevision | null>(
-    null,
-  );
-  const [schedulePublishTarget, setSchedulePublishTarget] = useState<TravelScheduleRevision | null>(
-    null,
-  );
   const [scheduleTripEditTarget, setScheduleTripEditTarget] = useState<{
     revision: TravelScheduleRevision;
     trip: TravelTripInstance;
@@ -174,91 +248,63 @@ export function AdminTransitPanel() {
     [scheduleRevisions],
   );
 
-  const publishedTransitRevision = useMemo(
-    () => revisions.find((revision) => revision.status === 'published') ?? null,
-    [revisions],
+  const allTransitLineRows = useMemo(
+    () => sortedRevisions.flatMap((revision) => revision.lines.map((line) => ({ line, revision }))),
+    [sortedRevisions],
   );
-
-  const transitDiffByRevisionId = useMemo(() => {
-    const entries = revisions.map(
-      (revision) =>
-        [
-          revision.revisionId,
-          buildTransitRevisionDiffSummary(revision, publishedTransitRevision),
-        ] as const,
-    );
-    return new Map(entries);
-  }, [publishedTransitRevision, revisions]);
-
-  const publishedScheduleRevision = useMemo(
-    () => scheduleRevisions.find((revision) => revision.status === 'published') ?? null,
-    [scheduleRevisions],
+  const allScheduleTripRows = useMemo(
+    () =>
+      sortedScheduleRevisions.flatMap((revision) =>
+        revision.trips.map((trip) => ({ revision, trip })),
+      ),
+    [sortedScheduleRevisions],
   );
-
-  const scheduleDiffByRevisionId = useMemo(() => {
-    const entries = scheduleRevisions.map(
-      (revision) =>
-        [
-          revision.revisionId,
-          buildScheduleRevisionDiffSummary(revision, publishedScheduleRevision),
-        ] as const,
-    );
-    return new Map(entries);
-  }, [publishedScheduleRevision, scheduleRevisions]);
-
   const statusCounts = useMemo(() => {
-    const counts = new Map<TransitDataRevisionStatus, number>();
-    for (const revision of revisions) {
-      counts.set(revision.status, (counts.get(revision.status) ?? 0) + 1);
+    const counts = new Map<TransitItemApprovalStatus, number>();
+    for (const { line, revision } of allTransitLineRows) {
+      const status = getTransitLineItemApprovalStatus(line, revision);
+      counts.set(status, (counts.get(status) ?? 0) + 1);
     }
     return counts;
-  }, [revisions]);
+  }, [allTransitLineRows]);
   const scheduleStatusCounts = useMemo(() => {
-    const counts = new Map<TravelScheduleRevisionStatus, number>();
-    for (const revision of scheduleRevisions) {
-      counts.set(revision.status, (counts.get(revision.status) ?? 0) + 1);
+    const counts = new Map<TransitItemApprovalStatus, number>();
+    for (const { revision, trip } of allScheduleTripRows) {
+      const status = getScheduleTripItemApprovalStatus(trip, revision);
+      counts.set(status, (counts.get(status) ?? 0) + 1);
     }
     return counts;
-  }, [scheduleRevisions]);
+  }, [allScheduleTripRows]);
   const transitModeFilterOptions = useMemo(
     () => [
       { value: 'all' as const, label: '全部交通方式' },
-      ...Array.from(
-        new Set(revisions.flatMap((revision) => revision.summary.map((item) => item.mode))),
-      )
+      ...Array.from(new Set(allTransitLineRows.map(({ line }) => line.mode)))
         .sort((left, right) => formatTransitMode(left).localeCompare(formatTransitMode(right)))
         .map((mode) => ({ value: mode, label: formatTransitMode(mode) })),
     ],
-    [revisions],
+    [allTransitLineRows],
   );
   const scheduleServiceFilterOptions = useMemo(
     () => [
       { value: 'all' as const, label: '全部服务类型' },
-      ...Array.from(
-        new Set(
-          scheduleRevisions.flatMap((revision) => revision.services.map((service) => service.kind)),
-        ),
-      )
+      ...Array.from(new Set(allScheduleTripRows.map(({ trip }) => trip.serviceKind)))
         .sort((left, right) =>
           formatScheduleServiceKind(left).localeCompare(formatScheduleServiceKind(right)),
         )
         .map((kind) => ({ value: kind, label: formatScheduleServiceKind(kind) })),
     ],
-    [scheduleRevisions],
+    [allScheduleTripRows],
   );
 
-  const filteredRevisions = useMemo(
+  const transitLineRows = useMemo(
     () =>
-      sortedRevisions.filter((revision) => {
-        if (!matchesTransitStatusFilter(revision, statusFilter)) {
+      allTransitLineRows.filter(({ line, revision }) => {
+        const itemStatus = getTransitLineItemApprovalStatus(line, revision);
+        if (!matchesTransitItemStatusFilter(itemStatus, revision, statusFilter)) {
           return false;
         }
 
-        if (
-          modeFilter !== 'all' &&
-          !revision.summary.some((item) => item.mode === modeFilter) &&
-          !revision.lines.some((line) => line.mode === modeFilter)
-        ) {
+        if (modeFilter !== 'all' && line.mode !== modeFilter) {
           return false;
         }
 
@@ -274,39 +320,39 @@ export function AdminTransitPanel() {
             revision.sourceProviderId,
             revision.sourcePath,
             revision.sourceFiles.join(' '),
-            statusLabel(revision.status),
-            formatSummary(revision),
-            revision.summary
-              .map((item) => `${item.label}${item.lineCount}${item.stationCount}`)
+            transitItemApprovalStatusLabel(itemStatus),
+            line.name,
+            formatTransitMode(line.mode),
+            line.operator,
+            line.fare,
+            line.stationSourceIds
+              .map(
+                (stationSourceId) =>
+                  revision.stations.find((station) => station.sourceId === stationSourceId)?.name,
+              )
+              .filter(Boolean)
               .join(' '),
             revision.validation.errors.join(' '),
             revision.validation.warnings.join(' '),
             getValidationIssues(revision)
               .map((issue) => `${issue.message}${issue.examples.join(' ')}`)
               .join(' '),
-            revision.lines
-              .slice(0, 40)
-              .map((line) => line.name)
-              .join(' '),
           ].join(' '),
         );
 
         return haystack.includes(normalizedQuery);
       }),
-    [modeFilter, query, sortedRevisions, statusFilter],
+    [allTransitLineRows, modeFilter, query, statusFilter],
   );
-  const filteredScheduleRevisions = useMemo(
+  const scheduleTripRows = useMemo(
     () =>
-      sortedScheduleRevisions.filter((revision) => {
-        if (!matchesScheduleRevisionStatusFilter(revision, scheduleStatusFilter)) {
+      allScheduleTripRows.filter(({ revision, trip }) => {
+        const itemStatus = getScheduleTripItemApprovalStatus(trip, revision);
+        if (!matchesScheduleItemStatusFilter(itemStatus, revision, trip, scheduleStatusFilter)) {
           return false;
         }
 
-        if (
-          scheduleServiceFilter !== 'all' &&
-          !revision.services.some((service) => service.kind === scheduleServiceFilter) &&
-          !revision.trips.some((trip) => trip.serviceKind === scheduleServiceFilter)
-        ) {
+        if (scheduleServiceFilter !== 'all' && trip.serviceKind !== scheduleServiceFilter) {
           return false;
         }
 
@@ -320,23 +366,22 @@ export function AdminTransitPanel() {
             revision.revisionId,
             revision.scheduleServiceId,
             revision.sourceFiles.join(' '),
-            travelScheduleRevisionStatusLabel(revision.status),
+            transitItemApprovalStatusLabel(itemStatus),
+            trip.lineName,
+            trip.tripCode,
+            trip.stationNames.join(' '),
+            trip.operator,
             revision.validation.errors.join(' '),
             revision.validation.warnings.join(' '),
             getScheduleValidationIssues(revision)
               .map((issue) => `${issue.message}${issue.examples.join(' ')}`)
-              .join(' '),
-            revision.services.map((service) => `${service.label}${service.tripCount}`).join(' '),
-            revision.trips
-              .slice(0, 40)
-              .map((trip) => `${trip.lineName}${trip.tripCode ?? ''}${trip.stationNames.join(' ')}`)
               .join(' '),
           ].join(' '),
         );
 
         return haystack.includes(normalizedQuery);
       }),
-    [scheduleQuery, scheduleServiceFilter, scheduleStatusFilter, sortedScheduleRevisions],
+    [allScheduleTripRows, scheduleQuery, scheduleServiceFilter, scheduleStatusFilter],
   );
   const hasActiveTransitFilters =
     statusFilter !== 'all' || modeFilter !== 'all' || query.trim().length > 0;
@@ -345,16 +390,13 @@ export function AdminTransitPanel() {
     scheduleServiceFilter !== 'all' ||
     scheduleQuery.trim().length > 0;
   const currentSectionStatusText = useMemo(() => {
-    if (activeSection === 'transit_revisions') {
+    if (activeSection === 'lines') {
       return statusText;
     }
-    if (activeSection === 'schedule_revisions') {
+    if (activeSection === 'trips') {
       return scheduleRevisionStatusText;
     }
-    if (activeSection === 'mode_profiles') {
-      return profileStatusText;
-    }
-    return serviceProfileStatusText;
+    return `${profileStatusText} · ${serviceProfileStatusText}`;
   }, [
     activeSection,
     profileStatusText,
@@ -362,68 +404,142 @@ export function AdminTransitPanel() {
     serviceProfileStatusText,
     statusText,
   ]);
-  const selectedTransitRevision = useMemo(
-    () =>
-      filteredRevisions.find((revision) => revision.revisionId === selectedTransitRevisionId) ??
-      null,
-    [filteredRevisions, selectedTransitRevisionId],
+  const preferredTransitDraftRevision = useMemo(
+    () => sortedRevisions.find(canEditTransitRevisionLines) ?? null,
+    [sortedRevisions],
   );
-  const selectedScheduleRevision = useMemo(
-    () =>
-      filteredScheduleRevisions.find(
-        (revision) => revision.revisionId === selectedScheduleRevisionId,
-      ) ?? null,
-    [filteredScheduleRevisions, selectedScheduleRevisionId],
+  const preferredScheduleDraftRevision = useMemo(
+    () => sortedScheduleRevisions.find(canEditTravelScheduleRevisionTrips) ?? null,
+    [sortedScheduleRevisions],
   );
-  const transitLineRows = useMemo(
+  const selectedTransitLineRows = useMemo(
     () =>
-      filteredRevisions.flatMap((revision) =>
-        revision.lines.map((line) => ({
-          line,
-          revision,
-        })),
+      transitLineRows.filter(({ line, revision }) =>
+        selectedTransitLineKeys.has(getTransitLineSelectionKey(revision.revisionId, line.sourceId)),
       ),
-    [filteredRevisions],
+    [selectedTransitLineKeys, transitLineRows],
   );
-  const scheduleTripRows = useMemo(
+  const selectedTransitLineBatches = useMemo(
+    () => getUniqueBatchesFromLineRows(selectedTransitLineRows),
+    [selectedTransitLineRows],
+  );
+  const isAllVisibleTransitLinesSelected =
+    transitLineRows.length > 0 &&
+    transitLineRows.every(({ line, revision }) =>
+      selectedTransitLineKeys.has(getTransitLineSelectionKey(revision.revisionId, line.sourceId)),
+    );
+  const selectedScheduleTripRows = useMemo(
     () =>
-      filteredScheduleRevisions.flatMap((revision) =>
-        revision.trips.map((trip) => ({
-          revision,
-          trip,
-        })),
+      scheduleTripRows.filter(({ revision, trip }) =>
+        selectedScheduleTripKeys.has(
+          getScheduleTripSelectionKey(revision.revisionId, trip.tripInstanceId),
+        ),
       ),
-    [filteredScheduleRevisions],
+    [scheduleTripRows, selectedScheduleTripKeys],
   );
+  const selectedScheduleTripBatches = useMemo(
+    () => getUniqueBatchesFromTripRows(selectedScheduleTripRows),
+    [selectedScheduleTripRows],
+  );
+  const isAllVisibleScheduleTripsSelected =
+    scheduleTripRows.length > 0 &&
+    scheduleTripRows.every(({ revision, trip }) =>
+      selectedScheduleTripKeys.has(
+        getScheduleTripSelectionKey(revision.revisionId, trip.tripInstanceId),
+      ),
+    );
 
   useEffect(() => {
-    if (
-      selectedTransitRevisionId &&
-      filteredRevisions.some((revision) => revision.revisionId === selectedTransitRevisionId)
-    ) {
-      return;
-    }
+    setSelectedTransitLineKeys((current) => {
+      if (current.size === 0) {
+        return current;
+      }
 
-    const preferredRevision =
-      filteredRevisions.find((revision) => revision.status === 'published') ?? filteredRevisions[0];
-    setSelectedTransitRevisionId(preferredRevision?.revisionId ?? '');
-  }, [filteredRevisions, selectedTransitRevisionId]);
+      const existingKeys = new Set(
+        revisions.flatMap((revision) =>
+          revision.lines.map((line) =>
+            getTransitLineSelectionKey(revision.revisionId, line.sourceId),
+          ),
+        ),
+      );
+      const next = new Set(Array.from(current).filter((key) => existingKeys.has(key)));
+      return next.size === current.size ? current : next;
+    });
+  }, [revisions]);
 
   useEffect(() => {
-    if (
-      selectedScheduleRevisionId &&
-      filteredScheduleRevisions.some(
-        (revision) => revision.revisionId === selectedScheduleRevisionId,
-      )
-    ) {
-      return;
-    }
+    setSelectedScheduleTripKeys((current) => {
+      if (current.size === 0) {
+        return current;
+      }
 
-    const preferredRevision =
-      filteredScheduleRevisions.find((revision) => revision.status === 'published') ??
-      filteredScheduleRevisions[0];
-    setSelectedScheduleRevisionId(preferredRevision?.revisionId ?? '');
-  }, [filteredScheduleRevisions, selectedScheduleRevisionId]);
+      const existingKeys = new Set(
+        scheduleRevisions.flatMap((revision) =>
+          revision.trips.map((trip) =>
+            getScheduleTripSelectionKey(revision.revisionId, trip.tripInstanceId),
+          ),
+        ),
+      );
+      const next = new Set(Array.from(current).filter((key) => existingKeys.has(key)));
+      return next.size === current.size ? current : next;
+    });
+  }, [scheduleRevisions]);
+
+  const toggleTransitLineSelection = (revisionId: string, lineSourceId: string) => {
+    const key = getTransitLineSelectionKey(revisionId, lineSourceId);
+    setSelectedTransitLineKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const toggleVisibleTransitLineSelection = () => {
+    setSelectedTransitLineKeys((current) => {
+      const next = new Set(current);
+      for (const { line, revision } of transitLineRows) {
+        const key = getTransitLineSelectionKey(revision.revisionId, line.sourceId);
+        if (isAllVisibleTransitLinesSelected) {
+          next.delete(key);
+        } else {
+          next.add(key);
+        }
+      }
+      return next;
+    });
+  };
+
+  const toggleScheduleTripSelection = (revisionId: string, tripInstanceId: string) => {
+    const key = getScheduleTripSelectionKey(revisionId, tripInstanceId);
+    setSelectedScheduleTripKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const toggleVisibleScheduleTripSelection = () => {
+    setSelectedScheduleTripKeys((current) => {
+      const next = new Set(current);
+      for (const { revision, trip } of scheduleTripRows) {
+        const key = getScheduleTripSelectionKey(revision.revisionId, trip.tripInstanceId);
+        if (isAllVisibleScheduleTripsSelected) {
+          next.delete(key);
+        } else {
+          next.add(key);
+        }
+      }
+      return next;
+    });
+  };
 
   const loadRevisions = async () => {
     const response = await fetch(appPath('/api/admin/transit/datasets'), { cache: 'no-store' });
@@ -434,9 +550,11 @@ export function AdminTransitPanel() {
     }
 
     setRevisions(data.items ?? []);
-    setStatusText(
-      data.items?.length ? `已读取 ${data.items.length} 个交通数据版本` : '暂无交通数据版本',
+    const lineCount = (data.items ?? []).reduce(
+      (count, revision) => count + revision.lines.length,
+      0,
     );
+    setStatusText(lineCount > 0 ? `已读取 ${lineCount} 条线路` : '暂无线路');
   };
 
   useEffect(() => {
@@ -545,14 +663,16 @@ export function AdminTransitPanel() {
       message?: string;
     };
     if (!response.ok) {
-      setScheduleRevisionStatusText(data.message ?? '班次数据版本后台暂不可用');
+      setScheduleRevisionStatusText(data.message ?? '班次后台暂不可用');
       return;
     }
 
     setScheduleRevisions(data.items ?? []);
-    setScheduleRevisionStatusText(
-      data.items?.length ? `已读取 ${data.items.length} 个班次数据版本` : '暂无班次数据版本',
+    const tripCount = (data.items ?? []).reduce(
+      (count, revision) => count + revision.trips.length,
+      0,
     );
+    setScheduleRevisionStatusText(tripCount > 0 ? `已读取 ${tripCount} 个班次` : '暂无班次');
   };
 
   const importLatest = async () => {
@@ -590,7 +710,7 @@ export function AdminTransitPanel() {
       });
       const data = (await response.json()) as { message?: string };
       if (!response.ok) {
-        setScheduleRevisionStatusText(data.message ?? '导入班次数据版本失败');
+        setScheduleRevisionStatusText(data.message ?? '导入班次快照失败');
         return;
       }
 
@@ -601,42 +721,60 @@ export function AdminTransitPanel() {
     }
   };
 
-  const runAction = async (
-    revisionId: string,
-    action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive' | 'restore',
-    reason?: string,
+  const runSelectedTransitLineAction = async (
+    action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive',
   ) => {
+    if (selectedTransitLineRows.length === 0) {
+      setStatusText('请先选择线路。');
+      return;
+    }
+
+    let successCount = 0;
+    for (const { line, revision } of selectedTransitLineRows) {
+      const ok = await runTransitLineItemAction(
+        revision.revisionId,
+        line.sourceId,
+        action,
+        action === 'reject' ? '后台批量退回' : undefined,
+      );
+      if (ok) {
+        successCount += 1;
+      }
+    }
+
+    setSelectedTransitLineKeys(new Set());
+    setStatusText(`已处理 ${successCount}/${selectedTransitLineRows.length} 条线路`);
+  };
+
+  const runTransitLineItemAction = async (
+    revisionId: string,
+    lineSourceId: string,
+    action: 'submit' | 'approve' | 'publish' | 'archive' | 'reject',
+    reason?: string,
+  ): Promise<boolean> => {
     setIsBusy(true);
     try {
-      const endpoint =
-        action === 'submit'
-          ? appPath(`/api/admin/transit/datasets/${encodeURIComponent(revisionId)}/submit`)
-          : action === 'publish'
-            ? appPath(`/api/admin/transit/datasets/${encodeURIComponent(revisionId)}/publish`)
-            : action === 'archive'
-              ? appPath(`/api/admin/transit/datasets/${encodeURIComponent(revisionId)}/archive`)
-              : action === 'restore'
-                ? appPath(`/api/admin/transit/datasets/${encodeURIComponent(revisionId)}/restore`)
-                : appPath(`/api/admin/transit/datasets/${encodeURIComponent(revisionId)}/review`);
-      const body =
-        action === 'approve'
-          ? { decision: 'approved' }
-          : action === 'reject'
-            ? { decision: 'rejected', reason: reason?.trim() || '后台退回' }
-            : {};
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = (await response.json()) as { message?: string };
+      const response = await fetch(
+        appPath(
+          `/api/admin/transit/datasets/${encodeURIComponent(
+            revisionId,
+          )}/lines/${encodeURIComponent(lineSourceId)}`,
+        ),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, reason }),
+        },
+      );
+      const data = (await response.json()) as TransitDataRevision & { message?: string };
       if (!response.ok) {
-        setStatusText(data.message ?? '操作失败');
-        return;
+        setStatusText(data.message ?? '线路审批操作失败');
+        return false;
       }
 
-      setStatusText('操作已完成');
-      await loadRevisions();
+      setRevisions((current) =>
+        current.map((revision) => (revision.revisionId === data.revisionId ? data : revision)),
+      );
       return true;
     } finally {
       setIsBusy(false);
@@ -649,6 +787,7 @@ export function AdminTransitPanel() {
     payload: {
       x: number;
       z: number;
+      boundPoiRefs?: TransitStationPoiBindingRef[];
       boundPoiLabel?: string;
       boundPoiMarkerId?: string;
     },
@@ -675,6 +814,10 @@ export function AdminTransitPanel() {
       setRevisions((current) =>
         current.map((revision) => (revision.revisionId === data.revisionId ? data : revision)),
       );
+      setLineEditTarget((current) =>
+        current?.revision.revisionId === data.revisionId ? { ...current, revision: data } : current,
+      );
+      setLineCreateTarget((current) => (current?.revisionId === data.revisionId ? data : current));
       setStatusText(`已修正站点坐标：${stationSourceId}`);
       return null;
     } finally {
@@ -749,52 +892,62 @@ export function AdminTransitPanel() {
     }
   };
 
-  const runScheduleRevisionAction = async (
-    revisionId: string,
-    action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive' | 'restore',
-    reason?: string,
+  const runSelectedScheduleTripAction = async (
+    action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive',
   ) => {
+    if (selectedScheduleTripRows.length === 0) {
+      setScheduleRevisionStatusText('请先选择班次。');
+      return;
+    }
+
+    let successCount = 0;
+    for (const { revision, trip } of selectedScheduleTripRows) {
+      const ok = await runScheduleTripItemAction(
+        revision.revisionId,
+        trip.tripInstanceId,
+        action,
+        action === 'reject' ? '后台批量退回' : undefined,
+      );
+      if (ok) {
+        successCount += 1;
+      }
+    }
+
+    setSelectedScheduleTripKeys(new Set());
+    setScheduleRevisionStatusText(
+      `已处理 ${successCount}/${selectedScheduleTripRows.length} 个班次`,
+    );
+  };
+
+  const runScheduleTripItemAction = async (
+    revisionId: string,
+    tripInstanceId: string,
+    action: 'submit' | 'approve' | 'publish' | 'archive' | 'reject',
+    reason?: string,
+  ): Promise<boolean> => {
     setScheduleRevisionBusy(true);
     try {
-      const endpoint =
-        action === 'submit'
-          ? appPath(`/api/admin/travel/schedule-revisions/${encodeURIComponent(revisionId)}/submit`)
-          : action === 'publish'
-            ? appPath(
-                `/api/admin/travel/schedule-revisions/${encodeURIComponent(revisionId)}/publish`,
-              )
-            : action === 'archive'
-              ? appPath(
-                  `/api/admin/travel/schedule-revisions/${encodeURIComponent(revisionId)}/archive`,
-                )
-              : action === 'restore'
-                ? appPath(
-                    `/api/admin/travel/schedule-revisions/${encodeURIComponent(revisionId)}/restore`,
-                  )
-                : appPath(
-                    `/api/admin/travel/schedule-revisions/${encodeURIComponent(revisionId)}/review`,
-                  );
-      const body =
-        action === 'approve'
-          ? { decision: 'approved' }
-          : action === 'reject'
-            ? { decision: 'rejected', reason: reason?.trim() || '后台退回' }
-            : {};
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = (await response.json()) as { message?: string };
+      const response = await fetch(
+        appPath(
+          `/api/admin/travel/schedule-revisions/${encodeURIComponent(
+            revisionId,
+          )}/trips/${encodeURIComponent(tripInstanceId)}`,
+        ),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, reason }),
+        },
+      );
+      const data = (await response.json()) as TravelScheduleRevision & { message?: string };
       if (!response.ok) {
-        setScheduleRevisionStatusText(data.message ?? '班次数据版本操作失败');
+        setScheduleRevisionStatusText(data.message ?? '班次审批操作失败');
         return false;
       }
 
-      setScheduleRevisionStatusText('班次数据版本操作已完成');
-      await (action === 'publish' || action === 'restore'
-        ? Promise.all([loadScheduleRevisions(), loadScheduleSummary()])
-        : loadScheduleRevisions());
+      setScheduleRevisions((current) =>
+        current.map((revision) => (revision.revisionId === data.revisionId ? data : revision)),
+      );
       return true;
     } finally {
       setScheduleRevisionBusy(false);
@@ -977,6 +1130,58 @@ export function AdminTransitPanel() {
     );
   };
 
+  const addModeProfileDraft = () => {
+    const nextProfile = supportedTransitModeProfiles.find(
+      (candidate) => !modeProfiles.some((profile) => profile.mode === candidate.mode),
+    );
+    if (!nextProfile) {
+      setProfileStatusText('所有受支持的交通方式都已添加。');
+      return;
+    }
+
+    setModeProfiles((current) => [...current, { ...nextProfile }]);
+    setProfileStatusText(`已添加 ${nextProfile.label}，保存后生效`);
+  };
+
+  const removeModeProfileDraft = (profile: TransitModeProfile) => {
+    if (modeProfiles.length <= 1) {
+      setProfileStatusText('至少保留一个交通方式。');
+      return;
+    }
+    if (!window.confirm(`确认删除交通方式“${profile.label}”？保存后生效。`)) {
+      return;
+    }
+
+    setModeProfiles((current) => current.filter((item) => item.mode !== profile.mode));
+    setProfileStatusText(`已移除 ${profile.label}，保存后生效`);
+  };
+
+  const addServiceProfileDraft = () => {
+    const nextProfile = supportedTravelServiceProfiles.find(
+      (candidate) => !serviceProfiles.some((profile) => profile.kind === candidate.kind),
+    );
+    if (!nextProfile) {
+      setServiceProfileStatusText('所有受支持的可排班服务都已添加。');
+      return;
+    }
+
+    setServiceProfiles((current) => [...current, { ...nextProfile }]);
+    setServiceProfileStatusText(`已添加 ${nextProfile.label}，保存后生效`);
+  };
+
+  const removeServiceProfileDraft = (profile: TravelScheduleServiceProfile) => {
+    if (serviceProfiles.length <= 1) {
+      setServiceProfileStatusText('至少保留一个可排班服务。');
+      return;
+    }
+    if (!window.confirm(`确认删除可排班服务“${profile.label}”？保存后生效。`)) {
+      return;
+    }
+
+    setServiceProfiles((current) => current.filter((item) => item.kind !== profile.kind));
+    setServiceProfileStatusText(`已移除 ${profile.label}，保存后生效`);
+  };
+
   const saveModeProfiles = async () => {
     setProfileBusy(true);
     try {
@@ -1050,43 +1255,35 @@ export function AdminTransitPanel() {
         <legend>线路与班次后台系列</legend>
         <div>
           <button
-            className={activeSection === 'transit_revisions' ? 'is-active' : ''}
+            className={activeSection === 'lines' ? 'is-active' : ''}
             type="button"
-            aria-pressed={activeSection === 'transit_revisions'}
-            onClick={() => setActiveSection('transit_revisions')}
+            aria-pressed={activeSection === 'lines'}
+            onClick={() => setActiveSection('lines')}
           >
             线路列表
           </button>
           <button
-            className={activeSection === 'schedule_revisions' ? 'is-active' : ''}
+            className={activeSection === 'trips' ? 'is-active' : ''}
             type="button"
-            aria-pressed={activeSection === 'schedule_revisions'}
-            onClick={() => setActiveSection('schedule_revisions')}
+            aria-pressed={activeSection === 'trips'}
+            onClick={() => setActiveSection('trips')}
           >
             班次列表
           </button>
           <button
-            className={activeSection === 'mode_profiles' ? 'is-active' : ''}
+            className={activeSection === 'profiles' ? 'is-active' : ''}
             type="button"
-            aria-pressed={activeSection === 'mode_profiles'}
-            onClick={() => setActiveSection('mode_profiles')}
+            aria-pressed={activeSection === 'profiles'}
+            onClick={() => setActiveSection('profiles')}
           >
-            交通方式
-          </button>
-          <button
-            className={activeSection === 'service_profiles' ? 'is-active' : ''}
-            type="button"
-            aria-pressed={activeSection === 'service_profiles'}
-            onClick={() => setActiveSection('service_profiles')}
-          >
-            可排班服务
+            服务配置
           </button>
         </div>
       </fieldset>
 
-      {activeSection === 'transit_revisions' ? (
+      {activeSection === 'lines' ? (
         <>
-          <div className="admin-report-summary transit-admin-summary" aria-label="交通数据版本摘要">
+          <div className="admin-report-summary transit-admin-summary" aria-label="线路审批状态摘要">
             <TransitAdminMetric
               label="已导入"
               value={statusCounts.get('imported') ?? 0}
@@ -1102,16 +1299,12 @@ export function AdminTransitPanel() {
               value={statusCounts.get('approved') ?? 0}
               tone={(statusCounts.get('approved') ?? 0) > 0 ? 'accent' : undefined}
             />
-            <TransitAdminMetric
-              label="校验失败"
-              value={statusCounts.get('validation_failed') ?? 0}
-              tone={(statusCounts.get('validation_failed') ?? 0) > 0 ? 'warning' : undefined}
-            />
             <TransitAdminMetric label="已发布" value={statusCounts.get('published') ?? 0} />
-            <TransitAdminMetric label="当前结果" value={filteredRevisions.length} />
+            <TransitAdminMetric label="已归档" value={statusCounts.get('archived') ?? 0} />
+            <TransitAdminMetric label="当前结果" value={transitLineRows.length} />
           </div>
 
-          <div className="admin-toolbar transit-admin-toolbar" aria-label="交通数据版本操作与筛选">
+          <div className="admin-toolbar transit-admin-toolbar" aria-label="线路操作与筛选">
             <button
               className="secondary-action-button is-primary"
               type="button"
@@ -1156,22 +1349,8 @@ export function AdminTransitPanel() {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.currentTarget.value)}
-                placeholder="版本、来源、线路、校验问题"
+                placeholder="线路、站点、运营方、来源批次"
               />
-            </label>
-            <label>
-              <span>查看版本</span>
-              <select
-                value={selectedTransitRevisionId}
-                disabled={filteredRevisions.length === 0}
-                onChange={(event) => setSelectedTransitRevisionId(event.currentTarget.value)}
-              >
-                {filteredRevisions.map((revision) => (
-                  <option value={revision.revisionId} key={revision.revisionId}>
-                    {`${statusLabel(revision.status)} · ${revision.revisionId} · ${formatSummary(revision)}`}
-                  </option>
-                ))}
-              </select>
             </label>
             <button type="button" disabled={!hasActiveTransitFilters} onClick={resetFilters}>
               重置筛选
@@ -1180,189 +1359,44 @@ export function AdminTransitPanel() {
 
           <TransitLineEntityList
             isBusy={isBusy}
+            isAllVisibleSelected={isAllVisibleTransitLinesSelected}
             rows={transitLineRows}
+            selectedCount={selectedTransitLineRows.length}
+            selectedBatchCount={selectedTransitLineBatches.length}
+            selectedKeys={selectedTransitLineKeys}
+            onCreateLine={() => {
+              if (preferredTransitDraftRevision) {
+                setLineCreateTarget(preferredTransitDraftRevision);
+              } else {
+                setStatusText('当前没有可写入的线路数据容器，请先导入一次线路或解除归档。');
+              }
+            }}
+            onBatchAction={(action) => void runSelectedTransitLineAction(action)}
+            onClearSelection={() => setSelectedTransitLineKeys(new Set())}
             onDeleteLine={(revision, line) => {
-              if (window.confirm(`确认删除线路 ${line.name}？删除后会立即从所属版本中移除。`)) {
+              if (window.confirm(`确认删除线路 ${line.name}？已发布线路会转为归档。`)) {
                 void deleteTransitLineByAdmin(revision.revisionId, line);
               }
             }}
             onEditLine={(revision, line) => setLineEditTarget({ revision, line })}
+            onItemAction={(revision, line, action) =>
+              void runTransitLineItemAction(
+                revision.revisionId,
+                line.sourceId,
+                action,
+                action === 'reject' ? '后台退回' : undefined,
+              )
+            }
+            onToggleSelected={toggleTransitLineSelection}
+            onToggleVisibleSelected={toggleVisibleTransitLineSelection}
           />
-
-          {selectedTransitRevision ? (
-            <section className="admin-content-list" aria-label="当前交通数据版本详情">
-              <article className="admin-content-item transit-revision-item transit-selected-version-card">
-                <div>
-                  <strong>{selectedTransitRevision.revisionId}</strong>
-                  <p className="muted">
-                    {statusLabel(selectedTransitRevision.status)} ·{' '}
-                    {formatSummary(selectedTransitRevision)} ·{' '}
-                    {formatDate(selectedTransitRevision.importedAt)}
-                  </p>
-                  <div className="transit-revision-summary" aria-label="版本摘要">
-                    {selectedTransitRevision.summary.map((item) => (
-                      <span key={item.mode}>
-                        {item.label} {item.lineCount} 线 / {item.stationCount} 站
-                      </span>
-                    ))}
-                  </div>
-                  <div className="transit-revision-validation" aria-label="校验结果">
-                    <span>错误 {selectedTransitRevision.validation.errorCount}</span>
-                    <span>提醒 {selectedTransitRevision.validation.warningCount}</span>
-                    {getValidationIssues(selectedTransitRevision)
-                      .slice(0, 3)
-                      .map((issue) => (
-                        <span key={`${issue.severity}-${issue.kind}`}>{issue.message}</span>
-                      ))}
-                  </div>
-                  {getValidationIssues(selectedTransitRevision).length > 0 ? (
-                    <ul className="transit-validation-issue-list" aria-label="详细校验问题">
-                      {getValidationIssues(selectedTransitRevision)
-                        .slice(0, 12)
-                        .map((issue) => (
-                          <li
-                            className={
-                              issue.severity === 'error'
-                                ? 'transit-validation-issue is-error'
-                                : 'transit-validation-issue is-warning'
-                            }
-                            key={`${selectedTransitRevision.revisionId}-${issue.severity}-${issue.kind}`}
-                          >
-                            <strong>
-                              {formatValidationIssueKind(issue.kind)} · {issue.count}
-                            </strong>
-                            <span>{issue.message}</span>
-                            {issue.examples.length > 0 ? (
-                              <small>例如：{issue.examples.join('；')}</small>
-                            ) : null}
-                          </li>
-                        ))}
-                    </ul>
-                  ) : null}
-                  <div className="transit-revision-preview" aria-label="线路预览">
-                    {selectedTransitRevision.lines.slice(0, 8).map((line) => (
-                      <span key={line.sourceId}>{line.name}</span>
-                    ))}
-                  </div>
-                  <AdminVersionDiffSummaryCard
-                    summary={transitDiffByRevisionId.get(selectedTransitRevision.revisionId)}
-                    title="与当前发布线路对比"
-                  />
-                  <TransitRevisionDetail
-                    canEditStations={canEditTransitRevisionStations(selectedTransitRevision)}
-                    canEditLines={canEditTransitRevisionLines(selectedTransitRevision)}
-                    revision={selectedTransitRevision}
-                    tilePreviewTemplate={tilePreviewTemplate}
-                    onCreateLine={() => setLineCreateTarget(selectedTransitRevision)}
-                    onDeleteLine={(line) => {
-                      if (
-                        window.confirm(`确认删除线路 ${line.name}？删除后会立即从当前版本中移除。`)
-                      ) {
-                        void deleteTransitLineByAdmin(selectedTransitRevision.revisionId, line);
-                      }
-                    }}
-                    onEditLine={(line) =>
-                      setLineEditTarget({ revision: selectedTransitRevision, line })
-                    }
-                    onEditStation={(station) =>
-                      setStationEditTarget({ revision: selectedTransitRevision, station })
-                    }
-                  />
-                  <p className="muted">
-                    来源：{selectedTransitRevision.sourceFiles.join('、') || '未记录'}
-                  </p>
-                </div>
-                <div className="admin-content-actions">
-                  <button
-                    type="button"
-                    disabled={isBusy || selectedTransitRevision.status !== 'imported'}
-                    onClick={() => runAction(selectedTransitRevision.revisionId, 'submit')}
-                  >
-                    提交
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isBusy || selectedTransitRevision.status !== 'pending_review'}
-                    onClick={() => runAction(selectedTransitRevision.revisionId, 'approve')}
-                  >
-                    通过
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isBusy || selectedTransitRevision.status !== 'pending_review'}
-                    onClick={() => setRejectTarget(selectedTransitRevision)}
-                  >
-                    驳回
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isBusy || selectedTransitRevision.status !== 'approved'}
-                    onClick={() => setPublishTarget(selectedTransitRevision)}
-                  >
-                    发布
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isBusy || selectedTransitRevision.status !== 'superseded'}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `确认恢复交通数据版本 ${selectedTransitRevision.revisionId} 为当前发布版本？当前发布版本会被标记为已被替换。`,
-                        )
-                      ) {
-                        void runAction(selectedTransitRevision.revisionId, 'restore');
-                      }
-                    }}
-                  >
-                    恢复
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      isBusy ||
-                      selectedTransitRevision.status === 'published' ||
-                      selectedTransitRevision.status === 'archived'
-                    }
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `确认归档交通数据版本 ${selectedTransitRevision.revisionId}？归档后不会进入待办和发布候选。`,
-                        )
-                      ) {
-                        void runAction(selectedTransitRevision.revisionId, 'archive');
-                      }
-                    }}
-                  >
-                    归档
-                  </button>
-                </div>
-              </article>
-            </section>
-          ) : (
-            <div className="admin-content-empty">
-              <p className="muted">
-                {hasActiveTransitFilters
-                  ? '当前筛选条件下没有可切换的线路版本。'
-                  : '暂无可用线路版本，请先导入一版数据。'}
-              </p>
-              {hasActiveTransitFilters ? (
-                <button type="button" onClick={resetFilters}>
-                  查看全部版本
-                </button>
-              ) : (
-                <button type="button" disabled={isBusy} onClick={importLatest}>
-                  从旧站导入最新线路
-                </button>
-              )}
-            </div>
-          )}
         </>
       ) : null}
 
-      {activeSection === 'schedule_revisions' ? (
+      {activeSection === 'trips' ? (
         <>
           <TravelScheduleAdminSummary result={scheduleSummary} statusText={scheduleStatusText} />
-          <div className="admin-report-summary transit-admin-summary" aria-label="班次数据版本摘要">
+          <div className="admin-report-summary transit-admin-summary" aria-label="班次审批状态摘要">
             <TransitAdminMetric
               label="已导入"
               value={scheduleStatusCounts.get('imported') ?? 0}
@@ -1378,17 +1412,11 @@ export function AdminTransitPanel() {
               value={scheduleStatusCounts.get('approved') ?? 0}
               tone={(scheduleStatusCounts.get('approved') ?? 0) > 0 ? 'accent' : undefined}
             />
-            <TransitAdminMetric
-              label="校验失败"
-              value={scheduleStatusCounts.get('validation_failed') ?? 0}
-              tone={
-                (scheduleStatusCounts.get('validation_failed') ?? 0) > 0 ? 'warning' : undefined
-              }
-            />
             <TransitAdminMetric label="已发布" value={scheduleStatusCounts.get('published') ?? 0} />
-            <TransitAdminMetric label="当前结果" value={filteredScheduleRevisions.length} />
+            <TransitAdminMetric label="已归档" value={scheduleStatusCounts.get('archived') ?? 0} />
+            <TransitAdminMetric label="当前结果" value={scheduleTripRows.length} />
           </div>
-          <div className="admin-toolbar transit-admin-toolbar" aria-label="班次数据版本操作与筛选">
+          <div className="admin-toolbar transit-admin-toolbar" aria-label="班次操作与筛选">
             <button
               className="secondary-action-button is-primary"
               type="button"
@@ -1435,22 +1463,8 @@ export function AdminTransitPanel() {
               <input
                 value={scheduleQuery}
                 onChange={(event) => setScheduleQuery(event.currentTarget.value)}
-                placeholder="版本、线路、班次、站点、校验问题"
+                placeholder="线路、班次号、站点、运营方、来源批次"
               />
-            </label>
-            <label>
-              <span>查看版本</span>
-              <select
-                value={selectedScheduleRevisionId}
-                disabled={filteredScheduleRevisions.length === 0}
-                onChange={(event) => setSelectedScheduleRevisionId(event.currentTarget.value)}
-              >
-                {filteredScheduleRevisions.map((revision) => (
-                  <option value={revision.revisionId} key={revision.revisionId}>
-                    {`${travelScheduleRevisionStatusLabel(revision.status)} · ${revision.revisionId} · ${revision.trips.length} 班 / ${revision.stationOptions.length} 站`}
-                  </option>
-                ))}
-              </select>
             </label>
             <button
               type="button"
@@ -1462,193 +1476,60 @@ export function AdminTransitPanel() {
           </div>
           <ScheduleTripEntityList
             isBusy={scheduleRevisionBusy}
+            isAllVisibleSelected={isAllVisibleScheduleTripsSelected}
             rows={scheduleTripRows}
+            selectedCount={selectedScheduleTripRows.length}
+            selectedBatchCount={selectedScheduleTripBatches.length}
+            selectedKeys={selectedScheduleTripKeys}
+            onCreateTrip={() => {
+              if (preferredScheduleDraftRevision) {
+                setScheduleTripCreateTarget(preferredScheduleDraftRevision);
+              } else {
+                setScheduleRevisionStatusText(
+                  '当前没有可写入的班次数据容器，请先导入一次班次或解除归档。',
+                );
+              }
+            }}
+            onBatchAction={(action) => void runSelectedScheduleTripAction(action)}
+            onClearSelection={() => setSelectedScheduleTripKeys(new Set())}
             onDeleteTrip={(revision, trip) => {
               if (
-                window.confirm(
-                  `确认删除班次 ${formatTripDiffLabel(trip)}？删除后会立即从所属版本中移除。`,
-                )
+                window.confirm(`确认删除班次 ${formatTripDiffLabel(trip)}？已发布班次会转为归档。`)
               ) {
                 void deleteScheduleTrip(revision.revisionId, trip);
               }
             }}
             onEditTrip={(revision, trip) => setScheduleTripEditTarget({ revision, trip })}
+            onItemAction={(revision, trip, action) =>
+              void runScheduleTripItemAction(
+                revision.revisionId,
+                trip.tripInstanceId,
+                action,
+                action === 'reject' ? '后台退回' : undefined,
+              )
+            }
+            onToggleSelected={toggleScheduleTripSelection}
+            onToggleVisibleSelected={toggleVisibleScheduleTripSelection}
           />
-          {selectedScheduleRevision ? (
-            <div className="travel-schedule-revision-list" aria-label="当前班次版本详情">
-              <article className="travel-schedule-revision-item transit-selected-version-card">
-                <div>
-                  <strong>{selectedScheduleRevision.revisionId}</strong>
-                  <p className="muted">
-                    {travelScheduleRevisionStatusLabel(selectedScheduleRevision.status)} ·{' '}
-                    {selectedScheduleRevision.trips.length} 班 /{' '}
-                    {selectedScheduleRevision.stationOptions.length} 站点选项 ·{' '}
-                    {formatDate(selectedScheduleRevision.importedAt)}
-                  </p>
-                  <div className="transit-revision-validation" aria-label="班次版本校验结果">
-                    <span>错误 {selectedScheduleRevision.validation.errorCount}</span>
-                    <span>提醒 {selectedScheduleRevision.validation.warningCount}</span>
-                    {getScheduleValidationIssues(selectedScheduleRevision)
-                      .slice(0, 3)
-                      .map((issue) => (
-                        <span
-                          key={`${selectedScheduleRevision.revisionId}-${issue.severity}-${issue.kind}`}
-                        >
-                          {issue.message}
-                        </span>
-                      ))}
-                  </div>
-                  <div className="travel-schedule-revision-services" aria-label="班次服务摘要">
-                    {selectedScheduleRevision.services.map((service) => (
-                      <span key={service.serviceId} data-status={service.status}>
-                        {service.label} · {service.tripCount} 班 / {service.stationCount} 站
-                      </span>
-                    ))}
-                  </div>
-                  <AdminVersionDiffSummaryCard
-                    summary={scheduleDiffByRevisionId.get(selectedScheduleRevision.revisionId)}
-                    title="与当前发布班次对比"
-                  />
-                  <ScheduleRevisionTripDetail
-                    canEditTrips={canEditTravelScheduleRevisionTrips(selectedScheduleRevision)}
-                    revision={selectedScheduleRevision}
-                    onCreateTrip={() => setScheduleTripCreateTarget(selectedScheduleRevision)}
-                    onDeleteTrip={(trip) => {
-                      if (
-                        window.confirm(
-                          `确认删除班次 ${formatTripDiffLabel(trip)}？删除后会立即从当前版本中移除。`,
-                        )
-                      ) {
-                        void deleteScheduleTrip(selectedScheduleRevision.revisionId, trip);
-                      }
-                    }}
-                    onEditTrip={(trip) =>
-                      setScheduleTripEditTarget({ revision: selectedScheduleRevision, trip })
-                    }
-                  />
-                  <p className="muted">
-                    来源：{selectedScheduleRevision.sourceFiles.join('、') || '未记录'}
-                  </p>
-                </div>
-                <div className="admin-content-actions">
-                  <button
-                    type="button"
-                    disabled={
-                      scheduleRevisionBusy || selectedScheduleRevision.status !== 'imported'
-                    }
-                    onClick={() =>
-                      runScheduleRevisionAction(selectedScheduleRevision.revisionId, 'submit')
-                    }
-                  >
-                    提交
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      scheduleRevisionBusy || selectedScheduleRevision.status !== 'pending_review'
-                    }
-                    onClick={() =>
-                      runScheduleRevisionAction(selectedScheduleRevision.revisionId, 'approve')
-                    }
-                  >
-                    通过
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      scheduleRevisionBusy || selectedScheduleRevision.status !== 'pending_review'
-                    }
-                    onClick={() => setScheduleRejectTarget(selectedScheduleRevision)}
-                  >
-                    驳回
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      scheduleRevisionBusy || selectedScheduleRevision.status !== 'approved'
-                    }
-                    onClick={() => setSchedulePublishTarget(selectedScheduleRevision)}
-                  >
-                    发布
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      scheduleRevisionBusy || selectedScheduleRevision.status !== 'superseded'
-                    }
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `确认恢复班次版本 ${selectedScheduleRevision.revisionId} 为当前发布版本？当前发布版本会被标记为已被替换。`,
-                        )
-                      ) {
-                        void runScheduleRevisionAction(
-                          selectedScheduleRevision.revisionId,
-                          'restore',
-                        );
-                      }
-                    }}
-                  >
-                    恢复
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      scheduleRevisionBusy ||
-                      selectedScheduleRevision.status === 'published' ||
-                      selectedScheduleRevision.status === 'archived'
-                    }
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `确认归档班次版本 ${selectedScheduleRevision.revisionId}？归档后不会进入待办和发布候选。`,
-                        )
-                      ) {
-                        void runScheduleRevisionAction(
-                          selectedScheduleRevision.revisionId,
-                          'archive',
-                        );
-                      }
-                    }}
-                  >
-                    归档
-                  </button>
-                </div>
-              </article>
-            </div>
-          ) : (
-            <div className="admin-content-empty">
-              <p className="muted">
-                {hasActiveScheduleFilters
-                  ? '当前筛选条件下没有可切换的班次版本。'
-                  : '暂无可用班次版本，请先导入当前班次快照。'}
-              </p>
-              {hasActiveScheduleFilters ? (
-                <button type="button" onClick={resetScheduleFilters}>
-                  查看全部版本
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={scheduleRevisionBusy}
-                  onClick={importCurrentScheduleRevision}
-                >
-                  导入当前班次快照
-                </button>
-              )}
-            </div>
-          )}
         </>
       ) : null}
 
-      {activeSection === 'mode_profiles' ? (
+      {activeSection === 'profiles' ? (
         <section
           className="transit-mode-profile-editor"
           aria-labelledby="transit-mode-profile-title"
         >
           <div className="section-heading">
             <h2 id="transit-mode-profile-title">交通方式配置</h2>
-            <span className="muted">{profileStatusText}</span>
+            <div className="transit-entity-heading-actions">
+              <span className="muted">{profileStatusText}</span>
+              <button type="button" disabled={profileBusy} onClick={addModeProfileDraft}>
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  add
+                </span>
+                <span>添加交通方式</span>
+              </button>
+            </div>
           </div>
           <div className="transit-mode-profile-grid" aria-label="交通方式颜色、图标和排序">
             {modeProfiles.map((profile) => (
@@ -1719,6 +1600,17 @@ export function AdminTransitPanel() {
                   />
                   <span>启用</span>
                 </label>
+                <button
+                  className="transit-profile-delete-button"
+                  type="button"
+                  disabled={profileBusy || modeProfiles.length <= 1}
+                  onClick={() => removeModeProfileDraft(profile)}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    delete
+                  </span>
+                  <span>删除</span>
+                </button>
               </article>
             ))}
           </div>
@@ -1735,14 +1627,22 @@ export function AdminTransitPanel() {
         </section>
       ) : null}
 
-      {activeSection === 'service_profiles' ? (
+      {activeSection === 'profiles' ? (
         <section
           className="transit-mode-profile-editor"
           aria-labelledby="travel-service-profile-title"
         >
           <div className="section-heading">
             <h2 id="travel-service-profile-title">可排班服务配置</h2>
-            <span className="muted">{serviceProfileStatusText}</span>
+            <div className="transit-entity-heading-actions">
+              <span className="muted">{serviceProfileStatusText}</span>
+              <button type="button" disabled={serviceProfileBusy} onClick={addServiceProfileDraft}>
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  add
+                </span>
+                <span>添加可排班服务</span>
+              </button>
+            </div>
           </div>
           <div className="transit-mode-profile-grid" aria-label="可排班服务颜色、图标和排序">
             {serviceProfiles.map((profile) => (
@@ -1815,6 +1715,17 @@ export function AdminTransitPanel() {
                   />
                   <span>启用</span>
                 </label>
+                <button
+                  className="transit-profile-delete-button"
+                  type="button"
+                  disabled={serviceProfileBusy || serviceProfiles.length <= 1}
+                  onClick={() => removeServiceProfileDraft(profile)}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    delete
+                  </span>
+                  <span>删除</span>
+                </button>
               </article>
             ))}
           </div>
@@ -1829,32 +1740,6 @@ export function AdminTransitPanel() {
             </button>
           </div>
         </section>
-      ) : null}
-      {rejectTarget ? (
-        <TransitRejectDialog
-          isBusy={isBusy}
-          revision={rejectTarget}
-          onClose={() => setRejectTarget(null)}
-          onSubmit={async (reason) => {
-            const ok = await runAction(rejectTarget.revisionId, 'reject', reason);
-            if (ok) {
-              setRejectTarget(null);
-            }
-          }}
-        />
-      ) : null}
-      {publishTarget ? (
-        <TransitPublishDialog
-          isBusy={isBusy}
-          revision={publishTarget}
-          onClose={() => setPublishTarget(null)}
-          onSubmit={async () => {
-            const ok = await runAction(publishTarget.revisionId, 'publish');
-            if (ok) {
-              setPublishTarget(null);
-            }
-          }}
-        />
       ) : null}
       {stationEditTarget ? (
         <TransitStationCoordinateDialog
@@ -1885,6 +1770,9 @@ export function AdminTransitPanel() {
           line={lineEditTarget.line}
           tilePreviewTemplate={tilePreviewTemplate}
           onClose={() => setLineEditTarget(null)}
+          onEditStation={(station) =>
+            setStationEditTarget({ revision: lineEditTarget.revision, station })
+          }
           onSubmit={async (payload) => {
             const error = await saveTransitLine(
               lineEditTarget.revision.revisionId,
@@ -1905,42 +1793,13 @@ export function AdminTransitPanel() {
           revision={lineCreateTarget}
           tilePreviewTemplate={tilePreviewTemplate}
           onClose={() => setLineCreateTarget(null)}
+          onEditStation={(station) => setStationEditTarget({ revision: lineCreateTarget, station })}
           onSubmit={async (payload) => {
             const error = await saveTransitLine(lineCreateTarget.revisionId, payload);
             if (!error) {
               setLineCreateTarget(null);
             }
             return error;
-          }}
-        />
-      ) : null}
-      {scheduleRejectTarget ? (
-        <ScheduleRevisionRejectDialog
-          isBusy={scheduleRevisionBusy}
-          revision={scheduleRejectTarget}
-          onClose={() => setScheduleRejectTarget(null)}
-          onSubmit={async (reason) => {
-            const ok = await runScheduleRevisionAction(
-              scheduleRejectTarget.revisionId,
-              'reject',
-              reason,
-            );
-            if (ok) {
-              setScheduleRejectTarget(null);
-            }
-          }}
-        />
-      ) : null}
-      {schedulePublishTarget ? (
-        <ScheduleRevisionPublishDialog
-          isBusy={scheduleRevisionBusy}
-          revision={schedulePublishTarget}
-          onClose={() => setSchedulePublishTarget(null)}
-          onSubmit={async () => {
-            const ok = await runScheduleRevisionAction(schedulePublishTarget.revisionId, 'publish');
-            if (ok) {
-              setSchedulePublishTarget(null);
-            }
           }}
         />
       ) : null}
@@ -2022,75 +1881,6 @@ function TransitAdminMetric({
   );
 }
 
-function AdminVersionDiffSummaryCard({
-  summary,
-  title,
-}: Readonly<{
-  summary?: AdminVersionDiffSummary;
-  title: string;
-}>) {
-  if (!summary) {
-    return null;
-  }
-
-  const hasItems =
-    summary.addedItems.length > 0 ||
-    summary.removedItems.length > 0 ||
-    summary.changedItems.length > 0 ||
-    summary.notes.length > 0;
-
-  return (
-    <div className="admin-version-diff-card" aria-label={title}>
-      <div className="admin-version-diff-heading">
-        <strong>{title}</strong>
-        <span>{summary.baselineLabel}</span>
-      </div>
-      <div className="admin-version-diff-metrics" aria-label="数量变化">
-        {summary.metrics.map((metric) => (
-          <span key={metric.label}>
-            <small>{metric.label}</small>
-            <strong>
-              {metric.before}
-              {' -> '}
-              {metric.after}
-            </strong>
-          </span>
-        ))}
-      </div>
-      {hasItems ? (
-        <div className="admin-version-diff-groups">
-          <AdminVersionDiffGroup label="新增" items={summary.addedItems} />
-          <AdminVersionDiffGroup label="移除" items={summary.removedItems} />
-          <AdminVersionDiffGroup label="可能变化" items={summary.changedItems} />
-          <AdminVersionDiffGroup label="提示" items={summary.notes} />
-        </div>
-      ) : (
-        <p className="muted">未发现主要数量、名称或关键字段差异。</p>
-      )}
-    </div>
-  );
-}
-
-function AdminVersionDiffGroup({
-  items,
-  label,
-}: Readonly<{
-  items: string[];
-  label: string;
-}>) {
-  if (items.length === 0) {
-    return null;
-  }
-
-  return (
-    <p>
-      <strong>{label}</strong>
-      <span>{items.slice(0, 6).join('；')}</span>
-      {items.length > 6 ? <small>另有 {items.length - 6} 项</small> : null}
-    </p>
-  );
-}
-
 function TravelScheduleAdminSummary({
   result,
   statusText,
@@ -2133,38 +1923,180 @@ function TravelScheduleAdminSummary({
 }
 
 function TransitLineEntityList({
+  isAllVisibleSelected,
   isBusy,
+  onBatchAction,
+  onClearSelection,
+  onCreateLine,
   onDeleteLine,
   onEditLine,
+  onItemAction,
+  onToggleSelected,
+  onToggleVisibleSelected,
   rows,
+  selectedCount,
+  selectedKeys,
+  selectedBatchCount,
 }: Readonly<{
+  isAllVisibleSelected: boolean;
   isBusy: boolean;
+  onBatchAction: (action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive') => void;
+  onClearSelection: () => void;
+  onCreateLine: () => void;
   onDeleteLine: (revision: TransitDataRevision, line: TransitRevisionLine) => void;
   onEditLine: (revision: TransitDataRevision, line: TransitRevisionLine) => void;
+  onItemAction: (
+    revision: TransitDataRevision,
+    line: TransitRevisionLine,
+    action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive',
+  ) => void;
+  onToggleSelected: (revisionId: string, lineSourceId: string) => void;
+  onToggleVisibleSelected: () => void;
   rows: Array<{ line: TransitRevisionLine; revision: TransitDataRevision }>;
+  selectedCount: number;
+  selectedKeys: Set<string>;
+  selectedBatchCount: number;
 }>) {
   return (
     <section className="transit-entity-list" aria-label="线路完整列表">
       <div className="section-heading">
         <h2>线路列表</h2>
-        <span className="muted">{`${rows.length} 条线路，按当前版本筛选展开`}</span>
+        <div className="transit-entity-heading-actions">
+          <span className="muted">{`${rows.length} 条线路`}</span>
+          <button type="button" disabled={isBusy} onClick={onCreateLine}>
+            <span className="material-symbols-outlined" aria-hidden="true">
+              add
+            </span>
+            <span>新增线路</span>
+          </button>
+        </div>
       </div>
-      <div className="transit-entity-table">
+      <div className="admin-content-bulk-bar transit-entity-bulk-bar" aria-label="线路批量操作">
+        <label className="checkbox-row admin-content-bulk-select">
+          <input
+            type="checkbox"
+            checked={isAllVisibleSelected}
+            disabled={rows.length === 0}
+            onChange={onToggleVisibleSelected}
+          />
+          <span>{`选择当前线路 ${selectedCount}/${rows.length}`}</span>
+        </label>
+        <span className="muted">
+          {`已选 ${selectedCount} 条线路，涉及 ${selectedBatchCount} 个导入批次`}
+        </span>
+        <button
+          type="button"
+          disabled={isBusy || selectedCount === 0}
+          onClick={() => onBatchAction('submit')}
+        >
+          提交所选线路
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || selectedCount === 0}
+          onClick={() => onBatchAction('approve')}
+        >
+          通过所选线路
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || selectedCount === 0}
+          onClick={() => onBatchAction('reject')}
+        >
+          驳回所选线路
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || selectedCount === 0}
+          onClick={() => onBatchAction('publish')}
+        >
+          发布所选线路
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || selectedCount === 0}
+          onClick={() => onBatchAction('archive')}
+        >
+          归档所选线路
+        </button>
+        <button type="button" disabled={isBusy || selectedCount === 0} onClick={onClearSelection}>
+          清空选择
+        </button>
+      </div>
+      <div className="admin-content-list transit-entity-table">
         {rows.map(({ line, revision }) => {
           const canEdit = canEditTransitRevisionLines(revision);
+          const isLegacy = isLegacyTransitRevision(revision);
+          const itemStatus = getTransitLineItemApprovalStatus(line, revision);
+          const selectionKey = getTransitLineSelectionKey(revision.revisionId, line.sourceId);
           return (
-            <article className="transit-entity-row" key={`${revision.revisionId}-${line.sourceId}`}>
+            <article
+              className="admin-content-item transit-entity-row"
+              key={`${revision.revisionId}-${line.sourceId}`}
+            >
+              <label className="admin-content-select" aria-label={`选择线路 ${line.name}`}>
+                <input
+                  type="checkbox"
+                  checked={selectedKeys.has(selectionKey)}
+                  onChange={() => onToggleSelected(revision.revisionId, line.sourceId)}
+                />
+              </label>
               <div>
-                <strong>{line.name}</strong>
+                <div className="admin-poi-title-row">
+                  <strong>{line.name}</strong>
+                  <span className={`admin-poi-status-chip is-${itemStatus}`}>
+                    {transitItemApprovalStatusLabel(itemStatus)}
+                  </span>
+                  {isLegacy ? (
+                    <span className="admin-poi-status-chip is-legacy">旧有数据</span>
+                  ) : null}
+                </div>
                 <p className="muted">
                   {formatTransitMode(line.mode)} · {line.stationSourceIds.length} 站 · 单向{' '}
-                  {countOneWayStops(line)} · 自定义路径 {line.segmentPaths?.length ?? 0} 段
+                  {countOneWayStops(line)} ·{' '}
+                  {(line.routeMode ?? defaultRouteModeForTransitMode(line.mode)) === 'road'
+                    ? '沿路运行'
+                    : '折线运行'}
                 </p>
-                <p className="muted">
-                  {statusLabel(revision.status)} · {revision.revisionId}
-                </p>
+                <p className="muted">来源批次：{revision.revisionId}</p>
               </div>
               <div className="admin-content-actions">
+                {itemStatus === 'imported' || itemStatus === 'rejected' ? (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => onItemAction(revision, line, 'submit')}
+                  >
+                    提交
+                  </button>
+                ) : null}
+                {itemStatus === 'pending_review' ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => onItemAction(revision, line, 'approve')}
+                    >
+                      通过
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => onItemAction(revision, line, 'reject')}
+                    >
+                      驳回
+                    </button>
+                  </>
+                ) : null}
+                {itemStatus === 'approved' ? (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => onItemAction(revision, line, 'publish')}
+                  >
+                    发布
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   disabled={isBusy || !canEdit}
@@ -2190,40 +2122,182 @@ function TransitLineEntityList({
 }
 
 function ScheduleTripEntityList({
+  isAllVisibleSelected,
   isBusy,
+  onBatchAction,
+  onClearSelection,
+  onCreateTrip,
   onDeleteTrip,
   onEditTrip,
+  onItemAction,
+  onToggleSelected,
+  onToggleVisibleSelected,
   rows,
+  selectedCount,
+  selectedKeys,
+  selectedBatchCount,
 }: Readonly<{
+  isAllVisibleSelected: boolean;
   isBusy: boolean;
+  onBatchAction: (action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive') => void;
+  onClearSelection: () => void;
+  onCreateTrip: () => void;
   onDeleteTrip: (revision: TravelScheduleRevision, trip: TravelTripInstance) => void;
   onEditTrip: (revision: TravelScheduleRevision, trip: TravelTripInstance) => void;
+  onItemAction: (
+    revision: TravelScheduleRevision,
+    trip: TravelTripInstance,
+    action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive',
+  ) => void;
+  onToggleSelected: (revisionId: string, tripInstanceId: string) => void;
+  onToggleVisibleSelected: () => void;
   rows: Array<{ revision: TravelScheduleRevision; trip: TravelTripInstance }>;
+  selectedCount: number;
+  selectedKeys: Set<string>;
+  selectedBatchCount: number;
 }>) {
   return (
     <section className="transit-entity-list" aria-label="班次完整列表">
       <div className="section-heading">
         <h2>班次列表</h2>
-        <span className="muted">{`${rows.length} 个班次，按当前版本筛选展开`}</span>
+        <div className="transit-entity-heading-actions">
+          <span className="muted">{`${rows.length} 个班次`}</span>
+          <button type="button" disabled={isBusy} onClick={onCreateTrip}>
+            <span className="material-symbols-outlined" aria-hidden="true">
+              add
+            </span>
+            <span>新增班次</span>
+          </button>
+        </div>
       </div>
-      <div className="transit-entity-table">
+      <div className="admin-content-bulk-bar transit-entity-bulk-bar" aria-label="班次批量操作">
+        <label className="checkbox-row admin-content-bulk-select">
+          <input
+            type="checkbox"
+            checked={isAllVisibleSelected}
+            disabled={rows.length === 0}
+            onChange={onToggleVisibleSelected}
+          />
+          <span>{`选择当前班次 ${selectedCount}/${rows.length}`}</span>
+        </label>
+        <span className="muted">
+          {`已选 ${selectedCount} 个班次，涉及 ${selectedBatchCount} 个导入批次`}
+        </span>
+        <button
+          type="button"
+          disabled={isBusy || selectedCount === 0}
+          onClick={() => onBatchAction('submit')}
+        >
+          提交所选班次
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || selectedCount === 0}
+          onClick={() => onBatchAction('approve')}
+        >
+          通过所选班次
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || selectedCount === 0}
+          onClick={() => onBatchAction('reject')}
+        >
+          驳回所选班次
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || selectedCount === 0}
+          onClick={() => onBatchAction('publish')}
+        >
+          发布所选班次
+        </button>
+        <button
+          type="button"
+          disabled={isBusy || selectedCount === 0}
+          onClick={() => onBatchAction('archive')}
+        >
+          归档所选班次
+        </button>
+        <button type="button" disabled={isBusy || selectedCount === 0} onClick={onClearSelection}>
+          清空选择
+        </button>
+      </div>
+      <div className="admin-content-list transit-entity-table">
         {rows.map(({ revision, trip }) => {
           const canEdit = canEditTravelScheduleRevisionTrips(revision);
+          const isLegacy = isLegacyTravelTrip(trip) || isLegacyScheduleRevision(revision);
+          const itemStatus = getScheduleTripItemApprovalStatus(trip, revision);
+          const selectionKey = getScheduleTripSelectionKey(
+            revision.revisionId,
+            trip.tripInstanceId,
+          );
           return (
             <article
-              className="transit-entity-row"
+              className="admin-content-item transit-entity-row"
               key={`${revision.revisionId}-${trip.tripInstanceId}`}
             >
+              <label
+                className="admin-content-select"
+                aria-label={`选择班次 ${formatTripDiffLabel(trip)}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedKeys.has(selectionKey)}
+                  onChange={() => onToggleSelected(revision.revisionId, trip.tripInstanceId)}
+                />
+              </label>
               <div>
-                <strong>{formatTripDiffLabel(trip)}</strong>
+                <div className="admin-poi-title-row">
+                  <strong>{formatTripDiffLabel(trip)}</strong>
+                  <span className={`admin-poi-status-chip is-${itemStatus}`}>
+                    {transitItemApprovalStatusLabel(itemStatus)}
+                  </span>
+                  {isLegacy ? (
+                    <span className="admin-poi-status-chip is-legacy">旧有数据</span>
+                  ) : null}
+                </div>
                 <p className="muted">
                   {trip.serviceLabel} · {trip.lineName} · {trip.stationNames.join(' → ')}
                 </p>
-                <p className="muted">
-                  {travelScheduleRevisionStatusLabel(revision.status)} · {revision.revisionId}
-                </p>
+                <p className="muted">来源批次：{revision.revisionId}</p>
               </div>
               <div className="admin-content-actions">
+                {itemStatus === 'imported' || itemStatus === 'rejected' ? (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => onItemAction(revision, trip, 'submit')}
+                  >
+                    提交
+                  </button>
+                ) : null}
+                {itemStatus === 'pending_review' ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => onItemAction(revision, trip, 'approve')}
+                    >
+                      通过
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => onItemAction(revision, trip, 'reject')}
+                    >
+                      驳回
+                    </button>
+                  </>
+                ) : null}
+                {itemStatus === 'approved' ? (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => onItemAction(revision, trip, 'publish')}
+                  >
+                    发布
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   disabled={isBusy || !canEdit}
@@ -2243,97 +2317,6 @@ function ScheduleTripEntityList({
           );
         })}
         {rows.length === 0 ? <p className="muted">当前筛选条件下没有班次。</p> : null}
-      </div>
-    </section>
-  );
-}
-
-function ScheduleRevisionTripDetail({
-  canEditTrips,
-  onCreateTrip,
-  onDeleteTrip,
-  revision,
-  onEditTrip,
-}: Readonly<{
-  canEditTrips: boolean;
-  onCreateTrip: () => void;
-  onDeleteTrip: (trip: TravelTripInstance) => void;
-  revision: TravelScheduleRevision;
-  onEditTrip: (trip: TravelTripInstance) => void;
-}>) {
-  const [query, setQuery] = useState('');
-  const normalizedQuery = normalizeSearchText(query);
-  const filteredTrips = useMemo(
-    () =>
-      revision.trips.filter((trip) =>
-        normalizedQuery ? travelTripMatchesQuery(trip, normalizedQuery) : true,
-      ),
-    [normalizedQuery, revision.trips],
-  );
-
-  return (
-    <section className="travel-schedule-trip-detail" aria-label="班次明细">
-      <div className="section-heading">
-        <h3>班次明细</h3>
-        <span className="muted">
-          {canEditTrips ? '导入态/待审核/待发布/已发布/已驳回可人工修正' : '当前状态只读'}
-        </span>
-      </div>
-      <div className="travel-schedule-trip-toolbar">
-        <label>
-          <span>搜索班次</span>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-            placeholder="班次号、线路、站点、运营方、来源"
-          />
-        </label>
-        <span className="muted">{`${filteredTrips.length} 条`}</span>
-        <button type="button" disabled={!canEditTrips} onClick={onCreateTrip}>
-          新增班次
-        </button>
-        {query ? (
-          <button
-            type="button"
-            onClick={() => {
-              setQuery('');
-            }}
-          >
-            清空
-          </button>
-        ) : null}
-      </div>
-      <div className="travel-schedule-trip-table">
-        {filteredTrips.map((trip) => (
-          <article className="travel-schedule-trip-row" key={trip.tripInstanceId}>
-            <div>
-              <strong>{formatTripDiffLabel(trip)}</strong>
-              <p className="muted">
-                {trip.serviceLabel} · {trip.lineName} · {trip.stationNames.join(' → ')}
-              </p>
-              <p className="muted">
-                {[
-                  trip.arrivalTime ? `到达 ${trip.arrivalTime}` : '',
-                  formatTripAvailability(trip.availability),
-                  trip.fareText,
-                  trip.operator,
-                  trip.sourcePath,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
-            </div>
-            <div className="admin-content-actions">
-              <button type="button" disabled={!canEditTrips} onClick={() => onEditTrip(trip)}>
-                编辑
-              </button>
-              <button type="button" disabled={!canEditTrips} onClick={() => onDeleteTrip(trip)}>
-                删除
-              </button>
-            </div>
-          </article>
-        ))}
-        {filteredTrips.length === 0 ? <p className="muted">没有匹配当前关键词的班次。</p> : null}
       </div>
     </section>
   );
@@ -2382,6 +2365,9 @@ function ScheduleTripEditDialog({
   const availableKinds = serviceProfiles
     .filter((profile) => profile.enabled || profile.kind === trip?.serviceKind)
     .map((profile) => profile.kind);
+  if (trip?.serviceKind && !availableKinds.includes(trip.serviceKind)) {
+    availableKinds.push(trip.serviceKind);
+  }
   const fallbackServiceKind =
     trip?.serviceKind ??
     revision.services[0]?.kind ??
@@ -2654,385 +2640,6 @@ function ScheduleTripEditDialog({
   );
 }
 
-function TransitRevisionDetail({
-  canEditLines,
-  canEditStations,
-  onCreateLine,
-  onDeleteLine,
-  onEditLine,
-  onEditStation,
-  revision,
-  tilePreviewTemplate,
-}: Readonly<{
-  canEditLines: boolean;
-  canEditStations: boolean;
-  onCreateLine: () => void;
-  onDeleteLine: (line: TransitRevisionLine) => void;
-  onEditLine: (line: TransitRevisionLine) => void;
-  onEditStation: (station: TransitRevisionStation) => void;
-  revision: TransitDataRevision;
-  tilePreviewTemplate: string | null;
-}>) {
-  const stationsMissingCoordinate = revision.stations.filter(
-    (station) => station.x === undefined || station.z === undefined,
-  );
-  const stationCoordinatePreview = [
-    ...stationsMissingCoordinate,
-    ...revision.stations.filter((station) => station.x !== undefined && station.z !== undefined),
-  ].slice(0, 16);
-
-  return (
-    <div className="transit-revision-detail" aria-label="交通数据版本详情">
-      <dl>
-        <div>
-          <dt>数据集</dt>
-          <dd>{revision.datasetId}</dd>
-        </div>
-        <div>
-          <dt>来源适配器</dt>
-          <dd>{revision.sourceProviderId}</dd>
-        </div>
-        <div>
-          <dt>导入人</dt>
-          <dd>{revision.importedBy}</dd>
-        </div>
-        <div>
-          <dt>审核记录</dt>
-          <dd>{formatTransitReviewTrail(revision)}</dd>
-        </div>
-      </dl>
-      <div className="transit-revision-mode-table" aria-label="交通方式汇总">
-        {revision.summary.map((item) => (
-          <span key={item.mode}>
-            <strong>{item.label}</strong>
-            <small>
-              {item.lineCount} 条线路 · {item.stationCount} 个站点
-            </small>
-          </span>
-        ))}
-      </div>
-      <TransitRevisionGeometryPreview
-        revision={revision}
-        tilePreviewTemplate={tilePreviewTemplate}
-      />
-      <div className="transit-revision-line-table" aria-label="线路站点顺序核对">
-        {canEditLines ? (
-          <span>
-            <strong>新增线路</strong>
-            <small>手动补录线路及站点序列</small>
-            <button type="button" onClick={onCreateLine}>
-              新增线路
-            </button>
-          </span>
-        ) : null}
-        {revision.lines.map((line) => (
-          <span key={line.sourceId}>
-            <strong>{line.name}</strong>
-            <small>
-              {formatTransitMode(line.mode)} · {line.stationSourceIds.length} 站 · 单向{' '}
-              {countOneWayStops(line)}
-            </small>
-            <div className="admin-content-actions">
-              <button type="button" disabled={!canEditLines} onClick={() => onEditLine(line)}>
-                编辑线路
-              </button>
-              <button type="button" disabled={!canEditLines} onClick={() => onDeleteLine(line)}>
-                删除线路
-              </button>
-            </div>
-          </span>
-        ))}
-      </div>
-      {stationsMissingCoordinate.length > 0 ? (
-        <p className="muted">
-          缺少世界坐标站点示例：
-          {stationsMissingCoordinate
-            .slice(0, 8)
-            .map((station) => station.name)
-            .join('、')}
-        </p>
-      ) : null}
-      <div className="transit-station-coordinate-table" aria-label="站点坐标核对">
-        <div className="transit-station-coordinate-heading">
-          <strong>站点坐标核对</strong>
-          <span>
-            {stationsMissingCoordinate.length > 0
-              ? `${stationsMissingCoordinate.length} 个站点缺少坐标`
-              : '全部站点已有坐标'}
-          </span>
-        </div>
-        {stationCoordinatePreview.map((station) => (
-          <div className="transit-station-coordinate-row" key={station.sourceId}>
-            <span>
-              <strong>{station.name}</strong>
-              <small>{station.sourceId}</small>
-              {station.boundPoiLabel ? <small>{`已绑定 ${station.boundPoiLabel}`}</small> : null}
-            </span>
-            <span>
-              {station.x === undefined || station.z === undefined
-                ? '待补坐标'
-                : `${roundCoordinateValue(station.x)}, ${roundCoordinateValue(station.z)}`}
-            </span>
-            {canEditStations ? (
-              <button type="button" onClick={() => onEditStation(station)}>
-                修正坐标
-              </button>
-            ) : (
-              <small>当前状态只读</small>
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="transit-revision-line-table" aria-label="线路详细预览">
-        {revision.lines.map((line) => (
-          <span key={line.sourceId}>
-            <strong>{line.name}</strong>
-            <small>
-              {formatTransitMode(line.mode)} · {line.stationSourceIds.length} 站
-              {countOneWayStops(line) ? ` · 单向 ${countOneWayStops(line)} 站` : ''}
-            </small>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function TransitRejectDialog({
-  isBusy,
-  onClose,
-  onSubmit,
-  revision,
-}: Readonly<{
-  isBusy: boolean;
-  onClose: () => void;
-  onSubmit: (reason: string) => Promise<void>;
-  revision: TransitDataRevision;
-}>) {
-  const [reason, setReason] = useState('');
-  const [error, setError] = useState('');
-
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!reason.trim()) {
-      setError('请填写驳回原因。');
-      return;
-    }
-
-    await onSubmit(reason);
-  };
-
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <form
-        className="modal-panel admin-transit-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-transit-reject-title"
-        onMouseDown={(event) => event.stopPropagation()}
-        onSubmit={submit}
-      >
-        <div className="section-heading">
-          <h2 id="admin-transit-reject-title">驳回交通数据版本</h2>
-          <span className="muted">{revision.revisionId}</span>
-        </div>
-        <label>
-          <span>驳回原因</span>
-          <textarea
-            value={reason}
-            onChange={(event) => {
-              setReason(event.currentTarget.value);
-              setError('');
-            }}
-            maxLength={500}
-            placeholder="说明需要重新导入或修正的数据问题"
-          />
-        </label>
-        <div className="admin-poi-reject-presets" aria-label="常用驳回原因">
-          {transitRejectReasonPresets.map((preset) => (
-            <button
-              type="button"
-              key={preset}
-              onClick={() => {
-                setReason(preset);
-                setError('');
-              }}
-            >
-              {preset}
-            </button>
-          ))}
-        </div>
-        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
-        <div className="admin-content-actions">
-          <button type="button" onClick={onClose} disabled={isBusy}>
-            取消
-          </button>
-          <button type="submit" disabled={isBusy}>
-            确认驳回
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-function TransitPublishDialog({
-  isBusy,
-  onClose,
-  onSubmit,
-  revision,
-}: Readonly<{
-  isBusy: boolean;
-  onClose: () => void;
-  onSubmit: () => Promise<void>;
-  revision: TransitDataRevision;
-}>) {
-  const [checked, setChecked] = useState({
-    validation: false,
-    preview: false,
-    source: false,
-  });
-  const canSubmit = checked.validation && checked.preview && checked.source;
-
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <div
-        className="modal-panel admin-transit-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-transit-publish-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="section-heading">
-          <h2 id="admin-transit-publish-title">发布交通数据版本</h2>
-          <span className="muted">{revision.revisionId}</span>
-        </div>
-        <p>
-          发布后会替换当前公开线路/站点数据，并将旧发布版本标记为已被替换。请确认校验结果和来源数据已复核。
-        </p>
-        <div className="admin-poi-publish-confirm" aria-label="发布前确认项">
-          <label>
-            <input
-              type="checkbox"
-              checked={checked.validation}
-              onChange={(event) =>
-                setChecked((current) => ({ ...current, validation: event.currentTarget.checked }))
-              }
-            />
-            <span>已确认错误数为 0，校验提醒可接受</span>
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={checked.preview}
-              onChange={(event) =>
-                setChecked((current) => ({ ...current, preview: event.currentTarget.checked }))
-              }
-            />
-            <span>已抽查线路、站点顺序和缺坐标提示</span>
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={checked.source}
-              onChange={(event) =>
-                setChecked((current) => ({ ...current, source: event.currentTarget.checked }))
-              }
-            />
-            <span>已确认来源文件和导入时间符合预期</span>
-          </label>
-        </div>
-        <div className="admin-content-actions">
-          <button type="button" onClick={onClose} disabled={isBusy}>
-            取消
-          </button>
-          <button type="button" disabled={isBusy || !canSubmit} onClick={onSubmit}>
-            确认发布
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TransitRevisionGeometryPreview({
-  revision,
-  tilePreviewTemplate,
-}: Readonly<{ revision: TransitDataRevision; tilePreviewTemplate: string | null }>) {
-  const model = buildTransitRevisionGeometryPreview(revision);
-  if (!model) {
-    return (
-      <section className="transit-revision-geometry-preview" aria-label="线路几何预览">
-        <div className="section-heading">
-          <h3>线路几何预览</h3>
-          <span className="muted">暂无可用站点坐标</span>
-        </div>
-        <p className="muted">需要先补齐站点 X/Z 坐标，才能绘制线路走向预览。</p>
-      </section>
-    );
-  }
-
-  const tiles = buildTransitPreviewTiles(model.bounds, tilePreviewTemplate);
-
-  return (
-    <section className="transit-revision-geometry-preview" aria-label="线路几何预览">
-      <div className="section-heading">
-        <h3>线路几何预览</h3>
-        <span className="muted">
-          {model.lineCount} 条线路 · {model.stationCount} 个有坐标站点
-        </span>
-      </div>
-      <div className="transit-revision-geometry-stage">
-        {tiles.length > 0 ? (
-          <div className="transit-revision-geometry-tiles" aria-hidden="true">
-            {tiles.map((tile) => (
-              <img
-                draggable={false}
-                key={tile.id}
-                loading="lazy"
-                onError={(event) => {
-                  event.currentTarget.style.visibility = 'hidden';
-                }}
-                src={tile.url}
-                style={{
-                  height: tile.displaySize,
-                  left: tile.left,
-                  top: tile.top,
-                  width: tile.displaySize,
-                }}
-              />
-            ))}
-          </div>
-        ) : null}
-        <svg viewBox="0 0 260 160" role="img" aria-label="线路站点几何预览">
-          <rect className="transit-revision-geometry-grid" x="0" y="0" width="260" height="160" />
-          {model.lines.map((line) => (
-            <polyline
-              className="transit-revision-geometry-line"
-              key={line.id}
-              points={line.points}
-              style={{ stroke: line.color }}
-            />
-          ))}
-          {model.stations.map((station) => (
-            <g
-              className="transit-revision-geometry-station"
-              key={station.id}
-              transform={`translate(${station.x} ${station.y})`}
-            >
-              <circle r="3.5" />
-              <title>{station.name}</title>
-            </g>
-          ))}
-        </svg>
-      </div>
-      {model.missingCoordinateCount > 0 ? (
-        <p className="muted">{`${model.missingCoordinateCount} 个站点缺少坐标，线路预览可能不完整。`}</p>
-      ) : null}
-    </section>
-  );
-}
-
 function TransitStationCoordinateDialog({
   isBusy,
   mapMarkers,
@@ -3047,6 +2654,7 @@ function TransitStationCoordinateDialog({
   onSubmit: (payload: {
     x: number;
     z: number;
+    boundPoiRefs?: TransitStationPoiBindingRef[];
     boundPoiLabel?: string;
     boundPoiMarkerId?: string;
   }) => Promise<string | null>;
@@ -3057,9 +2665,11 @@ function TransitStationCoordinateDialog({
 }>) {
   const [xValue, setXValue] = useState(station.x === undefined ? '' : String(station.x));
   const [zValue, setZValue] = useState(station.z === undefined ? '' : String(station.z));
+  const initialBoundPoiRefs = getTransitStationBoundPoiRefs(station);
+  const [boundPoiRefs, setBoundPoiRefs] =
+    useState<TransitStationPoiBindingRef[]>(initialBoundPoiRefs);
   const [poiSearchText, setPoiSearchText] = useState(station.boundPoiLabel ?? station.name);
-  const [boundPoiMarkerId, setBoundPoiMarkerId] = useState(station.boundPoiMarkerId ?? '');
-  const [boundPoiLabelValue, setBoundPoiLabelValue] = useState(station.boundPoiLabel ?? '');
+  const [boundPoiMarkerId, setBoundPoiMarkerId] = useState(initialBoundPoiRefs[0]?.markerId ?? '');
   const [error, setError] = useState('');
   const bindablePoiOptions = useMemo(
     () => buildTransitBindablePoiOptions(mapMarkers),
@@ -3090,6 +2700,14 @@ function TransitStationCoordinateDialog({
     () => bindablePoiOptions.find((option) => option.marker.id === boundPoiMarkerId) ?? null,
     [bindablePoiOptions, boundPoiMarkerId],
   );
+  const boundPoiOptionsById = useMemo(
+    () => new Map(bindablePoiOptions.map((option) => [option.marker.id, option] as const)),
+    [bindablePoiOptions],
+  );
+  const selectedBoundPoiOptions = useMemo(
+    () => boundPoiRefs.map((ref) => boundPoiOptionsById.get(ref.markerId)).filter(isDefined),
+    [boundPoiOptionsById, boundPoiRefs],
+  );
   const originalCoordinate =
     station.x !== undefined && station.z !== undefined
       ? ([station.x, station.z] as [number, number])
@@ -3105,9 +2723,9 @@ function TransitStationCoordinateDialog({
       buildTransitStationAuditContextMarkers(
         pickerReferenceCoordinate,
         mapMarkers,
-        selectedBoundPoi?.marker.id,
+        selectedBoundPoi?.marker.id ?? boundPoiRefs[0]?.markerId,
       ),
-    [mapMarkers, pickerReferenceCoordinate, selectedBoundPoi?.marker.id],
+    [boundPoiRefs, mapMarkers, pickerReferenceCoordinate, selectedBoundPoi?.marker.id],
   );
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -3122,8 +2740,9 @@ function TransitStationCoordinateDialog({
     const submitError = await onSubmit({
       x,
       z,
-      boundPoiMarkerId: selectedBoundPoi?.marker.id || boundPoiMarkerId.trim() || undefined,
-      boundPoiLabel: selectedBoundPoi?.marker.label || boundPoiLabelValue.trim() || undefined,
+      boundPoiRefs,
+      boundPoiMarkerId: boundPoiRefs[0]?.markerId,
+      boundPoiLabel: boundPoiRefs[0]?.label,
     });
     if (submitError) {
       setError(submitError);
@@ -3144,19 +2763,28 @@ function TransitStationCoordinateDialog({
     setBoundPoiMarkerId(markerId);
     const option = bindablePoiOptions.find((item) => item.marker.id === markerId) ?? null;
     if (!option) {
-      if (!markerId) {
-        setBoundPoiLabelValue('');
-      }
       return;
     }
 
     setPoiSearchText(option.marker.label);
-    setBoundPoiLabelValue(option.marker.label);
+    setBoundPoiRefs((current) => mergeTransitStationPoiBindingRefs(current, option.marker));
     applyPoiCoordinate(option);
   };
 
+  const removeBinding = (markerId: string) => {
+    setBoundPoiRefs((current) => current.filter((ref) => ref.markerId !== markerId));
+    if (boundPoiMarkerId === markerId) {
+      setBoundPoiMarkerId('');
+    }
+    setError('');
+  };
+
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <div
+      className="modal-backdrop transit-station-coordinate-backdrop"
+      role="presentation"
+      onMouseDown={onClose}
+    >
       <form
         className="modal-panel admin-transit-dialog"
         role="dialog"
@@ -3172,17 +2800,13 @@ function TransitStationCoordinateDialog({
           </span>
         </div>
         <p className="muted">
-          坐标使用 Minecraft 世界坐标 X/Z。保存后会重新校验当前交通数据版本，并记录事件审计。
+          坐标使用 Minecraft 世界坐标 X/Z。保存后会重新校验相关线路，并记录事件审计。
         </p>
         <div className="transit-station-binding-card">
           <div className="section-heading">
             <h3>绑定现有 POI</h3>
             <span className="muted">
-              {selectedBoundPoi
-                ? `当前绑定 ${selectedBoundPoi.marker.label}`
-                : boundPoiMarkerId
-                  ? `当前绑定 ${boundPoiLabelValue || boundPoiMarkerId}`
-                  : '未绑定'}
+              {boundPoiRefs.length > 0 ? `已绑定 ${boundPoiRefs.length} 个 POI` : '未绑定'}
             </span>
           </div>
           <div className="transit-station-binding-toolbar">
@@ -3224,23 +2848,50 @@ function TransitStationCoordinateDialog({
             </button>
             <button
               type="button"
-              disabled={!boundPoiMarkerId}
+              disabled={boundPoiRefs.length === 0}
               onClick={() => {
                 setBoundPoiMarkerId('');
-                setBoundPoiLabelValue('');
+                setBoundPoiRefs([]);
                 setError('');
               }}
             >
-              解除绑定
+              清空绑定
             </button>
           </div>
-          {selectedBoundPoi ? (
-            <p className="muted">
-              {selectedBoundPoi.marker.label} · {selectedBoundPoi.marker.categoryId ?? '未分类'} ·
-              坐标 {formatTransitCoordinatePair(selectedBoundPoi.coordinate)}
-            </p>
-          ) : boundPoiMarkerId ? (
-            <p className="muted">{`当前绑定 ${boundPoiLabelValue || boundPoiMarkerId}，但未在本次地图标记快照中命中可回填坐标。`}</p>
+          {boundPoiRefs.length > 0 ? (
+            <div className="transit-station-bound-poi-list" aria-label="已绑定 POI">
+              {boundPoiRefs.map((ref) => {
+                const option = boundPoiOptionsById.get(ref.markerId);
+                return (
+                  <span className="transit-station-bound-poi-chip" key={ref.markerId}>
+                    <strong>{ref.label}</strong>
+                    <small>
+                      {ref.categoryId ?? option?.marker.categoryId ?? '未分类'}
+                      {option ? ` · ${formatTransitCoordinatePair(option.coordinate)}` : ''}
+                    </small>
+                    <button
+                      type="button"
+                      disabled={!option}
+                      aria-label={`使用 ${ref.label} 坐标`}
+                      onClick={() => applyPoiCoordinate(option ?? null)}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        my_location
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`移除 ${ref.label} 绑定`}
+                      onClick={() => removeBinding(ref.markerId)}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        close
+                      </span>
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
           ) : (
             <p className="muted">
               绑定后可直接复用现有 POI 坐标，也方便后续回查站点与地图对象的对应关系。
@@ -3272,7 +2923,7 @@ function TransitStationCoordinateDialog({
           </label>
         </div>
         <TransitStationCoordinatePicker
-          boundPoi={selectedBoundPoi}
+          boundPoi={selectedBoundPoi ?? selectedBoundPoiOptions[0] ?? null}
           contextMarkers={contextMarkers}
           currentCoordinate={currentCoordinate}
           onPick={(coordinate) => {
@@ -3422,6 +3073,7 @@ function TransitLineEditorDialog({
   line,
   modeProfiles,
   onClose,
+  onEditStation,
   onSubmit,
   revision,
   tilePreviewTemplate,
@@ -3430,11 +3082,13 @@ function TransitLineEditorDialog({
   line?: TransitRevisionLine;
   modeProfiles: TransitModeProfile[];
   onClose: () => void;
+  onEditStation: (station: TransitRevisionStation) => void;
   onSubmit: (payload: TransitLineEditorSubmitPayload) => Promise<string | null>;
   revision: TransitDataRevision;
   tilePreviewTemplate: string | null;
 }>) {
-  const [mode, setMode] = useState<TransitRevisionLine['mode']>(line?.mode ?? 'bus');
+  const initialMode = line?.mode ?? modeProfiles.find((profile) => profile.enabled)?.mode ?? 'bus';
+  const [mode, setMode] = useState<TransitRevisionLine['mode']>(initialMode);
   const [name, setName] = useState(line?.name ?? '');
   const [color, setColor] = useState(line?.color ?? '');
   const [operator, setOperator] = useState(line?.operator ?? '');
@@ -3442,25 +3096,35 @@ function TransitLineEditorDialog({
   const [firstBus, setFirstBus] = useState(line?.firstLastBus?.first ?? '');
   const [lastBus, setLastBus] = useState(line?.firstLastBus?.last ?? '');
   const [bookingUrl, setBookingUrl] = useState(line?.bookingUrl ?? '');
+  const [routeMode, setRouteMode] = useState<NonNullable<TransitRevisionLine['routeMode']>>(
+    line?.routeMode ?? defaultRouteModeForTransitMode(initialMode),
+  );
+  const [routeModeManuallySet, setRouteModeManuallySet] = useState(Boolean(line?.routeMode));
+  const [routeNodeDrafts, setRouteNodeDrafts] = useState<TransitLineRouteNodeDraft[]>(() =>
+    buildTransitLineRouteNodeDrafts(line),
+  );
+  const [operatingDateRule, setOperatingDateRule] = useState(line?.operatingDateRule ?? '');
   const [departureTimesText, setDepartureTimesText] = useState(
-    (line?.departureTimes ?? []).join('\n'),
+    formatTransitDepartureRulesForEditor(line),
   );
-  const [stationSourceIdsText, setStationSourceIdsText] = useState(
-    (line?.stationSourceIds ?? []).join('\n'),
-  );
-  const [oneWayStopsText, setOneWayStopsText] = useState(formatOneWayStopsForEditor(line));
-  const [segmentPathsText, setSegmentPathsText] = useState(formatSegmentPathsForEditor(line));
+  const [activeTab, setActiveTab] = useState<TransitLineEditorTab>('basic');
   const [error, setError] = useState('');
   const stationById = useMemo(
     () => new Map(revision.stations.map((station) => [station.sourceId, station])),
     [revision.stations],
   );
-  const parsedStationSourceIds = parseLineList(stationSourceIdsText);
+  const parsedRoute = useMemo(
+    () => parseTransitLineRouteNodeDrafts(routeNodeDrafts, routeMode),
+    [routeMode, routeNodeDrafts],
+  );
+  const parsedStationSourceIds = parsedRoute.stationSourceIds;
   const missingStationSourceIds = parsedStationSourceIds.filter(
     (stationSourceId) => !stationById.has(stationSourceId),
   );
-  const parsedOneWayStops = parseOneWayStopsText(oneWayStopsText);
-  const parsedSegmentPaths = parseTransitSegmentPathsText(segmentPathsText);
+  const parsedDepartureSchedule = useMemo(
+    () => parseTransitDepartureScheduleText(departureTimesText),
+    [departureTimesText],
+  );
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -3476,22 +3140,12 @@ function TransitLineEditorDialog({
       setError(`存在未收录站点：${missingStationSourceIds.slice(0, 4).join('、')}`);
       return;
     }
-    if (parsedOneWayStops.error) {
-      setError(parsedOneWayStops.error);
+    if (parsedRoute.error) {
+      setError(parsedRoute.error);
       return;
     }
-    if (parsedSegmentPaths.error) {
-      setError(parsedSegmentPaths.error);
-      return;
-    }
-    const nonAdjacentSegmentPath = findNonAdjacentSegmentPath(
-      parsedSegmentPaths.items,
-      parsedStationSourceIds,
-    );
-    if (nonAdjacentSegmentPath) {
-      setError(
-        `站间路径 ${nonAdjacentSegmentPath.fromStationSourceId} -> ${nonAdjacentSegmentPath.toStationSourceId} 不在当前相邻站序中。`,
-      );
+    if (parsedDepartureSchedule.error) {
+      setError(parsedDepartureSchedule.error);
       return;
     }
 
@@ -3499,14 +3153,18 @@ function TransitLineEditorDialog({
       mode,
       name: name.trim(),
       color: color.trim() || undefined,
+      routeMode,
+      routeNodes: parsedRoute.routeNodes,
       stationSourceIds: parsedStationSourceIds,
-      oneWayStops: parsedOneWayStops.items,
-      segmentPaths: parsedSegmentPaths.items,
+      oneWayStops: parsedRoute.oneWayStops,
+      segmentPaths: parsedRoute.segmentPaths,
       operator: operator.trim() || undefined,
       fare: fare.trim() || undefined,
       firstBus: firstBus.trim() || undefined,
       lastBus: lastBus.trim() || undefined,
-      departureTimes: parseLineList(departureTimesText),
+      departureTimes: parsedDepartureSchedule.departureTimes,
+      departureRules: parsedDepartureSchedule.rules,
+      operatingDateRule: operatingDateRule.trim() || undefined,
       bookingUrl: bookingUrl.trim() || undefined,
     });
     if (submitError) {
@@ -3514,18 +3172,58 @@ function TransitLineEditorDialog({
     }
   };
 
+  const configuredModeOptions = modeProfiles.filter(
+    (profile) => profile.enabled || profile.mode === mode,
+  );
+  const currentModeFallback = supportedTransitModeProfiles.find((profile) => profile.mode === mode);
   const modeOptions =
-    modeProfiles.length > 0
-      ? modeProfiles.filter((profile) => profile.enabled || profile.mode === mode)
-      : ([
-          { mode: 'metro', label: '地铁' },
-          { mode: 'tram', label: '有轨电车' },
-          { mode: 'bus', label: '公交' },
-          { mode: 'coach', label: '客运' },
-          { mode: 'ferry', label: '轮渡' },
-          { mode: 'railway', label: '铁路' },
-          { mode: 'custom', label: '自定义' },
-        ] as const);
+    configuredModeOptions.length > 0
+      ? configuredModeOptions.some((profile) => profile.mode === mode) || !currentModeFallback
+        ? configuredModeOptions
+        : [...configuredModeOptions, currentModeFallback]
+      : supportedTransitModeProfiles;
+
+  const updateRouteNode = (index: number, patch: Partial<TransitLineRouteNodeDraft>) => {
+    setRouteNodeDrafts((current) =>
+      current.map((node, currentIndex) =>
+        currentIndex === index ? { ...node, ...patch, id: node.id } : node,
+      ),
+    );
+    setError('');
+  };
+
+  const moveRouteNode = (index: number, offset: -1 | 1) => {
+    const nextIndex = index + offset;
+    if (nextIndex < 0 || nextIndex >= routeNodeDrafts.length) {
+      return;
+    }
+
+    const next = [...routeNodeDrafts];
+    [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+    setRouteNodeDrafts(next);
+    setError('');
+  };
+
+  const removeRouteNode = (index: number) => {
+    setRouteNodeDrafts((current) => current.filter((_, currentIndex) => currentIndex !== index));
+    setError('');
+  };
+
+  const appendStationSourceId = () => {
+    setRouteNodeDrafts((current) => [
+      ...current,
+      createTransitLineRouteNodeDraft('station', current.length),
+    ]);
+    setError('');
+  };
+
+  const appendWaypoint = () => {
+    setRouteNodeDrafts((current) => [
+      ...current,
+      createTransitLineRouteNodeDraft('waypoint', current.length),
+    ]);
+    setError('');
+  };
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -3544,117 +3242,328 @@ function TransitLineEditorDialog({
             {line ? ` · ${line.name}` : ''}
           </span>
         </div>
-        <div className="schedule-trip-edit-grid">
-          <label>
-            <span>线路名称</span>
-            <input value={name} onChange={(event) => setName(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>交通方式</span>
-            <select
-              value={mode}
-              onChange={(event) =>
-                setMode(event.currentTarget.value as TransitRevisionLine['mode'])
-              }
-            >
-              {modeOptions.map((profile) => (
-                <option value={profile.mode} key={profile.mode}>
-                  {profile.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>颜色</span>
-            <input
-              value={color}
-              onChange={(event) => setColor(event.currentTarget.value)}
-              placeholder="#2677e8"
-            />
-          </label>
-          <label>
-            <span>运营方</span>
-            <input value={operator} onChange={(event) => setOperator(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>票价</span>
-            <input value={fare} onChange={(event) => setFare(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>首班</span>
-            <input value={firstBus} onChange={(event) => setFirstBus(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>末班</span>
-            <input value={lastBus} onChange={(event) => setLastBus(event.currentTarget.value)} />
-          </label>
-          <label>
-            <span>订票链接</span>
-            <input
-              value={bookingUrl}
-              onChange={(event) => setBookingUrl(event.currentTarget.value)}
-              placeholder="https://..."
-            />
-          </label>
-        </div>
-        <label>
-          <span>站点 sourceId</span>
-          <textarea
-            value={stationSourceIdsText}
-            onChange={(event) => {
-              setStationSourceIdsText(event.currentTarget.value);
-              setError('');
-            }}
-            placeholder="每行一个站点 sourceId，顺序即线路走向"
-          />
-        </label>
-        <label>
-          <span>单向站规则</span>
-          <textarea
-            value={oneWayStopsText}
-            onChange={(event) => {
-              setOneWayStopsText(event.currentTarget.value);
-              setError('');
-            }}
-            placeholder="每行一个规则：stationSourceId:up 或 stationSourceId:down；留空表示双向停靠"
-          />
-        </label>
-        <label>
-          <span>站间路径</span>
-          <textarea
-            value={segmentPathsText}
-            onChange={(event) => {
-              setSegmentPathsText(event.currentTarget.value);
-              setError('');
-            }}
-            placeholder="每行：起点sourceId -> 终点sourceId | straight 或 road | x,z; x,z"
-          />
-        </label>
-        <label>
-          <span>发车时刻</span>
-          <textarea
-            value={departureTimesText}
-            onChange={(event) => {
-              setDepartureTimesText(event.currentTarget.value);
-              setError('');
-            }}
-            placeholder="每行一个时刻，例如 07:30"
-          />
-        </label>
-        <div className="transit-line-order-preview" aria-label="站点序列预览">
-          <TransitLineOrderMapPreview
-            color={color.trim() || line?.color}
-            segmentPaths={parsedSegmentPaths.items}
-            stationById={stationById}
-            stationSourceIds={parsedStationSourceIds}
-            tilePreviewTemplate={tilePreviewTemplate}
-          />
-          <p className="muted">
-            单向站写在 stop 元数据里：`up` 表示仅上行停靠，`down`
-            表示仅下行停靠；需要上下行站点不同但站名相同的场景，优先复用同名标记点绑定，再分别在站序中引用对应
-            sourceId。
-          </p>
-        </div>
+        <fieldset className="segmented-control transit-line-editor-tabs">
+          <legend>线路编辑区域</legend>
+          <div>
+            {(
+              [
+                ['basic', '基本信息'],
+                ['route', '路线'],
+                ['schedule', '班次'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                className={activeTab === value ? 'is-active' : ''}
+                type="button"
+                aria-pressed={activeTab === value}
+                key={value}
+                onClick={() => setActiveTab(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        {activeTab === 'basic' ? (
+          <div className="transit-line-editor-page">
+            <div className="schedule-trip-edit-grid">
+              <label>
+                <span>线路名称</span>
+                <input value={name} onChange={(event) => setName(event.currentTarget.value)} />
+              </label>
+              <label>
+                <span>交通方式</span>
+                <select
+                  value={mode}
+                  onChange={(event) => {
+                    const nextMode = event.currentTarget.value as TransitRevisionLine['mode'];
+                    setMode(nextMode);
+                    if (!routeModeManuallySet) {
+                      setRouteMode(defaultRouteModeForTransitMode(nextMode));
+                    }
+                  }}
+                >
+                  {modeOptions.map((profile) => (
+                    <option value={profile.mode} key={profile.mode}>
+                      {profile.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>标识色</span>
+                <span className="transit-line-color-field">
+                  <input
+                    value={color}
+                    onChange={(event) => setColor(event.currentTarget.value)}
+                    placeholder="#2677e8"
+                  />
+                  <span
+                    aria-hidden="true"
+                    style={{ backgroundColor: color.trim() || line?.color || '#2f9e85' }}
+                  />
+                </span>
+              </label>
+              <label>
+                <span>运营方</span>
+                <input
+                  value={operator}
+                  onChange={(event) => setOperator(event.currentTarget.value)}
+                />
+              </label>
+              <label>
+                <span>票价</span>
+                <input value={fare} onChange={(event) => setFare(event.currentTarget.value)} />
+              </label>
+              <label>
+                <span>订票链接</span>
+                <input
+                  value={bookingUrl}
+                  onChange={(event) => setBookingUrl(event.currentTarget.value)}
+                  placeholder="https://..."
+                />
+              </label>
+            </div>
+          </div>
+        ) : null}
+
+        {activeTab === 'route' ? (
+          <div className="transit-line-editor-page">
+            <div className="transit-line-order-preview is-featured" aria-label="站点序列预览">
+              <TransitLineOrderMapPreview
+                color={color.trim() || line?.color}
+                segmentPaths={parsedRoute.segmentPaths}
+                stationById={stationById}
+                stationSourceIds={parsedStationSourceIds}
+                tilePreviewTemplate={tilePreviewTemplate}
+              />
+            </div>
+            <div className="transit-line-route-toolbar" aria-label="线路路线操作">
+              <span>线路运行方式</span>
+              <div className="segmented-control transit-line-path-mode-control">
+                <div>
+                  <button
+                    className={routeMode === 'straight' ? 'is-active' : ''}
+                    type="button"
+                    onClick={() => {
+                      setRouteMode('straight');
+                      setRouteModeManuallySet(true);
+                    }}
+                  >
+                    折线
+                  </button>
+                  <button
+                    className={routeMode === 'road' ? 'is-active' : ''}
+                    type="button"
+                    onClick={() => {
+                      setRouteMode('road');
+                      setRouteModeManuallySet(true);
+                    }}
+                  >
+                    沿路
+                  </button>
+                </div>
+              </div>
+              <button type="button" onClick={appendStationSourceId}>
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  add_location_alt
+                </span>
+                <span>添加站点</span>
+              </button>
+              <button type="button" onClick={appendWaypoint}>
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  add_road
+                </span>
+                <span>添加途径点</span>
+              </button>
+            </div>
+            <div className="transit-line-editor-route-grid">
+              <div className="transit-line-editor-stations" aria-label="线路站点">
+                <datalist id="transit-line-station-options">
+                  {revision.stations.map((station) => (
+                    <option value={station.sourceId} key={station.sourceId}>
+                      {station.name}
+                    </option>
+                  ))}
+                </datalist>
+                {routeNodeDrafts.map((node, index) => {
+                  const station =
+                    node.kind === 'station'
+                      ? stationById.get(node.stationSourceId.trim())
+                      : undefined;
+                  return (
+                    <div
+                      className={
+                        node.kind === 'station'
+                          ? 'transit-line-editor-station-row'
+                          : 'transit-line-editor-station-row is-waypoint'
+                      }
+                      key={node.id}
+                    >
+                      {node.kind === 'station' ? (
+                        <>
+                          <label>
+                            <span>{station?.name ?? '站点'}</span>
+                            <input
+                              list="transit-line-station-options"
+                              value={node.stationSourceId}
+                              onChange={(event) =>
+                                updateRouteNode(index, {
+                                  stationSourceId: event.currentTarget.value,
+                                })
+                              }
+                              placeholder="选择或输入站点 sourceId"
+                            />
+                          </label>
+                          <button
+                            className="transit-line-station-coordinate-button"
+                            type="button"
+                            disabled={!station}
+                            onClick={() => {
+                              if (station) {
+                                onEditStation(station);
+                              }
+                            }}
+                          >
+                            <span className="material-symbols-outlined" aria-hidden="true">
+                              location_on
+                            </span>
+                            <span>
+                              {station
+                                ? formatTransitStationBindingSummary(station)
+                                : '选择位置 / POI'}
+                            </span>
+                          </button>
+                        </>
+                      ) : (
+                        <div className="transit-line-waypoint-coordinate-fields">
+                          <label>
+                            <span>X 坐标</span>
+                            <input
+                              inputMode="decimal"
+                              value={node.xText}
+                              onChange={(event) =>
+                                updateRouteNode(index, { xText: event.currentTarget.value })
+                              }
+                              placeholder="X 坐标"
+                            />
+                          </label>
+                          <label>
+                            <span>Z 坐标</span>
+                            <input
+                              inputMode="decimal"
+                              value={node.zText}
+                              onChange={(event) =>
+                                updateRouteNode(index, { zText: event.currentTarget.value })
+                              }
+                              placeholder="Z 坐标"
+                            />
+                          </label>
+                        </div>
+                      )}
+                      <label>
+                        <span>方向</span>
+                        <select
+                          value={node.direction}
+                          onChange={(event) =>
+                            updateRouteNode(index, {
+                              direction: event.currentTarget
+                                .value as TransitLineRouteNodeDraft['direction'],
+                            })
+                          }
+                        >
+                          <option value="both">双向</option>
+                          <option value="up">仅上行</option>
+                          <option value="down">仅下行</option>
+                        </select>
+                      </label>
+                      <div className="transit-line-editor-row-actions">
+                        <button
+                          type="button"
+                          aria-label={node.kind === 'station' ? '上移站点' : '上移途径点'}
+                          disabled={index === 0}
+                          onClick={() => moveRouteNode(index, -1)}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            arrow_upward
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={node.kind === 'station' ? '下移站点' : '下移途径点'}
+                          disabled={index >= routeNodeDrafts.length - 1}
+                          onClick={() => moveRouteNode(index, 1)}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            arrow_downward
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={node.kind === 'station' ? '删除站点' : '删除途径点'}
+                          onClick={() => removeRouteNode(index)}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            close
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {activeTab === 'schedule' ? (
+          <div className="transit-line-editor-page">
+            <div className="schedule-trip-edit-grid">
+              <label>
+                <span>首班车</span>
+                <input
+                  value={firstBus}
+                  onChange={(event) => setFirstBus(event.currentTarget.value)}
+                />
+              </label>
+              <label>
+                <span>末班车</span>
+                <input
+                  value={lastBus}
+                  onChange={(event) => setLastBus(event.currentTarget.value)}
+                />
+              </label>
+            </div>
+            <label>
+              <span>运营日期规则</span>
+              <input
+                value={operatingDateRule}
+                onChange={(event) => {
+                  setOperatingDateRule(event.currentTarget.value);
+                  setError('');
+                }}
+                placeholder="例如：每日 / 工作日 / 2026-07-01 至 2026-08-31"
+              />
+            </label>
+            <label>
+              <span>发车时刻</span>
+              <textarea
+                value={departureTimesText}
+                onChange={(event) => {
+                  setDepartureTimesText(event.currentTarget.value);
+                  setError('');
+                }}
+                placeholder={'每行一个时刻或规则，例如：\n06:30\n06:30 + 00:05 * 5'}
+              />
+            </label>
+            {!parsedDepartureSchedule.error && parsedDepartureSchedule.rules.length > 0 ? (
+              <p className="muted">
+                {`已识别 ${parsedDepartureSchedule.rules.length} 行，展开为 ${parsedDepartureSchedule.departureTimes.length} 个发车时刻`}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
         <div className="admin-content-actions">
           <button type="button" onClick={onClose} disabled={isBusy}>
@@ -3751,501 +3660,70 @@ function TransitLineOrderMapPreview({
     </div>
   );
 }
-
-function ScheduleRevisionRejectDialog({
-  isBusy,
-  onClose,
-  onSubmit,
-  revision,
-}: Readonly<{
-  isBusy: boolean;
-  onClose: () => void;
-  onSubmit: (reason: string) => Promise<void>;
-  revision: TravelScheduleRevision;
-}>) {
-  const [reason, setReason] = useState('');
-  const [error, setError] = useState('');
-
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!reason.trim()) {
-      setError('请填写驳回原因。');
-      return;
-    }
-
-    await onSubmit(reason);
-  };
-
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <form
-        className="modal-panel admin-transit-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-schedule-reject-title"
-        onMouseDown={(event) => event.stopPropagation()}
-        onSubmit={submit}
-      >
-        <div className="section-heading">
-          <h2 id="admin-schedule-reject-title">驳回班次数据版本</h2>
-          <span className="muted">{revision.revisionId}</span>
-        </div>
-        <label>
-          <span>驳回原因</span>
-          <textarea
-            value={reason}
-            onChange={(event) => {
-              setReason(event.currentTarget.value);
-              setError('');
-            }}
-            maxLength={500}
-            placeholder="说明需要重新导入或修正的班次数据问题"
-          />
-        </label>
-        <div className="admin-poi-reject-presets" aria-label="常用驳回原因">
-          {scheduleRejectReasonPresets.map((preset) => (
-            <button
-              type="button"
-              key={preset}
-              onClick={() => {
-                setReason(preset);
-                setError('');
-              }}
-            >
-              {preset}
-            </button>
-          ))}
-        </div>
-        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
-        <div className="admin-content-actions">
-          <button type="button" onClick={onClose} disabled={isBusy}>
-            取消
-          </button>
-          <button type="submit" disabled={isBusy}>
-            确认驳回
-          </button>
-        </div>
-      </form>
-    </div>
-  );
+function getTransitLineSelectionKey(revisionId: string, lineSourceId: string): string {
+  return `${revisionId}::${lineSourceId}`;
 }
 
-function ScheduleRevisionPublishDialog({
-  isBusy,
-  onClose,
-  onSubmit,
-  revision,
-}: Readonly<{
-  isBusy: boolean;
-  onClose: () => void;
-  onSubmit: () => Promise<void>;
-  revision: TravelScheduleRevision;
-}>) {
-  const [checked, setChecked] = useState({
-    source: false,
-    validation: false,
-    ticketing: false,
-  });
-  const canSubmit = checked.source && checked.validation && checked.ticketing;
-
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <div
-        className="modal-panel admin-transit-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-schedule-publish-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="section-heading">
-          <h2 id="admin-schedule-publish-title">发布班次数据版本</h2>
-          <span className="muted">{revision.revisionId}</span>
-        </div>
-        <p>
-          发布后公开班次查询会优先读取该快照，并替换旧已发布版本；没有已发布版本时才回退实时来源。
-        </p>
-        <div className="admin-poi-publish-confirm" aria-label="班次发布前确认项">
-          <label>
-            <input
-              type="checkbox"
-              checked={checked.source}
-              onChange={(event) =>
-                setChecked((current) => ({ ...current, source: event.currentTarget.checked }))
-              }
-            />
-            <span>已确认来源文件、班次数量和服务接入状态符合预期</span>
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={checked.validation}
-              onChange={(event) =>
-                setChecked((current) => ({ ...current, validation: event.currentTarget.checked }))
-              }
-            />
-            <span>已确认错误数为 0，校验提醒可接受</span>
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={checked.ticketing}
-              onChange={(event) =>
-                setChecked((current) => ({ ...current, ticketing: event.currentTarget.checked }))
-              }
-            />
-            <span>已确认该版本不代表未配置票务库存的班次可售</span>
-          </label>
-        </div>
-        <div className="admin-content-actions">
-          <button type="button" onClick={onClose} disabled={isBusy}>
-            取消
-          </button>
-          <button type="button" disabled={isBusy || !canSubmit} onClick={onSubmit}>
-            确认发布
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+function getScheduleTripSelectionKey(revisionId: string, tripInstanceId: string): string {
+  return `${revisionId}::${tripInstanceId}`;
 }
 
-function formatSummary(revision: TransitDataRevision): string {
-  const lineCount = revision.summary.reduce((total, item) => total + item.lineCount, 0);
-  const stationCount = revision.summary.reduce((total, item) => total + item.stationCount, 0);
-  return `${lineCount} 条线路 / ${stationCount} 个站点`;
+function getUniqueBatchesFromLineRows(
+  rows: Array<{ line: TransitRevisionLine; revision: TransitDataRevision }>,
+): TransitDataRevision[] {
+  const revisions = new Map<string, TransitDataRevision>();
+  for (const row of rows) {
+    revisions.set(row.revision.revisionId, row.revision);
+  }
+  return Array.from(revisions.values());
 }
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat('zh-CN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+function getUniqueBatchesFromTripRows(
+  rows: Array<{ revision: TravelScheduleRevision; trip: TravelTripInstance }>,
+): TravelScheduleRevision[] {
+  const revisions = new Map<string, TravelScheduleRevision>();
+  for (const row of rows) {
+    revisions.set(row.revision.revisionId, row.revision);
+  }
+  return Array.from(revisions.values());
 }
-
-function statusLabel(status: TransitDataRevisionStatus): string {
-  const labels: Record<TransitDataRevisionStatus, string> = {
+function transitItemApprovalStatusLabel(status: TransitItemApprovalStatus): string {
+  const labels: Record<TransitItemApprovalStatus, string> = {
     imported: '已导入',
-    validation_failed: '校验失败',
     pending_review: '待审核',
-    approved: '已通过',
+    approved: '待发布',
     rejected: '已驳回',
     published: '已发布',
-    superseded: '已被替换',
     archived: '已归档',
   };
 
   return labels[status];
 }
 
-function travelScheduleRevisionStatusLabel(status: TravelScheduleRevisionStatus): string {
-  const labels: Record<TravelScheduleRevisionStatus, string> = {
-    imported: '已导入',
-    validation_failed: '校验失败',
-    pending_review: '待审核',
-    approved: '已通过',
-    rejected: '已驳回',
-    published: '已发布',
-    superseded: '已被替换',
-    archived: '已归档',
-  };
-
-  return labels[status];
-}
-
-function buildTransitRevisionDiffSummary(
+function getTransitLineItemApprovalStatus(
+  line: TransitRevisionLine,
   revision: TransitDataRevision,
-  baseline: TransitDataRevision | null,
-): AdminVersionDiffSummary {
-  if (!baseline) {
-    return {
-      baselineLabel: '暂无当前发布版本',
-      metrics: [
-        { label: '线路', before: 0, after: revision.lines.length },
-        { label: '站点', before: 0, after: revision.stations.length },
-        { label: '错误', before: 0, after: revision.validation.errorCount },
-        { label: '提醒', before: 0, after: revision.validation.warningCount },
-      ],
-      addedItems: revision.lines.slice(0, 12).map((line) => `线路 ${line.name}`),
-      removedItems: [],
-      changedItems: [],
-      notes: ['该版本发布后会成为第一份公开线路基线。'],
-    };
-  }
-
-  if (baseline.revisionId === revision.revisionId) {
-    return {
-      baselineLabel: '当前发布版本',
-      metrics: [
-        { label: '线路', before: baseline.lines.length, after: revision.lines.length },
-        { label: '站点', before: baseline.stations.length, after: revision.stations.length },
-        {
-          label: '错误',
-          before: baseline.validation.errorCount,
-          after: revision.validation.errorCount,
-        },
-        {
-          label: '提醒',
-          before: baseline.validation.warningCount,
-          after: revision.validation.warningCount,
-        },
-      ],
-      addedItems: [],
-      removedItems: [],
-      changedItems: [],
-      notes: ['这是当前公开线路版本。'],
-    };
-  }
-
-  const baselineLineById = new Map(baseline.lines.map((line) => [line.sourceId, line]));
-  const revisionLineById = new Map(revision.lines.map((line) => [line.sourceId, line]));
-  const baselineStationById = new Map(
-    baseline.stations.map((station) => [station.sourceId, station]),
-  );
-  const revisionStationById = new Map(
-    revision.stations.map((station) => [station.sourceId, station]),
-  );
-
-  const addedLines = revision.lines
-    .filter((line) => !baselineLineById.has(line.sourceId))
-    .map((line) => `线路 ${line.name}`);
-  const removedLines = baseline.lines
-    .filter((line) => !revisionLineById.has(line.sourceId))
-    .map((line) => `线路 ${line.name}`);
-  const changedLines = revision.lines.flatMap((line) => {
-    const previous = baselineLineById.get(line.sourceId);
-    if (!previous) {
-      return [];
-    }
-
-    const changes = [
-      previous.name !== line.name ? `名称 ${previous.name} -> ${line.name}` : '',
-      previous.stationSourceIds.length !== line.stationSourceIds.length
-        ? `站点 ${previous.stationSourceIds.length} -> ${line.stationSourceIds.length}`
-        : '',
-      previous.stops.length !== line.stops.length
-        ? `停靠 ${previous.stops.length} -> ${line.stops.length}`
-        : '',
-      (previous.color ?? '') !== (line.color ?? '')
-        ? `颜色 ${previous.color ?? '未填'} -> ${line.color ?? '未填'}`
-        : '',
-    ].filter(Boolean);
-
-    return changes.length > 0 ? [`线路 ${line.name}：${changes.join('，')}`] : [];
-  });
-
-  const addedStations = revision.stations
-    .filter((station) => !baselineStationById.has(station.sourceId))
-    .map((station) => `站点 ${station.name}`);
-  const removedStations = baseline.stations
-    .filter((station) => !revisionStationById.has(station.sourceId))
-    .map((station) => `站点 ${station.name}`);
-  const changedStations = revision.stations.flatMap((station) => {
-    const previous = baselineStationById.get(station.sourceId);
-    if (!previous) {
-      return [];
-    }
-
-    const coordinateChanged = previous.x !== station.x || previous.z !== station.z;
-    const aliasesChanged = previous.aliases.join('|') !== station.aliases.join('|');
-    if (!coordinateChanged && !aliasesChanged && previous.name === station.name) {
-      return [];
-    }
-
-    return [
-      `站点 ${station.name}：${[
-        previous.name !== station.name ? `名称 ${previous.name} -> ${station.name}` : '',
-        coordinateChanged ? '坐标变化' : '',
-        aliasesChanged ? '别名变化' : '',
-      ]
-        .filter(Boolean)
-        .join('，')}`,
-    ];
-  });
-
-  return {
-    baselineLabel: `当前发布 ${baseline.revisionId}`,
-    metrics: [
-      { label: '线路', before: baseline.lines.length, after: revision.lines.length },
-      { label: '站点', before: baseline.stations.length, after: revision.stations.length },
-      {
-        label: '错误',
-        before: baseline.validation.errorCount,
-        after: revision.validation.errorCount,
-      },
-      {
-        label: '提醒',
-        before: baseline.validation.warningCount,
-        after: revision.validation.warningCount,
-      },
-    ],
-    addedItems: [...addedLines, ...addedStations],
-    removedItems: [...removedLines, ...removedStations],
-    changedItems: [...changedLines, ...changedStations],
-    notes: buildDiffNotes({
-      addedCount: addedLines.length + addedStations.length,
-      changedCount: changedLines.length + changedStations.length,
-      removedCount: removedLines.length + removedStations.length,
-    }),
-  };
+): TransitItemApprovalStatus {
+  return line.approvalStatus ?? revisionStatusToItemApprovalStatus(revision.status);
 }
 
-function buildScheduleRevisionDiffSummary(
+function getScheduleTripItemApprovalStatus(
+  trip: TravelTripInstance,
   revision: TravelScheduleRevision,
-  baseline: TravelScheduleRevision | null,
-): AdminVersionDiffSummary {
-  if (!baseline) {
-    return {
-      baselineLabel: '暂无当前发布版本',
-      metrics: [
-        { label: '服务', before: 0, after: revision.services.length },
-        { label: '班次', before: 0, after: revision.trips.length },
-        { label: '站点选项', before: 0, after: revision.stationOptions.length },
-        { label: '公告', before: 0, after: revision.serviceNotices?.length ?? 0 },
-      ],
-      addedItems: revision.trips.slice(0, 12).map(formatTripDiffLabel),
-      removedItems: [],
-      changedItems: [],
-      notes: ['该版本发布后会成为第一份公开班次基线。'],
-    };
-  }
-
-  if (baseline.revisionId === revision.revisionId) {
-    return {
-      baselineLabel: '当前发布版本',
-      metrics: [
-        { label: '服务', before: baseline.services.length, after: revision.services.length },
-        { label: '班次', before: baseline.trips.length, after: revision.trips.length },
-        {
-          label: '站点选项',
-          before: baseline.stationOptions.length,
-          after: revision.stationOptions.length,
-        },
-        {
-          label: '公告',
-          before: baseline.serviceNotices?.length ?? 0,
-          after: revision.serviceNotices?.length ?? 0,
-        },
-      ],
-      addedItems: [],
-      removedItems: [],
-      changedItems: [],
-      notes: ['这是当前公开班次版本。'],
-    };
-  }
-
-  const baselineTripById = new Map(baseline.trips.map((trip) => [trip.tripInstanceId, trip]));
-  const revisionTripById = new Map(revision.trips.map((trip) => [trip.tripInstanceId, trip]));
-  const baselineServiceById = new Map(
-    baseline.services.map((service) => [service.serviceId, service]),
-  );
-  const revisionServiceById = new Map(
-    revision.services.map((service) => [service.serviceId, service]),
-  );
-  const baselineStationOptions = new Set(baseline.stationOptions);
-  const revisionStationOptions = new Set(revision.stationOptions);
-
-  const addedTrips = revision.trips
-    .filter((trip) => !baselineTripById.has(trip.tripInstanceId))
-    .map(formatTripDiffLabel);
-  const removedTrips = baseline.trips
-    .filter((trip) => !revisionTripById.has(trip.tripInstanceId))
-    .map(formatTripDiffLabel);
-  const changedTrips = revision.trips.flatMap((trip) => {
-    const previous = baselineTripById.get(trip.tripInstanceId);
-    if (!previous) {
-      return [];
-    }
-
-    const changes = [
-      previous.departureTime !== trip.departureTime
-        ? `发车 ${previous.departureTime} -> ${trip.departureTime}`
-        : '',
-      (previous.arrivalTime ?? '') !== (trip.arrivalTime ?? '')
-        ? `到达 ${previous.arrivalTime ?? '未填'} -> ${trip.arrivalTime ?? '未填'}`
-        : '',
-      previous.stationNames.join('|') !== trip.stationNames.join('|') ? '经停变化' : '',
-      (previous.gateText ?? '') !== (trip.gateText ?? '') ? '检票/值机位置变化' : '',
-      (previous.fareText ?? '') !== (trip.fareText ?? '') ? '票价文本变化' : '',
-      (previous.availability ?? '') !== (trip.availability ?? '') ? '可用性变化' : '',
-    ].filter(Boolean);
-
-    return changes.length > 0 ? [`${formatTripDiffLabel(trip)}：${changes.join('，')}`] : [];
-  });
-
-  const changedServices = revision.services.flatMap((service) => {
-    const previous = baselineServiceById.get(service.serviceId);
-    if (!previous) {
-      return [`服务 ${service.label} 新增`];
-    }
-
-    const changes = [
-      previous.status !== service.status ? `状态 ${previous.status} -> ${service.status}` : '',
-      previous.tripCount !== service.tripCount
-        ? `班次 ${previous.tripCount} -> ${service.tripCount}`
-        : '',
-      previous.stationCount !== service.stationCount
-        ? `站点 ${previous.stationCount} -> ${service.stationCount}`
-        : '',
-    ].filter(Boolean);
-
-    return changes.length > 0 ? [`服务 ${service.label}：${changes.join('，')}`] : [];
-  });
-  const removedServices = baseline.services
-    .filter((service) => !revisionServiceById.has(service.serviceId))
-    .map((service) => `服务 ${service.label}`);
-  const addedStations = revision.stationOptions
-    .filter((station) => !baselineStationOptions.has(station))
-    .map((station) => `站点选项 ${station}`);
-  const removedStations = baseline.stationOptions
-    .filter((station) => !revisionStationOptions.has(station))
-    .map((station) => `站点选项 ${station}`);
-
-  return {
-    baselineLabel: `当前发布 ${baseline.revisionId}`,
-    metrics: [
-      { label: '服务', before: baseline.services.length, after: revision.services.length },
-      { label: '班次', before: baseline.trips.length, after: revision.trips.length },
-      {
-        label: '站点选项',
-        before: baseline.stationOptions.length,
-        after: revision.stationOptions.length,
-      },
-      {
-        label: '公告',
-        before: baseline.serviceNotices?.length ?? 0,
-        after: revision.serviceNotices?.length ?? 0,
-      },
-    ],
-    addedItems: [...addedTrips, ...addedStations],
-    removedItems: [...removedTrips, ...removedServices, ...removedStations],
-    changedItems: [...changedTrips, ...changedServices],
-    notes: buildDiffNotes({
-      addedCount: addedTrips.length + addedStations.length,
-      changedCount: changedTrips.length + changedServices.length,
-      removedCount: removedTrips.length + removedServices.length + removedStations.length,
-    }),
-  };
+): TransitItemApprovalStatus {
+  return trip.approvalStatus ?? revisionStatusToItemApprovalStatus(revision.status);
 }
 
-function buildDiffNotes(input: {
-  addedCount: number;
-  changedCount: number;
-  removedCount: number;
-}): string[] {
-  const notes = [];
-  if (input.removedCount > 0) {
-    notes.push(`有 ${input.removedCount} 项移除，发布前需要确认不是来源缺失。`);
+function revisionStatusToItemApprovalStatus(
+  status: TransitDataRevisionStatus | TravelScheduleRevisionStatus,
+): TransitItemApprovalStatus {
+  if (status === 'validation_failed') {
+    return 'imported';
   }
-
-  if (input.changedCount > 0) {
-    notes.push(`有 ${input.changedCount} 项关键字段变化，建议抽查详情。`);
+  if (status === 'superseded') {
+    return 'published';
   }
-
-  if (input.addedCount > 0) {
-    notes.push(`有 ${input.addedCount} 项新增，建议确认命名和来源。`);
-  }
-
-  return notes;
+  return status;
 }
 
 function formatTripDiffLabel(trip: TravelScheduleRevision['trips'][number]): string {
@@ -4280,7 +3758,8 @@ function travelTripMatchesQuery(trip: TravelTripInstance, normalizedQuery: strin
     .some((value) => normalizeSearchText(String(value)).includes(normalizedQuery));
 }
 
-function matchesTransitStatusFilter(
+function matchesTransitItemStatusFilter(
+  status: TransitItemApprovalStatus,
   revision: TransitDataRevision,
   filter: TransitStatusFilter,
 ): boolean {
@@ -4289,22 +3768,20 @@ function matchesTransitStatusFilter(
   }
 
   if (filter === 'todo') {
-    return (
-      revision.status === 'imported' ||
-      revision.status === 'pending_review' ||
-      revision.status === 'approved'
-    );
+    return status === 'imported' || status === 'pending_review' || status === 'approved';
   }
 
-  if (filter === 'blocked') {
-    return revision.status === 'validation_failed' || revision.validation.errorCount > 0;
+  if (filter === 'legacy') {
+    return isLegacyTransitRevision(revision);
   }
 
-  return revision.status === filter;
+  return status === filter;
 }
 
-function matchesScheduleRevisionStatusFilter(
+function matchesScheduleItemStatusFilter(
+  status: TransitItemApprovalStatus,
   revision: TravelScheduleRevision,
+  trip: TravelTripInstance,
   filter: ScheduleStatusFilter,
 ): boolean {
   if (filter === 'all') {
@@ -4312,18 +3789,41 @@ function matchesScheduleRevisionStatusFilter(
   }
 
   if (filter === 'todo') {
-    return (
-      revision.status === 'imported' ||
-      revision.status === 'pending_review' ||
-      revision.status === 'approved'
-    );
+    return status === 'imported' || status === 'pending_review' || status === 'approved';
   }
 
-  if (filter === 'blocked') {
-    return revision.status === 'validation_failed' || revision.validation.errorCount > 0;
+  if (filter === 'legacy') {
+    return isLegacyScheduleRevision(revision) || isLegacyTravelTrip(trip);
   }
 
-  return revision.status === filter;
+  return status === filter;
+}
+
+function isLegacyTransitRevision(revision: TransitDataRevision): boolean {
+  return (
+    revision.sourceProviderId.toLowerCase().includes('legacy') ||
+    revision.sourceFiles.some((sourceFile) => normalizeSearchText(sourceFile).includes('legacy'))
+  );
+}
+
+function isLegacyScheduleRevision(revision: TravelScheduleRevision): boolean {
+  return (
+    revision.sourceProviderId.toLowerCase().includes('legacy') ||
+    revision.sourceFiles.some((sourceFile) => isLegacyScheduleSourceText(sourceFile)) ||
+    revision.trips.some((trip) => isLegacyTravelTrip(trip))
+  );
+}
+
+function isLegacyTravelTrip(trip: TravelTripInstance): boolean {
+  return (
+    trip.serviceId?.toLowerCase().includes('legacy') === true ||
+    isLegacyScheduleSourceText(trip.sourcePath ?? '')
+  );
+}
+
+function isLegacyScheduleSourceText(value: string): boolean {
+  const normalized = normalizeSearchText(value);
+  return normalized.includes('legacy') || normalized.includes('ltcx') || normalized.includes('旧');
 }
 
 function normalizeSearchText(value: string): string {
@@ -4341,23 +3841,6 @@ function formatScheduleServiceStatus(
 
   return labels[status];
 }
-
-function formatTransitReviewTrail(revision: TransitDataRevision): string {
-  if (revision.status === 'rejected' && revision.reviewReason) {
-    return `${revision.reviewedBy ?? '管理员'} 于 ${formatDate(revision.reviewedAt ?? revision.importedAt)} 驳回：${revision.reviewReason}`;
-  }
-
-  if (revision.reviewedAt) {
-    return `${revision.reviewedBy ?? '管理员'} 于 ${formatDate(revision.reviewedAt)} 审核`;
-  }
-
-  if (revision.submittedAt) {
-    return `${revision.submittedBy ?? '管理员'} 于 ${formatDate(revision.submittedAt)} 提交`;
-  }
-
-  return '尚未提交审核';
-}
-
 function formatTransitMode(mode: TransitDataRevision['lines'][number]['mode']): string {
   const labels: Partial<Record<TransitDataRevision['lines'][number]['mode'], string>> = {
     bus: '公交',
@@ -4494,72 +3977,6 @@ function buildTransitLineOrderPreviewModel(input: {
     segments,
     stationCount: input.stationSourceIds.length,
     stations,
-  };
-}
-
-function buildTransitRevisionGeometryPreview(revision: TransitDataRevision): {
-  bounds: { maxX: number; maxZ: number; minX: number; minZ: number };
-  lineCount: number;
-  lines: Array<{ color?: string; id: string; points: string }>;
-  missingCoordinateCount: number;
-  stationCount: number;
-  stations: Array<{ id: string; name: string; x: string; y: string }>;
-} | null {
-  const stationsWithCoordinate = revision.stations.filter(
-    (station) => station.x !== undefined && station.z !== undefined,
-  );
-  if (stationsWithCoordinate.length === 0) {
-    return null;
-  }
-
-  const stationById = new Map(revision.stations.map((station) => [station.sourceId, station]));
-  const pathCoordinates = revision.lines.flatMap((line) =>
-    (line.segmentPaths ?? []).flatMap((path) =>
-      path.waypoints.map((point) => [point.x, point.z] as [number, number]),
-    ),
-  );
-  const bounds = expandTransitPreviewBounds(
-    getTransitPreviewBounds([
-      ...stationsWithCoordinate.map(
-        (station) => [station.x as number, station.z as number] as [number, number],
-      ),
-      ...pathCoordinates,
-    ]),
-    80,
-  );
-  const project = (x: number, z: number) => projectTransitPreviewCoordinate([x, z], bounds);
-  const visibleLines = revision.lines.slice(0, 12).flatMap((line) => {
-    const points = getTransitLinePreviewCoordinates(line, stationById).map(([xValue, zValue]) => {
-      const [x, y] = project(xValue, zValue);
-      return `${roundCoordinateValue(x)},${roundCoordinateValue(y)}`;
-    });
-
-    return points.length >= 2
-      ? [
-          {
-            color: line.color,
-            id: line.sourceId,
-            points: points.join(' '),
-          },
-        ]
-      : [];
-  });
-
-  return {
-    bounds,
-    lineCount: visibleLines.length,
-    lines: visibleLines,
-    missingCoordinateCount: revision.stations.length - stationsWithCoordinate.length,
-    stationCount: stationsWithCoordinate.length,
-    stations: stationsWithCoordinate.slice(0, 80).map((station) => {
-      const [x, y] = project(station.x as number, station.z as number);
-      return {
-        id: station.sourceId,
-        name: station.name,
-        x: roundCoordinateValue(x),
-        y: roundCoordinateValue(y),
-      };
-    }),
   };
 }
 
@@ -4830,6 +4247,53 @@ function buildTransitBindablePoiOptions(markers: MapMarker[]): TransitStationPoi
     );
 }
 
+function getTransitStationBoundPoiRefs(
+  station: TransitRevisionStation,
+): TransitStationPoiBindingRef[] {
+  const refs: TransitStationPoiBindingRef[] = [];
+  const seen = new Set<string>();
+  for (const ref of station.boundPoiRefs ?? []) {
+    const markerId = ref.markerId.trim();
+    const label = ref.label.trim();
+    if (!markerId || !label || seen.has(markerId)) {
+      continue;
+    }
+
+    refs.push({
+      markerId,
+      label,
+      categoryId: ref.categoryId?.trim() || undefined,
+    });
+    seen.add(markerId);
+  }
+
+  const fallbackMarkerId = station.boundPoiMarkerId?.trim();
+  const fallbackLabel = station.boundPoiLabel?.trim();
+  if (fallbackMarkerId && fallbackLabel && !seen.has(fallbackMarkerId)) {
+    refs.push({ markerId: fallbackMarkerId, label: fallbackLabel });
+  }
+
+  return refs;
+}
+
+function mergeTransitStationPoiBindingRefs(
+  current: TransitStationPoiBindingRef[],
+  marker: MapMarker,
+): TransitStationPoiBindingRef[] {
+  return [
+    ...current.filter((ref) => ref.markerId !== marker.id),
+    {
+      markerId: marker.id,
+      label: marker.label,
+      categoryId: marker.categoryId,
+    },
+  ];
+}
+
+function isDefined<T>(value: T | null | undefined): value is T {
+  return value !== null && value !== undefined;
+}
+
 function buildTransitStationAuditContextMarkers(
   referenceCoordinate: [number, number] | null,
   markers: MapMarker[],
@@ -5067,139 +4531,259 @@ function parseLineList(value: string): string[] {
     .filter(Boolean);
 }
 
-function formatOneWayStopsForEditor(line: TransitRevisionLine | undefined): string {
-  return (line?.stops ?? [])
-    .filter((stop) => stop.oneWay)
-    .map((stop) => `${stop.stationSourceId}:${stop.oneWay}`)
-    .join('\n');
+function defaultRouteModeForTransitMode(
+  mode: TransitRevisionLine['mode'],
+): NonNullable<TransitRevisionLine['routeMode']> {
+  return mode === 'bus' || mode === 'coach' ? 'road' : 'straight';
 }
 
-function parseOneWayStopsText(value: string): {
-  error?: string;
-  items: NonNullable<TransitLineEditorSubmitPayload['oneWayStops']>;
-} {
-  const items: NonNullable<TransitLineEditorSubmitPayload['oneWayStops']> = [];
-  const lines = value
-    .split(/\n+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+function createTransitLineRouteNodeDraft(
+  kind: TransitLineRouteNodeDraft['kind'],
+  index: number,
+): TransitLineRouteNodeDraft {
+  return {
+    id: `route-node-${kind}-${Date.now()}-${index}`,
+    kind,
+    stationSourceId: '',
+    xText: '',
+    zText: '',
+    direction: 'both',
+  };
+}
 
-  for (const line of lines) {
-    const [stationSourceId, oneWay] = line.split(/[:：\s,，]+/, 2).map((item) => item.trim());
-    if (!stationSourceId || (oneWay !== 'up' && oneWay !== 'down')) {
-      return {
-        error: `单向站规则格式不正确：${line}`,
-        items: [],
-      };
-    }
+function buildTransitLineRouteNodeDrafts(
+  line: TransitRevisionLine | undefined,
+): TransitLineRouteNodeDraft[] {
+  if (line?.routeNodes?.length) {
+    return line.routeNodes.map((node, index) => ({
+      id: `route-node-${node.kind}-${index}`,
+      kind: node.kind,
+      stationSourceId: node.kind === 'station' ? node.stationSourceId : '',
+      xText: node.kind === 'waypoint' ? String(node.x) : '',
+      zText: node.kind === 'waypoint' ? String(node.z) : '',
+      direction: node.direction ?? 'both',
+    }));
+  }
 
-    items.push({
+  if (!line) {
+    return [
+      createTransitLineRouteNodeDraft('station', 0),
+      createTransitLineRouteNodeDraft('station', 1),
+    ];
+  }
+
+  const stopByStationId = new Map(line.stops.map((stop) => [stop.stationSourceId, stop] as const));
+  const pathBySegment = new Map(
+    (line.segmentPaths ?? []).map((path) => [
+      getTransitSegmentPathKey(path.fromStationSourceId, path.toStationSourceId),
+      path,
+    ]),
+  );
+  const drafts: TransitLineRouteNodeDraft[] = [];
+  line.stationSourceIds.forEach((stationSourceId, stationIndex) => {
+    const oneWay = stopByStationId.get(stationSourceId)?.oneWay;
+    drafts.push({
+      id: `route-node-station-${stationIndex}`,
+      kind: 'station',
       stationSourceId,
-      oneWay,
+      xText: '',
+      zText: '',
+      direction: oneWay ?? 'both',
     });
-  }
-
-  return { items };
+    const nextStationSourceId = line.stationSourceIds[stationIndex + 1];
+    if (!nextStationSourceId) {
+      return;
+    }
+    const path = pathBySegment.get(getTransitSegmentPathKey(stationSourceId, nextStationSourceId));
+    for (const [waypointIndex, point] of (path?.waypoints ?? []).entries()) {
+      drafts.push({
+        id: `route-node-waypoint-${stationIndex}-${waypointIndex}`,
+        kind: 'waypoint',
+        stationSourceId: '',
+        xText: String(point.x),
+        zText: String(point.z),
+        direction: point.direction ?? 'both',
+      });
+    }
+  });
+  return drafts;
 }
 
-function formatSegmentPathsForEditor(line: TransitRevisionLine | undefined): string {
-  return (line?.segmentPaths ?? [])
-    .map((path) =>
-      [
-        `${path.fromStationSourceId} -> ${path.toStationSourceId}`,
-        path.mode,
-        path.waypoints
-          .map((point) => `${roundCoordinateValue(point.x)},${roundCoordinateValue(point.z)}`)
-          .join('; '),
-      ]
-        .filter(Boolean)
-        .join(' | '),
-    )
-    .join('\n');
-}
-
-function parseTransitSegmentPathsText(value: string): {
+function parseTransitLineRouteNodeDrafts(
+  drafts: TransitLineRouteNodeDraft[],
+  routeMode: NonNullable<TransitRevisionLine['routeMode']>,
+): {
+  routeNodes: TransitLineRouteNodeSnapshot[];
+  stationSourceIds: string[];
+  oneWayStops: NonNullable<TransitLineEditorSubmitPayload['oneWayStops']>;
+  segmentPaths: NonNullable<TransitRevisionLine['segmentPaths']>;
   error?: string;
-  items: NonNullable<TransitRevisionLine['segmentPaths']>;
 } {
-  const items: NonNullable<TransitRevisionLine['segmentPaths']> = [];
-  const lines = value
-    .split(/\n+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  for (const line of lines) {
-    const [stationPart, modePart = 'straight', waypointPart = '', notePart = ''] = line
-      .split('|')
-      .map((item) => item.trim());
-    const [fromStationSourceId, toStationSourceId] = stationPart
-      .split(/\s*->\s*/)
-      .map((item) => item.trim());
-    const mode = modePart === 'road' ? 'road' : modePart === 'straight' ? 'straight' : null;
-    if (!fromStationSourceId || !toStationSourceId || !mode) {
-      return {
-        error: `站间路径格式不正确：${line}`,
-        items: [],
-      };
+  const routeNodes: TransitLineRouteNodeSnapshot[] = [];
+  for (const [index, draft] of drafts.entries()) {
+    if (draft.kind === 'station') {
+      const stationSourceId = draft.stationSourceId.trim();
+      if (!stationSourceId) {
+        return {
+          routeNodes: [],
+          stationSourceIds: [],
+          oneWayStops: [],
+          segmentPaths: [],
+          error: `第 ${index + 1} 行尚未选择站点。`,
+        };
+      }
+      routeNodes.push({ kind: 'station', stationSourceId, direction: draft.direction });
+      continue;
     }
 
-    const waypoints = waypointPart
-      ? waypointPart
-          .split(';')
-          .map((item) => item.trim())
-          .filter(Boolean)
-          .map((item) => {
-            const [xValue, zValue] = item.split(/[,，\s]+/, 2);
-            const x = Number(xValue);
-            const z = Number(zValue);
-            return Number.isFinite(x) && Number.isFinite(z) ? { x, z } : null;
-          })
-      : [];
-    if (waypoints.some((point) => !point)) {
+    const x = Number(draft.xText);
+    const z = Number(draft.zText);
+    if (!draft.xText.trim() || !draft.zText.trim() || !Number.isFinite(x) || !Number.isFinite(z)) {
       return {
-        error: `站间路径途径点坐标不正确：${line}`,
-        items: [],
+        routeNodes: [],
+        stationSourceIds: [],
+        oneWayStops: [],
+        segmentPaths: [],
+        error: `第 ${index + 1} 行的途径点坐标不完整。`,
       };
     }
-    if (mode === 'road' && waypoints.length === 0) {
-      return {
-        error: `沿道路走行至少需要 1 个途径点：${line}`,
-        items: [],
-      };
-    }
-
-    items.push({
-      fromStationSourceId,
-      toStationSourceId,
-      mode,
-      waypoints: waypoints.filter((point): point is { x: number; z: number } => Boolean(point)),
-      note: notePart || undefined,
-    });
+    routeNodes.push({ kind: 'waypoint', x, z, direction: draft.direction });
   }
 
-  return { items };
+  if (routeNodes[0]?.kind !== 'station' || routeNodes.at(-1)?.kind !== 'station') {
+    return {
+      routeNodes,
+      stationSourceIds: [],
+      oneWayStops: [],
+      segmentPaths: [],
+      error: '途径点必须放在两个站点之间。',
+    };
+  }
+
+  const stationSourceIds = routeNodes
+    .filter(
+      (node): node is Extract<TransitLineRouteNodeSnapshot, { kind: 'station' }> =>
+        node.kind === 'station',
+    )
+    .map((node) => node.stationSourceId);
+  const oneWayStops = routeNodes
+    .filter(
+      (node): node is Extract<TransitLineRouteNodeSnapshot, { kind: 'station' }> =>
+        node.kind === 'station',
+    )
+    .filter((node) => node.direction !== 'both')
+    .map((node) => ({
+      stationSourceId: node.stationSourceId,
+      oneWay: node.direction as 'up' | 'down',
+    }));
+  const segmentPaths: NonNullable<TransitRevisionLine['segmentPaths']> = [];
+  let currentStationId = '';
+  let waypoints: Array<{ x: number; z: number; direction?: 'both' | 'up' | 'down' }> = [];
+  for (const node of routeNodes) {
+    if (node.kind === 'waypoint') {
+      waypoints.push({ x: node.x, z: node.z, direction: node.direction });
+      continue;
+    }
+    if (currentStationId && waypoints.length > 0) {
+      segmentPaths.push({
+        fromStationSourceId: currentStationId,
+        toStationSourceId: node.stationSourceId,
+        mode: routeMode,
+        waypoints,
+      });
+    }
+    currentStationId = node.stationSourceId;
+    waypoints = [];
+  }
+
+  return { routeNodes, stationSourceIds, oneWayStops, segmentPaths };
 }
 
-function findNonAdjacentSegmentPath(
-  segmentPaths: NonNullable<TransitRevisionLine['segmentPaths']>,
-  stationSourceIds: string[],
-): NonNullable<TransitRevisionLine['segmentPaths']>[number] | null {
-  const adjacentKeys = new Set(
-    stationSourceIds
-      .slice(0, -1)
-      .map((stationSourceId, index) =>
-        getTransitSegmentPathKey(stationSourceId, stationSourceIds[index + 1] ?? ''),
-      ),
-  );
+function formatTransitDepartureRulesForEditor(line: TransitRevisionLine | undefined): string {
+  if (line?.departureRules?.length) {
+    return line.departureRules.map((rule) => rule.sourceText).join('\n');
+  }
+  return (line?.departureTimes ?? []).join('\n');
+}
 
-  return (
-    segmentPaths.find(
-      (path) =>
-        !adjacentKeys.has(
-          getTransitSegmentPathKey(path.fromStationSourceId, path.toStationSourceId),
-        ),
-    ) ?? null
-  );
+function parseTransitDepartureScheduleText(value: string): {
+  rules: TransitDepartureScheduleRule[];
+  departureTimes: string[];
+  error?: string;
+} {
+  const lines = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const rules: TransitDepartureScheduleRule[] = [];
+  const departureTimes: string[] = [];
+
+  for (const [index, line] of lines.entries()) {
+    const singleMatch = /^(\d{2}):(\d{2})$/.exec(line);
+    if (singleMatch) {
+      const startMinutes = parseClockMinutes(singleMatch[1], singleMatch[2]);
+      if (startMinutes === null) {
+        return { rules: [], departureTimes: [], error: `第 ${index + 1} 行的时刻无效。` };
+      }
+      const startTime = formatClockMinutes(startMinutes);
+      rules.push({ sourceText: line, startTime });
+      departureTimes.push(startTime);
+      continue;
+    }
+
+    const repeatedMatch = /^(\d{2}):(\d{2})\s*\+\s*(\d{2}):(\d{2})\s*\*\s*(\d+)$/.exec(line);
+    if (!repeatedMatch) {
+      return {
+        rules: [],
+        departureTimes: [],
+        error: `第 ${index + 1} 行格式无效，请使用 HH:mm 或 HH:mm + HH:mm * N。`,
+      };
+    }
+    const startMinutes = parseClockMinutes(repeatedMatch[1], repeatedMatch[2]);
+    const intervalHours = Number(repeatedMatch[3]);
+    const intervalMinutePart = Number(repeatedMatch[4]);
+    const additionalDepartures = Number(repeatedMatch[5]);
+    const intervalMinutes = intervalHours * 60 + intervalMinutePart;
+    if (
+      startMinutes === null ||
+      intervalMinutePart >= 60 ||
+      intervalMinutes <= 0 ||
+      additionalDepartures < 1 ||
+      additionalDepartures > 512
+    ) {
+      return { rules: [], departureTimes: [], error: `第 ${index + 1} 行的间隔或班次数无效。` };
+    }
+    if (startMinutes + intervalMinutes * additionalDepartures >= 24 * 60) {
+      return { rules: [], departureTimes: [], error: `第 ${index + 1} 行展开后跨越次日。` };
+    }
+
+    const startTime = formatClockMinutes(startMinutes);
+    rules.push({
+      sourceText: line,
+      startTime,
+      intervalMinutes,
+      additionalDepartures,
+    });
+    for (let offset = 0; offset <= additionalDepartures; offset += 1) {
+      departureTimes.push(formatClockMinutes(startMinutes + intervalMinutes * offset));
+    }
+  }
+
+  const uniqueDepartureTimes = Array.from(new Set(departureTimes));
+  if (uniqueDepartureTimes.length > 128) {
+    return { rules: [], departureTimes: [], error: '展开后的发车时刻不能超过 128 个。' };
+  }
+  return { rules, departureTimes: uniqueDepartureTimes };
+}
+
+function parseClockMinutes(hourText: string, minuteText: string): number | null {
+  const hours = Number(hourText);
+  const minutes = Number(minuteText);
+  return hours >= 0 && hours < 24 && minutes >= 0 && minutes < 60 ? hours * 60 + minutes : null;
+}
+
+function formatClockMinutes(totalMinutes: number): string {
+  return `${String(Math.floor(totalMinutes / 60)).padStart(2, '0')}:${String(totalMinutes % 60).padStart(2, '0')}`;
 }
 
 function getTransitSegmentPathKey(fromStationSourceId: string, toStationSourceId: string): string {
@@ -5221,6 +4805,15 @@ function roundCoordinateValue(value: number): string {
 
 function formatTransitCoordinatePair(coordinate: [number, number]): string {
   return `${roundCoordinateValue(coordinate[0])}, ${roundCoordinateValue(coordinate[1])}`;
+}
+
+function formatTransitStationBindingSummary(station: TransitRevisionStation): string {
+  const coordinate =
+    station.x === undefined || station.z === undefined
+      ? '待定坐标'
+      : `(${roundCoordinateValue(station.x)},${roundCoordinateValue(station.z)})`;
+  const poiCount = getTransitStationBoundPoiRefs(station).length;
+  return poiCount > 0 ? `${coordinate} · ${poiCount} POI` : coordinate;
 }
 
 function parseTransitCoordinatePair(xValue: string, zValue: string): [number, number] | null {

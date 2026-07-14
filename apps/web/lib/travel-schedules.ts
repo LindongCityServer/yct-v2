@@ -19,7 +19,7 @@ import { readRuntimeConfig } from './runtime-config';
 import { readTransitScreenSnapshot } from './transit-screen';
 import { readTransitServiceNotices } from './transit-service-notices';
 import { attachTicketingAvailability } from './travel-ticketing';
-import { findPublishedTravelScheduleRevision } from './travel-schedule-revision-store';
+import { readPublishedTravelScheduleEntitySnapshot } from './published-travel-schedule-read-model';
 import { readTravelServiceProfiles } from './travel-service-profile-store';
 import { createTimedCache } from './server-cache';
 
@@ -56,7 +56,7 @@ export async function readTravelScheduleQuery(
   const config = readRuntimeConfig();
   const source = options.source ?? 'published_or_live';
   const publishedRevision =
-    source === 'published_or_live' ? await findPublishedTravelScheduleRevision() : undefined;
+    source === 'published_or_live' ? await readPublishedTravelScheduleEntitySnapshot() : undefined;
   return travelScheduleQueryCache.read(
     buildTravelScheduleQueryCacheKey(query, config, {
       publishedRevision,
@@ -486,7 +486,7 @@ function getServiceProfile(
     color: '#168F78',
     icon: 'route',
     sortOrder: 999,
-    enabled: true,
+    enabled: false,
   };
 }
 

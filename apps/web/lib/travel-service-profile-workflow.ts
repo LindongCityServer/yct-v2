@@ -26,11 +26,33 @@ export async function updateTravelServiceProfiles(input: {
   actorId: string;
   services: TravelScheduleServiceProfile[];
 }): Promise<TravelServiceProfileActionResult> {
+  const previousServices = await readTravelServiceProfiles();
   const services = await writeTravelServiceProfiles({
     actorId: input.actorId,
     services: input.services,
   });
   const updatedAt = new Date().toISOString();
+
+  const previousByKind = new Map(previousServices.map((profile) => [profile.kind, profile]));
+  const nextByKind = new Map(services.map((profile) => [profile.kind, profile]));
+  for (const profile of services) {
+    if (!previousByKind.has(profile.kind)) {
+      await emitEvent('TravelScheduleServiceProfileCreated', input.actorId, {
+        profile,
+        createdBy: input.actorId,
+        createdAt: updatedAt,
+      });
+    }
+  }
+  for (const profile of previousServices) {
+    if (!nextByKind.has(profile.kind)) {
+      await emitEvent('TravelScheduleServiceProfileDeleted', input.actorId, {
+        profile,
+        deletedBy: input.actorId,
+        deletedAt: updatedAt,
+      });
+    }
+  }
 
   await emitEvent('TravelScheduleServiceProfileUpdated', input.actorId, {
     services,

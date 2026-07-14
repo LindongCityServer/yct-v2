@@ -9,6 +9,7 @@ import { readRuntimeConfig } from '../../../../lib/runtime-config';
 import { listServiceEntries } from '../../../../lib/service-entry-store';
 import { countPendingTicketOrdersForLdpassUser } from '../../../../lib/ticket-order-workflow';
 import { listTransitDataRevisions } from '../../../../lib/transit-data-store';
+import { listTravelScheduleRevisions } from '../../../../lib/travel-schedule-revision-store';
 import { buildMinotarAvatarUrl, resolveYctAvatarUrl } from '../../../../lib/yct-session';
 
 interface AccountBadgeSummary {
@@ -198,11 +199,12 @@ async function readAdminPendingReviewSummary(): Promise<{
   transit: number;
   poi: number;
 }> {
-  const [contents, contentAssets, services, transit, poi] = await Promise.all([
+  const [contents, contentAssets, services, transit, schedules, poi] = await Promise.all([
     listContentRecords(),
     listContentAssetRecords(),
     listServiceEntries(),
     listTransitDataRevisions(),
+    listTravelScheduleRevisions(),
     listPoiSubmissions(),
   ]);
 
@@ -211,7 +213,47 @@ async function readAdminPendingReviewSummary(): Promise<{
     contentAssets: contentAssets.filter((record) => record.asset.status === 'pending_review')
       .length,
     services: services.filter((entry) => entry.status === 'pending_review').length,
-    transit: transit.filter((revision) => revision.status === 'pending_review').length,
+    transit:
+      transit.reduce(
+        (count, revision) =>
+          count +
+          revision.lines.filter(
+            (line) =>
+              (line.approvalStatus ?? normalizeRevisionItemStatus(revision.status)) ===
+              'pending_review',
+          ).length,
+        0,
+      ) +
+      schedules.reduce(
+        (count, revision) =>
+          count +
+          revision.trips.filter(
+            (trip) =>
+              (trip.approvalStatus ?? normalizeRevisionItemStatus(revision.status)) ===
+              'pending_review',
+          ).length,
+        0,
+      ),
     poi: poi.filter((submission) => submission.status === 'pending_review').length,
   };
+}
+
+function normalizeRevisionItemStatus(
+  status:
+    | 'imported'
+    | 'validation_failed'
+    | 'pending_review'
+    | 'approved'
+    | 'rejected'
+    | 'published'
+    | 'superseded'
+    | 'archived',
+): 'imported' | 'pending_review' | 'approved' | 'rejected' | 'published' | 'archived' {
+  if (status === 'validation_failed') {
+    return 'imported';
+  }
+  if (status === 'superseded') {
+    return 'published';
+  }
+  return status;
 }

@@ -4,6 +4,7 @@ import type {
   MapMarkerSnapshot,
   TransitDataRevision,
   TransitDataRevisionStatus,
+  TransitItemApprovalStatus,
   TransitDataValidationIssue,
   TransitModeSnapshotSummary,
   YctEventPayloadMap,
@@ -40,6 +41,8 @@ export type TransitLineEditableField =
   | 'mode'
   | 'name'
   | 'color'
+  | 'routeMode'
+  | 'routeNodes'
   | 'stationSourceIds'
   | 'stops'
   | 'segmentPaths'
@@ -47,6 +50,8 @@ export type TransitLineEditableField =
   | 'fare'
   | 'firstLastBus'
   | 'departureTimes'
+  | 'departureRules'
+  | 'operatingDateRule'
   | 'bookingUrl';
 
 export async function listAdminTransitDataRevisions(): Promise<TransitDataRevision[]> {
@@ -122,6 +127,13 @@ async function bindTransitSnapshotStationsToExistingMarkers(
         ...station,
         x: marker.geometry.coordinates[0],
         z: marker.geometry.coordinates[1],
+        boundPoiRefs: [
+          {
+            markerId: marker.id,
+            label: marker.label,
+            categoryId: marker.categoryId,
+          },
+        ],
         boundPoiMarkerId: marker.id,
         boundPoiLabel: marker.label,
       };
@@ -248,6 +260,48 @@ function getTransitBindingMarkerIconBaseName(fileName: string | undefined): stri
       ?.replace(/\.[^.]+$/, '')
       .toLowerCase() ?? ''
   );
+}
+
+function getTransitStationPoiRefs(
+  station: TransitDataRevision['stations'][number],
+): NonNullable<TransitDataRevision['stations'][number]['boundPoiRefs']> {
+  return normalizeTransitStationPoiRefs(
+    station.boundPoiRefs,
+    station.boundPoiMarkerId,
+    station.boundPoiLabel,
+  );
+}
+
+function normalizeTransitStationPoiRefs(
+  refs: TransitDataRevision['stations'][number]['boundPoiRefs'] | undefined,
+  fallbackMarkerId?: string,
+  fallbackLabel?: string,
+): NonNullable<TransitDataRevision['stations'][number]['boundPoiRefs']> {
+  const normalized: NonNullable<TransitDataRevision['stations'][number]['boundPoiRefs']> = [];
+  const seen = new Set<string>();
+
+  for (const ref of refs ?? []) {
+    const markerId = ref.markerId.trim();
+    const label = ref.label.trim();
+    if (!markerId || !label || seen.has(markerId)) {
+      continue;
+    }
+
+    normalized.push({
+      markerId,
+      label,
+      categoryId: ref.categoryId?.trim() || undefined,
+    });
+    seen.add(markerId);
+  }
+
+  const markerId = fallbackMarkerId?.trim();
+  const label = fallbackLabel?.trim();
+  if (markerId && label && !seen.has(markerId)) {
+    normalized.push({ markerId, label });
+  }
+
+  return normalized;
 }
 
 export async function submitTransitDataRevision(input: {
@@ -450,6 +504,7 @@ export async function updateTransitStationCoordinate(input: {
   actorId: string;
   x: number;
   z: number;
+  boundPoiRefs?: TransitDataRevision['stations'][number]['boundPoiRefs'];
   boundPoiMarkerId?: string;
   boundPoiLabel?: string;
 }): Promise<TransitDataActionResult> {
@@ -474,16 +529,20 @@ export async function updateTransitStationCoordinate(input: {
     };
   }
 
-  const nextBoundPoiMarkerId = input.boundPoiMarkerId?.trim() || undefined;
-  const nextBoundPoiLabel = nextBoundPoiMarkerId
-    ? input.boundPoiLabel?.trim() || undefined
-    : undefined;
+  const nextBoundPoiRefs = normalizeTransitStationPoiRefs(
+    input.boundPoiRefs,
+    input.boundPoiMarkerId,
+    input.boundPoiLabel,
+  );
+  const primaryBoundPoiRef = nextBoundPoiRefs[0];
+  const nextBoundPoiMarkerId = primaryBoundPoiRef?.markerId;
+  const nextBoundPoiLabel = primaryBoundPoiRef?.label;
+  const previousBoundPoiRefs = getTransitStationPoiRefs(station);
 
   if (
     station.x === input.x &&
     station.z === input.z &&
-    station.boundPoiMarkerId === nextBoundPoiMarkerId &&
-    station.boundPoiLabel === nextBoundPoiLabel
+    JSON.stringify(previousBoundPoiRefs) === JSON.stringify(nextBoundPoiRefs)
   ) {
     return { ok: true, revision };
   }
@@ -499,6 +558,7 @@ export async function updateTransitStationCoordinate(input: {
           ...item,
           x: input.x,
           z: input.z,
+          boundPoiRefs: nextBoundPoiRefs.length > 0 ? nextBoundPoiRefs : undefined,
           boundPoiMarkerId: nextBoundPoiMarkerId,
           boundPoiLabel: nextBoundPoiLabel,
         }
@@ -535,6 +595,7 @@ export async function updateTransitStationCoordinate(input: {
       updatedAt,
       previousCoordinate,
       previousBoundPoi,
+      previousBoundPoiRefs,
       nextCoordinate: {
         x: input.x,
         z: input.z,
@@ -545,6 +606,7 @@ export async function updateTransitStationCoordinate(input: {
             label: nextBoundPoiLabel,
           }
         : undefined,
+      nextBoundPoiRefs,
     });
   }
 
@@ -559,6 +621,8 @@ export async function saveTransitLine(input: {
     mode: TransitDataRevision['lines'][number]['mode'];
     name: string;
     color?: string;
+    routeMode?: TransitDataRevision['lines'][number]['routeMode'];
+    routeNodes?: TransitDataRevision['lines'][number]['routeNodes'];
     stationSourceIds: string[];
     oneWayStops?: Array<{
       stationSourceId: string;
@@ -570,6 +634,8 @@ export async function saveTransitLine(input: {
     firstBus?: string;
     lastBus?: string;
     departureTimes?: string[];
+    departureRules?: TransitDataRevision['lines'][number]['departureRules'];
+    operatingDateRule?: string;
     bookingUrl?: string;
   };
 }): Promise<TransitDataActionResult> {
@@ -629,10 +695,8 @@ export async function saveTransitLine(input: {
   );
 
   if (updated) {
-    if (updated.status === 'published') {
-      clearTransitOverviewCache();
-      clearTransitLinePoiMarkerCache();
-    }
+    clearTransitOverviewCache();
+    clearTransitLinePoiMarkerCache();
     if (line) {
       await emitEvent('TransitDataRevisionLineUpdated', input.actorId, {
         datasetId: updated.datasetId,
@@ -687,7 +751,15 @@ export async function deleteTransitLine(input: {
   }
 
   const deletedAt = new Date().toISOString();
-  const nextLines = revision.lines.filter((item) => item.sourceId !== input.lineSourceId);
+  const lineStatus = getTransitLineApprovalStatus(line, revision.status);
+  const nextLines =
+    lineStatus === 'published'
+      ? revision.lines.map((item) =>
+          item.sourceId === input.lineSourceId
+            ? withTransitItemApprovalFields(item, 'archived', input.actorId, deletedAt)
+            : item,
+        )
+      : revision.lines.filter((item) => item.sourceId !== input.lineSourceId);
   const publishedValidationError = getPublishedTransitRevisionMutationError(revision, nextLines);
   if (publishedValidationError) {
     return invalidTransition(publishedValidationError);
@@ -697,10 +769,8 @@ export async function deleteTransitLine(input: {
   );
 
   if (updated) {
-    if (updated.status === 'published') {
-      clearTransitOverviewCache();
-      clearTransitLinePoiMarkerCache();
-    }
+    clearTransitOverviewCache();
+    clearTransitLinePoiMarkerCache();
     await emitEvent('TransitDataRevisionLineDeleted', input.actorId, {
       datasetId: updated.datasetId,
       revisionId: updated.revisionId,
@@ -709,6 +779,66 @@ export async function deleteTransitLine(input: {
       deletedBy: input.actorId,
       deletedAt,
       stationCount: line.stationSourceIds.length,
+    });
+  }
+
+  return { ok: true, revision: updated };
+}
+
+export async function updateTransitLineApprovalStatus(input: {
+  revisionId: string;
+  actorId: string;
+  lineSourceId: string;
+  action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive';
+  reason?: string;
+}): Promise<TransitDataActionResult> {
+  const revision = await findTransitDataRevision(input.revisionId);
+  if (!revision) {
+    return notFound();
+  }
+
+  const line = revision.lines.find((item) => item.sourceId === input.lineSourceId);
+  if (!line) {
+    return {
+      ok: false,
+      status: 404,
+      error: 'transit_line_not_found',
+      message: '交通数据版本中不存在该线路。',
+    };
+  }
+
+  const previousStatus = getTransitLineApprovalStatus(line, revision.status);
+  const nextStatus = getNextTransitItemApprovalStatus(previousStatus, input.action);
+  if (!nextStatus) {
+    return invalidTransition('当前线路状态不允许执行该审批动作。');
+  }
+
+  const changedAt = new Date().toISOString();
+  const nextLines = revision.lines.map((item) =>
+    item.sourceId === input.lineSourceId
+      ? withTransitItemApprovalFields(item, nextStatus, input.actorId, changedAt, input.reason)
+      : item,
+  );
+  const updated = await updateTransitDataRevision(input.revisionId, (current) => ({
+    ...current,
+    lines: nextLines,
+  }));
+
+  if (updated) {
+    if (nextStatus === 'published' || nextStatus === 'archived') {
+      clearTransitOverviewCache();
+      clearTransitLinePoiMarkerCache();
+    }
+    await emitEvent('TransitLineApprovalChanged', input.actorId, {
+      datasetId: updated.datasetId,
+      revisionId: updated.revisionId,
+      lineSourceId: line.sourceId,
+      lineName: line.name,
+      previousStatus,
+      nextStatus,
+      actorId: input.actorId,
+      changedAt,
+      reason: input.reason,
     });
   }
 
@@ -744,6 +874,8 @@ export async function updateTransitLineStationOrder(input: {
       mode: line.mode,
       name: line.name,
       color: line.color,
+      routeMode: line.routeMode,
+      routeNodes: line.routeNodes,
       stationSourceIds: input.stationSourceIds,
       oneWayStops: line.stops.map((stop) => ({
         stationSourceId: stop.stationSourceId,
@@ -755,6 +887,8 @@ export async function updateTransitLineStationOrder(input: {
       firstBus: line.firstLastBus?.first,
       lastBus: line.firstLastBus?.last,
       departureTimes: line.departureTimes,
+      departureRules: line.departureRules,
+      operatingDateRule: line.operatingDateRule,
       bookingUrl: line.bookingUrl,
     },
   });
@@ -766,6 +900,8 @@ function buildTransitLineSnapshot(
     mode: TransitDataRevision['lines'][number]['mode'];
     name: string;
     color?: string;
+    routeMode?: TransitDataRevision['lines'][number]['routeMode'];
+    routeNodes?: TransitDataRevision['lines'][number]['routeNodes'];
     stationSourceIds: string[];
     oneWayStops?: Array<{
       stationSourceId: string;
@@ -777,6 +913,8 @@ function buildTransitLineSnapshot(
     firstBus?: string;
     lastBus?: string;
     departureTimes?: string[];
+    departureRules?: TransitDataRevision['lines'][number]['departureRules'];
+    operatingDateRule?: string;
     bookingUrl?: string;
   },
   stationSourceIds: string[],
@@ -793,12 +931,38 @@ function buildTransitLineSnapshot(
     new Set((patch.departureTimes ?? []).map((item) => item.trim()).filter(Boolean)),
   );
   const segmentPaths = normalizeTransitLineSegmentPaths(patch.segmentPaths, stationSourceIds);
+  const routeMode =
+    patch.routeMode ?? previous?.routeMode ?? defaultTransitLineRouteMode(patch.mode);
+  const routeNodes = normalizeTransitLineRouteNodes(
+    patch.routeNodes,
+    stationSourceIds,
+    patch.oneWayStops,
+    segmentPaths,
+  );
+  const departureRules = (patch.departureRules ?? [])
+    .map((rule) => ({
+      sourceText: rule.sourceText.trim(),
+      startTime: rule.startTime.trim(),
+      intervalMinutes: rule.intervalMinutes,
+      additionalDepartures: rule.additionalDepartures,
+    }))
+    .filter((rule) => Boolean(rule.sourceText && rule.startTime));
 
   return {
     sourceId: previous?.sourceId ?? `manual_line_${randomUUID()}`,
+    approvalStatus: previous?.approvalStatus ?? 'imported',
+    submittedBy: previous?.submittedBy,
+    submittedAt: previous?.submittedAt,
+    reviewedBy: previous?.reviewedBy,
+    reviewedAt: previous?.reviewedAt,
+    reviewReason: previous?.reviewReason,
+    publishedAt: previous?.publishedAt,
+    archivedAt: previous?.archivedAt,
     mode: patch.mode,
     name: patch.name.trim(),
     color: patch.color?.trim() || undefined,
+    routeMode,
+    routeNodes,
     stationSourceIds,
     stops: stationSourceIds.map((stationSourceId, index) => ({
       ...previousStopByStationId.get(stationSourceId),
@@ -819,6 +983,8 @@ function buildTransitLineSnapshot(
           }
         : undefined,
     departureTimes: departureTimes.length > 0 ? departureTimes : undefined,
+    departureRules: departureRules.length > 0 ? departureRules : undefined,
+    operatingDateRule: patch.operatingDateRule?.trim() || undefined,
     bookingUrl: patch.bookingUrl?.trim() || undefined,
     sourcePath: previous?.sourcePath,
   };
@@ -832,6 +998,8 @@ function getChangedTransitLineFields(
     'mode',
     'name',
     'color',
+    'routeMode',
+    'routeNodes',
     'stationSourceIds',
     'stops',
     'segmentPaths',
@@ -839,6 +1007,8 @@ function getChangedTransitLineFields(
     'fare',
     'firstLastBus',
     'departureTimes',
+    'departureRules',
+    'operatingDateRule',
     'bookingUrl',
   ];
 
@@ -880,6 +1050,7 @@ function normalizeTransitLineSegmentPaths(
       .map((point) => ({
         x: point.x,
         z: point.z,
+        direction: point.direction,
       }));
     if (path.mode === 'road' && waypoints.length === 0) {
       continue;
@@ -896,6 +1067,84 @@ function normalizeTransitLineSegmentPaths(
   }
 
   return normalized;
+}
+
+function defaultTransitLineRouteMode(
+  mode: TransitDataRevision['lines'][number]['mode'],
+): NonNullable<TransitDataRevision['lines'][number]['routeMode']> {
+  return mode === 'bus' || mode === 'coach' ? 'road' : 'straight';
+}
+
+function normalizeTransitLineRouteNodes(
+  routeNodes: TransitDataRevision['lines'][number]['routeNodes'] | undefined,
+  stationSourceIds: string[],
+  oneWayStops:
+    | Array<{
+        stationSourceId: string;
+        oneWay?: 'up' | 'down' | null;
+      }>
+    | undefined,
+  segmentPaths: NonNullable<TransitDataRevision['lines'][number]['segmentPaths']>,
+): NonNullable<TransitDataRevision['lines'][number]['routeNodes']> {
+  if (routeNodes?.length) {
+    const normalized = routeNodes
+      .map((node) =>
+        node.kind === 'station'
+          ? {
+              kind: 'station' as const,
+              stationSourceId: node.stationSourceId.trim(),
+              direction: node.direction ?? 'both',
+            }
+          : {
+              kind: 'waypoint' as const,
+              x: node.x,
+              z: node.z,
+              direction: node.direction ?? 'both',
+            },
+      )
+      .filter((node) =>
+        node.kind === 'station'
+          ? stationSourceIds.includes(node.stationSourceId)
+          : Number.isFinite(node.x) && Number.isFinite(node.z),
+      );
+    const normalizedStationIds = normalized
+      .filter((node) => node.kind === 'station')
+      .map((node) => node.stationSourceId);
+    if (JSON.stringify(normalizedStationIds) === JSON.stringify(stationSourceIds)) {
+      return normalized;
+    }
+  }
+
+  const directionByStationId = new Map(
+    (oneWayStops ?? []).map((stop) => [stop.stationSourceId, stop.oneWay ?? 'both'] as const),
+  );
+  const pathBySegment = new Map(
+    segmentPaths.map((path) => [
+      getTransitLineSegmentKey(path.fromStationSourceId, path.toStationSourceId),
+      path,
+    ]),
+  );
+  return stationSourceIds.flatMap((stationSourceId, index) => {
+    const nextStationSourceId = stationSourceIds[index + 1];
+    const stationNode = {
+      kind: 'station' as const,
+      stationSourceId,
+      direction: directionByStationId.get(stationSourceId) ?? 'both',
+    };
+    if (!nextStationSourceId) {
+      return [stationNode];
+    }
+    const path = pathBySegment.get(getTransitLineSegmentKey(stationSourceId, nextStationSourceId));
+    return [
+      stationNode,
+      ...(path?.waypoints ?? []).map((point) => ({
+        kind: 'waypoint' as const,
+        x: point.x,
+        z: point.z,
+        direction: point.direction ?? 'both',
+      })),
+    ];
+  });
 }
 
 function getTransitLineSegmentKey(fromStationSourceId: string, toStationSourceId: string): string {
@@ -969,6 +1218,82 @@ function getTransitRevisionEditableStatus(
   }
 
   return status;
+}
+
+function getTransitLineApprovalStatus(
+  line: TransitDataRevision['lines'][number],
+  fallbackStatus: TransitDataRevisionStatus,
+): TransitItemApprovalStatus {
+  return line.approvalStatus ?? normalizeTransitRevisionStatusForItem(fallbackStatus);
+}
+
+function normalizeTransitRevisionStatusForItem(
+  status: TransitDataRevisionStatus,
+): TransitItemApprovalStatus {
+  if (status === 'validation_failed') {
+    return 'imported';
+  }
+  if (status === 'superseded') {
+    return 'published';
+  }
+  return status;
+}
+
+function getNextTransitItemApprovalStatus(
+  current: TransitItemApprovalStatus,
+  action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive',
+): TransitItemApprovalStatus | null {
+  if (action === 'archive') {
+    return current === 'archived' || current === 'published' ? null : 'archived';
+  }
+  if (action === 'submit') {
+    return current === 'imported' || current === 'rejected' ? 'pending_review' : null;
+  }
+  if (action === 'approve') {
+    return current === 'pending_review' ? 'approved' : null;
+  }
+  if (action === 'reject') {
+    return current === 'pending_review' ? 'rejected' : null;
+  }
+  return current === 'approved' ? 'published' : null;
+}
+
+function withTransitItemApprovalFields<T extends object>(
+  item: T,
+  status: TransitItemApprovalStatus,
+  actorId: string,
+  changedAt: string,
+  reason?: string,
+): T & {
+  approvalStatus: TransitItemApprovalStatus;
+  submittedBy?: string;
+  submittedAt?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewReason?: string;
+  publishedAt?: string;
+  archivedAt?: string;
+} {
+  return {
+    ...item,
+    approvalStatus: status,
+    submittedBy:
+      status === 'pending_review' ? actorId : (item as { submittedBy?: string }).submittedBy,
+    submittedAt:
+      status === 'pending_review' ? changedAt : (item as { submittedAt?: string }).submittedAt,
+    reviewedBy:
+      status === 'approved' || status === 'rejected'
+        ? actorId
+        : (item as { reviewedBy?: string }).reviewedBy,
+    reviewedAt:
+      status === 'approved' || status === 'rejected'
+        ? changedAt
+        : (item as { reviewedAt?: string }).reviewedAt,
+    reviewReason: status === 'rejected' ? reason : (item as { reviewReason?: string }).reviewReason,
+    publishedAt:
+      status === 'published' ? changedAt : (item as { publishedAt?: string }).publishedAt,
+    archivedAt: status === 'archived' ? changedAt : (item as { archivedAt?: string }).archivedAt,
+  };
 }
 
 function defaultTransitModeLabel(mode: TransitDataRevision['lines'][number]['mode']): string {

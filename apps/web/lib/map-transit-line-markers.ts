@@ -7,7 +7,7 @@ import type {
 import { appPath } from './app-paths';
 import { readLegacyTransitSnapshot } from './legacy-transit';
 import { createTimedCache } from './server-cache';
-import { findPublishedTransitDataRevision } from './transit-data-store';
+import { readPublishedTransitEntitySnapshot } from './published-transit-read-model';
 import { readTransitModeProfiles } from './transit-mode-profile-store';
 
 const transitLinePoiMarkerCache = createTimedCache<MapMarkerSnapshot['markers']>(60 * 1000);
@@ -56,11 +56,11 @@ async function readTransitSnapshotForMap(): Promise<{
   lines: TransitLineSnapshot[];
   stations: TransitStationSnapshot[];
 } | null> {
-  const publishedRevision = await findPublishedTransitDataRevision();
-  if (publishedRevision) {
+  const publishedSnapshot = await readPublishedTransitEntitySnapshot();
+  if (publishedSnapshot) {
     return {
-      lines: publishedRevision.lines,
-      stations: publishedRevision.stations,
+      lines: publishedSnapshot.lines,
+      stations: publishedSnapshot.stations,
     };
   }
 
@@ -82,22 +82,50 @@ function collectLineCoordinates(
   const seen = new Set<string>();
   const coordinates: Array<[number, number]> = [];
 
-  for (const stationSourceId of line.stationSourceIds) {
-    const station = stationById.get(stationSourceId);
-    const x = station?.x;
-    const z = station?.z;
-    if (!Number.isFinite(x) || !Number.isFinite(z)) {
-      continue;
+  const appendCoordinate = (coordinate: [number, number] | undefined) => {
+    if (!coordinate || !Number.isFinite(coordinate[0]) || !Number.isFinite(coordinate[1])) {
+      return;
     }
-
-    const coordinate: [number, number] = [x as number, z as number];
     const key = `${coordinate[0]}:${coordinate[1]}`;
-    if (seen.has(key)) {
-      continue;
+    if (!seen.has(key)) {
+      seen.add(key);
+      coordinates.push(coordinate);
     }
+  };
 
-    seen.add(key);
-    coordinates.push(coordinate);
+  if (line.routeNodes?.length) {
+    for (const node of line.routeNodes) {
+      if (node.kind === 'waypoint') {
+        appendCoordinate([node.x, node.z]);
+        continue;
+      }
+      const station = stationById.get(node.stationSourceId);
+      appendCoordinate(
+        station?.x !== undefined && station.z !== undefined ? [station.x, station.z] : undefined,
+      );
+    }
+    return coordinates;
+  }
+
+  const segmentPathByKey = new Map(
+    (line.segmentPaths ?? []).map((path) => [
+      `${path.fromStationSourceId}->${path.toStationSourceId}`,
+      path,
+    ]),
+  );
+
+  for (const [index, stationSourceId] of line.stationSourceIds.entries()) {
+    const station = stationById.get(stationSourceId);
+    appendCoordinate(
+      station?.x !== undefined && station.z !== undefined ? [station.x, station.z] : undefined,
+    );
+    const nextStationSourceId = line.stationSourceIds[index + 1];
+    const path = nextStationSourceId
+      ? segmentPathByKey.get(`${stationSourceId}->${nextStationSourceId}`)
+      : undefined;
+    for (const waypoint of path?.waypoints ?? []) {
+      appendCoordinate([waypoint.x, waypoint.z]);
+    }
   }
 
   return coordinates;

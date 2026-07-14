@@ -129,13 +129,9 @@ async function writeSnapshot(snapshot: TransitModeProfileStoreSnapshot): Promise
 }
 
 function normalizeProfiles(modes: TransitModeProfile[]): TransitModeProfile[] {
-  const byMode = new Map(defaultTransitModeProfiles.map((mode) => [mode.mode, mode]));
+  const byMode = new Map<TransitModeProfile['mode'], TransitModeProfile>();
   for (const mode of modes) {
-    byMode.set(mode.mode, {
-      ...byMode.get(mode.mode),
-      ...mode,
-      enabled: mode.enabled ?? true,
-    });
+    byMode.set(mode.mode, { ...mode, enabled: mode.enabled ?? true });
   }
 
   return Array.from(byMode.values()).sort((left, right) => left.sortOrder - right.sortOrder);

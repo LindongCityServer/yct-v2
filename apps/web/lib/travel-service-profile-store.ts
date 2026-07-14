@@ -115,13 +115,9 @@ async function writeSnapshot(snapshot: TravelServiceProfileStoreSnapshot): Promi
 function normalizeProfiles(
   services: TravelScheduleServiceProfile[],
 ): TravelScheduleServiceProfile[] {
-  const byKind = new Map(defaultTravelServiceProfiles.map((service) => [service.kind, service]));
+  const byKind = new Map<TravelScheduleServiceProfile['kind'], TravelScheduleServiceProfile>();
   for (const service of services) {
-    byKind.set(service.kind, {
-      ...byKind.get(service.kind),
-      ...service,
-      enabled: service.enabled ?? true,
-    });
+    byKind.set(service.kind, { ...service, enabled: service.enabled ?? true });
   }
 
   return Array.from(byKind.values()).sort((left, right) => left.sortOrder - right.sortOrder);
