@@ -52,6 +52,7 @@ export async function PATCH(
     iconFileName: parsed.data.iconFileName || undefined,
     description: parsed.data.description,
     href: parsed.data.href || undefined,
+    imageUrl: parsed.data.imageUrl,
     geometry: parsed.data.geometry,
   });
 

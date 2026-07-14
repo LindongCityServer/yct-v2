@@ -13,7 +13,7 @@ import type { FormEvent, MouseEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 
-type StatusFilter = PoiSubmissionStatus | 'all' | 'todo' | 'blocked';
+type StatusFilter = PoiSubmissionStatus | 'all' | 'todo' | 'blocked' | 'legacy';
 type PoiAdminSection = 'submissions' | 'categories';
 type PoiCategoryBoardFilter = 'all' | 'public_enabled' | 'public_disabled';
 type MapMarker = MapMarkerSnapshot['markers'][number];
@@ -82,6 +82,17 @@ interface PoiSubmissionEditInput {
   iconFileName: string;
   description: string;
   href: string;
+  imageUrl: string;
+  geometry?: MapGeometry;
+}
+
+interface LegacyPoiMarkerEditInput {
+  label: string;
+  categoryId: string;
+  iconFileName: string;
+  description: string;
+  href: string;
+  imageUrl: string;
   geometry?: MapGeometry;
 }
 
@@ -134,6 +145,7 @@ const defaultMarkerIconBaseUrl = 'https://map.shangxiaoguan.top/';
 
 const statusFilterOptions: Array<{ value: StatusFilter; label: string }> = [
   { value: 'all', label: '全部状态' },
+  { value: 'legacy', label: '旧有数据' },
   { value: 'todo', label: '待处理' },
   { value: 'blocked', label: '阻塞发布' },
   { value: 'pending_review', label: '待审核' },
@@ -182,10 +194,14 @@ export function AdminPoiPanel() {
   const [categoryBoardFilter, setCategoryBoardFilter] = useState<PoiCategoryBoardFilter>('all');
   const [categoryBoardQuery, setCategoryBoardQuery] = useState('');
   const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<Set<string>>(() => new Set());
+  const [selectedLegacyMarkerIds, setSelectedLegacyMarkerIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [detailTargetId, setDetailTargetId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<PoiSubmission | null>(null);
   const [publishTarget, setPublishTarget] = useState<AdminPoiSubmission | null>(null);
   const [editTarget, setEditTarget] = useState<PoiSubmission | null>(null);
+  const [legacyEditTarget, setLegacyEditTarget] = useState<MapMarker | null>(null);
   const [bulkRejectTargets, setBulkRejectTargets] = useState<AdminPoiSubmission[] | null>(null);
   const [bulkPublishTargets, setBulkPublishTargets] = useState<AdminPoiSubmission[] | null>(null);
   const [isCategoryEditorOpen, setIsCategoryEditorOpen] = useState(false);
@@ -330,6 +346,10 @@ export function AdminPoiPanel() {
     [mapMarkers],
   );
   const filteredLegacyMapMarkers = useMemo(() => {
+    if (!shouldShowLegacyPoiMarkers(statusFilter)) {
+      return [];
+    }
+
     const normalizedQuery = normalizeSearchText(query);
     return legacyMapMarkers.filter((marker) => {
       if (categoryFilter !== 'all' && marker.categoryId !== categoryFilter) {
@@ -348,7 +368,31 @@ export function AdminPoiPanel() {
       );
       return haystack.includes(normalizedQuery);
     });
-  }, [categoryById, categoryFilter, legacyMapMarkers, query]);
+  }, [categoryById, categoryFilter, legacyMapMarkers, query, statusFilter]);
+  const filteredPoiListItems = useMemo(
+    () =>
+      [
+        ...filteredSubmissions.map((submission) => ({
+          key: `submission:${submission.id}`,
+          kind: 'submission' as const,
+          submission,
+          sortText: submission.title,
+          sortTime: submission.submittedAt ?? submission.reviewedAt ?? submission.publishedAt ?? '',
+        })),
+        ...filteredLegacyMapMarkers.map((marker) => ({
+          key: `legacy:${marker.id}`,
+          kind: 'legacy' as const,
+          marker,
+          sortText: marker.label,
+          sortTime: '',
+        })),
+      ].sort(
+        (left, right) =>
+          right.sortTime.localeCompare(left.sortTime) ||
+          left.sortText.localeCompare(right.sortText, 'zh-CN'),
+      ),
+    [filteredLegacyMapMarkers, filteredSubmissions],
+  );
 
   const conflictHintsBySubmissionId = useMemo(() => {
     const entries = submissions.map(
@@ -525,6 +569,18 @@ export function AdminPoiPanel() {
     });
   }, [submissions]);
 
+  useEffect(() => {
+    setSelectedLegacyMarkerIds((current) => {
+      if (current.size === 0) {
+        return current;
+      }
+
+      const existingIds = new Set(legacyMapMarkers.map((marker) => marker.id));
+      const next = new Set(Array.from(current).filter((id) => existingIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [legacyMapMarkers]);
+
   const toggleSubmissionSelection = (poiId: string) => {
     setSelectedSubmissionIds((current) => {
       const next = new Set(current);
@@ -537,13 +593,34 @@ export function AdminPoiPanel() {
     });
   };
 
-  const toggleVisibleSubmissionSelection = () => {
+  const toggleLegacyMarkerSelection = (markerId: string) => {
+    setSelectedLegacyMarkerIds((current) => {
+      const next = new Set(current);
+      if (next.has(markerId)) {
+        next.delete(markerId);
+      } else {
+        next.add(markerId);
+      }
+      return next;
+    });
+  };
+
+  const toggleVisiblePoiSelection = () => {
     setSelectedSubmissionIds((current) => {
       const next = new Set(current);
-      if (isAllVisibleSelected) {
+      if (isAllVisiblePoiItemsSelected) {
         filteredSubmissions.forEach((submission) => next.delete(submission.id));
       } else {
         filteredSubmissions.forEach((submission) => next.add(submission.id));
+      }
+      return next;
+    });
+    setSelectedLegacyMarkerIds((current) => {
+      const next = new Set(current);
+      if (isAllVisiblePoiItemsSelected) {
+        filteredLegacyMapMarkers.forEach((marker) => next.delete(marker.id));
+      } else {
+        filteredLegacyMapMarkers.forEach((marker) => next.add(marker.id));
       }
       return next;
     });
@@ -551,6 +628,7 @@ export function AdminPoiPanel() {
 
   const clearSelection = () => {
     setSelectedSubmissionIds(new Set());
+    setSelectedLegacyMarkerIds(new Set());
   };
 
   const sendPoiAction = async (
@@ -714,6 +792,91 @@ export function AdminPoiPanel() {
     }
   };
 
+  const updateLegacyMarker = async (
+    markerId: string,
+    input: LegacyPoiMarkerEditInput,
+  ): Promise<string | null> => {
+    setIsBusy(true);
+    try {
+      const response = await fetch(
+        appPath(`/api/admin/map/legacy-markers/${encodeURIComponent(markerId)}`),
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+      );
+      const data = (await response.json()) as { message?: string };
+      if (!response.ok) {
+        return data.message ?? '旧有标记点保存失败';
+      }
+
+      await loadMapMarkers();
+      setStatusText(`已保存旧有标记点：${input.label.trim()}`);
+      return null;
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const archiveLegacyMarker = async (marker: MapMarker): Promise<boolean> => {
+    setIsBusy(true);
+    try {
+      const response = await fetch(
+        appPath(`/api/admin/map/legacy-markers/${encodeURIComponent(marker.id)}`),
+        {
+          method: 'DELETE',
+        },
+      );
+      const data = (await response.json()) as { message?: string };
+      if (!response.ok) {
+        setStatusText(data.message ?? '旧有标记点删除失败');
+        return false;
+      }
+
+      await loadMapMarkers();
+      setStatusText(`已删除旧有标记点：${marker.label}`);
+      return true;
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const archiveSelectedPoiRecords = async (): Promise<void> => {
+    const selectedLegacyMarkers = legacyMapMarkers.filter((marker) =>
+      selectedLegacyMarkerIds.has(marker.id),
+    );
+    if (selectedSubmissions.length === 0 && selectedLegacyMarkers.length === 0) {
+      setStatusText('当前没有已选择的 POI 记录。');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `确认归档/删除已选择的 ${selectedSubmissions.length} 条投稿和 ${selectedLegacyMarkers.length} 个旧有标记点？`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    let successCount = 0;
+    for (const submission of selectedSubmissions) {
+      const result = await sendPoiAction(submission.id, 'archive');
+      if (result.ok) {
+        successCount += 1;
+      }
+    }
+    for (const marker of selectedLegacyMarkers) {
+      const archived = await archiveLegacyMarker(marker);
+      if (archived) {
+        successCount += 1;
+      }
+    }
+
+    clearSelection();
+    await Promise.all([loadSubmissions(), loadMapMarkers()]);
+    setStatusText(`已处理 ${successCount} 条 POI 记录。`);
+  };
+
   const updateConflictDecision = async (
     submission: PoiSubmission,
     hint: PoiConflictHint,
@@ -813,6 +976,14 @@ export function AdminPoiPanel() {
     () => filteredSubmissions.filter((submission) => selectedSubmissionIds.has(submission.id)),
     [filteredSubmissions, selectedSubmissionIds],
   );
+  const selectedLegacyMarkers = useMemo(
+    () => legacyMapMarkers.filter((marker) => selectedLegacyMarkerIds.has(marker.id)),
+    [legacyMapMarkers, selectedLegacyMarkerIds],
+  );
+  const selectedVisibleLegacyMarkers = useMemo(
+    () => filteredLegacyMapMarkers.filter((marker) => selectedLegacyMarkerIds.has(marker.id)),
+    [filteredLegacyMapMarkers, selectedLegacyMarkerIds],
+  );
   const selectedPendingReviewSubmissions = useMemo(
     () => selectedSubmissions.filter((submission) => submission.status === 'pending_review'),
     [selectedSubmissions],
@@ -836,9 +1007,12 @@ export function AdminPoiPanel() {
       ),
     [conflictDecisions, imageReviewByKey, selectedApprovedSubmissions],
   );
-  const isAllVisibleSelected =
-    filteredSubmissions.length > 0 &&
-    filteredSubmissions.every((submission) => selectedSubmissionIds.has(submission.id));
+  const selectedPoiRecordCount = selectedSubmissions.length + selectedLegacyMarkers.length;
+  const visiblePoiRecordCount = filteredSubmissions.length + filteredLegacyMapMarkers.length;
+  const isAllVisiblePoiItemsSelected =
+    visiblePoiRecordCount > 0 &&
+    filteredSubmissions.every((submission) => selectedSubmissionIds.has(submission.id)) &&
+    filteredLegacyMapMarkers.every((marker) => selectedLegacyMarkerIds.has(marker.id));
   const currentSectionStatusText =
     activeSection === 'submissions'
       ? statusText
@@ -921,8 +1095,8 @@ export function AdminPoiPanel() {
               tone={duplicateConflictCount > 0 ? 'warning' : undefined}
             />
             <AdminPoiMetric label="已发布" value={publishedCount} />
-            <AdminPoiMetric label="旧标记点" value={filteredLegacyMapMarkers.length} />
-            <AdminPoiMetric label="当前结果" value={filteredSubmissions.length} />
+            <AdminPoiMetric label="旧标记点" value={legacyMapMarkers.length} />
+            <AdminPoiMetric label="当前结果" value={filteredPoiListItems.length} />
           </div>
 
           <div className="admin-toolbar admin-poi-toolbar" aria-label="POI 投稿筛选">
@@ -970,14 +1144,16 @@ export function AdminPoiPanel() {
             <label className="checkbox-row admin-content-bulk-select">
               <input
                 type="checkbox"
-                checked={isAllVisibleSelected}
-                disabled={filteredSubmissions.length === 0}
-                onChange={toggleVisibleSubmissionSelection}
+                checked={isAllVisiblePoiItemsSelected}
+                disabled={visiblePoiRecordCount === 0}
+                onChange={toggleVisiblePoiSelection}
               />
-              <span>{`选择当前列表 ${selectedVisibleSubmissions.length}/${filteredSubmissions.length}`}</span>
+              <span>{`选择当前列表 ${
+                selectedVisibleSubmissions.length + selectedVisibleLegacyMarkers.length
+              }/${visiblePoiRecordCount}`}</span>
             </label>
             <span className="muted">
-              {`已选 ${selectedSubmissions.length} 条，可通过 ${selectedPendingReviewSubmissions.length} 条，可发布 ${selectedPublishReadySubmissions.length} 条`}
+              {`已选 ${selectedPoiRecordCount} 条，其中投稿 ${selectedSubmissions.length} 条、旧标记点 ${selectedLegacyMarkers.length} 个；可通过 ${selectedPendingReviewSubmissions.length} 条，可发布 ${selectedPublishReadySubmissions.length} 条`}
               {selectedBlockedPublishSubmissions.length > 0
                 ? `，其中 ${selectedBlockedPublishSubmissions.length} 条仍阻塞发布`
                 : ''}
@@ -1005,44 +1181,75 @@ export function AdminPoiPanel() {
             </button>
             <button
               type="button"
-              disabled={isBusy || selectedSubmissions.length === 0}
+              disabled={isBusy || selectedPoiRecordCount === 0}
+              onClick={() => void archiveSelectedPoiRecords()}
+            >
+              批量归档/删除
+            </button>
+            <button
+              type="button"
+              disabled={isBusy || selectedPoiRecordCount === 0}
               onClick={clearSelection}
             >
               清空选择
             </button>
           </div>
 
-          <div className="admin-content-list" aria-label="POI 投稿记录">
-            {filteredSubmissions.map((submission) => (
-              <PoiSubmissionReviewItem
-                category={categoryById.get(submission.categoryId)}
-                conflictHints={conflictHintsBySubmissionId.get(submission.id) ?? []}
-                iconBaseUrl={categoryIconBaseUrl}
-                isBusy={isBusy}
-                imageReview={
-                  submission.imageUrl
-                    ? imageReviewByKey.get(imageReviewKey(submission.id, submission.imageUrl))
-                    : undefined
-                }
-                isSelected={selectedSubmissionIds.has(submission.id)}
-                key={submission.id}
-                hierarchyHint={hierarchyHintBySubmissionId.get(submission.id)}
-                onCopy={(message) => setStatusText(message)}
-                onDetail={() => setDetailTargetId(submission.id)}
-                onDelete={() => void deleteSubmission(submission)}
-                onEdit={() => setEditTarget(submission)}
-                onPublish={() => setPublishTarget(submission)}
-                onReject={() => setRejectTarget(submission)}
-                onRunAction={runAction}
-                onToggleSelected={() => toggleSubmissionSelection(submission.id)}
-                submission={submission}
-              />
-            ))}
-            {filteredSubmissions.length === 0 ? (
-              <p className="muted admin-poi-empty">当前筛选条件下没有 POI 投稿。</p>
+          <div className="admin-content-list" aria-label="POI 主列表">
+            {filteredPoiListItems.map((item) =>
+              item.kind === 'submission' ? (
+                <PoiSubmissionReviewItem
+                  category={categoryById.get(item.submission.categoryId)}
+                  conflictHints={conflictHintsBySubmissionId.get(item.submission.id) ?? []}
+                  iconBaseUrl={categoryIconBaseUrl}
+                  isBusy={isBusy}
+                  imageReview={
+                    item.submission.imageUrl
+                      ? imageReviewByKey.get(
+                          imageReviewKey(item.submission.id, item.submission.imageUrl),
+                        )
+                      : undefined
+                  }
+                  isSelected={selectedSubmissionIds.has(item.submission.id)}
+                  key={item.key}
+                  hierarchyHint={hierarchyHintBySubmissionId.get(item.submission.id)}
+                  onCopy={(message) => setStatusText(message)}
+                  onDetail={() => setDetailTargetId(item.submission.id)}
+                  onDelete={() => void deleteSubmission(item.submission)}
+                  onEdit={() => setEditTarget(item.submission)}
+                  onPublish={() => setPublishTarget(item.submission)}
+                  onReject={() => setRejectTarget(item.submission)}
+                  onRunAction={runAction}
+                  onToggleSelected={() => toggleSubmissionSelection(item.submission.id)}
+                  submission={item.submission}
+                />
+              ) : (
+                <LegacyPoiMarkerItem
+                  category={
+                    item.marker.categoryId ? categoryById.get(item.marker.categoryId) : undefined
+                  }
+                  isBusy={isBusy}
+                  isSelected={selectedLegacyMarkerIds.has(item.marker.id)}
+                  key={item.key}
+                  marker={item.marker}
+                  onDelete={() => {
+                    if (
+                      window.confirm(
+                        `确认删除旧有标记点“${item.marker.label}”？删除后会从公开地图标记列表移除。`,
+                      )
+                    ) {
+                      void archiveLegacyMarker(item.marker);
+                    }
+                  }}
+                  onEdit={() => setLegacyEditTarget(item.marker)}
+                  onToggleSelected={() => toggleLegacyMarkerSelection(item.marker.id)}
+                />
+              ),
+            )}
+            {filteredPoiListItems.length === 0 ? (
+              <p className="muted admin-poi-empty">当前筛选条件下没有 POI 记录。</p>
             ) : null}
           </div>
-          <LegacyPoiMarkerList categoryById={categoryById} markers={filteredLegacyMapMarkers} />
         </>
       ) : (
         <PoiCategoryBoard
@@ -1208,6 +1415,22 @@ export function AdminPoiPanel() {
           }}
         />
       ) : null}
+
+      {legacyEditTarget ? (
+        <EditLegacyPoiMarkerDialog
+          categories={categories}
+          isBusy={isBusy}
+          marker={legacyEditTarget}
+          onClose={() => setLegacyEditTarget(null)}
+          onSubmit={async (input) => {
+            const error = await updateLegacyMarker(legacyEditTarget.id, input);
+            if (!error) {
+              setLegacyEditTarget(null);
+            }
+            return error;
+          }}
+        />
+      ) : null}
     </section>
   );
 }
@@ -1225,53 +1448,226 @@ function AdminPoiMetric({
   );
 }
 
-function LegacyPoiMarkerList({
-  categoryById,
-  markers,
+function LegacyPoiMarkerItem({
+  category,
+  isBusy,
+  isSelected,
+  marker,
+  onDelete,
+  onEdit,
+  onToggleSelected,
 }: Readonly<{
-  categoryById: Map<string, PoiCategory>;
-  markers: MapMarker[];
+  category?: PoiCategory;
+  isBusy: boolean;
+  isSelected: boolean;
+  marker: MapMarker;
+  onDelete: () => void;
+  onEdit: () => void;
+  onToggleSelected: () => void;
 }>) {
+  const coordinate = getGeometryRepresentativeCoordinate(marker.geometry);
   return (
-    <section className="admin-poi-legacy-marker-list" aria-label="旧有地图标记点">
-      <div className="section-heading">
-        <h2>旧有标记点</h2>
-        <span className="muted">{`${markers.length} 个旧地图对象，按当前筛选加载`}</span>
+    <article className="admin-content-item admin-poi-legacy-marker-item">
+      <label className="admin-content-select" aria-label={`选择旧有 POI ${marker.label}`}>
+        <input type="checkbox" checked={isSelected} onChange={onToggleSelected} />
+      </label>
+      <div>
+        <div className="admin-poi-title-row">
+          <strong>{marker.label}</strong>
+          <span className="admin-poi-status-chip is-legacy">旧有数据</span>
+        </div>
+        <p className="muted">
+          {marker.categoryId ? formatCategoryName(marker.categoryId, category) : '未分类'} ·{' '}
+          {geometryLabel(marker.geometry)} · {marker.id}
+        </p>
+        {marker.description ? <p className="muted">{marker.description}</p> : null}
+        {marker.imageUrl ? <p className="muted">图片：{marker.imageUrl}</p> : null}
       </div>
-      <div className="admin-content-list">
-        {markers.map((marker) => {
-          const coordinate = getGeometryRepresentativeCoordinate(marker.geometry);
-          const category = marker.categoryId ? categoryById.get(marker.categoryId) : undefined;
-          return (
-            <article className="admin-content-item admin-poi-legacy-marker-item" key={marker.id}>
-              <div>
-                <div className="admin-poi-title-row">
-                  <strong>{marker.label}</strong>
-                  <span className="admin-poi-status-chip is-published">旧标记点</span>
-                </div>
-                <p className="muted">
-                  {marker.categoryId ? formatCategoryName(marker.categoryId, category) : '未分类'} ·{' '}
-                  {geometryLabel(marker.geometry)}
-                </p>
-                {marker.description ? <p className="muted">{marker.description}</p> : null}
-              </div>
-              <div className="admin-content-actions">
-                {coordinate ? (
-                  <a
-                    href={buildLegacyMarkerMapHref(marker, coordinate)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    地图查看
-                  </a>
-                ) : null}
-              </div>
-            </article>
-          );
-        })}
-        {markers.length === 0 ? <p className="muted">当前筛选条件下没有旧有标记点。</p> : null}
+      <div className="admin-content-actions">
+        {coordinate ? (
+          <a href={buildLegacyMarkerMapHref(marker, coordinate)} target="_blank" rel="noreferrer">
+            地图查看
+          </a>
+        ) : null}
+        <button type="button" disabled={isBusy} onClick={onEdit}>
+          编辑
+        </button>
+        <button type="button" disabled={isBusy} onClick={onDelete}>
+          删除
+        </button>
       </div>
-    </section>
+    </article>
+  );
+}
+
+function EditLegacyPoiMarkerDialog({
+  categories,
+  isBusy,
+  marker,
+  onClose,
+  onSubmit,
+}: Readonly<{
+  categories: PoiCategory[];
+  isBusy: boolean;
+  marker: MapMarker;
+  onClose: () => void;
+  onSubmit: (input: LegacyPoiMarkerEditInput) => Promise<string | null>;
+}>) {
+  const [form, setForm] = useState<LegacyPoiMarkerEditInput>(() => ({
+    label: marker.label,
+    categoryId: marker.categoryId ?? '',
+    iconFileName: marker.iconFileName ?? '',
+    description: marker.description ?? '',
+    href: marker.href ?? '',
+    imageUrl: marker.imageUrl ?? '',
+    geometry: marker.geometry,
+  }));
+  const [error, setError] = useState('');
+  const selectedCategory = categories.find((category) => category.id === form.categoryId);
+  const iconOptions = selectedCategory?.iconMapping.iconFileNames ?? [];
+
+  const updateForm = (patch: Partial<LegacyPoiMarkerEditInput>) => {
+    setForm((current) => {
+      const next = { ...current, ...patch };
+      if (patch.categoryId && patch.categoryId !== current.categoryId) {
+        const nextCategory = categories.find((category) => category.id === patch.categoryId);
+        next.iconFileName = nextCategory?.iconMapping.iconFileNames.includes(current.iconFileName)
+          ? current.iconFileName
+          : '';
+      }
+      return next;
+    });
+    setError('');
+  };
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!form.label.trim()) {
+      setError('请填写标记点名称。');
+      return;
+    }
+
+    const submitError = await onSubmit({
+      ...form,
+      label: form.label.trim(),
+      categoryId: form.categoryId.trim(),
+      iconFileName: form.iconFileName.trim(),
+      description: form.description.trim(),
+      href: form.href.trim(),
+      imageUrl: form.imageUrl.trim(),
+      geometry: marker.geometry,
+    });
+    if (submitError) {
+      setError(submitError);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <form
+        className="modal-panel admin-poi-edit-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-legacy-poi-edit-title"
+        onMouseDown={(event) => event.stopPropagation()}
+        onSubmit={submit}
+      >
+        <div className="section-heading">
+          <h2 id="admin-legacy-poi-edit-title">编辑旧有 POI</h2>
+          <span className="muted">{marker.id}</span>
+        </div>
+        <label>
+          <span>标记点名称</span>
+          <input
+            value={form.label}
+            onChange={(event) => updateForm({ label: event.currentTarget.value })}
+            maxLength={200}
+          />
+        </label>
+        <label>
+          <span>分类</span>
+          <select
+            value={form.categoryId}
+            onChange={(event) => updateForm({ categoryId: event.currentTarget.value })}
+          >
+            <option value="">未分类</option>
+            {categories.map((category) => (
+              <option value={category.id} key={category.id}>
+                {formatCategoryName(category.id, category)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>展示图标</span>
+          <select
+            value={form.iconFileName}
+            onChange={(event) => updateForm({ iconFileName: event.currentTarget.value })}
+          >
+            <option value="">跟随分类默认图标</option>
+            {iconOptions.map((iconValue) => (
+              <option value={iconValue} key={iconValue}>
+                {iconValue}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>简介</span>
+          <textarea
+            value={form.description}
+            onChange={(event) => updateForm({ description: event.currentTarget.value })}
+            maxLength={1000}
+          />
+        </label>
+        <label>
+          <span>链接</span>
+          <input
+            value={form.href}
+            onChange={(event) => updateForm({ href: event.currentTarget.value })}
+            placeholder="https://..."
+          />
+        </label>
+        <div className="admin-poi-image-edit-block">
+          <label>
+            <span>图片</span>
+            <input
+              value={form.imageUrl}
+              onChange={(event) => updateForm({ imageUrl: event.currentTarget.value })}
+              placeholder="https://... 或 /api/map/poi-submission-images/..."
+            />
+          </label>
+          <div className="admin-content-actions">
+            {form.imageUrl ? (
+              <a
+                href={resolvePoiSubmissionImageUrl(form.imageUrl)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                预览图片
+              </a>
+            ) : null}
+            <button
+              type="button"
+              disabled={!form.imageUrl}
+              onClick={() => updateForm({ imageUrl: '' })}
+            >
+              删除图片
+            </button>
+          </div>
+        </div>
+        <p className="muted">几何：{geometryLabel(marker.geometry)}。这轮保留原旧站几何。</p>
+        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
+        <div className="admin-content-actions">
+          <button type="button" onClick={onClose} disabled={isBusy}>
+            取消
+          </button>
+          <button type="submit" disabled={isBusy}>
+            保存修改
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -2555,6 +2951,7 @@ function EditPoiSubmissionDialog({
     iconFileName: submission.iconFileName ?? '',
     description: submission.description ?? '',
     href: submission.href ?? '',
+    imageUrl: submission.imageUrl ?? '',
   }));
   const [geometryDraft, setGeometryDraft] = useState<PoiGeometryDraft>(() =>
     createPoiGeometryDraft(submission.geometry),
@@ -2612,6 +3009,7 @@ function EditPoiSubmissionDialog({
       iconFileName: form.iconFileName.trim(),
       description: form.description.trim(),
       href: form.href.trim(),
+      imageUrl: form.imageUrl.trim(),
       geometry: geometryResult.geometry,
     });
     if (submitError) {
@@ -2684,6 +3082,34 @@ function EditPoiSubmissionDialog({
             placeholder="https://..."
           />
         </label>
+        <div className="admin-poi-image-edit-block">
+          <label>
+            <span>图片</span>
+            <input
+              value={form.imageUrl}
+              onChange={(event) => updateForm({ imageUrl: event.currentTarget.value })}
+              placeholder="https://... 或 /api/map/poi-submission-images/..."
+            />
+          </label>
+          <div className="admin-content-actions">
+            {form.imageUrl ? (
+              <a
+                href={resolvePoiSubmissionImageUrl(form.imageUrl)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                预览图片
+              </a>
+            ) : null}
+            <button
+              type="button"
+              disabled={!form.imageUrl}
+              onClick={() => updateForm({ imageUrl: '' })}
+            >
+              删除图片
+            </button>
+          </div>
+        </div>
         {geometryDraft.type === 'Point' && originalPointCoordinate ? (
           <div className="admin-poi-edit-coordinate">
             <div className="admin-poi-edit-coordinate-fields">
@@ -4874,7 +5300,15 @@ function matchesStatusFilter(status: PoiSubmissionStatus, filter: StatusFilter):
     return false;
   }
 
+  if (filter === 'legacy') {
+    return false;
+  }
+
   return status === filter;
+}
+
+function shouldShowLegacyPoiMarkers(filter: StatusFilter): boolean {
+  return filter === 'all' || filter === 'legacy';
 }
 
 function isPoiSubmissionPublishBlocked(

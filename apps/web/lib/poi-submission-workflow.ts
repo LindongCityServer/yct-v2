@@ -139,6 +139,7 @@ export async function updatePoiSubmissionByAdmin(input: {
   iconFileName?: string;
   description?: string;
   href?: string;
+  imageUrl?: string;
   geometry?: MapGeometry;
 }): Promise<PoiSubmissionActionResult> {
   const submission = await findLocalPoiSubmission(input.poiId);
@@ -165,6 +166,8 @@ export async function updatePoiSubmissionByAdmin(input: {
     iconFileName: normalizeOptionalText(input.iconFileName),
     description: normalizeOptionalText(input.description),
     href: normalizeOptionalText(input.href),
+    imageUrl:
+      input.imageUrl === undefined ? submission.imageUrl : normalizeOptionalText(input.imageUrl),
     geometry: input.geometry ?? submission.geometry,
   };
   if (input.geometry && input.geometry.type !== submission.geometry.type) {
@@ -358,12 +361,17 @@ function normalizeOptionalText(value: string | undefined): string | undefined {
 
 function getChangedPoiSubmissionFields(
   submission: PoiSubmission,
-  patch: Pick<PoiSubmission, 'title' | 'categoryId' | 'iconFileName' | 'description' | 'href'> & {
+  patch: Pick<
+    PoiSubmission,
+    'title' | 'categoryId' | 'iconFileName' | 'description' | 'href' | 'imageUrl'
+  > & {
     geometry: MapGeometry;
   },
-): Array<'title' | 'categoryId' | 'iconFileName' | 'description' | 'href' | 'geometry'> {
+): Array<
+  'title' | 'categoryId' | 'iconFileName' | 'description' | 'href' | 'imageUrl' | 'geometry'
+> {
   const textFields = (
-    ['title', 'categoryId', 'iconFileName', 'description', 'href'] as const
+    ['title', 'categoryId', 'iconFileName', 'description', 'href', 'imageUrl'] as const
   ).filter((field) => (submission[field] ?? '') !== (patch[field] ?? ''));
   const geometryChanged = JSON.stringify(submission.geometry) !== JSON.stringify(patch.geometry);
 

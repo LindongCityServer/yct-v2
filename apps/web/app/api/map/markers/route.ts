@@ -3,6 +3,7 @@ import { BdslmMarkerProvider, UnminedCustomMarkerProvider } from '@yct/adapters'
 import type { MapMarkerSnapshot } from '@yct/contracts';
 import { createApiMeta } from '../../../../lib/api-meta';
 import { readTransitLinePoiMarkers } from '../../../../lib/map-transit-line-markers';
+import { applyLegacyMapMarkerOverrides } from '../../../../lib/legacy-map-marker-override-store';
 import { readPoiCategories } from '../../../../lib/poi-categories';
 import { listPublishedPublicPoiSubmissions } from '../../../../lib/poi-submission-store';
 import { readRuntimeConfig, type RuntimeConfig } from '../../../../lib/runtime-config';
@@ -28,12 +29,13 @@ export async function GET() {
       readStaticMarkerSnapshot(config),
       readPlayerMarkerSnapshot(config),
     ]);
+    const staticSnapshotWithOverrides = await applyLegacyMapMarkerOverrides(staticSnapshot);
     const resolvedTransitLineMarkers = resolveTransitLineMarkerCoordinates(
       transitLinePoiMarkers,
       transitOverview,
-      staticSnapshot,
+      staticSnapshotWithOverrides,
     );
-    const snapshot = mergeMarkerSnapshots(staticSnapshot, playerSnapshot);
+    const snapshot = mergeMarkerSnapshots(staticSnapshotWithOverrides, playerSnapshot);
     const mergedSnapshot = normalizeMarkerSnapshotText(
       mergeLocalMapMarkers(
         snapshot,

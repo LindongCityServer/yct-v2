@@ -24,6 +24,7 @@ export interface RuntimeConfig {
   poiSubmissionImageReviewStorePath: string;
   poiCategoryProfileStorePath: string;
   poiConflictDecisionStorePath: string;
+  legacyMapMarkerOverrideStorePath: string;
   poiIconUploadDir: string;
   offlinePackageStorePath: string;
   eventOutboxStorePath: string;
@@ -123,6 +124,9 @@ export function readRuntimeConfig(): RuntimeConfig {
     poiConflictDecisionStorePath:
       emptyToUndefined(process.env.YCT_POI_CONFLICT_DECISION_STORE_PATH) ??
       '.yct-data/poi-conflict-decision-store.json',
+    legacyMapMarkerOverrideStorePath:
+      emptyToUndefined(process.env.YCT_LEGACY_MAP_MARKER_OVERRIDE_STORE_PATH) ??
+      '.yct-data/legacy-map-marker-overrides.json',
     poiIconUploadDir:
       emptyToUndefined(process.env.YCT_POI_ICON_UPLOAD_DIR) ?? 'runtime-assets/poi-icons',
     offlinePackageStorePath:
