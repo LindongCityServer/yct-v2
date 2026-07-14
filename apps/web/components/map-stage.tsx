@@ -2380,11 +2380,18 @@ export function MapStage() {
                     {sidebarMarkers.length > 0 ? (
                       sidebarMarkers.map((marker) => {
                         const center = getMarkerCenter(marker);
+                        const distanceDetail = formatMarkerListDistanceDetail(marker, {
+                          coordinates: nearbySearchCenter?.coordinates ?? [
+                            mapView.centerX,
+                            mapView.centerZ,
+                          ],
+                          t,
+                        });
                         const content = (
                           <>
                             <MarkerListIcon marker={marker} iconBaseUrl={markerIconBaseUrl} />
                             <span>{formatMarkerDisplayName(marker.label)}</span>
-                            <span className="muted">{formatMarkerDetail(marker, t)}</span>
+                            <span className="muted">{distanceDetail}</span>
                           </>
                         );
 
@@ -10163,6 +10170,22 @@ function formatMarkerDetail(marker: SidebarMarker, t: Translate): string {
   return t('map.geometry.roadEndpointCount', {
     count: marker.geometry.coordinates.length,
   });
+}
+
+function formatMarkerListDistanceDetail(
+  marker: SidebarMarker,
+  reference: { coordinates: [number, number]; t: Translate },
+): string {
+  const center = getMarkerCenter(marker);
+  if (!center) {
+    return formatGeometryDetail(marker, reference.t);
+  }
+
+  if (marker.geometry.type !== 'Point') {
+    return `全长 ${formatRoutePlanDistance(getCoordinateChainDistance(marker.geometry.coordinates), reference.t)}`;
+  }
+
+  return formatRoutePlanDistance(getCoordinateDistance(center, reference.coordinates), reference.t);
 }
 
 function dedupeMarkersById<T extends { id: string }>(markers: T[]): T[] {
