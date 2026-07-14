@@ -1,6 +1,6 @@
 # 后台链路完善目标与实施计划
 
-更新时间：2026-07-13
+更新时间：2026-07-14
 
 本文档基于当前代码走查整理，覆盖内容后台、POI 后台、线路后台、班次后台四条链路。评估范围主要包括 `apps/web/components/*admin*panel.tsx`、`apps/web/lib/*workflow.ts`、`apps/web/lib/*store.ts`、`apps/web/app/api/admin/**`、`packages/domain/src/*state.ts`、`packages/contracts/src/events.ts`。
 
@@ -20,16 +20,17 @@
 
 ### 1.1 2026-07-13 本轮明确修复目标
 
-本轮继续收后台日常维护体验，按以下顺序落地：
+本轮继续收后台日常维护体验，按以下顺序落地。原则上旧有数据、新投稿、新草稿和已发布实体都要进入同一个 `admin-content-list` 主列表语义，不能再用单独的旧数据调试列表割裂管理员的操作面：
 
-1. 线路与班次后台以“线路 / 班次实体”为最小审批和维护对象：版本仍作为导入快照、差异对比和发布容器，但主列表必须完整展示线路、班次实体，并在实体行上呈现所属版本、版本状态和可执行动作，避免管理员只能围绕版本做判断。
-2. 线路实体支持自定义站间路径：每一段站间路径可选择直线或沿道路走行，并允许设置一至多个途径点。单向站继续放在 stop 级元数据中，后台需明确展示和说明“某站只服务上行或下行”如何录入，而不是把它伪装成两条重复线路。
-3. `transit-line-order-preview` 不再只展示前几站文字摘要，改成小地图预览，直接呈现站点顺序、缺坐标站点和自定义站间路径。
-4. 加载旧有线路时，先按站点类别在既有同名标记点中查找绑定：例如公交站优先匹配公交/站点类标记，轨交优先匹配轨交/站点类标记；命中后回填 `boundPoiMarkerId`、`boundPoiLabel` 和世界坐标。
-5. 服务入口后台支持修改或删除已经公开的自定义服务入口；系统默认入口仍只读，防止误删。
-6. POI 后台列表除了投稿，也要加载旧有地图标记点，管理员可以在同一后台看到“旧标记点”和“新投稿 / 已发布 POI”的关系。
-7. 修正 `admin-poi-coordinate-picker-grid` 对应的小地图瓦片偏移：瓦片层和 SVG 矢量层必须共享同一 viewBox 尺寸和缩放方式。
-8. 清理后台界面中影响深色模式可读性的硬编码黑色或过深颜色，优先改为设计变量或 `color-mix`。
+1. 旧有线路、班次和 POI 不再在后台用独立旧数据列表呈现，而是合并进各自最主要的 `admin-content-list`。它们和新项目一样显示标题、来源、状态、摘要和操作按钮；筛选器额外提供“旧有数据”状态，便于只看导入自旧站的数据。
+2. 服务入口后台支持修改或删除已经公开的自定义服务入口。系统默认入口仍只读；自定义公开入口走轻量直接更新或归档删除，并记录事件，后续如需更强治理再升级成变更草稿。
+3. POI 编辑界面支持维护图片：管理员可以替换图片 URL 或清空图片；图片局部审核状态仍保留，后续再扩展多图、对象存储和安全扫描。
+4. 线路编辑弹窗改成更图形化的分段编辑体验，参考本轮附图：顶部按“基本信息 / 路线 / 班次”切换，基本信息集中维护交通方式、标识色、票价、订票链接和运营方；路线页维护折线/沿路、站点顺序、方向和途径点；班次页维护首末班车与班次条目。
+5. 线路实体继续支持自定义站间路径：每一段站间路径可选择直线或沿道路走行，并允许设置一至多个途径点。单向站继续放在 stop 级元数据中，后台需明确展示和说明“某站只服务上行或下行”如何录入，而不是把它伪装成两条重复线路。
+6. `transit-line-order-preview` 不再只展示前几站文字摘要，改成小地图预览，直接呈现站点顺序、缺坐标站点和自定义站间路径。
+7. 加载旧有线路时，先按站点类别在既有同名标记点中查找绑定：例如公交站优先匹配公交/站点类标记，轨交优先匹配轨交/站点类标记；命中后回填 `boundPoiMarkerId`、`boundPoiLabel` 和世界坐标。
+8. 修正 `admin-poi-coordinate-picker-grid` 对应的小地图瓦片偏移：瓦片层和 SVG 矢量层必须共享同一 viewBox 尺寸和缩放方式。
+9. 清理后台界面中影响深色模式可读性的硬编码黑色或过深颜色，优先改为设计变量或 `color-mix`。
 
 ### 1.2 本轮实现边界
 
@@ -37,17 +38,163 @@
 
 1. 不引入新的跨模块直接调用，继续沿用 `Route -> workflow -> store -> event` 的事件驱动边界。
 2. 不把线路/班次后台一次性升级成完整 GIS 编辑器；本轮只落直线/沿道路/途径点的结构化表达和预览，道路吸附算法、轨迹拖拽、方向子线路治理仍留在后续。
-3. 不把旧有地图标记点改造成可直接编辑的正式 POI；本轮先让 POI 后台能读、筛、看旧标记点，并用于冲突判断和旧站点绑定。
+3. 不把所有旧有地图标记点一次性改造成完整新版 POI；本轮先让旧有 POI 进入主列表、能筛选、能查看并参与图片/基础字段维护，正式父子关系、多语言和版本化治理留到后续。
 4. 服务入口的公开后修改采用“直接更新公开入口并记录事件”的轻量模式；后续若需要更强治理，再引入公开入口变更草稿和二次审核。
+
+### 1.3 2026-07-14 本轮修正准则
+
+本轮把上轮“版本工作台”继续向“业务实体工作台”收敛。旧数据导入只作为一种批量添加线路、班次或 POI 项目的来源，不能让旧项目长期停留在次级列表或只读参考态；管理员在后台看到的核心对象应始终是线路、班次、站点和 POI 本身。
+
+1. 旧有线路、班次和 POI 必须和新申请项目使用同一套主列表语义：可选中、可批量操作、可进入编辑或审核动作。筛选器可以保留“旧有数据/导入数据”维度，但来源不能决定它是否是一等对象。
+2. 线路/班次审批粒度从“整个导入版本”下沉到“线路/班次条目”。版本或导入批次只承担批量导入、来源追踪和回滚快照职责；提交审核、通过、驳回和发布动作优先围绕具体线路或班次进行。
+3. 线路编辑弹窗的线路页采用更接近图形编辑器的布局：顶部保留“基本信息 / 线路 / 班次”选项卡，线路页需要显式提供“添加站点”“添加标记点/途径点”等按钮，不能让用户只能编辑既有节点。
+4. 线路后台中一个站点可以绑定多个 POI。推荐数据结构是 `boundPoiRefs: Array<{ markerId: string; label: string; categoryId?: string }>`，旧的 `boundPoiMarkerId` / `boundPoiLabel` 作为兼容字段读取，保存时应归一到数组。
+5. 审计事件页面从内容后台独立出来，作为 `/admin/audit-events` 子页面；`/admin` 首页提供入口。内容后台只保留业务内容操作，不再承担横向审计入口。
+6. 桌面端 `admin-content-actions` 需要允许换行、分组和横向空间释放，避免按钮区把标题、筛选或状态标签挤压到不可读。
+7. 地图页 `map-marker-list-item` 的 `muted` 文案改为距离信息：优先显示到选定地点的距离，没有选定地点时显示到当前地图中心的距离。
+
+#### 为什么旧项目难融合
+
+旧项目之所以容易和新申请项目割裂，根因不是“旧数据天然特殊”，而是当前模型把导入版本、旧来源标记和业务实体混在一起：线路/班次以 revision 为审批对象，POI 里旧 marker 又通过独立覆盖表维护。这样会导致三个常见问题：
+
+1. UI 列表为了避免误操作旧数据，把旧项目排除在多选和批量动作之外。
+2. 状态机只认识 revision 的状态，无法表达“这一个旧线路已修正并提交审核”。
+3. 旧数据缺少新版投稿的完整字段，例如图片审核、分类 Profile、绑定 POI 等，前端只能降级为只读。
+
+本轮的修正方向是把旧来源降级为 `sourceKind`，把审批、选择、批量操作和编辑能力放回业务实体本身。导入批次只负责“从哪里来、一次导入了什么、如何回滚”，不再决定项目在后台里的地位。
+
+### 1.4 2026-07-14 后台首页与交通后台重构方案
+
+本轮不再继续修补“版本工作台”外观，而是把交通后台的页面模型、编辑模型和审批模型统一改成业务实体主线。改造必须满足以下验收标准：
+
+实施状态：已完成。公开线路和班次读取也已改为聚合条目级 `published` 状态，避免只改后台按钮、前台仍依赖整版发布的伪下沉。
+
+1. `/admin` 首页在主标题与后台入口之间增加概览模块，概览展示可直接从现有后台数据源读取的关键数量和待处理状态；不得使用模拟统计。
+2. 桌面端把 `.service-entry-grid.admin-home-grid` 移到与 `aside.rail` 同类的固定侧栏位置，但去掉侧栏背景、背景滤镜和描边；移动端仍保持当前普通网格布局和阅读顺序。
+3. “交通方式”和“可排班服务”合并为一个“服务配置”页签。两类配置除现有修改能力外，还必须支持新增和删除；新增、更新、删除都通过各自 workflow 持久化并发布领域事件。
+4. “线路列表”和“班次列表”只展示线路或班次实体。导入版本不再作为列表切换器、审批容器或批量操作单位，只在实体的来源信息中保留批次号、导入时间等追溯字段。
+5. 线路与班次的提交、通过、驳回、发布、归档全部按条目执行。列表筛选只围绕实体状态、交通方式/服务类型、来源和关键词展开；批量操作等价于逐条执行同一状态迁移。
+6. `.admin-content-item.transit-entity-row` 必须允许内容和操作区自然增高、换行，任何桌面宽度下都不能裁掉编辑或删除按钮。
+7. 线路编辑器只保留线路级运行方式，不允许在站间段落中切换折线/沿路。运行方式默认由交通方式决定：公交、客运默认沿路，其余默认折线；管理员仍可在线路级覆盖。
+8. “添加站点”只在 `.transit-line-editor-stations` 尾部追加空站点行，不弹出输入框；空行可直接选择站点、方向和绑定位置/多个 POI。
+9. 原 `.transit-line-editor-station-index` 移除。站点行中的位置按钮就是坐标/POI 编辑入口，不再保留语义重复的“插入站点”按钮。
+10. “添加途径点”在同一有序节点列表尾部追加途径点编辑行。途径点行包含一组坐标输入、方向下拉和移动/删除操作；不再使用难以理解的独立 `.transit-line-segment-editor`。
+11. 线路编辑器与坐标/POI 选择器必须形成正确的弹窗层级：打开子窗口时，子窗口可交互且不被父弹窗遮挡。
+12. 线路“班次”页签增加运营日期规则输入框。发车时刻支持每行一个单独时刻或班次表达式：`HH:mm + HH:mm * N`；例如 `06:30 + 00:05 * 5` 展开为 `06:30、06:35、06:40、06:45、06:50、06:55`。保存时保留结构化规则或可逆原文，公开读取侧不能依赖临时 UI 解析。
+
+#### 页面主线
+
+```text
+/admin/transit
+  服务配置：交通方式 + 可排班服务（新增 / 修改 / 删除）
+  线路列表：线路实体（筛选 / 多选 / 新增 / 编辑 / 删除 / 条目审批）
+  班次列表：班次实体（筛选 / 多选 / 新增 / 编辑 / 删除 / 条目审批）
+
+导入批次 / revision
+  仅作为批量添加来源、追溯元数据和底层兼容存储
+  不作为管理员的主导航、列表切换器或审批单位
+```
+
+#### 线路编辑节点模型
+
+线路顺序不再由“站点数组 + 站间段编辑器”两套 UI 表达，而是统一成有序节点编辑体验：
+
+```ts
+type TransitLineEditorNode =
+  | {
+      kind: 'station';
+      stationSourceId: string;
+      direction: 'both' | 'up' | 'down';
+    }
+  | {
+      kind: 'waypoint';
+      x?: number;
+      z?: number;
+      direction: 'both' | 'up' | 'down';
+    };
+```
+
+底层若暂时仍使用 `stationSourceIds` 与 `segmentPaths`，workflow 必须负责在统一编辑节点与兼容存储之间转换，不能把转换复杂度暴露给管理员。
+
+#### 本轮关键事件
+
+```ts
+interface TransitModeProfileCreatedPayload {
+  profile: TransitModeProfile;
+  createdBy: string;
+  createdAt: string;
+}
+
+interface TransitModeProfileDeletedPayload {
+  profile: TransitModeProfile;
+  deletedBy: string;
+  deletedAt: string;
+}
+
+interface TravelScheduleServiceProfileCreatedPayload {
+  profile: TravelScheduleServiceProfile;
+  createdBy: string;
+  createdAt: string;
+}
+
+interface TravelScheduleServiceProfileDeletedPayload {
+  profile: TravelScheduleServiceProfile;
+  deletedBy: string;
+  deletedAt: string;
+}
+
+interface TransitDataRevisionLineCreatedPayload {
+  datasetId: string;
+  revisionId: string;
+  lineSourceId: string;
+  lineName: string;
+  mode: TransportMode;
+  stationCount: number;
+  createdBy: string;
+  createdAt: string;
+}
+
+interface TransitDataRevisionLineDeletedPayload {
+  datasetId: string;
+  revisionId: string;
+  lineSourceId: string;
+  lineName: string;
+  stationCount: number;
+  deletedBy: string;
+  deletedAt: string;
+}
+
+interface TravelScheduleTripCreatedPayload {
+  scheduleServiceId: string;
+  revisionId: string;
+  tripInstanceId: string;
+  serviceKind: TicketableServiceKind;
+  lineName: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+interface TravelScheduleTripDeletedPayload {
+  scheduleServiceId: string;
+  revisionId: string;
+  tripInstanceId: string;
+  serviceKind: TicketableServiceKind;
+  lineName: string;
+  deletedBy: string;
+  deletedAt: string;
+}
+```
+
+高频风险点有三类：第一，删除仍被实现成直接数组过滤，导致事件审计和已发布引用丢失；第二，UI 看似按条目审批，实际仍偷偷修改整个 revision 状态；第三，发车规则只在 textarea 中展开成若干时刻，保存后无法还原规则。实现时必须分别以软删除/归档事件、独立条目状态、可逆规则字段规避。
 
 ## 2. 链路状态矩阵
 
-| 链路     | 当前状态             | 已具备能力                                                                                                                                                                                                                                                         | 主要缺口                                                                                                                                 |
-| -------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| 内容后台 | 可用审核台增强版     | 草稿创建/编辑、提交、审核、驳回理由、发布确认、发布快照历史、差异摘要、即时/定时发布、归档确认、批量提交/归档、素材上传/导入/审核、旧专题转换预览、首页强提醒规则和投递预览、卡片级正文/素材审核提示、编辑期局部检查提示                                           | 已提交内容的继续编辑链路仍需补齐；更细的正文质量规则、首页位视觉规范校验和逐字段 diff 仍可继续增强                                       |
-| POI 后台 | 可用审核工作台增强版 | 投稿、管理员修正资料和同类型几何、审核、发布、图片局部审核、冲突决策、分类/Profile/图标维护、发布前阻塞检查、批量通过/驳回/发布、按“投稿审核 / 分类图标”分段的后台主线布局                                                                                         | 单分类上下文编辑体验需补齐；仍缺真实瓦片地图编辑器、道路/站点叠加、父子 POI 和代表点治理、多图素材流、多语言资料                         |
-| 线路后台 | 当前版本工作台第一版 | 旧交通数据导入、校验摘要、提交、审核、发布、恢复、归档、站点坐标修正、站点绑定现有 POI、站点地图点选、线路站点序列编辑、线路/站点几何预览、瓦片底图叠加预览、当前发布版本差异摘要、交通方式 Profile、二级页默认直接展示所选版本下的线路/站点子项并通过下拉切换版本 | 仍缺自主新增/删除线路、版本容器与线路最小操作面解耦、独立轨迹点编辑、方向子线路管理、道路吸附、站点合并/拆分治理                         |
-| 班次后台 | 当前版本工作台第一版 | 当前真实统一班次快照导入、校验、单班次人工修正、提交、审核、发布、恢复、归档、公开 API 优先读取已发布快照并回退实时源、二级页默认直接展示所选版本下的服务摘要和班次明细并通过下拉切换版本                                                                          | 仍缺自主新增/删除班次、版本容器与班次最小操作面解耦、批量班次编辑、班次日历/有效期模型、票务库存联动校验、来源失败时的后台告警与回滚指引 |
+| 链路     | 当前状态             | 已具备能力                                                                                                                                                                                                               | 主要缺口                                                                                                         |
+| -------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| 内容后台 | 可用审核台增强版     | 草稿创建/编辑、提交、审核、驳回理由、发布确认、发布快照历史、差异摘要、即时/定时发布、归档确认、批量提交/归档、素材上传/导入/审核、旧专题转换预览、首页强提醒规则和投递预览、卡片级正文/素材审核提示、编辑期局部检查提示 | 已提交内容的继续编辑链路仍需补齐；更细的正文质量规则、首页位视觉规范校验和逐字段 diff 仍可继续增强               |
+| POI 后台 | 可用审核工作台增强版 | 投稿、管理员修正资料和同类型几何、审核、发布、图片局部审核、冲突决策、分类/Profile/图标维护、发布前阻塞检查、批量通过/驳回/发布、按“投稿审核 / 分类图标”分段的后台主线布局                                               | 单分类上下文编辑体验需补齐；仍缺真实瓦片地图编辑器、道路/站点叠加、父子 POI 和代表点治理、多图素材流、多语言资料 |
+| 线路后台 | 条目审核工作台增强版 | 旧交通数据批量导入、线路级筛选/多选/审批/发布/归档、新增/编辑/删除、站点多 POI 绑定、统一站点/途径点节点编辑、线路级折线/沿路模式、地图预览、公开端聚合已发布线路条目、交通方式 Profile 增删改                           | 仍缺独立站点新增、道路吸附算法、方向子线路治理、站点合并/拆分治理和已发布修改的独立草稿副本                      |
+| 班次后台 | 条目审核工作台增强版 | 当前真实班次快照批量导入、班次级筛选/多选/审批/发布/归档、新增/编辑/删除、运营日期规则、公开端聚合已发布班次条目、可排班服务 Profile 增删改                                                                              | 仍缺批量字段编辑、完整班次日历/有效期模型、票务库存联动校验、来源失败时的后台告警和已发布修改的独立草稿副本      |
 
 ### 2.1 代码证据入口
 
@@ -55,19 +202,19 @@
 - POI 后台：`apps/web/components/admin-poi-panel.tsx`、`apps/web/lib/poi-submission-workflow.ts`、`apps/web/lib/poi-submission-store.ts`、`apps/web/app/api/admin/map/**`
 - 线路后台：`apps/web/components/admin-transit-panel.tsx`、`apps/web/lib/transit-data-workflow.ts`、`apps/web/lib/transit-data-store.ts`、`apps/web/app/api/admin/transit/datasets/**`
 - 班次后台：`apps/web/components/admin-transit-panel.tsx`、`apps/web/lib/travel-schedule-revision-workflow.ts`、`apps/web/lib/travel-schedule-revision-store.ts`、`apps/web/app/api/admin/travel/schedule-revisions/**`
-- 横向审计链路：`apps/web/lib/event-outbox-store.ts`、`apps/web/app/api/admin/operations/audit-events/route.ts`、`packages/contracts/src/events.ts`
+- 横向审计链路：`apps/web/lib/event-outbox-store.ts`、`apps/web/app/api/admin/audit-events/route.ts`、`packages/contracts/src/events.ts`
 
 ### 2.2 后台二级页布局原则
 
 线路/班次后台这轮确认的 UI 主线如下：
 
-1. 分段控制只用于切“业务系列”，例如“线路版本 / 班次版本 / 交通方式 / 可排班服务”，而不是拿来切“已发布 / 待审核 / 已归档”这类状态。
-2. 进入某个系列后，主视图优先展示“当前选中版本”的子项工作区，也就是线路、站点、班次、服务摘要这些真正需要操作的对象。
-3. 版本本身不再铺成一整页长列表，而是作为顶部工具区里的版本切换器；状态、交通方式、服务类型、关键词用于缩小切换范围。
-4. 版本继续承担“导入快照、差异对比、发布容器”的职责，但线路/班次自身要能在工作区里直接新增、编辑、删除，不能只停留在版本级提交/发布动作。
-5. 提交、通过、驳回、发布、恢复、归档仍然保留在当前版本工作区右侧动作列；坐标修正、站点序列修正、单班次修正继续通过弹窗进入，后续再逐步扩展到线路/班次新增和删除弹窗。
+1. 分段控制只切“线路列表 / 班次列表 / 服务配置”三个业务工作区，不用状态或导入批次充当导航。
+2. 线路和班次页直接铺业务实体主列表；状态、交通方式/服务类型和关键词只过滤条目。
+3. 导入批次不提供切换器，只在条目的“来源批次”元数据中用于审计追溯和底层 API 定位。
+4. 新增、编辑、删除、提交、通过、驳回、发布和归档全部围绕线路或班次条目执行；批量操作是同一条目状态迁移的批量调用。
+5. “服务配置”同时展示交通方式和可排班服务，两类配置都支持添加、修改和删除，保存时发布集合更新及增删领域事件。
 
-当前代码已按这套思路把 `apps/web/components/admin-transit-panel.tsx` 调整为“筛选工具 + 版本下拉 + 当前版本详情工作台”的结构，不再让版本列表抢占二级页主区域。
+当前代码已按这套思路把 `apps/web/components/admin-transit-panel.tsx` 调整为实体工作台；公开读取分别由 `published-transit-read-model.ts` 和 `published-travel-schedule-read-model.ts` 聚合已发布条目。
 
 ## 3. 核心状态机
 
@@ -81,16 +228,17 @@ pending_review -> archived
 approved -> archived
 ```
 
-线路与班次是导入版本型链路：
+线路与班次条目采用独立审批状态机：
 
 ```ts
-imported -> pending_review -> approved -> published -> superseded -> archived
+imported -> pending_review -> approved -> published
 imported -> archived
-validation_failed -> archived
 pending_review -> rejected -> pending_review
 approved -> archived
-published -> archived
+published -> archived // 删除已发布条目时写入 tombstone
 ```
+
+revision 仍保留旧的导入、校验和整版回滚状态机，仅作为兼容存储和来源批次，不再驱动主列表或日常审批。
 
 大白话拆解如下：
 
@@ -209,6 +357,46 @@ interface TravelScheduleTripEditedPayload {
   changedFields: Array<'departureTime' | 'arrivalTime' | 'stationNames' | 'serviceKind'>;
   updatedBy: string;
   updatedAt: string;
+}
+
+interface ServiceEntryUpdatedPayload {
+  serviceEntryId: string;
+  updatedBy: string;
+  updatedAt: string;
+  changedFields: Array<
+    'title' | 'description' | 'categoryId' | 'icon' | 'href' | 'openMode' | 'sortOrder'
+  >;
+}
+
+interface ServiceEntryArchivedPayload {
+  serviceEntryId: string;
+  previousStatus: 'draft' | 'pending_review' | 'approved' | 'published' | 'rejected';
+  archivedBy: string;
+  archivedAt: string;
+}
+
+interface PoiSubmissionUpdatedPayload {
+  poiId: string;
+  updatedBy: string;
+  updatedAt: string;
+  changedFields: Array<
+    'title' | 'categoryId' | 'iconFileName' | 'description' | 'href' | 'imageUrl' | 'geometry'
+  >;
+}
+
+interface LegacyMapMarkerUpdatedPayload {
+  markerId: string;
+  updatedBy: string;
+  updatedAt: string;
+  changedFields: Array<
+    'label' | 'categoryId' | 'iconFileName' | 'description' | 'href' | 'imageUrl' | 'geometry'
+  >;
+}
+
+interface LegacyMapMarkerArchivedPayload {
+  markerId: string;
+  archivedBy: string;
+  archivedAt: string;
 }
 ```
 
