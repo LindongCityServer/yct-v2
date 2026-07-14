@@ -198,6 +198,9 @@ export type TransitDataRevisionStatus =
   | 'superseded'
   | 'archived';
 
+export type TransitItemApprovalStatus =
+  'imported' | 'pending_review' | 'approved' | 'rejected' | 'published' | 'archived';
+
 export interface TransitLineStopSnapshot {
   stationSourceId: string;
   sequence: number;
@@ -218,6 +221,7 @@ export type TransitLineSegmentPathMode = 'straight' | 'road';
 export interface TransitLineSegmentWaypointSnapshot {
   x: number;
   z: number;
+  direction?: 'both' | 'up' | 'down';
 }
 
 export interface TransitLineSegmentPathSnapshot {
@@ -228,11 +232,43 @@ export interface TransitLineSegmentPathSnapshot {
   note?: string;
 }
 
+export type TransitLineRouteMode = 'straight' | 'road';
+
+export type TransitLineRouteNodeSnapshot =
+  | {
+      kind: 'station';
+      stationSourceId: string;
+      direction: 'both' | 'up' | 'down';
+    }
+  | {
+      kind: 'waypoint';
+      x: number;
+      z: number;
+      direction: 'both' | 'up' | 'down';
+    };
+
+export interface TransitDepartureScheduleRule {
+  sourceText: string;
+  startTime: string;
+  intervalMinutes?: number;
+  additionalDepartures?: number;
+}
+
 export interface TransitLineSnapshot {
   sourceId: string;
   mode: Exclude<TransportMode, 'walk'>;
   name: string;
+  approvalStatus?: TransitItemApprovalStatus;
+  submittedBy?: string;
+  submittedAt?: ISODateTimeString;
+  reviewedBy?: string;
+  reviewedAt?: ISODateTimeString;
+  reviewReason?: string;
+  publishedAt?: ISODateTimeString;
+  archivedAt?: ISODateTimeString;
   color?: string;
+  routeMode?: TransitLineRouteMode;
+  routeNodes?: TransitLineRouteNodeSnapshot[];
   stationSourceIds: string[];
   stops: TransitLineStopSnapshot[];
   segmentPaths?: TransitLineSegmentPathSnapshot[];
@@ -243,8 +279,16 @@ export interface TransitLineSnapshot {
     last?: string;
   };
   departureTimes?: string[];
+  departureRules?: TransitDepartureScheduleRule[];
+  operatingDateRule?: string;
   bookingUrl?: string;
   sourcePath?: string;
+}
+
+export interface TransitStationPoiBindingSnapshot {
+  markerId: string;
+  label: string;
+  categoryId?: string;
 }
 
 export interface TransitStationSnapshot {
@@ -255,6 +299,7 @@ export interface TransitStationSnapshot {
   diagramY?: number;
   x?: number;
   z?: number;
+  boundPoiRefs?: TransitStationPoiBindingSnapshot[];
   boundPoiMarkerId?: string;
   boundPoiLabel?: string;
   sourcePath?: string;
@@ -452,6 +497,14 @@ export interface TravelScheduleServiceSummary {
 
 export interface TravelTripInstance {
   tripInstanceId: string;
+  approvalStatus?: TransitItemApprovalStatus;
+  submittedBy?: string;
+  submittedAt?: ISODateTimeString;
+  reviewedBy?: string;
+  reviewedAt?: ISODateTimeString;
+  reviewReason?: string;
+  publishedAt?: ISODateTimeString;
+  archivedAt?: ISODateTimeString;
   tripCode?: string;
   serviceId?: string;
   serviceKind: TicketableServiceKind;

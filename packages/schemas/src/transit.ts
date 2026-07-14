@@ -22,7 +22,15 @@ const transitLineSegmentPathSchema = z
     fromStationSourceId: stationSourceIdSchema,
     toStationSourceId: stationSourceIdSchema,
     mode: z.enum(['straight', 'road']),
-    waypoints: z.array(z.object({ x: z.number().finite(), z: z.number().finite() })).max(24),
+    waypoints: z
+      .array(
+        z.object({
+          x: z.number().finite(),
+          z: z.number().finite(),
+          direction: z.enum(['both', 'up', 'down']).optional(),
+        }),
+      )
+      .max(24),
     note: z.string().trim().max(120).optional(),
   })
   .superRefine((path, context) => {
@@ -35,12 +43,46 @@ const transitLineSegmentPathSchema = z
     }
   });
 
+const transitLineRouteNodeSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('station'),
+    stationSourceId: stationSourceIdSchema,
+    direction: z.enum(['both', 'up', 'down']).default('both'),
+  }),
+  z.object({
+    kind: z.literal('waypoint'),
+    x: z.number().finite(),
+    z: z.number().finite(),
+    direction: z.enum(['both', 'up', 'down']).default('both'),
+  }),
+]);
+
+const transitDepartureScheduleRuleSchema = z.object({
+  sourceText: z.string().trim().min(1).max(80),
+  startTime: z
+    .string()
+    .trim()
+    .regex(/^\d{2}:\d{2}$/),
+  intervalMinutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 60)
+    .optional(),
+  additionalDepartures: z.number().int().min(1).max(512).optional(),
+});
+
 export const transitDataImportSchema = z.object({
   sourceProviderId: idSchema.default('legacy-yct'),
 });
 
 export const transitDataReviewDecisionSchema = z.object({
   decision: z.enum(['approved', 'rejected']),
+  reason: z.string().trim().max(500).optional(),
+});
+
+export const transitItemApprovalActionSchema = z.object({
+  action: z.enum(['submit', 'approve', 'reject', 'publish', 'archive']),
   reason: z.string().trim().max(500).optional(),
 });
 
@@ -78,6 +120,8 @@ export const transitLineDraftSchema = z.object({
   mode: transitModeSchema,
   name: z.string().trim().min(1).max(120),
   color: colorHexSchema.optional(),
+  routeMode: z.enum(['straight', 'road']).optional(),
+  routeNodes: z.array(transitLineRouteNodeSchema).min(2).max(512).optional(),
   stationSourceIds: z.array(stationSourceIdSchema).min(2).max(256),
   oneWayStops: z
     .array(
@@ -94,6 +138,8 @@ export const transitLineDraftSchema = z.object({
   firstBus: z.string().trim().max(40).optional(),
   lastBus: z.string().trim().max(40).optional(),
   departureTimes: z.array(z.string().trim().min(1).max(40)).max(128).optional(),
+  departureRules: z.array(transitDepartureScheduleRuleSchema).max(128).optional(),
+  operatingDateRule: z.string().trim().max(240).optional(),
   bookingUrl: z.string().trim().max(500).optional(),
 });
 
@@ -131,6 +177,16 @@ export const travelScheduleTripDraftSchema = travelScheduleTripUpdateSchema.exte
 export const transitStationCoordinateUpdateSchema = z.object({
   x: z.number().finite(),
   z: z.number().finite(),
+  boundPoiRefs: z
+    .array(
+      z.object({
+        markerId: z.string().trim().min(1).max(160),
+        label: z.string().trim().min(1).max(120),
+        categoryId: z.string().trim().max(80).optional(),
+      }),
+    )
+    .max(12)
+    .optional(),
   boundPoiMarkerId: z.string().trim().max(160).optional().nullable(),
   boundPoiLabel: z.string().trim().max(120).optional().nullable(),
 });
@@ -141,6 +197,7 @@ export const transitLineStationOrderUpdateSchema = z.object({
 
 export type TransitDataImportInput = z.infer<typeof transitDataImportSchema>;
 export type TransitDataReviewDecisionInput = z.infer<typeof transitDataReviewDecisionSchema>;
+export type TransitItemApprovalActionInput = z.infer<typeof transitItemApprovalActionSchema>;
 export type TransitModeProfileUpdateInput = z.infer<typeof transitModeProfileUpdateSchema>;
 export type TravelScheduleServiceProfileUpdateInput = z.infer<
   typeof travelScheduleServiceProfileUpdateSchema

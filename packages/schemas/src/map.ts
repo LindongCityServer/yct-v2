@@ -147,6 +147,7 @@ export const poiSubmissionAdminUpdateSchema = z.object({
   iconFileName: z.union([z.string().trim().min(1).max(160), z.literal('')]).optional(),
   description: z.string().trim().max(1000).optional(),
   href: z.union([urlSchema, z.literal('')]).optional(),
+  imageUrl: z.union([poiSubmissionImageUrlSchema, z.literal('')]).optional(),
   geometry: mapGeometrySchema.optional(),
 });
 
@@ -163,6 +164,16 @@ export const poiSubmissionImageReviewUpdateSchema = z.object({
   imageUrl: poiSubmissionImageUrlSchema,
   decision: z.enum(['approved', 'rejected', 'unreviewed']),
   reason: z.string().trim().max(500).optional(),
+});
+
+export const legacyMapMarkerAdminUpdateSchema = z.object({
+  label: nonEmptyTextSchema,
+  categoryId: z.union([idSchema, z.literal('')]).optional(),
+  iconFileName: z.union([z.string().trim().min(1).max(160), z.literal('')]).optional(),
+  description: z.string().trim().max(1000).optional(),
+  href: z.union([urlSchema, z.literal('')]).optional(),
+  imageUrl: z.union([poiSubmissionImageUrlSchema, z.literal('')]).optional(),
+  geometry: mapGeometrySchema.optional(),
 });
 
 export const mapMarkerSourceConfigSchema = z.object({
