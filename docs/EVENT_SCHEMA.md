@@ -1,6 +1,6 @@
 # YCT Event Schema
 
-更新时间：2026-07-09
+更新时间：2026-07-14
 
 本文档记录雨城通 v2 第一阶段的领域事件。后端业务 Service 只负责本模块校验和写库，成功后发布事件；通知、Push、缓存失效、搜索索引、`ldpass` 同步等副作用由监听器处理。
 
@@ -35,11 +35,11 @@ export interface YctDomainEvent<TType extends string, TPayload> {
 | `ContentAssetUploaded`                       | 管理员上传内容素材            | 素材审核待办、去重、来源追踪、审计                                                                                                                                                                                                              |
 | `ContentAssetReviewed`                       | 管理员审核内容素材            | 内容发布校验、通知投稿者、记录审计                                                                                                                                                                                                              |
 | `PoiSubmissionImageUploaded`                 | 用户上传 POI 投稿图片         | POI 审核资料、图片来源追踪和审计；当前只记录生成的图片 URL、MIME、大小和哈希，不代表图片已公开审核通过                                                                                                                                          |
-| `PoiSubmitted`                               | 用户提交公开 POI              | POI 审核待办                                                                                                                                                                                                                                    |
-| `PoiSubmissionUpdated`                       | 管理员修正 POI 投稿资料       | 审核前资料修正、管理员审计和搜索预览刷新；当前仅允许修正待审核投稿的标题、分类、简介、链接和点状坐标                                                                                                                                            |
+| `PoiSubmitted`                               | 用户或管理员新增 POI 投稿     | POI 审核待办；payload 包含真实几何、父地点、绑定区域、营业时间、地址道路绑定和设施条目，管理员新增同样进入统一审核生命周期                                                                                                                      |
+| `PoiSubmissionUpdated`                       | 管理员修正 POI 投稿资料       | 审核前资料修正、管理员审计和搜索预览刷新；允许修正点、道路等几何、父地点、绑定区域、营业时间、地址道路绑定和设施条目                                                                                                                            |
 | `PoiSubmissionImageReviewed`                 | 管理员审核 POI 投稿图片       | 图片局部审核状态、公开发布校验和管理员审计；当前支持图片可用、图片不合格和重置审核状态                                                                                                                                                          |
 | `PoiReviewed`                                | 管理员审核 POI                | 地图数据发布、通知投稿者                                                                                                                                                                                                                        |
-| `PoiPublished`                               | 已审核 POI 发布为公开标记     | 地图标记缓存刷新、搜索索引、通知投稿者                                                                                                                                                                                                          |
+| `PoiPublished`                               | 已审核 POI 发布为公开标记     | 地图标记缓存刷新、搜索索引、通知投稿者；父地点、绑定区域、营业时间、地址道路绑定和设施条目随公开快照发布                                                                                                                                        |
 | `PoiConflictDecisionUpdated`                 | 管理员标记 POI 冲突提示       | 重复/相近地点审核状态、管理员审计和后续合并队列；当前支持忽略、待合并和重置三种判断                                                                                                                                                             |
 | `PoiCategoryProfileUpdated`                  | 管理员更新 POI 分类和图标配置 | 分类缓存刷新、地图投稿表单刷新、搜索索引和管理员审计；当前第一版写入本地分类覆盖配置并支持一类多图标文件名管理                                                                                                                                  |
 | `PoiCategoryIconUploaded`                    | 管理员上传 POI 分类图标       | 图标来源追踪、分类配置引用和管理员审计；当前文件默认落盘到 `runtime-assets/poi-icons` 并通过 `/api/map/poi-icons/<file>` 读取                                                                                                                   |
@@ -50,6 +50,10 @@ export interface YctDomainEvent<TType extends string, TPayload> {
 | `TransitDataRevisionPublished`               | 交通数据版本发布或恢复        | 地图图层、搜索、路线规划缓存刷新；当前发布或恢复已被替换版本时会清理交通概览与地图线路标记进程内缓存                                                                                                                                            |
 | `TransitDataRevisionArchived`                | 交通数据版本归档              | 管理员审计和待办清理；当前禁止直接归档正在发布中的版本，需要先恢复或发布另一个版本                                                                                                                                                              |
 | `TransitDataRevisionStationUpdated`          | 管理员修正交通版本站点坐标    | 站点坐标审核、路线规划候选刷新和管理员审计；当前只允许修正已导入、校验失败、待审核或已驳回版本中的站点 X/Z 坐标，并会重跑版本校验                                                                                                               |
+| `TransitDataRevisionStationCreated`          | 地图编辑器随线路新增站点      | 站点索引、地图标记和管理员审计；和线路修改处于同一次版本写入中，每个新站点独立发出事件                                                                                                                                                          |
+| `TransitDataRevisionLineUpdated`             | 管理员保存已有线路            | 地图线路图层、路线规划缓存、搜索索引和管理员审计；可视化编辑器保存时包含运行方式、节点序列和沿路分段                                                                                                                                            |
+| `TransitDataRevisionLineCreated`             | 管理员新增线路                | 地图线路图层、路线规划候选和管理员审计                                                                                                                                                                                                          |
+| `TransitDataRevisionLineDeleted`             | 管理员删除线路                | 地图线路图层、路线规划缓存、搜索索引和管理员审计                                                                                                                                                                                                |
 | `TransitModeProfileUpdated`                  | 地图/线路交通方式配置更新     | 线路颜色、图标、排序缓存刷新和管理员审计                                                                                                                                                                                                        |
 | `TileProviderSelected`                       | 地图瓦片源被选择              | 记录混合内容降级或管理员覆盖                                                                                                                                                                                                                    |
 | `TripReminderScheduled`                      | 行程提醒创建或同步到账号      | 定时任务、Web Push；登录用户同步待提醒记录到服务端时会发布该事件，payload 携带 `reminderId`、`remindAt`、`title`、`source` 和 `userId`                                                                                                          |
@@ -86,18 +90,108 @@ export interface YctDomainEvent<TType extends string, TPayload> {
 | `LdpassTicketStatusSynced`                   | 同步到 ldpass 票券/核销状态   | 订单、提醒、徽标刷新                                                                                                                                                                                                                            |
 | `AdminInitialized`                           | 命令行初始化首位超级管理员    | 安全审计                                                                                                                                                                                                                                        |
 
-## 3. 投递要求
+## 3. 地图与线路编辑 Payload
+
+```ts
+export interface PoiSubmittedPayload {
+  poiId: string;
+  revisionId?: string;
+  title?: string;
+  categoryId: string;
+  description?: string;
+  href?: string;
+  imageUrl?: string;
+  geometry: MapGeometry;
+  parentMarkerId?: string;
+  boundRegionMarkerIds?: string[];
+  openingHours?: string;
+  address?: string;
+  addressRoadMarkerId?: string;
+  facilities?: Array<{
+    symbolIcon: string;
+    description: string;
+  }>;
+}
+
+export interface PoiSubmissionUpdatedPayload {
+  poiId: string;
+  updatedBy: string;
+  updatedAt: string;
+  changedFields: Array<
+    | 'title'
+    | 'categoryId'
+    | 'iconFileName'
+    | 'description'
+    | 'href'
+    | 'imageUrl'
+    | 'geometry'
+    | 'parentMarkerId'
+    | 'boundRegionMarkerIds'
+    | 'openingHours'
+    | 'address'
+    | 'addressRoadMarkerId'
+    | 'facilities'
+  >;
+}
+
+export interface TransitDataRevisionStationCreatedPayload {
+  datasetId: string;
+  revisionId: string;
+  stationSourceId: string;
+  stationName: string;
+  x: number;
+  z: number;
+  boundPoiMarkerId?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface TransitDataRevisionLineUpdatedPayload {
+  datasetId: string;
+  revisionId: string;
+  lineSourceId: string;
+  lineName: string;
+  updatedBy: string;
+  updatedAt: string;
+  changedFields: Array<
+    | 'mode'
+    | 'name'
+    | 'color'
+    | 'routeMode'
+    | 'routeNodes'
+    | 'stationSourceIds'
+    | 'stops'
+    | 'segmentPaths'
+    | 'operator'
+    | 'fare'
+    | 'firstLastBus'
+    | 'departureTimes'
+    | 'departureRules'
+    | 'operatingDateRule'
+    | 'bookingUrl'
+  >;
+  stationCountBefore: number;
+  stationCountAfter: number;
+}
+```
+
+可视化编辑器中的新站点使用请求内临时引用 `draft:<clientId>`。Workflow 必须先生成正式 `stationSourceId`，再原子替换线路节点、站点序列和分段路径中的临时引用；写入成功后才发布站点与线路事件。监听器不得依赖 `draft:<clientId>`。
+
+POI 的 `addressRoadMarkerId` 是默认道路接入约束。地图路线规划器只能把该 POI 投影到对应道路的实际线段上；绑定道路缺失时必须返回无道路接入点，不能静默改投到其他道路。设施条目中的 `symbolIcon` 使用受 schema 约束的 Material Symbol 标识符，`description` 保存对用户可见的文字说明。
+
+## 4. 投递要求
 
 - 单机 MVP 可以先用 `InMemoryEventBus`。
 - 当前行程提醒投递已使用应用级共享内存事件总线连接 `TripReminderScheduled` 和通知投递监听器，投递记录持久化到 `.yct-data/push-delivery-store.json`。这解决单进程开发环境的监听器解耦，但不替代正式数据库 Outbox。
 - 当前工程已新增 `.yct-data/event-outbox-store.json` 作为单机开发阶段的本地事件 Outbox；业务 workflow 发布事件时先写 Outbox，再交给共享内存事件总线分发。受 `YCT_INTERNAL_TASK_TOKEN` 保护的 `/api/internal/events/process` 可重放 `queued` / `failed` 事件，用于开发期恢复失败监听器和审计验证；它仍不替代数据库事务内 Outbox。
+- 交通版本、线路、站点和交通方式配置变更后的概览/线路标记缓存失效由 `transit-cache-invalidation-listeners.ts` 订阅领域事件完成，交通 workflow 不直接调用缓存模块；Outbox 重放入口会先注册该监听器。
 - 内部 Push 投递任务处理到期队列前，会按用户和通知类型检查最小投递间隔；触发限频时把投递延后到下一次允许时间，并记录 `push_rate_limited`。
 - 公开数据发布、Push、Webhook、票务同步必须进入 Transactional Outbox。
 - 事件处理器必须幂等，不能假设只投递一次。
 - 事件 Payload 只放业务键和必要快照，不放密码、密钥、完整 Cookie 或私有运维信息。
 - 客运、轮渡、航班统一查询订票平台的详细事件边界见 `docs/TRAVEL_TICKETING_PLATFORM.md`，契约源码见 `packages/contracts/src/events.ts`。
 
-## 4. 状态机与校验
+## 5. 状态机与校验
 
 - 内容修订、素材审核和 POI 投稿的状态转换由 `@yct/domain` 的纯函数维护。
 - Markdown、素材上传、地图几何、瓦片模板、POI 分类和旧数据导入批次由 `@yct/schemas` 做运行时校验。

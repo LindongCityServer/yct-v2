@@ -148,6 +148,11 @@ export type PoiVisibility = 'private' | 'public_pending_review' | 'public';
 export type PoiSubmissionStatus =
   'draft' | 'pending_review' | 'approved' | 'rejected' | 'published' | 'archived';
 
+export interface PoiFacilitySnapshot {
+  symbolIcon: string;
+  description: string;
+}
+
 export interface PoiSubmission {
   id: string;
   profileId: YctProfileId;
@@ -158,6 +163,12 @@ export interface PoiSubmission {
   href?: string;
   imageUrl?: string;
   geometry: MapGeometry;
+  parentMarkerId?: string;
+  boundRegionMarkerIds?: string[];
+  openingHours?: string;
+  address?: string;
+  addressRoadMarkerId?: string;
+  facilities?: PoiFacilitySnapshot[];
   visibility: PoiVisibility;
   status: PoiSubmissionStatus;
   submittedBy: string;
@@ -222,6 +233,8 @@ export interface TransitLineSegmentWaypointSnapshot {
   x: number;
   z: number;
   direction?: 'both' | 'up' | 'down';
+  boundPoiMarkerId?: string;
+  boundPoiLabel?: string;
 }
 
 export interface TransitLineSegmentPathSnapshot {
@@ -245,6 +258,8 @@ export type TransitLineRouteNodeSnapshot =
       x: number;
       z: number;
       direction: 'both' | 'up' | 'down';
+      boundPoiMarkerId?: string;
+      boundPoiLabel?: string;
     };
 
 export interface TransitDepartureScheduleRule {

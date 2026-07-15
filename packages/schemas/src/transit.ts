@@ -28,9 +28,11 @@ const transitLineSegmentPathSchema = z
           x: z.number().finite(),
           z: z.number().finite(),
           direction: z.enum(['both', 'up', 'down']).optional(),
+          boundPoiMarkerId: z.string().trim().min(1).max(220).optional(),
+          boundPoiLabel: z.string().trim().min(1).max(160).optional(),
         }),
       )
-      .max(24),
+      .max(256),
     note: z.string().trim().max(120).optional(),
   })
   .superRefine((path, context) => {
@@ -54,8 +56,20 @@ const transitLineRouteNodeSchema = z.discriminatedUnion('kind', [
     x: z.number().finite(),
     z: z.number().finite(),
     direction: z.enum(['both', 'up', 'down']).default('both'),
+    boundPoiMarkerId: z.string().trim().min(1).max(220).optional(),
+    boundPoiLabel: z.string().trim().min(1).max(160).optional(),
   }),
 ]);
+
+const transitVisualStationDraftSchema = z.object({
+  clientId: z.string().trim().min(1).max(80),
+  name: z.string().trim().min(1).max(120),
+  x: z.number().finite(),
+  z: z.number().finite(),
+  boundPoiMarkerId: z.string().trim().min(1).max(220).optional(),
+  boundPoiLabel: z.string().trim().min(1).max(160).optional(),
+  boundPoiCategoryId: z.string().trim().min(1).max(80).optional(),
+});
 
 const transitDepartureScheduleRuleSchema = z.object({
   sourceText: z.string().trim().min(1).max(80),
@@ -141,6 +155,7 @@ export const transitLineDraftSchema = z.object({
   departureRules: z.array(transitDepartureScheduleRuleSchema).max(128).optional(),
   operatingDateRule: z.string().trim().max(240).optional(),
   bookingUrl: z.string().trim().max(500).optional(),
+  stationDrafts: z.array(transitVisualStationDraftSchema).max(128).optional(),
 });
 
 export const travelScheduleTripUpdateSchema = z.object({

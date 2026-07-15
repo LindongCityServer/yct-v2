@@ -4,6 +4,7 @@ import type {
   LocaleCode,
   LocalePreference,
   MapGeometry,
+  PoiFacilitySnapshot,
   PoiSubmissionStatus,
   RectangleBounds,
   ReviewDecision,
@@ -110,6 +111,12 @@ export interface PoiSubmittedPayload {
   href?: string;
   imageUrl?: string;
   geometry: MapGeometry;
+  parentMarkerId?: string;
+  boundRegionMarkerIds?: string[];
+  openingHours?: string;
+  address?: string;
+  addressRoadMarkerId?: string;
+  facilities?: PoiFacilitySnapshot[];
 }
 
 export interface PoiSubmissionImageUploadedPayload {
@@ -126,7 +133,19 @@ export interface PoiSubmissionUpdatedPayload {
   updatedBy: string;
   updatedAt: ISODateTimeString;
   changedFields: Array<
-    'title' | 'categoryId' | 'iconFileName' | 'description' | 'href' | 'imageUrl' | 'geometry'
+    | 'title'
+    | 'categoryId'
+    | 'iconFileName'
+    | 'description'
+    | 'href'
+    | 'imageUrl'
+    | 'geometry'
+    | 'parentMarkerId'
+    | 'boundRegionMarkerIds'
+    | 'openingHours'
+    | 'address'
+    | 'addressRoadMarkerId'
+    | 'facilities'
   >;
 }
 
@@ -145,6 +164,12 @@ export interface PoiPublishedPayload {
   href?: string;
   imageUrl?: string;
   geometry: MapGeometry;
+  parentMarkerId?: string;
+  boundRegionMarkerIds?: string[];
+  openingHours?: string;
+  address?: string;
+  addressRoadMarkerId?: string;
+  facilities?: PoiFacilitySnapshot[];
   publishedAt: ISODateTimeString;
 }
 
@@ -230,6 +255,18 @@ export interface TransitDataRevisionStationUpdatedPayload {
     label: string;
     categoryId?: string;
   }>;
+}
+
+export interface TransitDataRevisionStationCreatedPayload {
+  datasetId: string;
+  revisionId: string;
+  stationSourceId: string;
+  stationName: string;
+  x: number;
+  z: number;
+  boundPoiMarkerId?: string;
+  createdBy: string;
+  createdAt: ISODateTimeString;
 }
 
 export interface TransitDataRevisionLineUpdatedPayload {
@@ -539,7 +576,19 @@ export interface LegacyMapMarkerUpdatedPayload {
   updatedBy: string;
   updatedAt: ISODateTimeString;
   changedFields: Array<
-    'label' | 'categoryId' | 'iconFileName' | 'description' | 'href' | 'imageUrl' | 'geometry'
+    | 'label'
+    | 'categoryId'
+    | 'iconFileName'
+    | 'description'
+    | 'href'
+    | 'imageUrl'
+    | 'geometry'
+    | 'parentMarkerId'
+    | 'boundRegionMarkerIds'
+    | 'openingHours'
+    | 'address'
+    | 'addressRoadMarkerId'
+    | 'facilities'
   >;
 }
 
@@ -812,6 +861,7 @@ export type YctEventPayloadMap = {
   TransitDataRevisionPublished: TransitDataRevisionPublishedPayload;
   TransitDataRevisionArchived: TransitDataRevisionArchivedPayload;
   TransitDataRevisionStationUpdated: TransitDataRevisionStationUpdatedPayload;
+  TransitDataRevisionStationCreated: TransitDataRevisionStationCreatedPayload;
   TransitDataRevisionLineUpdated: TransitDataRevisionLineUpdatedPayload;
   TransitDataRevisionLineCreated: TransitDataRevisionLineCreatedPayload;
   TransitDataRevisionLineDeleted: TransitDataRevisionLineDeletedPayload;

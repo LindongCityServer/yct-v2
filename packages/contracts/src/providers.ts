@@ -33,6 +33,15 @@ export interface MapMarkerSnapshot {
     imageUrl?: string;
     parentLabel?: string;
     secondaryLabel?: string;
+    parentMarkerId?: string;
+    boundRegionMarkerIds?: string[];
+    openingHours?: string;
+    address?: string;
+    addressRoadMarkerId?: string;
+    facilities?: Array<{
+      symbolIcon: string;
+      description: string;
+    }>;
   }>;
 }
 

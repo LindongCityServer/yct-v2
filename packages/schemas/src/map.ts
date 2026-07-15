@@ -126,22 +126,62 @@ const poiSubmissionImageUrlSchema = z.union([
     .regex(/^\/api\/map\/poi-submission-images\/[a-f0-9]{24}\.(?:png|jpg|gif|webp|avif)$/),
 ]);
 
-export const poiSubmissionSchema = z.object({
-  title: nonEmptyTextSchema,
-  categoryId: idSchema,
-  description: z.string().trim().max(1000).optional(),
-  href: urlSchema.optional(),
-  imageUrl: poiSubmissionImageUrlSchema.optional(),
-  geometry: mapGeometrySchema,
-  visibility: z.enum(['private', 'public_pending_review']),
+const poiParentMarkerIdSchema = z.string().trim().min(1).max(220).optional();
+const poiBoundRegionMarkerIdsSchema = z
+  .array(z.string().trim().min(1).max(220))
+  .max(32)
+  .transform((ids) => Array.from(new Set(ids)))
+  .optional();
+
+const poiOpeningHoursSchema = z.string().trim().max(500).optional();
+const poiAddressSchema = z.string().trim().max(300).optional();
+const poiAddressRoadMarkerIdSchema = z.string().trim().min(1).max(220).optional();
+export const poiFacilitySchema = z.object({
+  symbolIcon: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9_]{1,64}$/),
+  description: z.string().trim().min(1).max(300),
 });
+const poiFacilitiesSchema = z.array(poiFacilitySchema).max(64).optional();
+
+function validatePoiAddressRoadBinding(
+  value: { address?: string; addressRoadMarkerId?: string },
+  context: z.RefinementCtx,
+): void {
+  if (value.addressRoadMarkerId?.trim() && !value.address?.trim()) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: '绑定地址道路前必须填写文字地址',
+      path: ['addressRoadMarkerId'],
+    });
+  }
+}
+
+export const poiSubmissionSchema = z
+  .object({
+    title: nonEmptyTextSchema,
+    categoryId: idSchema,
+    description: z.string().trim().max(1000).optional(),
+    href: urlSchema.optional(),
+    imageUrl: poiSubmissionImageUrlSchema.optional(),
+    geometry: mapGeometrySchema,
+    parentMarkerId: poiParentMarkerIdSchema,
+    boundRegionMarkerIds: poiBoundRegionMarkerIdsSchema,
+    openingHours: poiOpeningHoursSchema,
+    address: poiAddressSchema,
+    addressRoadMarkerId: poiAddressRoadMarkerIdSchema,
+    facilities: poiFacilitiesSchema,
+    visibility: z.enum(['private', 'public_pending_review']),
+  })
+  .superRefine(validatePoiAddressRoadBinding);
 
 export const poiSubmissionReviewDecisionSchema = z.object({
   decision: z.enum(['approved', 'rejected']),
   reason: z.string().trim().max(500).optional(),
 });
 
-export const poiSubmissionAdminUpdateSchema = z.object({
+const poiSubmissionAdminUpdateBaseSchema = z.object({
   title: nonEmptyTextSchema,
   categoryId: idSchema,
   iconFileName: z.union([z.string().trim().min(1).max(160), z.literal('')]).optional(),
@@ -149,7 +189,23 @@ export const poiSubmissionAdminUpdateSchema = z.object({
   href: z.union([urlSchema, z.literal('')]).optional(),
   imageUrl: z.union([poiSubmissionImageUrlSchema, z.literal('')]).optional(),
   geometry: mapGeometrySchema.optional(),
+  parentMarkerId: z.union([poiParentMarkerIdSchema.unwrap(), z.literal('')]).optional(),
+  boundRegionMarkerIds: poiBoundRegionMarkerIdsSchema,
+  openingHours: z.union([poiOpeningHoursSchema.unwrap(), z.literal('')]).optional(),
+  address: z.union([poiAddressSchema.unwrap(), z.literal('')]).optional(),
+  addressRoadMarkerId: z.union([poiAddressRoadMarkerIdSchema.unwrap(), z.literal('')]).optional(),
+  facilities: poiFacilitiesSchema,
 });
+
+export const poiSubmissionAdminUpdateSchema = poiSubmissionAdminUpdateBaseSchema.superRefine(
+  validatePoiAddressRoadBinding,
+);
+
+export const poiSubmissionAdminCreateSchema = poiSubmissionAdminUpdateBaseSchema
+  .extend({
+    geometry: mapGeometrySchema,
+  })
+  .superRefine(validatePoiAddressRoadBinding);
 
 export const poiConflictDecisionUpdateSchema = z.object({
   submissionId: idSchema,
@@ -166,15 +222,23 @@ export const poiSubmissionImageReviewUpdateSchema = z.object({
   reason: z.string().trim().max(500).optional(),
 });
 
-export const legacyMapMarkerAdminUpdateSchema = z.object({
-  label: nonEmptyTextSchema,
-  categoryId: z.union([idSchema, z.literal('')]).optional(),
-  iconFileName: z.union([z.string().trim().min(1).max(160), z.literal('')]).optional(),
-  description: z.string().trim().max(1000).optional(),
-  href: z.union([urlSchema, z.literal('')]).optional(),
-  imageUrl: z.union([poiSubmissionImageUrlSchema, z.literal('')]).optional(),
-  geometry: mapGeometrySchema.optional(),
-});
+export const legacyMapMarkerAdminUpdateSchema = z
+  .object({
+    label: nonEmptyTextSchema,
+    categoryId: z.union([idSchema, z.literal('')]).optional(),
+    iconFileName: z.union([z.string().trim().min(1).max(160), z.literal('')]).optional(),
+    description: z.string().trim().max(1000).optional(),
+    href: z.union([urlSchema, z.literal('')]).optional(),
+    imageUrl: z.union([poiSubmissionImageUrlSchema, z.literal('')]).optional(),
+    geometry: mapGeometrySchema.optional(),
+    parentMarkerId: z.union([poiParentMarkerIdSchema.unwrap(), z.literal('')]).optional(),
+    boundRegionMarkerIds: poiBoundRegionMarkerIdsSchema,
+    openingHours: z.union([poiOpeningHoursSchema.unwrap(), z.literal('')]).optional(),
+    address: z.union([poiAddressSchema.unwrap(), z.literal('')]).optional(),
+    addressRoadMarkerId: z.union([poiAddressRoadMarkerIdSchema.unwrap(), z.literal('')]).optional(),
+    facilities: poiFacilitiesSchema,
+  })
+  .superRefine(validatePoiAddressRoadBinding);
 
 export const mapMarkerSourceConfigSchema = z.object({
   id: idSchema,
@@ -193,6 +257,7 @@ export type PoiCategoryProfileUpdateInput = z.infer<typeof poiCategoryProfileUpd
 export type PoiSubmissionInput = z.infer<typeof poiSubmissionSchema>;
 export type PoiSubmissionReviewDecisionInput = z.infer<typeof poiSubmissionReviewDecisionSchema>;
 export type PoiSubmissionAdminUpdateInput = z.infer<typeof poiSubmissionAdminUpdateSchema>;
+export type PoiSubmissionAdminCreateInput = z.infer<typeof poiSubmissionAdminCreateSchema>;
 export type PoiConflictDecisionUpdateInput = z.infer<typeof poiConflictDecisionUpdateSchema>;
 export type PoiSubmissionImageReviewUpdateInput = z.infer<
   typeof poiSubmissionImageReviewUpdateSchema
