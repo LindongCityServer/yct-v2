@@ -52,6 +52,12 @@ export async function POST(request: NextRequest) {
     href: parsed.data.href,
     imageUrl: parsed.data.imageUrl,
     geometry: parsed.data.geometry,
+    parentMarkerId: parsed.data.parentMarkerId,
+    boundRegionMarkerIds: parsed.data.boundRegionMarkerIds,
+    openingHours: parsed.data.openingHours,
+    address: parsed.data.address,
+    addressRoadMarkerId: parsed.data.addressRoadMarkerId,
+    facilities: parsed.data.facilities,
     actorId: user.ldpassUserId,
   });
 

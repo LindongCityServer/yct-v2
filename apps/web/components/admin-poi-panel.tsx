@@ -4,14 +4,17 @@ import type {
   MapGeometry,
   MapMarkerSnapshot,
   PoiCategory,
+  PoiFacilitySnapshot,
   PoiSubmission,
   PoiSubmissionStatus,
   RectangleBounds,
   TileProviderDescriptor,
 } from '@yct/contracts';
-import type { FormEvent, MouseEvent } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import type { FormEvent, MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { EmbeddedMapLocationPicker } from './embedded-map-location-picker';
+import { PoiFacilityEditor } from './poi-facility-editor';
 
 type StatusFilter = PoiSubmissionStatus | 'all' | 'todo' | 'blocked' | 'legacy';
 type PoiAdminSection = 'submissions' | 'categories';
@@ -83,8 +86,16 @@ interface PoiSubmissionEditInput {
   description: string;
   href: string;
   imageUrl: string;
-  geometry?: MapGeometry;
+  geometry: MapGeometry;
+  parentMarkerId: string;
+  boundRegionMarkerIds: string[];
+  openingHours: string;
+  address: string;
+  addressRoadMarkerId: string;
+  facilities: PoiFacilitySnapshot[];
 }
+
+type PoiSubmissionFormInput = Omit<PoiSubmissionEditInput, 'geometry'>;
 
 interface LegacyPoiMarkerEditInput {
   label: string;
@@ -93,7 +104,13 @@ interface LegacyPoiMarkerEditInput {
   description: string;
   href: string;
   imageUrl: string;
-  geometry?: MapGeometry;
+  geometry: MapGeometry;
+  parentMarkerId: string;
+  boundRegionMarkerIds: string[];
+  openingHours: string;
+  address: string;
+  addressRoadMarkerId: string;
+  facilities: PoiFacilitySnapshot[];
 }
 
 interface CoordinateDraft {
@@ -201,6 +218,7 @@ export function AdminPoiPanel() {
   const [rejectTarget, setRejectTarget] = useState<PoiSubmission | null>(null);
   const [publishTarget, setPublishTarget] = useState<AdminPoiSubmission | null>(null);
   const [editTarget, setEditTarget] = useState<PoiSubmission | null>(null);
+  const [createTarget, setCreateTarget] = useState<{ parentMarkerId?: string } | null>(null);
   const [legacyEditTarget, setLegacyEditTarget] = useState<MapMarker | null>(null);
   const [bulkRejectTargets, setBulkRejectTargets] = useState<AdminPoiSubmission[] | null>(null);
   const [bulkPublishTargets, setBulkPublishTargets] = useState<AdminPoiSubmission[] | null>(null);
@@ -211,6 +229,36 @@ export function AdminPoiPanel() {
     const entries = categories.map((category) => [category.id, category] as const);
     return new Map(entries);
   }, [categories]);
+  const parentMarkerOptions = useMemo(
+    () =>
+      mapMarkers
+        .filter(
+          (marker) =>
+            marker.geometry.type === 'Point' &&
+            marker.categoryId !== 'player' &&
+            marker.categoryId !== 'road',
+        )
+        .sort((left, right) => left.label.localeCompare(right.label, 'zh-CN')),
+    [mapMarkers],
+  );
+  const regionMarkerOptions = useMemo(
+    () =>
+      mapMarkers
+        .filter((marker) => isRegionGeometry(marker.geometry))
+        .sort((left, right) => left.label.localeCompare(right.label, 'zh-CN')),
+    [mapMarkers],
+  );
+  const roadMarkerOptions = useMemo(
+    () =>
+      mapMarkers
+        .filter(
+          (marker) =>
+            isRoadReferenceMarker(marker) &&
+            (marker.geometry.type === 'MultiPoint' || marker.geometry.type === 'LineString'),
+        )
+        .sort((left, right) => left.label.localeCompare(right.label, 'zh-CN')),
+    [mapMarkers],
+  );
 
   const sortedSubmissions = useMemo(
     () =>
@@ -321,6 +369,9 @@ export function AdminPoiPanel() {
             statusLabel(submission.status),
             geometryLabel(submission.geometry),
             submission.description,
+            submission.openingHours,
+            submission.address,
+            submission.facilities?.map((facility) => facility.description).join(' '),
             submission.href,
             submission.submittedBy,
             submission.reviewReason,
@@ -341,10 +392,22 @@ export function AdminPoiPanel() {
       statusFilter,
     ],
   );
-  const legacyMapMarkers = useMemo(
-    () => mapMarkers.filter((marker) => isLegacyPoiMapMarker(marker)),
-    [mapMarkers],
-  );
+  const legacyMapMarkers = useMemo(() => {
+    const groupedRoadLabels = new Set(
+      mapMarkers
+        .filter((marker) => marker.categoryId === 'road' && marker.geometry.type === 'MultiPoint')
+        .map((marker) => normalizeSearchText(marker.label)),
+    );
+    return mapMarkers.filter(
+      (marker) =>
+        isLegacyPoiMapMarker(marker) &&
+        !(
+          marker.categoryId === 'road' &&
+          marker.geometry.type === 'Point' &&
+          groupedRoadLabels.has(normalizeSearchText(marker.label))
+        ),
+    );
+  }, [mapMarkers]);
   const filteredLegacyMapMarkers = useMemo(() => {
     if (!shouldShowLegacyPoiMarkers(statusFilter)) {
       return [];
@@ -792,6 +855,28 @@ export function AdminPoiPanel() {
     }
   };
 
+  const createSubmission = async (input: PoiSubmissionEditInput): Promise<string | null> => {
+    setIsBusy(true);
+    try {
+      const response = await fetch(appPath('/api/admin/map/poi-submissions'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      const data = (await response.json()) as AdminPoiSubmission & { message?: string };
+      if (!response.ok) {
+        return data.message ?? '新增 POI 失败';
+      }
+
+      setSubmissions((current) => [data, ...current]);
+      setStatusFilter('pending_review');
+      setStatusText(`已新增 ${data.title}，当前进入待审核队列。`);
+      return null;
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const updateLegacyMarker = async (
     markerId: string,
     input: LegacyPoiMarkerEditInput,
@@ -1138,6 +1223,12 @@ export function AdminPoiPanel() {
             <button type="button" onClick={resetFilters}>
               重置筛选
             </button>
+            <button type="button" disabled={isBusy} onClick={() => setCreateTarget({})}>
+              <span className="material-symbols-outlined" aria-hidden="true">
+                add_location_alt
+              </span>
+              <span>新增 POI</span>
+            </button>
           </div>
 
           <div className="admin-content-bulk-bar" aria-label="POI 投稿批量操作">
@@ -1213,6 +1304,9 @@ export function AdminPoiPanel() {
                   isSelected={selectedSubmissionIds.has(item.submission.id)}
                   key={item.key}
                   hierarchyHint={hierarchyHintBySubmissionId.get(item.submission.id)}
+                  onAddChild={() =>
+                    setCreateTarget({ parentMarkerId: `poi-${item.submission.id}` })
+                  }
                   onCopy={(message) => setStatusText(message)}
                   onDetail={() => setDetailTargetId(item.submission.id)}
                   onDelete={() => void deleteSubmission(item.submission)}
@@ -1232,6 +1326,7 @@ export function AdminPoiPanel() {
                   isSelected={selectedLegacyMarkerIds.has(item.marker.id)}
                   key={item.key}
                   marker={item.marker}
+                  onAddChild={() => setCreateTarget({ parentMarkerId: item.marker.id })}
                   onDelete={() => {
                     if (
                       window.confirm(
@@ -1403,6 +1498,9 @@ export function AdminPoiPanel() {
           categories={categories}
           contextMarkers={auditContextMarkersBySubmissionId.get(editTarget.id) ?? []}
           isBusy={isBusy}
+          parentMarkerOptions={parentMarkerOptions}
+          regionMarkerOptions={regionMarkerOptions}
+          roadMarkerOptions={roadMarkerOptions}
           submission={editTarget}
           tilePreviewConfig={tilePreviewConfig}
           onClose={() => setEditTarget(null)}
@@ -1416,11 +1514,36 @@ export function AdminPoiPanel() {
         />
       ) : null}
 
+      {createTarget ? (
+        <EditPoiSubmissionDialog
+          categories={categories}
+          contextMarkers={[]}
+          initialParentMarkerId={createTarget.parentMarkerId}
+          isBusy={isBusy}
+          parentMarkerOptions={parentMarkerOptions}
+          regionMarkerOptions={regionMarkerOptions}
+          roadMarkerOptions={roadMarkerOptions}
+          tilePreviewConfig={tilePreviewConfig}
+          onClose={() => setCreateTarget(null)}
+          onSubmit={async (input) => {
+            const error = await createSubmission(input);
+            if (!error) {
+              setCreateTarget(null);
+            }
+            return error;
+          }}
+        />
+      ) : null}
+
       {legacyEditTarget ? (
         <EditLegacyPoiMarkerDialog
           categories={categories}
           isBusy={isBusy}
           marker={legacyEditTarget}
+          parentMarkerOptions={parentMarkerOptions}
+          regionMarkerOptions={regionMarkerOptions}
+          roadMarkerOptions={roadMarkerOptions}
+          tilePreviewConfig={tilePreviewConfig}
           onClose={() => setLegacyEditTarget(null)}
           onSubmit={async (input) => {
             const error = await updateLegacyMarker(legacyEditTarget.id, input);
@@ -1453,6 +1576,7 @@ function LegacyPoiMarkerItem({
   isBusy,
   isSelected,
   marker,
+  onAddChild,
   onDelete,
   onEdit,
   onToggleSelected,
@@ -1461,6 +1585,7 @@ function LegacyPoiMarkerItem({
   isBusy: boolean;
   isSelected: boolean;
   marker: MapMarker;
+  onAddChild: () => void;
   onDelete: () => void;
   onEdit: () => void;
   onToggleSelected: () => void;
@@ -1492,11 +1617,105 @@ function LegacyPoiMarkerItem({
         <button type="button" disabled={isBusy} onClick={onEdit}>
           编辑
         </button>
+        {marker.geometry.type === 'Point' ? (
+          <button type="button" disabled={isBusy} onClick={onAddChild}>
+            新增子地点
+          </button>
+        ) : null}
         <button type="button" disabled={isBusy} onClick={onDelete}>
           删除
         </button>
       </div>
     </article>
+  );
+}
+
+function AdminPoiBusinessDetailsFields({
+  disabled,
+  form,
+  onChange,
+  roadMarkerOptions,
+}: Readonly<{
+  disabled: boolean;
+  form: Pick<
+    PoiSubmissionFormInput,
+    'openingHours' | 'address' | 'addressRoadMarkerId' | 'facilities'
+  >;
+  onChange: (
+    patch: Partial<
+      Pick<
+        PoiSubmissionFormInput,
+        'openingHours' | 'address' | 'addressRoadMarkerId' | 'facilities'
+      >
+    >,
+  ) => void;
+  roadMarkerOptions: MapMarker[];
+}>) {
+  const matchingRoads = findAddressRoadMarkers(form.address, roadMarkerOptions);
+  const matchingRoadIds = new Set(matchingRoads.map((marker) => marker.id));
+  const orderedRoads = [
+    ...matchingRoads,
+    ...roadMarkerOptions.filter((marker) => !matchingRoadIds.has(marker.id)),
+  ];
+
+  const updateAddress = (address: string) => {
+    const matches = findAddressRoadMarkers(address, roadMarkerOptions);
+    const addressRoadMarkerId =
+      matches.length === 1
+        ? (matches[0]?.id ?? '')
+        : matches.some((marker) => marker.id === form.addressRoadMarkerId)
+          ? form.addressRoadMarkerId
+          : '';
+    onChange({ address, addressRoadMarkerId });
+  };
+
+  return (
+    <div className="admin-poi-business-details">
+      <label>
+        <span>营业时间</span>
+        <input
+          disabled={disabled}
+          maxLength={500}
+          value={form.openingHours}
+          onChange={(event) => onChange({ openingHours: event.currentTarget.value })}
+          placeholder="例如：周一至周五 09:00-18:00"
+        />
+      </label>
+      <label>
+        <span>文字地址</span>
+        <input
+          disabled={disabled}
+          maxLength={300}
+          value={form.address}
+          onChange={(event) => updateAddress(event.currentTarget.value)}
+          placeholder="例如：青年大街 18 号"
+        />
+      </label>
+      <label>
+        <span>地址道路</span>
+        <select
+          disabled={disabled || !form.address.trim()}
+          value={form.addressRoadMarkerId}
+          onChange={(event) => onChange({ addressRoadMarkerId: event.currentTarget.value })}
+        >
+          <option value="">不绑定道路</option>
+          {form.addressRoadMarkerId &&
+          !orderedRoads.some((marker) => marker.id === form.addressRoadMarkerId) ? (
+            <option value={form.addressRoadMarkerId}>{form.addressRoadMarkerId}</option>
+          ) : null}
+          {orderedRoads.map((marker) => (
+            <option value={marker.id} key={marker.id}>
+              {marker.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <PoiFacilityEditor
+        disabled={disabled}
+        facilities={form.facilities}
+        onChange={(facilities) => onChange({ facilities })}
+      />
+    </div>
   );
 }
 
@@ -1506,12 +1725,20 @@ function EditLegacyPoiMarkerDialog({
   marker,
   onClose,
   onSubmit,
+  parentMarkerOptions,
+  regionMarkerOptions,
+  roadMarkerOptions,
+  tilePreviewConfig,
 }: Readonly<{
   categories: PoiCategory[];
   isBusy: boolean;
   marker: MapMarker;
   onClose: () => void;
   onSubmit: (input: LegacyPoiMarkerEditInput) => Promise<string | null>;
+  parentMarkerOptions: MapMarker[];
+  regionMarkerOptions: MapMarker[];
+  roadMarkerOptions: MapMarker[];
+  tilePreviewConfig: PoiTilePreviewConfig;
 }>) {
   const [form, setForm] = useState<LegacyPoiMarkerEditInput>(() => ({
     label: marker.label,
@@ -1521,7 +1748,16 @@ function EditLegacyPoiMarkerDialog({
     href: marker.href ?? '',
     imageUrl: marker.imageUrl ?? '',
     geometry: marker.geometry,
+    parentMarkerId: marker.parentMarkerId ?? '',
+    boundRegionMarkerIds: marker.boundRegionMarkerIds ?? [],
+    openingHours: marker.openingHours ?? '',
+    address: marker.address ?? '',
+    addressRoadMarkerId: marker.addressRoadMarkerId ?? '',
+    facilities: marker.facilities ?? [],
   }));
+  const [geometryDraft, setGeometryDraft] = useState<PoiGeometryDraft>(() =>
+    createPoiGeometryDraft(marker.geometry),
+  );
   const [error, setError] = useState('');
   const selectedCategory = categories.find((category) => category.id === form.categoryId);
   const iconOptions = selectedCategory?.iconMapping.iconFileNames ?? [];
@@ -1546,6 +1782,16 @@ function EditLegacyPoiMarkerDialog({
       setError('请填写标记点名称。');
       return;
     }
+    if (form.facilities.some((facility) => !facility.description.trim())) {
+      setError('请填写每条设施信息的文字描述。');
+      return;
+    }
+
+    const geometryResult = buildMapGeometryFromDraft(geometryDraft);
+    if (!geometryResult.geometry) {
+      setError(geometryResult.error ?? '请填写有效的几何坐标。');
+      return;
+    }
 
     const submitError = await onSubmit({
       ...form,
@@ -1555,7 +1801,13 @@ function EditLegacyPoiMarkerDialog({
       description: form.description.trim(),
       href: form.href.trim(),
       imageUrl: form.imageUrl.trim(),
-      geometry: marker.geometry,
+      geometry: geometryResult.geometry,
+      parentMarkerId: form.parentMarkerId.trim(),
+      boundRegionMarkerIds: form.boundRegionMarkerIds,
+      openingHours: form.openingHours.trim(),
+      address: form.address.trim(),
+      addressRoadMarkerId: form.addressRoadMarkerId,
+      facilities: form.facilities,
     });
     if (submitError) {
       setError(submitError);
@@ -1620,6 +1872,12 @@ function EditLegacyPoiMarkerDialog({
             maxLength={1000}
           />
         </label>
+        <AdminPoiBusinessDetailsFields
+          disabled={isBusy}
+          form={form}
+          roadMarkerOptions={roadMarkerOptions}
+          onChange={updateForm}
+        />
         <label>
           <span>链接</span>
           <input
@@ -1656,7 +1914,76 @@ function EditLegacyPoiMarkerDialog({
             </button>
           </div>
         </div>
-        <p className="muted">几何：{geometryLabel(marker.geometry)}。这轮保留原旧站几何。</p>
+        <label>
+          <span>几何类型</span>
+          <select
+            value={geometryDraft.type}
+            onChange={(event) =>
+              setGeometryDraft(
+                createEmptyPoiGeometryDraft(
+                  event.currentTarget.value as PoiGeometryDraft['type'],
+                  getGeometryDraftRepresentativeCoordinate(geometryDraft),
+                ),
+              )
+            }
+          >
+            <option value="Point">点状 POI</option>
+            <option value="MultiPoint">多点对象</option>
+            <option value="LineString">道路 / 线性 POI</option>
+            <option value="Rectangle">矩形区域</option>
+            <option value="MultiRectangle">多矩形区域</option>
+            <option value="Polygon">多边形区域</option>
+            <option value="MultiPolygon">多重多边形区域</option>
+          </select>
+        </label>
+        <LegacyPoiGeometryEditor
+          draft={geometryDraft}
+          originalGeometry={marker.geometry}
+          tilePreviewConfig={tilePreviewConfig}
+          onChange={(draft) => {
+            setGeometryDraft(draft);
+            setError('');
+          }}
+        />
+        <label>
+          <span>父地点</span>
+          <select
+            value={form.parentMarkerId}
+            onChange={(event) => updateForm({ parentMarkerId: event.currentTarget.value })}
+          >
+            <option value="">无父地点</option>
+            {parentMarkerOptions
+              .filter((candidate) => candidate.id !== marker.id)
+              .map((candidate) => (
+                <option value={candidate.id} key={candidate.id}>
+                  {candidate.label} · {candidate.id}
+                </option>
+              ))}
+          </select>
+        </label>
+        <fieldset className="admin-poi-region-bindings">
+          <legend>绑定区域</legend>
+          {regionMarkerOptions.length > 0 ? (
+            regionMarkerOptions.map((region) => (
+              <label className="checkbox-row" key={region.id}>
+                <input
+                  type="checkbox"
+                  checked={form.boundRegionMarkerIds.includes(region.id)}
+                  onChange={(event) =>
+                    updateForm({
+                      boundRegionMarkerIds: event.currentTarget.checked
+                        ? [...form.boundRegionMarkerIds, region.id]
+                        : form.boundRegionMarkerIds.filter((id) => id !== region.id),
+                    })
+                  }
+                />
+                <span>{region.label}</span>
+              </label>
+            ))
+          ) : (
+            <p className="muted">当前地图数据中没有可绑定的区域 POI。</p>
+          )}
+        </fieldset>
         {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
         <div className="admin-content-actions">
           <button type="button" onClick={onClose} disabled={isBusy}>
@@ -1668,6 +1995,76 @@ function EditLegacyPoiMarkerDialog({
         </div>
       </form>
     </div>
+  );
+}
+
+function LegacyPoiGeometryEditor({
+  draft,
+  onChange,
+  originalGeometry,
+  tilePreviewConfig,
+}: Readonly<{
+  draft: PoiGeometryDraft;
+  onChange: (draft: PoiGeometryDraft) => void;
+  originalGeometry: MapGeometry;
+  tilePreviewConfig: PoiTilePreviewConfig;
+}>) {
+  if (draft.type === 'Point') {
+    const currentCoordinate = parseCoordinateDraft(draft.coordinate);
+    const originalCoordinate =
+      originalGeometry.type === 'Point'
+        ? originalGeometry.coordinates
+        : getGeometryRepresentativeCoordinate(originalGeometry);
+    return (
+      <div className="admin-poi-edit-coordinate">
+        <div className="admin-poi-edit-coordinate-fields">
+          <label>
+            <span>X 坐标</span>
+            <input
+              inputMode="decimal"
+              value={draft.coordinate.x}
+              onChange={(event) =>
+                onChange({
+                  type: 'Point',
+                  coordinate: { ...draft.coordinate, x: event.currentTarget.value },
+                })
+              }
+            />
+          </label>
+          <label>
+            <span>Z 坐标</span>
+            <input
+              inputMode="decimal"
+              value={draft.coordinate.z}
+              onChange={(event) =>
+                onChange({
+                  type: 'Point',
+                  coordinate: { ...draft.coordinate, z: event.currentTarget.value },
+                })
+              }
+            />
+          </label>
+        </div>
+        <PoiPointCoordinatePicker
+          contextMarkers={[]}
+          currentCoordinate={currentCoordinate}
+          originalCoordinate={originalCoordinate}
+          tilePreviewConfig={tilePreviewConfig}
+          onPick={(coordinate) =>
+            onChange({ type: 'Point', coordinate: coordinateToDraft(coordinate) })
+          }
+        />
+      </div>
+    );
+  }
+
+  return (
+    <PoiNonPointGeometryEditor
+      contextMarkers={[]}
+      draft={draft}
+      tilePreviewConfig={tilePreviewConfig}
+      onChange={onChange}
+    />
   );
 }
 
@@ -1836,6 +2233,7 @@ function PoiSubmissionReviewItem({
   isBusy,
   isSelected,
   imageReview,
+  onAddChild,
   onCopy,
   onDetail,
   onDelete,
@@ -1853,6 +2251,7 @@ function PoiSubmissionReviewItem({
   isBusy: boolean;
   isSelected: boolean;
   imageReview?: PoiSubmissionImageReview;
+  onAddChild: () => void;
   onCopy: (message: string) => void;
   onDetail: () => void;
   onDelete: () => void;
@@ -1917,7 +2316,16 @@ function PoiSubmissionReviewItem({
           {rejectedImage ? <span className="operation-tag is-warning">图片不合格</span> : null}
           {unreviewedImage ? <span className="operation-tag">图片待审</span> : null}
           {hierarchyHint ? <span className="operation-tag">疑似父子地点</span> : null}
+          {submission.parentMarkerId ? <span className="operation-tag">已绑定父地点</span> : null}
+          {submission.boundRegionMarkerIds?.length ? (
+            <span className="operation-tag">{`绑定区域 ${submission.boundRegionMarkerIds.length}`}</span>
+          ) : null}
           {submission.description ? <span className="operation-tag">已填写简介</span> : null}
+          {submission.openingHours ? <span className="operation-tag">已填写营业时间</span> : null}
+          {submission.address ? <span className="operation-tag">已填写地址</span> : null}
+          {submission.facilities?.length ? (
+            <span className="operation-tag">{`设施 ${submission.facilities.length}`}</span>
+          ) : null}
         </div>
         {representativeCoordinate ? (
           <p className="muted">代表坐标：{formatCoordinatePair(representativeCoordinate)}</p>
@@ -1967,6 +2375,11 @@ function PoiSubmissionReviewItem({
         >
           修正资料
         </button>
+        {submission.geometry.type === 'Point' ? (
+          <button type="button" disabled={isBusy} onClick={onAddChild}>
+            新增子地点
+          </button>
+        ) : null}
         <button
           type="button"
           disabled={isBusy || !canDeletePoiSubmission(submission.status)}
@@ -2296,6 +2709,18 @@ function PoiSubmissionDetail({
           <dd>{submission.href ? <a href={submission.href}>{submission.href}</a> : '未填写'}</dd>
         </div>
         <div>
+          <dt>营业时间</dt>
+          <dd>{submission.openingHours || '未填写'}</dd>
+        </div>
+        <div>
+          <dt>文字地址</dt>
+          <dd>{submission.address || '未填写'}</dd>
+        </div>
+        <div>
+          <dt>地址道路</dt>
+          <dd>{submission.addressRoadMarkerId || '未绑定'}</dd>
+        </div>
+        <div>
           <dt>审核</dt>
           <dd>
             {submission.reviewedBy
@@ -2304,6 +2729,19 @@ function PoiSubmissionDetail({
           </dd>
         </div>
       </dl>
+      {submission.facilities?.length ? (
+        <div className="admin-poi-detail-facilities">
+          <strong>设施信息</strong>
+          {submission.facilities.map((facility, index) => (
+            <div key={`${facility.symbolIcon}-${index}`}>
+              <span className="material-symbols-outlined" aria-hidden="true">
+                {facility.symbolIcon}
+              </span>
+              <span>{facility.description}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <details>
         <summary>几何 JSON</summary>
         <pre>{JSON.stringify(submission.geometry, null, 2)}</pre>
@@ -2931,42 +3369,57 @@ function BulkPublishPoiDialog({
 function EditPoiSubmissionDialog({
   categories,
   contextMarkers,
+  initialParentMarkerId,
   isBusy,
   onClose,
   onSubmit,
+  parentMarkerOptions,
+  regionMarkerOptions,
+  roadMarkerOptions,
   submission,
   tilePreviewConfig,
 }: Readonly<{
   categories: PoiCategory[];
   contextMarkers: PoiAuditContextMarker[];
+  initialParentMarkerId?: string;
   isBusy: boolean;
   onClose: () => void;
   onSubmit: (input: PoiSubmissionEditInput) => Promise<string | null>;
-  submission: PoiSubmission;
+  parentMarkerOptions: MapMarker[];
+  regionMarkerOptions: MapMarker[];
+  roadMarkerOptions: MapMarker[];
+  submission?: PoiSubmission;
   tilePreviewConfig: PoiTilePreviewConfig;
 }>) {
-  const [form, setForm] = useState<PoiSubmissionEditInput>(() => ({
-    title: submission.title,
-    categoryId: submission.categoryId,
-    iconFileName: submission.iconFileName ?? '',
-    description: submission.description ?? '',
-    href: submission.href ?? '',
-    imageUrl: submission.imageUrl ?? '',
+  const [form, setForm] = useState<PoiSubmissionFormInput>(() => ({
+    title: submission?.title ?? '',
+    categoryId: submission?.categoryId ?? categories[0]?.id ?? '',
+    iconFileName: submission?.iconFileName ?? '',
+    description: submission?.description ?? '',
+    href: submission?.href ?? '',
+    imageUrl: submission?.imageUrl ?? '',
+    parentMarkerId: submission?.parentMarkerId ?? initialParentMarkerId ?? '',
+    boundRegionMarkerIds: submission?.boundRegionMarkerIds ?? [],
+    openingHours: submission?.openingHours ?? '',
+    address: submission?.address ?? '',
+    addressRoadMarkerId: submission?.addressRoadMarkerId ?? '',
+    facilities: submission?.facilities ?? [],
   }));
   const [geometryDraft, setGeometryDraft] = useState<PoiGeometryDraft>(() =>
-    createPoiGeometryDraft(submission.geometry),
+    submission ? createPoiGeometryDraft(submission.geometry) : createEmptyPoiGeometryDraft('Point'),
   );
   const [error, setError] = useState('');
   const originalPointCoordinate =
-    submission.geometry.type === 'Point' ? submission.geometry.coordinates : null;
+    submission?.geometry.type === 'Point' ? submission.geometry.coordinates : null;
   const currentPointCoordinate =
     geometryDraft.type === 'Point'
       ? (parseCoordinateDraft(geometryDraft.coordinate) ?? originalPointCoordinate)
       : null;
+  const pointMapCoordinate = currentPointCoordinate ?? originalPointCoordinate;
   const selectedCategory = categories.find((category) => category.id === form.categoryId);
   const iconOptions = selectedCategory?.iconMapping.iconFileNames ?? [];
 
-  const updateForm = (patch: Partial<PoiSubmissionEditInput>) => {
+  const updateForm = (patch: Partial<PoiSubmissionFormInput>) => {
     setForm((current) => {
       const next = { ...current, ...patch };
       if (patch.categoryId && patch.categoryId !== current.categoryId) {
@@ -2996,6 +3449,10 @@ function EditPoiSubmissionDialog({
       setError('请选择地点分类。');
       return;
     }
+    if (form.facilities.some((facility) => !facility.description.trim())) {
+      setError('请填写每条设施信息的文字描述。');
+      return;
+    }
 
     const geometryResult = buildMapGeometryFromDraft(geometryDraft);
     if (!geometryResult.geometry) {
@@ -3011,6 +3468,12 @@ function EditPoiSubmissionDialog({
       href: form.href.trim(),
       imageUrl: form.imageUrl.trim(),
       geometry: geometryResult.geometry,
+      parentMarkerId: form.parentMarkerId.trim(),
+      boundRegionMarkerIds: form.boundRegionMarkerIds,
+      openingHours: form.openingHours.trim(),
+      address: form.address.trim(),
+      addressRoadMarkerId: form.addressRoadMarkerId,
+      facilities: form.facilities,
     });
     if (submitError) {
       setError(submitError);
@@ -3028,8 +3491,10 @@ function EditPoiSubmissionDialog({
         onSubmit={submit}
       >
         <div className="section-heading">
-          <h2 id="admin-poi-edit-title">修正 POI 投稿</h2>
-          <span className="muted">{getPoiEditDialogHint(submission.status)}</span>
+          <h2 id="admin-poi-edit-title">{submission ? '修正 POI 投稿' : '新增 POI'}</h2>
+          <span className="muted">
+            {submission ? getPoiEditDialogHint(submission.status) : '保存后进入待审核队列'}
+          </span>
         </div>
         <label>
           <span>地点名称</span>
@@ -3074,6 +3539,12 @@ function EditPoiSubmissionDialog({
             maxLength={1000}
           />
         </label>
+        <AdminPoiBusinessDetailsFields
+          disabled={isBusy}
+          form={form}
+          roadMarkerOptions={roadMarkerOptions}
+          onChange={updateForm}
+        />
         <label>
           <span>链接</span>
           <input
@@ -3110,7 +3581,68 @@ function EditPoiSubmissionDialog({
             </button>
           </div>
         </div>
-        {geometryDraft.type === 'Point' && originalPointCoordinate ? (
+        <label>
+          <span>几何类型</span>
+          <select
+            value={geometryDraft.type}
+            onChange={(event) =>
+              updateGeometryDraft(
+                createEmptyPoiGeometryDraft(
+                  event.currentTarget.value as PoiGeometryDraft['type'],
+                  getGeometryDraftRepresentativeCoordinate(geometryDraft),
+                ),
+              )
+            }
+          >
+            <option value="Point">点状 POI</option>
+            <option value="MultiPoint">多点对象</option>
+            <option value="LineString">道路 / 线性 POI</option>
+            <option value="Rectangle">矩形区域</option>
+            <option value="MultiRectangle">多矩形区域</option>
+            <option value="Polygon">多边形区域</option>
+            <option value="MultiPolygon">多重多边形区域</option>
+          </select>
+        </label>
+        <label>
+          <span>父地点</span>
+          <select
+            value={form.parentMarkerId}
+            onChange={(event) => updateForm({ parentMarkerId: event.currentTarget.value })}
+          >
+            <option value="">无父地点</option>
+            {parentMarkerOptions
+              .filter((marker) => marker.id !== (submission ? `poi-${submission.id}` : ''))
+              .map((marker) => (
+                <option value={marker.id} key={marker.id}>
+                  {marker.label} · {marker.id}
+                </option>
+              ))}
+          </select>
+        </label>
+        <fieldset className="admin-poi-region-bindings">
+          <legend>绑定区域</legend>
+          {regionMarkerOptions.length > 0 ? (
+            regionMarkerOptions.map((marker) => (
+              <label className="checkbox-row" key={marker.id}>
+                <input
+                  type="checkbox"
+                  checked={form.boundRegionMarkerIds.includes(marker.id)}
+                  onChange={(event) =>
+                    updateForm({
+                      boundRegionMarkerIds: event.currentTarget.checked
+                        ? [...form.boundRegionMarkerIds, marker.id]
+                        : form.boundRegionMarkerIds.filter((id) => id !== marker.id),
+                    })
+                  }
+                />
+                <span>{marker.label}</span>
+              </label>
+            ))
+          ) : (
+            <p className="muted">当前地图数据中没有可绑定的区域 POI。</p>
+          )}
+        </fieldset>
+        {geometryDraft.type === 'Point' ? (
           <div className="admin-poi-edit-coordinate">
             <div className="admin-poi-edit-coordinate-fields">
               <label>
@@ -3148,7 +3680,7 @@ function EditPoiSubmissionDialog({
             </div>
             <PoiPointCoordinatePicker
               contextMarkers={contextMarkers}
-              currentCoordinate={currentPointCoordinate ?? originalPointCoordinate}
+              currentCoordinate={currentPointCoordinate}
               originalCoordinate={originalPointCoordinate}
               tilePreviewConfig={tilePreviewConfig}
               onPick={(coordinate) => {
@@ -3158,56 +3690,24 @@ function EditPoiSubmissionDialog({
                 });
               }}
             />
-            <a
-              className="admin-action-link"
-              href={buildSubmissionMapHref(
-                submission,
-                currentPointCoordinate ?? originalPointCoordinate,
-              )}
-              target="_blank"
-              rel="noreferrer"
-            >
-              打开地图辅助选点
-            </a>
+            {submission && pointMapCoordinate ? (
+              <a
+                className="admin-action-link"
+                href={buildSubmissionMapHref(submission, pointMapCoordinate)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                打开地图辅助选点
+              </a>
+            ) : null}
           </div>
-        ) : geometryDraft.type === 'MultiPoint' ? (
-          <PoiCoordinateListEditor
-            coordinates={geometryDraft.coordinates}
-            minPoints={2}
-            title="点组坐标"
-            onChange={(coordinates) => updateGeometryDraft({ type: 'MultiPoint', coordinates })}
-          />
-        ) : geometryDraft.type === 'LineString' ? (
-          <PoiCoordinateListEditor
-            coordinates={geometryDraft.coordinates}
-            minPoints={2}
-            title="线性 POI 点序"
-            onChange={(coordinates) => updateGeometryDraft({ type: 'LineString', coordinates })}
-          />
-        ) : geometryDraft.type === 'Rectangle' ? (
-          <PoiRectangleBoundsEditor
-            bounds={geometryDraft.bounds}
-            title="矩形区域边界"
-            onChange={(bounds) => updateGeometryDraft({ type: 'Rectangle', bounds })}
-          />
-        ) : geometryDraft.type === 'MultiRectangle' ? (
-          <PoiMultiRectangleEditor
-            rectangles={geometryDraft.rectangles}
-            onChange={(rectangles) => updateGeometryDraft({ type: 'MultiRectangle', rectangles })}
-          />
-        ) : geometryDraft.type === 'Polygon' ? (
-          <PoiPolygonEditor
-            rings={geometryDraft.rings}
-            title="多边形边界"
-            onChange={(rings) => updateGeometryDraft({ type: 'Polygon', rings })}
-          />
-        ) : geometryDraft.type === 'MultiPolygon' ? (
-          <PoiMultiPolygonEditor
-            polygons={geometryDraft.polygons}
-            onChange={(polygons) => updateGeometryDraft({ type: 'MultiPolygon', polygons })}
-          />
         ) : (
-          <p className="muted">当前几何类型暂不支持在此弹窗修正。</p>
+          <PoiNonPointGeometryEditor
+            contextMarkers={contextMarkers}
+            draft={geometryDraft}
+            tilePreviewConfig={tilePreviewConfig}
+            onChange={updateGeometryDraft}
+          />
         )}
         {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
         <div className="admin-content-actions">
@@ -3215,11 +3715,181 @@ function EditPoiSubmissionDialog({
             取消
           </button>
           <button type="submit" disabled={isBusy}>
-            保存修正
+            {submission ? '保存修正' : '创建 POI'}
           </button>
         </div>
       </form>
     </div>
+  );
+}
+
+function PoiNonPointGeometryEditor({
+  contextMarkers,
+  draft,
+  onChange,
+  tilePreviewConfig,
+}: Readonly<{
+  contextMarkers: PoiAuditContextMarker[];
+  draft: PoiGeometryDraft;
+  onChange: (draft: PoiGeometryDraft) => void;
+  tilePreviewConfig: PoiTilePreviewConfig;
+}>) {
+  if (draft.type === 'Point') {
+    return null;
+  }
+
+  let fields;
+  if (draft.type === 'MultiPoint' || draft.type === 'LineString') {
+    fields = (
+      <PoiCoordinateListEditor
+        coordinates={draft.coordinates}
+        minPoints={2}
+        title={draft.type === 'LineString' ? '道路 / 线性 POI 点序' : '点组坐标'}
+        onChange={(coordinates) => onChange({ type: draft.type, coordinates })}
+      />
+    );
+  } else if (draft.type === 'Rectangle') {
+    fields = (
+      <PoiRectangleBoundsEditor
+        bounds={draft.bounds}
+        title="矩形区域边界"
+        onChange={(bounds) => onChange({ type: 'Rectangle', bounds })}
+      />
+    );
+  } else if (draft.type === 'MultiRectangle') {
+    fields = (
+      <PoiMultiRectangleEditor
+        rectangles={draft.rectangles}
+        onChange={(rectangles) => onChange({ type: 'MultiRectangle', rectangles })}
+      />
+    );
+  } else if (draft.type === 'Polygon') {
+    fields = (
+      <PoiPolygonEditor
+        rings={draft.rings}
+        title="多边形边界"
+        onChange={(rings) => onChange({ type: 'Polygon', rings })}
+      />
+    );
+  } else {
+    fields = (
+      <PoiMultiPolygonEditor
+        polygons={draft.polygons}
+        onChange={(polygons) => onChange({ type: 'MultiPolygon', polygons })}
+      />
+    );
+  }
+
+  return (
+    <div className="admin-poi-nonpoint-geometry-editor">
+      <PoiGeometryVisualEditor
+        contextMarkers={contextMarkers}
+        draft={draft}
+        tilePreviewConfig={tilePreviewConfig}
+        onChange={onChange}
+      />
+      {fields}
+    </div>
+  );
+}
+
+function PoiGeometryVisualEditor({
+  contextMarkers,
+  draft,
+  onChange,
+  tilePreviewConfig,
+}: Readonly<{
+  contextMarkers: PoiAuditContextMarker[];
+  draft: Exclude<PoiGeometryDraft, { type: 'Point' }>;
+  onChange: (draft: PoiGeometryDraft) => void;
+  tilePreviewConfig: PoiTilePreviewConfig;
+}>) {
+  const preview = buildPoiGeometryDraftMapPreview(draft, contextMarkers);
+  const handlePick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const coordinate = unprojectAuditMapPreviewCoordinate(
+      [
+        ((event.clientX - rect.left) / rect.width) * poiAuditPreviewWidth,
+        ((event.clientY - rect.top) / rect.height) * poiAuditPreviewHeight,
+      ],
+      preview.bounds,
+    );
+    onChange(appendPoiGeometryDraftCoordinate(draft, coordinate));
+  };
+  const removable = canRemovePoiGeometryDraftCoordinate(draft);
+
+  return (
+    <section className="admin-poi-geometry-map-editor" aria-label="POI 几何地图编辑">
+      <div className="admin-poi-audit-map-header">
+        <strong>地图编辑</strong>
+        <span>{geometryLabelFromDraft(draft)}</span>
+      </div>
+      <button
+        className="admin-poi-geometry-map-stage"
+        type="button"
+        aria-label="在地图上添加几何节点"
+        onClick={handlePick}
+      >
+        <PoiAuditTileLayer bounds={preview.bounds} tilePreviewConfig={tilePreviewConfig} />
+        <svg viewBox={`0 0 ${poiAuditPreviewWidth} ${poiAuditPreviewHeight}`} aria-hidden="true">
+          <rect
+            className="admin-poi-audit-map-grid"
+            x="0"
+            y="0"
+            width={poiAuditPreviewWidth}
+            height={poiAuditPreviewHeight}
+          />
+          {preview.polygons.map((polygon, index) => (
+            <polygon
+              className="admin-poi-audit-map-submission-shape"
+              key={`draft-polygon-${index}`}
+              points={polygon}
+            />
+          ))}
+          {preview.lines.map((line, index) => (
+            <polyline
+              className="admin-poi-audit-map-submission-line"
+              key={`draft-line-${index}`}
+              points={line}
+            />
+          ))}
+          {preview.contextMarkers.map((marker) => (
+            <g
+              className={`admin-poi-audit-map-context-marker is-${marker.relation}`}
+              key={marker.marker.id}
+              transform={`translate(${roundPreviewValue(marker.point[0])} ${roundPreviewValue(marker.point[1])})`}
+            >
+              <circle r="4.5" />
+              <title>{marker.marker.label}</title>
+            </g>
+          ))}
+          {preview.points.map((point, index) => (
+            <g
+              className="admin-poi-geometry-map-node"
+              key={`draft-point-${index}`}
+              transform={`translate(${roundPreviewValue(point[0])} ${roundPreviewValue(point[1])})`}
+            >
+              <circle r="5" />
+              <text x="8" y="4">
+                {index + 1}
+              </text>
+            </g>
+          ))}
+        </svg>
+      </button>
+      <div className="admin-content-actions">
+        <button
+          type="button"
+          disabled={!removable}
+          onClick={() => onChange(removeLastPoiGeometryDraftCoordinate(draft))}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            undo
+          </span>
+          <span>撤销末节点</span>
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -3556,64 +4226,37 @@ function PoiPointCoordinatePicker({
   tilePreviewConfig,
 }: Readonly<{
   contextMarkers: PoiAuditContextMarker[];
-  currentCoordinate: [number, number];
+  currentCoordinate: [number, number] | null;
   onPick: (coordinate: [number, number]) => void;
-  originalCoordinate: [number, number];
+  originalCoordinate: [number, number] | null;
   tilePreviewConfig: PoiTilePreviewConfig;
 }>) {
-  const model = buildPoiPointCoordinatePickerModel(
-    currentCoordinate,
-    originalCoordinate,
-    contextMarkers,
-  );
-  const stageRef = useRef<HTMLSpanElement | null>(null);
-
-  const pickCoordinate = (event: MouseEvent<HTMLButtonElement>) => {
-    const rect =
-      stageRef.current?.getBoundingClientRect() ?? event.currentTarget.getBoundingClientRect();
-    const viewPoint: [number, number] = [
-      ((event.clientX - rect.left) / rect.width) * 220,
-      ((event.clientY - rect.top) / rect.height) * 152,
-    ];
-    onPick(unprojectAuditMapPreviewCoordinate(viewPoint, model.bounds));
-  };
-
   return (
-    <button
-      className="admin-poi-coordinate-picker"
-      type="button"
-      onClick={pickCoordinate}
-      aria-label="在坐标预览中点选新的 POI 坐标"
-    >
-      <span className="admin-poi-coordinate-picker-stage" aria-hidden="true" ref={stageRef}>
-        <PoiAuditTileLayer bounds={model.bounds} tilePreviewConfig={tilePreviewConfig} />
-        <svg viewBox="0 0 220 152">
-          <rect className="admin-poi-coordinate-picker-grid" x="0" y="0" width="220" height="152" />
-          {model.contextMarkers.map((marker) => (
-            <circle
-              className={`admin-poi-coordinate-picker-context is-${marker.relation}`}
-              cx={marker.point[0]}
-              cy={marker.point[1]}
-              key={marker.marker.id}
-              r="4"
-            />
-          ))}
-          <circle
-            className="admin-poi-coordinate-picker-original"
-            cx={model.originalPoint[0]}
-            cy={model.originalPoint[1]}
-            r="6"
-          />
-          <circle
-            className="admin-poi-coordinate-picker-current"
-            cx={model.currentPoint[0]}
-            cy={model.currentPoint[1]}
-            r="5"
-          />
-        </svg>
-      </span>
-      <span>点击预览区域回填坐标 · 当前 {formatCoordinatePair(currentCoordinate)}</span>
-    </button>
+    <EmbeddedMapLocationPicker
+      ariaLabel="在坐标预览中点选新的 POI 坐标"
+      footer={
+        currentCoordinate
+          ? `点击预览区域回填坐标 · 当前 ${formatCoordinatePair(currentCoordinate)}`
+          : '点击预览区域回填坐标'
+      }
+      markers={contextMarkers.map((marker) => ({
+        coordinate: marker.coordinate,
+        id: marker.marker.id,
+        label: marker.marker.label,
+        tone:
+          marker.relation === 'same-category'
+            ? 'same-category'
+            : marker.relation === 'road'
+              ? 'road'
+              : marker.relation === 'station'
+                ? 'station'
+                : 'nearby',
+      }))}
+      onChange={onPick}
+      originalValue={originalCoordinate}
+      tileTemplate={tilePreviewConfig.tileTemplate}
+      value={currentCoordinate}
+    />
   );
 }
 
@@ -4076,7 +4719,6 @@ function isLegacyPoiMapMarker(marker: MapMarker): boolean {
     marker.id.startsWith('poi-') ||
     marker.id.startsWith('transit-line-') ||
     categoryId === 'transit-line' ||
-    categoryId === 'road' ||
     categoryId === 'player'
   ) {
     return false;
@@ -4171,6 +4813,84 @@ function buildPoiAuditMapPreview(
     points,
     polygons,
   };
+}
+
+function buildPoiGeometryDraftMapPreview(
+  draft: Exclude<PoiGeometryDraft, { type: 'Point' }>,
+  contextMarkers: PoiAuditContextMarker[],
+): PoiAuditMapPreviewModel {
+  const coordinateSets = getPoiGeometryDraftCoordinateSets(draft);
+  const draftCoordinates = coordinateSets.flatMap((set) => set.coordinates);
+  const contextCoordinates = contextMarkers.map((item) => item.coordinate);
+  const allCoordinates = [...draftCoordinates, ...contextCoordinates];
+  const bounds = expandCoordinateBounds(
+    getCoordinateBounds(allCoordinates.length > 0 ? allCoordinates : [[0, 0]]),
+    120,
+  );
+  const project = (coordinate: [number, number]) =>
+    projectAuditMapPreviewCoordinate(coordinate, bounds);
+  const points: Array<[number, number]> = [];
+  const lines: string[] = [];
+  const polygons: string[] = [];
+
+  for (const set of coordinateSets) {
+    const projected = set.coordinates.map(project);
+    points.push(...projected);
+    const pointsValue = projected
+      .map(([x, y]) => `${roundPreviewValue(x)},${roundPreviewValue(y)}`)
+      .join(' ');
+    if (set.kind === 'polygon' && projected.length >= 3) {
+      polygons.push(pointsValue);
+    } else if (set.kind !== 'point' && projected.length >= 2) {
+      lines.push(pointsValue);
+    }
+  }
+
+  return {
+    bounds,
+    contextMarkers: contextMarkers.map((item) => ({
+      ...item,
+      point: project(item.coordinate),
+    })),
+    lines,
+    points,
+    polygons,
+  };
+}
+
+function getPoiGeometryDraftCoordinateSets(
+  draft: Exclude<PoiGeometryDraft, { type: 'Point' }>,
+): Array<{ kind: 'line' | 'point' | 'polygon'; coordinates: Array<[number, number]> }> {
+  if (draft.type === 'MultiPoint') {
+    return [{ kind: 'point', coordinates: parseValidCoordinateDrafts(draft.coordinates) }];
+  }
+  if (draft.type === 'LineString') {
+    return [{ kind: 'line', coordinates: parseValidCoordinateDrafts(draft.coordinates) }];
+  }
+  if (draft.type === 'Rectangle') {
+    const bounds = parseRectangleBoundsDraft(draft.bounds);
+    return bounds ? [{ kind: 'polygon', coordinates: rectangleBoundsToCoordinates(bounds) }] : [];
+  }
+  if (draft.type === 'MultiRectangle') {
+    return draft.rectangles.flatMap((boundsDraft) => {
+      const bounds = parseRectangleBoundsDraft(boundsDraft);
+      return bounds
+        ? [{ kind: 'polygon' as const, coordinates: rectangleBoundsToCoordinates(bounds) }]
+        : [];
+    });
+  }
+  if (draft.type === 'Polygon') {
+    return draft.rings.map((ring) => ({
+      kind: 'polygon' as const,
+      coordinates: parseValidCoordinateDrafts(ring),
+    }));
+  }
+  return draft.polygons.flatMap((polygon) =>
+    polygon.map((ring) => ({
+      kind: 'polygon' as const,
+      coordinates: parseValidCoordinateDrafts(ring),
+    })),
+  );
 }
 
 interface PoiAuditMapView {
@@ -4669,7 +5389,7 @@ function canEditPoiSubmission(status: PoiSubmissionStatus): boolean {
 }
 
 function canDeletePoiSubmission(status: PoiSubmissionStatus): boolean {
-  return status === 'approved' || status === 'published';
+  return status !== 'archived';
 }
 
 function getPoiEditDialogHint(status: PoiSubmissionStatus): string {
@@ -4945,6 +5665,24 @@ function isRoadReferenceMarker(
   return /\b(road|roadpoint|highway)\b/.test(text);
 }
 
+function findAddressRoadMarkers(address: string, markers: MapMarker[]): MapMarker[] {
+  const normalizedAddress = normalizeSearchText(address);
+  if (!normalizedAddress) {
+    return [];
+  }
+
+  return markers
+    .filter((marker) => {
+      const normalizedLabel = normalizeSearchText(marker.label);
+      return normalizedLabel.length >= 2 && normalizedAddress.includes(normalizedLabel);
+    })
+    .sort(
+      (left, right) =>
+        normalizeSearchText(right.label).length - normalizeSearchText(left.label).length ||
+        left.label.localeCompare(right.label, 'zh-CN'),
+    );
+}
+
 function isTransitStationReferenceMarker(
   marker: Pick<MapMarker, 'categoryId' | 'iconFileName' | 'symbolIcon'>,
 ): boolean {
@@ -5117,6 +5855,232 @@ function createPoiGeometryDraft(geometry: MapGeometry): PoiGeometryDraft {
   };
 }
 
+function isRegionGeometry(geometry: MapGeometry): boolean {
+  return (
+    geometry.type === 'Rectangle' ||
+    geometry.type === 'MultiRectangle' ||
+    geometry.type === 'Polygon' ||
+    geometry.type === 'MultiPolygon'
+  );
+}
+
+function createEmptyPoiGeometryDraft(
+  type: PoiGeometryDraft['type'],
+  anchor?: [number, number] | null,
+): PoiGeometryDraft {
+  const coordinate = anchor ? coordinateToDraft(anchor) : createEmptyCoordinateDraft();
+  const nextCoordinate = anchor
+    ? coordinateToDraft([anchor[0] + 1, anchor[1] + 1])
+    : createEmptyCoordinateDraft();
+  if (type === 'Point') {
+    return { type, coordinate };
+  }
+  if (type === 'MultiPoint' || type === 'LineString') {
+    return { type, coordinates: [coordinate, nextCoordinate] };
+  }
+  if (type === 'Rectangle') {
+    return {
+      type,
+      bounds: anchor
+        ? rectangleBoundsToDraft({
+            minX: anchor[0] - 1,
+            minZ: anchor[1] - 1,
+            maxX: anchor[0] + 1,
+            maxZ: anchor[1] + 1,
+          })
+        : createEmptyRectangleBoundsDraft(),
+    };
+  }
+  if (type === 'MultiRectangle') {
+    return {
+      type,
+      rectangles: [
+        anchor
+          ? rectangleBoundsToDraft({
+              minX: anchor[0] - 1,
+              minZ: anchor[1] - 1,
+              maxX: anchor[0] + 1,
+              maxZ: anchor[1] + 1,
+            })
+          : createEmptyRectangleBoundsDraft(),
+      ],
+    };
+  }
+  if (type === 'Polygon') {
+    return {
+      type,
+      rings: [anchor ? createDefaultPolygonRingDraft(coordinate) : [coordinate, nextCoordinate]],
+    };
+  }
+  return {
+    type,
+    polygons: [[anchor ? createDefaultPolygonRingDraft(coordinate) : [coordinate, nextCoordinate]]],
+  };
+}
+
+function appendPoiGeometryDraftCoordinate(
+  draft: Exclude<PoiGeometryDraft, { type: 'Point' }>,
+  coordinate: [number, number],
+): PoiGeometryDraft {
+  const coordinateDraft = coordinateToDraft(coordinate);
+  if (draft.type === 'MultiPoint' || draft.type === 'LineString') {
+    return {
+      type: draft.type,
+      coordinates: fillOrAppendCoordinateDraft(draft.coordinates, coordinateDraft),
+    };
+  }
+  if (draft.type === 'Rectangle') {
+    return { type: 'Rectangle', bounds: expandRectangleDraft(draft.bounds, coordinate) };
+  }
+  if (draft.type === 'MultiRectangle') {
+    const rectangles =
+      draft.rectangles.length > 0 ? [...draft.rectangles] : [createEmptyRectangleBoundsDraft()];
+    rectangles[rectangles.length - 1] = expandRectangleDraft(rectangles.at(-1)!, coordinate);
+    return { type: 'MultiRectangle', rectangles };
+  }
+  if (draft.type === 'Polygon') {
+    const rings = draft.rings.length > 0 ? draft.rings.map((ring) => [...ring]) : [[]];
+    rings[0] = appendPolygonRingCoordinate(rings[0] ?? [], coordinateDraft);
+    return { type: 'Polygon', rings };
+  }
+
+  const polygons =
+    draft.polygons.length > 0
+      ? draft.polygons.map((polygon) => polygon.map((ring) => [...ring]))
+      : [[[]]];
+  const polygon = polygons[0] ?? [[]];
+  polygon[0] = appendPolygonRingCoordinate(polygon[0] ?? [], coordinateDraft);
+  polygons[0] = polygon;
+  return { type: 'MultiPolygon', polygons };
+}
+
+function canRemovePoiGeometryDraftCoordinate(
+  draft: Exclude<PoiGeometryDraft, { type: 'Point' }>,
+): boolean {
+  if (draft.type === 'MultiPoint' || draft.type === 'LineString') {
+    return draft.coordinates.length > 2;
+  }
+  if (draft.type === 'Polygon') {
+    return (draft.rings[0]?.length ?? 0) > 4;
+  }
+  if (draft.type === 'MultiPolygon') {
+    return (draft.polygons[0]?.[0]?.length ?? 0) > 4;
+  }
+  return false;
+}
+
+function removeLastPoiGeometryDraftCoordinate(
+  draft: Exclude<PoiGeometryDraft, { type: 'Point' }>,
+): PoiGeometryDraft {
+  if (draft.type === 'MultiPoint' || draft.type === 'LineString') {
+    return { type: draft.type, coordinates: draft.coordinates.slice(0, -1) };
+  }
+  if (draft.type === 'Polygon') {
+    return {
+      type: 'Polygon',
+      rings: draft.rings.map((ring, index) =>
+        index === 0 ? removeLastPolygonRingCoordinate(ring) : ring,
+      ),
+    };
+  }
+  if (draft.type === 'MultiPolygon') {
+    return {
+      type: 'MultiPolygon',
+      polygons: draft.polygons.map((polygon, polygonIndex) =>
+        polygon.map((ring, ringIndex) =>
+          polygonIndex === 0 && ringIndex === 0 ? removeLastPolygonRingCoordinate(ring) : ring,
+        ),
+      ),
+    };
+  }
+  return draft;
+}
+
+function fillOrAppendCoordinateDraft(
+  coordinates: CoordinateDraft[],
+  coordinate: CoordinateDraft,
+): CoordinateDraft[] {
+  const emptyIndex = coordinates.findIndex((item) => !parseCoordinateDraft(item));
+  return emptyIndex >= 0
+    ? coordinates.map((item, index) => (index === emptyIndex ? coordinate : item))
+    : [...coordinates, coordinate];
+}
+
+function appendPolygonRingCoordinate(
+  ring: CoordinateDraft[],
+  coordinate: CoordinateDraft,
+): CoordinateDraft[] {
+  const emptyIndex = ring.findIndex((item) => !parseCoordinateDraft(item));
+  if (emptyIndex >= 0) {
+    return ring.map((item, index) => (index === emptyIndex ? coordinate : item));
+  }
+  const first = ring[0] ? parseCoordinateDraft(ring[0]) : null;
+  const lastDraft = ring.at(-1);
+  const last = lastDraft ? parseCoordinateDraft(lastDraft) : null;
+  const closed = Boolean(first && last && first[0] === last[0] && first[1] === last[1]);
+  return closed && lastDraft
+    ? [...ring.slice(0, -1), coordinate, lastDraft]
+    : [...ring, coordinate];
+}
+
+function removeLastPolygonRingCoordinate(ring: CoordinateDraft[]): CoordinateDraft[] {
+  const first = ring[0] ? parseCoordinateDraft(ring[0]) : null;
+  const lastDraft = ring.at(-1);
+  const last = lastDraft ? parseCoordinateDraft(lastDraft) : null;
+  const closed = Boolean(first && last && first[0] === last[0] && first[1] === last[1]);
+  return closed && lastDraft ? [...ring.slice(0, -2), lastDraft] : ring.slice(0, -1);
+}
+
+function expandRectangleDraft(
+  draft: RectangleBoundsDraft,
+  coordinate: [number, number],
+): RectangleBoundsDraft {
+  const bounds = parseRectangleBoundsDraft(draft);
+  return rectangleBoundsToDraft(
+    bounds
+      ? {
+          minX: Math.min(bounds.minX, coordinate[0]),
+          minZ: Math.min(bounds.minZ, coordinate[1]),
+          maxX: Math.max(bounds.maxX, coordinate[0]),
+          maxZ: Math.max(bounds.maxZ, coordinate[1]),
+        }
+      : {
+          minX: coordinate[0] - 1,
+          minZ: coordinate[1] - 1,
+          maxX: coordinate[0] + 1,
+          maxZ: coordinate[1] + 1,
+        },
+  );
+}
+
+function geometryLabelFromDraft(draft: PoiGeometryDraft): string {
+  const labels: Record<PoiGeometryDraft['type'], string> = {
+    Point: '点状 POI',
+    MultiPoint: '多点对象',
+    LineString: '线性 POI',
+    Rectangle: '矩形区域',
+    MultiRectangle: '多矩形区域',
+    Polygon: '多边形区域',
+    MultiPolygon: '多重多边形区域',
+  };
+  return labels[draft.type];
+}
+
+function getGeometryDraftRepresentativeCoordinate(
+  draft: PoiGeometryDraft,
+): [number, number] | null {
+  const geometry = buildMapGeometryFromDraft(draft).geometry;
+  return geometry ? getGeometryRepresentativeCoordinate(geometry) : null;
+}
+
+function createEmptyCoordinateDraft(): CoordinateDraft {
+  return { x: '', z: '' };
+}
+
+function createEmptyRectangleBoundsDraft(): RectangleBoundsDraft {
+  return { minX: '', minZ: '', maxX: '', maxZ: '' };
+}
+
 function buildMapGeometryFromDraft(draft: PoiGeometryDraft): {
   geometry?: MapGeometry;
   error?: string;
@@ -5191,6 +6155,9 @@ function rectangleBoundsToDraft(bounds: RectangleBounds): RectangleBoundsDraft {
 }
 
 function parseCoordinateDraft(draft: CoordinateDraft): [number, number] | null {
+  if (!draft.x.trim() || !draft.z.trim()) {
+    return null;
+  }
   const x = Number(draft.x);
   const z = Number(draft.z);
   return Number.isFinite(x) && Number.isFinite(z) ? [x, z] : null;
@@ -5206,7 +6173,17 @@ function parseCoordinateDrafts(
     : null;
 }
 
+function parseValidCoordinateDrafts(drafts: CoordinateDraft[]): Array<[number, number]> {
+  return drafts.flatMap((draft) => {
+    const coordinate = parseCoordinateDraft(draft);
+    return coordinate ? [coordinate] : [];
+  });
+}
+
 function parseRectangleBoundsDraft(draft: RectangleBoundsDraft): RectangleBounds | null {
+  if (!draft.minX.trim() || !draft.minZ.trim() || !draft.maxX.trim() || !draft.maxZ.trim()) {
+    return null;
+  }
   const minX = Number(draft.minX);
   const minZ = Number(draft.minZ);
   const maxX = Number(draft.maxX);

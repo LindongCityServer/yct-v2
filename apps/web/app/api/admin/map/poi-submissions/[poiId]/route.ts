@@ -54,6 +54,12 @@ export async function PATCH(
     href: parsed.data.href || undefined,
     imageUrl: parsed.data.imageUrl,
     geometry: parsed.data.geometry,
+    parentMarkerId: parsed.data.parentMarkerId || undefined,
+    boundRegionMarkerIds: parsed.data.boundRegionMarkerIds,
+    openingHours: parsed.data.openingHours,
+    address: parsed.data.address,
+    addressRoadMarkerId: parsed.data.addressRoadMarkerId,
+    facilities: parsed.data.facilities,
   });
 
   if (!result.ok) {

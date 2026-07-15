@@ -96,17 +96,50 @@ function getChangedLegacyMapMarkerFields(
   previous: Partial<LegacyMapMarkerPatch> | undefined,
   patch: LegacyMapMarkerPatch,
 ): Array<
-  'label' | 'categoryId' | 'iconFileName' | 'description' | 'href' | 'imageUrl' | 'geometry'
+  | 'label'
+  | 'categoryId'
+  | 'iconFileName'
+  | 'description'
+  | 'href'
+  | 'imageUrl'
+  | 'geometry'
+  | 'parentMarkerId'
+  | 'boundRegionMarkerIds'
+  | 'openingHours'
+  | 'address'
+  | 'addressRoadMarkerId'
+  | 'facilities'
 > {
   const textFields = (
-    ['label', 'categoryId', 'iconFileName', 'description', 'href', 'imageUrl'] as const
+    [
+      'label',
+      'categoryId',
+      'iconFileName',
+      'description',
+      'href',
+      'imageUrl',
+      'parentMarkerId',
+      'openingHours',
+      'address',
+      'addressRoadMarkerId',
+    ] as const
   ).filter((field) => (previous?.[field] ?? '') !== (patch[field] ?? ''));
   const previousGeometry = previous?.geometry as MapGeometry | undefined;
   const geometryChanged =
     patch.geometry !== undefined &&
     JSON.stringify(previousGeometry) !== JSON.stringify(patch.geometry);
 
-  return geometryChanged ? [...textFields, 'geometry'] : textFields;
+  const regionBindingsChanged =
+    JSON.stringify(previous?.boundRegionMarkerIds ?? []) !==
+    JSON.stringify(patch.boundRegionMarkerIds ?? []);
+  const facilitiesChanged =
+    JSON.stringify(previous?.facilities ?? []) !== JSON.stringify(patch.facilities ?? []);
+  return [
+    ...textFields,
+    ...(geometryChanged ? (['geometry'] as const) : []),
+    ...(regionBindingsChanged ? (['boundRegionMarkerIds'] as const) : []),
+    ...(facilitiesChanged ? (['facilities'] as const) : []),
+  ];
 }
 
 async function emitEvent<TType extends YctEventType>(

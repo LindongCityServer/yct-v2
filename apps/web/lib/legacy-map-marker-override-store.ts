@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { MapGeometry, MapMarkerSnapshot } from '@yct/contracts';
+import type { MapGeometry, MapMarkerSnapshot, PoiFacilitySnapshot } from '@yct/contracts';
 import { readRuntimeConfig } from './runtime-config';
 
 export interface LegacyMapMarkerPatch {
@@ -11,6 +11,12 @@ export interface LegacyMapMarkerPatch {
   href?: string;
   imageUrl?: string;
   geometry?: MapGeometry;
+  parentMarkerId?: string;
+  boundRegionMarkerIds?: string[];
+  openingHours?: string;
+  address?: string;
+  addressRoadMarkerId?: string;
+  facilities?: PoiFacilitySnapshot[];
 }
 
 export interface LegacyMapMarkerOverride {
@@ -119,6 +125,12 @@ function normalizePatch(patch: LegacyMapMarkerPatch): LegacyMapMarkerPatch {
     description: normalizeOptionalText(patch.description),
     href: normalizeOptionalText(patch.href),
     imageUrl: normalizeOptionalText(patch.imageUrl),
+    parentMarkerId: normalizeOptionalText(patch.parentMarkerId),
+    boundRegionMarkerIds: normalizeIdList(patch.boundRegionMarkerIds),
+    openingHours: normalizeOptionalText(patch.openingHours),
+    address: normalizeOptionalText(patch.address),
+    addressRoadMarkerId: normalizeOptionalText(patch.addressRoadMarkerId),
+    facilities: normalizeFacilities(patch.facilities),
   };
   if (patch.geometry) {
     normalized.geometry = patch.geometry;
@@ -156,4 +168,24 @@ function resolveStorePath(): string {
 function normalizeOptionalText(value: string | undefined): string | undefined {
   const trimmed = value?.trim() ?? '';
   return trimmed || undefined;
+}
+
+function normalizeIdList(values: string[] | undefined): string[] | undefined {
+  const normalized = Array.from(
+    new Set(values?.map((value) => value.trim()).filter(Boolean) ?? []),
+  );
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeFacilities(
+  facilities: PoiFacilitySnapshot[] | undefined,
+): PoiFacilitySnapshot[] | undefined {
+  const normalized =
+    facilities
+      ?.map((facility) => ({
+        symbolIcon: facility.symbolIcon.trim(),
+        description: facility.description.trim(),
+      }))
+      .filter((facility) => facility.symbolIcon && facility.description) ?? [];
+  return normalized.length > 0 ? normalized : undefined;
 }

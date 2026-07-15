@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   MapGeometry,
+  PoiFacilitySnapshot,
   PoiSubmission,
   PoiSubmissionStatus,
   PoiVisibility,
@@ -39,10 +40,17 @@ export async function findLocalPoiSubmission(id: string): Promise<PoiSubmission 
 export async function createLocalPoiSubmission(input: {
   title: string;
   categoryId: string;
+  iconFileName?: string;
   description?: string;
   href?: string;
   imageUrl?: string;
   geometry: MapGeometry;
+  parentMarkerId?: string;
+  boundRegionMarkerIds?: string[];
+  openingHours?: string;
+  address?: string;
+  addressRoadMarkerId?: string;
+  facilities?: PoiFacilitySnapshot[];
   visibility: PoiVisibility;
   actorId: string;
 }): Promise<PoiSubmission> {
@@ -52,10 +60,17 @@ export async function createLocalPoiSubmission(input: {
     profileId: 'default',
     title: input.title,
     categoryId: input.categoryId,
+    iconFileName: input.iconFileName,
     description: input.description,
     href: input.href,
     imageUrl: input.imageUrl,
     geometry: input.geometry,
+    parentMarkerId: input.parentMarkerId,
+    boundRegionMarkerIds: input.boundRegionMarkerIds,
+    openingHours: input.openingHours,
+    address: input.address,
+    addressRoadMarkerId: input.addressRoadMarkerId,
+    facilities: input.facilities,
     visibility: input.visibility,
     status: 'draft',
     submittedBy: input.actorId,

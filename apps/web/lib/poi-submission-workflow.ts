@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type {
   MapGeometry,
+  PoiFacilitySnapshot,
   PoiSubmission,
   PoiSubmissionStatus,
   YctEvent,
@@ -38,15 +39,67 @@ export async function submitPublicPoi(input: {
   href?: string;
   imageUrl?: string;
   geometry: MapGeometry;
+  parentMarkerId?: string;
+  boundRegionMarkerIds?: string[];
+  openingHours?: string;
+  address?: string;
+  addressRoadMarkerId?: string;
+  facilities?: PoiFacilitySnapshot[];
   actorId: string;
+}): Promise<PoiSubmissionActionResult> {
+  return createSubmittedPoi({ ...input, actorType: 'user' });
+}
+
+export async function createPoiSubmissionByAdmin(input: {
+  title: string;
+  categoryId: string;
+  iconFileName?: string;
+  description?: string;
+  href?: string;
+  imageUrl?: string;
+  geometry: MapGeometry;
+  parentMarkerId?: string;
+  boundRegionMarkerIds?: string[];
+  openingHours?: string;
+  address?: string;
+  addressRoadMarkerId?: string;
+  facilities?: PoiFacilitySnapshot[];
+  actorId: string;
+}): Promise<PoiSubmissionActionResult> {
+  return createSubmittedPoi({ ...input, actorType: 'admin' });
+}
+
+async function createSubmittedPoi(input: {
+  title: string;
+  categoryId: string;
+  iconFileName?: string;
+  description?: string;
+  href?: string;
+  imageUrl?: string;
+  geometry: MapGeometry;
+  parentMarkerId?: string;
+  boundRegionMarkerIds?: string[];
+  openingHours?: string;
+  address?: string;
+  addressRoadMarkerId?: string;
+  facilities?: PoiFacilitySnapshot[];
+  actorId: string;
+  actorType: 'admin' | 'user';
 }): Promise<PoiSubmissionActionResult> {
   const draft = await createLocalPoiSubmission({
     title: input.title,
     categoryId: input.categoryId,
+    iconFileName: input.iconFileName,
     description: input.description,
     href: input.href,
     imageUrl: input.imageUrl,
     geometry: input.geometry,
+    parentMarkerId: normalizeOptionalText(input.parentMarkerId),
+    boundRegionMarkerIds: normalizeIdList(input.boundRegionMarkerIds),
+    openingHours: normalizeOptionalText(input.openingHours),
+    address: normalizeOptionalText(input.address),
+    addressRoadMarkerId: normalizeOptionalText(input.addressRoadMarkerId),
+    facilities: normalizePoiFacilities(input.facilities),
     visibility: 'public_pending_review',
     actorId: input.actorId,
   });
@@ -68,7 +121,7 @@ export async function submitPublicPoi(input: {
     await emitEvent(
       'PoiSubmitted',
       {
-        type: 'user',
+        type: input.actorType,
         id: input.actorId,
       },
       {
@@ -79,6 +132,12 @@ export async function submitPublicPoi(input: {
         href: submitted.href,
         imageUrl: submitted.imageUrl,
         geometry: submitted.geometry,
+        parentMarkerId: submitted.parentMarkerId,
+        boundRegionMarkerIds: submitted.boundRegionMarkerIds,
+        openingHours: submitted.openingHours,
+        address: submitted.address,
+        addressRoadMarkerId: submitted.addressRoadMarkerId,
+        facilities: submitted.facilities,
       },
     );
   }
@@ -141,6 +200,12 @@ export async function updatePoiSubmissionByAdmin(input: {
   href?: string;
   imageUrl?: string;
   geometry?: MapGeometry;
+  parentMarkerId?: string;
+  boundRegionMarkerIds?: string[];
+  openingHours?: string;
+  address?: string;
+  addressRoadMarkerId?: string;
+  facilities?: PoiFacilitySnapshot[];
 }): Promise<PoiSubmissionActionResult> {
   const submission = await findLocalPoiSubmission(input.poiId);
   if (!submission) {
@@ -169,15 +234,13 @@ export async function updatePoiSubmissionByAdmin(input: {
     imageUrl:
       input.imageUrl === undefined ? submission.imageUrl : normalizeOptionalText(input.imageUrl),
     geometry: input.geometry ?? submission.geometry,
+    parentMarkerId: normalizeOptionalText(input.parentMarkerId),
+    boundRegionMarkerIds: normalizeIdList(input.boundRegionMarkerIds),
+    openingHours: normalizeOptionalText(input.openingHours),
+    address: normalizeOptionalText(input.address),
+    addressRoadMarkerId: normalizeOptionalText(input.addressRoadMarkerId),
+    facilities: normalizePoiFacilities(input.facilities),
   };
-  if (input.geometry && input.geometry.type !== submission.geometry.type) {
-    return {
-      ok: false,
-      status: 409,
-      error: 'poi_submission_geometry_edit_unsupported',
-      message: '当前修正入口只允许在原几何类型内调整，不支持转换 POI 几何类型。',
-    };
-  }
 
   const changedFields = getChangedPoiSubmissionFields(submission, patch);
   if (changedFields.length === 0) {
@@ -217,12 +280,12 @@ export async function archivePoiSubmissionByAdmin(input: {
     return notFound();
   }
 
-  if (submission.status !== 'approved' && submission.status !== 'published') {
+  if (submission.status === 'archived') {
     return {
       ok: false,
       status: 409,
       error: 'invalid_poi_submission_state',
-      message: '当前仅允许删除待发布或已发布的 POI 投稿。',
+      message: '该 POI 已归档，不能重复删除。',
     };
   }
 
@@ -310,6 +373,12 @@ export async function publishPoiSubmission(input: {
         href: updated.href,
         imageUrl: updated.imageUrl,
         geometry: updated.geometry,
+        parentMarkerId: updated.parentMarkerId,
+        boundRegionMarkerIds: updated.boundRegionMarkerIds,
+        openingHours: updated.openingHours,
+        address: updated.address,
+        addressRoadMarkerId: updated.addressRoadMarkerId,
+        facilities: updated.facilities,
         publishedAt,
       },
     );
@@ -359,23 +428,87 @@ function normalizeOptionalText(value: string | undefined): string | undefined {
   return normalized || undefined;
 }
 
+function normalizeIdList(values: string[] | undefined): string[] | undefined {
+  const normalized = Array.from(
+    new Set(values?.map((value) => value.trim()).filter(Boolean) ?? []),
+  );
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizePoiFacilities(
+  facilities: PoiFacilitySnapshot[] | undefined,
+): PoiFacilitySnapshot[] | undefined {
+  const normalized =
+    facilities
+      ?.map((facility) => ({
+        symbolIcon: facility.symbolIcon.trim(),
+        description: facility.description.trim(),
+      }))
+      .filter((facility) => facility.symbolIcon && facility.description) ?? [];
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 function getChangedPoiSubmissionFields(
   submission: PoiSubmission,
   patch: Pick<
     PoiSubmission,
-    'title' | 'categoryId' | 'iconFileName' | 'description' | 'href' | 'imageUrl'
+    | 'title'
+    | 'categoryId'
+    | 'iconFileName'
+    | 'description'
+    | 'href'
+    | 'imageUrl'
+    | 'parentMarkerId'
+    | 'openingHours'
+    | 'address'
+    | 'addressRoadMarkerId'
   > & {
     geometry: MapGeometry;
+    boundRegionMarkerIds?: string[];
+    facilities?: PoiFacilitySnapshot[];
   },
 ): Array<
-  'title' | 'categoryId' | 'iconFileName' | 'description' | 'href' | 'imageUrl' | 'geometry'
+  | 'title'
+  | 'categoryId'
+  | 'iconFileName'
+  | 'description'
+  | 'href'
+  | 'imageUrl'
+  | 'geometry'
+  | 'parentMarkerId'
+  | 'boundRegionMarkerIds'
+  | 'openingHours'
+  | 'address'
+  | 'addressRoadMarkerId'
+  | 'facilities'
 > {
   const textFields = (
-    ['title', 'categoryId', 'iconFileName', 'description', 'href', 'imageUrl'] as const
+    [
+      'title',
+      'categoryId',
+      'iconFileName',
+      'description',
+      'href',
+      'imageUrl',
+      'parentMarkerId',
+      'openingHours',
+      'address',
+      'addressRoadMarkerId',
+    ] as const
   ).filter((field) => (submission[field] ?? '') !== (patch[field] ?? ''));
   const geometryChanged = JSON.stringify(submission.geometry) !== JSON.stringify(patch.geometry);
+  const regionBindingsChanged =
+    JSON.stringify(submission.boundRegionMarkerIds ?? []) !==
+    JSON.stringify(patch.boundRegionMarkerIds ?? []);
+  const facilitiesChanged =
+    JSON.stringify(submission.facilities ?? []) !== JSON.stringify(patch.facilities ?? []);
 
-  return geometryChanged ? [...textFields, 'geometry'] : textFields;
+  return [
+    ...textFields,
+    ...(geometryChanged ? (['geometry'] as const) : []),
+    ...(regionBindingsChanged ? (['boundRegionMarkerIds'] as const) : []),
+    ...(facilitiesChanged ? (['facilities'] as const) : []),
+  ];
 }
 
 async function emitEvent<TType extends YctEventType>(
