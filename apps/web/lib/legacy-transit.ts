@@ -45,6 +45,7 @@ export interface TransitLineSummary {
 
 export interface TransitLineStopSummary {
   stationName: string;
+  stationMarkerIds?: string[];
   sequence: number;
   oneWay?: 'up' | 'down';
   status?: string;
@@ -383,6 +384,7 @@ function buildTransitLineStopSummaries(
 
       return {
         stationName,
+        stationMarkerIds: getTransitStationMarkerIds(stationById.get(stop.stationSourceId)),
         sequence: stop.sequence,
         oneWay: stop.oneWay,
         status: stop.status,
@@ -391,6 +393,20 @@ function buildTransitLineStopSummaries(
     })
     .filter((stop): stop is TransitLineStopSummary => Boolean(stop))
     .sort((left, right) => left.sequence - right.sequence);
+}
+
+function getTransitStationMarkerIds(station: TransitStationSnapshot | undefined): string[] {
+  if (!station) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      [station.boundPoiMarkerId, ...(station.boundPoiRefs ?? []).map((ref) => ref.markerId)].filter(
+        (markerId): markerId is string => Boolean(markerId?.trim()),
+      ),
+    ),
+  );
 }
 
 function normalizeTransitStationName(

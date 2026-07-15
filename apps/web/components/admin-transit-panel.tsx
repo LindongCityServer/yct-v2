@@ -16,9 +16,12 @@ import type {
   TravelScheduleServiceProfile,
   TravelTripInstance,
 } from '@yct/contracts';
-import type { FormEvent, MouseEvent } from 'react';
+import type { FormEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { appPath } from '../lib/app-paths';
+import { EmbeddedMapLocationPicker } from './embedded-map-location-picker';
 
 type TransitStatusFilter = TransitItemApprovalStatus | 'all' | 'todo' | 'legacy';
 type ScheduleStatusFilter = TransitItemApprovalStatus | 'all' | 'todo' | 'legacy';
@@ -52,6 +55,11 @@ interface TransitLineEditorSubmitPayload {
   bookingUrl?: string;
 }
 
+interface TransitLineEditorSubmitResult {
+  error: string | null;
+  lineSourceId?: string;
+}
+
 interface TransitStationPoiBindingOption {
   coordinate: [number, number];
   marker: MapMarker;
@@ -77,6 +85,8 @@ interface TransitLineRouteNodeDraft {
   xText: string;
   zText: string;
   direction: 'both' | 'up' | 'down';
+  boundPoiMarkerId?: string;
+  boundPoiLabel?: string;
 }
 
 const transitStatusFilterOptions: Array<{ value: TransitStatusFilter; label: string }> = [
@@ -829,9 +839,14 @@ export function AdminTransitPanel() {
     revisionId: string,
     payload: TransitLineEditorSubmitPayload,
     lineSourceId?: string,
-  ): Promise<string | null> => {
+  ): Promise<TransitLineEditorSubmitResult> => {
     setIsBusy(true);
     try {
+      const previousLineSourceIds = new Set(
+        revisions
+          .find((revision) => revision.revisionId === revisionId)
+          ?.lines.map((line) => line.sourceId) ?? [],
+      );
       const response = await fetch(
         lineSourceId
           ? appPath(
@@ -848,14 +863,19 @@ export function AdminTransitPanel() {
       );
       const data = (await response.json()) as TransitDataRevision & { message?: string };
       if (!response.ok) {
-        return data.message ?? (lineSourceId ? '线路保存失败' : '线路新增失败');
+        return {
+          error: data.message ?? (lineSourceId ? '线路保存失败' : '线路新增失败'),
+        };
       }
 
       setRevisions((current) =>
         current.map((revision) => (revision.revisionId === data.revisionId ? data : revision)),
       );
       setStatusText(lineSourceId ? `已更新线路：${payload.name}` : `已新增线路：${payload.name}`);
-      return null;
+      const savedLineSourceId =
+        lineSourceId ??
+        data.lines.find((candidate) => !previousLineSourceIds.has(candidate.sourceId))?.sourceId;
+      return { error: null, lineSourceId: savedLineSourceId };
     } finally {
       setIsBusy(false);
     }
@@ -1773,17 +1793,13 @@ export function AdminTransitPanel() {
           onEditStation={(station) =>
             setStationEditTarget({ revision: lineEditTarget.revision, station })
           }
-          onSubmit={async (payload) => {
-            const error = await saveTransitLine(
+          onSubmit={(payload) =>
+            saveTransitLine(
               lineEditTarget.revision.revisionId,
               payload,
               lineEditTarget.line.sourceId,
-            );
-            if (!error) {
-              setLineEditTarget(null);
-            }
-            return error;
-          }}
+            )
+          }
         />
       ) : null}
       {lineCreateTarget ? (
@@ -1794,13 +1810,7 @@ export function AdminTransitPanel() {
           tilePreviewTemplate={tilePreviewTemplate}
           onClose={() => setLineCreateTarget(null)}
           onEditStation={(station) => setStationEditTarget({ revision: lineCreateTarget, station })}
-          onSubmit={async (payload) => {
-            const error = await saveTransitLine(lineCreateTarget.revisionId, payload);
-            if (!error) {
-              setLineCreateTarget(null);
-            }
-            return error;
-          }}
+          onSubmit={(payload) => saveTransitLine(lineCreateTarget.revisionId, payload)}
         />
       ) : null}
       {scheduleTripEditTarget ? (
@@ -2963,108 +2973,36 @@ function TransitStationCoordinatePicker({
   originalCoordinate: [number, number] | null;
   tilePreviewTemplate: string | null;
 }>) {
-  const stageWidth = 260;
-  const stageHeight = 160;
-  const model = buildTransitStationCoordinatePickerModel({
-    boundPoiCoordinate: boundPoi?.coordinate ?? null,
-    contextMarkers,
-    currentCoordinate,
-    originalCoordinate,
-  });
-
-  if (!model) {
-    return (
-      <div className="transit-station-binding-card">
-        <p className="muted">当前没有可用于地图点选的基准坐标，请先绑定一个 POI 或手动输入坐标。</p>
-      </div>
-    );
-  }
-
-  const tiles = buildTransitPreviewTiles(model.bounds, tilePreviewTemplate);
-  const pickCoordinate = (event: MouseEvent<HTMLButtonElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const point: [number, number] = [
-      ((event.clientX - rect.left) / rect.width) * stageWidth,
-      ((event.clientY - rect.top) / rect.height) * stageHeight,
-    ];
-    onPick(unprojectTransitPreviewCoordinate(point, model.bounds, stageWidth, stageHeight));
-  };
-
   return (
-    <button
-      className="transit-station-coordinate-picker"
-      type="button"
-      onClick={pickCoordinate}
-      aria-label="在地图预览中点选站点坐标"
-    >
-      <span className="transit-station-coordinate-picker-stage" aria-hidden="true">
-        {tiles.length > 0 ? (
-          <span className="transit-revision-geometry-tiles">
-            {tiles.map((tile) => (
-              <img
-                draggable={false}
-                key={tile.id}
-                loading="lazy"
-                onError={(event) => {
-                  event.currentTarget.style.visibility = 'hidden';
-                }}
-                src={tile.url}
-                style={{
-                  height: tile.displaySize,
-                  left: tile.left,
-                  top: tile.top,
-                  width: tile.displaySize,
-                }}
-              />
-            ))}
-          </span>
-        ) : null}
-        <svg viewBox={`0 0 ${stageWidth} ${stageHeight}`}>
-          <rect
-            className="transit-revision-geometry-grid"
-            x="0"
-            y="0"
-            width={stageWidth}
-            height={stageHeight}
-          />
-          {model.contextMarkers.map((marker) => (
-            <circle
-              className={`transit-station-coordinate-context is-${marker.relation}`}
-              cx={marker.point[0]}
-              cy={marker.point[1]}
-              key={marker.marker.id}
-              r={marker.relation === 'bound-poi' ? 5 : 4}
-            />
-          ))}
-          {model.boundPoiPoint ? (
-            <circle
-              className="transit-station-coordinate-bound-poi"
-              cx={model.boundPoiPoint[0]}
-              cy={model.boundPoiPoint[1]}
-              r="6"
-            />
-          ) : null}
-          {model.originalPoint ? (
-            <circle
-              className="transit-station-coordinate-original"
-              cx={model.originalPoint[0]}
-              cy={model.originalPoint[1]}
-              r="6"
-            />
-          ) : null}
-          <circle
-            className="transit-station-coordinate-current"
-            cx={model.currentPoint[0]}
-            cy={model.currentPoint[1]}
-            r="5"
-          />
-        </svg>
-      </span>
-      <span>
-        点击地图回填坐标
-        {currentCoordinate ? ` · 当前 ${formatTransitCoordinatePair(currentCoordinate)}` : ''}
-      </span>
-    </button>
+    <EmbeddedMapLocationPicker
+      ariaLabel="在地图预览中点选站点坐标"
+      emptyContent="当前没有可用于地图点选的基准坐标，请先绑定一个 POI 或手动输入坐标。"
+      footer={
+        currentCoordinate
+          ? `点击地图回填坐标 · 当前 ${formatTransitCoordinatePair(currentCoordinate)}`
+          : '点击地图回填坐标'
+      }
+      markers={contextMarkers.map((marker) => ({
+        coordinate: marker.coordinate,
+        id: marker.marker.id,
+        label: marker.marker.label,
+        tone:
+          marker.relation === 'bound-poi'
+            ? 'bound'
+            : marker.relation === 'road'
+              ? 'road'
+              : marker.relation === 'station'
+                ? 'station'
+                : marker.relation === 'nearby'
+                  ? 'nearby'
+                  : 'default',
+      }))}
+      onChange={onPick}
+      originalValue={originalCoordinate}
+      referenceValue={boundPoi?.coordinate ?? null}
+      tileTemplate={tilePreviewTemplate}
+      value={currentCoordinate}
+    />
   );
 }
 
@@ -3083,10 +3021,11 @@ function TransitLineEditorDialog({
   modeProfiles: TransitModeProfile[];
   onClose: () => void;
   onEditStation: (station: TransitRevisionStation) => void;
-  onSubmit: (payload: TransitLineEditorSubmitPayload) => Promise<string | null>;
+  onSubmit: (payload: TransitLineEditorSubmitPayload) => Promise<TransitLineEditorSubmitResult>;
   revision: TransitDataRevision;
   tilePreviewTemplate: string | null;
 }>) {
+  const router = useRouter();
   const initialMode = line?.mode ?? modeProfiles.find((profile) => profile.enabled)?.mode ?? 'bus';
   const [mode, setMode] = useState<TransitRevisionLine['mode']>(initialMode);
   const [name, setName] = useState(line?.name ?? '');
@@ -3126,8 +3065,7 @@ function TransitLineEditorDialog({
     [departureTimesText],
   );
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const saveLine = async (intent: 'close' | 'map-editor') => {
     if (!name.trim()) {
       setError('线路名称不能为空。');
       return;
@@ -3149,7 +3087,7 @@ function TransitLineEditorDialog({
       return;
     }
 
-    const submitError = await onSubmit({
+    const result = await onSubmit({
       mode,
       name: name.trim(),
       color: color.trim() || undefined,
@@ -3167,9 +3105,28 @@ function TransitLineEditorDialog({
       operatingDateRule: operatingDateRule.trim() || undefined,
       bookingUrl: bookingUrl.trim() || undefined,
     });
-    if (submitError) {
-      setError(submitError);
+    if (result.error) {
+      setError(result.error);
+      return;
     }
+    if (intent === 'map-editor') {
+      if (!result.lineSourceId) {
+        setError('线路已保存，但无法确定新线路标识，请关闭窗口后从线路列表进入地图编辑。');
+        return;
+      }
+      router.push(
+        appPath(
+          `/admin/transit/lines/${encodeURIComponent(revision.revisionId)}/${encodeURIComponent(result.lineSourceId)}/edit`,
+        ),
+      );
+      return;
+    }
+    onClose();
+  };
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void saveLine('close');
   };
 
   const configuredModeOptions = modeProfiles.filter(
@@ -3341,6 +3298,31 @@ function TransitLineEditorDialog({
             </div>
             <div className="transit-line-route-toolbar" aria-label="线路路线操作">
               <span>线路运行方式</span>
+              {line ? (
+                <Link
+                  className="transit-line-visual-editor-link"
+                  href={appPath(
+                    `/admin/transit/lines/${encodeURIComponent(revision.revisionId)}/${encodeURIComponent(line.sourceId)}/edit`,
+                  )}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    map
+                  </span>
+                  <span>地图编辑</span>
+                </Link>
+              ) : (
+                <button
+                  className="transit-line-visual-editor-link"
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => void saveLine('map-editor')}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    add_location_alt
+                  </span>
+                  <span>创建并地图编辑</span>
+                </button>
+              )}
               <div className="segmented-control transit-line-path-mode-control">
                 <div>
                   <button
@@ -4562,6 +4544,8 @@ function buildTransitLineRouteNodeDrafts(
       xText: node.kind === 'waypoint' ? String(node.x) : '',
       zText: node.kind === 'waypoint' ? String(node.z) : '',
       direction: node.direction ?? 'both',
+      boundPoiMarkerId: node.kind === 'waypoint' ? node.boundPoiMarkerId : undefined,
+      boundPoiLabel: node.kind === 'waypoint' ? node.boundPoiLabel : undefined,
     }));
   }
 
@@ -4603,6 +4587,8 @@ function buildTransitLineRouteNodeDrafts(
         xText: String(point.x),
         zText: String(point.z),
         direction: point.direction ?? 'both',
+        boundPoiMarkerId: point.boundPoiMarkerId,
+        boundPoiLabel: point.boundPoiLabel,
       });
     }
   });
@@ -4647,7 +4633,14 @@ function parseTransitLineRouteNodeDrafts(
         error: `第 ${index + 1} 行的途径点坐标不完整。`,
       };
     }
-    routeNodes.push({ kind: 'waypoint', x, z, direction: draft.direction });
+    routeNodes.push({
+      kind: 'waypoint',
+      x,
+      z,
+      direction: draft.direction,
+      boundPoiMarkerId: draft.boundPoiMarkerId,
+      boundPoiLabel: draft.boundPoiLabel,
+    });
   }
 
   if (routeNodes[0]?.kind !== 'station' || routeNodes.at(-1)?.kind !== 'station') {
@@ -4678,10 +4671,16 @@ function parseTransitLineRouteNodeDrafts(
     }));
   const segmentPaths: NonNullable<TransitRevisionLine['segmentPaths']> = [];
   let currentStationId = '';
-  let waypoints: Array<{ x: number; z: number; direction?: 'both' | 'up' | 'down' }> = [];
+  let waypoints: NonNullable<TransitRevisionLine['segmentPaths']>[number]['waypoints'] = [];
   for (const node of routeNodes) {
     if (node.kind === 'waypoint') {
-      waypoints.push({ x: node.x, z: node.z, direction: node.direction });
+      waypoints.push({
+        x: node.x,
+        z: node.z,
+        direction: node.direction,
+        boundPoiMarkerId: node.boundPoiMarkerId,
+        boundPoiLabel: node.boundPoiLabel,
+      });
       continue;
     }
     if (currentStationId && waypoints.length > 0) {

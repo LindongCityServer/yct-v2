@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto';
 import type { TransitModeProfile, YctEventPayloadMap, YctEventType } from '@yct/contracts';
 import { publishDomainEvent } from './app-event-bus';
 import { readTransitModeProfiles, writeTransitModeProfiles } from './transit-mode-profile-store';
+import { ensureTransitCacheInvalidationListenersRegistered } from './transit-cache-invalidation-listeners';
+
+ensureTransitCacheInvalidationListenersRegistered();
 
 export interface TransitModeProfileActionResult {
   ok: boolean;

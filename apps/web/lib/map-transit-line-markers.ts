@@ -47,7 +47,7 @@ async function readTransitLinePoiMarkersUncached(): Promise<MapMarkerSnapshot['m
       symbolIcon: profile?.icon ?? 'route',
       accentColor: line.color ?? profile?.color,
       description: buildLineDescription(line, profile, coordinates.length),
-      href: appPath(`/map/lines/${encodeURIComponent(line.sourceId)}`),
+      href: appPath(`/map?marker=${encodeURIComponent(`transit-line-${line.sourceId}`)}`),
     };
   });
 }
@@ -93,7 +93,7 @@ function collectLineCoordinates(
     }
   };
 
-  if (line.routeNodes?.length) {
+  if (line.routeNodes?.length && line.routeMode !== 'road') {
     for (const node of line.routeNodes) {
       if (node.kind === 'waypoint') {
         appendCoordinate([node.x, node.z]);
@@ -113,6 +113,35 @@ function collectLineCoordinates(
       path,
     ]),
   );
+
+  if (line.routeNodes?.length) {
+    let previousStationSourceId: string | undefined;
+    let pendingWaypoints: Array<[number, number]> = [];
+    for (const node of line.routeNodes) {
+      if (node.kind === 'waypoint') {
+        pendingWaypoints.push([node.x, node.z]);
+        continue;
+      }
+
+      if (previousStationSourceId) {
+        const segmentPath = segmentPathByKey.get(
+          `${previousStationSourceId}->${node.stationSourceId}`,
+        );
+        const segmentCoordinates = segmentPath?.waypoints.length
+          ? segmentPath.waypoints.map((waypoint) => [waypoint.x, waypoint.z] as [number, number])
+          : pendingWaypoints;
+        segmentCoordinates.forEach(appendCoordinate);
+      }
+      const station = stationById.get(node.stationSourceId);
+      appendCoordinate(
+        station?.x !== undefined && station.z !== undefined ? [station.x, station.z] : undefined,
+      );
+      previousStationSourceId = node.stationSourceId;
+      pendingWaypoints = [];
+    }
+    pendingWaypoints.forEach(appendCoordinate);
+    return coordinates;
+  }
 
   for (const [index, stationSourceId] of line.stationSourceIds.entries()) {
     const station = stationById.get(stationSourceId);

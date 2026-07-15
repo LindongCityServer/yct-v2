@@ -17,8 +17,7 @@ import {
 } from '@yct/domain';
 import { publishDomainEvent } from './app-event-bus';
 import { readLegacyTransitSnapshot, type LegacyTransitSnapshot } from './legacy-transit';
-import { clearTransitLinePoiMarkerCache } from './map-transit-line-markers';
-import { clearTransitOverviewCache } from './transit-data';
+import { ensureTransitCacheInvalidationListenersRegistered } from './transit-cache-invalidation-listeners';
 import {
   createTransitDataRevision,
   findTransitDataRevision,
@@ -28,6 +27,8 @@ import {
   withTransitDataRevisionStatus,
 } from './transit-data-store';
 import { readRuntimeConfig } from './runtime-config';
+
+ensureTransitCacheInvalidationListenersRegistered();
 
 export interface TransitDataActionResult {
   ok: boolean;
@@ -413,8 +414,6 @@ export async function publishTransitDataRevision(input: {
   );
 
   if (updated) {
-    clearTransitOverviewCache();
-    clearTransitLinePoiMarkerCache();
     await emitEvent('TransitDataRevisionPublished', input.actorId, {
       datasetId: updated.datasetId,
       revisionId: updated.revisionId,
@@ -448,8 +447,6 @@ export async function restoreTransitDataRevision(input: {
   );
 
   if (updated) {
-    clearTransitOverviewCache();
-    clearTransitLinePoiMarkerCache();
     await emitEvent('TransitDataRevisionPublished', input.actorId, {
       datasetId: updated.datasetId,
       revisionId: updated.revisionId,
@@ -637,6 +634,15 @@ export async function saveTransitLine(input: {
     departureRules?: TransitDataRevision['lines'][number]['departureRules'];
     operatingDateRule?: string;
     bookingUrl?: string;
+    stationDrafts?: Array<{
+      clientId: string;
+      name: string;
+      x: number;
+      z: number;
+      boundPoiMarkerId?: string;
+      boundPoiLabel?: string;
+      boundPoiCategoryId?: string;
+    }>;
   };
 }): Promise<TransitDataActionResult> {
   const revision = await findTransitDataRevision(input.revisionId);
@@ -648,14 +654,66 @@ export async function saveTransitLine(input: {
     return invalidTransition('当前交通数据版本状态不允许编辑线路。');
   }
 
-  const nextStationSourceIds = input.patch.stationSourceIds
+  const stationDrafts = input.patch.stationDrafts ?? [];
+  const draftClientIds = stationDrafts.map((draft) => draft.clientId.trim());
+  if (new Set(draftClientIds).size !== draftClientIds.length) {
+    return invalidTransition('可视化编辑器提交了重复的站点草稿 ID。');
+  }
+  const stationSourceIdByDraftRef = new Map<string, string>();
+  const createdStations: TransitDataRevision['stations'] = stationDrafts.map((draft) => {
+    const sourceId = `visual-station-${randomUUID()}`;
+    stationSourceIdByDraftRef.set(`draft:${draft.clientId.trim()}`, sourceId);
+    const boundPoiMarkerId = draft.boundPoiMarkerId?.trim() || undefined;
+    const boundPoiLabel = draft.boundPoiLabel?.trim() || undefined;
+    return {
+      sourceId,
+      name: draft.name.trim(),
+      aliases: [],
+      x: draft.x,
+      z: draft.z,
+      boundPoiMarkerId,
+      boundPoiLabel,
+      boundPoiRefs:
+        boundPoiMarkerId && boundPoiLabel
+          ? [
+              {
+                markerId: boundPoiMarkerId,
+                label: boundPoiLabel,
+                categoryId: draft.boundPoiCategoryId?.trim() || undefined,
+              },
+            ]
+          : undefined,
+    };
+  });
+  const resolveStationSourceId = (sourceId: string) =>
+    stationSourceIdByDraftRef.get(sourceId.trim()) ?? sourceId.trim();
+  const resolvedPatch = {
+    ...input.patch,
+    stationSourceIds: input.patch.stationSourceIds.map(resolveStationSourceId),
+    routeNodes: input.patch.routeNodes?.map((node) =>
+      node.kind === 'station'
+        ? { ...node, stationSourceId: resolveStationSourceId(node.stationSourceId) }
+        : node,
+    ),
+    oneWayStops: input.patch.oneWayStops?.map((stop) => ({
+      ...stop,
+      stationSourceId: resolveStationSourceId(stop.stationSourceId),
+    })),
+    segmentPaths: input.patch.segmentPaths?.map((path) => ({
+      ...path,
+      fromStationSourceId: resolveStationSourceId(path.fromStationSourceId),
+      toStationSourceId: resolveStationSourceId(path.toStationSourceId),
+    })),
+  };
+  const nextStations = [...revision.stations, ...createdStations];
+  const nextStationSourceIds = resolvedPatch.stationSourceIds
     .map((stationSourceId) => stationSourceId.trim())
     .filter(Boolean);
   if (nextStationSourceIds.length < 2) {
     return invalidTransition('线路至少需要 2 个站点。');
   }
 
-  const stationById = new Map(revision.stations.map((station) => [station.sourceId, station]));
+  const stationById = new Map(nextStations.map((station) => [station.sourceId, station]));
   const missingStationIds = nextStationSourceIds.filter(
     (stationSourceId) => !stationById.has(stationSourceId),
   );
@@ -675,7 +733,7 @@ export async function saveTransitLine(input: {
     };
   }
 
-  const nextLine = buildTransitLineSnapshot(line, input.patch, nextStationSourceIds);
+  const nextLine = buildTransitLineSnapshot(line, resolvedPatch, nextStationSourceIds);
   const changedFields = line ? getChangedTransitLineFields(line, nextLine) : [];
   if (line && changedFields.length === 0) {
     return { ok: true, revision };
@@ -684,19 +742,34 @@ export async function saveTransitLine(input: {
   const nextLines = line
     ? revision.lines.map((item) => (item.sourceId === line.sourceId ? nextLine : item))
     : [...revision.lines, nextLine];
-  const publishedValidationError = getPublishedTransitRevisionMutationError(revision, nextLines);
+  const publishedValidationError = getPublishedTransitRevisionMutationError(
+    revision,
+    nextLines,
+    nextStations,
+  );
   if (publishedValidationError) {
     return invalidTransition(publishedValidationError);
   }
 
   const updatedAt = new Date().toISOString();
   const updated = await updateTransitDataRevision(input.revisionId, (current) =>
-    applyTransitLineMutation(current, nextLines),
+    applyTransitLineMutation(current, nextLines, nextStations),
   );
 
   if (updated) {
-    clearTransitOverviewCache();
-    clearTransitLinePoiMarkerCache();
+    for (const station of createdStations) {
+      await emitEvent('TransitDataRevisionStationCreated', input.actorId, {
+        datasetId: updated.datasetId,
+        revisionId: updated.revisionId,
+        stationSourceId: station.sourceId,
+        stationName: station.name,
+        x: station.x as number,
+        z: station.z as number,
+        boundPoiMarkerId: station.boundPoiMarkerId,
+        createdBy: input.actorId,
+        createdAt: updatedAt,
+      });
+    }
     if (line) {
       await emitEvent('TransitDataRevisionLineUpdated', input.actorId, {
         datasetId: updated.datasetId,
@@ -769,8 +842,6 @@ export async function deleteTransitLine(input: {
   );
 
   if (updated) {
-    clearTransitOverviewCache();
-    clearTransitLinePoiMarkerCache();
     await emitEvent('TransitDataRevisionLineDeleted', input.actorId, {
       datasetId: updated.datasetId,
       revisionId: updated.revisionId,
@@ -825,10 +896,6 @@ export async function updateTransitLineApprovalStatus(input: {
   }));
 
   if (updated) {
-    if (nextStatus === 'published' || nextStatus === 'archived') {
-      clearTransitOverviewCache();
-      clearTransitLinePoiMarkerCache();
-    }
     await emitEvent('TransitLineApprovalChanged', input.actorId, {
       datasetId: updated.datasetId,
       revisionId: updated.revisionId,
@@ -1100,6 +1167,8 @@ function normalizeTransitLineRouteNodes(
               x: node.x,
               z: node.z,
               direction: node.direction ?? 'both',
+              boundPoiMarkerId: node.boundPoiMarkerId?.trim() || undefined,
+              boundPoiLabel: node.boundPoiLabel?.trim() || undefined,
             },
       )
       .filter((node) =>
@@ -1142,6 +1211,8 @@ function normalizeTransitLineRouteNodes(
         x: point.x,
         z: point.z,
         direction: point.direction ?? 'both',
+        boundPoiMarkerId: point.boundPoiMarkerId,
+        boundPoiLabel: point.boundPoiLabel,
       })),
     ];
   });
@@ -1154,12 +1225,13 @@ function getTransitLineSegmentKey(fromStationSourceId: string, toStationSourceId
 function applyTransitLineMutation(
   revision: TransitDataRevision,
   lines: TransitDataRevision['lines'],
+  stations: TransitDataRevision['stations'] = revision.stations,
 ): TransitDataRevision {
-  const summary = buildTransitModeSummary(revision.summary, lines, revision.stations);
+  const summary = buildTransitModeSummary(revision.summary, lines, stations);
   const validation = validateTransitSnapshot({
     summary,
     lines,
-    stations: revision.stations,
+    stations,
   });
   const nextStatus = getTransitRevisionEditableStatus(revision.status, validation.errorCount);
   const shouldResetReviewTrail =
@@ -1168,6 +1240,7 @@ function applyTransitLineMutation(
   return {
     ...revision,
     lines,
+    stations,
     summary,
     validation,
     status: nextStatus,
@@ -1464,12 +1537,13 @@ function canEditTransitRevisionLine(status: TransitDataRevisionStatus): boolean 
 function getPublishedTransitRevisionMutationError(
   revision: TransitDataRevision,
   nextLines: TransitDataRevision['lines'],
+  nextStations: TransitDataRevision['stations'] = revision.stations,
 ): string | null {
   if (revision.status !== 'published') {
     return null;
   }
 
-  const candidate = applyTransitLineMutation(revision, nextLines);
+  const candidate = applyTransitLineMutation(revision, nextLines, nextStations);
   if (candidate.validation.errorCount === 0) {
     return null;
   }

@@ -131,7 +131,7 @@ export function TransitLineBrowser({
         {sortedLines.map((line) => (
           <Link
             className="line-list-item"
-            href={appPath(`/map/lines/${encodeURIComponent(line.id)}`)}
+            href={appPath(`/map?marker=${encodeURIComponent(`transit-line-${line.id}`)}`)}
             key={line.id}
           >
             <span className="line-list-title">
