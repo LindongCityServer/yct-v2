@@ -16,7 +16,11 @@ const emptySnapshot: ServiceEntryStoreSnapshot = {
 
 export async function listServiceEntries(): Promise<ServiceEntry[]> {
   const snapshot = await readSnapshot();
-  return [...buildDefaultServiceEntries(), ...snapshot.entries].sort(compareServiceEntries);
+  const entriesById = new Map(buildDefaultServiceEntries().map((entry) => [entry.id, entry]));
+  for (const entry of snapshot.entries) {
+    entriesById.set(entry.id, entry);
+  }
+  return [...entriesById.values()].sort(compareServiceEntries);
 }
 
 export async function listPublishedServiceEntries(): Promise<ServiceEntry[]> {
@@ -26,7 +30,10 @@ export async function listPublishedServiceEntries(): Promise<ServiceEntry[]> {
 
 export async function findLocalServiceEntry(id: string): Promise<ServiceEntry | undefined> {
   const snapshot = await readSnapshot();
-  return snapshot.entries.find((entry) => entry.id === id);
+  return (
+    snapshot.entries.find((entry) => entry.id === id) ??
+    buildDefaultServiceEntries().find((entry) => entry.id === id)
+  );
 }
 
 export async function createLocalServiceEntry(input: {
@@ -67,7 +74,8 @@ export async function updateLocalServiceEntry(
   updater: (entry: ServiceEntry) => ServiceEntry,
 ): Promise<ServiceEntry | undefined> {
   const snapshot = await readSnapshot();
-  const existing = snapshot.entries.find((entry) => entry.id === id);
+  const localEntry = snapshot.entries.find((entry) => entry.id === id);
+  const existing = localEntry ?? buildDefaultServiceEntries().find((entry) => entry.id === id);
   if (!existing) {
     return undefined;
   }
@@ -75,16 +83,31 @@ export async function updateLocalServiceEntry(
   const updated = updater(existing);
   await writeSnapshot({
     ...snapshot,
-    entries: snapshot.entries.map((entry) => (entry.id === id ? updated : entry)),
+    entries: localEntry
+      ? snapshot.entries.map((entry) => (entry.id === id ? updated : entry))
+      : [...snapshot.entries, updated],
   });
   return updated;
 }
 
 export async function deleteLocalServiceEntry(id: string): Promise<ServiceEntry | undefined> {
   const snapshot = await readSnapshot();
-  const existing = snapshot.entries.find((entry) => entry.id === id);
+  const localEntry = snapshot.entries.find((entry) => entry.id === id);
+  const defaultEntry = buildDefaultServiceEntries().find((entry) => entry.id === id);
+  const existing = localEntry ?? defaultEntry;
   if (!existing) {
     return undefined;
+  }
+
+  if (defaultEntry) {
+    const tombstone = withServiceEntryStatus(existing, 'archived');
+    await writeSnapshot({
+      ...snapshot,
+      entries: localEntry
+        ? snapshot.entries.map((entry) => (entry.id === id ? tombstone : entry))
+        : [...snapshot.entries, tombstone],
+    });
+    return existing;
   }
 
   await writeSnapshot({

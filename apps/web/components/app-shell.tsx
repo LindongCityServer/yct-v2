@@ -369,12 +369,16 @@ export function SecondaryShell({
   title,
   titleKey,
   backHref = '/',
+  desktopBackHref,
+  desktopNavigation,
   legalVariant = 'none',
   children,
 }: Readonly<{
   title: string;
   titleKey?: CommonMessageKey;
   backHref?: string;
+  desktopBackHref?: string;
+  desktopNavigation?: ReactNode;
   legalVariant?: 'none' | 'mobile' | 'always';
   children: ReactNode;
 }>) {
@@ -384,13 +388,39 @@ export function SecondaryShell({
   return (
     <main className="secondary-shell">
       <header className="topbar secondary-topbar">
-        <Link className="icon-button" href={appPath(backHref)} aria-label={t('nav.back')}>
+        <Link
+          className={desktopBackHref ? 'icon-button secondary-back-mobile' : 'icon-button'}
+          href={appPath(backHref)}
+          aria-label={t('nav.back')}
+        >
           <span className="material-symbols-outlined">arrow_back</span>
         </Link>
+        {desktopBackHref ? (
+          <Link
+            className="icon-button secondary-back-desktop"
+            href={appPath(desktopBackHref)}
+            aria-label={t('nav.back')}
+          >
+            <span className="material-symbols-outlined">arrow_back</span>
+          </Link>
+        ) : null}
         <h1 className="secondary-title">{renderedTitle}</h1>
         <div className="secondary-actions" />
       </header>
-      <section className="secondary-content">{children}</section>
+      <section
+        className={
+          desktopNavigation ? 'secondary-content has-desktop-navigation' : 'secondary-content'
+        }
+      >
+        {desktopNavigation ? (
+          <>
+            <div className="secondary-desktop-navigation">{desktopNavigation}</div>
+            <div className="secondary-page-content">{children}</div>
+          </>
+        ) : (
+          children
+        )}
+      </section>
       {legalVariant !== 'none' ? (
         <SiteLegal
           className={[

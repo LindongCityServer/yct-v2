@@ -268,19 +268,19 @@ export function AdminServicesPanel() {
   const deleteEntry = async (entry: AdminServiceEntry) => {
     setIsBusy(true);
     try {
-      const response =
-        entry.status === 'published'
-          ? await fetch(
-              appPath(`/api/admin/services/entries/${encodeURIComponent(entry.id)}/archive`),
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({}),
-              },
-            )
-          : await fetch(appPath(`/api/admin/services/entries/${encodeURIComponent(entry.id)}`), {
-              method: 'DELETE',
-            });
+      const deleteDirectly = isDefaultEntry(entry) || entry.status !== 'published';
+      const response = !deleteDirectly
+        ? await fetch(
+            appPath(`/api/admin/services/entries/${encodeURIComponent(entry.id)}/archive`),
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({}),
+            },
+          )
+        : await fetch(appPath(`/api/admin/services/entries/${encodeURIComponent(entry.id)}`), {
+            method: 'DELETE',
+          });
       const data = (await response.json()) as { message?: string };
       if (!response.ok) {
         setStatusText(data.message ?? '移除服务入口失败');
@@ -288,7 +288,11 @@ export function AdminServicesPanel() {
       }
 
       setStatusText(
-        entry.status === 'published' ? '服务入口已从公开列表移除。' : '服务入口已删除。',
+        isDefaultEntry(entry)
+          ? '系统默认入口已删除，并保留本地覆盖记录。'
+          : entry.status === 'published'
+            ? '服务入口已从公开列表移除。'
+            : '服务入口已删除。',
       );
       await loadEntries();
     } finally {
@@ -408,63 +412,74 @@ export function AdminServicesPanel() {
                 </p>
                 <p className="muted">{entry.href}</p>
                 {entry.description ? <p>{entry.description}</p> : null}
+                {isDefaultEntry(entry) ? <span className="operation-tag">系统默认入口</span> : null}
               </div>
-              {isDefaultEntry(entry) ? (
-                <span className="muted">系统默认入口</span>
-              ) : (
-                <div className="admin-content-actions">
-                  <button type="button" disabled={isBusy} onClick={() => openEditDialog(entry)}>
-                    编辑
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isBusy || entry.status !== 'draft'}
-                    onClick={() => void runAction(entry.id, 'submit')}
-                  >
-                    提交
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isBusy || entry.status !== 'pending_review'}
-                    onClick={() => void runAction(entry.id, 'approve')}
-                  >
-                    通过
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isBusy || entry.status !== 'pending_review'}
-                    onClick={() => void runAction(entry.id, 'reject')}
-                  >
-                    驳回
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isBusy || entry.status !== 'approved'}
-                    onClick={() => void runAction(entry.id, 'publish')}
-                  >
-                    发布
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isBusy || entry.status === 'archived'}
-                    onClick={() => {
-                      if (
-                        !window.confirm(
-                          entry.status === 'published'
+              <div className="admin-content-actions">
+                <button
+                  type="button"
+                  disabled={isBusy || entry.status === 'archived'}
+                  onClick={() => openEditDialog(entry)}
+                >
+                  编辑
+                </button>
+                {!isDefaultEntry(entry) ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={isBusy || entry.status !== 'draft'}
+                      onClick={() => void runAction(entry.id, 'submit')}
+                    >
+                      提交
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy || entry.status !== 'pending_review'}
+                      onClick={() => void runAction(entry.id, 'approve')}
+                    >
+                      通过
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy || entry.status !== 'pending_review'}
+                      onClick={() => void runAction(entry.id, 'reject')}
+                    >
+                      驳回
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy || entry.status !== 'approved'}
+                      onClick={() => void runAction(entry.id, 'publish')}
+                    >
+                      发布
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={isBusy || entry.status === 'archived'}
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        isDefaultEntry(entry)
+                          ? `确认删除系统默认入口“${entry.title}”？删除后会立即从公开服务列表下线。`
+                          : entry.status === 'published'
                             ? `确认移除已发布服务入口“${entry.title}”？移除后会立即从公开服务列表下线，并保留后台记录。`
                             : `确认删除服务入口“${entry.title}”？`,
-                        )
-                      ) {
-                        return;
-                      }
+                      )
+                    ) {
+                      return;
+                    }
 
-                      void deleteEntry(entry);
-                    }}
-                  >
-                    {entry.status === 'published' ? '移除' : '删除'}
-                  </button>
-                </div>
-              )}
+                    void deleteEntry(entry);
+                  }}
+                >
+                  {isDefaultEntry(entry)
+                    ? '删除默认入口'
+                    : entry.status === 'published'
+                      ? '移除'
+                      : '删除'}
+                </button>
+              </div>
             </article>
           ))}
           {filteredEntries.length === 0 ? (
