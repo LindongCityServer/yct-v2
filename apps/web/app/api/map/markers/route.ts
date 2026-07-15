@@ -323,15 +323,18 @@ function groupRoadEndpointMarkers(snapshot: MapMarkerSnapshot): MapMarkerSnapsho
       categoryId: 'road',
       geometry: {
         type: 'MultiPoint',
-        coordinates: dedupeCoordinates(
-          markers
-            .filter(
-              (
-                marker,
-              ): marker is Marker & { geometry: Extract<Marker['geometry'], { type: 'Point' }> } =>
-                marker.geometry.type === 'Point',
-            )
-            .map((marker) => marker.geometry.coordinates),
+        coordinates: orderRoadCoordinates(
+          dedupeCoordinates(
+            markers
+              .filter(
+                (
+                  marker,
+                ): marker is Marker & {
+                  geometry: Extract<Marker['geometry'], { type: 'Point' }>;
+                } => marker.geometry.type === 'Point',
+              )
+              .map((marker) => marker.geometry.coordinates),
+          ),
         ),
       },
       iconFileName: markers.find((marker) => marker.iconFileName)?.iconFileName,
@@ -435,6 +438,55 @@ function dedupeCoordinates(coordinates: Array<[number, number]>): Array<[number,
   return deduped;
 }
 
+function orderRoadCoordinates(coordinates: Array<[number, number]>): Array<[number, number]> {
+  if (coordinates.length < 3) {
+    return coordinates;
+  }
+
+  const remaining = [...coordinates];
+  const xValues = remaining.map(([x]) => x);
+  const zValues = remaining.map(([, z]) => z);
+  const preferX =
+    Math.max(...xValues) - Math.min(...xValues) >= Math.max(...zValues) - Math.min(...zValues);
+  const firstIndex = remaining.reduce((bestIndex, coordinate, index) => {
+    const best = remaining[bestIndex];
+    if (!best) {
+      return index;
+    }
+    const coordinateAxis = preferX ? coordinate[0] : coordinate[1];
+    const bestAxis = preferX ? best[0] : best[1];
+    return coordinateAxis < bestAxis ? index : bestIndex;
+  }, 0);
+  const first = remaining.splice(firstIndex, 1)[0];
+  const ordered = first ? [first] : [];
+
+  while (remaining.length > 0) {
+    const previous = ordered.at(-1);
+    if (!previous) {
+      break;
+    }
+    const nearestIndex = remaining.reduce((bestIndex, coordinate, index) => {
+      const best = remaining[bestIndex];
+      return !best ||
+        squaredCoordinateDistance(previous, coordinate) < squaredCoordinateDistance(previous, best)
+        ? index
+        : bestIndex;
+    }, 0);
+    const next = remaining.splice(nearestIndex, 1)[0];
+    if (next) {
+      ordered.push(next);
+    }
+  }
+
+  return ordered;
+}
+
+function squaredCoordinateDistance(left: [number, number], right: [number, number]): number {
+  const deltaX = left[0] - right[0];
+  const deltaZ = left[1] - right[1];
+  return deltaX * deltaX + deltaZ * deltaZ;
+}
+
 function stableMarkerId(value: string): string {
   return (
     encodeURIComponent(value.trim().toLowerCase()).replace(/%/g, '-').slice(0, 120) || 'unnamed'
@@ -456,8 +508,17 @@ function mergeLocalMapMarkers(
       description: submission.description,
       href: submission.href,
       imageUrl: submission.imageUrl,
-      geometry: submission.geometry,
+      geometry:
+        submission.categoryId === 'road' && submission.geometry.type === 'LineString'
+          ? { type: 'MultiPoint', coordinates: submission.geometry.coordinates }
+          : submission.geometry,
       iconFileName: submission.iconFileName ?? category?.iconMapping.defaultIconFileName,
+      parentMarkerId: submission.parentMarkerId,
+      boundRegionMarkerIds: submission.boundRegionMarkerIds,
+      openingHours: submission.openingHours,
+      address: submission.address,
+      addressRoadMarkerId: submission.addressRoadMarkerId,
+      facilities: submission.facilities,
     };
   });
 

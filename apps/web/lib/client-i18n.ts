@@ -261,6 +261,7 @@ export type CommonMessageKey =
   | 'map.overlay.transitTraceTitle'
   | 'map.overlay.viewMarker'
   | 'map.poi.actions'
+  | 'map.poi.address'
   | 'map.poi.close'
   | 'map.poi.collapse'
   | 'map.poi.connections'
@@ -283,6 +284,7 @@ export type CommonMessageKey =
   | 'map.poi.noFacilities'
   | 'map.poi.objectFallback'
   | 'map.poi.openDetail'
+  | 'map.poi.openingHours'
   | 'map.poi.parent'
   | 'map.poi.parentFallback'
   | 'map.poi.relatedPlaceFallback'
@@ -299,6 +301,9 @@ export type CommonMessageKey =
   | 'map.poi.unfavoriteAria'
   | 'map.poi.unfavoriteStatus'
   | 'map.poiSubmit.category'
+  | 'map.poiSubmit.address'
+  | 'map.poiSubmit.addressPlaceholder'
+  | 'map.poiSubmit.addressRoad'
   | 'map.poiSubmit.close'
   | 'map.poiSubmit.description'
   | 'map.poiSubmit.descriptionPlaceholder'
@@ -309,8 +314,12 @@ export type CommonMessageKey =
   | 'map.poiSubmit.imageUrl'
   | 'map.poiSubmit.imageUrlPlaceholder'
   | 'map.poiSubmit.invalid'
+  | 'map.poiSubmit.invalidFacility'
   | 'map.poiSubmit.name'
   | 'map.poiSubmit.namePlaceholder'
+  | 'map.poiSubmit.noAddressRoad'
+  | 'map.poiSubmit.openingHours'
+  | 'map.poiSubmit.openingHoursPlaceholder'
   | 'map.poiSubmit.pickCancel'
   | 'map.poiSubmit.pickDone'
   | 'map.poiSubmit.pickHint'
@@ -1087,6 +1096,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.overlay.transitTraceTitle': '{name} · {count} 个途经站',
     'map.overlay.viewMarker': '查看 {name}',
     'map.poi.actions': '地点操作',
+    'map.poi.address': '地址',
     'map.poi.close': '关闭地点信息',
     'map.poi.collapse': '收起地点信息',
     'map.poi.connections': '接驳线路',
@@ -1109,6 +1119,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.noFacilities': '暂无设施数据',
     'map.poi.objectFallback': '地图对象',
     'map.poi.openDetail': '打开详情',
+    'map.poi.openingHours': '营业时间',
     'map.poi.parent': '所属地点',
     'map.poi.parentFallback': '父地点',
     'map.poi.relatedPlaceFallback': '关联地点',
@@ -1125,6 +1136,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.unfavoriteAria': '取消收藏 {name}',
     'map.poi.unfavoriteStatus': '已取消收藏 {name}',
     'map.poiSubmit.category': '分类',
+    'map.poiSubmit.address': '文字地址',
+    'map.poiSubmit.addressPlaceholder': '例如：青年大街 18 号',
+    'map.poiSubmit.addressRoad': '地址道路',
     'map.poiSubmit.close': '关闭投稿窗口',
     'map.poiSubmit.description': '地点简介',
     'map.poiSubmit.descriptionPlaceholder': '可填写地点用途、开放状态、出入口说明等',
@@ -1135,8 +1149,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poiSubmit.imageUrl': '图片链接',
     'map.poiSubmit.imageUrlPlaceholder': 'https://.../photo.png',
     'map.poiSubmit.invalid': '请填写名称、分类和有效坐标。',
+    'map.poiSubmit.invalidFacility': '请填写每条设施信息的文字描述。',
     'map.poiSubmit.name': '地点名称',
     'map.poiSubmit.namePlaceholder': '地点名称',
+    'map.poiSubmit.noAddressRoad': '不绑定道路',
+    'map.poiSubmit.openingHours': '营业时间',
+    'map.poiSubmit.openingHoursPlaceholder': '例如：周一至周五 09:00-18:00',
     'map.poiSubmit.pickCancel': '取消',
     'map.poiSubmit.pickDone': '已选择坐标 {point}。',
     'map.poiSubmit.pickHint': '轻点地图空白处设置投稿坐标',
@@ -1921,6 +1939,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.overlay.transitTraceTitle': '{name} · {count} 個途經站',
     'map.overlay.viewMarker': '查看 {name}',
     'map.poi.actions': '地點操作',
+    'map.poi.address': '地址',
     'map.poi.close': '關閉地點資訊',
     'map.poi.collapse': '收起地點資訊',
     'map.poi.connections': '接駁線路',
@@ -1943,6 +1962,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.noFacilities': '暫無設施資料',
     'map.poi.objectFallback': '地圖物件',
     'map.poi.openDetail': '開啟詳情',
+    'map.poi.openingHours': '營業時間',
     'map.poi.parent': '所屬地點',
     'map.poi.parentFallback': '父地點',
     'map.poi.relatedPlaceFallback': '關聯地點',
@@ -1959,6 +1979,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.unfavoriteAria': '取消收藏 {name}',
     'map.poi.unfavoriteStatus': '已取消收藏 {name}',
     'map.poiSubmit.category': '分類',
+    'map.poiSubmit.address': '文字地址',
+    'map.poiSubmit.addressPlaceholder': '例如：青年大街 18 號',
+    'map.poiSubmit.addressRoad': '地址道路',
     'map.poiSubmit.close': '關閉投稿視窗',
     'map.poiSubmit.description': '地點簡介',
     'map.poiSubmit.descriptionPlaceholder': '可填寫地點用途、開放狀態、出入口說明等',
@@ -1969,8 +1992,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poiSubmit.imageUrl': '圖片連結',
     'map.poiSubmit.imageUrlPlaceholder': 'https://.../photo.png',
     'map.poiSubmit.invalid': '請填寫名稱、分類和有效座標。',
+    'map.poiSubmit.invalidFacility': '請填寫每條設施資訊的文字描述。',
     'map.poiSubmit.name': '地點名稱',
     'map.poiSubmit.namePlaceholder': '地點名稱',
+    'map.poiSubmit.noAddressRoad': '不綁定道路',
+    'map.poiSubmit.openingHours': '營業時間',
+    'map.poiSubmit.openingHoursPlaceholder': '例如：週一至週五 09:00-18:00',
     'map.poiSubmit.pickCancel': '取消',
     'map.poiSubmit.pickDone': '已選擇座標 {point}。',
     'map.poiSubmit.pickHint': '輕點地圖空白處設定投稿座標',
@@ -2767,6 +2794,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.overlay.transitTraceTitle': '{name} · {count} stops',
     'map.overlay.viewMarker': 'View {name}',
     'map.poi.actions': 'Place actions',
+    'map.poi.address': 'Address',
     'map.poi.close': 'Close place details',
     'map.poi.collapse': 'Collapse place details',
     'map.poi.connections': 'Connecting lines',
@@ -2789,6 +2817,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.noFacilities': 'No facility data',
     'map.poi.objectFallback': 'Map object',
     'map.poi.openDetail': 'Open details',
+    'map.poi.openingHours': 'Opening hours',
     'map.poi.parent': 'Parent place',
     'map.poi.parentFallback': 'Parent place',
     'map.poi.relatedPlaceFallback': 'Related place',
@@ -2805,6 +2834,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.unfavoriteAria': 'Remove {name} from favorites',
     'map.poi.unfavoriteStatus': 'Removed {name} from favorites',
     'map.poiSubmit.category': 'Category',
+    'map.poiSubmit.address': 'Address',
+    'map.poiSubmit.addressPlaceholder': 'For example: 18 Qingnian Avenue',
+    'map.poiSubmit.addressRoad': 'Address road',
     'map.poiSubmit.close': 'Close submission dialog',
     'map.poiSubmit.description': 'Place description',
     'map.poiSubmit.descriptionPlaceholder':
@@ -2816,8 +2848,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poiSubmit.imageUrl': 'Image URL',
     'map.poiSubmit.imageUrlPlaceholder': 'https://.../photo.png',
     'map.poiSubmit.invalid': 'Enter a name, category, and valid coordinates.',
+    'map.poiSubmit.invalidFacility': 'Add a description to every facility entry.',
     'map.poiSubmit.name': 'Place name',
     'map.poiSubmit.namePlaceholder': 'Place name',
+    'map.poiSubmit.noAddressRoad': 'No road binding',
+    'map.poiSubmit.openingHours': 'Opening hours',
+    'map.poiSubmit.openingHoursPlaceholder': 'For example: Mon-Fri 09:00-18:00',
     'map.poiSubmit.pickCancel': 'Cancel',
     'map.poiSubmit.pickDone': 'Selected coordinates {point}.',
     'map.poiSubmit.pickHint': 'Tap an empty map area to set submission coordinates',

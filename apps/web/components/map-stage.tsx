@@ -6,14 +6,11 @@ import type {
   LocaleCode,
   MapMarkerSnapshot,
   PoiCategory,
+  PoiFacilitySnapshot,
   TileProviderDescriptor,
 } from '@yct/contracts';
 import { useSearchParams } from 'next/navigation';
-import type {
-  CSSProperties,
-  FormEvent,
-  PointerEvent as ReactPointerEvent,
-} from 'react';
+import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getFontEmbedCSS, toBlob } from 'html-to-image';
 import LZString from 'lz-string';
@@ -24,6 +21,11 @@ import {
   writeSelectedMapTileProviderId,
 } from '../lib/client-map-settings';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+import {
+  getMapRoadMarkerKind as getRoadMarkerKind,
+  orderMapRoadCoordinates as orderRoadTracePoints,
+} from '../lib/map-road-geometry';
+import { PoiFacilityEditor } from './poi-facility-editor';
 
 interface MarkerResponse {
   meta: ApiMeta;
@@ -166,6 +168,7 @@ interface ProjectedRoadTrace {
   label: string;
   labels?: ProjectedRouteRoadLabel[];
   path: string;
+  routeRoadSegments?: ProjectedRouteRoadSegment[];
   segments?: ProjectedRouteTraceSegment[];
   viewBox: string;
   accentColor?: string;
@@ -186,9 +189,15 @@ interface ProjectedRouteTraceSegment {
   path: string;
 }
 
+interface ProjectedRouteRoadSegment extends ProjectedRouteTraceSegment {
+  id: string;
+  label: string;
+}
+
 interface ProjectedRouteRoadLabel {
   color?: string;
   id: string;
+  isVerticalLabel: boolean;
   label: string;
   left: number;
   top: number;
@@ -228,6 +237,7 @@ interface TransitOverviewLine {
 
 interface TransitLineStopForMap {
   stationName: string;
+  stationMarkerIds?: string[];
   sequence: number;
   oneWay?: 'up' | 'down';
   status?: string;
@@ -303,6 +313,7 @@ interface RoutePlanRoadLabel {
   coordinates: Array<[number, number]>;
   id: string;
   label: string;
+  roadId: string;
 }
 
 interface RoutePlanStep {
@@ -339,6 +350,7 @@ interface RoadRouteEdge {
   distance: number;
   kind: 'connection' | 'road';
   label: string;
+  roadId?: string;
   to: string;
 }
 
@@ -372,6 +384,7 @@ interface RoadRouteInstructionSegment {
   coordinates: Array<[number, number]>;
   kind: 'approach' | 'connection' | 'depart' | 'road';
   label: string;
+  roadId?: string;
 }
 
 interface RoadConnectionCandidate {
@@ -649,7 +662,10 @@ function getLocalizedTileProviderName(provider: TileProviderDescriptor, t: Trans
   return messageKey ? t(messageKey) : provider.name;
 }
 
-function getLocalizedTileProviderNote(provider: TileProviderDescriptor, t: Translate): string | undefined {
+function getLocalizedTileProviderNote(
+  provider: TileProviderDescriptor,
+  t: Translate,
+): string | undefined {
   const messageKey = tileProviderNoteKeys[provider.id];
   if (messageKey) {
     return t(messageKey);
@@ -718,6 +734,7 @@ export function MapStage() {
   });
   const mapViewRef = useRef<MapView>(mapView);
   const viewportSizeRef = useRef<ViewportSize>(viewportSize);
+  const fittedRouteOptionKeyRef = useRef<string | null>(null);
   const [poiTitle, setPoiTitle] = useState('');
   const [poiCategoryId, setPoiCategoryId] = useState('');
   const [poiDescription, setPoiDescription] = useState('');
@@ -727,6 +744,10 @@ export function MapStage() {
   const [poiImageFileInputKey, setPoiImageFileInputKey] = useState(0);
   const [poiX, setPoiX] = useState('');
   const [poiZ, setPoiZ] = useState('');
+  const [poiOpeningHours, setPoiOpeningHours] = useState('');
+  const [poiAddress, setPoiAddress] = useState('');
+  const [poiAddressRoadMarkerId, setPoiAddressRoadMarkerId] = useState('');
+  const [poiFacilities, setPoiFacilities] = useState<PoiFacilitySnapshot[]>([]);
   const [poiSubmitStatus, setPoiSubmitStatus] = useState('');
   const [poiSubmitBusy, setPoiSubmitBusy] = useState(false);
   const [poiSubmitDialogOpen, setPoiSubmitDialogOpen] = useState(false);
@@ -745,6 +766,7 @@ export function MapStage() {
     defaultRouteTransportModes,
   );
   const [routePlanOptions, setRoutePlanOptions] = useState<RoutePlanOption[]>([]);
+  const [routePlanOptionsKey, setRoutePlanOptionsKey] = useState<string | null>(null);
   const [routePlanStatus, setRoutePlanStatus] = useState<RoutePlanStatus>('idle');
   const [selectedRouteOptionId, setSelectedRouteOptionId] = useState<string | null>(null);
   const [editingRouteEndpoint, setEditingRouteEndpoint] = useState<RouteEndpointKind | null>(null);
@@ -946,8 +968,6 @@ export function MapStage() {
   const markerIconBaseUrl = markerResponse?.iconBaseUrl ?? tileBaseUrl;
   const tilesVisible = browseMode === 'satellite';
   const activeTileZoom = getTileZoom(mapView.zoom);
-  const lastTileZoomRef = useRef(activeTileZoom);
-  const [fadingTileZoom, setFadingTileZoom] = useState<number | null>(null);
   const regionIndex = useMemo(() => buildUnminedRegionIndex(regionResponse), [regionResponse]);
   const markerSnapshot = useMemo(() => markerResponse?.snapshot.markers ?? [], [markerResponse]);
   const rawPointMarkers = useMemo(() => markerSnapshot.filter(isPointMarker), [markerSnapshot]);
@@ -963,10 +983,7 @@ export function MapStage() {
     () => markerSnapshot.filter(isTransitLineMarker),
     [markerSnapshot],
   );
-  const sharedMarkerFocusKey = useMemo(
-    () => readMapSharedFocusKey(searchParams),
-    [searchParams],
-  );
+  const sharedMarkerFocusKey = useMemo(() => readMapSharedFocusKey(searchParams), [searchParams]);
   const sharedRoutePlan = useMemo(() => readMapSharedRoutePlan(searchParams), [searchParams]);
   const sharedCoordinateFocus = useMemo(
     () => readMapSharedCoordinateFocus(searchParams),
@@ -990,7 +1007,7 @@ export function MapStage() {
             getMarkerDistanceToCoordinates(right, [mapView.centerX, mapView.centerZ]),
         );
 
-    return source.slice(0, 8);
+    return source;
   }, [
     centerableMarkers,
     editingRouteEndpoint,
@@ -1022,6 +1039,13 @@ export function MapStage() {
     () => buildTransitLineLookup(transitOverview),
     [transitOverview],
   );
+  const stationConnectionIndex = useMemo(
+    () => buildStationConnectionIndex(transitOverview, t),
+    [transitOverview, t],
+  );
+  const focusedTransitLine = focusedTransitLineMarker
+    ? findTransitLineByMarker(focusedTransitLineMarker, transitLineLookup)
+    : undefined;
   const metroTransitLineMarkers = useMemo(
     () =>
       transitLineMarkers.filter(
@@ -1038,7 +1062,10 @@ export function MapStage() {
     () => buildSecondaryPoiParentIndex(pointMarkers),
     [pointMarkers],
   );
-  const representativePoiIds = useMemo(() => new Set(secondaryPoiIndex.keys()), [secondaryPoiIndex]);
+  const representativePoiIds = useMemo(
+    () => new Set(secondaryPoiIndex.keys()),
+    [secondaryPoiIndex],
+  );
   const focusedSecondaryPois = focusedPointMarker
     ? (secondaryPoiIndex.get(focusedPointMarker.id) ?? [])
     : [];
@@ -1049,29 +1076,55 @@ export function MapStage() {
     () => groupSecondaryPois(focusedSecondaryPois),
     [focusedSecondaryPois],
   );
-  const pointOverlaySource = useMemo(
+  const focusedTransitStationMarkers = useMemo(
     () =>
-      focusedPointMarker
-        ? dedupeMarkersById([focusedPointMarker, ...filteredPointMarkers])
-        : filteredPointMarkers,
-    [filteredPointMarkers, focusedPointMarker],
+      focusedTransitLine
+        ? findTransitLineStationMarkers(pointMarkers, focusedTransitLine, stationConnectionIndex)
+        : [],
+    [focusedTransitLine, pointMarkers, stationConnectionIndex],
   );
+  const pointOverlaySource = useMemo(() => {
+    if (editingRouteEndpoint) {
+      return routeEndpointQuery.trim()
+        ? filterMarkers(pointMarkers, routeEndpointQuery)
+        : pointMarkers;
+    }
+    if (!focusedMarker) {
+      return filteredPointMarkers;
+    }
+    if (focusedPointMarker) {
+      return dedupeMarkersById([
+        focusedPointMarker,
+        ...focusedSecondaryPois.map((link) => link.marker),
+      ]);
+    }
+    return focusedTransitStationMarkers;
+  }, [
+    editingRouteEndpoint,
+    filteredPointMarkers,
+    focusedMarker,
+    focusedPointMarker,
+    focusedSecondaryPois,
+    focusedTransitStationMarkers,
+    pointMarkers,
+    routeEndpointQuery,
+  ]);
   const markerListCategoryOptions = useMemo(() => {
     const availableCategoryIds = new Set(
       [...pointMarkers, ...endpointGroupMarkers, ...transitLineMarkers]
         .map((marker) => marker.categoryId)
         .filter((categoryId): categoryId is string => Boolean(categoryId)),
     );
-  const configuredCategories =
-    categoryResponse?.items
-      .filter((category) => availableCategoryIds.has(category.id))
-      .map((category) => ({
-        ...category,
-        name: getMarkerCategoryDisplayName(category.id, t, category.name),
-      }))
-      .sort(
-        (left, right) =>
-          left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'zh-CN'),
+    const configuredCategories =
+      categoryResponse?.items
+        .filter((category) => availableCategoryIds.has(category.id))
+        .map((category) => ({
+          ...category,
+          name: getMarkerCategoryDisplayName(category.id, t, category.name),
+        }))
+        .sort(
+          (left, right) =>
+            left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'zh-CN'),
         ) ?? [];
     const configuredCategoryIds = new Set(configuredCategories.map((category) => category.id));
     const inferredCategories = Array.from(availableCategoryIds)
@@ -1151,78 +1204,89 @@ export function MapStage() {
     }
   }, [markerListCategoryId, markerListCategoryOptions]);
 
-  const selectedRouteOption =
-    routePlanOptions.find((option) => option.id === selectedRouteOptionId) ?? routePlanOptions[0];
-  const routeResultActive = Boolean(routePlanDraft && selectedRouteOption && !editingRouteEndpoint);
-  const routeResultMarkerIds = useMemo(
-    () => (routeResultActive ? new Set(selectedRouteOption?.markerIds ?? []) : undefined),
-    [routeResultActive, selectedRouteOption],
-  );
-  const routeLabelMarkerIds = useMemo(
-    () => (routeResultActive ? new Set(selectedRouteOption?.labelMarkerIds ?? []) : undefined),
-    [routeResultActive, selectedRouteOption],
-  );
-  const routeSuppressLabelMarkerIds = useMemo(
+  const routePlanCalculationKey = routePlanDraft
+    ? buildRoutePlanCalculationKey(routePlanDraft, routeTransportModes)
+    : null;
+  const currentRoutePlanOptions = useMemo(
     () =>
-      routeResultActive ? new Set(selectedRouteOption?.suppressLabelMarkerIds ?? []) : undefined,
-    [routeResultActive, selectedRouteOption],
+      routePlanCalculationKey && routePlanOptionsKey === routePlanCalculationKey
+        ? routePlanOptions
+        : [],
+    [routePlanCalculationKey, routePlanOptions, routePlanOptionsKey],
   );
+  const currentRoutePlanStatus: RoutePlanStatus =
+    routePlanDraft && routePlanOptionsKey !== routePlanCalculationKey ? 'loading' : routePlanStatus;
+  const selectedRouteOption =
+    currentRoutePlanOptions.find((option) => option.id === selectedRouteOptionId) ??
+    currentRoutePlanOptions[0];
+  const routeResultActive = Boolean(routePlanDraft && selectedRouteOption && !editingRouteEndpoint);
+  const routeOverlayVisibility = useMemo(
+    () => buildRouteOverlayVisibility(selectedRouteOption, routePlanDraft, routeResultActive),
+    [routePlanDraft, routeResultActive, selectedRouteOption],
+  );
+  const routeResultMarkerIds = routeOverlayVisibility?.markerIds;
   const pointProjectionSource = useMemo(() => {
-    const baseSource = markersVisible ? pointOverlaySource : [];
+    const baseSource = focusedMarker
+      ? pointOverlaySource
+      : markersVisible
+        ? pointOverlaySource
+        : [];
     if (!routeResultMarkerIds) {
       return baseSource;
     }
 
     const routeMarkers = pointMarkers.filter((marker) => routeResultMarkerIds.has(marker.id));
     return dedupeMarkersById([...baseSource, ...routeMarkers]);
-  }, [markersVisible, pointMarkers, pointOverlaySource, routeResultMarkerIds]);
-  const rawProjectedMarkers = useMemo(
-    () => {
-      const projected = projectPointMarkers(
-        pointProjectionSource,
-        mapView,
-        viewportSize,
-        markerIconBaseUrl,
-        focusedMarkerId,
-        browseMode,
-        representativePoiIds,
-        {
-          forceLabelMarkerIds: routeLabelMarkerIds,
-          suppressLabelMarkerIds: routeSuppressLabelMarkerIds,
-        },
-      );
-      return routeResultMarkerIds ? projected : projected.slice(0, 220);
-    },
-    [
-      browseMode,
-      focusedMarkerId,
-      markerQuery,
-      markersVisible,
+  }, [focusedMarker, markersVisible, pointMarkers, pointOverlaySource, routeResultMarkerIds]);
+  const rawProjectedMarkers = useMemo(() => {
+    const projected = projectPointMarkers(
       pointProjectionSource,
-      representativePoiIds,
       mapView,
-      markerIconBaseUrl,
-      routeResultMarkerIds,
-      routeLabelMarkerIds,
-      routeSuppressLabelMarkerIds,
       viewportSize,
-    ],
-  );
+      markerIconBaseUrl,
+      focusedMarkerId,
+      browseMode,
+      representativePoiIds,
+      {
+        forceLabelMarkerIds: routeOverlayVisibility?.forceLabelMarkerIds,
+        suppressLabelMarkerIds: routeOverlayVisibility?.suppressLabelMarkerIds,
+      },
+    );
+    return routeResultMarkerIds ? projected : projected.slice(0, 220);
+  }, [
+    browseMode,
+    focusedMarkerId,
+    markerQuery,
+    markersVisible,
+    pointProjectionSource,
+    representativePoiIds,
+    mapView,
+    markerIconBaseUrl,
+    routeResultMarkerIds,
+    routeOverlayVisibility,
+    viewportSize,
+  ]);
   const linearOverlaySource = useMemo(() => {
-    if (!linearFeaturesVisible) {
+    const effectiveFocusedMarker = editingRouteEndpoint ? undefined : focusedMarker;
+    if (!linearFeaturesVisible && !effectiveFocusedMarker) {
       return [];
     }
 
-    const queryMatched = markerQuery.trim()
-      ? [...filteredEndpointGroupMarkers, ...filteredTransitLineMarkers]
+    const activeQuery = editingRouteEndpoint ? routeEndpointQuery : markerQuery;
+    const queryMatched = activeQuery.trim()
+      ? [
+          ...filterMarkers(endpointGroupMarkers, activeQuery),
+          ...filterMarkers(transitLineMarkers, activeQuery),
+        ]
       : [];
-    const focusedMarker = focusedMarkerId
-      ? [...endpointGroupMarkers, ...transitLineMarkers].find(
-          (marker) => marker.id === focusedMarkerId,
-        )
-      : undefined;
+    const focusedLinearMarker =
+      !editingRouteEndpoint && focusedMarkerId
+        ? [...endpointGroupMarkers, ...transitLineMarkers].find(
+            (marker) => marker.id === focusedMarkerId,
+          )
+        : undefined;
     const roadLabelSource =
-      browseMode === 'traffic'
+      effectiveFocusedMarker || browseMode === 'traffic'
         ? []
         : endpointGroupMarkers
             .filter((marker) => {
@@ -1230,8 +1294,8 @@ export function MapStage() {
               return Boolean(roadKind);
             })
             .slice(0, browseMode === 'satellite' ? 80 : 80);
-    const combined = focusedMarker
-      ? [focusedMarker, ...queryMatched, ...roadLabelSource]
+    const combined = focusedLinearMarker
+      ? [focusedLinearMarker]
       : [...queryMatched, ...roadLabelSource];
 
     return dedupeMarkersById(combined)
@@ -1239,12 +1303,13 @@ export function MapStage() {
       .slice(0, 40);
   }, [
     browseMode,
+    editingRouteEndpoint,
     endpointGroupMarkers,
-    filteredEndpointGroupMarkers,
-    filteredTransitLineMarkers,
+    focusedMarker,
     focusedMarkerId,
     linearFeaturesVisible,
     markerQuery,
+    routeEndpointQuery,
     transitLineMarkers,
   ]);
   const rawProjectedLinearPois = useMemo(
@@ -1271,6 +1336,16 @@ export function MapStage() {
     () => endpointGroupMarkers.filter((marker) => getRoadMarkerKind(marker)),
     [endpointGroupMarkers],
   );
+  const poiAddressRoadOptions = useMemo(() => {
+    const matched = findPoiAddressRoadMarkers(poiAddress, roadTraceSource);
+    const matchedIds = new Set(matched.map((marker) => marker.id));
+    return [
+      ...matched,
+      ...roadTraceSource
+        .filter((marker) => !matchedIds.has(marker.id))
+        .sort((left, right) => left.label.localeCompare(right.label, 'zh-CN')),
+    ];
+  }, [poiAddress, roadTraceSource]);
   useEffect(() => {
     let cancelled = false;
 
@@ -1316,56 +1391,60 @@ export function MapStage() {
     return selectedRoadTrace ? [selectedRoadTrace] : [];
   }, [focusedMarkerId, roadTraceSource]);
   const browseModeRoadTraceSource = useMemo(() => {
-    const shouldForceRoadReference =
-      browseMode === 'road-network' || browseMode === 'traffic';
-    if (!linearFeaturesVisible && !shouldForceRoadReference) {
+    const shouldForceRoadReference = browseMode === 'road-network' || browseMode === 'traffic';
+    const shouldKeepContextReference = Boolean(focusedMarker) || routeResultActive;
+    if (!linearFeaturesVisible && !shouldForceRoadReference && !shouldKeepContextReference) {
       return [];
     }
 
     const baseSource = roadTraceSource;
 
     return dedupeMarkersById([...selectedRoadTraceSource, ...baseSource]);
-  }, [browseMode, linearFeaturesVisible, roadTraceSource, selectedRoadTraceSource]);
-  const projectedRoadTraces = useMemo(
-    () => {
-      const traces = projectRoadTraceMarkers(
-        browseModeRoadTraceSource,
-        mapView,
-        viewportSize,
-        focusedMarkerId,
-        {
-          isMuted: browseMode === 'traffic' || browseMode === 'satellite',
-          suppressLargeOverlap: false,
-        },
-      );
-      return browseMode === 'satellite' ? traces.slice(0, 160) : traces;
-    },
-    [browseMode, browseModeRoadTraceSource, focusedMarkerId, mapView, viewportSize],
-  );
-  const projectedTransitTraces = useMemo(
-    () => {
-      if (!linearFeaturesVisible) {
-        return [];
-      }
-
-      const traceSource = focusedTransitLineMarker
-        ? dedupeMarkersById([...metroTransitLineMarkers, focusedTransitLineMarker])
-        : metroTransitLineMarkers;
-
-      return projectTransitLineTraces(traceSource, mapView, viewportSize, focusedMarkerId).slice(
-        0,
-        48,
-      );
-    },
-    [
-      focusedMarkerId,
-      focusedTransitLineMarker,
-      linearFeaturesVisible,
+  }, [
+    browseMode,
+    focusedMarker,
+    linearFeaturesVisible,
+    roadTraceSource,
+    routeResultActive,
+    selectedRoadTraceSource,
+  ]);
+  const projectedRoadTraces = useMemo(() => {
+    const traces = projectRoadTraceMarkers(
+      browseModeRoadTraceSource,
       mapView,
-      metroTransitLineMarkers,
       viewportSize,
-    ],
-  );
+      focusedMarkerId,
+      {
+        isMuted: browseMode === 'traffic' || browseMode === 'satellite',
+        suppressLargeOverlap: false,
+      },
+    );
+    return browseMode === 'satellite' ? traces.slice(0, 160) : traces;
+  }, [browseMode, browseModeRoadTraceSource, focusedMarkerId, mapView, viewportSize]);
+  const projectedTransitTraces = useMemo(() => {
+    const shouldKeepContextReference = Boolean(focusedMarker) || routeResultActive;
+    if (!linearFeaturesVisible && !focusedTransitLineMarker && !shouldKeepContextReference) {
+      return [];
+    }
+
+    const traceSource = focusedTransitLineMarker
+      ? [focusedTransitLineMarker]
+      : metroTransitLineMarkers;
+
+    return projectTransitLineTraces(traceSource, mapView, viewportSize, focusedMarkerId).slice(
+      0,
+      48,
+    );
+  }, [
+    focusedMarkerId,
+    focusedMarker,
+    focusedTransitLineMarker,
+    linearFeaturesVisible,
+    mapView,
+    metroTransitLineMarkers,
+    routeResultActive,
+    viewportSize,
+  ]);
   const publicPoiCategories = useMemo(
     () => categoryResponse?.items.filter((category) => category.acceptsPublicSubmissions) ?? [],
     [categoryResponse],
@@ -1401,10 +1480,6 @@ export function MapStage() {
       ),
     [categoryResponse, t],
   );
-  const stationConnectionIndex = useMemo(
-    () => buildStationConnectionIndex(transitOverview, t),
-    [transitOverview, t],
-  );
   const routePlanRequest = useMemo(
     () =>
       routePlanDraft
@@ -1432,6 +1507,7 @@ export function MapStage() {
   useEffect(() => {
     if (!routePlanDraft || !routePlanRequest) {
       setRoutePlanOptions([]);
+      setRoutePlanOptionsKey(null);
       setRoutePlanStatus('idle');
       return;
     }
@@ -1439,6 +1515,7 @@ export function MapStage() {
     let cancelled = false;
     setRoutePlanStatus('loading');
     setRoutePlanOptions([]);
+    setRoutePlanOptionsKey(null);
 
     if (roadRoutingStatus === 'loading') {
       return () => {
@@ -1461,6 +1538,7 @@ export function MapStage() {
           return;
         }
         setRoutePlanOptions(nextOptions);
+        setRoutePlanOptionsKey(routePlanCalculationKey);
         setRoutePlanStatus('ready');
       });
     }, routePlanRecalculateDelayMs);
@@ -1469,7 +1547,14 @@ export function MapStage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [roadRoutingGraph, roadRoutingStatus, routePlanDraft, routePlanRequest, t]);
+  }, [
+    roadRoutingGraph,
+    roadRoutingStatus,
+    routePlanCalculationKey,
+    routePlanDraft,
+    routePlanRequest,
+    t,
+  ]);
   useEffect(() => {
     if (!shareActionStatus) {
       return undefined;
@@ -1480,17 +1565,33 @@ export function MapStage() {
   }, [shareActionStatus]);
   const selectedRouteTrace = useMemo(
     () =>
-      selectedRouteOption
+      routeResultActive && selectedRouteOption
         ? projectRoutePlanTrace(selectedRouteOption, mapView, viewportSize)
         : undefined,
-    [mapView, selectedRouteOption, viewportSize],
+    [mapView, routeResultActive, selectedRouteOption, viewportSize],
   );
-  const visibleProjectedMarkers = useMemo(
+  const projectedRouteEndpointMarkers = useMemo(
     () =>
-      routeResultMarkerIds
-        ? rawProjectedMarkers.filter((marker) => routeResultMarkerIds.has(marker.id))
-        : projectedMarkers,
-    [projectedMarkers, rawProjectedMarkers, routeResultMarkerIds],
+      routePlanDraft && selectedRouteOption && routeResultActive
+        ? projectRouteEndpointMarkers(
+            selectedRouteOption,
+            routePlanDraft,
+            pointMarkers,
+            mapView,
+            viewportSize,
+          )
+        : [],
+    [mapView, pointMarkers, routePlanDraft, routeResultActive, selectedRouteOption, viewportSize],
+  );
+  const visibleProjectedMarkers = useMemo(() => {
+    const baseMarkers = routeResultMarkerIds
+      ? rawProjectedMarkers.filter((marker) => routeResultMarkerIds.has(marker.id))
+      : projectedMarkers;
+    return [...baseMarkers, ...projectedRouteEndpointMarkers];
+  }, [projectedMarkers, projectedRouteEndpointMarkers, rawProjectedMarkers, routeResultMarkerIds]);
+  const visibleSelectedRouteTrace = useMemo(
+    () => applyRouteRoadLabelCollisionVisibility(selectedRouteTrace, visibleProjectedMarkers),
+    [selectedRouteTrace, visibleProjectedMarkers],
   );
   const visibleProjectedLinearPois = routeResultActive ? [] : projectedLinearPois;
   const visibleProjectedRoadTraces = projectedRoadTraces;
@@ -1505,10 +1606,6 @@ export function MapStage() {
     focusedMarker && isTransitStationPoi(focusedMarker)
       ? findStationConnections(focusedMarker, stationConnectionIndex)
       : [];
-  const focusedTransitLine =
-    focusedMarker && isTransitLineMarker(focusedMarker)
-      ? findTransitLineByMarker(focusedMarker, transitLineLookup)
-      : undefined;
   const scaleBarInfo = useMemo(
     () => buildScaleBarInfo(mapView, viewportSize, t),
     [mapView, t, viewportSize],
@@ -1525,27 +1622,6 @@ export function MapStage() {
         : null,
     [activeTileZoom, mapView, regionIndex, tileTemplate, tilesVisible, viewportSize],
   );
-  const fadingTiles = useMemo<TileLayer | null>(
-    () =>
-      tilesVisible && tileTemplate && fadingTileZoom !== null && fadingTileZoom !== activeTileZoom
-        ? {
-            zoom: fadingTileZoom,
-            tiles: buildVisibleTiles(mapView, viewportSize, tileTemplate, regionIndex, {
-              tileZoom: fadingTileZoom,
-            }),
-          }
-        : null,
-    [
-      activeTileZoom,
-      fadingTileZoom,
-      mapView,
-      regionIndex,
-      tileTemplate,
-      tilesVisible,
-      viewportSize,
-    ],
-  );
-
   useEffect(() => {
     if (!poiCategoryId && publicPoiCategories.length > 0) {
       setPoiCategoryId(publicPoiCategories[0].id);
@@ -1559,34 +1635,44 @@ export function MapStage() {
     }
 
     if (
-      routePlanOptions.length > 0 &&
-      !routePlanOptions.some((option) => option.id === selectedRouteOptionId)
+      currentRoutePlanOptions.length > 0 &&
+      !currentRoutePlanOptions.some((option) => option.id === selectedRouteOptionId)
     ) {
-      setSelectedRouteOptionId(routePlanOptions[0].id);
+      setSelectedRouteOptionId(currentRoutePlanOptions[0].id);
     }
-  }, [routePlanDraft, routePlanOptions, selectedRouteOptionId]);
+  }, [currentRoutePlanOptions, routePlanDraft, selectedRouteOptionId]);
 
   useEffect(() => {
-    if (!tilesVisible || !tileTemplate) {
-      lastTileZoomRef.current = activeTileZoom;
-      setFadingTileZoom(null);
+    if (!routeResultActive || !routePlanDraft || !selectedRouteOption) {
+      fittedRouteOptionKeyRef.current = null;
       return;
     }
 
-    const previousTileZoom = lastTileZoomRef.current;
-    if (previousTileZoom === activeTileZoom) {
+    const fitKey = [
+      selectedRouteOption.id,
+      ...routePlanDraft.origin,
+      ...routePlanDraft.destination,
+      ...selectedRouteOption.markerIds,
+    ].join(':');
+    if (fittedRouteOptionKeyRef.current === fitKey) {
       return;
     }
 
-    lastTileZoomRef.current = activeTileZoom;
-    setFadingTileZoom(previousTileZoom);
-
-    const timeoutId = window.setTimeout(() => {
-      setFadingTileZoom((current) => (current === previousTileZoom ? null : current));
-    }, 260);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [activeTileZoom, tileTemplate, tilesVisible]);
+    const markerIds = new Set(selectedRouteOption.markerIds);
+    const semanticCoordinates = pointMarkers
+      .filter((marker) => markerIds.has(marker.id))
+      .map((marker) => getMarkerCenter(marker))
+      .filter((coordinate): coordinate is [number, number] => Boolean(coordinate));
+    setMapView((current) =>
+      fitCoordinatesToMapView(
+        [...selectedRouteOption.coordinates, ...semanticCoordinates],
+        current,
+        viewportSize,
+        160,
+      ),
+    );
+    fittedRouteOptionKeyRef.current = fitKey;
+  }, [pointMarkers, routePlanDraft, routeResultActive, selectedRouteOption, viewportSize]);
 
   useEffect(() => {
     if (!activeTileProvider || !tileTemplate?.includes('tiles/zoom.{z}')) {
@@ -1634,13 +1720,16 @@ export function MapStage() {
     });
   };
 
-  const focusMapMarker = useCallback((marker: CenterableMarker) => {
-    setMapView((current) => fitMarkerToMapView(marker, current, viewportSize));
-    setFocusedMarkerId(marker.id);
-    setPoiDetailTab('summary');
-    setPoiDetailCollapsed(false);
-    setNearbySearchCenter(null);
-  }, [viewportSize]);
+  const focusMapMarker = useCallback(
+    (marker: CenterableMarker) => {
+      setMapView((current) => fitMarkerToMapView(marker, current, viewportSize));
+      setFocusedMarkerId(marker.id);
+      setPoiDetailTab('summary');
+      setPoiDetailCollapsed(false);
+      setNearbySearchCenter(null);
+    },
+    [viewportSize],
+  );
 
   useEffect(() => {
     if (!sharedMarkerFocusKey) {
@@ -1659,12 +1748,7 @@ export function MapStage() {
       focusMapMarker(marker);
     }
     setAppliedSharedMarkerFocusKey(sharedMarkerFocusKey);
-  }, [
-    appliedSharedMarkerFocusKey,
-    focusMapMarker,
-    markerSnapshot,
-    sharedMarkerFocusKey,
-  ]);
+  }, [appliedSharedMarkerFocusKey, focusMapMarker, markerSnapshot, sharedMarkerFocusKey]);
 
   useEffect(() => {
     if (!sharedRoutePlan) {
@@ -1686,9 +1770,7 @@ export function MapStage() {
     setRouteEndpointQuery('');
     setNearbySearchCenter(null);
     setFocusedMarkerId(null);
-    setMapView((current) =>
-      fitRouteDraftToMapView(sharedRoutePlan.draft, current, viewportSize),
-    );
+    setMapView((current) => fitRouteDraftToMapView(sharedRoutePlan.draft, current, viewportSize));
     setAppliedSharedRoutePlanKey(sharedRoutePlan.key);
   }, [appliedSharedRoutePlanKey, sharedRoutePlan, viewportSize]);
 
@@ -1762,6 +1844,18 @@ export function MapStage() {
     focusMapMarker(lineMarker);
   };
 
+  const focusTransitStationStop = (line: TransitOverviewLine, stationName: string) => {
+    const stationMarker = findTransitStationMarkerForLine(
+      pointMarkers,
+      stationName,
+      line,
+      stationConnectionIndex,
+    );
+    if (stationMarker) {
+      focusMapMarker(stationMarker);
+    }
+  };
+
   const startDragGesture = (pointerId: number, clientX: number, clientY: number, view: MapView) => {
     dragRef.current = {
       pointerId,
@@ -1825,13 +1919,14 @@ export function MapStage() {
     updateCursorWorld(event);
     event.currentTarget.setPointerCapture(event.pointerId);
     activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    tapRef.current = editingRouteEndpoint || poiCoordinatePickMode
-      ? {
-          pointerId: event.pointerId,
-          startX: event.clientX,
-          startY: event.clientY,
-        }
-      : null;
+    tapRef.current =
+      editingRouteEndpoint || poiCoordinatePickMode
+        ? {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+          }
+        : null;
 
     if (activePointersRef.current.size >= 2) {
       dragRef.current = null;
@@ -1941,6 +2036,17 @@ export function MapStage() {
     setPoiSubmitStatus(t('map.poiSubmit.pickDone', { point: formatPoint(coordinates) }));
   };
 
+  const updatePoiAddress = (address: string) => {
+    setPoiAddress(address);
+    const matched = findPoiAddressRoadMarkers(address, roadTraceSource);
+    setPoiAddressRoadMarkerId((current) => {
+      if (matched.length === 1) {
+        return matched[0]?.id ?? '';
+      }
+      return matched.some((marker) => marker.id === current) ? current : '';
+    });
+  };
+
   const submitPoi = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPoiSubmitStatus('');
@@ -1949,6 +2055,10 @@ export function MapStage() {
 
     if (!poiTitle.trim() || !poiCategoryId || !Number.isFinite(x) || !Number.isFinite(z)) {
       setPoiSubmitStatus(t('map.poiSubmit.invalid'));
+      return;
+    }
+    if (poiFacilities.some((facility) => !facility.description.trim())) {
+      setPoiSubmitStatus(t('map.poiSubmit.invalidFacility'));
       return;
     }
 
@@ -1988,6 +2098,10 @@ export function MapStage() {
             type: 'Point',
             coordinates: [x, z],
           },
+          openingHours: poiOpeningHours.trim() || undefined,
+          address: poiAddress.trim() || undefined,
+          addressRoadMarkerId: poiAddressRoadMarkerId || undefined,
+          facilities: poiFacilities.length > 0 ? poiFacilities : undefined,
         }),
       });
       const data = (await response.json()) as { message?: string };
@@ -2004,6 +2118,10 @@ export function MapStage() {
       setPoiImageFileInputKey((current) => current + 1);
       setPoiX('');
       setPoiZ('');
+      setPoiOpeningHours('');
+      setPoiAddress('');
+      setPoiAddressRoadMarkerId('');
+      setPoiFacilities([]);
       setPoiSubmitStatus(t('map.poiSubmit.success'));
       setPoiSubmitDialogOpen(false);
     } finally {
@@ -2177,30 +2295,7 @@ export function MapStage() {
       viewportSize,
       32,
     );
-    if (routePlanDraft) {
-      const routeOrigin = projectCoordinateMarker(
-        'route-origin',
-        t('map.route.origin'),
-        routePlanDraft.origin,
-        mapView,
-        viewportSize,
-        40,
-      );
-      const routeDestination = projectCoordinateMarker(
-        'route-destination',
-        t('map.route.destination'),
-        routePlanDraft.destination,
-        mapView,
-        viewportSize,
-        40,
-      );
-      if (routeOrigin) {
-        markers.push(routeOrigin);
-      }
-      if (routeDestination) {
-        markers.push(routeDestination);
-      }
-    } else if (sharedCoordinateFocus) {
+    if (sharedCoordinateFocus) {
       const sharedMarker = projectCoordinateMarker(
         'shared-coordinate',
         sharedCoordinateFocus.label ?? formatPoint(sharedCoordinateFocus.coordinate),
@@ -2218,18 +2313,26 @@ export function MapStage() {
     }
 
     return markers;
-  }, [mapView, routePlanDraft, sharedCoordinateFocus, t, viewportSize]);
-
+  }, [mapView, sharedCoordinateFocus, t, viewportSize]);
   const hasMapOverlay =
     projectedGuideMarkers.length > 0 ||
-    Boolean(selectedRouteTrace) ||
+    Boolean(visibleSelectedRouteTrace) ||
     visibleProjectedMarkers.length > 0 ||
     visibleProjectedLinearPois.length > 0 ||
     visibleProjectedRoadTraces.length > 0 ||
     visibleProjectedTransitTraces.length > 0;
 
   return (
-    <section className={`map-stage is-mode-${browseMode}`} aria-labelledby="map-title">
+    <section
+      className={[
+        'map-stage',
+        `is-mode-${browseMode}`,
+        focusedMarker || routeResultActive ? 'has-context-overlay' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      aria-labelledby="map-title"
+    >
       <h1 id="map-title" className="sr-only">
         {t('map.title')}
       </h1>
@@ -2269,8 +2372,8 @@ export function MapStage() {
               enabledModes={routeTransportModes}
               endpointCandidates={routeEndpointCandidates}
               endpointQuery={routeEndpointQuery}
-              options={routePlanOptions}
-              status={routePlanStatus}
+              options={currentRoutePlanOptions}
+              status={currentRoutePlanStatus}
               selectedOptionId={selectedRouteOption?.id}
               iconBaseUrl={markerIconBaseUrl}
               onBeginEndpointEdit={beginRouteEndpointEdit}
@@ -2395,7 +2498,7 @@ export function MapStage() {
                           </>
                         );
 
-                        if (marker.href && !editingRouteEndpoint) {
+                        if (marker.href && !editingRouteEndpoint && !isTransitLineMarker(marker)) {
                           return (
                             <a
                               className={
@@ -2507,6 +2610,9 @@ export function MapStage() {
                     <TransitLineMapDetail
                       line={focusedTransitLine}
                       lineColor={focusedMarker.accentColor}
+                      onFocusStation={(stationName) =>
+                        focusTransitStationStop(focusedTransitLine, stationName)
+                      }
                       t={t}
                     />
                   ) : isRoadEndpointGroupMarker(focusedMarker) ? (
@@ -2528,6 +2634,18 @@ export function MapStage() {
                           <div>
                             <dt>{t('map.poi.coordinate')}</dt>
                             <dd>{formatPoint(focusedMarkerCenter)}</dd>
+                          </div>
+                        ) : null}
+                        {focusedMarker.address ? (
+                          <div>
+                            <dt>{t('map.poi.address')}</dt>
+                            <dd>{focusedMarker.address}</dd>
+                          </div>
+                        ) : null}
+                        {focusedMarker.openingHours ? (
+                          <div>
+                            <dt>{t('map.poi.openingHours')}</dt>
+                            <dd>{focusedMarker.openingHours}</dd>
                           </div>
                         ) : null}
                         <div>
@@ -2611,77 +2729,101 @@ export function MapStage() {
                     />
                   ) : null}
                   {!isLinearDetailMarker(focusedMarker) && poiDetailTab === 'facilities' ? (
-                    focusedSecondaryPois.length > 0 ? (
-                      <div className="map-poi-related-list" aria-label={t('map.poi.relatedPlaces')}>
-                        {focusedSecondaryPoiGroups.map((group) => (
-                          <section className="map-poi-related-group" key={group.id}>
+                    <>
+                      {focusedMarker.facilities?.length ? (
+                        <div className="map-poi-facility-list">
+                          {focusedMarker.facilities.map((facility, index) => (
+                            <div
+                              className="map-poi-facility-item"
+                              key={`${facility.symbolIcon}-${index}`}
+                            >
+                              <span className="material-symbols-outlined" aria-hidden="true">
+                                {facility.symbolIcon}
+                              </span>
+                              <span>{facility.description}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {focusedSecondaryPois.length > 0 ? (
+                        <div
+                          className="map-poi-related-list"
+                          aria-label={t('map.poi.relatedPlaces')}
+                        >
+                          {focusedSecondaryPoiGroups.map((group) => (
+                            <section className="map-poi-related-group" key={group.id}>
+                              <h4>
+                                <span>
+                                  {formatSecondaryPoiGroupLabel(group.id, group.label, t)}
+                                </span>
+                                <small>{t('map.poi.count', { count: group.items.length })}</small>
+                              </h4>
+                              <div className="map-poi-related-group-items">
+                                {group.items.map((item) => (
+                                  <button
+                                    className="map-poi-related-item"
+                                    type="button"
+                                    key={item.marker.id}
+                                    onClick={() => focusMapMarker(item.marker)}
+                                  >
+                                    <MarkerListIcon
+                                      marker={item.marker}
+                                      iconBaseUrl={markerIconBaseUrl}
+                                    />
+                                    <span>
+                                      <strong>{item.childLabel}</strong>
+                                      <small>
+                                        {item.marker.categoryId
+                                          ? (categoryById.get(item.marker.categoryId) ??
+                                            getMarkerCategoryDisplayName(item.marker.categoryId, t))
+                                          : t('map.poi.relatedPlaceFallback')}
+                                      </small>
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            </section>
+                          ))}
+                        </div>
+                      ) : focusedParentPoi ? (
+                        <div className="map-poi-related-list" aria-label={t('map.poi.parent')}>
+                          <section className="map-poi-related-group">
                             <h4>
-                              <span>{formatSecondaryPoiGroupLabel(group.id, group.label, t)}</span>
-                              <small>{t('map.poi.count', { count: group.items.length })}</small>
+                              <span>{t('map.poi.parent')}</span>
+                              <small>{t('map.poi.count', { count: 1 })}</small>
                             </h4>
                             <div className="map-poi-related-group-items">
-                              {group.items.map((item) => (
-                                <button
-                                  className="map-poi-related-item"
-                                  type="button"
-                                  key={item.marker.id}
-                                  onClick={() => focusMapMarker(item.marker)}
-                                >
-                                  <MarkerListIcon
-                                    marker={item.marker}
-                                    iconBaseUrl={markerIconBaseUrl}
-                                  />
-                                  <span>
-                                    <strong>{item.childLabel}</strong>
-                                    <small>
-                                      {item.marker.categoryId
-                                        ? (categoryById.get(item.marker.categoryId) ??
-                                          getMarkerCategoryDisplayName(item.marker.categoryId, t))
-                                        : t('map.poi.relatedPlaceFallback')}
-                                    </small>
-                                  </span>
-                                </button>
-                              ))}
+                              <button
+                                className="map-poi-related-item"
+                                type="button"
+                                onClick={() => focusMapMarker(focusedParentPoi.parent)}
+                              >
+                                <MarkerListIcon
+                                  marker={focusedParentPoi.parent}
+                                  iconBaseUrl={markerIconBaseUrl}
+                                />
+                                <span>
+                                  <strong>
+                                    {formatMarkerDisplayName(focusedParentPoi.parent.label)}
+                                  </strong>
+                                  <small>
+                                    {focusedParentPoi.parent.categoryId
+                                      ? (categoryById.get(focusedParentPoi.parent.categoryId) ??
+                                        getMarkerCategoryDisplayName(
+                                          focusedParentPoi.parent.categoryId,
+                                          t,
+                                        ))
+                                      : t('map.poi.parentFallback')}
+                                  </small>
+                                </span>
+                              </button>
                             </div>
                           </section>
-                        ))}
-                      </div>
-                    ) : focusedParentPoi ? (
-                      <div className="map-poi-related-list" aria-label={t('map.poi.parent')}>
-                        <section className="map-poi-related-group">
-                          <h4>
-                            <span>{t('map.poi.parent')}</span>
-                            <small>{t('map.poi.count', { count: 1 })}</small>
-                          </h4>
-                          <div className="map-poi-related-group-items">
-                            <button
-                              className="map-poi-related-item"
-                              type="button"
-                              onClick={() => focusMapMarker(focusedParentPoi.parent)}
-                            >
-                              <MarkerListIcon
-                                marker={focusedParentPoi.parent}
-                                iconBaseUrl={markerIconBaseUrl}
-                              />
-                              <span>
-                                <strong>{formatMarkerDisplayName(focusedParentPoi.parent.label)}</strong>
-                                <small>
-                                  {focusedParentPoi.parent.categoryId
-                                    ? (categoryById.get(focusedParentPoi.parent.categoryId) ??
-                                      getMarkerCategoryDisplayName(
-                                        focusedParentPoi.parent.categoryId,
-                                        t,
-                                      ))
-                                    : t('map.poi.parentFallback')}
-                                </small>
-                              </span>
-                            </button>
-                          </div>
-                        </section>
-                      </div>
-                    ) : (
-                      <p>{focusedMarker.description ?? t('map.poi.noFacilities')}</p>
-                    )
+                        </div>
+                      ) : focusedMarker.facilities?.length ? null : (
+                        <p>{focusedMarker.description ?? t('map.poi.noFacilities')}</p>
+                      )}
+                    </>
                   ) : null}
                 </div>
               </>
@@ -2702,17 +2844,10 @@ export function MapStage() {
       >
         {visibleTiles ? (
           <div className="unmined-tile-stack" aria-hidden="true">
-            {fadingTiles ? (
-              <TileLayerView
-                layer={fadingTiles}
-                className="unmined-tile-layer is-fading"
-                key={`tile-fading-${fadingTiles.zoom}`}
-              />
-            ) : null}
             <TileLayerView
               layer={visibleTiles}
-              className="unmined-tile-layer is-active"
-              key={`tile-active-${visibleTiles.zoom}`}
+              className="unmined-tile-layer"
+              key={`tile-${visibleTiles.zoom}`}
             />
           </div>
         ) : null}
@@ -2730,7 +2865,8 @@ export function MapStage() {
               ? t('map.source.loading')
               : loadStatus === 'ready'
                 ? t('map.source.objectCount', {
-                    count: pointMarkers.length + endpointGroupMarkers.length + transitLineMarkers.length,
+                    count:
+                      pointMarkers.length + endpointGroupMarkers.length + transitLineMarkers.length,
                   })
                 : t('map.source.unavailable')}
           </span>
@@ -2818,18 +2954,22 @@ export function MapStage() {
                 ))}
               </div>
             ) : null}
-            {selectedRouteTrace ? (
+            {visibleSelectedRouteTrace ? (
               <div className="map-route-trace-layer" aria-hidden="true">
                 <TraceLayerView
-                  trace={selectedRouteTrace}
+                  trace={visibleSelectedRouteTrace}
                   kind="route"
                   title={t('map.route.traceTitle', {
                     title: selectedRouteOption?.title ?? t('map.route.optionFallback'),
                   })}
                 />
-                {selectedRouteTrace.labels?.map((label) => (
+                {visibleSelectedRouteTrace.labels?.map((label) => (
                   <span
-                    className="map-route-road-label"
+                    className={
+                      label.isVerticalLabel
+                        ? 'map-route-road-label is-vertical'
+                        : 'map-route-road-label'
+                    }
                     key={label.id}
                     style={
                       {
@@ -2865,6 +3005,9 @@ export function MapStage() {
                       {marker.kind === 'route-destination' ? 'flag' : 'location_on'}
                     </span>
                   </span>
+                )}
+                {marker.kind === 'default-anchor' ? null : (
+                  <span className="map-guide-marker-badge">{marker.label}</span>
                 )}
               </div>
             ))}
@@ -2990,11 +3133,7 @@ export function MapStage() {
             <span className="material-symbols-outlined" aria-hidden="true">
               map
             </span>
-            <p>
-              {loadStatus === 'loading'
-                ? t('map.empty.loading')
-                : t('map.empty.unavailable')}
-            </p>
+            <p>{loadStatus === 'loading' ? t('map.empty.loading') : t('map.empty.unavailable')}</p>
           </div>
         )}
       </div>
@@ -3038,7 +3177,11 @@ export function MapStage() {
 
       {layerPanelOpen ? (
         <aside className="map-layer-panel" id="map-layer-panel" aria-label={t('map.layer.aria')}>
-          <div className="map-browse-mode-control" role="tablist" aria-label={t('map.layer.modeAria')}>
+          <div
+            className="map-browse-mode-control"
+            role="tablist"
+            aria-label={t('map.layer.modeAria')}
+          >
             {mapBrowseModes.map((mode) => (
               <button
                 className={browseMode === mode.value ? 'is-active' : ''}
@@ -3079,7 +3222,10 @@ export function MapStage() {
           <p className="map-layer-note">
             {browseMode === 'satellite'
               ? t('map.layer.noteSatellite', {
-                  name: activeTileProviderName ?? activeTileProvider?.name ?? t('map.source.tileFallback'),
+                  name:
+                    activeTileProviderName ??
+                    activeTileProvider?.name ??
+                    t('map.source.tileFallback'),
                 })
               : browseMode === 'road-network'
                 ? t('map.layer.noteRoadNetwork')
@@ -3197,6 +3343,43 @@ export function MapStage() {
                 />
               </label>
               <label>
+                <span>{t('map.poiSubmit.openingHours')}</span>
+                <input
+                  value={poiOpeningHours}
+                  onChange={(event) => setPoiOpeningHours(event.currentTarget.value)}
+                  placeholder={t('map.poiSubmit.openingHoursPlaceholder')}
+                  aria-label={t('map.poiSubmit.openingHours')}
+                  maxLength={500}
+                />
+              </label>
+              <label>
+                <span>{t('map.poiSubmit.address')}</span>
+                <input
+                  value={poiAddress}
+                  onChange={(event) => updatePoiAddress(event.currentTarget.value)}
+                  placeholder={t('map.poiSubmit.addressPlaceholder')}
+                  aria-label={t('map.poiSubmit.address')}
+                  maxLength={300}
+                />
+              </label>
+              <label>
+                <span>{t('map.poiSubmit.addressRoad')}</span>
+                <select
+                  value={poiAddressRoadMarkerId}
+                  disabled={!poiAddress.trim()}
+                  onChange={(event) => setPoiAddressRoadMarkerId(event.currentTarget.value)}
+                  aria-label={t('map.poiSubmit.addressRoad')}
+                >
+                  <option value="">{t('map.poiSubmit.noAddressRoad')}</option>
+                  {poiAddressRoadOptions.map((marker) => (
+                    <option value={marker.id} key={marker.id}>
+                      {marker.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <PoiFacilityEditor facilities={poiFacilities} onChange={setPoiFacilities} />
+              <label>
                 <span>{t('map.poiSubmit.href')}</span>
                 <input
                   type="url"
@@ -3266,7 +3449,9 @@ export function MapStage() {
                 <span className="material-symbols-outlined" aria-hidden="true">
                   upload
                 </span>
-                <span>{poiSubmitBusy ? t('map.poiSubmit.submitting') : t('map.poiSubmit.submit')}</span>
+                <span>
+                  {poiSubmitBusy ? t('map.poiSubmit.submitting') : t('map.poiSubmit.submit')}
+                </span>
               </button>
             </form>
             {poiSubmitStatus ? <p className="map-source-note">{poiSubmitStatus}</p> : null}
@@ -3441,7 +3626,9 @@ function MapShareDialog({
         <div className="map-share-actions" aria-label={t('map.share.actions')}>
           {mapShareModes.map((mode) => (
             <button
-              className={mode === 'image' ? 'secondary-action-button is-primary' : 'secondary-action-button'}
+              className={
+                mode === 'image' ? 'secondary-action-button is-primary' : 'secondary-action-button'
+              }
               type="button"
               key={mode}
               disabled={busyMode !== null}
@@ -3450,7 +3637,9 @@ function MapShareDialog({
               <span className="material-symbols-outlined" aria-hidden="true">
                 {mapShareModeIcons[mode]}
               </span>
-              <span>{busyMode === mode ? t('map.share.processing') : t(mapShareModeLabelKeys[mode])}</span>
+              <span>
+                {busyMode === mode ? t('map.share.processing') : t(mapShareModeLabelKeys[mode])}
+              </span>
             </button>
           ))}
         </div>
@@ -3543,9 +3732,7 @@ function TraceLayerView({
           .join(' ')
       : kind === 'route'
         ? 'map-route-trace is-selected'
-        : ['map-transit-trace', trace.isSelected ? 'is-selected' : '']
-            .filter(Boolean)
-            .join(' ');
+        : ['map-transit-trace', trace.isSelected ? 'is-selected' : ''].filter(Boolean).join(' ');
 
   return (
     <svg
@@ -3580,6 +3767,18 @@ function TraceLayerView({
           <title>{title}</title>
         </path>
       )}
+      {kind === 'route'
+        ? trace.routeRoadSegments?.map((segment) => (
+            <path
+              className="map-route-road-segment"
+              d={segment.path}
+              key={segment.id}
+              style={{ stroke: segment.color }}
+            >
+              <title>{segment.label}</title>
+            </path>
+          ))
+        : null}
     </svg>
   );
 }
@@ -3587,8 +3786,14 @@ function TraceLayerView({
 function TransitLineMapDetail({
   line,
   lineColor,
+  onFocusStation,
   t,
-}: Readonly<{ line: TransitOverviewLine; lineColor?: string; t: Translate }>) {
+}: Readonly<{
+  line: TransitOverviewLine;
+  lineColor?: string;
+  onFocusStation: (stationName: string) => void;
+  t: Translate;
+}>) {
   const [direction, setDirection] = useState<'forward' | 'reverse'>('forward');
   const stationStops = getDirectionalLineStops(line, direction);
   const firstStationName = stationStops[0]?.stationName ?? line.firstStationName;
@@ -3663,12 +3868,14 @@ function TransitLineMapDetail({
           {stationStops.map((stop, index) => (
             <li key={`${stop.stationName}-${stop.sequence}-${index}`}>
               <span className="map-line-station-node" aria-hidden="true" />
-              <span>
+              <button
+                className="map-line-station-button"
+                type="button"
+                onClick={() => onFocusStation(stop.stationName)}
+              >
                 {formatMarkerDisplayName(stop.stationName)}
-                {stop.oneWay ? (
-                  <small>{formatTransitStopOneWayLabel(stop.oneWay, t)}</small>
-                ) : null}
-              </span>
+                {stop.oneWay ? <small>{formatTransitStopOneWayLabel(stop.oneWay, t)}</small> : null}
+              </button>
             </li>
           ))}
         </ol>
@@ -3786,15 +3993,14 @@ function RoutePlanDraftCard({
   };
 
   return (
-    <section
-      className={cardClassName}
-      aria-label={t('map.route.aria')}
-      aria-busy={isPlanning}
-    >
+    <section className={cardClassName} aria-label={t('map.route.aria')} aria-busy={isPlanning}>
       <div className="map-route-plan-top">
         <div className="map-route-endpoint-list">
           <div className="map-route-endpoint-row">
-            <span className="material-symbols-outlined map-route-endpoint-icon is-origin" aria-hidden="true">
+            <span
+              className="material-symbols-outlined map-route-endpoint-icon is-origin"
+              aria-hidden="true"
+            >
               location_on
             </span>
             {editingEndpoint === 'origin' ? (
@@ -3887,7 +4093,10 @@ function RoutePlanDraftCard({
             </div>
           ) : null}
           {editingEndpoint ? (
-            <div className="map-route-endpoint-candidates" aria-label={t('map.route.endpointCandidatesAria')}>
+            <div
+              className="map-route-endpoint-candidates"
+              aria-label={t('map.route.endpointCandidatesAria')}
+            >
               <div className="map-route-endpoint-candidate-heading">
                 <span>
                   {editingEndpoint === 'origin'
@@ -4012,7 +4221,10 @@ function RoutePlanDraftCard({
                             </span>
                             {formatRoutePlanDistance(option.walkingDistance, t)}
                           </span>
-                          <span className="map-route-option-badges" aria-label={t('map.route.featuresAria')}>
+                          <span
+                            className="map-route-option-badges"
+                            aria-label={t('map.route.featuresAria')}
+                          >
                             {optionBadges.map((badge) => (
                               <span className="map-route-option-badge" key={badge}>
                                 {badge}
@@ -4038,7 +4250,10 @@ function RoutePlanDraftCard({
                           </span>
                         </p>
                         {isSelected ? (
-                          <ol className="map-route-step-timeline" aria-label={t('map.route.stepsAria')}>
+                          <ol
+                            className="map-route-step-timeline"
+                            aria-label={t('map.route.stepsAria')}
+                          >
                             {option.steps.map((step, stepIndex) => {
                               const stepId = `${option.id}-${stepIndex}`;
                               const stepClassName = [
@@ -4085,8 +4300,13 @@ function RoutePlanDraftCard({
                                           }
                                           onClick={() => toggleRouteStepDetails(stepId)}
                                         >
-                                          <span className="material-symbols-outlined" aria-hidden="true">
-                                            {isExpanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
+                                          <span
+                                            className="material-symbols-outlined"
+                                            aria-hidden="true"
+                                          >
+                                            {isExpanded
+                                              ? 'keyboard_arrow_up'
+                                              : 'keyboard_arrow_down'}
                                           </span>
                                         </button>
                                       ) : null}
@@ -4095,7 +4315,10 @@ function RoutePlanDraftCard({
                                       <ul className="map-route-step-detail-list">
                                         {step.details?.map((detail, detailIndex) => (
                                           <li key={`${stepId}-detail-${detailIndex}`}>
-                                            <span className="material-symbols-outlined" aria-hidden="true">
+                                            <span
+                                              className="material-symbols-outlined"
+                                              aria-hidden="true"
+                                            >
                                               {detail.icon}
                                             </span>
                                             <span
@@ -4258,7 +4481,10 @@ function buildRoutePlanOptions(input: {
       const fewerTurnMinutes =
         estimateResolvedWalkRouteMinutes(fewerTurnWalkRoute) +
         estimateRouteMinutes(endpointAccessDistance, 72);
-      const fewerTurnCoordinates = buildRouteTraceCoordinates(draft, fewerTurnWalkRoute.coordinates);
+      const fewerTurnCoordinates = buildRouteTraceCoordinates(
+        draft,
+        fewerTurnWalkRoute.coordinates,
+      );
       options.push({
         id: 'walk-fewer-turns',
         title: input.t('map.route.walkFewerTurns'),
@@ -4356,8 +4582,25 @@ function areCoordinateChainsEquivalent(
   });
 }
 
+function buildRoutePlanCalculationKey(
+  draft: RoutePlanDraft,
+  enabledModes: EnabledRouteTransportModes,
+): string {
+  return JSON.stringify({
+    destination: draft.destination,
+    destinationId: draft.destinationId,
+    destinationLabel: draft.destinationLabel,
+    modes: routeTransportModeOptions.map(({ mode }) => [mode, enabledModes[mode]]),
+    origin: draft.origin,
+    originId: draft.originId,
+    originLabel: draft.originLabel,
+  });
+}
+
 function getRouteOptionLimit(enabledModes: EnabledRouteTransportModes): number {
-  const enabledCount = routeTransportModeOptions.filter((option) => enabledModes[option.mode]).length;
+  const enabledCount = routeTransportModeOptions.filter(
+    (option) => enabledModes[option.mode],
+  ).length;
   return Math.min(10, Math.max(3, enabledCount + 2));
 }
 
@@ -4438,11 +4681,7 @@ function resolveRouteEndpointAccessPoint(input: {
   if (
     input.endpointId &&
     input.targetId &&
-    areRouteEndpointsParentAndChild(
-      input.endpointId,
-      input.targetId,
-      input.secondaryPoiParentIndex,
-    )
+    areRouteEndpointsParentAndChild(input.endpointId, input.targetId, input.secondaryPoiParentIndex)
   ) {
     return { coordinate: input.endpointCoordinate };
   }
@@ -4539,7 +4778,9 @@ function isRouteAccessSecondaryPoi(link: SecondaryPoiLink): boolean {
     return /出入口|出口|站口|[a-z]\d?口/.test(text);
   }
 
-  return !link.marker.iconFileName && /出入口|入口|出口|[东西南北]门|正门|侧门|大门|门岗/.test(text);
+  return (
+    !link.marker.iconFileName && /出入口|入口|出口|[东西南北]门|正门|侧门|大门|门岗/.test(text)
+  );
 }
 
 function buildRouteTraceCoordinates(
@@ -4570,38 +4811,53 @@ function createRouteRoadLabelsFromSegments(
   color = routeWalkTraceColor,
 ): RoutePlanRoadLabel[] {
   const labels: RoutePlanRoadLabel[] = [];
+  let activeLabel: RoutePlanRoadLabel | undefined;
 
-  for (const [index, segment] of (segments ?? []).entries()) {
-    if (segment.kind !== 'road') {
-      continue;
-    }
-
-    if (segment.coordinates.length < 2) {
+  for (const segment of segments ?? []) {
+    if (segment.kind !== 'road' || segment.coordinates.length < 2) {
+      activeLabel = undefined;
       continue;
     }
 
     const label = formatMarkerDisplayName(segment.label);
     if (!label) {
+      activeLabel = undefined;
       continue;
     }
 
-    const distance = getCoordinateChainDistance(segment.coordinates);
-    if (distance <= 0) {
+    const roadId = segment.roadId ?? `road:${normalizeMarkerSearchText(label)}`;
+    const previousCoordinate = activeLabel?.coordinates.at(-1);
+    const firstCoordinate = segment.coordinates[0];
+    if (
+      activeLabel &&
+      activeLabel.roadId === roadId &&
+      previousCoordinate &&
+      firstCoordinate &&
+      areCoordinatesClose(previousCoordinate, firstCoordinate)
+    ) {
+      activeLabel.coordinates = dedupeConsecutiveCoordinates([
+        ...activeLabel.coordinates,
+        ...segment.coordinates,
+      ]);
       continue;
     }
 
-    labels.push({
+    activeLabel = {
       color,
-      coordinates: segment.coordinates,
-      id: `route-road-label-${encodeURIComponent(label)}-${index}`,
+      coordinates: [...segment.coordinates],
+      id: `route-road-label-${encodeURIComponent(roadId)}-${labels.length}`,
       label,
-    });
+      roadId,
+    };
+    labels.push(activeLabel);
   }
 
-  return labels;
+  return labels.filter((label) => getCoordinateChainDistance(label.coordinates) > 0);
 }
 
-function combineRouteRoadLabels(...groups: Array<RoutePlanRoadLabel[] | undefined>): RoutePlanRoadLabel[] {
+function combineRouteRoadLabels(
+  ...groups: Array<RoutePlanRoadLabel[] | undefined>
+): RoutePlanRoadLabel[] {
   return groups.flatMap((group) => group ?? []);
 }
 
@@ -4630,7 +4886,8 @@ function createRouteEndpointAccessSteps(
   endpoint: RouteEndpointKind,
   t?: Translate,
 ): RoutePlanStep[] {
-  const accessLabel = endpoint === 'origin' ? draft.originAccessLabel : draft.destinationAccessLabel;
+  const accessLabel =
+    endpoint === 'origin' ? draft.originAccessLabel : draft.destinationAccessLabel;
   if (!accessLabel) {
     return [];
   }
@@ -4920,6 +5177,7 @@ function buildRoadRouteGraph(roadMarkers: EndpointGroupMarker[]): RoadRouteGraph
         distance: getCoordinateDistance(previous.coordinate, current.coordinate),
         kind: 'road',
         label: segment.roadLabel,
+        roadId: segment.roadId,
         reverseLabel: segment.roadLabel,
       });
     }
@@ -4984,9 +5242,7 @@ function collectRoadConnectionCandidates(
     }
   }
 
-  return Array.from(connections.values()).sort(
-    (left, right) => left.distance - right.distance,
-  );
+  return Array.from(connections.values()).sort((left, right) => left.distance - right.distance);
 }
 
 function getRoadSegmentConnectionCandidates(
@@ -5094,41 +5350,24 @@ function getSegmentIntersectionPoint(
   rightStart: [number, number],
   rightEnd: [number, number],
 ): [number, number] | undefined {
-  const leftVector: [number, number] = [
-    leftEnd[0] - leftStart[0],
-    leftEnd[1] - leftStart[1],
-  ];
-  const rightVector: [number, number] = [
-    rightEnd[0] - rightStart[0],
-    rightEnd[1] - rightStart[1],
-  ];
+  const leftVector: [number, number] = [leftEnd[0] - leftStart[0], leftEnd[1] - leftStart[1]];
+  const rightVector: [number, number] = [rightEnd[0] - rightStart[0], rightEnd[1] - rightStart[1]];
   const denominator = leftVector[0] * rightVector[1] - leftVector[1] * rightVector[0];
   if (Math.abs(denominator) < 0.000001) {
     return undefined;
   }
 
-  const delta: [number, number] = [
-    rightStart[0] - leftStart[0],
-    rightStart[1] - leftStart[1],
-  ];
+  const delta: [number, number] = [rightStart[0] - leftStart[0], rightStart[1] - leftStart[1]];
   const leftRatio = (delta[0] * rightVector[1] - delta[1] * rightVector[0]) / denominator;
   const rightRatio = (delta[0] * leftVector[1] - delta[1] * leftVector[0]) / denominator;
-  if (
-    leftRatio < 0 ||
-    leftRatio > 1 ||
-    rightRatio < 0 ||
-    rightRatio > 1
-  ) {
+  if (leftRatio < 0 || leftRatio > 1 || rightRatio < 0 || rightRatio > 1) {
     return undefined;
   }
 
   return interpolateCoordinate(leftStart, leftEnd, leftRatio);
 }
 
-function getRoadSegmentRatio(
-  segment: RoadRouteSegment,
-  coordinate: [number, number],
-): number {
+function getRoadSegmentRatio(segment: RoadRouteSegment, coordinate: [number, number]): number {
   return projectPointOntoSegment(segment.start, segment.end, coordinate).ratio;
 }
 
@@ -5149,6 +5388,7 @@ function addRoadRouteGraphEdge(
     distance: number;
     kind: 'connection' | 'road';
     label: string;
+    roadId?: string;
     reverseLabel?: string;
   },
 ) {
@@ -5157,6 +5397,7 @@ function addRoadRouteGraphEdge(
     distance: input.distance,
     kind: input.kind,
     label: input.label,
+    roadId: input.roadId,
     to: to.id,
   });
   adjacency.get(to.id)?.push({
@@ -5164,6 +5405,7 @@ function addRoadRouteGraphEdge(
     distance: input.distance,
     kind: input.kind,
     label: input.reverseLabel ?? input.label,
+    roadId: input.roadId,
     to: from.id,
   });
 }
@@ -5266,6 +5508,7 @@ function findRoadRoutePath(
       coordinates: edge.coordinates,
       kind: edge.kind,
       label: edge.label,
+      roadId: edge.roadId,
     });
   }
 
@@ -5395,6 +5638,7 @@ function findFewerTurnRoadRoutePath(
       coordinates: edge.coordinates,
       kind: edge.kind,
       label: edge.label,
+      roadId: edge.roadId,
     });
   }
 
@@ -5475,18 +5719,13 @@ function buildRoadRouteStepDetails(
       continue;
     }
 
-    const vector: [number, number] = [
-      end[0] - start[0],
-      end[1] - start[1],
-    ];
+    const vector: [number, number] = [end[0] - start[0], end[1] - start[1]];
     const lastGroup = groups.at(-1);
     if (
       lastGroup &&
       lastGroup.label === segment.label &&
-      (
-        (lastGroup.kind === 'road' && segment.kind === 'road') ||
-        (lastGroup.kind === 'connection' && segment.kind === 'road')
-      )
+      ((lastGroup.kind === 'road' && segment.kind === 'road') ||
+        (lastGroup.kind === 'connection' && segment.kind === 'road'))
     ) {
       lastGroup.distance += distance;
       lastGroup.kind = 'road';
@@ -5508,7 +5747,10 @@ function buildRoadRouteStepDetails(
         : getTurnInstructionIcon(groups[index - 1]?.vector, group.vector),
       formatRoadRouteStepLabel(group.kind, group.label, t),
       `${formatRoutePlanDistance(group.distance, t)} ${formatRouteStepMinutes(
-        estimateRouteMinutes(group.distance, group.kind === 'road' || group.kind === 'connection' ? 64 : 72),
+        estimateRouteMinutes(
+          group.distance,
+          group.kind === 'road' || group.kind === 'connection' ? 64 : 72,
+        ),
         t,
       )}`,
       'process',
@@ -5782,6 +6024,7 @@ function appendTransitStopAccessSegment(input: {
     ],
     distance: input.externalRoute.distance + internalDistance,
     markerIds: dedupeValues([...(input.externalRoute.markerIds ?? []), ...(input.markerIds ?? [])]),
+    roadSegments: input.externalRoute.roadSegments,
     usesRoadGraph: input.externalRoute.usesRoadGraph,
   };
 }
@@ -5816,6 +6059,7 @@ function prependTransitStopAccessSegment(input: {
     ],
     distance: internalDistance + input.externalRoute.distance,
     markerIds: dedupeValues([...(input.markerIds ?? []), ...(input.externalRoute.markerIds ?? [])]),
+    roadSegments: input.externalRoute.roadSegments,
     usesRoadGraph: input.externalRoute.usesRoadGraph,
   };
 }
@@ -6075,20 +6319,21 @@ function buildDirectTransitLineOption(
       ...(draft.originRaw ? [draft.originRaw] : []),
       ...accessRoute.coordinates,
     ]),
-    createRouteTraceSegment(
-      'transit',
-      transitRoute.coordinates,
-      candidate.color,
-    ),
+    createRouteTraceSegment('transit', transitRoute.coordinates, candidate.color),
     createRouteTraceSegment('walk', [
       ...egressRoute.coordinates,
       ...(draft.destinationRaw ? [draft.destinationRaw] : []),
     ]),
   ]);
   const labelMarkerIds = dedupeValues([originStop.marker.id, destinationStop.marker.id]);
-  const suppressLabelMarkerIds = segmentStops
-    .map((stop) => stop.marker.id)
-    .filter((id) => !labelMarkerIds.includes(id));
+  const transitStopAccessMarkerIds = dedupeValues([
+    ...(accessRoute.markerIds ?? []),
+    ...(egressRoute.markerIds ?? []),
+  ]);
+  const suppressLabelMarkerIds = [
+    ...segmentStops.map((stop) => stop.marker.id),
+    ...transitStopAccessMarkerIds,
+  ].filter((id) => !labelMarkerIds.includes(id));
   const roadLabels = combineRouteRoadLabels(
     createRouteRoadLabelsFromSegments(accessRoute.roadSegments),
     createRouteRoadLabelsFromSegments(egressRoute.roadSegments),
@@ -6168,7 +6413,9 @@ function buildDirectTransitLineOption(
       ),
       ...createRouteEndpointAccessSteps(draft, 'destination', t),
       createRoutePlaceStep(
-        t ? t('map.route.arrive', { name: draft.destinationLabel }) : `到达 ${draft.destinationLabel}`,
+        t
+          ? t('map.route.arrive', { name: draft.destinationLabel })
+          : `到达 ${draft.destinationLabel}`,
         'destination',
       ),
     ],
@@ -6338,7 +6585,10 @@ function buildTransferTransitLineOptions(
         secondTransitDistance,
         destinationCandidate.candidate.mode.mode,
       );
-      const firstStationSpan = Math.max(1, transfer.fromStop.index - originCandidate.originStop.index);
+      const firstStationSpan = Math.max(
+        1,
+        transfer.fromStop.index - originCandidate.originStop.index,
+      );
       const secondStationSpan = Math.max(
         1,
         destinationCandidate.destinationStop.index - transfer.toStop.index,
@@ -6388,9 +6638,15 @@ function buildTransferTransitLineOptions(
         transfer.toStop.marker.id,
         destinationCandidate.destinationStop.marker.id,
       ]);
+      const transitStopAccessMarkerIds = dedupeValues([
+        ...(accessRoute.markerIds ?? []),
+        ...(transferRoute.markerIds ?? []),
+        ...(egressRoute.markerIds ?? []),
+      ]);
       const suppressLabelMarkerIds = dedupeValues([
         ...firstSegment.map((stop) => stop.marker.id),
         ...secondSegment.map((stop) => stop.marker.id),
+        ...transitStopAccessMarkerIds,
       ]).filter((id) => !labelMarkerIds.includes(id));
       const roadLabels = combineRouteRoadLabels(
         createRouteRoadLabelsFromSegments(accessRoute.roadSegments),
@@ -6431,7 +6687,8 @@ function buildTransferTransitLineOptions(
           secondTransitDistance,
         estimatedMinutes,
         transferCount: 1,
-        walkingDistance: endpointAccessDistance + accessDistance + egressDistance + transferDistance,
+        walkingDistance:
+          endpointAccessDistance + accessDistance + egressDistance + transferDistance,
         steps: [
           createRoutePlaceStep(t('map.route.depart', { name: draft.originLabel }), 'origin'),
           ...createRouteEndpointAccessSteps(draft, 'origin', t),
@@ -6503,7 +6760,10 @@ function buildTransferTransitLineOptions(
             egressRoute.details,
           ),
           ...createRouteEndpointAccessSteps(draft, 'destination', t),
-          createRoutePlaceStep(t('map.route.arrive', { name: draft.destinationLabel }), 'destination'),
+          createRoutePlaceStep(
+            t('map.route.arrive', { name: draft.destinationLabel }),
+            'destination',
+          ),
         ],
         note: getTransitRoutePlanNote(
           noteMode,
@@ -6553,10 +6813,7 @@ function findTransitStationMarker(
   return undefined;
 }
 
-function matchesTransitMarkerMode(
-  marker: PointMarker,
-  mode: RouteTransportMode,
-): boolean {
+function matchesTransitMarkerMode(marker: PointMarker, mode: RouteTransportMode): boolean {
   if (mode === 'bus') {
     return marker.categoryId === 'bus-stop';
   }
@@ -6608,26 +6865,26 @@ function findTransferStopPair(input: {
       const toStop = toStopsByMarkerId.get(fromStop.marker.id);
       return toStop ? { fromStop, toStop } : undefined;
     })
-    .filter(
-      (pair): pair is { fromStop: TransitRouteStop; toStop: TransitRouteStop } => Boolean(pair),
+    .filter((pair): pair is { fromStop: TransitRouteStop; toStop: TransitRouteStop } =>
+      Boolean(pair),
     )
     .sort(
       (left, right) =>
-        left.fromStop.index +
-        left.toStop.index -
-        (right.fromStop.index + right.toStop.index),
+        left.fromStop.index + left.toStop.index - (right.fromStop.index + right.toStop.index),
     )[0];
 }
 
 function buildTransitStopStepDetails(stops: TransitRouteStop[]): RoutePlanStepDetail[] {
-  return stops.slice(1, -1).map((stop) =>
-    createRouteStepDetail(
-      'radio_button_checked',
-      formatMarkerDisplayName(stop.marker.label),
-      undefined,
-      'place_pass',
-    ),
-  );
+  return stops
+    .slice(1, -1)
+    .map((stop) =>
+      createRouteStepDetail(
+        'radio_button_checked',
+        formatMarkerDisplayName(stop.marker.label),
+        undefined,
+        'place_pass',
+      ),
+    );
 }
 
 function buildTransitSegmentRoute(
@@ -6909,11 +7166,12 @@ function getRoadRouteCacheKey(
   ].join('|');
 }
 
-function formatRoadAccessCandidatesCacheKey(
-  candidates: RoadAccessCandidate[] | undefined,
-): string {
-  if (!candidates || candidates.length === 0) {
+function formatRoadAccessCandidatesCacheKey(candidates: RoadAccessCandidate[] | undefined): string {
+  if (candidates === undefined) {
     return '*';
+  }
+  if (candidates.length === 0) {
+    return 'none';
   }
 
   return candidates
@@ -6963,19 +7221,20 @@ function buildMarkerRoadAccessIndex(
   graph: RoadRouteGraph,
 ): Map<string, RoadAccessCandidate[]> {
   const rawIndex = new Map<string, RoadAccessCandidate[]>();
-  const projectionOwners = new Map<
-    string,
-    { distanceToPoint: number; markerId: string }
-  >();
+  const addressBoundMarkerIds = new Set<string>();
+  const projectionOwners = new Map<string, { distanceToPoint: number; markerId: string }>();
   for (const marker of markers) {
     const center = getMarkerCenter(marker);
     if (!center) {
       continue;
     }
 
-    const candidates = buildMarkerRoadAccessCandidates(center, graph);
+    const candidates = buildMarkerRoadAccessCandidates(center, graph, marker.addressRoadMarkerId);
     if (candidates.length > 0) {
       rawIndex.set(marker.id, candidates);
+      if (marker.addressRoadMarkerId) {
+        addressBoundMarkerIds.add(marker.id);
+      }
       for (const candidate of candidates) {
         const key = getRoadAccessProjectionOwnershipKey(candidate);
         const currentOwner = projectionOwners.get(key);
@@ -6996,10 +7255,13 @@ function buildMarkerRoadAccessIndex(
 
   const index = new Map<string, RoadAccessCandidate[]>();
   for (const [markerId, candidates] of rawIndex) {
+    if (addressBoundMarkerIds.has(markerId)) {
+      index.set(markerId, candidates);
+      continue;
+    }
     const ownedCandidates = candidates.filter(
       (candidate) =>
-        projectionOwners.get(getRoadAccessProjectionOwnershipKey(candidate))?.markerId ===
-        markerId,
+        projectionOwners.get(getRoadAccessProjectionOwnershipKey(candidate))?.markerId === markerId,
     );
     if (ownedCandidates.length > 0) {
       index.set(markerId, ownedCandidates);
@@ -7012,9 +7274,13 @@ function buildMarkerRoadAccessIndex(
 function buildMarkerRoadAccessCandidates(
   point: [number, number],
   graph: RoadRouteGraph,
+  requiredRoadId?: string,
 ): RoadAccessCandidate[] {
   const nearestByRoad = new Map<string, RoadAccessCandidate>();
   for (const segment of graph.roadSegments) {
+    if (requiredRoadId && segment.roadId !== requiredRoadId) {
+      continue;
+    }
     const projection = projectPointToRoadSegment(point, segment);
     const existing = nearestByRoad.get(segment.roadId);
     if (!existing || projection.distanceToPoint < existing.distanceToPoint) {
@@ -7043,14 +7309,8 @@ function getRoadAccessDirectionPenalty(
   target: [number, number],
   accessPoint: [number, number],
 ): number {
-  const accessVector: [number, number] = [
-    accessPoint[0] - point[0],
-    accessPoint[1] - point[1],
-  ];
-  const targetVector: [number, number] = [
-    target[0] - point[0],
-    target[1] - point[1],
-  ];
+  const accessVector: [number, number] = [accessPoint[0] - point[0], accessPoint[1] - point[1]];
+  const targetVector: [number, number] = [target[0] - point[0], target[1] - point[1]];
   const accessLength = Math.hypot(accessVector[0], accessVector[1]);
   const targetLength = Math.hypot(targetVector[0], targetVector[1]);
   if (accessLength === 0 || targetLength === 0) {
@@ -7099,6 +7359,7 @@ function buildSameSegmentRoadRoute(
       coordinates: [originAccess.coordinate, destinationAccess.coordinate],
       kind: 'road',
       label: originAccess.roadLabel,
+      roadId: originAccess.roadId,
     });
   }
   if (getCoordinateDistance(destinationAccess.coordinate, destination) > 0.01) {
@@ -7115,8 +7376,7 @@ function buildSameSegmentRoadRoute(
     destinationAccess.coordinate,
     destination,
   ]);
-  const distance =
-    originAccess.distanceToPoint + roadDistance + destinationAccess.distanceToPoint;
+  const distance = originAccess.distanceToPoint + roadDistance + destinationAccess.distanceToPoint;
 
   return {
     coordinates,
@@ -7179,6 +7439,7 @@ function buildGraphRoadRouteCandidate(input: {
       coordinates: [input.originAccess.coordinate, originNode.coordinate],
       kind: 'road',
       label: input.originAccess.roadLabel,
+      roadId: input.originAccess.roadId,
     });
   }
   instructionSegments.push(...roadPath.segments);
@@ -7190,6 +7451,7 @@ function buildGraphRoadRouteCandidate(input: {
       coordinates: [destinationNode.coordinate, input.destinationAccess.coordinate],
       kind: 'road',
       label: input.destinationAccess.roadLabel,
+      roadId: input.destinationAccess.roadId,
     });
   }
   if (getCoordinateDistance(input.destinationAccess.coordinate, input.destination) > 0.01) {
@@ -7302,12 +7564,11 @@ function dedupeValues<T>(values: T[]): T[] {
 }
 
 function getRouteEndpointMarkerIds(draft: RoutePlanDraft): string[] {
-  return dedupeValues([
-    draft.originId,
-    draft.originAccessId,
-    draft.destinationId,
-    draft.destinationAccessId,
-  ].filter((id): id is string => Boolean(id)));
+  return dedupeValues(
+    [draft.originId, draft.originAccessId, draft.destinationId, draft.destinationAccessId].filter(
+      (id): id is string => Boolean(id),
+    ),
+  );
 }
 
 function getRouteEndpointRoadAccessCandidates(
@@ -7317,8 +7578,8 @@ function getRouteEndpointRoadAccessCandidates(
 ): RoadAccessCandidate[] | undefined {
   const markerId =
     endpoint === 'origin'
-      ? draft.originAccessId ?? draft.originId
-      : draft.destinationAccessId ?? draft.destinationId;
+      ? (draft.originAccessId ?? draft.originId)
+      : (draft.destinationAccessId ?? draft.destinationId);
   return markerId
     ? getIndexedMarkerRoadAccessCandidates(markerRoadAccessIndex, markerId)
     : undefined;
@@ -7424,11 +7685,7 @@ function buildMapSharePayload(target: MapShareTarget, t: Translate): MapSharePay
   }
 
   const routeTitle = `${target.draft.originLabel} → ${target.draft.destinationLabel}`;
-  const url = buildRoutePlanShareUrl(
-    target.draft,
-    target.enabledModes,
-    target.option?.id,
-  );
+  const url = buildRoutePlanShareUrl(target.draft, target.enabledModes, target.option?.id);
   const optionSummary = target.option
     ? [
         target.option.title,
@@ -7740,8 +7997,7 @@ function readMapSharedRoutePlan(
     destinationLabel:
       normalizeMapSharedFocusValue(
         searchParams.get('dl') ?? searchParams.get('destinationLabel'),
-      ) ??
-      formatPoint(destination),
+      ) ?? formatPoint(destination),
     origin,
     originId:
       normalizeMapSharedFocusValue(searchParams.get('oi') ?? searchParams.get('originId')) ??
@@ -7782,10 +8038,7 @@ function buildCompactRoutePlanShareState(
   ];
 }
 
-function setCompactRoutePlanShareSearchParam(
-  url: URL,
-  state: CompactRoutePlanShareState,
-) {
+function setCompactRoutePlanShareSearchParam(url: URL, state: CompactRoutePlanShareState) {
   const json = JSON.stringify(state);
   const compressed = LZString.compressToEncodedURIComponent(json);
   const base64 = encodeBase64UrlText(json);
@@ -7865,7 +8118,7 @@ function readRoutePlanShareStateJson(
         destination,
         destinationId:
           typeof destinationIdValue === 'string'
-            ? normalizeMapSharedFocusValue(destinationIdValue) ?? undefined
+            ? (normalizeMapSharedFocusValue(destinationIdValue) ?? undefined)
             : undefined,
         destinationLabel:
           typeof destinationLabelValue === 'string' && destinationLabelValue.trim()
@@ -7874,7 +8127,7 @@ function readRoutePlanShareStateJson(
         origin,
         originId:
           typeof originIdValue === 'string'
-            ? normalizeMapSharedFocusValue(originIdValue) ?? undefined
+            ? (normalizeMapSharedFocusValue(originIdValue) ?? undefined)
             : undefined,
         originLabel:
           typeof originLabelValue === 'string' && originLabelValue.trim()
@@ -7888,7 +8141,7 @@ function readRoutePlanShareStateJson(
       key: searchParams.toString(),
       selectedOptionId:
         typeof selectedOptionIdValue === 'string'
-          ? normalizeMapSharedFocusValue(selectedOptionIdValue) ?? undefined
+          ? (normalizeMapSharedFocusValue(selectedOptionIdValue) ?? undefined)
           : undefined,
     };
   } catch {
@@ -8119,9 +8372,7 @@ function formatTransitStopOneWayLabel(
   t: Translate,
 ): string {
   // 旧 YCT 数据中 down 表示数据记载方向，up 表示反向。
-  return oneWay === 'down'
-    ? t('lineDetail.oneWay.forward')
-    : t('lineDetail.oneWay.reverse');
+  return oneWay === 'down' ? t('lineDetail.oneWay.forward') : t('lineDetail.oneWay.reverse');
 }
 
 function isPointMarker(marker: MapMarkerSnapshot['markers'][number]): marker is PointMarker {
@@ -8173,7 +8424,9 @@ function isBusStopPoi(marker: Pick<MapMarkerSnapshot['markers'][number], 'catego
   return marker.categoryId === 'bus-stop';
 }
 
-function isMetroStationPoi(marker: Pick<MapMarkerSnapshot['markers'][number], 'categoryId'>): boolean {
+function isMetroStationPoi(
+  marker: Pick<MapMarkerSnapshot['markers'][number], 'categoryId'>,
+): boolean {
   return marker.categoryId === 'metro-station';
 }
 
@@ -8217,7 +8470,9 @@ function getSecondaryPoiGroup(link: SecondaryPoiLink): Omit<SecondaryPoiGroup, '
     return { id: 'scenery', label: '景点' };
   }
 
-  if (/商店|商场|餐厅|酒店|超市|住宅|小区|工厂|shop|restaurant|hotel|residence|industry/.test(text)) {
+  if (
+    /商店|商场|餐厅|酒店|超市|住宅|小区|工厂|shop|restaurant|hotel|residence|industry/.test(text)
+  ) {
     return { id: 'nearby', label: '周边' };
   }
 
@@ -8225,7 +8480,9 @@ function getSecondaryPoiGroup(link: SecondaryPoiLink): Omit<SecondaryPoiGroup, '
 }
 
 function getSecondaryPoiGroupOrder(groupId: string): number {
-  const index = ['access', 'transport', 'building', 'scenery', 'facility', 'nearby'].indexOf(groupId);
+  const index = ['access', 'transport', 'building', 'scenery', 'facility', 'nearby'].indexOf(
+    groupId,
+  );
   return index >= 0 ? index : 99;
 }
 
@@ -8271,6 +8528,7 @@ function resolveSecondaryPoiLinks(
   markers: PointMarker[],
 ): Array<SecondaryPoiLink & { parent: PointMarker }> {
   const markersByName = new Map<string, PointMarker[]>();
+  const markerById = new Map(markers.map((marker) => [marker.id, marker]));
   for (const marker of markers) {
     const key = normalizeMarkerSearchText(marker.label);
     const values = markersByName.get(key) ?? [];
@@ -8280,6 +8538,21 @@ function resolveSecondaryPoiLinks(
 
   const links: Array<SecondaryPoiLink & { parent: PointMarker }> = [];
   for (const marker of markers) {
+    const explicitParent = marker.parentMarkerId
+      ? markerById.get(marker.parentMarkerId)
+      : undefined;
+    if (explicitParent && explicitParent.id !== marker.id) {
+      links.push({
+        childLabel:
+          marker.secondaryLabel ??
+          parseSecondaryPoiName(marker.label)?.childName ??
+          formatMarkerDisplayName(marker.label),
+        marker,
+        parent: explicitParent,
+      });
+      continue;
+    }
+
     const parsed = parseSecondaryPoiName(marker.label);
     if (!parsed) {
       continue;
@@ -8314,7 +8587,9 @@ function sortSecondaryPoiLinks(links: SecondaryPoiLink[]): SecondaryPoiLink[] {
   );
 }
 
-function parseSecondaryPoiName(label: string): { parentName: string; childName: string } | undefined {
+function parseSecondaryPoiName(
+  label: string,
+): { parentName: string; childName: string } | undefined {
   const displayName = formatMarkerDisplayName(label);
   const separatorMatch = /[-－–—]/.exec(displayName);
   if (!separatorMatch || separatorMatch.index <= 0) {
@@ -8374,6 +8649,27 @@ function filterMarkers<T extends { label: string }>(markers: T[], query: string)
   );
 }
 
+function findPoiAddressRoadMarkers(
+  address: string,
+  markers: EndpointGroupMarker[],
+): EndpointGroupMarker[] {
+  const normalizedAddress = normalizeMarkerSearchText(address);
+  if (!normalizedAddress) {
+    return [];
+  }
+
+  return markers
+    .filter((marker) => {
+      const normalizedLabel = normalizeMarkerSearchText(marker.label);
+      return normalizedLabel.length >= 2 && normalizedAddress.includes(normalizedLabel);
+    })
+    .sort(
+      (left, right) =>
+        normalizeMarkerSearchText(right.label).length -
+          normalizeMarkerSearchText(left.label).length || left.label.localeCompare(right.label),
+    );
+}
+
 function buildStationConnectionIndex(
   overview: TransitOverviewResponse | null,
   t: Translate,
@@ -8389,13 +8685,13 @@ function buildStationConnectionIndex(
 
   for (const line of overview.lines ?? []) {
     const profile = profileByMode.get(line.mode);
-      const connection: TransitLineConnection = {
-        id: line.id,
-        mode: line.mode,
-        modeLabel: getTransitModeDisplayLabel(line.mode, profile?.label ?? line.mode, t),
-        name: line.name,
-        color: line.color ?? profile?.color,
-        sortOrder: profile?.sortOrder ?? 999,
+    const connection: TransitLineConnection = {
+      id: line.id,
+      mode: line.mode,
+      modeLabel: getTransitModeDisplayLabel(line.mode, profile?.label ?? line.mode, t),
+      name: line.name,
+      color: line.color ?? profile?.color,
+      sortOrder: profile?.sortOrder ?? 999,
     };
 
     for (const stationName of line.stationNames ?? []) {
@@ -8453,6 +8749,64 @@ function buildTransitLineLookup(
   }
 
   return lookup;
+}
+
+function findTransitStationMarkerForLine(
+  markers: PointMarker[],
+  stationName: string,
+  line: TransitOverviewLine,
+  connectionIndex: Map<string, TransitLineConnection[]>,
+): PointMarker | undefined {
+  const stopMarkerIds = new Set(
+    (line.stationStops ?? [])
+      .filter((stop) =>
+        getStationNameMatchKeys(stop.stationName).some((key) =>
+          getStationNameMatchKeys(stationName).includes(key),
+        ),
+      )
+      .flatMap((stop) => stop.stationMarkerIds ?? []),
+  );
+  const exactBoundMarker = markers.find((marker) => stopMarkerIds.has(marker.id));
+  if (exactBoundMarker) {
+    return exactBoundMarker;
+  }
+
+  const stationKeys = new Set(getStationNameMatchKeys(stationName));
+  const candidates = markers.filter(
+    (marker) =>
+      isTransitStationPoi(marker) &&
+      getStationNameMatchKeys(marker.label).some((key) => stationKeys.has(key)),
+  );
+
+  return (
+    candidates.find((marker) =>
+      findStationConnections(marker, connectionIndex).some(
+        (connection) => connection.id === line.id,
+      ),
+    ) ?? candidates[0]
+  );
+}
+
+function findTransitLineStationMarkers(
+  markers: PointMarker[],
+  line: TransitOverviewLine,
+  connectionIndex: Map<string, TransitLineConnection[]>,
+): PointMarker[] {
+  const boundMarkerIds = new Set(
+    (line.stationStops ?? []).flatMap((stop) => stop.stationMarkerIds ?? []),
+  );
+  const stationKeys = new Set(line.stationNames.flatMap(getStationNameMatchKeys));
+  return dedupeMarkersById(
+    markers.filter(
+      (marker) =>
+        boundMarkerIds.has(marker.id) ||
+        (isTransitStationPoi(marker) &&
+          getStationNameMatchKeys(marker.label).some((key) => stationKeys.has(key)) &&
+          findStationConnections(marker, connectionIndex).some(
+            (connection) => connection.id === line.id,
+          )),
+    ),
+  );
 }
 
 function findTransitLineByMarker(
@@ -8878,10 +9232,36 @@ function projectRoutePlanTrace(
 
       return {
         color: segment.color,
-        path: buildTracePath(segment.coordinates, view, size, traceProjection.left, traceProjection.top),
+        path: buildTracePath(
+          segment.coordinates,
+          view,
+          size,
+          traceProjection.left,
+          traceProjection.top,
+        ),
       };
     })
     .filter((segment): segment is ProjectedRouteTraceSegment => Boolean(segment));
+  const routeRoadSegments = option.roadLabels
+    ?.map((segment): ProjectedRouteRoadSegment | undefined => {
+      if (segment.coordinates.length < 2) {
+        return undefined;
+      }
+
+      return {
+        color: segment.color ?? routeWalkTraceColor,
+        id: segment.id,
+        label: segment.label,
+        path: buildTracePath(
+          segment.coordinates,
+          view,
+          size,
+          traceProjection.left,
+          traceProjection.top,
+        ),
+      };
+    })
+    .filter((segment): segment is ProjectedRouteRoadSegment => Boolean(segment));
   const labels = projectRouteRoadLabels(option.roadLabels, view, size);
 
   return {
@@ -8889,6 +9269,8 @@ function projectRoutePlanTrace(
     label: option.title,
     labels: labels.length > 0 ? labels : undefined,
     path: traceProjection.path,
+    routeRoadSegments:
+      routeRoadSegments && routeRoadSegments.length > 0 ? routeRoadSegments : undefined,
     segments: segments && segments.length > 0 ? segments : undefined,
     viewBox: traceProjection.viewBox,
     accentColor: option.color,
@@ -8903,6 +9285,98 @@ function projectRoutePlanTrace(
   };
 }
 
+function buildRouteOverlayVisibility(
+  option: RoutePlanOption | undefined,
+  draft: RoutePlanDraft | null,
+  active: boolean,
+):
+  | {
+      forceLabelMarkerIds: ReadonlySet<string>;
+      markerIds: ReadonlySet<string>;
+      suppressLabelMarkerIds: ReadonlySet<string>;
+    }
+  | undefined {
+  if (!active || !option) {
+    return undefined;
+  }
+
+  return {
+    forceLabelMarkerIds: new Set(
+      dedupeValues(
+        [draft?.originId, draft?.destinationId, ...(option.labelMarkerIds ?? [])].filter(
+          (id): id is string => Boolean(id),
+        ),
+      ),
+    ),
+    markerIds: new Set(option.markerIds),
+    suppressLabelMarkerIds: new Set(option.suppressLabelMarkerIds ?? []),
+  };
+}
+
+function projectRouteEndpointMarkers(
+  option: RoutePlanOption,
+  draft: RoutePlanDraft,
+  pointMarkers: PointMarker[],
+  view: MapView,
+  size: ViewportSize,
+): ProjectedMarker[] {
+  if (size.width <= 0 || size.height <= 0) {
+    return [];
+  }
+
+  const pointMarkerIds = new Set(pointMarkers.map((marker) => marker.id));
+  const forcedRouteMarkers = pointMarkers.filter((marker) =>
+    option.labelMarkerIds?.includes(marker.id),
+  );
+  const scale = getScale(view.zoom);
+  return [
+    {
+      coordinate: draft.originRaw ?? draft.origin,
+      id: draft.originId,
+      kind: 'origin' as const,
+      label: draft.originLabel,
+    },
+    {
+      coordinate: draft.destinationRaw ?? draft.destination,
+      id: draft.destinationId,
+      kind: 'destination' as const,
+      label: draft.destinationLabel,
+    },
+  ].flatMap((endpoint): ProjectedMarker[] => {
+    if (endpoint.id && pointMarkerIds.has(endpoint.id)) {
+      return [];
+    }
+    if (
+      forcedRouteMarkers.some(
+        (marker) => getCoordinateDistance(marker.geometry.coordinates, endpoint.coordinate) <= 1,
+      )
+    ) {
+      return [];
+    }
+
+    const [x, z] = endpoint.coordinate;
+    const left = size.width / 2 + (x - view.centerX) * scale;
+    const top = size.height / 2 + (z - view.centerZ) * scale;
+    if (left < -80 || left > size.width + 80 || top < -80 || top > size.height + 80) {
+      return [];
+    }
+
+    return [
+      {
+        id: `route-result-${endpoint.kind}`,
+        label: endpoint.label,
+        x,
+        z,
+        left,
+        top,
+        symbolIcon: endpoint.kind === 'destination' ? 'flag' : 'location_on',
+        showLabel: true,
+        priority: Number.MAX_SAFE_INTEGER,
+      },
+    ];
+  });
+}
+
 function projectRouteRoadLabels(
   labels: RoutePlanRoadLabel[] | undefined,
   view: MapView,
@@ -8913,22 +9387,7 @@ function projectRouteRoadLabels(
   }
 
   const scale = getScale(view.zoom);
-  const groupsByLabel = new Map<
-    string,
-    {
-      color?: string;
-      id: string;
-      label: string;
-      segments: Array<{
-        start: { left: number; top: number };
-        end: { left: number; top: number };
-        length: number;
-      }>;
-      visibleLength: number;
-    }
-  >();
-
-  for (const label of labels) {
+  return labels.flatMap((label) => {
     const visibleSegments = getVisibleProjectedRouteLabelSegments(
       label.coordinates.map(([x, z]) => ({
         left: size.width / 2 + (x - view.centerX) * scale,
@@ -8938,35 +9397,23 @@ function projectRouteRoadLabels(
     );
     const visibleLength = visibleSegments.reduce((total, segment) => total + segment.length, 0);
     if (visibleLength <= 0) {
-      continue;
-    }
-
-    const group = groupsByLabel.get(label.label) ?? {
-      color: label.color,
-      id: label.id,
-      label: label.label,
-      segments: [],
-      visibleLength: 0,
-    };
-    group.segments.push(...visibleSegments);
-    group.visibleLength += visibleLength;
-    groupsByLabel.set(label.label, group);
-  }
-
-  return [...groupsByLabel.values()].flatMap((group) => {
-    if (group.visibleLength < 72) {
       return [];
     }
-    const position = getProjectedRouteLabelPointAtDistance(group.segments, group.visibleLength / 2);
+    const position = getProjectedRouteLabelPointAtDistance(visibleSegments, visibleLength / 2);
     if (!position) {
       return [];
     }
+    const worldAnchor = screenToWorld(position.left, position.top, view, size);
 
     return [
       {
-        color: group.color,
-        id: group.id,
-        label: group.label,
+        color: label.color,
+        id: label.id,
+        isVerticalLabel: shouldUseVerticalRoadLabel(label.coordinates, [
+          worldAnchor.x,
+          worldAnchor.z,
+        ]),
+        label: label.label,
         left: position.left,
         top: position.top,
       },
@@ -8974,10 +9421,49 @@ function projectRouteRoadLabels(
   });
 }
 
+function applyRouteRoadLabelCollisionVisibility(
+  trace: ProjectedRoadTrace | undefined,
+  markers: ProjectedMarker[],
+): ProjectedRoadTrace | undefined {
+  if (!trace?.labels?.length) {
+    return trace;
+  }
+
+  const acceptedBoxes = markers.map((marker) =>
+    getMarkerCollisionBox(createMarkerCollisionItem(marker)),
+  );
+  const labels = trace.labels.filter((label) => {
+    const box = getRouteRoadLabelCollisionBox(label);
+    if (acceptedBoxes.some((accepted) => boxesOverlap(accepted, box))) {
+      return false;
+    }
+    acceptedBoxes.push(box);
+    return true;
+  });
+
+  return { ...trace, labels: labels.length > 0 ? labels : undefined };
+}
+
+function getRouteRoadLabelCollisionBox(label: ProjectedRouteRoadLabel): MarkerCollisionBox {
+  const labelLength = normalizeMarkerDisplayText(label.label).length;
+  const width = label.isVerticalLabel ? 24 : Math.max(42, labelLength * 12);
+  const height = label.isVerticalLabel ? Math.max(36, labelLength * 13) : 24;
+  return {
+    left: label.left - width / 2,
+    right: label.left + width / 2,
+    top: label.top - height / 2,
+    bottom: label.top + height / 2,
+  };
+}
+
 function getVisibleProjectedRouteLabelSegments(
   points: Array<{ left: number; top: number }>,
   size: ViewportSize,
-): Array<{ start: { left: number; top: number }; end: { left: number; top: number }; length: number }> {
+): Array<{
+  start: { left: number; top: number };
+  end: { left: number; top: number };
+  length: number;
+}> {
   const segments: Array<{
     start: { left: number; top: number };
     end: { left: number; top: number };
@@ -8996,7 +9482,10 @@ function getVisibleProjectedRouteLabelSegments(
       continue;
     }
 
-    const length = Math.hypot(clipped.end.left - clipped.start.left, clipped.end.top - clipped.start.top);
+    const length = Math.hypot(
+      clipped.end.left - clipped.start.left,
+      clipped.end.top - clipped.start.top,
+    );
     if (length <= 0) {
       continue;
     }
@@ -9023,7 +9512,7 @@ function clipProjectedSegmentToViewport(
 
   const clip = (denominator: number, numerator: number): boolean => {
     if (denominator === 0) {
-      return numerator <= 0;
+      return numerator >= 0;
     }
     const ratio = numerator / denominator;
     if (denominator < 0) {
@@ -9066,7 +9555,11 @@ function clipProjectedSegmentToViewport(
 }
 
 function getProjectedRouteLabelPointAtDistance(
-  segments: Array<{ start: { left: number; top: number }; end: { left: number; top: number }; length: number }>,
+  segments: Array<{
+    start: { left: number; top: number };
+    end: { left: number; top: number };
+    length: number;
+  }>,
   targetDistance: number,
 ): { left: number; top: number } | undefined {
   let travelled = 0;
@@ -9144,55 +9637,6 @@ function traceBoundsIntersectsViewport(bounds: TraceBounds, size: ViewportSize):
   );
 }
 
-function orderRoadTracePoints(coordinates: Array<[number, number]>): Array<[number, number]> {
-  const remaining = [...coordinates];
-  const firstIndex = findRoadTraceStartIndex(remaining);
-  const ordered = [remaining.splice(firstIndex, 1)[0]].filter(Boolean) as Array<[number, number]>;
-
-  while (remaining.length > 0) {
-    const last = ordered[ordered.length - 1];
-    let nearestIndex = 0;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-
-    remaining.forEach((coordinate, index) => {
-      const distance = squaredDistance(last, coordinate);
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearestIndex = index;
-      }
-    });
-
-    const next = remaining.splice(nearestIndex, 1)[0];
-    if (next) {
-      ordered.push(next);
-    }
-  }
-
-  return ordered;
-}
-
-function findRoadTraceStartIndex(coordinates: Array<[number, number]>): number {
-  const xValues = coordinates.map((coordinate) => coordinate[0]);
-  const zValues = coordinates.map((coordinate) => coordinate[1]);
-  const xRange = Math.max(...xValues) - Math.min(...xValues);
-  const zRange = Math.max(...zValues) - Math.min(...zValues);
-  const primaryAxis = xRange > zRange ? 0 : 1;
-  const secondaryAxis = primaryAxis === 0 ? 1 : 0;
-
-  return coordinates.reduce((bestIndex, coordinate, index) => {
-    const best = coordinates[bestIndex];
-    if (!best) {
-      return index;
-    }
-
-    if (coordinate[primaryAxis] === best[primaryAxis]) {
-      return coordinate[secondaryAxis] < best[secondaryAxis] ? index : bestIndex;
-    }
-
-    return coordinate[primaryAxis] < best[primaryAxis] ? index : bestIndex;
-  }, 0);
-}
-
 function squaredDistance(a: [number, number], b: [number, number]): number {
   return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
 }
@@ -9214,27 +9658,6 @@ function normalizeMarkerDisplayText(value: string): string {
     .replace(/[\s\u3000]+/g, '')
     .replace(/[|｜]+/g, '')
     .trim();
-}
-
-function getRoadMarkerKind(
-  marker: Pick<MapMarkerSnapshot['markers'][number], 'categoryId' | 'label' | 'iconFileName'>,
-): RoadMarkerKind | undefined {
-  const label = normalizeMarkerSearchText(marker.label);
-  const iconFileName = marker.iconFileName?.toLowerCase() ?? '';
-  if (
-    label.includes('高速') ||
-    label.includes('快速') ||
-    iconFileName.includes('highway') ||
-    iconFileName.includes('toll')
-  ) {
-    return 'highway';
-  }
-
-  if (marker.categoryId === 'road') {
-    return 'road';
-  }
-
-  return undefined;
 }
 
 function getMarkerIconBaseName(fileName?: string): string {
@@ -9727,14 +10150,30 @@ function fitMarkerToMapView(
   };
 }
 
-function fitRouteDraftToMapView(draft: RoutePlanDraft, current: MapView, size: ViewportSize): MapView {
-  const coordinates = [draft.origin, draft.destination];
+function fitRouteDraftToMapView(
+  draft: RoutePlanDraft,
+  current: MapView,
+  size: ViewportSize,
+): MapView {
+  return fitCoordinatesToMapView([draft.origin, draft.destination], current, size, 120);
+}
+
+function fitCoordinatesToMapView(
+  coordinates: Array<[number, number]>,
+  current: MapView,
+  size: ViewportSize,
+  padding: number,
+): MapView {
+  if (coordinates.length === 0) {
+    return current;
+  }
+
   const bounds = getCoordinateBounds(coordinates);
   return {
     ...current,
     centerX: (bounds.minX + bounds.maxX) / 2,
     centerZ: (bounds.minZ + bounds.maxZ) / 2,
-    zoom: getZoomToFitCoordinates(coordinates, size, 120, current.zoom),
+    zoom: getZoomToFitCoordinates(coordinates, size, padding, current.zoom),
   };
 }
 
@@ -10182,7 +10621,11 @@ function formatMarkerListDistanceDetail(
   }
 
   if (marker.geometry.type !== 'Point') {
-    return `全长 ${formatRoutePlanDistance(getCoordinateChainDistance(marker.geometry.coordinates), reference.t)}`;
+    const rawCoordinates = marker.geometry.type === 'MultiPoint' ? marker.geometry.coordinates : [];
+    const coordinates = isRoadEndpointGroupMarker(marker)
+      ? orderRoadTracePoints(rawCoordinates)
+      : rawCoordinates;
+    return `全长 ${formatRoutePlanDistance(getCoordinateChainDistance(coordinates), reference.t)}`;
   }
 
   return formatRoutePlanDistance(getCoordinateDistance(center, reference.coordinates), reference.t);
