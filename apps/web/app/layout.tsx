@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import '@yct/design-tokens/tokens.css';
+import { EmbeddedContextBridge } from '../components/embedded-context-bridge';
 import { PreferenceBridge } from '../components/preference-bridge';
 import { PwaBridge } from '../components/pwa-bridge';
 import { appPath } from '../lib/app-paths';
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         ) : null}
       </head>
       <body>
+        <EmbeddedContextBridge />
         <PreferenceBridge />
         <PwaBridge />
         {children}

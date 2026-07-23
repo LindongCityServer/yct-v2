@@ -219,13 +219,16 @@ export type CommonMessageKey =
   | 'map.empty.noMatch'
   | 'map.empty.unavailable'
   | 'map.geometry.linearObject'
+  | 'map.geometry.lineString'
   | 'map.geometry.pointMarker'
+  | 'map.geometry.region'
   | 'map.geometry.roadEndpointCount'
   | 'map.geometry.transitLineDetail'
   | 'map.geometry.transitLineObject'
   | 'map.geometry.transitLinePending'
   | 'map.markerList.count'
   | 'map.markerList.default'
+  | 'map.markerList.fullLength'
   | 'map.markerList.nearby'
   | 'map.markerList.results'
   | 'map.hud.aria'
@@ -247,6 +250,9 @@ export type CommonMessageKey =
   | 'map.layer.noteSatellite'
   | 'map.layer.noteTraffic'
   | 'map.layer.open'
+  | 'map.layer.players'
+  | 'map.layer.playersHidden'
+  | 'map.layer.playersVisible'
   | 'map.layer.submitPoi'
   | 'map.layer.tileProvider'
   | 'map.layer.tileProviderAria'
@@ -254,12 +260,20 @@ export type CommonMessageKey =
   | 'map.lineDetail.stations'
   | 'map.nearby.exit'
   | 'map.nearby.note'
+  | 'map.nearby.scopeAria'
+  | 'map.nearby.scopeInside'
+  | 'map.nearby.scopeOutside'
   | 'map.overlay.aria'
   | 'map.overlay.linearPoiTitle'
   | 'map.overlay.markerTitle'
   | 'map.overlay.roadTraceTitle'
   | 'map.overlay.transitTraceTitle'
   | 'map.overlay.viewMarker'
+  | 'map.player.lastSeen'
+  | 'map.player.observed'
+  | 'map.player.serverAccount'
+  | 'map.player.status.offline'
+  | 'map.player.status.online'
   | 'map.poi.actions'
   | 'map.poi.address'
   | 'map.poi.close'
@@ -272,6 +286,12 @@ export type CommonMessageKey =
   | 'map.poi.facilities'
   | 'map.poi.favoriteAria'
   | 'map.poi.favoriteStatus'
+  | 'map.poi.floor'
+  | 'map.poi.filterAll'
+  | 'map.poi.filterCategory'
+  | 'map.poi.filterFloor'
+  | 'map.poi.filterKeyword'
+  | 'map.poi.filterKeywordPlaceholder'
   | 'map.poi.group.access'
   | 'map.poi.group.building'
   | 'map.poi.group.facility'
@@ -279,6 +299,9 @@ export type CommonMessageKey =
   | 'map.poi.group.scenery'
   | 'map.poi.group.transport'
   | 'map.poi.imageAlt'
+  | 'map.poi.imageCounter'
+  | 'map.poi.imageNext'
+  | 'map.poi.imagePrevious'
   | 'map.poi.nearbyAria'
   | 'map.poi.noConnections'
   | 'map.poi.noFacilities'
@@ -286,6 +309,7 @@ export type CommonMessageKey =
   | 'map.poi.openDetail'
   | 'map.poi.openingHours'
   | 'map.poi.parent'
+  | 'map.poi.boundRegions'
   | 'map.poi.parentFallback'
   | 'map.poi.relatedPlaceFallback'
   | 'map.poi.relatedPlaces'
@@ -304,17 +328,21 @@ export type CommonMessageKey =
   | 'map.poiSubmit.address'
   | 'map.poiSubmit.addressPlaceholder'
   | 'map.poiSubmit.addressRoad'
+  | 'map.poiSubmit.floor'
+  | 'map.poiSubmit.floorPlaceholder'
   | 'map.poiSubmit.close'
   | 'map.poiSubmit.description'
   | 'map.poiSubmit.descriptionPlaceholder'
   | 'map.poiSubmit.href'
   | 'map.poiSubmit.hrefPlaceholder'
   | 'map.poiSubmit.imageFile'
+  | 'map.poiSubmit.imageFileCount'
   | 'map.poiSubmit.imageUploadFailed'
   | 'map.poiSubmit.imageUrl'
   | 'map.poiSubmit.imageUrlPlaceholder'
   | 'map.poiSubmit.invalid'
   | 'map.poiSubmit.invalidFacility'
+  | 'map.poiSubmit.tooManyImages'
   | 'map.poiSubmit.name'
   | 'map.poiSubmit.namePlaceholder'
   | 'map.poiSubmit.noAddressRoad'
@@ -344,6 +372,7 @@ export type CommonMessageKey =
   | 'map.source.tileProvider'
   | 'map.source.tooltipLoading'
   | 'map.source.unavailable'
+  | 'map.location.currentAccount'
   | 'map.search.aria'
   | 'map.search.clear'
   | 'map.search.placeholder'
@@ -356,11 +385,18 @@ export type CommonMessageKey =
   | 'map.share.image'
   | 'map.share.imageDownloaded'
   | 'map.share.imageShared'
+  | 'map.share.coordinate'
+  | 'map.share.coordinateCopied'
+  | 'map.share.copy'
+  | 'map.share.copyKind'
   | 'map.share.link'
   | 'map.share.linkCopied'
   | 'map.share.processing'
+  | 'map.share.qrCode'
   | 'map.share.text'
   | 'map.share.textCopied'
+  | 'map.share.teleport'
+  | 'map.share.teleportCopied'
   | 'map.share.title'
   | 'map.share.unavailable'
   | 'map.toolbar.reset'
@@ -585,11 +621,14 @@ export type CommonMessageKey =
   | 'search.category.all'
   | 'search.category.lines'
   | 'search.category.operations'
+  | 'search.category.poi'
+  | 'search.category.schedules'
   | 'search.category.services'
   | 'search.category.stations'
   | 'search.clear'
   | 'search.emptyPrompt'
   | 'search.facilityCount'
+  | 'search.loading'
   | 'search.noCategoryResults'
   | 'search.noMatch'
   | 'search.placeholder'
@@ -597,11 +636,14 @@ export type CommonMessageKey =
   | 'search.results'
   | 'search.resultGroup.lines'
   | 'search.resultGroup.operations'
+  | 'search.resultGroup.poi'
+  | 'search.resultGroup.schedules'
   | 'search.resultGroup.services'
   | 'search.resultGroup.stations'
   | 'search.resultFilters'
   | 'search.stopCount'
   | 'search.stationExitCount'
+  | 'search.unavailable'
   | 'status.loggedIn'
   | 'status.noPending'
   | 'status.pendingItems'
@@ -1054,7 +1096,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.empty.noMatch': '暂无匹配标记',
     'map.empty.unavailable': '暂无可显示地图标记',
     'map.geometry.linearObject': '线性对象端点组，{count} 个端点',
+    'map.geometry.lineString': '线性对象，{count} 个节点',
     'map.geometry.pointMarker': '点标记',
+    'map.geometry.region': '区域对象，{count} 个边界节点',
     'map.geometry.roadEndpointCount': '道路端点 {count} 个',
     'map.geometry.transitLineDetail': '站点坐标直连 {count} 个点',
     'map.geometry.transitLineObject': '线路对象，{count} 个站点坐标直连点',
@@ -1065,6 +1109,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.hud.scale.kilometers': '{value} km',
     'map.markerList.count': '{count} 个',
     'map.markerList.default': '地图标记',
+    'map.markerList.fullLength': '全长 {distance}',
     'map.markerList.nearby': '{name}周边',
     'map.markerList.results': '搜索结果',
     'map.layer.aria': '图层与投稿',
@@ -1082,6 +1127,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.layer.noteSatellite': '加载{name}，仅叠加关键道路。',
     'map.layer.noteTraffic': '关闭瓦片，突出公共交通站点并淡化道路。',
     'map.layer.open': '图层与投稿',
+    'map.layer.players': '玩家位置',
+    'map.layer.playersHidden': '已隐藏在线/离线玩家',
+    'map.layer.playersVisible': '显示在线/离线玩家',
     'map.layer.submitPoi': '投稿 POI',
     'map.layer.tileProvider': '瓦片源',
     'map.layer.tileProviderAria': '瓦片源',
@@ -1089,12 +1137,20 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.lineDetail.stations': '站点',
     'map.nearby.exit': '退出',
     'map.nearby.note': '按距离显示 {name} 周边标记',
+    'map.nearby.scopeAria': '区域周边范围',
+    'map.nearby.scopeInside': '区域内',
+    'map.nearby.scopeOutside': '区域外附近',
     'map.overlay.aria': '地图标记示意层',
     'map.overlay.linearPoiTitle': '{name} · {count} 个端点',
     'map.overlay.markerTitle': '{name}（{x}, {z}）',
     'map.overlay.roadTraceTitle': '{name} · 近似线，{count} 个端点',
     'map.overlay.transitTraceTitle': '{name} · {count} 个途经站',
     'map.overlay.viewMarker': '查看 {name}',
+    'map.player.lastSeen': '最后在线：{time}',
+    'map.player.observed': '最近观测：{time}',
+    'map.player.serverAccount': '服务器账号',
+    'map.player.status.offline': '离线',
+    'map.player.status.online': '在线',
     'map.poi.actions': '地点操作',
     'map.poi.address': '地址',
     'map.poi.close': '关闭地点信息',
@@ -1107,6 +1163,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.facilities': '设施/出入口',
     'map.poi.favoriteAria': '收藏 {name}',
     'map.poi.favoriteStatus': '已收藏 {name}',
+    'map.poi.floor': '楼层',
+    'map.poi.filterAll': '全部',
+    'map.poi.filterCategory': '子地点分类',
+    'map.poi.filterFloor': '楼层',
+    'map.poi.filterKeyword': '检索子地点',
+    'map.poi.filterKeywordPlaceholder': '名称、地址、设施等',
     'map.poi.group.access': '出入口',
     'map.poi.group.building': '楼栋',
     'map.poi.group.facility': '设施',
@@ -1114,6 +1176,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.group.scenery': '景点',
     'map.poi.group.transport': '交通',
     'map.poi.imageAlt': '{name} 图片',
+    'map.poi.imageCounter': '{current} / {total}',
+    'map.poi.imageNext': '下一张图片',
+    'map.poi.imagePrevious': '上一张图片',
     'map.poi.nearbyAria': '搜索 {name} 周边',
     'map.poi.noConnections': '暂无已知接驳线路',
     'map.poi.noFacilities': '暂无设施数据',
@@ -1121,6 +1186,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.openDetail': '打开详情',
     'map.poi.openingHours': '营业时间',
     'map.poi.parent': '所属地点',
+    'map.poi.boundRegions': '所属区域',
     'map.poi.parentFallback': '父地点',
     'map.poi.relatedPlaceFallback': '关联地点',
     'map.poi.relatedPlaces': '关联地点',
@@ -1139,17 +1205,21 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poiSubmit.address': '文字地址',
     'map.poiSubmit.addressPlaceholder': '例如：青年大街 18 号',
     'map.poiSubmit.addressRoad': '地址道路',
+    'map.poiSubmit.floor': '楼层',
+    'map.poiSubmit.floorPlaceholder': '例如：B1、3F、站厅层',
     'map.poiSubmit.close': '关闭投稿窗口',
     'map.poiSubmit.description': '地点简介',
     'map.poiSubmit.descriptionPlaceholder': '可填写地点用途、开放状态、出入口说明等',
     'map.poiSubmit.href': '相关链接',
     'map.poiSubmit.hrefPlaceholder': 'https://...',
     'map.poiSubmit.imageFile': '上传图片',
+    'map.poiSubmit.imageFileCount': '已选择 {count} 张图片',
     'map.poiSubmit.imageUploadFailed': '图片上传失败',
     'map.poiSubmit.imageUrl': '图片链接',
     'map.poiSubmit.imageUrlPlaceholder': 'https://.../photo.png',
     'map.poiSubmit.invalid': '请填写名称、分类和有效坐标。',
     'map.poiSubmit.invalidFacility': '请填写每条设施信息的文字描述。',
+    'map.poiSubmit.tooManyImages': '每个 POI 最多可提交 12 张图片。',
     'map.poiSubmit.name': '地点名称',
     'map.poiSubmit.namePlaceholder': '地点名称',
     'map.poiSubmit.noAddressRoad': '不绑定道路',
@@ -1182,6 +1252,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.source.tileProvider': '当前瓦片源：{name}',
     'map.source.tooltipLoading': '地图数据正在读取。',
     'map.source.unavailable': '地图数据暂不可用',
+    'map.location.currentAccount': '当前账号：{name}',
     'map.search.aria': '筛选地图标记',
     'map.search.clear': '清空地图搜索',
     'map.search.placeholder': '搜索地点或标记',
@@ -1194,14 +1265,21 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.share.image': '分享图',
     'map.share.imageDownloaded': '分享图已下载',
     'map.share.imageShared': '已打开图片分享面板',
+    'map.share.coordinate': '复制坐标',
+    'map.share.coordinateCopied': '坐标已复制',
+    'map.share.copy': '复制',
+    'map.share.copyKind': '复制内容',
     'map.share.link': '复制链接',
     'map.share.linkCopied': '已复制分享链接',
     'map.share.processing': '处理中',
+    'map.share.qrCode': '分享链接二维码',
     'map.share.text': '复制文字版',
     'map.share.textCopied': '已复制文字版内容',
+    'map.share.teleport': '复制传送指令',
+    'map.share.teleportCopied': '传送指令已复制',
     'map.share.title': '分享',
     'map.share.unavailable': '当前浏览器暂不支持该分享方式',
-    'map.toolbar.reset': '回到默认视图',
+    'map.toolbar.reset': '回到当前位置或默认视图',
     'map.toolbar.zoomIn': '放大地图',
     'map.toolbar.zoomOut': '缩小地图',
     'map.title': '地图探索',
@@ -1430,23 +1508,29 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'search.category.all': '全部',
     'search.category.lines': '线路',
     'search.category.operations': '运营',
+    'search.category.poi': '地图 POI',
+    'search.category.schedules': '班次',
     'search.category.services': '服务',
     'search.category.stations': '站点',
     'search.clear': '清空搜索',
-    'search.emptyPrompt': '输入关键词后显示运营信息、线路、站点和服务结果',
+    'search.emptyPrompt': '输入关键词后搜索地图 POI、班次、运营资讯和服务',
     'search.facilityCount': '{count} 项设施',
+    'search.loading': '正在搜索',
     'search.noCategoryResults': '当前分类下暂无匹配结果',
     'search.noMatch': '暂无匹配“{query}”的结果',
-    'search.placeholder': '搜索资讯、线路、站点和服务',
+    'search.placeholder': '搜索地点详情、班次、运营资讯或服务',
     'search.resultCount': '{count} 项结果',
     'search.results': '搜索结果',
     'search.resultFilters': '搜索结果分类',
     'search.resultGroup.lines': '线路',
     'search.resultGroup.operations': '运营信息',
+    'search.resultGroup.poi': '地图 POI',
+    'search.resultGroup.schedules': '班次',
     'search.resultGroup.services': '服务与工具',
     'search.resultGroup.stations': '站点',
     'search.stationExitCount': '{count} 个出入口',
     'search.stopCount': '{count} 站',
+    'search.unavailable': '地图与班次数据暂时均不可用',
     'status.loggedIn': '已登录',
     'status.noPending': '无待办',
     'status.pendingItems': '{count} 个待处理事项',
@@ -1897,7 +1981,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.empty.noMatch': '暫無符合標記',
     'map.empty.unavailable': '暫無可顯示地圖標記',
     'map.geometry.linearObject': '線性物件端點組，{count} 個端點',
+    'map.geometry.lineString': '線性物件，{count} 個節點',
     'map.geometry.pointMarker': '點標記',
+    'map.geometry.region': '區域物件，{count} 個邊界節點',
     'map.geometry.roadEndpointCount': '道路端點 {count} 個',
     'map.geometry.transitLineDetail': '站點座標直連 {count} 個點',
     'map.geometry.transitLineObject': '線路物件，{count} 個站點座標直連點',
@@ -1908,6 +1994,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.hud.scale.kilometers': '{value} km',
     'map.markerList.count': '{count} 個',
     'map.markerList.default': '地圖標記',
+    'map.markerList.fullLength': '全長 {distance}',
     'map.markerList.nearby': '{name}周邊',
     'map.markerList.results': '搜尋結果',
     'map.layer.aria': '圖層與投稿',
@@ -1925,6 +2012,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.layer.noteSatellite': '載入{name}，僅疊加關鍵道路。',
     'map.layer.noteTraffic': '關閉瓦片，突出公共交通站點並淡化道路。',
     'map.layer.open': '圖層與投稿',
+    'map.layer.players': '玩家位置',
+    'map.layer.playersHidden': '已隱藏線上/離線玩家',
+    'map.layer.playersVisible': '顯示線上/離線玩家',
     'map.layer.submitPoi': '投稿 POI',
     'map.layer.tileProvider': '瓦片源',
     'map.layer.tileProviderAria': '瓦片源',
@@ -1932,12 +2022,20 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.lineDetail.stations': '站點',
     'map.nearby.exit': '退出',
     'map.nearby.note': '按距離顯示 {name} 周邊標記',
+    'map.nearby.scopeAria': '區域周邊範圍',
+    'map.nearby.scopeInside': '區域內',
+    'map.nearby.scopeOutside': '區域外附近',
     'map.overlay.aria': '地圖標記示意層',
     'map.overlay.linearPoiTitle': '{name} · {count} 個端點',
     'map.overlay.markerTitle': '{name}（{x}, {z}）',
     'map.overlay.roadTraceTitle': '{name} · 近似線，{count} 個端點',
     'map.overlay.transitTraceTitle': '{name} · {count} 個途經站',
     'map.overlay.viewMarker': '查看 {name}',
+    'map.player.lastSeen': '最後上線：{time}',
+    'map.player.observed': '最近觀測：{time}',
+    'map.player.serverAccount': '伺服器帳號',
+    'map.player.status.offline': '離線',
+    'map.player.status.online': '線上',
     'map.poi.actions': '地點操作',
     'map.poi.address': '地址',
     'map.poi.close': '關閉地點資訊',
@@ -1950,6 +2048,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.facilities': '設施/出入口',
     'map.poi.favoriteAria': '收藏 {name}',
     'map.poi.favoriteStatus': '已收藏 {name}',
+    'map.poi.floor': '樓層',
+    'map.poi.filterAll': '全部',
+    'map.poi.filterCategory': '子地點分類',
+    'map.poi.filterFloor': '樓層',
+    'map.poi.filterKeyword': '檢索子地點',
+    'map.poi.filterKeywordPlaceholder': '名稱、地址、設施等',
     'map.poi.group.access': '出入口',
     'map.poi.group.building': '樓棟',
     'map.poi.group.facility': '設施',
@@ -1957,6 +2061,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.group.scenery': '景點',
     'map.poi.group.transport': '交通',
     'map.poi.imageAlt': '{name} 圖片',
+    'map.poi.imageCounter': '{current} / {total}',
+    'map.poi.imageNext': '下一張圖片',
+    'map.poi.imagePrevious': '上一張圖片',
     'map.poi.nearbyAria': '搜尋 {name} 周邊',
     'map.poi.noConnections': '暫無已知接駁線路',
     'map.poi.noFacilities': '暫無設施資料',
@@ -1964,6 +2071,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.openDetail': '開啟詳情',
     'map.poi.openingHours': '營業時間',
     'map.poi.parent': '所屬地點',
+    'map.poi.boundRegions': '所屬區域',
     'map.poi.parentFallback': '父地點',
     'map.poi.relatedPlaceFallback': '關聯地點',
     'map.poi.relatedPlaces': '關聯地點',
@@ -1982,17 +2090,21 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poiSubmit.address': '文字地址',
     'map.poiSubmit.addressPlaceholder': '例如：青年大街 18 號',
     'map.poiSubmit.addressRoad': '地址道路',
+    'map.poiSubmit.floor': '樓層',
+    'map.poiSubmit.floorPlaceholder': '例如：B1、3F、站廳層',
     'map.poiSubmit.close': '關閉投稿視窗',
     'map.poiSubmit.description': '地點簡介',
     'map.poiSubmit.descriptionPlaceholder': '可填寫地點用途、開放狀態、出入口說明等',
     'map.poiSubmit.href': '相關連結',
     'map.poiSubmit.hrefPlaceholder': 'https://...',
     'map.poiSubmit.imageFile': '上傳圖片',
+    'map.poiSubmit.imageFileCount': '已選擇 {count} 張圖片',
     'map.poiSubmit.imageUploadFailed': '圖片上傳失敗',
     'map.poiSubmit.imageUrl': '圖片連結',
     'map.poiSubmit.imageUrlPlaceholder': 'https://.../photo.png',
     'map.poiSubmit.invalid': '請填寫名稱、分類和有效座標。',
     'map.poiSubmit.invalidFacility': '請填寫每條設施資訊的文字描述。',
+    'map.poiSubmit.tooManyImages': '每個 POI 最多可提交 12 張圖片。',
     'map.poiSubmit.name': '地點名稱',
     'map.poiSubmit.namePlaceholder': '地點名稱',
     'map.poiSubmit.noAddressRoad': '不綁定道路',
@@ -2025,6 +2137,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.source.tileProvider': '目前瓦片源：{name}',
     'map.source.tooltipLoading': '地圖資料正在讀取。',
     'map.source.unavailable': '地圖資料暫不可用',
+    'map.location.currentAccount': '目前帳號：{name}',
     'map.search.aria': '篩選地圖標記',
     'map.search.clear': '清空地圖搜尋',
     'map.search.placeholder': '搜尋地點或標記',
@@ -2037,14 +2150,21 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.share.image': '分享圖',
     'map.share.imageDownloaded': '分享圖已下載',
     'map.share.imageShared': '已開啟圖片分享面板',
+    'map.share.coordinate': '複製座標',
+    'map.share.coordinateCopied': '座標已複製',
+    'map.share.copy': '複製',
+    'map.share.copyKind': '複製內容',
     'map.share.link': '複製連結',
     'map.share.linkCopied': '已複製分享連結',
     'map.share.processing': '處理中',
+    'map.share.qrCode': '分享連結二維碼',
     'map.share.text': '複製文字版',
     'map.share.textCopied': '已複製文字版內容',
+    'map.share.teleport': '複製傳送指令',
+    'map.share.teleportCopied': '傳送指令已複製',
     'map.share.title': '分享',
     'map.share.unavailable': '目前瀏覽器暫不支援此分享方式',
-    'map.toolbar.reset': '回到預設視圖',
+    'map.toolbar.reset': '回到目前位置或預設視圖',
     'map.toolbar.zoomIn': '放大地圖',
     'map.toolbar.zoomOut': '縮小地圖',
     'map.title': '地圖探索',
@@ -2273,23 +2393,29 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'search.category.all': '全部',
     'search.category.lines': '線路',
     'search.category.operations': '營運',
+    'search.category.poi': '地圖 POI',
+    'search.category.schedules': '班次',
     'search.category.services': '服務',
     'search.category.stations': '站點',
     'search.clear': '清空搜尋',
-    'search.emptyPrompt': '輸入關鍵字後顯示營運資訊、線路、站點和服務結果',
+    'search.emptyPrompt': '輸入關鍵字後搜尋地圖 POI、班次、營運資訊和服務',
     'search.facilityCount': '{count} 項設施',
+    'search.loading': '正在搜尋',
     'search.noCategoryResults': '目前分類下暫無符合結果',
     'search.noMatch': '暫無符合「{query}」的結果',
-    'search.placeholder': '搜尋資訊、線路、站點和服務',
+    'search.placeholder': '搜尋地點詳情、班次、營運資訊或服務',
     'search.resultCount': '{count} 項結果',
     'search.results': '搜尋結果',
     'search.resultFilters': '搜尋結果分類',
     'search.resultGroup.lines': '線路',
     'search.resultGroup.operations': '營運資訊',
+    'search.resultGroup.poi': '地圖 POI',
+    'search.resultGroup.schedules': '班次',
     'search.resultGroup.services': '服務與工具',
     'search.resultGroup.stations': '站點',
     'search.stationExitCount': '{count} 個出入口',
     'search.stopCount': '{count} 站',
+    'search.unavailable': '地圖與班次資料暫時均不可用',
     'status.loggedIn': '已登入',
     'status.noPending': '無待辦',
     'status.pendingItems': '{count} 個待處理事項',
@@ -2752,7 +2878,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.empty.noMatch': 'No matching markers',
     'map.empty.unavailable': 'No map markers to show',
     'map.geometry.linearObject': 'Linear object endpoint group, {count} endpoints',
+    'map.geometry.lineString': 'Linear object, {count} nodes',
     'map.geometry.pointMarker': 'Point marker',
+    'map.geometry.region': 'Area object, {count} boundary nodes',
     'map.geometry.roadEndpointCount': '{count} road endpoints',
     'map.geometry.transitLineDetail': '{count} stop coordinate points connected directly',
     'map.geometry.transitLineObject': 'Line object, {count} stop coordinate points',
@@ -2763,6 +2891,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.hud.scale.kilometers': '{value} km',
     'map.markerList.count': '{count} items',
     'map.markerList.default': 'Map Markers',
+    'map.markerList.fullLength': 'Total length {distance}',
     'map.markerList.nearby': 'Near {name}',
     'map.markerList.results': 'Search Results',
     'map.layer.aria': 'Layers and submissions',
@@ -2780,6 +2909,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.layer.noteSatellite': 'Loading {name} with key roads overlaid.',
     'map.layer.noteTraffic': 'Tiles are off. Transit stops are emphasized and roads are muted.',
     'map.layer.open': 'Layers and submissions',
+    'map.layer.players': 'Player locations',
+    'map.layer.playersHidden': 'Online/offline players hidden',
+    'map.layer.playersVisible': 'Online/offline players visible',
     'map.layer.submitPoi': 'Submit POI',
     'map.layer.tileProvider': 'Tile source',
     'map.layer.tileProviderAria': 'Tile source',
@@ -2787,12 +2919,20 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.lineDetail.stations': 'Stops',
     'map.nearby.exit': 'Exit',
     'map.nearby.note': 'Showing markers near {name} by distance',
+    'map.nearby.scopeAria': 'Area search scope',
+    'map.nearby.scopeInside': 'Inside area',
+    'map.nearby.scopeOutside': 'Nearby outside',
     'map.overlay.aria': 'Map marker overlay',
     'map.overlay.linearPoiTitle': '{name} · {count} endpoints',
     'map.overlay.markerTitle': '{name} ({x}, {z})',
     'map.overlay.roadTraceTitle': '{name} · approximate line, {count} endpoints',
     'map.overlay.transitTraceTitle': '{name} · {count} stops',
     'map.overlay.viewMarker': 'View {name}',
+    'map.player.lastSeen': 'Last online: {time}',
+    'map.player.observed': 'Last observed: {time}',
+    'map.player.serverAccount': 'Server account',
+    'map.player.status.offline': 'Offline',
+    'map.player.status.online': 'Online',
     'map.poi.actions': 'Place actions',
     'map.poi.address': 'Address',
     'map.poi.close': 'Close place details',
@@ -2805,6 +2945,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.facilities': 'Facilities and Exits',
     'map.poi.favoriteAria': 'Favorite {name}',
     'map.poi.favoriteStatus': 'Added {name} to favorites',
+    'map.poi.floor': 'Floor',
+    'map.poi.filterAll': 'All',
+    'map.poi.filterCategory': 'Sub-place category',
+    'map.poi.filterFloor': 'Floor',
+    'map.poi.filterKeyword': 'Search sub-places',
+    'map.poi.filterKeywordPlaceholder': 'Name, address, facilities, etc.',
     'map.poi.group.access': 'Entrances and exits',
     'map.poi.group.building': 'Buildings',
     'map.poi.group.facility': 'Facilities',
@@ -2812,6 +2958,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.group.scenery': 'Attractions',
     'map.poi.group.transport': 'Transit',
     'map.poi.imageAlt': '{name} image',
+    'map.poi.imageCounter': '{current} / {total}',
+    'map.poi.imageNext': 'Next image',
+    'map.poi.imagePrevious': 'Previous image',
     'map.poi.nearbyAria': 'Search near {name}',
     'map.poi.noConnections': 'No known connecting lines',
     'map.poi.noFacilities': 'No facility data',
@@ -2819,6 +2968,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.openDetail': 'Open details',
     'map.poi.openingHours': 'Opening hours',
     'map.poi.parent': 'Parent place',
+    'map.poi.boundRegions': 'Containing areas',
     'map.poi.parentFallback': 'Parent place',
     'map.poi.relatedPlaceFallback': 'Related place',
     'map.poi.relatedPlaces': 'Related places',
@@ -2837,6 +2987,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poiSubmit.address': 'Address',
     'map.poiSubmit.addressPlaceholder': 'For example: 18 Qingnian Avenue',
     'map.poiSubmit.addressRoad': 'Address road',
+    'map.poiSubmit.floor': 'Floor',
+    'map.poiSubmit.floorPlaceholder': 'For example: B1, 3F, concourse',
     'map.poiSubmit.close': 'Close submission dialog',
     'map.poiSubmit.description': 'Place description',
     'map.poiSubmit.descriptionPlaceholder':
@@ -2844,11 +2996,13 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poiSubmit.href': 'Related link',
     'map.poiSubmit.hrefPlaceholder': 'https://...',
     'map.poiSubmit.imageFile': 'Upload image',
+    'map.poiSubmit.imageFileCount': '{count} images selected',
     'map.poiSubmit.imageUploadFailed': 'Image upload failed',
     'map.poiSubmit.imageUrl': 'Image URL',
     'map.poiSubmit.imageUrlPlaceholder': 'https://.../photo.png',
     'map.poiSubmit.invalid': 'Enter a name, category, and valid coordinates.',
     'map.poiSubmit.invalidFacility': 'Add a description to every facility entry.',
+    'map.poiSubmit.tooManyImages': 'Each POI can include up to 12 images.',
     'map.poiSubmit.name': 'Place name',
     'map.poiSubmit.namePlaceholder': 'Place name',
     'map.poiSubmit.noAddressRoad': 'No road binding',
@@ -2882,6 +3036,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.source.tileProvider': 'Current tile source: {name}',
     'map.source.tooltipLoading': 'Map data is still loading.',
     'map.source.unavailable': 'Map data is temporarily unavailable',
+    'map.location.currentAccount': 'Current account: {name}',
     'map.search.aria': 'Filter map markers',
     'map.search.clear': 'Clear map search',
     'map.search.placeholder': 'Search places or markers',
@@ -2894,14 +3049,21 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.share.image': 'Share image',
     'map.share.imageDownloaded': 'Share image downloaded',
     'map.share.imageShared': 'Image share panel opened',
+    'map.share.coordinate': 'Copy coordinates',
+    'map.share.coordinateCopied': 'Coordinates copied',
+    'map.share.copy': 'Copy',
+    'map.share.copyKind': 'Copy content',
     'map.share.link': 'Copy link',
     'map.share.linkCopied': 'Share link copied',
     'map.share.processing': 'Processing',
+    'map.share.qrCode': 'QR code for the share link',
     'map.share.text': 'Copy text',
     'map.share.textCopied': 'Text version copied',
+    'map.share.teleport': 'Copy teleport command',
+    'map.share.teleportCopied': 'Teleport command copied',
     'map.share.title': 'Share',
     'map.share.unavailable': 'This share format is not supported in the current browser',
-    'map.toolbar.reset': 'Reset to default view',
+    'map.toolbar.reset': 'Return to current location or default view',
     'map.toolbar.zoomIn': 'Zoom in',
     'map.toolbar.zoomOut': 'Zoom out',
     'map.title': 'Map Explore',
@@ -3134,23 +3296,29 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'search.category.all': 'All',
     'search.category.lines': 'Lines',
     'search.category.operations': 'Updates',
+    'search.category.poi': 'Map POI',
+    'search.category.schedules': 'Schedules',
     'search.category.services': 'Services',
     'search.category.stations': 'Stations',
     'search.clear': 'Clear search',
-    'search.emptyPrompt': 'Enter a keyword to search updates, lines, stations, and services.',
+    'search.emptyPrompt': 'Enter a keyword to search map POIs, schedules, updates, and services.',
     'search.facilityCount': '{count} facilities',
+    'search.loading': 'Searching',
     'search.noCategoryResults': 'No matches in this category',
     'search.noMatch': 'No results matching "{query}"',
-    'search.placeholder': 'Search updates, lines, stations, and services',
+    'search.placeholder': 'Search place details, schedules, updates, or services',
     'search.resultCount': '{count} results',
     'search.results': 'Search Results',
     'search.resultFilters': 'Search result categories',
     'search.resultGroup.lines': 'Lines',
     'search.resultGroup.operations': 'Updates',
+    'search.resultGroup.poi': 'Map POI',
+    'search.resultGroup.schedules': 'Schedules',
     'search.resultGroup.services': 'Services and Tools',
     'search.resultGroup.stations': 'Stations',
     'search.stationExitCount': '{count} exits',
     'search.stopCount': '{count} stops',
+    'search.unavailable': 'Map and schedule data are both unavailable',
     'status.loggedIn': 'Signed in',
     'status.noPending': 'No pending items',
     'status.pendingItems': '{count} pending items',
