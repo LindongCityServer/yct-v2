@@ -6,7 +6,7 @@ export const yctAuthReturnOriginCookieName = 'yct.ldpass_return_origin';
 export const yctSessionCookieName = 'yct.account_snapshot';
 
 const authStateMaxAgeSeconds = 10 * 60;
-const sessionMaxAgeSeconds = 7 * 24 * 60 * 60;
+export const yctSessionMaxAgeSeconds = 7 * 24 * 60 * 60;
 
 export function createLdpassState(): string {
   return randomUUID();
@@ -148,7 +148,7 @@ export function sessionCookieOptions(secure: boolean) {
     sameSite: 'lax' as const,
     secure,
     path: '/',
-    maxAge: sessionMaxAgeSeconds,
+    maxAge: yctSessionMaxAgeSeconds,
   };
 }
 

@@ -4,8 +4,11 @@ import { endYctSession } from '../../../../lib/auth-workflow';
 import { isSecureNextRequest, resolvePublicSiteOrigin } from '../../../../lib/request-site-url';
 import { readRuntimeConfig } from '../../../../lib/runtime-config';
 import {
+  deleteYctServerSession,
+  readYctServerSession,
+} from '../../../../lib/yct-server-session-store';
+import {
   expiredCookieOptions,
-  parseYctSessionSnapshot,
   yctAuthReturnOriginCookieName,
   yctAuthStateCookieName,
   yctSessionCookieName,
@@ -19,10 +22,13 @@ export async function GET(request: NextRequest) {
     publicSiteOrigin.endsWith('/') ? publicSiteOrigin : `${publicSiteOrigin}/`,
   );
   accountUrl.searchParams.set('auth', 'logged_out');
+  const sessionId = request.cookies.get(yctSessionCookieName)?.value;
+  const serverSession = await readYctServerSession(sessionId);
   await endYctSession({
-    snapshot: parseYctSessionSnapshot(request.cookies.get(yctSessionCookieName)?.value),
+    snapshot: serverSession?.snapshot,
     reason: 'user_logout',
   });
+  await deleteYctServerSession(sessionId);
   const response = NextResponse.redirect(accountUrl);
   const secure = isSecureNextRequest(request);
   response.cookies.set(yctAuthStateCookieName, '', expiredCookieOptions(secure));

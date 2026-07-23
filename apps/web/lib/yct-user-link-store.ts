@@ -35,6 +35,22 @@ export async function upsertYctUserLinkFromLdpassUser(
   const existing = snapshot.links.find((link) => link.ldpassUserId === user.id);
 
   if (existing) {
+    const snapshotsUnchanged =
+      existing.usernameSnapshot === user.username &&
+      existing.emailSnapshot === normalizeOptionalString(user.email) &&
+      existing.serverAccountVerifiedSnapshot === user.serverAccountVerified;
+    const lastWriteAt = Date.parse(existing.updatedAt);
+    if (
+      snapshotsUnchanged &&
+      Number.isFinite(lastWriteAt) &&
+      loginAt.localeCompare(existing.updatedAt) >= 0
+    ) {
+      const nextWriteAt = Date.parse(loginAt);
+      if (Number.isFinite(nextWriteAt) && nextWriteAt - lastWriteAt < 5 * 60 * 1000) {
+        return { link: existing, created: false };
+      }
+    }
+
     const updated: YctUserLink = {
       ...existing,
       usernameSnapshot: user.username,

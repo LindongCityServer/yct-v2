@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { LdpassIdentityProvider } from '@yct/adapters';
 import { ensureYctUserLinkForLdpassSession } from './auth-workflow';
-import { readRuntimeConfig } from './runtime-config';
+import { readYctServerSession } from './yct-server-session-store';
+import { yctSessionCookieName } from './yct-session';
 
 export type WritableUserAuthResult =
   | {
@@ -20,33 +20,13 @@ export type WritableUserAuthResult =
 export async function requireActiveLdpassUser(
   request: NextRequest,
 ): Promise<WritableUserAuthResult> {
-  const config = readRuntimeConfig();
-
-  if (!config.ldpassBaseUrl || !config.ldpassClientId) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error: 'ldpass_not_configured',
-          message: '需要先配置 LDPASS_BASE_URL 与 LDPASS_CLIENT_ID。',
-        },
-        { status: 503 },
-      ),
-    };
-  }
-
-  const provider = new LdpassIdentityProvider({
-    baseUrl: config.ldpassBaseUrl,
-    clientId: config.ldpassClientId,
-  });
-
   try {
-    const session = await provider.readClientSession({
-      clientId: config.ldpassClientId,
-      cookieHeader: request.headers.get('cookie') ?? undefined,
-    });
+    const serverSession = await readYctServerSession(
+      request.cookies.get(yctSessionCookieName)?.value,
+    );
+    const session = serverSession?.ldpassSession;
 
-    if (!session.authenticated || !session.user) {
+    if (!session?.authenticated || !session.user) {
       return {
         ok: false,
         response: NextResponse.json(

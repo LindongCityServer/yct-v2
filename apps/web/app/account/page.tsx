@@ -2,7 +2,8 @@ import { cookies } from 'next/headers';
 import { SecondaryShell } from '../../components/app-shell';
 import { AccountSettingsPanel } from '../../components/account-settings-panel';
 import { readRuntimeConfig } from '../../lib/runtime-config';
-import { parseYctSessionSnapshot, yctSessionCookieName } from '../../lib/yct-session';
+import { readYctServerSession } from '../../lib/yct-server-session-store';
+import { yctSessionCookieName } from '../../lib/yct-session';
 
 export default async function AccountPage({
   searchParams,
@@ -11,7 +12,7 @@ export default async function AccountPage({
 }>) {
   const config = readRuntimeConfig();
   const cookieStore = await cookies();
-  const sessionSnapshot = parseYctSessionSnapshot(cookieStore.get(yctSessionCookieName)?.value);
+  const serverSession = await readYctServerSession(cookieStore.get(yctSessionCookieName)?.value);
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const authStatus = Array.isArray(resolvedSearchParams?.auth)
     ? (resolvedSearchParams?.auth[0] ?? '')
@@ -24,7 +25,7 @@ export default async function AccountPage({
           ldpassConfigured: Boolean(config.ldpassBaseUrl && config.ldpassClientId),
           ldpassBaseUrl: config.ldpassBaseUrl,
           status: normalizeAuthStatus(authStatus),
-          session: sessionSnapshot,
+          session: serverSession?.snapshot,
         }}
       />
     </SecondaryShell>

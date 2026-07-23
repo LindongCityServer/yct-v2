@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { LdpassIdentityProvider } from '@yct/adapters';
 import { resolveYctAdminMembershipForLdpassUser } from '../../../../lib/admin-identity';
-import { listContentAssetRecords } from '../../../../lib/content-asset-store';
-import { listContentRecords } from '../../../../lib/content-store';
+import { readAdminPendingReviewSummary } from '../../../../lib/admin-pending-review-summary';
 import { markResponseNoStore } from '../../../../lib/http-cache';
-import { listPoiSubmissions } from '../../../../lib/poi-submission-store';
 import { readRuntimeConfig } from '../../../../lib/runtime-config';
-import { listServiceEntries } from '../../../../lib/service-entry-store';
 import { countPendingTicketOrdersForLdpassUser } from '../../../../lib/ticket-order-workflow';
-import { listTransitDataRevisions } from '../../../../lib/transit-data-store';
-import { listTravelScheduleRevisions } from '../../../../lib/travel-schedule-revision-store';
-import { buildMinotarAvatarUrl, resolveYctAvatarUrl } from '../../../../lib/yct-session';
+import { readYctServerSession } from '../../../../lib/yct-server-session-store';
+import { yctSessionCookieName } from '../../../../lib/yct-session';
 
 interface AccountBadgeSummary {
   kind: 'none' | 'count' | 'dot';
@@ -43,32 +38,33 @@ interface AccountStatusResponse {
 export async function GET(request: NextRequest) {
   const config = readRuntimeConfig();
 
-  if (!config.ldpassBaseUrl || !config.ldpassClientId) {
-    return markResponseNoStore(
-      NextResponse.json({
-        accountStatus: 'not_configured',
-        badge: {
-          kind: 'dot',
-          count: 0,
-          label: '临东通登录尚未配置',
-        },
-        message: 'LDPASS_BASE_URL 或 LDPASS_CLIENT_ID 尚未配置。',
-      } satisfies AccountStatusResponse),
-    );
-  }
-
-  const provider = new LdpassIdentityProvider({
-    baseUrl: config.ldpassBaseUrl,
-    clientId: config.ldpassClientId,
-  });
-
   try {
-    const session = await provider.readClientSession({
-      clientId: config.ldpassClientId,
-      cookieHeader: request.headers.get('cookie') ?? undefined,
-    });
+    const serverSession = await readYctServerSession(
+      request.cookies.get(yctSessionCookieName)?.value,
+    );
+    if (!serverSession) {
+      const configured = Boolean(config.ldpassBaseUrl && config.ldpassClientId);
+      return markResponseNoStore(
+        NextResponse.json({
+          accountStatus: configured ? 'anonymous' : 'not_configured',
+          badge: configured
+            ? {
+                kind: 'none',
+                count: 0,
+                label: '未登录',
+              }
+            : {
+                kind: 'dot',
+                count: 0,
+                label: '临东通登录尚未配置',
+              },
+          message: configured ? undefined : 'LDPASS_BASE_URL 或 LDPASS_CLIENT_ID 尚未配置。',
+        } satisfies AccountStatusResponse),
+      );
+    }
+    const session = serverSession.ldpassSession;
 
-    if (!session.authenticated || (!session.user && !session.readonlyUser)) {
+    if (!session.user && !session.readonlyUser) {
       return markResponseNoStore(
         NextResponse.json({
           accountStatus: 'anonymous',
@@ -81,7 +77,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (session.user) {
+    if (session.authenticated && session.user) {
+      const identity = serverSession.snapshot.user;
       const membership = await resolveYctAdminMembershipForLdpassUser(session.user);
       const [pendingReview, pendingTicketOrderCount] = await Promise.all([
         membership ? readAdminPendingReviewSummary() : undefined,
@@ -103,14 +100,8 @@ export async function GET(request: NextRequest) {
       return markResponseNoStore(
         NextResponse.json({
           accountStatus: 'active',
-          username: session.user.username,
-          avatarUrl: resolveYctAvatarUrl({
-            avatarFallbackUrl: session.user.avatarFallbackUrl,
-            avatarUrl: session.user.avatarUrl,
-            minotarUrl: buildMinotarAvatarUrl(
-              session.user.serverAccountName ?? session.user.username,
-            ),
-          }),
+          username: identity?.username ?? session.user.username,
+          avatarUrl: identity?.avatarUrl,
           badge:
             totalBadgeCount > 0
               ? {
@@ -144,6 +135,7 @@ export async function GET(request: NextRequest) {
     }
 
     const readonlyUser = session.readonlyUser;
+    const readonlyIdentity = serverSession.snapshot.readonlyUser;
     if (!readonlyUser) {
       return markResponseNoStore(
         NextResponse.json({
@@ -160,12 +152,8 @@ export async function GET(request: NextRequest) {
     return markResponseNoStore(
       NextResponse.json({
         accountStatus: 'readonly',
-        username: readonlyUser.username,
-        avatarUrl: resolveYctAvatarUrl({
-          avatarFallbackUrl: readonlyUser.avatarFallbackUrl,
-          avatarUrl: readonlyUser.avatarUrl,
-          minotarUrl: buildMinotarAvatarUrl(readonlyUser.username),
-        }),
+        username: readonlyIdentity?.username ?? readonlyUser.username,
+        avatarUrl: readonlyIdentity?.avatarUrl,
         badge: {
           kind: 'dot',
           count: 0,
@@ -190,70 +178,4 @@ export async function GET(request: NextRequest) {
       ),
     );
   }
-}
-
-async function readAdminPendingReviewSummary(): Promise<{
-  contents: number;
-  contentAssets: number;
-  services: number;
-  transit: number;
-  poi: number;
-}> {
-  const [contents, contentAssets, services, transit, schedules, poi] = await Promise.all([
-    listContentRecords(),
-    listContentAssetRecords(),
-    listServiceEntries(),
-    listTransitDataRevisions(),
-    listTravelScheduleRevisions(),
-    listPoiSubmissions(),
-  ]);
-
-  return {
-    contents: contents.filter((record) => record.revision.status === 'pending_review').length,
-    contentAssets: contentAssets.filter((record) => record.asset.status === 'pending_review')
-      .length,
-    services: services.filter((entry) => entry.status === 'pending_review').length,
-    transit:
-      transit.reduce(
-        (count, revision) =>
-          count +
-          revision.lines.filter(
-            (line) =>
-              (line.approvalStatus ?? normalizeRevisionItemStatus(revision.status)) ===
-              'pending_review',
-          ).length,
-        0,
-      ) +
-      schedules.reduce(
-        (count, revision) =>
-          count +
-          revision.trips.filter(
-            (trip) =>
-              (trip.approvalStatus ?? normalizeRevisionItemStatus(revision.status)) ===
-              'pending_review',
-          ).length,
-        0,
-      ),
-    poi: poi.filter((submission) => submission.status === 'pending_review').length,
-  };
-}
-
-function normalizeRevisionItemStatus(
-  status:
-    | 'imported'
-    | 'validation_failed'
-    | 'pending_review'
-    | 'approved'
-    | 'rejected'
-    | 'published'
-    | 'superseded'
-    | 'archived',
-): 'imported' | 'pending_review' | 'approved' | 'rejected' | 'published' | 'archived' {
-  if (status === 'validation_failed') {
-    return 'imported';
-  }
-  if (status === 'superseded') {
-    return 'published';
-  }
-  return status;
 }

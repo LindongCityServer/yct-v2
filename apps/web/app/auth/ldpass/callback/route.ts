@@ -5,8 +5,8 @@ import { startYctSessionFromLdpass } from '../../../../lib/auth-workflow';
 import { markResponseNoStore } from '../../../../lib/http-cache';
 import { isSecureNextRequest, resolvePublicSiteOrigin } from '../../../../lib/request-site-url';
 import { readRuntimeConfig } from '../../../../lib/runtime-config';
+import { createYctServerSession } from '../../../../lib/yct-server-session-store';
 import {
-  encodeYctSessionSnapshot,
   expiredCookieOptions,
   normalizeStoredReturnOrigin,
   sessionCookieOptions,
@@ -84,6 +84,10 @@ export async function GET(request: NextRequest) {
       return markResponseNoStore(unavailableResponse);
     }
 
+    const yctSession = await createYctServerSession({
+      ldpassSession: session,
+      snapshot,
+    });
     accountUrl.searchParams.set('auth', snapshot.authenticated ? 'login_success' : 'readonly');
     const successResponse = NextResponse.redirect(accountUrl);
     successResponse.cookies.set(yctAuthStateCookieName, '', expiredCookieOptions(secure));
@@ -94,7 +98,7 @@ export async function GET(request: NextRequest) {
     );
     successResponse.cookies.set(
       yctSessionCookieName,
-      encodeYctSessionSnapshot(snapshot),
+      yctSession.id,
       sessionCookieOptions(secure),
     );
     return markResponseNoStore(successResponse);

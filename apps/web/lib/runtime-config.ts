@@ -5,6 +5,7 @@ export interface RuntimeConfig {
   siteUrl: string;
   ldpassBaseUrl?: string;
   ldpassClientId?: string;
+  yctSessionStorePath: string;
   yctUserLinkStorePath: string;
   adminStorePath: string;
   contentStorePath: string;
@@ -21,8 +22,10 @@ export interface RuntimeConfig {
   ticketOrderStorePath: string;
   poiSubmissionStorePath: string;
   poiSubmissionImageUploadDir: string;
+  entityTranslationStorePath: string;
   poiSubmissionImageReviewStorePath: string;
   poiCategoryProfileStorePath: string;
+  poiCategoryIconMetadataStorePath: string;
   poiConflictDecisionStorePath: string;
   legacyMapMarkerOverrideStorePath: string;
   poiIconUploadDir: string;
@@ -30,6 +33,7 @@ export interface RuntimeConfig {
   eventOutboxStorePath: string;
   localePreferenceStorePath: string;
   mapFavoriteStorePath: string;
+  playerLocationStorePath: string;
   notificationPreferenceStorePath: string;
   pushSubscriptionStorePath: string;
   pushDeliveryStorePath: string;
@@ -70,6 +74,9 @@ export function readRuntimeConfig(): RuntimeConfig {
     siteUrl: emptyToUndefined(process.env.YCT_PUBLIC_SITE_URL) ?? 'http://localhost:3000',
     ldpassBaseUrl: emptyToUndefined(process.env.LDPASS_BASE_URL),
     ldpassClientId: emptyToUndefined(process.env.LDPASS_CLIENT_ID),
+    yctSessionStorePath:
+      emptyToUndefined(process.env.YCT_SESSION_STORE_PATH) ??
+      '.yct-data/yct-account-sessions.json',
     yctUserLinkStorePath:
       emptyToUndefined(process.env.YCT_USER_LINK_STORE_PATH) ?? '.yct-data/yct-user-links.json',
     adminStorePath:
@@ -115,12 +122,18 @@ export function readRuntimeConfig(): RuntimeConfig {
     poiSubmissionImageUploadDir:
       emptyToUndefined(process.env.YCT_POI_SUBMISSION_IMAGE_UPLOAD_DIR) ??
       '.yct-data/poi-submission-images',
+    entityTranslationStorePath:
+      emptyToUndefined(process.env.YCT_ENTITY_TRANSLATION_STORE_PATH) ??
+      '.yct-data/entity-translation-store.json',
     poiSubmissionImageReviewStorePath:
       emptyToUndefined(process.env.YCT_POI_SUBMISSION_IMAGE_REVIEW_STORE_PATH) ??
       '.yct-data/poi-submission-image-review-store.json',
     poiCategoryProfileStorePath:
       emptyToUndefined(process.env.YCT_POI_CATEGORY_PROFILE_STORE_PATH) ??
       '.yct-data/poi-category-profile-store.json',
+    poiCategoryIconMetadataStorePath:
+      emptyToUndefined(process.env.YCT_POI_CATEGORY_ICON_METADATA_STORE_PATH) ??
+      '.yct-data/poi-category-icon-metadata-store.json',
     poiConflictDecisionStorePath:
       emptyToUndefined(process.env.YCT_POI_CONFLICT_DECISION_STORE_PATH) ??
       '.yct-data/poi-conflict-decision-store.json',
@@ -141,6 +154,9 @@ export function readRuntimeConfig(): RuntimeConfig {
     mapFavoriteStorePath:
       emptyToUndefined(process.env.YCT_MAP_FAVORITE_STORE_PATH) ??
       '.yct-data/map-favorite-store.json',
+    playerLocationStorePath:
+      emptyToUndefined(process.env.YCT_PLAYER_LOCATION_STORE_PATH) ??
+      '.yct-data/player-location-store.json',
     notificationPreferenceStorePath:
       emptyToUndefined(process.env.YCT_NOTIFICATION_PREFERENCE_STORE_PATH) ??
       '.yct-data/notification-preference-store.json',
@@ -170,11 +186,14 @@ export function readRuntimeConfig(): RuntimeConfig {
     tripReminderStorePath:
       emptyToUndefined(process.env.YCT_TRIP_REMINDER_STORE_PATH) ??
       '.yct-data/trip-reminder-store.json',
-    tileFreshHttpTemplate: emptyToUndefined(process.env.YCT_TILE_FRESH_HTTP_TEMPLATE),
+    tileFreshHttpTemplate:
+      emptyToUndefined(process.env.YCT_TILE_FRESH_HTTP_TEMPLATE) ??
+      'http://ld.cmsy.xyz:19136/tiles/zoom.{z}/{xd}/{yd}/tile.{x}.{y}.webp',
     tileSafeHttpsStaticTemplate: emptyToUndefined(process.env.YCT_TILE_SAFE_HTTPS_STATIC_TEMPLATE),
     unminedMapBaseUrl:
       emptyToUndefined(process.env.YCT_UNMINED_MAP_BASE_URL) ?? 'https://map.shangxiaoguan.top/',
-    markerBdslmBaseUrl: emptyToUndefined(process.env.YCT_MARKER_BDSLM_BASE_URL),
+    markerBdslmBaseUrl:
+      emptyToUndefined(process.env.YCT_MARKER_BDSLM_BASE_URL) ?? 'http://ld.cmsy.xyz:19136',
     markerBdslmTimeoutMs: Number(process.env.YCT_MARKER_BDSLM_TIMEOUT_MS ?? 6000),
     legacyDataSource: parseLegacyDataSource(process.env.YCT_LEGACY_DATA_SOURCE),
     legacyDataDir: emptyToUndefined(process.env.YCT_LEGACY_DATA_DIR),

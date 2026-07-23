@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { YctAdminMembership } from '@yct/contracts';
+import type { YctAdminMembership, YctAdminRole } from '@yct/contracts';
 import { readRuntimeConfig } from './runtime-config';
 
 interface AdminMembershipSnapshot {
@@ -70,6 +70,44 @@ export async function upsertSuperAdmin(input: {
     memberships: [...snapshot.memberships, created],
   });
   return created;
+}
+
+export async function setAdminMembership(input: {
+  ldpassUserId: string;
+  yctUserId: string;
+  role: YctAdminRole;
+  status: YctAdminMembership['status'];
+}): Promise<YctAdminMembership> {
+  const snapshot = await readSnapshot();
+  const now = new Date().toISOString();
+  const existing = snapshot.memberships.find(
+    (membership) => membership.ldpassUserId === input.ldpassUserId,
+  );
+  const membership: YctAdminMembership = existing
+    ? {
+        ...existing,
+        yctUserId: input.yctUserId,
+        role: input.role,
+        status: input.status,
+        updatedAt: now,
+      }
+    : {
+        id: `admin_${randomUUID()}`,
+        yctUserId: input.yctUserId,
+        ldpassUserId: input.ldpassUserId,
+        role: input.role,
+        status: input.status,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+  await writeSnapshot({
+    ...snapshot,
+    memberships: existing
+      ? snapshot.memberships.map((item) => (item.id === existing.id ? membership : item))
+      : [...snapshot.memberships, membership],
+  });
+  return membership;
 }
 
 async function readSnapshot(): Promise<AdminMembershipSnapshot> {
