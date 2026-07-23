@@ -9,9 +9,11 @@ export interface LegacyMapMarkerPatch {
   iconFileName?: string;
   description?: string;
   href?: string;
+  imageUrls?: string[];
   imageUrl?: string;
   geometry?: MapGeometry;
   parentMarkerId?: string;
+  floorLabel?: string;
   boundRegionMarkerIds?: string[];
   openingHours?: string;
   address?: string;
@@ -124,8 +126,10 @@ function normalizePatch(patch: LegacyMapMarkerPatch): LegacyMapMarkerPatch {
     iconFileName: normalizeOptionalText(patch.iconFileName),
     description: normalizeOptionalText(patch.description),
     href: normalizeOptionalText(patch.href),
-    imageUrl: normalizeOptionalText(patch.imageUrl),
+    imageUrls: normalizeImageUrls(patch.imageUrls, patch.imageUrl),
+    imageUrl: normalizeImageUrls(patch.imageUrls, patch.imageUrl)?.[0],
     parentMarkerId: normalizeOptionalText(patch.parentMarkerId),
+    floorLabel: normalizeOptionalText(patch.floorLabel),
     boundRegionMarkerIds: normalizeIdList(patch.boundRegionMarkerIds),
     openingHours: normalizeOptionalText(patch.openingHours),
     address: normalizeOptionalText(patch.address),
@@ -168,6 +172,20 @@ function resolveStorePath(): string {
 function normalizeOptionalText(value: string | undefined): string | undefined {
   const trimmed = value?.trim() ?? '';
   return trimmed || undefined;
+}
+
+function normalizeImageUrls(
+  imageUrls: string[] | undefined,
+  legacyImageUrl?: string,
+): string[] | undefined {
+  const normalized = Array.from(
+    new Set(
+      [...(imageUrls ?? []), ...(legacyImageUrl ? [legacyImageUrl] : [])]
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, 12);
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 function normalizeIdList(values: string[] | undefined): string[] | undefined {

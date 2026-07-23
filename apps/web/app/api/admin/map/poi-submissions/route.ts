@@ -13,7 +13,7 @@ import {
 } from '../../../../../lib/poi-submission-workflow';
 
 type AdminPoiSubmissionResponse = PoiSubmission & {
-  imageMetadata?: StoredPoiSubmissionImageMetadata;
+  imageMetadataByUrl?: Record<string, StoredPoiSubmissionImageMetadata>;
 };
 
 export async function GET(request: NextRequest) {
@@ -62,9 +62,11 @@ export async function POST(request: NextRequest) {
     iconFileName: parsed.data.iconFileName || undefined,
     description: parsed.data.description,
     href: parsed.data.href || undefined,
+    imageUrls: parsed.data.imageUrls,
     imageUrl: parsed.data.imageUrl || undefined,
     geometry: parsed.data.geometry,
     parentMarkerId: parsed.data.parentMarkerId || undefined,
+    floorLabel: parsed.data.floorLabel || undefined,
     boundRegionMarkerIds: parsed.data.boundRegionMarkerIds,
     openingHours: parsed.data.openingHours || undefined,
     address: parsed.data.address || undefined,
@@ -79,13 +81,26 @@ export async function POST(request: NextRequest) {
 }
 
 async function withImageMetadata(submission: PoiSubmission): Promise<AdminPoiSubmissionResponse> {
-  if (!submission.imageUrl) {
+  const imageUrls = submission.imageUrls ?? (submission.imageUrl ? [submission.imageUrl] : []);
+  if (imageUrls.length === 0) {
     return submission;
   }
 
   try {
-    const imageMetadata = await readPoiSubmissionImageMetadataByPublicPath(submission.imageUrl);
-    return imageMetadata ? { ...submission, imageMetadata } : submission;
+    const metadataEntries = await Promise.all(
+      imageUrls.map(
+        async (imageUrl) =>
+          [imageUrl, await readPoiSubmissionImageMetadataByPublicPath(imageUrl)] as const,
+      ),
+    );
+    const imageMetadataByUrl = Object.fromEntries(
+      metadataEntries.filter((entry): entry is [string, StoredPoiSubmissionImageMetadata] =>
+        Boolean(entry[1]),
+      ),
+    );
+    return Object.keys(imageMetadataByUrl).length > 0
+      ? { ...submission, imageMetadataByUrl }
+      : submission;
   } catch {
     return submission;
   }

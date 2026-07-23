@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server';
-import { BdslmMarkerProvider, UnminedCustomMarkerProvider } from '@yct/adapters';
-import type { MapMarkerSnapshot } from '@yct/contracts';
+import { UnminedCustomMarkerProvider } from '@yct/adapters';
+import type { EntityTranslationRecord, MapMarkerSnapshot } from '@yct/contracts';
 import { createApiMeta } from '../../../../lib/api-meta';
+import {
+  buildEntityTranslationMap,
+  entityTranslationKey,
+  listEntityTranslations,
+} from '../../../../lib/entity-translation-store';
 import { readTransitLinePoiMarkers } from '../../../../lib/map-transit-line-markers';
+import { enrichMapMarkerPlaceRelations } from '../../../../lib/map-place-relations';
 import { applyLegacyMapMarkerOverrides } from '../../../../lib/legacy-map-marker-override-store';
 import { readPoiCategories } from '../../../../lib/poi-categories';
 import { listPublishedPublicPoiSubmissions } from '../../../../lib/poi-submission-store';
@@ -16,33 +22,40 @@ const providerMarkerSnapshotCache = createTimedCache<MapMarkerSnapshot>(60 * 100
 export async function GET() {
   const config = readRuntimeConfig();
   const iconBaseUrl = config.unminedMapBaseUrl;
-  const [categories, publishedPoiSubmissions, transitLinePoiMarkers, transitOverview] =
-    await Promise.all([
-      readPoiCategories().catch(() => []),
-      listPublishedPublicPoiSubmissions(),
-      readTransitLinePoiMarkers().catch(() => []),
-      readTransitOverview().catch(() => null),
-    ]);
+  const [
+    categories,
+    publishedPoiSubmissions,
+    transitLinePoiMarkers,
+    transitOverview,
+    entityTranslations,
+  ] = await Promise.all([
+    readPoiCategories().catch(() => []),
+    listPublishedPublicPoiSubmissions(),
+    readTransitLinePoiMarkers().catch(() => []),
+    readTransitOverview().catch(() => null),
+    listEntityTranslations(),
+  ]);
 
   try {
-    const [staticSnapshot, playerSnapshot] = await Promise.all([
-      readStaticMarkerSnapshot(config),
-      readPlayerMarkerSnapshot(config),
-    ]);
+    const staticSnapshot = await readStaticMarkerSnapshot(config);
     const staticSnapshotWithOverrides = await applyLegacyMapMarkerOverrides(staticSnapshot);
     const resolvedTransitLineMarkers = resolveTransitLineMarkerCoordinates(
       transitLinePoiMarkers,
       transitOverview,
       staticSnapshotWithOverrides,
     );
-    const snapshot = mergeMarkerSnapshots(staticSnapshotWithOverrides, playerSnapshot);
-    const mergedSnapshot = normalizeMarkerSnapshotText(
-      mergeLocalMapMarkers(
-        snapshot,
-        publishedPoiSubmissions,
-        categories,
-        resolvedTransitLineMarkers,
+    const mergedSnapshot = applyMapMarkerTranslations(
+      enrichMapMarkerPlaceRelations(
+        normalizeMarkerSnapshotText(
+          mergeLocalMapMarkers(
+            staticSnapshotWithOverrides,
+            publishedPoiSubmissions,
+            categories,
+            resolvedTransitLineMarkers,
+          ),
+        ),
       ),
+      entityTranslations,
     );
 
     return NextResponse.json({
@@ -50,11 +63,7 @@ export async function GET() {
         'ready',
         [
           '当前读取 map.shangxiaoguan.top 的静态地点标记快照。',
-          config.markerBdslmBaseUrl
-            ? playerSnapshot
-              ? `已合并 ${playerSnapshot.markers.length} 个实时玩家位置。`
-              : '实时玩家位置暂不可用。'
-            : undefined,
+          '玩家位置由独立实时位置接口提供。',
           localPoiMessage(publishedPoiSubmissions.length),
           transitLinePoiMessage(resolvedTransitLineMarkers.length),
         ]
@@ -65,16 +74,21 @@ export async function GET() {
       iconBaseUrl,
     });
   } catch (error) {
-    const localSnapshot = normalizeMarkerSnapshotText(
-      mergeLocalMapMarkers(
-        {
-          fetchedAt: new Date().toISOString(),
-          markers: [],
-        },
-        publishedPoiSubmissions,
-        categories,
-        transitLinePoiMarkers,
+    const localSnapshot = applyMapMarkerTranslations(
+      enrichMapMarkerPlaceRelations(
+        normalizeMarkerSnapshotText(
+          mergeLocalMapMarkers(
+            {
+              fetchedAt: new Date().toISOString(),
+              markers: [],
+            },
+            publishedPoiSubmissions,
+            categories,
+            transitLinePoiMarkers,
+          ),
+        ),
       ),
+      entityTranslations,
     );
     if (localSnapshot.markers.length > 0) {
       return NextResponse.json({
@@ -104,6 +118,25 @@ export async function GET() {
   }
 }
 
+function applyMapMarkerTranslations(
+  snapshot: MapMarkerSnapshot,
+  translations: EntityTranslationRecord[],
+): MapMarkerSnapshot {
+  const translationMap = buildEntityTranslationMap(translations);
+  return {
+    ...snapshot,
+    markers: snapshot.markers.map((marker) => {
+      const lineId = marker.id.startsWith('transit-line-')
+        ? marker.id.slice('transit-line-'.length)
+        : undefined;
+      const localizedLabels =
+        translationMap.get(entityTranslationKey('map_marker', marker.id)) ??
+        (lineId ? translationMap.get(entityTranslationKey('transit_line', lineId)) : undefined);
+      return localizedLabels ? { ...marker, localizedLabels } : marker;
+    }),
+  };
+}
+
 type Marker = MapMarkerSnapshot['markers'][number];
 
 async function readStaticMarkerSnapshot(config: RuntimeConfig): Promise<MapMarkerSnapshot> {
@@ -119,36 +152,6 @@ async function readStaticMarkerSnapshot(config: RuntimeConfig): Promise<MapMarke
     async () =>
       groupRoadEndpointMarkers(normalizeMarkerSnapshotText(await provider.fetchMarkers('default'))),
   );
-}
-
-async function readPlayerMarkerSnapshot(config: RuntimeConfig): Promise<MapMarkerSnapshot | null> {
-  if (!config.markerBdslmBaseUrl) {
-    return null;
-  }
-
-  const provider = new BdslmMarkerProvider({
-    id: 'bdslm-player-markers',
-    name: 'BDSLM 实时玩家位置',
-    baseUrl: config.markerBdslmBaseUrl,
-    fetchTimeoutMs: config.markerBdslmTimeoutMs,
-  });
-
-  return providerMarkerSnapshotCache
-    .read(
-      [provider.id, config.markerBdslmBaseUrl, config.markerBdslmTimeoutMs].join('|'),
-      async () => normalizeMarkerSnapshotText(await provider.fetchMarkers('default')),
-    )
-    .catch(() => null);
-}
-
-function mergeMarkerSnapshots(
-  staticSnapshot: MapMarkerSnapshot,
-  playerSnapshot: MapMarkerSnapshot | null,
-): MapMarkerSnapshot {
-  return {
-    fetchedAt: new Date().toISOString(),
-    markers: [...staticSnapshot.markers, ...(playerSnapshot?.markers ?? [])],
-  };
 }
 
 function resolveTransitLineMarkerCoordinates(
@@ -507,6 +510,7 @@ function mergeLocalMapMarkers(
       categoryId: submission.categoryId,
       description: submission.description,
       href: submission.href,
+      imageUrls: submission.imageUrls,
       imageUrl: submission.imageUrl,
       geometry:
         submission.categoryId === 'road' && submission.geometry.type === 'LineString'
@@ -514,6 +518,7 @@ function mergeLocalMapMarkers(
           : submission.geometry,
       iconFileName: submission.iconFileName ?? category?.iconMapping.defaultIconFileName,
       parentMarkerId: submission.parentMarkerId,
+      floorLabel: submission.floorLabel,
       boundRegionMarkerIds: submission.boundRegionMarkerIds,
       openingHours: submission.openingHours,
       address: submission.address,

@@ -10,9 +10,18 @@ import type {
   RectangleBounds,
   TileProviderDescriptor,
 } from '@yct/contracts';
-import type { FormEvent, MouseEvent as ReactMouseEvent } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import type {
+  FormEvent,
+  PointerEvent as ReactPointerEvent,
+  WheelEvent as ReactWheelEvent,
+} from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import {
+  findPoiAddressMarkerMatches,
+  inferPoiFloorLabel,
+  selectUnambiguousAddressMarker,
+} from '../lib/poi-address-inference';
 import { EmbeddedMapLocationPicker } from './embedded-map-location-picker';
 import { PoiFacilityEditor } from './poi-facility-editor';
 
@@ -30,7 +39,7 @@ interface PoiSubmissionImageMetadata {
 }
 
 type AdminPoiSubmission = PoiSubmission & {
-  imageMetadata?: PoiSubmissionImageMetadata;
+  imageMetadataByUrl?: Record<string, PoiSubmissionImageMetadata>;
 };
 
 type PoiSubmissionImageReviewDecision = 'approved' | 'rejected';
@@ -85,9 +94,10 @@ interface PoiSubmissionEditInput {
   iconFileName: string;
   description: string;
   href: string;
-  imageUrl: string;
+  imageUrls: string[];
   geometry: MapGeometry;
   parentMarkerId: string;
+  floorLabel: string;
   boundRegionMarkerIds: string[];
   openingHours: string;
   address: string;
@@ -103,9 +113,10 @@ interface LegacyPoiMarkerEditInput {
   iconFileName: string;
   description: string;
   href: string;
-  imageUrl: string;
+  imageUrls: string[];
   geometry: MapGeometry;
   parentMarkerId: string;
+  floorLabel: string;
   boundRegionMarkerIds: string[];
   openingHours: string;
   address: string;
@@ -234,7 +245,7 @@ export function AdminPoiPanel() {
       mapMarkers
         .filter(
           (marker) =>
-            marker.geometry.type === 'Point' &&
+            (marker.geometry.type === 'Point' || isRegionGeometry(marker.geometry)) &&
             marker.categoryId !== 'player' &&
             marker.categoryId !== 'road',
         )
@@ -371,6 +382,7 @@ export function AdminPoiPanel() {
             submission.description,
             submission.openingHours,
             submission.address,
+            submission.floorLabel,
             submission.facilities?.map((facility) => facility.description).join(' '),
             submission.href,
             submission.submittedBy,
@@ -995,9 +1007,10 @@ export function AdminPoiPanel() {
 
   const updateImageReview = async (
     submission: AdminPoiSubmission,
+    imageUrl: string,
     decision: PoiSubmissionImageReviewInput,
   ) => {
-    if (!submission.imageUrl) {
+    if (!imageUrl) {
       return;
     }
 
@@ -1008,7 +1021,7 @@ export function AdminPoiPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           submissionId: submission.id,
-          imageUrl: submission.imageUrl,
+          imageUrl,
           decision,
         }),
       });
@@ -1042,11 +1055,11 @@ export function AdminPoiPanel() {
   const pendingCount = statusCounts.get('pending_review') ?? 0;
   const approvedCount = statusCounts.get('approved') ?? 0;
   const publishedCount = statusCounts.get('published') ?? 0;
-  const rejectedImageCount = submissions.filter(
-    (submission) =>
-      submission.imageUrl &&
-      imageReviewByKey.get(imageReviewKey(submission.id, submission.imageUrl))?.decision ===
-        'rejected',
+  const rejectedImageCount = submissions.filter((submission) =>
+    getPoiImageUrls(submission).some(
+      (imageUrl) =>
+        imageReviewByKey.get(imageReviewKey(submission.id, imageUrl))?.decision === 'rejected',
+    ),
   ).length;
   const duplicateConflictCount = new Set(
     conflictDecisions
@@ -1294,13 +1307,7 @@ export function AdminPoiPanel() {
                   conflictHints={conflictHintsBySubmissionId.get(item.submission.id) ?? []}
                   iconBaseUrl={categoryIconBaseUrl}
                   isBusy={isBusy}
-                  imageReview={
-                    item.submission.imageUrl
-                      ? imageReviewByKey.get(
-                          imageReviewKey(item.submission.id, item.submission.imageUrl),
-                        )
-                      : undefined
-                  }
+                  imageReviews={getPoiImageReviews(item.submission, imageReviewByKey)}
                   isSelected={selectedSubmissionIds.has(item.submission.id)}
                   key={item.key}
                   hierarchyHint={hierarchyHintBySubmissionId.get(item.submission.id)}
@@ -1376,11 +1383,7 @@ export function AdminPoiPanel() {
           contextMarkers={auditContextMarkersBySubmissionId.get(detailTarget.id) ?? []}
           conflictHints={conflictHintsBySubmissionId.get(detailTarget.id) ?? []}
           hierarchyHint={hierarchyHintBySubmissionId.get(detailTarget.id)}
-          imageReview={
-            detailTarget.imageUrl
-              ? imageReviewByKey.get(imageReviewKey(detailTarget.id, detailTarget.imageUrl))
-              : undefined
-          }
+          imageReviews={getPoiImageReviews(detailTarget, imageReviewByKey)}
           isBusy={isBusy}
           submission={detailTarget}
           tilePreviewConfig={tilePreviewConfig}
@@ -1398,7 +1401,9 @@ export function AdminPoiPanel() {
             setDetailTargetId(null);
             setEditTarget(detailTarget);
           }}
-          onImageReview={(decision) => void updateImageReview(detailTarget, decision)}
+          onImageReview={(imageUrl, decision) =>
+            void updateImageReview(detailTarget, imageUrl, decision)
+          }
           onPublish={() => {
             setDetailTargetId(null);
             setPublishTarget(detailTarget);
@@ -1462,11 +1467,7 @@ export function AdminPoiPanel() {
             (decision) => decision.submissionId === publishTarget.id,
           )}
           conflictHints={conflictHintsBySubmissionId.get(publishTarget.id) ?? []}
-          imageReview={
-            publishTarget.imageUrl
-              ? imageReviewByKey.get(imageReviewKey(publishTarget.id, publishTarget.imageUrl))
-              : undefined
-          }
+          imageReviews={getPoiImageReviews(publishTarget, imageReviewByKey)}
           isBusy={isBusy}
           submission={publishTarget}
           onClose={() => setPublishTarget(null)}
@@ -1496,6 +1497,7 @@ export function AdminPoiPanel() {
       {editTarget ? (
         <EditPoiSubmissionDialog
           categories={categories}
+          iconBaseUrl={categoryIconBaseUrl}
           contextMarkers={auditContextMarkersBySubmissionId.get(editTarget.id) ?? []}
           isBusy={isBusy}
           parentMarkerOptions={parentMarkerOptions}
@@ -1517,6 +1519,7 @@ export function AdminPoiPanel() {
       {createTarget ? (
         <EditPoiSubmissionDialog
           categories={categories}
+          iconBaseUrl={categoryIconBaseUrl}
           contextMarkers={[]}
           initialParentMarkerId={createTarget.parentMarkerId}
           isBusy={isBusy}
@@ -1538,6 +1541,7 @@ export function AdminPoiPanel() {
       {legacyEditTarget ? (
         <EditLegacyPoiMarkerDialog
           categories={categories}
+          iconBaseUrl={categoryIconBaseUrl}
           isBusy={isBusy}
           marker={legacyEditTarget}
           parentMarkerOptions={parentMarkerOptions}
@@ -1606,7 +1610,9 @@ function LegacyPoiMarkerItem({
           {geometryLabel(marker.geometry)} · {marker.id}
         </p>
         {marker.description ? <p className="muted">{marker.description}</p> : null}
-        {marker.imageUrl ? <p className="muted">图片：{marker.imageUrl}</p> : null}
+        {getPoiImageUrls(marker).length > 0 ? (
+          <p className="muted">图片：{getPoiImageUrls(marker).length} 张</p>
+        ) : null}
       </div>
       <div className="admin-content-actions">
         {coordinate ? (
@@ -1632,23 +1638,37 @@ function LegacyPoiMarkerItem({
 
 function AdminPoiBusinessDetailsFields({
   disabled,
+  excludedParentMarkerId,
   form,
   onChange,
+  parentMarkerOptions,
   roadMarkerOptions,
 }: Readonly<{
   disabled: boolean;
+  excludedParentMarkerId?: string;
   form: Pick<
     PoiSubmissionFormInput,
-    'openingHours' | 'address' | 'addressRoadMarkerId' | 'facilities'
+    | 'openingHours'
+    | 'address'
+    | 'addressRoadMarkerId'
+    | 'parentMarkerId'
+    | 'floorLabel'
+    | 'facilities'
   >;
   onChange: (
     patch: Partial<
       Pick<
         PoiSubmissionFormInput,
-        'openingHours' | 'address' | 'addressRoadMarkerId' | 'facilities'
+        | 'openingHours'
+        | 'address'
+        | 'addressRoadMarkerId'
+        | 'parentMarkerId'
+        | 'floorLabel'
+        | 'facilities'
       >
     >,
   ) => void;
+  parentMarkerOptions: MapMarker[];
   roadMarkerOptions: MapMarker[];
 }>) {
   const matchingRoads = findAddressRoadMarkers(form.address, roadMarkerOptions);
@@ -1657,16 +1677,19 @@ function AdminPoiBusinessDetailsFields({
     ...matchingRoads,
     ...roadMarkerOptions.filter((marker) => !matchingRoadIds.has(marker.id)),
   ];
+  const roadMarkerIds = new Set(roadMarkerOptions.map((marker) => marker.id));
+  const matchingParents = findPoiAddressMarkerMatches(
+    form.address,
+    parentMarkerOptions.filter(
+      (marker) => marker.id !== excludedParentMarkerId && !roadMarkerIds.has(marker.id),
+    ),
+  );
+  const suggestedRoad = selectUnambiguousAddressMarker(matchingRoads);
+  const suggestedParent = selectUnambiguousAddressMarker(matchingParents);
+  const suggestedFloorLabel = inferPoiFloorLabel(form.address);
 
   const updateAddress = (address: string) => {
-    const matches = findAddressRoadMarkers(address, roadMarkerOptions);
-    const addressRoadMarkerId =
-      matches.length === 1
-        ? (matches[0]?.id ?? '')
-        : matches.some((marker) => marker.id === form.addressRoadMarkerId)
-          ? form.addressRoadMarkerId
-          : '';
-    onChange({ address, addressRoadMarkerId });
+    onChange({ address });
   };
 
   return (
@@ -1691,6 +1714,50 @@ function AdminPoiBusinessDetailsFields({
           placeholder="例如：青年大街 18 号"
         />
       </label>
+      <label>
+        <span>楼层</span>
+        <input
+          disabled={disabled}
+          maxLength={40}
+          value={form.floorLabel}
+          onChange={(event) => onChange({ floorLabel: event.currentTarget.value })}
+          placeholder="例如：B1、3F、站厅层"
+        />
+      </label>
+      {suggestedRoad?.id !== form.addressRoadMarkerId ||
+      suggestedParent?.id !== form.parentMarkerId ||
+      (suggestedFloorLabel && suggestedFloorLabel !== form.floorLabel) ? (
+        <div className="admin-poi-address-suggestions" aria-label="地址识别建议">
+          <span>从地址识别</span>
+          {suggestedRoad && suggestedRoad.id !== form.addressRoadMarkerId ? (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange({ addressRoadMarkerId: suggestedRoad.id })}
+            >
+              道路：{suggestedRoad.label}
+            </button>
+          ) : null}
+          {suggestedParent && suggestedParent.id !== form.parentMarkerId ? (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange({ parentMarkerId: suggestedParent.id })}
+            >
+              父地点：{suggestedParent.label}
+            </button>
+          ) : null}
+          {suggestedFloorLabel && suggestedFloorLabel !== form.floorLabel ? (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange({ floorLabel: suggestedFloorLabel })}
+            >
+              楼层：{suggestedFloorLabel}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <label>
         <span>地址道路</span>
         <select
@@ -1721,6 +1788,7 @@ function AdminPoiBusinessDetailsFields({
 
 function EditLegacyPoiMarkerDialog({
   categories,
+  iconBaseUrl,
   isBusy,
   marker,
   onClose,
@@ -1731,6 +1799,7 @@ function EditLegacyPoiMarkerDialog({
   tilePreviewConfig,
 }: Readonly<{
   categories: PoiCategory[];
+  iconBaseUrl: string;
   isBusy: boolean;
   marker: MapMarker;
   onClose: () => void;
@@ -1746,9 +1815,10 @@ function EditLegacyPoiMarkerDialog({
     iconFileName: marker.iconFileName ?? '',
     description: marker.description ?? '',
     href: marker.href ?? '',
-    imageUrl: marker.imageUrl ?? '',
+    imageUrls: getPoiImageUrls(marker),
     geometry: marker.geometry,
     parentMarkerId: marker.parentMarkerId ?? '',
+    floorLabel: marker.floorLabel ?? '',
     boundRegionMarkerIds: marker.boundRegionMarkerIds ?? [],
     openingHours: marker.openingHours ?? '',
     address: marker.address ?? '',
@@ -1800,9 +1870,10 @@ function EditLegacyPoiMarkerDialog({
       iconFileName: form.iconFileName.trim(),
       description: form.description.trim(),
       href: form.href.trim(),
-      imageUrl: form.imageUrl.trim(),
+      imageUrls: normalizePoiImageUrlList(form.imageUrls),
       geometry: geometryResult.geometry,
       parentMarkerId: form.parentMarkerId.trim(),
+      floorLabel: form.floorLabel.trim(),
       boundRegionMarkerIds: form.boundRegionMarkerIds,
       openingHours: form.openingHours.trim(),
       address: form.address.trim(),
@@ -1850,20 +1921,14 @@ function EditLegacyPoiMarkerDialog({
             ))}
           </select>
         </label>
-        <label>
-          <span>展示图标</span>
-          <select
-            value={form.iconFileName}
-            onChange={(event) => updateForm({ iconFileName: event.currentTarget.value })}
-          >
-            <option value="">跟随分类默认图标</option>
-            {iconOptions.map((iconValue) => (
-              <option value={iconValue} key={iconValue}>
-                {iconValue}
-              </option>
-            ))}
-          </select>
-        </label>
+        <AdminPoiIconPicker
+          defaultIconFileName={selectedCategory?.iconMapping.defaultIconFileName}
+          disabled={isBusy}
+          iconBaseUrl={iconBaseUrl}
+          options={iconOptions}
+          value={form.iconFileName}
+          onChange={(iconFileName) => updateForm({ iconFileName })}
+        />
         <label>
           <span>简介</span>
           <textarea
@@ -1874,7 +1939,9 @@ function EditLegacyPoiMarkerDialog({
         </label>
         <AdminPoiBusinessDetailsFields
           disabled={isBusy}
+          excludedParentMarkerId={marker.id}
           form={form}
+          parentMarkerOptions={parentMarkerOptions}
           roadMarkerOptions={roadMarkerOptions}
           onChange={updateForm}
         />
@@ -1886,34 +1953,11 @@ function EditLegacyPoiMarkerDialog({
             placeholder="https://..."
           />
         </label>
-        <div className="admin-poi-image-edit-block">
-          <label>
-            <span>图片</span>
-            <input
-              value={form.imageUrl}
-              onChange={(event) => updateForm({ imageUrl: event.currentTarget.value })}
-              placeholder="https://... 或 /api/map/poi-submission-images/..."
-            />
-          </label>
-          <div className="admin-content-actions">
-            {form.imageUrl ? (
-              <a
-                href={resolvePoiSubmissionImageUrl(form.imageUrl)}
-                target="_blank"
-                rel="noreferrer"
-              >
-                预览图片
-              </a>
-            ) : null}
-            <button
-              type="button"
-              disabled={!form.imageUrl}
-              onClick={() => updateForm({ imageUrl: '' })}
-            >
-              删除图片
-            </button>
-          </div>
-        </div>
+        <AdminPoiImageEditor
+          disabled={isBusy}
+          values={form.imageUrls}
+          onChange={(imageUrls) => updateForm({ imageUrls })}
+        />
         <label>
           <span>几何类型</span>
           <select
@@ -1945,45 +1989,17 @@ function EditLegacyPoiMarkerDialog({
             setError('');
           }}
         />
-        <label>
-          <span>父地点</span>
-          <select
-            value={form.parentMarkerId}
-            onChange={(event) => updateForm({ parentMarkerId: event.currentTarget.value })}
-          >
-            <option value="">无父地点</option>
-            {parentMarkerOptions
-              .filter((candidate) => candidate.id !== marker.id)
-              .map((candidate) => (
-                <option value={candidate.id} key={candidate.id}>
-                  {candidate.label} · {candidate.id}
-                </option>
-              ))}
-          </select>
-        </label>
-        <fieldset className="admin-poi-region-bindings">
-          <legend>绑定区域</legend>
-          {regionMarkerOptions.length > 0 ? (
-            regionMarkerOptions.map((region) => (
-              <label className="checkbox-row" key={region.id}>
-                <input
-                  type="checkbox"
-                  checked={form.boundRegionMarkerIds.includes(region.id)}
-                  onChange={(event) =>
-                    updateForm({
-                      boundRegionMarkerIds: event.currentTarget.checked
-                        ? [...form.boundRegionMarkerIds, region.id]
-                        : form.boundRegionMarkerIds.filter((id) => id !== region.id),
-                    })
-                  }
-                />
-                <span>{region.label}</span>
-              </label>
-            ))
-          ) : (
-            <p className="muted">当前地图数据中没有可绑定的区域 POI。</p>
-          )}
-        </fieldset>
+        <ParentMarkerSelect
+          excludedMarkerId={marker.id}
+          markerOptions={parentMarkerOptions}
+          selectedId={form.parentMarkerId}
+          onChange={(parentMarkerId) => updateForm({ parentMarkerId })}
+        />
+        <PoiRegionBindingsFieldset
+          markerOptions={regionMarkerOptions}
+          selectedIds={form.boundRegionMarkerIds}
+          onChange={(boundRegionMarkerIds) => updateForm({ boundRegionMarkerIds })}
+        />
         {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
         <div className="admin-content-actions">
           <button type="button" onClick={onClose} disabled={isBusy}>
@@ -2232,7 +2248,7 @@ function PoiSubmissionReviewItem({
   iconBaseUrl,
   isBusy,
   isSelected,
-  imageReview,
+  imageReviews,
   onAddChild,
   onCopy,
   onDetail,
@@ -2250,7 +2266,7 @@ function PoiSubmissionReviewItem({
   iconBaseUrl: string;
   isBusy: boolean;
   isSelected: boolean;
-  imageReview?: PoiSubmissionImageReview;
+  imageReviews: PoiSubmissionImageReview[];
   onAddChild: () => void;
   onCopy: (message: string) => void;
   onDetail: () => void;
@@ -2266,8 +2282,9 @@ function PoiSubmissionReviewItem({
   const mapHref = representativeCoordinate
     ? buildSubmissionMapHref(submission, representativeCoordinate)
     : appPath('/map');
-  const rejectedImage = imageReview?.decision === 'rejected';
-  const unreviewedImage = Boolean(submission.imageUrl) && !imageReview;
+  const imageUrls = getPoiImageUrls(submission);
+  const rejectedImage = imageReviews.some((review) => review.decision === 'rejected');
+  const unreviewedImage = imageUrls.length > imageReviews.length;
   const hasConflicts = conflictHints.length > 0;
   const conflictSummary = hasConflicts ? `${conflictHints.length} 条` : '';
 
@@ -2323,6 +2340,9 @@ function PoiSubmissionReviewItem({
           {submission.description ? <span className="operation-tag">已填写简介</span> : null}
           {submission.openingHours ? <span className="operation-tag">已填写营业时间</span> : null}
           {submission.address ? <span className="operation-tag">已填写地址</span> : null}
+          {submission.floorLabel ? (
+            <span className="operation-tag">{`楼层 ${submission.floorLabel}`}</span>
+          ) : null}
           {submission.facilities?.length ? (
             <span className="operation-tag">{`设施 ${submission.facilities.length}`}</span>
           ) : null}
@@ -2492,7 +2512,7 @@ function PoiSubmissionDetailDialog({
   contextMarkers,
   conflictHints,
   hierarchyHint,
-  imageReview,
+  imageReviews,
   isBusy,
   onClose,
   onConflictDecision,
@@ -2511,13 +2531,13 @@ function PoiSubmissionDetailDialog({
   contextMarkers: PoiAuditContextMarker[];
   conflictHints: PoiConflictHint[];
   hierarchyHint?: PoiHierarchyHint | null;
-  imageReview?: PoiSubmissionImageReview;
+  imageReviews: PoiSubmissionImageReview[];
   isBusy: boolean;
   onClose: () => void;
   onConflictDecision: (hint: PoiConflictHint, decision: PoiConflictDecisionInput) => void;
   onDelete: () => void;
   onEdit: () => void;
-  onImageReview: (decision: PoiSubmissionImageReviewInput) => void;
+  onImageReview: (imageUrl: string, decision: PoiSubmissionImageReviewInput) => void;
   onPublish: () => void;
   onReject: () => void;
   onRunAction: (poiId: string, action: 'approve' | 'reject', reason?: string) => Promise<boolean>;
@@ -2588,9 +2608,13 @@ function PoiSubmissionDetailDialog({
           >
             发布
           </button>
-          <a className="admin-action-link" href={mapHref} target="_blank" rel="noreferrer">
+          <button
+            type="button"
+            disabled={isBusy || submission.status !== 'approved'}
+            onClick={() => void window.open(mapHref, '_blank', 'noopener,noreferrer')}
+          >
             地图查看
-          </a>
+          </button>
           <button
             type="button"
             disabled={!representativeCoordinate}
@@ -2626,9 +2650,9 @@ function PoiSubmissionDetailDialog({
             submission={submission}
           />
         ) : null}
-        {submission.imageUrl ? (
+        {getPoiImageUrls(submission).length > 0 ? (
           <PoiSubmissionImagePreview
-            imageReview={imageReview}
+            imageReviews={imageReviews}
             isBusy={isBusy}
             onReview={onImageReview}
             submission={submission}
@@ -2715,6 +2739,10 @@ function PoiSubmissionDetail({
         <div>
           <dt>文字地址</dt>
           <dd>{submission.address || '未填写'}</dd>
+        </div>
+        <div>
+          <dt>楼层</dt>
+          <dd>{submission.floorLabel || '未填写'}</dd>
         </div>
         <div>
           <dt>地址道路</dt>
@@ -2936,7 +2964,7 @@ function PublishPoiDialog({
   category,
   conflictDecisions,
   conflictHints,
-  imageReview,
+  imageReviews,
   isBusy,
   onClose,
   onConfirm,
@@ -2945,7 +2973,7 @@ function PublishPoiDialog({
   category?: PoiCategory;
   conflictDecisions: PoiConflictDecision[];
   conflictHints: PoiConflictHint[];
-  imageReview?: PoiSubmissionImageReview;
+  imageReviews: PoiSubmissionImageReview[];
   isBusy: boolean;
   onClose: () => void;
   onConfirm: () => Promise<void>;
@@ -2953,7 +2981,8 @@ function PublishPoiDialog({
 }>) {
   const [isConfirmed, setIsConfirmed] = useState(false);
   const representativeCoordinate = getGeometryRepresentativeCoordinate(submission.geometry);
-  const hasRejectedImage = imageReview?.decision === 'rejected';
+  const imageUrls = getPoiImageUrls(submission);
+  const hasRejectedImage = imageReviews.some((review) => review.decision === 'rejected');
   const duplicateDecisionCount = conflictDecisions.filter(
     (decision) => decision.decision === 'duplicate',
   ).length;
@@ -3014,10 +3043,8 @@ function PublishPoiDialog({
           <div>
             <dt>投稿图片</dt>
             <dd>
-              {submission.imageUrl
-                ? imageReview
-                  ? imageReviewLabel(imageReview.decision)
-                  : '有图片，尚未标记审核状态'
+              {imageUrls.length > 0
+                ? `${imageUrls.length} 张 · ${imageReviews.length} 张已审核`
                 : '未提交图片'}
             </dd>
           </div>
@@ -3297,7 +3324,9 @@ function BulkPublishPoiDialog({
           </div>
           <div>
             <dt>含图片</dt>
-            <dd>{submissions.filter((submission) => Boolean(submission.imageUrl)).length}</dd>
+            <dd>
+              {submissions.filter((submission) => getPoiImageUrls(submission).length > 0).length}
+            </dd>
           </div>
           <div>
             <dt>冲突待合并</dt>
@@ -3328,9 +3357,7 @@ function BulkPublishPoiDialog({
             {blockedTargets.slice(0, 5).map((submission) => (
               <p key={submission.id}>
                 {submission.title}
-                {submission.imageUrl &&
-                imageReviewByKey.get(imageReviewKey(submission.id, submission.imageUrl))
-                  ?.decision === 'rejected'
+                {hasRejectedPoiImage(submission, imageReviewByKey)
                   ? '：图片不合格'
                   : '：存在待合并冲突'}
               </p>
@@ -3370,6 +3397,7 @@ function EditPoiSubmissionDialog({
   categories,
   contextMarkers,
   initialParentMarkerId,
+  iconBaseUrl,
   isBusy,
   onClose,
   onSubmit,
@@ -3382,6 +3410,7 @@ function EditPoiSubmissionDialog({
   categories: PoiCategory[];
   contextMarkers: PoiAuditContextMarker[];
   initialParentMarkerId?: string;
+  iconBaseUrl: string;
   isBusy: boolean;
   onClose: () => void;
   onSubmit: (input: PoiSubmissionEditInput) => Promise<string | null>;
@@ -3397,8 +3426,9 @@ function EditPoiSubmissionDialog({
     iconFileName: submission?.iconFileName ?? '',
     description: submission?.description ?? '',
     href: submission?.href ?? '',
-    imageUrl: submission?.imageUrl ?? '',
+    imageUrls: submission ? getPoiImageUrls(submission) : [],
     parentMarkerId: submission?.parentMarkerId ?? initialParentMarkerId ?? '',
+    floorLabel: submission?.floorLabel ?? '',
     boundRegionMarkerIds: submission?.boundRegionMarkerIds ?? [],
     openingHours: submission?.openingHours ?? '',
     address: submission?.address ?? '',
@@ -3466,9 +3496,10 @@ function EditPoiSubmissionDialog({
       iconFileName: form.iconFileName.trim(),
       description: form.description.trim(),
       href: form.href.trim(),
-      imageUrl: form.imageUrl.trim(),
+      imageUrls: normalizePoiImageUrlList(form.imageUrls),
       geometry: geometryResult.geometry,
       parentMarkerId: form.parentMarkerId.trim(),
+      floorLabel: form.floorLabel.trim(),
       boundRegionMarkerIds: form.boundRegionMarkerIds,
       openingHours: form.openingHours.trim(),
       address: form.address.trim(),
@@ -3517,20 +3548,14 @@ function EditPoiSubmissionDialog({
             ))}
           </select>
         </label>
-        <label>
-          <span>展示图标</span>
-          <select
-            value={form.iconFileName}
-            onChange={(event) => updateForm({ iconFileName: event.currentTarget.value })}
-          >
-            <option value="">跟随分类默认图标</option>
-            {iconOptions.map((iconValue) => (
-              <option value={iconValue} key={iconValue}>
-                {iconValue}
-              </option>
-            ))}
-          </select>
-        </label>
+        <AdminPoiIconPicker
+          defaultIconFileName={selectedCategory?.iconMapping.defaultIconFileName}
+          disabled={isBusy}
+          iconBaseUrl={iconBaseUrl}
+          options={iconOptions}
+          value={form.iconFileName}
+          onChange={(iconFileName) => updateForm({ iconFileName })}
+        />
         <label>
           <span>简介</span>
           <textarea
@@ -3541,7 +3566,9 @@ function EditPoiSubmissionDialog({
         </label>
         <AdminPoiBusinessDetailsFields
           disabled={isBusy}
+          excludedParentMarkerId={submission ? `poi-${submission.id}` : undefined}
           form={form}
+          parentMarkerOptions={parentMarkerOptions}
           roadMarkerOptions={roadMarkerOptions}
           onChange={updateForm}
         />
@@ -3553,34 +3580,11 @@ function EditPoiSubmissionDialog({
             placeholder="https://..."
           />
         </label>
-        <div className="admin-poi-image-edit-block">
-          <label>
-            <span>图片</span>
-            <input
-              value={form.imageUrl}
-              onChange={(event) => updateForm({ imageUrl: event.currentTarget.value })}
-              placeholder="https://... 或 /api/map/poi-submission-images/..."
-            />
-          </label>
-          <div className="admin-content-actions">
-            {form.imageUrl ? (
-              <a
-                href={resolvePoiSubmissionImageUrl(form.imageUrl)}
-                target="_blank"
-                rel="noreferrer"
-              >
-                预览图片
-              </a>
-            ) : null}
-            <button
-              type="button"
-              disabled={!form.imageUrl}
-              onClick={() => updateForm({ imageUrl: '' })}
-            >
-              删除图片
-            </button>
-          </div>
-        </div>
+        <AdminPoiImageEditor
+          disabled={isBusy}
+          values={form.imageUrls}
+          onChange={(imageUrls) => updateForm({ imageUrls })}
+        />
         <label>
           <span>几何类型</span>
           <select
@@ -3603,45 +3607,17 @@ function EditPoiSubmissionDialog({
             <option value="MultiPolygon">多重多边形区域</option>
           </select>
         </label>
-        <label>
-          <span>父地点</span>
-          <select
-            value={form.parentMarkerId}
-            onChange={(event) => updateForm({ parentMarkerId: event.currentTarget.value })}
-          >
-            <option value="">无父地点</option>
-            {parentMarkerOptions
-              .filter((marker) => marker.id !== (submission ? `poi-${submission.id}` : ''))
-              .map((marker) => (
-                <option value={marker.id} key={marker.id}>
-                  {marker.label} · {marker.id}
-                </option>
-              ))}
-          </select>
-        </label>
-        <fieldset className="admin-poi-region-bindings">
-          <legend>绑定区域</legend>
-          {regionMarkerOptions.length > 0 ? (
-            regionMarkerOptions.map((marker) => (
-              <label className="checkbox-row" key={marker.id}>
-                <input
-                  type="checkbox"
-                  checked={form.boundRegionMarkerIds.includes(marker.id)}
-                  onChange={(event) =>
-                    updateForm({
-                      boundRegionMarkerIds: event.currentTarget.checked
-                        ? [...form.boundRegionMarkerIds, marker.id]
-                        : form.boundRegionMarkerIds.filter((id) => id !== marker.id),
-                    })
-                  }
-                />
-                <span>{marker.label}</span>
-              </label>
-            ))
-          ) : (
-            <p className="muted">当前地图数据中没有可绑定的区域 POI。</p>
-          )}
-        </fieldset>
+        <ParentMarkerSelect
+          excludedMarkerId={submission ? `poi-${submission.id}` : undefined}
+          markerOptions={parentMarkerOptions}
+          selectedId={form.parentMarkerId}
+          onChange={(parentMarkerId) => updateForm({ parentMarkerId })}
+        />
+        <PoiRegionBindingsFieldset
+          markerOptions={regionMarkerOptions}
+          selectedIds={form.boundRegionMarkerIds}
+          onChange={(boundRegionMarkerIds) => updateForm({ boundRegionMarkerIds })}
+        />
         {geometryDraft.type === 'Point' ? (
           <div className="admin-poi-edit-coordinate">
             <div className="admin-poi-edit-coordinate-fields">
@@ -3793,6 +3769,270 @@ function PoiNonPointGeometryEditor({
   );
 }
 
+function AdminPoiImageEditor({
+  disabled,
+  onChange,
+  values,
+}: Readonly<{
+  disabled: boolean;
+  onChange: (imageUrls: string[]) => void;
+  values: string[];
+}>) {
+  const [inputKey, setInputKey] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [status, setStatus] = useState('');
+
+  const upload = async (files: File[]) => {
+    if (files.length === 0) {
+      return;
+    }
+    const availableSlots = Math.max(0, 12 - values.length);
+    const selectedFiles = files.slice(0, availableSlots);
+    if (selectedFiles.length === 0) {
+      setStatus('每个 POI 最多可保存 12 张图片');
+      return;
+    }
+    setIsUploading(true);
+    setStatus(`正在上传 ${selectedFiles.length} 张图片`);
+    const nextValues = [...values];
+    try {
+      for (const file of selectedFiles) {
+        const body = new FormData();
+        body.append('file', file);
+        const response = await fetch(appPath('/api/admin/map/poi-submission-images/upload'), {
+          method: 'POST',
+          body,
+        });
+        const data = (await response.json()) as { imageUrl?: string; message?: string };
+        if (!response.ok || !data.imageUrl) {
+          onChange(nextValues);
+          setStatus(data.message ?? `图片 ${file.name} 上传失败`);
+          return;
+        }
+        nextValues.push(data.imageUrl);
+      }
+      onChange(normalizePoiImageUrlList(nextValues));
+      setStatus(`已上传 ${selectedFiles.length} 张图片`);
+    } catch {
+      setStatus('图片上传失败');
+    } finally {
+      setIsUploading(false);
+      setInputKey((current) => current + 1);
+    }
+  };
+
+  return (
+    <div className="admin-poi-image-edit-block">
+      <span>图片（最多 12 张，顺序即地图展示顺序）</span>
+      {values.map((value, index) => (
+        <div className="admin-poi-image-url-row" key={index}>
+          <input
+            value={value}
+            disabled={disabled || isUploading}
+            onChange={(event) =>
+              onChange(
+                values.map((item, itemIndex) =>
+                  itemIndex === index ? event.currentTarget.value : item,
+                ),
+              )
+            }
+            placeholder="https://... 或 /api/map/poi-submission-images/..."
+            aria-label={`第 ${index + 1} 张图片链接`}
+          />
+          {value ? (
+            <a href={resolvePoiSubmissionImageUrl(value)} target="_blank" rel="noreferrer">
+              预览
+            </a>
+          ) : null}
+          <button
+            type="button"
+            title="向前移动"
+            aria-label="向前移动图片"
+            disabled={disabled || isUploading || index === 0}
+            onClick={() => onChange(moveListItem(values, index, index - 1))}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              arrow_back
+            </span>
+          </button>
+          <button
+            type="button"
+            title="向后移动"
+            aria-label="向后移动图片"
+            disabled={disabled || isUploading || index === values.length - 1}
+            onClick={() => onChange(moveListItem(values, index, index + 1))}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              arrow_forward
+            </span>
+          </button>
+          <button
+            type="button"
+            title="删除图片"
+            aria-label="删除图片"
+            disabled={disabled || isUploading}
+            onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              delete
+            </span>
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        disabled={disabled || isUploading || values.length >= 12}
+        onClick={() => onChange([...values, ''])}
+      >
+        添加图片链接
+      </button>
+      <label className="admin-poi-image-upload">
+        <span>上传一张或多张图片</span>
+        <input
+          key={inputKey}
+          type="file"
+          multiple
+          accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
+          disabled={disabled || isUploading}
+          onChange={(event) => void upload(Array.from(event.currentTarget.files ?? []))}
+        />
+      </label>
+      <div className="admin-content-actions">
+        {status ? (
+          <span className="muted" role="status">
+            {status}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ParentMarkerSelect({
+  excludedMarkerId,
+  markerOptions,
+  onChange,
+  selectedId,
+}: Readonly<{
+  excludedMarkerId?: string;
+  markerOptions: MapMarker[];
+  onChange: (markerId: string) => void;
+  selectedId: string;
+}>) {
+  const [query, setQuery] = useState('');
+  const options = useMemo(() => {
+    const normalized = normalizeSearchText(query);
+    return markerOptions.filter((marker) => {
+      if (marker.id === excludedMarkerId) {
+        return false;
+      }
+      if (marker.id === selectedId || !normalized) {
+        return true;
+      }
+      return normalizeSearchText(
+        [marker.label, marker.id, ...Object.values(marker.localizedLabels ?? {})].join(' '),
+      ).includes(normalized);
+    });
+  }, [excludedMarkerId, markerOptions, query, selectedId]);
+
+  return (
+    <div className="admin-poi-parent-selector">
+      <label>
+        <span>搜索父地点</span>
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.currentTarget.value)}
+          placeholder="输入地点名称、译名或 ID"
+        />
+      </label>
+      <label>
+        <span>父地点</span>
+        <select value={selectedId} onChange={(event) => onChange(event.currentTarget.value)}>
+          <option value="">无父地点</option>
+          {options.map((marker) => (
+            <option value={marker.id} key={marker.id}>
+              {marker.label} · {marker.id}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function PoiRegionBindingsFieldset({
+  markerOptions,
+  onChange,
+  selectedIds,
+}: Readonly<{
+  markerOptions: MapMarker[];
+  onChange: (selectedIds: string[]) => void;
+  selectedIds: string[];
+}>) {
+  const [query, setQuery] = useState('');
+  const filteredMarkers = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase('zh-CN');
+    const ordered = [...markerOptions].sort((left, right) => {
+      const selectedDifference =
+        Number(selectedIds.includes(right.id)) - Number(selectedIds.includes(left.id));
+      return selectedDifference || left.label.localeCompare(right.label, 'zh-CN');
+    });
+    return normalized
+      ? ordered.filter((marker) =>
+          `${marker.label}\u0000${marker.id}`.toLocaleLowerCase('zh-CN').includes(normalized),
+        )
+      : ordered;
+  }, [markerOptions, query, selectedIds]);
+
+  return (
+    <fieldset className="admin-poi-region-bindings">
+      <legend>绑定区域</legend>
+      <div className="admin-poi-region-binding-scroll">
+        {markerOptions.length > 0 ? (
+          <>
+            <label className="admin-poi-region-search">
+              <span className="material-symbols-outlined" aria-hidden="true">
+                search
+              </span>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.currentTarget.value)}
+                placeholder="搜索区域名称或 ID"
+              />
+            </label>
+            <div className="admin-poi-region-binding-options">
+              {filteredMarkers.map((marker) => (
+                <label className="checkbox-row" key={marker.id}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(marker.id)}
+                    onChange={(event) =>
+                      onChange(
+                        event.currentTarget.checked
+                          ? Array.from(new Set([...selectedIds, marker.id]))
+                          : selectedIds.filter((id) => id !== marker.id),
+                      )
+                    }
+                  />
+                  <span>
+                    <strong>{marker.label}</strong>
+                    <small>{marker.id}</small>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {filteredMarkers.length === 0 ? <p className="muted">没有匹配的区域。</p> : null}
+          </>
+        ) : (
+          <p className="muted">当前地图数据中没有可绑定的区域 POI。</p>
+        )}
+      </div>
+    </fieldset>
+  );
+}
+
 function PoiGeometryVisualEditor({
   contextMarkers,
   draft,
@@ -3804,17 +4044,110 @@ function PoiGeometryVisualEditor({
   onChange: (draft: PoiGeometryDraft) => void;
   tilePreviewConfig: PoiTilePreviewConfig;
 }>) {
-  const preview = buildPoiGeometryDraftMapPreview(draft, contextMarkers);
-  const handlePick = (event: ReactMouseEvent<HTMLButtonElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const coordinate = unprojectAuditMapPreviewCoordinate(
+  const autoPreview = buildPoiGeometryDraftMapPreview(draft, contextMarkers);
+  const [tool, setTool] = useState<'pan' | 'move' | 'draw'>('pan');
+  const [viewBounds, setViewBounds] = useState(autoPreview.bounds);
+  const gestureRef = useRef<{
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    startBounds: PoiAuditMapBounds;
+    moved: boolean;
+    nodeIndex?: number;
+  } | null>(null);
+  const preview = buildPoiGeometryDraftMapPreview(draft, contextMarkers, viewBounds);
+  const coordinateAtClientPoint = (
+    clientX: number,
+    clientY: number,
+    element: HTMLElement,
+  ): [number, number] => {
+    const rect = element.getBoundingClientRect();
+    return unprojectAuditMapPreviewCoordinate(
       [
-        ((event.clientX - rect.left) / rect.width) * poiAuditPreviewWidth,
-        ((event.clientY - rect.top) / rect.height) * poiAuditPreviewHeight,
+        ((clientX - rect.left) / rect.width) * poiAuditPreviewWidth,
+        ((clientY - rect.top) / rect.height) * poiAuditPreviewHeight,
       ],
       preview.bounds,
     );
-    onChange(appendPoiGeometryDraftCoordinate(draft, coordinate));
+  };
+  const zoom = (factor: number) => setViewBounds((current) => scalePoiAuditBounds(current, factor));
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const nodeElement =
+      event.target instanceof Element
+        ? event.target.closest<SVGGElement>('[data-poi-node-index]')
+        : null;
+    const nodeIndex = nodeElement ? Number(nodeElement.dataset.poiNodeIndex) : undefined;
+    gestureRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startBounds: viewBounds,
+      moved: false,
+      nodeIndex: tool === 'move' && Number.isInteger(nodeIndex) ? nodeIndex : undefined,
+    };
+  };
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) {
+      return;
+    }
+    if (tool === 'move' && gesture.nodeIndex !== undefined) {
+      gesture.moved = true;
+      onChange(
+        replacePoiGeometryDraftCoordinate(
+          draft,
+          gesture.nodeIndex,
+          coordinateAtClientPoint(event.clientX, event.clientY, event.currentTarget),
+        ),
+      );
+      return;
+    }
+    if (tool !== 'pan') {
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const deltaX = event.clientX - gesture.startClientX;
+    const deltaY = event.clientY - gesture.startClientY;
+    if (Math.hypot(deltaX, deltaY) > 5) {
+      gesture.moved = true;
+    }
+    const width = gesture.startBounds.maxX - gesture.startBounds.minX;
+    const height = gesture.startBounds.maxZ - gesture.startBounds.minZ;
+    const worldDeltaX = (deltaX / Math.max(1, rect.width)) * width;
+    const worldDeltaZ = (deltaY / Math.max(1, rect.height)) * height;
+    setViewBounds({
+      minX: gesture.startBounds.minX - worldDeltaX,
+      maxX: gesture.startBounds.maxX - worldDeltaX,
+      minZ: gesture.startBounds.minZ - worldDeltaZ,
+      maxZ: gesture.startBounds.maxZ - worldDeltaZ,
+    });
+  };
+  const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) {
+      return;
+    }
+    if (tool === 'draw' && !gesture.moved) {
+      onChange(
+        appendPoiGeometryDraftCoordinate(
+          draft,
+          coordinateAtClientPoint(event.clientX, event.clientY, event.currentTarget),
+        ),
+      );
+    }
+    gestureRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+  const handleWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    zoom(event.deltaY < 0 ? 0.8 : 1.25);
   };
   const removable = canRemovePoiGeometryDraftCoordinate(draft);
 
@@ -3824,11 +4157,21 @@ function PoiGeometryVisualEditor({
         <strong>地图编辑</strong>
         <span>{geometryLabelFromDraft(draft)}</span>
       </div>
-      <button
-        className="admin-poi-geometry-map-stage"
-        type="button"
-        aria-label="在地图上添加几何节点"
-        onClick={handlePick}
+      <div
+        className={`admin-poi-geometry-map-stage is-tool-${tool}`}
+        role="application"
+        aria-label={
+          tool === 'pan'
+            ? '拖移 POI 几何地图'
+            : tool === 'move'
+              ? '拖移 POI 几何控制点'
+              : '在地图上添加几何节点'
+        }
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onWheel={handleWheel}
       >
         <PoiAuditTileLayer bounds={preview.bounds} tilePreviewConfig={tilePreviewConfig} />
         <svg viewBox={`0 0 ${poiAuditPreviewWidth} ${poiAuditPreviewHeight}`} aria-hidden="true">
@@ -3866,6 +4209,7 @@ function PoiGeometryVisualEditor({
           {preview.points.map((point, index) => (
             <g
               className="admin-poi-geometry-map-node"
+              data-poi-node-index={index}
               key={`draft-point-${index}`}
               transform={`translate(${roundPreviewValue(point[0])} ${roundPreviewValue(point[1])})`}
             >
@@ -3876,17 +4220,69 @@ function PoiGeometryVisualEditor({
             </g>
           ))}
         </svg>
-      </button>
-      <div className="admin-content-actions">
+      </div>
+      <div className="admin-poi-geometry-map-controls" aria-label="几何地图工具">
+        <button
+          className={tool === 'pan' ? 'is-active' : ''}
+          type="button"
+          aria-pressed={tool === 'pan'}
+          title="拖移地图"
+          onClick={() => setTool('pan')}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            pan_tool
+          </span>
+        </button>
+        <button
+          className={tool === 'move' ? 'is-active' : ''}
+          type="button"
+          aria-pressed={tool === 'move'}
+          title="拖移控制点"
+          onClick={() => setTool('move')}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            open_with
+          </span>
+        </button>
+        <button
+          className={tool === 'draw' ? 'is-active' : ''}
+          type="button"
+          aria-pressed={tool === 'draw'}
+          title="添加边界节点"
+          onClick={() => setTool('draw')}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            add_location_alt
+          </span>
+        </button>
+        <button type="button" title="放大" onClick={() => zoom(0.8)}>
+          <span className="material-symbols-outlined" aria-hidden="true">
+            add
+          </span>
+        </button>
+        <button type="button" title="缩小" onClick={() => zoom(1.25)}>
+          <span className="material-symbols-outlined" aria-hidden="true">
+            remove
+          </span>
+        </button>
+        <button
+          type="button"
+          title="适配全部几何"
+          onClick={() => setViewBounds(autoPreview.bounds)}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            fit_screen
+          </span>
+        </button>
         <button
           type="button"
           disabled={!removable}
+          title="撤销末节点"
           onClick={() => onChange(removeLastPoiGeometryDraftCoordinate(draft))}
         >
           <span className="material-symbols-outlined" aria-hidden="true">
             undo
           </span>
-          <span>撤销末节点</span>
         </button>
       </div>
     </section>
@@ -4269,6 +4665,90 @@ interface PoiCategoryDraft {
   iconFileNamesText: string;
 }
 
+function AdminPoiIconPicker({
+  defaultIconFileName,
+  disabled,
+  iconBaseUrl,
+  onChange,
+  options,
+  value,
+}: Readonly<{
+  defaultIconFileName?: string;
+  disabled: boolean;
+  iconBaseUrl: string;
+  onChange: (value: string) => void;
+  options: string[];
+  value: string;
+}>) {
+  const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(appPath('/api/admin/map/poi-category-icons'), { cache: 'no-store' })
+      .then(async (response) => {
+        const data = (await response.json()) as {
+          items?: Array<{ fileName: string; displayName: string }>;
+        };
+        if (!response.ok || cancelled) {
+          return;
+        }
+        setDisplayNames(
+          Object.fromEntries((data.items ?? []).map((item) => [item.fileName, item.displayName])),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const normalizedOptions = Array.from(new Set(options));
+  const defaultPreview = defaultIconFileName || normalizedOptions[0];
+  return (
+    <fieldset className="admin-poi-icon-picker" disabled={disabled}>
+      <legend>展示图标</legend>
+      <div className="admin-poi-icon-picker-grid">
+        <button
+          className={!value ? 'admin-poi-icon-option is-selected' : 'admin-poi-icon-option'}
+          type="button"
+          aria-pressed={!value}
+          onClick={() => onChange('')}
+        >
+          {defaultPreview ? (
+            <img src={toMarkerIconUrl(defaultPreview, iconBaseUrl)} alt="" draggable={false} />
+          ) : (
+            <span className="material-symbols-outlined" aria-hidden="true">
+              category
+            </span>
+          )}
+          <span>跟随分类默认</span>
+        </button>
+        {normalizedOptions.map((iconValue) => {
+          const iconKey = getPoiCategoryIconMetadataKey(iconValue);
+          const displayName =
+            (iconKey ? displayNames[iconKey] : undefined) ??
+            getDefaultPoiCategoryIconDisplayName(iconValue);
+          return (
+            <button
+              className={
+                value === iconValue ? 'admin-poi-icon-option is-selected' : 'admin-poi-icon-option'
+              }
+              type="button"
+              aria-pressed={value === iconValue}
+              title={`${displayName} · ${iconValue}`}
+              key={iconValue}
+              onClick={() => onChange(iconValue)}
+            >
+              <img src={toMarkerIconUrl(iconValue, iconBaseUrl)} alt="" draggable={false} />
+              <span>{displayName}</span>
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
 function PoiCategoryProfileDialog({
   categories,
   iconBaseUrl,
@@ -4289,10 +4769,33 @@ function PoiCategoryProfileDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingCategoryId, setUploadingCategoryId] = useState<string | null>(null);
   const [deletingIconKey, setDeletingIconKey] = useState<string | null>(null);
+  const [renamingIconKey, setRenamingIconKey] = useState<string | null>(null);
+  const [iconDisplayNames, setIconDisplayNames] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setDrafts(createCategoryDrafts(categories));
   }, [categories]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(appPath('/api/admin/map/poi-category-icons'), { cache: 'no-store' })
+      .then(async (response) => {
+        const data = (await response.json()) as {
+          items?: Array<{ fileName: string; displayName: string }>;
+        };
+        if (!response.ok || cancelled) {
+          return;
+        }
+        setIconDisplayNames(
+          Object.fromEntries((data.items ?? []).map((item) => [item.fileName, item.displayName])),
+        );
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const visibleDrafts = useMemo(
     () => (selectedCategoryId ? drafts.filter((draft) => draft.id === selectedCategoryId) : drafts),
@@ -4348,13 +4851,24 @@ function PoiCategoryProfileDialog({
         method: 'POST',
         body: formData,
       });
-      const data = (await response.json()) as { iconUrl?: string; message?: string };
+      const data = (await response.json()) as {
+        displayName?: string;
+        iconUrl?: string;
+        message?: string;
+      };
       if (!response.ok || !data.iconUrl) {
         setLocalStatus(data.message ?? '图标上传失败');
         return;
       }
 
       const iconUrl = data.iconUrl;
+      const iconKey = getPoiCategoryIconMetadataKey(iconUrl);
+      if (iconKey) {
+        setIconDisplayNames((current) => ({
+          ...current,
+          [iconKey]: data.displayName ?? getDefaultPoiCategoryIconDisplayName(file.name),
+        }));
+      }
       setDrafts((current) =>
         current.map((draft) => {
           if (draft.id !== categoryId) {
@@ -4373,6 +4887,34 @@ function PoiCategoryProfileDialog({
       setLocalStatus(`已上传图标：${iconUrl}`);
     } finally {
       setUploadingCategoryId(null);
+    }
+  };
+
+  const renameCategoryIcon = async (iconValue: string) => {
+    const iconKey = getPoiCategoryIconMetadataKey(iconValue);
+    const displayName = iconKey ? iconDisplayNames[iconKey]?.trim() : '';
+    if (!iconKey || !displayName) {
+      setLocalStatus('图标显示名称不能为空。');
+      return;
+    }
+
+    setRenamingIconKey(iconKey);
+    setLocalStatus('');
+    try {
+      const response = await fetch(appPath('/api/admin/map/poi-category-icons'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ iconFileName: iconValue, displayName }),
+      });
+      const data = (await response.json()) as { displayName?: string; message?: string };
+      if (!response.ok || !data.displayName) {
+        setLocalStatus(data.message ?? '图标重命名失败');
+        return;
+      }
+      setIconDisplayNames((current) => ({ ...current, [iconKey]: data.displayName! }));
+      setLocalStatus(`已将图标命名为：${data.displayName}`);
+    } finally {
+      setRenamingIconKey(null);
     }
   };
 
@@ -4408,6 +4950,11 @@ function PoiCategoryProfileDialog({
       }
 
       const deletedFileName = data.fileName ?? uploadedFileName;
+      setIconDisplayNames((current) => {
+        const next = { ...current };
+        delete next[deletedFileName];
+        return next;
+      });
       setDrafts((current) =>
         current.map((draft) => {
           const icons = splitIconFileNames(draft.iconFileNamesText).filter(
@@ -4498,6 +5045,7 @@ function PoiCategoryProfileDialog({
               <div className="admin-poi-category-icon-list" aria-label={`${draft.name} 图标预览`}>
                 {splitIconFileNames(draft.iconFileNamesText).map((iconValue) => {
                   const uploadedFileName = extractUploadedPoiIconFileName(iconValue);
+                  const iconKey = getPoiCategoryIconMetadataKey(iconValue);
                   const isDefault = draft.defaultIconFileName.trim() === iconValue;
                   const deleteKey = `${draft.id}:${iconValue}`;
                   return (
@@ -4520,8 +5068,35 @@ function PoiCategoryProfileDialog({
                           </span>
                         ))}
                       </span>
-                      <code>{iconValue}</code>
+                      <span className="admin-poi-category-icon-identity">
+                        <input
+                          aria-label={`${iconValue} 的显示名称`}
+                          value={
+                            (iconKey ? iconDisplayNames[iconKey] : undefined) ??
+                            getDefaultPoiCategoryIconDisplayName(iconValue)
+                          }
+                          maxLength={80}
+                          onChange={(event) => {
+                            if (!iconKey) {
+                              return;
+                            }
+                            const displayName = event.currentTarget.value;
+                            setIconDisplayNames((current) => ({
+                              ...current,
+                              [iconKey]: displayName,
+                            }));
+                          }}
+                        />
+                        <code title={iconValue}>{iconValue}</code>
+                      </span>
                       {isDefault ? <small>默认</small> : null}
+                      <button
+                        type="button"
+                        disabled={!iconKey || renamingIconKey === iconKey}
+                        onClick={() => void renameCategoryIcon(iconValue)}
+                      >
+                        {renamingIconKey === iconKey ? '保存中' : '保存名称'}
+                      </button>
                       {uploadedFileName ? (
                         <button
                           type="button"
@@ -4613,86 +5188,153 @@ function PoiCategoryIcon({
 }
 
 function PoiSubmissionImagePreview({
-  imageReview,
+  imageReviews,
   isBusy,
   onReview,
   submission,
 }: Readonly<{
-  imageReview?: PoiSubmissionImageReview;
+  imageReviews: PoiSubmissionImageReview[];
   isBusy: boolean;
-  onReview: (decision: PoiSubmissionImageReviewInput) => void;
+  onReview: (imageUrl: string, decision: PoiSubmissionImageReviewInput) => void;
   submission: AdminPoiSubmission;
 }>) {
-  if (!submission.imageUrl) {
+  const imageUrls = getPoiImageUrls(submission);
+  if (imageUrls.length === 0) {
     return null;
   }
 
-  const imageUrl = resolvePoiSubmissionImageUrl(submission.imageUrl);
-  const metadata = submission.imageMetadata;
-
   return (
-    <article className="admin-poi-image-preview">
-      <a href={imageUrl} target="_blank" rel="noreferrer">
-        <img src={imageUrl} alt={`${submission.title} 投稿图片`} loading="lazy" decoding="async" />
-      </a>
-      <div className="admin-poi-image-preview-copy">
-        <div className="admin-poi-image-preview-heading">
-          <span className="admin-poi-image-preview-title">投稿图片</span>
-          {imageReview ? (
-            <span className={`admin-poi-image-review-chip is-${imageReview.decision}`}>
-              {imageReviewLabel(imageReview.decision)}
-            </span>
-          ) : null}
-        </div>
-        {metadata ? (
-          <dl className="admin-poi-image-metadata">
-            <div>
-              <dt>文件</dt>
-              <dd>{metadata.fileName}</dd>
+    <div className="admin-poi-image-preview-list">
+      {imageUrls.map((sourceImageUrl, index) => {
+        const imageUrl = resolvePoiSubmissionImageUrl(sourceImageUrl);
+        const imageReview = imageReviews.find((review) => review.imageUrl === sourceImageUrl);
+        const metadata = submission.imageMetadataByUrl?.[sourceImageUrl];
+        return (
+          <article className="admin-poi-image-preview" key={sourceImageUrl}>
+            <a href={imageUrl} target="_blank" rel="noreferrer">
+              <img
+                src={imageUrl}
+                alt={`${submission.title} 投稿图片 ${index + 1}`}
+                loading="lazy"
+                decoding="async"
+              />
+            </a>
+            <div className="admin-poi-image-preview-copy">
+              <div className="admin-poi-image-preview-heading">
+                <span className="admin-poi-image-preview-title">
+                  投稿图片 {index + 1} / {imageUrls.length}
+                </span>
+                {imageReview ? (
+                  <span className={`admin-poi-image-review-chip is-${imageReview.decision}`}>
+                    {imageReviewLabel(imageReview.decision)}
+                  </span>
+                ) : null}
+              </div>
+              {metadata ? (
+                <dl className="admin-poi-image-metadata">
+                  <div>
+                    <dt>文件</dt>
+                    <dd>{metadata.fileName}</dd>
+                  </div>
+                  <div>
+                    <dt>类型</dt>
+                    <dd>{metadata.mimeType}</dd>
+                  </div>
+                  <div>
+                    <dt>大小</dt>
+                    <dd>{formatFileSize(metadata.sizeBytes)}</dd>
+                  </div>
+                  <div>
+                    <dt>更新时间</dt>
+                    <dd>{formatDate(metadata.updatedAt)}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <small>
+                  {sourceImageUrl.startsWith('/')
+                    ? '本地图片元数据暂不可用'
+                    : '外部图片链接，无法读取本地元数据'}
+                </small>
+              )}
+              <div className="admin-poi-image-review-actions">
+                {imageReview ? (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => onReview(sourceImageUrl, 'unreviewed')}
+                  >
+                    重置图片审核
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => onReview(sourceImageUrl, 'approved')}
+                    >
+                      图片可用
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => onReview(sourceImageUrl, 'rejected')}
+                    >
+                      图片不合格
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
-            <div>
-              <dt>类型</dt>
-              <dd>{metadata.mimeType}</dd>
-            </div>
-            <div>
-              <dt>大小</dt>
-              <dd>{formatFileSize(metadata.sizeBytes)}</dd>
-            </div>
-            <div>
-              <dt>更新时间</dt>
-              <dd>{formatDate(metadata.updatedAt)}</dd>
-            </div>
-          </dl>
-        ) : (
-          <small>
-            {submission.imageUrl.startsWith('/')
-              ? '本地图片元数据暂不可用'
-              : '外部图片链接，无法读取本地元数据'}
-          </small>
-        )}
-        <div className="admin-poi-image-review-actions">
-          {imageReview ? (
-            <button type="button" disabled={isBusy} onClick={() => onReview('unreviewed')}>
-              重置图片审核
-            </button>
-          ) : (
-            <>
-              <button type="button" disabled={isBusy} onClick={() => onReview('approved')}>
-                图片可用
-              </button>
-              <button type="button" disabled={isBusy} onClick={() => onReview('rejected')}>
-                图片不合格
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </article>
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
 function resolvePoiSubmissionImageUrl(value: string): string {
   return value.startsWith('/') ? appPath(value) : value;
+}
+
+function getPoiImageUrls(value: { imageUrls?: string[]; imageUrl?: string }): string[] {
+  return normalizePoiImageUrlList([
+    ...(value.imageUrls ?? []),
+    ...(value.imageUrl ? [value.imageUrl] : []),
+  ]);
+}
+
+function getPoiImageReviews(
+  submission: PoiSubmission,
+  imageReviewByKey: Map<string, PoiSubmissionImageReview>,
+): PoiSubmissionImageReview[] {
+  return getPoiImageUrls(submission)
+    .map((imageUrl) => imageReviewByKey.get(imageReviewKey(submission.id, imageUrl)))
+    .filter((review): review is PoiSubmissionImageReview => Boolean(review));
+}
+
+function hasRejectedPoiImage(
+  submission: PoiSubmission,
+  imageReviewByKey: Map<string, PoiSubmissionImageReview>,
+): boolean {
+  return getPoiImageReviews(submission, imageReviewByKey).some(
+    (review) => review.decision === 'rejected',
+  );
+}
+
+function normalizePoiImageUrlList(values: string[]): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).slice(0, 12);
+}
+
+function moveListItem(values: string[], fromIndex: number, toIndex: number): string[] {
+  if (fromIndex === toIndex || !values[fromIndex] || toIndex < 0 || toIndex >= values.length) {
+    return values;
+  }
+  const next = [...values];
+  const [item] = next.splice(fromIndex, 1);
+  if (item !== undefined) {
+    next.splice(toIndex, 0, item);
+  }
+  return next;
 }
 
 function buildSubmissionMapHref(submission: PoiSubmission, coordinate: [number, number]): string {
@@ -4733,8 +5375,15 @@ interface GeometryPreviewModel {
   polygons: string[];
 }
 
+interface PoiAuditMapBounds {
+  minX: number;
+  minZ: number;
+  maxX: number;
+  maxZ: number;
+}
+
 interface PoiAuditMapPreviewModel extends GeometryPreviewModel {
-  bounds: { minX: number; minZ: number; maxX: number; maxZ: number };
+  bounds: PoiAuditMapBounds;
   contextMarkers: Array<PoiAuditContextMarker & { point: [number, number] }>;
 }
 
@@ -4818,15 +5467,18 @@ function buildPoiAuditMapPreview(
 function buildPoiGeometryDraftMapPreview(
   draft: Exclude<PoiGeometryDraft, { type: 'Point' }>,
   contextMarkers: PoiAuditContextMarker[],
+  viewBounds?: PoiAuditMapBounds,
 ): PoiAuditMapPreviewModel {
   const coordinateSets = getPoiGeometryDraftCoordinateSets(draft);
   const draftCoordinates = coordinateSets.flatMap((set) => set.coordinates);
   const contextCoordinates = contextMarkers.map((item) => item.coordinate);
   const allCoordinates = [...draftCoordinates, ...contextCoordinates];
-  const bounds = expandCoordinateBounds(
-    getCoordinateBounds(allCoordinates.length > 0 ? allCoordinates : [[0, 0]]),
-    120,
-  );
+  const bounds =
+    viewBounds ??
+    expandCoordinateBounds(
+      getCoordinateBounds(allCoordinates.length > 0 ? allCoordinates : [[0, 0]]),
+      120,
+    );
   const project = (coordinate: [number, number]) =>
     projectAuditMapPreviewCoordinate(coordinate, bounds);
   const points: Array<[number, number]> = [];
@@ -5323,6 +5975,19 @@ function unprojectAuditMapPreviewCoordinate(
   return [clamp(x, bounds.minX, bounds.maxX), clamp(z, bounds.minZ, bounds.maxZ)];
 }
 
+function scalePoiAuditBounds(bounds: PoiAuditMapBounds, factor: number): PoiAuditMapBounds {
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+  const halfWidth = Math.max(1, ((bounds.maxX - bounds.minX) * factor) / 2);
+  const halfHeight = Math.max(1, ((bounds.maxZ - bounds.minZ) * factor) / 2);
+  return {
+    minX: centerX - halfWidth,
+    maxX: centerX + halfWidth,
+    minZ: centerZ - halfHeight,
+    maxZ: centerZ + halfHeight,
+  };
+}
+
 function projectGeometryPreviewCoordinate(
   coordinate: [number, number],
   bounds: { minX: number; minZ: number; maxX: number; maxZ: number },
@@ -5792,6 +6457,16 @@ function extractUploadedPoiIconFileName(value: string): string | null {
   }
 }
 
+function getPoiCategoryIconMetadataKey(value: string): string | null {
+  return extractUploadedPoiIconFileName(value) ?? (value.trim() || null);
+}
+
+function getDefaultPoiCategoryIconDisplayName(value: string): string {
+  const key = getPoiCategoryIconMetadataKey(value) ?? '未命名图标';
+  const fileName = key.split('/').pop() ?? key;
+  return fileName.replace(/\.[^.]+$/, '') || '未命名图标';
+}
+
 function iconPreviewToneLabel(tone: string): string {
   if (tone === 'dark') {
     return '深色背景预览';
@@ -5952,6 +6627,129 @@ function appendPoiGeometryDraftCoordinate(
   polygon[0] = appendPolygonRingCoordinate(polygon[0] ?? [], coordinateDraft);
   polygons[0] = polygon;
   return { type: 'MultiPolygon', polygons };
+}
+
+function replacePoiGeometryDraftCoordinate(
+  draft: Exclude<PoiGeometryDraft, { type: 'Point' }>,
+  targetIndex: number,
+  coordinate: [number, number],
+): Exclude<PoiGeometryDraft, { type: 'Point' }> {
+  if (draft.type === 'MultiPoint' || draft.type === 'LineString') {
+    return {
+      type: draft.type,
+      coordinates: replaceValidCoordinateDraft(draft.coordinates, targetIndex, coordinate),
+    };
+  }
+  if (draft.type === 'Rectangle') {
+    return {
+      type: 'Rectangle',
+      bounds: replaceRectangleDraftCorner(draft.bounds, targetIndex, coordinate),
+    };
+  }
+  if (draft.type === 'MultiRectangle') {
+    const rectangleIndex = Math.floor(targetIndex / 4);
+    const cornerIndex = targetIndex % 4;
+    return {
+      type: 'MultiRectangle',
+      rectangles: draft.rectangles.map((bounds, index) =>
+        index === rectangleIndex
+          ? replaceRectangleDraftCorner(bounds, cornerIndex, coordinate)
+          : bounds,
+      ),
+    };
+  }
+
+  const cursor = { index: 0, found: false };
+  if (draft.type === 'Polygon') {
+    return {
+      type: 'Polygon',
+      rings: draft.rings.map((ring) =>
+        replacePolygonRingCoordinate(ring, targetIndex, coordinate, cursor),
+      ),
+    };
+  }
+  return {
+    type: 'MultiPolygon',
+    polygons: draft.polygons.map((polygon) =>
+      polygon.map((ring) => replacePolygonRingCoordinate(ring, targetIndex, coordinate, cursor)),
+    ),
+  };
+}
+
+function replaceValidCoordinateDraft(
+  drafts: CoordinateDraft[],
+  targetIndex: number,
+  coordinate: [number, number],
+): CoordinateDraft[] {
+  let validIndex = 0;
+  return drafts.map((draft) => {
+    if (!parseCoordinateDraft(draft)) {
+      return draft;
+    }
+    const shouldReplace = validIndex === targetIndex;
+    validIndex += 1;
+    return shouldReplace ? coordinateToDraft(coordinate) : draft;
+  });
+}
+
+function replaceRectangleDraftCorner(
+  draft: RectangleBoundsDraft,
+  cornerIndex: number,
+  coordinate: [number, number],
+): RectangleBoundsDraft {
+  const bounds = parseRectangleBoundsDraft(draft);
+  if (!bounds || cornerIndex < 0 || cornerIndex > 3) {
+    return draft;
+  }
+  const corners = rectangleBoundsToCoordinates(bounds);
+  const opposite = corners[(cornerIndex + 2) % 4];
+  if (!opposite) {
+    return draft;
+  }
+  return rectangleBoundsToDraft({
+    minX: Math.min(coordinate[0], opposite[0]),
+    minZ: Math.min(coordinate[1], opposite[1]),
+    maxX: Math.max(coordinate[0], opposite[0]),
+    maxZ: Math.max(coordinate[1], opposite[1]),
+  });
+}
+
+function replacePolygonRingCoordinate(
+  ring: CoordinateDraft[],
+  targetIndex: number,
+  coordinate: [number, number],
+  cursor: { index: number; found: boolean },
+): CoordinateDraft[] {
+  if (cursor.found) {
+    return ring;
+  }
+  const validRawIndexes = ring.flatMap((draft, rawIndex) =>
+    parseCoordinateDraft(draft) ? [rawIndex] : [],
+  );
+  const localIndex = targetIndex - cursor.index;
+  cursor.index += validRawIndexes.length;
+  const rawIndex = validRawIndexes[localIndex];
+  if (rawIndex === undefined) {
+    return ring;
+  }
+
+  cursor.found = true;
+  const next = [...ring];
+  const replacement = coordinateToDraft(coordinate);
+  const firstCoordinate = ring[0] ? parseCoordinateDraft(ring[0]) : null;
+  const lastCoordinate = ring.at(-1) ? parseCoordinateDraft(ring.at(-1)!) : null;
+  const isClosed = Boolean(
+    firstCoordinate &&
+    lastCoordinate &&
+    firstCoordinate[0] === lastCoordinate[0] &&
+    firstCoordinate[1] === lastCoordinate[1],
+  );
+  next[rawIndex] = replacement;
+  if (isClosed && (rawIndex === 0 || rawIndex === ring.length - 1)) {
+    next[0] = replacement;
+    next[ring.length - 1] = replacement;
+  }
+  return next;
 }
 
 function canRemovePoiGeometryDraftCoordinate(
@@ -6293,10 +7091,7 @@ function isPoiSubmissionPublishBlocked(
   imageReviewByKey: Map<string, PoiSubmissionImageReview>,
   conflictDecisions: PoiConflictDecision[],
 ): boolean {
-  const imageReview = submission.imageUrl
-    ? imageReviewByKey.get(imageReviewKey(submission.id, submission.imageUrl))
-    : undefined;
-  const hasRejectedImage = imageReview?.decision === 'rejected';
+  const hasRejectedImage = hasRejectedPoiImage(submission, imageReviewByKey);
   const hasDuplicateConflict = conflictDecisions.some(
     (decision) => decision.submissionId === submission.id && decision.decision === 'duplicate',
   );

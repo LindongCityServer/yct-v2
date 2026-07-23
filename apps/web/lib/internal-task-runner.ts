@@ -4,6 +4,7 @@ import { ensureNotificationDeliveryListenersRegistered } from './notification-de
 import { syncOperationsContentReminderRuleSource } from './operations-reminder-content-source-sync-workflow';
 import { ensureOperationsReminderRefreshListenersRegistered } from './operations-reminder-refresh-listeners';
 import { processDuePushDeliveries } from './notification-delivery-workflow';
+import { syncPlayerLocations } from './player-location-workflow';
 import type { OperationsReminderSourceSyncResult } from './operations-reminder-source-sync-workflow';
 import { syncTransitServiceNoticeReminderSource } from './operations-reminder-source-sync-workflow';
 import { processExpiredTicketOrders } from './ticket-order-workflow';
@@ -33,6 +34,7 @@ export interface InternalTaskRunResult {
   };
   events: Awaited<ReturnType<typeof replayPendingAppEvents>>;
   notifications: Awaited<ReturnType<typeof processDuePushDeliveries>>;
+  playerLocations: Awaited<ReturnType<typeof syncPlayerLocations>>;
   ticketing: Awaited<ReturnType<typeof processExpiredTicketOrders>>;
 }
 
@@ -84,6 +86,11 @@ export async function runInternalTasks(input: {
           now: input.now,
         });
 
+  const playerLocations = await syncPlayerLocations({
+    actorId: actorId ?? 'internal_task',
+    actorType: 'system',
+  });
+
   const events = await replayPendingAppEvents(input.eventLimit);
   const notifications = await processDuePushDeliveries({
     limit: input.pushLimit,
@@ -96,6 +103,7 @@ export async function runInternalTasks(input: {
     operationsReminders,
     events,
     notifications,
+    playerLocations,
   });
 
   const result: InternalTaskRunResult = {
@@ -109,12 +117,14 @@ export async function runInternalTasks(input: {
       contentOperationsReminders,
       events,
       notifications,
+      playerLocations,
       ticketing,
     }),
     operationsReminders,
     contentOperationsReminders,
     events,
     notifications,
+    playerLocations,
     ticketing,
   };
 
@@ -126,12 +136,15 @@ function inferInternalTaskRunStatus(input: {
   operationsReminders: InternalTaskRunResult['operationsReminders'];
   events: InternalTaskRunResult['events'];
   notifications: InternalTaskRunResult['notifications'];
+  playerLocations: InternalTaskRunResult['playerLocations'];
 }): InternalTaskRunResult['status'] {
   if (
     input.operationsReminders.status === 'not_configured' ||
     input.operationsReminders.status === 'unavailable' ||
     input.events.failed > 0 ||
-    input.notifications.failed > 0
+    input.notifications.failed > 0 ||
+    input.playerLocations.status === 'not_configured' ||
+    input.playerLocations.status === 'unavailable'
   ) {
     return 'warning';
   }
@@ -145,6 +158,7 @@ function buildInternalTaskRunStatusSummary(input: {
   contentOperationsReminders: InternalTaskRunResult['contentOperationsReminders'];
   events: InternalTaskRunResult['events'];
   notifications: InternalTaskRunResult['notifications'];
+  playerLocations: InternalTaskRunResult['playerLocations'];
   ticketing: InternalTaskRunResult['ticketing'];
 }): string {
   const parts = [
@@ -163,6 +177,7 @@ function buildInternalTaskRunStatusSummary(input: {
   if (input.notifications.failed > 0) {
     parts.push(`通知发送失败 ${input.notifications.failed} 条`);
   }
+  parts.push(input.playerLocations.message);
   if (input.ticketing.expiredOrderCount > 0 || input.ticketing.expiredHoldCount > 0) {
     parts.push(
       `已清理过期订单 ${input.ticketing.expiredOrderCount} 条、过期占座 ${input.ticketing.expiredHoldCount} 条`,

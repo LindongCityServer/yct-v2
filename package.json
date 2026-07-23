@@ -24,6 +24,7 @@
     "web:dev:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-dev-status.ps1",
     "runtime:check:v2": "node scripts/run-runtime-check.mjs -BasePath v2",
     "web:tasks:run": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-web-internal-tasks.ps1",
+    "web:player-locations:run": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-web-player-location-poller.ps1",
     "web:artifact": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

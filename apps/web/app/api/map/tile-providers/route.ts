@@ -12,22 +12,6 @@ export function GET() {
   const config = readRuntimeConfig();
   const items: TileProviderDescriptor[] = [];
 
-  if (config.tileFreshHttpTemplate) {
-    const provider = tileProviderConfigSchema.parse({
-      id: 'lindong-fresh-http',
-      name: '临东较新瓦片',
-      sourceKind: 'proxied',
-      tileTemplate: buildMapTileProxyTemplate('fresh-http'),
-    });
-
-    items.push({
-      ...provider,
-      freshness: {
-        note: '该源较新，已通过 YCT 后端代理同源加载以避免 HTTPS 混合内容风险。',
-      },
-    });
-  }
-
   if (config.tileSafeHttpsStaticTemplate) {
     const provider = tileProviderConfigSchema.parse({
       id: 'lindong-safe-https-static',
@@ -57,6 +41,22 @@ export function GET() {
       ...provider,
       freshness: {
         note: '该源来自 map.shangxiaoguan.top 的 HTTPS 静态地图，后续需接入 uNmINeD 坐标转换后完整渲染。',
+      },
+    });
+  }
+
+  if (config.tileFreshHttpTemplate) {
+    const provider = tileProviderConfigSchema.parse({
+      id: 'lindong-fresh-http',
+      name: '临东较新瓦片',
+      sourceKind: 'proxied',
+      tileTemplate: buildMapTileProxyTemplate('fresh-http'),
+    });
+
+    items.push({
+      ...provider,
+      freshness: {
+        note: '该源较新，已通过 YCT 后端代理同源加载以避免 HTTPS 混合内容风险。',
       },
     });
   }

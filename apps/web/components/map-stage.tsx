@@ -4,18 +4,33 @@ import type {
   ApiListResponse,
   ApiMeta,
   LocaleCode,
+  MapGeometry,
   MapMarkerSnapshot,
+  LocalizedLabelMap,
   PoiCategory,
   PoiFacilitySnapshot,
   TileProviderDescriptor,
+  TransitLineRouteMode,
+  TransitLineRouteNodeSnapshot,
+  TransitLineSegmentPathSnapshot,
 } from '@yct/contracts';
 import { useSearchParams } from 'next/navigation';
 import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getFontEmbedCSS, toBlob } from 'html-to-image';
 import LZString from 'lz-string';
+import QRCode from 'qrcode';
 import { appPath } from '../lib/app-paths';
 import { readMapFavoriteMarkerIds, writeMapFavoriteMarkerIds } from '../lib/client-map-favorites';
+import {
+  publishMapNearbySearchScopeChanged,
+  publishMapRoutePanelVisibilityChanged,
+  publishMapTileProviderSelected,
+  subscribeMapNearbySearchScopeChanged,
+  subscribeMapNavigationLayoutChanged,
+  subscribeMapTileProviderSelected,
+  type MapNearbySearchScope,
+} from '../lib/client-map-ui-events';
 import {
   readSelectedMapTileProviderId,
   writeSelectedMapTileProviderId,
@@ -25,12 +40,33 @@ import {
   getMapRoadMarkerKind as getRoadMarkerKind,
   orderMapRoadCoordinates as orderRoadTracePoints,
 } from '../lib/map-road-geometry';
+import {
+  buildMapMarkerSearchText,
+  filterMapMarkers,
+  getMapMarkerSearchMatchPriority,
+} from '../lib/map-marker-search';
+import {
+  buildMapPlaceRelationIndex,
+  dedupeEquivalentMapPlaceMarkers,
+  getEquivalentMapPlaceMarkerIds,
+  resolveCanonicalMapPlaceMarker,
+  type MapPlaceRelationIndex,
+} from '../lib/map-place-relations';
 import { PoiFacilityEditor } from './poi-facility-editor';
 
 interface MarkerResponse {
   meta: ApiMeta;
   snapshot: MapMarkerSnapshot;
   iconBaseUrl?: string;
+}
+
+interface PlayerLocationResponse {
+  meta: ApiMeta;
+  snapshot: MapMarkerSnapshot;
+  currentAccount?: {
+    serverAccountName: string;
+    hasRecordedLocation: boolean;
+  };
 }
 
 interface MapView {
@@ -42,6 +78,13 @@ interface MapView {
 interface ViewportSize {
   width: number;
   height: number;
+}
+
+interface MapVisibleRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
 }
 
 interface DragState {
@@ -75,6 +118,7 @@ interface TapState {
   pointerId: number;
   startX: number;
   startY: number;
+  markerId?: string;
 }
 
 interface VisibleTile {
@@ -133,6 +177,9 @@ interface ProjectedMarker {
   showLabel: boolean;
   priority: number;
   roadKind?: RoadMarkerKind;
+  playerPresence?: 'online' | 'offline';
+  isPlayer?: boolean;
+  isCurrentAccount?: boolean;
 }
 
 interface ProjectedLinearPoi {
@@ -153,6 +200,19 @@ interface ProjectedLinearPoi {
     left: number;
     top: number;
   }>;
+}
+
+interface ProjectedShapePoi {
+  accentColor?: string;
+  centerLeft: number;
+  centerTop: number;
+  id: string;
+  isArea: boolean;
+  labelMode: 'label' | 'representative';
+  label: string;
+  path: string;
+  priority: number;
+  showLabel: boolean;
 }
 
 interface ProjectedGuideMarker {
@@ -219,6 +279,7 @@ interface TransitOverviewLine {
   id: string;
   mode: string;
   name: string;
+  localizedName?: LocalizedLabelMap;
   color?: string;
   operator?: string;
   fare?: string;
@@ -227,16 +288,25 @@ interface TransitOverviewLine {
     last?: string;
   };
   departureTimes?: string[];
+  routeMode?: TransitLineRouteMode;
+  routeNodes?: TransitLineRouteNodeSnapshot[];
+  segmentPaths?: TransitLineSegmentPathSnapshot[];
   stationCount?: number;
   stationNames: string[];
+  displayStationNames?: string[];
   stationStops?: TransitLineStopForMap[];
   firstStationName?: string;
   lastStationName?: string;
+  displayFirstStationName?: string;
+  displayLastStationName?: string;
   sourcePath?: string;
 }
 
 interface TransitLineStopForMap {
+  stationSourceId?: string;
   stationName: string;
+  displayStationName?: string;
+  localizedStationName?: LocalizedLabelMap;
   stationMarkerIds?: string[];
   sequence: number;
   oneWay?: 'up' | 'down';
@@ -424,6 +494,7 @@ type RoadRoutingStatus = 'loading' | 'ready';
 type RoadRouteStrategy = 'shortest' | 'fewer-turns';
 
 type MapShareMode = 'link' | 'text' | 'image';
+type MapShareCopyKind = 'link' | 'text' | 'coordinate' | 'teleport';
 
 type MapShareTarget =
   | {
@@ -439,12 +510,14 @@ type MapShareTarget =
 
 interface MapSharePayload {
   color: string;
+  coordinateText?: string;
   eyebrow: string;
   icon: string;
   meta: string[];
   steps: MapShareStep[];
   text: string;
   title: string;
+  teleportCommand?: string;
   url: string;
 }
 
@@ -481,7 +554,7 @@ interface ResolvedWalkRoute {
 interface SecondaryPoiLink {
   childLabel: string;
   marker: PointMarker;
-  parent: PointMarker;
+  parent: CenterableMarker;
 }
 
 interface SecondaryPoiGroup {
@@ -493,7 +566,7 @@ interface SecondaryPoiGroup {
 interface SecondaryPoiParentLink {
   childLabel: string;
   marker: PointMarker;
-  parent: PointMarker;
+  parent: CenterableMarker;
 }
 
 interface NearbySearchCenter {
@@ -556,7 +629,9 @@ const defaultRouteTransportModes: EnabledRouteTransportModes = {
 const favoriteMarkerCategoryId = 'favorites';
 type Translate = ReturnType<typeof useI18n>['t'];
 
-const mapShareModes: MapShareMode[] = ['link', 'text', 'image'];
+const mapShareModes: MapShareMode[] = ['image'];
+
+const mapShareCopyKinds: MapShareCopyKind[] = ['link', 'text', 'coordinate', 'teleport'];
 
 const mapShareModeIcons: Record<MapShareMode, string> = {
   image: 'image',
@@ -568,6 +643,20 @@ const mapShareModeLabelKeys: Record<MapShareMode, CommonMessageKey> = {
   image: 'map.share.image',
   link: 'map.share.link',
   text: 'map.share.text',
+};
+
+const mapShareCopyLabelKeys: Record<MapShareCopyKind, CommonMessageKey> = {
+  coordinate: 'map.share.coordinate',
+  link: 'map.share.link',
+  teleport: 'map.share.teleport',
+  text: 'map.share.text',
+};
+
+const mapShareCopySuccessKeys: Record<MapShareCopyKind, CommonMessageKey> = {
+  coordinate: 'map.share.coordinateCopied',
+  link: 'map.share.linkCopied',
+  teleport: 'map.share.teleportCopied',
+  text: 'map.share.textCopied',
 };
 
 const markerCategoryFallbackNames: Record<string, string> = {
@@ -695,6 +784,7 @@ const lowPriorityTrafficCategoryIds = new Set(['bus-stop', 'residence', 'industr
 const tileSize = 256;
 const representativePoiPriorityBoost = 24;
 const markerRoadAccessProjectionRange = 50;
+const playerRouteRecalculationDistance = 128;
 const mapDefaults = {
   minZoom: -7,
   maxZoom: 3,
@@ -709,10 +799,12 @@ export function MapStage() {
   const { locale, t } = useI18n();
   const searchParams = useSearchParams();
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const sidebarRef = useRef<HTMLElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const activePointersRef = useRef<Map<number, ActivePointer>>(new Map());
   const pinchRef = useRef<PinchState | null>(null);
   const tapRef = useRef<TapState | null>(null);
+  const suppressedMarkerClickRef = useRef<string | null>(null);
   const [layerPanelOpen, setLayerPanelOpen] = useState(false);
   const [markerQuery, setMarkerQuery] = useState('');
   const [tileResponse, setTileResponse] = useState<ApiListResponse<TileProviderDescriptor> | null>(
@@ -720,6 +812,8 @@ export function MapStage() {
   );
   const [selectedTileProviderId, setSelectedTileProviderId] = useState('');
   const [markerResponse, setMarkerResponse] = useState<MarkerResponse | null>(null);
+  const [playerLocationResponse, setPlayerLocationResponse] =
+    useState<PlayerLocationResponse | null>(null);
   const [transitOverview, setTransitOverview] = useState<TransitOverviewResponse | null>(null);
   const [categoryResponse, setCategoryResponse] = useState<ApiListResponse<PoiCategory> | null>(
     null,
@@ -727,6 +821,13 @@ export function MapStage() {
   const [regionResponse, setRegionResponse] = useState<UnminedRegionResponse | null>(null);
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
   const [viewportSize, setViewportSize] = useState<ViewportSize>({ width: 0, height: 0 });
+  const [mapVisibleRect, setMapVisibleRect] = useState<MapVisibleRect>({
+    left: 0,
+    top: 0,
+    right: 0,
+    bottom: 0,
+  });
+  const [mapNavigationExpanded, setMapNavigationExpanded] = useState(true);
   const [mapView, setMapView] = useState<MapView>({
     centerX: mapDefaults.centerX,
     centerZ: mapDefaults.centerZ,
@@ -734,18 +835,24 @@ export function MapStage() {
   });
   const mapViewRef = useRef<MapView>(mapView);
   const viewportSizeRef = useRef<ViewportSize>(viewportSize);
+  const mapVisibleLayoutRef = useRef<{
+    rect: MapVisibleRect;
+    size: ViewportSize;
+  } | null>(null);
+  const appliedDefaultCurrentAccountLocationIdRef = useRef<string | null>(null);
   const fittedRouteOptionKeyRef = useRef<string | null>(null);
   const [poiTitle, setPoiTitle] = useState('');
   const [poiCategoryId, setPoiCategoryId] = useState('');
   const [poiDescription, setPoiDescription] = useState('');
   const [poiHref, setPoiHref] = useState('');
   const [poiImageUrl, setPoiImageUrl] = useState('');
-  const [poiImageFile, setPoiImageFile] = useState<File | null>(null);
+  const [poiImageFiles, setPoiImageFiles] = useState<File[]>([]);
   const [poiImageFileInputKey, setPoiImageFileInputKey] = useState(0);
   const [poiX, setPoiX] = useState('');
   const [poiZ, setPoiZ] = useState('');
   const [poiOpeningHours, setPoiOpeningHours] = useState('');
   const [poiAddress, setPoiAddress] = useState('');
+  const [poiFloorLabel, setPoiFloorLabel] = useState('');
   const [poiAddressRoadMarkerId, setPoiAddressRoadMarkerId] = useState('');
   const [poiFacilities, setPoiFacilities] = useState<PoiFacilitySnapshot[]>([]);
   const [poiSubmitStatus, setPoiSubmitStatus] = useState('');
@@ -753,10 +860,16 @@ export function MapStage() {
   const [poiSubmitDialogOpen, setPoiSubmitDialogOpen] = useState(false);
   const [focusedMarkerId, setFocusedMarkerId] = useState<string | null>(null);
   const [poiDetailTab, setPoiDetailTab] = useState<PoiDetailTab>('summary');
+  const [secondaryPoiCategoryFilter, setSecondaryPoiCategoryFilter] = useState('all');
+  const [secondaryPoiFloorFilter, setSecondaryPoiFloorFilter] = useState('all');
+  const [secondaryPoiKeyword, setSecondaryPoiKeyword] = useState('');
+  const [secondaryPoiCategoryExpanded, setSecondaryPoiCategoryExpanded] = useState(false);
+  const [secondaryPoiFloorExpanded, setSecondaryPoiFloorExpanded] = useState(false);
   const [markerListCategoryId, setMarkerListCategoryId] = useState('all');
   const [markerCategoryExpanded, setMarkerCategoryExpanded] = useState(false);
   const [browseMode, setBrowseMode] = useState<MapBrowseMode>('satellite');
   const [markersVisible, setMarkersVisible] = useState(true);
+  const [playersVisible, setPlayersVisible] = useState(true);
   const [linearFeaturesVisible, setLinearFeaturesVisible] = useState(true);
   const [markerListExpanded, setMarkerListExpanded] = useState(true);
   const [cursorWorld, setCursorWorld] = useState<{ x: number; z: number } | null>(null);
@@ -779,6 +892,7 @@ export function MapStage() {
   }));
   const [poiCoordinatePickMode, setPoiCoordinatePickMode] = useState(false);
   const [nearbySearchCenter, setNearbySearchCenter] = useState<NearbySearchCenter | null>(null);
+  const [nearbySearchScope, setNearbySearchScope] = useState<MapNearbySearchScope>('outside');
   const [poiDetailCollapsed, setPoiDetailCollapsed] = useState(false);
   const [favoriteMarkerIds, setFavoriteMarkerIds] = useState<Set<string>>(() => new Set());
   const [poiActionStatus, setPoiActionStatus] = useState('');
@@ -793,6 +907,12 @@ export function MapStage() {
   useEffect(() => {
     mapViewRef.current = mapView;
   }, [mapView]);
+
+  useEffect(() => {
+    publishMapRoutePanelVisibilityChanged({ visible: Boolean(routePlanDraft) });
+  }, [routePlanDraft]);
+
+  useEffect(() => () => publishMapRoutePanelVisibilityChanged({ visible: false }), []);
 
   useEffect(() => {
     viewportSizeRef.current = viewportSize;
@@ -835,6 +955,19 @@ export function MapStage() {
     };
   }, []);
 
+  useEffect(
+    () => subscribeMapNavigationLayoutChanged(({ expanded }) => setMapNavigationExpanded(expanded)),
+    [],
+  );
+
+  useEffect(
+    () =>
+      subscribeMapNearbySearchScopeChanged(({ scope }) => {
+        setNearbySearchScope(scope);
+      }),
+    [],
+  );
+
   useEffect(() => {
     setFavoriteMarkerIds(new Set(readMapFavoriteMarkerIds()));
   }, []);
@@ -848,6 +981,11 @@ export function MapStage() {
 
   useEffect(() => {
     setPoiActionStatus('');
+    setSecondaryPoiCategoryFilter('all');
+    setSecondaryPoiFloorFilter('all');
+    setSecondaryPoiKeyword('');
+    setSecondaryPoiCategoryExpanded(false);
+    setSecondaryPoiFloorExpanded(false);
   }, [focusedMarkerId]);
 
   useEffect(() => {
@@ -898,6 +1036,47 @@ export function MapStage() {
     };
   }, []);
 
+  useEffect(
+    () =>
+      subscribeMapTileProviderSelected(({ providerId }) => {
+        if (!tileResponse?.items.some((provider) => provider.id === providerId)) {
+          return;
+        }
+        setSelectedTileProviderId(providerId);
+        writeSelectedMapTileProviderId(providerId);
+      }),
+    [tileResponse],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: number | undefined;
+
+    async function loadPlayerLocations() {
+      try {
+        const response = await fetch(appPath('/api/map/player-locations'), { cache: 'no-store' });
+        const data = (await response.json()) as PlayerLocationResponse;
+        if (!cancelled && data.snapshot) {
+          setPlayerLocationResponse(data);
+        }
+      } catch {
+        // 短暂请求失败时保留上一帧位置，下一轮继续刷新。
+      } finally {
+        if (!cancelled) {
+          timer = window.setTimeout(loadPlayerLocations, 10_000);
+        }
+      }
+    }
+
+    void loadPlayerLocations();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -944,6 +1123,98 @@ export function MapStage() {
     return () => resizeObserver.disconnect();
   }, []);
 
+  const sidebarBlocksMapViewport = Boolean(routePlanDraft || focusedMarkerId || markerListExpanded);
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    const sidebar = sidebarRef.current;
+    if (!viewport || !sidebar) {
+      return undefined;
+    }
+
+    const updateMapVisibleRect = () => {
+      const viewportBounds = viewport.getBoundingClientRect();
+      const sidebarBounds = sidebar.getBoundingClientRect();
+      const insetValue = Number.parseFloat(
+        window.getComputedStyle(viewport).getPropertyValue('--yct-map-control-inset'),
+      );
+      const inset = Number.isFinite(insetValue) ? insetValue : 16;
+      const isMobile = window.matchMedia('(max-width: 720px)').matches;
+      const nextRect = normalizeMapVisibleRect(
+        {
+          left: isMobile
+            ? inset
+            : sidebarBlocksMapViewport
+              ? sidebarBounds.right - viewportBounds.left + inset
+              : Math.max(inset, sidebarBounds.left - viewportBounds.left),
+          top: inset,
+          right: viewportBounds.width - inset,
+          bottom: isMobile
+            ? sidebarBounds.top - viewportBounds.top - inset
+            : viewportBounds.height - inset,
+        },
+        { width: viewportBounds.width, height: viewportBounds.height },
+      );
+      setMapVisibleRect((current) =>
+        mapVisibleRectsEqual(current, nextRect) ? current : nextRect,
+      );
+    };
+
+    const resizeObserver = new ResizeObserver(updateMapVisibleRect);
+    resizeObserver.observe(viewport);
+    resizeObserver.observe(sidebar);
+    window.addEventListener('resize', updateMapVisibleRect);
+    const animationFrame = window.requestAnimationFrame(updateMapVisibleRect);
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener('resize', updateMapVisibleRect);
+      resizeObserver.disconnect();
+    };
+  }, [mapNavigationExpanded, poiDetailCollapsed, routePlanCollapsed, sidebarBlocksMapViewport]);
+
+  const effectiveMapVisibleRect = useMemo(
+    () => normalizeMapVisibleRect(mapVisibleRect, viewportSize),
+    [mapVisibleRect, viewportSize],
+  );
+
+  useEffect(() => {
+    if (viewportSize.width <= 0 || viewportSize.height <= 0) {
+      return;
+    }
+
+    const previousLayout = mapVisibleLayoutRef.current;
+    const previousRect = previousLayout?.rect ?? {
+      left: 0,
+      top: 0,
+      right: viewportSize.width,
+      bottom: viewportSize.height,
+    };
+    const previousSize = previousLayout?.size ?? viewportSize;
+    if (
+      previousLayout &&
+      mapVisibleRectsEqual(previousRect, effectiveMapVisibleRect) &&
+      previousSize.width === viewportSize.width &&
+      previousSize.height === viewportSize.height
+    ) {
+      return;
+    }
+
+    setMapView((current) => {
+      const scale = getScale(current.zoom);
+      const previousCenterX = (previousRect.left + previousRect.right) / 2;
+      const previousCenterY = (previousRect.top + previousRect.bottom) / 2;
+      const visibleWorldX = current.centerX + (previousCenterX - previousSize.width / 2) / scale;
+      const visibleWorldZ = current.centerZ + (previousCenterY - previousSize.height / 2) / scale;
+      const nextCenterX = (effectiveMapVisibleRect.left + effectiveMapVisibleRect.right) / 2;
+      const nextCenterY = (effectiveMapVisibleRect.top + effectiveMapVisibleRect.bottom) / 2;
+      return {
+        ...current,
+        centerX: visibleWorldX - (nextCenterX - viewportSize.width / 2) / scale,
+        centerZ: visibleWorldZ - (nextCenterY - viewportSize.height / 2) / scale,
+      };
+    });
+    mapVisibleLayoutRef.current = { rect: effectiveMapVisibleRect, size: viewportSize };
+  }, [effectiveMapVisibleRect, viewportSize]);
+
   const tileProviders = useMemo(() => tileResponse?.items ?? [], [tileResponse]);
   useEffect(() => {
     if (tileProviders.length === 0) {
@@ -969,16 +1240,66 @@ export function MapStage() {
   const tilesVisible = browseMode === 'satellite';
   const activeTileZoom = getTileZoom(mapView.zoom);
   const regionIndex = useMemo(() => buildUnminedRegionIndex(regionResponse), [regionResponse]);
-  const markerSnapshot = useMemo(() => markerResponse?.snapshot.markers ?? [], [markerResponse]);
+  const localizedStaticMarkerSnapshot = useMemo(
+    () =>
+      (markerResponse?.snapshot.markers ?? [])
+        .filter((marker) => marker.categoryId !== 'player')
+        .map((marker) => ({
+          ...marker,
+          label: resolveLocalizedLabel(marker.label, marker.localizedLabels, locale),
+          sourceLabel: marker.label,
+        })),
+    [locale, markerResponse],
+  );
+  const localizedPlayerMarkerSnapshot = useMemo(
+    () =>
+      (playerLocationResponse?.snapshot.markers ?? []).map((marker) => ({
+        ...marker,
+        label: resolveLocalizedLabel(marker.label, marker.localizedLabels, locale),
+        sourceLabel: marker.label,
+      })),
+    [locale, playerLocationResponse],
+  );
+  const markerSnapshot = useMemo(
+    () => [...localizedStaticMarkerSnapshot, ...localizedPlayerMarkerSnapshot],
+    [localizedPlayerMarkerSnapshot, localizedStaticMarkerSnapshot],
+  );
+  const categoryById = useMemo(
+    () =>
+      new Map(
+        (categoryResponse?.items ?? []).map((category) => [
+          category.id,
+          getMarkerCategoryDisplayName(category.id, t, category.name),
+        ]),
+      ),
+    [categoryResponse, t],
+  );
+  const localizedTransitOverview = useMemo(
+    () => localizeTransitOverview(transitOverview, locale),
+    [locale, transitOverview],
+  );
   const rawPointMarkers = useMemo(() => markerSnapshot.filter(isPointMarker), [markerSnapshot]);
   const pointMarkers = useMemo(
     () => rawPointMarkers.filter(shouldRenderAsPointPoi),
     [rawPointMarkers],
   );
+  const staticPointMarkers = useMemo(
+    () => localizedStaticMarkerSnapshot.filter(isPointMarker).filter(shouldRenderAsPointPoi),
+    [localizedStaticMarkerSnapshot],
+  );
+  const staticEndpointGroupMarkers = useMemo(
+    () => localizedStaticMarkerSnapshot.filter(isEndpointGroupMarker),
+    [localizedStaticMarkerSnapshot],
+  );
+  const staticShapeMarkers = useMemo(
+    () => localizedStaticMarkerSnapshot.filter(isShapeMarker),
+    [localizedStaticMarkerSnapshot],
+  );
   const endpointGroupMarkers = useMemo(
     () => markerSnapshot.filter(isEndpointGroupMarker),
     [markerSnapshot],
   );
+  const shapeMarkers = useMemo(() => markerSnapshot.filter(isShapeMarker), [markerSnapshot]);
   const transitLineMarkers = useMemo(
     () => markerSnapshot.filter(isTransitLineMarker),
     [markerSnapshot],
@@ -993,6 +1314,67 @@ export function MapStage() {
     () => markerSnapshot.filter(isCenterableMarker),
     [markerSnapshot],
   );
+  const mapPlaceRelationIndex = useMemo(
+    () => buildMapPlaceRelationIndex(localizedStaticMarkerSnapshot.filter(isCenterableMarker)),
+    [localizedStaticMarkerSnapshot],
+  );
+  const canonicalCenterableMarkers = useMemo(
+    () => dedupeEquivalentMapPlaceMarkers(centerableMarkers, mapPlaceRelationIndex),
+    [centerableMarkers, mapPlaceRelationIndex],
+  );
+  const currentAccountLocationMarker = useMemo(
+    () => pointMarkers.find((marker) => marker.playerLocation?.isCurrentAccount),
+    [pointMarkers],
+  );
+  const preferredCurrentLocation = useMemo<[number, number]>(
+    () =>
+      currentAccountLocationMarker?.geometry.coordinates ?? [
+        mapDefaults.centerX,
+        mapDefaults.centerZ,
+      ],
+    [currentAccountLocationMarker],
+  );
+  useEffect(() => {
+    if (
+      !currentAccountLocationMarker ||
+      appliedDefaultCurrentAccountLocationIdRef.current === currentAccountLocationMarker.id ||
+      viewportSize.width <= 0 ||
+      viewportSize.height <= 0
+    ) {
+      return;
+    }
+
+    appliedDefaultCurrentAccountLocationIdRef.current = currentAccountLocationMarker.id;
+    if (
+      focusedMarkerId ||
+      routePlanDraft ||
+      sharedCoordinateFocus ||
+      sharedMarkerFocusKey ||
+      sharedRoutePlan
+    ) {
+      return;
+    }
+
+    setMapView((current) =>
+      fitCoordinatesToMapView(
+        [preferredCurrentLocation],
+        { ...current, zoom: mapDefaults.defaultZoom },
+        viewportSize,
+        0,
+        effectiveMapVisibleRect,
+      ),
+    );
+  }, [
+    currentAccountLocationMarker,
+    effectiveMapVisibleRect,
+    focusedMarkerId,
+    preferredCurrentLocation,
+    routePlanDraft,
+    sharedCoordinateFocus,
+    sharedMarkerFocusKey,
+    sharedRoutePlan,
+    viewportSize,
+  ]);
   const routeEndpointCandidates = useMemo(() => {
     if (!editingRouteEndpoint) {
       return [];
@@ -1000,8 +1382,8 @@ export function MapStage() {
 
     const query = routeEndpointQuery.trim();
     const source = query
-      ? filterMarkers(centerableMarkers, query)
-      : [...centerableMarkers].sort(
+      ? filterMarkers(canonicalCenterableMarkers, query)
+      : [...canonicalCenterableMarkers].sort(
           (left, right) =>
             getMarkerDistanceToCoordinates(left, [mapView.centerX, mapView.centerZ]) -
             getMarkerDistanceToCoordinates(right, [mapView.centerX, mapView.centerZ]),
@@ -1009,7 +1391,7 @@ export function MapStage() {
 
     return source;
   }, [
-    centerableMarkers,
+    canonicalCenterableMarkers,
     editingRouteEndpoint,
     mapView.centerX,
     mapView.centerZ,
@@ -1027,21 +1409,26 @@ export function MapStage() {
     () => filterMarkers(transitLineMarkers, markerQuery),
     [markerQuery, transitLineMarkers],
   );
+  const filteredShapeMarkers = useMemo(
+    () => filterMarkers(shapeMarkers, markerQuery),
+    [markerQuery, shapeMarkers],
+  );
   const focusedMarker = useMemo(
     () => markerSnapshot.find((marker) => marker.id === focusedMarkerId),
     [focusedMarkerId, markerSnapshot],
   );
+  const focusedMarkerIsPlayer = Boolean(focusedMarker?.playerLocation);
   const focusedTransitLineMarker = useMemo(
     () => transitLineMarkers.find((marker) => marker.id === focusedMarkerId),
     [focusedMarkerId, transitLineMarkers],
   );
   const transitLineLookup = useMemo(
-    () => buildTransitLineLookup(transitOverview),
-    [transitOverview],
+    () => buildTransitLineLookup(localizedTransitOverview),
+    [localizedTransitOverview],
   );
   const stationConnectionIndex = useMemo(
-    () => buildStationConnectionIndex(transitOverview, t),
-    [transitOverview, t],
+    () => buildStationConnectionIndex(localizedTransitOverview, t),
+    [localizedTransitOverview, t],
   );
   const focusedTransitLine = focusedTransitLineMarker
     ? findTransitLineByMarker(focusedTransitLineMarker, transitLineLookup)
@@ -1057,24 +1444,104 @@ export function MapStage() {
     () => pointMarkers.find((marker) => marker.id === focusedMarkerId),
     [focusedMarkerId, pointMarkers],
   );
-  const secondaryPoiIndex = useMemo(() => buildSecondaryPoiIndex(pointMarkers), [pointMarkers]);
+  const centerableMarkerById = useMemo(
+    () => new Map(centerableMarkers.map((marker) => [marker.id, marker])),
+    [centerableMarkers],
+  );
+  const nearbySearchRegion = useMemo(() => {
+    if (!nearbySearchCenter) {
+      return undefined;
+    }
+    const marker = centerableMarkerById.get(nearbySearchCenter.markerId);
+    return marker && isRegionMarker(marker) ? marker : undefined;
+  }, [centerableMarkerById, nearbySearchCenter]);
+  const focusedBoundRegions = useMemo(
+    () =>
+      focusedMarker?.boundRegionMarkerIds?.flatMap((id) => {
+        const marker = centerableMarkerById.get(id);
+        return marker ? [marker] : [];
+      }) ?? [],
+    [centerableMarkerById, focusedMarker],
+  );
+  const secondaryPoiIndex = useMemo(
+    () =>
+      buildSecondaryPoiIndex(
+        staticPointMarkers,
+        [...staticPointMarkers, ...staticShapeMarkers],
+        mapPlaceRelationIndex,
+      ),
+    [mapPlaceRelationIndex, staticPointMarkers, staticShapeMarkers],
+  );
   const secondaryPoiParentIndex = useMemo(
-    () => buildSecondaryPoiParentIndex(pointMarkers),
-    [pointMarkers],
+    () =>
+      buildSecondaryPoiParentIndex(
+        staticPointMarkers,
+        [...staticPointMarkers, ...staticShapeMarkers],
+        mapPlaceRelationIndex,
+      ),
+    [mapPlaceRelationIndex, staticPointMarkers, staticShapeMarkers],
   );
   const representativePoiIds = useMemo(
     () => new Set(secondaryPoiIndex.keys()),
     [secondaryPoiIndex],
   );
-  const focusedSecondaryPois = focusedPointMarker
-    ? (secondaryPoiIndex.get(focusedPointMarker.id) ?? [])
-    : [];
+  const focusedSecondaryPois =
+    focusedMarker && isCenterableMarker(focusedMarker)
+      ? (secondaryPoiIndex.get(focusedMarker.id) ?? [])
+      : [];
   const focusedParentPoi = focusedPointMarker
     ? secondaryPoiParentIndex.get(focusedPointMarker.id)
     : undefined;
-  const focusedSecondaryPoiGroups = useMemo(
-    () => groupSecondaryPois(focusedSecondaryPois),
+  const focusedSecondaryPoiCategoryOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          focusedSecondaryPois
+            .map((link) => link.marker.categoryId)
+            .filter((categoryId): categoryId is string => Boolean(categoryId)),
+        ),
+      ).sort((left, right) =>
+        (categoryById.get(left) ?? left).localeCompare(categoryById.get(right) ?? right, 'zh-CN'),
+      ),
+    [categoryById, focusedSecondaryPois],
+  );
+  const focusedSecondaryPoiFloorOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          focusedSecondaryPois
+            .map((link) => link.marker.floorLabel)
+            .filter((floorLabel): floorLabel is string => Boolean(floorLabel)),
+        ),
+      ).sort((left, right) => left.localeCompare(right, 'zh-CN', { numeric: true })),
     [focusedSecondaryPois],
+  );
+  const filteredFocusedSecondaryPois = useMemo(() => {
+    const keyword = normalizeMarkerSearchText(secondaryPoiKeyword);
+    return focusedSecondaryPois.filter(
+      (link) =>
+        (secondaryPoiCategoryFilter === 'all' ||
+          link.marker.categoryId === secondaryPoiCategoryFilter) &&
+        (secondaryPoiFloorFilter === 'all' || link.marker.floorLabel === secondaryPoiFloorFilter) &&
+        (!keyword ||
+          normalizeMarkerSearchText(
+            [
+              link.childLabel,
+              buildMapMarkerSearchText(link.marker),
+              link.marker.categoryId ? categoryById.get(link.marker.categoryId) : '',
+            ].join(' '),
+          ).includes(keyword)),
+    );
+  }, [
+    categoryById,
+    focusedSecondaryPois,
+    secondaryPoiCategoryFilter,
+    secondaryPoiFloorFilter,
+    secondaryPoiKeyword,
+  ]);
+  const focusedSecondaryPoiGroups = useMemo(
+    () => groupSecondaryPois(filteredFocusedSecondaryPois, categoryById, t),
+    [categoryById, filteredFocusedSecondaryPois, t],
   );
   const focusedTransitStationMarkers = useMemo(
     () =>
@@ -1098,6 +1565,9 @@ export function MapStage() {
         ...focusedSecondaryPois.map((link) => link.marker),
       ]);
     }
+    if (focusedSecondaryPois.length > 0) {
+      return dedupeMarkersById(focusedSecondaryPois.map((link) => link.marker));
+    }
     return focusedTransitStationMarkers;
   }, [
     editingRouteEndpoint,
@@ -1111,7 +1581,7 @@ export function MapStage() {
   ]);
   const markerListCategoryOptions = useMemo(() => {
     const availableCategoryIds = new Set(
-      [...pointMarkers, ...endpointGroupMarkers, ...transitLineMarkers]
+      [...pointMarkers, ...endpointGroupMarkers, ...shapeMarkers, ...transitLineMarkers]
         .map((marker) => marker.categoryId)
         .filter((categoryId): categoryId is string => Boolean(categoryId)),
     );
@@ -1134,37 +1604,72 @@ export function MapStage() {
         name: getMarkerCategoryDisplayName(categoryId, t),
       }))
       .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
+    const playerCategory = [...configuredCategories, ...inferredCategories].find(
+      (category) => category.id === 'player',
+    );
+    const otherConfiguredCategories = configuredCategories.filter(
+      (category) => category.id !== 'player',
+    );
+    const otherInferredCategories = inferredCategories.filter(
+      (category) => category.id !== 'player',
+    );
 
     return [
       { id: 'all', name: t('map.category.all') },
+      ...(playerCategory ? [playerCategory] : []),
       { id: favoriteMarkerCategoryId, name: t('map.category.favorites') },
-      ...configuredCategories,
-      ...inferredCategories,
+      ...otherConfiguredCategories,
+      ...otherInferredCategories,
     ];
-  }, [categoryResponse, endpointGroupMarkers, pointMarkers, t, transitLineMarkers]);
+  }, [categoryResponse, endpointGroupMarkers, pointMarkers, shapeMarkers, t, transitLineMarkers]);
   const sidebarMarkers = useMemo(() => {
     const queryMode = Boolean(markerQuery.trim());
     const nearbyMode = !queryMode && nearbySearchCenter;
     const source = queryMode
-      ? [...filteredTransitLineMarkers, ...filteredEndpointGroupMarkers, ...filteredPointMarkers]
+      ? [
+          ...filteredTransitLineMarkers,
+          ...filteredEndpointGroupMarkers,
+          ...filteredShapeMarkers,
+          ...filteredPointMarkers,
+        ]
       : nearbyMode
-        ? [...endpointGroupMarkers, ...pointMarkers].filter(
+        ? [...endpointGroupMarkers, ...shapeMarkers, ...pointMarkers].filter(
             (marker) => marker.id !== nearbySearchCenter.markerId,
           )
-        : [...endpointGroupMarkers, ...pointMarkers];
+        : [...endpointGroupMarkers, ...shapeMarkers, ...pointMarkers];
+    const dedupedSource = dedupeEquivalentMapPlaceMarkers(source, mapPlaceRelationIndex);
     const categoryFiltered =
       markerListCategoryId === 'all'
-        ? source
+        ? dedupedSource
         : markerListCategoryId === favoriteMarkerCategoryId
-          ? source.filter((marker) => favoriteMarkerIds.has(marker.id))
-          : source.filter((marker) => marker.categoryId === markerListCategoryId);
+          ? dedupedSource.filter((marker) => favoriteMarkerIds.has(marker.id))
+          : dedupedSource.filter((marker) => marker.categoryId === markerListCategoryId);
+    const nearbyScopeFiltered =
+      nearbyMode && nearbySearchRegion
+        ? categoryFiltered.filter(
+            (marker) =>
+              isMarkerInsideRegion(marker, nearbySearchRegion.geometry) ===
+              (nearbySearchScope === 'inside'),
+          )
+        : categoryFiltered;
 
     if (queryMode) {
-      return categoryFiltered.slice(0, 12);
+      return nearbyScopeFiltered
+        .map((marker) => ({
+          marker,
+          matchPriority: getMapMarkerSearchMatchPriority(marker, markerQuery),
+          distance: getMarkerDistanceToMapCenter(marker, mapView),
+        }))
+        .sort(
+          (left, right) =>
+            left.matchPriority - right.matchPriority || left.distance - right.distance,
+        )
+        .map(({ marker }) => marker)
+        .slice(0, 12);
     }
 
     if (nearbyMode) {
-      return categoryFiltered
+      return nearbyScopeFiltered
         .map((marker) => ({
           marker,
           distance: getMarkerDistanceToCoordinates(marker, nearbySearchCenter.coordinates),
@@ -1174,7 +1679,7 @@ export function MapStage() {
         .slice(0, 12);
     }
 
-    return categoryFiltered
+    return nearbyScopeFiltered
       .map((marker) => ({
         marker,
         distance: getMarkerDistanceToMapCenter(marker, mapView),
@@ -1186,13 +1691,18 @@ export function MapStage() {
     endpointGroupMarkers,
     filteredEndpointGroupMarkers,
     filteredPointMarkers,
+    filteredShapeMarkers,
     filteredTransitLineMarkers,
     favoriteMarkerIds,
     mapView,
     markerListCategoryId,
     markerQuery,
+    mapPlaceRelationIndex,
     nearbySearchCenter,
+    nearbySearchRegion,
+    nearbySearchScope,
     pointMarkers,
+    shapeMarkers,
   ]);
 
   useEffect(() => {
@@ -1226,18 +1736,32 @@ export function MapStage() {
   );
   const routeResultMarkerIds = routeOverlayVisibility?.markerIds;
   const pointProjectionSource = useMemo(() => {
-    const baseSource = focusedMarker
-      ? pointOverlaySource
-      : markersVisible
-        ? pointOverlaySource
-        : [];
+    const nonPlayerSource = pointOverlaySource.filter((marker) => !marker.playerLocation);
+    const baseSource =
+      focusedMarker && !focusedMarkerIsPlayer
+        ? nonPlayerSource
+        : markersVisible
+          ? nonPlayerSource
+          : [];
+    const playerSource = pointMarkers.filter((marker) => marker.playerLocation);
+    const visiblePlayerSource = playersVisible ? playerSource : [];
     if (!routeResultMarkerIds) {
-      return baseSource;
+      return dedupeMarkersById([...baseSource, ...visiblePlayerSource]);
     }
 
-    const routeMarkers = pointMarkers.filter((marker) => routeResultMarkerIds.has(marker.id));
-    return dedupeMarkersById([...baseSource, ...routeMarkers]);
-  }, [focusedMarker, markersVisible, pointMarkers, pointOverlaySource, routeResultMarkerIds]);
+    const routeMarkers = pointMarkers.filter(
+      (marker) => routeResultMarkerIds.has(marker.id) && (playersVisible || !marker.playerLocation),
+    );
+    return dedupeMarkersById([...baseSource, ...visiblePlayerSource, ...routeMarkers]);
+  }, [
+    focusedMarker,
+    focusedMarkerIsPlayer,
+    markersVisible,
+    playersVisible,
+    pointMarkers,
+    pointOverlaySource,
+    routeResultMarkerIds,
+  ]);
   const rawProjectedMarkers = useMemo(() => {
     const projected = projectPointMarkers(
       pointProjectionSource,
@@ -1252,7 +1776,19 @@ export function MapStage() {
         suppressLabelMarkerIds: routeOverlayVisibility?.suppressLabelMarkerIds,
       },
     );
-    return routeResultMarkerIds ? projected : projected.slice(0, 220);
+    if (routeResultMarkerIds) {
+      return projected;
+    }
+
+    const playerMarkers = projected.filter((marker) => marker.isPlayer);
+    const nonPlayerMarkers = projected
+      .filter((marker) => !marker.isPlayer)
+      .sort(
+        (left, right) =>
+          Number(right.showLabel) - Number(left.showLabel) || right.priority - left.priority,
+      )
+      .slice(0, 220);
+    return [...nonPlayerMarkers, ...playerMarkers];
   }, [
     browseMode,
     focusedMarkerId,
@@ -1321,20 +1857,63 @@ export function MapStage() {
       }),
     [focusedMarkerId, linearOverlaySource, mapView, markerIconBaseUrl, viewportSize],
   );
-  const { markers: projectedMarkers, linearPois: projectedLinearPois } = useMemo(
+  const shapeOverlaySource = useMemo(() => {
+    if (routeResultActive) {
+      return [];
+    }
+    const focusedShape = focusedMarkerId
+      ? shapeMarkers.find((marker) => marker.id === focusedMarkerId)
+      : undefined;
+    if (focusedShape) {
+      return [focusedShape];
+    }
+    if (focusedMarkerId) {
+      return [];
+    }
+    if (!markersVisible) {
+      return [];
+    }
+    return markerQuery.trim() ? filteredShapeMarkers : shapeMarkers;
+  }, [
+    filteredShapeMarkers,
+    focusedMarkerId,
+    markerQuery,
+    markersVisible,
+    routeResultActive,
+    shapeMarkers,
+  ]);
+  const rawProjectedShapePois = useMemo(
+    () => projectShapePoiMarkers(shapeOverlaySource, mapView, viewportSize),
+    [mapView, shapeOverlaySource, viewportSize],
+  );
+  const {
+    markers: projectedMarkers,
+    linearPois: projectedLinearPois,
+    shapePois: projectedShapePois,
+  } = useMemo(
     () =>
       applyMapOverlayCollisionVisibility(
         rawProjectedMarkers,
         rawProjectedLinearPois,
+        rawProjectedShapePois,
         viewportSize,
         focusedMarkerId,
         Boolean(markerQuery.trim()),
+        mapView.zoom >= mapDefaults.maxZoom,
       ),
-    [focusedMarkerId, markerQuery, rawProjectedLinearPois, rawProjectedMarkers, viewportSize],
+    [
+      focusedMarkerId,
+      markerQuery,
+      mapView.zoom,
+      rawProjectedLinearPois,
+      rawProjectedMarkers,
+      rawProjectedShapePois,
+      viewportSize,
+    ],
   );
   const roadTraceSource = useMemo(
-    () => endpointGroupMarkers.filter((marker) => getRoadMarkerKind(marker)),
-    [endpointGroupMarkers],
+    () => staticEndpointGroupMarkers.filter((marker) => getRoadMarkerKind(marker)),
+    [staticEndpointGroupMarkers],
   );
   const poiAddressRoadOptions = useMemo(() => {
     const matched = findPoiAddressRoadMarkers(poiAddress, roadTraceSource);
@@ -1360,7 +1939,7 @@ export function MapStage() {
     const timer = window.setTimeout(() => {
       const graph = buildRoadRouteGraph(roadTraceSource);
       const markerRoadAccessIndex = graph
-        ? buildMarkerRoadAccessIndex(pointMarkers, graph)
+        ? buildMarkerRoadAccessIndex(staticPointMarkers, graph)
         : new Map<string, RoadAccessCandidate[]>();
 
       if (cancelled) {
@@ -1381,9 +1960,31 @@ export function MapStage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [loadStatus, pointMarkers, roadTraceSource]);
+  }, [loadStatus, roadTraceSource, staticPointMarkers]);
   const roadRoutingGraph = roadRoutingSnapshot.graph;
   const markerRoadAccessIndex = roadRoutingSnapshot.markerRoadAccessIndex;
+  const routeMarkerRoadAccessIndex = useMemo(() => {
+    if (!routePlanDraft || !roadRoutingGraph) {
+      return markerRoadAccessIndex;
+    }
+
+    const nextIndex = new Map(markerRoadAccessIndex);
+    const originCoordinate = routePlanDraft.originRaw ?? routePlanDraft.origin;
+    const destinationCoordinate = routePlanDraft.destinationRaw ?? routePlanDraft.destination;
+    if (isPlayerLocationMarkerId(routePlanDraft.originId)) {
+      nextIndex.set(
+        routePlanDraft.originId,
+        findRoadAccessCandidates(originCoordinate, destinationCoordinate, roadRoutingGraph),
+      );
+    }
+    if (isPlayerLocationMarkerId(routePlanDraft.destinationId)) {
+      nextIndex.set(
+        routePlanDraft.destinationId,
+        findRoadAccessCandidates(destinationCoordinate, originCoordinate, roadRoutingGraph),
+      );
+    }
+    return nextIndex;
+  }, [markerRoadAccessIndex, roadRoutingGraph, routePlanDraft]);
   const selectedRoadTraceSource = useMemo(() => {
     const selectedRoadTrace = focusedMarkerId
       ? roadTraceSource.find((marker) => marker.id === focusedMarkerId)
@@ -1464,46 +2065,49 @@ export function MapStage() {
         .join('。')
     : undefined;
   const dataSourceText =
-    [markerResponse?.meta.message, tileSourceText].filter(Boolean).join('\n') ||
-    t('map.source.tooltipLoading');
+    [markerResponse?.meta.message, playerLocationResponse?.meta.message, tileSourceText]
+      .filter(Boolean)
+      .join('\n') || t('map.source.tooltipLoading');
   const updateSelectedTileProviderId = (providerId: string) => {
-    setSelectedTileProviderId(providerId);
-    writeSelectedMapTileProviderId(providerId);
+    publishMapTileProviderSelected({ providerId });
   };
-  const categoryById = useMemo(
-    () =>
-      new Map(
-        (categoryResponse?.items ?? []).map((category) => [
-          category.id,
-          getMarkerCategoryDisplayName(category.id, t, category.name),
-        ]),
-      ),
-    [categoryResponse, t],
-  );
   const routePlanRequest = useMemo(
     () =>
       routePlanDraft
         ? {
             draft: routePlanDraft,
             enabledModes: routeTransportModes,
-            markerRoadAccessIndex,
-            pointMarkers,
+            markerRoadAccessIndex: routeMarkerRoadAccessIndex,
+            pointMarkers: staticPointMarkers,
             secondaryPoiIndex,
             secondaryPoiParentIndex,
-            transitLines: transitOverview?.lines ?? [],
-            modeProfiles: transitOverview?.modeProfiles ?? [],
+            transitLines: localizedTransitOverview?.lines ?? [],
+            modeProfiles: localizedTransitOverview?.modeProfiles ?? [],
           }
         : null,
     [
-      markerRoadAccessIndex,
-      pointMarkers,
+      routeMarkerRoadAccessIndex,
+      staticPointMarkers,
       routePlanDraft,
       routeTransportModes,
       secondaryPoiIndex,
       secondaryPoiParentIndex,
-      transitOverview,
+      localizedTransitOverview,
     ],
   );
+  useEffect(() => {
+    if (!routePlanDraft) {
+      return;
+    }
+
+    const nextDraft = updateRoutePlanDraftPlayerEndpoints(routePlanDraft, pointMarkers);
+    if (nextDraft === routePlanDraft) {
+      return;
+    }
+
+    setRoutePlanDraft(nextDraft);
+    setSelectedRouteOptionId(null);
+  }, [pointMarkers, routePlanDraft]);
   useEffect(() => {
     if (!routePlanDraft || !routePlanRequest) {
       setRoutePlanOptions([]);
@@ -1653,6 +2257,10 @@ export function MapStage() {
       ...routePlanDraft.origin,
       ...routePlanDraft.destination,
       ...selectedRouteOption.markerIds,
+      effectiveMapVisibleRect.left,
+      effectiveMapVisibleRect.top,
+      effectiveMapVisibleRect.right,
+      effectiveMapVisibleRect.bottom,
     ].join(':');
     if (fittedRouteOptionKeyRef.current === fitKey) {
       return;
@@ -1669,10 +2277,18 @@ export function MapStage() {
         current,
         viewportSize,
         160,
+        effectiveMapVisibleRect,
       ),
     );
     fittedRouteOptionKeyRef.current = fitKey;
-  }, [pointMarkers, routePlanDraft, routeResultActive, selectedRouteOption, viewportSize]);
+  }, [
+    effectiveMapVisibleRect,
+    pointMarkers,
+    routePlanDraft,
+    routeResultActive,
+    selectedRouteOption,
+    viewportSize,
+  ]);
 
   useEffect(() => {
     if (!activeTileProvider || !tileTemplate?.includes('tiles/zoom.{z}')) {
@@ -1713,22 +2329,28 @@ export function MapStage() {
   };
 
   const resetView = () => {
-    setMapView({
-      centerX: mapDefaults.centerX,
-      centerZ: mapDefaults.centerZ,
-      zoom: mapDefaults.defaultZoom,
-    });
+    setMapView((current) =>
+      fitCoordinatesToMapView(
+        [preferredCurrentLocation],
+        { ...current, zoom: mapDefaults.defaultZoom },
+        viewportSize,
+        0,
+        effectiveMapVisibleRect,
+      ),
+    );
   };
 
   const focusMapMarker = useCallback(
     (marker: CenterableMarker) => {
-      setMapView((current) => fitMarkerToMapView(marker, current, viewportSize));
+      setMapView((current) =>
+        fitMarkerToMapView(marker, current, viewportSize, effectiveMapVisibleRect),
+      );
       setFocusedMarkerId(marker.id);
       setPoiDetailTab('summary');
       setPoiDetailCollapsed(false);
       setNearbySearchCenter(null);
     },
-    [viewportSize],
+    [effectiveMapVisibleRect, viewportSize],
   );
 
   useEffect(() => {
@@ -1770,9 +2392,11 @@ export function MapStage() {
     setRouteEndpointQuery('');
     setNearbySearchCenter(null);
     setFocusedMarkerId(null);
-    setMapView((current) => fitRouteDraftToMapView(sharedRoutePlan.draft, current, viewportSize));
+    setMapView((current) =>
+      fitRouteDraftToMapView(sharedRoutePlan.draft, current, viewportSize, effectiveMapVisibleRect),
+    );
     setAppliedSharedRoutePlanKey(sharedRoutePlan.key);
-  }, [appliedSharedRoutePlanKey, sharedRoutePlan, viewportSize]);
+  }, [appliedSharedRoutePlanKey, effectiveMapVisibleRect, sharedRoutePlan, viewportSize]);
 
   useEffect(() => {
     if (!sharedCoordinateFocus) {
@@ -1791,14 +2415,22 @@ export function MapStage() {
     setEditingRouteEndpoint(null);
     setRouteEndpointQuery('');
     setNearbySearchCenter(null);
-    setMapView((current) => ({
-      ...current,
-      centerX: sharedCoordinateFocus.coordinate[0],
-      centerZ: sharedCoordinateFocus.coordinate[1],
-      zoom: Math.max(current.zoom, mapDefaults.defaultZoom),
-    }));
+    setMapView((current) =>
+      fitCoordinatesToMapView(
+        [sharedCoordinateFocus.coordinate],
+        { ...current, zoom: Math.max(current.zoom, mapDefaults.defaultZoom) },
+        viewportSize,
+        0,
+        effectiveMapVisibleRect,
+      ),
+    );
     setAppliedSharedCoordinateFocusKey(sharedCoordinateFocus.key);
-  }, [appliedSharedCoordinateFocusKey, sharedCoordinateFocus]);
+  }, [
+    appliedSharedCoordinateFocusKey,
+    effectiveMapVisibleRect,
+    sharedCoordinateFocus,
+    viewportSize,
+  ]);
 
   const toggleFavoriteMarker = (marker: CenterableMarker) => {
     const label = formatMarkerDisplayName(marker.label);
@@ -1919,12 +2551,15 @@ export function MapStage() {
     updateCursorWorld(event);
     event.currentTarget.setPointerCapture(event.pointerId);
     activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const markerId =
+      event.pointerType === 'mouse' ? undefined : getPointerTargetMapMarkerId(event.target);
     tapRef.current =
-      editingRouteEndpoint || poiCoordinatePickMode
+      editingRouteEndpoint || poiCoordinatePickMode || markerId
         ? {
             pointerId: event.pointerId,
             startX: event.clientX,
             startY: event.clientY,
+            markerId,
           }
         : null;
 
@@ -1977,7 +2612,18 @@ export function MapStage() {
     const tap = tapRef.current;
     if (tap?.pointerId === event.pointerId) {
       tapRef.current = null;
-      if (!wasPinching && (editingRouteEndpoint || poiCoordinatePickMode)) {
+      if (!wasPinching && tap.markerId) {
+        const marker = centerableMarkers.find((item) => item.id === tap.markerId);
+        if (marker) {
+          suppressedMarkerClickRef.current = marker.id;
+          window.setTimeout(() => {
+            if (suppressedMarkerClickRef.current === marker.id) {
+              suppressedMarkerClickRef.current = null;
+            }
+          }, 0);
+          handleMapMarkerActivate(marker);
+        }
+      } else if (!wasPinching && (editingRouteEndpoint || poiCoordinatePickMode)) {
         const rect = event.currentTarget.getBoundingClientRect();
         const coordinates = toCoordinatePair(
           screenToWorld(
@@ -2064,10 +2710,15 @@ export function MapStage() {
 
     setPoiSubmitBusy(true);
     try {
-      let imageUrl = poiImageUrl.trim() || undefined;
-      if (poiImageFile) {
+      const externalImageUrl = poiImageUrl.trim();
+      if (poiImageFiles.length + (externalImageUrl ? 1 : 0) > 12) {
+        setPoiSubmitStatus(t('map.poiSubmit.tooManyImages'));
+        return;
+      }
+      const uploadedImageUrls: string[] = [];
+      for (const imageFile of poiImageFiles) {
         const imageBody = new FormData();
-        imageBody.append('file', poiImageFile);
+        imageBody.append('file', imageFile);
         const imageResponse = await fetch(appPath('/api/map/poi-submission-images/upload'), {
           method: 'POST',
           body: imageBody,
@@ -2080,9 +2731,9 @@ export function MapStage() {
           setPoiSubmitStatus(imageData.message ?? t('map.poiSubmit.imageUploadFailed'));
           return;
         }
-
-        imageUrl = imageData.imageUrl;
+        uploadedImageUrls.push(imageData.imageUrl);
       }
+      const imageUrls = [externalImageUrl, ...uploadedImageUrls].filter(Boolean);
 
       const response = await fetch(appPath('/api/map/poi-submissions'), {
         method: 'POST',
@@ -2092,7 +2743,8 @@ export function MapStage() {
           categoryId: poiCategoryId,
           description: poiDescription.trim() || undefined,
           href: poiHref.trim() || undefined,
-          imageUrl,
+          imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+          imageUrl: imageUrls[0],
           visibility: 'public_pending_review',
           geometry: {
             type: 'Point',
@@ -2100,6 +2752,7 @@ export function MapStage() {
           },
           openingHours: poiOpeningHours.trim() || undefined,
           address: poiAddress.trim() || undefined,
+          floorLabel: poiFloorLabel.trim() || undefined,
           addressRoadMarkerId: poiAddressRoadMarkerId || undefined,
           facilities: poiFacilities.length > 0 ? poiFacilities : undefined,
         }),
@@ -2114,12 +2767,13 @@ export function MapStage() {
       setPoiDescription('');
       setPoiHref('');
       setPoiImageUrl('');
-      setPoiImageFile(null);
+      setPoiImageFiles([]);
       setPoiImageFileInputKey((current) => current + 1);
       setPoiX('');
       setPoiZ('');
       setPoiOpeningHours('');
       setPoiAddress('');
+      setPoiFloorLabel('');
       setPoiAddressRoadMarkerId('');
       setPoiFacilities([]);
       setPoiSubmitStatus(t('map.poiSubmit.success'));
@@ -2134,11 +2788,18 @@ export function MapStage() {
     if (!destination) {
       return;
     }
-    const origin: [number, number] = [mapDefaults.centerX, mapDefaults.centerZ];
+    const origin = preferredCurrentLocation;
 
     setRoutePlanDraft({
       destinationId: marker.id,
-      originLabel: t('map.route.currentLocation'),
+      originId: currentAccountLocationMarker?.id,
+      originLabel: currentAccountLocationMarker
+        ? t('map.location.currentAccount', {
+            name:
+              currentAccountLocationMarker.playerLocation?.serverAccountName ??
+              currentAccountLocationMarker.label,
+          })
+        : t('map.route.currentLocation'),
       destinationLabel: formatMarkerDisplayName(marker.label),
       destination,
       origin,
@@ -2259,6 +2920,27 @@ export function MapStage() {
     focusMapMarker(marker);
   };
 
+  const handleMapMarkerPointerDown = (event: ReactPointerEvent<Element>) => {
+    if (event.pointerType === 'mouse') {
+      event.stopPropagation();
+    }
+  };
+
+  const handlePointerCancel = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (tapRef.current?.pointerId === event.pointerId) {
+      tapRef.current = null;
+    }
+    handlePointerUp(event);
+  };
+
+  const handleMapMarkerClick = (marker: CenterableMarker) => {
+    if (suppressedMarkerClickRef.current === marker.id) {
+      suppressedMarkerClickRef.current = null;
+      return;
+    }
+    handleMapMarkerActivate(marker);
+  };
+
   const updateMarkerQuery = (value: string) => {
     setMarkerQuery(value);
     if (value.trim()) {
@@ -2277,6 +2959,7 @@ export function MapStage() {
       label: formatMarkerDisplayName(marker.label),
       coordinates: center,
     });
+    publishMapNearbySearchScopeChanged({ markerId: marker.id, scope: 'outside' });
     setMarkerQuery('');
     setFocusedMarkerId(null);
     setRoutePlanDraft(null);
@@ -2289,8 +2972,14 @@ export function MapStage() {
     const markers: ProjectedGuideMarker[] = [];
     const defaultAnchor = projectCoordinateMarker(
       'default-anchor',
-      t('map.route.defaultView'),
-      [mapDefaults.centerX, mapDefaults.centerZ],
+      currentAccountLocationMarker
+        ? t('map.location.currentAccount', {
+            name:
+              currentAccountLocationMarker.playerLocation?.serverAccountName ??
+              currentAccountLocationMarker.label,
+          })
+        : t('map.route.defaultView'),
+      preferredCurrentLocation,
       mapView,
       viewportSize,
       32,
@@ -2313,12 +3002,20 @@ export function MapStage() {
     }
 
     return markers;
-  }, [mapView, sharedCoordinateFocus, t, viewportSize]);
+  }, [
+    currentAccountLocationMarker,
+    mapView,
+    preferredCurrentLocation,
+    sharedCoordinateFocus,
+    t,
+    viewportSize,
+  ]);
   const hasMapOverlay =
     projectedGuideMarkers.length > 0 ||
     Boolean(visibleSelectedRouteTrace) ||
     visibleProjectedMarkers.length > 0 ||
     visibleProjectedLinearPois.length > 0 ||
+    rawProjectedShapePois.length > 0 ||
     visibleProjectedRoadTraces.length > 0 ||
     visibleProjectedTransitTraces.length > 0;
 
@@ -2337,7 +3034,11 @@ export function MapStage() {
         {t('map.title')}
       </h1>
 
-      <aside className="map-control-stack map-sidebar-stack" aria-label={t('map.title')}>
+      <aside
+        className="map-control-stack map-sidebar-stack"
+        aria-label={t('map.title')}
+        ref={sidebarRef}
+      >
         <div className="map-panel-section">
           <div className="search-box map-search-box">
             <span className="material-symbols-outlined" aria-hidden="true">
@@ -2433,9 +3134,40 @@ export function MapStage() {
                         travel_explore
                       </span>
                       <span>{t('map.nearby.note', { name: nearbySearchCenter.label })}</span>
-                      <button type="button" onClick={() => setNearbySearchCenter(null)}>
+                      <button
+                        className="map-nearby-search-exit"
+                        type="button"
+                        onClick={() => setNearbySearchCenter(null)}
+                      >
                         {t('map.nearby.exit')}
                       </button>
+                      {nearbySearchRegion ? (
+                        <div
+                          className="map-nearby-scope-switch"
+                          aria-label={t('map.nearby.scopeAria')}
+                        >
+                          {(['outside', 'inside'] as const).map((scope) => (
+                            <button
+                              className={nearbySearchScope === scope ? 'is-active' : ''}
+                              type="button"
+                              aria-pressed={nearbySearchScope === scope}
+                              key={scope}
+                              onClick={() =>
+                                publishMapNearbySearchScopeChanged({
+                                  markerId: nearbySearchCenter.markerId,
+                                  scope,
+                                })
+                              }
+                            >
+                              {t(
+                                scope === 'outside'
+                                  ? 'map.nearby.scopeOutside'
+                                  : 'map.nearby.scopeInside',
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                   <div
@@ -2489,6 +3221,7 @@ export function MapStage() {
                             mapView.centerZ,
                           ],
                           t,
+                          secondaryPoiIndex,
                         });
                         const content = (
                           <>
@@ -2497,22 +3230,6 @@ export function MapStage() {
                             <span className="muted">{distanceDetail}</span>
                           </>
                         );
-
-                        if (marker.href && !editingRouteEndpoint && !isTransitLineMarker(marker)) {
-                          return (
-                            <a
-                              className={
-                                marker.id === focusedMarkerId
-                                  ? 'map-marker-list-item is-active'
-                                  : 'map-marker-list-item'
-                              }
-                              href={marker.href}
-                              key={marker.id}
-                            >
-                              {content}
-                            </a>
-                          );
-                        }
 
                         return (
                           <button
@@ -2557,11 +3274,26 @@ export function MapStage() {
               <MarkerListIcon marker={focusedMarker} iconBaseUrl={markerIconBaseUrl} />
               <div>
                 <h2 id="map-poi-detail-title">{formatMarkerDisplayName(focusedMarker.label)}</h2>
-                <span>
-                  {focusedMarkerCategoryName ??
-                    focusedMarker.categoryId ??
-                    t('map.poi.objectFallback')}
-                </span>
+                {focusedMarker.playerLocation ? (
+                  <span
+                    className={`map-player-presence is-${focusedMarker.playerLocation.presence}`}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      {focusedMarker.playerLocation.presence === 'online' ? 'wifi' : 'wifi_off'}
+                    </span>
+                    {t(
+                      focusedMarker.playerLocation.presence === 'online'
+                        ? 'map.player.status.online'
+                        : 'map.player.status.offline',
+                    )}
+                  </span>
+                ) : (
+                  <span>
+                    {focusedMarkerCategoryName ??
+                      focusedMarker.categoryId ??
+                      t('map.poi.objectFallback')}
+                  </span>
+                )}
               </div>
               <button
                 className="icon-action-button"
@@ -2587,7 +3319,7 @@ export function MapStage() {
             </div>
             {!poiDetailCollapsed ? (
               <>
-                {!isLinearDetailMarker(focusedMarker) ? (
+                {!isLinearDetailMarker(focusedMarker) && !focusedMarkerIsPlayer ? (
                   <div className="map-poi-detail-tabs" aria-label={t('map.poi.tabsAria')}>
                     {[
                       ['summary', t('map.poi.summary')],
@@ -2619,13 +3351,40 @@ export function MapStage() {
                     <RoadMapDetail marker={focusedMarker} t={t} />
                   ) : poiDetailTab === 'summary' ? (
                     <>
-                      {focusedMarker.imageUrl ? (
-                        <img
-                          className="map-poi-detail-image"
-                          src={appPath(focusedMarker.imageUrl)}
-                          alt={t('map.poi.imageAlt', {
+                      {focusedMarker.playerLocation ? (
+                        <div className="map-player-detail-summary">
+                          <div className="map-player-detail-summary-row">
+                            <span>{t('map.player.serverAccount')}</span>
+                            <strong>{focusedMarker.playerLocation.serverAccountName}</strong>
+                          </div>
+                          <p>
+                            {t(
+                              focusedMarker.playerLocation.presence === 'online'
+                                ? 'map.player.observed'
+                                : 'map.player.lastSeen',
+                              {
+                                time: formatPlayerLocationTimestamp(
+                                  focusedMarker.playerLocation.presence === 'online'
+                                    ? focusedMarker.playerLocation.observedAt
+                                    : focusedMarker.playerLocation.lastSeenAt,
+                                  locale,
+                                ),
+                              },
+                            )}
+                          </p>
+                        </div>
+                      ) : null}
+                      {getMapMarkerImageUrls(focusedMarker).length > 0 ? (
+                        <MapPoiImageGallery
+                          imageUrls={getMapMarkerImageUrls(focusedMarker)}
+                          imageAlt={t('map.poi.imageAlt', {
                             name: formatMarkerDisplayName(focusedMarker.label),
                           })}
+                          previousLabel={t('map.poi.imagePrevious')}
+                          nextLabel={t('map.poi.imageNext')}
+                          counterLabel={(current, total) =>
+                            t('map.poi.imageCounter', { current, total })
+                          }
                         />
                       ) : null}
                       {focusedMarker.description ? <p>{focusedMarker.description}</p> : null}
@@ -2640,6 +3399,12 @@ export function MapStage() {
                           <div>
                             <dt>{t('map.poi.address')}</dt>
                             <dd>{focusedMarker.address}</dd>
+                          </div>
+                        ) : null}
+                        {focusedMarker.floorLabel ? (
+                          <div>
+                            <dt>{t('map.poi.floor')}</dt>
+                            <dd>{focusedMarker.floorLabel}</dd>
                           </div>
                         ) : null}
                         {focusedMarker.openingHours ? (
@@ -2657,12 +3422,31 @@ export function MapStage() {
                             <dt>{t('map.poi.parent')}</dt>
                             <dd>
                               <button
-                                className="map-transfer-line-chip"
+                                className="map-poi-parent-link"
                                 type="button"
                                 onClick={() => focusMapMarker(focusedParentPoi.parent)}
                               >
                                 {formatMarkerDisplayName(focusedParentPoi.parent.label)}
                               </button>
+                            </dd>
+                          </div>
+                        ) : null}
+                        {focusedBoundRegions.length > 0 ? (
+                          <div>
+                            <dt>{t('map.poi.boundRegions')}</dt>
+                            <dd>
+                              <span className="map-transfer-line-list">
+                                {focusedBoundRegions.map((region) => (
+                                  <button
+                                    className="map-transfer-line-chip map-poi-region-chip"
+                                    type="button"
+                                    key={region.id}
+                                    onClick={() => focusMapMarker(region)}
+                                  >
+                                    {formatMarkerDisplayName(region.label)}
+                                  </button>
+                                ))}
+                              </span>
                             </dd>
                           </div>
                         ) : null}
@@ -2728,7 +3512,9 @@ export function MapStage() {
                       t={t}
                     />
                   ) : null}
-                  {!isLinearDetailMarker(focusedMarker) && poiDetailTab === 'facilities' ? (
+                  {!isLinearDetailMarker(focusedMarker) &&
+                  !focusedMarkerIsPlayer &&
+                  poiDetailTab === 'facilities' ? (
                     <>
                       {focusedMarker.facilities?.length ? (
                         <div className="map-poi-facility-list">
@@ -2750,6 +3536,135 @@ export function MapStage() {
                           className="map-poi-related-list"
                           aria-label={t('map.poi.relatedPlaces')}
                         >
+                          <div className="map-poi-related-filters">
+                            <label className="map-poi-related-keyword">
+                              <span>{t('map.poi.filterKeyword')}</span>
+                              <input
+                                type="search"
+                                value={secondaryPoiKeyword}
+                                onChange={(event) =>
+                                  setSecondaryPoiKeyword(event.currentTarget.value)
+                                }
+                                placeholder={t('map.poi.filterKeywordPlaceholder')}
+                              />
+                            </label>
+                            <div className="map-poi-related-filter-section">
+                              <span>{t('map.poi.filterCategory')}</span>
+                              <div
+                                className={
+                                  secondaryPoiCategoryExpanded
+                                    ? 'map-category-filter is-expanded'
+                                    : 'map-category-filter'
+                                }
+                              >
+                                <div
+                                  className="map-category-strip"
+                                  aria-label={t('map.poi.filterCategory')}
+                                >
+                                  {['all', ...focusedSecondaryPoiCategoryOptions].map(
+                                    (categoryId) => (
+                                      <button
+                                        className={
+                                          secondaryPoiCategoryFilter === categoryId
+                                            ? 'map-category-pill is-active'
+                                            : 'map-category-pill'
+                                        }
+                                        type="button"
+                                        key={categoryId}
+                                        onClick={() => setSecondaryPoiCategoryFilter(categoryId)}
+                                      >
+                                        {categoryId === 'all'
+                                          ? t('map.poi.filterAll')
+                                          : (categoryById.get(categoryId) ??
+                                            getMarkerCategoryDisplayName(categoryId, t))}
+                                      </button>
+                                    ),
+                                  )}
+                                </div>
+                                {focusedSecondaryPoiCategoryOptions.length > 3 ? (
+                                  <button
+                                    className="map-category-toggle"
+                                    type="button"
+                                    aria-expanded={secondaryPoiCategoryExpanded}
+                                    aria-label={
+                                      secondaryPoiCategoryExpanded
+                                        ? t('map.categoryFilter.collapse')
+                                        : t('map.categoryFilter.expand')
+                                    }
+                                    onClick={() =>
+                                      setSecondaryPoiCategoryExpanded((current) => !current)
+                                    }
+                                  >
+                                    <span className="material-symbols-outlined" aria-hidden="true">
+                                      {secondaryPoiCategoryExpanded
+                                        ? 'keyboard_arrow_up'
+                                        : 'keyboard_arrow_down'}
+                                    </span>
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                            {focusedSecondaryPoiFloorOptions.length > 0 ? (
+                              <div className="map-poi-related-filter-section">
+                                <span>{t('map.poi.filterFloor')}</span>
+                                <div
+                                  className={
+                                    secondaryPoiFloorExpanded
+                                      ? 'map-category-filter is-expanded'
+                                      : 'map-category-filter'
+                                  }
+                                >
+                                  <div
+                                    className="map-category-strip"
+                                    aria-label={t('map.poi.filterFloor')}
+                                  >
+                                    {['all', ...focusedSecondaryPoiFloorOptions].map(
+                                      (floorLabel) => (
+                                        <button
+                                          className={
+                                            secondaryPoiFloorFilter === floorLabel
+                                              ? 'map-category-pill is-active'
+                                              : 'map-category-pill'
+                                          }
+                                          type="button"
+                                          key={floorLabel}
+                                          onClick={() => setSecondaryPoiFloorFilter(floorLabel)}
+                                        >
+                                          {floorLabel === 'all'
+                                            ? t('map.poi.filterAll')
+                                            : floorLabel}
+                                        </button>
+                                      ),
+                                    )}
+                                  </div>
+                                  {focusedSecondaryPoiFloorOptions.length > 3 ? (
+                                    <button
+                                      className="map-category-toggle"
+                                      type="button"
+                                      aria-expanded={secondaryPoiFloorExpanded}
+                                      aria-label={
+                                        secondaryPoiFloorExpanded
+                                          ? t('map.categoryFilter.collapse')
+                                          : t('map.categoryFilter.expand')
+                                      }
+                                      onClick={() =>
+                                        setSecondaryPoiFloorExpanded((current) => !current)
+                                      }
+                                    >
+                                      <span
+                                        className="material-symbols-outlined"
+                                        aria-hidden="true"
+                                      >
+                                        {secondaryPoiFloorExpanded
+                                          ? 'keyboard_arrow_up'
+                                          : 'keyboard_arrow_down'}
+                                      </span>
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
                           {focusedSecondaryPoiGroups.map((group) => (
                             <section className="map-poi-related-group" key={group.id}>
                               <h4>
@@ -2777,6 +3692,9 @@ export function MapStage() {
                                           ? (categoryById.get(item.marker.categoryId) ??
                                             getMarkerCategoryDisplayName(item.marker.categoryId, t))
                                           : t('map.poi.relatedPlaceFallback')}
+                                        {item.marker.floorLabel
+                                          ? ` · ${item.marker.floorLabel}`
+                                          : ''}
                                       </small>
                                     </span>
                                   </button>
@@ -2821,7 +3739,7 @@ export function MapStage() {
                           </section>
                         </div>
                       ) : focusedMarker.facilities?.length ? null : (
-                        <p>{focusedMarker.description ?? t('map.poi.noFacilities')}</p>
+                        <p>{t('map.poi.noFacilities')}</p>
                       )}
                     </>
                   ) : null}
@@ -2838,7 +3756,7 @@ export function MapStage() {
         aria-live="polite"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
-        onPointerCancel={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerLeave}
       >
@@ -2866,7 +3784,10 @@ export function MapStage() {
               : loadStatus === 'ready'
                 ? t('map.source.objectCount', {
                     count:
-                      pointMarkers.length + endpointGroupMarkers.length + transitLineMarkers.length,
+                      pointMarkers.length +
+                      endpointGroupMarkers.length +
+                      shapeMarkers.length +
+                      transitLineMarkers.length,
                   })
                 : t('map.source.unavailable')}
           </span>
@@ -2922,7 +3843,7 @@ export function MapStage() {
           </div>
         </div>
 
-        {hasMapOverlay ? (
+        {hasMapOverlay || Boolean(visibleTiles?.tiles.length) ? (
           <div className="map-marker-layer" aria-label={t('map.overlay.aria')}>
             {visibleProjectedRoadTraces.length ? (
               <div className="map-road-trace-layer" aria-hidden="true">
@@ -2984,6 +3905,93 @@ export function MapStage() {
                 ))}
               </div>
             ) : null}
+            {rawProjectedShapePois.length > 0 ? (
+              <div
+                className={
+                  poiCoordinatePickMode
+                    ? 'map-shape-poi-layer is-coordinate-pick-through'
+                    : 'map-shape-poi-layer'
+                }
+              >
+                <svg
+                  viewBox={`0 0 ${Math.max(1, viewportSize.width)} ${Math.max(1, viewportSize.height)}`}
+                  aria-hidden="true"
+                >
+                  {rawProjectedShapePois.map((shape) => {
+                    const source = shapeOverlaySource.find((marker) => marker.id === shape.id);
+                    return (
+                      <path
+                        className={[
+                          'map-shape-poi-path',
+                          shape.isArea ? 'is-area' : 'is-line',
+                          shape.id === focusedMarkerId ? 'is-selected' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        d={shape.path}
+                        data-map-marker-id={source?.id}
+                        key={`${shape.id}-shape`}
+                        onPointerDown={
+                          shape.isArea ? undefined : handleMapMarkerPointerDown
+                        }
+                        onClick={
+                          shape.isArea
+                            ? undefined
+                            : () => {
+                                if (source) {
+                                  handleMapMarkerClick(source);
+                                }
+                              }
+                        }
+                        style={
+                          {
+                            '--shape-poi-color': shape.accentColor,
+                            pointerEvents:
+                              poiCoordinatePickMode || shape.isArea ? 'none' : undefined,
+                          } as CSSProperties
+                        }
+                      >
+                        <title>{shape.label}</title>
+                      </path>
+                    );
+                  })}
+                </svg>
+                {projectedShapePois.map((shape) => {
+                  const source = shapeOverlaySource.find((marker) => marker.id === shape.id);
+                  return source ? (
+                    <button
+                      className={[
+                        'map-shape-poi-center',
+                        `is-${shape.labelMode}`,
+                        shape.isArea ? 'is-area-poi' : '',
+                        shape.id === focusedMarkerId ? 'is-selected' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      type="button"
+                      data-map-marker-id={source.id}
+                      key={`${shape.id}-center`}
+                      onPointerDown={handleMapMarkerPointerDown}
+                      onClick={() => handleMapMarkerClick(source)}
+                      style={
+                        {
+                          '--shape-poi-left': `${shape.centerLeft}px`,
+                          '--shape-poi-top': `${shape.centerTop}px`,
+                          '--shape-poi-color': shape.accentColor,
+                        } as CSSProperties
+                      }
+                    >
+                      {shape.labelMode === 'representative' ? (
+                        <MarkerListIcon marker={source} iconBaseUrl={markerIconBaseUrl} />
+                      ) : null}
+                      {shape.showLabel ? (
+                        <span className="map-marker-label">{shape.label}</span>
+                      ) : null}
+                    </button>
+                  ) : null;
+                })}
+              </div>
+            ) : null}
             {projectedGuideMarkers.map((marker) => (
               <div
                 className={`map-guide-marker is-${marker.kind}`}
@@ -3015,7 +4023,7 @@ export function MapStage() {
               const sourceMarker = linearOverlaySource.find((item) => item.id === marker.id);
               const focusLinearMarker = () => {
                 if (sourceMarker) {
-                  handleMapMarkerActivate(sourceMarker);
+                  handleMapMarkerClick(sourceMarker);
                 }
               };
 
@@ -3026,8 +4034,9 @@ export function MapStage() {
                       className="map-linear-poi-endpoint"
                       type="button"
                       aria-label={t('map.overlay.viewMarker', { name: marker.label })}
+                      data-map-marker-id={sourceMarker?.id}
                       key={endpoint.id}
-                      onPointerDown={(event) => event.stopPropagation()}
+                      onPointerDown={handleMapMarkerPointerDown}
                       onClick={focusLinearMarker}
                       style={
                         {
@@ -3053,7 +4062,8 @@ export function MapStage() {
                         .filter(Boolean)
                         .join(' ')}
                       type="button"
-                      onPointerDown={(event) => event.stopPropagation()}
+                      data-map-marker-id={sourceMarker?.id}
+                      onPointerDown={handleMapMarkerPointerDown}
                       onClick={focusLinearMarker}
                       style={
                         {
@@ -3089,21 +4099,27 @@ export function MapStage() {
               <button
                 className={[
                   'map-marker-dot',
-                  marker.showLabel || marker.id === focusedMarkerId ? 'has-label' : '',
+                  !marker.isPlayer && (marker.showLabel || marker.id === focusedMarkerId)
+                    ? 'has-label'
+                    : '',
                   !marker.iconUrl ? 'has-fallback-icon' : '',
                   marker.id === focusedMarkerId ? 'is-selected' : '',
                   marker.roadKind ? `is-${marker.roadKind}` : '',
+                  marker.playerPresence === 'offline' ? 'is-offline' : '',
+                  marker.isPlayer ? 'is-player' : '',
+                  marker.isCurrentAccount ? 'is-current-account' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
                 type="button"
                 aria-label={t('map.overlay.viewMarker', { name: marker.label })}
+                data-map-marker-id={marker.id}
                 key={marker.id}
-                onPointerDown={(event) => event.stopPropagation()}
+                onPointerDown={handleMapMarkerPointerDown}
                 onClick={() => {
                   const source = pointMarkers.find((item) => item.id === marker.id);
                   if (source) {
-                    handleMapMarkerActivate(source);
+                    handleMapMarkerClick(source);
                   }
                 }}
                 style={
@@ -3122,7 +4138,7 @@ export function MapStage() {
                 <span className="material-symbols-outlined" aria-hidden="true">
                   {marker.symbolIcon ?? 'location_on'}
                 </span>
-                {marker.showLabel || marker.id === focusedMarkerId ? (
+                {!marker.isPlayer && (marker.showLabel || marker.id === focusedMarkerId) ? (
                   <span className="map-marker-label">{marker.label}</span>
                 ) : null}
               </button>
@@ -3250,6 +4266,22 @@ export function MapStage() {
             </label>
             <label className="map-layer-toggle">
               <span className="material-symbols-outlined" aria-hidden="true">
+                person_pin_circle
+              </span>
+              <span>
+                <strong>{t('map.layer.players')}</strong>
+                <small>
+                  {playersVisible ? t('map.layer.playersVisible') : t('map.layer.playersHidden')}
+                </small>
+              </span>
+              <input
+                type="checkbox"
+                checked={playersVisible}
+                onChange={(event) => setPlayersVisible(event.currentTarget.checked)}
+              />
+            </label>
+            <label className="map-layer-toggle">
+              <span className="material-symbols-outlined" aria-hidden="true">
                 route
               </span>
               <span>
@@ -3363,6 +4395,16 @@ export function MapStage() {
                 />
               </label>
               <label>
+                <span>{t('map.poiSubmit.floor')}</span>
+                <input
+                  value={poiFloorLabel}
+                  onChange={(event) => setPoiFloorLabel(event.currentTarget.value)}
+                  placeholder={t('map.poiSubmit.floorPlaceholder')}
+                  aria-label={t('map.poiSubmit.floor')}
+                  maxLength={40}
+                />
+              </label>
+              <label>
                 <span>{t('map.poiSubmit.addressRoad')}</span>
                 <select
                   value={poiAddressRoadMarkerId}
@@ -3394,10 +4436,18 @@ export function MapStage() {
                 <input
                   key={poiImageFileInputKey}
                   type="file"
+                  multiple
                   accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
-                  onChange={(event) => setPoiImageFile(event.currentTarget.files?.[0] ?? null)}
+                  onChange={(event) =>
+                    setPoiImageFiles(Array.from(event.currentTarget.files ?? []).slice(0, 12))
+                  }
                   aria-label={t('map.poiSubmit.imageFile')}
                 />
+                {poiImageFiles.length > 0 ? (
+                  <small>
+                    {t('map.poiSubmit.imageFileCount', { count: poiImageFiles.length })}
+                  </small>
+                ) : null}
               </label>
               <label>
                 <span>{t('map.poiSubmit.imageUrl')}</span>
@@ -3492,8 +4542,50 @@ function MapShareDialog({
 }>) {
   const previewRef = useRef<HTMLElement | null>(null);
   const [busyMode, setBusyMode] = useState<MapShareMode | null>(null);
+  const [copyKind, setCopyKind] = useState<MapShareCopyKind>('link');
+  const [busyCopy, setBusyCopy] = useState<MapShareCopyKind | null>(null);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
   const payload = useMemo(() => buildMapSharePayload(target, t), [target, t]);
+  const copyOptions = useMemo(
+    () => mapShareCopyKinds.filter((kind) => Boolean(getMapShareCopyValue(payload, kind))),
+    [payload],
+  );
+  const selectedCopyKind = copyOptions.includes(copyKind) ? copyKind : copyOptions[0];
   const useWordmarkLogo = locale !== 'en';
+
+  useEffect(() => {
+    let cancelled = false;
+    setQrCodeDataUrl('');
+    void QRCode.toDataURL(payload.url, {
+      errorCorrectionLevel: 'M',
+      margin: 1,
+      width: 104,
+      color: {
+        dark: '#263c3a',
+        light: '#ffffff',
+      },
+    })
+      .then((dataUrl) => {
+        if (!cancelled) {
+          setQrCodeDataUrl(dataUrl);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQrCodeDataUrl('');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [payload.url]);
+
+  useEffect(() => {
+    if (selectedCopyKind && selectedCopyKind !== copyKind) {
+      setCopyKind(selectedCopyKind);
+    }
+  }, [copyKind, selectedCopyKind]);
 
   const performShare = async (mode: MapShareMode) => {
     setBusyMode(mode);
@@ -3511,6 +4603,28 @@ function MapShareDialog({
       onComplete(t('map.share.unavailable'));
     } finally {
       setBusyMode(null);
+    }
+  };
+
+  const performCopy = async () => {
+    if (!selectedCopyKind) {
+      return;
+    }
+    const value = getMapShareCopyValue(payload, selectedCopyKind);
+    if (!value) {
+      return;
+    }
+
+    const successMessage = t(mapShareCopySuccessKeys[selectedCopyKind]);
+    const kind = selectedCopyKind;
+    setBusyCopy(kind);
+    try {
+      await copyTextToClipboard(value);
+      onComplete(successMessage);
+    } catch {
+      onComplete(t('map.share.unavailable'));
+    } finally {
+      setBusyCopy(null);
     }
   };
 
@@ -3610,20 +4724,66 @@ function MapShareDialog({
             </ol>
           ) : null}
           <footer className="map-share-preview-footer">
-            <span>{t('map.share.footerPrefix')}</span>
-            {useWordmarkLogo ? (
-              <img src={appPath('/icons/yct-logo-wordmark.svg')} alt="雨城通" />
+            <div className="map-share-preview-footer-copy">
+              <span>{t('map.share.footerPrefix')}</span>
+              {useWordmarkLogo ? (
+                <img src={appPath('/icons/yct-logo-wordmark.svg')} alt="雨城通" />
+              ) : (
+                <span className="map-share-preview-footer-brand">
+                  <img src={appPath('/icons/yct-logo.svg')} alt="" aria-hidden="true" />
+                  <strong>Yuchengtong</strong>
+                </span>
+              )}
+              <small>{t('map.share.footerDisclaimer')}</small>
+            </div>
+            {qrCodeDataUrl ? (
+              <img
+                className="map-share-preview-qr"
+                src={qrCodeDataUrl}
+                alt={t('map.share.qrCode')}
+              />
             ) : (
-              <span className="map-share-preview-footer-brand">
-                <img src={appPath('/icons/yct-logo.svg')} alt="" aria-hidden="true" />
-                <strong>Yuchengtong</strong>
-              </span>
+              <span className="map-share-preview-qr-placeholder" aria-hidden="true" />
             )}
-            <small>{t('map.share.footerDisclaimer')}</small>
           </footer>
           <p className="map-share-preview-url">{payload.url}</p>
         </article>
         <div className="map-share-actions" aria-label={t('map.share.actions')}>
+          {copyOptions.length > 0 ? (
+            <div className="map-share-copy-control">
+              <label className="map-share-copy-select">
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  content_copy
+                </span>
+                <span>
+                  <strong>{t('map.share.copyKind')}</strong>
+                  <select
+                    value={selectedCopyKind ?? ''}
+                    onChange={(event) => setCopyKind(event.currentTarget.value as MapShareCopyKind)}
+                    disabled={busyMode !== null || busyCopy !== null}
+                    aria-label={t('map.share.copyKind')}
+                  >
+                    {copyOptions.map((kind) => (
+                      <option value={kind} key={kind}>
+                        {t(mapShareCopyLabelKeys[kind])}
+                      </option>
+                    ))}
+                  </select>
+                </span>
+              </label>
+              <button
+                className="secondary-action-button"
+                type="button"
+                disabled={busyMode !== null || busyCopy !== null || !selectedCopyKind}
+                onClick={() => void performCopy()}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  content_copy
+                </span>
+                <span>{busyCopy ? t('map.share.processing') : t('map.share.copy')}</span>
+              </button>
+            </div>
+          ) : null}
           {mapShareModes.map((mode) => (
             <button
               className={
@@ -3631,7 +4791,9 @@ function MapShareDialog({
               }
               type="button"
               key={mode}
-              disabled={busyMode !== null}
+              disabled={
+                busyMode !== null || busyCopy !== null || (mode === 'image' && !qrCodeDataUrl)
+              }
               onClick={() => void performShare(mode)}
             >
               <span className="material-symbols-outlined" aria-hidden="true">
@@ -3648,11 +4810,13 @@ function MapShareDialog({
   );
 }
 
-type PointMarker = MapMarkerSnapshot['markers'][number] & {
+type LocalizedMapMarker = MapMarkerSnapshot['markers'][number] & { sourceLabel: string };
+
+type PointMarker = LocalizedMapMarker & {
   geometry: Extract<MapMarkerSnapshot['markers'][number]['geometry'], { type: 'Point' }>;
 };
 
-type EndpointGroupMarker = MapMarkerSnapshot['markers'][number] & {
+type EndpointGroupMarker = LocalizedMapMarker & {
   geometry: Extract<MapMarkerSnapshot['markers'][number]['geometry'], { type: 'MultiPoint' }>;
 };
 
@@ -3660,14 +4824,23 @@ type TransitLineMarker = EndpointGroupMarker & {
   categoryId: 'transit-line';
 };
 
-type SidebarMarker = PointMarker | EndpointGroupMarker;
+type ShapeMarker = LocalizedMapMarker & {
+  geometry: Exclude<MapGeometry, { type: 'Point' } | { type: 'MultiPoint' }>;
+};
 
-type CenterableMarker = PointMarker | EndpointGroupMarker | TransitLineMarker;
+type RegionGeometry = Extract<
+  MapGeometry,
+  { type: 'Rectangle' | 'MultiRectangle' | 'Polygon' | 'MultiPolygon' }
+>;
+
+type CenterableMarker = LocalizedMapMarker;
+
+type SidebarMarker = CenterableMarker;
 
 function isCenterableMarker(
   marker: MapMarkerSnapshot['markers'][number],
 ): marker is CenterableMarker {
-  return marker.geometry.type === 'Point' || marker.geometry.type === 'MultiPoint';
+  return getMapGeometryCoordinates(marker.geometry).length > 0;
 }
 
 function MapStageLegal() {
@@ -3796,13 +4969,24 @@ function TransitLineMapDetail({
 }>) {
   const [direction, setDirection] = useState<'forward' | 'reverse'>('forward');
   const stationStops = getDirectionalLineStops(line, direction);
-  const firstStationName = stationStops[0]?.stationName ?? line.firstStationName;
+  const firstStationName =
+    stationStops[0]?.displayStationName ?? line.displayFirstStationName ?? line.firstStationName;
   const lastStationName =
-    stationStops[stationStops.length - 1]?.stationName ?? line.lastStationName;
+    stationStops[stationStops.length - 1]?.displayStationName ??
+    line.displayLastStationName ??
+    line.lastStationName;
   const forwardDirectionName =
-    line.lastStationName ?? line.stationNames.at(-1) ?? t('lineDetail.lastStation');
+    line.displayLastStationName ??
+    line.lastStationName ??
+    line.displayStationNames?.at(-1) ??
+    line.stationNames.at(-1) ??
+    t('lineDetail.lastStation');
   const reverseDirectionName =
-    line.firstStationName ?? line.stationNames[0] ?? t('lineDetail.firstStation');
+    line.displayFirstStationName ??
+    line.firstStationName ??
+    line.displayStationNames?.[0] ??
+    line.stationNames[0] ??
+    t('lineDetail.firstStation');
 
   return (
     <div
@@ -3873,7 +5057,7 @@ function TransitLineMapDetail({
                 type="button"
                 onClick={() => onFocusStation(stop.stationName)}
               >
-                {formatMarkerDisplayName(stop.stationName)}
+                {formatMarkerDisplayName(stop.displayStationName ?? stop.stationName)}
                 {stop.oneWay ? <small>{formatTransitStopOneWayLabel(stop.oneWay, t)}</small> : null}
               </button>
             </li>
@@ -4375,16 +5559,19 @@ function buildRoutePlanOptions(input: {
   transitLines: TransitOverviewLine[];
   modeProfiles: TransitModeProfileForMap[];
 }): RoutePlanOption[] {
+  const roadGraph = input.roadGraph;
+  const routeCache = createRoutePlanningCache();
   const draft = resolveRoutePlanDraftAccessPoints(
     input.draft,
     input.secondaryPoiIndex,
     input.secondaryPoiParentIndex,
+    roadGraph,
+    routeCache,
+    input.t,
   );
   const options: RoutePlanOption[] = [];
   const endpointAccessDistance = getRouteEndpointAccessDistance(draft);
   const routeOptionLimit = getRouteOptionLimit(input.enabledModes);
-  const roadGraph = input.roadGraph;
-  const routeCache = createRoutePlanningCache();
   const originRoadAccessCandidates = getRouteEndpointRoadAccessCandidates(
     draft,
     'origin',
@@ -4597,6 +5784,60 @@ function buildRoutePlanCalculationKey(
   });
 }
 
+function updateRoutePlanDraftPlayerEndpoints(
+  draft: RoutePlanDraft,
+  pointMarkers: PointMarker[],
+): RoutePlanDraft {
+  let nextDraft = draft;
+
+  for (const endpoint of ['origin', 'destination'] as const) {
+    const markerId = endpoint === 'origin' ? nextDraft.originId : nextDraft.destinationId;
+    if (!markerId) {
+      continue;
+    }
+
+    const marker = pointMarkers.find(
+      (candidate) => candidate.id === markerId && candidate.playerLocation,
+    );
+    if (!marker) {
+      continue;
+    }
+
+    const latestCoordinate = marker.geometry.coordinates;
+    const previousCoordinate =
+      endpoint === 'origin'
+        ? (nextDraft.originRaw ?? nextDraft.origin)
+        : (nextDraft.destinationRaw ?? nextDraft.destination);
+    if (
+      getCoordinateDistance(previousCoordinate, latestCoordinate) < playerRouteRecalculationDistance
+    ) {
+      continue;
+    }
+
+    if (nextDraft === draft) {
+      nextDraft = { ...draft };
+    }
+
+    if (endpoint === 'origin') {
+      nextDraft.origin = latestCoordinate;
+      if (nextDraft.originRaw) {
+        nextDraft.originRaw = latestCoordinate;
+      }
+    } else {
+      nextDraft.destination = latestCoordinate;
+      if (nextDraft.destinationRaw) {
+        nextDraft.destinationRaw = latestCoordinate;
+      }
+    }
+  }
+
+  return nextDraft;
+}
+
+function isPlayerLocationMarkerId(markerId: string | undefined): markerId is string {
+  return Boolean(markerId?.startsWith('player-location-'));
+}
+
 function getRouteOptionLimit(enabledModes: EnabledRouteTransportModes): number {
   const enabledCount = routeTransportModeOptions.filter(
     (option) => enabledModes[option.mode],
@@ -4639,23 +5880,63 @@ function resolveRoutePlanDraftAccessPoints(
   draft: RoutePlanDraft,
   secondaryPoiIndex: ReadonlyMap<string, SecondaryPoiLink[]>,
   secondaryPoiParentIndex: ReadonlyMap<string, SecondaryPoiParentLink>,
+  roadGraph: RoadRouteGraph | undefined,
+  routeCache: RoutePlanningCache,
+  t: Translate,
 ): RoutePlanDraft {
-  const origin = resolveRouteEndpointAccessPoint({
+  if (
+    draft.originId &&
+    draft.destinationId &&
+    areRouteEndpointsParentAndChild(draft.originId, draft.destinationId, secondaryPoiParentIndex)
+  ) {
+    return draft;
+  }
+
+  const originCandidates = listRouteEndpointAccessPoints({
     endpointCoordinate: draft.origin,
     endpointId: draft.originId,
     secondaryPoiIndex,
     secondaryPoiParentIndex,
-    targetCoordinate: draft.destination,
-    targetId: draft.destinationId,
   });
-  const destination = resolveRouteEndpointAccessPoint({
+  const destinationCandidates = listRouteEndpointAccessPoints({
     endpointCoordinate: draft.destination,
     endpointId: draft.destinationId,
     secondaryPoiIndex,
     secondaryPoiParentIndex,
-    targetCoordinate: origin.coordinate,
-    targetId: draft.originId,
   });
+
+  const pairs = originCandidates.flatMap((origin) =>
+    destinationCandidates.map((destination) => {
+      const betweenAccessPoints = buildWalkRouteBetweenCoordinates(
+        origin.coordinate,
+        destination.coordinate,
+        roadGraph,
+        routeCache,
+        t,
+      ).distance;
+      const endpointAccessDistance =
+        (origin.accessId ? getCoordinateDistance(draft.origin, origin.coordinate) : 0) +
+        (destination.accessId
+          ? getCoordinateDistance(draft.destination, destination.coordinate)
+          : 0);
+      return {
+        destination,
+        directionDistance:
+          getCoordinateDistance(origin.coordinate, draft.destination) +
+          getCoordinateDistance(destination.coordinate, draft.origin),
+        origin,
+        totalWalkingDistance: betweenAccessPoints + endpointAccessDistance,
+      };
+    }),
+  );
+  pairs.sort(
+    (left, right) =>
+      left.totalWalkingDistance - right.totalWalkingDistance ||
+      left.directionDistance - right.directionDistance,
+  );
+  const selected = pairs[0];
+  const origin = selected?.origin ?? { coordinate: draft.origin };
+  const destination = selected?.destination ?? { coordinate: draft.destination };
 
   return {
     ...draft,
@@ -4670,22 +5951,18 @@ function resolveRoutePlanDraftAccessPoints(
   };
 }
 
-function resolveRouteEndpointAccessPoint(input: {
+interface RouteEndpointAccessPoint {
+  coordinate: [number, number];
+  accessId?: string;
+  accessLabel?: string;
+}
+
+function listRouteEndpointAccessPoints(input: {
   endpointCoordinate: [number, number];
   endpointId?: string;
   secondaryPoiIndex: ReadonlyMap<string, SecondaryPoiLink[]>;
   secondaryPoiParentIndex: ReadonlyMap<string, SecondaryPoiParentLink>;
-  targetCoordinate: [number, number];
-  targetId?: string;
-}): { coordinate: [number, number]; accessId?: string; accessLabel?: string } {
-  if (
-    input.endpointId &&
-    input.targetId &&
-    areRouteEndpointsParentAndChild(input.endpointId, input.targetId, input.secondaryPoiParentIndex)
-  ) {
-    return { coordinate: input.endpointCoordinate };
-  }
-
+}): RouteEndpointAccessPoint[] {
   const parentEndpointChildPois = input.endpointId
     ? input.secondaryPoiIndex.get(input.endpointId)
     : undefined;
@@ -4700,7 +5977,7 @@ function resolveRouteEndpointAccessPoint(input: {
       parent: childParent.parent,
     })
   ) {
-    return { coordinate: input.endpointCoordinate };
+    return [{ coordinate: input.endpointCoordinate }];
   }
   const childEndpointSiblingPois = childParent
     ? input.secondaryPoiIndex
@@ -4711,45 +5988,23 @@ function resolveRouteEndpointAccessPoint(input: {
   const accessChildPois = allChildPois?.filter(isRouteAccessSecondaryPoi);
   const childPois = accessChildPois && accessChildPois.length > 0 ? accessChildPois : allChildPois;
   if (!childPois || childPois.length === 0) {
-    return { coordinate: input.endpointCoordinate };
+    return [{ coordinate: input.endpointCoordinate }];
   }
 
-  const candidates = childPois
-    .map((link) => {
-      const coordinate = getMarkerCenter(link.marker);
-      return coordinate
-        ? {
+  const candidates: RouteEndpointAccessPoint[] = childPois.flatMap((link) => {
+    const coordinate = getMarkerCenter(link.marker);
+    return coordinate
+      ? [
+          {
             coordinate,
-            link,
-            distanceToTarget: getCoordinateDistance(coordinate, input.targetCoordinate),
-          }
-        : undefined;
-    })
-    .filter(
-      (
-        candidate,
-      ): candidate is {
-        coordinate: [number, number];
-        link: SecondaryPoiLink;
-        distanceToTarget: number;
-      } => Boolean(candidate),
-    )
-    .sort((left, right) => left.distanceToTarget - right.distanceToTarget);
-  const selected = candidates[0];
+            accessId: link.marker.id,
+            accessLabel: link.childLabel || formatMarkerDisplayName(link.marker.label),
+          },
+        ]
+      : [];
+  });
 
-  if (!selected) {
-    return { coordinate: input.endpointCoordinate };
-  }
-
-  if (selected.link.marker.id === input.endpointId) {
-    return { coordinate: input.endpointCoordinate };
-  }
-
-  return {
-    coordinate: selected.coordinate,
-    accessId: selected.link.marker.id,
-    accessLabel: selected.link.childLabel || formatMarkerDisplayName(selected.link.marker.label),
-  };
+  return candidates.length > 0 ? candidates : [{ coordinate: input.endpointCoordinate }];
 }
 
 function areRouteEndpointsParentAndChild(
@@ -6176,8 +7431,9 @@ function buildTransitRoutePlanOptions(input: {
         const stops = getDirectionalLineStops(line, direction)
           .map((stop): Omit<TransitRouteStop, 'index'> | undefined => {
             const marker = findTransitStationMarker(
-              stop.stationName,
+              stop,
               stationMarkerIndex,
+              input.pointMarkers,
               mode.mode,
             );
             const center = marker ? getMarkerCenter(marker) : undefined;
@@ -6198,7 +7454,11 @@ function buildTransitRoutePlanOptions(input: {
           mode,
           modeLabel: getRouteTransportModeLabel(mode.mode, input.t),
           stops,
-          terminalName: stops.at(-1)?.stop.stationName ?? line.lastStationName ?? line.name,
+          terminalName:
+            stops.at(-1)?.stop.displayStationName ??
+            line.displayLastStationName ??
+            line.lastStationName ??
+            line.name,
         });
       }
     }
@@ -6294,6 +7554,8 @@ function buildDirectTransitLineOption(
   const transitRoute = buildTransitSegmentRoute(
     segmentStops,
     candidate.mode.mode,
+    candidate.line,
+    candidate.direction,
     markerRoadAccessIndex,
     roadGraph,
     routeCache,
@@ -6554,6 +7816,8 @@ function buildTransferTransitLineOptions(
       const firstTransitRoute = buildTransitSegmentRoute(
         firstSegment,
         originCandidate.candidate.mode.mode,
+        originCandidate.candidate.line,
+        originCandidate.candidate.direction,
         markerRoadAccessIndex,
         roadGraph,
         routeCache,
@@ -6561,6 +7825,8 @@ function buildTransferTransitLineOptions(
       const secondTransitRoute = buildTransitSegmentRoute(
         secondSegment,
         destinationCandidate.candidate.mode.mode,
+        destinationCandidate.candidate.line,
+        destinationCandidate.candidate.direction,
         markerRoadAccessIndex,
         roadGraph,
         routeCache,
@@ -6788,7 +8054,7 @@ function buildTransitStationMarkerIndex(pointMarkers: PointMarker[]): Map<string
     if (!isTransitStationPoi(marker)) {
       continue;
     }
-    for (const key of getStationNameMatchKeys(marker.label)) {
+    for (const key of getMarkerStationNameMatchKeys(marker)) {
       const current = index.get(key) ?? [];
       current.push(marker);
       index.set(key, current);
@@ -6798,11 +8064,21 @@ function buildTransitStationMarkerIndex(pointMarkers: PointMarker[]): Map<string
 }
 
 function findTransitStationMarker(
-  stationName: string,
+  stop: Pick<TransitLineStopForMap, 'stationName' | 'stationMarkerIds'>,
   stationMarkerIndex: Map<string, PointMarker[]>,
+  pointMarkers: PointMarker[],
   mode: RouteTransportMode,
 ): PointMarker | undefined {
-  for (const key of getStationNameMatchKeys(stationName)) {
+  const boundMarker = (stop.stationMarkerIds ?? [])
+    .map((markerId) => pointMarkers.find((marker) => marker.id === markerId))
+    .find((marker): marker is PointMarker =>
+      Boolean(marker && matchesTransitMarkerMode(marker, mode)),
+    );
+  if (boundMarker) {
+    return boundMarker;
+  }
+
+  for (const key of getStationNameMatchKeys(stop.stationName)) {
     const marker = stationMarkerIndex
       .get(key)
       ?.find((item) => matchesTransitMarkerMode(item, mode));
@@ -6890,6 +8166,8 @@ function buildTransitStopStepDetails(stops: TransitRouteStop[]): RoutePlanStepDe
 function buildTransitSegmentRoute(
   stops: TransitRouteStop[],
   mode: RouteTransportMode,
+  line: TransitOverviewLine,
+  direction: 'forward' | 'reverse',
   markerRoadAccessIndex: ReadonlyMap<string, RoadAccessCandidate[]>,
   roadGraph?: RoadRouteGraph,
   routeCache?: RoutePlanningCache,
@@ -6902,7 +8180,8 @@ function buildTransitSegmentRoute(
     };
   }
 
-  if (!shouldUseRoadGraphForTransitMode(mode) || !roadGraph) {
+  const hasConfiguredLineGeometry = Boolean(line.segmentPaths?.length || line.routeNodes?.length);
+  if (!hasConfiguredLineGeometry && (!shouldUseRoadGraphForTransitMode(mode) || !roadGraph)) {
     return {
       coordinates: stops.map((stop) => stop.center),
       distance: getTransitSegmentDistance(stops),
@@ -6921,23 +8200,44 @@ function buildTransitSegmentRoute(
       continue;
     }
 
-    const roadSegment = findRoadRouteBetweenCoordinates(
-      previous.center,
-      current.center,
-      roadGraph,
-      routeCache,
-      undefined,
-      {
-        destinationAccessCandidates: getIndexedMarkerRoadAccessCandidates(
-          markerRoadAccessIndex,
-          current.marker.id,
-        ),
-        originAccessCandidates: getIndexedMarkerRoadAccessCandidates(
-          markerRoadAccessIndex,
-          previous.marker.id,
-        ),
-      },
+    const configuredSegment = getConfiguredTransitSegment(
+      line,
+      previous,
+      current,
+      direction,
     );
+    if (configuredSegment) {
+      const segmentCoordinates = [
+        previous.center,
+        ...configuredSegment.waypoints,
+        current.center,
+      ];
+      appendRouteSegmentCoordinates(coordinates, segmentCoordinates);
+      distance += getCoordinateChainDistance(segmentCoordinates);
+      usesRoadGraph ||= configuredSegment.mode === 'road';
+      continue;
+    }
+
+    const roadSegment =
+      shouldUseRoadGraphForTransitMode(mode) && roadGraph
+        ? findRoadRouteBetweenCoordinates(
+            previous.center,
+            current.center,
+            roadGraph,
+            routeCache,
+            undefined,
+            {
+              destinationAccessCandidates: getIndexedMarkerRoadAccessCandidates(
+                markerRoadAccessIndex,
+                current.marker.id,
+              ),
+              originAccessCandidates: getIndexedMarkerRoadAccessCandidates(
+                markerRoadAccessIndex,
+                previous.marker.id,
+              ),
+            },
+          )
+        : undefined;
     const segmentCoordinates = roadSegment?.coordinates ?? [previous.center, current.center];
     appendRouteSegmentCoordinates(coordinates, segmentCoordinates);
     distance += roadSegment?.distance ?? getCoordinateDistance(previous.center, current.center);
@@ -6949,6 +8249,100 @@ function buildTransitSegmentRoute(
     distance,
     usesRoadGraph,
   };
+}
+
+function getConfiguredTransitSegment(
+  line: TransitOverviewLine,
+  previous: TransitRouteStop,
+  current: TransitRouteStop,
+  direction: 'forward' | 'reverse',
+): { mode: TransitLineRouteMode; waypoints: Array<[number, number]> } | undefined {
+  const fromStationSourceId = previous.stop.stationSourceId;
+  const toStationSourceId = current.stop.stationSourceId;
+  if (!fromStationSourceId || !toStationSourceId) {
+    return undefined;
+  }
+
+  const segmentPaths = line.segmentPaths ?? [];
+  const directPath = segmentPaths.find(
+    (path) =>
+      path.fromStationSourceId === fromStationSourceId &&
+      path.toStationSourceId === toStationSourceId,
+  );
+  const reversePath = directPath
+    ? undefined
+    : segmentPaths.find(
+        (path) =>
+          path.fromStationSourceId === toStationSourceId &&
+          path.toStationSourceId === fromStationSourceId,
+      );
+  const configuredPath = directPath ?? reversePath;
+  if (configuredPath) {
+    const waypoints = filterTransitSegmentWaypoints(configuredPath.waypoints, direction).map(
+      (waypoint) => [waypoint.x, waypoint.z] as [number, number],
+    );
+    return {
+      mode: configuredPath.mode,
+      waypoints: reversePath ? waypoints.reverse() : waypoints,
+    };
+  }
+
+  let segmentStartId: string | undefined;
+  let pendingWaypoints: TransitLineRouteNodeSnapshot[] = [];
+  for (const node of line.routeNodes ?? []) {
+    if (node.kind === 'waypoint') {
+      pendingWaypoints.push(node);
+      continue;
+    }
+    if (
+      segmentStartId === fromStationSourceId &&
+      node.stationSourceId === toStationSourceId
+    ) {
+      return {
+        mode: line.routeMode ?? 'straight',
+        waypoints: filterTransitRouteNodeWaypoints(pendingWaypoints, direction),
+      };
+    }
+    if (
+      segmentStartId === toStationSourceId &&
+      node.stationSourceId === fromStationSourceId
+    ) {
+      return {
+        mode: line.routeMode ?? 'straight',
+        waypoints: filterTransitRouteNodeWaypoints(pendingWaypoints, direction).reverse(),
+      };
+    }
+    segmentStartId = node.stationSourceId;
+    pendingWaypoints = [];
+  }
+
+  return undefined;
+}
+
+function filterTransitSegmentWaypoints(
+  waypoints: TransitLineSegmentPathSnapshot['waypoints'],
+  direction: 'forward' | 'reverse',
+): TransitLineSegmentPathSnapshot['waypoints'] {
+  const expectedDirection = direction === 'forward' ? 'down' : 'up';
+  return waypoints.filter(
+    (waypoint) =>
+      !waypoint.direction ||
+      waypoint.direction === 'both' ||
+      waypoint.direction === expectedDirection,
+  );
+}
+
+function filterTransitRouteNodeWaypoints(
+  nodes: TransitLineRouteNodeSnapshot[],
+  direction: 'forward' | 'reverse',
+): Array<[number, number]> {
+  const expectedDirection = direction === 'forward' ? 'down' : 'up';
+  return nodes.flatMap((node) =>
+    node.kind === 'waypoint' &&
+    (node.direction === 'both' || node.direction === expectedDirection)
+      ? ([[node.x, node.z]] as Array<[number, number]>)
+      : [],
+  );
 }
 
 function shouldUseRoadGraphForTransitMode(mode: RouteTransportMode): boolean {
@@ -7661,15 +9055,19 @@ function buildMapSharePayload(target: MapShareTarget, t: Translate): MapSharePay
     const category = target.marker.categoryId
       ? getMarkerCategoryDisplayName(target.marker.categoryId, t)
       : formatMarkerDetail(target.marker, t);
-    const coordinateText = coordinate
-      ? `X ${formatMapCoordinate(coordinate[0])} / Z ${formatMapCoordinate(coordinate[1])}`
-      : '';
+    const coordinateDisplayText = coordinate ? formatShareCoordinate(coordinate) : '';
+    const teleportCommand = coordinate
+      ? target.marker.playerLocation?.serverAccountName
+        ? `/tp ${target.marker.playerLocation.serverAccountName}`
+        : `/tp ${roundCoordinateForParam(coordinate[0])} ~ ${roundCoordinateForParam(coordinate[1])}`
+      : undefined;
 
     return {
       color: 'var(--yct-color-primary)',
+      coordinateText: coordinateDisplayText || undefined,
       eyebrow: category,
       icon: 'location_on',
-      meta: [formatMarkerDetail(target.marker, t), coordinateText].filter(Boolean),
+      meta: [formatMarkerDetail(target.marker, t), coordinateDisplayText].filter(Boolean),
       steps: [],
       text: [
         t('map.poi.shareText', { name: label }),
@@ -7680,6 +9078,7 @@ function buildMapSharePayload(target: MapShareTarget, t: Translate): MapSharePay
         .filter(Boolean)
         .join('\n'),
       title: t('map.poi.shareTitle', { name: label }),
+      teleportCommand,
       url,
     };
   }
@@ -7717,6 +9116,7 @@ function buildMapSharePayload(target: MapShareTarget, t: Translate): MapSharePay
 
   return {
     color: target.option?.color ?? 'var(--yct-color-primary)',
+    coordinateText: formatShareCoordinate(target.draft.destination),
     eyebrow: t('map.route.share'),
     icon: target.option?.icon ?? 'route',
     meta: optionSummary,
@@ -7725,6 +9125,25 @@ function buildMapSharePayload(target: MapShareTarget, t: Translate): MapSharePay
     title: routeTitle,
     url,
   };
+}
+
+function getMapShareCopyValue(
+  payload: MapSharePayload,
+  kind: MapShareCopyKind,
+): string | undefined {
+  if (kind === 'link') {
+    return payload.url;
+  }
+
+  if (kind === 'text') {
+    return payload.text;
+  }
+
+  if (kind === 'coordinate') {
+    return payload.coordinateText;
+  }
+
+  return payload.teleportCommand;
 }
 
 function formatRouteShareStepTextList(option: RoutePlanOption): string {
@@ -7890,12 +9309,7 @@ function downloadBlob(blob: Blob, fileName: string) {
 }
 
 function getCenterableMarkerPrimaryCoordinate(marker: CenterableMarker): [number, number] | null {
-  if (marker.geometry.type === 'Point') {
-    return marker.geometry.coordinates;
-  }
-
-  const coordinate = marker.geometry.coordinates[0];
-  return coordinate ? [coordinate[0], coordinate[1]] : null;
+  return getMarkerCenter(marker) ?? null;
 }
 
 function buildMapMarkerShareUrl(marker: CenterableMarker): string {
@@ -8349,6 +9763,7 @@ function getDirectionalLineStops(
       ? line.stationStops
       : line.stationNames.map((stationName, sequence) => ({
           stationName,
+          displayStationName: line.displayStationNames?.[sequence],
           sequence,
         }));
 
@@ -8376,7 +9791,7 @@ function formatTransitStopOneWayLabel(
 }
 
 function isPointMarker(marker: MapMarkerSnapshot['markers'][number]): marker is PointMarker {
-  return marker.geometry.type === 'Point';
+  return 'sourceLabel' in marker && marker.geometry.type === 'Point';
 }
 
 function shouldRenderAsPointPoi(marker: PointMarker): boolean {
@@ -8386,13 +9801,40 @@ function shouldRenderAsPointPoi(marker: PointMarker): boolean {
 function isEndpointGroupMarker(
   marker: MapMarkerSnapshot['markers'][number],
 ): marker is EndpointGroupMarker {
-  return marker.geometry.type === 'MultiPoint' && marker.categoryId !== 'transit-line';
+  return (
+    'sourceLabel' in marker &&
+    marker.geometry.type === 'MultiPoint' &&
+    marker.categoryId !== 'transit-line'
+  );
+}
+
+function isShapeMarker(marker: MapMarkerSnapshot['markers'][number]): marker is ShapeMarker {
+  return (
+    'sourceLabel' in marker &&
+    marker.geometry.type !== 'Point' &&
+    marker.geometry.type !== 'MultiPoint'
+  );
+}
+
+function isRegionMarker(
+  marker: CenterableMarker,
+): marker is CenterableMarker & { geometry: RegionGeometry } {
+  return (
+    marker.geometry.type === 'Rectangle' ||
+    marker.geometry.type === 'MultiRectangle' ||
+    marker.geometry.type === 'Polygon' ||
+    marker.geometry.type === 'MultiPolygon'
+  );
 }
 
 function isTransitLineMarker(
   marker: MapMarkerSnapshot['markers'][number],
 ): marker is TransitLineMarker {
-  return marker.geometry.type === 'MultiPoint' && marker.categoryId === 'transit-line';
+  return (
+    'sourceLabel' in marker &&
+    marker.geometry.type === 'MultiPoint' &&
+    marker.categoryId === 'transit-line'
+  );
 }
 
 function isRoadEndpointGroupMarker(
@@ -8430,63 +9872,34 @@ function isMetroStationPoi(
   return marker.categoryId === 'metro-station';
 }
 
-function groupSecondaryPois(links: SecondaryPoiLink[]): SecondaryPoiGroup[] {
+function groupSecondaryPois(
+  links: SecondaryPoiLink[],
+  categoryById: ReadonlyMap<string, string>,
+  t: Translate,
+): SecondaryPoiGroup[] {
   const groups = new Map<string, SecondaryPoiGroup>();
 
   for (const link of links) {
-    const group = getSecondaryPoiGroup(link);
+    const categoryId = link.marker.categoryId?.trim() || 'uncategorized';
+    const group = {
+      id: `category:${categoryId}`,
+      label:
+        categoryId === 'uncategorized'
+          ? t('map.poi.relatedPlaceFallback')
+          : (categoryById.get(categoryId) ?? getMarkerCategoryDisplayName(categoryId, t)),
+    };
     const current = groups.get(group.id) ?? { ...group, items: [] };
     current.items.push(link);
     groups.set(group.id, current);
   }
 
-  return [...groups.values()].sort(
-    (left, right) =>
-      getSecondaryPoiGroupOrder(left.id) - getSecondaryPoiGroupOrder(right.id) ||
-      left.label.localeCompare(right.label, 'zh-CN'),
-  );
-}
-
-function getSecondaryPoiGroup(link: SecondaryPoiLink): Omit<SecondaryPoiGroup, 'items'> {
-  const categoryId = link.marker.categoryId?.toLowerCase() ?? '';
-  const text = normalizeMarkerSearchText(`${link.childLabel} ${link.marker.label} ${categoryId}`);
-
-  if (isRouteAccessSecondaryPoi(link)) {
-    return { id: 'access', label: '出入口' };
-  }
-
-  if (
-    isTransitStationPoi(link.marker) ||
-    /station|stop|port|airport|metro|bus|tram|railway|coach|ferry/.test(categoryId)
-  ) {
-    return { id: 'transport', label: '交通' };
-  }
-
-  if (/([a-z]\d?座|[0-9一二三四五六七八九十]+号楼|楼栋|楼|栋|座|塔)/.test(text)) {
-    return { id: 'building', label: '楼栋' };
-  }
-
-  if (/景点|公园|广场|展馆|文化|纪念|湖|山|岛|园|scenery|park/.test(text)) {
-    return { id: 'scenery', label: '景点' };
-  }
-
-  if (
-    /商店|商场|餐厅|酒店|超市|住宅|小区|工厂|shop|restaurant|hotel|residence|industry/.test(text)
-  ) {
-    return { id: 'nearby', label: '周边' };
-  }
-
-  return { id: 'facility', label: '设施' };
-}
-
-function getSecondaryPoiGroupOrder(groupId: string): number {
-  const index = ['access', 'transport', 'building', 'scenery', 'facility', 'nearby'].indexOf(
-    groupId,
-  );
-  return index >= 0 ? index : 99;
+  return [...groups.values()].sort((left, right) => left.label.localeCompare(right.label, 'zh-CN'));
 }
 
 function formatSecondaryPoiGroupLabel(groupId: string, fallback: string, t: Translate): string {
+  if (groupId.startsWith('category:')) {
+    return fallback;
+  }
   const labelKeyByGroupId: Record<string, CommonMessageKey> = {
     access: 'map.poi.group.access',
     building: 'map.poi.group.building',
@@ -8499,25 +9912,66 @@ function formatSecondaryPoiGroupLabel(groupId: string, fallback: string, t: Tran
   return labelKey ? t(labelKey) : fallback;
 }
 
-function buildSecondaryPoiIndex(markers: PointMarker[]): Map<string, SecondaryPoiLink[]> {
-  const links = resolveSecondaryPoiLinks(markers);
-  const index = new Map<string, SecondaryPoiLink[]>();
+function buildSecondaryPoiIndex(
+  markers: PointMarker[],
+  parentMarkers: CenterableMarker[],
+  placeRelationIndex: MapPlaceRelationIndex<CenterableMarker>,
+): Map<string, SecondaryPoiLink[]> {
+  const parentMarkerById = new Map(parentMarkers.map((marker) => [marker.id, marker]));
+  const declaredParentLinks = resolveSecondaryPoiLinks(
+    markers,
+    parentMarkers,
+    placeRelationIndex,
+  );
+  const boundRegionLinks = markers.flatMap((marker) =>
+    (marker.boundRegionMarkerIds ?? []).flatMap((regionMarkerId) => {
+      const parent =
+        parentMarkerById.get(regionMarkerId) ??
+        parentMarkers.find((candidate) =>
+          getEquivalentMapPlaceMarkerIds(candidate.id, placeRelationIndex).has(regionMarkerId),
+        );
+      if (!parent || parent.id === marker.id) {
+        return [];
+      }
+      return [
+        {
+          childLabel:
+            marker.secondaryLabel ??
+            parseSecondaryPoiName(marker.sourceLabel ?? marker.label)?.childName ??
+            formatMarkerDisplayName(marker.label),
+          marker,
+          parent,
+        },
+      ];
+    }),
+  );
+  const index = new Map<string, Map<string, SecondaryPoiLink>>();
+  const links = [...declaredParentLinks, ...boundRegionLinks];
   for (const link of links) {
-    const values = index.get(link.parent.id) ?? [];
-    values.push(link);
-    index.set(link.parent.id, values);
+    for (const parentId of getEquivalentMapPlaceMarkerIds(link.parent.id, placeRelationIndex)) {
+      const values = index.get(parentId) ?? new Map<string, SecondaryPoiLink>();
+      if (!values.has(link.marker.id)) {
+        values.set(link.marker.id, link);
+      }
+      index.set(parentId, values);
+    }
   }
 
+  const sortedIndex = new Map<string, SecondaryPoiLink[]>();
   for (const [parentId, parentLinks] of index) {
-    index.set(parentId, sortSecondaryPoiLinks(parentLinks));
+    sortedIndex.set(parentId, sortSecondaryPoiLinks([...parentLinks.values()]));
   }
 
-  return index;
+  return sortedIndex;
 }
 
-function buildSecondaryPoiParentIndex(markers: PointMarker[]): Map<string, SecondaryPoiParentLink> {
+function buildSecondaryPoiParentIndex(
+  markers: PointMarker[],
+  parentMarkers: CenterableMarker[],
+  placeRelationIndex: MapPlaceRelationIndex<CenterableMarker>,
+): Map<string, SecondaryPoiParentLink> {
   return new Map(
-    resolveSecondaryPoiLinks(markers).map((link) => [
+    resolveSecondaryPoiLinks(markers, parentMarkers, placeRelationIndex).map((link) => [
       link.marker.id,
       { childLabel: link.childLabel, marker: link.marker, parent: link.parent },
     ]),
@@ -8526,26 +9980,37 @@ function buildSecondaryPoiParentIndex(markers: PointMarker[]): Map<string, Secon
 
 function resolveSecondaryPoiLinks(
   markers: PointMarker[],
-): Array<SecondaryPoiLink & { parent: PointMarker }> {
-  const markersByName = new Map<string, PointMarker[]>();
-  const markerById = new Map(markers.map((marker) => [marker.id, marker]));
-  for (const marker of markers) {
-    const key = normalizeMarkerSearchText(marker.label);
+  parentMarkers: CenterableMarker[],
+  placeRelationIndex: MapPlaceRelationIndex<CenterableMarker>,
+): Array<SecondaryPoiLink & { parent: CenterableMarker }> {
+  const markersByName = new Map<string, CenterableMarker[]>();
+  const markerById = new Map(parentMarkers.map((marker) => [marker.id, marker]));
+  for (const marker of parentMarkers) {
+    const key = normalizeMarkerSearchText(marker.sourceLabel ?? marker.label);
     const values = markersByName.get(key) ?? [];
     values.push(marker);
     markersByName.set(key, values);
   }
 
-  const links: Array<SecondaryPoiLink & { parent: PointMarker }> = [];
+  const links: Array<SecondaryPoiLink & { parent: CenterableMarker }> = [];
   for (const marker of markers) {
     const explicitParent = marker.parentMarkerId
-      ? markerById.get(marker.parentMarkerId)
+      ? resolveCanonicalMapPlaceMarker(
+          markerById.get(marker.parentMarkerId) ??
+            parentMarkers.find((candidate) =>
+              getEquivalentMapPlaceMarkerIds(candidate.id, placeRelationIndex).has(
+                marker.parentMarkerId ?? '',
+              ),
+            ) ??
+            marker,
+          placeRelationIndex,
+        )
       : undefined;
     if (explicitParent && explicitParent.id !== marker.id) {
       links.push({
         childLabel:
           marker.secondaryLabel ??
-          parseSecondaryPoiName(marker.label)?.childName ??
+          parseSecondaryPoiName(marker.sourceLabel ?? marker.label)?.childName ??
           formatMarkerDisplayName(marker.label),
         marker,
         parent: explicitParent,
@@ -8553,14 +10018,32 @@ function resolveSecondaryPoiLinks(
       continue;
     }
 
-    const parsed = parseSecondaryPoiName(marker.label);
+    const declaredParentLabel = marker.parentLabel?.trim();
+    if (declaredParentLabel) {
+      const parentCandidates = dedupeEquivalentMapPlaceMarkers(
+        markersByName.get(normalizeMarkerSearchText(declaredParentLabel)) ?? [],
+        placeRelationIndex,
+      ).filter((candidate) => candidate.id !== marker.id && !isBusStopPoi(candidate));
+      const parent = parentCandidates ? findNearestParentPoi(marker, parentCandidates) : undefined;
+      if (parent) {
+        links.push({
+          childLabel: marker.secondaryLabel ?? formatMarkerDisplayName(marker.label),
+          marker,
+          parent,
+        });
+        continue;
+      }
+    }
+
+    const parsed = parseSecondaryPoiName(marker.sourceLabel ?? marker.label);
     if (!parsed) {
       continue;
     }
 
-    const parentCandidates = markersByName
-      .get(normalizeMarkerSearchText(parsed.parentName))
-      ?.filter((candidate) => candidate.id !== marker.id && !isBusStopPoi(candidate));
+    const parentCandidates = dedupeEquivalentMapPlaceMarkers(
+      markersByName.get(normalizeMarkerSearchText(parsed.parentName)) ?? [],
+      placeRelationIndex,
+    ).filter((candidate) => candidate.id !== marker.id && !isBusStopPoi(candidate));
     if (!parentCandidates || parentCandidates.length === 0) {
       continue;
     }
@@ -8607,13 +10090,16 @@ function parseSecondaryPoiName(
 
 function findNearestParentPoi(
   child: PointMarker,
-  candidates: PointMarker[],
-): PointMarker | undefined {
-  return [...candidates].sort(
-    (left, right) =>
-      getCoordinateDistance(child.geometry.coordinates, left.geometry.coordinates) -
-      getCoordinateDistance(child.geometry.coordinates, right.geometry.coordinates),
-  )[0];
+  candidates: CenterableMarker[],
+): CenterableMarker | undefined {
+  return candidates
+    .flatMap((candidate) => {
+      const center = getMarkerCenter(candidate);
+      return center
+        ? [{ candidate, distance: getCoordinateDistance(child.geometry.coordinates, center) }]
+        : [];
+    })
+    .sort((left, right) => left.distance - right.distance)[0]?.candidate;
 }
 
 function MarkerListIcon({
@@ -8623,6 +10109,17 @@ function MarkerListIcon({
   marker: SidebarMarker;
   iconBaseUrl: string;
 }>) {
+  if (marker.playerLocation?.avatarUrl) {
+    return (
+      <img
+        className="map-player-list-avatar"
+        src={marker.playerLocation.avatarUrl}
+        alt=""
+        draggable={false}
+      />
+    );
+  }
+
   if (marker.iconFileName && !isTransparentRoadIcon(marker.iconFileName)) {
     return <img src={toMarkerIconUrl(marker.iconFileName, iconBaseUrl)} alt="" draggable={false} />;
   }
@@ -8638,15 +10135,107 @@ function MarkerListIcon({
   );
 }
 
-function filterMarkers<T extends { label: string }>(markers: T[], query: string): T[] {
-  const normalizedQuery = normalizeMarkerSearchText(query);
-  if (!normalizedQuery) {
-    return markers;
-  }
+function MapPoiImageGallery({
+  counterLabel,
+  imageAlt,
+  imageUrls,
+  nextLabel,
+  previousLabel,
+}: Readonly<{
+  counterLabel: (current: number, total: number) => string;
+  imageAlt: string;
+  imageUrls: string[];
+  nextLabel: string;
+  previousLabel: string;
+}>) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const swipeStartXRef = useRef<number | null>(null);
+  const hasMultipleImages = imageUrls.length > 1;
+  const imageKey = imageUrls.join('\u0000');
 
-  return markers.filter((marker) =>
-    normalizeMarkerSearchText(marker.label).includes(normalizedQuery),
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [imageKey]);
+
+  const showPrevious = () =>
+    setActiveIndex((current) => (current - 1 + imageUrls.length) % imageUrls.length);
+  const showNext = () => setActiveIndex((current) => (current + 1) % imageUrls.length);
+  const finishSwipe = (clientX: number) => {
+    const startX = swipeStartXRef.current;
+    swipeStartXRef.current = null;
+    if (startX === null || Math.abs(clientX - startX) < 36) {
+      return;
+    }
+    if (clientX < startX) {
+      showNext();
+    } else {
+      showPrevious();
+    }
+  };
+
+  return (
+    <div
+      className={
+        hasMultipleImages ? 'map-poi-detail-gallery is-multiple' : 'map-poi-detail-gallery'
+      }
+      onPointerDown={(event) => {
+        if (hasMultipleImages) {
+          swipeStartXRef.current = event.clientX;
+        }
+      }}
+      onPointerUp={(event) => finishSwipe(event.clientX)}
+      onPointerCancel={() => {
+        swipeStartXRef.current = null;
+      }}
+    >
+      <img
+        className="map-poi-detail-image"
+        src={appPath(imageUrls[activeIndex] ?? imageUrls[0])}
+        alt={imageAlt}
+        draggable={false}
+      />
+      {hasMultipleImages ? (
+        <>
+          <button
+            className="map-poi-detail-gallery-button is-previous"
+            type="button"
+            aria-label={previousLabel}
+            onClick={showPrevious}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              chevron_left
+            </span>
+          </button>
+          <button
+            className="map-poi-detail-gallery-button is-next"
+            type="button"
+            aria-label={nextLabel}
+            onClick={showNext}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              chevron_right
+            </span>
+          </button>
+          <span className="map-poi-detail-gallery-counter">
+            {counterLabel(activeIndex + 1, imageUrls.length)}
+          </span>
+        </>
+      ) : null}
+    </div>
   );
+}
+
+function getMapMarkerImageUrls(marker: MapMarkerSnapshot['markers'][number]): string[] {
+  return Array.from(
+    new Set([...(marker.imageUrls ?? []), ...(marker.imageUrl ? [marker.imageUrl] : [])]),
+  ).filter(Boolean);
+}
+
+function filterMarkers<T extends MapMarkerSnapshot['markers'][number]>(
+  markers: T[],
+  query: string,
+): T[] {
+  return filterMapMarkers(markers, query);
 }
 
 function findPoiAddressRoadMarkers(
@@ -8712,6 +10301,59 @@ function buildStationConnectionIndex(
   return connectionsByStation;
 }
 
+function localizeTransitOverview(
+  overview: TransitOverviewResponse | null,
+  locale: LocaleCode,
+): TransitOverviewResponse | null {
+  if (!overview || locale === 'zh-CN') {
+    return overview;
+  }
+  return {
+    ...overview,
+    lines: overview.lines.map((line) => {
+      const stationNameMap = new Map(
+        (line.stationStops ?? []).map((stop) => [
+          stop.stationName,
+          resolveLocalizedLabel(stop.stationName, stop.localizedStationName, locale),
+        ]),
+      );
+      return {
+        ...line,
+        name: resolveLocalizedLabel(line.name, line.localizedName, locale),
+        stationNames: line.stationNames,
+        displayStationNames: line.stationNames.map((name) => stationNameMap.get(name) ?? name),
+        stationStops: line.stationStops?.map((stop) => ({
+          ...stop,
+          displayStationName: resolveLocalizedLabel(
+            stop.stationName,
+            stop.localizedStationName,
+            locale,
+          ),
+        })),
+        firstStationName: line.firstStationName ? line.firstStationName : undefined,
+        lastStationName: line.lastStationName ? line.lastStationName : undefined,
+        displayFirstStationName: line.firstStationName
+          ? (stationNameMap.get(line.firstStationName) ?? line.firstStationName)
+          : undefined,
+        displayLastStationName: line.lastStationName
+          ? (stationNameMap.get(line.lastStationName) ?? line.lastStationName)
+          : undefined,
+      };
+    }),
+  };
+}
+
+function resolveLocalizedLabel(
+  sourceText: string,
+  localizedLabels: LocalizedLabelMap | undefined,
+  locale: LocaleCode,
+): string {
+  const normalizedSourceText = normalizeLegacyMapSourceText(sourceText);
+  return locale === 'zh-CN'
+    ? normalizedSourceText
+    : localizedLabels?.[locale]?.trim() || normalizedSourceText;
+}
+
 function findStationConnections(
   marker: MapMarkerSnapshot['markers'][number],
   index: Map<string, TransitLineConnection[]>,
@@ -8719,7 +10361,7 @@ function findStationConnections(
   const collected: TransitLineConnection[] = [];
   const seen = new Set<string>();
 
-  for (const key of getStationNameMatchKeys(marker.label)) {
+  for (const key of getMarkerStationNameMatchKeys(marker)) {
     const connections = index.get(key);
     if (!connections) {
       continue;
@@ -8775,7 +10417,7 @@ function findTransitStationMarkerForLine(
   const candidates = markers.filter(
     (marker) =>
       isTransitStationPoi(marker) &&
-      getStationNameMatchKeys(marker.label).some((key) => stationKeys.has(key)),
+      getMarkerStationNameMatchKeys(marker).some((key) => stationKeys.has(key)),
   );
 
   return (
@@ -8801,7 +10443,7 @@ function findTransitLineStationMarkers(
       (marker) =>
         boundMarkerIds.has(marker.id) ||
         (isTransitStationPoi(marker) &&
-          getStationNameMatchKeys(marker.label).some((key) => stationKeys.has(key)) &&
+          getMarkerStationNameMatchKeys(marker).some((key) => stationKeys.has(key)) &&
           findStationConnections(marker, connectionIndex).some(
             (connection) => connection.id === line.id,
           )),
@@ -8814,7 +10456,7 @@ function findTransitLineByMarker(
   lookup: ReadonlyMap<string, TransitOverviewLine>,
 ): TransitOverviewLine | undefined {
   const markerLineId = marker.id.replace(/^transit-line-/, '');
-  return lookup.get(markerLineId) ?? lookup.get(marker.label);
+  return lookup.get(markerLineId) ?? lookup.get(marker.sourceLabel) ?? lookup.get(marker.label);
 }
 
 function compareTransitConnections(
@@ -8863,6 +10505,13 @@ function getStationNameMatchKeys(value: string): string[] {
   }
 
   return Array.from(keys).filter(Boolean);
+}
+
+function getMarkerStationNameMatchKeys(marker: { label: string; sourceLabel?: string }): string[] {
+  return dedupeValues([
+    ...getStationNameMatchKeys(marker.sourceLabel ?? marker.label),
+    ...getStationNameMatchKeys(marker.label),
+  ]);
 }
 
 function normalizeStationNameForMatch(value: string): string {
@@ -9038,18 +10687,24 @@ function projectPointMarkers(
         left: size.width / 2 + (x - view.centerX) * scale,
         top: size.height / 2 + (z - view.centerZ) * scale,
         iconUrl:
-          marker.iconFileName && !isTransparentRoadIcon(marker.iconFileName)
+          marker.playerLocation?.avatarUrl ??
+          (marker.iconFileName && !isTransparentRoadIcon(marker.iconFileName)
             ? toMarkerIconUrl(marker.iconFileName, iconBaseUrl)
-            : undefined,
+            : undefined),
         symbolIcon: marker.symbolIcon,
-        showLabel: forceLabel
-          ? true
-          : suppressLabel
-            ? false
-            : marker.id === focusedMarkerId ||
-              shouldShowMarkerLabelForBrowseMode(marker, browseMode, priority),
+        showLabel: marker.playerLocation
+          ? false
+          : forceLabel
+            ? true
+            : suppressLabel
+              ? false
+              : marker.id === focusedMarkerId ||
+                shouldShowMarkerLabelForBrowseMode(marker, browseMode, priority),
         priority,
         roadKind: getRoadMarkerKind(marker),
+        playerPresence: marker.playerLocation?.presence,
+        isPlayer: marker.categoryId === 'player' && Boolean(marker.playerLocation),
+        isCurrentAccount: marker.playerLocation?.isCurrentAccount,
       };
     })
     .filter(
@@ -9646,7 +11301,9 @@ function roundSvg(value: number): number {
 }
 
 function normalizeMarkerSearchText(value: string): string {
-  return normalizeMarkerDisplayText(value).toLowerCase();
+  return normalizeMarkerDisplayText(value)
+    .replace(/[\s\u3000]+/g, '')
+    .toLowerCase();
 }
 
 function formatMarkerDisplayName(value: string): string {
@@ -9655,9 +11312,13 @@ function formatMarkerDisplayName(value: string): string {
 
 function normalizeMarkerDisplayText(value: string): string {
   return value
-    .replace(/[\s\u3000]+/g, '')
     .replace(/[|｜]+/g, '')
+    .replace(/[\s\u3000]+/g, ' ')
     .trim();
+}
+
+function normalizeLegacyMapSourceText(value: string): string {
+  return value.replace(/[\s\u3000|｜]+/g, '').trim() || value.trim();
 }
 
 function getMarkerIconBaseName(fileName?: string): string {
@@ -9692,19 +11353,62 @@ function isHighwayIconFileName(fileName: string): boolean {
   return /^highway-[a-z0-9-]+$/i.test(baseName);
 }
 
+function normalizeMapVisibleRect(rect: MapVisibleRect, size: ViewportSize): MapVisibleRect {
+  if (size.width <= 0 || size.height <= 0) {
+    return { left: 0, top: 0, right: 0, bottom: 0 };
+  }
+
+  if (
+    !Number.isFinite(rect.left) ||
+    !Number.isFinite(rect.top) ||
+    !Number.isFinite(rect.right) ||
+    !Number.isFinite(rect.bottom) ||
+    rect.right <= rect.left ||
+    rect.bottom <= rect.top
+  ) {
+    return { left: 0, top: 0, right: size.width, bottom: size.height };
+  }
+
+  const left = clamp(rect.left, 0, Math.max(0, size.width - 1));
+  const top = clamp(rect.top, 0, Math.max(0, size.height - 1));
+  return {
+    left,
+    top,
+    right: clamp(rect.right, left + 1, size.width),
+    bottom: clamp(rect.bottom, top + 1, size.height),
+  };
+}
+
+function mapVisibleRectsEqual(left: MapVisibleRect, right: MapVisibleRect): boolean {
+  return (
+    Math.abs(left.left - right.left) < 0.5 &&
+    Math.abs(left.top - right.top) < 0.5 &&
+    Math.abs(left.right - right.right) < 0.5 &&
+    Math.abs(left.bottom - right.bottom) < 0.5
+  );
+}
+
 function applyMapOverlayCollisionVisibility(
   markers: ProjectedMarker[],
   linearPois: ProjectedLinearPoi[],
+  shapePois: ProjectedShapePoi[],
   size: ViewportSize,
   focusedMarkerId: string | null,
   hideCollidingLabelsOnly: boolean,
-): { markers: ProjectedMarker[]; linearPois: ProjectedLinearPoi[] } {
+  ignoreCollisions: boolean,
+): {
+  markers: ProjectedMarker[];
+  linearPois: ProjectedLinearPoi[];
+  shapePois: ProjectedShapePoi[];
+} {
   const acceptedBoxes: MarkerCollisionBox[] = [];
   const markerState = new Map(markers.map((marker) => [marker.id, { ...marker }]));
   const linearState = new Map(linearPois.map((marker) => [marker.id, { ...marker }]));
+  const shapeState = new Map(shapePois.map((shape) => [shape.id, { ...shape }]));
   const orderedMarkers = [
     ...markers.map((marker) => createMarkerCollisionItem(marker)),
     ...linearPois.flatMap((marker) => createLinearPoiCollisionItem(marker)),
+    ...shapePois.map((shape) => createShapePoiCollisionItem(shape)),
   ].sort((left, right) => {
     if (left.id === focusedMarkerId) {
       return -1;
@@ -9718,37 +11422,44 @@ function applyMapOverlayCollisionVisibility(
   });
 
   for (const marker of orderedMarkers) {
+    const markerVisibleRect = { left: 0, top: 0, right: size.width, bottom: size.height };
     if (
-      marker.left < 0 ||
-      marker.left > size.width ||
-      marker.top < 18 ||
-      marker.top > size.height - 18
+      marker.left < markerVisibleRect.left ||
+      marker.left > markerVisibleRect.right ||
+      marker.top < markerVisibleRect.top + 18 ||
+      marker.top > markerVisibleRect.bottom - 18
     ) {
-      if (hideCollidingLabelsOnly) {
-        hideCollisionItemLabel(marker, markerState, linearState);
-      } else {
-        hideCollisionItem(marker, markerState, linearState);
-      }
+      hideCollisionItem(marker, markerState, linearState, shapeState);
       continue;
     }
 
     const box = getMarkerCollisionBox(marker);
-    if (box.left < 0 || box.right > size.width || box.top < 0 || box.bottom > size.height) {
-      if (hideCollidingLabelsOnly) {
-        hideCollisionItemLabel(marker, markerState, linearState);
-      } else {
-        hideCollisionItem(marker, markerState, linearState);
-      }
+    if (
+      box.left < markerVisibleRect.left ||
+      box.right > markerVisibleRect.right ||
+      box.top < markerVisibleRect.top ||
+      box.bottom > markerVisibleRect.bottom
+    ) {
+      hideCollisionItem(marker, markerState, linearState, shapeState);
+      continue;
+    }
+
+    if (marker.ignoreCollision) {
+      continue;
+    }
+
+    if (ignoreCollisions) {
+      acceptedBoxes.push(box);
       continue;
     }
 
     if (acceptedBoxes.some((acceptedBox) => boxesOverlap(box, acceptedBox))) {
       if (hideCollidingLabelsOnly) {
         if (marker.id !== focusedMarkerId) {
-          hideCollisionItemLabel(marker, markerState, linearState);
+          hideCollisionItemLabel(marker, markerState, linearState, shapeState);
         }
       } else if (marker.id !== focusedMarkerId) {
-        hideCollisionItem(marker, markerState, linearState);
+        hideCollisionItem(marker, markerState, linearState, shapeState);
       }
       continue;
     }
@@ -9765,6 +11476,10 @@ function applyMapOverlayCollisionVisibility(
       const updated = linearState.get(marker.id);
       return updated ? [updated] : [];
     }),
+    shapePois: shapePois.flatMap((shape) => {
+      const updated = shapeState.get(shape.id);
+      return updated?.showLabel || updated?.labelMode === 'representative' ? [updated] : [];
+    }),
   };
 }
 
@@ -9776,7 +11491,7 @@ interface MarkerCollisionBox {
 }
 
 interface OverlayCollisionItem {
-  kind: 'marker' | 'linear';
+  kind: 'marker' | 'linear' | 'shape';
   id: string;
   label: string;
   left: number;
@@ -9785,6 +11500,9 @@ interface OverlayCollisionItem {
   showLabel: boolean;
   hasIcon: boolean;
   isVerticalLabel: boolean;
+  centerIcon: boolean;
+  centerLabel: boolean;
+  ignoreCollision?: boolean;
 }
 
 function createMarkerCollisionItem(marker: ProjectedMarker): OverlayCollisionItem {
@@ -9798,6 +11516,9 @@ function createMarkerCollisionItem(marker: ProjectedMarker): OverlayCollisionIte
     showLabel: marker.showLabel,
     hasIcon: Boolean(marker.iconUrl || marker.symbolIcon),
     isVerticalLabel: false,
+    centerIcon: false,
+    centerLabel: false,
+    ignoreCollision: marker.isPlayer,
   };
 }
 
@@ -9817,17 +11538,41 @@ function createLinearPoiCollisionItem(marker: ProjectedLinearPoi): OverlayCollis
       showLabel: marker.showTextLabel,
       hasIcon: Boolean(marker.iconUrl || marker.symbolIcon),
       isVerticalLabel: marker.isVerticalLabel,
+      centerIcon: false,
+      centerLabel: false,
     },
   ];
+}
+
+function createShapePoiCollisionItem(shape: ProjectedShapePoi): OverlayCollisionItem {
+  return {
+    kind: 'shape',
+    id: shape.id,
+    label: shape.label,
+    left: shape.centerLeft,
+    top: shape.centerTop,
+    priority: shape.priority,
+    showLabel: shape.showLabel,
+    hasIcon: shape.labelMode === 'representative',
+    isVerticalLabel: false,
+    centerIcon: shape.labelMode === 'representative',
+    centerLabel: shape.labelMode === 'label',
+  };
 }
 
 function hideCollisionItem(
   item: OverlayCollisionItem,
   markerState: Map<string, ProjectedMarker>,
   linearState: Map<string, ProjectedLinearPoi>,
+  shapeState: Map<string, ProjectedShapePoi>,
 ) {
   if (item.kind === 'marker') {
     markerState.delete(item.id);
+    return;
+  }
+
+  if (item.kind === 'shape') {
+    shapeState.delete(item.id);
     return;
   }
 
@@ -9841,12 +11586,25 @@ function hideCollisionItemLabel(
   item: OverlayCollisionItem,
   markerState: Map<string, ProjectedMarker>,
   linearState: Map<string, ProjectedLinearPoi>,
+  shapeState: Map<string, ProjectedShapePoi>,
 ) {
   if (item.kind === 'marker') {
     const marker = markerState.get(item.id);
     if (marker) {
       markerState.set(item.id, { ...marker, showLabel: false });
     }
+    return;
+  }
+
+  if (item.kind === 'shape') {
+    const shape = shapeState.get(item.id);
+    if (!shape) {
+      return;
+    }
+    shapeState.set(item.id, {
+      ...shape,
+      showLabel: shape.labelMode === 'representative',
+    });
     return;
   }
 
@@ -9875,9 +11633,14 @@ function getMarkerCollisionBox(marker: OverlayCollisionItem): MarkerCollisionBox
     : Math.max(iconWidth, 20);
   const totalHeight = marker.showLabel && marker.isVerticalLabel ? labelHeight : 32;
 
+  const left = marker.centerLabel
+    ? marker.left - totalWidth / 2
+    : marker.centerIcon
+      ? marker.left - iconWidth / 2
+      : marker.left - 12;
   return {
-    left: marker.left - 12,
-    right: marker.left - 12 + totalWidth,
+    left,
+    right: left + totalWidth,
     top: marker.top - totalHeight / 2,
     bottom: marker.top + totalHeight / 2,
   };
@@ -9979,6 +11742,205 @@ function boxesOverlap(left: MarkerCollisionBox, right: MarkerCollisionBox): bool
     right.right + gap <= left.left ||
     left.bottom + gap <= right.top ||
     right.bottom + gap <= left.top
+  );
+}
+
+function projectShapePoiMarkers(
+  markers: ShapeMarker[],
+  view: MapView,
+  size: ViewportSize,
+): ProjectedShapePoi[] {
+  if (size.width <= 0 || size.height <= 0) {
+    return [];
+  }
+  const scale = getScale(view.zoom);
+  return markers.flatMap((marker) => {
+    const coordinateSets = getShapeGeometryCoordinateSets(marker.geometry);
+    const projectedSets = coordinateSets
+      .map((set) => ({
+        ...set,
+        points: set.coordinates.map(([x, z]) => ({
+          left: size.width / 2 + (x - view.centerX) * scale,
+          top: size.height / 2 + (z - view.centerZ) * scale,
+        })),
+      }))
+      .filter((set) => set.points.length >= (set.closed ? 3 : 2));
+    const allPoints = projectedSets.flatMap((set) => set.points);
+    const center = getMarkerCenter(marker);
+    if (!center || allPoints.length === 0) {
+      return [];
+    }
+    const bounds = getTraceBounds(allPoints);
+    if (!traceBoundsIntersectsViewport(bounds, size)) {
+      return [];
+    }
+    const path = projectedSets
+      .map((set) => {
+        const [first, ...rest] = set.points;
+        if (!first) {
+          return '';
+        }
+        return [
+          `M ${first.left} ${first.top}`,
+          ...rest.map((point) => `L ${point.left} ${point.top}`),
+          set.closed ? 'Z' : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
+      })
+      .join(' ');
+    const isArea = projectedSets.some((set) => set.closed);
+    const geometryCenter = {
+      left: size.width / 2 + (center[0] - view.centerX) * scale,
+      top: size.height / 2 + (center[1] - view.centerZ) * scale,
+    };
+    const label = formatMarkerDisplayName(marker.label);
+    const labelAnchor = isArea
+      ? findAreaLabelAnchor(projectedSets, geometryCenter, label)
+      : undefined;
+    const labelMode = labelAnchor ? 'label' : 'representative';
+    return [
+      {
+        id: marker.id,
+        label,
+        path,
+        isArea,
+        accentColor: marker.accentColor,
+        centerLeft: (labelAnchor ?? geometryCenter).left,
+        centerTop: (labelAnchor ?? geometryCenter).top,
+        labelMode,
+        priority: isArea && labelMode === 'label' ? 500 : 18,
+        showLabel: true,
+      },
+    ];
+  });
+}
+
+interface ProjectedShapeCoordinateSet {
+  closed: boolean;
+  points: Array<{ left: number; top: number }>;
+}
+
+function findAreaLabelAnchor(
+  projectedSets: ProjectedShapeCoordinateSet[],
+  geometryCenter: { left: number; top: number },
+  label: string,
+): { left: number; top: number } | undefined {
+  const closedSets = projectedSets.filter((set) => set.closed && set.points.length >= 3);
+  if (closedSets.length === 0) {
+    return undefined;
+  }
+
+  const dimensions = getAreaLabelDimensions(label);
+  const bounds = getTraceBounds(closedSets.flatMap((set) => set.points));
+  const candidates = [geometryCenter];
+  const gridSize = 15;
+  for (let row = 0; row <= gridSize; row += 1) {
+    for (let column = 0; column <= gridSize; column += 1) {
+      candidates.push({
+        left: bounds.minLeft + ((bounds.maxLeft - bounds.minLeft) * column) / gridSize,
+        top: bounds.minTop + ((bounds.maxTop - bounds.minTop) * row) / gridSize,
+      });
+    }
+  }
+
+  return candidates
+    .filter((candidate) => isLabelBoxInsideArea(candidate, dimensions, closedSets))
+    .sort(
+      (left, right) =>
+        squaredScreenDistance(left, geometryCenter) - squaredScreenDistance(right, geometryCenter),
+    )[0];
+}
+
+function getAreaLabelDimensions(label: string): { width: number; height: number } {
+  return {
+    width: Math.max(42, normalizeMarkerDisplayText(label).length * 12 + 4),
+    height: 24,
+  };
+}
+
+function isLabelBoxInsideArea(
+  center: { left: number; top: number },
+  dimensions: { width: number; height: number },
+  sets: ProjectedShapeCoordinateSet[],
+): boolean {
+  const halfWidth = dimensions.width / 2;
+  const halfHeight = dimensions.height / 2;
+  const corners = [
+    { left: center.left - halfWidth, top: center.top - halfHeight },
+    { left: center.left + halfWidth, top: center.top - halfHeight },
+    { left: center.left + halfWidth, top: center.top + halfHeight },
+    { left: center.left - halfWidth, top: center.top + halfHeight },
+  ];
+  return corners.every((point) => isPointInsideProjectedArea(point, sets));
+}
+
+function isPointInsideProjectedArea(
+  point: { left: number; top: number },
+  sets: ProjectedShapeCoordinateSet[],
+): boolean {
+  let inside = false;
+  for (const set of sets) {
+    if (isPointInsideProjectedPolygon(point, set.points)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function isPointInsideProjectedPolygon(
+  point: { left: number; top: number },
+  polygon: Array<{ left: number; top: number }>,
+): boolean {
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+    const currentPoint = polygon[index];
+    const previousPoint = polygon[previous];
+    if (!currentPoint || !previousPoint) {
+      continue;
+    }
+    const intersects =
+      currentPoint.top > point.top !== previousPoint.top > point.top &&
+      point.left <
+        ((previousPoint.left - currentPoint.left) * (point.top - currentPoint.top)) /
+          (previousPoint.top - currentPoint.top) +
+          currentPoint.left;
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function squaredScreenDistance(
+  left: { left: number; top: number },
+  right: { left: number; top: number },
+): number {
+  const deltaLeft = left.left - right.left;
+  const deltaTop = left.top - right.top;
+  return deltaLeft * deltaLeft + deltaTop * deltaTop;
+}
+
+function getShapeGeometryCoordinateSets(
+  geometry: ShapeMarker['geometry'],
+): Array<{ closed: boolean; coordinates: Array<[number, number]> }> {
+  if (geometry.type === 'LineString') {
+    return [{ closed: false, coordinates: geometry.coordinates }];
+  }
+  if (geometry.type === 'Rectangle') {
+    return [{ closed: true, coordinates: rectangleBoundsToMapCoordinates(geometry.bounds) }];
+  }
+  if (geometry.type === 'MultiRectangle') {
+    return geometry.rectangles.map((bounds) => ({
+      closed: true,
+      coordinates: rectangleBoundsToMapCoordinates(bounds),
+    }));
+  }
+  if (geometry.type === 'Polygon') {
+    return geometry.coordinates.map((coordinates) => ({ closed: true, coordinates }));
+  }
+  return geometry.coordinates.flatMap((polygon) =>
+    polygon.map((coordinates) => ({ closed: true, coordinates })),
   );
 }
 
@@ -10133,29 +12095,35 @@ function fitMarkerToMapView(
   marker: CenterableMarker,
   current: MapView,
   size: ViewportSize,
+  visibleRect: MapVisibleRect,
 ): MapView {
   const center = getMarkerCenter(marker);
   if (!center) {
     return current;
   }
-
-  return {
-    ...current,
-    centerX: center[0],
-    centerZ: center[1],
-    zoom:
-      marker.geometry.type === 'MultiPoint'
-        ? getZoomToFitCoordinates(marker.geometry.coordinates, size, 120, current.zoom)
-        : Math.max(current.zoom, 0),
-  };
+  const coordinates = getMapGeometryCoordinates(marker.geometry);
+  return fitCoordinatesToMapView(
+    coordinates.length > 0 ? coordinates : [center],
+    current,
+    size,
+    coordinates.length > 1 ? 120 : 0,
+    visibleRect,
+  );
 }
 
 function fitRouteDraftToMapView(
   draft: RoutePlanDraft,
   current: MapView,
   size: ViewportSize,
+  visibleRect: MapVisibleRect,
 ): MapView {
-  return fitCoordinatesToMapView([draft.origin, draft.destination], current, size, 120);
+  return fitCoordinatesToMapView(
+    [draft.origin, draft.destination],
+    current,
+    size,
+    120,
+    visibleRect,
+  );
 }
 
 function fitCoordinatesToMapView(
@@ -10163,17 +12131,29 @@ function fitCoordinatesToMapView(
   current: MapView,
   size: ViewportSize,
   padding: number,
+  visibleRect: MapVisibleRect,
 ): MapView {
   if (coordinates.length === 0) {
     return current;
   }
 
   const bounds = getCoordinateBounds(coordinates);
+  const effectiveRect = normalizeMapVisibleRect(visibleRect, size);
+  const visibleSize = {
+    width: effectiveRect.right - effectiveRect.left,
+    height: effectiveRect.bottom - effectiveRect.top,
+  };
+  const zoom = getZoomToFitCoordinates(coordinates, visibleSize, padding, current.zoom);
+  const scale = getScale(zoom);
+  const worldCenterX = (bounds.minX + bounds.maxX) / 2;
+  const worldCenterZ = (bounds.minZ + bounds.maxZ) / 2;
+  const visibleCenterX = (effectiveRect.left + effectiveRect.right) / 2;
+  const visibleCenterY = (effectiveRect.top + effectiveRect.bottom) / 2;
   return {
     ...current,
-    centerX: (bounds.minX + bounds.maxX) / 2,
-    centerZ: (bounds.minZ + bounds.maxZ) / 2,
-    zoom: getZoomToFitCoordinates(coordinates, size, padding, current.zoom),
+    centerX: worldCenterX - (visibleCenterX - size.width / 2) / scale,
+    centerZ: worldCenterZ - (visibleCenterY - size.height / 2) / scale,
+    zoom,
   };
 }
 
@@ -10293,8 +12273,28 @@ function formatMapCoordinate(value: number): string {
   return Math.round(value).toLocaleString('zh-CN');
 }
 
+function formatPlayerLocationTimestamp(value: string, locale: LocaleCode): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    return value;
+  }
+
+  const intlLocale = locale === 'en' ? 'en-US' : locale === 'zh-Hant' ? 'zh-TW' : 'zh-CN';
+  return new Intl.DateTimeFormat(intlLocale, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
+
 function getScale(zoom: number): number {
   return 2 ** zoom;
+}
+
+function getPointerTargetMapMarkerId(target: EventTarget | null): string | undefined {
+  if (!(target instanceof Element)) {
+    return undefined;
+  }
+  return target.closest<HTMLElement>('[data-map-marker-id]')?.dataset.mapMarkerId;
 }
 
 function getPinchPoints(
@@ -10365,26 +12365,147 @@ function formatPoint([x, z]: [number, number]): string {
   return `${Math.round(x)}, ${Math.round(z)}`;
 }
 
+function formatShareCoordinate([x, z]: [number, number]): string {
+  return `${roundCoordinateForParam(x)}, ${roundCoordinateForParam(z)}`;
+}
+
 function getMarkerCenter(marker: CenterableMarker): [number, number] | undefined {
   if (marker.geometry.type === 'Point') {
     return marker.geometry.coordinates;
   }
 
-  if (marker.geometry.coordinates.length === 0) {
+  const coordinates = getMapGeometryCoordinates(marker.geometry);
+  if (coordinates.length === 0) {
     return undefined;
   }
+  const bounds = getCoordinateBounds(coordinates);
+  return [(bounds.minX + bounds.maxX) / 2, (bounds.minZ + bounds.maxZ) / 2];
+}
 
-  const total = marker.geometry.coordinates.reduce(
-    (sum, coordinate) => ({
-      x: sum.x + coordinate[0],
-      z: sum.z + coordinate[1],
-    }),
-    { x: 0, z: 0 },
+function getMapGeometryCoordinates(geometry: MapGeometry): Array<[number, number]> {
+  if (geometry.type === 'Point') {
+    return [geometry.coordinates];
+  }
+  if (geometry.type === 'MultiPoint' || geometry.type === 'LineString') {
+    return geometry.coordinates;
+  }
+  if (geometry.type === 'Rectangle') {
+    return rectangleBoundsToMapCoordinates(geometry.bounds);
+  }
+  if (geometry.type === 'MultiRectangle') {
+    return geometry.rectangles.flatMap(rectangleBoundsToMapCoordinates);
+  }
+  if (geometry.type === 'Polygon') {
+    return geometry.coordinates.flat();
+  }
+  return geometry.coordinates.flat(2);
+}
+
+function isMarkerInsideRegion(marker: CenterableMarker, region: RegionGeometry): boolean {
+  const center = getMarkerCenter(marker);
+  return center ? isCoordinateInsideRegion(center, region) : false;
+}
+
+function isCoordinateInsideRegion(coordinate: [number, number], region: RegionGeometry): boolean {
+  if (region.type === 'Rectangle') {
+    return isCoordinateInsideRectangle(coordinate, region.bounds);
+  }
+  if (region.type === 'MultiRectangle') {
+    return region.rectangles.some((bounds) => isCoordinateInsideRectangle(coordinate, bounds));
+  }
+  if (region.type === 'Polygon') {
+    return isCoordinateInsidePolygon(coordinate, region.coordinates);
+  }
+  return region.coordinates.some((polygon) => isCoordinateInsidePolygon(coordinate, polygon));
+}
+
+function isCoordinateInsideRectangle(
+  [x, z]: [number, number],
+  bounds: { minX: number; minZ: number; maxX: number; maxZ: number },
+): boolean {
+  return x >= bounds.minX && x <= bounds.maxX && z >= bounds.minZ && z <= bounds.maxZ;
+}
+
+function isCoordinateInsidePolygon(
+  coordinate: [number, number],
+  rings: Array<Array<[number, number]>>,
+): boolean {
+  let inside = false;
+  for (const ring of rings) {
+    if (isCoordinateOnRingBoundary(coordinate, ring)) {
+      return true;
+    }
+    if (isCoordinateInsideRing(coordinate, ring)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function isCoordinateOnRingBoundary(
+  coordinate: [number, number],
+  ring: Array<[number, number]>,
+): boolean {
+  for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index++) {
+    const start = ring[previous];
+    const end = ring[index];
+    if (start && end && isCoordinateOnSegment(coordinate, start, end)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isCoordinateOnSegment(
+  [x, z]: [number, number],
+  [startX, startZ]: [number, number],
+  [endX, endZ]: [number, number],
+): boolean {
+  const cross = (x - startX) * (endZ - startZ) - (z - startZ) * (endX - startX);
+  if (Math.abs(cross) > 1e-9) {
+    return false;
+  }
+  return (
+    x >= Math.min(startX, endX) &&
+    x <= Math.max(startX, endX) &&
+    z >= Math.min(startZ, endZ) &&
+    z <= Math.max(startZ, endZ)
   );
+}
 
+function isCoordinateInsideRing([x, z]: [number, number], ring: Array<[number, number]>): boolean {
+  let inside = false;
+  for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index++) {
+    const currentPoint = ring[index];
+    const previousPoint = ring[previous];
+    if (!currentPoint || !previousPoint) {
+      continue;
+    }
+    const intersects =
+      currentPoint[1] > z !== previousPoint[1] > z &&
+      x <
+        ((previousPoint[0] - currentPoint[0]) * (z - currentPoint[1])) /
+          (previousPoint[1] - currentPoint[1]) +
+          currentPoint[0];
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function rectangleBoundsToMapCoordinates(bounds: {
+  minX: number;
+  minZ: number;
+  maxX: number;
+  maxZ: number;
+}): Array<[number, number]> {
   return [
-    total.x / marker.geometry.coordinates.length,
-    total.z / marker.geometry.coordinates.length,
+    [bounds.minX, bounds.minZ],
+    [bounds.maxX, bounds.minZ],
+    [bounds.maxX, bounds.maxZ],
+    [bounds.minX, bounds.maxZ],
+    [bounds.minX, bounds.minZ],
   ];
 }
 
@@ -10578,9 +12699,24 @@ function formatGeometryDetail(marker: CenterableMarker, t: Translate): string {
     return t('map.geometry.pointMarker');
   }
 
-  if (marker.categoryId === 'transit-line') {
+  if (marker.categoryId === 'transit-line' && marker.geometry.type === 'MultiPoint') {
     return t('map.geometry.transitLineObject', {
       count: marker.geometry.coordinates.length,
+    });
+  }
+
+  if (marker.geometry.type === 'LineString') {
+    return t('map.geometry.lineString', { count: marker.geometry.coordinates.length });
+  }
+
+  if (
+    marker.geometry.type === 'Rectangle' ||
+    marker.geometry.type === 'MultiRectangle' ||
+    marker.geometry.type === 'Polygon' ||
+    marker.geometry.type === 'MultiPolygon'
+  ) {
+    return t('map.geometry.region', {
+      count: getMapGeometryCoordinates(marker.geometry).length,
     });
   }
 
@@ -10598,12 +12734,16 @@ function formatMarkerDetail(marker: SidebarMarker, t: Translate): string {
     return formatPoint(marker.geometry.coordinates);
   }
 
-  if (marker.categoryId === 'transit-line') {
+  if (marker.categoryId === 'transit-line' && marker.geometry.type === 'MultiPoint') {
     return marker.geometry.coordinates.length > 0
       ? t('map.geometry.transitLineDetail', {
           count: marker.geometry.coordinates.length,
         })
       : t('map.geometry.transitLinePending');
+  }
+
+  if (marker.geometry.type !== 'MultiPoint') {
+    return formatGeometryDetail(marker, t);
   }
 
   return t('map.geometry.roadEndpointCount', {
@@ -10613,19 +12753,39 @@ function formatMarkerDetail(marker: SidebarMarker, t: Translate): string {
 
 function formatMarkerListDistanceDetail(
   marker: SidebarMarker,
-  reference: { coordinates: [number, number]; t: Translate },
+  reference: {
+    coordinates: [number, number];
+    secondaryPoiIndex: ReadonlyMap<string, SecondaryPoiLink[]>;
+    t: Translate;
+  },
 ): string {
   const center = getMarkerCenter(marker);
   if (!center) {
     return formatGeometryDetail(marker, reference.t);
   }
 
-  if (marker.geometry.type !== 'Point') {
-    const rawCoordinates = marker.geometry.type === 'MultiPoint' ? marker.geometry.coordinates : [];
+  if (marker.geometry.type === 'MultiPoint' || marker.geometry.type === 'LineString') {
+    const rawCoordinates = marker.geometry.coordinates;
     const coordinates = isRoadEndpointGroupMarker(marker)
       ? orderRoadTracePoints(rawCoordinates)
       : rawCoordinates;
-    return `全长 ${formatRoutePlanDistance(getCoordinateChainDistance(coordinates), reference.t)}`;
+    return reference.t('map.markerList.fullLength', {
+      distance: formatRoutePlanDistance(getCoordinateChainDistance(coordinates), reference.t),
+    });
+  }
+
+  if (marker.geometry.type !== 'Point') {
+    const nearestAccessDistance = (reference.secondaryPoiIndex.get(marker.id) ?? [])
+      .filter(isRouteAccessSecondaryPoi)
+      .flatMap((link) => {
+        const accessCenter = getMarkerCenter(link.marker);
+        return accessCenter ? [getCoordinateDistance(accessCenter, reference.coordinates)] : [];
+      })
+      .sort((left, right) => left - right)[0];
+    return formatRoutePlanDistance(
+      nearestAccessDistance ?? getCoordinateDistance(center, reference.coordinates),
+      reference.t,
+    );
   }
 
   return formatRoutePlanDistance(getCoordinateDistance(center, reference.coordinates), reference.t);

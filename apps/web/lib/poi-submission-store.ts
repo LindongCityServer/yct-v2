@@ -43,9 +43,11 @@ export async function createLocalPoiSubmission(input: {
   iconFileName?: string;
   description?: string;
   href?: string;
+  imageUrls?: string[];
   imageUrl?: string;
   geometry: MapGeometry;
   parentMarkerId?: string;
+  floorLabel?: string;
   boundRegionMarkerIds?: string[];
   openingHours?: string;
   address?: string;
@@ -63,9 +65,11 @@ export async function createLocalPoiSubmission(input: {
     iconFileName: input.iconFileName,
     description: input.description,
     href: input.href,
-    imageUrl: input.imageUrl,
+    imageUrls: normalizePoiImageUrls(input.imageUrls, input.imageUrl),
+    imageUrl: normalizePoiImageUrls(input.imageUrls, input.imageUrl)?.[0],
     geometry: input.geometry,
     parentMarkerId: input.parentMarkerId,
+    floorLabel: input.floorLabel,
     boundRegionMarkerIds: input.boundRegionMarkerIds,
     openingHours: input.openingHours,
     address: input.address,
@@ -131,11 +135,36 @@ async function readSnapshot(): Promise<PoiSubmissionStoreSnapshot> {
     const parsed = JSON.parse(source) as PoiSubmissionStoreSnapshot;
     return {
       version: 1,
-      submissions: Array.isArray(parsed.submissions) ? parsed.submissions : [],
+      submissions: Array.isArray(parsed.submissions)
+        ? parsed.submissions.map(normalizeStoredPoiSubmission)
+        : [],
     };
   } catch {
     return emptySnapshot;
   }
+}
+
+export function normalizePoiImageUrls(
+  imageUrls: string[] | undefined,
+  legacyImageUrl?: string,
+): string[] | undefined {
+  const normalized = Array.from(
+    new Set(
+      [...(imageUrls ?? []), ...(legacyImageUrl ? [legacyImageUrl] : [])]
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, 12);
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeStoredPoiSubmission(submission: PoiSubmission): PoiSubmission {
+  const imageUrls = normalizePoiImageUrls(submission.imageUrls, submission.imageUrl);
+  return {
+    ...submission,
+    imageUrls,
+    imageUrl: imageUrls?.[0],
+  };
 }
 
 async function writeSnapshot(snapshot: PoiSubmissionStoreSnapshot): Promise<void> {

@@ -8,11 +8,13 @@ import {
   normalizePoiCategoryIconMimeType,
   storePoiCategoryIconFile,
 } from './poi-category-icon-store';
-import {
-  listPoiCategoryProfiles,
-  replacePoiCategoryProfiles,
-} from './poi-category-profile-store';
+import { listPoiCategoryProfiles, replacePoiCategoryProfiles } from './poi-category-profile-store';
 import { clearPoiCategoryCache } from './poi-categories';
+import {
+  deletePoiCategoryIconMetadata,
+  normalizePoiCategoryIconMetadataKey,
+  upsertPoiCategoryIconMetadata,
+} from './poi-category-icon-metadata-store';
 
 export interface PoiCategoryIconUploadResult {
   ok: boolean;
@@ -26,6 +28,7 @@ export interface PoiCategoryIconUploadResult {
     mimeType: string;
     sizeBytes: number;
     sha256: string;
+    displayName: string;
   };
 }
 
@@ -59,6 +62,14 @@ export async function uploadPoiCategoryIcon(input: {
     mimeType,
     bytes: input.bytes,
   });
+  const displayName = buildDefaultPoiCategoryIconDisplayName(input.fileName);
+  const updatedAt = new Date().toISOString();
+  await upsertPoiCategoryIconMetadata({
+    fileName: storedFile.fileName,
+    displayName,
+    updatedBy: input.actorId,
+    updatedAt,
+  });
   const icon = {
     iconId: `poi_icon_${storedFile.sha256.slice(0, 24)}`,
     fileName: storedFile.fileName,
@@ -66,6 +77,7 @@ export async function uploadPoiCategoryIcon(input: {
     mimeType,
     sizeBytes: storedFile.sizeBytes,
     sha256: storedFile.sha256,
+    displayName,
   };
 
   await emitEvent(
@@ -136,10 +148,12 @@ export async function deletePoiCategoryIcon(input: {
   });
 
   const updatedAt = new Date().toISOString();
-  const categories = removedCategoryIds.length > 0
-    ? await replacePoiCategoryProfiles(nextCategories)
-    : profileCategories;
+  const categories =
+    removedCategoryIds.length > 0
+      ? await replacePoiCategoryProfiles(nextCategories)
+      : profileCategories;
   const deletedFile = await deletePoiCategoryIconFile(fileName);
+  await deletePoiCategoryIconMetadata(fileName);
   clearPoiCategoryCache();
 
   if (removedCategoryIds.length > 0) {
@@ -188,6 +202,44 @@ export async function deletePoiCategoryIcon(input: {
     ok: true,
     icon,
   };
+}
+
+export async function renamePoiCategoryIcon(input: {
+  actorId: string;
+  iconFileName: string;
+  displayName: string;
+}): Promise<{
+  ok: boolean;
+  status?: number;
+  error?: string;
+  message?: string;
+  icon?: { iconId: string; fileName: string; displayName: string };
+}> {
+  const fileName = normalizePoiCategoryIconMetadataKey(input.iconFileName);
+  const displayName = input.displayName.trim();
+  if (!fileName || !displayName || displayName.length > 80) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'invalid_poi_category_icon_name',
+      message: '图标显示名称不符合要求。',
+    };
+  }
+
+  const renamedAt = new Date().toISOString();
+  await upsertPoiCategoryIconMetadata({
+    fileName,
+    displayName,
+    updatedBy: input.actorId,
+    updatedAt: renamedAt,
+  });
+  const icon = { iconId: buildPoiCategoryIconId(fileName), fileName, displayName };
+  await emitEvent(
+    'PoiCategoryIconRenamed',
+    { type: 'admin', id: input.actorId },
+    { ...icon, renamedBy: input.actorId, renamedAt },
+  );
+  return { ok: true, icon };
 }
 
 function validatePoiCategoryIcon(input: {
@@ -239,6 +291,14 @@ function invalidUpload(message: string): PoiCategoryIconUploadResult {
 
 function buildPoiCategoryIconId(fileName: string): string {
   return `poi_icon_${fileName.replace(/\.[^.]+$/, '')}`;
+}
+
+function buildDefaultPoiCategoryIconDisplayName(fileName: string): string {
+  const baseName = fileName
+    .trim()
+    .replace(/\.[^.]+$/, '')
+    .trim();
+  return (baseName || '未命名图标').slice(0, 80);
 }
 
 function detectPoiImageMimeType(bytes: Uint8Array): string | undefined {

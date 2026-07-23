@@ -43,6 +43,13 @@ export interface InternalTaskRunRecord {
     skipped: number;
     deferred: number;
   };
+  playerLocations: {
+    status: 'ready' | 'not_configured' | 'unavailable';
+    checkedAt: string;
+    onlineCount: number;
+    changed: boolean;
+    message: string;
+  };
   ticketing: {
     processedAt: string;
     expiredOrderCount: number;
@@ -143,6 +150,13 @@ function toInternalTaskRunRecord(result: InternalTaskRunResult): InternalTaskRun
       skipped: result.notifications.skipped,
       deferred: result.notifications.deferred,
     },
+    playerLocations: {
+      status: result.playerLocations.status,
+      checkedAt: result.playerLocations.checkedAt,
+      onlineCount: result.playerLocations.onlineCount,
+      changed: result.playerLocations.changed,
+      message: result.playerLocations.message,
+    },
     ticketing: {
       processedAt: result.ticketing.processedAt,
       expiredOrderCount: result.ticketing.expiredOrderCount,
@@ -217,6 +231,14 @@ function normalizeRecord(record: InternalTaskRunRecord): InternalTaskRunRecord {
       skipped: normalizeCount(record.notifications.skipped),
       deferred: normalizeCount(record.notifications.deferred),
     },
+    playerLocations: {
+      status: normalizePlayerLocationStatus(record.playerLocations?.status),
+      checkedAt: normalizeOptionalText(record.playerLocations?.checkedAt) ?? record.processedAt,
+      onlineCount: normalizeCount(record.playerLocations?.onlineCount ?? 0),
+      changed: record.playerLocations?.changed === true,
+      message:
+        normalizeOptionalText(record.playerLocations?.message) ?? '尚无玩家位置同步结果。',
+    },
     ticketing: {
       processedAt: record.ticketing.processedAt,
       expiredOrderCount: normalizeCount(record.ticketing.expiredOrderCount),
@@ -240,6 +262,14 @@ function normalizeContentOperationsReminderStatus(
   value: InternalTaskRunRecord['contentOperationsReminders']['status'] | undefined,
 ): InternalTaskRunRecord['contentOperationsReminders']['status'] {
   return value === 'changed' || value === 'unchanged' ? value : 'unchanged';
+}
+
+function normalizePlayerLocationStatus(
+  value: InternalTaskRunRecord['playerLocations']['status'] | undefined,
+): InternalTaskRunRecord['playerLocations']['status'] {
+  return value === 'ready' || value === 'not_configured' || value === 'unavailable'
+    ? value
+    : 'not_configured';
 }
 
 function normalizeCount(value: number): number {

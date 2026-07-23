@@ -16,6 +16,7 @@ import {
   listPoiSubmissions,
   updateLocalPoiSubmission,
   withPoiSubmissionStatus,
+  normalizePoiImageUrls,
 } from './poi-submission-store';
 import { listPoiSubmissionImageReviews } from './poi-submission-image-review-store';
 import { listPoiConflictDecisions } from './poi-conflict-decision-store';
@@ -37,9 +38,11 @@ export async function submitPublicPoi(input: {
   categoryId: string;
   description?: string;
   href?: string;
+  imageUrls?: string[];
   imageUrl?: string;
   geometry: MapGeometry;
   parentMarkerId?: string;
+  floorLabel?: string;
   boundRegionMarkerIds?: string[];
   openingHours?: string;
   address?: string;
@@ -56,9 +59,11 @@ export async function createPoiSubmissionByAdmin(input: {
   iconFileName?: string;
   description?: string;
   href?: string;
+  imageUrls?: string[];
   imageUrl?: string;
   geometry: MapGeometry;
   parentMarkerId?: string;
+  floorLabel?: string;
   boundRegionMarkerIds?: string[];
   openingHours?: string;
   address?: string;
@@ -75,9 +80,11 @@ async function createSubmittedPoi(input: {
   iconFileName?: string;
   description?: string;
   href?: string;
+  imageUrls?: string[];
   imageUrl?: string;
   geometry: MapGeometry;
   parentMarkerId?: string;
+  floorLabel?: string;
   boundRegionMarkerIds?: string[];
   openingHours?: string;
   address?: string;
@@ -92,9 +99,11 @@ async function createSubmittedPoi(input: {
     iconFileName: input.iconFileName,
     description: input.description,
     href: input.href,
-    imageUrl: input.imageUrl,
+    imageUrls: normalizePoiImageUrls(input.imageUrls, input.imageUrl),
+    imageUrl: normalizePoiImageUrls(input.imageUrls, input.imageUrl)?.[0],
     geometry: input.geometry,
     parentMarkerId: normalizeOptionalText(input.parentMarkerId),
+    floorLabel: normalizeOptionalText(input.floorLabel),
     boundRegionMarkerIds: normalizeIdList(input.boundRegionMarkerIds),
     openingHours: normalizeOptionalText(input.openingHours),
     address: normalizeOptionalText(input.address),
@@ -130,9 +139,11 @@ async function createSubmittedPoi(input: {
         categoryId: submitted.categoryId,
         description: submitted.description,
         href: submitted.href,
+        imageUrls: submitted.imageUrls,
         imageUrl: submitted.imageUrl,
         geometry: submitted.geometry,
         parentMarkerId: submitted.parentMarkerId,
+        floorLabel: submitted.floorLabel,
         boundRegionMarkerIds: submitted.boundRegionMarkerIds,
         openingHours: submitted.openingHours,
         address: submitted.address,
@@ -198,9 +209,11 @@ export async function updatePoiSubmissionByAdmin(input: {
   iconFileName?: string;
   description?: string;
   href?: string;
+  imageUrls?: string[];
   imageUrl?: string;
   geometry?: MapGeometry;
   parentMarkerId?: string;
+  floorLabel?: string;
   boundRegionMarkerIds?: string[];
   openingHours?: string;
   address?: string;
@@ -225,16 +238,21 @@ export async function updatePoiSubmissionByAdmin(input: {
     };
   }
 
+  const imageUrls =
+    input.imageUrls === undefined && input.imageUrl === undefined
+      ? normalizePoiImageUrls(submission.imageUrls, submission.imageUrl)
+      : normalizePoiImageUrls(input.imageUrls, input.imageUrl);
   const patch = {
     title: input.title.trim(),
     categoryId: input.categoryId.trim(),
     iconFileName: normalizeOptionalText(input.iconFileName),
     description: normalizeOptionalText(input.description),
     href: normalizeOptionalText(input.href),
-    imageUrl:
-      input.imageUrl === undefined ? submission.imageUrl : normalizeOptionalText(input.imageUrl),
+    imageUrls,
+    imageUrl: imageUrls?.[0],
     geometry: input.geometry ?? submission.geometry,
     parentMarkerId: normalizeOptionalText(input.parentMarkerId),
+    floorLabel: normalizeOptionalText(input.floorLabel),
     boundRegionMarkerIds: normalizeIdList(input.boundRegionMarkerIds),
     openingHours: normalizeOptionalText(input.openingHours),
     address: normalizeOptionalText(input.address),
@@ -335,11 +353,17 @@ export async function publishPoiSubmission(input: {
     return invalidTransition(transition.reason);
   }
 
-  if (submission.imageUrl) {
-    const imageReview = (await listPoiSubmissionImageReviews()).find(
-      (review) => review.submissionId === submission.id && review.imageUrl === submission.imageUrl,
-    );
-    if (imageReview?.decision === 'rejected') {
+  const imageUrls = normalizePoiImageUrls(submission.imageUrls, submission.imageUrl) ?? [];
+  if (imageUrls.length > 0) {
+    const imageReviews = await listPoiSubmissionImageReviews();
+    if (
+      imageUrls.some(
+        (imageUrl) =>
+          imageReviews.find(
+            (review) => review.submissionId === submission.id && review.imageUrl === imageUrl,
+          )?.decision === 'rejected',
+      )
+    ) {
       return invalidImageReview();
     }
   }
@@ -371,9 +395,11 @@ export async function publishPoiSubmission(input: {
         categoryId: updated.categoryId,
         description: updated.description,
         href: updated.href,
+        imageUrls: updated.imageUrls,
         imageUrl: updated.imageUrl,
         geometry: updated.geometry,
         parentMarkerId: updated.parentMarkerId,
+        floorLabel: updated.floorLabel,
         boundRegionMarkerIds: updated.boundRegionMarkerIds,
         openingHours: updated.openingHours,
         address: updated.address,
@@ -410,7 +436,7 @@ function invalidImageReview(): PoiSubmissionActionResult {
     ok: false,
     status: 409,
     error: 'poi_submission_image_rejected',
-    message: '投稿图片已被标记为不合格，请先更换图片或重置图片审核状态后再发布。',
+    message: '投稿中存在已被标记为不合格的图片，请先更换图片或重置图片审核状态后再发布。',
   };
 }
 
@@ -457,8 +483,10 @@ function getChangedPoiSubmissionFields(
     | 'iconFileName'
     | 'description'
     | 'href'
+    | 'imageUrls'
     | 'imageUrl'
     | 'parentMarkerId'
+    | 'floorLabel'
     | 'openingHours'
     | 'address'
     | 'addressRoadMarkerId'
@@ -473,9 +501,11 @@ function getChangedPoiSubmissionFields(
   | 'iconFileName'
   | 'description'
   | 'href'
+  | 'imageUrls'
   | 'imageUrl'
   | 'geometry'
   | 'parentMarkerId'
+  | 'floorLabel'
   | 'boundRegionMarkerIds'
   | 'openingHours'
   | 'address'
@@ -489,14 +519,17 @@ function getChangedPoiSubmissionFields(
       'iconFileName',
       'description',
       'href',
-      'imageUrl',
       'parentMarkerId',
+      'floorLabel',
       'openingHours',
       'address',
       'addressRoadMarkerId',
     ] as const
   ).filter((field) => (submission[field] ?? '') !== (patch[field] ?? ''));
   const geometryChanged = JSON.stringify(submission.geometry) !== JSON.stringify(patch.geometry);
+  const imageUrlsChanged =
+    JSON.stringify(normalizePoiImageUrls(submission.imageUrls, submission.imageUrl) ?? []) !==
+    JSON.stringify(patch.imageUrls ?? []);
   const regionBindingsChanged =
     JSON.stringify(submission.boundRegionMarkerIds ?? []) !==
     JSON.stringify(patch.boundRegionMarkerIds ?? []);
@@ -505,6 +538,7 @@ function getChangedPoiSubmissionFields(
 
   return [
     ...textFields,
+    ...(imageUrlsChanged ? (['imageUrls', 'imageUrl'] as const) : []),
     ...(geometryChanged ? (['geometry'] as const) : []),
     ...(regionBindingsChanged ? (['boundRegionMarkerIds'] as const) : []),
     ...(facilitiesChanged ? (['facilities'] as const) : []),

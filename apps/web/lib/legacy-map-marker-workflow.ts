@@ -101,9 +101,11 @@ function getChangedLegacyMapMarkerFields(
   | 'iconFileName'
   | 'description'
   | 'href'
+  | 'imageUrls'
   | 'imageUrl'
   | 'geometry'
   | 'parentMarkerId'
+  | 'floorLabel'
   | 'boundRegionMarkerIds'
   | 'openingHours'
   | 'address'
@@ -117,14 +119,17 @@ function getChangedLegacyMapMarkerFields(
       'iconFileName',
       'description',
       'href',
-      'imageUrl',
       'parentMarkerId',
+      'floorLabel',
       'openingHours',
       'address',
       'addressRoadMarkerId',
     ] as const
   ).filter((field) => (previous?.[field] ?? '') !== (patch[field] ?? ''));
   const previousGeometry = previous?.geometry as MapGeometry | undefined;
+  const imageUrlsChanged =
+    JSON.stringify(previous?.imageUrls ?? (previous?.imageUrl ? [previous.imageUrl] : [])) !==
+    JSON.stringify(patch.imageUrls ?? (patch.imageUrl ? [patch.imageUrl] : []));
   const geometryChanged =
     patch.geometry !== undefined &&
     JSON.stringify(previousGeometry) !== JSON.stringify(patch.geometry);
@@ -136,6 +141,7 @@ function getChangedLegacyMapMarkerFields(
     JSON.stringify(previous?.facilities ?? []) !== JSON.stringify(patch.facilities ?? []);
   return [
     ...textFields,
+    ...(imageUrlsChanged ? (['imageUrls', 'imageUrl'] as const) : []),
     ...(geometryChanged ? (['geometry'] as const) : []),
     ...(regionBindingsChanged ? (['boundRegionMarkerIds'] as const) : []),
     ...(facilitiesChanged ? (['facilities'] as const) : []),

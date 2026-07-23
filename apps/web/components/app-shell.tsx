@@ -6,6 +6,10 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+import {
+  publishMapNavigationLayoutChanged,
+  subscribeMapRoutePanelVisibilityChanged,
+} from '../lib/client-map-ui-events';
 import { ticketOrderStateChangedEventName } from '../lib/client-ticket-orders';
 import {
   readTripReminderState,
@@ -62,6 +66,7 @@ export function AppShell({
   const [topbarNotice, setTopbarNotice] = useState<string | null>(null);
   const [accountStatus, setAccountStatus] = useState<AccountStatusResponse | null>(null);
   const [localPendingSyncCount, setLocalPendingSyncCount] = useState(0);
+  const [mapRoutePanelVisible, setMapRoutePanelVisible] = useState(false);
   const noticeTimer = useRef<number | null>(null);
   const { locale, t } = useI18n();
 
@@ -73,6 +78,25 @@ export function AppShell({
     },
     [],
   );
+
+  useEffect(() => {
+    if (variant !== 'map') {
+      setMapRoutePanelVisible(false);
+      return undefined;
+    }
+
+    return subscribeMapRoutePanelVisibilityChanged(({ visible }) =>
+      setMapRoutePanelVisible(visible),
+    );
+  }, [variant]);
+
+  useEffect(() => {
+    if (variant !== 'map') {
+      return;
+    }
+
+    publishMapNavigationLayoutChanged({ expanded: navOpen });
+  }, [navOpen, variant]);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,6 +183,7 @@ export function AppShell({
         'app-shell',
         variant === 'map' ? 'is-map-shell' : '',
         navOpen ? '' : 'is-nav-collapsed',
+        variant === 'map' && mapRoutePanelVisible ? 'has-map-route-panel' : '',
       ]
         .filter(Boolean)
         .join(' ')}
