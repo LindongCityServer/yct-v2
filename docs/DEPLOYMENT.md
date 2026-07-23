@@ -196,6 +196,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\run-yct-internal-tasks.ps1
 - `-ForceOperationsReminderRefresh`：即使公告签名没变化，也强制触发一次运营提醒重算。
 - `-Now 2026-07-07T12:00:00+08:00`：为通知和票务过期处理注入调试时间。
 
+如果需要在没有用户访问网站时持续记录玩家上线、移动和下线位置，可以单独运行玩家位置采集器。它只调用受保护的玩家位置同步入口，不会重复执行通知、票务等其他内部任务：
+
+```powershell
+pnpm web:player-locations:run
+```
+
+部署包中对应脚本为 `run-yct-player-location-poller.ps1`。建议使用 Windows 服务、计划任务守护进程或 PM2 运行它；默认每 15 秒采集一次，停止采集器不会影响 Web 主进程。
+
 把 `artifacts/yct-web-*` 上传到服务器后，推荐先解压到一个新的临时目录，再从这个临时目录执行包内的 `deploy-yct-web.ps1`。这个脚本会自动把旧部署目录中的环境文件、`.yct-data`、`runtime-assets` 和 `apps\web\public\content-assets` 迁走，替换部署文件，再把这些持久数据放回去。
 
 推荐命令：
@@ -286,7 +294,7 @@ foreach ($relativePath in @(
 
 可以按下面理解：
 
-- `.yct-data`：账号映射、管理员成员、交通数据版本、POI 投稿、POI 投稿图片、提醒、通知、票务草稿、离线范围请求等本地仓储；当前 POI 投稿图片默认在 `.yct-data/poi-submission-images`。
+- `.yct-data`：账号会话、账号映射、管理员成员、交通数据版本、POI 投稿、POI 投稿图片、提醒、通知、票务草稿、离线范围请求等本地仓储；账号会话默认写入 `.yct-data/yct-account-sessions.json`，也可通过 `YCT_SESSION_STORE_PATH` 调整，当前 POI 投稿图片默认在 `.yct-data/poi-submission-images`。
 - `runtime-assets`：部署包根目录下的运行时静态资源；当前 POI 分类图标默认在 `runtime-assets/poi-icons`。
 - `apps\web\public\content-assets`：内容后台上传的真实图片和附件。
 - `apps\web\public\legacy-assets`：如果它来自你本地打包机的 `public` 目录，通常已经包含在部署包里；只有当云端还保留了“没有重新打进包的额外旧资源”时，才需要额外手工保留。
