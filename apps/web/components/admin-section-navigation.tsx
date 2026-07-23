@@ -21,6 +21,12 @@ const adminEntries = [
     description: '追踪后台事件、操作者、实体 ID、派发状态和失败原因。',
   },
   {
+    path: '/admin/memberships',
+    icon: 'manage_accounts',
+    title: '管理员成员',
+    description: '从真实雨城通用户中授予、调整或停用后台权限。',
+  },
+  {
     path: '/admin/services',
     icon: 'dashboard_customize',
     title: '服务后台',
@@ -38,6 +44,12 @@ const adminEntries = [
     title: 'POI 后台',
     description: '审核 POI 投稿，维护分类、图标和地图资料。',
   },
+  {
+    path: '/admin/translations',
+    icon: 'translate',
+    title: '名称翻译',
+    description: '维护地名、路名、站名和线路名的其他语种译名。',
+  },
 ] as const;
 
 export function AdminSectionNavigation({
@@ -47,11 +59,9 @@ export function AdminSectionNavigation({
   currentPath?: string;
   includeOverview?: boolean;
 }>) {
-  const entries = includeOverview ? adminEntries : adminEntries.slice(1);
-
   return (
     <nav className="service-entry-grid admin-home-grid" aria-label="后台导航">
-      {entries.map((entry) => (
+      {adminEntries.map((entry) => (
         <Link
           className="service-entry admin-home-entry"
           href={appPath(entry.path)}
