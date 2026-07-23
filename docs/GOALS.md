@@ -448,7 +448,7 @@ DESIGN.md
 - 已处理第一版：交通数据校验结果已从简单错误/提醒计数升级为结构化 issue 列表；当前后台会单独报告线路断点、重名站点、孤立站点、单向站点和缺少 Minecraft 坐标，并展示部分样例，方便在没有可视化编辑器前先做版本筛查。当前仍属于导入快照后的只读校验，不支持直接在后台页内修复。
 - 新增公开 API `/api/transit/overview`；出行页和线路详情页优先读取已发布交通数据版本，没有发布版时继续退回旧站直读，避免现有体验中断。
 - 新增客运公告解析：`ltcx/stop.txt` 迁移为 `TransitServiceNotice`，公开 API 为 `/api/transit/service-notices`；出行页会展示当前/未来客运提醒，历史提醒折叠显示，避免过期公告冒充当前强提醒。
-- 新增地铁站点详情解析：`metro_station_detail.js` 迁移为 `TransitStationDetailSnapshot`，公开 API 为 `/api/transit/station-details`；线路详情页会按站名展示出入口、设施、换乘和周边站摘要，并对已有详情的站点链接到 `/travel/stations/[lineName]/[stationName]` 二级页。
+- 新增地铁站点详情解析：`metro_station_detail.js` 迁移为 `TransitStationDetailSnapshot`，公开 API 为 `/api/transit/station-details`；原站点二级页已弃用，线路详情中的站点入口改为地图 POI 搜索。
 - 新增客运大屏快照解析：`ltcx/screen/station.txt`、`tickets.txt`、`rttime.txt`、`notice.txt` 与 `ltcx/route.txt` 组合为 `TransitScreenSnapshot`，公开 API 为 `/api/transit/screen`；出行页展示智运大屏摘要和近期班次，`/travel/screen` 提供按线路、车站、班次号、检票口和时间状态筛选的二级页。
 - 共享事件 Schema 新增 `TransitDataRevisionImported`、`TransitDataRevisionReviewed`，并继续使用 `TransitDataRevisionSubmitted`、`TransitDataRevisionPublished`。
 
@@ -457,7 +457,7 @@ DESIGN.md
 - 新增 `apps/web/public/sw.js`：缓存应用壳、manifest、图标、公开一级页面和离线兜底页。
 - 新增 `/offline` 离线兜底页面；普通导航离线且没有近期缓存时会退回该页面。当前离线页会提供运营信息、地图探索、班次查询和离线管理入口，并提示对应内容需要先被缓存。
 - 新增 `PwaBridge` 并接入根布局，在安全上下文或本地开发环境注册 Service Worker。
-- 近期访问的出行二级页 `/travel/[id]`、`/travel/screen`、`/travel/stations/[lineName]/[stationName]` 和运营详情 `/operations/[id]` 进入运行时缓存；`/travel/screen` 同时纳入应用壳预热；公开 API `/api/transit/overview`、`/api/transit/service-notices`、`/api/operations/feed`、`/api/services/entries`、`/api/settings/bootstrap` 使用 stale-while-revalidate。
+- 近期访问的 `/travel/screen`、`/travel/schedules` 和运营详情 `/operations/[id]` 进入运行时缓存；`/travel/screen` 同时纳入应用壳预热。旧线路页 `/travel/[id]` 和旧站点页 `/travel/stations/[lineName]/[stationName]` 已弃用且不再进入缓存。
 - 站点详情 API `/api/transit/station-details` 纳入数据缓存和账号页“刷新缓存”入口，支撑近期线路详情离线查看站点摘要。
 - 客运大屏 API `/api/transit/screen` 纳入数据缓存和账号页“刷新缓存”入口，支撑出行页近期班次摘要离线查看。
 - 地图公开基础 API `/api/map/tile-providers`、`/api/map/markers`、`/api/map/poi-categories`、`/api/map/unmined-regions` 纳入数据缓存名单，用于后续自定义范围离线包的基础数据预热。
