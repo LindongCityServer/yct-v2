@@ -109,9 +109,11 @@ export interface PoiSubmittedPayload {
   categoryId: string;
   description?: string;
   href?: string;
+  imageUrls?: string[];
   imageUrl?: string;
   geometry: MapGeometry;
   parentMarkerId?: string;
+  floorLabel?: string;
   boundRegionMarkerIds?: string[];
   openingHours?: string;
   address?: string;
@@ -138,9 +140,11 @@ export interface PoiSubmissionUpdatedPayload {
     | 'iconFileName'
     | 'description'
     | 'href'
+    | 'imageUrls'
     | 'imageUrl'
     | 'geometry'
     | 'parentMarkerId'
+    | 'floorLabel'
     | 'boundRegionMarkerIds'
     | 'openingHours'
     | 'address'
@@ -162,9 +166,11 @@ export interface PoiPublishedPayload {
   categoryId: string;
   description?: string;
   href?: string;
+  imageUrls?: string[];
   imageUrl?: string;
   geometry: MapGeometry;
   parentMarkerId?: string;
+  floorLabel?: string;
   boundRegionMarkerIds?: string[];
   openingHours?: string;
   address?: string;
@@ -354,6 +360,23 @@ export interface TileProviderSelectedPayload {
   reason: 'default' | 'mixed-content-risk' | 'admin-override' | 'profile-config';
 }
 
+export interface PlayerLocationsObservedPayload {
+  sourceId: string;
+  observedAt: ISODateTimeString;
+  onlinePlayerNames: string[];
+  onlineCount: number;
+}
+
+export interface PlayerLocationPresenceChangedPayload {
+  playerName: string;
+  previousPresence: 'unknown' | 'online' | 'offline';
+  presence: 'online' | 'offline';
+  x: number;
+  z: number;
+  observedAt: ISODateTimeString;
+  lastSeenAt: ISODateTimeString;
+}
+
 export interface TripReminderScheduledPayload {
   reminderId: string;
   userId?: string;
@@ -541,6 +564,15 @@ export interface PoiCategoryIconUploadedPayload {
   mimeType: string;
   sizeBytes: number;
   sha256: string;
+  displayName: string;
+}
+
+export interface PoiCategoryIconRenamedPayload {
+  iconId: string;
+  fileName: string;
+  displayName: string;
+  renamedBy: string;
+  renamedAt: ISODateTimeString;
 }
 
 export interface PoiCategoryIconDeletedPayload {
@@ -581,9 +613,11 @@ export interface LegacyMapMarkerUpdatedPayload {
     | 'iconFileName'
     | 'description'
     | 'href'
+    | 'imageUrls'
     | 'imageUrl'
     | 'geometry'
     | 'parentMarkerId'
+    | 'floorLabel'
     | 'boundRegionMarkerIds'
     | 'openingHours'
     | 'address'
@@ -833,6 +867,14 @@ export interface AdminInitializedPayload {
   role: 'super_admin';
 }
 
+export interface AdminMembershipUpdatedPayload {
+  adminMembershipId: string;
+  yctUserId: string;
+  ldpassUserId: string;
+  role: 'admin' | 'super_admin';
+  status: 'active' | 'suspended';
+}
+
 export type YctEventPayloadMap = {
   ContentDraftUpdated: ContentDraftUpdatedPayload;
   ContentSubmitted: ContentSubmittedPayload;
@@ -850,6 +892,7 @@ export type YctEventPayloadMap = {
   PoiArchived: PoiArchivedPayload;
   PoiCategoryProfileUpdated: PoiCategoryProfileUpdatedPayload;
   PoiCategoryIconUploaded: PoiCategoryIconUploadedPayload;
+  PoiCategoryIconRenamed: PoiCategoryIconRenamedPayload;
   PoiCategoryIconDeleted: PoiCategoryIconDeletedPayload;
   PoiConflictDecisionUpdated: PoiConflictDecisionUpdatedPayload;
   PoiSubmissionImageReviewed: PoiSubmissionImageReviewedPayload;
@@ -870,6 +913,8 @@ export type YctEventPayloadMap = {
   TransitModeProfileDeleted: TransitModeProfileDeletedPayload;
   TransitModeProfileUpdated: TransitModeProfileUpdatedPayload;
   TileProviderSelected: TileProviderSelectedPayload;
+  PlayerLocationsObserved: PlayerLocationsObservedPayload;
+  PlayerLocationPresenceChanged: PlayerLocationPresenceChangedPayload;
   TripReminderScheduled: TripReminderScheduledPayload;
   TripReminderDeleted: TripReminderDeletedPayload;
   PushPreferenceUpdated: PushPreferenceUpdatedPayload;
@@ -918,6 +963,7 @@ export type YctEventPayloadMap = {
   TicketRefundCompleted: TicketRefundCompletedPayload;
   LdpassTicketStatusSynced: LdpassTicketStatusSyncedPayload;
   AdminInitialized: AdminInitializedPayload;
+  AdminMembershipUpdated: AdminMembershipUpdatedPayload;
 };
 
 export type YctEventType = keyof YctEventPayloadMap;

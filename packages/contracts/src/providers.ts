@@ -1,5 +1,6 @@
 import type {
   MapGeometry,
+  LocalizedLabelMap,
   PoiCategory,
   TileFreshness,
   TileProviderDescriptor,
@@ -23,6 +24,7 @@ export interface MapMarkerSnapshot {
   markers: Array<{
     id: string;
     label: string;
+    localizedLabels?: LocalizedLabelMap;
     categoryId?: string;
     geometry: MapGeometry;
     iconFileName?: string;
@@ -30,10 +32,13 @@ export interface MapMarkerSnapshot {
     accentColor?: string;
     description?: string;
     href?: string;
+    imageUrls?: string[];
+    /** @deprecated 兼容旧地图数据，值应等于 imageUrls 的第一项。 */
     imageUrl?: string;
     parentLabel?: string;
     secondaryLabel?: string;
     parentMarkerId?: string;
+    floorLabel?: string;
     boundRegionMarkerIds?: string[];
     openingHours?: string;
     address?: string;
@@ -42,7 +47,17 @@ export interface MapMarkerSnapshot {
       symbolIcon: string;
       description: string;
     }>;
+    playerLocation?: MapPlayerLocationMetadata;
   }>;
+}
+
+export interface MapPlayerLocationMetadata {
+  serverAccountName: string;
+  avatarUrl?: string;
+  presence: 'online' | 'offline';
+  isCurrentAccount: boolean;
+  observedAt: string;
+  lastSeenAt: string;
 }
 
 export interface MarkerProvider {

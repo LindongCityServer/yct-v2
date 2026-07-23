@@ -118,6 +118,11 @@ export const poiCategoryProfileUpdateSchema = z.object({
     }),
 });
 
+export const poiCategoryIconRenameSchema = z.object({
+  iconFileName: z.string().trim().min(1).max(300),
+  displayName: z.string().trim().min(1).max(80),
+});
+
 const poiSubmissionImageUrlSchema = z.union([
   urlSchema,
   z
@@ -126,7 +131,14 @@ const poiSubmissionImageUrlSchema = z.union([
     .regex(/^\/api\/map\/poi-submission-images\/[a-f0-9]{24}\.(?:png|jpg|gif|webp|avif)$/),
 ]);
 
+const poiSubmissionImageUrlsSchema = z
+  .array(poiSubmissionImageUrlSchema)
+  .max(12)
+  .transform((urls) => Array.from(new Set(urls)))
+  .optional();
+
 const poiParentMarkerIdSchema = z.string().trim().min(1).max(220).optional();
+const poiFloorLabelSchema = z.string().trim().max(40).optional();
 const poiBoundRegionMarkerIdsSchema = z
   .array(z.string().trim().min(1).max(220))
   .max(32)
@@ -164,9 +176,11 @@ export const poiSubmissionSchema = z
     categoryId: idSchema,
     description: z.string().trim().max(1000).optional(),
     href: urlSchema.optional(),
+    imageUrls: poiSubmissionImageUrlsSchema,
     imageUrl: poiSubmissionImageUrlSchema.optional(),
     geometry: mapGeometrySchema,
     parentMarkerId: poiParentMarkerIdSchema,
+    floorLabel: poiFloorLabelSchema,
     boundRegionMarkerIds: poiBoundRegionMarkerIdsSchema,
     openingHours: poiOpeningHoursSchema,
     address: poiAddressSchema,
@@ -187,9 +201,11 @@ const poiSubmissionAdminUpdateBaseSchema = z.object({
   iconFileName: z.union([z.string().trim().min(1).max(160), z.literal('')]).optional(),
   description: z.string().trim().max(1000).optional(),
   href: z.union([urlSchema, z.literal('')]).optional(),
+  imageUrls: poiSubmissionImageUrlsSchema,
   imageUrl: z.union([poiSubmissionImageUrlSchema, z.literal('')]).optional(),
   geometry: mapGeometrySchema.optional(),
   parentMarkerId: z.union([poiParentMarkerIdSchema.unwrap(), z.literal('')]).optional(),
+  floorLabel: z.union([poiFloorLabelSchema.unwrap(), z.literal('')]).optional(),
   boundRegionMarkerIds: poiBoundRegionMarkerIdsSchema,
   openingHours: z.union([poiOpeningHoursSchema.unwrap(), z.literal('')]).optional(),
   address: z.union([poiAddressSchema.unwrap(), z.literal('')]).optional(),
@@ -229,9 +245,11 @@ export const legacyMapMarkerAdminUpdateSchema = z
     iconFileName: z.union([z.string().trim().min(1).max(160), z.literal('')]).optional(),
     description: z.string().trim().max(1000).optional(),
     href: z.union([urlSchema, z.literal('')]).optional(),
+    imageUrls: poiSubmissionImageUrlsSchema,
     imageUrl: z.union([poiSubmissionImageUrlSchema, z.literal('')]).optional(),
     geometry: mapGeometrySchema.optional(),
     parentMarkerId: z.union([poiParentMarkerIdSchema.unwrap(), z.literal('')]).optional(),
+    floorLabel: z.union([poiFloorLabelSchema.unwrap(), z.literal('')]).optional(),
     boundRegionMarkerIds: poiBoundRegionMarkerIdsSchema,
     openingHours: z.union([poiOpeningHoursSchema.unwrap(), z.literal('')]).optional(),
     address: z.union([poiAddressSchema.unwrap(), z.literal('')]).optional(),

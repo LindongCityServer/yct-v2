@@ -1,4 +1,5 @@
 export * from './common';
+export * from './admin';
 export * from './content';
 export * from './i18n';
 export * from './imports';

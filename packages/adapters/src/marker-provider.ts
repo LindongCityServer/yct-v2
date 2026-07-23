@@ -269,25 +269,41 @@ export class BdslmMarkerProvider implements MarkerProvider {
       }
 
       const rawMarkers = (await response.json()) as BdslmPlayerMarker[];
+      const observedAt = new Date().toISOString();
       return {
-        fetchedAt: new Date().toISOString(),
+        fetchedAt: observedAt,
         markers: rawMarkers
           .filter((marker) => Number.isFinite(marker.x) && Number.isFinite(marker.z))
-          .map((marker, index) => ({
-            id: `bdslm-player-${index}-${marker.x}-${marker.z}`,
-            label: marker.text?.trim() || '在线玩家',
-            categoryId: 'player',
-            geometry: {
-              type: 'Point',
-              coordinates: [marker.x, marker.z],
-            },
-            symbolIcon: 'person_pin_circle',
-          })),
+          .map((marker, index) => {
+            const serverAccountName = marker.text?.trim() || `在线玩家 ${index + 1}`;
+            return {
+              id: buildStablePlayerMarkerId(serverAccountName),
+              label: serverAccountName,
+              categoryId: 'player',
+              geometry: {
+                type: 'Point' as const,
+                coordinates: [marker.x, marker.z] as [number, number],
+              },
+              symbolIcon: 'person_pin_circle',
+              playerLocation: {
+                serverAccountName,
+                presence: 'online' as const,
+                isCurrentAccount: false,
+                observedAt,
+                lastSeenAt: observedAt,
+              },
+            };
+          }),
       };
     } finally {
       clearTimeout(timeout);
     }
   }
+}
+
+function buildStablePlayerMarkerId(serverAccountName: string): string {
+  const normalized = serverAccountName.trim().toLocaleLowerCase();
+  return `bdslm-player-${encodeURIComponent(normalized).replaceAll('%', '-')}`;
 }
 
 export interface UnminedCustomMarkerProviderConfig {

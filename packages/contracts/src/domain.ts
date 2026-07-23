@@ -6,6 +6,17 @@ export type ColorSchemePreference = 'light' | 'dark' | 'system';
 export type AccentPreferenceMode = 'follow_ldpass' | 'custom';
 export type LocaleCode = 'zh-CN' | 'zh-Hant' | 'en';
 export type LocalePreference = LocaleCode | 'system';
+export type LocalizedLabelMap = Partial<Record<Exclude<LocaleCode, 'zh-CN'>, string>>;
+export type TranslatableEntityKind = 'map_marker' | 'transit_line' | 'transit_station';
+
+export interface EntityTranslationRecord {
+  entityKind: TranslatableEntityKind;
+  entityId: string;
+  sourceText: string;
+  localizedLabels: LocalizedLabelMap;
+  updatedBy: string;
+  updatedAt: ISODateTimeString;
+}
 
 export type TransportMode =
   'metro' | 'tram' | 'bus' | 'coach' | 'ferry' | 'railway' | 'walk' | 'custom';
@@ -161,9 +172,12 @@ export interface PoiSubmission {
   iconFileName?: string;
   description?: string;
   href?: string;
+  imageUrls?: string[];
+  /** @deprecated 兼容旧消费者，值始终等于 imageUrls 的第一项。 */
   imageUrl?: string;
   geometry: MapGeometry;
   parentMarkerId?: string;
+  floorLabel?: string;
   boundRegionMarkerIds?: string[];
   openingHours?: string;
   address?: string;
