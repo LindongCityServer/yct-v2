@@ -41,8 +41,10 @@ const timeOptions: Array<{
 ];
 
 export function TravelScheduleQueryPanel({
+  initialQuery = '',
   result,
 }: Readonly<{
+  initialQuery?: string;
   result: TravelScheduleQueryResult;
 }>) {
   const { t } = useI18n();
@@ -52,7 +54,7 @@ export function TravelScheduleQueryPanel({
   const [destinationFilter, setDestinationFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState<TravelScheduleTimeScope>('all');
   const [serviceDate, setServiceDate] = useState(() => toDateInputValue(new Date()));
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [historyState, setHistoryState] = useState<TravelScheduleHistoryState | null>(null);
   const [ticketOrders, setTicketOrders] = useState<TicketOrderListItem[] | null>(null);
   const [ticketOrderStatusText, setTicketOrderStatusText] = useState('');

@@ -1,6 +1,10 @@
 import type {
   ApiMeta,
+  LocalizedLabelMap,
   TransitModeProfile,
+  TransitLineRouteMode,
+  TransitLineRouteNodeSnapshot,
+  TransitLineSegmentPathSnapshot,
   TransitLineSnapshot,
   TransitModeSnapshotSummary,
   TransitStationSnapshot,
@@ -25,6 +29,7 @@ export interface TransitLineSummary {
   id: string;
   mode: LegacyTransitMode;
   name: string;
+  localizedName?: LocalizedLabelMap;
   color?: string;
   operator?: string;
   fare?: string;
@@ -34,6 +39,9 @@ export interface TransitLineSummary {
   };
   departureTimes?: string[];
   bookingUrl?: string;
+  routeMode?: TransitLineRouteMode;
+  routeNodes?: TransitLineRouteNodeSnapshot[];
+  segmentPaths?: TransitLineSegmentPathSnapshot[];
   stationCount: number;
   stopMetadataCount: number;
   stationNames: string[];
@@ -44,7 +52,9 @@ export interface TransitLineSummary {
 }
 
 export interface TransitLineStopSummary {
+  stationSourceId?: string;
   stationName: string;
+  localizedStationName?: LocalizedLabelMap;
   stationMarkerIds?: string[];
   sequence: number;
   oneWay?: 'up' | 'down';
@@ -343,6 +353,9 @@ export function buildTransitOverview(
       firstLastBus: line.firstLastBus,
       departureTimes: line.departureTimes,
       bookingUrl: line.bookingUrl,
+      routeMode: line.routeMode,
+      routeNodes: line.routeNodes,
+      segmentPaths: line.segmentPaths,
       stationCount: line.stationSourceIds.length,
       stopMetadataCount: countStopMetadata(line.stops),
       stationNames,
@@ -383,6 +396,7 @@ function buildTransitLineStopSummaries(
       }
 
       return {
+        stationSourceId: stop.stationSourceId,
         stationName,
         stationMarkerIds: getTransitStationMarkerIds(stationById.get(stop.stationSourceId)),
         sequence: stop.sequence,

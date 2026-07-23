@@ -81,7 +81,10 @@ export function TransitLineDetailPanel({
       className="transit-line-detail"
       style={{ '--line-detail-color': lineColor } as CSSProperties}
     >
-      <section className="line-detail-card line-detail-identity-card" aria-label={t('lineDetail.overviewAria')}>
+      <section
+        className="line-detail-card line-detail-identity-card"
+        aria-label={t('lineDetail.overviewAria')}
+      >
         <div className="line-detail-title-row">
           <span className="line-mode-icon material-symbols-outlined" aria-hidden="true">
             {modeIcon(line.mode, modeProfileByMode)}
@@ -108,7 +111,11 @@ export function TransitLineDetailPanel({
         className="line-detail-card station-sequence"
         aria-labelledby="station-sequence-title"
       >
-        <div className="line-direction-switch" role="tablist" aria-label={t('lineDetail.directionAria')}>
+        <div
+          className="line-direction-switch"
+          role="tablist"
+          aria-label={t('lineDetail.directionAria')}
+        >
           <button
             className={direction === 'forward' ? 'is-active' : ''}
             type="button"
@@ -143,9 +150,7 @@ export function TransitLineDetailPanel({
                       {detailByStationName.has(stationName) ? (
                         <Link
                           className="station-detail-link"
-                          href={appPath(
-                            `/travel/stations/${encodeURIComponent(line.name)}/${encodeURIComponent(stationName)}`,
-                          )}
+                          href={appPath(`/search?q=${encodeURIComponent(stationName)}`)}
                         >
                           <TitleWithBreaks title={stationName} />
                         </Link>
@@ -175,7 +180,9 @@ export function TransitLineDetailPanel({
       </section>
 
       {line.sourcePath ? (
-        <p className="operation-source-note">{t('lineDetail.source', { source: line.sourcePath })}</p>
+        <p className="operation-source-note">
+          {t('lineDetail.source', { source: line.sourcePath })}
+        </p>
       ) : null}
     </article>
   );

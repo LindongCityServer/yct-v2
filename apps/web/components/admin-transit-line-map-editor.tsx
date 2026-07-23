@@ -78,15 +78,29 @@ interface ViewportSize {
 interface PointerGesture {
   centerX: number;
   centerZ: number;
-  kind: 'add' | 'pan';
+  kind: 'add' | 'move-node' | 'pan';
   longPressTriggered: boolean;
   moved: boolean;
   pointerId: number;
+  pointerType: string;
+  nodeId?: string;
   startClientX: number;
   startClientY: number;
   startX: number;
   startY: number;
   timerId?: number;
+}
+
+interface EditorTouchPoint {
+  clientX: number;
+  clientY: number;
+}
+
+interface EditorPinchGesture {
+  anchorWorld: [number, number];
+  pointerIds: [number, number];
+  startDistance: number;
+  startZoom: number;
 }
 
 interface VisibleTile {
@@ -116,6 +130,8 @@ export function AdminTransitLineMapEditor({
   const router = useRouter();
   const stageRef = useRef<HTMLDivElement | null>(null);
   const gestureRef = useRef<PointerGesture | null>(null);
+  const touchPointersRef = useRef<Map<number, EditorTouchPoint>>(new Map());
+  const pinchGestureRef = useRef<EditorPinchGesture | null>(null);
   const [data, setData] = useState<EditorData | null>(null);
   const [nodes, setNodes] = useState<EditorNode[]>([]);
   const [routeMode, setRouteMode] = useState<'road' | 'straight'>('straight');
@@ -129,6 +145,7 @@ export function AdminTransitLineMapEditor({
   const [status, setStatus] = useState('正在读取线路和地图数据');
   const [isSaving, setIsSaving] = useState(false);
   const [routePanelCollapsed, setRoutePanelCollapsed] = useState(false);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -329,6 +346,30 @@ export function AdminTransitLineMapEditor({
         : undefined;
       const resolvedCoordinate = snapMarker?.geometry.coordinates ?? coordinate;
 
+      const selectedNode = selectedNodeId
+        ? nodes.find((node) => node.id === selectedNodeId)
+        : undefined;
+      if (selectedNode && selectedNode.kind === effectiveTool) {
+        setNodes((current) =>
+          current.map((node) =>
+            node.id === selectedNode.id
+              ? {
+                  ...node,
+                  coordinate: roundCoordinate(resolvedCoordinate),
+                  boundPoiMarkerId: snapMarker?.id,
+                  boundPoiLabel: snapMarker?.label,
+                  ...(node.kind === 'station'
+                    ? { boundPoiCategoryId: snapMarker?.categoryId }
+                    : {}),
+                }
+              : node,
+          ),
+        );
+        setSelectedNodeId(null);
+        setStatus(`已设置${selectedNode.kind === 'station' ? '站点' : '途径点'}坐标。`);
+        return;
+      }
+
       if (effectiveTool === 'waypoint') {
         setNodes((current) =>
           insertEditorNode(
@@ -399,9 +440,11 @@ export function AdminTransitLineMapEditor({
       effectiveTool,
       insertionMode,
       mapView,
+      nodes,
       pointMarkers,
       roadGraph,
       routeMode,
+      selectedNodeId,
     ],
   );
 
@@ -415,19 +458,60 @@ export function AdminTransitLineMapEditor({
     }
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
+    if (event.pointerType === 'touch') {
+      touchPointersRef.current.set(event.pointerId, {
+        clientX: event.clientX,
+        clientY: event.clientY,
+      });
+      if (touchPointersRef.current.size === 2) {
+        const points = Array.from(touchPointersRef.current.entries());
+        const first = points[0];
+        const second = points[1];
+        if (first && second) {
+          const rect = event.currentTarget.getBoundingClientRect();
+          const midpoint = getEditorTouchMidpoint(first[1], second[1]);
+          pinchGestureRef.current = {
+            pointerIds: [first[0], second[0]],
+            startDistance: getEditorTouchDistance(first[1], second[1]),
+            startZoom: mapView.zoom,
+            anchorWorld: unprojectClientPoint(midpoint[0], midpoint[1], rect, mapView),
+          };
+          if (gestureRef.current?.timerId) {
+            window.clearTimeout(gestureRef.current.timerId);
+          }
+          gestureRef.current = null;
+          return;
+        }
+      }
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const hitNodeIndex = isPanGesture
+      ? -1
+      : findNearestEditorNodeScreenIndex(
+          nodes,
+          event.clientX - rect.left,
+          event.clientY - rect.top,
+          mapView,
+          viewportSize,
+          event.pointerType === 'touch' ? 24 : 16,
+        );
+    const hitNode = hitNodeIndex >= 0 ? nodes[hitNodeIndex] : undefined;
+    const canMoveNode = Boolean(hitNode && hitNode.kind === effectiveTool);
     const gesture: PointerGesture = {
       centerX: mapView.centerX,
       centerZ: mapView.centerZ,
-      kind: isPanGesture ? 'pan' : 'add',
+      kind: isPanGesture ? 'pan' : canMoveNode ? 'move-node' : 'add',
       longPressTriggered: false,
       moved: false,
       pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      nodeId: canMoveNode ? hitNode?.id : undefined,
       startClientX: event.clientX,
       startClientY: event.clientY,
       startX: event.clientX,
       startY: event.clientY,
     };
-    if (event.pointerType === 'touch') {
+    if (event.pointerType === 'touch' && gesture.kind === 'add') {
       gesture.timerId = window.setTimeout(() => {
         const current = gestureRef.current;
         if (!current || current.pointerId !== event.pointerId || current.moved) {
@@ -442,6 +526,32 @@ export function AdminTransitLineMapEditor({
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'touch') {
+      touchPointersRef.current.set(event.pointerId, {
+        clientX: event.clientX,
+        clientY: event.clientY,
+      });
+      const pinch = pinchGestureRef.current;
+      if (pinch?.pointerIds.includes(event.pointerId)) {
+        const first = touchPointersRef.current.get(pinch.pointerIds[0]);
+        const second = touchPointersRef.current.get(pinch.pointerIds[1]);
+        if (first && second) {
+          const distance = Math.max(1, getEditorTouchDistance(first, second));
+          const nextZoom = clampZoom(
+            pinch.startZoom + Math.log2(distance / Math.max(1, pinch.startDistance)),
+          );
+          const midpoint = getEditorTouchMidpoint(first, second);
+          const rect = event.currentTarget.getBoundingClientRect();
+          const scale = getEditorScale(nextZoom);
+          setMapView({
+            centerX: pinch.anchorWorld[0] - (midpoint[0] - rect.left - rect.width / 2) / scale,
+            centerZ: pinch.anchorWorld[1] - (midpoint[1] - rect.top - rect.height / 2) / scale,
+            zoom: nextZoom,
+          });
+          return;
+        }
+      }
+    }
     const gesture = gestureRef.current;
     if (!gesture || gesture.pointerId !== event.pointerId) {
       return;
@@ -458,7 +568,28 @@ export function AdminTransitLineMapEditor({
         gesture.timerId = undefined;
       }
     }
-    if (gesture.kind === 'pan') {
+    if (gesture.kind === 'move-node' && gesture.nodeId && gesture.moved) {
+      const stage = stageRef.current;
+      if (stage) {
+        const coordinate = roundCoordinate(
+          unprojectClientPoint(
+            event.clientX,
+            event.clientY,
+            stage.getBoundingClientRect(),
+            mapView,
+          ),
+        );
+        setNodes((current) =>
+          current.map((node) => (node.id === gesture.nodeId ? { ...node, coordinate } : node)),
+        );
+        setSelectedNodeId(gesture.nodeId);
+      }
+      return;
+    }
+    if (
+      gesture.kind === 'pan' ||
+      (gesture.kind === 'add' && gesture.pointerType === 'touch' && gesture.moved)
+    ) {
       const scale = getEditorScale(mapView.zoom);
       setMapView((current) => ({
         ...current,
@@ -469,6 +600,15 @@ export function AdminTransitLineMapEditor({
   };
 
   const finishPointerGesture = (event: ReactPointerEvent<HTMLDivElement>) => {
+    touchPointersRef.current.delete(event.pointerId);
+    if (pinchGestureRef.current?.pointerIds.includes(event.pointerId)) {
+      pinchGestureRef.current = null;
+      gestureRef.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      return;
+    }
     const gesture = gestureRef.current;
     if (!gesture || gesture.pointerId !== event.pointerId) {
       return;
@@ -478,6 +618,9 @@ export function AdminTransitLineMapEditor({
     }
     if (gesture.kind === 'add' && !gesture.moved && !gesture.longPressTriggered) {
       addNodeAtClientPoint(event.clientX, event.clientY);
+    } else if (gesture.kind === 'move-node' && gesture.moved) {
+      setSelectedNodeId(null);
+      setStatus('已移动节点；保存线路后写入坐标。');
     }
     gestureRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -498,8 +641,45 @@ export function AdminTransitLineMapEditor({
     });
   };
 
+  const zoomBy = (delta: number) => {
+    setMapView((current) => ({ ...current, zoom: clampZoom(current.zoom + delta) }));
+  };
+
+  const fitView = () => setMapView(fitEditorView(nodes, data?.markers ?? []));
+
   const updateNode = (id: string, updater: (node: EditorNode) => EditorNode) => {
     setNodes((current) => current.map((node) => (node.id === id ? updater(node) : node)));
+  };
+
+  const focusNode = (node: EditorNode) => {
+    setSelectedNodeId(node.id);
+    setActiveTool(node.kind);
+    const boundMarker = data?.markers.find(
+      (marker) =>
+        marker.geometry.type === 'Point' &&
+        (marker.id === node.boundPoiMarkerId ||
+          (node.boundPoiLabel &&
+            normalizeText(marker.label) === normalizeText(node.boundPoiLabel)) ||
+          (node.kind === 'station' && normalizeText(marker.label) === normalizeText(node.name))),
+    );
+    const focusCoordinate =
+      node.coordinate ??
+      (boundMarker?.geometry.type === 'Point' ? boundMarker.geometry.coordinates : null);
+    if (!focusCoordinate) {
+      setStatus(`请在地图上点击，为“${node.kind === 'station' ? node.name : '途径点'}”设置坐标。`);
+      return;
+    }
+    setMapView((current) => ({
+      ...current,
+      centerX: focusCoordinate[0],
+      centerZ: focusCoordinate[1],
+      zoom: Math.max(current.zoom, 1.5),
+    }));
+    setStatus(
+      node.coordinate
+        ? `已定位到“${node.kind === 'station' ? node.name : '途径点'}”。`
+        : `已定位到匹配的 POI；请在地图点击以确认“${node.kind === 'station' ? node.name : '途径点'}”坐标。`,
+    );
   };
 
   const moveNode = (index: number, offset: -1 | 1) => {
@@ -599,6 +779,50 @@ export function AdminTransitLineMapEditor({
     setIsSaving(true);
     setStatus('正在保存线路');
     try {
+      const originalStationById = new Map(
+        data.revision.stations.map((station) => [station.sourceId, station]),
+      );
+      const changedExistingStations = stationNodes.filter((node) => {
+        if (node.draftClientId || !node.coordinate) {
+          return false;
+        }
+        const original = originalStationById.get(node.stationSourceId);
+        return original?.x !== node.coordinate[0] || original?.z !== node.coordinate[1];
+      });
+      for (const node of changedExistingStations) {
+        setStatus(`正在保存站点“${node.name}”的坐标`);
+        const stationResponse = await fetch(
+          appPath(
+            `/api/admin/transit/datasets/${encodeURIComponent(normalizedRevisionId)}/stations/${encodeURIComponent(node.stationSourceId)}`,
+          ),
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              x: node.coordinate![0],
+              z: node.coordinate![1],
+              boundPoiMarkerId: node.boundPoiMarkerId,
+              boundPoiLabel: node.boundPoiLabel,
+              boundPoiRefs:
+                node.boundPoiMarkerId && node.boundPoiLabel
+                  ? [
+                      {
+                        markerId: node.boundPoiMarkerId,
+                        label: node.boundPoiLabel,
+                        categoryId: node.boundPoiCategoryId,
+                      },
+                    ]
+                  : undefined,
+            }),
+          },
+        );
+        if (!stationResponse.ok) {
+          const stationResult = (await stationResponse.json()) as { message?: string };
+          setStatus(stationResult.message ?? `站点“${node.name}”坐标保存失败。`);
+          return;
+        }
+      }
+      setStatus('正在保存线路');
       const response = await fetch(
         appPath(
           `/api/admin/transit/datasets/${encodeURIComponent(normalizedRevisionId)}/lines/${encodeURIComponent(normalizedLineSourceId)}`,
@@ -805,10 +1029,25 @@ export function AdminTransitLineMapEditor({
         {routePanelCollapsed ? null : (
           <div className="transit-visual-node-list">
             {nodes.map((node, index) => (
-              <div className={`transit-visual-node-row is-${node.kind}`} key={node.id}>
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  {node.kind === 'station' ? 'location_on' : 'add_road'}
-                </span>
+              <div
+                className={`transit-visual-node-row is-${node.kind}${selectedNodeId === node.id ? ' is-selected' : ''}`}
+                key={node.id}
+              >
+                <button
+                  className="transit-visual-node-focus"
+                  type="button"
+                  aria-label={
+                    node.coordinate
+                      ? `在地图定位${node.kind === 'station' ? node.name : '途径点'}`
+                      : `在地图设置${node.kind === 'station' ? node.name : '途径点'}坐标`
+                  }
+                  title={node.coordinate ? '在地图定位' : '在地图设置坐标'}
+                  onClick={() => focusNode(node)}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    {node.kind === 'station' ? 'location_on' : 'add_road'}
+                  </span>
+                </button>
                 <div className="transit-visual-node-main">
                   {node.kind === 'station' && node.draftClientId ? (
                     <input
@@ -942,6 +1181,23 @@ export function AdminTransitLineMapEditor({
         >
           <span className="material-symbols-outlined" aria-hidden="true">
             location_searching
+          </span>
+        </button>
+      </nav>
+      <nav className="transit-visual-viewport-controls" aria-label="地图视野工具">
+        <button type="button" aria-label="放大" title="放大" onClick={() => zoomBy(0.5)}>
+          <span className="material-symbols-outlined" aria-hidden="true">
+            add
+          </span>
+        </button>
+        <button type="button" aria-label="缩小" title="缩小" onClick={() => zoomBy(-0.5)}>
+          <span className="material-symbols-outlined" aria-hidden="true">
+            remove
+          </span>
+        </button>
+        <button type="button" aria-label="适配整条线路" title="适配整条线路" onClick={fitView}>
+          <span className="material-symbols-outlined" aria-hidden="true">
+            fit_screen
           </span>
         </button>
       </nav>
@@ -1431,6 +1687,14 @@ function getEditorScale(zoom: number): number {
 
 function clampZoom(zoom: number): number {
   return Math.min(4, Math.max(-7, zoom));
+}
+
+function getEditorTouchDistance(left: EditorTouchPoint, right: EditorTouchPoint): number {
+  return Math.hypot(left.clientX - right.clientX, left.clientY - right.clientY);
+}
+
+function getEditorTouchMidpoint(left: EditorTouchPoint, right: EditorTouchPoint): [number, number] {
+  return [(left.clientX + right.clientX) / 2, (left.clientY + right.clientY) / 2];
 }
 
 function isPointVisible(point: [number, number], size: ViewportSize, padding: number): boolean {

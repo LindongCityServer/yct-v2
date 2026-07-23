@@ -283,12 +283,7 @@ function isRecentContentPath(url) {
 }
 
 function isRecentTravelPath(appPath) {
-  return (
-    appPath === '/travel/schedules' ||
-    appPath === '/travel/screen' ||
-    appPath.startsWith('/travel/stations/') ||
-    /^\/travel\/[^/]+$/.test(appPath)
-  );
+  return appPath === '/travel/schedules' || appPath === '/travel/screen';
 }
 
 function isRecentMapPath(appPath) {
