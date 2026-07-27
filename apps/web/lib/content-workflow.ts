@@ -20,6 +20,7 @@ import {
   updateContentRecord,
   withRevisionStatus,
 } from './content-store';
+import { readLegacyOperationsDetails } from './legacy-content';
 import { ensureOperationsReminderRefreshListenersRegistered } from './operations-reminder-refresh-listeners';
 
 ensureOperationsReminderRefreshListenersRegistered();
@@ -32,8 +33,71 @@ export interface ContentActionResult {
   message?: string;
 }
 
-export async function listAdminContentRecords(): Promise<StoredContentRecord[]> {
-  return listContentRecords();
+export type AdminContentRecord = StoredContentRecord & {
+  sourceKind: 'legacy_content_data' | 'local_content_store';
+};
+
+export async function listAdminContentRecords(): Promise<AdminContentRecord[]> {
+  const [localRecords, legacyDetails] = await Promise.all([
+    listContentRecords(),
+    readLegacyOperationsDetails(),
+  ]);
+  const localContentIds = new Set(localRecords.map((record) => record.contentId));
+  const legacyRecords = legacyDetails.items
+    .filter((item) => !localContentIds.has(item.id))
+    .map((item) => toLegacyAdminContentRecord(item));
+
+  return [
+    ...localRecords.map((record) => ({ ...record, sourceKind: 'local_content_store' as const })),
+    ...legacyRecords,
+  ];
+}
+
+export async function adoptLegacyContent(input: {
+  contentId: string;
+  actorId: string;
+}): Promise<ContentActionResult> {
+  const existing = await findContentRecord(input.contentId);
+  if (existing) {
+    return { ok: true, record: existing };
+  }
+
+  const legacyDetails = await readLegacyOperationsDetails();
+  const legacyItem = legacyDetails.items.find((item) => item.id === input.contentId);
+  if (!legacyItem) {
+    return {
+      ok: false,
+      status: 404,
+      error: 'legacy_content_not_found',
+      message: '未找到可接管的旧消息。',
+    };
+  }
+
+  const record = await createContentRecord({
+    contentId: legacyItem.id,
+    title: legacyItem.title,
+    categoryId: legacyItem.categoryId,
+    markdown: legacyItem.markdown,
+    assetIds: [],
+    actorId: input.actorId,
+    metadata: {
+      excerpt: legacyItem.excerpt,
+      showInBanner: legacyItem.showInBanner,
+      bannerSortOrder: legacyItem.bannerSortOrder,
+      coverColor: legacyItem.coverColor,
+      coverImageUrl: legacyItem.coverImageUrl,
+      expiresAt: legacyItem.expiresAt,
+    },
+  });
+
+  await emitEvent('ContentLegacyAdopted', input.actorId, {
+    contentId: record.contentId,
+    revisionId: record.revision.id,
+    legacySourceId: legacyItem.id,
+    title: record.revision.title,
+  });
+
+  return { ok: true, record };
 }
 
 export async function createContentDraft(input: {
@@ -335,6 +399,37 @@ function notFound(): ContentActionResult {
     status: 404,
     error: 'content_not_found',
     message: '内容记录不存在。',
+  };
+}
+
+function toLegacyAdminContentRecord(
+  item: Awaited<ReturnType<typeof readLegacyOperationsDetails>>['items'][number],
+): AdminContentRecord {
+  const timestamp = item.publishedAt ?? '1970-01-01T00:00:00.000Z';
+  return {
+    contentId: item.id,
+    revision: {
+      id: `legacy_revision_${item.id}`,
+      contentId: item.id,
+      title: item.title,
+      categoryId: item.categoryId,
+      markdown: item.markdown,
+      assetIds: [],
+      status: 'published',
+      publishedAt: item.publishedAt,
+    },
+    metadata: {
+      excerpt: item.excerpt,
+      showInBanner: item.showInBanner,
+      bannerSortOrder: item.bannerSortOrder,
+      customTags: item.customTags,
+      coverColor: item.coverColor,
+      coverImageUrl: item.coverImageUrl,
+      expiresAt: item.expiresAt,
+    },
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    sourceKind: 'legacy_content_data',
   };
 }
 

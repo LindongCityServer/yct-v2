@@ -57,6 +57,13 @@ export interface ContentDraftUpdatedPayload {
   previousStatus: 'draft' | 'pending_review' | 'approved' | 'rejected' | 'published';
 }
 
+export interface ContentLegacyAdoptedPayload {
+  contentId: string;
+  revisionId: string;
+  legacySourceId: string;
+  title: string;
+}
+
 export interface ContentReviewedPayload {
   contentId: string;
   revisionId: string;
@@ -917,6 +924,7 @@ export interface AdminMembershipUpdatedPayload {
 
 export type YctEventPayloadMap = {
   ContentDraftUpdated: ContentDraftUpdatedPayload;
+  ContentLegacyAdopted: ContentLegacyAdoptedPayload;
   ContentSubmitted: ContentSubmittedPayload;
   ContentReviewed: ContentReviewedPayload;
   ContentPublished: ContentPublishedPayload;

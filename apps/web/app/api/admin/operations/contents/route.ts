@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireYctAdmin } from '../../../../../lib/admin-auth';
 import { adminContentDraftSchema } from '../../../../../lib/admin-content-draft-schema';
-import { createContentDraft, listAdminContentRecords } from '../../../../../lib/content-workflow';
+import {
+  createContentDraft,
+  listAdminContentRecords,
+} from '../../../../../lib/content-workflow';
 
 export async function GET(request: NextRequest) {
   const admin = await requireYctAdmin(request);

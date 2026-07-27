@@ -71,6 +71,7 @@ export async function findContentRecord(
 }
 
 export async function createContentRecord(input: {
+  contentId?: string;
   title: string;
   categoryId: string;
   markdown: string;
@@ -80,7 +81,7 @@ export async function createContentRecord(input: {
 }): Promise<StoredContentRecord> {
   const snapshot = await readSnapshot();
   const now = new Date().toISOString();
-  const contentId = `local_content_${randomUUID()}`;
+  const contentId = input.contentId?.trim() || `local_content_${randomUUID()}`;
   const revisionId = `local_revision_${randomUUID()}`;
   const record: StoredContentRecord = {
     contentId,

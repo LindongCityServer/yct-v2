@@ -27,13 +27,15 @@ export async function readOperationsFeed(): Promise<ApiListResponse<OperationsFe
   const localItems = localDetails.items.map(
     ({ markdown: _markdown, sourceKind: _sourceKind, ...item }) => item,
   );
+  const localContentIds = new Set(localItems.map((item) => item.id));
+  const legacyItems = legacyFeed.items.filter((item) => !localContentIds.has(item.id));
 
   return {
     meta: createApiMeta(
-      localItems.length > 0 || legacyFeed.items.length > 0 ? 'ready' : legacyFeed.meta.sourceStatus,
+      localItems.length > 0 || legacyItems.length > 0 ? 'ready' : legacyFeed.meta.sourceStatus,
       legacyFeed.meta.message,
     ),
-    items: [...localItems, ...legacyFeed.items].sort(comparePublishedAtDesc),
+    items: [...localItems, ...legacyItems].sort(comparePublishedAtDesc),
   };
 }
 
@@ -59,15 +61,17 @@ export async function readOperationsDetails(): Promise<ApiListResponse<Operation
     readLocalOperationsDetails(),
     readLegacyOperationsDetails(),
   ]);
+  const localContentIds = new Set(localDetails.items.map((item) => item.id));
+  const legacyItems = legacyDetails.items.filter((item) => !localContentIds.has(item.id));
 
   return {
     meta: createApiMeta(
-      localDetails.items.length > 0 || legacyDetails.items.length > 0
+      localDetails.items.length > 0 || legacyItems.length > 0
         ? 'ready'
         : legacyDetails.meta.sourceStatus,
       legacyDetails.meta.message,
     ),
-    items: [...localDetails.items, ...legacyDetails.items].sort(comparePublishedAtDesc),
+    items: [...localDetails.items, ...legacyItems].sort(comparePublishedAtDesc),
   };
 }
 

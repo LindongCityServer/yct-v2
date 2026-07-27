@@ -30,6 +30,7 @@ interface AdminContentMetadata {
 
 interface AdminContentRecord {
   contentId: string;
+  sourceKind?: 'legacy_content_data' | 'local_content_store';
   revision: {
     id: string;
     title: string;
@@ -899,6 +900,31 @@ export function AdminOperationsPanel() {
               ? '已载入已发布内容，保存后会直接覆盖当前公开内容。'
               : '已载入草稿，可继续编辑。',
     );
+  };
+
+  const adoptLegacyRecordToEditor = async (record: AdminContentRecord) => {
+    setIsBusy(true);
+    try {
+      const response = await fetch(appPath('/api/admin/operations/contents/adopt-legacy'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contentId: record.contentId }),
+      });
+      const data = (await response.json()) as AdminContentRecord & { message?: string };
+      if (!response.ok || !data.contentId) {
+        setStatusText(data.message ?? '接管旧消息失败。');
+        return;
+      }
+
+      setRecords((current) => [
+        ...current.filter((item) => item.contentId !== data.contentId),
+        { ...data, sourceKind: 'local_content_store' },
+      ]);
+      loadRecordToEditor({ ...data, sourceKind: 'local_content_store' });
+      setStatusText('旧消息已接管为本地草稿。公开页会继续显示旧版本，待新草稿发布后替换。');
+    } finally {
+      setIsBusy(false);
+    }
   };
 
   const loadReminderToEditor = (rule: OperationsStrongReminderRule) => {
@@ -2496,6 +2522,9 @@ export function AdminOperationsPanel() {
                       {record.metadata.customTags?.length
                         ? ` · 标签 ${record.metadata.customTags.join(' / ')}`
                         : ''}
+                      {record.sourceKind === 'legacy_content_data'
+                        ? ' · 旧项目数据（接管后可编辑）'
+                        : ''}
                     </p>
                     {record.revision.reviewReason ? (
                       <p className="muted">{`驳回原因：${record.revision.reviewReason}`}</p>
@@ -2510,9 +2539,15 @@ export function AdminOperationsPanel() {
                         record.revision.status === 'archived' ||
                         editingContentId === record.contentId
                       }
-                      onClick={() => loadRecordToEditor(record)}
+                      onClick={() => {
+                        if (record.sourceKind === 'legacy_content_data') {
+                          void adoptLegacyRecordToEditor(record);
+                          return;
+                        }
+                        loadRecordToEditor(record);
+                      }}
                     >
-                      编辑
+                      {record.sourceKind === 'legacy_content_data' ? '接管编辑' : '编辑'}
                     </button>
                     <button
                       type="button"
