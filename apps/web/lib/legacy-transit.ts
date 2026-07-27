@@ -7,10 +7,12 @@ import type {
   TransitLineSegmentPathSnapshot,
   TransitLineSnapshot,
   TransitModeSnapshotSummary,
+  TransitStationDetailSnapshot,
   TransitStationSnapshot,
 } from '@yct/contracts';
 import {
   normalizeLegacyCoachStationName,
+  parseLegacyMetroStationDetailSource,
   parseLegacyCoachRouteSource,
   parseLegacyTransitSource,
   type LegacyTransitMode,
@@ -31,6 +33,7 @@ export interface TransitLineSummary {
   name: string;
   localizedName?: LocalizedLabelMap;
   color?: string;
+  maxCarCount?: number;
   operator?: string;
   fare?: string;
   firstLastBus?: {
@@ -60,6 +63,7 @@ export interface TransitLineStopSummary {
   oneWay?: 'up' | 'down';
   status?: string;
   travelTime?: number;
+  platformSide?: string;
 }
 
 export interface TransitModeSummary {
@@ -73,6 +77,7 @@ export interface TransitOverview {
   meta: ApiMeta;
   summary: TransitModeSummary[];
   lines: TransitLineSummary[];
+  stationDetails?: TransitStationDetailSnapshot[];
   modeProfiles?: TransitModeProfile[];
 }
 
@@ -83,6 +88,7 @@ export interface LegacyTransitSnapshot {
   summary: TransitModeSnapshotSummary[];
   lines: TransitLineSnapshot[];
   stations: TransitStationSnapshot[];
+  stationDetails: TransitStationDetailSnapshot[];
 }
 
 interface LegacyTransitSource {
@@ -186,6 +192,16 @@ async function readLegacyTransitSnapshotUncached(
   const lines: TransitLineSnapshot[] = [];
   const stationMap = new Map<string, TransitStationSnapshot>();
   const sourceFiles: string[] = [];
+  const stationDetailsResult = await readLegacyMetroStationDetails(config);
+  let stationDetails = stationDetailsResult?.items ?? [];
+  if (stationDetailsResult?.sourcePath) {
+    sourceFiles.push(stationDetailsResult.sourcePath);
+  }
+  const maxCarCountByLine = new Map(
+    stationDetails
+      .filter((detail) => detail.maxCarCount !== undefined)
+      .map((detail) => [detail.lineName, detail.maxCarCount] as const),
+  );
   const parsedSources = await Promise.all(
     legacyTransitSources.map((source) => readAndParseLegacyTransitSource(config, source)),
   );
@@ -232,6 +248,7 @@ async function readLegacyTransitSnapshotUncached(
         stationSourceIds: line.stationSourceIds,
         stops: line.stops ?? [],
         color: line.color,
+        maxCarCount: line.maxCarCount ?? maxCarCountByLine.get(line.name),
         operator: line.operator,
         fare: line.fare,
         firstLastBus: line.firstLastBus,
@@ -248,6 +265,17 @@ async function readLegacyTransitSnapshotUncached(
     };
   }
 
+  stationDetails = stationDetails.map((detail) => {
+    const line = lines.find((candidate) => candidate.name === detail.lineName);
+    const stationId = line?.stationSourceIds.find(
+      (candidate) => stationMap.get(candidate)?.name === detail.stationName,
+    );
+    const stop = line?.stops.find((candidate) => candidate.stationSourceId === stationId);
+    return stop?.platformSide
+      ? { ...detail, platformSide: normalizePlatformSide(stop.platformSide) }
+      : detail;
+  });
+
   return {
     meta: createApiMeta('ready'),
     snapshot: {
@@ -260,8 +288,31 @@ async function readLegacyTransitSnapshotUncached(
       summary,
       lines,
       stations: Array.from(stationMap.values()),
+      stationDetails: stationDetails.map(({ maxCarCount: _maxCarCount, ...detail }) => detail),
     },
   };
+}
+
+async function readLegacyMetroStationDetails(
+  config: RuntimeConfig,
+): Promise<{ sourcePath: string; items: Array<TransitStationDetailSnapshot & { maxCarCount?: number }> } | null> {
+  try {
+    const legacyFile = await readLegacyDataSourceFile(config, 'metro_station_detail.js');
+    return {
+      sourcePath: legacyFile.sourcePath,
+      items: parseLegacyMetroStationDetailSource({
+        source: legacyFile.source,
+        sourcePath: legacyFile.sourcePath,
+        sourcePrefix: 'metro-station-detail',
+      }) as Array<TransitStationDetailSnapshot & { maxCarCount?: number }>,
+    };
+  } catch (error) {
+    if (error instanceof LegacyDataSourceNotConfiguredError) {
+      return null;
+    }
+    return null;
+  }
+
 }
 
 async function readAndParseLegacyTransitSource(
@@ -327,7 +378,8 @@ export async function readLegacyTransitOverview(): Promise<TransitOverview> {
 }
 
 export function buildTransitOverview(
-  snapshot: Pick<LegacyTransitSnapshot, 'summary' | 'lines' | 'stations'>,
+  snapshot: Pick<LegacyTransitSnapshot, 'summary' | 'lines' | 'stations'> &
+    Partial<Pick<LegacyTransitSnapshot, 'stationDetails'>>,
   meta: ApiMeta,
 ): TransitOverview {
   const stationById = new Map(snapshot.stations.map((station) => [station.sourceId, station]));
@@ -347,6 +399,7 @@ export function buildTransitOverview(
       id: line.sourceId,
       mode: line.mode,
       name: line.name,
+      maxCarCount: line.maxCarCount,
       color: line.color,
       operator: line.operator,
       fare: line.fare,
@@ -370,6 +423,7 @@ export function buildTransitOverview(
     meta,
     summary: snapshot.summary,
     lines,
+    stationDetails: snapshot.stationDetails,
   };
 }
 
@@ -403,6 +457,7 @@ function buildTransitLineStopSummaries(
         oneWay: stop.oneWay,
         status: stop.status,
         travelTime: stop.travelTime,
+        platformSide: stop.platformSide,
       };
     })
     .filter((stop): stop is TransitLineStopSummary => Boolean(stop))
@@ -436,6 +491,14 @@ function normalizeTransitStationName(
 
 function mergeAliases(left: string[], right: string[]): string[] {
   return Array.from(new Set([...left, ...right].filter(Boolean)));
+}
+
+function normalizePlatformSide(
+  value: string,
+): TransitStationDetailSnapshot['platformSide'] | undefined {
+  return value === 'left' || value === 'right' || value === 'both' || value === 'none'
+    ? value
+    : undefined;
 }
 
 function countStopMetadata(lineStops: TransitLineSnapshot['stops']): number {

@@ -14,10 +14,15 @@ const emptySnapshot: ServiceEntryStoreSnapshot = {
   entries: [],
 };
 
+const retiredDefaultServiceEntryIds = new Set(['default-dynamic-routemap']);
+
 export async function listServiceEntries(): Promise<ServiceEntry[]> {
   const snapshot = await readSnapshot();
   const entriesById = new Map(buildDefaultServiceEntries().map((entry) => [entry.id, entry]));
   for (const entry of snapshot.entries) {
+    if (retiredDefaultServiceEntryIds.has(entry.id)) {
+      continue;
+    }
     entriesById.set(entry.id, entry);
   }
   return [...entriesById.values()].sort(compareServiceEntries);
@@ -29,6 +34,9 @@ export async function listPublishedServiceEntries(): Promise<ServiceEntry[]> {
 }
 
 export async function findLocalServiceEntry(id: string): Promise<ServiceEntry | undefined> {
+  if (retiredDefaultServiceEntryIds.has(id)) {
+    return undefined;
+  }
   const snapshot = await readSnapshot();
   return (
     snapshot.entries.find((entry) => entry.id === id) ??
@@ -182,18 +190,6 @@ function buildDefaultServiceEntries(): ServiceEntry[] {
       openMode: 'new_tab',
       status: 'published',
       sortOrder: 20,
-      publishedAt: now,
-    },
-    {
-      id: 'default-dynamic-routemap',
-      title: '动态线路图',
-      description: '旧动态线路图生成工具。',
-      categoryId: 'toolbox',
-      icon: 'cast',
-      href: `${legacyBaseUrl}/dynamic_routemap/`,
-      openMode: 'new_tab',
-      status: 'published',
-      sortOrder: 10,
       publishedAt: now,
     },
     {

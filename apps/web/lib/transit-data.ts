@@ -28,6 +28,7 @@ async function readTransitOverviewUncached(): Promise<TransitOverview> {
           summary: publishedSnapshot.summary,
           lines: publishedSnapshot.lines,
           stations: publishedSnapshot.stations,
+          stationDetails: publishedSnapshot.stationDetails,
         },
         createApiMeta(
           'ready',

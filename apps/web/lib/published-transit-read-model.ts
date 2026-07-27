@@ -4,6 +4,7 @@ import { listTransitDataRevisions } from './transit-data-store';
 export interface PublishedTransitEntitySnapshot {
   lines: TransitDataRevision['lines'];
   stations: TransitDataRevision['stations'];
+  stationDetails: NonNullable<TransitDataRevision['stationDetails']>;
   summary: TransitModeSnapshotSummary[];
   publishedAt?: string;
   sourceRevisionIds: string[];
@@ -62,6 +63,13 @@ export async function readPublishedTransitEntitySnapshot(): Promise<
   const sourceRevisionIds = Array.from(
     new Set(selectedLines.map(({ revision }) => revision.revisionId)),
   );
+  const stationDetails = Array.from(
+    new Map(
+      selectedLines.flatMap(({ revision }) =>
+        (revision.stationDetails ?? []).map((detail) => [detail.sourceId, detail] as const),
+      ),
+    ).values(),
+  );
   const publishedAt = selectedLines
     .map(({ line, revision }) => line.publishedAt ?? revision.publishedAt)
     .filter((value): value is string => Boolean(value))
@@ -71,6 +79,7 @@ export async function readPublishedTransitEntitySnapshot(): Promise<
   return {
     lines,
     stations,
+    stationDetails,
     summary: buildPublishedTransitSummary(lines, stations),
     publishedAt,
     sourceRevisionIds,

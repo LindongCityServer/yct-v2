@@ -3,6 +3,7 @@
 import type { TransitScreenGate, TransitScreenSnapshot, TransitScreenTrip } from '@yct/contracts';
 import { useMemo, useState } from 'react';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+import { formatFareTextWithoutCurrencyUnit } from '../lib/fare-display';
 
 type TimeFilter = 'all' | 'upcoming' | 'past';
 
@@ -226,7 +227,7 @@ function TripItem({
         />
         <MetaItem
           label={t('travel.screenDetail.fare')}
-          value={trip.fare ?? t('lineDetail.toBeAdded')}
+          value={formatFareTextWithoutCurrencyUnit(trip.fare) ?? t('lineDetail.toBeAdded')}
         />
         <MetaItem
           label={t('travel.screenDetail.operator')}

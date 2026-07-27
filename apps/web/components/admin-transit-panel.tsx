@@ -10,6 +10,7 @@ import type {
   TransitItemApprovalStatus,
   TransitLineRouteNodeSnapshot,
   TransitModeProfile,
+  TransitStationDetailSnapshot,
   TravelScheduleQueryResult,
   TravelScheduleRevision,
   TravelScheduleRevisionStatus,
@@ -22,6 +23,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { appPath } from '../lib/app-paths';
 import { EmbeddedMapLocationPicker } from './embedded-map-location-picker';
+import type { TransitStationDetailUpdateInput } from '@yct/schemas';
 
 type TransitStatusFilter = TransitItemApprovalStatus | 'all' | 'todo' | 'legacy';
 type ScheduleStatusFilter = TransitItemApprovalStatus | 'all' | 'todo' | 'legacy';
@@ -37,6 +39,7 @@ interface TransitLineEditorSubmitPayload {
   mode: TransitRevisionLine['mode'];
   name: string;
   color?: string;
+  maxCarCount?: number;
   routeMode?: TransitRevisionLine['routeMode'];
   routeNodes?: TransitLineRouteNodeSnapshot[];
   stationSourceIds: string[];
@@ -234,6 +237,10 @@ export function AdminTransitPanel() {
   const [stationEditTarget, setStationEditTarget] = useState<{
     revision: TransitDataRevision;
     station: TransitRevisionStation;
+  } | null>(null);
+  const [stationDetailEditTarget, setStationDetailEditTarget] = useState<{
+    revision: TransitDataRevision;
+    detail: TransitStationDetailSnapshot;
   } | null>(null);
   const [lineEditTarget, setLineEditTarget] = useState<{
     revision: TransitDataRevision;
@@ -829,6 +836,52 @@ export function AdminTransitPanel() {
       );
       setLineCreateTarget((current) => (current?.revisionId === data.revisionId ? data : current));
       setStatusText(`已修正站点坐标：${stationSourceId}`);
+      return null;
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const updateTransitStationDetail = async (
+    revisionId: string,
+    detailSourceId: string,
+    patch: TransitStationDetailUpdateInput,
+  ): Promise<string | null> => {
+    setIsBusy(true);
+    try {
+      const response = await fetch(
+        appPath(
+          `/api/admin/transit/datasets/${encodeURIComponent(
+            revisionId,
+          )}/stations/${encodeURIComponent(detailSourceId)}/details`,
+        ),
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        },
+      );
+      const data = (await response.json()) as TransitDataRevision & { message?: string };
+      if (!response.ok) {
+        return data.message ?? '站内设施信息保存失败';
+      }
+
+      setRevisions((current) =>
+        current.map((revision) => (revision.revisionId === data.revisionId ? data : revision)),
+      );
+      setLineEditTarget((current) =>
+        current?.revision.revisionId === data.revisionId ? { ...current, revision: data } : current,
+      );
+      setStationDetailEditTarget((current) => {
+        if (current?.revision.revisionId !== data.revisionId) {
+          return current;
+        }
+        const detail = data.stationDetails?.find(
+          (candidate) => candidate.sourceId === detailSourceId,
+        );
+        return detail ? { revision: data, detail } : null;
+      });
+      setStatusText(`已更新站内设施信息：${detailSourceId}`);
       return null;
     } finally {
       setIsBusy(false);
@@ -1782,6 +1835,25 @@ export function AdminTransitPanel() {
           }}
         />
       ) : null}
+      {stationDetailEditTarget ? (
+        <TransitStationDetailDialog
+          isBusy={isBusy}
+          revision={stationDetailEditTarget.revision}
+          detail={stationDetailEditTarget.detail}
+          onClose={() => setStationDetailEditTarget(null)}
+          onSubmit={async (patch) => {
+            const error = await updateTransitStationDetail(
+              stationDetailEditTarget.revision.revisionId,
+              stationDetailEditTarget.detail.sourceId,
+              patch,
+            );
+            if (!error) {
+              setStationDetailEditTarget(null);
+            }
+            return error;
+          }}
+        />
+      ) : null}
       {lineEditTarget ? (
         <TransitLineEditorDialog
           isBusy={isBusy}
@@ -1792,6 +1864,9 @@ export function AdminTransitPanel() {
           onClose={() => setLineEditTarget(null)}
           onEditStation={(station) =>
             setStationEditTarget({ revision: lineEditTarget.revision, station })
+          }
+          onEditStationDetail={(detail) =>
+            setStationDetailEditTarget({ revision: lineEditTarget.revision, detail })
           }
           onSubmit={(payload) =>
             saveTransitLine(
@@ -1810,6 +1885,7 @@ export function AdminTransitPanel() {
           tilePreviewTemplate={tilePreviewTemplate}
           onClose={() => setLineCreateTarget(null)}
           onEditStation={(station) => setStationEditTarget({ revision: lineCreateTarget, station })}
+          onEditStationDetail={() => undefined}
           onSubmit={(payload) => saveTransitLine(lineCreateTarget.revisionId, payload)}
         />
       ) : null}
@@ -3006,12 +3082,278 @@ function TransitStationCoordinatePicker({
   );
 }
 
+type TransitStationFacilityEdit = TransitStationDetailSnapshot['facilities'][number];
+type TransitStationTransferEdit = TransitStationDetailSnapshot['transfers'][number];
+type TransitStationExitEdit = TransitStationDetailSnapshot['exits'][number];
+
+function formatStationDetailLayers(layers: TransitStationDetailSnapshot['layers']): string {
+  return layers.map((layer) => `${layer.floor} | ${layer.type}`).join('\n');
+}
+
+function formatStationDetailFacilities(facilities: TransitStationFacilityEdit[]): string {
+  return facilities
+    .map((facility) =>
+      [
+        facility.type,
+        facility.location === undefined ? '' : String(facility.location),
+        facility.floor ?? '',
+        facility.endFloor ?? '',
+        facility.direction ?? '',
+        facility.oneWay ?? '',
+        facility.orientation ?? '',
+      ].join(' | '),
+    )
+    .join('\n');
+}
+
+function formatStationDetailTransfers(transfers: TransitStationTransferEdit[]): string {
+  return transfers
+    .map((transfer) =>
+      [
+        transfer.line,
+        transfer.floor ?? '',
+        transfer.direction ?? '',
+        transfer.location === undefined ? '' : String(transfer.location),
+        transfer.transferDirection ?? '',
+      ].join(' | '),
+    )
+    .join('\n');
+}
+
+function formatStationDetailExits(exits: TransitStationExitEdit[]): string {
+  return exits
+    .map((exit) =>
+      [exit.code, exit.description ?? '', exit.floor ?? '', exit.direction ?? '', exit.orientation ?? ''].join(
+        ' | ',
+      ),
+    )
+    .join('\n');
+}
+
+function splitStationDetailRows(value: string): string[][] {
+  return value
+    .split(/\r?\n/)
+    .map((row) => row.trim())
+    .filter(Boolean)
+    .map((row) => row.split('|').map((cell) => cell.trim()));
+}
+
+function optionalStationDetailNumber(value: string | undefined): number | undefined {
+  const text = value?.trim() ?? '';
+  if (!text) {
+    return undefined;
+  }
+  const number = Number(text);
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function parseStationDetailLayers(value: string): TransitStationDetailSnapshot['layers'] {
+  return splitStationDetailRows(value).map(([floor = '', type = ''], index) => ({
+    floor,
+    type,
+    order: index,
+  }));
+}
+
+function parseStationDetailFacilities(value: string): TransitStationFacilityEdit[] {
+  return splitStationDetailRows(value).map(
+    ([type = '', location, floor, endFloor, direction, oneWay, orientation]) => ({
+      type,
+      location: optionalStationDetailNumber(location),
+      floor: floor || undefined,
+      endFloor: endFloor || undefined,
+      direction: direction || undefined,
+      oneWay: oneWay || undefined,
+      orientation: orientation || undefined,
+    }),
+  );
+}
+
+function parseStationDetailTransfers(value: string): TransitStationTransferEdit[] {
+  return splitStationDetailRows(value).map(
+    ([line = '', floor, direction, location, transferDirection]) => ({
+      line,
+      floor: floor || undefined,
+      direction: direction || undefined,
+      location: optionalStationDetailNumber(location),
+      transferDirection:
+        transferDirection === 'upwards' || transferDirection === 'downwards'
+          ? transferDirection
+          : undefined,
+    }),
+  );
+}
+
+function parseStationDetailExits(value: string): TransitStationExitEdit[] {
+  return splitStationDetailRows(value).map(([code = '', description, floor, direction, orientation]) => ({
+    code,
+    description: description || undefined,
+    floor: floor || undefined,
+    direction: direction === 'upwards' || direction === 'downwards' ? direction : undefined,
+    orientation: orientation || undefined,
+  }));
+}
+
+function TransitStationDetailDialog({
+  detail,
+  isBusy,
+  onClose,
+  onSubmit,
+  revision,
+}: Readonly<{
+  detail: TransitStationDetailSnapshot;
+  isBusy: boolean;
+  onClose: () => void;
+  onSubmit: (patch: TransitStationDetailUpdateInput) => Promise<string | null>;
+  revision: TransitDataRevision;
+}>) {
+  const [platformSide, setPlatformSide] = useState(detail.platformSide ?? 'none');
+  const [overGround, setOverGround] = useState(Boolean(detail.overGround));
+  const [layersText, setLayersText] = useState(formatStationDetailLayers(detail.layers));
+  const [facilitiesText, setFacilitiesText] = useState(
+    formatStationDetailFacilities(detail.facilities),
+  );
+  const [facilitiesUpwardsText, setFacilitiesUpwardsText] = useState(
+    formatStationDetailFacilities(detail.facilitiesUpwards ?? []),
+  );
+  const [transfersText, setTransfersText] = useState(formatStationDetailTransfers(detail.transfers));
+  const [exitsText, setExitsText] = useState(formatStationDetailExits(detail.exits));
+  const [surroundingText, setSurroundingText] = useState(detail.surroundingStationNames.join('\n'));
+  const [swapExitLayersText, setSwapExitLayersText] = useState(
+    detail.swapExitLayers?.join(', ') ?? '',
+  );
+  const [flipTemplateForUpwards, setFlipTemplateForUpwards] = useState(
+    Boolean(detail.flipTemplateForUpwards),
+  );
+  const [error, setError] = useState('');
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const swapExitLayers = swapExitLayersText
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const patch: TransitStationDetailUpdateInput = {
+      platformSide,
+      overGround,
+      layers: parseStationDetailLayers(layersText),
+      facilities: parseStationDetailFacilities(facilitiesText),
+      facilitiesUpwards: parseStationDetailFacilities(facilitiesUpwardsText),
+      transfers: parseStationDetailTransfers(transfersText),
+      exits: parseStationDetailExits(exitsText),
+      surroundingStationNames: surroundingText
+        .split(/\r?\n/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+      swapExitLayers:
+        swapExitLayers.length === 2 ? [swapExitLayers[0], swapExitLayers[1]] : undefined,
+      flipTemplateForUpwards,
+    };
+    const submitError = await onSubmit(patch);
+    if (submitError) {
+      setError(submitError);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop transit-station-detail-backdrop" role="presentation" onMouseDown={onClose}>
+      <form
+        className="modal-panel admin-transit-dialog transit-station-detail-editor"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-transit-station-detail-title"
+        onMouseDown={(event) => event.stopPropagation()}
+        onSubmit={submit}
+      >
+        <div className="section-heading">
+          <h2 id="admin-transit-station-detail-title">编辑站内设施信息</h2>
+          <span className="muted">
+            {revision.revisionId} · {detail.lineName} · {detail.stationName}
+          </span>
+        </div>
+        <div className="transit-station-detail-editor-grid">
+          <label>
+            <span>站台开门侧</span>
+            <select value={platformSide} onChange={(event) => setPlatformSide(event.currentTarget.value as typeof platformSide)}>
+              <option value="left">左侧</option>
+              <option value="right">右侧</option>
+              <option value="both">两侧</option>
+              <option value="none">未设置</option>
+            </select>
+          </label>
+          <label className="transit-station-detail-checkbox">
+            <input type="checkbox" checked={overGround} onChange={(event) => setOverGround(event.currentTarget.checked)} />
+            <span>地面站</span>
+          </label>
+          <label className="transit-station-detail-checkbox">
+            <input
+              type="checkbox"
+              checked={flipTemplateForUpwards}
+              onChange={(event) => setFlipTemplateForUpwards(event.currentTarget.checked)}
+            />
+            <span>上行反转站台模板</span>
+          </label>
+          <label>
+            <span>出口楼层互换（两项逗号分隔）</span>
+            <input value={swapExitLayersText} onChange={(event) => setSwapExitLayersText(event.currentTarget.value)} placeholder="B1, B2" />
+          </label>
+        </div>
+        <StationDetailEditorTextarea label="楼层（每行：楼层 | 性质）" value={layersText} onChange={setLayersText} />
+        <StationDetailEditorTextarea
+          label="下行方向设施（每行：类型 | 相对位置 | 所在层 | 终点层 | 开口方向 | 单向 | 朝向）"
+          value={facilitiesText}
+          onChange={setFacilitiesText}
+        />
+        <StationDetailEditorTextarea
+          label="上行方向设施（格式同上，可留空；有值时地图可切换）"
+          value={facilitiesUpwardsText}
+          onChange={setFacilitiesUpwardsText}
+        />
+        <StationDetailEditorTextarea
+          label="换乘（每行：线路 | 楼层 | 标记方向 | 相对位置 | 适用行车方向 upwards/downwards）"
+          value={transfersText}
+          onChange={setTransfersText}
+        />
+        <StationDetailEditorTextarea
+          label="出口（每行：编号 | 说明 | 楼层 | upwards/downwards | 朝向）"
+          value={exitsText}
+          onChange={setExitsText}
+        />
+        <StationDetailEditorTextarea label="周边站名（每行一个）" value={surroundingText} onChange={setSurroundingText} />
+        {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
+        <div className="admin-content-actions">
+          <button type="button" onClick={onClose} disabled={isBusy}>
+            取消
+          </button>
+          <button type="submit" disabled={isBusy}>
+            保存站内信息
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function StationDetailEditorTextarea({
+  label,
+  onChange,
+  value,
+}: Readonly<{ label: string; onChange: (value: string) => void; value: string }>) {
+  return (
+    <label className="transit-station-detail-editor-field">
+      <span>{label}</span>
+      <textarea rows={3} value={value} onChange={(event) => onChange(event.currentTarget.value)} />
+    </label>
+  );
+}
+
 function TransitLineEditorDialog({
   isBusy,
   line,
   modeProfiles,
   onClose,
   onEditStation,
+  onEditStationDetail,
   onSubmit,
   revision,
   tilePreviewTemplate,
@@ -3021,6 +3363,7 @@ function TransitLineEditorDialog({
   modeProfiles: TransitModeProfile[];
   onClose: () => void;
   onEditStation: (station: TransitRevisionStation) => void;
+  onEditStationDetail: (detail: TransitStationDetailSnapshot) => void;
   onSubmit: (payload: TransitLineEditorSubmitPayload) => Promise<TransitLineEditorSubmitResult>;
   revision: TransitDataRevision;
   tilePreviewTemplate: string | null;
@@ -3030,6 +3373,9 @@ function TransitLineEditorDialog({
   const [mode, setMode] = useState<TransitRevisionLine['mode']>(initialMode);
   const [name, setName] = useState(line?.name ?? '');
   const [color, setColor] = useState(line?.color ?? '');
+  const [maxCarCount, setMaxCarCount] = useState(
+    line?.maxCarCount === undefined ? '' : String(line.maxCarCount),
+  );
   const [operator, setOperator] = useState(line?.operator ?? '');
   const [fare, setFare] = useState(line?.fare ?? '');
   const [firstBus, setFirstBus] = useState(line?.firstLastBus?.first ?? '');
@@ -3091,6 +3437,7 @@ function TransitLineEditorDialog({
       mode,
       name: name.trim(),
       color: color.trim() || undefined,
+      maxCarCount: maxCarCount.trim() ? Number(maxCarCount) : undefined,
       routeMode,
       routeNodes: parsedRoute.routeNodes,
       stationSourceIds: parsedStationSourceIds,
@@ -3263,6 +3610,17 @@ function TransitLineEditorDialog({
                 </span>
               </label>
               <label>
+                <span>最大车厢数</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={64}
+                  value={maxCarCount}
+                  onChange={(event) => setMaxCarCount(event.currentTarget.value)}
+                  placeholder="地铁/有轨可填写"
+                />
+              </label>
+              <label>
                 <span>运营方</span>
                 <input
                   value={operator}
@@ -3374,6 +3732,12 @@ function TransitLineEditorDialog({
                     node.kind === 'station'
                       ? stationById.get(node.stationSourceId.trim())
                       : undefined;
+                  const stationDetail = station
+                    ? revision.stationDetails?.find(
+                        (detail) =>
+                          detail.stationName === station.name && detail.lineName === line?.name,
+                      )
+                    : undefined;
                   return (
                     <div
                       className={
@@ -3416,6 +3780,21 @@ function TransitLineEditorDialog({
                                 ? formatTransitStationBindingSummary(station)
                                 : '选择位置 / POI'}
                             </span>
+                          </button>
+                          <button
+                            className="transit-line-station-detail-button"
+                            type="button"
+                            disabled={!stationDetail}
+                            onClick={() => {
+                              if (stationDetail) {
+                                onEditStationDetail(stationDetail);
+                              }
+                            }}
+                          >
+                            <span className="material-symbols-outlined" aria-hidden="true">
+                              tune
+                            </span>
+                            <span>{stationDetail ? '站内设施' : '暂无站内信息'}</span>
                           </button>
                         </>
                       ) : (

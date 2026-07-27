@@ -25,6 +25,7 @@ import {
 } from '../lib/client-schedule-history';
 import { createTripReminder, formatTripReminderTime } from '../lib/client-trip-reminders';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+import { formatFareTextWithoutCurrencyUnit } from '../lib/fare-display';
 import { TicketOrderDraftPanel } from './ticket-order-draft-panel';
 
 type ServiceFilter = TicketableServiceKind | 'all';
@@ -612,7 +613,10 @@ function ScheduleTripCard({
         </div>
         <div className="schedule-trip-fare">
           <span>{t('travelSchedule.trip.fare')}</span>
-          <strong>{trip.fareText ?? t('travelSchedule.trip.toBeAnnounced')}</strong>
+          <strong>
+            {formatFareTextWithoutCurrencyUnit(trip.fareText) ??
+              t('travelSchedule.trip.toBeAnnounced')}
+          </strong>
         </div>
       </div>
 
@@ -1266,12 +1270,13 @@ function formatScheduleReminderTitle(trip: TravelTripInstance): string {
 }
 
 function formatScheduleReminderDetail(trip: TravelTripInstance, t?: Translate): string {
+  const fareText = formatFareTextWithoutCurrencyUnit(trip.fareText);
   return [
     trip.tripCode ? `班次 ${trip.tripCode}` : undefined,
     `发车 ${trip.departureTime}`,
     trip.arrivalTime ? `到达 ${formatArrivalTime(trip, t)}` : undefined,
     trip.gateText ? `${getLocationMetaLabel(trip.serviceKind, t)} ${trip.gateText}` : undefined,
-    trip.fareText ? `票价 ${trip.fareText}` : undefined,
+    fareText ? `票价 ${fareText}` : undefined,
     trip.operator,
     formatVehicleText(trip, t) !== (t ? t('travelSchedule.trip.toBeAnnounced') : '待公布')
       ? `${getVehicleMetaLabel(trip.serviceKind, t)} ${formatVehicleText(trip, t)}`

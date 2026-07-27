@@ -10,10 +10,13 @@ import type {
   PoiCategory,
   PoiFacilitySnapshot,
   TileProviderDescriptor,
+  TransitFareQuote,
   TransitLineRouteMode,
   TransitLineRouteNodeSnapshot,
   TransitLineSegmentPathSnapshot,
+  TransitStationDetailSnapshot,
 } from '@yct/contracts';
+import { quoteTransitRouteFare } from '@yct/domain';
 import { useSearchParams } from 'next/navigation';
 import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -25,10 +28,13 @@ import { readMapFavoriteMarkerIds, writeMapFavoriteMarkerIds } from '../lib/clie
 import {
   publishMapNearbySearchScopeChanged,
   publishMapRoutePanelVisibilityChanged,
+  publishMapShortcutContextChanged,
   publishMapTileProviderSelected,
   subscribeMapNearbySearchScopeChanged,
   subscribeMapNavigationLayoutChanged,
+  subscribeMapRouteShortcutRequested,
   subscribeMapTileProviderSelected,
+  subscribeMapZoomRequested,
   type MapNearbySearchScope,
 } from '../lib/client-map-ui-events';
 import {
@@ -36,6 +42,7 @@ import {
   writeSelectedMapTileProviderId,
 } from '../lib/client-map-settings';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+import { formatFareTextWithoutCurrencyUnit } from '../lib/fare-display';
 import {
   getMapRoadMarkerKind as getRoadMarkerKind,
   orderMapRoadCoordinates as orderRoadTracePoints,
@@ -273,6 +280,11 @@ interface TraceBounds {
 interface TransitOverviewResponse {
   lines: TransitOverviewLine[];
   modeProfiles?: TransitModeProfileForMap[];
+  stationDetails?: TransitStationDetailSnapshot[];
+}
+
+interface TransitStationDetailsResponse {
+  items: TransitStationDetailSnapshot[];
 }
 
 interface TransitOverviewLine {
@@ -292,6 +304,7 @@ interface TransitOverviewLine {
   routeNodes?: TransitLineRouteNodeSnapshot[];
   segmentPaths?: TransitLineSegmentPathSnapshot[];
   stationCount?: number;
+  maxCarCount?: number;
   stationNames: string[];
   displayStationNames?: string[];
   stationStops?: TransitLineStopForMap[];
@@ -370,6 +383,7 @@ interface RoutePlanOption {
   labelMarkerIds?: string[];
   estimatedDistance: number;
   estimatedMinutes: number;
+  fare?: TransitFareQuote;
   transferCount: number;
   walkingDistance: number;
   steps: RoutePlanStep[];
@@ -676,7 +690,7 @@ const markerCategoryFallbackNames: Record<string, string> = {
   museum: '展馆',
   park: '公园绿地',
   parking: '停车',
-  player: '在线玩家',
+  player: '玩家',
   'public-service': '公共服务',
   railway: '铁路',
   'railway-station': '铁路车站',
@@ -815,6 +829,9 @@ export function MapStage() {
   const [playerLocationResponse, setPlayerLocationResponse] =
     useState<PlayerLocationResponse | null>(null);
   const [transitOverview, setTransitOverview] = useState<TransitOverviewResponse | null>(null);
+  const [transitStationDetails, setTransitStationDetails] = useState<
+    TransitStationDetailSnapshot[]
+  >([]);
   const [categoryResponse, setCategoryResponse] = useState<ApiListResponse<PoiCategory> | null>(
     null,
   );
@@ -912,7 +929,16 @@ export function MapStage() {
     publishMapRoutePanelVisibilityChanged({ visible: Boolean(routePlanDraft) });
   }, [routePlanDraft]);
 
-  useEffect(() => () => publishMapRoutePanelVisibilityChanged({ visible: false }), []);
+  useEffect(
+    () => () => {
+      publishMapRoutePanelVisibilityChanged({ visible: false });
+      publishMapShortcutContextChanged({
+        canPlanFocusedMarker: false,
+        canSwapRouteEndpoints: false,
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     viewportSizeRef.current = viewportSize;
@@ -1082,14 +1108,24 @@ export function MapStage() {
 
     async function loadTransitOverview() {
       try {
-        const response = await fetch(appPath('/api/transit/overview'), { cache: 'no-store' });
-        const data = (await response.json()) as TransitOverviewResponse;
-        if (!cancelled && response.ok) {
-          setTransitOverview(data);
+        const [overviewResponse, stationDetailsResponse] = await Promise.all([
+          fetch(appPath('/api/transit/overview'), { cache: 'no-store' }),
+          fetch(appPath('/api/transit/station-details'), { cache: 'no-store' }),
+        ]);
+        const [overviewData, stationDetailsData] = await Promise.all([
+          overviewResponse.json() as Promise<TransitOverviewResponse>,
+          stationDetailsResponse.json() as Promise<TransitStationDetailsResponse>,
+        ]);
+        if (!cancelled && overviewResponse.ok) {
+          setTransitOverview(overviewData);
+        }
+        if (!cancelled && stationDetailsResponse.ok) {
+          setTransitStationDetails(stationDetailsData.items ?? []);
         }
       } catch {
         if (!cancelled) {
           setTransitOverview(null);
+          setTransitStationDetails([]);
         }
       }
     }
@@ -1417,6 +1453,14 @@ export function MapStage() {
     () => markerSnapshot.find((marker) => marker.id === focusedMarkerId),
     [focusedMarkerId, markerSnapshot],
   );
+  useEffect(() => {
+    publishMapShortcutContextChanged({
+      canPlanFocusedMarker: Boolean(
+        !routePlanDraft && focusedMarker && isCenterableMarker(focusedMarker),
+      ),
+      canSwapRouteEndpoints: Boolean(routePlanDraft),
+    });
+  }, [focusedMarker, routePlanDraft]);
   const focusedMarkerIsPlayer = Boolean(focusedMarker?.playerLocation);
   const focusedTransitLineMarker = useMemo(
     () => transitLineMarkers.find((marker) => marker.id === focusedMarkerId),
@@ -1622,6 +1666,24 @@ export function MapStage() {
       ...otherInferredCategories,
     ];
   }, [categoryResponse, endpointGroupMarkers, pointMarkers, shapeMarkers, t, transitLineMarkers]);
+  const playerMarkerCounts = useMemo(
+    () =>
+      pointMarkers.reduce(
+        (counts, marker) => {
+          if (!marker.playerLocation) {
+            return counts;
+          }
+
+          counts.total += 1;
+          if (marker.playerLocation.presence === 'online') {
+            counts.online += 1;
+          }
+          return counts;
+        },
+        { online: 0, total: 0 },
+      ),
+    [pointMarkers],
+  );
   const sidebarMarkers = useMemo(() => {
     const queryMode = Boolean(markerQuery.trim());
     const nearbyMode = !queryMode && nearbySearchCenter;
@@ -1713,6 +1775,20 @@ export function MapStage() {
       setMarkerListCategoryId('all');
     }
   }, [markerListCategoryId, markerListCategoryOptions]);
+
+  useEffect(() => {
+    if (searchParams.get('category') !== 'player') {
+      return;
+    }
+
+    if (!markerListCategoryOptions.some((category) => category.id === 'player')) {
+      return;
+    }
+
+    setMarkerListCategoryId('player');
+    setMarkerListExpanded(true);
+    setPlayersVisible(true);
+  }, [markerListCategoryOptions, searchParams]);
 
   const routePlanCalculationKey = routePlanDraft
     ? buildRoutePlanCalculationKey(routePlanDraft, routeTransportModes)
@@ -2210,6 +2286,22 @@ export function MapStage() {
     focusedMarker && isTransitStationPoi(focusedMarker)
       ? findStationConnections(focusedMarker, stationConnectionIndex)
       : [];
+  const focusedTransitStationDetails = useMemo(() => {
+    if (!focusedMarker || !isMetroStationPoi(focusedMarker)) {
+      return [];
+    }
+
+    const markerKeys = new Set(getMarkerStationNameMatchKeys(focusedMarker));
+    const details =
+      transitStationDetails.length > 0
+        ? transitStationDetails
+        : (transitOverview?.stationDetails ?? []);
+    return details
+      .filter((detail) =>
+        getStationNameMatchKeys(detail.stationName).some((key) => markerKeys.has(key)),
+      )
+      .sort((left, right) => left.lineName.localeCompare(right.lineName, 'zh-CN'));
+  }, [focusedMarker, transitOverview, transitStationDetails]);
   const scaleBarInfo = useMemo(
     () => buildScaleBarInfo(mapView, viewportSize, t),
     [mapView, t, viewportSize],
@@ -2321,12 +2413,14 @@ export function MapStage() {
     };
   }, [activeTileProvider, tileTemplate]);
 
-  const zoomBy = (delta: number) => {
+  const zoomBy = useCallback((delta: number) => {
     setMapView((current) => ({
       ...current,
       zoom: clampZoom(current.zoom + delta),
     }));
-  };
+  }, []);
+
+  useEffect(() => subscribeMapZoomRequested(({ delta }) => zoomBy(delta)), [zoomBy]);
 
   const resetView = () => {
     setMapView((current) =>
@@ -2841,7 +2935,29 @@ export function MapStage() {
         : current,
     );
     setSelectedRouteOptionId(null);
+    setEditingRouteEndpoint(null);
+    setRouteEndpointQuery('');
   };
+
+  useEffect(
+    () =>
+      subscribeMapRouteShortcutRequested(({ command }) => {
+        if (command === 'swap_endpoints' && routePlanDraft) {
+          swapRoutePlanEndpoints();
+          return;
+        }
+
+        if (
+          command === 'plan_focused_marker' &&
+          !routePlanDraft &&
+          focusedMarker &&
+          isCenterableMarker(focusedMarker)
+        ) {
+          createRoutePlanDraft(focusedMarker);
+        }
+      }),
+    [focusedMarker, routePlanDraft],
+  );
 
   const beginRouteEndpointEdit = (endpoint: RouteEndpointKind) => {
     setEditingRouteEndpoint(endpoint);
@@ -3116,14 +3232,18 @@ export function MapStage() {
                   {markerListExpanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
                 </span>
                 <span>
-                  {markerQuery.trim()
-                    ? t('map.markerList.results')
-                    : nearbySearchCenter
-                      ? t('map.markerList.nearby', { name: nearbySearchCenter.label })
-                      : t('map.markerList.default')}
+                  {markerListCategoryId === 'player'
+                    ? t('map.categoryName.player')
+                    : markerQuery.trim()
+                      ? t('map.markerList.results')
+                      : nearbySearchCenter
+                        ? t('map.markerList.nearby', { name: nearbySearchCenter.label })
+                        : t('map.markerList.default')}
                 </span>
                 <span className="muted">
-                  {t('map.markerList.count', { count: sidebarMarkers.length })}
+                  {markerListCategoryId === 'player'
+                    ? t('map.markerList.playerCount', playerMarkerCounts)
+                    : t('map.markerList.count', { count: sidebarMarkers.length })}
                 </span>
               </button>
               {markerListExpanded ? (
@@ -3223,21 +3343,39 @@ export function MapStage() {
                           t,
                           secondaryPoiIndex,
                         });
+                        const playerPresence = marker.playerLocation?.presence;
                         const content = (
                           <>
                             <MarkerListIcon marker={marker} iconBaseUrl={markerIconBaseUrl} />
                             <span>{formatMarkerDisplayName(marker.label)}</span>
-                            <span className="muted">{distanceDetail}</span>
+                            <span className="map-marker-list-detail">
+                              {playerPresence ? (
+                                <span className={`map-player-list-presence is-${playerPresence}`}>
+                                  <span className="material-symbols-outlined" aria-hidden="true">
+                                    {playerPresence === 'online' ? 'wifi' : 'wifi_off'}
+                                  </span>
+                                  {t(
+                                    playerPresence === 'online'
+                                      ? 'map.player.status.online'
+                                      : 'map.player.status.offline',
+                                  )}
+                                </span>
+                              ) : null}
+                              <span className="muted">{distanceDetail}</span>
+                            </span>
                           </>
                         );
 
                         return (
                           <button
-                            className={
-                              marker.id === focusedMarkerId
-                                ? 'map-marker-list-item is-active'
-                                : 'map-marker-list-item'
-                            }
+                            className={[
+                              'map-marker-list-item',
+                              marker.id === focusedMarkerId ? 'is-active' : '',
+                              playerPresence ? 'is-player' : '',
+                              playerPresence === 'offline' ? 'is-offline' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
                             type="button"
                             key={marker.id}
                             disabled={!center}
@@ -3516,6 +3654,13 @@ export function MapStage() {
                   !focusedMarkerIsPlayer &&
                   poiDetailTab === 'facilities' ? (
                     <>
+                      {focusedTransitStationDetails.length > 0 ? (
+                        <TransitStationInfrastructureDetail
+                          details={focusedTransitStationDetails}
+                          lines={transitOverview?.lines ?? []}
+                          key={focusedMarker.id}
+                        />
+                      ) : null}
                       {focusedMarker.facilities?.length ? (
                         <div className="map-poi-facility-list">
                           {focusedMarker.facilities.map((facility, index) => (
@@ -3931,9 +4076,7 @@ export function MapStage() {
                         d={shape.path}
                         data-map-marker-id={source?.id}
                         key={`${shape.id}-shape`}
-                        onPointerDown={
-                          shape.isArea ? undefined : handleMapMarkerPointerDown
-                        }
+                        onPointerDown={shape.isArea ? undefined : handleMapMarkerPointerDown}
                         onClick={
                           shape.isArea
                             ? undefined
@@ -5008,7 +5151,7 @@ function TransitLineMapDetail({
         </div>
         <div>
           <dt>{t('map.lineDetail.fare')}</dt>
-          <dd>{line.fare ?? t('lineDetail.toBeAdded')}</dd>
+          <dd>{formatFareTextWithoutCurrencyUnit(line.fare) ?? t('lineDetail.toBeAdded')}</dd>
         </div>
         <div>
           <dt>{t('map.lineDetail.stations')}</dt>
@@ -5406,22 +5549,36 @@ function RoutePlanDraftCard({
                             {formatRoutePlanDistance(option.walkingDistance, t)}
                           </span>
                           <span
-                            className="map-route-option-badges"
-                            aria-label={t('map.route.featuresAria')}
-                          >
-                            {optionBadges.map((badge) => (
-                              <span className="map-route-option-badge" key={badge}>
-                                {badge}
-                              </span>
-                            ))}
-                          </span>
-                          <span
                             className="material-symbols-outlined map-route-option-expand"
                             aria-hidden="true"
                           >
                             {isSelected ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
                           </span>
                         </button>
+                        {option.fare || optionBadges.length > 0 ? (
+                          <div className="map-route-option-meta">
+                            {option.fare ? (
+                              <span className="map-route-option-fare">
+                                <span className="material-symbols-outlined" aria-hidden="true">
+                                  payments
+                                </span>
+                                {formatRoutePlanFare(option.fare, t)}
+                              </span>
+                            ) : null}
+                            {optionBadges.length > 0 ? (
+                              <span
+                                className="map-route-option-badges"
+                                aria-label={t('map.route.featuresAria')}
+                              >
+                                {optionBadges.map((badge) => (
+                                  <span className="map-route-option-badge" key={badge}>
+                                    {badge}
+                                  </span>
+                                ))}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
                         <p className="map-route-option-copy">
                           <span
                             className="material-symbols-outlined map-route-option-type-icon"
@@ -7561,6 +7718,15 @@ function buildDirectTransitLineOption(
     routeCache,
   );
   const transitDistance = transitRoute.distance;
+  const fare = quoteTransitRouteFare([
+    {
+      mode: candidate.mode.mode,
+      lineId: candidate.line.id,
+      lineName: candidate.line.name,
+      distanceBlocks: transitDistance,
+      configuredFareText: candidate.line.fare,
+    },
+  ]);
   const accessMinutes = estimateResolvedWalkRouteMinutes(accessRoute);
   const egressMinutes = estimateResolvedWalkRouteMinutes(egressRoute);
   const endpointAccessMinutes = estimateRouteMinutes(endpointAccessDistance, 72);
@@ -7627,6 +7793,7 @@ function buildDirectTransitLineOption(
     suppressLabelMarkerIds,
     estimatedDistance: endpointAccessDistance + accessDistance + egressDistance + transitDistance,
     estimatedMinutes,
+    fare,
     transferCount: 0,
     walkingDistance: endpointAccessDistance + accessDistance + egressDistance,
     steps: [
@@ -7833,6 +8000,22 @@ function buildTransferTransitLineOptions(
       );
       const firstTransitDistance = firstTransitRoute.distance;
       const secondTransitDistance = secondTransitRoute.distance;
+      const fare = quoteTransitRouteFare([
+        {
+          mode: originCandidate.candidate.mode.mode,
+          lineId: originCandidate.candidate.line.id,
+          lineName: originCandidate.candidate.line.name,
+          distanceBlocks: firstTransitDistance,
+          configuredFareText: originCandidate.candidate.line.fare,
+        },
+        {
+          mode: destinationCandidate.candidate.mode.mode,
+          lineId: destinationCandidate.candidate.line.id,
+          lineName: destinationCandidate.candidate.line.name,
+          distanceBlocks: secondTransitDistance,
+          configuredFareText: destinationCandidate.candidate.line.fare,
+        },
+      ]);
       const endpointAccessDistance = getRouteEndpointAccessDistance(draft);
       const transferDistance =
         transfer.fromStop.marker.id === transfer.toStop.marker.id ? 0 : transferRoute.distance;
@@ -7952,6 +8135,7 @@ function buildTransferTransitLineOptions(
           firstTransitDistance +
           secondTransitDistance,
         estimatedMinutes,
+        fare,
         transferCount: 1,
         walkingDistance:
           endpointAccessDistance + accessDistance + egressDistance + transferDistance,
@@ -8200,18 +8384,9 @@ function buildTransitSegmentRoute(
       continue;
     }
 
-    const configuredSegment = getConfiguredTransitSegment(
-      line,
-      previous,
-      current,
-      direction,
-    );
+    const configuredSegment = getConfiguredTransitSegment(line, previous, current, direction);
     if (configuredSegment) {
-      const segmentCoordinates = [
-        previous.center,
-        ...configuredSegment.waypoints,
-        current.center,
-      ];
+      const segmentCoordinates = [previous.center, ...configuredSegment.waypoints, current.center];
       appendRouteSegmentCoordinates(coordinates, segmentCoordinates);
       distance += getCoordinateChainDistance(segmentCoordinates);
       usesRoadGraph ||= configuredSegment.mode === 'road';
@@ -8294,19 +8469,13 @@ function getConfiguredTransitSegment(
       pendingWaypoints.push(node);
       continue;
     }
-    if (
-      segmentStartId === fromStationSourceId &&
-      node.stationSourceId === toStationSourceId
-    ) {
+    if (segmentStartId === fromStationSourceId && node.stationSourceId === toStationSourceId) {
       return {
         mode: line.routeMode ?? 'straight',
         waypoints: filterTransitRouteNodeWaypoints(pendingWaypoints, direction),
       };
     }
-    if (
-      segmentStartId === toStationSourceId &&
-      node.stationSourceId === fromStationSourceId
-    ) {
+    if (segmentStartId === toStationSourceId && node.stationSourceId === fromStationSourceId) {
       return {
         mode: line.routeMode ?? 'straight',
         waypoints: filterTransitRouteNodeWaypoints(pendingWaypoints, direction).reverse(),
@@ -8338,8 +8507,7 @@ function filterTransitRouteNodeWaypoints(
 ): Array<[number, number]> {
   const expectedDirection = direction === 'forward' ? 'down' : 'up';
   return nodes.flatMap((node) =>
-    node.kind === 'waypoint' &&
-    (node.direction === 'both' || node.direction === expectedDirection)
+    node.kind === 'waypoint' && (node.direction === 'both' || node.direction === expectedDirection)
       ? ([[node.x, node.z]] as Array<[number, number]>)
       : [],
   );
@@ -9042,6 +9210,25 @@ function formatRoutePlanMinutes(minutes: number, t?: Translate): string {
   return t ? t('map.route.duration.short', { count }) : `约 ${count} 分`;
 }
 
+function formatRoutePlanFare(fare: TransitFareQuote, t?: Translate): string {
+  if (fare.status === 'unavailable') {
+    return t ? t('map.route.fare.unavailable') : '票价待确认';
+  }
+
+  const amount = formatRouteFareAmount(fare.totalAmount ?? fare.knownSubtotal);
+  if (fare.status === 'estimated') {
+    return t ? t('map.route.fare.estimated', { amount }) : `预计 ${amount}`;
+  }
+  if (fare.status === 'partial') {
+    return t ? t('map.route.fare.partial', { amount }) : `已知 ${amount} 起`;
+  }
+  return t ? t('map.route.fare.exact', { amount }) : amount;
+}
+
+function formatRouteFareAmount(amount: number): string {
+  return Number.isInteger(amount) ? String(amount) : amount.toFixed(2).replace(/0+$/u, '');
+}
+
 function formatRouteStepMinutes(minutes: number, t?: Translate): string {
   const count = Math.max(1, Math.round(minutes));
   return t ? t('map.route.duration.step', { count }) : `${count}分钟`;
@@ -9092,7 +9279,7 @@ function buildMapSharePayload(target: MapShareTarget, t: Translate): MapSharePay
         `${formatRoutePlanMinutes(target.option.estimatedMinutes, t)} · ${formatRoutePlanDistance(
           target.option.walkingDistance,
           t,
-        )}`,
+        )}${target.option.fare ? ` · ${formatRoutePlanFare(target.option.fare, t)}` : ''}`,
       ]
     : [];
   const steps =
@@ -9872,6 +10059,414 @@ function isMetroStationPoi(
   return marker.categoryId === 'metro-station';
 }
 
+function TransitStationInfrastructureDetail({
+  details,
+  lines,
+}: Readonly<{
+  details: TransitStationDetailSnapshot[];
+  lines: TransitOverviewLine[];
+}>) {
+  const [activeLineName, setActiveLineName] = useState(details[0]?.lineName ?? '');
+  const [activeDirection, setActiveDirection] = useState<'downwards' | 'upwards'>('downwards');
+  const activeDetail = details.find((detail) => detail.lineName === activeLineName) ?? details[0];
+  if (!activeDetail) {
+    return null;
+  }
+
+  const activeLine = lines.find((line) => line.name === activeDetail.lineName);
+  const hasUpwardsFacilityLayout = (activeDetail.facilitiesUpwards?.length ?? 0) > 0;
+  const hasDirectionSpecificTransfer = activeDetail.transfers.some(
+    (transfer) => transfer.transferDirection !== undefined,
+  );
+  const hasDirectionSpecificLayout =
+    hasUpwardsFacilityLayout ||
+    hasDirectionSpecificTransfer ||
+    Boolean(activeDetail.swapExitLayers) ||
+    Boolean(activeDetail.flipTemplateForUpwards);
+  const selectedFacilities =
+    activeDirection === 'upwards' && hasUpwardsFacilityLayout
+      ? activeDetail.facilitiesUpwards ?? activeDetail.facilities
+      : activeDetail.facilities;
+  const shouldFlipTemplate = activeDirection === 'upwards' && Boolean(activeDetail.flipTemplateForUpwards);
+  return (
+    <section
+      className="map-metro-station-infrastructure"
+      aria-label="地铁站内设施信息"
+      style={
+        {
+          '--map-metro-station-line-color': activeLine?.color ?? 'var(--yct-color-primary)',
+        } as CSSProperties
+      }
+    >
+      <div className="map-metro-station-infrastructure-heading">
+        <span className="material-symbols-outlined" aria-hidden="true">
+          account_tree
+        </span>
+        <strong>站内设施信息</strong>
+        <span className="map-metro-station-detail-tabs">
+          <span className="map-metro-station-line-tabs" role="tablist" aria-label="线路设施信息">
+            {[...details]
+              .sort((left, right) => left.lineName.localeCompare(right.lineName, 'zh-CN', { numeric: true }))
+              .map((detail) => (
+                <button
+                  className={detail.lineName === activeDetail.lineName ? 'is-active' : ''}
+                  type="button"
+                  role="tab"
+                  aria-selected={detail.lineName === activeDetail.lineName}
+                  key={detail.sourceId}
+                  onClick={() => {
+                    setActiveLineName(detail.lineName);
+                    setActiveDirection('downwards');
+                  }}
+                >
+                  {detail.lineName}
+                </button>
+              ))}
+          </span>
+          {hasDirectionSpecificLayout ? (
+            <span className="map-metro-station-direction-tabs" role="group" aria-label="行车方向">
+              <button
+                className={activeDirection === 'downwards' ? 'is-active' : ''}
+                type="button"
+                aria-pressed={activeDirection === 'downwards'}
+                aria-label="下行方向设施"
+                title="下行方向设施"
+                onClick={() => setActiveDirection('downwards')}
+              >
+                <i className="material-symbols-outlined" aria-hidden="true">
+                  south
+                </i>
+              </button>
+              <button
+                className={activeDirection === 'upwards' ? 'is-active' : ''}
+                type="button"
+                aria-pressed={activeDirection === 'upwards'}
+                aria-label="上行方向设施"
+                title="上行方向设施"
+                onClick={() => setActiveDirection('upwards')}
+              >
+                <i className="material-symbols-outlined" aria-hidden="true">
+                  north
+                </i>
+              </button>
+            </span>
+          ) : null}
+        </span>
+      </div>
+      <article className={`map-metro-station-detail${shouldFlipTemplate ? ' is-template-flipped' : ''}`}>
+        <div className="map-metro-station-detail-title">
+          <strong>{activeDetail.lineName}</strong>
+          <span>{activeDetail.overGround ? '地面站' : '地下站'}</span>
+        </div>
+        <div className="map-metro-station-floor-stack">
+          {activeDetail.layers.map((layer) => (
+            <StationInfrastructureFloor
+              activeLine={activeLine}
+              detail={activeDetail}
+              direction={activeDirection}
+              facilities={selectedFacilities}
+              isTemplateFlipped={shouldFlipTemplate}
+              layer={layer}
+              lines={lines}
+              key={`${activeDetail.sourceId}-${layer.floor}-${layer.order ?? 0}`}
+            />
+          ))}
+        </div>
+      </article>
+    </section>
+  );
+}
+
+function StationInfrastructureFloor({
+  activeLine,
+  detail,
+  direction,
+  facilities: detailFacilities,
+  isTemplateFlipped,
+  layer,
+  lines,
+}: Readonly<{
+  activeLine: TransitOverviewLine | undefined;
+  detail: TransitStationDetailSnapshot;
+  direction: 'downwards' | 'upwards';
+  facilities: TransitStationDetailSnapshot['facilities'];
+  isTemplateFlipped: boolean;
+  layer: TransitStationDetailSnapshot['layers'][number];
+  lines: TransitOverviewLine[];
+}>) {
+  const exits = detail.exits.filter(
+    (exit) => resolveStationExitFloor(detail, exit.floor, direction) === layer.floor,
+  );
+  const transfers = detail.transfers.filter(
+    (transfer) =>
+      transfer.floor === layer.floor &&
+      (transfer.transferDirection === undefined || transfer.transferDirection === direction),
+  );
+  const isPlatform = layer.type === 'platform';
+  const facilities = isPlatform
+    ? detailFacilities.filter((facility) => !facility.floor || facility.floor === layer.floor)
+    : detailFacilities.filter((facility) => facility.floor === layer.floor);
+
+  return (
+    <section className={`map-metro-station-floor${isPlatform ? ' is-platform' : ''}`}>
+      <div className="map-metro-station-floor-heading">
+        <strong>{layer.floor}</strong>
+        <span>{formatStationLayerType(layer.type)}</span>
+        {isPlatform ? <small>{formatStationPlatformSide(detail.platformSide)}开门</small> : null}
+      </div>
+      {isPlatform ? (
+        <StationPlatformSchematic
+          activeLine={activeLine}
+          currentFloor={layer.floor}
+          detail={detail}
+          facilities={facilities}
+          isTemplateFlipped={isTemplateFlipped}
+        />
+      ) : null}
+      {exits.length > 0 ? (
+        <StationExitSchematic exits={exits} isTemplateFlipped={isTemplateFlipped} />
+      ) : null}
+      {transfers.length > 0 ? (
+        <div className="map-metro-station-transfer-track">
+          {transfers.map((transfer, index) => (
+            <span
+              className="map-metro-station-transfer-marker"
+              key={`${transfer.line}-${index}`}
+              style={{
+                '--station-detail-position': `${resolveStationDetailPosition(
+                  transfer.location,
+                  activeLine?.maxCarCount,
+                )}%`,
+                '--station-detail-offset': `${(index - (transfers.length - 1) / 2) * 8}px`,
+                '--station-transfer-line-color':
+                  lines.find((line) => line.name === transfer.line)?.color ??
+                  'var(--yct-color-primary)',
+              } as CSSProperties}
+              title={`${transfer.line}${transfer.direction ? ` · ${formatStationFacilityDirection(transfer.direction)}` : ''}`}
+            >
+              {formatStationTransferMarker(transfer.line)}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {!isPlatform && exits.length === 0 && transfers.length === 0 ? (
+        <span className="map-metro-station-floor-empty">暂无站内节点记录</span>
+      ) : null}
+    </section>
+  );
+}
+
+function StationExitSchematic({
+  exits,
+  isTemplateFlipped,
+}: Readonly<{ exits: TransitStationDetailSnapshot['exits']; isTemplateFlipped: boolean }>) {
+  const upwardExits = exits.filter((exit) => exit.direction !== 'downwards');
+  const downwardExits = exits.filter((exit) => exit.direction === 'downwards');
+  const leftExits = isTemplateFlipped ? downwardExits : upwardExits;
+  const rightExits = isTemplateFlipped ? upwardExits : downwardExits;
+  return (
+    <div className="map-metro-station-exit-track">
+      <span className="is-left">{formatStationExitGroup(leftExits, '←')}</span>
+      <span className="is-right">{formatStationExitGroup(rightExits, '→')}</span>
+    </div>
+  );
+}
+
+function StationPlatformSchematic({
+  activeLine,
+  currentFloor,
+  detail,
+  facilities,
+  isTemplateFlipped,
+}: Readonly<{
+  activeLine: TransitOverviewLine | undefined;
+  currentFloor: string;
+  detail: TransitStationDetailSnapshot;
+  facilities: TransitStationDetailSnapshot['facilities'];
+  isTemplateFlipped: boolean;
+}>) {
+  const carriageCount = Math.max(
+    1,
+    activeLine?.maxCarCount ?? 0,
+    ...facilities.map((facility) => Math.ceil(facility.location ?? 0)),
+    6,
+  );
+  const firstStation = activeLine?.firstStationName ?? '上行终点';
+  const lastStation = activeLine?.lastStationName ?? '下行终点';
+  const leftDirectionStation = isTemplateFlipped ? lastStation : firstStation;
+  const rightDirectionStation = isTemplateFlipped ? firstStation : lastStation;
+  return (
+    <div className="map-metro-station-platform-schematic">
+      <div className="map-metro-station-platform-direction">
+        <span>← 开往 {leftDirectionStation}</span>
+        <span>开往 {rightDirectionStation} →</span>
+      </div>
+      <div className="map-metro-station-facility-track">
+        {facilities.map((facility, index) => (
+          <span
+            className="map-metro-station-facility-icon"
+            key={`${facility.type}-${facility.location ?? 'unpositioned'}-${index}`}
+            style={{
+              '--station-detail-position': `${resolveStationDetailPosition(
+                facility.location,
+                carriageCount,
+              )}%`,
+            } as CSSProperties}
+            title={`${formatStationFacilityType(facility.type)}${
+              facility.endFloor ? ` · 至 ${facility.endFloor}` : ''
+            }${
+              facility.direction ? ` · ${formatStationFacilityDirection(facility.direction)}` : ''
+            }${facility.oneWay ? ` · ${formatStationFacilityOneWay(facility.oneWay)}` : ''}${
+              facility.orientation ? ` · 朝向 ${facility.orientation}` : ''
+            }`}
+          >
+            <span
+              className={
+                shouldFlipStationFacility(facility, detail, currentFloor) !== isTemplateFlipped
+                  ? 'map-metro-station-facility-symbols is-flipped'
+                  : 'map-metro-station-facility-symbols'
+              }
+              aria-hidden="true"
+            >
+              {getStationFacilityIcons(facility.type).map((icon) => (
+                <i className="material-symbols-outlined" key={icon}>
+                  {icon}
+                </i>
+              ))}
+            </span>
+          </span>
+        ))}
+      </div>
+      <div
+        className={`map-metro-station-carriages${isTemplateFlipped ? ' is-template-flipped' : ''}`}
+        style={{ '--station-carriage-count': carriageCount } as CSSProperties}
+      >
+        {Array.from({ length: carriageCount }, (_, index) => (
+          <span key={index}>{index + 1}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatStationPlatformSide(value: TransitStationDetailSnapshot['platformSide']): string {
+  if (value === 'left') return '左侧';
+  if (value === 'right') return '右侧';
+  if (value === 'both') return '两侧';
+  return '方向未记录';
+}
+
+function formatStationLayerType(value: string): string {
+  const labels: Record<string, string> = {
+    concourse: '站厅层',
+    platform: '站台层',
+    transfer: '换乘层',
+    entrance: '入口层',
+    passageway: '通道层',
+  };
+  return labels[value] ?? value;
+}
+
+function formatStationFacilityType(value: string): string {
+  const labels: Record<string, string> = {
+    toilet: '卫生间',
+    elevator: '电梯',
+    escalator_and_stairs: '扶梯/楼梯',
+    stairs: '楼梯',
+    escalator: '扶梯',
+    platform_door: '屏蔽门',
+    nursing_room: '母婴室',
+    police: '警务室',
+  };
+  return labels[value] ?? value;
+}
+
+function getStationFacilityIcons(value: string): string[] {
+  if (value.includes('escalator_and_stairs')) return ['stairs', 'escalator'];
+  if (value.includes('toilet')) return ['wc'];
+  if (value.includes('elevator')) return ['elevator'];
+  if (value.includes('stairs')) return ['stairs'];
+  if (value.includes('escalator')) return ['escalator'];
+  if (value.includes('door')) return ['door_open'];
+  if (value.includes('nursing_room')) return ['breastfeeding'];
+  if (value.includes('police')) return ['local_police'];
+  return ['location_on'];
+}
+
+function resolveStationExitFloor(
+  detail: TransitStationDetailSnapshot,
+  floor: string | undefined,
+  direction: 'downwards' | 'upwards',
+): string | undefined {
+  if (direction !== 'upwards' || !floor || !detail.swapExitLayers) {
+    return floor;
+  }
+  const [firstFloor, secondFloor] = detail.swapExitLayers;
+  if (floor === firstFloor) return secondFloor;
+  if (floor === secondFloor) return firstFloor;
+  return floor;
+}
+
+function shouldFlipStationFacility(
+  facility: TransitStationDetailSnapshot['facilities'][number],
+  detail: TransitStationDetailSnapshot,
+  currentFloor: string,
+): boolean {
+  if (!facility.type.includes('stairs') && !facility.type.includes('escalator')) {
+    return false;
+  }
+
+  let shouldFlip = facility.direction === 'upwards';
+  const currentLayerIndex = detail.layers.findIndex((layer) => layer.floor === currentFloor);
+  const endLayerIndex = detail.layers.findIndex((layer) => layer.floor === facility.endFloor);
+  if (currentLayerIndex >= 0 && endLayerIndex > currentLayerIndex) {
+    shouldFlip = !shouldFlip;
+  }
+  return shouldFlip;
+}
+
+function formatStationTransferMarker(lineName: string): string {
+  return lineName.match(/\d+/)?.[0] ?? 'M';
+}
+
+function formatStationExitGroup(
+  exits: TransitStationDetailSnapshot['exits'],
+  arrow: '←' | '→',
+): string {
+  if (exits.length === 0) {
+    return '';
+  }
+  const label = exits.map((exit) => `${exit.code}出口`).join('/');
+  return arrow === '←' ? `${arrow}${label}` : `${label}${arrow}`;
+}
+
+function resolveStationDetailPosition(location: number | undefined, maxPosition: number | undefined): number {
+  if (location === undefined || !maxPosition || maxPosition <= 0) {
+    return 50;
+  }
+  return Math.max(0, Math.min(100, (location / maxPosition) * 100));
+}
+
+function formatStationFacilityDirection(value: string): string {
+  const labels: Record<string, string> = {
+    up: '向上',
+    down: '向下',
+    upwards: '向上',
+    downwards: '向下',
+    here: '本站换乘',
+  };
+  return labels[value] ?? value;
+}
+
+function formatStationFacilityOneWay(value: string): string {
+  const labels: Record<string, string> = {
+    up: '仅上行',
+    down: '仅下行',
+    none: '双向通行',
+  };
+  return labels[value] ?? value;
+}
+
 function groupSecondaryPois(
   links: SecondaryPoiLink[],
   categoryById: ReadonlyMap<string, string>,
@@ -9918,11 +10513,7 @@ function buildSecondaryPoiIndex(
   placeRelationIndex: MapPlaceRelationIndex<CenterableMarker>,
 ): Map<string, SecondaryPoiLink[]> {
   const parentMarkerById = new Map(parentMarkers.map((marker) => [marker.id, marker]));
-  const declaredParentLinks = resolveSecondaryPoiLinks(
-    markers,
-    parentMarkers,
-    placeRelationIndex,
-  );
+  const declaredParentLinks = resolveSecondaryPoiLinks(markers, parentMarkers, placeRelationIndex);
   const boundRegionLinks = markers.flatMap((marker) =>
     (marker.boundRegionMarkerIds ?? []).flatMap((regionMarkerId) => {
       const parent =
@@ -10112,7 +10703,11 @@ function MarkerListIcon({
   if (marker.playerLocation?.avatarUrl) {
     return (
       <img
-        className="map-player-list-avatar"
+        className={
+          marker.playerLocation.presence === 'offline'
+            ? 'map-player-list-avatar is-offline'
+            : 'map-player-list-avatar'
+        }
         src={marker.playerLocation.avatarUrl}
         alt=""
         draggable={false}

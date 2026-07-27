@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { UnminedCustomMarkerProvider } from '@yct/adapters';
+import type { TransitStationDetailUpdateInput } from '@yct/schemas';
 import type {
   MapMarkerSnapshot,
   TransitDataRevision,
@@ -42,6 +43,7 @@ export type TransitLineEditableField =
   | 'mode'
   | 'name'
   | 'color'
+  | 'maxCarCount'
   | 'routeMode'
   | 'routeNodes'
   | 'stationSourceIds'
@@ -610,6 +612,103 @@ export async function updateTransitStationCoordinate(input: {
   return { ok: true, revision: updated };
 }
 
+export async function updateTransitStationDetail(input: {
+  revisionId: string;
+  detailSourceId: string;
+  actorId: string;
+  patch: TransitStationDetailUpdateInput;
+}): Promise<TransitDataActionResult> {
+  const revision = await findTransitDataRevision(input.revisionId);
+  if (!revision) {
+    return notFound();
+  }
+  if (!canEditTransitRevisionStationCoordinate(revision.status)) {
+    return invalidTransition('当前交通数据版本状态不允许编辑站内设施信息。');
+  }
+
+  const detail = revision.stationDetails?.find((item) => item.sourceId === input.detailSourceId);
+  if (!detail) {
+    return {
+      ok: false,
+      status: 404,
+      error: 'transit_station_detail_not_found',
+      message: '交通数据版本中不存在该站内设施详情。',
+    };
+  }
+
+  const nextDetail: NonNullable<TransitDataRevision['stationDetails']>[number] = {
+    ...detail,
+    overGround: input.patch.overGround,
+    platformSide: input.patch.platformSide,
+    layers: input.patch.layers.map((layer, order) => ({ ...layer, order })),
+    facilities: input.patch.facilities,
+    facilitiesUpwards: input.patch.facilitiesUpwards,
+    transfers: input.patch.transfers,
+    exits: input.patch.exits,
+    surroundingStationNames: input.patch.surroundingStationNames,
+    swapExitLayers: input.patch.swapExitLayers,
+    flipTemplateForUpwards: input.patch.flipTemplateForUpwards,
+  };
+  const changedFields = getChangedTransitStationDetailFields(detail, nextDetail);
+  if (changedFields.length === 0) {
+    return { ok: true, revision };
+  }
+
+  const nextDetails = revision.stationDetails?.map((item) =>
+    item.sourceId === detail.sourceId ? nextDetail : item,
+  );
+  const nextLines = revision.lines.map((line) => {
+    if (line.name !== detail.lineName || input.patch.platformSide === undefined) {
+      return line;
+    }
+    const station = revision.stations.find((candidate) => candidate.name === detail.stationName);
+    if (!station || !line.stationSourceIds.includes(station.sourceId)) {
+      return line;
+    }
+    return {
+      ...line,
+      stops: line.stops.map((stop) =>
+        stop.stationSourceId === station.sourceId
+          ? { ...stop, platformSide: input.patch.platformSide }
+          : stop,
+      ),
+    };
+  });
+  const validation = validateTransitSnapshot({
+    summary: revision.summary,
+    lines: nextLines,
+    stations: revision.stations,
+  });
+  const updatedAt = new Date().toISOString();
+  const shouldResetReviewTrail = revision.status === 'pending_review' || revision.status === 'approved';
+  const updated = await updateTransitDataRevision(input.revisionId, (current) => ({
+    ...current,
+    lines: nextLines,
+    stationDetails: nextDetails,
+    status: getTransitRevisionEditableStatus(revision.status, validation.errorCount),
+    validation,
+    submittedAt: shouldResetReviewTrail ? undefined : current.submittedAt,
+    submittedBy: shouldResetReviewTrail ? undefined : current.submittedBy,
+    reviewedAt: shouldResetReviewTrail ? undefined : current.reviewedAt,
+    reviewedBy: shouldResetReviewTrail ? undefined : current.reviewedBy,
+    reviewReason: shouldResetReviewTrail ? undefined : current.reviewReason,
+  }));
+
+  if (updated) {
+    await emitEvent('TransitDataRevisionStationDetailUpdated', input.actorId, {
+      datasetId: updated.datasetId,
+      revisionId: updated.revisionId,
+      detailSourceId: detail.sourceId,
+      lineName: detail.lineName,
+      stationName: detail.stationName,
+      updatedBy: input.actorId,
+      updatedAt,
+      changedFields,
+    });
+  }
+  return { ok: true, revision: updated };
+}
+
 export async function saveTransitLine(input: {
   revisionId: string;
   actorId: string;
@@ -618,6 +717,7 @@ export async function saveTransitLine(input: {
     mode: TransitDataRevision['lines'][number]['mode'];
     name: string;
     color?: string;
+    maxCarCount?: number;
     routeMode?: TransitDataRevision['lines'][number]['routeMode'];
     routeNodes?: TransitDataRevision['lines'][number]['routeNodes'];
     stationSourceIds: string[];
@@ -941,6 +1041,7 @@ export async function updateTransitLineStationOrder(input: {
       mode: line.mode,
       name: line.name,
       color: line.color,
+      maxCarCount: line.maxCarCount,
       routeMode: line.routeMode,
       routeNodes: line.routeNodes,
       stationSourceIds: input.stationSourceIds,
@@ -967,6 +1068,7 @@ function buildTransitLineSnapshot(
     mode: TransitDataRevision['lines'][number]['mode'];
     name: string;
     color?: string;
+    maxCarCount?: number;
     routeMode?: TransitDataRevision['lines'][number]['routeMode'];
     routeNodes?: TransitDataRevision['lines'][number]['routeNodes'];
     stationSourceIds: string[];
@@ -1028,6 +1130,10 @@ function buildTransitLineSnapshot(
     mode: patch.mode,
     name: patch.name.trim(),
     color: patch.color?.trim() || undefined,
+    maxCarCount:
+      patch.maxCarCount !== undefined && Number.isInteger(patch.maxCarCount)
+        ? Math.max(1, Math.min(64, patch.maxCarCount))
+        : previous?.maxCarCount,
     routeMode,
     routeNodes,
     stationSourceIds,
@@ -1065,6 +1171,7 @@ function getChangedTransitLineFields(
     'mode',
     'name',
     'color',
+    'maxCarCount',
     'routeMode',
     'routeNodes',
     'stationSourceIds',
@@ -1084,6 +1191,38 @@ function getChangedTransitLineFields(
     const nextValue = next[field];
     return JSON.stringify(previousValue ?? null) !== JSON.stringify(nextValue ?? null);
   });
+}
+
+function getChangedTransitStationDetailFields(
+  previous: NonNullable<TransitDataRevision['stationDetails']>[number],
+  next: NonNullable<TransitDataRevision['stationDetails']>[number],
+): Array<
+  | 'platformSide'
+  | 'overGround'
+  | 'layers'
+  | 'facilities'
+  | 'facilitiesUpwards'
+  | 'transfers'
+  | 'exits'
+  | 'surroundingStationNames'
+  | 'swapExitLayers'
+  | 'flipTemplateForUpwards'
+> {
+  const fields = [
+    'platformSide',
+    'overGround',
+    'layers',
+    'facilities',
+    'facilitiesUpwards',
+    'transfers',
+    'exits',
+    'surroundingStationNames',
+    'swapExitLayers',
+    'flipTemplateForUpwards',
+  ] as const;
+  return fields.filter(
+    (field) => JSON.stringify(previous[field] ?? null) !== JSON.stringify(next[field] ?? null),
+  );
 }
 
 function normalizeTransitLineSegmentPaths(

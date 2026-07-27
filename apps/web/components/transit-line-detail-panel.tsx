@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import type { TransitModeProfile, TransitStationDetailSnapshot } from '@yct/contracts';
 import { appPath } from '../lib/app-paths';
 import { useI18n } from '../lib/client-i18n';
+import { formatFareTextWithoutCurrencyUnit } from '../lib/fare-display';
 import type { TransitLineStopSummary, TransitLineSummary } from '../lib/legacy-transit';
 import { TitleWithBreaks } from './title-with-breaks';
 
@@ -327,7 +328,11 @@ function formatFirstLastBus(line: TransitLineSummary, t: Translate): string {
 
 function formatExtraAttributes(line: TransitLineSummary, t: Translate): string {
   const values = [
-    line.fare ? t('lineDetail.extra.fare', { fare: line.fare }) : undefined,
+    line.fare
+      ? t('lineDetail.extra.fare', {
+          fare: formatFareTextWithoutCurrencyUnit(line.fare) ?? line.fare,
+        })
+      : undefined,
     line.departureTimes?.length
       ? t('lineDetail.extra.departures', { count: line.departureTimes.length })
       : undefined,

@@ -54,6 +54,7 @@ export async function createTransitDataRevision(input: {
     summary: input.snapshot.summary,
     lines: input.snapshot.lines,
     stations: input.snapshot.stations,
+    stationDetails: input.snapshot.stationDetails,
     validation: input.validation,
     importedBy: input.actorId,
     importedAt: now,
