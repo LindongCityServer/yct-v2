@@ -213,7 +213,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -Target
 ```
 
 如果希望部署完成后直接启动：
-
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot C:\wwwroot\yct-v2 -StartAfterDeploy -Port 3300 -HostName 127.0.0.1 -BasePath v2 -NodePath "C:\node-v22\node.exe"
 ```
