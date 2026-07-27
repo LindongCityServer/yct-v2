@@ -22,6 +22,10 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { appPath } from '../lib/app-paths';
+import {
+  getTransitStationServiceModes,
+  isTransitPoiMarkerCompatibleWithStation,
+} from '../lib/transit-station-mode';
 import { EmbeddedMapLocationPicker } from './embedded-map-location-picker';
 import type { TransitStationDetailUpdateInput } from '@yct/schemas';
 
@@ -2757,9 +2761,13 @@ function TransitStationCoordinateDialog({
   const [poiSearchText, setPoiSearchText] = useState(station.boundPoiLabel ?? station.name);
   const [boundPoiMarkerId, setBoundPoiMarkerId] = useState(initialBoundPoiRefs[0]?.markerId ?? '');
   const [error, setError] = useState('');
+  const stationModes = useMemo(
+    () => getTransitStationServiceModes(revision, station.sourceId),
+    [revision, station.sourceId],
+  );
   const bindablePoiOptions = useMemo(
-    () => buildTransitBindablePoiOptions(mapMarkers),
-    [mapMarkers],
+    () => buildTransitBindablePoiOptions(mapMarkers, stationModes),
+    [mapMarkers, stationModes],
   );
   const filteredPoiOptions = useMemo(() => {
     const normalizedSearch = normalizeSearchText(poiSearchText);
@@ -2895,6 +2903,13 @@ function TransitStationCoordinateDialog({
               {boundPoiRefs.length > 0 ? `已绑定 ${boundPoiRefs.length} 个 POI` : '未绑定'}
             </span>
           </div>
+          <p className="muted">
+            服务交通方式：
+            {stationModes.length > 0
+              ? stationModes.map(formatTransitMode).join('、')
+              : '未接入线路'}
+            。 候选项仅显示对应交通方式的站点 POI。
+          </p>
           <div className="transit-station-binding-toolbar">
             <label className="transit-admin-search">
               <span>搜索 POI</span>
@@ -3123,9 +3138,13 @@ function formatStationDetailTransfers(transfers: TransitStationTransferEdit[]): 
 function formatStationDetailExits(exits: TransitStationExitEdit[]): string {
   return exits
     .map((exit) =>
-      [exit.code, exit.description ?? '', exit.floor ?? '', exit.direction ?? '', exit.orientation ?? ''].join(
-        ' | ',
-      ),
+      [
+        exit.code,
+        exit.description ?? '',
+        exit.floor ?? '',
+        exit.direction ?? '',
+        exit.orientation ?? '',
+      ].join(' | '),
     )
     .join('\n');
 }
@@ -3185,13 +3204,15 @@ function parseStationDetailTransfers(value: string): TransitStationTransferEdit[
 }
 
 function parseStationDetailExits(value: string): TransitStationExitEdit[] {
-  return splitStationDetailRows(value).map(([code = '', description, floor, direction, orientation]) => ({
-    code,
-    description: description || undefined,
-    floor: floor || undefined,
-    direction: direction === 'upwards' || direction === 'downwards' ? direction : undefined,
-    orientation: orientation || undefined,
-  }));
+  return splitStationDetailRows(value).map(
+    ([code = '', description, floor, direction, orientation]) => ({
+      code,
+      description: description || undefined,
+      floor: floor || undefined,
+      direction: direction === 'upwards' || direction === 'downwards' ? direction : undefined,
+      orientation: orientation || undefined,
+    }),
+  );
 }
 
 function TransitStationDetailDialog({
@@ -3216,7 +3237,9 @@ function TransitStationDetailDialog({
   const [facilitiesUpwardsText, setFacilitiesUpwardsText] = useState(
     formatStationDetailFacilities(detail.facilitiesUpwards ?? []),
   );
-  const [transfersText, setTransfersText] = useState(formatStationDetailTransfers(detail.transfers));
+  const [transfersText, setTransfersText] = useState(
+    formatStationDetailTransfers(detail.transfers),
+  );
   const [exitsText, setExitsText] = useState(formatStationDetailExits(detail.exits));
   const [surroundingText, setSurroundingText] = useState(detail.surroundingStationNames.join('\n'));
   const [swapExitLayersText, setSwapExitLayersText] = useState(
@@ -3256,7 +3279,11 @@ function TransitStationDetailDialog({
   };
 
   return (
-    <div className="modal-backdrop transit-station-detail-backdrop" role="presentation" onMouseDown={onClose}>
+    <div
+      className="modal-backdrop transit-station-detail-backdrop"
+      role="presentation"
+      onMouseDown={onClose}
+    >
       <form
         className="modal-panel admin-transit-dialog transit-station-detail-editor"
         role="dialog"
@@ -3274,7 +3301,12 @@ function TransitStationDetailDialog({
         <div className="transit-station-detail-editor-grid">
           <label>
             <span>站台开门侧</span>
-            <select value={platformSide} onChange={(event) => setPlatformSide(event.currentTarget.value as typeof platformSide)}>
+            <select
+              value={platformSide}
+              onChange={(event) =>
+                setPlatformSide(event.currentTarget.value as typeof platformSide)
+              }
+            >
               <option value="left">左侧</option>
               <option value="right">右侧</option>
               <option value="both">两侧</option>
@@ -3282,7 +3314,11 @@ function TransitStationDetailDialog({
             </select>
           </label>
           <label className="transit-station-detail-checkbox">
-            <input type="checkbox" checked={overGround} onChange={(event) => setOverGround(event.currentTarget.checked)} />
+            <input
+              type="checkbox"
+              checked={overGround}
+              onChange={(event) => setOverGround(event.currentTarget.checked)}
+            />
             <span>地面站</span>
           </label>
           <label className="transit-station-detail-checkbox">
@@ -3295,10 +3331,18 @@ function TransitStationDetailDialog({
           </label>
           <label>
             <span>出口楼层互换（两项逗号分隔）</span>
-            <input value={swapExitLayersText} onChange={(event) => setSwapExitLayersText(event.currentTarget.value)} placeholder="B1, B2" />
+            <input
+              value={swapExitLayersText}
+              onChange={(event) => setSwapExitLayersText(event.currentTarget.value)}
+              placeholder="B1, B2"
+            />
           </label>
         </div>
-        <StationDetailEditorTextarea label="楼层（每行：楼层 | 性质）" value={layersText} onChange={setLayersText} />
+        <StationDetailEditorTextarea
+          label="楼层（每行：楼层 | 性质）"
+          value={layersText}
+          onChange={setLayersText}
+        />
         <StationDetailEditorTextarea
           label="下行方向设施（每行：类型 | 相对位置 | 所在层 | 终点层 | 开口方向 | 单向 | 朝向）"
           value={facilitiesText}
@@ -3319,7 +3363,11 @@ function TransitStationDetailDialog({
           value={exitsText}
           onChange={setExitsText}
         />
-        <StationDetailEditorTextarea label="周边站名（每行一个）" value={surroundingText} onChange={setSurroundingText} />
+        <StationDetailEditorTextarea
+          label="周边站名（每行一个）"
+          value={surroundingText}
+          onChange={setSurroundingText}
+        />
         {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
         <div className="admin-content-actions">
           <button type="button" onClick={onClose} disabled={isBusy}>
@@ -4587,11 +4635,18 @@ function clampTransitPreviewTileZoom(zoom: number): number {
   return Math.min(3, Math.max(-7, zoom));
 }
 
-function buildTransitBindablePoiOptions(markers: MapMarker[]): TransitStationPoiBindingOption[] {
+function buildTransitBindablePoiOptions(
+  markers: MapMarker[],
+  stationModes: TransitDataRevision['lines'][number]['mode'][],
+): TransitStationPoiBindingOption[] {
   return markers
     .map((marker) => {
       const coordinate = getTransitMarkerRepresentativeCoordinate(marker.geometry);
-      if (!coordinate || !isBindableTransitPoiMarker(marker)) {
+      if (
+        !coordinate ||
+        !isBindableTransitPoiMarker(marker) ||
+        !isTransitPoiMarkerCompatibleWithStation(marker, stationModes)
+      ) {
         return null;
       }
 

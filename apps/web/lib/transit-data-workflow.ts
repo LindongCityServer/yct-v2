@@ -18,6 +18,11 @@ import {
 } from '@yct/domain';
 import { publishDomainEvent } from './app-event-bus';
 import { readLegacyTransitSnapshot, type LegacyTransitSnapshot } from './legacy-transit';
+import {
+  getTransitPoiMarkerModes,
+  getTransitStationServiceModes,
+  isTransitPoiMarkerCompatibleWithStation,
+} from './transit-station-mode';
 import { ensureTransitCacheInvalidationListenersRegistered } from './transit-cache-invalidation-listeners';
 import {
   createTransitDataRevision,
@@ -216,6 +221,10 @@ function getTransitBindingMarkerScore(
   marker: MapMarkerSnapshot['markers'][number],
   modes: Array<TransitDataRevision['lines'][number]['mode']>,
 ): number {
+  if (!isTransitPoiMarkerCompatibleWithStation(marker, modes)) {
+    return 0;
+  }
+
   const categoryId = marker.categoryId?.toLowerCase() ?? '';
   const iconBaseName = getTransitBindingMarkerIconBaseName(marker.iconFileName);
   const source = `${categoryId} ${iconBaseName}`;
@@ -533,6 +542,22 @@ export async function updateTransitStationCoordinate(input: {
     input.boundPoiMarkerId,
     input.boundPoiLabel,
   );
+  const stationModes = getTransitStationServiceModes(revision, station.sourceId);
+  const incompatibleBoundPoi = nextBoundPoiRefs.find((ref) => {
+    const marker = { categoryId: ref.categoryId };
+    return (
+      getTransitPoiMarkerModes(marker).length > 0 &&
+      !isTransitPoiMarkerCompatibleWithStation(marker, stationModes)
+    );
+  });
+  if (incompatibleBoundPoi) {
+    return {
+      ok: false,
+      status: 422,
+      error: 'transit_station_poi_mode_mismatch',
+      message: `站点当前服务的交通方式与 POI「${incompatibleBoundPoi.label}」的分类不匹配。`,
+    };
+  }
   const primaryBoundPoiRef = nextBoundPoiRefs[0];
   const nextBoundPoiMarkerId = primaryBoundPoiRef?.markerId;
   const nextBoundPoiLabel = primaryBoundPoiRef?.label;
@@ -622,7 +647,7 @@ export async function updateTransitStationDetail(input: {
   if (!revision) {
     return notFound();
   }
-  if (!canEditTransitRevisionStationCoordinate(revision.status)) {
+  if (!canEditTransitRevisionLine(revision.status)) {
     return invalidTransition('当前交通数据版本状态不允许编辑站内设施信息。');
   }
 
@@ -680,7 +705,8 @@ export async function updateTransitStationDetail(input: {
     stations: revision.stations,
   });
   const updatedAt = new Date().toISOString();
-  const shouldResetReviewTrail = revision.status === 'pending_review' || revision.status === 'approved';
+  const shouldResetReviewTrail =
+    revision.status === 'pending_review' || revision.status === 'approved';
   const updated = await updateTransitDataRevision(input.revisionId, (current) => ({
     ...current,
     lines: nextLines,

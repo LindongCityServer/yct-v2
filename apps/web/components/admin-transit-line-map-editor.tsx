@@ -16,6 +16,7 @@ import type {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { appPath } from '../lib/app-paths';
+import { isTransitPoiMarkerCompatibleWithStation } from '../lib/transit-station-mode';
 import {
   buildVisualRoadGraph,
   isVisualRoadMarker,
@@ -926,7 +927,7 @@ export function AdminTransitLineMapEditor({
               mapView,
               viewportSize,
             );
-            const modeMatched = isMarkerForTransitMode(marker, data.line.mode);
+            const modeMatched = isTransitPoiMarkerCompatibleWithStation(marker, [data.line.mode]);
             return isPointVisible(point, viewportSize, 30) ? (
               <g
                 className={`transit-visual-poi${modeMatched ? ' is-mode-match' : ''}`}
@@ -1583,35 +1584,6 @@ function isRoadLinearMarker(marker: MapMarkerSnapshot['markers'][number]): boole
     isVisualRoadMarker(marker) &&
     (marker.geometry.type === 'MultiPoint' || marker.geometry.type === 'LineString')
   );
-}
-
-function isMarkerForTransitMode(
-  marker: MapMarkerSnapshot['markers'][number],
-  mode: TransitLine['mode'],
-): boolean {
-  const source = [marker.categoryId, marker.iconFileName, marker.symbolIcon]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-  if (isVisualRoadMarker(marker)) {
-    return false;
-  }
-  switch (mode) {
-    case 'metro':
-      return /metro|subway/.test(source);
-    case 'tram':
-      return /tram|light[-_ ]?rail/.test(source);
-    case 'bus':
-      return /bus|stop/.test(source);
-    case 'coach':
-      return /coach|bus[-_ ]?station|terminal/.test(source);
-    case 'ferry':
-      return /ferry|port|pier/.test(source);
-    case 'railway':
-      return /railway|rail[-_ ]?station|train/.test(source);
-    case 'custom':
-      return false;
-  }
 }
 
 function formatVisualMarkerLabel(label: string): string {
