@@ -86,6 +86,16 @@ const transitDepartureScheduleRuleSchema = z.object({
   additionalDepartures: z.number().int().min(1).max(512).optional(),
 });
 
+const transitStationFacilitySchema = z.object({
+  type: z.string().trim().min(1).max(80),
+  location: z.number().finite().optional(),
+  floor: z.string().trim().max(40).optional(),
+  endFloor: z.string().trim().max(40).optional(),
+  direction: z.string().trim().max(80).optional(),
+  oneWay: z.string().trim().max(40).optional(),
+  orientation: z.string().trim().max(80).optional(),
+});
+
 export const transitDataImportSchema = z.object({
   sourceProviderId: idSchema.default('legacy-yct'),
 });
@@ -134,6 +144,7 @@ export const transitLineDraftSchema = z.object({
   mode: transitModeSchema,
   name: z.string().trim().min(1).max(120),
   color: colorHexSchema.optional(),
+  maxCarCount: z.number().int().min(1).max(64).optional(),
   routeMode: z.enum(['straight', 'road']).optional(),
   routeNodes: z.array(transitLineRouteNodeSchema).min(2).max(512).optional(),
   stationSourceIds: z.array(stationSourceIdSchema).min(2).max(256),
@@ -206,6 +217,49 @@ export const transitStationCoordinateUpdateSchema = z.object({
   boundPoiLabel: z.string().trim().max(120).optional().nullable(),
 });
 
+export const transitStationDetailUpdateSchema = z.object({
+  overGround: z.boolean().optional(),
+  platformSide: z.enum(['left', 'right', 'both', 'none']).optional(),
+  layers: z
+    .array(
+      z.object({
+        floor: z.string().trim().min(1).max(40),
+        type: z.string().trim().min(1).max(80),
+        order: z.number().int().nonnegative().optional(),
+      }),
+    )
+    .max(64),
+  facilities: z.array(transitStationFacilitySchema).max(256),
+  facilitiesUpwards: z.array(transitStationFacilitySchema).max(256).optional(),
+  transfers: z
+    .array(
+      z.object({
+        line: z.string().trim().min(1).max(80),
+        floor: z.string().trim().max(40).optional(),
+        direction: z.string().trim().max(80).optional(),
+        location: z.number().finite().optional(),
+        transferDirection: z.enum(['upwards', 'downwards']).optional(),
+      }),
+    )
+    .max(64),
+  exits: z
+    .array(
+      z.object({
+        code: z.string().trim().min(1).max(40),
+        description: z.string().trim().max(300).optional(),
+        floor: z.string().trim().max(40).optional(),
+        direction: z.enum(['upwards', 'downwards']).optional(),
+        orientation: z.string().trim().max(80).optional(),
+      }),
+    )
+    .max(256),
+  surroundingStationNames: z.array(z.string().trim().min(1).max(120)).max(80),
+  swapExitLayers: z
+    .tuple([z.string().trim().min(1).max(40), z.string().trim().min(1).max(40)])
+    .optional(),
+  flipTemplateForUpwards: z.boolean().optional(),
+});
+
 export const transitLineStationOrderUpdateSchema = z.object({
   stationSourceIds: z.array(z.string().trim().min(1).max(120)).min(2).max(256),
 });
@@ -223,6 +277,9 @@ export type TravelScheduleTripDraftInput = z.infer<typeof travelScheduleTripDraf
 export type TravelScheduleTripUpdateInput = z.infer<typeof travelScheduleTripUpdateSchema>;
 export type TransitStationCoordinateUpdateInput = z.infer<
   typeof transitStationCoordinateUpdateSchema
+>;
+export type TransitStationDetailUpdateInput = z.infer<
+  typeof transitStationDetailUpdateSchema
 >;
 export type TransitLineStationOrderUpdateInput = z.infer<
   typeof transitLineStationOrderUpdateSchema

@@ -27,6 +27,7 @@ export type LegacyTransitMode = 'metro' | 'tram' | 'bus' | 'coach' | 'ferry' | '
 interface LegacyLineRecord {
   name?: string;
   color?: string;
+  maxCarCount?: number;
   operator?: string | string[];
   fare?: string | number;
   firstLastBus?: {
@@ -67,12 +68,15 @@ interface LegacyCoachRuntimeSegmentRecord {
 
 interface LegacyMetroStationDetailLineRecord {
   name?: string;
+  maxCarCount?: number;
   stationTemplate?: LegacyMetroStationTemplateRecord[];
   stations?: LegacyMetroStationDetailRecord[];
 }
 
 interface LegacyMetroStationTemplateRecord extends LegacyMetroStationBaseRecord {
   name?: string;
+  swapExitLayers?: [string, string];
+  flipTemplateForUpwards?: boolean;
 }
 
 interface LegacyMetroStationDetailRecord extends LegacyMetroStationBaseRecord {
@@ -81,6 +85,8 @@ interface LegacyMetroStationDetailRecord extends LegacyMetroStationBaseRecord {
   exits?: LegacyMetroStationExitGroupRecord[];
   transfer?: LegacyMetroStationTransferRecord[];
   surrounding_stations?: string[];
+  swapExitLayers?: [string, string];
+  flipTemplateForUpwards?: boolean;
 }
 
 interface LegacyMetroStationBaseRecord {
@@ -88,6 +94,8 @@ interface LegacyMetroStationBaseRecord {
   layers?: LegacyMetroStationLayerRecord[];
   facilities?: LegacyMetroStationFacilityRecord[];
   facilitiesUpwards?: LegacyMetroStationFacilityRecord[];
+  swapExitLayers?: [string, string];
+  flipTemplateForUpwards?: boolean;
 }
 
 interface LegacyMetroStationLayerRecord {
@@ -102,6 +110,7 @@ interface LegacyMetroStationFacilityRecord {
   endFloor?: string;
   direction?: string;
   oneWay?: string;
+  orientation?: string;
 }
 
 interface LegacyMetroStationTransferRecord {
@@ -109,6 +118,7 @@ interface LegacyMetroStationTransferRecord {
   floor?: string;
   direction?: string;
   location?: number;
+  transferDirection?: 'upwards' | 'downwards';
 }
 
 interface LegacyMetroStationExitGroupRecord {
@@ -120,6 +130,7 @@ interface LegacyMetroStationExitGroupRecord {
 interface LegacyMetroStationExitRecord {
   code?: string;
   description?: string;
+  orientation?: string;
 }
 
 type LegacyStationRecord =
@@ -221,6 +232,7 @@ export function parseLegacyTransitSource(input: {
       stationSourceIds,
       stops,
       color: normalizeColor(line.color),
+      maxCarCount: normalizePositiveInteger(line.maxCarCount),
       operator: normalizeLegacyText(line.operator),
       fare: normalizeLegacyFare(line.fare),
       firstLastBus: line.firstLastBus,
@@ -479,11 +491,17 @@ export function parseLegacyMetroStationDetailSource(input: {
           lineName,
           stationName,
           overGround: merged.overGround,
+          maxCarCount: normalizePositiveInteger(line.maxCarCount),
           layers: normalizeStationLayers(merged.layers),
           facilities: normalizeStationFacilities(merged.facilities),
+          facilitiesUpwards: merged.facilitiesUpwards
+            ? normalizeStationFacilities(merged.facilitiesUpwards)
+            : undefined,
           transfers: normalizeStationTransfers(station.transfer),
           exits: normalizeStationExits(station.exits),
           surroundingStationNames: uniqueValues(station.surrounding_stations ?? []),
+          swapExitLayers: merged.swapExitLayers,
+          flipTemplateForUpwards: merged.flipTemplateForUpwards,
           sourcePath: input.sourcePath,
         });
       });
@@ -609,14 +627,22 @@ function mergeStationTemplate(
       template?.facilities ??
       template?.facilitiesUpwards ??
       [],
+    facilitiesUpwards: station.facilitiesUpwards ?? template?.facilitiesUpwards,
+    swapExitLayers: station.swapExitLayers ?? template?.swapExitLayers,
+    flipTemplateForUpwards:
+      station.flipTemplateForUpwards ?? template?.flipTemplateForUpwards,
   };
 }
 
+function normalizePositiveInteger(value: number | undefined): number | undefined {
+  return value !== undefined && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
 function normalizeStationLayers(layers: LegacyMetroStationLayerRecord[] | undefined) {
-  return (layers ?? []).flatMap((layer) => {
+  return (layers ?? []).flatMap((layer, order) => {
     const floor = normalizeLegacyString(layer.floor);
     const type = normalizeLegacyString(layer.type);
-    return floor && type ? [{ floor, type }] : [];
+    return floor && type ? [{ floor, type, order }] : [];
   });
 }
 
@@ -635,6 +661,7 @@ function normalizeStationFacilities(facilities: LegacyMetroStationFacilityRecord
         endFloor: normalizeLegacyString(facility.endFloor),
         direction: normalizeLegacyString(facility.direction),
         oneWay: normalizeLegacyString(facility.oneWay),
+        orientation: normalizeLegacyString(facility.orientation),
       },
     ];
   });
@@ -653,6 +680,7 @@ function normalizeStationTransfers(transfers: LegacyMetroStationTransferRecord[]
         floor: normalizeLegacyString(transfer.floor),
         direction: normalizeLegacyString(transfer.direction),
         location: Number.isFinite(transfer.location) ? transfer.location : undefined,
+        transferDirection: transfer.transferDirection,
       },
     ];
   });
@@ -679,6 +707,7 @@ function normalizeStationExitDirection(
       {
         code,
         description: normalizeLegacyString(exit.description),
+        orientation: normalizeLegacyString(exit.orientation),
         floor: normalizeLegacyString(group.floor),
         direction,
       },

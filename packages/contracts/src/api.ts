@@ -66,6 +66,13 @@ export interface OperationsStrongReminderItem {
   displayEndDate?: string;
 }
 
+export interface OperationsServerStatus {
+  availability: 'online' | 'offline' | 'unknown';
+  checkedAt: ISODateTimeString;
+  latencyMs?: number;
+  onlinePlayerCount?: number;
+}
+
 export interface ServiceEntryGroup {
   categoryId: ServiceEntry['categoryId'];
   title: string;

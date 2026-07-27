@@ -275,6 +275,28 @@ export interface TransitDataRevisionStationCreatedPayload {
   createdAt: ISODateTimeString;
 }
 
+export interface TransitDataRevisionStationDetailUpdatedPayload {
+  datasetId: string;
+  revisionId: string;
+  detailSourceId: string;
+  lineName: string;
+  stationName: string;
+  updatedBy: string;
+  updatedAt: ISODateTimeString;
+  changedFields: Array<
+    | 'platformSide'
+    | 'overGround'
+    | 'layers'
+    | 'facilities'
+    | 'facilitiesUpwards'
+    | 'transfers'
+    | 'exits'
+    | 'surroundingStationNames'
+    | 'swapExitLayers'
+    | 'flipTemplateForUpwards'
+  >;
+}
+
 export interface TransitDataRevisionLineUpdatedPayload {
   datasetId: string;
   revisionId: string;
@@ -286,6 +308,7 @@ export interface TransitDataRevisionLineUpdatedPayload {
     | 'mode'
     | 'name'
     | 'color'
+    | 'maxCarCount'
     | 'routeMode'
     | 'routeNodes'
     | 'stationSourceIds'
@@ -375,6 +398,23 @@ export interface PlayerLocationPresenceChangedPayload {
   z: number;
   observedAt: ISODateTimeString;
   lastSeenAt: ISODateTimeString;
+}
+
+export interface ServerStatusObservedPayload {
+  sourceId: string;
+  observedAt: ISODateTimeString;
+  availability: 'online' | 'offline';
+  latencyMs?: number;
+  onlineCount?: number;
+}
+
+export interface RideCodeRedemptionLinkCreatedPayload {
+  ldpassUserId: string;
+  actionLinkId: string;
+  selectionScope: 'same_provider';
+  requestedValue: string;
+  verificationMethod: 'server_account' | 'pin';
+  expiresAt: ISODateTimeString;
 }
 
 export interface TripReminderScheduledPayload {
@@ -905,6 +945,7 @@ export type YctEventPayloadMap = {
   TransitDataRevisionArchived: TransitDataRevisionArchivedPayload;
   TransitDataRevisionStationUpdated: TransitDataRevisionStationUpdatedPayload;
   TransitDataRevisionStationCreated: TransitDataRevisionStationCreatedPayload;
+  TransitDataRevisionStationDetailUpdated: TransitDataRevisionStationDetailUpdatedPayload;
   TransitDataRevisionLineUpdated: TransitDataRevisionLineUpdatedPayload;
   TransitDataRevisionLineCreated: TransitDataRevisionLineCreatedPayload;
   TransitDataRevisionLineDeleted: TransitDataRevisionLineDeletedPayload;
@@ -915,6 +956,7 @@ export type YctEventPayloadMap = {
   TileProviderSelected: TileProviderSelectedPayload;
   PlayerLocationsObserved: PlayerLocationsObservedPayload;
   PlayerLocationPresenceChanged: PlayerLocationPresenceChangedPayload;
+  ServerStatusObserved: ServerStatusObservedPayload;
   TripReminderScheduled: TripReminderScheduledPayload;
   TripReminderDeleted: TripReminderDeletedPayload;
   PushPreferenceUpdated: PushPreferenceUpdatedPayload;
@@ -962,6 +1004,7 @@ export type YctEventPayloadMap = {
   TicketRefundRequested: TicketRefundRequestedPayload;
   TicketRefundCompleted: TicketRefundCompletedPayload;
   LdpassTicketStatusSynced: LdpassTicketStatusSyncedPayload;
+  RideCodeRedemptionLinkCreated: RideCodeRedemptionLinkCreatedPayload;
   AdminInitialized: AdminInitializedPayload;
   AdminMembershipUpdated: AdminMembershipUpdatedPayload;
 };

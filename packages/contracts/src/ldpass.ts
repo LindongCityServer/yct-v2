@@ -101,6 +101,35 @@ export interface LdpassTicketReference {
   claimUrl?: string;
 }
 
+export interface LdpassCreateActionLinkInput {
+  kind: 'use';
+  targetPassId?: string;
+  selectionScope?: 'same_provider' | 'top_up_sources' | 'all_authorized';
+  clientId?: string;
+  requestedValue: string;
+  verificationMethod: 'server_account' | 'pin';
+  expiresInSeconds?: number;
+  note?: string;
+  idempotencyKey: string;
+}
+
+export interface LdpassProviderActionLink {
+  id: string;
+  kind: 'use';
+  status: 'Active';
+  targetPassId?: string | null;
+  selectionScope?: 'same_provider' | 'top_up_sources' | 'all_authorized' | null;
+  requestedValue: string;
+  verificationMethod: 'server_account' | 'pin';
+  expiresAt: ISODateTimeString;
+  token: string;
+  actionPath: string;
+}
+
+export interface LdpassCreateActionLinkResponse {
+  actionLink: LdpassProviderActionLink;
+}
+
 export type YctAdminRole = 'admin' | 'super_admin';
 
 export interface YctAdminMembership {

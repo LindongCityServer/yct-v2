@@ -60,6 +60,7 @@ export const legacyTransitLineImportItemSchema = z.object({
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/)
     .optional(),
+  maxCarCount: z.number().int().min(1).max(64).optional(),
   operator: z.string().trim().max(200).optional(),
   fare: z.string().trim().max(120).optional(),
   firstLastBus: z
@@ -141,11 +142,13 @@ export const legacyMetroStationDetailImportItemSchema = z.object({
   lineName: nonEmptyTextSchema,
   stationName: nonEmptyTextSchema,
   overGround: z.boolean().optional(),
+  maxCarCount: z.number().int().min(1).max(64).optional(),
   layers: z
     .array(
       z.object({
         floor: z.string().trim().min(1).max(40),
         type: z.string().trim().min(1).max(80),
+        order: z.number().int().nonnegative().optional(),
       }),
     )
     .max(64),
@@ -158,6 +161,7 @@ export const legacyMetroStationDetailImportItemSchema = z.object({
         endFloor: z.string().trim().max(40).optional(),
         direction: z.string().trim().max(80).optional(),
         oneWay: z.string().trim().max(40).optional(),
+        orientation: z.string().trim().max(80).optional(),
       }),
     )
     .max(256),
@@ -168,6 +172,7 @@ export const legacyMetroStationDetailImportItemSchema = z.object({
         floor: z.string().trim().max(40).optional(),
         direction: z.string().trim().max(80).optional(),
         location: z.number().finite().optional(),
+        transferDirection: z.enum(['upwards', 'downwards']).optional(),
       }),
     )
     .max(64),
@@ -178,10 +183,29 @@ export const legacyMetroStationDetailImportItemSchema = z.object({
         description: z.string().trim().max(300).optional(),
         floor: z.string().trim().max(40).optional(),
         direction: z.enum(['upwards', 'downwards']).optional(),
+        orientation: z.string().trim().max(80).optional(),
       }),
     )
     .max(256),
   surroundingStationNames: z.array(nonEmptyTextSchema).max(80),
+  facilitiesUpwards: z
+    .array(
+      z.object({
+        type: z.string().trim().min(1).max(80),
+        location: z.number().finite().optional(),
+        floor: z.string().trim().max(40).optional(),
+        endFloor: z.string().trim().max(40).optional(),
+        direction: z.string().trim().max(80).optional(),
+        oneWay: z.string().trim().max(40).optional(),
+        orientation: z.string().trim().max(80).optional(),
+      }),
+    )
+    .max(256)
+    .optional(),
+  swapExitLayers: z
+    .tuple([z.string().trim().min(1).max(40), z.string().trim().min(1).max(40)])
+    .optional(),
+  flipTemplateForUpwards: z.boolean().optional(),
   sourcePath: z.string().trim().min(1).max(500).optional(),
 });
 

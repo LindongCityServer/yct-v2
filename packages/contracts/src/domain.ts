@@ -21,6 +21,36 @@ export interface EntityTranslationRecord {
 export type TransportMode =
   'metro' | 'tram' | 'bus' | 'coach' | 'ferry' | 'railway' | 'walk' | 'custom';
 
+export type TransitFareQuoteStatus = 'exact' | 'estimated' | 'partial' | 'unavailable';
+
+export type TransitFareRule =
+  | 'bus_default_flat'
+  | 'bus_configured'
+  | 'rail_distance'
+  | 'coach_configured'
+  | 'ferry_flat'
+  | 'configured'
+  | 'unconfigured';
+
+export interface TransitFareBreakdownItem {
+  modes: TransportMode[];
+  lineIds: string[];
+  lineNames: string[];
+  rule: TransitFareRule;
+  status: Exclude<TransitFareQuoteStatus, 'partial'>;
+  amount?: number;
+  distanceKilometers?: number;
+  sourceText?: string;
+}
+
+export interface TransitFareQuote {
+  currency: 'CNY';
+  status: TransitFareQuoteStatus;
+  totalAmount?: number;
+  knownSubtotal: number;
+  breakdown: TransitFareBreakdownItem[];
+}
+
 export type ContentStatus =
   'draft' | 'pending_review' | 'approved' | 'scheduled' | 'published' | 'rejected' | 'archived';
 
@@ -296,6 +326,8 @@ export interface TransitLineSnapshot {
   publishedAt?: ISODateTimeString;
   archivedAt?: ISODateTimeString;
   color?: string;
+  /** 地铁/有轨线路可用的最大编组车厢数。 */
+  maxCarCount?: number;
   routeMode?: TransitLineRouteMode;
   routeNodes?: TransitLineRouteNodeSnapshot[];
   stationSourceIds: string[];
@@ -337,6 +369,8 @@ export interface TransitStationSnapshot {
 export interface TransitStationLayerSnapshot {
   floor: string;
   type: string;
+  /** 旧数据数组中的稳定层级顺序，0 表示最先声明的楼层。 */
+  order?: number;
 }
 
 export interface TransitStationFacilitySnapshot {
@@ -346,6 +380,7 @@ export interface TransitStationFacilitySnapshot {
   endFloor?: string;
   direction?: string;
   oneWay?: string;
+  orientation?: string;
 }
 
 export interface TransitStationTransferSnapshot {
@@ -353,6 +388,7 @@ export interface TransitStationTransferSnapshot {
   floor?: string;
   direction?: string;
   location?: number;
+  transferDirection?: 'upwards' | 'downwards';
 }
 
 export interface TransitStationExitSnapshot {
@@ -360,6 +396,7 @@ export interface TransitStationExitSnapshot {
   description?: string;
   floor?: string;
   direction?: 'upwards' | 'downwards';
+  orientation?: string;
 }
 
 export interface TransitStationDetailSnapshot {
@@ -369,9 +406,14 @@ export interface TransitStationDetailSnapshot {
   overGround?: boolean;
   layers: TransitStationLayerSnapshot[];
   facilities: TransitStationFacilitySnapshot[];
+  facilitiesUpwards?: TransitStationFacilitySnapshot[];
   transfers: TransitStationTransferSnapshot[];
   exits: TransitStationExitSnapshot[];
   surroundingStationNames: string[];
+  swapExitLayers?: [string, string];
+  flipTemplateForUpwards?: boolean;
+  /** 站台开门方向，来自线路停靠点 platformSide。 */
+  platformSide?: 'left' | 'right' | 'both' | 'none';
   sourcePath?: string;
 }
 
@@ -426,6 +468,7 @@ export interface TransitDataRevision {
   summary: TransitModeSnapshotSummary[];
   lines: TransitLineSnapshot[];
   stations: TransitStationSnapshot[];
+  stationDetails?: TransitStationDetailSnapshot[];
   validation: TransitDataValidationResult;
   importedBy: string;
   importedAt: ISODateTimeString;
