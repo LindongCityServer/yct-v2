@@ -1990,7 +1990,9 @@ function EditLegacyPoiMarkerDialog({
           }}
         />
         <ParentMarkerSelect
+          categories={categories}
           excludedMarkerId={marker.id}
+          iconBaseUrl={iconBaseUrl}
           markerOptions={parentMarkerOptions}
           selectedId={form.parentMarkerId}
           onChange={(parentMarkerId) => updateForm({ parentMarkerId })}
@@ -3608,7 +3610,9 @@ function EditPoiSubmissionDialog({
           </select>
         </label>
         <ParentMarkerSelect
+          categories={categories}
           excludedMarkerId={submission ? `poi-${submission.id}` : undefined}
+          iconBaseUrl={iconBaseUrl}
           markerOptions={parentMarkerOptions}
           selectedId={form.parentMarkerId}
           onChange={(parentMarkerId) => updateForm({ parentMarkerId })}
@@ -3909,17 +3913,25 @@ function AdminPoiImageEditor({
 }
 
 function ParentMarkerSelect({
+  categories,
   excludedMarkerId,
+  iconBaseUrl,
   markerOptions,
   onChange,
   selectedId,
 }: Readonly<{
+  categories: PoiCategory[];
   excludedMarkerId?: string;
+  iconBaseUrl: string;
   markerOptions: MapMarker[];
   onChange: (markerId: string) => void;
   selectedId: string;
 }>) {
   const [query, setQuery] = useState('');
+  const categoryById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category] as const)),
+    [categories],
+  );
   const options = useMemo(() => {
     const normalized = normalizeSearchText(query);
     return markerOptions.filter((marker) => {
@@ -3930,10 +3942,16 @@ function ParentMarkerSelect({
         return true;
       }
       return normalizeSearchText(
-        [marker.label, marker.id, ...Object.values(marker.localizedLabels ?? {})].join(' '),
+        [
+          marker.label,
+          marker.id,
+          marker.categoryId,
+          categoryById.get(marker.categoryId ?? '')?.name,
+          ...Object.values(marker.localizedLabels ?? {}),
+        ].join(' '),
       ).includes(normalized);
     });
-  }, [excludedMarkerId, markerOptions, query, selectedId]);
+  }, [categoryById, excludedMarkerId, markerOptions, query, selectedId]);
 
   return (
     <div className="admin-poi-parent-selector">
@@ -3946,17 +3964,49 @@ function ParentMarkerSelect({
           placeholder="输入地点名称、译名或 ID"
         />
       </label>
-      <label>
-        <span>父地点</span>
-        <select value={selectedId} onChange={(event) => onChange(event.currentTarget.value)}>
-          <option value="">无父地点</option>
-          {options.map((marker) => (
-            <option value={marker.id} key={marker.id}>
-              {marker.label} · {marker.id}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="admin-poi-parent-candidates" role="listbox" aria-label="父地点候选">
+        <button
+          className={!selectedId ? 'is-selected' : ''}
+          type="button"
+          role="option"
+          aria-selected={!selectedId}
+          onClick={() => onChange('')}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            block
+          </span>
+          <span>
+            <strong>无父地点</strong>
+            <small>不建立地点层级关系</small>
+          </span>
+        </button>
+        {options.slice(0, 24).map((marker) => {
+          const category = categoryById.get(marker.categoryId ?? '');
+          const categoryName = formatCategoryName(marker.categoryId ?? 'uncategorized', category);
+          const isSelected = marker.id === selectedId;
+          return (
+            <button
+              className={isSelected ? 'is-selected' : ''}
+              type="button"
+              role="option"
+              aria-selected={isSelected}
+              key={marker.id}
+              onClick={() => onChange(marker.id)}
+            >
+              <PoiCategoryIcon
+                category={category}
+                iconBaseUrl={iconBaseUrl}
+                iconFileName={marker.iconFileName}
+              />
+              <span>
+                <strong>{marker.label}</strong>
+                <small>{`${categoryName} · ${marker.id}`}</small>
+              </span>
+            </button>
+          );
+        })}
+        {options.length === 0 ? <p className="muted">没有匹配的父地点。</p> : null}
+      </div>
     </div>
   );
 }
