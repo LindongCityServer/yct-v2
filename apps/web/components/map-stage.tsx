@@ -15,6 +15,7 @@ import type {
   TransitLineRouteNodeSnapshot,
   TransitLineSegmentPathSnapshot,
   TransitStationDetailSnapshot,
+  TransitStationTransferSnapshot,
 } from '@yct/contracts';
 import { quoteTransitRouteFare } from '@yct/domain';
 import { useSearchParams } from 'next/navigation';
@@ -2455,16 +2456,28 @@ export function MapStage() {
       return;
     }
 
-    if (appliedSharedMarkerFocusKey === sharedMarkerFocusKey || markerSnapshot.length === 0) {
+    if (
+      appliedSharedMarkerFocusKey === sharedMarkerFocusKey ||
+      markerSnapshot.length === 0 ||
+      viewportSize.width <= 0 ||
+      viewportSize.height <= 0
+    ) {
       return;
     }
 
     const marker = findMapMarkerBySharedFocusKey(markerSnapshot, sharedMarkerFocusKey);
     if (marker && isCenterableMarker(marker)) {
       focusMapMarker(marker);
+      setAppliedSharedMarkerFocusKey(sharedMarkerFocusKey);
     }
-    setAppliedSharedMarkerFocusKey(sharedMarkerFocusKey);
-  }, [appliedSharedMarkerFocusKey, focusMapMarker, markerSnapshot, sharedMarkerFocusKey]);
+  }, [
+    appliedSharedMarkerFocusKey,
+    focusMapMarker,
+    markerSnapshot,
+    sharedMarkerFocusKey,
+    viewportSize.height,
+    viewportSize.width,
+  ]);
 
   useEffect(() => {
     if (!sharedRoutePlan) {
@@ -2474,7 +2487,11 @@ export function MapStage() {
       return;
     }
 
-    if (appliedSharedRoutePlanKey === sharedRoutePlan.key) {
+    if (
+      appliedSharedRoutePlanKey === sharedRoutePlan.key ||
+      viewportSize.width <= 0 ||
+      viewportSize.height <= 0
+    ) {
       return;
     }
 
@@ -2500,7 +2517,11 @@ export function MapStage() {
       return;
     }
 
-    if (appliedSharedCoordinateFocusKey === sharedCoordinateFocus.key) {
+    if (
+      appliedSharedCoordinateFocusKey === sharedCoordinateFocus.key ||
+      viewportSize.width <= 0 ||
+      viewportSize.height <= 0
+    ) {
       return;
     }
 
@@ -3155,253 +3176,255 @@ export function MapStage() {
         aria-label={t('map.title')}
         ref={sidebarRef}
       >
-        <div className="map-panel-section">
-          <div className="search-box map-search-box">
-            <span className="material-symbols-outlined" aria-hidden="true">
-              search
-            </span>
-            <input
-              type="search"
-              aria-label={t('map.search.aria')}
-              value={markerQuery}
-              onChange={(event) => updateMarkerQuery(event.currentTarget.value)}
-              placeholder={t('map.search.placeholder')}
-            />
-            {markerQuery ? (
-              <button
-                className="search-clear-button"
-                type="button"
-                aria-label={t('map.search.clear')}
-                onClick={() => updateMarkerQuery('')}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
-            ) : null}
-          </div>
-          {routePlanDraft ? (
-            <RoutePlanDraftCard
-              draft={routePlanDraft}
-              t={t}
-              collapsed={routePlanCollapsed}
-              editingEndpoint={editingRouteEndpoint}
-              enabledModes={routeTransportModes}
-              endpointCandidates={routeEndpointCandidates}
-              endpointQuery={routeEndpointQuery}
-              options={currentRoutePlanOptions}
-              status={currentRoutePlanStatus}
-              selectedOptionId={selectedRouteOption?.id}
-              iconBaseUrl={markerIconBaseUrl}
-              onBeginEndpointEdit={beginRouteEndpointEdit}
-              onClear={() => {
-                setRoutePlanDraft(null);
-                setEditingRouteEndpoint(null);
-                setRouteEndpointQuery('');
-              }}
-              onEndpointQueryChange={setRouteEndpointQuery}
-              onSetAllModes={(enabled) =>
-                setRouteTransportModes(
-                  Object.fromEntries(
-                    routeTransportModeOptions.map((mode) => [mode.mode, enabled]),
-                  ) as EnabledRouteTransportModes,
-                )
-              }
-              onSelectOption={setSelectedRouteOptionId}
-              onSelectEndpointCandidate={applyRouteEndpointMarker}
-              onShare={() => void shareRoutePlan()}
-              onSwapEndpoints={swapRoutePlanEndpoints}
-              onToggleCollapsed={() => setRoutePlanCollapsed((current) => !current)}
-              onToggleMode={(mode) =>
-                setRouteTransportModes((current) => ({ ...current, [mode]: !current[mode] }))
-              }
-              onUseMapCenter={updateRoutePlanOriginToMapCenter}
-            />
-          ) : null}
-          {routePlanDraft || (focusedMarker && isCenterableMarker(focusedMarker)) ? null : (
-            <div
-              className={markerListExpanded ? 'map-marker-list' : 'map-marker-list is-collapsed'}
-            >
-              <button
-                className="map-marker-list-toggle"
-                type="button"
-                aria-expanded={markerListExpanded}
-                onClick={() => setMarkerListExpanded((current) => !current)}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  {markerListExpanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
-                </span>
-                <span>
-                  {markerListCategoryId === 'player'
-                    ? t('map.categoryName.player')
-                    : markerQuery.trim()
-                      ? t('map.markerList.results')
-                      : nearbySearchCenter
-                        ? t('map.markerList.nearby', { name: nearbySearchCenter.label })
-                        : t('map.markerList.default')}
-                </span>
-                <span className="muted">
-                  {markerListCategoryId === 'player'
-                    ? t('map.markerList.playerCount', playerMarkerCounts)
-                    : t('map.markerList.count', { count: sidebarMarkers.length })}
-                </span>
-              </button>
-              {markerListExpanded ? (
-                <>
-                  {nearbySearchCenter ? (
-                    <div className="map-nearby-search-note">
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        travel_explore
-                      </span>
-                      <span>{t('map.nearby.note', { name: nearbySearchCenter.label })}</span>
-                      <button
-                        className="map-nearby-search-exit"
-                        type="button"
-                        onClick={() => setNearbySearchCenter(null)}
-                      >
-                        {t('map.nearby.exit')}
-                      </button>
-                      {nearbySearchRegion ? (
-                        <div
-                          className="map-nearby-scope-switch"
-                          aria-label={t('map.nearby.scopeAria')}
-                        >
-                          {(['outside', 'inside'] as const).map((scope) => (
-                            <button
-                              className={nearbySearchScope === scope ? 'is-active' : ''}
-                              type="button"
-                              aria-pressed={nearbySearchScope === scope}
-                              key={scope}
-                              onClick={() =>
-                                publishMapNearbySearchScopeChanged({
-                                  markerId: nearbySearchCenter.markerId,
-                                  scope,
-                                })
-                              }
-                            >
-                              {t(
-                                scope === 'outside'
-                                  ? 'map.nearby.scopeOutside'
-                                  : 'map.nearby.scopeInside',
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <div
-                    className={
-                      markerCategoryExpanded
-                        ? 'map-category-filter is-expanded'
-                        : 'map-category-filter'
-                    }
-                  >
-                    <div className="map-category-strip" aria-label={t('map.categoryFilter.aria')}>
-                      {markerListCategoryOptions.map((category) => (
-                        <button
-                          className={
-                            markerListCategoryId === category.id
-                              ? 'map-category-pill is-active'
-                              : 'map-category-pill'
-                          }
-                          type="button"
-                          key={category.id}
-                          onClick={() => setMarkerListCategoryId(category.id)}
-                        >
-                          {category.name}
-                        </button>
-                      ))}
-                    </div>
-                    {markerListCategoryOptions.length > 4 ? (
-                      <button
-                        className="map-category-toggle"
-                        type="button"
-                        aria-expanded={markerCategoryExpanded}
-                        aria-label={
-                          markerCategoryExpanded
-                            ? t('map.categoryFilter.collapse')
-                            : t('map.categoryFilter.expand')
-                        }
-                        onClick={() => setMarkerCategoryExpanded((current) => !current)}
-                      >
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          {markerCategoryExpanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
-                        </span>
-                      </button>
-                    ) : null}
-                  </div>
-                  <div className="map-marker-list-items">
-                    {sidebarMarkers.length > 0 ? (
-                      sidebarMarkers.map((marker) => {
-                        const center = getMarkerCenter(marker);
-                        const distanceDetail = formatMarkerListDistanceDetail(marker, {
-                          coordinates: nearbySearchCenter?.coordinates ?? [
-                            mapView.centerX,
-                            mapView.centerZ,
-                          ],
-                          t,
-                          secondaryPoiIndex,
-                        });
-                        const playerPresence = marker.playerLocation?.presence;
-                        const content = (
-                          <>
-                            <MarkerListIcon marker={marker} iconBaseUrl={markerIconBaseUrl} />
-                            <span>{formatMarkerDisplayName(marker.label)}</span>
-                            <span className="map-marker-list-detail">
-                              {playerPresence ? (
-                                <span className={`map-player-list-presence is-${playerPresence}`}>
-                                  <span className="material-symbols-outlined" aria-hidden="true">
-                                    {playerPresence === 'online' ? 'wifi' : 'wifi_off'}
-                                  </span>
-                                  {t(
-                                    playerPresence === 'online'
-                                      ? 'map.player.status.online'
-                                      : 'map.player.status.offline',
-                                  )}
-                                </span>
-                              ) : null}
-                              <span className="muted">{distanceDetail}</span>
-                            </span>
-                          </>
-                        );
-
-                        return (
-                          <button
-                            className={[
-                              'map-marker-list-item',
-                              marker.id === focusedMarkerId ? 'is-active' : '',
-                              playerPresence ? 'is-player' : '',
-                              playerPresence === 'offline' ? 'is-offline' : '',
-                            ]
-                              .filter(Boolean)
-                              .join(' ')}
-                            type="button"
-                            key={marker.id}
-                            disabled={!center}
-                            onClick={() => handleMapMarkerActivate(marker)}
-                          >
-                            {content}
-                          </button>
-                        );
-                      })
-                    ) : (
-                      <p className="map-marker-list-empty">
-                        {getMapMarkerListEmptyText({
-                          loadStatus,
-                          markerListCategoryId,
-                          nearbySearchCenter,
-                          t,
-                        })}
-                      </p>
-                    )}
-                  </div>
-                </>
+        {routePlanDraft ? (
+          <RoutePlanDraftCard
+            draft={routePlanDraft}
+            t={t}
+            collapsed={routePlanCollapsed}
+            editingEndpoint={editingRouteEndpoint}
+            enabledModes={routeTransportModes}
+            endpointCandidates={routeEndpointCandidates}
+            endpointQuery={routeEndpointQuery}
+            options={currentRoutePlanOptions}
+            status={currentRoutePlanStatus}
+            selectedOptionId={selectedRouteOption?.id}
+            iconBaseUrl={markerIconBaseUrl}
+            onBeginEndpointEdit={beginRouteEndpointEdit}
+            onClear={() => {
+              setRoutePlanDraft(null);
+              setEditingRouteEndpoint(null);
+              setRouteEndpointQuery('');
+            }}
+            onEndpointQueryChange={setRouteEndpointQuery}
+            onSetAllModes={(enabled) =>
+              setRouteTransportModes(
+                Object.fromEntries(
+                  routeTransportModeOptions.map((mode) => [mode.mode, enabled]),
+                ) as EnabledRouteTransportModes,
+              )
+            }
+            onSelectOption={setSelectedRouteOptionId}
+            onSelectEndpointCandidate={applyRouteEndpointMarker}
+            onShare={() => void shareRoutePlan()}
+            onSwapEndpoints={swapRoutePlanEndpoints}
+            onToggleCollapsed={() => setRoutePlanCollapsed((current) => !current)}
+            onToggleMode={(mode) =>
+              setRouteTransportModes((current) => ({ ...current, [mode]: !current[mode] }))
+            }
+            onUseMapCenter={updateRoutePlanOriginToMapCenter}
+          />
+        ) : null}
+        {!routePlanDraft && !focusedMarker ? (
+          <div className="map-panel-section">
+            <div className="search-box map-search-box">
+              <span className="material-symbols-outlined" aria-hidden="true">
+                search
+              </span>
+              <input
+                type="search"
+                aria-label={t('map.search.aria')}
+                value={markerQuery}
+                onChange={(event) => updateMarkerQuery(event.currentTarget.value)}
+                placeholder={t('map.search.placeholder')}
+              />
+              {markerQuery ? (
+                <button
+                  className="search-clear-button"
+                  type="button"
+                  aria-label={t('map.search.clear')}
+                  onClick={() => updateMarkerQuery('')}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    close
+                  </span>
+                </button>
               ) : null}
             </div>
-          )}
-        </div>
-        {focusedMarker && isCenterableMarker(focusedMarker) ? (
+            {routePlanDraft || (focusedMarker && isCenterableMarker(focusedMarker)) ? null : (
+              <div
+                className={markerListExpanded ? 'map-marker-list' : 'map-marker-list is-collapsed'}
+              >
+                <button
+                  className="map-marker-list-toggle"
+                  type="button"
+                  aria-expanded={markerListExpanded}
+                  onClick={() => setMarkerListExpanded((current) => !current)}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    {markerListExpanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
+                  </span>
+                  <span>
+                    {markerListCategoryId === 'player'
+                      ? t('map.categoryName.player')
+                      : markerQuery.trim()
+                        ? t('map.markerList.results')
+                        : nearbySearchCenter
+                          ? t('map.markerList.nearby', { name: nearbySearchCenter.label })
+                          : t('map.markerList.default')}
+                  </span>
+                  <span className="muted">
+                    {markerListCategoryId === 'player'
+                      ? t('map.markerList.playerCount', playerMarkerCounts)
+                      : t('map.markerList.count', { count: sidebarMarkers.length })}
+                  </span>
+                </button>
+                {markerListExpanded ? (
+                  <>
+                    {nearbySearchCenter ? (
+                      <div className="map-nearby-search-note">
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          travel_explore
+                        </span>
+                        <span>{t('map.nearby.note', { name: nearbySearchCenter.label })}</span>
+                        <button
+                          className="map-nearby-search-exit"
+                          type="button"
+                          onClick={() => setNearbySearchCenter(null)}
+                        >
+                          {t('map.nearby.exit')}
+                        </button>
+                        {nearbySearchRegion ? (
+                          <div
+                            className="map-nearby-scope-switch"
+                            aria-label={t('map.nearby.scopeAria')}
+                          >
+                            {(['outside', 'inside'] as const).map((scope) => (
+                              <button
+                                className={nearbySearchScope === scope ? 'is-active' : ''}
+                                type="button"
+                                aria-pressed={nearbySearchScope === scope}
+                                key={scope}
+                                onClick={() =>
+                                  publishMapNearbySearchScopeChanged({
+                                    markerId: nearbySearchCenter.markerId,
+                                    scope,
+                                  })
+                                }
+                              >
+                                {t(
+                                  scope === 'outside'
+                                    ? 'map.nearby.scopeOutside'
+                                    : 'map.nearby.scopeInside',
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <div
+                      className={
+                        markerCategoryExpanded
+                          ? 'map-category-filter is-expanded'
+                          : 'map-category-filter'
+                      }
+                    >
+                      <div className="map-category-strip" aria-label={t('map.categoryFilter.aria')}>
+                        {markerListCategoryOptions.map((category) => (
+                          <button
+                            className={
+                              markerListCategoryId === category.id
+                                ? 'map-category-pill is-active'
+                                : 'map-category-pill'
+                            }
+                            type="button"
+                            key={category.id}
+                            onClick={() => setMarkerListCategoryId(category.id)}
+                          >
+                            {category.name}
+                          </button>
+                        ))}
+                      </div>
+                      {markerListCategoryOptions.length > 4 ? (
+                        <button
+                          className="map-category-toggle"
+                          type="button"
+                          aria-expanded={markerCategoryExpanded}
+                          aria-label={
+                            markerCategoryExpanded
+                              ? t('map.categoryFilter.collapse')
+                              : t('map.categoryFilter.expand')
+                          }
+                          onClick={() => setMarkerCategoryExpanded((current) => !current)}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            {markerCategoryExpanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
+                          </span>
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="map-marker-list-items">
+                      {sidebarMarkers.length > 0 ? (
+                        sidebarMarkers.map((marker) => {
+                          const center = getMarkerCenter(marker);
+                          const distanceDetail = formatMarkerListDistanceDetail(marker, {
+                            coordinates: nearbySearchCenter?.coordinates ?? [
+                              mapView.centerX,
+                              mapView.centerZ,
+                            ],
+                            t,
+                            secondaryPoiIndex,
+                          });
+                          const playerPresence = marker.playerLocation?.presence;
+                          const content = (
+                            <>
+                              <MarkerListIcon marker={marker} iconBaseUrl={markerIconBaseUrl} />
+                              <span>{formatMarkerDisplayName(marker.label)}</span>
+                              <span className="map-marker-list-detail">
+                                {playerPresence ? (
+                                  <span className={`map-player-list-presence is-${playerPresence}`}>
+                                    <span className="material-symbols-outlined" aria-hidden="true">
+                                      {playerPresence === 'online' ? 'wifi' : 'wifi_off'}
+                                    </span>
+                                    {t(
+                                      playerPresence === 'online'
+                                        ? 'map.player.status.online'
+                                        : 'map.player.status.offline',
+                                    )}
+                                  </span>
+                                ) : null}
+                                <span className="muted">{distanceDetail}</span>
+                              </span>
+                            </>
+                          );
+
+                          return (
+                            <button
+                              className={[
+                                'map-marker-list-item',
+                                marker.id === focusedMarkerId ? 'is-active' : '',
+                                playerPresence ? 'is-player' : '',
+                                playerPresence === 'offline' ? 'is-offline' : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ')}
+                              type="button"
+                              key={marker.id}
+                              disabled={!center}
+                              onClick={() => handleMapMarkerActivate(marker)}
+                            >
+                              {content}
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <p className="map-marker-list-empty">
+                          {getMapMarkerListEmptyText({
+                            loadStatus,
+                            markerListCategoryId,
+                            nearbySearchCenter,
+                            t,
+                          })}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            )}
+          </div>
+        ) : null}
+        {!routePlanDraft && focusedMarker && isCenterableMarker(focusedMarker) ? (
           <aside
             className={
               poiDetailCollapsed ? 'map-poi-detail-panel is-collapsed' : 'map-poi-detail-panel'
@@ -3659,6 +3682,7 @@ export function MapStage() {
                           details={focusedTransitStationDetails}
                           lines={transitOverview?.lines ?? []}
                           key={focusedMarker.id}
+                          t={t}
                         />
                       ) : null}
                       {focusedMarker.facilities?.length ? (
@@ -4809,8 +4833,8 @@ function MapShareDialog({
           </div>
           {payload.meta.length > 0 ? (
             <div className="map-share-preview-meta">
-              {payload.meta.map((item) => (
-                <span key={item}>{item}</span>
+              {payload.meta.map((item, index) => (
+                <span key={`${item}-${index}`}>{item}</span>
               ))}
             </div>
           ) : null}
@@ -10062,36 +10086,54 @@ function isMetroStationPoi(
 function TransitStationInfrastructureDetail({
   details,
   lines,
+  t,
 }: Readonly<{
   details: TransitStationDetailSnapshot[];
   lines: TransitOverviewLine[];
+  t: Translate;
 }>) {
-  const [activeLineName, setActiveLineName] = useState(details[0]?.lineName ?? '');
-  const [activeDirection, setActiveDirection] = useState<'downwards' | 'upwards'>('downwards');
-  const activeDetail = details.find((detail) => detail.lineName === activeLineName) ?? details[0];
-  if (!activeDetail) {
+  const stationDetailTabs = [...details]
+    .sort((left, right) => left.lineName.localeCompare(right.lineName, 'zh-CN', { numeric: true }))
+    .flatMap((detail) => {
+      const line = lines.find((candidate) => candidate.name === detail.lineName);
+      const hasDirectionSpecificLayout = hasDirectionSpecificStationLayout(detail);
+      const directions = hasDirectionSpecificLayout
+        ? (['downwards', 'upwards'] as const)
+        : (['downwards'] as const);
+      return directions.map((direction) => ({
+        detail,
+        direction,
+        key: `${detail.sourceId}:${direction}`,
+        label: formatStationDetailTabLabel(
+          detail.lineName,
+          direction,
+          line,
+          hasDirectionSpecificLayout,
+          t,
+        ),
+      }));
+    });
+  const [activeTabKey, setActiveTabKey] = useState(stationDetailTabs[0]?.key ?? '');
+  const activeTab =
+    stationDetailTabs.find((tab) => tab.key === activeTabKey) ?? stationDetailTabs[0];
+  if (!activeTab) {
     return null;
   }
 
+  const activeDetail = activeTab.detail;
+  const activeDirection = activeTab.direction;
   const activeLine = lines.find((line) => line.name === activeDetail.lineName);
-  const hasUpwardsFacilityLayout = (activeDetail.facilitiesUpwards?.length ?? 0) > 0;
-  const hasDirectionSpecificTransfer = activeDetail.transfers.some(
-    (transfer) => transfer.transferDirection !== undefined,
-  );
-  const hasDirectionSpecificLayout =
-    hasUpwardsFacilityLayout ||
-    hasDirectionSpecificTransfer ||
-    Boolean(activeDetail.swapExitLayers) ||
-    Boolean(activeDetail.flipTemplateForUpwards);
+  const hasUpwardsFacilityLayout = hasDifferentUpwardsFacilityLayout(activeDetail);
   const selectedFacilities =
     activeDirection === 'upwards' && hasUpwardsFacilityLayout
-      ? activeDetail.facilitiesUpwards ?? activeDetail.facilities
+      ? (activeDetail.facilitiesUpwards ?? activeDetail.facilities)
       : activeDetail.facilities;
-  const shouldFlipTemplate = activeDirection === 'upwards' && Boolean(activeDetail.flipTemplateForUpwards);
+  const shouldFlipTemplate =
+    activeDirection === 'upwards' && Boolean(activeDetail.flipTemplateForUpwards);
   return (
     <section
       className="map-metro-station-infrastructure"
-      aria-label="地铁站内设施信息"
+      aria-label={t('map.metroInfrastructure.title')}
       style={
         {
           '--map-metro-station-line-color': activeLine?.color ?? 'var(--yct-color-primary)',
@@ -10102,76 +10144,62 @@ function TransitStationInfrastructureDetail({
         <span className="material-symbols-outlined" aria-hidden="true">
           account_tree
         </span>
-        <strong>站内设施信息</strong>
+        <strong>{t('map.metroInfrastructure.title')}</strong>
         <span className="map-metro-station-detail-tabs">
-          <span className="map-metro-station-line-tabs" role="tablist" aria-label="线路设施信息">
-            {[...details]
-              .sort((left, right) => left.lineName.localeCompare(right.lineName, 'zh-CN', { numeric: true }))
-              .map((detail) => (
-                <button
-                  className={detail.lineName === activeDetail.lineName ? 'is-active' : ''}
-                  type="button"
-                  role="tab"
-                  aria-selected={detail.lineName === activeDetail.lineName}
-                  key={detail.sourceId}
-                  onClick={() => {
-                    setActiveLineName(detail.lineName);
-                    setActiveDirection('downwards');
-                  }}
-                >
-                  {detail.lineName}
-                </button>
-              ))}
+          <span
+            className="map-metro-station-line-tabs"
+            role="tablist"
+            aria-label={t('map.metroInfrastructure.tabsAria')}
+          >
+            {stationDetailTabs.map((tab) => (
+              <button
+                className={tab.key === activeTab.key ? 'is-active' : ''}
+                type="button"
+                role="tab"
+                aria-selected={tab.key === activeTab.key}
+                key={tab.key}
+                onClick={() => setActiveTabKey(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
           </span>
-          {hasDirectionSpecificLayout ? (
-            <span className="map-metro-station-direction-tabs" role="group" aria-label="行车方向">
-              <button
-                className={activeDirection === 'downwards' ? 'is-active' : ''}
-                type="button"
-                aria-pressed={activeDirection === 'downwards'}
-                aria-label="下行方向设施"
-                title="下行方向设施"
-                onClick={() => setActiveDirection('downwards')}
-              >
-                <i className="material-symbols-outlined" aria-hidden="true">
-                  south
-                </i>
-              </button>
-              <button
-                className={activeDirection === 'upwards' ? 'is-active' : ''}
-                type="button"
-                aria-pressed={activeDirection === 'upwards'}
-                aria-label="上行方向设施"
-                title="上行方向设施"
-                onClick={() => setActiveDirection('upwards')}
-              >
-                <i className="material-symbols-outlined" aria-hidden="true">
-                  north
-                </i>
-              </button>
-            </span>
-          ) : null}
         </span>
       </div>
-      <article className={`map-metro-station-detail${shouldFlipTemplate ? ' is-template-flipped' : ''}`}>
+      <article
+        className={`map-metro-station-detail${shouldFlipTemplate ? ' is-template-flipped' : ''}`}
+      >
         <div className="map-metro-station-detail-title">
           <strong>{activeDetail.lineName}</strong>
-          <span>{activeDetail.overGround ? '地面站' : '地下站'}</span>
+          <span>
+            {activeDetail.overGround ? t('stationDetail.ground') : t('stationDetail.underground')}
+          </span>
         </div>
-        <div className="map-metro-station-floor-stack">
-          {activeDetail.layers.map((layer) => (
-            <StationInfrastructureFloor
-              activeLine={activeLine}
-              detail={activeDetail}
-              direction={activeDirection}
-              facilities={selectedFacilities}
-              isTemplateFlipped={shouldFlipTemplate}
-              layer={layer}
-              lines={lines}
-              key={`${activeDetail.sourceId}-${layer.floor}-${layer.order ?? 0}`}
-            />
-          ))}
-        </div>
+        {activeDetail.layers.map((layer) => (
+          <StationInfrastructureFloor
+            activeLine={activeLine}
+            detail={activeDetail}
+            direction={activeDirection}
+            facilities={selectedFacilities}
+            isTemplateFlipped={shouldFlipTemplate}
+            layer={layer}
+            lines={lines}
+            t={t}
+            onSelectTransfer={(lineName, direction) => {
+              const targetDetail = details.find((detail) => detail.lineName === lineName);
+              if (!targetDetail) {
+                return;
+              }
+              const targetDirection =
+                direction && hasDirectionSpecificStationLayout(targetDetail)
+                  ? direction
+                  : 'downwards';
+              setActiveTabKey(`${targetDetail.sourceId}:${targetDirection}`);
+            }}
+            canSelectTransfer={(lineName) => details.some((detail) => detail.lineName === lineName)}
+            key={`${activeDetail.sourceId}-${layer.floor}-${layer.order ?? 0}`}
+          />
+        ))}
       </article>
     </section>
   );
@@ -10185,6 +10213,9 @@ function StationInfrastructureFloor({
   isTemplateFlipped,
   layer,
   lines,
+  t,
+  onSelectTransfer,
+  canSelectTransfer,
 }: Readonly<{
   activeLine: TransitOverviewLine | undefined;
   detail: TransitStationDetailSnapshot;
@@ -10193,26 +10224,35 @@ function StationInfrastructureFloor({
   isTemplateFlipped: boolean;
   layer: TransitStationDetailSnapshot['layers'][number];
   lines: TransitOverviewLine[];
+  t: Translate;
+  onSelectTransfer: (
+    lineName: string,
+    direction: TransitStationTransferSnapshot['transferDirection'],
+  ) => void;
+  canSelectTransfer: (lineName: string) => boolean;
 }>) {
   const exits = detail.exits.filter(
     (exit) => resolveStationExitFloor(detail, exit.floor, direction) === layer.floor,
   );
-  const transfers = detail.transfers.filter(
-    (transfer) =>
-      transfer.floor === layer.floor &&
-      (transfer.transferDirection === undefined || transfer.transferDirection === direction),
-  );
+  const transfers = detail.transfers.filter((transfer) => transfer.floor === layer.floor);
   const isPlatform = layer.type === 'platform';
   const facilities = isPlatform
     ? detailFacilities.filter((facility) => !facility.floor || facility.floor === layer.floor)
     : detailFacilities.filter((facility) => facility.floor === layer.floor);
+  const positionScale = resolveStationDetailPositionScale(activeLine, detailFacilities, transfers);
 
   return (
     <section className={`map-metro-station-floor${isPlatform ? ' is-platform' : ''}`}>
       <div className="map-metro-station-floor-heading">
         <strong>{layer.floor}</strong>
-        <span>{formatStationLayerType(layer.type)}</span>
-        {isPlatform ? <small>{formatStationPlatformSide(detail.platformSide)}开门</small> : null}
+        <span>{formatStationLayerType(layer.type, t)}</span>
+        {isPlatform ? (
+          <small>
+            {t('map.metroInfrastructure.platformDoors', {
+              side: formatStationPlatformSide(detail.platformSide, t),
+            })}
+          </small>
+        ) : null}
       </div>
       {isPlatform ? (
         <StationPlatformSchematic
@@ -10221,36 +10261,57 @@ function StationInfrastructureFloor({
           detail={detail}
           facilities={facilities}
           isTemplateFlipped={isTemplateFlipped}
+          t={t}
         />
       ) : null}
       {exits.length > 0 ? (
-        <StationExitSchematic exits={exits} isTemplateFlipped={isTemplateFlipped} />
+        <StationExitSchematic exits={exits} isTemplateFlipped={isTemplateFlipped} t={t} />
       ) : null}
       {transfers.length > 0 ? (
         <div className="map-metro-station-transfer-track">
-          {transfers.map((transfer, index) => (
-            <span
-              className="map-metro-station-transfer-marker"
-              key={`${transfer.line}-${index}`}
-              style={{
-                '--station-detail-position': `${resolveStationDetailPosition(
-                  transfer.location,
-                  activeLine?.maxCarCount,
-                )}%`,
-                '--station-detail-offset': `${(index - (transfers.length - 1) / 2) * 8}px`,
-                '--station-transfer-line-color':
-                  lines.find((line) => line.name === transfer.line)?.color ??
-                  'var(--yct-color-primary)',
-              } as CSSProperties}
-              title={`${transfer.line}${transfer.direction ? ` · ${formatStationFacilityDirection(transfer.direction)}` : ''}`}
-            >
-              {formatStationTransferMarker(transfer.line)}
-            </span>
-          ))}
+          {transfers.map((transfer, index) => {
+            const canSelect = canSelectTransfer(transfer.line);
+            const title = `${transfer.line}${
+              transfer.transferDirection
+                ? ` · ${formatStationTransferDirection(transfer.transferDirection, t)}`
+                : transfer.direction
+                  ? ` · ${formatStationFacilityDirection(transfer.direction, t)}`
+                  : ''
+            }`;
+            return (
+              <button
+                className="map-metro-station-transfer-marker"
+                type="button"
+                disabled={!canSelect}
+                key={`${transfer.line}-${index}`}
+                style={
+                  {
+                    '--station-detail-position': `${resolveStationDetailPosition(
+                      transfer.location,
+                      positionScale,
+                    )}%`,
+                    '--station-detail-offset': `${(index - (transfers.length - 1) / 2) * 5}px`,
+                    '--station-transfer-line-color':
+                      lines.find((line) => line.name === transfer.line)?.color ??
+                      'var(--yct-color-primary)',
+                  } as CSSProperties
+                }
+                title={title}
+                aria-label={
+                  canSelect ? t('map.metroInfrastructure.transferAction', { title }) : title
+                }
+                onClick={() => onSelectTransfer(transfer.line, transfer.transferDirection)}
+              >
+                {formatStationTransferMarker(transfer.line)}
+              </button>
+            );
+          })}
         </div>
       ) : null}
       {!isPlatform && exits.length === 0 && transfers.length === 0 ? (
-        <span className="map-metro-station-floor-empty">暂无站内节点记录</span>
+        <span className="map-metro-station-floor-empty">
+          {t('map.metroInfrastructure.floorEmpty')}
+        </span>
       ) : null}
     </section>
   );
@@ -10259,15 +10320,20 @@ function StationInfrastructureFloor({
 function StationExitSchematic({
   exits,
   isTemplateFlipped,
-}: Readonly<{ exits: TransitStationDetailSnapshot['exits']; isTemplateFlipped: boolean }>) {
+  t,
+}: Readonly<{
+  exits: TransitStationDetailSnapshot['exits'];
+  isTemplateFlipped: boolean;
+  t: Translate;
+}>) {
   const upwardExits = exits.filter((exit) => exit.direction !== 'downwards');
   const downwardExits = exits.filter((exit) => exit.direction === 'downwards');
   const leftExits = isTemplateFlipped ? downwardExits : upwardExits;
   const rightExits = isTemplateFlipped ? upwardExits : downwardExits;
   return (
     <div className="map-metro-station-exit-track">
-      <span className="is-left">{formatStationExitGroup(leftExits, '←')}</span>
-      <span className="is-right">{formatStationExitGroup(rightExits, '→')}</span>
+      <span className="is-left">{formatStationExitGroup(leftExits, '←', t)}</span>
+      <span className="is-right">{formatStationExitGroup(rightExits, '→', t)}</span>
     </div>
   );
 }
@@ -10278,65 +10344,41 @@ function StationPlatformSchematic({
   detail,
   facilities,
   isTemplateFlipped,
+  t,
 }: Readonly<{
   activeLine: TransitOverviewLine | undefined;
   currentFloor: string;
   detail: TransitStationDetailSnapshot;
   facilities: TransitStationDetailSnapshot['facilities'];
   isTemplateFlipped: boolean;
+  t: Translate;
 }>) {
-  const carriageCount = Math.max(
-    1,
-    activeLine?.maxCarCount ?? 0,
-    ...facilities.map((facility) => Math.ceil(facility.location ?? 0)),
-    6,
+  const carriageCount = resolveStationDetailPositionScale(activeLine, facilities);
+  const { lowerFacilities, upperFacilities } = splitStationPlatformFacilities(
+    facilities,
+    detail,
+    currentFloor,
   );
-  const firstStation = activeLine?.firstStationName ?? '上行终点';
-  const lastStation = activeLine?.lastStationName ?? '下行终点';
+  const firstStation = activeLine?.firstStationName ?? t('map.metroInfrastructure.upwardsTerminus');
+  const lastStation = activeLine?.lastStationName ?? t('map.metroInfrastructure.downwardsTerminus');
   const leftDirectionStation = isTemplateFlipped ? lastStation : firstStation;
   const rightDirectionStation = isTemplateFlipped ? firstStation : lastStation;
   return (
     <div className="map-metro-station-platform-schematic">
       <div className="map-metro-station-platform-direction">
-        <span>← 开往 {leftDirectionStation}</span>
-        <span>开往 {rightDirectionStation} →</span>
+        <span>{t('map.metroInfrastructure.towardsLeft', { station: leftDirectionStation })}</span>
+        <span>{t('map.metroInfrastructure.towardsRight', { station: rightDirectionStation })}</span>
       </div>
-      <div className="map-metro-station-facility-track">
-        {facilities.map((facility, index) => (
-          <span
-            className="map-metro-station-facility-icon"
-            key={`${facility.type}-${facility.location ?? 'unpositioned'}-${index}`}
-            style={{
-              '--station-detail-position': `${resolveStationDetailPosition(
-                facility.location,
-                carriageCount,
-              )}%`,
-            } as CSSProperties}
-            title={`${formatStationFacilityType(facility.type)}${
-              facility.endFloor ? ` · 至 ${facility.endFloor}` : ''
-            }${
-              facility.direction ? ` · ${formatStationFacilityDirection(facility.direction)}` : ''
-            }${facility.oneWay ? ` · ${formatStationFacilityOneWay(facility.oneWay)}` : ''}${
-              facility.orientation ? ` · 朝向 ${facility.orientation}` : ''
-            }`}
-          >
-            <span
-              className={
-                shouldFlipStationFacility(facility, detail, currentFloor) !== isTemplateFlipped
-                  ? 'map-metro-station-facility-symbols is-flipped'
-                  : 'map-metro-station-facility-symbols'
-              }
-              aria-hidden="true"
-            >
-              {getStationFacilityIcons(facility.type).map((icon) => (
-                <i className="material-symbols-outlined" key={icon}>
-                  {icon}
-                </i>
-              ))}
-            </span>
-          </span>
-        ))}
-      </div>
+      {upperFacilities.length > 0 ? (
+        <StationFacilityTrack
+          carriageCount={carriageCount}
+          currentFloor={currentFloor}
+          detail={detail}
+          facilities={upperFacilities}
+          isTemplateFlipped={isTemplateFlipped}
+          t={t}
+        />
+      ) : null}
       <div
         className={`map-metro-station-carriages${isTemplateFlipped ? ' is-template-flipped' : ''}`}
         style={{ '--station-carriage-count': carriageCount } as CSSProperties}
@@ -10345,40 +10387,173 @@ function StationPlatformSchematic({
           <span key={index}>{index + 1}</span>
         ))}
       </div>
+      {lowerFacilities.length > 0 ? (
+        <StationFacilityTrack
+          carriageCount={carriageCount}
+          className="is-below-carriages"
+          currentFloor={currentFloor}
+          detail={detail}
+          facilities={lowerFacilities}
+          isTemplateFlipped={isTemplateFlipped}
+          t={t}
+        />
+      ) : null}
     </div>
   );
 }
 
-function formatStationPlatformSide(value: TransitStationDetailSnapshot['platformSide']): string {
-  if (value === 'left') return '左侧';
-  if (value === 'right') return '右侧';
-  if (value === 'both') return '两侧';
-  return '方向未记录';
+function StationFacilityTrack({
+  carriageCount,
+  className = '',
+  currentFloor,
+  detail,
+  facilities,
+  isTemplateFlipped,
+  t,
+}: Readonly<{
+  carriageCount: number;
+  className?: string;
+  currentFloor: string;
+  detail: TransitStationDetailSnapshot;
+  facilities: TransitStationDetailSnapshot['facilities'];
+  isTemplateFlipped: boolean;
+  t: Translate;
+}>) {
+  return (
+    <div className={`map-metro-station-facility-track ${className}`.trim()}>
+      {facilities.map((facility, index) => (
+        <span
+          className="map-metro-station-facility-icon"
+          key={`${facility.type}-${facility.location ?? 'unpositioned'}-${index}`}
+          style={
+            {
+              '--station-detail-position': `${resolveStationDetailPosition(
+                facility.location,
+                carriageCount,
+              )}%`,
+            } as CSSProperties
+          }
+          title={`${formatStationFacilityType(facility.type, t)}${
+            facility.endFloor
+              ? ` · ${t('stationDetail.facilities.toFloor', { floor: facility.endFloor })}`
+              : ''
+          }${
+            facility.direction ? ` · ${formatStationFacilityDirection(facility.direction, t)}` : ''
+          }${facility.oneWay ? ` · ${formatStationFacilityOneWay(facility.oneWay, t)}` : ''}${
+            facility.orientation
+              ? ` · ${t('map.metroInfrastructure.facing', { orientation: facility.orientation })}`
+              : ''
+          }`}
+        >
+          <span
+            className={
+              shouldFlipStationFacility(facility, detail, currentFloor) !== isTemplateFlipped
+                ? 'map-metro-station-facility-symbols is-flipped'
+                : 'map-metro-station-facility-symbols'
+            }
+            aria-hidden="true"
+          >
+            {getStationFacilityIcons(facility.type).map((icon) => (
+              <i className="material-symbols-outlined" key={icon}>
+                {icon}
+              </i>
+            ))}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
 }
 
-function formatStationLayerType(value: string): string {
-  const labels: Record<string, string> = {
-    concourse: '站厅层',
-    platform: '站台层',
-    transfer: '换乘层',
-    entrance: '入口层',
-    passageway: '通道层',
-  };
-  return labels[value] ?? value;
+function splitStationPlatformFacilities(
+  facilities: TransitStationDetailSnapshot['facilities'],
+  detail: TransitStationDetailSnapshot,
+  currentFloor: string,
+): {
+  lowerFacilities: TransitStationDetailSnapshot['facilities'];
+  upperFacilities: TransitStationDetailSnapshot['facilities'];
+} {
+  const upperFacilities: TransitStationDetailSnapshot['facilities'] = [];
+  const lowerFacilities: TransitStationDetailSnapshot['facilities'] = [];
+  const sameFloorFacilities: TransitStationDetailSnapshot['facilities'] = [];
+
+  for (const facility of facilities) {
+    const verticalDirection = resolveStationFacilityVerticalDirection(
+      facility,
+      detail,
+      currentFloor,
+    );
+    if (verticalDirection === 'upwards') {
+      upperFacilities.push(facility);
+    } else if (verticalDirection === 'downwards') {
+      lowerFacilities.push(facility);
+    } else {
+      sameFloorFacilities.push(facility);
+    }
+  }
+
+  if (upperFacilities.length > 0) {
+    upperFacilities.push(...sameFloorFacilities);
+  } else {
+    lowerFacilities.push(...sameFloorFacilities);
+  }
+
+  return { lowerFacilities, upperFacilities };
 }
 
-function formatStationFacilityType(value: string): string {
-  const labels: Record<string, string> = {
-    toilet: '卫生间',
-    elevator: '电梯',
-    escalator_and_stairs: '扶梯/楼梯',
-    stairs: '楼梯',
-    escalator: '扶梯',
-    platform_door: '屏蔽门',
-    nursing_room: '母婴室',
-    police: '警务室',
+function resolveStationFacilityVerticalDirection(
+  facility: TransitStationDetailSnapshot['facilities'][number],
+  detail: TransitStationDetailSnapshot,
+  currentFloor: string,
+): 'upwards' | 'downwards' | 'same_floor' {
+  const currentLayerIndex = detail.layers.findIndex((layer) => layer.floor === currentFloor);
+  const endLayerIndex = detail.layers.findIndex((layer) => layer.floor === facility.endFloor);
+  if (currentLayerIndex >= 0 && endLayerIndex >= 0 && endLayerIndex !== currentLayerIndex) {
+    return endLayerIndex < currentLayerIndex ? 'upwards' : 'downwards';
+  }
+  if (facility.direction === 'up' || facility.direction === 'upwards') {
+    return 'upwards';
+  }
+  if (facility.direction === 'down' || facility.direction === 'downwards') {
+    return 'downwards';
+  }
+  return 'same_floor';
+}
+
+function formatStationPlatformSide(
+  value: TransitStationDetailSnapshot['platformSide'],
+  t: Translate,
+): string {
+  if (value === 'left') return t('map.metroInfrastructure.platformSide.left');
+  if (value === 'right') return t('map.metroInfrastructure.platformSide.right');
+  if (value === 'both') return t('map.metroInfrastructure.platformSide.both');
+  return t('map.metroInfrastructure.platformSide.unknown');
+}
+
+function formatStationLayerType(value: string, t: Translate): string {
+  const labels: Record<string, CommonMessageKey> = {
+    concourse: 'map.metroInfrastructure.layer.concourse',
+    platform: 'map.metroInfrastructure.layer.platform',
+    transfer: 'map.metroInfrastructure.layer.transfer',
+    entrance: 'map.metroInfrastructure.layer.entrance',
+    passageway: 'map.metroInfrastructure.layer.passageway',
   };
-  return labels[value] ?? value;
+  return labels[value] ? t(labels[value]) : value;
+}
+
+function formatStationFacilityType(value: string, t: Translate): string {
+  const labels: Record<string, CommonMessageKey> = {
+    toilet: 'map.metroInfrastructure.facility.toilet',
+    elevator: 'map.metroInfrastructure.facility.elevator',
+    escalator_and_stairs: 'map.metroInfrastructure.facility.escalatorAndStairs',
+    stairs: 'map.metroInfrastructure.facility.stairs',
+    escalator: 'map.metroInfrastructure.facility.escalator',
+    platform_door: 'map.metroInfrastructure.facility.platformDoor',
+    nursing_room: 'map.metroInfrastructure.facility.nursingRoom',
+    police: 'map.metroInfrastructure.facility.police',
+    waiting_room: 'map.metroInfrastructure.facility.waitingRoom',
+  };
+  return labels[value] ? t(labels[value]) : value;
 }
 
 function getStationFacilityIcons(value: string): string[] {
@@ -10390,7 +10565,40 @@ function getStationFacilityIcons(value: string): string[] {
   if (value.includes('door')) return ['door_open'];
   if (value.includes('nursing_room')) return ['breastfeeding'];
   if (value.includes('police')) return ['local_police'];
+  if (value.includes('waiting_room')) return ['airline_seat_recline_extra'];
   return ['location_on'];
+}
+
+function hasDifferentUpwardsFacilityLayout(detail: TransitStationDetailSnapshot): boolean {
+  return (
+    detail.facilitiesUpwards !== undefined &&
+    JSON.stringify(detail.facilitiesUpwards) !== JSON.stringify(detail.facilities)
+  );
+}
+
+function hasDirectionSpecificStationLayout(detail: TransitStationDetailSnapshot): boolean {
+  return (
+    hasDifferentUpwardsFacilityLayout(detail) ||
+    Boolean(detail.swapExitLayers) ||
+    Boolean(detail.flipTemplateForUpwards)
+  );
+}
+
+function formatStationDetailTabLabel(
+  lineName: string,
+  direction: 'downwards' | 'upwards',
+  line: TransitOverviewLine | undefined,
+  includeDirection: boolean,
+  t: Translate,
+): string {
+  if (!includeDirection) {
+    return lineName;
+  }
+  const terminal =
+    direction === 'upwards'
+      ? (line?.firstStationName ?? t('map.metroInfrastructure.upwardsTerminus'))
+      : (line?.lastStationName ?? t('map.metroInfrastructure.downwardsTerminus'));
+  return t('map.metroInfrastructure.lineTowards', { lineName, terminal });
 }
 
 function resolveStationExitFloor(
@@ -10432,39 +10640,69 @@ function formatStationTransferMarker(lineName: string): string {
 function formatStationExitGroup(
   exits: TransitStationDetailSnapshot['exits'],
   arrow: '←' | '→',
+  t: Translate,
 ): string {
   if (exits.length === 0) {
     return '';
   }
-  const label = exits.map((exit) => `${exit.code}出口`).join('/');
-  return arrow === '←' ? `${arrow}${label}` : `${label}${arrow}`;
+  const codes = exits.map((exit) => exit.code).join('/');
+  return t(
+    arrow === '←'
+      ? 'map.metroInfrastructure.exitGroup.left'
+      : 'map.metroInfrastructure.exitGroup.right',
+    { arrow, codes },
+  );
 }
 
-function resolveStationDetailPosition(location: number | undefined, maxPosition: number | undefined): number {
+function resolveStationDetailPosition(
+  location: number | undefined,
+  maxPosition: number | undefined,
+): number {
   if (location === undefined || !maxPosition || maxPosition <= 0) {
     return 50;
   }
   return Math.max(0, Math.min(100, (location / maxPosition) * 100));
 }
 
-function formatStationFacilityDirection(value: string): string {
-  const labels: Record<string, string> = {
-    up: '向上',
-    down: '向下',
-    upwards: '向上',
-    downwards: '向下',
-    here: '本站换乘',
-  };
-  return labels[value] ?? value;
+function resolveStationDetailPositionScale(
+  activeLine: TransitOverviewLine | undefined,
+  ...locationGroups: Array<Array<{ location?: number }>>
+): number {
+  const largestLocation = Math.max(
+    0,
+    ...locationGroups.flatMap((group) =>
+      group.map((item) => (Number.isFinite(item.location) ? Math.ceil(item.location ?? 0) : 0)),
+    ),
+  );
+  return Math.max(6, activeLine?.maxCarCount ?? 0, largestLocation);
 }
 
-function formatStationFacilityOneWay(value: string): string {
-  const labels: Record<string, string> = {
-    up: '仅上行',
-    down: '仅下行',
-    none: '双向通行',
+function formatStationFacilityDirection(value: string, t: Translate): string {
+  const labels: Record<string, CommonMessageKey> = {
+    up: 'map.metroInfrastructure.direction.up',
+    down: 'map.metroInfrastructure.direction.down',
+    upwards: 'map.metroInfrastructure.direction.up',
+    downwards: 'map.metroInfrastructure.direction.down',
+    here: 'map.metroInfrastructure.direction.here',
   };
-  return labels[value] ?? value;
+  return labels[value] ? t(labels[value]) : value;
+}
+
+function formatStationTransferDirection(value: 'upwards' | 'downwards', t: Translate): string {
+  return t(
+    value === 'upwards'
+      ? 'map.metroInfrastructure.transferDirection.upwards'
+      : 'map.metroInfrastructure.transferDirection.downwards',
+  );
+}
+
+function formatStationFacilityOneWay(value: string, t: Translate): string {
+  const labels: Record<string, CommonMessageKey> = {
+    up: 'map.metroInfrastructure.oneWay.up',
+    down: 'map.metroInfrastructure.oneWay.down',
+    none: 'map.metroInfrastructure.oneWay.both',
+  };
+  return labels[value] ? t(labels[value]) : value;
 }
 
 function groupSecondaryPois(

@@ -232,6 +232,45 @@ export type CommonMessageKey =
   | 'map.markerList.nearby'
   | 'map.markerList.playerCount'
   | 'map.markerList.results'
+  | 'map.metroInfrastructure.direction.down'
+  | 'map.metroInfrastructure.direction.here'
+  | 'map.metroInfrastructure.direction.up'
+  | 'map.metroInfrastructure.downwardsTerminus'
+  | 'map.metroInfrastructure.exitGroup.left'
+  | 'map.metroInfrastructure.exitGroup.right'
+  | 'map.metroInfrastructure.facing'
+  | 'map.metroInfrastructure.facility.elevator'
+  | 'map.metroInfrastructure.facility.escalator'
+  | 'map.metroInfrastructure.facility.escalatorAndStairs'
+  | 'map.metroInfrastructure.facility.nursingRoom'
+  | 'map.metroInfrastructure.facility.platformDoor'
+  | 'map.metroInfrastructure.facility.police'
+  | 'map.metroInfrastructure.facility.stairs'
+  | 'map.metroInfrastructure.facility.toilet'
+  | 'map.metroInfrastructure.facility.waitingRoom'
+  | 'map.metroInfrastructure.floorEmpty'
+  | 'map.metroInfrastructure.layer.concourse'
+  | 'map.metroInfrastructure.layer.entrance'
+  | 'map.metroInfrastructure.layer.passageway'
+  | 'map.metroInfrastructure.layer.platform'
+  | 'map.metroInfrastructure.layer.transfer'
+  | 'map.metroInfrastructure.lineTowards'
+  | 'map.metroInfrastructure.oneWay.both'
+  | 'map.metroInfrastructure.oneWay.down'
+  | 'map.metroInfrastructure.oneWay.up'
+  | 'map.metroInfrastructure.platformDoors'
+  | 'map.metroInfrastructure.platformSide.both'
+  | 'map.metroInfrastructure.platformSide.left'
+  | 'map.metroInfrastructure.platformSide.right'
+  | 'map.metroInfrastructure.platformSide.unknown'
+  | 'map.metroInfrastructure.tabsAria'
+  | 'map.metroInfrastructure.title'
+  | 'map.metroInfrastructure.towardsLeft'
+  | 'map.metroInfrastructure.towardsRight'
+  | 'map.metroInfrastructure.transferAction'
+  | 'map.metroInfrastructure.transferDirection.downwards'
+  | 'map.metroInfrastructure.transferDirection.upwards'
+  | 'map.metroInfrastructure.upwardsTerminus'
   | 'map.hud.aria'
   | 'map.hud.cursor'
   | 'map.hud.scale.blocks'
@@ -1146,6 +1185,45 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.markerList.nearby': '{name}周边',
     'map.markerList.playerCount': '{online}/{total} 个',
     'map.markerList.results': '搜索结果',
+    'map.metroInfrastructure.direction.down': '向下',
+    'map.metroInfrastructure.direction.here': '本站换乘',
+    'map.metroInfrastructure.direction.up': '向上',
+    'map.metroInfrastructure.downwardsTerminus': '下行终点',
+    'map.metroInfrastructure.exitGroup.left': '{arrow}{codes}出口',
+    'map.metroInfrastructure.exitGroup.right': '{codes}出口{arrow}',
+    'map.metroInfrastructure.facing': '朝向 {orientation}',
+    'map.metroInfrastructure.facility.elevator': '电梯',
+    'map.metroInfrastructure.facility.escalator': '扶梯',
+    'map.metroInfrastructure.facility.escalatorAndStairs': '扶梯/楼梯',
+    'map.metroInfrastructure.facility.nursingRoom': '母婴室',
+    'map.metroInfrastructure.facility.platformDoor': '屏蔽门',
+    'map.metroInfrastructure.facility.police': '警务室',
+    'map.metroInfrastructure.facility.stairs': '楼梯',
+    'map.metroInfrastructure.facility.toilet': '卫生间',
+    'map.metroInfrastructure.facility.waitingRoom': '候车室',
+    'map.metroInfrastructure.floorEmpty': '暂无站内节点记录',
+    'map.metroInfrastructure.layer.concourse': '站厅层',
+    'map.metroInfrastructure.layer.entrance': '入口层',
+    'map.metroInfrastructure.layer.passageway': '通道层',
+    'map.metroInfrastructure.layer.platform': '站台层',
+    'map.metroInfrastructure.layer.transfer': '换乘层',
+    'map.metroInfrastructure.lineTowards': '{lineName} 开往{terminal}',
+    'map.metroInfrastructure.oneWay.both': '双向通行',
+    'map.metroInfrastructure.oneWay.down': '仅下行',
+    'map.metroInfrastructure.oneWay.up': '仅上行',
+    'map.metroInfrastructure.platformDoors': '{side}开门',
+    'map.metroInfrastructure.platformSide.both': '两侧',
+    'map.metroInfrastructure.platformSide.left': '左侧',
+    'map.metroInfrastructure.platformSide.right': '右侧',
+    'map.metroInfrastructure.platformSide.unknown': '方向未记录',
+    'map.metroInfrastructure.tabsAria': '线路设施信息',
+    'map.metroInfrastructure.title': '站内设施信息',
+    'map.metroInfrastructure.towardsLeft': '← 开往 {station}',
+    'map.metroInfrastructure.towardsRight': '开往 {station} →',
+    'map.metroInfrastructure.transferAction': '查看{title}站台设施',
+    'map.metroInfrastructure.transferDirection.downwards': '下行方向换乘',
+    'map.metroInfrastructure.transferDirection.upwards': '上行方向换乘',
+    'map.metroInfrastructure.upwardsTerminus': '上行终点',
     'map.layer.aria': '图层与投稿',
     'map.layer.linearFeatures': '线条与标签',
     'map.layer.linearFeaturesHidden': '已隐藏道路/线路覆盖',
@@ -2064,6 +2142,45 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.markerList.nearby': '{name}周邊',
     'map.markerList.playerCount': '{online}/{total} 個',
     'map.markerList.results': '搜尋結果',
+    'map.metroInfrastructure.direction.down': '向下',
+    'map.metroInfrastructure.direction.here': '本站轉乘',
+    'map.metroInfrastructure.direction.up': '向上',
+    'map.metroInfrastructure.downwardsTerminus': '下行終點',
+    'map.metroInfrastructure.exitGroup.left': '{arrow}{codes}出口',
+    'map.metroInfrastructure.exitGroup.right': '{codes}出口{arrow}',
+    'map.metroInfrastructure.facing': '朝向 {orientation}',
+    'map.metroInfrastructure.facility.elevator': '電梯',
+    'map.metroInfrastructure.facility.escalator': '扶梯',
+    'map.metroInfrastructure.facility.escalatorAndStairs': '扶梯/樓梯',
+    'map.metroInfrastructure.facility.nursingRoom': '母嬰室',
+    'map.metroInfrastructure.facility.platformDoor': '屏蔽門',
+    'map.metroInfrastructure.facility.police': '警務室',
+    'map.metroInfrastructure.facility.stairs': '樓梯',
+    'map.metroInfrastructure.facility.toilet': '洗手間',
+    'map.metroInfrastructure.facility.waitingRoom': '候車室',
+    'map.metroInfrastructure.floorEmpty': '暫無站內節點紀錄',
+    'map.metroInfrastructure.layer.concourse': '站廳層',
+    'map.metroInfrastructure.layer.entrance': '入口層',
+    'map.metroInfrastructure.layer.passageway': '通道層',
+    'map.metroInfrastructure.layer.platform': '站台層',
+    'map.metroInfrastructure.layer.transfer': '轉乘層',
+    'map.metroInfrastructure.lineTowards': '{lineName} 開往{terminal}',
+    'map.metroInfrastructure.oneWay.both': '雙向通行',
+    'map.metroInfrastructure.oneWay.down': '僅下行',
+    'map.metroInfrastructure.oneWay.up': '僅上行',
+    'map.metroInfrastructure.platformDoors': '{side}開門',
+    'map.metroInfrastructure.platformSide.both': '兩側',
+    'map.metroInfrastructure.platformSide.left': '左側',
+    'map.metroInfrastructure.platformSide.right': '右側',
+    'map.metroInfrastructure.platformSide.unknown': '方向未記錄',
+    'map.metroInfrastructure.tabsAria': '線路設施資訊',
+    'map.metroInfrastructure.title': '站內設施資訊',
+    'map.metroInfrastructure.towardsLeft': '← 開往 {station}',
+    'map.metroInfrastructure.towardsRight': '開往 {station} →',
+    'map.metroInfrastructure.transferAction': '查看{title}站台設施',
+    'map.metroInfrastructure.transferDirection.downwards': '下行方向轉乘',
+    'map.metroInfrastructure.transferDirection.upwards': '上行方向轉乘',
+    'map.metroInfrastructure.upwardsTerminus': '上行終點',
     'map.layer.aria': '圖層與投稿',
     'map.layer.linearFeatures': '線條與標籤',
     'map.layer.linearFeaturesHidden': '已隱藏道路/線路覆蓋',
@@ -2994,6 +3111,45 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.markerList.nearby': 'Near {name}',
     'map.markerList.playerCount': '{online}/{total} online',
     'map.markerList.results': 'Search Results',
+    'map.metroInfrastructure.direction.down': 'Downward',
+    'map.metroInfrastructure.direction.here': 'Transfer here',
+    'map.metroInfrastructure.direction.up': 'Upward',
+    'map.metroInfrastructure.downwardsTerminus': 'downbound terminus',
+    'map.metroInfrastructure.exitGroup.left': '{arrow}Exit {codes}',
+    'map.metroInfrastructure.exitGroup.right': 'Exit {codes}{arrow}',
+    'map.metroInfrastructure.facing': 'Facing {orientation}',
+    'map.metroInfrastructure.facility.elevator': 'Elevator',
+    'map.metroInfrastructure.facility.escalator': 'Escalator',
+    'map.metroInfrastructure.facility.escalatorAndStairs': 'Escalator / stairs',
+    'map.metroInfrastructure.facility.nursingRoom': 'Nursing room',
+    'map.metroInfrastructure.facility.platformDoor': 'Platform screen door',
+    'map.metroInfrastructure.facility.police': 'Police room',
+    'map.metroInfrastructure.facility.stairs': 'Stairs',
+    'map.metroInfrastructure.facility.toilet': 'Restroom',
+    'map.metroInfrastructure.facility.waitingRoom': 'Waiting room',
+    'map.metroInfrastructure.floorEmpty': 'No station facilities recorded on this level',
+    'map.metroInfrastructure.layer.concourse': 'Concourse level',
+    'map.metroInfrastructure.layer.entrance': 'Entrance level',
+    'map.metroInfrastructure.layer.passageway': 'Passageway level',
+    'map.metroInfrastructure.layer.platform': 'Platform level',
+    'map.metroInfrastructure.layer.transfer': 'Transfer level',
+    'map.metroInfrastructure.lineTowards': '{lineName} toward {terminal}',
+    'map.metroInfrastructure.oneWay.both': 'Two-way access',
+    'map.metroInfrastructure.oneWay.down': 'Downbound only',
+    'map.metroInfrastructure.oneWay.up': 'Upbound only',
+    'map.metroInfrastructure.platformDoors': '{side} doors',
+    'map.metroInfrastructure.platformSide.both': 'Both-side',
+    'map.metroInfrastructure.platformSide.left': 'Left-side',
+    'map.metroInfrastructure.platformSide.right': 'Right-side',
+    'map.metroInfrastructure.platformSide.unknown': 'Unspecified',
+    'map.metroInfrastructure.tabsAria': 'Line facility information',
+    'map.metroInfrastructure.title': 'Station Facilities',
+    'map.metroInfrastructure.towardsLeft': '← Toward {station}',
+    'map.metroInfrastructure.towardsRight': 'Toward {station} →',
+    'map.metroInfrastructure.transferAction': 'View {title} platform facilities',
+    'map.metroInfrastructure.transferDirection.downwards': 'Transfer toward downbound service',
+    'map.metroInfrastructure.transferDirection.upwards': 'Transfer toward upbound service',
+    'map.metroInfrastructure.upwardsTerminus': 'upbound terminus',
     'map.layer.aria': 'Layers and submissions',
     'map.layer.linearFeatures': 'Lines and labels',
     'map.layer.linearFeaturesHidden': 'Road and line overlays hidden',
