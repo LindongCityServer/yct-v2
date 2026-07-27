@@ -172,7 +172,7 @@ export function KeyboardShortcutBridge() {
   );
 
   return (
-    <div className="shortcut-backdrop" role="presentation" onMouseDown={closeDialog}>
+    <div className="modal-backdrop shortcut-backdrop" role="presentation" onMouseDown={closeDialog}>
       <div
         className="modal-panel shortcut-dialog"
         role="dialog"
