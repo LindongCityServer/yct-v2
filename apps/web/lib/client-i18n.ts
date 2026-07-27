@@ -230,6 +230,7 @@ export type CommonMessageKey =
   | 'map.markerList.default'
   | 'map.markerList.fullLength'
   | 'map.markerList.nearby'
+  | 'map.markerList.playerCount'
   | 'map.markerList.results'
   | 'map.hud.aria'
   | 'map.hud.cursor'
@@ -428,6 +429,10 @@ export type CommonMessageKey =
   | 'map.route.endpointCandidatesAria'
   | 'map.route.expand'
   | 'map.route.featuresAria'
+  | 'map.route.fare.estimated'
+  | 'map.route.fare.exact'
+  | 'map.route.fare.partial'
+  | 'map.route.fare.unavailable'
   | 'map.route.input.destination'
   | 'map.route.input.origin'
   | 'map.route.loadingDetail'
@@ -534,12 +539,24 @@ export type CommonMessageKey =
   | 'operations.emptyFeatured'
   | 'operations.expired'
   | 'operations.featuredAria'
+  | 'operations.featuredNext'
+  | 'operations.featuredPage'
+  | 'operations.featuredPages'
+  | 'operations.featuredPrevious'
   | 'operations.feedAria'
   | 'operations.itemCount'
   | 'operations.latestTitle'
   | 'operations.noStrongReminder'
   | 'operations.noTripReminder'
   | 'operations.remindersAria'
+  | 'operations.serverStatus.latency'
+  | 'operations.serverStatus.offline'
+  | 'operations.serverStatus.online'
+  | 'operations.serverStatus.openPlayers'
+  | 'operations.serverStatus.players'
+  | 'operations.serverStatus.title'
+  | 'operations.serverStatus.unknown'
+  | 'operations.serverStatusAria'
   | 'operations.social.bilibili'
   | 'operations.social.qq'
   | 'operations.social.qqChannel'
@@ -560,7 +577,16 @@ export type CommonMessageKey =
   | 'page.travelScreen'
   | 'quickAction.rideCode'
   | 'quickAction.rideCodeLoginRequired'
+  | 'quickAction.rideCodeUnavailable'
   | 'search.open'
+  | 'shortcut.close'
+  | 'shortcut.holdCtrl'
+  | 'shortcut.map'
+  | 'shortcut.openMenu'
+  | 'shortcut.planFocusedMarker'
+  | 'shortcut.swapRouteEndpoints'
+  | 'shortcut.title'
+  | 'shortcut.toggleNavigation'
   | 'settings.accent.gray'
   | 'settings.accent.green'
   | 'settings.accent.label'
@@ -579,6 +605,13 @@ export type CommonMessageKey =
   | 'settings.language.system'
   | 'settings.language.zhCN'
   | 'settings.language.zhHant'
+  | 'settings.material.advanced'
+  | 'settings.material.balanced'
+  | 'settings.material.group'
+  | 'settings.material.label'
+  | 'settings.material.performance'
+  | 'settings.material.thickness'
+  | 'settings.material.thicknessValue'
   | 'settings.motion.full'
   | 'settings.motion.group'
   | 'settings.motion.label'
@@ -1080,7 +1113,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.categoryName.museum': '展馆',
     'map.categoryName.park': '公园绿地',
     'map.categoryName.parking': '停车',
-    'map.categoryName.player': '在线玩家',
+    'map.categoryName.player': '玩家',
     'map.categoryName.publicService': '公共服务',
     'map.categoryName.railway': '铁路',
     'map.categoryName.railwayStation': '铁路车站',
@@ -1111,6 +1144,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.markerList.default': '地图标记',
     'map.markerList.fullLength': '全长 {distance}',
     'map.markerList.nearby': '{name}周边',
+    'map.markerList.playerCount': '{online}/{total} 个',
     'map.markerList.results': '搜索结果',
     'map.layer.aria': '图层与投稿',
     'map.layer.linearFeatures': '线条与标签',
@@ -1308,6 +1342,10 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.endpointCandidatesAria': '路线端点候选',
     'map.route.expand': '展开路线规划',
     'map.route.featuresAria': '路线特征',
+    'map.route.fare.estimated': '预计 {amount}',
+    'map.route.fare.exact': '{amount}',
+    'map.route.fare.partial': '已知 {amount} 起',
+    'map.route.fare.unavailable': '票价待确认',
     'map.route.input.destination': '输入路线终点',
     'map.route.input.origin': '输入路线起点',
     'map.route.loadingDetail': '首次构建道路图可能需要几秒',
@@ -1421,12 +1459,24 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operations.emptyFeatured': '暂无已发布重点资讯',
     'operations.expired': '过期消息',
     'operations.featuredAria': '重点资讯',
+    'operations.featuredNext': '下一条重点资讯',
+    'operations.featuredPage': '查看第 {index} 条重点资讯',
+    'operations.featuredPages': '重点资讯页码',
+    'operations.featuredPrevious': '上一条重点资讯',
     'operations.feedAria': '运营信息列表',
     'operations.itemCount': '{count} 条',
     'operations.latestTitle': '最新资讯',
     'operations.noStrongReminder': '暂无生效的强提醒',
     'operations.noTripReminder': '暂无行程提醒',
     'operations.remindersAria': '强提醒面板',
+    'operations.serverStatus.latency': '延迟',
+    'operations.serverStatus.offline': '离线',
+    'operations.serverStatus.online': '在线',
+    'operations.serverStatus.openPlayers': '查看玩家位置',
+    'operations.serverStatus.players': '玩家',
+    'operations.serverStatus.title': '服务器状态',
+    'operations.serverStatus.unknown': '状态未知',
+    'operations.serverStatusAria': '服务器状态与在线玩家',
     'operations.social.bilibili': 'Bilibili',
     'operations.social.qq': 'QQ 群',
     'operations.social.qqChannel': 'QQ 频道',
@@ -1447,7 +1497,16 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'page.travelScreen': '智运大屏',
     'quickAction.rideCode': '乘车码',
     'quickAction.rideCodeLoginRequired': '乘车码需要登录后使用',
+    'quickAction.rideCodeUnavailable': '乘车码暂不可用，请稍后重试',
     'search.open': '搜索',
+    'shortcut.close': '关闭快捷键',
+    'shortcut.holdCtrl': '长按 Ctrl',
+    'shortcut.map': '地图',
+    'shortcut.openMenu': '快捷键提示',
+    'shortcut.planFocusedMarker': '查找前往当前标记点的路线',
+    'shortcut.swapRouteEndpoints': '交换路线起终点',
+    'shortcut.title': '键盘快捷键',
+    'shortcut.toggleNavigation': '展开或收起侧边导航',
     'settings.accent.gray': '灰色',
     'settings.accent.green': '青绿',
     'settings.accent.label': '强调色',
@@ -1466,6 +1525,13 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.language.system': '跟随系统',
     'settings.language.zhCN': '简体中文',
     'settings.language.zhHant': '繁體中文',
+    'settings.material.advanced': '高级',
+    'settings.material.balanced': '平衡',
+    'settings.material.group': '界面材质',
+    'settings.material.label': '材质模式',
+    'settings.material.performance': '性能',
+    'settings.material.thickness': '高级材质厚度',
+    'settings.material.thicknessValue': '{value}%',
     'settings.motion.full': '开启',
     'settings.motion.group': '动态效果',
     'settings.motion.label': '动态',
@@ -1965,7 +2031,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.categoryName.museum': '展館',
     'map.categoryName.park': '公園綠地',
     'map.categoryName.parking': '停車',
-    'map.categoryName.player': '線上玩家',
+    'map.categoryName.player': '玩家',
     'map.categoryName.publicService': '公共服務',
     'map.categoryName.railway': '鐵路',
     'map.categoryName.railwayStation': '鐵路車站',
@@ -1996,6 +2062,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.markerList.default': '地圖標記',
     'map.markerList.fullLength': '全長 {distance}',
     'map.markerList.nearby': '{name}周邊',
+    'map.markerList.playerCount': '{online}/{total} 個',
     'map.markerList.results': '搜尋結果',
     'map.layer.aria': '圖層與投稿',
     'map.layer.linearFeatures': '線條與標籤',
@@ -2193,6 +2260,10 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.endpointCandidatesAria': '路線端點候選',
     'map.route.expand': '展開路線規劃',
     'map.route.featuresAria': '路線特徵',
+    'map.route.fare.estimated': '預計 {amount}',
+    'map.route.fare.exact': '{amount}',
+    'map.route.fare.partial': '已知 {amount} 起',
+    'map.route.fare.unavailable': '票價待確認',
     'map.route.input.destination': '輸入路線終點',
     'map.route.input.origin': '輸入路線起點',
     'map.route.loadingDetail': '首次建立道路圖可能需要幾秒',
@@ -2306,12 +2377,24 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operations.emptyFeatured': '暫無已發布重點資訊',
     'operations.expired': '過期消息',
     'operations.featuredAria': '重點資訊',
+    'operations.featuredNext': '下一條重點資訊',
+    'operations.featuredPage': '查看第 {index} 條重點資訊',
+    'operations.featuredPages': '重點資訊頁碼',
+    'operations.featuredPrevious': '上一條重點資訊',
     'operations.feedAria': '營運資訊列表',
     'operations.itemCount': '{count} 條',
     'operations.latestTitle': '最新資訊',
     'operations.noStrongReminder': '暫無生效的強提醒',
     'operations.noTripReminder': '暫無行程提醒',
     'operations.remindersAria': '強提醒面板',
+    'operations.serverStatus.latency': '延遲',
+    'operations.serverStatus.offline': '離線',
+    'operations.serverStatus.online': '在線',
+    'operations.serverStatus.openPlayers': '查看玩家位置',
+    'operations.serverStatus.players': '玩家',
+    'operations.serverStatus.title': '伺服器狀態',
+    'operations.serverStatus.unknown': '狀態未知',
+    'operations.serverStatusAria': '伺服器狀態與在線玩家',
     'operations.social.bilibili': 'Bilibili',
     'operations.social.qq': 'QQ 群',
     'operations.social.qqChannel': 'QQ 頻道',
@@ -2332,7 +2415,16 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'page.travelScreen': '智運大屏',
     'quickAction.rideCode': '乘車碼',
     'quickAction.rideCodeLoginRequired': '乘車碼需要登入後使用',
+    'quickAction.rideCodeUnavailable': '乘車碼暫不可用，請稍後重試',
     'search.open': '搜尋',
+    'shortcut.close': '關閉快捷鍵',
+    'shortcut.holdCtrl': '長按 Ctrl',
+    'shortcut.map': '地圖',
+    'shortcut.openMenu': '快捷鍵提示',
+    'shortcut.planFocusedMarker': '查找前往目前標記點的路線',
+    'shortcut.swapRouteEndpoints': '交換路線起終點',
+    'shortcut.title': '鍵盤快捷鍵',
+    'shortcut.toggleNavigation': '展開或收合側邊導覽',
     'settings.accent.gray': '灰色',
     'settings.accent.green': '青綠',
     'settings.accent.label': '強調色',
@@ -2351,6 +2443,13 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.language.system': '跟隨系統',
     'settings.language.zhCN': '简体中文',
     'settings.language.zhHant': '繁體中文',
+    'settings.material.advanced': '進階',
+    'settings.material.balanced': '平衡',
+    'settings.material.group': '介面材質',
+    'settings.material.label': '材質模式',
+    'settings.material.performance': '效能',
+    'settings.material.thickness': '進階材質厚度',
+    'settings.material.thicknessValue': '{value}%',
     'settings.motion.full': '開啟',
     'settings.motion.group': '動態效果',
     'settings.motion.label': '動態',
@@ -2862,7 +2961,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.categoryName.museum': 'Museum',
     'map.categoryName.park': 'Park',
     'map.categoryName.parking': 'Parking',
-    'map.categoryName.player': 'Online Player',
+    'map.categoryName.player': 'Players',
     'map.categoryName.publicService': 'Public Service',
     'map.categoryName.railway': 'Railway',
     'map.categoryName.railwayStation': 'Railway Station',
@@ -2893,6 +2992,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.markerList.default': 'Map Markers',
     'map.markerList.fullLength': 'Total length {distance}',
     'map.markerList.nearby': 'Near {name}',
+    'map.markerList.playerCount': '{online}/{total} online',
     'map.markerList.results': 'Search Results',
     'map.layer.aria': 'Layers and submissions',
     'map.layer.linearFeatures': 'Lines and labels',
@@ -3093,6 +3193,10 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.endpointCandidatesAria': 'Route endpoint candidates',
     'map.route.expand': 'Expand route planner',
     'map.route.featuresAria': 'Route features',
+    'map.route.fare.estimated': 'est. {amount}',
+    'map.route.fare.exact': '{amount}',
+    'map.route.fare.partial': 'from {amount} known',
+    'map.route.fare.unavailable': 'Fare to be confirmed',
     'map.route.input.destination': 'Enter route destination',
     'map.route.input.origin': 'Enter route origin',
     'map.route.loadingDetail': 'Building the road graph for the first time may take a few seconds',
@@ -3209,12 +3313,24 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operations.emptyFeatured': 'No featured updates published yet',
     'operations.expired': 'Expired Updates',
     'operations.featuredAria': 'Featured update',
+    'operations.featuredNext': 'Next featured update',
+    'operations.featuredPage': 'View featured update {index}',
+    'operations.featuredPages': 'Featured update pages',
+    'operations.featuredPrevious': 'Previous featured update',
     'operations.feedAria': 'Updates list',
     'operations.itemCount': '{count} items',
     'operations.latestTitle': 'Latest Updates',
     'operations.noStrongReminder': 'No active reminders',
     'operations.noTripReminder': 'No trip reminders',
     'operations.remindersAria': 'Important reminders',
+    'operations.serverStatus.latency': 'Latency',
+    'operations.serverStatus.offline': 'Offline',
+    'operations.serverStatus.online': 'Online',
+    'operations.serverStatus.openPlayers': 'View player locations',
+    'operations.serverStatus.players': 'Players',
+    'operations.serverStatus.title': 'Server Status',
+    'operations.serverStatus.unknown': 'Unknown',
+    'operations.serverStatusAria': 'Server status and online players',
     'operations.social.bilibili': 'Bilibili',
     'operations.social.qq': 'QQ Group',
     'operations.social.qqChannel': 'QQ Channel',
@@ -3235,7 +3351,16 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'page.travelScreen': 'Operations Board',
     'quickAction.rideCode': 'Ride Code',
     'quickAction.rideCodeLoginRequired': 'Sign in to use the ride code',
+    'quickAction.rideCodeUnavailable': 'Ride code is temporarily unavailable',
     'search.open': 'Search',
+    'shortcut.close': 'Close shortcuts',
+    'shortcut.holdCtrl': 'Hold Ctrl',
+    'shortcut.map': 'Map',
+    'shortcut.openMenu': 'Shortcut guide',
+    'shortcut.planFocusedMarker': 'Plan a route to this marker',
+    'shortcut.swapRouteEndpoints': 'Swap route endpoints',
+    'shortcut.title': 'Keyboard Shortcuts',
+    'shortcut.toggleNavigation': 'Expand or collapse navigation',
     'settings.accent.gray': 'Gray',
     'settings.accent.green': 'Teal',
     'settings.accent.label': 'Accent',
@@ -3254,6 +3379,13 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.language.system': 'Follow system',
     'settings.language.zhCN': '简体中文',
     'settings.language.zhHant': '繁體中文',
+    'settings.material.advanced': 'Advanced',
+    'settings.material.balanced': 'Balanced',
+    'settings.material.group': 'Interface Material',
+    'settings.material.label': 'Material Mode',
+    'settings.material.performance': 'Performance',
+    'settings.material.thickness': 'Advanced Material Thickness',
+    'settings.material.thicknessValue': '{value}%',
     'settings.motion.full': 'On',
     'settings.motion.group': 'Motion',
     'settings.motion.label': 'Motion',
@@ -3553,12 +3685,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
 };
 
 export function useI18n() {
-  const [locale, setLocale] = useState<LocaleCode>(
-    () => readLocalLocalePreference().resolvedLocale,
-  );
+  // 首帧必须与服务端保持稳定，挂载后再读取浏览器本地偏好以避免 hydration mismatch。
+  const [locale, setLocale] = useState<LocaleCode>('zh-CN');
 
   useEffect(() => {
     const syncLocale = () => setLocale(readLocalLocalePreference().resolvedLocale);
+    syncLocale();
     window.addEventListener(localePreferenceChangedEventName, syncLocale);
     window.addEventListener('storage', syncLocale);
     return () => {

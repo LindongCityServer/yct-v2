@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import '@yct/design-tokens/tokens.css';
 import { EmbeddedContextBridge } from '../components/embedded-context-bridge';
+import { KeyboardShortcutBridge } from '../components/keyboard-shortcut-bridge';
 import { PreferenceBridge } from '../components/preference-bridge';
 import { PwaBridge } from '../components/pwa-bridge';
 import { appPath } from '../lib/app-paths';
@@ -33,7 +34,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   const shouldExposePwaManifest = process.env.NODE_ENV === 'production';
 
   return (
-    <html lang="zh-CN" data-color-scheme="system">
+    <html lang="zh-CN" data-color-scheme="system" data-material-mode="balanced">
       <head>
         {shouldExposePwaManifest ? (
           <link rel="manifest" href={appPath('/manifest.webmanifest')} />
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body>
         <EmbeddedContextBridge />
+        <KeyboardShortcutBridge />
         <PreferenceBridge />
         <PwaBridge />
         {children}

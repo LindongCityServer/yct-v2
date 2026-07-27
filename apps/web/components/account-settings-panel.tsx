@@ -53,6 +53,12 @@ import {
   readMotionMode,
   readThemeMode,
 } from './preference-bridge';
+import {
+  readMaterialPreference,
+  updateMaterialPreference,
+  type MaterialMode,
+  type MaterialPreference,
+} from '../lib/client-material-preference';
 import { appPath } from '../lib/app-paths';
 import {
   clearMapFavoriteMarkers,
@@ -93,6 +99,12 @@ const motionOptionKeys: Array<{ value: MotionMode; labelKey: CommonMessageKey }>
 const fontOptionKeys: Array<{ value: FontMode; labelKey: CommonMessageKey }> = [
   { value: 'harmony', labelKey: 'settings.font.harmony' },
   { value: 'system', labelKey: 'settings.font.system' },
+];
+
+const materialOptionKeys: Array<{ value: MaterialMode; labelKey: CommonMessageKey }> = [
+  { value: 'performance', labelKey: 'settings.material.performance' },
+  { value: 'balanced', labelKey: 'settings.material.balanced' },
+  { value: 'advanced', labelKey: 'settings.material.advanced' },
 ];
 
 const localeOptionKeys: Array<{ value: LocalePreference; labelKey: CommonMessageKey }> = [
@@ -264,10 +276,22 @@ export function AccountSettingsPanel({
       })),
     [t],
   );
+  const materialOptions = useMemo(
+    () =>
+      materialOptionKeys.map((option) => ({
+        value: option.value,
+        label: t(option.labelKey),
+      })),
+    [t],
+  );
   const [themeMode, setThemeMode] = useState<ThemeMode>('system');
   const [accentMode, setAccentMode] = useState<AccentMode>('ldpass');
   const [motionMode, setMotionMode] = useState<MotionMode>('system');
   const [fontMode, setFontMode] = useState<FontMode>('harmony');
+  const [materialPreference, setMaterialPreference] = useState<MaterialPreference>({
+    mode: 'balanced',
+    thickness: 50,
+  });
   const [localeMode, setLocaleMode] = useState<LocalePreference>('system');
   const [localeStatusState, setLocaleStatusState] = useState<ClientLocalePreferenceState | null>(
     null,
@@ -394,6 +418,7 @@ export function AccountSettingsPanel({
     setAccentMode(readAccentMode());
     setMotionMode(readMotionMode());
     setFontMode(readFontMode());
+    setMaterialPreference(readMaterialPreference());
     const localLocalePreference = readLocalLocalePreference();
     applyLocalePreferenceState(localLocalePreference);
     setLocaleStatusState(localLocalePreference);
@@ -518,6 +543,16 @@ export function AccountSettingsPanel({
   const updateAccentMode = (mode: AccentMode) => {
     setAccentMode(mode);
     applyAccentMode(mode);
+  };
+
+  const updateMaterialMode = (mode: MaterialMode) => {
+    const next = updateMaterialPreference({ ...materialPreference, mode });
+    setMaterialPreference(next);
+  };
+
+  const updateMaterialThickness = (thickness: number) => {
+    const next = updateMaterialPreference({ ...materialPreference, thickness });
+    setMaterialPreference(next);
   };
 
   const updateMotionMode = (mode: MotionMode) => {
@@ -969,6 +1004,50 @@ export function AccountSettingsPanel({
               onChange={updateLocaleMode}
             />
           </div>
+        </section>
+
+        <section
+          className="settings-row settings-row-block"
+          aria-labelledby="material-settings-title"
+        >
+          <div className="settings-row-title">
+            <span className="material-symbols-outlined" aria-hidden="true">
+              blur_on
+            </span>
+            <span id="material-settings-title">{t('settings.material.group')}</span>
+          </div>
+          <SegmentedControl
+            label={t('settings.material.label')}
+            options={materialOptions}
+            value={materialPreference.mode}
+            onChange={updateMaterialMode}
+          />
+          <label
+            className={
+              materialPreference.mode === 'advanced'
+                ? 'material-thickness-control'
+                : 'material-thickness-control is-disabled'
+            }
+          >
+            <span>
+              <span>{t('settings.material.thickness')}</span>
+              <output htmlFor="material-thickness">
+                {t('settings.material.thicknessValue', {
+                  value: materialPreference.thickness,
+                })}
+              </output>
+            </span>
+            <input
+              id="material-thickness"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={materialPreference.thickness}
+              disabled={materialPreference.mode !== 'advanced'}
+              onChange={(event) => updateMaterialThickness(Number(event.currentTarget.value))}
+            />
+          </label>
         </section>
 
         <section

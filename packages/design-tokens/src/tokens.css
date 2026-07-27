@@ -39,8 +39,13 @@
   --yct-shadow-floating: 0 18px 48px rgba(17, 24, 23, 0.14);
   --yct-motion-duration-fast: 120ms;
   --yct-motion-duration-standard: 180ms;
+  --yct-motion-duration-enter: 240ms;
+  --yct-motion-duration-layout: 320ms;
   --yct-motion-duration-spinner: 1100ms;
   --yct-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --yct-motion-easing-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --yct-motion-distance-sm: 8px;
+  --yct-motion-distance-md: 16px;
 }
 
 :root[data-accent='red'] {
@@ -54,14 +59,22 @@
 :root[data-motion='reduced'] {
   --yct-motion-duration-fast: 0ms;
   --yct-motion-duration-standard: 0ms;
+  --yct-motion-duration-enter: 0ms;
+  --yct-motion-duration-layout: 0ms;
   --yct-motion-duration-spinner: 0ms;
+  --yct-motion-distance-sm: 0px;
+  --yct-motion-distance-md: 0px;
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-motion='full']) {
     --yct-motion-duration-fast: 0ms;
     --yct-motion-duration-standard: 0ms;
+    --yct-motion-duration-enter: 0ms;
+    --yct-motion-duration-layout: 0ms;
     --yct-motion-duration-spinner: 0ms;
+    --yct-motion-distance-sm: 0px;
+    --yct-motion-distance-md: 0px;
   }
 }
 

@@ -8,6 +8,7 @@ import { appPath } from '../lib/app-paths';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import {
   publishMapNavigationLayoutChanged,
+  subscribeAppNavigationToggleRequested,
   subscribeMapRoutePanelVisibilityChanged,
 } from '../lib/client-map-ui-events';
 import { ticketOrderStateChangedEventName } from '../lib/client-ticket-orders';
@@ -48,6 +49,11 @@ interface TopbarBadgeSummary {
   label: string;
 }
 
+interface RideCodeResponse {
+  actionUrl?: string;
+  message?: string;
+}
+
 export function AppShell({
   active,
   pageTitle,
@@ -67,6 +73,7 @@ export function AppShell({
   const [accountStatus, setAccountStatus] = useState<AccountStatusResponse | null>(null);
   const [localPendingSyncCount, setLocalPendingSyncCount] = useState(0);
   const [mapRoutePanelVisible, setMapRoutePanelVisible] = useState(false);
+  const [rideCodeLoading, setRideCodeLoading] = useState(false);
   const noticeTimer = useRef<number | null>(null);
   const { locale, t } = useI18n();
 
@@ -78,6 +85,10 @@ export function AppShell({
     },
     [],
   );
+
+  useEffect(() => {
+    return subscribeAppNavigationToggleRequested(() => setNavOpen((current) => !current));
+  }, []);
 
   useEffect(() => {
     if (variant !== 'map') {
@@ -165,6 +176,35 @@ export function AppShell({
   const openGlobalSearch = () => {
     router.push(appPath('/search'));
   };
+  const openRideCode = async () => {
+    if (rideCodeLoading) {
+      return;
+    }
+
+    if (accountStatus?.accountStatus !== 'active') {
+      showTopbarNotice(t('quickAction.rideCodeLoginRequired'));
+      router.push(appPath('/account'));
+      return;
+    }
+
+    setRideCodeLoading(true);
+    try {
+      const response = await fetch(appPath('/api/account/ride-code'), {
+        method: 'POST',
+        cache: 'no-store',
+      });
+      const payload = (await response.json()) as RideCodeResponse;
+      if (!response.ok || !payload.actionUrl) {
+        showTopbarNotice(payload.message ?? t('quickAction.rideCodeUnavailable'));
+        return;
+      }
+      window.location.assign(payload.actionUrl);
+    } catch {
+      showTopbarNotice(t('quickAction.rideCodeUnavailable'));
+    } finally {
+      setRideCodeLoading(false);
+    }
+  };
   const accountBadge = mergeTopbarBadge(accountStatus?.badge, localPendingSyncCount, t);
   const renderedPageTitle = pageTitleKey ? t(pageTitleKey) : pageTitle;
   const useSymbolBrand =
@@ -189,6 +229,7 @@ export function AppShell({
         .join(' ')}
     >
       <header className="topbar">
+        <TopbarMaterialLayers />
         <button
           className="icon-button desktop-menu"
           type="button"
@@ -219,9 +260,13 @@ export function AppShell({
           <button
             className="pill-button"
             type="button"
-            onClick={() => showTopbarNotice(t('quickAction.rideCodeLoginRequired'))}
+            aria-busy={rideCodeLoading}
+            disabled={rideCodeLoading}
+            onClick={() => void openRideCode()}
           >
-            <span className="material-symbols-outlined">qr_code_2</span>
+            <span className="material-symbols-outlined">
+              {rideCodeLoading ? 'progress_activity' : 'qr_code_2'}
+            </span>
             <span>{t('quickAction.rideCode')}</span>
           </button>
           <button
@@ -396,6 +441,7 @@ export function SecondaryShell({
   backHref = '/',
   desktopBackHref,
   desktopNavigation,
+  secondaryActions,
   legalVariant = 'none',
   children,
 }: Readonly<{
@@ -404,6 +450,7 @@ export function SecondaryShell({
   backHref?: string;
   desktopBackHref?: string;
   desktopNavigation?: ReactNode;
+  secondaryActions?: ReactNode;
   legalVariant?: 'none' | 'mobile' | 'always';
   children: ReactNode;
 }>) {
@@ -413,6 +460,7 @@ export function SecondaryShell({
   return (
     <main className="secondary-shell">
       <header className="topbar secondary-topbar">
+        <TopbarMaterialLayers />
         <Link
           className={desktopBackHref ? 'icon-button secondary-back-mobile' : 'icon-button'}
           href={appPath(backHref)}
@@ -430,7 +478,7 @@ export function SecondaryShell({
           </Link>
         ) : null}
         <h1 className="secondary-title">{renderedTitle}</h1>
-        <div className="secondary-actions" />
+        <div className="secondary-actions">{secondaryActions}</div>
       </header>
       <section
         className={
@@ -457,6 +505,16 @@ export function SecondaryShell({
         />
       ) : null}
     </main>
+  );
+}
+
+function TopbarMaterialLayers() {
+  return (
+    <span className="topbar-material-layers" aria-hidden="true">
+      <span className="topbar-material-layer is-strong" />
+      <span className="topbar-material-layer is-medium" />
+      <span className="topbar-material-layer is-soft" />
+    </span>
   );
 }
 
