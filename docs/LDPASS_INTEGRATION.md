@@ -1,6 +1,6 @@
 # YCT 与 ldpass 接入说明草案
 
-更新时间：2026-07-09
+更新时间：2026-07-26
 
 本文档记录雨城通 v2（Yuchengtong / YCT）需要接入 `ldpass` 的模块、接入方式、需要的数据、建议接口格式和仍待确认的问题。
 
@@ -469,7 +469,207 @@ export interface YctContributorIdentity {
   - `POST /api/admin/passes/ticket-update-requests/:requestId/reject`
 - Provider API Key Scope 已包含 `action_links:create/read/revoke`、`passes:read/status_update/ticket_update`、`redemptions:create/cancel/reverse/read`。
 
-### 7.1 职责边界
+### 7.1 当前“乘车码”核销链接配置教程
+
+本节对应首页“乘车码”按钮的现有实现。目标是让已登录 YCT 的 Active 临东通用户跳转到临东通操作链接，在临东通当前登录态下选择一张由 `yct` 发卡方发行、状态正常且可核销的卡片，并完成指定数值的核销。
+
+#### 7.1.1 先理解实际调用链
+
+```text
+用户点击 YCT 首页“乘车码”
+  -> YCT POST /api/account/ride-code
+  -> YCT 服务端使用 Provider API Key 签名请求
+  -> ldpass POST /api/open/provider/action-links
+  -> ldpass 创建 kind=use、selectionScope=same_provider 的操作链接
+  -> YCT 仅接受同一 ldpass Origin 且路径为 /action 的返回地址
+  -> 浏览器跳转到 ldpass /action?token=...
+  -> ldpass 根据打开链接时的登录用户列出其本人持有的 yct 卡片
+  -> 用户完成服务器账号或 PIN 验证
+  -> ldpass 消耗卡片数值并将操作链接标记为已使用
+```
+
+这里有两个容易误解的身份边界：
+
+1. “以发卡方 `yct` 的身份”不是通过请求体里的 `provider=yct` 参数实现的。临东通从 Provider API Key 反查所属发卡方，因此 `LDPASS_YCT_PROVIDER_API_KEY` 必须由 slug 为 `yct` 的发卡方创建。若误填其他发卡方的密钥，`same_provider` 会筛选该发卡方的卡片，而不是 YCT 卡片。
+2. 当前创建操作链接的请求不会把 `ldpassUserId` 传给临东通。链接最终面向哪个用户，由打开 `/action` 时的临东通登录态决定。YCT 会要求点击按钮者是 Active 临东通用户并记录创建事件，但操作链接本身仍应视为短时有效的持有者凭证，不能转发给他人。
+
+#### 7.1.2 前置条件
+
+配置前需要确保：
+
+- 临东通中存在 slug 为 `yct` 的发卡方，且发卡方状态为 Active。
+- 有权管理该发卡方的 Owner 可以登录临东通 Provider 后台。
+- 客户端应用 `yuchengtong` 已启用，并绑定到 `yct` 发卡方，而不是未绑定的全局应用或其他发卡方。
+- YCT 与临东通的登录回调和共享 Cookie 已按第 2 节配置完成。
+- 测试用户持有至少一张由 `yct` 发行、状态为 Active、允许消费且可用数值不低于本次核销值的卡片。
+- YCT 服务器能通过 HTTPS 访问 `LDPASS_BASE_URL`，两台服务器的系统时间已经同步。
+
+#### 7.1.3 在临东通确认发卡方
+
+1. 由平台管理员进入 `/admin/providers`，确认 `yct` 发卡方存在且状态为 Active。
+2. 如果尚未创建，可通过发卡方注册流程创建，或由平台管理员在后台创建并指定 Owner。
+3. 发卡方 Owner 登录 `/provider/login` 后，应能看到 `yct` 的客户端应用和 API Key 管理页面。
+
+不要复用另一个发卡方的 API Key，也不要通过修改 Key 名称来模拟 `yct` 身份。真正生效的是 Key 记录关联的 `providerId`。
+
+#### 7.1.4 配置并启用客户端应用
+
+进入临东通 Provider 后台的 `/provider/client-applications`，创建或检查以下应用：
+
+```text
+client_id: yuchengtong
+应用名称: Yuchengtong
+redirect_uri:
+  - https://yct.shangxiaoguan.top/v2/auth/ldpass/callback
+allowed_origin:
+  - https://yct.shangxiaoguan.top
+```
+
+提交后还需由平台侧启用该应用。最终应同时满足：
+
+- `clientId` 与 YCT 的 `LDPASS_CLIENT_ID` 完全一致。
+- 应用处于启用状态。
+- 应用明确绑定到 `yct` 发卡方。
+- 正式环境和本地环境分别登记准确的回调地址，不使用模糊匹配。
+
+虽然操作链接协议允许不传 `clientId`，当前 YCT 实现会传入 `LDPASS_CLIENT_ID`。如果应用存在但未启用、未绑定发卡方，或绑定到了其他发卡方，临东通会拒绝创建链接。
+
+#### 7.1.5 申请最小权限的 Provider API Key
+
+1. 使用 `yct` 发卡方 Owner 账号进入 `/provider/api-keys`。
+2. 新建 API Key 申请，名称可填写“YCT 乘车码操作链接”。
+3. Scope 只选择“生成操作链接”，对应 `action_links:create`。
+4. 按组织的密钥轮换策略设置有效期并填写申请原因。
+5. 提交申请，等待平台管理员在 `/admin/providers` 的待处理申请中批准。
+6. 返回 `/provider/api-keys` 领取 Secret。Secret 只展示一次，应立即写入 YCT 服务器的私密环境变量。
+
+当前 YCT 只创建操作链接，不查询或撤销链接，因此不需要授予 `action_links:read`、`action_links:revoke`，也不需要任何 `redemptions:*` Scope。不要把 Provider 登录密码、`client_id` 或 API Key 的显示名称当作 Secret。
+
+#### 7.1.6 配置 YCT 环境变量
+
+在 YCT 部署目录的私密 `.env` 文件中配置：
+
+```dotenv
+LDPASS_BASE_URL=https://ldpass.shangxiaoguan.top
+LDPASS_CLIENT_ID=yuchengtong
+LDPASS_YCT_PROVIDER_API_KEY=<从 yct 发卡方后台领取的一次性 Secret>
+LDPASS_RIDE_CODE_REQUESTED_VALUE=1
+LDPASS_RIDE_CODE_VERIFICATION_METHOD=server_account
+LDPASS_RIDE_CODE_EXPIRES_IN_SECONDS=120
+```
+
+各变量的含义和约束如下：
+
+| 变量 | 含义 | 约束 |
+| --- | --- | --- |
+| `LDPASS_BASE_URL` | 临东通站点根地址 | 只写 Origin，不附加 `/api`、`/action` 或查询参数 |
+| `LDPASS_CLIENT_ID` | 关联的客户端应用 | 必须已启用并绑定到 `yct` 发卡方 |
+| `LDPASS_YCT_PROVIDER_API_KEY` | YCT 服务端签名密钥 | 必须属于 `yct`，且拥有 `action_links:create`；禁止使用 `NEXT_PUBLIC_` 前缀 |
+| `LDPASS_RIDE_CODE_REQUESTED_VALUE` | 每次核销的数值 | 必须大于 `0`，最多 6 位小数；默认 `1` |
+| `LDPASS_RIDE_CODE_VERIFICATION_METHOD` | 核销验证方式 | `server_account` 或 `pin`；其他值会回退为 `server_account` |
+| `LDPASS_RIDE_CODE_EXPIRES_IN_SECONDS` | 链接有效秒数 | `60` 至 `86400`；默认 `120` |
+
+生产部署使用 `/v2` BasePath 时，登录相关变量仍需保持一致：
+
+```dotenv
+YCT_PUBLIC_SITE_URL=https://yct.shangxiaoguan.top
+NEXT_PUBLIC_YCT_BASE_PATH=/v2
+YCT_BASE_PATH=/v2
+```
+
+环境变量修改后需要重启 YCT 进程才能生效。Secret 不得提交到 Git、放入前端代码、打印到日志或出现在截图中；YCT 前端只调用本站的 `/api/account/ride-code`，签名和 Secret 始终留在服务端。
+
+#### 7.1.7 当前固定的操作链接参数
+
+YCT 服务端会向临东通发送以下业务参数：
+
+```ts
+export interface YctRideCodeActionLinkInput {
+  kind: 'use';
+  selectionScope: 'same_provider';
+  clientId: string;
+  requestedValue: string;
+  verificationMethod: 'server_account' | 'pin';
+  expiresInSeconds: number;
+  note: '雨城通乘车码核销';
+  idempotencyKey: string;
+}
+```
+
+其中：
+
+- `kind: 'use'` 表示消耗卡片数值，而不是充值。
+- `selectionScope: 'same_provider'` 表示只展示与 API Key 同属一个发卡方的卡片。
+- 当前不传 `targetPassId`，因此用户会在临东通页面选择自己符合条件的 YCT 卡片。
+- 每次点击都会生成新的随机幂等键，临东通对同一幂等键只保存和返回第一次结果。
+- YCT 对临东通请求使用 HMAC-SHA256 签名，并设置 8 秒超时；签名包含请求方法、原始路径、时间戳、幂等键和原始请求体摘要。
+
+#### 7.1.8 验收步骤
+
+1. 使用持有 YCT 卡片的 Active 临东通账号登录 YCT。
+2. 打开首页并点击“乘车码”。
+3. 浏览器应先向 YCT 发起 `POST /api/account/ride-code`，响应为 `200`，包含 `actionUrl` 和 `expiresAt`。
+4. 浏览器应跳转到与 `LDPASS_BASE_URL` 同源的 `/action?token=...`，而不是第三方域名或其他路径。
+5. 临东通页面应只列出当前登录用户本人持有、由 `yct` 发行且可核销的卡片。
+6. 按配置完成服务器账号或 PIN 验证，确认卡片数值被正确扣减，操作链接不能再次使用。
+7. 在 YCT 事件存储中确认产生 `RideCodeRedemptionLinkCreated`；在临东通审计或事件记录中确认操作链接创建和核销事件。
+
+至少再验证以下异常场景：
+
+- 未登录或非 Active 用户点击时，YCT 不创建链接。
+- 用户只有其他发卡方的卡片时，不得出现在选择列表中。
+- 卡片冻结、失效或余额不足时，不得完成核销。
+- 链接过期后不可使用，重新点击按钮可以获得新链接。
+- 将链接换到另一个临东通账号打开时，只能看到该账号自己的合格卡片，绝不能看到创建者的卡片。
+- API Key 被撤销、过期或轮换后，旧 Secret 不能继续创建链接。
+
+#### 7.1.9 事件 Schema 与状态流转
+
+YCT 在操作链接成功创建后发布现有领域事件：
+
+```ts
+export interface RideCodeRedemptionLinkCreatedPayload {
+  ldpassUserId: string;
+  actionLinkId: string;
+  selectionScope: 'same_provider';
+  requestedValue: string;
+  verificationMethod: 'server_account' | 'pin';
+  expiresAt: string;
+}
+```
+
+核心状态应按两个系统分别理解：
+
+```text
+YCT 按钮：空闲 -> 创建中 -> 跳转
+                    -> 未配置 / 上游不可用
+
+ldpass 操作链接：Active -> Consumed
+                         -> Expired
+                         -> Revoked
+```
+
+核销验证和操作链接本身是两套状态机。使用 `server_account` 时，临东通还会创建服务器账号核销请求并等待验证完成；不要仅凭 YCT 已创建链接就把业务视为核销成功。后续如果 YCT 需要展示最终核销结果，应订阅临东通核销完成事件或通过受控同步任务更新本地状态，不要让首页组件直接调用临东通其他业务 Service。
+
+#### 7.1.10 常见问题
+
+| 现象 | 主要原因 | 处理方式 |
+| --- | --- | --- |
+| YCT 返回 `503 not_configured` | 缺少 `LDPASS_BASE_URL` 或 `LDPASS_YCT_PROVIDER_API_KEY` | 检查部署目录的 `.env*` 是否被启动脚本加载，并重启 YCT |
+| YCT 返回 `502 upstream_unavailable` | 临东通不可达、超时，或临东通拒绝了请求 | 检查临东通服务端日志、网络、TLS 和下列 API 配置；YCT 当前会把上游错误统一收敛为 502 |
+| 临东通提示 API Key 无效 | Key 被撤销、过期、轮换，或 Secret 填写错误 | 在 `yct` Provider 后台检查 Key 状态；轮换后替换 Secret 并重启 YCT |
+| 临东通提示签名或时间戳无效 | 服务器时钟偏差超过 5 分钟，或代理改写了签名路径/请求体 | 开启系统时间同步；确保 YCT 直接请求标准路径 `/api/open/provider/action-links` |
+| 权限不足 | Key 缺少 `action_links:create`，或发卡方不是 Active | 用最小正确 Scope 重新申请，并检查 `yct` 状态 |
+| 客户端应用不存在或未启用 | `LDPASS_CLIENT_ID` 错误，应用未启用 | 核对 `yuchengtong` 及平台审核状态 |
+| 客户端应用未绑定或身份不一致 | 应用未绑定发卡方，或并非绑定到 API Key 所属的 `yct` | 在 Provider 后台修正绑定关系 |
+| 链接能打开但没有可选卡片 | 当前用户未登录、没有 YCT 卡片，或卡片失效、冻结、余额不足 | 检查打开链接时的临东通账号、卡片发卡方和可消费状态 |
+| `server_account` 无法完成 | 用户的服务器账号验证条件不满足，或对应服务不可用 | 检查临东通服务器账号绑定和核销服务状态；不要盲目改成 PIN |
+| `pin` 无法完成 | 用户未设置 PIN 或 PIN 错误 | 先在临东通完成 PIN 设置，再重新创建链接 |
+| 跳转地址被 YCT 拒绝 | 临东通返回地址不是同源的精确 `/action` 路径 | 检查 `LDPASS_BASE_URL`、反向代理和临东通公开地址配置 |
+
+工业界通常将这类功能拆为“业务站点创建短时授权链接”“凭证平台完成用户验证与原子扣减”“事件/审计异步同步结果”三部分。最常见的事故是把 Provider API Key 暴露到浏览器，或把“链接已创建”误当成“核销已完成”；另一个高频问题是多实例服务器时钟不同步，导致部分实例间歇性签名失败。上线前至少应覆盖上面的异常场景，并定期轮换 API Key。
+
+### 7.2 职责边界
 
 YCT 负责：
 
@@ -492,7 +692,7 @@ YCT 负责：
 - YCT 通过轮询、Webhook 或后台任务同步核销状态，然后更新行程提醒、订单状态和计数徽标。
 - 所有出票、退票、核销、冲正请求都必须带幂等键，避免重复操作。
 
-### 7.2 YCT 订单草稿
+### 7.3 YCT 订单草稿
 
 ```ts
 export interface YctTicketOrderDraft {
@@ -506,7 +706,7 @@ export interface YctTicketOrderDraft {
 }
 ```
 
-### 7.3 票券发行请求
+### 7.4 票券发行请求
 
 ```ts
 export interface LdpassTicketIssueRequest {
@@ -527,7 +727,7 @@ export interface LdpassTicketIssueRequest {
 }
 ```
 
-### 7.4 票券发行响应
+### 7.5 票券发行响应
 
 ```ts
 export interface LdpassTicketIssueResponse {
@@ -538,7 +738,7 @@ export interface LdpassTicketIssueResponse {
 }
 ```
 
-### 7.5 票券状态同步
+### 7.6 票券状态同步
 
 ```ts
 export interface LdpassTicketStatusWebhook {

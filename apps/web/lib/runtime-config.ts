@@ -5,6 +5,10 @@ export interface RuntimeConfig {
   siteUrl: string;
   ldpassBaseUrl?: string;
   ldpassClientId?: string;
+  ldpassYctProviderApiKey?: string;
+  ldpassRideCodeRequestedValue: string;
+  ldpassRideCodeVerificationMethod: 'server_account' | 'pin';
+  ldpassRideCodeExpiresInSeconds: number;
   yctSessionStorePath: string;
   yctUserLinkStorePath: string;
   adminStorePath: string;
@@ -74,9 +78,22 @@ export function readRuntimeConfig(): RuntimeConfig {
     siteUrl: emptyToUndefined(process.env.YCT_PUBLIC_SITE_URL) ?? 'http://localhost:3000',
     ldpassBaseUrl: emptyToUndefined(process.env.LDPASS_BASE_URL),
     ldpassClientId: emptyToUndefined(process.env.LDPASS_CLIENT_ID),
+    ldpassYctProviderApiKey: emptyToUndefined(process.env.LDPASS_YCT_PROVIDER_API_KEY),
+    ldpassRideCodeRequestedValue: parsePositiveDecimal(
+      process.env.LDPASS_RIDE_CODE_REQUESTED_VALUE,
+      '1',
+    ),
+    ldpassRideCodeVerificationMethod: parseRideCodeVerificationMethod(
+      process.env.LDPASS_RIDE_CODE_VERIFICATION_METHOD,
+    ),
+    ldpassRideCodeExpiresInSeconds: parseIntegerInRange(
+      process.env.LDPASS_RIDE_CODE_EXPIRES_IN_SECONDS,
+      120,
+      60,
+      86_400,
+    ),
     yctSessionStorePath:
-      emptyToUndefined(process.env.YCT_SESSION_STORE_PATH) ??
-      '.yct-data/yct-account-sessions.json',
+      emptyToUndefined(process.env.YCT_SESSION_STORE_PATH) ?? '.yct-data/yct-account-sessions.json',
     yctUserLinkStorePath:
       emptyToUndefined(process.env.YCT_USER_LINK_STORE_PATH) ?? '.yct-data/yct-user-links.json',
     adminStorePath:
@@ -231,6 +248,27 @@ function parsePositiveInteger(value: string | undefined, fallback: number): numb
 function parseNonNegativeInteger(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback;
+}
+
+function parseIntegerInRange(
+  value: string | undefined,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : fallback;
+}
+
+function parsePositiveDecimal(value: string | undefined, fallback: string): string {
+  const trimmed = value?.trim();
+  return trimmed && /^\d+(?:\.\d{1,6})?$/.test(trimmed) && Number(trimmed) > 0 ? trimmed : fallback;
+}
+
+function parseRideCodeVerificationMethod(
+  value: string | undefined,
+): RuntimeConfig['ldpassRideCodeVerificationMethod'] {
+  return value?.trim() === 'pin' ? 'pin' : 'server_account';
 }
 
 function parsePushNotificationTypes(value: string | undefined): PushNotificationType[] {
