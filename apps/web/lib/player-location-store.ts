@@ -3,6 +3,7 @@ import path from 'node:path';
 import { readRuntimeConfig } from './runtime-config';
 
 export type PlayerPresence = 'online' | 'offline';
+export type PlayerLocationSourceStatus = 'ready' | 'not_configured' | 'unavailable';
 
 export interface PlayerLocationRecord {
   playerKey: string;
@@ -21,6 +22,8 @@ export interface PlayerLocationSnapshot {
   sourceId: string;
   lastAttemptAt?: string;
   lastSuccessfulSyncAt?: string;
+  sourceStatus?: PlayerLocationSourceStatus;
+  latencyMs?: number;
   locations: PlayerLocationRecord[];
 }
 
@@ -39,6 +42,12 @@ export interface PlayerLocationMergeResult {
   snapshot: PlayerLocationSnapshot;
   changed: boolean;
   presenceChanges: PlayerPresenceChange[];
+  previousSourceStatus?: PlayerLocationSourceStatus;
+}
+
+export interface PlayerLocationAttemptResult {
+  snapshot: PlayerLocationSnapshot;
+  previousSourceStatus?: PlayerLocationSourceStatus;
 }
 
 const sourceId = 'bdslm-player-markers';
@@ -54,15 +63,30 @@ export async function readPlayerLocationSnapshot(): Promise<PlayerLocationSnapsh
   return readSnapshot();
 }
 
-export async function recordPlayerLocationAttempt(attemptedAt: string): Promise<void> {
-  await enqueueMutation(async () => {
+export async function recordPlayerLocationAttempt(input: {
+  attemptedAt: string;
+  sourceStatus: PlayerLocationSourceStatus;
+  latencyMs?: number;
+}): Promise<PlayerLocationAttemptResult> {
+  return enqueueMutation(async () => {
     const snapshot = await readSnapshot();
-    await writeSnapshot({ ...snapshot, lastAttemptAt: attemptedAt });
+    const nextSnapshot = {
+      ...snapshot,
+      lastAttemptAt: input.attemptedAt,
+      sourceStatus: input.sourceStatus,
+      latencyMs: input.latencyMs,
+    };
+    await writeSnapshot(nextSnapshot);
+    return {
+      snapshot: nextSnapshot,
+      previousSourceStatus: snapshot.sourceStatus,
+    };
   });
 }
 
 export async function mergePlayerLocationObservation(input: {
   observedAt: string;
+  latencyMs: number;
   locations: PlayerLocationObservation[];
 }): Promise<PlayerLocationMergeResult> {
   let result: PlayerLocationMergeResult | undefined;
@@ -134,10 +158,17 @@ export async function mergePlayerLocationObservation(input: {
       sourceId,
       lastAttemptAt: input.observedAt,
       lastSuccessfulSyncAt: input.observedAt,
+      sourceStatus: 'ready',
+      latencyMs: input.latencyMs,
       locations: nextLocations.sort((left, right) => left.playerKey.localeCompare(right.playerKey)),
     };
     await writeSnapshot(nextSnapshot);
-    result = { snapshot: nextSnapshot, changed, presenceChanges };
+    result = {
+      snapshot: nextSnapshot,
+      changed,
+      presenceChanges,
+      previousSourceStatus: snapshot.sourceStatus,
+    };
   });
 
   if (!result) {
@@ -168,6 +199,8 @@ async function readSnapshot(): Promise<PlayerLocationSnapshot> {
       sourceId,
       lastAttemptAt: normalizeOptionalText(parsed.lastAttemptAt),
       lastSuccessfulSyncAt: normalizeOptionalText(parsed.lastSuccessfulSyncAt),
+      sourceStatus: normalizeSourceStatus(parsed.sourceStatus),
+      latencyMs: normalizeLatency(parsed.latencyMs),
       locations: Array.isArray(parsed.locations)
         ? parsed.locations.filter(isPlayerLocationRecord)
         : [],
@@ -209,4 +242,16 @@ function isPlayerLocationRecord(value: PlayerLocationRecord): boolean {
 function normalizeOptionalText(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function normalizeSourceStatus(
+  value: PlayerLocationSourceStatus | undefined,
+): PlayerLocationSourceStatus | undefined {
+  return value === 'ready' || value === 'not_configured' || value === 'unavailable'
+    ? value
+    : undefined;
+}
+
+function normalizeLatency(value: number | undefined): number | undefined {
+  return Number.isFinite(value) && Number(value) >= 0 ? Math.round(Number(value)) : undefined;
 }

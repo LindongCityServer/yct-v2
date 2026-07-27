@@ -8,21 +8,59 @@ type MarkdownBlock =
   | { type: 'quote'; text: string }
   | { type: 'image'; alt: string; src: string };
 
+export interface MarkdownHeading {
+  id: string;
+  level: 2 | 3 | 4;
+  text: string;
+}
+
 export function MarkdownBlocks({ markdown }: Readonly<{ markdown: string }>) {
   const blocks = parseMarkdownBlocks(markdown);
+  const headings = extractMarkdownHeadings(markdown);
+  let headingIndex = 0;
 
   return (
     <div className="markdown-blocks">
-      {blocks.map((block, index) => renderMarkdownBlock(block, index))}
+      {blocks.map((block, index) => {
+        const headingId = block.type === 'heading' ? headings[headingIndex++]?.id : undefined;
+        return renderMarkdownBlock(block, index, headingId);
+      })}
     </div>
   );
 }
 
-function renderMarkdownBlock(block: MarkdownBlock, index: number): ReactNode {
+export function extractMarkdownHeadings(markdown: string): MarkdownHeading[] {
+  const usedIds = new Map<string, number>();
+
+  return parseMarkdownBlocks(markdown).flatMap((block) => {
+    if (block.type !== 'heading') {
+      return [];
+    }
+
+    const text = markdownInlineText(block.text);
+    const baseId = markdownHeadingId(text);
+    const occurrence = (usedIds.get(baseId) ?? 0) + 1;
+    usedIds.set(baseId, occurrence);
+
+    return [
+      {
+        id: occurrence === 1 ? baseId : `${baseId}-${occurrence}`,
+        level: block.level,
+        text,
+      },
+    ];
+  });
+}
+
+function renderMarkdownBlock(block: MarkdownBlock, index: number, headingId?: string): ReactNode {
   switch (block.type) {
     case 'heading': {
       const HeadingTag = `h${block.level}` as 'h2' | 'h3' | 'h4';
-      return <HeadingTag key={index}>{renderInlineMarkdown(block.text)}</HeadingTag>;
+      return (
+        <HeadingTag id={headingId} key={index}>
+          {renderInlineMarkdown(block.text)}
+        </HeadingTag>
+      );
     }
     case 'list': {
       const ListTag = block.ordered ? 'ol' : 'ul';
@@ -285,6 +323,23 @@ function renderInlineMarkdown(text: string): ReactNode[] {
   }
 
   return nodes.length > 0 ? nodes : [text];
+}
+
+function markdownInlineText(text: string): string {
+  return text
+    .replace(/!?\[([^\]]+)]\([^)]+\)/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .trim();
+}
+
+function markdownHeadingId(text: string): string {
+  const normalized = text
+    .normalize('NFKC')
+    .toLocaleLowerCase('zh-CN')
+    .replace(/[^\p{Letter}\p{Number}]+/gu, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized || 'section';
 }
 
 function isSafeHref(href: string): boolean {

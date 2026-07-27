@@ -1,13 +1,15 @@
 'use client';
 
 import type {
+  ApiItemResponse,
   ApiListResponse,
   OperationsFeedItem,
+  OperationsServerStatus,
   OperationsStrongReminderItem,
 } from '@yct/contracts';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { TitleWithBreaks } from './title-with-breaks';
@@ -57,18 +59,27 @@ const categoryLabelKeyById = new Map<string, CommonMessageKey>(
 export function OperationsHome({
   feed,
   reminders,
+  serverStatus,
 }: Readonly<{
   feed: ApiListResponse<OperationsFeedItem>;
   reminders: ApiListResponse<OperationsStrongReminderItem>;
+  serverStatus: ApiItemResponse<OperationsServerStatus>;
 }>) {
   const { t } = useI18n();
   const [activeCategory, setActiveCategory] = useState<CategoryKey>('all');
+  const [activeBannerIndex, setActiveBannerIndex] = useState(0);
+  const [carouselPaused, setCarouselPaused] = useState(false);
+  const [motionReduced, setMotionReduced] = useState(false);
+  const [currentServerStatus, setCurrentServerStatus] = useState(serverStatus);
   const now = useMemo(() => Date.now(), []);
   const activeReminders = reminders.items;
 
   const activeLabel = useMemo(
     () =>
-      t(categories.find((category) => category.key === activeCategory)?.labelKey ?? 'operations.category.all'),
+      t(
+        categories.find((category) => category.key === activeCategory)?.labelKey ??
+          'operations.category.all',
+      ),
     [activeCategory, t],
   );
 
@@ -80,7 +91,74 @@ export function OperationsHome({
   );
   const currentItems = filteredItems.filter((item) => !isExpiredItem(item, now));
   const expiredItems = filteredItems.filter((item) => isExpiredItem(item, now));
-  const bannerItem = useMemo(() => pickFeaturedOperationsItem(sortedItems, now), [now, sortedItems]);
+  const bannerItems = useMemo(
+    () => selectFeaturedOperationsItems(sortedItems, now),
+    [now, sortedItems],
+  );
+  const bannerItem = bannerItems[activeBannerIndex] ?? bannerItems[0];
+
+  useEffect(() => {
+    setActiveBannerIndex((current) => (current < bannerItems.length ? current : 0));
+  }, [bannerItems.length]);
+
+  useEffect(() => {
+    if (carouselPaused || motionReduced || bannerItems.length < 2) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(
+      () => setActiveBannerIndex((current) => (current + 1) % bannerItems.length),
+      6_500,
+    );
+    return () => window.clearInterval(timer);
+  }, [bannerItems.length, carouselPaused, motionReduced]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const systemMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const updateMotionPreference = () => {
+      setMotionReduced(
+        root.dataset.motion === 'reduced' ||
+          (root.dataset.motion !== 'full' && systemMotionQuery.matches),
+      );
+    };
+    const rootObserver = new MutationObserver(updateMotionPreference);
+
+    updateMotionPreference();
+    systemMotionQuery.addEventListener('change', updateMotionPreference);
+    rootObserver.observe(root, { attributes: true, attributeFilter: ['data-motion'] });
+    return () => {
+      systemMotionQuery.removeEventListener('change', updateMotionPreference);
+      rootObserver.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshServerStatus() {
+      try {
+        const response = await fetch(appPath('/api/operations/server-status'), {
+          cache: 'no-store',
+        });
+        if (!response.ok) {
+          return;
+        }
+        const payload = (await response.json()) as ApiItemResponse<OperationsServerStatus>;
+        if (!cancelled && payload.item) {
+          setCurrentServerStatus(payload);
+        }
+      } catch {
+        // 保留最近一次明确状态，下一轮轮询会继续尝试。
+      }
+    }
+
+    const timer = window.setInterval(() => void refreshServerStatus(), 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const emptyText =
     activeCategory === 'all'
@@ -89,12 +167,24 @@ export function OperationsHome({
 
   return (
     <div className="content-stack" aria-labelledby="operations-title">
-      <section className="hero-panel" aria-label={t('operations.featuredAria')}>
+      <section
+        className={bannerItems.length > 1 ? 'hero-panel has-carousel' : 'hero-panel'}
+        aria-label={t('operations.featuredAria')}
+        onPointerEnter={() => setCarouselPaused(true)}
+        onPointerLeave={() => setCarouselPaused(false)}
+        onFocusCapture={() => setCarouselPaused(true)}
+        onBlurCapture={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) {
+            setCarouselPaused(false);
+          }
+        }}
+      >
         {bannerItem ? (
           <Link
             className="hero-feature-link"
             href={appPath(`/operations/${encodeURIComponent(bannerItem.id)}`)}
             style={buildHeroFallbackStyle(bannerItem)}
+            key={bannerItem.id}
           >
             {bannerItem.coverImageUrl ? (
               <img
@@ -120,19 +210,32 @@ export function OperationsHome({
             <p className="empty-copy">{t('operations.emptyFeatured')}</p>
           </div>
         )}
+        {bannerItems.length > 1 ? (
+          <HeroCarouselControls
+            activeIndex={activeBannerIndex}
+            count={bannerItems.length}
+            onSelect={setActiveBannerIndex}
+            t={t}
+          />
+        ) : null}
       </section>
 
       <section className="reminder-panel" aria-label={t('operations.remindersAria')}>
-        <div className="section-heading">
-          <h2>{t('operations.strongReminder')}</h2>
-          <span className="muted">
-            {activeReminders.length > 0
-              ? t('operations.itemCount', { count: activeReminders.length })
-              : t('operations.noStrongReminder')}
+        <div className="reminder-panel-layout">
+          <span className="material-symbols-outlined reminder-panel-icon" aria-hidden="true">
+            campaign
           </span>
+          <div className="reminder-panel-marquee">
+            {activeReminders.length > 0 ? (
+              <ReminderTicker items={activeReminders} t={t} />
+            ) : (
+              <span className="reminder-panel-empty">{t('operations.noStrongReminder')}</span>
+            )}
+          </div>
         </div>
-        {activeReminders.length > 0 ? <ReminderList items={activeReminders} t={t} /> : null}
       </section>
+
+      <ServerStatusPanel response={currentServerStatus} t={t} />
 
       <section className="feed-panel" aria-label={t('operations.feedAria')}>
         <div className="operations-feed-toolbar">
@@ -206,45 +309,112 @@ export function OperationsHome({
   );
 }
 
-function ReminderList({
-  items,
+function HeroCarouselControls({
+  activeIndex,
+  count,
+  onSelect,
   t,
-}: Readonly<{ items: OperationsStrongReminderItem[]; t: Translate }>) {
+}: Readonly<{
+  activeIndex: number;
+  count: number;
+  onSelect: (index: number) => void;
+  t: Translate;
+}>) {
+  const selectRelative = (offset: number) => onSelect((activeIndex + offset + count) % count);
+
   return (
-    <div className="operations-reminder-list">
-      {items.map((item) => (
-        <ReminderCard item={item} key={item.id} t={t} />
-      ))}
+    <div className="hero-carousel-controls">
+      <button
+        className="hero-carousel-arrow"
+        type="button"
+        aria-label={t('operations.featuredPrevious')}
+        title={t('operations.featuredPrevious')}
+        onClick={() => selectRelative(-1)}
+      >
+        <span className="material-symbols-outlined" aria-hidden="true">
+          chevron_left
+        </span>
+      </button>
+      <div className="hero-carousel-pages" aria-label={t('operations.featuredPages')}>
+        {Array.from({ length: count }, (_, index) => (
+          <button
+            className={index === activeIndex ? 'is-active' : ''}
+            type="button"
+            aria-label={t('operations.featuredPage', { index: index + 1 })}
+            aria-current={index === activeIndex ? 'true' : undefined}
+            onClick={() => onSelect(index)}
+            key={index}
+          />
+        ))}
+      </div>
+      <button
+        className="hero-carousel-arrow"
+        type="button"
+        aria-label={t('operations.featuredNext')}
+        title={t('operations.featuredNext')}
+        onClick={() => selectRelative(1)}
+      >
+        <span className="material-symbols-outlined" aria-hidden="true">
+          chevron_right
+        </span>
+      </button>
     </div>
   );
 }
 
-function ReminderCard({
+function ReminderTicker({
+  items,
+  t,
+}: Readonly<{ items: OperationsStrongReminderItem[]; t: Translate }>) {
+  const style = {
+    '--operations-reminder-duration': `${Math.max(18, items.length * 11)}s`,
+  } as CSSProperties;
+
+  return (
+    <div className="operations-reminder-marquee" style={style}>
+      <div className="operations-reminder-track">
+        <div className="operations-reminder-group">
+          {items.map((item) => (
+            <ReminderTickerItem item={item} key={item.id} t={t} />
+          ))}
+        </div>
+        <div className="operations-reminder-group is-copy" aria-hidden="true">
+          {items.map((item) => (
+            <ReminderTickerItem duplicate item={item} key={item.id} t={t} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReminderTickerItem({
+  duplicate = false,
   item,
   t,
-}: Readonly<{ item: OperationsStrongReminderItem; t: Translate }>) {
-  const className = ['operations-reminder-item', `tone-${item.tone}`].join(' ');
+}: Readonly<{
+  duplicate?: boolean;
+  item: OperationsStrongReminderItem;
+  t: Translate;
+}>) {
+  const className = ['operations-reminder-ticker-item', `tone-${item.tone}`].join(' ');
   const windowText = item.displayEndDate
     ? t('operations.validUntil', { date: item.displayEndDate })
     : item.displayStartDate
       ? t('operations.startsAt', { date: item.displayStartDate })
       : undefined;
-  const icon = iconForReminderTone(item.tone);
   const content = (
-    <>
-      <div className="operations-reminder-copy">
-        <div className="operations-reminder-meta">
-          {item.label ? <span className="operations-reminder-label">{item.label}</span> : null}
-          {windowText ? <span className="muted">{windowText}</span> : null}
-        </div>
-        <strong>{item.title}</strong>
-        {item.summary ? <p>{item.summary}</p> : null}
-      </div>
-      <span className="material-symbols-outlined" aria-hidden="true">
-        {icon}
-      </span>
-    </>
+    <span className="operations-reminder-ticker-copy">
+      {item.label ? <span className="operations-reminder-label">{item.label}</span> : null}
+      <span className="operations-reminder-ticker-title">{item.title}</span>
+      {item.summary ? <span>{item.summary}</span> : null}
+      {windowText ? <span>{windowText}</span> : null}
+    </span>
   );
+
+  if (duplicate) {
+    return <div className={className}>{content}</div>;
+  }
 
   if (!item.href) {
     return <article className={className}>{content}</article>;
@@ -261,6 +431,56 @@ function ReminderCard({
   return (
     <Link className={className} href={item.href}>
       {content}
+    </Link>
+  );
+}
+
+function ServerStatusPanel({
+  response,
+  t,
+}: Readonly<{ response: ApiItemResponse<OperationsServerStatus>; t: Translate }>) {
+  const status = response.item;
+  const availability = status?.availability ?? 'unknown';
+  const statusLabel =
+    availability === 'online'
+      ? t('operations.serverStatus.online')
+      : availability === 'offline'
+        ? t('operations.serverStatus.offline')
+        : t('operations.serverStatus.unknown');
+
+  return (
+    <Link
+      className={`server-status-panel is-${availability}`}
+      href={appPath('/map?category=player')}
+      aria-label={t('operations.serverStatusAria')}
+      title={t('operations.serverStatus.openPlayers')}
+    >
+      <h2 className="server-status-title">{t('operations.serverStatus.title')}</h2>
+      <div className="server-status-summary">
+        <span className="server-status-indicator" aria-hidden="true" />
+        {availability === 'online' ? (
+          <>
+            {status?.latencyMs !== undefined ? (
+              <span className="server-status-latency">{status.latencyMs}ms</span>
+            ) : (
+              <span className="server-status-state">{statusLabel}</span>
+            )}
+            {status?.onlinePlayerCount !== undefined ? (
+              <span
+                className="server-status-player-count"
+                title={t('operations.serverStatus.players')}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  group
+                </span>
+                <span>{status.onlinePlayerCount}</span>
+              </span>
+            ) : null}
+          </>
+        ) : (
+          <span className="server-status-state">{statusLabel}</span>
+        )}
+      </div>
     </Link>
   );
 }
@@ -337,30 +557,6 @@ function comparePublishedAtDesc(left: OperationsFeedItem, right: OperationsFeedI
   return toTime(right.publishedAt) - toTime(left.publishedAt);
 }
 
-function iconForReminderTone(tone: OperationsStrongReminderItem['tone']): string {
-  switch (tone) {
-    case 'metro':
-      return 'subway';
-    case 'bus':
-    case 'coach':
-      return 'directions_bus';
-    case 'tram':
-      return 'tram';
-    case 'ferry':
-      return 'directions_boat';
-    case 'flight':
-      return 'flight_takeoff';
-    case 'railway':
-      return 'train';
-    case 'warning':
-      return 'warning';
-    case 'danger':
-      return 'crisis_alert';
-    default:
-      return 'notifications_active';
-  }
-}
-
 function compareBannerPriority(left: OperationsFeedItem, right: OperationsFeedItem): number {
   const leftOrder = left.bannerSortOrder ?? Number.POSITIVE_INFINITY;
   const rightOrder = right.bannerSortOrder ?? Number.POSITIVE_INFINITY;
@@ -375,8 +571,22 @@ export function pickFeaturedOperationsItem(
   items: OperationsFeedItem[],
   now: number,
 ): OperationsFeedItem | undefined {
-  const bannerCandidates = items.filter((item) => item.showInBanner).sort(compareBannerPriority);
-  return bannerCandidates.find((item) => !isExpiredItem(item, now)) ?? bannerCandidates[0] ?? items[0];
+  return selectFeaturedOperationsItems(items, now)[0];
+}
+
+export function selectFeaturedOperationsItems(
+  items: OperationsFeedItem[],
+  now: number,
+): OperationsFeedItem[] {
+  const activeBannerItems = items
+    .filter((item) => item.showInBanner && !isExpiredItem(item, now))
+    .sort(compareBannerPriority);
+  if (activeBannerItems.length > 0) {
+    return activeBannerItems;
+  }
+
+  const fallbackItem = items.find((item) => !isExpiredItem(item, now)) ?? items[0];
+  return fallbackItem ? [fallbackItem] : [];
 }
 
 function isExpiredItem(item: OperationsFeedItem, now: number): boolean {

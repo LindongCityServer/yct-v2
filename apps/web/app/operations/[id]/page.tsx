@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation';
 import type { OperationsContentDetail } from '@yct/contracts';
 import { SecondaryShell } from '../../../components/app-shell';
-import { MarkdownBlocks } from '../../../components/markdown-blocks';
+import { MarkdownBlocks, extractMarkdownHeadings } from '../../../components/markdown-blocks';
+import { OperationTableOfContents } from '../../../components/operation-table-of-contents';
 import { TitleWithBreaks } from '../../../components/title-with-breaks';
 import { appPath } from '../../../lib/app-paths';
 import { readOperationDetail } from '../../../lib/operations-content';
@@ -21,8 +22,14 @@ export default async function OperationDetailPage({
     notFound();
   }
 
+  const headings = item.markdown.trim() ? extractMarkdownHeadings(item.markdown) : [];
+
   return (
-    <SecondaryShell title="运营信息" titleKey="page.operations">
+    <SecondaryShell
+      title="运营信息"
+      titleKey="page.operations"
+      secondaryActions={<OperationTableOfContents headings={headings} />}
+    >
       <article className="operation-detail">
         <header className="operation-detail-header">
           <div className="feed-item-meta">
