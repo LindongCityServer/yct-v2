@@ -12,7 +12,8 @@ const prohibitedSourcePatterns = [
   /<!entity/i,
   /<\/?(?:script|foreignobject|iframe|object|embed|image|use)\b/i,
   /\son[a-z]+\s*=/i,
-  /(?:javascript|data|https?):/i,
+  /\b(?:xlink:)?href\s*=\s*["']\s*(?:javascript|data|https?:|\/\/)/i,
+  /\bsrc\s*=\s*["']\s*(?:javascript|data|https?:|\/\/)/i,
   /@import\b/i,
   /url\s*\(/i,
 ];
