@@ -172,6 +172,13 @@ export function AdminMaterialsPanel() {
     setEditorError('');
   };
 
+  const updateEditorField = <TKey extends keyof EditorState>(
+    key: TKey,
+    value: EditorState[TKey],
+  ) => {
+    setEditor((current) => ({ ...current, [key]: value }));
+  };
+
   const saveTemplate = async () => {
     const parsed = parseEditor(editor);
     if (!parsed.ok) {
@@ -432,9 +439,7 @@ export function AdminMaterialsPanel() {
               <span>模板名称</span>
               <input
                 value={editor.title}
-                onChange={(event) =>
-                  setEditor((current) => ({ ...current, title: event.currentTarget.value }))
-                }
+                onChange={(event) => updateEditorField('title', event.currentTarget.value)}
                 required
               />
             </label>
@@ -443,10 +448,7 @@ export function AdminMaterialsPanel() {
               <select
                 value={editor.family}
                 onChange={(event) =>
-                  setEditor((current) => ({
-                    ...current,
-                    family: event.currentTarget.value as MaterialFamily,
-                  }))
+                  updateEditorField('family', event.currentTarget.value as MaterialFamily)
                 }
               >
                 {Object.entries(familyLabels).map(([value, label]) => (
@@ -460,9 +462,7 @@ export function AdminMaterialsPanel() {
               <span>说明</span>
               <input
                 value={editor.description}
-                onChange={(event) =>
-                  setEditor((current) => ({ ...current, description: event.currentTarget.value }))
-                }
+                onChange={(event) => updateEditorField('description', event.currentTarget.value)}
               />
             </label>
             <label className="admin-editor-markdown">
@@ -470,9 +470,7 @@ export function AdminMaterialsPanel() {
               <textarea
                 value={editor.source}
                 spellCheck={false}
-                onChange={(event) =>
-                  setEditor((current) => ({ ...current, source: event.currentTarget.value }))
-                }
+                onChange={(event) => updateEditorField('source', event.currentTarget.value)}
                 required
               />
             </label>
@@ -481,9 +479,7 @@ export function AdminMaterialsPanel() {
               <textarea
                 value={editor.fieldsSource}
                 spellCheck={false}
-                onChange={(event) =>
-                  setEditor((current) => ({ ...current, fieldsSource: event.currentTarget.value }))
-                }
+                onChange={(event) => updateEditorField('fieldsSource', event.currentTarget.value)}
                 required
               />
             </label>
@@ -493,10 +489,7 @@ export function AdminMaterialsPanel() {
                 value={editor.typographySource}
                 spellCheck={false}
                 onChange={(event) =>
-                  setEditor((current) => ({
-                    ...current,
-                    typographySource: event.currentTarget.value,
-                  }))
+                  updateEditorField('typographySource', event.currentTarget.value)
                 }
               />
             </label>
@@ -508,9 +501,7 @@ export function AdminMaterialsPanel() {
                 max="64"
                 step="0.01"
                 value={editor.widthM}
-                onChange={(event) =>
-                  setEditor((current) => ({ ...current, widthM: event.currentTarget.value }))
-                }
+                onChange={(event) => updateEditorField('widthM', event.currentTarget.value)}
                 required
               />
             </label>
@@ -522,9 +513,7 @@ export function AdminMaterialsPanel() {
                 max="64"
                 step="0.01"
                 value={editor.heightM}
-                onChange={(event) =>
-                  setEditor((current) => ({ ...current, heightM: event.currentTarget.value }))
-                }
+                onChange={(event) => updateEditorField('heightM', event.currentTarget.value)}
                 required
               />
             </label>
@@ -535,9 +524,7 @@ export function AdminMaterialsPanel() {
                 min="16"
                 max="1024"
                 value={editor.pxPerMeter}
-                onChange={(event) =>
-                  setEditor((current) => ({ ...current, pxPerMeter: event.currentTarget.value }))
-                }
+                onChange={(event) => updateEditorField('pxPerMeter', event.currentTarget.value)}
                 required
               />
             </label>
@@ -548,9 +535,7 @@ export function AdminMaterialsPanel() {
                 min="16"
                 max="4096"
                 value={editor.tileSizePx}
-                onChange={(event) =>
-                  setEditor((current) => ({ ...current, tileSizePx: event.currentTarget.value }))
-                }
+                onChange={(event) => updateEditorField('tileSizePx', event.currentTarget.value)}
                 required
               />
             </label>
@@ -558,9 +543,7 @@ export function AdminMaterialsPanel() {
               <input
                 type="checkbox"
                 checked={editor.alignToTile}
-                onChange={(event) =>
-                  setEditor((current) => ({ ...current, alignToTile: event.currentTarget.checked }))
-                }
+                onChange={(event) => updateEditorField('alignToTile', event.currentTarget.checked)}
               />
               <span>对齐到整数地图画尺寸</span>
             </label>

@@ -11,7 +11,17 @@ export async function GET(request: NextRequest) {
   if (!admin.ok) {
     return admin.response;
   }
-  return NextResponse.json(await listAdminMaterialState());
+  try {
+    return NextResponse.json(await listAdminMaterialState());
+  } catch {
+    return NextResponse.json(
+      {
+        error: 'material_admin_state_unavailable',
+        message: '物料后台数据暂时不可用。',
+      },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: NextRequest) {

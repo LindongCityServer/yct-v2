@@ -10363,6 +10363,10 @@ img.map-player-list-avatar.is-offline {
   z-index: 100;
 }
 
+.transit-station-detail-backdrop {
+  z-index: 110;
+}
+
 .modal-panel {
   display: grid;
   gap: var(--yct-space-4);
