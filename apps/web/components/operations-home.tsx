@@ -404,12 +404,12 @@ function ReminderTickerItem({
       ? t('operations.startsAt', { date: item.displayStartDate })
       : undefined;
   const content = (
-    <span className="operations-reminder-ticker-copy">
+    <div className="operations-reminder-ticker-copy">
       {item.label ? <span className="operations-reminder-label">{item.label}</span> : null}
       <span className="operations-reminder-ticker-title">{item.title}</span>
       {item.summary ? <span>{item.summary}</span> : null}
       {windowText ? <span>{windowText}</span> : null}
-    </span>
+    </div>
   );
 
   if (duplicate) {

@@ -1044,6 +1044,7 @@ body .material-symbols-outlined {
 
 .operations-reminder-track {
   display: flex;
+  gap: 0;
   width: max-content;
   animation: operations-reminder-scroll var(--operations-reminder-duration) linear infinite;
   will-change: transform;
@@ -1056,6 +1057,7 @@ body .material-symbols-outlined {
 
 .operations-reminder-group {
   display: flex;
+  flex: 0 0 auto;
   align-items: stretch;
   gap: var(--yct-space-5);
   padding-right: var(--yct-space-5);
@@ -1065,6 +1067,7 @@ body .material-symbols-outlined {
   --operations-reminder-tone: var(--yct-color-primary);
   position: relative;
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: var(--yct-space-2);
   min-height: 32px;
@@ -1126,9 +1129,10 @@ body .material-symbols-outlined {
 
 .operations-reminder-ticker-copy {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: var(--yct-space-2);
-  min-width: 0;
+  min-width: max-content;
   overflow: visible;
   color: inherit;
   font-size: inherit;
@@ -1240,27 +1244,6 @@ body .material-symbols-outlined {
   .hero-carousel-controls {
     right: var(--yct-space-3);
     top: var(--yct-space-3);
-  }
-
-  .operations-reminder-ticker-item {
-    max-width: 86vw;
-  }
-
-  .operations-reminder-marquee {
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .operations-reminder-marquee::-webkit-scrollbar {
-    display: none;
-  }
-
-  .operations-reminder-track {
-    animation: none;
-  }
-
-  .operations-reminder-group.is-copy {
-    display: none;
   }
 
   .server-status-panel {
@@ -7621,6 +7604,65 @@ img.map-player-list-avatar.is-offline {
   font-weight: 650;
 }
 
+.admin-cover-color-picker {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.admin-cover-color-picker legend {
+  padding: 0;
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.admin-cover-color-picker > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+}
+
+.admin-cover-color-picker button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-height: 34px;
+  padding: 0 var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-secondary);
+  font: inherit;
+}
+
+.admin-cover-color-picker button:hover,
+.admin-cover-color-picker button.is-selected {
+  border-color: var(--yct-color-primary);
+  color: var(--yct-color-text);
+}
+
+.admin-cover-color-picker button.is-selected {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--yct-color-primary) 16%, transparent);
+}
+
+.admin-cover-color-swatch {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border: 1px solid color-mix(in srgb, var(--yct-color-text) 24%, transparent);
+  border-radius: 50%;
+}
+
+.admin-cover-color-swatch.is-none {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--yct-color-surface-panel) 0 3px,
+    var(--yct-color-surface-muted) 3px 6px
+  );
+}
+
 .admin-content-editor-dialog input,
 .admin-content-editor-dialog select,
 .admin-content-editor-dialog textarea,
@@ -12902,8 +12944,12 @@ img.map-player-list-avatar.is-offline {
 
 :root[data-material-mode='advanced'] .modal-backdrop {
   background: rgb(0 0 0 / 44%);
-  -webkit-backdrop-filter: blur(var(--yct-material-blur-soft));
-  backdrop-filter: blur(var(--yct-material-blur-soft));
+  -webkit-backdrop-filter: contrast(var(--yct-material-contrast))
+    brightness(var(--yct-material-brightness-dark)) saturate(var(--yct-material-saturation))
+    blur(var(--yct-material-blur-soft));
+  backdrop-filter: contrast(var(--yct-material-contrast))
+    brightness(var(--yct-material-brightness-dark)) saturate(var(--yct-material-saturation))
+    blur(var(--yct-material-blur-soft));
 }
 
 :root[data-material-mode='advanced'] .modal-panel {
