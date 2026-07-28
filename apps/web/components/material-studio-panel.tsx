@@ -49,6 +49,13 @@ interface TransitLineOption {
   }>;
 }
 
+interface MaterialLocationOption {
+  id: string;
+  label: string;
+  categoryId: string;
+  address?: string;
+}
+
 interface MaterialDraft {
   id: string;
   templateId: string;
@@ -64,20 +71,27 @@ export function MaterialStudioPanel({
   title,
   families,
   serverSource,
+  serverFamilies,
 }: Readonly<{
   title: string;
   families: MaterialFamily[];
-  serverSource?: 'transit_line';
+  serverSource?: 'transit_line' | 'map_location';
+  serverFamilies?: MaterialFamily[];
 }>) {
   const [items, setItems] = useState<PublishedMaterialTemplate[]>([]);
   const [drafts, setDrafts] = useState<MaterialDraft[]>([]);
   const [transitLines, setTransitLines] = useState<TransitLineOption[]>([]);
+  const [locations, setLocations] = useState<MaterialLocationOption[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [mode, setMode] = useState<StudioMode>('manual');
   const [input, setInput] = useState<Record<string, string>>({});
   const [canvas, setCanvas] = useState<MaterialCanvas | null>(null);
   const [selectedLineId, setSelectedLineId] = useState('');
   const [selectedStationSourceId, setSelectedStationSourceId] = useState('');
+  const [selectedLocationId, setSelectedLocationId] = useState('');
+  const [locationQuery, setLocationQuery] = useState('');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewSize, setPreviewSize] = useState<{ width: number; height: number } | null>(null);
   const [statusText, setStatusText] = useState('正在读取模板');
   const [isBusy, setIsBusy] = useState(false);
 
@@ -96,6 +110,26 @@ export function MaterialStudioPanel({
     )
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
   const selectedLine = transitLines.find((line) => line.id === selectedLineId);
+  const canUseServerSource = Boolean(
+    serverSource &&
+    selected &&
+    (!serverFamilies || serverFamilies.includes(selected.template.family)),
+  );
+  const visibleLocations = useMemo(() => {
+    const query = locationQuery.trim().toLocaleLowerCase();
+    return locations
+      .filter((location) => {
+        if (!query) {
+          return true;
+        }
+        return [location.label, location.categoryId, location.address]
+          .filter(Boolean)
+          .join(' ')
+          .toLocaleLowerCase()
+          .includes(query);
+      })
+      .slice(0, 100);
+  }, [locationQuery, locations]);
 
   const loadWorkspace = async () => {
     try {
@@ -145,6 +179,20 @@ export function MaterialStudioPanel({
             .catch(() => undefined),
         );
       }
+      if (serverSource === 'map_location') {
+        pendingRequests.push(
+          fetch(appPath('/api/materials/locations'), { cache: 'no-store' })
+            .then(async (response) => {
+              const data = (await response.json()) as { items?: MaterialLocationOption[] };
+              if (response.ok) {
+                const nextLocations = data.items ?? [];
+                setLocations(nextLocations);
+                setSelectedLocationId((current) => current || nextLocations[0]?.id || '');
+              }
+            })
+            .catch(() => undefined),
+        );
+      }
       await Promise.all(pendingRequests);
       setStatusText(firstTemplate ? '已读取可用模板。' : '当前没有可用模板。');
     } catch {
@@ -164,9 +212,30 @@ export function MaterialStudioPanel({
     setCanvas(selected.template.defaultCanvas);
   }, [selected?.id, selected?.template.version]);
 
+  useEffect(() => {
+    if (!canUseServerSource && mode === 'server') {
+      setMode('manual');
+    }
+  }, [canUseServerSource, mode]);
+
+  useEffect(
+    () => () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    },
+    [previewUrl],
+  );
+
   const selectTemplate = (templateId: string) => {
     setSelectedTemplateId(templateId);
     setStatusText('');
+    clearPreview();
+  };
+
+  const clearPreview = () => {
+    setPreviewUrl(null);
+    setPreviewSize(null);
   };
 
   const updateCanvas = <TKey extends keyof MaterialCanvas>(
@@ -174,6 +243,7 @@ export function MaterialStudioPanel({
     value: MaterialCanvas[TKey],
   ) => {
     setCanvas((current) => (current ? { ...current, [key]: value } : current));
+    clearPreview();
   };
 
   const downloadBlob = async (response: Response) => {
@@ -186,6 +256,76 @@ export function MaterialStudioPanel({
     link.click();
     link.remove();
     URL.revokeObjectURL(objectUrl);
+  };
+
+  const showPreviewBlob = async (response: Response) => {
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    setPreviewUrl(objectUrl);
+    setPreviewSize({
+      width: Number(response.headers.get('X-Yct-Material-Preview-Width')) || 0,
+      height: Number(response.headers.get('X-Yct-Material-Preview-Height')) || 0,
+    });
+  };
+
+  const buildServerSource = () => {
+    if (serverSource === 'transit_line' && selectedLineId) {
+      return {
+        kind: 'transit_line' as const,
+        lineId: selectedLineId,
+        stationSourceId: selectedStationSourceId || undefined,
+      };
+    }
+    if (serverSource === 'map_location' && selectedLocationId) {
+      return { kind: 'map_location' as const, locationId: selectedLocationId };
+    }
+    return undefined;
+  };
+
+  const requestPreview = async () => {
+    if (!selected || !activeCanvas) {
+      return;
+    }
+    const source = mode === 'server' ? buildServerSource() : undefined;
+    if (mode === 'server' && !source) {
+      setStatusText('请先选择服务器数据。');
+      return;
+    }
+    setIsBusy(true);
+    try {
+      const response = await fetch(appPath('/api/materials/previews'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          mode === 'server'
+            ? {
+                mode: 'server',
+                templateId: selected.id,
+                templateVersion: selected.template.version,
+                canvas: activeCanvas,
+                source,
+              }
+            : {
+                mode: 'manual',
+                templateId: selected.id,
+                templateVersion: selected.template.version,
+                canvas: activeCanvas,
+                input,
+              },
+        ),
+      });
+      if (!response.ok) {
+        const data = (await response.json()) as { message?: string };
+        setStatusText(data.message ?? '生成预览失败。');
+        return;
+      }
+      await showPreviewBlob(response);
+      setStatusText('预览已更新。');
+    } catch {
+      setStatusText('生成预览时发生网络错误。');
+    } finally {
+      setIsBusy(false);
+    }
   };
 
   const submitManualDraft = async () => {
@@ -254,8 +394,9 @@ export function MaterialStudioPanel({
   };
 
   const exportFromServer = async () => {
-    if (!selected || !activeCanvas || !selectedLineId) {
-      setStatusText('请先选择模板和服务器线路。');
+    const source = buildServerSource();
+    if (!selected || !activeCanvas || !source) {
+      setStatusText('请先选择模板和服务器数据。');
       return;
     }
     setIsBusy(true);
@@ -268,11 +409,7 @@ export function MaterialStudioPanel({
           templateId: selected.id,
           templateVersion: selected.template.version,
           canvas: activeCanvas,
-          source: {
-            kind: 'transit_line',
-            lineId: selectedLineId,
-            stationSourceId: selectedStationSourceId || undefined,
-          },
+          source,
         }),
       });
       if (!response.ok) {
@@ -316,19 +453,25 @@ export function MaterialStudioPanel({
             </select>
           </label>
           {selected?.template.description ? <p>{selected.template.description}</p> : null}
-          {serverSource ? (
+          {canUseServerSource ? (
             <div className="material-mode-switch" role="group" aria-label="数据来源">
               <button
                 className={mode === 'manual' ? 'is-active' : ''}
                 type="button"
-                onClick={() => setMode('manual')}
+                onClick={() => {
+                  setMode('manual');
+                  clearPreview();
+                }}
               >
                 手动输入
               </button>
               <button
                 className={mode === 'server' ? 'is-active' : ''}
                 type="button"
-                onClick={() => setMode('server')}
+                onClick={() => {
+                  setMode('server');
+                  clearPreview();
+                }}
               >
                 服务器数据
               </button>
@@ -355,6 +498,7 @@ export function MaterialStudioPanel({
                     const line = transitLines.find((item) => item.id === lineId);
                     setSelectedLineId(lineId);
                     setSelectedStationSourceId(line?.stations[0]?.stationSourceId ?? '');
+                    clearPreview();
                   }}
                   disabled={isBusy || !transitLines.length}
                 >
@@ -370,7 +514,10 @@ export function MaterialStudioPanel({
                 <span>服务器站点</span>
                 <select
                   value={selectedStationSourceId}
-                  onChange={(event) => setSelectedStationSourceId(event.currentTarget.value)}
+                  onChange={(event) => {
+                    setSelectedStationSourceId(event.currentTarget.value);
+                    clearPreview();
+                  }}
                   disabled={isBusy || !selectedLine?.stations.length}
                 >
                   {selectedLine?.stations.map((station) => (
@@ -381,11 +528,58 @@ export function MaterialStudioPanel({
                 </select>
               </label>
               <div className="material-action-row">
+                <PreviewButton onClick={() => void requestPreview()} disabled={isBusy} />
                 <button
                   type="button"
                   className="is-primary"
                   onClick={() => void exportFromServer()}
                   disabled={isBusy || !selectedLineId}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    download
+                  </span>
+                  下载图片
+                </button>
+              </div>
+            </>
+          ) : mode === 'server' && serverSource === 'map_location' ? (
+            <>
+              <label className="material-field">
+                <span>搜索服务器地点</span>
+                <input
+                  value={locationQuery}
+                  onChange={(event) => setLocationQuery(event.currentTarget.value)}
+                  disabled={isBusy}
+                />
+              </label>
+              <label className="material-field">
+                <span>服务器地点</span>
+                <select
+                  value={selectedLocationId}
+                  onChange={(event) => {
+                    setSelectedLocationId(event.currentTarget.value);
+                    clearPreview();
+                  }}
+                  disabled={isBusy || !visibleLocations.length}
+                >
+                  {visibleLocations.map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.label} · {location.categoryId}
+                      {location.address ? ` · ${location.address}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="material-action-row">
+                <PreviewButton
+                  onClick={() => void requestPreview()}
+                  disabled={isBusy || !selectedLocationId}
+                />
+                <button
+                  type="button"
+                  className="is-primary"
+                  onClick={() => void exportFromServer()}
+                  disabled={isBusy || !selectedLocationId}
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">
                     download
@@ -403,13 +597,15 @@ export function MaterialStudioPanel({
                     field={field}
                     value={input[field.key] ?? ''}
                     disabled={isBusy}
-                    onChange={(value) =>
-                      setInput((current) => ({ ...current, [field.key]: value }))
-                    }
+                    onChange={(value) => {
+                      setInput((current) => ({ ...current, [field.key]: value }));
+                      clearPreview();
+                    }}
                   />
                 ))}
               </div>
               <div className="material-action-row">
+                <PreviewButton onClick={() => void requestPreview()} disabled={isBusy} />
                 <button type="button" onClick={() => void submitManualDraft()} disabled={isBusy}>
                   提交审核
                 </button>
@@ -429,8 +625,49 @@ export function MaterialStudioPanel({
             </>
           )}
         </div>
+
+        <section className="material-preview" aria-label="物料预览">
+          <div className="material-preview-heading">
+            <h2>预览</h2>
+            {previewSize?.width && previewSize.height ? (
+              <span>
+                {previewSize.width} × {previewSize.height} px
+              </span>
+            ) : null}
+          </div>
+          <div className="material-preview-stage">
+            {previewUrl ? (
+              <img src={previewUrl} alt={`${selected?.template.title ?? title}预览`} />
+            ) : (
+              <span>尚未生成预览</span>
+            )}
+          </div>
+        </section>
       </div>
     </section>
+  );
+}
+
+function PreviewButton({
+  disabled,
+  onClick,
+}: Readonly<{
+  disabled: boolean;
+  onClick: () => void;
+}>) {
+  return (
+    <button
+      type="button"
+      className="icon-button"
+      aria-label="预览"
+      title="预览"
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <span className="material-symbols-outlined" aria-hidden="true">
+        visibility
+      </span>
+    </button>
   );
 }
 

@@ -25,7 +25,6 @@ const systemTemplateRecords: MaterialTemplateRecord[] = [
         key: 'direction',
         label: '方向',
         kind: 'select',
-        required: true,
         options: [
           { value: '东西', label: '东西' },
           { value: '西东', label: '西东' },

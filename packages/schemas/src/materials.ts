@@ -125,6 +125,18 @@ export const materialReviewDecisionSchema = z.object({
   reason: z.string().trim().max(500).optional(),
 });
 
+export const materialServerSourceSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('transit_line'),
+    lineId: idSchema,
+    stationSourceId: idSchema.optional(),
+  }),
+  z.object({
+    kind: z.literal('map_location'),
+    locationId: idSchema,
+  }),
+]);
+
 export const materialExportRequestSchema = z
   .object({
     mode: z.enum(['server', 'custom']),
@@ -132,13 +144,7 @@ export const materialExportRequestSchema = z
     templateId: idSchema.optional(),
     templateVersion: z.number().int().positive().optional(),
     canvas: materialCanvasSchema.optional(),
-    source: z
-      .object({
-        kind: z.literal('transit_line'),
-        lineId: idSchema,
-        stationSourceId: idSchema.optional(),
-      })
-      .optional(),
+    source: materialServerSourceSchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (value.mode === 'custom' && !value.draftId) {
@@ -149,6 +155,30 @@ export const materialExportRequestSchema = z
     }
   });
 
+export const materialPreviewRequestSchema = z
+  .object({
+    mode: z.enum(['manual', 'server']),
+    templateId: idSchema,
+    templateVersion: z.number().int().positive(),
+    canvas: materialCanvasSchema,
+    input: z.record(fieldKeySchema, z.string().max(2000)).optional(),
+    source: materialServerSourceSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.mode === 'manual' && !value.input) {
+      ctx.addIssue({ code: 'custom', message: '手动预览必须提供字段输入。', path: ['input'] });
+    }
+    if (value.mode === 'server' && !value.source) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '服务器预览必须指定真实数据来源。',
+        path: ['source'],
+      });
+    }
+  });
+
 export type MaterialTemplateDraftInput = z.infer<typeof materialTemplateDraftSchema>;
 export type MaterialDraftInput = z.infer<typeof materialDraftInputSchema>;
 export type MaterialExportRequestInput = z.infer<typeof materialExportRequestSchema>;
+export type MaterialPreviewRequestInput = z.infer<typeof materialPreviewRequestSchema>;
+export type MaterialServerSourceInput = z.infer<typeof materialServerSourceSchema>;

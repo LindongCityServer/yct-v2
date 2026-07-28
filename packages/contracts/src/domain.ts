@@ -889,7 +889,7 @@ export type MaterialTemplateStatus = 'draft' | 'published' | 'archived';
 export type MaterialTemplateFamily = 'road_sign' | 'address_sign' | 'bus_stop' | 'custom';
 export type MaterialTemplateFieldKind = 'text' | 'number' | 'select';
 export type MaterialDraftStatus = 'draft' | 'pending_review' | 'approved' | 'rejected';
-export type MaterialSourceKind = 'manual' | 'transit_line';
+export type MaterialSourceKind = 'manual' | 'transit_line' | 'map_location';
 
 export interface MaterialTemplateField {
   key: string;

@@ -11,6 +11,8 @@ import type {
 import type {
   MaterialDraftInput,
   MaterialExportRequestInput,
+  MaterialPreviewRequestInput,
+  MaterialServerSourceInput,
   MaterialTemplateDraftInput,
 } from '@yct/schemas';
 import { publishDomainEvent } from './app-event-bus';
@@ -35,6 +37,7 @@ import {
   listMaterialTemplateRecords,
   writeMaterialTemplateRecord,
 } from './material-template-store';
+import { resolveMaterialLocationInput } from './material-location-source';
 import { resolveTransitLineMaterialInput } from './material-transit-source';
 
 export type MaterialWorkflowResult = MaterialWorkflowSuccess | MaterialWorkflowFailure;
@@ -54,6 +57,12 @@ export type MaterialExportResult = MaterialWorkflowResult & {
   png?: Buffer;
   fileName?: string;
   audit?: MaterialExportAuditRecord;
+};
+
+export type MaterialPreviewResult = MaterialWorkflowResult & {
+  png?: Buffer;
+  widthPx?: number;
+  heightPx?: number;
 };
 
 export async function listPublishedMaterialTemplates(): Promise<
@@ -328,6 +337,30 @@ export async function prepareMaterialExport(input: {
   }
 }
 
+export async function prepareMaterialPreview(input: {
+  request: MaterialPreviewRequestInput;
+}): Promise<MaterialPreviewResult> {
+  const source = await resolveMaterialPreviewSource(input.request);
+  if (!source.ok) {
+    return source;
+  }
+  try {
+    const rendered = await renderMaterialTemplateToPng({
+      template: source.template,
+      values: source.values,
+      canvas: source.canvas,
+    });
+    return {
+      ok: true,
+      png: rendered.png,
+      widthPx: rendered.widthPx,
+      heightPx: rendered.heightPx,
+    };
+  } catch (error) {
+    return invalidInput(error);
+  }
+}
+
 async function resolveMaterialExportSource(
   request: MaterialExportRequestInput,
   actorId: string,
@@ -338,7 +371,7 @@ async function resolveMaterialExportSource(
       template: MaterialTemplateVersion;
       values: Record<string, string>;
       canvas: MaterialCanvasConfig;
-      sourceKind: 'manual' | 'transit_line';
+      sourceKind: 'manual' | 'transit_line' | 'map_location';
       sourceRef?: string;
       draftId?: string;
     }
@@ -385,13 +418,9 @@ async function resolveMaterialExportSource(
   if (!template.ok) {
     return template;
   }
-  if (request.source.kind !== 'transit_line') {
-    return invalidInputMessage('当前不支持该服务器数据来源。');
-  }
   try {
-    const resolved = await resolveTransitLineMaterialInput({
-      lineId: request.source.lineId,
-      stationSourceId: request.source.stationSourceId,
+    const resolved = await resolveServerMaterialInput({
+      source: request.source,
       fields: template.template.fields,
     });
     return {
@@ -400,12 +429,79 @@ async function resolveMaterialExportSource(
       template: template.template,
       values: validateMaterialInput(template.template.fields, resolved.values),
       canvas: request.canvas,
-      sourceKind: 'transit_line',
+      sourceKind: resolved.sourceKind,
       sourceRef: resolved.sourceRef,
     };
   } catch (error) {
     return invalidInput(error);
   }
+}
+
+async function resolveMaterialPreviewSource(request: MaterialPreviewRequestInput): Promise<
+  | {
+      ok: true;
+      template: MaterialTemplateVersion;
+      values: Record<string, string>;
+      canvas: MaterialCanvasConfig;
+    }
+  | MaterialWorkflowFailure
+> {
+  const template = await resolveTemplateVersion({
+    templateId: request.templateId,
+    version: request.templateVersion,
+    publishedOnly: true,
+  });
+  if (!template.ok) {
+    return template;
+  }
+  try {
+    if (request.mode === 'manual') {
+      return {
+        ok: true,
+        template: template.template,
+        values: validateMaterialInput(template.template.fields, request.input ?? {}),
+        canvas: request.canvas,
+      };
+    }
+    if (!request.source) {
+      return invalidInputMessage('服务器预览参数不完整。');
+    }
+    const resolved = await resolveServerMaterialInput({
+      source: request.source,
+      fields: template.template.fields,
+    });
+    return {
+      ok: true,
+      template: template.template,
+      values: validateMaterialInput(template.template.fields, resolved.values),
+      canvas: request.canvas,
+    };
+  } catch (error) {
+    return invalidInput(error);
+  }
+}
+
+async function resolveServerMaterialInput(input: {
+  source: MaterialServerSourceInput;
+  fields: MaterialTemplateVersion['fields'];
+}): Promise<{
+  sourceKind: 'transit_line' | 'map_location';
+  values: Record<string, string>;
+  sourceRef: string;
+}> {
+  if (input.source.kind === 'transit_line') {
+    const resolved = await resolveTransitLineMaterialInput({
+      lineId: input.source.lineId,
+      stationSourceId: input.source.stationSourceId,
+      fields: input.fields,
+    });
+    return { ...resolved, sourceKind: 'transit_line' };
+  }
+  const resolved = await resolveMaterialLocationInput({
+    locationId: input.source.locationId,
+    fields: input.fields,
+  });
+  return { ...resolved, sourceKind: 'map_location' };
 }
 
 async function resolveTemplateVersion(input: {

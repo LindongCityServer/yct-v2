@@ -88,8 +88,8 @@ export function resolveMaterialOutputSize(canvas: MaterialCanvasConfig): {
   widthPx: number;
   heightPx: number;
 } {
-  const contentWidthPx = Math.round(canvas.widthM * canvas.pxPerMeter);
-  const contentHeightPx = Math.round(canvas.heightM * canvas.pxPerMeter);
+  const contentWidthPx = Math.max(1, Math.round(canvas.widthM * canvas.pxPerMeter));
+  const contentHeightPx = Math.max(1, Math.round(canvas.heightM * canvas.pxPerMeter));
   const widthPx = canvas.alignToTile
     ? alignToTile(contentWidthPx, canvas.tileSizePx)
     : contentWidthPx;

@@ -5235,13 +5235,14 @@ img.map-player-list-avatar.is-offline {
 
 .material-studio-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr) minmax(240px, 340px);
   gap: var(--yct-space-4);
   align-items: start;
 }
 
 .material-studio-sidebar,
-.material-studio-editor {
+.material-studio-editor,
+.material-preview {
   display: grid;
   gap: var(--yct-space-3);
   min-width: 0;
@@ -5393,6 +5394,50 @@ img.map-player-list-avatar.is-offline {
   color: var(--yct-color-text-muted);
 }
 
+.material-preview {
+  align-content: start;
+}
+
+.material-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+}
+
+.material-preview-heading h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.material-preview-heading span {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.material-preview-stage {
+  display: grid;
+  place-items: center;
+  min-height: 260px;
+  overflow: hidden;
+  border: 1px solid var(--yct-color-border-subtle);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.material-preview-stage img {
+  display: block;
+  width: 100%;
+  max-height: 480px;
+  object-fit: contain;
+}
+
+.material-preview-stage span {
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+}
+
 .admin-materials-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -5521,6 +5566,10 @@ img.map-player-list-avatar.is-offline {
 
   .material-studio-layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .material-preview-stage {
+    min-height: 200px;
   }
 
   .material-field-grid {
@@ -12945,6 +12994,10 @@ img.map-player-list-avatar.is-offline {
   background: transparent;
 }
 
+.secondary-content:has(.material-studio) {
+  width: min(1280px, calc(100% - 32px));
+}
+
 .secondary-content .settings-row {
   border: 0;
   background: var(--yct-color-surface-panel);
@@ -13937,6 +13990,10 @@ img.map-player-list-avatar.is-offline {
   .secondary-content {
     width: min(100% - 24px, 560px);
     margin-top: var(--yct-space-3);
+  }
+
+  .secondary-content:has(.material-studio) {
+    width: min(100% - 24px, 560px);
   }
 }
 
