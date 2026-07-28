@@ -1,0 +1,5 @@
+{
+  "gatewayUrl": "https://<yct-host>/api/internal/ride-code/gate-events",
+  "gatewayToken": "<same-as-YCT_RIDE_GATEWAY_TOKEN>",
+  "command": "yctgate"
+}

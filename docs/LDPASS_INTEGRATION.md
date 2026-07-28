@@ -65,7 +65,7 @@ allowed_origin:
   - 不带 BasePath 的本地模式：`http://127.0.0.1:3300/auth/ldpass/callback`
   - 带 `/v2` BasePath 的本地模式：`http://127.0.0.1:3300/v2/auth/ldpass/callback`
   - 对应来源仍然只需要 `http://127.0.0.1:3300`
-  不要把生产和本地调试混成同一条配置说明。
+    不要把生产和本地调试混成同一条配置说明。
 - 当前 `/v2` 测试站依赖外层反代把浏览器访问的 `/v2/auth/ldpass/callback` 转发到应用内部的 `/auth/ldpass/callback`。如果反代只覆盖了首页、但没有覆盖认证回调路径，就会表现为 `ldpass` 登录后回跳 404。
 
 ### 2.1.2 YCT 运行时必须具备的环境变量
@@ -467,9 +467,11 @@ export interface YctContributorIdentity {
   - `GET /api/admin/passes/ticket-update-requests`
   - `POST /api/admin/passes/ticket-update-requests/:requestId/approve`
   - `POST /api/admin/passes/ticket-update-requests/:requestId/reject`
-- Provider API Key Scope 已包含 `action_links:create/read/revoke`、`passes:read/status_update/ticket_update`、`redemptions:create/cancel/reverse/read`。
+- Provider API Key Scope 已包含 `action_links:create/read/revoke`、`ride_authorizations:read/enter/capture/release`、`passes:read/status_update/ticket_update`、`redemptions:create/cancel/reverse/read`。
 
-### 7.1 当前“乘车码”核销链接配置教程
+### 7.1 历史即时核销方案（已废弃）
+
+> 本节保留用于说明旧的固定数值 `kind=use` 链接，不得用于当前部署。当前乘车码已改为“选卡授权 -> 进站冻结最高票价 -> 出站结算实际票价”，请以 [乘车码预授权与设备网关](./RIDE_CODE_GATEWAY.md) 为准。
 
 本节对应首页“乘车码”按钮的现有实现。目标是让已登录 YCT 的 Active 临东通用户跳转到临东通操作链接，在临东通当前登录态下选择一张由 `yct` 发卡方发行、状态正常且可核销的卡片，并完成指定数值的核销。
 
@@ -560,14 +562,14 @@ LDPASS_RIDE_CODE_EXPIRES_IN_SECONDS=120
 
 各变量的含义和约束如下：
 
-| 变量 | 含义 | 约束 |
-| --- | --- | --- |
-| `LDPASS_BASE_URL` | 临东通站点根地址 | 只写 Origin，不附加 `/api`、`/action` 或查询参数 |
-| `LDPASS_CLIENT_ID` | 关联的客户端应用 | 必须已启用并绑定到 `yct` 发卡方 |
-| `LDPASS_YCT_PROVIDER_API_KEY` | YCT 服务端签名密钥 | 必须属于 `yct`，且拥有 `action_links:create`；禁止使用 `NEXT_PUBLIC_` 前缀 |
-| `LDPASS_RIDE_CODE_REQUESTED_VALUE` | 每次核销的数值 | 必须大于 `0`，最多 6 位小数；默认 `1` |
-| `LDPASS_RIDE_CODE_VERIFICATION_METHOD` | 核销验证方式 | `server_account` 或 `pin`；其他值会回退为 `server_account` |
-| `LDPASS_RIDE_CODE_EXPIRES_IN_SECONDS` | 链接有效秒数 | `60` 至 `86400`；默认 `120` |
+| 变量                                   | 含义               | 约束                                                                       |
+| -------------------------------------- | ------------------ | -------------------------------------------------------------------------- |
+| `LDPASS_BASE_URL`                      | 临东通站点根地址   | 只写 Origin，不附加 `/api`、`/action` 或查询参数                           |
+| `LDPASS_CLIENT_ID`                     | 关联的客户端应用   | 必须已启用并绑定到 `yct` 发卡方                                            |
+| `LDPASS_YCT_PROVIDER_API_KEY`          | YCT 服务端签名密钥 | 必须属于 `yct`，且拥有 `action_links:create`；禁止使用 `NEXT_PUBLIC_` 前缀 |
+| `LDPASS_RIDE_CODE_REQUESTED_VALUE`     | 每次核销的数值     | 必须大于 `0`，最多 6 位小数；默认 `1`                                      |
+| `LDPASS_RIDE_CODE_VERIFICATION_METHOD` | 核销验证方式       | `server_account` 或 `pin`；其他值会回退为 `server_account`                 |
+| `LDPASS_RIDE_CODE_EXPIRES_IN_SECONDS`  | 链接有效秒数       | `60` 至 `86400`；默认 `120`                                                |
 
 生产部署使用 `/v2` BasePath 时，登录相关变量仍需保持一致：
 
@@ -653,19 +655,19 @@ ldpass 操作链接：Active -> Consumed
 
 #### 7.1.10 常见问题
 
-| 现象 | 主要原因 | 处理方式 |
-| --- | --- | --- |
-| YCT 返回 `503 not_configured` | 缺少 `LDPASS_BASE_URL` 或 `LDPASS_YCT_PROVIDER_API_KEY` | 检查部署目录的 `.env*` 是否被启动脚本加载，并重启 YCT |
-| YCT 返回 `502 upstream_unavailable` | 临东通不可达、超时，或临东通拒绝了请求 | 检查临东通服务端日志、网络、TLS 和下列 API 配置；YCT 当前会把上游错误统一收敛为 502 |
-| 临东通提示 API Key 无效 | Key 被撤销、过期、轮换，或 Secret 填写错误 | 在 `yct` Provider 后台检查 Key 状态；轮换后替换 Secret 并重启 YCT |
-| 临东通提示签名或时间戳无效 | 服务器时钟偏差超过 5 分钟，或代理改写了签名路径/请求体 | 开启系统时间同步；确保 YCT 直接请求标准路径 `/api/open/provider/action-links` |
-| 权限不足 | Key 缺少 `action_links:create`，或发卡方不是 Active | 用最小正确 Scope 重新申请，并检查 `yct` 状态 |
-| 客户端应用不存在或未启用 | `LDPASS_CLIENT_ID` 错误，应用未启用 | 核对 `yuchengtong` 及平台审核状态 |
-| 客户端应用未绑定或身份不一致 | 应用未绑定发卡方，或并非绑定到 API Key 所属的 `yct` | 在 Provider 后台修正绑定关系 |
-| 链接能打开但没有可选卡片 | 当前用户未登录、没有 YCT 卡片，或卡片失效、冻结、余额不足 | 检查打开链接时的临东通账号、卡片发卡方和可消费状态 |
-| `server_account` 无法完成 | 用户的服务器账号验证条件不满足，或对应服务不可用 | 检查临东通服务器账号绑定和核销服务状态；不要盲目改成 PIN |
-| `pin` 无法完成 | 用户未设置 PIN 或 PIN 错误 | 先在临东通完成 PIN 设置，再重新创建链接 |
-| 跳转地址被 YCT 拒绝 | 临东通返回地址不是同源的精确 `/action` 路径 | 检查 `LDPASS_BASE_URL`、反向代理和临东通公开地址配置 |
+| 现象                                | 主要原因                                                  | 处理方式                                                                            |
+| ----------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| YCT 返回 `503 not_configured`       | 缺少 `LDPASS_BASE_URL` 或 `LDPASS_YCT_PROVIDER_API_KEY`   | 检查部署目录的 `.env*` 是否被启动脚本加载，并重启 YCT                               |
+| YCT 返回 `502 upstream_unavailable` | 临东通不可达、超时，或临东通拒绝了请求                    | 检查临东通服务端日志、网络、TLS 和下列 API 配置；YCT 当前会把上游错误统一收敛为 502 |
+| 临东通提示 API Key 无效             | Key 被撤销、过期、轮换，或 Secret 填写错误                | 在 `yct` Provider 后台检查 Key 状态；轮换后替换 Secret 并重启 YCT                   |
+| 临东通提示签名或时间戳无效          | 服务器时钟偏差超过 5 分钟，或代理改写了签名路径/请求体    | 开启系统时间同步；确保 YCT 直接请求标准路径 `/api/open/provider/action-links`       |
+| 权限不足                            | Key 缺少 `action_links:create`，或发卡方不是 Active       | 用最小正确 Scope 重新申请，并检查 `yct` 状态                                        |
+| 客户端应用不存在或未启用            | `LDPASS_CLIENT_ID` 错误，应用未启用                       | 核对 `yuchengtong` 及平台审核状态                                                   |
+| 客户端应用未绑定或身份不一致        | 应用未绑定发卡方，或并非绑定到 API Key 所属的 `yct`       | 在 Provider 后台修正绑定关系                                                        |
+| 链接能打开但没有可选卡片            | 当前用户未登录、没有 YCT 卡片，或卡片失效、冻结、余额不足 | 检查打开链接时的临东通账号、卡片发卡方和可消费状态                                  |
+| `server_account` 无法完成           | 用户的服务器账号验证条件不满足，或对应服务不可用          | 检查临东通服务器账号绑定和核销服务状态；不要盲目改成 PIN                            |
+| `pin` 无法完成                      | 用户未设置 PIN 或 PIN 错误                                | 先在临东通完成 PIN 设置，再重新创建链接                                             |
+| 跳转地址被 YCT 拒绝                 | 临东通返回地址不是同源的精确 `/action` 路径               | 检查 `LDPASS_BASE_URL`、反向代理和临东通公开地址配置                                |
 
 工业界通常将这类功能拆为“业务站点创建短时授权链接”“凭证平台完成用户验证与原子扣减”“事件/审计异步同步结果”三部分。最常见的事故是把 Provider API Key 暴露到浏览器，或把“链接已创建”误当成“核销已完成”；另一个高频问题是多实例服务器时钟不同步，导致部分实例间歇性签名失败。上线前至少应覆盖上面的异常场景，并定期轮换 API Key。
 
