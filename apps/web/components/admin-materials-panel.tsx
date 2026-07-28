@@ -292,41 +292,45 @@ export function AdminMaterialsPanel() {
       </div>
 
       <div className="admin-materials-list">
-        {templates.map((record) => {
-          const version = latestVersion(record);
-          if (!version) {
-            return null;
-          }
-          return (
-            <article className="admin-material-template" key={record.id}>
-              <div>
-                <div className="admin-material-template-heading">
-                  <strong>{version.title}</strong>
-                  <span>{familyLabels[version.family]}</span>
+        {templates.length ? (
+          templates.map((record) => {
+            const version = latestVersion(record);
+            if (!version) {
+              return null;
+            }
+            return (
+              <article className="admin-material-template" key={record.id}>
+                <div>
+                  <div className="admin-material-template-heading">
+                    <strong>{version.title}</strong>
+                    <span>{familyLabels[version.family]}</span>
+                  </div>
+                  <p>{version.description || '无说明'}</p>
+                  <small>
+                    {record.id} · 最新版本 v{version.version} · {statusLabel(version.status)}
+                  </small>
                 </div>
-                <p>{version.description || '无说明'}</p>
-                <small>
-                  {record.id} · 最新版本 v{version.version} · {statusLabel(version.status)}
-                </small>
-              </div>
-              <div className="admin-content-actions">
-                <button type="button" onClick={() => openRevision(record)} disabled={isBusy}>
-                  修订
-                </button>
-                {version.status === 'draft' ? (
-                  <button
-                    type="button"
-                    className="is-primary"
-                    onClick={() => void publishVersion(record, version)}
-                    disabled={isBusy}
-                  >
-                    发布
+                <div className="admin-content-actions">
+                  <button type="button" onClick={() => openRevision(record)} disabled={isBusy}>
+                    修订
                   </button>
-                ) : null}
-              </div>
-            </article>
-          );
-        })}
+                  {version.status === 'draft' ? (
+                    <button
+                      type="button"
+                      className="is-primary"
+                      onClick={() => void publishVersion(record, version)}
+                      disabled={isBusy}
+                    >
+                      发布
+                    </button>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })
+        ) : (
+          <p className="admin-content-empty">当前还没有模板，可直接新建模板草稿。</p>
+        )}
       </div>
 
       <section className="admin-material-review-list" aria-labelledby="material-review-heading">
