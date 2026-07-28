@@ -13,6 +13,8 @@ export async function POST(request: NextRequest) {
 
   const result = await createRideCodeRedemptionLink({
     ldpassUserId: user.ldpassUserId,
+    serverAccountName: user.serverAccountName,
+    serverAccountVerified: user.serverAccountVerified,
   });
   if (!result.ok) {
     return markResponseNoStore(
@@ -21,7 +23,16 @@ export async function POST(request: NextRequest) {
           error: result.reason,
           message: result.message,
         },
-        { status: result.reason === 'not_configured' ? 503 : 502 },
+        {
+          status:
+            result.reason === 'not_configured'
+              ? 503
+              : result.reason === 'account_not_bound'
+                ? 403
+                : result.reason === 'session_active'
+                  ? 409
+                  : 502,
+        },
       ),
     );
   }
@@ -29,6 +40,7 @@ export async function POST(request: NextRequest) {
   return markResponseNoStore(
     NextResponse.json({
       actionUrl: result.actionUrl,
+      sessionId: result.sessionId,
       expiresAt: result.expiresAt,
     }),
   );

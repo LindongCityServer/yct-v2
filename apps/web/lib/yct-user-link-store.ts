@@ -38,6 +38,7 @@ export async function upsertYctUserLinkFromLdpassUser(
     const snapshotsUnchanged =
       existing.usernameSnapshot === user.username &&
       existing.emailSnapshot === normalizeOptionalString(user.email) &&
+      existing.serverAccountNameSnapshot === normalizeOptionalString(user.serverAccountName) &&
       existing.serverAccountVerifiedSnapshot === user.serverAccountVerified;
     const lastWriteAt = Date.parse(existing.updatedAt);
     if (
@@ -55,6 +56,7 @@ export async function upsertYctUserLinkFromLdpassUser(
       ...existing,
       usernameSnapshot: user.username,
       emailSnapshot: normalizeOptionalString(user.email),
+      serverAccountNameSnapshot: normalizeOptionalString(user.serverAccountName),
       serverAccountVerifiedSnapshot: user.serverAccountVerified,
       updatedAt: loginAt,
       lastLoginAt: loginAt,
@@ -71,6 +73,7 @@ export async function upsertYctUserLinkFromLdpassUser(
     ldpassUserId: user.id,
     usernameSnapshot: user.username,
     emailSnapshot: normalizeOptionalString(user.email),
+    serverAccountNameSnapshot: normalizeOptionalString(user.serverAccountName),
     serverAccountVerifiedSnapshot: user.serverAccountVerified,
     createdAt: loginAt,
     updatedAt: loginAt,

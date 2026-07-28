@@ -6,9 +6,14 @@ export interface RuntimeConfig {
   ldpassBaseUrl?: string;
   ldpassClientId?: string;
   ldpassYctProviderApiKey?: string;
-  ldpassRideCodeRequestedValue: string;
+  ldpassRideCodeMaximumFareValue?: string;
   ldpassRideCodeVerificationMethod: 'server_account' | 'pin';
   ldpassRideCodeExpiresInSeconds: number;
+  ldpassRideCodeAuthorizationExpiresInSeconds: number;
+  ldpassRideWebhookSecret?: string;
+  rideCodeSessionStorePath: string;
+  rideGateConfigStorePath: string;
+  rideGatewayToken?: string;
   yctSessionStorePath: string;
   yctUserLinkStorePath: string;
   adminStorePath: string;
@@ -82,9 +87,8 @@ export function readRuntimeConfig(): RuntimeConfig {
     ldpassBaseUrl: emptyToUndefined(process.env.LDPASS_BASE_URL),
     ldpassClientId: emptyToUndefined(process.env.LDPASS_CLIENT_ID),
     ldpassYctProviderApiKey: emptyToUndefined(process.env.LDPASS_YCT_PROVIDER_API_KEY),
-    ldpassRideCodeRequestedValue: parsePositiveDecimal(
-      process.env.LDPASS_RIDE_CODE_REQUESTED_VALUE,
-      '1',
+    ldpassRideCodeMaximumFareValue: parseOptionalPositiveDecimal(
+      process.env.LDPASS_RIDE_CODE_MAXIMUM_FARE ?? process.env.LDPASS_RIDE_CODE_REQUESTED_VALUE,
     ),
     ldpassRideCodeVerificationMethod: parseRideCodeVerificationMethod(
       process.env.LDPASS_RIDE_CODE_VERIFICATION_METHOD,
@@ -95,6 +99,20 @@ export function readRuntimeConfig(): RuntimeConfig {
       60,
       86_400,
     ),
+    ldpassRideCodeAuthorizationExpiresInSeconds: parseIntegerInRange(
+      process.env.LDPASS_RIDE_CODE_AUTHORIZATION_EXPIRES_IN_SECONDS,
+      4 * 60 * 60,
+      300,
+      14_400,
+    ),
+    ldpassRideWebhookSecret: emptyToUndefined(process.env.LDPASS_RIDE_WEBHOOK_SECRET),
+    rideCodeSessionStorePath:
+      emptyToUndefined(process.env.YCT_RIDE_CODE_SESSION_STORE_PATH) ??
+      '.yct-data/ride-code-sessions.json',
+    rideGateConfigStorePath:
+      emptyToUndefined(process.env.YCT_RIDE_GATE_CONFIG_STORE_PATH) ??
+      '.yct-data/ride-gate-config.json',
+    rideGatewayToken: emptyToUndefined(process.env.YCT_RIDE_GATEWAY_TOKEN),
     yctSessionStorePath:
       emptyToUndefined(process.env.YCT_SESSION_STORE_PATH) ?? '.yct-data/yct-account-sessions.json',
     yctUserLinkStorePath:
@@ -272,15 +290,17 @@ function parseIntegerInRange(
   return Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : fallback;
 }
 
-function parsePositiveDecimal(value: string | undefined, fallback: string): string {
+function parseOptionalPositiveDecimal(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
-  return trimmed && /^\d+(?:\.\d{1,6})?$/.test(trimmed) && Number(trimmed) > 0 ? trimmed : fallback;
+  return trimmed && /^\d+(?:\.\d{1,6})?$/.test(trimmed) && Number(trimmed) > 0
+    ? trimmed
+    : undefined;
 }
 
 function parseRideCodeVerificationMethod(
   value: string | undefined,
 ): RuntimeConfig['ldpassRideCodeVerificationMethod'] {
-  return value?.trim() === 'pin' ? 'pin' : 'server_account';
+  return value?.trim() === 'server_account' ? 'server_account' : 'pin';
 }
 
 function parsePushNotificationTypes(value: string | undefined): PushNotificationType[] {

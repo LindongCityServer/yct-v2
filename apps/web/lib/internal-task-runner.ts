@@ -8,6 +8,7 @@ import { syncPlayerLocations } from './player-location-workflow';
 import type { OperationsReminderSourceSyncResult } from './operations-reminder-source-sync-workflow';
 import { syncTransitServiceNoticeReminderSource } from './operations-reminder-source-sync-workflow';
 import { processExpiredTicketOrders } from './ticket-order-workflow';
+import { ensureRideCodeListenersRegistered } from './ride-code-workflow';
 
 export interface InternalTaskRunResult {
   processedAt: string;
@@ -15,40 +16,47 @@ export interface InternalTaskRunResult {
   actorId?: string;
   status: 'ok' | 'warning';
   statusSummary: string;
-  operationsReminders: OperationsReminderSourceSyncResult | {
-    sourceKey: 'transit_service_notice';
-    status: 'unchanged';
-    candidateCount: 0;
-    checkedAt: string;
-    refreshTriggered: false;
-    message: string;
-  };
-  contentOperationsReminders: Awaited<ReturnType<typeof syncOperationsContentReminderRuleSource>> | {
-    sourceKey: 'operations_content_rule_visibility';
-    status: 'unchanged';
-    candidateCount: 0;
-    currentSignature: string;
-    checkedAt: string;
-    refreshTriggered: false;
-    message: string;
-  };
+  operationsReminders:
+    | OperationsReminderSourceSyncResult
+    | {
+        sourceKey: 'transit_service_notice';
+        status: 'unchanged';
+        candidateCount: 0;
+        checkedAt: string;
+        refreshTriggered: false;
+        message: string;
+      };
+  contentOperationsReminders:
+    | Awaited<ReturnType<typeof syncOperationsContentReminderRuleSource>>
+    | {
+        sourceKey: 'operations_content_rule_visibility';
+        status: 'unchanged';
+        candidateCount: 0;
+        currentSignature: string;
+        checkedAt: string;
+        refreshTriggered: false;
+        message: string;
+      };
   events: Awaited<ReturnType<typeof replayPendingAppEvents>>;
   notifications: Awaited<ReturnType<typeof processDuePushDeliveries>>;
   playerLocations: Awaited<ReturnType<typeof syncPlayerLocations>>;
   ticketing: Awaited<ReturnType<typeof processExpiredTicketOrders>>;
 }
 
-export async function runInternalTasks(input: {
-  actorId?: string;
-  actorType?: 'admin' | 'system';
-  eventLimit?: number;
-  pushLimit?: number;
-  now?: string;
-  syncOperationsReminders?: boolean;
-  forceOperationsReminderRefresh?: boolean;
-} = {}): Promise<InternalTaskRunResult> {
+export async function runInternalTasks(
+  input: {
+    actorId?: string;
+    actorType?: 'admin' | 'system';
+    eventLimit?: number;
+    pushLimit?: number;
+    now?: string;
+    syncOperationsReminders?: boolean;
+    forceOperationsReminderRefresh?: boolean;
+  } = {},
+): Promise<InternalTaskRunResult> {
   ensureNotificationDeliveryListenersRegistered();
   ensureOperationsReminderRefreshListenersRegistered();
+  ensureRideCodeListenersRegistered();
   const processedAt = new Date().toISOString();
   const actorType = input.actorType ?? 'system';
   const actorId = input.actorId?.trim() || undefined;

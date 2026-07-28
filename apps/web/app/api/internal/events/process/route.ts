@@ -6,6 +6,7 @@ import {
   readInternalTaskLimit,
 } from '../../../../../lib/internal-task-auth';
 import { ensureNotificationDeliveryListenersRegistered } from '../../../../../lib/notification-delivery-listeners';
+import { ensureRideCodeListenersRegistered } from '../../../../../lib/ride-code-workflow';
 import { ensureTransitCacheInvalidationListenersRegistered } from '../../../../../lib/transit-cache-invalidation-listeners';
 
 export async function POST(request: NextRequest) {
@@ -15,6 +16,7 @@ export async function POST(request: NextRequest) {
   }
 
   ensureNotificationDeliveryListenersRegistered();
+  ensureRideCodeListenersRegistered();
   ensureTransitCacheInvalidationListenersRegistered();
   const body = await readInternalTaskJsonBody(request);
   const result = await replayPendingAppEvents(readInternalTaskLimit(body));
