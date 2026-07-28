@@ -127,6 +127,17 @@ type AdminAssetStatusFilter = ContentAsset['status'] | 'all';
 type AdminAssetSourceFilter = AdminContentAssetRecord['sourceKind'] | 'all';
 
 const categories = ['通知公告', '运营信息', '地铁运营', '公交运营', '有轨运营', '网站公告'];
+
+const coverColorOptions = [
+  { value: 'var(--yct-color-primary)', label: '品牌主色' },
+  { value: 'var(--yct-color-secondary)', label: '地铁' },
+  { value: 'var(--yct-color-tertiary)', label: '公交' },
+  { value: 'var(--yct-color-tram)', label: '有轨' },
+  { value: 'var(--yct-color-ferry)', label: '水运' },
+  { value: 'var(--yct-color-railway)', label: '铁路' },
+  { value: 'var(--yct-color-warning)', label: '提醒' },
+  { value: 'var(--yct-color-error)', label: '紧急' },
+] as const;
 const contentStatusFilterOptions: Array<{
   value: AdminContentStatusFilter;
   label: string;
@@ -1507,14 +1518,52 @@ export function AdminOperationsPanel() {
               <span>摘要</span>
               <input value={excerpt} onChange={(event) => setExcerpt(event.currentTarget.value)} />
             </label>
-            <label>
-              <span>封面色</span>
-              <input
-                value={coverColor}
-                onChange={(event) => setCoverColor(event.currentTarget.value)}
-                placeholder="#168f78 或 var(--token)"
-              />
-            </label>
+            <fieldset className="admin-cover-color-picker">
+              <legend>封面色</legend>
+              <div>
+                <button
+                  className={!coverColor.trim() ? 'is-selected' : ''}
+                  type="button"
+                  aria-pressed={!coverColor.trim()}
+                  onClick={() => setCoverColor('')}
+                >
+                  <span className="admin-cover-color-swatch is-none" aria-hidden="true" />
+                  <span>不设置</span>
+                </button>
+                {coverColor.trim() &&
+                !coverColorOptions.some((option) => option.value === coverColor.trim()) ? (
+                  <button
+                    className="is-selected"
+                    type="button"
+                    aria-pressed="true"
+                    onClick={() => setCoverColor('')}
+                  >
+                    <span
+                      className="admin-cover-color-swatch"
+                      aria-hidden="true"
+                      style={{ backgroundColor: coverColor.trim() }}
+                    />
+                    <span>现有颜色</span>
+                  </button>
+                ) : null}
+                {coverColorOptions.map((option) => (
+                  <button
+                    className={coverColor.trim() === option.value ? 'is-selected' : ''}
+                    type="button"
+                    aria-pressed={coverColor.trim() === option.value}
+                    key={option.value}
+                    onClick={() => setCoverColor(option.value)}
+                  >
+                    <span
+                      className="admin-cover-color-swatch"
+                      aria-hidden="true"
+                      style={{ backgroundColor: option.value }}
+                    />
+                    <span>{option.label}</span>
+                  </button>
+                ))}
+              </div>
+            </fieldset>
             <label>
               <span>封面图链接</span>
               <input

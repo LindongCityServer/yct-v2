@@ -5,7 +5,7 @@ import type {
   OperationsFeedTag,
 } from '@yct/contracts';
 import { createApiMeta } from './api-meta';
-import { listPublishedContentRecords } from './content-store';
+import { listContentRecords, listPublishedContentRecords } from './content-store';
 import {
   readLegacyOperationDetail,
   readLegacyOperationsDetails,
@@ -20,14 +20,15 @@ const tagKeywords: Array<{ tag: OperationsFeedTag; keywords: string[] }> = [
 ];
 
 export async function readOperationsFeed(): Promise<ApiListResponse<OperationsFeedItem>> {
-  const [localDetails, legacyFeed] = await Promise.all([
+  const [localDetails, legacyFeed, localRecords] = await Promise.all([
     readLocalOperationsDetails(),
     readLegacyOperationsFeed(),
+    listContentRecords(),
   ]);
   const localItems = localDetails.items.map(
     ({ markdown: _markdown, sourceKind: _sourceKind, ...item }) => item,
   );
-  const localContentIds = new Set(localItems.map((item) => item.id));
+  const localContentIds = getLegacyOverrideContentIds(localItems, localRecords);
   const legacyItems = legacyFeed.items.filter((item) => !localContentIds.has(item.id));
 
   return {
@@ -43,7 +44,10 @@ export async function readOperationDetail(id: string): Promise<{
   meta: ApiListResponse<OperationsContentDetail>['meta'];
   item?: OperationsContentDetail;
 }> {
-  const localDetails = await readLocalOperationsDetails();
+  const [localDetails, localRecords] = await Promise.all([
+    readLocalOperationsDetails(),
+    listContentRecords(),
+  ]);
   const localItem = localDetails.items.find((item) => item.id === id);
 
   if (localItem) {
@@ -53,15 +57,22 @@ export async function readOperationDetail(id: string): Promise<{
     };
   }
 
+  if (
+    localRecords.some((record) => record.contentId === id && record.revision.status === 'archived')
+  ) {
+    return { meta: createApiMeta('ready') };
+  }
+
   return readLegacyOperationDetail(id);
 }
 
 export async function readOperationsDetails(): Promise<ApiListResponse<OperationsContentDetail>> {
-  const [localDetails, legacyDetails] = await Promise.all([
+  const [localDetails, legacyDetails, localRecords] = await Promise.all([
     readLocalOperationsDetails(),
     readLegacyOperationsDetails(),
+    listContentRecords(),
   ]);
-  const localContentIds = new Set(localDetails.items.map((item) => item.id));
+  const localContentIds = getLegacyOverrideContentIds(localDetails.items, localRecords);
   const legacyItems = legacyDetails.items.filter((item) => !localContentIds.has(item.id));
 
   return {
@@ -73,6 +84,18 @@ export async function readOperationsDetails(): Promise<ApiListResponse<Operation
     ),
     items: [...localDetails.items, ...legacyItems].sort(comparePublishedAtDesc),
   };
+}
+
+function getLegacyOverrideContentIds(
+  publishedItems: ReadonlyArray<{ id: string }>,
+  localRecords: Awaited<ReturnType<typeof listContentRecords>>,
+): Set<string> {
+  return new Set([
+    ...publishedItems.map((item) => item.id),
+    ...localRecords
+      .filter((record) => record.revision.status === 'archived')
+      .map((record) => record.contentId),
+  ]);
 }
 
 async function readLocalOperationsDetails(): Promise<ApiListResponse<OperationsContentDetail>> {

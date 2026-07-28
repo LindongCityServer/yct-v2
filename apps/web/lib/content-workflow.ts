@@ -367,9 +367,13 @@ export async function archiveContentRevision(input: {
   contentId: string;
   actorId: string;
 }): Promise<ContentActionResult> {
-  const record = await findContentRecord(input.contentId);
+  let record = await findContentRecord(input.contentId);
   if (!record) {
-    return notFound();
+    const adoption = await adoptLegacyContent(input);
+    if (!adoption.ok || !adoption.record) {
+      return adoption;
+    }
+    record = adoption.record;
   }
 
   const previousStatus = record.revision.status as Exclude<ContentRevisionStatus, 'archived'>;
