@@ -277,6 +277,18 @@ function buildDefaultServiceEntries(): ServiceEntry[] {
       publishedAt: now,
     },
     {
+      id: 'default-transit-network-health',
+      title: '公共交通网络健康度',
+      description: '按运营方统计线路、站点和拓扑连接指标，并提供启发式建议。',
+      categoryId: 'toolbox',
+      icon: 'account_tree',
+      href: '/services/transit-network-health',
+      openMode: 'same_tab',
+      status: 'published',
+      sortOrder: 37,
+      publishedAt: now,
+    },
+    {
       id: 'default-bus-stop-generator',
       title: '公交站牌生成器',
       description: '旧公交站牌生成工具，用于生成服务器内可用的站牌素材。',

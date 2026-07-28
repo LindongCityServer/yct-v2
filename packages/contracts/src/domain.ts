@@ -424,6 +424,62 @@ export interface TransitModeSnapshotSummary {
   stationCount: number;
 }
 
+export type TransitNetworkHealthSuggestionKind =
+  | 'connect_components'
+  | 'improve_transfer'
+  | 'improve_cross_connection'
+  | 'reduce_corridor_overlap'
+  | 'data_quality';
+
+export type TransitNetworkHealthSuggestionPriority = 'info' | 'attention';
+
+export interface TransitNetworkHealthOperatorRanks {
+  stationCount: number;
+  lineCount: number;
+  averageConnectivity: number;
+  connectivityWeight: number;
+  averageLinesPerSegment: number;
+}
+
+export interface TransitNetworkHealthOperatorStats {
+  operator: string;
+  lineCount: number;
+  stationCount: number;
+  topologySegmentCount: number;
+  sharedSegmentCount: number;
+  averageConnectivity: number;
+  connectivityWeight: number;
+  averageLinesPerSegment: number;
+  transferStationCount: number;
+  componentCount: number;
+  ranks: TransitNetworkHealthOperatorRanks;
+}
+
+export interface TransitNetworkHealthSuggestion {
+  id: string;
+  kind: TransitNetworkHealthSuggestionKind;
+  priority: TransitNetworkHealthSuggestionPriority;
+  operator?: string;
+  title: string;
+  detail: string;
+  evidence: string;
+}
+
+export interface TransitNetworkHealthReport {
+  analyzedAt: ISODateTimeString;
+  sourceMessage?: string;
+  lineCount: number;
+  topologyLineCount: number;
+  stationCount: number;
+  topologySegmentCount: number;
+  sharedSegmentCount: number;
+  transferStationCount: number;
+  stationIdentityFallbackCount: number;
+  incompleteLineCount: number;
+  operators: TransitNetworkHealthOperatorStats[];
+  suggestions: TransitNetworkHealthSuggestion[];
+}
+
 export interface TransitModeProfile {
   mode: Exclude<TransportMode, 'walk'>;
   label: string;
