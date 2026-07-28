@@ -1,12 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireActiveLdpassUser } from '../../../../lib/user-auth';
+import { NextResponse } from 'next/server';
 import { listPublishedMaterialTemplates } from '../../../../lib/material-workflow';
 
-export async function GET(request: NextRequest) {
-  const user = await requireActiveLdpassUser(request);
-  if (!user.ok) {
-    return user.response;
-  }
+export async function GET() {
   const items = await listPublishedMaterialTemplates();
   return NextResponse.json({ items });
 }
