@@ -428,6 +428,72 @@ export interface RideCodeRedemptionLinkCreatedPayload {
   expiresAt: ISODateTimeString;
 }
 
+export interface RideCodeSessionCreatedPayload {
+  sessionId: string;
+  ldpassUserId: string;
+  playerName: string;
+  maximumFareValue: string;
+}
+
+export interface RideCodeActionLinkCreatedPayload {
+  sessionId: string;
+  actionLinkId: string;
+  actionUrl: string;
+  expiresAt: ISODateTimeString;
+}
+
+export interface RideCodeGateEventReceivedPayload {
+  sessionId: string;
+  deviceEventId: string;
+  deviceId: string;
+  operation: 'entry' | 'exit';
+  playerName: string;
+  stationId: string;
+  fareProfileId: string;
+  occurredAt: ISODateTimeString;
+}
+
+export interface RideCodeEntryFrozenPayload {
+  sessionId: string;
+  authorizationId: string;
+  passId: string;
+  deviceEventId: string;
+  stationId: string;
+  reservedValue: string;
+  enteredAt: ISODateTimeString;
+}
+
+export interface RideCodeFareCapturedPayload {
+  sessionId: string;
+  authorizationId: string;
+  passId: string;
+  deviceEventId: string;
+  entryStationId: string;
+  exitStationId: string;
+  fareValue: string;
+  capturedAt: ISODateTimeString;
+}
+
+export interface RideCodeAuthorizationReleasedPayload {
+  sessionId: string;
+  authorizationId: string;
+  reason: string;
+  releasedAt: ISODateTimeString;
+}
+
+export interface RideCodeAuthorizationSynchronizedPayload {
+  sessionId: string;
+  authorizationId: string;
+  actionLinkId?: string;
+  passId: string;
+  status: 'Authorized' | 'Entered' | 'Captured' | 'Released' | 'Expired';
+  maximumFareValue: string;
+  reservedValue: string;
+  capturedValue?: string | null;
+  authorizationExpiresAt: ISODateTimeString;
+  occurredAt: ISODateTimeString;
+}
+
 export interface TripReminderScheduledPayload {
   reminderId: string;
   userId?: string;
@@ -1058,6 +1124,13 @@ export type YctEventPayloadMap = {
   TicketRefundCompleted: TicketRefundCompletedPayload;
   LdpassTicketStatusSynced: LdpassTicketStatusSyncedPayload;
   RideCodeRedemptionLinkCreated: RideCodeRedemptionLinkCreatedPayload;
+  RideCodeSessionCreated: RideCodeSessionCreatedPayload;
+  RideCodeActionLinkCreated: RideCodeActionLinkCreatedPayload;
+  RideCodeGateEventReceived: RideCodeGateEventReceivedPayload;
+  RideCodeEntryFrozen: RideCodeEntryFrozenPayload;
+  RideCodeFareCaptured: RideCodeFareCapturedPayload;
+  RideCodeAuthorizationReleased: RideCodeAuthorizationReleasedPayload;
+  RideCodeAuthorizationSynchronized: RideCodeAuthorizationSynchronizedPayload;
   AdminInitialized: AdminInitializedPayload;
   AdminMembershipUpdated: AdminMembershipUpdatedPayload;
 };

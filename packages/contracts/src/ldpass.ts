@@ -67,6 +67,7 @@ export interface YctUserLink {
   ldpassUserId: string;
   usernameSnapshot: string;
   emailSnapshot?: string;
+  serverAccountNameSnapshot?: string;
   serverAccountVerifiedSnapshot: boolean;
   createdAt: ISODateTimeString;
   updatedAt: ISODateTimeString;
@@ -102,32 +103,118 @@ export interface LdpassTicketReference {
 }
 
 export interface LdpassCreateActionLinkInput {
-  kind: 'use';
+  kind: 'use' | 'ride_authorization';
   targetPassId?: string;
   selectionScope?: 'same_provider' | 'top_up_sources' | 'all_authorized';
   clientId?: string;
   requestedValue: string;
   verificationMethod: 'server_account' | 'pin';
   expiresInSeconds?: number;
+  authorizationExpiresInSeconds?: number;
+  externalReferenceId?: string;
   note?: string;
   idempotencyKey: string;
 }
 
 export interface LdpassProviderActionLink {
   id: string;
-  kind: 'use';
+  kind: 'use' | 'ride_authorization';
   status: 'Active';
   targetPassId?: string | null;
   selectionScope?: 'same_provider' | 'top_up_sources' | 'all_authorized' | null;
   requestedValue: string;
   verificationMethod: 'server_account' | 'pin';
   expiresAt: ISODateTimeString;
+  authorizationExpiresAt?: ISODateTimeString | null;
   token: string;
   actionPath: string;
 }
 
 export interface LdpassCreateActionLinkResponse {
   actionLink: LdpassProviderActionLink;
+}
+
+export type RideAuthorizationStatus =
+  'Authorized' | 'Entered' | 'Captured' | 'Released' | 'Expired';
+
+export interface LdpassRideAuthorization {
+  id: string;
+  providerId: string;
+  userId: string;
+  passId: string;
+  actionLinkId: string;
+  externalReferenceId: string;
+  status: RideAuthorizationStatus;
+  maximumFareValue: string;
+  reservedValue: string;
+  capturedValue: string | null;
+  entryEventId: string | null;
+  enteredAt: ISODateTimeString | null;
+  capturedAt: ISODateTimeString | null;
+  releasedAt: ISODateTimeString | null;
+  expiresAt: ISODateTimeString;
+  createdAt: ISODateTimeString;
+}
+
+export interface LdpassRideAuthorizationResponse {
+  rideAuthorization: LdpassRideAuthorization;
+}
+
+export type RideGateOperation = 'entry' | 'exit';
+
+export type RideCodeSessionStatus =
+  | 'link_pending'
+  | 'awaiting_authorization'
+  | 'authorized'
+  | 'entered'
+  | 'captured'
+  | 'released'
+  | 'expired'
+  | 'failed';
+
+export interface RideCodeSession {
+  id: string;
+  ldpassUserId: string;
+  playerName: string;
+  status: RideCodeSessionStatus;
+  maximumFareValue: string;
+  actionLinkId?: string;
+  actionUrl?: string;
+  actionLinkExpiresAt?: ISODateTimeString;
+  authorizationId?: string;
+  authorizationExpiresAt?: ISODateTimeString;
+  selectedPassId?: string;
+  entryDeviceId?: string;
+  entryStationId?: string;
+  entryFareProfileId?: string;
+  entryEventId?: string;
+  enteredAt?: ISODateTimeString;
+  exitDeviceId?: string;
+  exitStationId?: string;
+  exitEventId?: string;
+  fareValue?: string;
+  capturedAt?: ISODateTimeString;
+  releasedAt?: ISODateTimeString;
+  failureCode?: string;
+  failureMessage?: string;
+  processedDeviceEventIds: string[];
+  createdAt: ISODateTimeString;
+  updatedAt: ISODateTimeString;
+}
+
+export interface RideGateDeviceConfig {
+  id: string;
+  operation: RideGateOperation;
+  stationId: string;
+  fareProfileId: string;
+  enabled: boolean;
+}
+
+export interface RideFareRule {
+  fareProfileId: string;
+  entryStationId: string;
+  exitStationId: string;
+  fareValue: string;
 }
 
 export type YctAdminRole = 'admin' | 'super_admin';

@@ -1,4 +1,8 @@
-import type { LdpassCreateActionLinkInput, LdpassCreateActionLinkResponse } from '@yct/contracts';
+import type {
+  LdpassCreateActionLinkInput,
+  LdpassCreateActionLinkResponse,
+  LdpassRideAuthorizationResponse,
+} from '@yct/contracts';
 
 export interface LdpassActionLinkProviderConfig {
   baseUrl: string;
@@ -7,6 +11,7 @@ export interface LdpassActionLinkProviderConfig {
 }
 
 const createActionLinkRoute = '/api/open/provider/action-links';
+const rideAuthorizationRoutePrefix = '/api/open/provider/ride-authorizations';
 
 export class LdpassActionLinkProvider {
   constructor(private readonly config: LdpassActionLinkProviderConfig) {}
@@ -14,7 +19,6 @@ export class LdpassActionLinkProvider {
   async createActionLink(
     input: LdpassCreateActionLinkInput,
   ): Promise<LdpassCreateActionLinkResponse> {
-    const url = new URL(createActionLinkRoute, this.config.baseUrl);
     const body = JSON.stringify({
       kind: input.kind,
       targetPassId: input.targetPassId,
@@ -23,14 +27,92 @@ export class LdpassActionLinkProvider {
       requestedValue: input.requestedValue,
       verificationMethod: input.verificationMethod,
       expiresInSeconds: input.expiresInSeconds,
+      authorizationExpiresInSeconds: input.authorizationExpiresInSeconds,
+      externalReferenceId: input.externalReferenceId,
       note: input.note,
     });
+    return this.postSigned<LdpassCreateActionLinkResponse>(
+      createActionLinkRoute,
+      body,
+      input.idempotencyKey,
+    );
+  }
+
+  async readRideAuthorization(authorizationId: string): Promise<LdpassRideAuthorizationResponse> {
+    const route = `${rideAuthorizationRoutePrefix}/${encodeURIComponent(authorizationId)}`;
+    const url = new URL(route, this.config.baseUrl);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.config.fetchTimeoutMs ?? 8_000);
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: {
+          accept: 'application/json',
+          authorization: `Bearer ${this.config.providerApiKey}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(await readLdpassError(response));
+      }
+      return (await response.json()) as LdpassRideAuthorizationResponse;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async enterRideAuthorization(input: {
+    authorizationId: string;
+    deviceEventId: string;
+    idempotencyKey: string;
+  }): Promise<LdpassRideAuthorizationResponse> {
+    const route = `${rideAuthorizationRoutePrefix}/${encodeURIComponent(input.authorizationId)}/enter`;
+    return this.postSigned<LdpassRideAuthorizationResponse>(
+      route,
+      JSON.stringify({ deviceEventId: input.deviceEventId }),
+      input.idempotencyKey,
+    );
+  }
+
+  async captureRideAuthorization(input: {
+    authorizationId: string;
+    fareValue: string;
+    idempotencyKey: string;
+  }): Promise<LdpassRideAuthorizationResponse> {
+    const route = `${rideAuthorizationRoutePrefix}/${encodeURIComponent(input.authorizationId)}/capture`;
+    return this.postSigned<LdpassRideAuthorizationResponse>(
+      route,
+      JSON.stringify({ fareValue: input.fareValue }),
+      input.idempotencyKey,
+    );
+  }
+
+  async releaseRideAuthorization(input: {
+    authorizationId: string;
+    reason: string;
+    idempotencyKey: string;
+  }): Promise<LdpassRideAuthorizationResponse> {
+    const route = `${rideAuthorizationRoutePrefix}/${encodeURIComponent(input.authorizationId)}/release`;
+    return this.postSigned<LdpassRideAuthorizationResponse>(
+      route,
+      JSON.stringify({ reason: input.reason }),
+      input.idempotencyKey,
+    );
+  }
+
+  private async postSigned<TResponse>(
+    route: string,
+    body: string,
+    idempotencyKey: string,
+  ): Promise<TResponse> {
+    const url = new URL(route, this.config.baseUrl);
     const timestamp = new Date().toISOString();
     const signature = await createOpenApiSignature({
       method: 'POST',
-      route: createActionLinkRoute,
+      route,
       timestamp,
-      idempotencyKey: input.idempotencyKey,
+      idempotencyKey,
       body,
       secret: this.config.providerApiKey,
     });
@@ -45,7 +127,7 @@ export class LdpassActionLinkProvider {
           accept: 'application/json',
           authorization: `Bearer ${this.config.providerApiKey}`,
           'content-type': 'application/json; charset=utf-8',
-          'x-ldpass-idempotency-key': input.idempotencyKey,
+          'x-ldpass-idempotency-key': idempotencyKey,
           'x-ldpass-signature': `v1=${signature}`,
           'x-ldpass-timestamp': timestamp,
         },
@@ -56,7 +138,7 @@ export class LdpassActionLinkProvider {
         throw new Error(await readLdpassError(response));
       }
 
-      return (await response.json()) as LdpassCreateActionLinkResponse;
+      return (await response.json()) as TResponse;
     } finally {
       clearTimeout(timeout);
     }
