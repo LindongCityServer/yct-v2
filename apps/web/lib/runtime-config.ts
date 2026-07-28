@@ -18,6 +18,9 @@ export interface RuntimeConfig {
   contentAssetStorePath: string;
   contentAssetUploadDir: string;
   serviceEntryStorePath: string;
+  materialTemplateStorePath: string;
+  materialDraftStorePath: string;
+  materialExportAuditStorePath: string;
   transitDataStorePath: string;
   transitModeProfileStorePath: string;
   travelScheduleRevisionStorePath: string;
@@ -115,6 +118,15 @@ export function readRuntimeConfig(): RuntimeConfig {
     serviceEntryStorePath:
       emptyToUndefined(process.env.YCT_SERVICE_ENTRY_STORE_PATH) ??
       '.yct-data/service-entry-store.json',
+    materialTemplateStorePath:
+      emptyToUndefined(process.env.YCT_MATERIAL_TEMPLATE_STORE_PATH) ??
+      '.yct-data/material-template-store.json',
+    materialDraftStorePath:
+      emptyToUndefined(process.env.YCT_MATERIAL_DRAFT_STORE_PATH) ??
+      '.yct-data/material-draft-store.json',
+    materialExportAuditStorePath:
+      emptyToUndefined(process.env.YCT_MATERIAL_EXPORT_AUDIT_STORE_PATH) ??
+      '.yct-data/material-export-audit-store.json',
     transitDataStorePath:
       emptyToUndefined(process.env.YCT_TRANSIT_DATA_STORE_PATH) ??
       '.yct-data/transit-data-store.json',

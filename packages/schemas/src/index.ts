@@ -4,6 +4,7 @@ export * from './content';
 export * from './i18n';
 export * from './imports';
 export * from './map';
+export * from './materials';
 export * from './notifications';
 export * from './services';
 export * from './ticketing';

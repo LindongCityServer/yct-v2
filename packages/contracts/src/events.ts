@@ -4,6 +4,10 @@ import type {
   LocaleCode,
   LocalePreference,
   MapGeometry,
+  MaterialCanvasConfig,
+  MaterialDraftStatus,
+  MaterialSourceKind,
+  MaterialTemplateFamily,
   PoiFacilitySnapshot,
   PoiSubmissionStatus,
   RectangleBounds,
@@ -591,6 +595,43 @@ export interface ServiceEntryDeletedPayload {
   deletedAt: ISODateTimeString;
 }
 
+export interface MaterialTemplatePublishedPayload {
+  templateId: string;
+  version: number;
+  family: MaterialTemplateFamily;
+  publishedBy: string;
+  publishedAt: ISODateTimeString;
+}
+
+export interface MaterialDraftSubmittedPayload {
+  draftId: string;
+  templateId: string;
+  templateVersion: number;
+  submittedBy: string;
+  submittedAt: ISODateTimeString;
+}
+
+export interface MaterialDraftReviewedPayload {
+  draftId: string;
+  decision: Extract<MaterialDraftStatus, 'approved' | 'rejected'>;
+  reviewerId: string;
+  reviewedAt: ISODateTimeString;
+  reason?: string;
+}
+
+export interface MaterialExportRequestedPayload {
+  exportId: string;
+  actorId: string;
+  templateId: string;
+  templateVersion: number;
+  sourceKind: MaterialSourceKind;
+  sourceRef?: string;
+  draftId?: string;
+  canvas: MaterialCanvasConfig;
+  outputWidthPx: number;
+  outputHeightPx: number;
+}
+
 export interface PoiCategoryProfileUpdatedPayload {
   categories: Array<{
     id: string;
@@ -988,6 +1029,10 @@ export type YctEventPayloadMap = {
   ServiceEntryPublished: ServiceEntryPublishedPayload;
   ServiceEntryArchived: ServiceEntryArchivedPayload;
   ServiceEntryDeleted: ServiceEntryDeletedPayload;
+  MaterialTemplatePublished: MaterialTemplatePublishedPayload;
+  MaterialDraftSubmitted: MaterialDraftSubmittedPayload;
+  MaterialDraftReviewed: MaterialDraftReviewedPayload;
+  MaterialExportRequested: MaterialExportRequestedPayload;
   OperationsStrongReminderRulesUpdated: OperationsStrongReminderRulesUpdatedPayload;
   OperationsReminderDeliveryRefreshRequested: OperationsReminderDeliveryRefreshRequestedPayload;
   TravelScheduleRevisionImported: TravelScheduleRevisionImportedPayload;
