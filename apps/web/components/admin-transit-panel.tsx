@@ -26,6 +26,7 @@ import {
   getTransitStationServiceModes,
   isTransitPoiMarkerCompatibleWithStation,
 } from '../lib/transit-station-mode';
+import { findTransitStationDetail } from '../lib/transit-station-detail-match';
 import { EmbeddedMapLocationPicker } from './embedded-map-location-picker';
 import type { TransitStationDetailUpdateInput } from '@yct/schemas';
 
@@ -245,6 +246,8 @@ export function AdminTransitPanel() {
   const [stationDetailEditTarget, setStationDetailEditTarget] = useState<{
     revision: TransitDataRevision;
     detail: TransitStationDetailSnapshot;
+    lineSourceId: string;
+    stationSourceId: string;
   } | null>(null);
   const [lineEditTarget, setLineEditTarget] = useState<{
     revision: TransitDataRevision;
@@ -883,7 +886,7 @@ export function AdminTransitPanel() {
         const detail = data.stationDetails?.find(
           (candidate) => candidate.sourceId === detailSourceId,
         );
-        return detail ? { revision: data, detail } : null;
+        return detail && current ? { ...current, revision: data, detail } : null;
       });
       setStatusText(`已更新站内设施信息：${detailSourceId}`);
       return null;
@@ -1849,7 +1852,11 @@ export function AdminTransitPanel() {
             const error = await updateTransitStationDetail(
               stationDetailEditTarget.revision.revisionId,
               stationDetailEditTarget.detail.sourceId,
-              patch,
+              {
+                ...patch,
+                lineSourceId: stationDetailEditTarget.lineSourceId,
+                stationSourceId: stationDetailEditTarget.stationSourceId,
+              },
             );
             if (!error) {
               setStationDetailEditTarget(null);
@@ -1869,8 +1876,13 @@ export function AdminTransitPanel() {
           onEditStation={(station) =>
             setStationEditTarget({ revision: lineEditTarget.revision, station })
           }
-          onEditStationDetail={(detail) =>
-            setStationDetailEditTarget({ revision: lineEditTarget.revision, detail })
+          onEditStationDetail={(detail, line, station) =>
+            setStationDetailEditTarget({
+              revision: lineEditTarget.revision,
+              detail,
+              lineSourceId: line.sourceId,
+              stationSourceId: station.sourceId,
+            })
           }
           onSubmit={(payload) =>
             saveTransitLine(
@@ -3395,6 +3407,33 @@ function StationDetailEditorTextarea({
   );
 }
 
+function createTransitStationDetailDraft(
+  line: TransitRevisionLine,
+  station: TransitRevisionStation,
+): TransitStationDetailSnapshot {
+  return {
+    sourceId: `station-detail:${line.sourceId}:${station.sourceId}`,
+    lineName: line.name,
+    stationName: station.name,
+    platformSide: normalizeTransitStationPlatformSide(
+      line.stops.find((stop) => stop.stationSourceId === station.sourceId)?.platformSide,
+    ),
+    layers: [],
+    facilities: [],
+    transfers: [],
+    exits: [],
+    surroundingStationNames: [],
+  };
+}
+
+function normalizeTransitStationPlatformSide(
+  value: string | undefined,
+): TransitStationDetailSnapshot['platformSide'] {
+  return value === 'left' || value === 'right' || value === 'both' || value === 'none'
+    ? value
+    : undefined;
+}
+
 function TransitLineEditorDialog({
   isBusy,
   line,
@@ -3411,7 +3450,11 @@ function TransitLineEditorDialog({
   modeProfiles: TransitModeProfile[];
   onClose: () => void;
   onEditStation: (station: TransitRevisionStation) => void;
-  onEditStationDetail: (detail: TransitStationDetailSnapshot) => void;
+  onEditStationDetail: (
+    detail: TransitStationDetailSnapshot,
+    line: TransitRevisionLine,
+    station: TransitRevisionStation,
+  ) => void;
   onSubmit: (payload: TransitLineEditorSubmitPayload) => Promise<TransitLineEditorSubmitResult>;
   revision: TransitDataRevision;
   tilePreviewTemplate: string | null;
@@ -3781,10 +3824,7 @@ function TransitLineEditorDialog({
                       ? stationById.get(node.stationSourceId.trim())
                       : undefined;
                   const stationDetail = station
-                    ? revision.stationDetails?.find(
-                        (detail) =>
-                          detail.stationName === station.name && detail.lineName === line?.name,
-                      )
+                    ? findTransitStationDetail(revision.stationDetails, line?.name, station.name)
                     : undefined;
                   return (
                     <div
@@ -3832,17 +3872,21 @@ function TransitLineEditorDialog({
                           <button
                             className="transit-line-station-detail-button"
                             type="button"
-                            disabled={!stationDetail}
+                            disabled={!station || !line}
                             onClick={() => {
-                              if (stationDetail) {
-                                onEditStationDetail(stationDetail);
+                              if (station && line) {
+                                onEditStationDetail(
+                                  stationDetail ?? createTransitStationDetailDraft(line, station),
+                                  line,
+                                  station,
+                                );
                               }
                             }}
                           >
                             <span className="material-symbols-outlined" aria-hidden="true">
                               tune
                             </span>
-                            <span>{stationDetail ? '站内设施' : '暂无站内信息'}</span>
+                            <span>{stationDetail ? '站内设施' : '新增站内信息'}</span>
                           </button>
                         </>
                       ) : (

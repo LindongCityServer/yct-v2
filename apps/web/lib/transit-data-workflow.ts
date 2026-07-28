@@ -8,6 +8,7 @@ import type {
   TransitItemApprovalStatus,
   TransitDataValidationIssue,
   TransitModeSnapshotSummary,
+  TransitStationDetailSnapshot,
   YctEventPayloadMap,
   YctEventType,
 } from '@yct/contracts';
@@ -33,6 +34,10 @@ import {
   withTransitDataRevisionStatus,
 } from './transit-data-store';
 import { readRuntimeConfig } from './runtime-config';
+import {
+  getTransitStationNameMatchKeys,
+  mergeTransitStationDetails,
+} from './transit-station-detail-match';
 
 ensureTransitCacheInvalidationListenersRegistered();
 
@@ -63,7 +68,19 @@ export type TransitLineEditableField =
   | 'bookingUrl';
 
 export async function listAdminTransitDataRevisions(): Promise<TransitDataRevision[]> {
-  return listTransitDataRevisions();
+  const [revisions, legacy] = await Promise.all([
+    listTransitDataRevisions(),
+    readLegacyTransitSnapshot(),
+  ]);
+  const legacyDetails = legacy.snapshot?.stationDetails;
+  if (!legacyDetails?.length) {
+    return revisions;
+  }
+
+  return revisions.map((revision) => ({
+    ...revision,
+    stationDetails: mergeTransitStationDetails(revision.stationDetails, legacyDetails),
+  }));
 }
 
 export async function importLegacyTransitDataRevision(input: {
@@ -651,18 +668,37 @@ export async function updateTransitStationDetail(input: {
     return invalidTransition('当前交通数据版本状态不允许编辑站内设施信息。');
   }
 
-  const detail = revision.stationDetails?.find((item) => item.sourceId === input.detailSourceId);
-  if (!detail) {
+  const legacy = await readLegacyTransitSnapshot();
+  const details = mergeTransitStationDetails(
+    revision.stationDetails,
+    legacy.snapshot?.stationDetails,
+  );
+  const detail = details.find((item) => item.sourceId === input.detailSourceId);
+  const line = input.patch.lineSourceId
+    ? revision.lines.find((item) => item.sourceId === input.patch.lineSourceId)
+    : detail
+      ? revision.lines.find((item) => item.name === detail.lineName)
+      : undefined;
+  const station = input.patch.stationSourceId
+    ? revision.stations.find((item) => item.sourceId === input.patch.stationSourceId)
+    : detail
+      ? findTransitRevisionStation(revision.stations, detail.stationName)
+      : undefined;
+
+  if (!detail && (!line || !station || !line.stationSourceIds.includes(station.sourceId))) {
     return {
       ok: false,
       status: 404,
       error: 'transit_station_detail_not_found',
-      message: '交通数据版本中不存在该站内设施详情。',
+      message: '未找到对应线路站点的站内设施信息，也无法创建新的站内设施信息。',
     };
   }
 
-  const nextDetail: NonNullable<TransitDataRevision['stationDetails']>[number] = {
-    ...detail,
+  const nextDetail: TransitStationDetailSnapshot = {
+    sourceId: detail?.sourceId ?? input.detailSourceId,
+    lineName: detail?.lineName ?? line!.name,
+    stationName: detail?.stationName ?? station!.name,
+    sourcePath: detail?.sourcePath,
     overGround: input.patch.overGround,
     platformSide: input.patch.platformSide,
     layers: input.patch.layers.map((layer, order) => ({ ...layer, order })),
@@ -674,26 +710,31 @@ export async function updateTransitStationDetail(input: {
     swapExitLayers: input.patch.swapExitLayers,
     flipTemplateForUpwards: input.patch.flipTemplateForUpwards,
   };
-  const changedFields = getChangedTransitStationDetailFields(detail, nextDetail);
+  const changedFields = detail
+    ? getChangedTransitStationDetailFields(detail, nextDetail)
+    : getAllTransitStationDetailFields();
   if (changedFields.length === 0) {
     return { ok: true, revision };
   }
 
-  const nextDetails = revision.stationDetails?.map((item) =>
-    item.sourceId === detail.sourceId ? nextDetail : item,
-  );
-  const nextLines = revision.lines.map((line) => {
-    if (line.name !== detail.lineName || input.patch.platformSide === undefined) {
-      return line;
+  const nextDetails = detail
+    ? details.map((item) => (item.sourceId === detail.sourceId ? nextDetail : item))
+    : [...details, nextDetail];
+  const targetLineSourceId = line?.sourceId;
+  const nextLines = revision.lines.map((currentLine) => {
+    if (currentLine.sourceId !== targetLineSourceId || input.patch.platformSide === undefined) {
+      return currentLine;
     }
-    const station = revision.stations.find((candidate) => candidate.name === detail.stationName);
-    if (!station || !line.stationSourceIds.includes(station.sourceId)) {
-      return line;
+    const targetStation = input.patch.stationSourceId
+      ? revision.stations.find((candidate) => candidate.sourceId === input.patch.stationSourceId)
+      : findTransitRevisionStation(revision.stations, nextDetail.stationName);
+    if (!targetStation || !currentLine.stationSourceIds.includes(targetStation.sourceId)) {
+      return currentLine;
     }
     return {
-      ...line,
-      stops: line.stops.map((stop) =>
-        stop.stationSourceId === station.sourceId
+      ...currentLine,
+      stops: currentLine.stops.map((stop) =>
+        stop.stationSourceId === targetStation.sourceId
           ? { ...stop, platformSide: input.patch.platformSide }
           : stop,
       ),
@@ -724,9 +765,9 @@ export async function updateTransitStationDetail(input: {
     await emitEvent('TransitDataRevisionStationDetailUpdated', input.actorId, {
       datasetId: updated.datasetId,
       revisionId: updated.revisionId,
-      detailSourceId: detail.sourceId,
-      lineName: detail.lineName,
-      stationName: detail.stationName,
+      detailSourceId: nextDetail.sourceId,
+      lineName: nextDetail.lineName,
+      stationName: nextDetail.stationName,
       updatedBy: input.actorId,
       updatedAt,
       changedFields,
@@ -1217,6 +1258,33 @@ function getChangedTransitLineFields(
     const nextValue = next[field];
     return JSON.stringify(previousValue ?? null) !== JSON.stringify(nextValue ?? null);
   });
+}
+
+function findTransitRevisionStation(
+  stations: TransitDataRevision['stations'],
+  stationName: string,
+): TransitDataRevision['stations'][number] | undefined {
+  const matchKeys = new Set(getTransitStationNameMatchKeys(stationName));
+  return stations.find((station) =>
+    getTransitStationNameMatchKeys(station.name).some((key) => matchKeys.has(key)),
+  );
+}
+
+function getAllTransitStationDetailFields(): ReturnType<
+  typeof getChangedTransitStationDetailFields
+> {
+  return [
+    'platformSide',
+    'overGround',
+    'layers',
+    'facilities',
+    'facilitiesUpwards',
+    'transfers',
+    'exits',
+    'surroundingStationNames',
+    'swapExitLayers',
+    'flipTemplateForUpwards',
+  ];
 }
 
 function getChangedTransitStationDetailFields(

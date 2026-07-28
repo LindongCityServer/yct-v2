@@ -218,6 +218,8 @@ export const transitStationCoordinateUpdateSchema = z.object({
 });
 
 export const transitStationDetailUpdateSchema = z.object({
+  lineSourceId: z.string().trim().min(1).max(120).optional(),
+  stationSourceId: z.string().trim().min(1).max(120).optional(),
   overGround: z.boolean().optional(),
   platformSide: z.enum(['left', 'right', 'both', 'none']).optional(),
   layers: z
@@ -278,9 +280,7 @@ export type TravelScheduleTripUpdateInput = z.infer<typeof travelScheduleTripUpd
 export type TransitStationCoordinateUpdateInput = z.infer<
   typeof transitStationCoordinateUpdateSchema
 >;
-export type TransitStationDetailUpdateInput = z.infer<
-  typeof transitStationDetailUpdateSchema
->;
+export type TransitStationDetailUpdateInput = z.infer<typeof transitStationDetailUpdateSchema>;
 export type TransitLineStationOrderUpdateInput = z.infer<
   typeof transitLineStationOrderUpdateSchema
 >;

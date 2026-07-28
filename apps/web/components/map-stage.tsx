@@ -53,6 +53,7 @@ import {
   filterMapMarkers,
   getMapMarkerSearchMatchPriority,
 } from '../lib/map-marker-search';
+import { getTransitStationNameMatchKeys as getStationNameMatchKeys } from '../lib/transit-station-detail-match';
 import {
   buildMapPlaceRelationIndex,
   dedupeEquivalentMapPlaceMarkers,
@@ -11303,52 +11304,11 @@ function compareTransitConnections(
   );
 }
 
-function getStationNameMatchKeys(value: string): string[] {
-  const normalized = normalizeStationNameForMatch(value);
-  if (!normalized) {
-    return [];
-  }
-
-  const keys = new Set([normalized]);
-  const withoutLindongPrefix = normalized.replace(/^临东/, '');
-  if (withoutLindongPrefix) {
-    keys.add(withoutLindongPrefix);
-  }
-
-  const withoutTransitSuffix = normalized
-    .replace(/地铁站$/u, '')
-    .replace(/公交枢纽站$/u, '')
-    .replace(/公交枢纽$/u, '')
-    .replace(/公交站$/u, '')
-    .replace(/汽车客运枢纽站$/u, '客运站')
-    .replace(/汽车客运站$/u, '客运站')
-    .replace(/区客运站$/u, '客运站');
-  if (withoutTransitSuffix) {
-    keys.add(withoutTransitSuffix);
-    keys.add(withoutTransitSuffix.replace(/^临东/, ''));
-  }
-
-  if (normalized.endsWith('客运站')) {
-    keys.add(`临东${normalized}`);
-    keys.add(normalized.replace(/客运站$/u, ''));
-  }
-
-  if (normalized.endsWith('站')) {
-    keys.add(normalized.replace(/站$/u, ''));
-  }
-
-  return Array.from(keys).filter(Boolean);
-}
-
 function getMarkerStationNameMatchKeys(marker: { label: string; sourceLabel?: string }): string[] {
   return dedupeValues([
     ...getStationNameMatchKeys(marker.sourceLabel ?? marker.label),
     ...getStationNameMatchKeys(marker.label),
   ]);
-}
-
-function normalizeStationNameForMatch(value: string): string {
-  return normalizeMarkerDisplayText(value);
 }
 
 function buildVisibleTiles(
