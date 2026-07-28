@@ -1,0 +1,184 @@
+import { z } from 'zod';
+import { idSchema } from './common';
+
+const fieldKeySchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z][a-zA-Z0-9_]{0,63}$/);
+
+export const materialCanvasSchema = z.object({
+  widthM: z.number().positive().max(64),
+  heightM: z.number().positive().max(64),
+  pxPerMeter: z.number().int().min(16).max(1024).default(128),
+  alignToTile: z.boolean().default(true),
+  tileSizePx: z.number().int().min(16).max(4096).default(128),
+});
+
+export const materialTemplateFieldSchema = z
+  .object({
+    key: fieldKeySchema,
+    label: z.string().trim().min(1).max(48),
+    kind: z.enum(['text', 'number', 'select']),
+    required: z.boolean().optional(),
+    maxLength: z.number().int().min(1).max(1000).optional(),
+    minimum: z.number().finite().optional(),
+    maximum: z.number().finite().optional(),
+    options: z
+      .array(
+        z.object({
+          value: z.string().trim().min(1).max(120),
+          label: z.string().trim().min(1).max(120),
+        }),
+      )
+      .min(1)
+      .max(64)
+      .optional(),
+  })
+  .superRefine((field, ctx) => {
+    if (field.kind === 'select' && !field.options?.length) {
+      ctx.addIssue({ code: 'custom', message: '下拉字段必须提供选项。', path: ['options'] });
+    }
+    if (
+      field.minimum !== undefined &&
+      field.maximum !== undefined &&
+      field.minimum > field.maximum
+    ) {
+      ctx.addIssue({ code: 'custom', message: '最小值不能大于最大值。', path: ['minimum'] });
+    }
+  });
+
+export const materialTypographyProfileSchema = z.object({
+  designSpeedFieldKey: fieldKeySchema,
+  rules: z
+    .array(
+      z
+        .object({
+          minDesignSpeedKph: z.number().nonnegative().max(400),
+          maxDesignSpeedKph: z.number().nonnegative().max(400),
+          primaryTextHeightMm: z.number().positive().max(2000),
+          secondaryTextHeightMm: z.number().positive().max(2000).optional(),
+          captionTextHeightMm: z.number().positive().max(2000).optional(),
+        })
+        .refine((rule) => rule.minDesignSpeedKph <= rule.maxDesignSpeedKph, {
+          message: '设计时速下限不能大于上限。',
+          path: ['minDesignSpeedKph'],
+        }),
+    )
+    .min(1)
+    .max(32),
+});
+
+export const materialTemplateDraftSchema = z
+  .object({
+    title: z.string().trim().min(1).max(100),
+    description: z.string().trim().max(500).optional(),
+    family: z.enum(['road_sign', 'address_sign', 'bus_stop', 'custom']),
+    source: z.string().trim().min(1).max(160_000),
+    fields: z.array(materialTemplateFieldSchema).min(1).max(80),
+    typographyProfile: materialTypographyProfileSchema.optional(),
+    defaultCanvas: materialCanvasSchema,
+  })
+  .superRefine((template, ctx) => {
+    if (
+      template.typographyProfile &&
+      !template.fields.some(
+        (field) => field.key === template.typographyProfile?.designSpeedFieldKey,
+      )
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '字体规则引用的设计时速字段不存在。',
+        path: ['typographyProfile', 'designSpeedFieldKey'],
+      });
+    }
+
+    if (template.typographyProfile) {
+      const sortedRules = [...template.typographyProfile.rules].sort(
+        (left, right) => left.minDesignSpeedKph - right.minDesignSpeedKph,
+      );
+      for (let index = 1; index < sortedRules.length; index += 1) {
+        if (sortedRules[index].minDesignSpeedKph <= sortedRules[index - 1].maxDesignSpeedKph) {
+          ctx.addIssue({
+            code: 'custom',
+            message: '设计时速字高规则不能重叠。',
+            path: ['typographyProfile', 'rules'],
+          });
+          break;
+        }
+      }
+    }
+  });
+
+export const materialTemplateRevisionSchema = materialTemplateDraftSchema.extend({
+  baseVersion: z.number().int().positive(),
+});
+
+export const materialDraftInputSchema = z.object({
+  templateId: idSchema,
+  templateVersion: z.number().int().positive(),
+  input: z.record(fieldKeySchema, z.string().max(2000)),
+  canvas: materialCanvasSchema,
+});
+
+export const materialReviewDecisionSchema = z.object({
+  decision: z.enum(['approved', 'rejected']),
+  reason: z.string().trim().max(500).optional(),
+});
+
+export const materialServerSourceSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('transit_line'),
+    lineId: idSchema,
+    stationSourceId: idSchema.optional(),
+  }),
+  z.object({
+    kind: z.literal('map_location'),
+    locationId: idSchema,
+  }),
+]);
+
+export const materialExportRequestSchema = z
+  .object({
+    mode: z.enum(['server', 'custom']),
+    draftId: idSchema.optional(),
+    templateId: idSchema.optional(),
+    templateVersion: z.number().int().positive().optional(),
+    canvas: materialCanvasSchema.optional(),
+    source: materialServerSourceSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.mode === 'custom' && !value.draftId) {
+      ctx.addIssue({ code: 'custom', message: '自定义导出必须指定物料草稿。', path: ['draftId'] });
+    }
+    if (value.mode === 'server' && (!value.templateId || !value.templateVersion || !value.source)) {
+      ctx.addIssue({ code: 'custom', message: '服务器导出必须指定模板和真实数据来源。' });
+    }
+  });
+
+export const materialPreviewRequestSchema = z
+  .object({
+    mode: z.enum(['manual', 'server']),
+    templateId: idSchema,
+    templateVersion: z.number().int().positive(),
+    canvas: materialCanvasSchema,
+    input: z.record(fieldKeySchema, z.string().max(2000)).optional(),
+    source: materialServerSourceSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.mode === 'manual' && !value.input) {
+      ctx.addIssue({ code: 'custom', message: '手动预览必须提供字段输入。', path: ['input'] });
+    }
+    if (value.mode === 'server' && !value.source) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '服务器预览必须指定真实数据来源。',
+        path: ['source'],
+      });
+    }
+  });
+
+export type MaterialTemplateDraftInput = z.infer<typeof materialTemplateDraftSchema>;
+export type MaterialDraftInput = z.infer<typeof materialDraftInputSchema>;
+export type MaterialExportRequestInput = z.infer<typeof materialExportRequestSchema>;
+export type MaterialPreviewRequestInput = z.infer<typeof materialPreviewRequestSchema>;
+export type MaterialServerSourceInput = z.infer<typeof materialServerSourceSchema>;

@@ -424,6 +424,62 @@ export interface TransitModeSnapshotSummary {
   stationCount: number;
 }
 
+export type TransitNetworkHealthSuggestionKind =
+  | 'connect_components'
+  | 'improve_transfer'
+  | 'improve_cross_connection'
+  | 'reduce_corridor_overlap'
+  | 'data_quality';
+
+export type TransitNetworkHealthSuggestionPriority = 'info' | 'attention';
+
+export interface TransitNetworkHealthOperatorRanks {
+  stationCount: number;
+  lineCount: number;
+  averageConnectivity: number;
+  connectivityWeight: number;
+  averageLinesPerSegment: number;
+}
+
+export interface TransitNetworkHealthOperatorStats {
+  operator: string;
+  lineCount: number;
+  stationCount: number;
+  topologySegmentCount: number;
+  sharedSegmentCount: number;
+  averageConnectivity: number;
+  connectivityWeight: number;
+  averageLinesPerSegment: number;
+  transferStationCount: number;
+  componentCount: number;
+  ranks: TransitNetworkHealthOperatorRanks;
+}
+
+export interface TransitNetworkHealthSuggestion {
+  id: string;
+  kind: TransitNetworkHealthSuggestionKind;
+  priority: TransitNetworkHealthSuggestionPriority;
+  operator?: string;
+  title: string;
+  detail: string;
+  evidence: string;
+}
+
+export interface TransitNetworkHealthReport {
+  analyzedAt: ISODateTimeString;
+  sourceMessage?: string;
+  lineCount: number;
+  topologyLineCount: number;
+  stationCount: number;
+  topologySegmentCount: number;
+  sharedSegmentCount: number;
+  transferStationCount: number;
+  stationIdentityFallbackCount: number;
+  incompleteLineCount: number;
+  operators: TransitNetworkHealthOperatorStats[];
+  suggestions: TransitNetworkHealthSuggestion[];
+}
+
 export interface TransitModeProfile {
   mode: Exclude<TransportMode, 'walk'>;
   label: string;
@@ -884,6 +940,101 @@ export type ServiceEntryStatus =
   'draft' | 'pending_review' | 'approved' | 'rejected' | 'published' | 'archived';
 export type ServiceEntryCategory = 'operations' | 'server_sites' | 'toolbox' | 'other';
 export type ServiceEntryOpenMode = 'same_tab' | 'new_tab';
+
+export type MaterialTemplateStatus = 'draft' | 'published' | 'archived';
+export type MaterialTemplateFamily = 'road_sign' | 'address_sign' | 'bus_stop' | 'custom';
+export type MaterialTemplateFieldKind = 'text' | 'number' | 'select';
+export type MaterialDraftStatus = 'draft' | 'pending_review' | 'approved' | 'rejected';
+export type MaterialSourceKind = 'manual' | 'transit_line' | 'map_location';
+
+export interface MaterialTemplateField {
+  key: string;
+  label: string;
+  kind: MaterialTemplateFieldKind;
+  required?: boolean;
+  maxLength?: number;
+  minimum?: number;
+  maximum?: number;
+  options?: Array<{
+    value: string;
+    label: string;
+  }>;
+}
+
+export interface MaterialTypographyRule {
+  minDesignSpeedKph: number;
+  maxDesignSpeedKph: number;
+  primaryTextHeightMm: number;
+  secondaryTextHeightMm?: number;
+  captionTextHeightMm?: number;
+}
+
+export interface MaterialTypographyProfile {
+  designSpeedFieldKey: string;
+  rules: MaterialTypographyRule[];
+}
+
+export interface MaterialCanvasConfig {
+  widthM: number;
+  heightM: number;
+  pxPerMeter: number;
+  alignToTile: boolean;
+  tileSizePx: number;
+}
+
+export interface MaterialTemplateVersion {
+  version: number;
+  status: MaterialTemplateStatus;
+  title: string;
+  description?: string;
+  family: MaterialTemplateFamily;
+  source: string;
+  fields: MaterialTemplateField[];
+  typographyProfile?: MaterialTypographyProfile;
+  defaultCanvas: MaterialCanvasConfig;
+  createdBy: string;
+  createdAt: ISODateTimeString;
+  publishedBy?: string;
+  publishedAt?: ISODateTimeString;
+  archivedAt?: ISODateTimeString;
+}
+
+export interface MaterialTemplateRecord {
+  id: string;
+  versions: MaterialTemplateVersion[];
+}
+
+export interface MaterialDraft {
+  id: string;
+  templateId: string;
+  templateVersion: number;
+  input: Record<string, string>;
+  canvas: MaterialCanvasConfig;
+  status: MaterialDraftStatus;
+  createdBy: string;
+  createdAt: ISODateTimeString;
+  updatedAt: ISODateTimeString;
+  submittedAt?: ISODateTimeString;
+  reviewedBy?: string;
+  reviewedAt?: ISODateTimeString;
+  reviewReason?: string;
+}
+
+export interface MaterialExportAuditRecord {
+  id: string;
+  actorId: string;
+  templateId: string;
+  templateVersion: number;
+  sourceKind: MaterialSourceKind;
+  sourceRef?: string;
+  draftId?: string;
+  inputHash: string;
+  canvas: MaterialCanvasConfig;
+  outputWidthPx: number;
+  outputHeightPx: number;
+  outputSha256: string;
+  requestedAt: ISODateTimeString;
+}
 
 export interface ServiceEntry {
   id: string;

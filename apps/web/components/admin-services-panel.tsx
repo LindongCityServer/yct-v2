@@ -172,6 +172,14 @@ export function AdminServicesPanel() {
     setEditorError('');
   };
 
+  const updateEditorField = <TKey extends keyof ServiceEntryEditorState>(
+    key: TKey,
+    value: ServiceEntryEditorState[TKey],
+  ) => {
+    setEditorState((current) => ({ ...current, [key]: value }));
+    setEditorError('');
+  };
+
   const saveEntry = async () => {
     const title = editorState.title.trim();
     const href = editorState.href.trim();
@@ -531,23 +539,19 @@ export function AdminServicesPanel() {
               <span>名称</span>
               <input
                 value={editorState.title}
-                onChange={(event) => {
-                  setEditorState((current) => ({ ...current, title: event.currentTarget.value }));
-                  setEditorError('');
-                }}
+                onChange={(event) => updateEditorField('title', event.currentTarget.value)}
               />
             </label>
             <label>
               <span>分类</span>
               <select
                 value={editorState.categoryId}
-                onChange={(event) => {
-                  setEditorState((current) => ({
-                    ...current,
-                    categoryId: event.currentTarget.value as AdminServiceEntry['categoryId'],
-                  }));
-                  setEditorError('');
-                }}
+                onChange={(event) =>
+                  updateEditorField(
+                    'categoryId',
+                    event.currentTarget.value as AdminServiceEntry['categoryId'],
+                  )
+                }
               >
                 {categoryOptions.map((category) => (
                   <option value={category.value} key={category.value}>
@@ -560,10 +564,7 @@ export function AdminServicesPanel() {
               <span>图标</span>
               <input
                 value={editorState.icon}
-                onChange={(event) => {
-                  setEditorState((current) => ({ ...current, icon: event.currentTarget.value }));
-                  setEditorError('');
-                }}
+                onChange={(event) => updateEditorField('icon', event.currentTarget.value)}
                 placeholder="apps"
               />
             </label>
@@ -574,26 +575,19 @@ export function AdminServicesPanel() {
                 min={0}
                 max={10000}
                 value={editorState.sortOrderValue}
-                onChange={(event) => {
-                  setEditorState((current) => ({
-                    ...current,
-                    sortOrderValue: event.currentTarget.value,
-                  }));
-                  setEditorError('');
-                }}
+                onChange={(event) => updateEditorField('sortOrderValue', event.currentTarget.value)}
               />
             </label>
             <label>
               <span>打开方式</span>
               <select
                 value={editorState.openMode}
-                onChange={(event) => {
-                  setEditorState((current) => ({
-                    ...current,
-                    openMode: event.currentTarget.value as AdminServiceEntry['openMode'],
-                  }));
-                  setEditorError('');
-                }}
+                onChange={(event) =>
+                  updateEditorField(
+                    'openMode',
+                    event.currentTarget.value as AdminServiceEntry['openMode'],
+                  )
+                }
               >
                 <option value="new_tab">新标签页</option>
                 <option value="same_tab">当前页</option>
@@ -603,10 +597,7 @@ export function AdminServicesPanel() {
               <span>链接</span>
               <input
                 value={editorState.href}
-                onChange={(event) => {
-                  setEditorState((current) => ({ ...current, href: event.currentTarget.value }));
-                  setEditorError('');
-                }}
+                onChange={(event) => updateEditorField('href', event.currentTarget.value)}
                 placeholder="https://..."
               />
             </label>
@@ -614,13 +605,7 @@ export function AdminServicesPanel() {
               <span>说明</span>
               <textarea
                 value={editorState.description}
-                onChange={(event) => {
-                  setEditorState((current) => ({
-                    ...current,
-                    description: event.currentTarget.value,
-                  }));
-                  setEditorError('');
-                }}
+                onChange={(event) => updateEditorField('description', event.currentTarget.value)}
               />
             </label>
             {editorError ? <p className="muted admin-poi-dialog-error">{editorError}</p> : null}

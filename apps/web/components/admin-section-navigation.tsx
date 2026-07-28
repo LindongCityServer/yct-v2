@@ -33,6 +33,12 @@ const adminEntries = [
     description: '维护服务入口、排序、上下线状态和跳转方式。',
   },
   {
+    path: '/admin/materials',
+    icon: 'design_services',
+    title: '物料后台',
+    description: '维护 SVG 模板版本并审核用户自定义物料。',
+  },
+  {
     path: '/admin/transit',
     icon: 'route',
     title: '线路与班次后台',
