@@ -1,5 +1,6 @@
 [CmdletBinding(PositionalBinding = $false)]
 param(
+  [AllowEmptyString()]
   [string]$BasePath = $env:YCT_DEPLOY_BASE_PATH,
   [string]$OutputDir = "artifacts",
   [string]$StagingDir = ".deploy\web",
@@ -254,7 +255,7 @@ function Convert-YctUrlPathToStagedPath {
   param(
     [Parameter(Mandatory = $true)][string]$Path,
     [Parameter(Mandatory = $true)][string]$WebRoot,
-    [Parameter(Mandatory = $true)][string]$BasePath
+    [Parameter(Mandatory = $true)][AllowEmptyString()][string]$BasePath
   )
 
   $cleanPath = Get-YctCleanUrlPath -Path $Path
@@ -286,7 +287,7 @@ function Convert-YctUrlPathToStagedPath {
 function Assert-YctStagedWebAssetConsistency {
   param(
     [Parameter(Mandatory = $true)][string]$StageRoot,
-    [Parameter(Mandatory = $true)][string]$BasePath,
+    [Parameter(Mandatory = $true)][AllowEmptyString()][string]$BasePath,
     [string]$BuildId = ""
   )
 
