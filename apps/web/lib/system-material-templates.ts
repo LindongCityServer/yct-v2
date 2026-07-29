@@ -21,10 +21,10 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
   <path d="{{select.arrowMode.rightPath}}" fill="#ffffff"/>
   <text x="24" y="92" fill="{{signColor}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="10" font-weight="700" text-anchor="middle">{{select.directionMode.leftText}}</text>
   <text x="232" y="92" fill="{{signColor}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="10" font-weight="700" text-anchor="middle">{{select.directionMode.rightText}}</text>
-  <text x="0" y="100" transform="translate(128 0) scale({{fit.roadName.scaleX}} 1)" fill="#ffffff" font-family="'HarmonyOS Sans SC', sans-serif" font-size="30" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadName.letterSpacing}}">{{roadName}}</text>
-  <text x="22" y="125" fill="{{signColor}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="14" font-weight="700" text-anchor="middle">{{select.directionMode.leftCode}}</text>
-  <text x="0" y="125" transform="translate(128 0) scale({{fit.roadNamePinyin.scaleX}} 1)" fill="{{signColor}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="16" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadNamePinyin.letterSpacing}}">{{roadNamePinyin}}</text>
-  <text x="234" y="125" fill="{{signColor}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="14" font-weight="700" text-anchor="middle">{{select.directionMode.rightCode}}</text>
+  <text x="0" y="98" transform="translate(128 0) scale({{fit.roadName.scaleX}} 1)" fill="#ffffff" font-family="'HarmonyOS Sans SC', sans-serif" font-size="30" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadName.letterSpacing}}">{{roadName}}</text>
+  <text x="22" y="123" fill="{{signColor}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="14" font-weight="700" text-anchor="middle">{{select.directionMode.leftCode}}</text>
+  <text x="0" y="123" transform="translate(128 0) scale({{fit.roadNamePinyin.scaleX}} 1)" fill="{{signColor}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="16" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadNamePinyin.letterSpacing}}">{{roadNamePinyin}}</text>
+  <text x="234" y="123" fill="{{signColor}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="14" font-weight="700" text-anchor="middle">{{select.directionMode.rightCode}}</text>
 </svg>`,
         fields: [
           {
