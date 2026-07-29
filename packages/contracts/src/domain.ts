@@ -946,7 +946,12 @@ export type MaterialTemplateStatus = 'draft' | 'published' | 'archived';
 export type MaterialTemplateFamily = 'road_sign' | 'address_sign' | 'bus_stop' | 'custom';
 export type MaterialTemplateFieldKind = 'text' | 'number' | 'select';
 export type MaterialDraftStatus = 'draft' | 'pending_review' | 'approved' | 'rejected';
-export type MaterialSourceKind = 'manual' | 'transit_line' | 'map_location' | 'road_coordinate';
+export type MaterialSourceKind =
+  | 'manual'
+  | 'transit_line'
+  | 'transit_station'
+  | 'map_location'
+  | 'road_coordinate';
 
 export interface MaterialTextFitConfig {
   maxWidth: number;

@@ -41,7 +41,10 @@ import {
   resolveMaterialLocationInput,
   resolveRoadCoordinateMaterialInput,
 } from './material-location-source';
-import { resolveTransitLineMaterialInput } from './material-transit-source';
+import {
+  resolveTransitLineMaterialInput,
+  resolveTransitStationMaterialInput,
+} from './material-transit-source';
 
 export type MaterialWorkflowResult = MaterialWorkflowSuccess | MaterialWorkflowFailure;
 
@@ -68,8 +71,10 @@ export type MaterialPreviewResult = MaterialWorkflowResult & {
   heightPx?: number;
 };
 
+type PublishedMaterialTemplateSummary = Omit<MaterialTemplateVersion, 'source'>;
+
 export async function listPublishedMaterialTemplates(): Promise<
-  Array<{ id: string; template: MaterialTemplateVersion }>
+  Array<{ id: string; template: PublishedMaterialTemplateSummary }>
 > {
   const records = await listMaterialTemplateRecords();
   return records
@@ -78,6 +83,10 @@ export async function listPublishedMaterialTemplates(): Promise<
       (item): item is { id: string; template: MaterialTemplateVersion } =>
         item.template !== undefined,
     )
+    .map(({ id, template }) => {
+      const { source: _source, ...summary } = template;
+      return { id, template: summary };
+    })
     .sort((left, right) => left.template.title.localeCompare(right.template.title, 'zh-CN'));
 }
 
@@ -374,7 +383,7 @@ async function resolveMaterialExportSource(
       template: MaterialTemplateVersion;
       values: Record<string, string>;
       canvas: MaterialCanvasConfig;
-      sourceKind: 'manual' | 'transit_line' | 'map_location' | 'road_coordinate';
+      sourceKind: 'manual' | 'transit_line' | 'transit_station' | 'map_location' | 'road_coordinate';
       sourceRef?: string;
       draftId?: string;
     }
@@ -488,7 +497,7 @@ async function resolveServerMaterialInput(input: {
   source: MaterialServerSourceInput;
   fields: MaterialTemplateVersion['fields'];
 }): Promise<{
-  sourceKind: 'transit_line' | 'map_location' | 'road_coordinate';
+  sourceKind: 'transit_line' | 'transit_station' | 'map_location' | 'road_coordinate';
   values: Record<string, string>;
   sourceRef: string;
 }> {
@@ -499,6 +508,16 @@ async function resolveServerMaterialInput(input: {
       fields: input.fields,
     });
     return { ...resolved, sourceKind: 'transit_line' };
+  }
+  if (input.source.kind === 'transit_station') {
+    const resolved = await resolveTransitStationMaterialInput({
+      stationMarkerId: input.source.stationMarkerId,
+      direction: input.source.direction,
+      lineIds: input.source.lineIds,
+      terminalRole: input.source.terminalRole,
+      fields: input.fields,
+    });
+    return { ...resolved, sourceKind: 'transit_station' };
   }
   if (input.source.kind === 'road_coordinate') {
     const resolved = await resolveRoadCoordinateMaterialInput({

@@ -1,5 +1,16 @@
 import type { MaterialTemplateField } from '@yct/contracts';
+import { toUppercaseRoadPinyin } from './chinese-pinyin';
+import {
+  findMaterialRoadAtCoordinate,
+  listMaterialLocations,
+  type MaterialLocationOption,
+} from './material-location-source';
 import { readTransitOverview } from './transit-data';
+import type { TransitLineStopSummary, TransitLineSummary } from './legacy-transit';
+
+export type MaterialTransitDirection = 'east' | 'west' | 'north' | 'south';
+export type MaterialTransitTerminalRole = 'origin' | 'terminal';
+type MaterialTransitLineDirection = MaterialTransitDirection | 'unknown';
 
 export interface MaterialTransitLineOption {
   id: string;
@@ -10,6 +21,32 @@ export interface MaterialTransitLineOption {
     stationSourceId: string;
     stationName: string;
   }>;
+}
+
+export interface MaterialTransitStationLineOption {
+  id: string;
+  name: string;
+  operator?: string;
+  firstLastBus: string;
+  forwardStations: string;
+  reverseStations: string;
+  direction: MaterialTransitLineDirection;
+  isOriginAtStation: boolean;
+  isTerminalAtStation: boolean;
+}
+
+export interface MaterialTransitStationOption {
+  markerId: string;
+  stationSourceId: string;
+  stationName: string;
+  coordinate?: [number, number];
+  directionOptions: Array<{ value: MaterialTransitDirection; label: string }>;
+  lines: MaterialTransitStationLineOption[];
+}
+
+interface TransitStationLineCandidate
+  extends Omit<MaterialTransitStationLineOption, 'direction'> {
+  stationStopIndex: number;
 }
 
 export async function listMaterialTransitLines(): Promise<MaterialTransitLineOption[]> {
@@ -27,6 +64,112 @@ export async function listMaterialTransitLines(): Promise<MaterialTransitLineOpt
       ),
     }))
     .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
+}
+
+/**
+ * 以公交站标记点为入口组织可用线路。方向按道路主走向归为东西或南北；
+ * 无法获得相邻站点或道路坐标时保留为 unknown，不与已识别方向混选。
+ */
+export async function listMaterialTransitStations(): Promise<MaterialTransitStationOption[]> {
+  const [overview, locations] = await Promise.all([readTransitOverview(), listMaterialLocations()]);
+  const busStopLocations = locations.filter(
+    (location) => location.categoryId.trim().toLowerCase() === 'bus-stop',
+  );
+  const locationByMarkerId = new Map(
+    busStopLocations.map((location) => [getMarkerId(location.id), location] as const),
+  );
+  const locationByName = new Map(
+    busStopLocations.map((location) => [normalizeStationName(location.label), location] as const),
+  );
+  const coordinateByStationSourceId = new Map<string, [number, number]>();
+
+  for (const line of overview.lines) {
+    if (line.mode !== 'bus') {
+      continue;
+    }
+    for (const stop of line.stationStops) {
+      if (!stop.stationSourceId || coordinateByStationSourceId.has(stop.stationSourceId)) {
+        continue;
+      }
+      const location = findBusStopLocation(stop, locationByMarkerId, locationByName);
+      if (location?.coordinate) {
+        coordinateByStationSourceId.set(stop.stationSourceId, location.coordinate);
+      }
+    }
+  }
+
+  const candidateByMarkerId = new Map<
+    string,
+    {
+      marker: MaterialLocationOption;
+      stationSourceId: string;
+      stationName: string;
+      candidates: TransitStationLineCandidate[];
+    }
+  >();
+
+  for (const line of overview.lines) {
+    if (line.mode !== 'bus') {
+      continue;
+    }
+    line.stationStops.forEach((stop, stationStopIndex) => {
+      if (!stop.stationSourceId) {
+        return;
+      }
+      const location = findBusStopLocation(stop, locationByMarkerId, locationByName);
+      if (!location) {
+        return;
+      }
+      const markerId = getMarkerId(location.id);
+      const current = candidateByMarkerId.get(markerId) ?? {
+        marker: location,
+        stationSourceId: stop.stationSourceId,
+        stationName: stop.stationName,
+        candidates: [],
+      };
+      if (!current.candidates.some((candidate) => candidate.id === line.id)) {
+        current.candidates.push({
+          ...createTransitStationLineCandidate(line, stationStopIndex),
+          stationStopIndex,
+        });
+      }
+      candidateByMarkerId.set(markerId, current);
+    });
+  }
+
+  const stations = await Promise.all(
+    Array.from(candidateByMarkerId.entries()).map(async ([markerId, candidate]) => {
+      const road = candidate.marker.coordinate
+        ? await findMaterialRoadAtCoordinate(candidate.marker.coordinate)
+        : undefined;
+      const lines = candidate.candidates
+        .map(({ stationStopIndex, ...line }) => ({
+          ...line,
+          direction: resolveTransitLineDirection({
+            line: overview.lines.find((item) => item.id === line.id),
+            stationStopIndex,
+            stationCoordinate: candidate.marker.coordinate,
+            coordinateByStationSourceId,
+            road,
+          }),
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
+      return {
+        markerId,
+        stationSourceId: candidate.stationSourceId,
+        stationName: candidate.stationName,
+        coordinate: candidate.marker.coordinate,
+        directionOptions: resolveMaterialTransitDirectionOptions(road),
+        lines,
+      };
+    }),
+  );
+
+  return stations.sort(
+    (left, right) =>
+      left.stationName.localeCompare(right.stationName, 'zh-CN') ||
+      left.markerId.localeCompare(right.markerId),
+  );
 }
 
 export async function resolveTransitLineMaterialInput(input: {
@@ -55,11 +198,230 @@ export async function resolveTransitLineMaterialInput(input: {
     roadNameEn: '',
     direction: `${line.firstStationName ?? ''} - ${destination}`.trim(),
   };
-  const values = Object.fromEntries(
-    input.fields.map((field) => [field.key, candidates[field.key] ?? '']),
-  );
   return {
-    values,
+    values: mapTemplateFields(input.fields, candidates),
     sourceRef: `transit_line:${line.id}${selectedStop?.stationSourceId ? `:${selectedStop.stationSourceId}` : ''}`,
   };
+}
+
+export async function resolveTransitStationMaterialInput(input: {
+  stationMarkerId: string;
+  direction: MaterialTransitDirection;
+  lineIds: string[];
+  terminalRole?: MaterialTransitTerminalRole;
+  fields: MaterialTemplateField[];
+}): Promise<{ values: Record<string, string>; sourceRef: string }> {
+  const station = (await listMaterialTransitStations()).find(
+    (item) => item.markerId === input.stationMarkerId,
+  );
+  if (!station) {
+    throw new Error('所选公交站标记点不存在或未关联已发布的公交线路。');
+  }
+  const selectableLines = station.lines.filter(
+    (line) => line.direction === input.direction,
+  );
+  const selectedLines = input.lineIds.map((lineId) => {
+    const line = selectableLines.find((candidate) => candidate.id === lineId);
+    if (!line) {
+      throw new Error('所选线路不经过当前站点，或与选择的道路方向不符。');
+    }
+    return line;
+  });
+  if (new Set(input.lineIds).size !== input.lineIds.length) {
+    throw new Error('公交线路不能重复选择。');
+  }
+  const maximumLineCount = resolveTemplateLineCapacity(input.fields);
+  if (selectedLines.length > maximumLineCount) {
+    throw new Error(`当前模板最多支持 ${maximumLineCount} 条公交线路。`);
+  }
+  const requiresTerminalRole = input.fields.some((field) => field.key === 'terminalRole');
+  if (requiresTerminalRole && !input.terminalRole) {
+    throw new Error('始发终点模板必须选择始发站或终点站。');
+  }
+  if (
+    input.terminalRole &&
+    selectedLines.some((line) =>
+      input.terminalRole === 'origin' ? !line.isOriginAtStation : !line.isTerminalAtStation,
+    )
+  ) {
+    throw new Error(
+      input.terminalRole === 'origin'
+        ? '所选线路并非在当前站始发。'
+        : '所选线路并非在当前站终到。',
+    );
+  }
+
+  const candidates: Record<string, string> = {
+    stationName: station.stationName,
+    stationNamePinyin: toUppercaseRoadPinyin(station.stationName),
+  };
+  selectedLines.forEach((line, index) => {
+    const slot = index + 1;
+    candidates[`route${slot}Number`] = line.name;
+    candidates[`route${slot}FirstLast`] = line.firstLastBus;
+    candidates[`route${slot}ForwardStations`] = line.forwardStations;
+    candidates[`route${slot}ReverseStations`] = line.reverseStations;
+    if (index === 0) {
+      candidates.routeNumber = line.name;
+      candidates.routeFirstLast = line.firstLastBus;
+      candidates.routeForwardStations = line.forwardStations;
+      candidates.routeReverseStations = line.reverseStations;
+      candidates.nextStation = resolveNextStation(line);
+      candidates.routeOrigin = line.reverseStations.split(' / ').at(-1) ?? '';
+      candidates.routeTerminal = line.forwardStations.split(' / ').at(-1) ?? '';
+      assignDetailStationFields(candidates, line);
+    }
+  });
+  if (input.terminalRole) {
+    candidates.terminalRole = input.terminalRole === 'origin' ? '始发站' : '终点站';
+  }
+  return {
+    values: mapTemplateFields(input.fields, candidates),
+    sourceRef: `transit_station:${station.markerId};direction=${input.direction};lines=${input.lineIds.join(',')}${input.terminalRole ? `;terminal=${input.terminalRole}` : ''}`,
+  };
+}
+
+function findBusStopLocation(
+  stop: TransitLineStopSummary,
+  locationByMarkerId: Map<string, MaterialLocationOption>,
+  locationByName: Map<string, MaterialLocationOption>,
+): MaterialLocationOption | undefined {
+  for (const markerId of stop.stationMarkerIds ?? []) {
+    const location = locationByMarkerId.get(markerId);
+    if (location) {
+      return location;
+    }
+  }
+  return locationByName.get(normalizeStationName(stop.stationName));
+}
+
+function createTransitStationLineCandidate(
+  line: TransitLineSummary,
+  stationStopIndex: number,
+): Omit<TransitStationLineCandidate, 'stationStopIndex' | 'direction'> {
+  const stationNames = line.stationStops.map((stop) => stop.stationName);
+  return {
+    id: line.id,
+    name: line.name,
+    operator: line.operator,
+    firstLastBus: formatFirstLastBus(line),
+    forwardStations: stationNames.slice(stationStopIndex).join(' / '),
+    reverseStations: stationNames.slice(0, stationStopIndex + 1).reverse().join(' / '),
+    isOriginAtStation: stationStopIndex === 0,
+    isTerminalAtStation: stationStopIndex === stationNames.length - 1,
+  };
+}
+
+function resolveTransitLineDirection(input: {
+  line: TransitLineSummary | undefined;
+  stationStopIndex: number;
+  stationCoordinate: [number, number] | undefined;
+  coordinateByStationSourceId: Map<string, [number, number]>;
+  road: Awaited<ReturnType<typeof findMaterialRoadAtCoordinate>>;
+}): MaterialTransitLineDirection {
+  if (!input.line || !input.stationCoordinate || !input.road) {
+    return 'unknown';
+  }
+  const nextStop = input.line.stationStops[input.stationStopIndex + 1];
+  const previousStop = input.line.stationStops[input.stationStopIndex - 1];
+  const adjacentCoordinate = nextStop?.stationSourceId
+    ? input.coordinateByStationSourceId.get(nextStop.stationSourceId)
+    : previousStop?.stationSourceId
+      ? input.coordinateByStationSourceId.get(previousStop.stationSourceId)
+      : undefined;
+  if (!adjacentCoordinate) {
+    return 'unknown';
+  }
+  const roadVectorX = input.road.projection.segmentEnd[0] - input.road.projection.segmentStart[0];
+  const roadVectorZ = input.road.projection.segmentEnd[1] - input.road.projection.segmentStart[1];
+  const lineVectorX = adjacentCoordinate[0] - input.stationCoordinate[0];
+  const lineVectorZ = adjacentCoordinate[1] - input.stationCoordinate[1];
+  const roadRunsNorthSouth = Math.abs(roadVectorZ) > Math.abs(roadVectorX);
+  const axisDelta = roadRunsNorthSouth ? lineVectorZ : lineVectorX;
+  if (Math.abs(axisDelta) < 0.001) {
+    return 'unknown';
+  }
+  if (roadRunsNorthSouth) {
+    // 地图坐标的 Z 轴向南递增。
+    return axisDelta < 0 ? 'north' : 'south';
+  }
+  return axisDelta < 0 ? 'west' : 'east';
+}
+
+function resolveMaterialTransitDirectionOptions(
+  road: Awaited<ReturnType<typeof findMaterialRoadAtCoordinate>>,
+): Array<{ value: MaterialTransitDirection; label: string }> {
+  if (!road) {
+    return [];
+  }
+  const deltaX = road.projection.segmentEnd[0] - road.projection.segmentStart[0];
+  const deltaZ = road.projection.segmentEnd[1] - road.projection.segmentStart[1];
+  return Math.abs(deltaZ) > Math.abs(deltaX)
+    ? [
+        { value: 'north', label: '向北' },
+        { value: 'south', label: '向南' },
+      ]
+    : [
+        { value: 'east', label: '向东' },
+        { value: 'west', label: '向西' },
+      ];
+}
+
+function resolveNextStation(line: MaterialTransitStationLineOption): string {
+  return line.forwardStations.split(' / ').at(1) ?? line.reverseStations.split(' / ').at(1) ?? '';
+}
+
+function assignDetailStationFields(
+  candidates: Record<string, string>,
+  line: MaterialTransitStationLineOption,
+): void {
+  const forwardStations = line.forwardStations.split(' / ').filter(Boolean);
+  const reverseStations = line.reverseStations.split(' / ').filter(Boolean);
+  const stationNames = [...reverseStations.slice(1).reverse(), ...forwardStations];
+  const currentIndex = Math.max(stationNames.length - forwardStations.length, 0);
+  stationNames.slice(0, 12).forEach((stationName, index) => {
+    candidates[`routeStation${index + 1}`] = stationName;
+  });
+  candidates.currentStationPosition = currentIndex < 12 ? String(currentIndex + 1) : 'none';
+}
+
+function resolveTemplateLineCapacity(fields: MaterialTemplateField[]): number {
+  const numberedSlots = fields
+    .map((field) => field.key.match(/^route(\d+)Number$/)?.[1])
+    .filter((value): value is string => Boolean(value))
+    .map(Number);
+  if (numberedSlots.length > 0) {
+    return Math.max(...numberedSlots);
+  }
+  return fields.some((field) => field.key === 'routeNumber') ? 1 : 1;
+}
+
+function formatFirstLastBus(line: TransitLineSummary): string {
+  const first = line.firstLastBus?.first?.trim();
+  const last = line.firstLastBus?.last?.trim();
+  if (first && last) {
+    return `首 ${first} 末 ${last}`;
+  }
+  if (first) {
+    return `首 ${first}`;
+  }
+  if (last) {
+    return `末 ${last}`;
+  }
+  return '首末班时间待维护';
+}
+
+function getMarkerId(locationId: string): string {
+  return locationId.startsWith('marker:') ? locationId.slice('marker:'.length) : locationId;
+}
+
+function normalizeStationName(value: string): string {
+  return value.replace(/[\s\u3000]+/g, '').trim().toLocaleLowerCase();
+}
+
+function mapTemplateFields(
+  fields: MaterialTemplateField[],
+  candidates: Record<string, string>,
+): Record<string, string> {
+  return Object.fromEntries(fields.map((field) => [field.key, candidates[field.key] ?? '']));
 }

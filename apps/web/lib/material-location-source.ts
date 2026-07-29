@@ -7,6 +7,7 @@ import {
   projectPointOntoMapRoad,
   resolveMapRoadSignDirectionMode,
   shouldUseVerticalMapRoadLabel,
+  type MapRoadProjection,
 } from './map-road-geometry';
 import { toUppercaseRoadPinyin } from './chinese-pinyin';
 import { applyLegacyMapMarkerOverrides } from './legacy-map-marker-override-store';
@@ -37,6 +38,12 @@ interface MatchedRoad {
   projection: NonNullable<ReturnType<typeof projectPointOntoMapRoad>>;
 }
 
+export interface MaterialRoadMatch {
+  id: string;
+  label: string;
+  projection: MapRoadProjection;
+}
+
 const endpointCircleDistance = 80;
 const materialLocationCache = createTimedCache<MaterialLocationEntry[]>(60 * 1000);
 
@@ -49,6 +56,23 @@ export async function listMaterialLocations(): Promise<MaterialLocationOption[]>
     address,
     coordinate: getRepresentativeCoordinate(geometry),
   }));
+}
+
+/**
+ * 返回给物料来源使用的最近道路切线，供站点线路的东西或南北方向判定复用。
+ */
+export async function findMaterialRoadAtCoordinate(
+  coordinate: [number, number],
+): Promise<MaterialRoadMatch | undefined> {
+  const road = findNearestRoad(coordinate, await readMaterialLocations());
+  if (!road) {
+    return undefined;
+  }
+  return {
+    id: road.entry.id,
+    label: road.entry.label,
+    projection: road.projection,
+  };
 }
 
 export async function resolveMaterialLocationInput(input: {

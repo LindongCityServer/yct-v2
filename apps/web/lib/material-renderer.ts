@@ -18,7 +18,8 @@ const prohibitedSourcePatterns = [
   /\b(?:xlink:)?href\s*=\s*["']\s*(?:javascript|data|https?:|\/\/)/i,
   /\bsrc\s*=\s*["']\s*(?:javascript|data|https?:|\/\/)/i,
   /@import\b/i,
-  /url\s*\(/i,
+  // 仅允许同一 SVG 文档中定义的裁剪、渐变等本地片段引用，例如 url(#clip)。
+  /url\s*\(\s*(?:["']\s*)?(?!#)/i,
 ];
 
 let harmonyOsFontFaceCss: string | undefined;

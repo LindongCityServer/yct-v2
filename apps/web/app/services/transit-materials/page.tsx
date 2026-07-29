@@ -9,7 +9,7 @@ export default function TransitMaterialsPage() {
       <MaterialStudioPanel
         title="公共交通导视物料生成"
         families={['bus_stop']}
-        serverSource="transit_line"
+        serverSource="transit_station"
       />
     </SecondaryShell>
   );

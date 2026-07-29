@@ -148,7 +148,8 @@ export const materialTemplateDraftSchema = z
     title: z.string().trim().min(1).max(100),
     description: z.string().trim().max(500).optional(),
     family: z.enum(['road_sign', 'address_sign', 'bus_stop', 'custom']),
-    source: z.string().trim().min(1).max(160_000),
+    // Figma 导出的精确 SVG 路径可能超过 160 KiB，例如复杂公交站牌详情模板。
+    source: z.string().trim().min(1).max(384_000),
     fields: z.array(materialTemplateFieldSchema).min(1).max(80),
     typographyProfile: materialTypographyProfileSchema.optional(),
     defaultCanvas: materialCanvasSchema,
@@ -239,6 +240,13 @@ export const materialServerSourceSchema = z.discriminatedUnion('kind', [
     kind: z.literal('transit_line'),
     lineId: idSchema,
     stationSourceId: idSchema.optional(),
+  }),
+  z.object({
+    kind: z.literal('transit_station'),
+    stationMarkerId: idSchema,
+    direction: z.enum(['east', 'west', 'north', 'south']),
+    lineIds: z.array(idSchema).min(1).max(12),
+    terminalRole: z.enum(['origin', 'terminal']).optional(),
   }),
   z.object({
     kind: z.literal('map_location'),

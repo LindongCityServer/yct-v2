@@ -59,7 +59,7 @@ interface MaterialExportAudit {
   actorId: string;
   templateId: string;
   templateVersion: number;
-  sourceKind: 'manual' | 'transit_line' | 'map_location' | 'road_coordinate';
+  sourceKind: 'manual' | 'transit_line' | 'transit_station' | 'map_location' | 'road_coordinate';
   sourceRef?: string;
   draftId?: string;
   outputWidthPx: number;
@@ -711,6 +711,7 @@ function formatMaterialSource(item: MaterialExportAudit): string {
   }
   const sourceLabel = {
     transit_line: '服务器线路',
+    transit_station: '服务器公交站',
     map_location: '服务器地点',
     road_coordinate: '道路安装坐标',
   }[item.sourceKind];

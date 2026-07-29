@@ -5,7 +5,7 @@ import { appPath } from '../lib/app-paths';
 import { EmbeddedMapLocationPicker } from './embedded-map-location-picker';
 
 type MaterialFamily = 'road_sign' | 'address_sign' | 'bus_stop' | 'custom';
-type MaterialServerSource = 'transit_line' | 'map_location' | 'road_coordinate';
+type MaterialServerSource = 'transit_line' | 'transit_station' | 'map_location' | 'road_coordinate';
 
 interface MaterialField {
   key: string;
@@ -51,6 +51,30 @@ interface TransitLineOption {
   }>;
 }
 
+interface TransitStationLineOption {
+  id: string;
+  name: string;
+  operator?: string;
+  firstLastBus: string;
+  forwardStations: string;
+  reverseStations: string;
+  direction: 'east' | 'west' | 'north' | 'south' | 'unknown';
+  isOriginAtStation: boolean;
+  isTerminalAtStation: boolean;
+}
+
+interface TransitStationOption {
+  markerId: string;
+  stationSourceId: string;
+  stationName: string;
+  coordinate?: [number, number];
+  directionOptions: Array<{
+    value: 'east' | 'west' | 'north' | 'south';
+    label: string;
+  }>;
+  lines: TransitStationLineOption[];
+}
+
 interface MaterialLocationOption {
   id: string;
   label: string;
@@ -92,6 +116,7 @@ export function MaterialStudioPanel({
   const [items, setItems] = useState<PublishedMaterialTemplate[]>([]);
   const [drafts, setDrafts] = useState<MaterialDraft[]>([]);
   const [transitLines, setTransitLines] = useState<TransitLineOption[]>([]);
+  const [transitStations, setTransitStations] = useState<TransitStationOption[]>([]);
   const [locations, setLocations] = useState<MaterialLocationOption[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [mode, setMode] = useState<StudioMode>('manual');
@@ -99,6 +124,12 @@ export function MaterialStudioPanel({
   const [canvas, setCanvas] = useState<MaterialCanvas | null>(null);
   const [selectedLineId, setSelectedLineId] = useState('');
   const [selectedStationSourceId, setSelectedStationSourceId] = useState('');
+  const [selectedTransitStationMarkerId, setSelectedTransitStationMarkerId] = useState('');
+  const [transitDirection, setTransitDirection] = useState<'east' | 'west' | 'north' | 'south'>(
+    'east',
+  );
+  const [transitTerminalRole, setTransitTerminalRole] = useState<'origin' | 'terminal'>('origin');
+  const [selectedTransitLineIds, setSelectedTransitLineIds] = useState<string[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState('');
   const [locationQuery, setLocationQuery] = useState('');
   const [roadCoordinate, setRoadCoordinate] = useState<[number, number] | null>(null);
@@ -134,6 +165,9 @@ export function MaterialStudioPanel({
     [drafts],
   );
   const selectedLine = transitLines.find((line) => line.id === selectedLineId);
+  const selectedTransitStation = transitStations.find(
+    (station) => station.markerId === selectedTransitStationMarkerId,
+  );
   const activeServerSource = selected
     ? (serverSources?.[selected.template.family] ?? serverSource)
     : serverSource;
@@ -157,6 +191,33 @@ export function MaterialStudioPanel({
       })
       .slice(0, 100);
   }, [locationQuery, locations]);
+  const requiresTransitTerminalRole = Boolean(
+    selected?.template.fields.some((field) => field.key === 'terminalRole'),
+  );
+  const selectableTransitLines = useMemo(
+    () =>
+      (selectedTransitStation?.lines ?? []).filter(
+        (line) =>
+          line.direction === transitDirection &&
+          (!requiresTransitTerminalRole ||
+            (transitTerminalRole === 'origin'
+              ? line.isOriginAtStation
+              : line.isTerminalAtStation)),
+      ),
+    [
+      requiresTransitTerminalRole,
+      selectedTransitStation,
+      transitDirection,
+      transitTerminalRole,
+    ],
+  );
+  const maximumTransitLineCount = useMemo(() => {
+    const slots = selected?.template.fields
+      .map((field) => field.key.match(/^route(\d+)Number$/)?.[1])
+      .filter((value): value is string => Boolean(value))
+      .map(Number);
+    return slots?.length ? Math.max(...slots) : 1;
+  }, [selected?.id, selected?.template.fields]);
 
   const loadWorkspace = async () => {
     try {
@@ -204,6 +265,23 @@ export function MaterialStudioPanel({
                 setSelectedStationSourceId(
                   (current) => current || lines[0]?.stations[0]?.stationSourceId || '',
                 );
+              }
+            })
+            .catch(() => undefined),
+        );
+      }
+      if (
+        serverSource === 'transit_station' ||
+        Object.values(serverSources ?? {}).includes('transit_station')
+      ) {
+        pendingRequests.push(
+          fetch(appPath('/api/materials/transit-stations'), { cache: 'no-store' })
+            .then(async (response) => {
+              const data = (await response.json()) as { items?: TransitStationOption[] };
+              if (response.ok) {
+                const stations = data.items ?? [];
+                setTransitStations(stations);
+                setSelectedTransitStationMarkerId((current) => current || stations[0]?.markerId || '');
               }
             })
             .catch(() => undefined),
@@ -282,6 +360,24 @@ export function MaterialStudioPanel({
     }
   }, [activeServerSource, locations, roadCoordinate]);
 
+  useEffect(() => {
+    const selectableIds = new Set(selectableTransitLines.map((line) => line.id));
+    setSelectedTransitLineIds((current) => {
+      const retained = current.filter((lineId) => selectableIds.has(lineId));
+      if (retained.length > 0) {
+        return retained.slice(0, maximumTransitLineCount);
+      }
+      return selectableTransitLines.slice(0, maximumTransitLineCount).map((line) => line.id);
+    });
+  }, [maximumTransitLineCount, selectableTransitLines]);
+
+  useEffect(() => {
+    const options = selectedTransitStation?.directionOptions ?? [];
+    if (options.length && !options.some((option) => option.value === transitDirection)) {
+      setTransitDirection(options[0]!.value);
+    }
+  }, [selectedTransitStation, transitDirection]);
+
   useEffect(
     () => () => {
       if (previewUrl) {
@@ -347,6 +443,15 @@ export function MaterialStudioPanel({
         kind: 'transit_line' as const,
         lineId: selectedLineId,
         stationSourceId: selectedStationSourceId || undefined,
+      };
+    }
+    if (activeServerSource === 'transit_station' && selectedTransitStationMarkerId) {
+      return {
+        kind: 'transit_station' as const,
+        stationMarkerId: selectedTransitStationMarkerId,
+        direction: transitDirection,
+        lineIds: selectedTransitLineIds,
+        terminalRole: requiresTransitTerminalRole ? transitTerminalRole : undefined,
       };
     }
     if (activeServerSource === 'map_location' && selectedLocationId) {
@@ -567,6 +672,118 @@ export function MaterialStudioPanel({
         <div className="material-studio-editor">
           {!selected ? (
             <p className="material-studio-empty">暂无可用模板。</p>
+          ) : mode === 'server' && activeServerSource === 'transit_station' ? (
+            <>
+              <label className="material-field">
+                <span>服务器公交站</span>
+                <select
+                  value={selectedTransitStationMarkerId}
+                  onChange={(event) => {
+                    setSelectedTransitStationMarkerId(event.currentTarget.value);
+                    clearPreview();
+                  }}
+                  disabled={isBusy || !transitStations.length}
+                >
+                  {transitStations.map((station) => (
+                    <option key={station.markerId} value={station.markerId}>
+                      {station.stationName} · {station.lines.length} 条公交线路
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="material-field">
+                <span>道路行车方向</span>
+                <select
+                  value={transitDirection}
+                  onChange={(event) => {
+                    setTransitDirection(
+                      event.currentTarget.value as 'east' | 'west' | 'north' | 'south',
+                    );
+                    clearPreview();
+                  }}
+                  disabled={
+                    isBusy ||
+                    !selectedTransitStation ||
+                    !selectedTransitStation.directionOptions.length
+                  }
+                >
+                  {selectedTransitStation?.directionOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {requiresTransitTerminalRole ? (
+                <label className="material-field">
+                  <span>站点属性</span>
+                  <select
+                    value={transitTerminalRole}
+                    onChange={(event) => {
+                      setTransitTerminalRole(event.currentTarget.value as 'origin' | 'terminal');
+                      clearPreview();
+                    }}
+                    disabled={isBusy || !selectedTransitStation}
+                  >
+                    <option value="origin">始发站</option>
+                    <option value="terminal">终点站</option>
+                  </select>
+                </label>
+              ) : null}
+              <fieldset className="material-canvas-editor" disabled={isBusy || !selectedTransitStation}>
+                <legend>同方向线路（最多 {maximumTransitLineCount} 条）</legend>
+                {selectableTransitLines.length ? (
+                  selectableTransitLines.map((line) => {
+                    const checked = selectedTransitLineIds.includes(line.id);
+                    return (
+                      <label className="material-checkbox-row" key={line.id}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={
+                            !checked && selectedTransitLineIds.length >= maximumTransitLineCount
+                          }
+                          onChange={(event) => {
+                            const nextChecked = event.currentTarget.checked;
+                            setSelectedTransitLineIds((current) =>
+                              nextChecked
+                                ? [...current, line.id].slice(0, maximumTransitLineCount)
+                                : current.filter((lineId) => lineId !== line.id),
+                            );
+                            clearPreview();
+                          }}
+                        />
+                        <span>
+                          {line.name} · {line.firstLastBus}
+                          {line.operator ? ` · ${line.operator}` : ''}
+                          {line.isOriginAtStation ? ' · 当前站始发' : ''}
+                          {line.isTerminalAtStation ? ' · 当前站终到' : ''}
+                        </span>
+                      </label>
+                    );
+                  })
+                ) : (
+                  <p className="muted">当前方向没有可用线路。</p>
+                )}
+              </fieldset>
+              <div className="material-action-row">
+                <PreviewButton
+                  onClick={() => void requestPreview()}
+                  disabled={isBusy || !selectedTransitLineIds.length}
+                />
+                <button
+                  type="button"
+                  className="is-primary"
+                  onClick={() => void exportFromServer()}
+                  disabled={isBusy || !selectedTransitLineIds.length}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    download
+                  </span>
+                  下载图片
+                </button>
+              </div>
+            </>
           ) : mode === 'server' && activeServerSource === 'transit_line' ? (
             <>
               <label className="material-field">
