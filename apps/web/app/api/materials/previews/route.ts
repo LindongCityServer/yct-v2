@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  if (parsed.data.mode === 'manual') {
+  if (parsed.data.mode === 'manual' && !isLocalDevelopmentPreview(request)) {
     const user = await requireActiveLdpassUser(request);
     if (!user.ok) {
       return user.response;
@@ -39,4 +39,11 @@ export async function POST(request: NextRequest) {
       'X-Yct-Material-Preview-Height': String(result.heightPx),
     },
   });
+}
+
+function isLocalDevelopmentPreview(request: NextRequest): boolean {
+  if (process.env.NODE_ENV !== 'development') {
+    return false;
+  }
+  return ['localhost', '127.0.0.1', '::1', '[::1]'].includes(request.nextUrl.hostname);
 }

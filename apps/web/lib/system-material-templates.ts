@@ -18,12 +18,12 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
   <rect x="4" y="108" width="248" height="20" fill="#ffffff"/>
   <path d="{{select.arrowMode.leftPath}}" fill="#ffffff"/>
   <path d="{{select.arrowMode.rightPath}}" fill="#ffffff"/>
-  <text x="16" y="92" fill="{{signColor}}" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="700" text-anchor="middle">{{select.directionMode.leftText}}</text>
-  <text x="240" y="92" fill="{{signColor}}" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="700" text-anchor="middle">{{select.directionMode.rightText}}</text>
-  <text x="0" y="100" transform="translate(128 0) scale({{fit.mainText.scaleX}} 1)" fill="#ffffff" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="30" font-weight="700" text-anchor="middle" letter-spacing="{{fit.mainText.letterSpacing}}">{{mainText}}</text>
-  <text x="14" y="125" fill="{{signColor}}" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">{{select.directionMode.leftCode}}</text>
-  <text x="0" y="125" transform="translate(128 0) scale({{fit.secondaryText.scaleX}} 1)" fill="{{signColor}}" font-family="Arial, Microsoft YaHei, sans-serif" font-size="16" font-weight="700" text-anchor="middle" letter-spacing="{{fit.secondaryText.letterSpacing}}">{{secondaryText}}</text>
-  <text x="242" y="125" fill="{{signColor}}" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">{{select.directionMode.rightCode}}</text>
+  <text x="24" y="92" fill="{{signColor}}" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="700" text-anchor="middle">{{select.directionMode.leftText}}</text>
+  <text x="232" y="92" fill="{{signColor}}" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="700" text-anchor="middle">{{select.directionMode.rightText}}</text>
+  <text x="0" y="100" transform="translate(128 0) scale({{fit.roadName.scaleX}} 1)" fill="#ffffff" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="30" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadName.letterSpacing}}">{{roadName}}</text>
+  <text x="22" y="125" fill="{{signColor}}" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">{{select.directionMode.leftCode}}</text>
+  <text x="0" y="125" transform="translate(128 0) scale({{fit.roadNamePinyin.scaleX}} 1)" fill="{{signColor}}" font-family="Arial, Microsoft YaHei, sans-serif" font-size="16" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadNamePinyin.letterSpacing}}">{{roadNamePinyin}}</text>
+  <text x="234" y="125" fill="{{signColor}}" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">{{select.directionMode.rightCode}}</text>
 </svg>`,
         fields: [
           {
@@ -38,20 +38,20 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             ],
           },
           {
-            key: 'mainText',
+            key: 'roadName',
             label: '道路主名称',
             kind: 'text',
             required: true,
             maxLength: 24,
-            textFit: { maxWidth: 164, fontSize: 30, maxLetterSpacing: 3 },
+            textFit: { maxWidth: 164, fontSize: 30, maxLetterSpacing: 9 },
           },
           {
-            key: 'secondaryText',
+            key: 'roadNamePinyin',
             label: '道路副名称',
             kind: 'text',
             required: true,
             maxLength: 32,
-            textFit: { maxWidth: 176, fontSize: 16, maxLetterSpacing: 1.5 },
+            textFit: { maxWidth: 176, fontSize: 16, maxLetterSpacing: 0 },
           },
           {
             key: 'directionMode',
@@ -83,16 +83,16 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             ],
             selectVariableValues: {
               dual_arrow: {
-                leftPath: 'M4 88 L14 73 V81 H28 V95 H14 V103 Z',
-                rightPath: 'M252 88 L242 73 V81 H228 V95 H242 V103 Z',
+                leftPath: 'M12 88 L22 73 V81 H36 V95 H22 V103 Z',
+                rightPath: 'M244 88 L234 73 V81 H220 V95 H234 V103 Z',
               },
               left_circle_right_arrow: {
-                leftPath: 'M16 76 A12 12 0 1 0 16 100 A12 12 0 1 0 16 76 Z',
-                rightPath: 'M252 88 L242 73 V81 H228 V95 H242 V103 Z',
+                leftPath: 'M24 78 A10 10 0 1 0 24 98 A10 10 0 1 0 24 78 Z',
+                rightPath: 'M244 88 L234 73 V81 H220 V95 H234 V103 Z',
               },
               left_arrow_right_circle: {
-                leftPath: 'M4 88 L14 73 V81 H28 V95 H14 V103 Z',
-                rightPath: 'M240 76 A12 12 0 1 0 240 100 A12 12 0 1 0 240 76 Z',
+                leftPath: 'M12 88 L22 73 V81 H36 V95 H22 V103 Z',
+                rightPath: 'M232 78 A10 10 0 1 0 232 98 A10 10 0 1 0 232 78 Z',
               },
             },
           },
@@ -123,14 +123,15 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
         source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 128">
   <rect width="256" height="128" fill="#0054C2"/>
   <rect x="143" y="5" width="109" height="118" fill="#F8FADE"/>
-  <text x="0" y="45" transform="translate(70 0) scale({{fit.mainText.scaleX}} 1)" fill="#ffffff" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="32" font-weight="700" text-anchor="middle" letter-spacing="{{fit.mainText.letterSpacing}}">{{mainText}}</text>
-  <text x="0" y="73" transform="translate(70 0) scale({{fit.secondaryText.scaleX}} 1)" fill="#ffffff" font-family="Arial, Microsoft YaHei, sans-serif" font-size="17" font-weight="700" text-anchor="middle" letter-spacing="{{fit.secondaryText.letterSpacing}}">{{secondaryText}}</text>
-  <text x="0" y="111" transform="translate(70 0) scale({{fit.postalText.scaleX}} 1)" fill="#ffffff" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="15" font-weight="400" text-anchor="middle" letter-spacing="{{fit.postalText.letterSpacing}}">{{postalText}}</text>
-  <text x="0" y="109" transform="translate(197.5 0) scale({{fit.buildingNumber.scaleX}} 1)" fill="#A40000" font-family="Arial, Microsoft YaHei, sans-serif" font-size="98" font-weight="700" text-anchor="middle" letter-spacing="{{fit.buildingNumber.letterSpacing}}">{{buildingNumber}}</text>
+  <text x="0" y="45" transform="translate(70 0) scale({{fit.roadName.scaleX}} 1)" fill="#ffffff" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="32" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadName.letterSpacing}}">{{roadName}}</text>
+  <text x="0" y="73" transform="translate(70 0) scale({{fit.roadNamePinyin.scaleX}} 1)" fill="#ffffff" font-family="Arial, Microsoft YaHei, sans-serif" font-size="17" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadNamePinyin.letterSpacing}}">{{roadNamePinyin}}</text>
+  <text x="0" y="111" transform="translate(70 0) scale({{fit.postalCode.scaleX}} 1)" fill="#ffffff" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="15" font-weight="400" text-anchor="middle" letter-spacing="{{fit.postalCode.letterSpacing}}">邮政编码:{{postalCode}}</text>
+  <text x="0" y="109" transform="translate(190 0) scale({{fit.buildingNumber.scaleX}} 1)" fill="#A40000" font-family="Arial, Microsoft YaHei, sans-serif" font-size="98" font-weight="700" text-anchor="middle" letter-spacing="{{fit.buildingNumber.letterSpacing}}">{{buildingNumber}}</text>
+  <text x="246" y="112" fill="#A40000" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="22" font-weight="700" text-anchor="end">{{buildingSuffix}}</text>
 </svg>`,
         fields: [
           {
-            key: 'mainText',
+            key: 'roadName',
             label: '地名或道路名称',
             kind: 'text',
             required: true,
@@ -138,7 +139,7 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             textFit: { maxWidth: 130, fontSize: 32, maxLetterSpacing: 3 },
           },
           {
-            key: 'secondaryText',
+            key: 'roadNamePinyin',
             label: '地名或道路副名称',
             kind: 'text',
             required: true,
@@ -146,12 +147,12 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             textFit: { maxWidth: 126, fontSize: 17, maxLetterSpacing: 1.5 },
           },
           {
-            key: 'postalText',
-            label: '邮政信息',
+            key: 'postalCode',
+            label: '邮政编码',
             kind: 'text',
             required: true,
             maxLength: 32,
-            textFit: { maxWidth: 126, fontSize: 15, maxLetterSpacing: 1 },
+            textFit: { maxWidth: 68, fontSize: 15, maxLetterSpacing: 1 },
           },
           {
             key: 'buildingNumber',
@@ -159,7 +160,73 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             kind: 'text',
             required: true,
             maxLength: 8,
-            textFit: { maxWidth: 92, fontSize: 98, maxLetterSpacing: 0 },
+            textFit: { maxWidth: 76, fontSize: 98, maxLetterSpacing: 0 },
+          },
+          {
+            key: 'buildingSuffix',
+            label: '门牌附标',
+            kind: 'text',
+            maxLength: 12,
+          },
+        ],
+        defaultCanvas: {
+          widthM: 2,
+          heightM: 1,
+          pxPerMeter: 128,
+          alignToTile: true,
+          tileSizePx: 128,
+        },
+        createdBy: systemActorId,
+        createdAt: systemPublishedAt,
+        publishedBy: systemActorId,
+        publishedAt: systemPublishedAt,
+      },
+    ],
+  },
+  {
+    id: 'system_material_nostalgic_building_address',
+    versions: [
+      {
+        version: 1,
+        status: 'published',
+        title: '怀旧楼栋地名标志',
+        description: '按怀旧楼牌样式制作的竖排道路名称与特定数字字形门牌号。',
+        family: 'address_sign',
+        source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 128">
+  <rect x="2" y="2" width="252" height="124" rx="14" fill="#FFFFFF"/>
+  <rect x="9" y="9" width="238" height="110" rx="6" fill="#000099"/>
+  <g transform="translate(13 16)" fill="#FFFFFF">{{glyph.roadName}}</g>
+  <g transform="translate(80 21)" fill="#FFFFFF">{{glyph.buildingNumber}}</g>
+  <text x="238" y="108" fill="#FFFFFF" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="20" font-weight="700" text-anchor="end">{{buildingSuffix}}</text>
+</svg>`,
+        fields: [
+          {
+            key: 'roadName',
+            label: '道路名称',
+            kind: 'text',
+            required: true,
+            maxLength: 16,
+            glyph: {
+              renderer: 'chill_jinshu_vertical',
+              layoutWidth: 58,
+              layoutHeight: 96,
+              fontSize: 26,
+              maxLetterSpacing: 6,
+            },
+          },
+          {
+            key: 'buildingNumber',
+            label: '门牌主号',
+            kind: 'text',
+            required: true,
+            maxLength: 8,
+            glyph: { renderer: 'nostalgic_digits', layoutWidth: 150, layoutHeight: 85 },
+          },
+          {
+            key: 'buildingSuffix',
+            label: '门牌附标',
+            kind: 'text',
+            maxLength: 12,
           },
         ],
         defaultCanvas: {

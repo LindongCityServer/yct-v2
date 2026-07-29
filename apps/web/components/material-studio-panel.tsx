@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { EmbeddedMapLocationPicker } from './embedded-map-location-picker';
 
 type MaterialFamily = 'road_sign' | 'address_sign' | 'bus_stop' | 'custom';
+type MaterialServerSource = 'transit_line' | 'map_location' | 'road_coordinate';
 
 interface MaterialField {
   key: string;
@@ -54,6 +56,7 @@ interface MaterialLocationOption {
   label: string;
   categoryId: string;
   address?: string;
+  coordinate?: [number, number];
 }
 
 interface MaterialDraft {
@@ -71,11 +74,13 @@ export function MaterialStudioPanel({
   title,
   families,
   serverSource,
+  serverSources,
   serverFamilies,
 }: Readonly<{
   title: string;
   families: MaterialFamily[];
-  serverSource?: 'transit_line' | 'map_location';
+  serverSource?: MaterialServerSource;
+  serverSources?: Partial<Record<MaterialFamily, MaterialServerSource>>;
   serverFamilies?: MaterialFamily[];
 }>) {
   const [items, setItems] = useState<PublishedMaterialTemplate[]>([]);
@@ -90,6 +95,8 @@ export function MaterialStudioPanel({
   const [selectedStationSourceId, setSelectedStationSourceId] = useState('');
   const [selectedLocationId, setSelectedLocationId] = useState('');
   const [locationQuery, setLocationQuery] = useState('');
+  const [roadCoordinate, setRoadCoordinate] = useState<[number, number] | null>(null);
+  const [tileTemplate, setTileTemplate] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewSize, setPreviewSize] = useState<{ width: number; height: number } | null>(null);
   const [statusText, setStatusText] = useState('正在读取模板');
@@ -110,8 +117,11 @@ export function MaterialStudioPanel({
     )
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
   const selectedLine = transitLines.find((line) => line.id === selectedLineId);
+  const activeServerSource = selected
+    ? serverSources?.[selected.template.family] ?? serverSource
+    : serverSource;
   const canUseServerSource = Boolean(
-    serverSource &&
+    activeServerSource &&
     selected &&
     (!serverFamilies || serverFamilies.includes(selected.template.family)),
   );
@@ -162,7 +172,7 @@ export function MaterialStudioPanel({
           })
           .catch(() => undefined),
       ];
-      if (serverSource === 'transit_line') {
+      if (serverSource === 'transit_line' || Object.values(serverSources ?? {}).includes('transit_line')) {
         pendingRequests.push(
           fetch(appPath('/api/materials/transit-lines'), { cache: 'no-store' })
             .then(async (response) => {
@@ -179,7 +189,13 @@ export function MaterialStudioPanel({
             .catch(() => undefined),
         );
       }
-      if (serverSource === 'map_location') {
+      if (
+        serverSource === 'map_location' ||
+        serverSource === 'road_coordinate' ||
+        Object.values(serverSources ?? {}).some(
+          (source) => source === 'map_location' || source === 'road_coordinate',
+        )
+      ) {
         pendingRequests.push(
           fetch(appPath('/api/materials/locations'), { cache: 'no-store' })
             .then(async (response) => {
@@ -189,6 +205,22 @@ export function MaterialStudioPanel({
                 setLocations(nextLocations);
                 setSelectedLocationId((current) => current || nextLocations[0]?.id || '');
               }
+            })
+            .catch(() => undefined),
+        );
+        pendingRequests.push(
+          fetch(appPath('/api/map/tile-providers'), { cache: 'no-store' })
+            .then(async (response) => {
+              const data = (await response.json()) as {
+                items?: Array<{ sourceKind?: string; tileTemplate?: string }>;
+              };
+              if (!response.ok) {
+                return;
+              }
+              const provider = (data.items ?? []).find(
+                (item) => item.sourceKind === 'safe-https-static' && item.tileTemplate,
+              );
+              setTileTemplate(provider?.tileTemplate ?? null);
             })
             .catch(() => undefined),
         );
@@ -217,6 +249,15 @@ export function MaterialStudioPanel({
       setMode('manual');
     }
   }, [canUseServerSource, mode]);
+
+  useEffect(() => {
+    if (activeServerSource === 'road_coordinate' && !roadCoordinate) {
+      const initialCoordinate = locations.find((location) => location.coordinate)?.coordinate;
+      if (initialCoordinate) {
+        setRoadCoordinate(initialCoordinate);
+      }
+    }
+  }, [activeServerSource, locations, roadCoordinate]);
 
   useEffect(
     () => () => {
@@ -269,15 +310,18 @@ export function MaterialStudioPanel({
   };
 
   const buildServerSource = () => {
-    if (serverSource === 'transit_line' && selectedLineId) {
+    if (activeServerSource === 'transit_line' && selectedLineId) {
       return {
         kind: 'transit_line' as const,
         lineId: selectedLineId,
         stationSourceId: selectedStationSourceId || undefined,
       };
     }
-    if (serverSource === 'map_location' && selectedLocationId) {
+    if (activeServerSource === 'map_location' && selectedLocationId) {
       return { kind: 'map_location' as const, locationId: selectedLocationId };
+    }
+    if (activeServerSource === 'road_coordinate' && roadCoordinate) {
+      return { kind: 'road_coordinate' as const, x: roadCoordinate[0], z: roadCoordinate[1] };
     }
     return undefined;
   };
@@ -487,7 +531,7 @@ export function MaterialStudioPanel({
         <div className="material-studio-editor">
           {!selected ? (
             <p className="material-studio-empty">暂无可用模板。</p>
-          ) : mode === 'server' && serverSource === 'transit_line' ? (
+          ) : mode === 'server' && activeServerSource === 'transit_line' ? (
             <>
               <label className="material-field">
                 <span>服务器线路</span>
@@ -542,7 +586,7 @@ export function MaterialStudioPanel({
                 </button>
               </div>
             </>
-          ) : mode === 'server' && serverSource === 'map_location' ? (
+          ) : mode === 'server' && activeServerSource === 'map_location' ? (
             <>
               <label className="material-field">
                 <span>搜索服务器地点</span>
@@ -580,6 +624,76 @@ export function MaterialStudioPanel({
                   className="is-primary"
                   onClick={() => void exportFromServer()}
                   disabled={isBusy || !selectedLocationId}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    download
+                  </span>
+                  下载图片
+                </button>
+              </div>
+            </>
+          ) : mode === 'server' && activeServerSource === 'road_coordinate' ? (
+            <>
+              <div className="material-field-grid">
+                <label className="material-field">
+                  <span>安装坐标 X</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={roadCoordinate?.[0] ?? ''}
+                    disabled={isBusy}
+                    onChange={(event) => {
+                      const value = Number(event.currentTarget.value);
+                      if (!Number.isFinite(value)) {
+                        return;
+                      }
+                      setRoadCoordinate((current) => [value, current?.[1] ?? 0]);
+                      clearPreview();
+                    }}
+                  />
+                </label>
+                <label className="material-field">
+                  <span>安装坐标 Z</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={roadCoordinate?.[1] ?? ''}
+                    disabled={isBusy}
+                    onChange={(event) => {
+                      const value = Number(event.currentTarget.value);
+                      if (!Number.isFinite(value)) {
+                        return;
+                      }
+                      setRoadCoordinate((current) => [current?.[0] ?? 0, value]);
+                      clearPreview();
+                    }}
+                  />
+                </label>
+              </div>
+              <EmbeddedMapLocationPicker
+                ariaLabel="在服务器地图预览中点选路牌安装坐标"
+                footer={
+                  roadCoordinate
+                    ? `点击地图确定安装坐标 · X ${formatCoordinate(roadCoordinate[0])} / Z ${formatCoordinate(roadCoordinate[1])}`
+                    : '请填写安装坐标后在地图中微调'
+                }
+                onChange={(coordinate) => {
+                  setRoadCoordinate(coordinate);
+                  clearPreview();
+                }}
+                tileTemplate={tileTemplate}
+                value={roadCoordinate}
+              />
+              <div className="material-action-row">
+                <PreviewButton
+                  onClick={() => void requestPreview()}
+                  disabled={isBusy || !roadCoordinate}
+                />
+                <button
+                  type="button"
+                  className="is-primary"
+                  onClick={() => void exportFromServer()}
+                  disabled={isBusy || !roadCoordinate}
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">
                     download
@@ -637,7 +751,9 @@ export function MaterialStudioPanel({
           </div>
           <div className="material-preview-stage">
             {previewUrl ? (
-              <img src={previewUrl} alt={`${selected?.template.title ?? title}预览`} />
+              <div className="material-preview-canvas">
+                <img src={previewUrl} alt={`${selected?.template.title ?? title}预览`} />
+              </div>
             ) : (
               <span>尚未生成预览</span>
             )}
@@ -799,4 +915,8 @@ function MaterialFieldEditor({
       )}
     </label>
   );
+}
+
+function formatCoordinate(value: number): string {
+  return String(Math.round(value * 100) / 100);
 }

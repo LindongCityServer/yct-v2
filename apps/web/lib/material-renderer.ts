@@ -6,6 +6,7 @@ import type {
   MaterialTemplateVersion,
   MaterialTypographyProfile,
 } from '@yct/contracts';
+import { renderMaterialGlyph } from './material-glyphs';
 
 const prohibitedSourcePatterns = [
   /<!doctype/i,
@@ -127,7 +128,13 @@ export function renderMaterialTemplateToSvg(input: {
     'typography.secondaryFontPx': String(typography.secondaryFontPx),
     'typography.captionFontPx': String(typography.captionFontPx),
   };
+  const trustedContext = new Set<string>();
   for (const field of input.template.fields) {
+    if (field.glyph) {
+      const key = `glyph.${field.key}`;
+      context[key] = renderMaterialGlyph(values[field.key], field.glyph);
+      trustedContext.add(key);
+    }
     if (!field.textFit) {
       if (field.kind === 'select' && field.selectVariableValues) {
         const selectedVariables = field.selectVariableValues[values[field.key]];
@@ -142,7 +149,7 @@ export function renderMaterialTemplateToSvg(input: {
     context[`fit.${field.key}.scaleX`] = formatSvgNumber(fit.scaleX);
   }
   const resolved = input.template.source.replace(/{{([^}]+)}}/g, (_match, key: string) =>
-    escapeXml(context[key] ?? ''),
+    trustedContext.has(key) ? context[key] ?? '' : escapeXml(context[key] ?? ''),
   );
   const sourceOpenTag = resolved.match(/^<svg\b[^>]*>/i)?.[0];
   const sourceViewBox = sourceOpenTag?.match(/\bviewBox\s*=\s*["']([^"']+)["']/i)?.[1];
@@ -196,6 +203,10 @@ function isAllowedTemplateVariable(variable: string, fields: MaterialTemplateFie
   const fitMatch = variable.match(/^fit\.([a-z][a-zA-Z0-9_]*)\.(letterSpacing|scaleX)$/);
   if (fitMatch) {
     return fields.some((field) => field.key === fitMatch[1] && field.textFit);
+  }
+  const glyphMatch = variable.match(/^glyph\.([a-z][a-zA-Z0-9_]*)$/);
+  if (glyphMatch) {
+    return fields.some((field) => field.key === glyphMatch[1] && field.glyph);
   }
   const selectMatch = variable.match(/^select\.([a-z][a-zA-Z0-9_]*)\.([a-z][a-zA-Z0-9_]*)$/);
   return Boolean(

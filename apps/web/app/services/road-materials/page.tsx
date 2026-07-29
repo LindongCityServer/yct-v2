@@ -9,8 +9,7 @@ export default function RoadMaterialsPage() {
       <MaterialStudioPanel
         title="路牌物料生成"
         families={['road_sign', 'address_sign']}
-        serverSource="map_location"
-        serverFamilies={['road_sign']}
+        serverSources={{ road_sign: 'road_coordinate', address_sign: 'map_location' }}
       />
     </SecondaryShell>
   );

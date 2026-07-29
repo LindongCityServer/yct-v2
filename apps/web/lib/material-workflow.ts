@@ -37,7 +37,10 @@ import {
   listMaterialTemplateRecords,
   writeMaterialTemplateRecord,
 } from './material-template-store';
-import { resolveMaterialLocationInput } from './material-location-source';
+import {
+  resolveMaterialLocationInput,
+  resolveRoadCoordinateMaterialInput,
+} from './material-location-source';
 import { resolveTransitLineMaterialInput } from './material-transit-source';
 
 export type MaterialWorkflowResult = MaterialWorkflowSuccess | MaterialWorkflowFailure;
@@ -371,7 +374,7 @@ async function resolveMaterialExportSource(
       template: MaterialTemplateVersion;
       values: Record<string, string>;
       canvas: MaterialCanvasConfig;
-      sourceKind: 'manual' | 'transit_line' | 'map_location';
+      sourceKind: 'manual' | 'transit_line' | 'map_location' | 'road_coordinate';
       sourceRef?: string;
       draftId?: string;
     }
@@ -485,7 +488,7 @@ async function resolveServerMaterialInput(input: {
   source: MaterialServerSourceInput;
   fields: MaterialTemplateVersion['fields'];
 }): Promise<{
-  sourceKind: 'transit_line' | 'map_location';
+  sourceKind: 'transit_line' | 'map_location' | 'road_coordinate';
   values: Record<string, string>;
   sourceRef: string;
 }> {
@@ -496,6 +499,13 @@ async function resolveServerMaterialInput(input: {
       fields: input.fields,
     });
     return { ...resolved, sourceKind: 'transit_line' };
+  }
+  if (input.source.kind === 'road_coordinate') {
+    const resolved = await resolveRoadCoordinateMaterialInput({
+      coordinate: [input.source.x, input.source.z],
+      fields: input.fields,
+    });
+    return { ...resolved, sourceKind: 'road_coordinate' };
   }
   const resolved = await resolveMaterialLocationInput({
     locationId: input.source.locationId,

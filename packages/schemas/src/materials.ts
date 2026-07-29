@@ -49,6 +49,15 @@ export const materialTemplateFieldSchema = z
         maxLetterSpacing: z.number().nonnegative().max(1_024).optional(),
       })
       .optional(),
+    glyph: z
+      .object({
+        renderer: z.enum(['nostalgic_digits', 'chill_jinshu_vertical']),
+        layoutWidth: z.number().positive().max(32_768),
+        layoutHeight: z.number().positive().max(32_768),
+        fontSize: z.number().positive().max(8_192).optional(),
+        maxLetterSpacing: z.number().nonnegative().max(1_024).optional(),
+      })
+      .optional(),
   })
   .superRefine((field, ctx) => {
     if (field.kind === 'select' && !field.options?.length) {
@@ -83,6 +92,20 @@ export const materialTemplateFieldSchema = z
         code: 'custom',
         message: '自适应排字只支持文本字段。',
         path: ['textFit'],
+      });
+    }
+    if (field.glyph && field.kind !== 'text') {
+      ctx.addIssue({
+        code: 'custom',
+        message: '字形渲染只支持文本字段。',
+        path: ['glyph'],
+      });
+    }
+    if (field.glyph?.renderer === 'chill_jinshu_vertical' && !field.glyph.fontSize) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '竖排字形渲染必须指定字号。',
+        path: ['glyph', 'fontSize'],
       });
     }
   });
@@ -174,6 +197,11 @@ export const materialServerSourceSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('map_location'),
     locationId: idSchema,
+  }),
+  z.object({
+    kind: z.literal('road_coordinate'),
+    x: z.number().finite().min(-30_000_000).max(30_000_000),
+    z: z.number().finite().min(-30_000_000).max(30_000_000),
   }),
 ]);
 

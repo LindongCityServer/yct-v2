@@ -47,6 +47,7 @@ import { formatFareTextWithoutCurrencyUnit } from '../lib/fare-display';
 import {
   getMapRoadMarkerKind as getRoadMarkerKind,
   orderMapRoadCoordinates as orderRoadTracePoints,
+  shouldUseVerticalMapRoadLabel,
 } from '../lib/map-road-geometry';
 import {
   buildMapMarkerSearchText,
@@ -11857,7 +11858,7 @@ function projectRouteRoadLabels(
       {
         color: label.color,
         id: label.id,
-        isVerticalLabel: shouldUseVerticalRoadLabel(label.coordinates, [
+        isVerticalLabel: shouldUseVerticalMapRoadLabel(label.coordinates, [
           worldAnchor.x,
           worldAnchor.z,
         ]),
@@ -12508,26 +12509,6 @@ function shouldShowMarkerLabelForBrowseMode(
   return priority >= 10;
 }
 
-function shouldUseVerticalRoadLabel(
-  coordinates: Array<[number, number]>,
-  center: [number, number],
-): boolean {
-  if (coordinates.length < 2) {
-    return false;
-  }
-
-  const nearest = [...coordinates]
-    .sort((left, right) => squaredDistance(left, center) - squaredDistance(right, center))
-    .slice(0, 2);
-  const sample = [center, ...nearest];
-  const xValues = sample.map(([x]) => x);
-  const zValues = sample.map(([, z]) => z);
-  const xRange = Math.max(...xValues) - Math.min(...xValues);
-  const zRange = Math.max(...zValues) - Math.min(...zValues);
-
-  return zRange > Math.max(8, xRange * 1.35);
-}
-
 function boxesOverlap(left: MarkerCollisionBox, right: MarkerCollisionBox): boolean {
   const gap = 4;
   return !(
@@ -12798,7 +12779,7 @@ function projectLinearPoiMarkers(
       showTextLabel,
       isVerticalLabel:
         Boolean(roadKind) && showTextLabel
-          ? shouldUseVerticalRoadLabel(marker.geometry.coordinates, labelAnchor)
+          ? shouldUseVerticalMapRoadLabel(marker.geometry.coordinates, labelAnchor)
           : false,
       symbolIcon,
       endpoints,

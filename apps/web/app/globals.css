@@ -5423,14 +5423,31 @@ img.map-player-list-avatar.is-offline {
   overflow: hidden;
   border: 1px solid var(--yct-color-border-subtle);
   border-radius: var(--yct-radius-md);
-  background: var(--yct-color-surface-panel);
+  background-color: #d7e6ef;
+  background-image:
+    linear-gradient(45deg, #edf5f7 25%, transparent 25%),
+    linear-gradient(-45deg, #edf5f7 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #edf5f7 75%),
+    linear-gradient(-45deg, transparent 75%, #edf5f7 75%);
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+  background-size: 20px 20px;
 }
 
-.material-preview-stage img {
+.material-preview-canvas {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 0;
+  outline: 1px solid rgba(17, 52, 70, 0.5);
+  box-shadow: 0 3px 12px rgba(17, 52, 70, 0.18);
+}
+
+.material-preview-canvas img {
   display: block;
-  width: 100%;
+  width: auto;
+  height: auto;
+  max-width: 100%;
   max-height: 480px;
-  object-fit: contain;
 }
 
 .material-preview-stage span {
