@@ -5459,6 +5459,69 @@ img.map-player-list-avatar.is-offline {
   font-size: 13px;
 }
 
+.material-history {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding-top: var(--yct-space-4);
+  border-top: 1px solid var(--yct-color-border);
+}
+
+.material-history-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+}
+
+.material-history-heading h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.material-history-heading p {
+  margin: 4px 0 0;
+}
+
+.material-history-heading > span {
+  min-width: 42px;
+  padding: 4px var(--yct-space-2);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.material-history-list {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.material-history-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--yct-space-3);
+  align-items: center;
+  padding: var(--yct-space-3) 0;
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+.material-history-item > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.material-history-item p,
+.material-history-item small,
+.material-history-empty {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .admin-materials-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -5506,11 +5569,13 @@ img.map-player-list-avatar.is-offline {
 
 .admin-material-template p,
 .admin-material-template small,
-.admin-material-draft small {
+.admin-material-draft small,
+.admin-material-draft-content {
   margin: 0;
   overflow-wrap: anywhere;
   color: var(--yct-color-text-muted);
   font-size: 12px;
+  line-height: 1.5;
 }
 
 .admin-material-template-heading,
@@ -5598,12 +5663,14 @@ img.map-player-list-avatar.is-offline {
   }
 
   .admin-material-template,
-  .admin-material-draft {
+  .admin-material-draft,
+  .material-history-item {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .admin-material-template .admin-content-actions,
-  .admin-material-draft .admin-content-actions {
+  .admin-material-draft .admin-content-actions,
+  .material-history-item button {
     justify-content: flex-start;
   }
 

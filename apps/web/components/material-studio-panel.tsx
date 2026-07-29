@@ -63,8 +63,14 @@ interface MaterialDraft {
   id: string;
   templateId: string;
   templateVersion: number;
+  input: Record<string, string>;
+  canvas: MaterialCanvas;
   status: 'draft' | 'pending_review' | 'approved' | 'rejected';
+  createdBy: string;
   createdAt: string;
+  updatedAt: string;
+  submittedAt?: string;
+  reviewedAt?: string;
   reviewReason?: string;
 }
 
@@ -115,7 +121,18 @@ export function MaterialStudioPanel({
         draft.templateVersion === selected?.template.version &&
         draft.status === 'approved',
     )
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+  const templateVersionByKey = useMemo(() => {
+    const map = new Map<string, MaterialTemplate>();
+    for (const item of items) {
+      map.set(`${item.id}:${item.template.version}`, item.template);
+    }
+    return map;
+  }, [items]);
+  const historyDrafts = useMemo(
+    () => [...drafts].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+    [drafts],
+  );
   const selectedLine = transitLines.find((line) => line.id === selectedLineId);
   const activeServerSource = selected
     ? (serverSources?.[selected.template.family] ?? serverSource)
@@ -426,17 +443,13 @@ export function MaterialStudioPanel({
     }
   };
 
-  const exportManualDraft = async () => {
-    if (!existingDraft) {
-      setStatusText('当前模板尚无已通过审核的自定义物料。');
-      return;
-    }
+  const exportDraft = async (draft: MaterialDraft) => {
     setIsBusy(true);
     try {
       const response = await fetch(appPath('/api/materials/exports'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'custom', draftId: existingDraft.id }),
+        body: JSON.stringify({ mode: 'custom', draftId: draft.id }),
       });
       if (!response.ok) {
         const data = (await response.json()) as { message?: string };
@@ -444,12 +457,20 @@ export function MaterialStudioPanel({
         return;
       }
       await downloadBlob(response);
-      setStatusText('图片已下载。');
+      setStatusText('物料图片已下载。');
     } catch {
       setStatusText('下载物料时发生网络错误。');
     } finally {
       setIsBusy(false);
     }
+  };
+
+  const exportManualDraft = async () => {
+    if (!existingDraft) {
+      setStatusText('当前模板尚无已通过审核的自定义物料。');
+      return;
+    }
+    await exportDraft(existingDraft);
   };
 
   const exportFromServer = async () => {
@@ -775,6 +796,56 @@ export function MaterialStudioPanel({
           </div>
         </section>
       </div>
+
+      <section className="material-history" aria-labelledby="material-history-heading">
+        <div className="material-history-heading">
+          <div>
+            <h2 id="material-history-heading">我的物料历史</h2>
+            <p className="muted">已提交的自定义物料会保留在这里，审核通过后可随时下载。</p>
+          </div>
+          <span>{historyDrafts.length} 条</span>
+        </div>
+        {historyDrafts.length ? (
+          <div className="material-history-list">
+            {historyDrafts.map((draft) => {
+              const template = templateVersionByKey.get(
+                `${draft.templateId}:${draft.templateVersion}`,
+              );
+              return (
+                <article className="material-history-item" key={draft.id}>
+                  <div>
+                    <strong>
+                      {template?.title ?? draft.templateId} · v{draft.templateVersion} ·{' '}
+                      {materialDraftStatusLabel(draft.status)}
+                    </strong>
+                    <p>{formatStudioDraftInput(draft, template)}</p>
+                    <small>
+                      提交于 {formatTime(draft.submittedAt ?? draft.createdAt)}
+                      {draft.reviewedAt ? ` · 审核于 ${formatTime(draft.reviewedAt)}` : ''}
+                      {draft.reviewReason ? ` · ${draft.reviewReason}` : ''}
+                    </small>
+                  </div>
+                  {draft.status === 'approved' ? (
+                    <button
+                      type="button"
+                      className="is-primary"
+                      onClick={() => void exportDraft(draft)}
+                      disabled={isBusy}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        download
+                      </span>
+                      下载图片
+                    </button>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="material-history-empty">还没有提交过自定义物料。</p>
+        )}
+      </section>
     </section>
   );
 }
@@ -923,4 +994,44 @@ function MaterialFieldEditor({
 
 function formatCoordinate(value: number): string {
   return String(Math.round(value * 100) / 100);
+}
+
+function materialDraftStatusLabel(status: MaterialDraft['status']): string {
+  return {
+    draft: '草稿',
+    pending_review: '待审核',
+    approved: '已通过',
+    rejected: '已驳回',
+  }[status];
+}
+
+function formatStudioDraftInput(
+  draft: MaterialDraft,
+  template: MaterialTemplate | undefined,
+): string {
+  if (!template) {
+    return Object.entries(draft.input)
+      .filter(([, value]) => value)
+      .map(([key, value]) => `${key}：${value}`)
+      .join(' · ');
+  }
+  return (
+    template.fields
+      .map((field) => {
+        const value = draft.input[field.key]?.trim();
+        if (!value) {
+          return undefined;
+        }
+        const option = field.options?.find((item) => item.value === value);
+        return `${field.label}：${option?.label ?? value}`;
+      })
+      .filter(Boolean)
+      .join(' · ') || '未填写字段内容'
+  );
+}
+
+function formatTime(value: string): string {
+  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(
+    new Date(value),
+  );
 }

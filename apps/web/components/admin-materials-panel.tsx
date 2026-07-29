@@ -21,11 +21,17 @@ interface TemplateVersion {
   description?: string;
   family: MaterialFamily;
   source: string;
-  fields: unknown[];
+  fields: MaterialTemplateField[];
   typographyProfile?: unknown;
   defaultCanvas: MaterialCanvas;
   createdAt: string;
   publishedAt?: string;
+}
+
+interface MaterialTemplateField {
+  key: string;
+  label: string;
+  options?: Array<{ value: string; label: string }>;
 }
 
 interface TemplateRecord {
@@ -38,8 +44,13 @@ interface MaterialDraft {
   templateId: string;
   templateVersion: number;
   status: 'draft' | 'pending_review' | 'approved' | 'rejected';
+  input: Record<string, string>;
+  canvas: MaterialCanvas;
   createdBy: string;
   createdAt: string;
+  submittedAt?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
   reviewReason?: string;
 }
 
@@ -48,12 +59,18 @@ interface MaterialExportAudit {
   actorId: string;
   templateId: string;
   templateVersion: number;
-  sourceKind: 'manual' | 'transit_line';
+  sourceKind: 'manual' | 'transit_line' | 'map_location' | 'road_coordinate';
   sourceRef?: string;
   draftId?: string;
   outputWidthPx: number;
   outputHeightPx: number;
   requestedAt: string;
+}
+
+interface MaterialActor {
+  ldpassUserId: string;
+  displayName: string;
+  email?: string;
 }
 
 interface EditorState {
@@ -95,6 +112,7 @@ export function AdminMaterialsPanel() {
   const [templates, setTemplates] = useState<TemplateRecord[]>([]);
   const [drafts, setDrafts] = useState<MaterialDraft[]>([]);
   const [exports, setExports] = useState<MaterialExportAudit[]>([]);
+  const [actors, setActors] = useState<MaterialActor[]>([]);
   const [statusText, setStatusText] = useState('正在读取物料后台');
   const [isBusy, setIsBusy] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -114,6 +132,7 @@ export function AdminMaterialsPanel() {
         templates?: TemplateRecord[];
         drafts?: MaterialDraft[];
         exports?: MaterialExportAudit[];
+        actors?: MaterialActor[];
         message?: string;
       };
       if (!response.ok) {
@@ -123,6 +142,7 @@ export function AdminMaterialsPanel() {
       setTemplates(data.templates ?? []);
       setDrafts(data.drafts ?? []);
       setExports(data.exports ?? []);
+      setActors(data.actors ?? []);
       setStatusText('物料模板和审核队列已更新。');
     } catch {
       setStatusText('物料后台暂时无法连接。');
@@ -263,6 +283,20 @@ export function AdminMaterialsPanel() {
     }
   };
 
+  const templateVersionByKey = useMemo(() => {
+    const map = new Map<string, TemplateVersion>();
+    for (const record of templates) {
+      for (const version of record.versions) {
+        map.set(`${record.id}:${version.version}`, version);
+      }
+    }
+    return map;
+  }, [templates]);
+  const actorById = useMemo(
+    () => new Map(actors.map((actor) => [actor.ldpassUserId, actor])),
+    [actors],
+  );
+
   return (
     <section className="admin-materials-panel" aria-label="物料后台">
       <div className="section-heading">
@@ -350,10 +384,22 @@ export function AdminMaterialsPanel() {
             <article className="admin-material-draft" key={draft.id}>
               <div>
                 <strong>
-                  {draft.templateId} · v{draft.templateVersion}
+                  {templateVersionByKey.get(`${draft.templateId}:${draft.templateVersion}`)
+                    ?.title ?? draft.templateId}{' '}
+                  · v{draft.templateVersion} · {materialDraftStatusLabel(draft.status)}
                 </strong>
+                <p className="admin-material-draft-content">
+                  {formatMaterialDraftInput(
+                    draft,
+                    templateVersionByKey.get(`${draft.templateId}:${draft.templateVersion}`),
+                  )}
+                  <br />
+                  画布：{draft.canvas.widthM} × {draft.canvas.heightM} 米，输出基准{' '}
+                  {draft.canvas.tileSizePx} px
+                </p>
                 <small>
-                  {draft.createdBy} · {formatTime(draft.createdAt)}
+                  发起者：{formatActor(draft.createdBy, actorById)} · 提交于{' '}
+                  {formatTime(draft.submittedAt ?? draft.createdAt)} · 草稿 ID：{draft.id}
                 </small>
               </div>
               <div className="admin-content-actions">
@@ -396,13 +442,13 @@ export function AdminMaterialsPanel() {
               <article className="admin-material-draft" key={item.id}>
                 <div>
                   <strong>
-                    {item.templateId} · v{item.templateVersion} · {item.outputWidthPx} ×{' '}
-                    {item.outputHeightPx} px
+                    {templateVersionByKey.get(`${item.templateId}:${item.templateVersion}`)
+                      ?.title ?? item.templateId}{' '}
+                    · v{item.templateVersion} · {item.outputWidthPx} × {item.outputHeightPx} px
                   </strong>
                   <small>
-                    {item.actorId} ·{' '}
-                    {item.sourceKind === 'transit_line' ? item.sourceRef : item.draftId} ·{' '}
-                    {formatTime(item.requestedAt)}
+                    下载者：{formatActor(item.actorId, actorById)} · 来源：
+                    {formatMaterialSource(item)} · {formatTime(item.requestedAt)}
                   </small>
                 </div>
               </article>
@@ -613,6 +659,62 @@ function latestVersion(record: TemplateRecord): TemplateVersion | undefined {
 
 function statusLabel(status: TemplateStatus): string {
   return { draft: '草稿', published: '已发布', archived: '已归档' }[status];
+}
+
+function materialDraftStatusLabel(status: MaterialDraft['status']): string {
+  return {
+    draft: '草稿',
+    pending_review: '待审核',
+    approved: '已通过',
+    rejected: '已驳回',
+  }[status];
+}
+
+function formatMaterialDraftInput(
+  draft: MaterialDraft,
+  template: TemplateVersion | undefined,
+): string {
+  if (!template) {
+    return `字段：${
+      Object.entries(draft.input)
+        .filter(([, value]) => value)
+        .map(([key, value]) => `${key}：${value}`)
+        .join(' · ') || '未填写'
+    }`;
+  }
+  const values = template.fields
+    .map((field) => {
+      const value = draft.input[field.key]?.trim();
+      if (!value) {
+        return undefined;
+      }
+      const option = field.options?.find((item) => item.value === value);
+      return `${field.label}：${option?.label ?? value}`;
+    })
+    .filter(Boolean);
+  return values.length ? values.join(' · ') : '未填写字段内容';
+}
+
+function formatActor(actorId: string, actors: Map<string, MaterialActor>): string {
+  const actor = actors.get(actorId);
+  if (!actor) {
+    return actorId;
+  }
+  return actor.email
+    ? `${actor.displayName}（${actor.email}）`
+    : `${actor.displayName}（${actorId}）`;
+}
+
+function formatMaterialSource(item: MaterialExportAudit): string {
+  if (item.sourceKind === 'manual') {
+    return `自定义物料${item.draftId ? ` · ${item.draftId}` : ''}`;
+  }
+  const sourceLabel = {
+    transit_line: '服务器线路',
+    map_location: '服务器地点',
+    road_coordinate: '道路安装坐标',
+  }[item.sourceKind];
+  return `${sourceLabel}${item.sourceRef ? ` · ${item.sourceRef}` : ''}`;
 }
 
 function formatTime(value: string): string {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { materialTemplateDraftSchema } from '@yct/schemas';
 import { requireYctAdmin } from '../../../../lib/admin-auth';
+import { listYctUserLinks } from '../../../../lib/yct-user-link-store';
 import {
   createMaterialTemplateDraft,
   listAdminMaterialState,
@@ -12,7 +13,15 @@ export async function GET(request: NextRequest) {
     return admin.response;
   }
   try {
-    return NextResponse.json(await listAdminMaterialState());
+    const [state, users] = await Promise.all([listAdminMaterialState(), listYctUserLinks()]);
+    return NextResponse.json({
+      ...state,
+      actors: users.map((user) => ({
+        ldpassUserId: user.ldpassUserId,
+        displayName: user.usernameSnapshot,
+        email: user.emailSnapshot,
+      })),
+    });
   } catch {
     return NextResponse.json(
       {
