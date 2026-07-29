@@ -225,6 +225,65 @@ function Copy-YctNextRuntimeDependencies {
   }
 }
 
+function Copy-YctTurbopackExternalRuntimeDependencies {
+  param(
+    [Parameter(Mandatory = $true)][string]$SourceNodeModules,
+    [Parameter(Mandatory = $true)][string]$DestinationNodeModules
+  )
+
+  if (-not (Test-Path -LiteralPath $SourceNodeModules)) {
+    return
+  }
+
+  $externalPackages = Get-ChildItem -LiteralPath $SourceNodeModules -Directory -Filter "sharp-*" -Force |
+    Where-Object { $_.LinkType -and $_.Name -match "^sharp-[0-9a-f]{16}$" }
+
+  foreach ($externalPackage in $externalPackages) {
+    $actualPackagePath = Resolve-YctLinkedPath -Item $externalPackage
+    $packageNodeModules = Split-Path -Parent $actualPackagePath
+    if (-not (Test-Path -LiteralPath (Join-Path $actualPackagePath "package.json"))) {
+      continue
+    }
+
+    Get-ChildItem -LiteralPath $packageNodeModules -Force |
+      Where-Object { $_.FullName -ne $actualPackagePath } |
+      ForEach-Object {
+        if ($_.Name.StartsWith("@")) {
+          $scopeDestination = Join-Path $DestinationNodeModules $_.Name
+          New-Item -ItemType Directory -Force -Path $scopeDestination | Out-Null
+          Get-ChildItem -LiteralPath $_.FullName -Force | ForEach-Object {
+            Copy-YctNodeModuleEntry -Source $_ -Destination (Join-Path $scopeDestination $_.Name)
+          }
+        } else {
+          Copy-YctNodeModuleEntry -Source $_ -Destination (Join-Path $DestinationNodeModules $_.Name)
+        }
+      }
+  }
+}
+
+function Assert-YctTurbopackExternalRuntimeDependencies {
+  param(
+    [Parameter(Mandatory = $true)][string]$NodeCommand,
+    [Parameter(Mandatory = $true)][string]$StagedNextNodeModules
+  )
+
+  $sharpPackage = Get-ChildItem -LiteralPath $StagedNextNodeModules -Directory -Filter "sharp-*" -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if (-not $sharpPackage) {
+    return
+  }
+
+  $sharpEntry = Join-Path $sharpPackage.FullName "dist\index.mjs"
+  if (-not (Test-Path -LiteralPath $sharpEntry)) {
+    throw "Staged Turbopack sharp entry does not exist: $sharpEntry"
+  }
+
+  & $NodeCommand -e "import(process.argv[1]).then((module) => module.default({ create: { width: 1, height: 1, channels: 4, background: '#00000000' } }).png().toBuffer()).catch((error) => { console.error(error); process.exit(1); })" ([System.Uri]::new($sharpEntry).AbsoluteUri)
+  if ($LASTEXITCODE -ne 0) {
+    throw "Staged Turbopack sharp runtime validation failed with exit code $LASTEXITCODE."
+  }
+}
+
 function Write-YctUtf8File {
   param(
     [Parameter(Mandatory = $true)][string]$Path,
@@ -443,6 +502,15 @@ if ($SkipStaging) {
     Write-YctUtf8File -Path $stagedServiceWorkerPath -Content $serviceWorker
   }
   Copy-YctNextRuntimeDependencies -Root $root -DestinationNodeModules $standaloneWebNodeModules
+  $sourceNextNodeModules = Join-Path $nextRoot "node_modules"
+  $stagedNextNodeModules = Join-Path $standaloneNextRoot "node_modules"
+  Copy-YctTurbopackExternalRuntimeDependencies `
+    -SourceNodeModules $sourceNextNodeModules `
+    -DestinationNodeModules $stagedNextNodeModules
+  $nodeCommand = (Get-Command node.exe -ErrorAction Stop).Source
+  Assert-YctTurbopackExternalRuntimeDependencies `
+    -NodeCommand $nodeCommand `
+    -StagedNextNodeModules $stagedNextNodeModules
 
   $startScript = @"
 param(
