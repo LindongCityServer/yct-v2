@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { UnminedCustomMarkerProvider } from '@yct/adapters';
 import type { EntityTranslationRecord, MapMarkerSnapshot } from '@yct/contracts';
 import { createApiMeta } from '../../../../lib/api-meta';
+import { roadNameTranslationEntityId } from '../../../../lib/entity-translation-keys';
+import { isMapRoadGeometryMarker } from '../../../../lib/map-road-geometry';
 import {
   buildEntityTranslationMap,
   entityTranslationKey,
@@ -131,7 +133,12 @@ function applyMapMarkerTranslations(
         : undefined;
       const localizedLabels =
         translationMap.get(entityTranslationKey('map_marker', marker.id)) ??
-        (lineId ? translationMap.get(entityTranslationKey('transit_line', lineId)) : undefined);
+        (lineId ? translationMap.get(entityTranslationKey('transit_line', lineId)) : undefined) ??
+        (isMapRoadGeometryMarker(marker)
+          ? translationMap.get(
+              entityTranslationKey('map_marker', roadNameTranslationEntityId(marker.label)),
+            )
+          : undefined);
       return localizedLabels ? { ...marker, localizedLabels } : marker;
     }),
   };

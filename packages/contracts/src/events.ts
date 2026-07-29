@@ -592,6 +592,19 @@ export interface EntityTranslationUpdatedPayload {
   updatedBy: string;
 }
 
+export interface MaterialRoadPinyinOverrideUpsertedPayload {
+  roadName: string;
+  pinyin: string;
+  actorId: string;
+  occurredAt: ISODateTimeString;
+}
+
+export interface MaterialRoadPinyinOverrideDeletedPayload {
+  roadName: string;
+  actorId: string;
+  occurredAt: ISODateTimeString;
+}
+
 export interface MapFavoritesUpdatedPayload {
   userId: string;
   markerIds: string[];
@@ -1085,6 +1098,8 @@ export type YctEventPayloadMap = {
   LocalePreferenceUpdated: LocalePreferenceUpdatedPayload;
   TranslationCatalogPublished: TranslationCatalogPublishedPayload;
   EntityTranslationUpdated: EntityTranslationUpdatedPayload;
+  MaterialRoadPinyinOverrideUpserted: MaterialRoadPinyinOverrideUpsertedPayload;
+  MaterialRoadPinyinOverrideDeleted: MaterialRoadPinyinOverrideDeletedPayload;
   MapFavoritesUpdated: MapFavoritesUpdatedPayload;
   LdpassUserLinked: LdpassUserLinkedPayload;
   YctSessionStarted: YctSessionStartedPayload;

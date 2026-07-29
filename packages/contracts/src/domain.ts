@@ -14,6 +14,7 @@ export interface EntityTranslationRecord {
   entityId: string;
   sourceText: string;
   localizedLabels: LocalizedLabelMap;
+  roadSignPinyin?: string;
   updatedBy: string;
   updatedAt: ISODateTimeString;
 }
@@ -950,6 +951,7 @@ export type MaterialSourceKind = 'manual' | 'transit_line' | 'map_location' | 'r
 export interface MaterialTextFitConfig {
   maxWidth: number;
   fontSize: number;
+  defaultScaleX?: number;
   maxLetterSpacing?: number;
   additionalFields?: Array<{
     fieldKey: string;
@@ -958,11 +960,12 @@ export interface MaterialTextFitConfig {
 }
 
 export interface MaterialGlyphConfig {
-  renderer: 'nostalgic_digits' | 'chill_jinshu_vertical';
+  renderer: 'nostalgic_digits' | 'nostalgic_address_number' | 'chill_jinshu_vertical';
   layoutWidth: number;
   layoutHeight: number;
   fontSize?: number;
   maxLetterSpacing?: number;
+  suffixFieldKey?: string;
 }
 
 export interface MaterialTemplateField {

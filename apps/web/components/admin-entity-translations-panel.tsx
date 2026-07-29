@@ -8,12 +8,17 @@ import type {
 } from '@yct/contracts';
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { roadNameTranslationEntityId } from '../lib/entity-translation-keys';
+import { isMapRoadGeometryMarker } from '../lib/map-road-geometry';
+
+type EntityTranslationDraft = LocalizedLabelMap & { roadSignPinyin?: string };
 
 interface TranslationEntity {
   kind: TranslatableEntityKind;
   id: string;
   sourceText: string;
   typeLabel: string;
+  supportsRoadSignPinyin: boolean;
 }
 
 interface TransitOverviewForTranslations {
@@ -40,7 +45,7 @@ const kindOptions: Array<{ value: EntityKindFilter; label: string; icon: string 
 export function AdminEntityTranslationsPanel() {
   const [entities, setEntities] = useState<TranslationEntity[]>([]);
   const [records, setRecords] = useState<EntityTranslationRecord[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, LocalizedLabelMap>>({});
+  const [drafts, setDrafts] = useState<Record<string, EntityTranslationDraft>>({});
   const [filter, setFilter] = useState<EntityKindFilter>('all');
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('正在读取可翻译实体');
@@ -86,7 +91,10 @@ export function AdminEntityTranslationsPanel() {
         setRecords(nextRecords);
         setDrafts(
           Object.fromEntries(
-            nextRecords.map((record) => [translationEntityKey(record), record.localizedLabels]),
+            nextRecords.map((record) => [
+              translationEntityKey(record),
+              { ...record.localizedLabels, roadSignPinyin: record.roadSignPinyin },
+            ]),
           ),
         );
         setStatus('翻译资料已读取');
@@ -112,7 +120,14 @@ export function AdminEntityTranslationsPanel() {
         }
         const draft = drafts[translationEntityKey(entity)] ?? {};
         return normalizeTranslationSearchText(
-          [entity.sourceText, entity.typeLabel, entity.id, draft['zh-Hant'], draft.en]
+          [
+            entity.sourceText,
+            entity.typeLabel,
+            entity.id,
+            draft['zh-Hant'],
+            draft.en,
+            draft.roadSignPinyin,
+          ]
             .filter(Boolean)
             .join(' '),
         ).includes(normalized);
@@ -120,7 +135,7 @@ export function AdminEntityTranslationsPanel() {
   }, [drafts, entities, filter, query]);
   const visibleEntities = filteredEntities.slice(0, 100);
 
-  const updateDraft = (entity: TranslationEntity, patch: LocalizedLabelMap) => {
+  const updateDraft = (entity: TranslationEntity, patch: EntityTranslationDraft) => {
     const key = translationEntityKey(entity);
     setDrafts((current) => ({ ...current, [key]: { ...(current[key] ?? {}), ...patch } }));
   };
@@ -137,7 +152,13 @@ export function AdminEntityTranslationsPanel() {
           entityKind: entity.kind,
           entityId: entity.id,
           sourceText: entity.sourceText,
-          localizedLabels: drafts[key] ?? {},
+          localizedLabels: {
+            'zh-Hant': drafts[key]?.['zh-Hant'],
+            en: drafts[key]?.en,
+          },
+          roadSignPinyin: entity.supportsRoadSignPinyin
+            ? (drafts[key]?.roadSignPinyin ?? '')
+            : undefined,
         }),
       });
       const data = (await response.json()) as {
@@ -154,7 +175,13 @@ export function AdminEntityTranslationsPanel() {
         ),
         data.item!,
       ]);
-      setDrafts((current) => ({ ...current, [key]: data.item!.localizedLabels }));
+      setDrafts((current) => ({
+        ...current,
+        [key]: {
+          ...data.item!.localizedLabels,
+          roadSignPinyin: data.item!.roadSignPinyin,
+        },
+      }));
       setStatus(`已保存：${entity.sourceText}`);
     } catch {
       setStatus('翻译保存失败');
@@ -251,6 +278,20 @@ export function AdminEntityTranslationsPanel() {
                   maxLength={300}
                 />
               </label>
+              {entity.supportsRoadSignPinyin ? (
+                <label>
+                  <span>路牌拼音</span>
+                  <input
+                    value={draft.roadSignPinyin ?? ''}
+                    onChange={(event) =>
+                      updateDraft(entity, { roadSignPinyin: event.currentTarget.value })
+                    }
+                    maxLength={300}
+                  />
+                </label>
+              ) : (
+                <span className="admin-translation-pinyin-spacer" aria-hidden="true" />
+              )}
               <button type="submit" disabled={savingKey === key} title="保存翻译">
                 <span className="material-symbols-outlined" aria-hidden="true">
                   save
@@ -277,11 +318,13 @@ function buildTranslationEntities(
     if (marker.categoryId === 'player' || marker.id.startsWith('transit-line-')) {
       continue;
     }
+    const isRoad = isMapRoadGeometryMarker(marker);
     const entity = {
       kind: 'map_marker' as const,
-      id: marker.id,
+      id: isRoad ? roadNameTranslationEntityId(marker.label) : marker.id,
       sourceText: marker.label,
       typeLabel: getMapMarkerTranslationTypeLabel(marker, iconDisplayNames),
+      supportsRoadSignPinyin: isRoad,
     };
     entities.set(translationEntityKey(entity), entity);
   }
@@ -291,6 +334,7 @@ function buildTranslationEntities(
       id: line.id,
       sourceText: line.name,
       typeLabel: '线路名',
+      supportsRoadSignPinyin: false,
     };
     entities.set(translationEntityKey(lineEntity), lineEntity);
     for (const stop of line.stationStops ?? []) {
@@ -302,6 +346,7 @@ function buildTranslationEntities(
         id: stop.stationSourceId,
         sourceText: stop.stationName,
         typeLabel: '站名',
+        supportsRoadSignPinyin: false,
       };
       entities.set(translationEntityKey(stationEntity), stationEntity);
     }

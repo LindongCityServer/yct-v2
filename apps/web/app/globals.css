@@ -5429,7 +5429,11 @@ img.map-player-list-avatar.is-offline {
     linear-gradient(-45deg, #edf5f7 25%, transparent 25%),
     linear-gradient(45deg, transparent 75%, #edf5f7 75%),
     linear-gradient(-45deg, transparent 75%, #edf5f7 75%);
-  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+  background-position:
+    0 0,
+    0 10px,
+    10px -10px,
+    -10px 0;
   background-size: 20px 20px;
 }
 
@@ -7726,11 +7730,15 @@ img.map-player-list-avatar.is-offline {
 
 .admin-translation-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) repeat(2, minmax(160px, 1fr)) 42px;
+  grid-template-columns: minmax(180px, 1fr) repeat(3, minmax(140px, 1fr)) 42px;
   align-items: end;
   gap: var(--yct-space-3);
   padding: var(--yct-space-3) 0;
   border-bottom: 1px solid var(--yct-color-border-subtle);
+}
+
+.admin-translation-pinyin-spacer {
+  min-height: 40px;
 }
 
 .admin-translation-source,
@@ -7795,7 +7803,8 @@ img.map-player-list-avatar.is-offline {
   }
 
   .admin-translation-source,
-  .admin-translation-row label {
+  .admin-translation-row label,
+  .admin-translation-pinyin-spacer {
     grid-column: 1 / -1;
   }
 

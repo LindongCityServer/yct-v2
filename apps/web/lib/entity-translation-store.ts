@@ -6,6 +6,7 @@ import type {
   TranslatableEntityKind,
 } from '@yct/contracts';
 import { readRuntimeConfig } from './runtime-config';
+import { roadNameTranslationEntityId } from './entity-translation-keys';
 
 interface EntityTranslationStoreSnapshot {
   version: 1;
@@ -27,27 +28,39 @@ export async function findEntityTranslation(
   );
 }
 
+export async function findRoadSignPinyin(roadName: string): Promise<string | undefined> {
+  return (await findEntityTranslation('map_marker', roadNameTranslationEntityId(roadName)))
+    ?.roadSignPinyin;
+}
+
 export async function upsertEntityTranslation(input: {
   entityKind: TranslatableEntityKind;
   entityId: string;
   sourceText: string;
   localizedLabels: LocalizedLabelMap;
+  roadSignPinyin?: string;
   actorId: string;
 }): Promise<EntityTranslationRecord> {
   const snapshot = await readSnapshot();
+  const previous = snapshot.items.find(
+    (item) => item.entityKind === input.entityKind && item.entityId === input.entityId,
+  );
   const updatedAt = new Date().toISOString();
   const record: EntityTranslationRecord = {
     entityKind: input.entityKind,
     entityId: input.entityId,
     sourceText: input.sourceText,
     localizedLabels: normalizeLocalizedLabels(input.localizedLabels),
+    roadSignPinyin: Object.prototype.hasOwnProperty.call(input, 'roadSignPinyin')
+      ? normalizeRoadSignPinyin(input.roadSignPinyin)
+      : previous?.roadSignPinyin,
     updatedBy: input.actorId,
     updatedAt,
   };
   const nextItems = snapshot.items.filter(
     (item) => item.entityKind !== input.entityKind || item.entityId !== input.entityId,
   );
-  if (Object.keys(record.localizedLabels).length > 0) {
+  if (Object.keys(record.localizedLabels).length > 0 || record.roadSignPinyin) {
     nextItems.push(record);
   }
   await writeSnapshot({
@@ -55,6 +68,14 @@ export async function upsertEntityTranslation(input: {
     items: nextItems.sort(compareTranslations),
   });
   return record;
+}
+
+export function normalizeRoadSignPinyin(value: string | undefined): string | undefined {
+  const normalized = value
+    ?.trim()
+    .replace(/[\s\u3000]+/gu, ' ')
+    .toLocaleUpperCase('zh-CN');
+  return normalized || undefined;
 }
 
 export function buildEntityTranslationMap(
