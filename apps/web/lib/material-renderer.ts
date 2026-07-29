@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import sharp from 'sharp';
 import type {
   MaterialCanvasConfig,
@@ -18,6 +20,8 @@ const prohibitedSourcePatterns = [
   /@import\b/i,
   /url\s*\(/i,
 ];
+
+let harmonyOsFontFaceCss: string | undefined;
 
 export class MaterialTemplateSourceError extends Error {}
 export class MaterialInputError extends Error {}
@@ -132,7 +136,7 @@ export function renderMaterialTemplateToSvg(input: {
   for (const field of input.template.fields) {
     if (field.glyph) {
       const key = `glyph.${field.key}`;
-      context[key] = renderMaterialGlyph(values[field.key], field.glyph);
+      context[key] = renderMaterialGlyph(values[field.key], field.glyph, values);
       trustedContext.add(key);
     }
     if (!field.textFit) {
@@ -149,7 +153,7 @@ export function renderMaterialTemplateToSvg(input: {
     context[`fit.${field.key}.scaleX`] = formatSvgNumber(fit.scaleX);
   }
   const resolved = input.template.source.replace(/{{([^}]+)}}/g, (_match, key: string) =>
-    trustedContext.has(key) ? context[key] ?? '' : escapeXml(context[key] ?? ''),
+    trustedContext.has(key) ? (context[key] ?? '') : escapeXml(context[key] ?? ''),
   );
   const sourceOpenTag = resolved.match(/^<svg\b[^>]*>/i)?.[0];
   const sourceViewBox = sourceOpenTag?.match(/\bviewBox\s*=\s*["']([^"']+)["']/i)?.[1];
@@ -157,7 +161,10 @@ export function renderMaterialTemplateToSvg(input: {
     throw new MaterialTemplateSourceError('模板 SVG 未能解析 viewBox。');
   }
   const children = resolved.replace(/^<svg\b[^>]*>/i, '').replace(/<\/svg>\s*$/i, '');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size.widthPx}" height="${size.heightPx}" viewBox="0 0 ${size.widthPx} ${size.heightPx}"><svg x="0" y="0" width="${size.contentWidthPx}" height="${size.contentHeightPx}" viewBox="${sourceViewBox}">${children}</svg></svg>`;
+  const fontDefinitions = children.includes('HarmonyOS Sans SC')
+    ? `<defs><style type="text/css">${getHarmonyOsFontFaceCss()}</style></defs>`
+    : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size.widthPx}" height="${size.heightPx}" viewBox="0 0 ${size.widthPx} ${size.heightPx}">${fontDefinitions}<svg x="0" y="0" width="${size.contentWidthPx}" height="${size.contentHeightPx}" viewBox="${sourceViewBox}">${children}</svg></svg>`;
   return { svg, widthPx: size.widthPx, heightPx: size.heightPx };
 }
 
@@ -211,14 +218,14 @@ function isAllowedTemplateVariable(variable: string, fields: MaterialTemplateFie
   const selectMatch = variable.match(/^select\.([a-z][a-zA-Z0-9_]*)\.([a-z][a-zA-Z0-9_]*)$/);
   return Boolean(
     selectMatch &&
-      fields.some(
-        (field) =>
-          field.key === selectMatch[1] &&
-          field.kind === 'select' &&
-          Object.values(field.selectVariableValues ?? {}).every((variables) =>
-            Object.hasOwn(variables, selectMatch[2]),
-          ),
-      ),
+    fields.some(
+      (field) =>
+        field.key === selectMatch[1] &&
+        field.kind === 'select' &&
+        Object.values(field.selectVariableValues ?? {}).every((variables) =>
+          Object.hasOwn(variables, selectMatch[2]),
+        ),
+    ),
   );
 }
 
@@ -227,27 +234,60 @@ function resolveTextFit(
   config: NonNullable<MaterialTemplateField['textFit']>,
   values: Record<string, string>,
 ): { letterSpacing: number; scaleX: number } {
+  const defaultScaleX = config.defaultScaleX ?? 1;
   const additionalWidth = (config.additionalFields ?? []).reduce(
     (width, field) => width + estimateTextWidth(values[field.fieldKey] ?? '', field.fontSize),
     0,
   );
   const naturalWidth = estimateTextWidth(value, config.fontSize) + additionalWidth;
-  if (naturalWidth <= config.maxWidth) {
+  const layoutWidth = config.maxWidth / defaultScaleX;
+  if (naturalWidth <= layoutWidth) {
     const gapCount = Math.max(Array.from(value).length - 1, 0);
     const maxLetterSpacing = config.maxLetterSpacing ?? config.fontSize * 0.12;
     const letterSpacing = gapCount
-      ? Math.min(maxLetterSpacing, Math.max(config.maxWidth - naturalWidth, 0) / gapCount)
+      ? Math.min(maxLetterSpacing, Math.max(layoutWidth - naturalWidth, 0) / gapCount)
       : 0;
     return {
       letterSpacing,
-      scaleX: 1,
+      scaleX: defaultScaleX,
     };
   }
   return { letterSpacing: 0, scaleX: naturalWidth ? config.maxWidth / naturalWidth : 1 };
 }
 
+function getHarmonyOsFontFaceCss(): string {
+  if (harmonyOsFontFaceCss) {
+    return harmonyOsFontFaceCss;
+  }
+  const regular = readMaterialFontAsDataUrl('HarmonyOS_Sans_SC_Regular.ttf');
+  const bold = readMaterialFontAsDataUrl('HarmonyOS_Sans_SC_Bold.ttf');
+  harmonyOsFontFaceCss = [
+    `@font-face{font-family:'HarmonyOS Sans SC';src:url('${regular}') format('truetype');font-style:normal;font-weight:400;}`,
+    `@font-face{font-family:'HarmonyOS Sans SC';src:url('${bold}') format('truetype');font-style:normal;font-weight:700;}`,
+  ].join('');
+  return harmonyOsFontFaceCss;
+}
+
+function readMaterialFontAsDataUrl(fileName: string): string {
+  const relativePath = ['harmonyos-sans', fileName];
+  const candidates = [
+    resolve(process.cwd(), 'public', 'fonts', ...relativePath),
+    resolve(process.cwd(), 'apps', 'web', 'public', 'fonts', ...relativePath),
+    resolve(process.cwd(), 'app', 'fonts', ...relativePath),
+    resolve(process.cwd(), 'apps', 'web', 'app', 'fonts', ...relativePath),
+  ];
+  const sourcePath = candidates.find((candidate) => existsSync(candidate));
+  if (!sourcePath) {
+    throw new Error(`物料字体文件 ${fileName} 不存在。`);
+  }
+  return `data:font/ttf;base64,${readFileSync(sourcePath).toString('base64')}`;
+}
+
 function estimateTextWidth(value: string, fontSize: number): number {
-  return Array.from(value).reduce((width, character) => width + characterWidthFactor(character), 0) * fontSize;
+  return (
+    Array.from(value).reduce((width, character) => width + characterWidthFactor(character), 0) *
+    fontSize
+  );
 }
 
 function characterWidthFactor(character: string): number {

@@ -34,18 +34,13 @@ export const materialTemplateFieldSchema = z
       .max(64)
       .optional(),
     selectVariableValues: z
-      .record(
-        z.string().trim().min(1).max(120),
-        z.record(
-          fieldKeySchema,
-          z.string().max(2_000),
-        ),
-      )
+      .record(z.string().trim().min(1).max(120), z.record(fieldKeySchema, z.string().max(2_000)))
       .optional(),
     textFit: z
       .object({
         maxWidth: z.number().positive().max(32_768),
         fontSize: z.number().positive().max(8_192),
+        defaultScaleX: z.number().positive().max(1).optional(),
         maxLetterSpacing: z.number().nonnegative().max(1_024).optional(),
         additionalFields: z
           .array(
@@ -60,11 +55,12 @@ export const materialTemplateFieldSchema = z
       .optional(),
     glyph: z
       .object({
-        renderer: z.enum(['nostalgic_digits', 'chill_jinshu_vertical']),
+        renderer: z.enum(['nostalgic_digits', 'nostalgic_address_number', 'chill_jinshu_vertical']),
         layoutWidth: z.number().positive().max(32_768),
         layoutHeight: z.number().positive().max(32_768),
         fontSize: z.number().positive().max(8_192).optional(),
         maxLetterSpacing: z.number().nonnegative().max(1_024).optional(),
+        suffixFieldKey: fieldKeySchema.optional(),
       })
       .optional(),
   })
@@ -117,6 +113,13 @@ export const materialTemplateFieldSchema = z
         path: ['glyph', 'fontSize'],
       });
     }
+    if (field.glyph?.renderer === 'nostalgic_address_number' && !field.glyph.suffixFieldKey) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '怀旧门牌组合字形必须指定附标字段。',
+        path: ['glyph', 'suffixFieldKey'],
+      });
+    }
   });
 
 export const materialTypographyProfileSchema = z.object({
@@ -167,6 +170,19 @@ export const materialTemplateDraftSchema = z
             code: 'custom',
             message: '参与组合排字的附加字段必须引用另一个文本字段。',
             path: ['fields', fieldIndex, 'textFit', 'additionalFields', additionalIndex],
+          });
+        }
+      }
+      const suffixFieldKey = field.glyph?.suffixFieldKey;
+      if (suffixFieldKey) {
+        const referencedField = template.fields.find(
+          (candidate) => candidate.key === suffixFieldKey,
+        );
+        if (suffixFieldKey === field.key || !referencedField || referencedField.kind !== 'text') {
+          ctx.addIssue({
+            code: 'custom',
+            message: '组合字形的附标字段必须引用另一个文本字段。',
+            path: ['fields', fieldIndex, 'glyph', 'suffixFieldKey'],
           });
         }
       }

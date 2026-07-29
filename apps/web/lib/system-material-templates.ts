@@ -44,7 +44,12 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             kind: 'text',
             required: true,
             maxLength: 24,
-            textFit: { maxWidth: 164, fontSize: 30, maxLetterSpacing: 9 },
+            textFit: {
+              maxWidth: 164,
+              fontSize: 30,
+              defaultScaleX: 1,
+              maxLetterSpacing: 9,
+            },
           },
           {
             key: 'roadNamePinyin',
@@ -138,7 +143,12 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             kind: 'text',
             required: true,
             maxLength: 24,
-            textFit: { maxWidth: 130, fontSize: 32, maxLetterSpacing: 3 },
+            textFit: {
+              maxWidth: 130,
+              fontSize: 32,
+              defaultScaleX: 0.9,
+              maxLetterSpacing: 9.6,
+            },
           },
           {
             key: 'roadNamePinyin',
@@ -146,7 +156,7 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             kind: 'text',
             required: true,
             maxLength: 32,
-            textFit: { maxWidth: 112, fontSize: 17, maxLetterSpacing: 1.5 },
+            textFit: { maxWidth: 126, fontSize: 17, maxLetterSpacing: 1.5 },
           },
           {
             key: 'postalCode',
@@ -204,7 +214,6 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
   <rect x="9" y="9" width="238" height="110" rx="6" fill="#000099"/>
   <g transform="translate(13 10)" fill="#FFFFFF">{{glyph.roadName}}</g>
   <g transform="translate(80 21)" fill="#FFFFFF">{{glyph.buildingNumber}}</g>
-  <text x="238" y="108" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="end">{{buildingSuffix}}</text>
 </svg>`,
         fields: [
           {
@@ -228,10 +237,11 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             required: true,
             maxLength: 8,
             glyph: {
-              renderer: 'nostalgic_digits',
+              renderer: 'nostalgic_address_number',
               layoutWidth: 150,
               layoutHeight: 85,
               maxLetterSpacing: 10,
+              suffixFieldKey: 'buildingSuffix',
             },
           },
           {

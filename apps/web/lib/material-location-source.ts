@@ -10,6 +10,8 @@ import {
 } from './map-road-geometry';
 import { toUppercaseRoadPinyin } from './chinese-pinyin';
 import { applyLegacyMapMarkerOverrides } from './legacy-map-marker-override-store';
+import { findRoadSignPinyin } from './entity-translation-store';
+import { parseMaterialAddress } from './material-address';
 import { listPublishedPublicPoiSubmissions } from './poi-submission-store';
 import { readRuntimeConfig } from './runtime-config';
 import { createTimedCache } from './server-cache';
@@ -98,9 +100,11 @@ export async function resolveRoadCoordinateMaterialInput(input: {
     road.projection.coordinate,
     directionMode,
   );
+  const roadNamePinyin =
+    (await findRoadSignPinyin(road.entry.label)) ?? toUppercaseRoadPinyin(road.entry.label);
   const candidates: Record<string, string> = {
     roadName: road.entry.label,
-    roadNamePinyin: toUppercaseRoadPinyin(road.entry.label),
+    roadNamePinyin,
     signColor: vertical ? '#1E892C' : '#004796',
     directionMode,
     arrowMode,
@@ -170,16 +174,10 @@ async function readStaticLocationMarkers(): Promise<MapMarkerSnapshot['markers']
   );
 }
 
-function createRoadEndpointEntries(
-  entries: MaterialLocationEntry[],
-): MaterialLocationEntry[] {
+function createRoadEndpointEntries(entries: MaterialLocationEntry[]): MaterialLocationEntry[] {
   const groups = new Map<string, Array<[number, number]>>();
   for (const entry of entries) {
-    if (
-      entry.geometry.type !== 'Point' ||
-      !getMapRoadMarkerKind(entry) ||
-      !entry.label.trim()
-    ) {
+    if (entry.geometry.type !== 'Point' || !getMapRoadMarkerKind(entry) || !entry.label.trim()) {
       continue;
     }
     const coordinates = groups.get(entry.label) ?? [];
@@ -243,7 +241,7 @@ function resolveAddressInformation(
           entry.id === `poi:${location.addressRoadMarkerId}`,
       )
     : undefined;
-  const parsed = parseAddress(location.address ?? '');
+  const parsed = parseMaterialAddress(location.address ?? '', linkedRoad?.label);
   const roadName = linkedRoad?.label ?? parsed.roadName;
   if (!roadName) {
     throw new Error('所选地点的地址中缺少可识别的道路名称。');
@@ -252,28 +250,6 @@ function resolveAddressInformation(
     throw new Error('所选地点的地址中缺少门牌号。');
   }
   return { roadName, buildingNumber: parsed.buildingNumber, buildingSuffix: parsed.buildingSuffix };
-}
-
-function parseAddress(value: string): {
-  roadName: string;
-  buildingNumber: string;
-  buildingSuffix: string;
-} {
-  const normalized = value.replace(/[\s\u3000]+/g, '').trim();
-  const numberMatch = normalized.match(/(\d+)((?:-\d+)|[甲乙丙丁戊己庚辛壬癸A-Za-z])?号?$/u);
-  if (!numberMatch || numberMatch.index === undefined) {
-    return { roadName: extractRoadName(normalized), buildingNumber: '', buildingSuffix: '' };
-  }
-  return {
-    roadName: extractRoadName(normalized.slice(0, numberMatch.index)),
-    buildingNumber: numberMatch[1] ?? '',
-    buildingSuffix: numberMatch[2] ?? '',
-  };
-}
-
-function extractRoadName(value: string): string {
-  const matches = value.match(/[\u3400-\u9fffA-Za-z0-9]+(?:环城高速公路|高速公路|快速路|高架路|立交桥|环路|大道|大街|北路|南路|东路|西路|胡同|隧道|街|路|巷|弄|道)/gu);
-  return matches?.at(-1) ?? '';
 }
 
 function deriveRoadArrowMode(
@@ -313,13 +289,17 @@ function getRepresentativeCoordinate(geometry: MapGeometry): [number, number] | 
     return geometry.coordinates[Math.floor(geometry.coordinates.length / 2)];
   }
   if (geometry.type === 'Rectangle') {
-    return [(geometry.bounds.minX + geometry.bounds.maxX) / 2, (geometry.bounds.minZ + geometry.bounds.maxZ) / 2];
+    return [
+      (geometry.bounds.minX + geometry.bounds.maxX) / 2,
+      (geometry.bounds.minZ + geometry.bounds.maxZ) / 2,
+    ];
   }
   if (geometry.type === 'MultiRectangle') {
     const bounds = geometry.rectangles[0];
     return bounds ? [(bounds.minX + bounds.maxX) / 2, (bounds.minZ + bounds.maxZ) / 2] : undefined;
   }
-  const coordinates = geometry.type === 'Polygon' ? geometry.coordinates[0] : geometry.coordinates[0]?.[0];
+  const coordinates =
+    geometry.type === 'Polygon' ? geometry.coordinates[0] : geometry.coordinates[0]?.[0];
   return coordinates?.[0];
 }
 
