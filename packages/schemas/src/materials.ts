@@ -47,6 +47,15 @@ export const materialTemplateFieldSchema = z
         maxWidth: z.number().positive().max(32_768),
         fontSize: z.number().positive().max(8_192),
         maxLetterSpacing: z.number().nonnegative().max(1_024).optional(),
+        additionalFields: z
+          .array(
+            z.object({
+              fieldKey: fieldKeySchema,
+              fontSize: z.number().positive().max(8_192),
+            }),
+          )
+          .max(8)
+          .optional(),
       })
       .optional(),
     glyph: z
@@ -142,6 +151,27 @@ export const materialTemplateDraftSchema = z
     defaultCanvas: materialCanvasSchema,
   })
   .superRefine((template, ctx) => {
+    for (const [fieldIndex, field] of template.fields.entries()) {
+      for (const [additionalIndex, additional] of (
+        field.textFit?.additionalFields ?? []
+      ).entries()) {
+        const referencedField = template.fields.find(
+          (candidate) => candidate.key === additional.fieldKey,
+        );
+        if (
+          additional.fieldKey === field.key ||
+          !referencedField ||
+          referencedField.kind !== 'text'
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            message: '参与组合排字的附加字段必须引用另一个文本字段。',
+            path: ['fields', fieldIndex, 'textFit', 'additionalFields', additionalIndex],
+          });
+        }
+      }
+    }
+
     if (
       template.typographyProfile &&
       !template.fields.some(

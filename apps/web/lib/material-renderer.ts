@@ -144,7 +144,7 @@ export function renderMaterialTemplateToSvg(input: {
       }
       continue;
     }
-    const fit = resolveTextFit(values[field.key], field.textFit);
+    const fit = resolveTextFit(values[field.key], field.textFit, values);
     context[`fit.${field.key}.letterSpacing`] = formatSvgNumber(fit.letterSpacing);
     context[`fit.${field.key}.scaleX`] = formatSvgNumber(fit.scaleX);
   }
@@ -225,9 +225,14 @@ function isAllowedTemplateVariable(variable: string, fields: MaterialTemplateFie
 function resolveTextFit(
   value: string,
   config: NonNullable<MaterialTemplateField['textFit']>,
+  values: Record<string, string>,
 ): { letterSpacing: number; scaleX: number } {
-  const naturalWidth = estimateTextWidth(value, config.fontSize);
-  if (!value || naturalWidth <= config.maxWidth) {
+  const additionalWidth = (config.additionalFields ?? []).reduce(
+    (width, field) => width + estimateTextWidth(values[field.fieldKey] ?? '', field.fontSize),
+    0,
+  );
+  const naturalWidth = estimateTextWidth(value, config.fontSize) + additionalWidth;
+  if (naturalWidth <= config.maxWidth) {
     const gapCount = Math.max(Array.from(value).length - 1, 0);
     const maxLetterSpacing = config.maxLetterSpacing ?? config.fontSize * 0.12;
     const letterSpacing = gapCount
@@ -238,7 +243,7 @@ function resolveTextFit(
       scaleX: 1,
     };
   }
-  return { letterSpacing: 0, scaleX: config.maxWidth / naturalWidth };
+  return { letterSpacing: 0, scaleX: naturalWidth ? config.maxWidth / naturalWidth : 1 };
 }
 
 function estimateTextWidth(value: string, fontSize: number): number {

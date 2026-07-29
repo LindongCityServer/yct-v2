@@ -951,6 +951,10 @@ export interface MaterialTextFitConfig {
   maxWidth: number;
   fontSize: number;
   maxLetterSpacing?: number;
+  additionalFields?: Array<{
+    fieldKey: string;
+    fontSize: number;
+  }>;
 }
 
 export interface MaterialGlyphConfig {

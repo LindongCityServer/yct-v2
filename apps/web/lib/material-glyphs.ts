@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import opentype from 'opentype.js';
+import * as opentypeModule from 'opentype.js';
+import type { Font } from 'opentype.js';
 import type { MaterialGlyphConfig } from '@yct/contracts';
 
 interface NostalgicDigitGlyph {
@@ -66,7 +67,7 @@ const nostalgicDigitGlyphs: Record<string, NostalgicDigitGlyph> = {
   },
 };
 
-let chillJinshuSongFont: opentype.Font | undefined;
+let chillJinshuSongFont: Font | undefined;
 
 export function renderMaterialGlyph(
   value: string,
@@ -87,17 +88,21 @@ function renderNostalgicDigits(value: string, config: MaterialGlyphConfig): stri
     throw new Error('怀旧楼牌门牌号只能包含阿拉伯数字。');
   }
   const resolvedGlyphs = glyphs as NostalgicDigitGlyph[];
-  const naturalWidth = resolvedGlyphs.reduce((sum, glyph) => sum + glyph.advance, 0);
+  const letterSpacing = config.maxLetterSpacing ?? 0;
+  const naturalWidth =
+    resolvedGlyphs.reduce((sum, glyph) => sum + glyph.advance, 0) +
+    Math.max(resolvedGlyphs.length - 1, 0) * letterSpacing;
   const scaleX = Math.min(1, config.layoutWidth / naturalWidth);
   const scaleY = config.layoutHeight / 85;
+  const offsetXInLayout = (config.layoutWidth - naturalWidth * scaleX) / 2;
   let offsetX = 0;
-  const paths = resolvedGlyphs.map((glyph) => {
-    const output = `<path d="${glyph.path}"${glyph.transform ? ` transform="${glyph.transform}"` : ''}/>`;
+  const paths = resolvedGlyphs.map((glyph, index) => {
+    const output = `<path d="${glyph.path}" fill-rule="evenodd" clip-rule="evenodd"${glyph.transform ? ` transform="${glyph.transform}"` : ''}/>`;
     const wrapped = `<g transform="translate(${formatNumber(offsetX)} 0)">${output}</g>`;
-    offsetX += glyph.advance;
+    offsetX += glyph.advance + (index < resolvedGlyphs.length - 1 ? letterSpacing : 0);
     return wrapped;
   });
-  return `<g transform="scale(${formatNumber(scaleX)} ${formatNumber(scaleY)})">${paths.join('')}</g>`;
+  return `<g transform="translate(${formatNumber(offsetXInLayout)} 0) scale(${formatNumber(scaleX)} ${formatNumber(scaleY)})">${paths.join('')}</g>`;
 }
 
 function renderVerticalChillJinshuSong(value: string, config: MaterialGlyphConfig): string {
@@ -131,15 +136,27 @@ function renderVerticalChillJinshuSong(value: string, config: MaterialGlyphConfi
   return `<g transform="scale(1 ${formatNumber(scaleY)})">${paths.join('')}</g>`;
 }
 
-function getChillJinshuSongFont(): opentype.Font {
+function getChillJinshuSongFont(): Font {
   if (chillJinshuSongFont) {
     return chillJinshuSongFont;
   }
   const sourcePath = resolveMaterialFontPath('chill-jinshu-song-wide-bold.otf');
   const source = readFileSync(sourcePath);
   const buffer = source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength);
-  chillJinshuSongFont = opentype.parse(buffer);
+  chillJinshuSongFont = parseOpenTypeFont(buffer);
   return chillJinshuSongFont;
+}
+
+function parseOpenTypeFont(buffer: ArrayBuffer): Font {
+  const runtime = opentypeModule as unknown as {
+    default?: { parse?: (source: ArrayBuffer) => Font };
+    parse?: (source: ArrayBuffer) => Font;
+  };
+  const parse = runtime.parse ?? runtime.default?.parse;
+  if (!parse) {
+    throw new Error('当前 OpenType 运行时不支持字体解析。');
+  }
+  return parse(buffer);
 }
 
 function resolveMaterialFontPath(fileName: string): string {

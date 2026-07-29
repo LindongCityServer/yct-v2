@@ -127,8 +127,9 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
   <text x="0" y="45" transform="translate(70 0) scale({{fit.roadName.scaleX}} 1)" fill="#ffffff" font-family="'HarmonyOS Sans SC', sans-serif" font-size="32" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadName.letterSpacing}}">{{roadName}}</text>
   <text x="0" y="73" transform="translate(70 0) scale({{fit.roadNamePinyin.scaleX}} 1)" fill="#ffffff" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="17" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadNamePinyin.letterSpacing}}">{{roadNamePinyin}}</text>
   <text x="0" y="111" transform="translate(70 0) scale({{fit.postalCode.scaleX}} 1)" fill="#ffffff" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="15" font-weight="400" text-anchor="middle" letter-spacing="{{fit.postalCode.letterSpacing}}">邮政编码:{{postalCode}}</text>
-  <text x="0" y="107" transform="translate(196 0) scale({{fit.buildingNumber.scaleX}} 1)" fill="#A40000" font-family="Arial, sans-serif" font-size="126" font-weight="700" text-anchor="middle" letter-spacing="{{fit.buildingNumber.letterSpacing}}">{{buildingNumber}}</text>
-  <text x="247" y="107" fill="#A40000" font-family="'HarmonyOS Sans SC', sans-serif" font-size="14" font-weight="700" text-anchor="end">{{buildingSuffix}}</text>
+  <g transform="translate(197 0) scale({{fit.buildingNumber.scaleX}} 1)">
+    <text x="0" y="107" fill="#A40000" text-anchor="middle"><tspan font-family="Arial, sans-serif" font-size="126" font-weight="700">{{buildingNumber}}</tspan><tspan font-family="'HarmonyOS Sans SC', sans-serif" font-size="63" font-weight="700">{{buildingSuffix}}</tspan></text>
+  </g>
 </svg>`,
         fields: [
           {
@@ -145,7 +146,7 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             kind: 'text',
             required: true,
             maxLength: 32,
-            textFit: { maxWidth: 126, fontSize: 17, maxLetterSpacing: 1.5 },
+            textFit: { maxWidth: 112, fontSize: 17, maxLetterSpacing: 1.5 },
           },
           {
             key: 'postalCode',
@@ -161,7 +162,12 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             kind: 'text',
             required: true,
             maxLength: 8,
-            textFit: { maxWidth: 74, fontSize: 126, maxLetterSpacing: 0 },
+            textFit: {
+              maxWidth: 100,
+              fontSize: 126,
+              maxLetterSpacing: 0,
+              additionalFields: [{ fieldKey: 'buildingSuffix', fontSize: 63 }],
+            },
           },
           {
             key: 'buildingSuffix',
@@ -196,7 +202,7 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
         source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 128">
   <rect x="2" y="2" width="252" height="124" rx="14" fill="#FFFFFF"/>
   <rect x="9" y="9" width="238" height="110" rx="6" fill="#000099"/>
-  <g transform="translate(13 16)" fill="#FFFFFF">{{glyph.roadName}}</g>
+  <g transform="translate(13 10)" fill="#FFFFFF">{{glyph.roadName}}</g>
   <g transform="translate(80 21)" fill="#FFFFFF">{{glyph.buildingNumber}}</g>
   <text x="238" y="108" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="end">{{buildingSuffix}}</text>
 </svg>`,
@@ -221,7 +227,12 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             kind: 'text',
             required: true,
             maxLength: 8,
-            glyph: { renderer: 'nostalgic_digits', layoutWidth: 150, layoutHeight: 85 },
+            glyph: {
+              renderer: 'nostalgic_digits',
+              layoutWidth: 150,
+              layoutHeight: 85,
+              maxLetterSpacing: 10,
+            },
           },
           {
             key: 'buildingSuffix',

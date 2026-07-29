@@ -84,7 +84,7 @@
 
 `select` 字段必须提供 `options`，每项包含 `value` 和 `label`。字段键不可重复。
 
-`textFit` 只适用于 `text` 字段，数值使用源 SVG 的 `viewBox` 坐标：`maxWidth` 是文字可占用的最大宽度，`fontSize` 应与该 `<text>` 的 `font-size` 一致，`maxLetterSpacing` 为可选的最大字间距。使用时将三个变量同时写入该字段的 `<text>` 元素，例如：
+`textFit` 只适用于 `text` 字段，数值使用源 SVG 的 `viewBox` 坐标：`maxWidth` 是文字可占用的最大宽度，`fontSize` 应与该 `<text>` 的 `font-size` 一致，`maxLetterSpacing` 为可选的最大字间距。`additionalFields` 可以列出需要与主字段共同参与测宽的其他文本字段及其字号，适合门牌主号与附标使用不同字高、但需要整体横向压缩的排版。使用时将三个变量同时写入对应排版组，例如：
 
 ```svg
 <text
