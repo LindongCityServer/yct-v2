@@ -118,7 +118,7 @@ export function MaterialStudioPanel({
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
   const selectedLine = transitLines.find((line) => line.id === selectedLineId);
   const activeServerSource = selected
-    ? serverSources?.[selected.template.family] ?? serverSource
+    ? (serverSources?.[selected.template.family] ?? serverSource)
     : serverSource;
   const canUseServerSource = Boolean(
     activeServerSource &&
@@ -172,7 +172,10 @@ export function MaterialStudioPanel({
           })
           .catch(() => undefined),
       ];
-      if (serverSource === 'transit_line' || Object.values(serverSources ?? {}).includes('transit_line')) {
+      if (
+        serverSource === 'transit_line' ||
+        Object.values(serverSources ?? {}).includes('transit_line')
+      ) {
         pendingRequests.push(
           fetch(appPath('/api/materials/transit-lines'), { cache: 'no-store' })
             .then(async (response) => {
@@ -241,7 +244,10 @@ export function MaterialStudioPanel({
       return;
     }
     setInput(Object.fromEntries(selected.template.fields.map((field) => [field.key, ''])));
-    setCanvas(selected.template.defaultCanvas);
+    setCanvas({
+      ...selected.template.defaultCanvas,
+      pxPerMeter: selected.template.defaultCanvas.tileSizePx,
+    });
   }, [selected?.id, selected?.template.version]);
 
   useEffect(() => {
@@ -283,7 +289,16 @@ export function MaterialStudioPanel({
     key: TKey,
     value: MaterialCanvas[TKey],
   ) => {
-    setCanvas((current) => (current ? { ...current, [key]: value } : current));
+    setCanvas((current) => {
+      if (!current) {
+        return current;
+      }
+      if (key === 'tileSizePx') {
+        const resolution = Number(value);
+        return { ...current, pxPerMeter: resolution, tileSizePx: resolution };
+      }
+      return { ...current, [key]: value };
+    });
     clearPreview();
   };
 
@@ -832,17 +847,6 @@ function CanvasEditor({
           step="0.01"
           value={canvas.heightM}
           onChange={(event) => onChange('heightM', Number(event.currentTarget.value))}
-        />
-      </label>
-      <label>
-        <span>DPI</span>
-        <input
-          type="number"
-          min="16"
-          max="1024"
-          step="1"
-          value={canvas.pxPerMeter}
-          onChange={(event) => onChange('pxPerMeter', Number(event.currentTarget.value))}
         />
       </label>
       <label>
