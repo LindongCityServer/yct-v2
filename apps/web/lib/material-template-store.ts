@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { MaterialTemplateRecord, MaterialTemplateVersion } from '@yct/contracts';
 import { readRuntimeConfig } from './runtime-config';
+import { systemMaterialTemplateRecords } from './system-material-templates';
 
 interface MaterialTemplateStoreSnapshot {
   version: 1;
@@ -18,7 +19,12 @@ const retiredSystemTemplateIds = new Set([
 
 export async function listMaterialTemplateRecords(): Promise<MaterialTemplateRecord[]> {
   const snapshot = await readSnapshot();
-  return snapshot.records
+  const snapshotById = new Map(snapshot.records.map((record) => [record.id, record]));
+  const systemIds = new Set(systemMaterialTemplateRecords.map((record) => record.id));
+  return [
+    ...systemMaterialTemplateRecords.map((record) => snapshotById.get(record.id) ?? record),
+    ...snapshot.records.filter((record) => !systemIds.has(record.id)),
+  ]
     .filter((record) => !retiredSystemTemplateIds.has(record.id))
     .sort((left, right) => left.id.localeCompare(right.id));
 }

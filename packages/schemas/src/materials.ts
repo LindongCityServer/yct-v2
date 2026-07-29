@@ -33,10 +33,43 @@ export const materialTemplateFieldSchema = z
       .min(1)
       .max(64)
       .optional(),
+    selectVariableValues: z
+      .record(
+        z.string().trim().min(1).max(120),
+        z.record(
+          fieldKeySchema,
+          z.string().max(2_000),
+        ),
+      )
+      .optional(),
+    textFit: z
+      .object({
+        maxWidth: z.number().positive().max(32_768),
+        fontSize: z.number().positive().max(8_192),
+        maxLetterSpacing: z.number().nonnegative().max(1_024).optional(),
+      })
+      .optional(),
   })
   .superRefine((field, ctx) => {
     if (field.kind === 'select' && !field.options?.length) {
       ctx.addIssue({ code: 'custom', message: '下拉字段必须提供选项。', path: ['options'] });
+    }
+    if (field.selectVariableValues && field.kind !== 'select') {
+      ctx.addIssue({
+        code: 'custom',
+        message: '选择项派生变量只支持下拉字段。',
+        path: ['selectVariableValues'],
+      });
+    }
+    if (
+      field.selectVariableValues &&
+      field.options?.some((option) => !field.selectVariableValues?.[option.value])
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '每个下拉选项都必须提供选择项派生变量。',
+        path: ['selectVariableValues'],
+      });
     }
     if (
       field.minimum !== undefined &&
@@ -44,6 +77,13 @@ export const materialTemplateFieldSchema = z
       field.minimum > field.maximum
     ) {
       ctx.addIssue({ code: 'custom', message: '最小值不能大于最大值。', path: ['minimum'] });
+    }
+    if (field.textFit && field.kind !== 'text') {
+      ctx.addIssue({
+        code: 'custom',
+        message: '自适应排字只支持文本字段。',
+        path: ['textFit'],
+      });
     }
   });
 

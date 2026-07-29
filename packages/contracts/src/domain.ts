@@ -947,6 +947,12 @@ export type MaterialTemplateFieldKind = 'text' | 'number' | 'select';
 export type MaterialDraftStatus = 'draft' | 'pending_review' | 'approved' | 'rejected';
 export type MaterialSourceKind = 'manual' | 'transit_line' | 'map_location';
 
+export interface MaterialTextFitConfig {
+  maxWidth: number;
+  fontSize: number;
+  maxLetterSpacing?: number;
+}
+
 export interface MaterialTemplateField {
   key: string;
   label: string;
@@ -959,6 +965,8 @@ export interface MaterialTemplateField {
     value: string;
     label: string;
   }>;
+  selectVariableValues?: Record<string, Record<string, string>>;
+  textFit?: MaterialTextFitConfig;
 }
 
 export interface MaterialTypographyRule {

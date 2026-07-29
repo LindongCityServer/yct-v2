@@ -21,7 +21,10 @@ const prohibitedSourcePatterns = [
 export class MaterialTemplateSourceError extends Error {}
 export class MaterialInputError extends Error {}
 
-export function validateMaterialTemplateSource(source: string): void {
+export function validateMaterialTemplateSource(
+  source: string,
+  fields: MaterialTemplateField[] = [],
+): void {
   const normalized = source.trim();
   if (!/^<svg\b[^>]*>/i.test(normalized) || !/<\/svg>\s*$/i.test(normalized)) {
     throw new MaterialTemplateSourceError('模板源码必须是完整的 SVG 文档。');
@@ -33,11 +36,7 @@ export function validateMaterialTemplateSource(source: string): void {
     throw new MaterialTemplateSourceError('模板源码包含不允许的 SVG 功能或外部资源。');
   }
   for (const match of normalized.matchAll(/{{([^}]+)}}/g)) {
-    if (
-      !/^(?:[a-z][a-zA-Z0-9_]*|canvas\.(?:widthPx|heightPx|innerWidthPx|innerHeightPx|primaryFontPx|secondaryFontPx|captionFontPx|largeFontPx)|typography\.(?:primaryFontPx|secondaryFontPx|captionFontPx))$/.test(
-        match[1],
-      )
-    ) {
+    if (!isAllowedTemplateVariable(match[1], fields)) {
       throw new MaterialTemplateSourceError(`模板变量 ${match[1]} 不符合要求。`);
     }
   }
@@ -105,7 +104,7 @@ export function renderMaterialTemplateToSvg(input: {
   values: Record<string, string>;
   canvas: MaterialCanvasConfig;
 }): { svg: string; widthPx: number; heightPx: number } {
-  validateMaterialTemplateSource(input.template.source);
+  validateMaterialTemplateSource(input.template.source, input.template.fields);
   const values = validateMaterialInput(input.template.fields, input.values);
   const size = resolveMaterialOutputSize(input.canvas);
   const typography = resolveTypography(
@@ -114,7 +113,7 @@ export function renderMaterialTemplateToSvg(input: {
     input.canvas,
     size,
   );
-  const context = {
+  const context: Record<string, string> = {
     ...values,
     'canvas.widthPx': String(size.contentWidthPx),
     'canvas.heightPx': String(size.contentHeightPx),
@@ -128,8 +127,22 @@ export function renderMaterialTemplateToSvg(input: {
     'typography.secondaryFontPx': String(typography.secondaryFontPx),
     'typography.captionFontPx': String(typography.captionFontPx),
   };
+  for (const field of input.template.fields) {
+    if (!field.textFit) {
+      if (field.kind === 'select' && field.selectVariableValues) {
+        const selectedVariables = field.selectVariableValues[values[field.key]];
+        for (const [variableName, variableValue] of Object.entries(selectedVariables ?? {})) {
+          context[`select.${field.key}.${variableName}`] = variableValue;
+        }
+      }
+      continue;
+    }
+    const fit = resolveTextFit(values[field.key], field.textFit);
+    context[`fit.${field.key}.letterSpacing`] = formatSvgNumber(fit.letterSpacing);
+    context[`fit.${field.key}.scaleX`] = formatSvgNumber(fit.scaleX);
+  }
   const resolved = input.template.source.replace(/{{([^}]+)}}/g, (_match, key: string) =>
-    escapeXml(context[key as keyof typeof context] ?? ''),
+    escapeXml(context[key] ?? ''),
   );
   const sourceOpenTag = resolved.match(/^<svg\b[^>]*>/i)?.[0];
   const sourceViewBox = sourceOpenTag?.match(/\bviewBox\s*=\s*["']([^"']+)["']/i)?.[1];
@@ -170,6 +183,81 @@ function escapeXml(value: string): string {
     };
     return entityByCharacter[character];
   });
+}
+
+function isAllowedTemplateVariable(variable: string, fields: MaterialTemplateField[]): boolean {
+  if (
+    /^(?:[a-z][a-zA-Z0-9_]*|canvas\.(?:widthPx|heightPx|innerWidthPx|innerHeightPx|primaryFontPx|secondaryFontPx|captionFontPx|largeFontPx)|typography\.(?:primaryFontPx|secondaryFontPx|captionFontPx))$/.test(
+      variable,
+    )
+  ) {
+    return true;
+  }
+  const fitMatch = variable.match(/^fit\.([a-z][a-zA-Z0-9_]*)\.(letterSpacing|scaleX)$/);
+  if (fitMatch) {
+    return fields.some((field) => field.key === fitMatch[1] && field.textFit);
+  }
+  const selectMatch = variable.match(/^select\.([a-z][a-zA-Z0-9_]*)\.([a-z][a-zA-Z0-9_]*)$/);
+  return Boolean(
+    selectMatch &&
+      fields.some(
+        (field) =>
+          field.key === selectMatch[1] &&
+          field.kind === 'select' &&
+          Object.values(field.selectVariableValues ?? {}).every((variables) =>
+            Object.hasOwn(variables, selectMatch[2]),
+          ),
+      ),
+  );
+}
+
+function resolveTextFit(
+  value: string,
+  config: NonNullable<MaterialTemplateField['textFit']>,
+): { letterSpacing: number; scaleX: number } {
+  const naturalWidth = estimateTextWidth(value, config.fontSize);
+  if (!value || naturalWidth <= config.maxWidth) {
+    const gapCount = Math.max(Array.from(value).length - 1, 0);
+    const maxLetterSpacing = config.maxLetterSpacing ?? config.fontSize * 0.12;
+    const letterSpacing = gapCount
+      ? Math.min(maxLetterSpacing, Math.max(config.maxWidth - naturalWidth, 0) / gapCount)
+      : 0;
+    return {
+      letterSpacing,
+      scaleX: 1,
+    };
+  }
+  return { letterSpacing: 0, scaleX: config.maxWidth / naturalWidth };
+}
+
+function estimateTextWidth(value: string, fontSize: number): number {
+  return Array.from(value).reduce((width, character) => width + characterWidthFactor(character), 0) * fontSize;
+}
+
+function characterWidthFactor(character: string): number {
+  const codePoint = character.codePointAt(0) ?? 0;
+  if (/\s/u.test(character)) {
+    return 0.34;
+  }
+  if (
+    (codePoint >= 0x2e80 && codePoint <= 0x9fff) ||
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+    (codePoint >= 0xff01 && codePoint <= 0xff60) ||
+    (codePoint >= 0xffe0 && codePoint <= 0xffe6)
+  ) {
+    return 1;
+  }
+  if (/[,.;:!?，。；：！？、]/u.test(character)) {
+    return 0.38;
+  }
+  if (/[A-Z0-9]/u.test(character)) {
+    return 0.62;
+  }
+  return 0.56;
+}
+
+function formatSvgNumber(value: number): string {
+  return String(Math.round(value * 1_000) / 1_000);
 }
 
 function resolveTypography(

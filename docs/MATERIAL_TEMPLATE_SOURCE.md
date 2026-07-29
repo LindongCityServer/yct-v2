@@ -31,6 +31,11 @@
 - `{{typography.secondaryFontPx}}`
 - `{{typography.captionFontPx}}`
 
+文本字段可以配置 `textFit` 后，在 SVG 中使用对应字段的排字变量：
+
+- `{{fit.字段键.letterSpacing}}`：宽度有余量时增加的字间距。
+- `{{fit.字段键.scaleX}}`：文本超宽时小于 `1`，用于压缩字宽；正常情况下为 `1`。
+
 示例：
 
 ```svg
@@ -51,7 +56,12 @@
     "label": "道路名称",
     "kind": "text",
     "required": true,
-    "maxLength": 20
+    "maxLength": 20,
+    "textFit": {
+      "maxWidth": 180,
+      "fontSize": 32,
+      "maxLetterSpacing": 3
+    }
   },
   {
     "key": "designSpeedKph",
@@ -64,6 +74,41 @@
 ```
 
 `select` 字段必须提供 `options`，每项包含 `value` 和 `label`。字段键不可重复。
+
+`textFit` 只适用于 `text` 字段，数值使用源 SVG 的 `viewBox` 坐标：`maxWidth` 是文字可占用的最大宽度，`fontSize` 应与该 `<text>` 的 `font-size` 一致，`maxLetterSpacing` 为可选的最大字间距。使用时将三个变量同时写入该字段的 `<text>` 元素，例如：
+
+```svg
+<text
+  x="0"
+  text-anchor="middle"
+  transform="translate(120 0) scale({{fit.roadName.scaleX}} 1)"
+  letter-spacing="{{fit.roadName.letterSpacing}}"
+>{{roadName}}</text>
+```
+
+下拉字段可以配置 `selectVariableValues`，为每个选项预先定义多个受限派生值；SVG 通过 `{{select.字段键.变量键}}` 读取当前选项的值。这适合方位模式、图形路径或一项配置联动多处标签，且不会在 SVG 中执行脚本。
+
+```json
+{
+  "key": "directionMode",
+  "label": "方位模式",
+  "kind": "select",
+  "options": [
+    { "value": "west_east", "label": "左西右东" }
+  ],
+  "selectVariableValues": {
+    "west_east": {
+      "leftText": "西",
+      "rightText": "东"
+    }
+  }
+}
+```
+
+```svg
+<text>{{select.directionMode.leftText}}</text>
+<text>{{select.directionMode.rightText}}</text>
+```
 
 ## 设计时速与字高
 

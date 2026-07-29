@@ -526,7 +526,7 @@ function validateTemplatePayload(input: MaterialTemplateDraftInput): MaterialWor
     return invalidInputMessage('模板字段键不能重复。');
   }
   try {
-    validateMaterialTemplateSource(input.source);
+    validateMaterialTemplateSource(input.source, input.fields);
   } catch (error) {
     return invalidInput(error);
   }
