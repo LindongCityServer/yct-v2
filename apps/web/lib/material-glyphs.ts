@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import opentype from 'opentype.js';
 import type { MaterialGlyphConfig } from '@yct/contracts';
 
@@ -135,16 +135,23 @@ function getChillJinshuSongFont(): opentype.Font {
   if (chillJinshuSongFont) {
     return chillJinshuSongFont;
   }
-  const sourcePath = path.join(
-    /* turbopackIgnore: true */ process.cwd(),
-    'public',
-    'fonts',
-    'chill-jinshu-song-wide-bold.otf',
-  );
+  const sourcePath = resolveMaterialFontPath('chill-jinshu-song-wide-bold.otf');
   const source = readFileSync(sourcePath);
   const buffer = source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength);
   chillJinshuSongFont = opentype.parse(buffer);
   return chillJinshuSongFont;
+}
+
+function resolveMaterialFontPath(fileName: string): string {
+  const candidates = [
+    resolve(process.cwd(), 'public', 'fonts', fileName),
+    resolve(process.cwd(), 'apps', 'web', 'public', 'fonts', fileName),
+  ];
+  const sourcePath = candidates.find((candidate) => existsSync(candidate));
+  if (!sourcePath) {
+    throw new Error(`物料字体文件 ${fileName} 不存在。`);
+  }
+  return sourcePath;
 }
 
 function formatNumber(value: number): string {

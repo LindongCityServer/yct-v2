@@ -14,16 +14,17 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
         description: '按旧版路牌模板复现的中英文道路名称与双向方位牌。',
         family: 'road_sign',
         source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 128">
+  <rect x="0" y="64" width="256" height="64" fill="#ffffff"/>
   <rect x="4" y="68" width="248" height="40" fill="{{signColor}}"/>
   <rect x="4" y="108" width="248" height="20" fill="#ffffff"/>
   <path d="{{select.arrowMode.leftPath}}" fill="#ffffff"/>
   <path d="{{select.arrowMode.rightPath}}" fill="#ffffff"/>
-  <text x="24" y="92" fill="{{signColor}}" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="700" text-anchor="middle">{{select.directionMode.leftText}}</text>
-  <text x="232" y="92" fill="{{signColor}}" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="10" font-weight="700" text-anchor="middle">{{select.directionMode.rightText}}</text>
-  <text x="0" y="100" transform="translate(128 0) scale({{fit.roadName.scaleX}} 1)" fill="#ffffff" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="30" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadName.letterSpacing}}">{{roadName}}</text>
-  <text x="22" y="125" fill="{{signColor}}" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">{{select.directionMode.leftCode}}</text>
-  <text x="0" y="125" transform="translate(128 0) scale({{fit.roadNamePinyin.scaleX}} 1)" fill="{{signColor}}" font-family="Arial, Microsoft YaHei, sans-serif" font-size="16" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadNamePinyin.letterSpacing}}">{{roadNamePinyin}}</text>
-  <text x="234" y="125" fill="{{signColor}}" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">{{select.directionMode.rightCode}}</text>
+  <text x="24" y="92" fill="{{signColor}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="10" font-weight="700" text-anchor="middle">{{select.directionMode.leftText}}</text>
+  <text x="232" y="92" fill="{{signColor}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="10" font-weight="700" text-anchor="middle">{{select.directionMode.rightText}}</text>
+  <text x="0" y="100" transform="translate(128 0) scale({{fit.roadName.scaleX}} 1)" fill="#ffffff" font-family="'HarmonyOS Sans SC', sans-serif" font-size="30" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadName.letterSpacing}}">{{roadName}}</text>
+  <text x="22" y="125" fill="{{signColor}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="14" font-weight="700" text-anchor="middle">{{select.directionMode.leftCode}}</text>
+  <text x="0" y="125" transform="translate(128 0) scale({{fit.roadNamePinyin.scaleX}} 1)" fill="{{signColor}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="16" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadNamePinyin.letterSpacing}}">{{roadNamePinyin}}</text>
+  <text x="234" y="125" fill="{{signColor}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="14" font-weight="700" text-anchor="middle">{{select.directionMode.rightCode}}</text>
 </svg>`,
         fields: [
           {
@@ -123,11 +124,11 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
         source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 128">
   <rect width="256" height="128" fill="#0054C2"/>
   <rect x="143" y="5" width="109" height="118" fill="#F8FADE"/>
-  <text x="0" y="45" transform="translate(70 0) scale({{fit.roadName.scaleX}} 1)" fill="#ffffff" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="32" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadName.letterSpacing}}">{{roadName}}</text>
-  <text x="0" y="73" transform="translate(70 0) scale({{fit.roadNamePinyin.scaleX}} 1)" fill="#ffffff" font-family="Arial, Microsoft YaHei, sans-serif" font-size="17" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadNamePinyin.letterSpacing}}">{{roadNamePinyin}}</text>
-  <text x="0" y="111" transform="translate(70 0) scale({{fit.postalCode.scaleX}} 1)" fill="#ffffff" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="15" font-weight="400" text-anchor="middle" letter-spacing="{{fit.postalCode.letterSpacing}}">邮政编码:{{postalCode}}</text>
-  <text x="0" y="109" transform="translate(190 0) scale({{fit.buildingNumber.scaleX}} 1)" fill="#A40000" font-family="Arial, Microsoft YaHei, sans-serif" font-size="98" font-weight="700" text-anchor="middle" letter-spacing="{{fit.buildingNumber.letterSpacing}}">{{buildingNumber}}</text>
-  <text x="246" y="112" fill="#A40000" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="22" font-weight="700" text-anchor="end">{{buildingSuffix}}</text>
+  <text x="0" y="45" transform="translate(70 0) scale({{fit.roadName.scaleX}} 1)" fill="#ffffff" font-family="'HarmonyOS Sans SC', sans-serif" font-size="32" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadName.letterSpacing}}">{{roadName}}</text>
+  <text x="0" y="73" transform="translate(70 0) scale({{fit.roadNamePinyin.scaleX}} 1)" fill="#ffffff" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="17" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadNamePinyin.letterSpacing}}">{{roadNamePinyin}}</text>
+  <text x="0" y="111" transform="translate(70 0) scale({{fit.postalCode.scaleX}} 1)" fill="#ffffff" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="15" font-weight="400" text-anchor="middle" letter-spacing="{{fit.postalCode.letterSpacing}}">邮政编码:{{postalCode}}</text>
+  <text x="0" y="107" transform="translate(196 0) scale({{fit.buildingNumber.scaleX}} 1)" fill="#A40000" font-family="Arial, sans-serif" font-size="126" font-weight="700" text-anchor="middle" letter-spacing="{{fit.buildingNumber.letterSpacing}}">{{buildingNumber}}</text>
+  <text x="247" y="107" fill="#A40000" font-family="'HarmonyOS Sans SC', sans-serif" font-size="14" font-weight="700" text-anchor="end">{{buildingSuffix}}</text>
 </svg>`,
         fields: [
           {
@@ -160,7 +161,7 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             kind: 'text',
             required: true,
             maxLength: 8,
-            textFit: { maxWidth: 76, fontSize: 98, maxLetterSpacing: 0 },
+            textFit: { maxWidth: 74, fontSize: 126, maxLetterSpacing: 0 },
           },
           {
             key: 'buildingSuffix',
@@ -197,7 +198,7 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
   <rect x="9" y="9" width="238" height="110" rx="6" fill="#000099"/>
   <g transform="translate(13 16)" fill="#FFFFFF">{{glyph.roadName}}</g>
   <g transform="translate(80 21)" fill="#FFFFFF">{{glyph.buildingNumber}}</g>
-  <text x="238" y="108" fill="#FFFFFF" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" font-size="20" font-weight="700" text-anchor="end">{{buildingSuffix}}</text>
+  <text x="238" y="108" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="end">{{buildingSuffix}}</text>
 </svg>`,
         fields: [
           {
