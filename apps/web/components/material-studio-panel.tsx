@@ -53,11 +53,15 @@ interface TransitLineOption {
 
 interface TransitStationLineOption {
   id: string;
+  lineId: string;
+  travelDirection: 'forward' | 'reverse';
   name: string;
   operator?: string;
   firstLastBus: string;
-  forwardStations: string;
-  reverseStations: string;
+  destinationName: string;
+  stationNames: string[];
+  currentStationIndex: number;
+  nextStationName?: string;
   direction: 'east' | 'west' | 'north' | 'south' | 'unknown';
   isOriginAtStation: boolean;
   isTerminalAtStation: boolean;
@@ -680,6 +684,7 @@ export function MaterialStudioPanel({
                   value={selectedTransitStationMarkerId}
                   onChange={(event) => {
                     setSelectedTransitStationMarkerId(event.currentTarget.value);
+                    setSelectedTransitLineIds([]);
                     clearPreview();
                   }}
                   disabled={isBusy || !transitStations.length}
@@ -699,6 +704,7 @@ export function MaterialStudioPanel({
                     setTransitDirection(
                       event.currentTarget.value as 'east' | 'west' | 'north' | 'south',
                     );
+                    setSelectedTransitLineIds([]);
                     clearPreview();
                   }}
                   disabled={
@@ -721,6 +727,7 @@ export function MaterialStudioPanel({
                     value={transitTerminalRole}
                     onChange={(event) => {
                       setTransitTerminalRole(event.currentTarget.value as 'origin' | 'terminal');
+                      setSelectedTransitLineIds([]);
                       clearPreview();
                     }}
                     disabled={isBusy || !selectedTransitStation}
@@ -754,7 +761,7 @@ export function MaterialStudioPanel({
                           }}
                         />
                         <span>
-                          {line.name} · {line.firstLastBus}
+                          {line.name} · 往 {line.destinationName || '终点待维护'} · {line.firstLastBus}
                           {line.operator ? ` · ${line.operator}` : ''}
                           {line.isOriginAtStation ? ' · 当前站始发' : ''}
                           {line.isTerminalAtStation ? ' · 当前站终到' : ''}

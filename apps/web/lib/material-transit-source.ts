@@ -5,11 +5,13 @@ import {
   listMaterialLocations,
   type MaterialLocationOption,
 } from './material-location-source';
+import { findMaterialTransitLineNumber } from './entity-translation-store';
 import { readTransitOverview } from './transit-data';
 import type { TransitLineStopSummary, TransitLineSummary } from './legacy-transit';
 
 export type MaterialTransitDirection = 'east' | 'west' | 'north' | 'south';
 export type MaterialTransitTerminalRole = 'origin' | 'terminal';
+export type MaterialTransitTravelDirection = 'forward' | 'reverse';
 type MaterialTransitLineDirection = MaterialTransitDirection | 'unknown';
 
 export interface MaterialTransitLineOption {
@@ -25,11 +27,15 @@ export interface MaterialTransitLineOption {
 
 export interface MaterialTransitStationLineOption {
   id: string;
+  lineId: string;
+  travelDirection: MaterialTransitTravelDirection;
   name: string;
   operator?: string;
   firstLastBus: string;
-  forwardStations: string;
-  reverseStations: string;
+  destinationName: string;
+  stationNames: string[];
+  currentStationIndex: number;
+  nextStationName?: string;
   direction: MaterialTransitLineDirection;
   isOriginAtStation: boolean;
   isTerminalAtStation: boolean;
@@ -127,11 +133,10 @@ export async function listMaterialTransitStations(): Promise<MaterialTransitStat
         stationName: stop.stationName,
         candidates: [],
       };
-      if (!current.candidates.some((candidate) => candidate.id === line.id)) {
-        current.candidates.push({
-          ...createTransitStationLineCandidate(line, stationStopIndex),
-          stationStopIndex,
-        });
+      for (const lineCandidate of createTransitStationLineCandidates(line, stationStopIndex)) {
+        if (!current.candidates.some((candidate) => candidate.id === lineCandidate.id)) {
+          current.candidates.push(lineCandidate);
+        }
       }
       candidateByMarkerId.set(markerId, current);
     });
@@ -143,11 +148,13 @@ export async function listMaterialTransitStations(): Promise<MaterialTransitStat
         ? await findMaterialRoadAtCoordinate(candidate.marker.coordinate)
         : undefined;
       const lines = candidate.candidates
-        .map(({ stationStopIndex, ...line }) => ({
+        .map(({ stationStopIndex, travelDirection, ...line }) => ({
           ...line,
+          travelDirection,
           direction: resolveTransitLineDirection({
-            line: overview.lines.find((item) => item.id === line.id),
+            line: overview.lines.find((item) => item.id === line.lineId),
             stationStopIndex,
+            travelDirection,
             stationCoordinate: candidate.marker.coordinate,
             coordinateByStationSourceId,
             road,
@@ -255,21 +262,22 @@ export async function resolveTransitStationMaterialInput(input: {
     stationName: station.stationName,
     stationNamePinyin: toUppercaseRoadPinyin(station.stationName),
   };
+  const lineNumbers = await Promise.all(
+    selectedLines.map((line) => resolveMaterialTransitLineNumber(line.lineId, line.name)),
+  );
   selectedLines.forEach((line, index) => {
     const slot = index + 1;
-    candidates[`route${slot}Number`] = line.name;
+    const lineNumber = lineNumbers[index];
+    candidates[`route${slot}Number`] = lineNumber;
     candidates[`route${slot}FirstLast`] = line.firstLastBus;
-    candidates[`route${slot}ForwardStations`] = line.forwardStations;
-    candidates[`route${slot}ReverseStations`] = line.reverseStations;
     if (index === 0) {
-      candidates.routeNumber = line.name;
+      candidates.routeNumber = lineNumber;
       candidates.routeFirstLast = line.firstLastBus;
-      candidates.routeForwardStations = line.forwardStations;
-      candidates.routeReverseStations = line.reverseStations;
-      candidates.nextStation = resolveNextStation(line);
-      candidates.routeOrigin = line.reverseStations.split(' / ').at(-1) ?? '';
-      candidates.routeTerminal = line.forwardStations.split(' / ').at(-1) ?? '';
-      assignDetailStationFields(candidates, line);
+      candidates.nextStation = line.nextStationName ?? '';
+      candidates.routeOrigin = line.stationNames[0] ?? '';
+      candidates.routeTerminal = line.destinationName;
+      candidates.routeStations = line.stationNames.join('\n');
+      candidates.currentStationIndex = String(line.currentStationIndex);
     }
   });
   if (input.terminalRole) {
@@ -295,26 +303,42 @@ function findBusStopLocation(
   return locationByName.get(normalizeStationName(stop.stationName));
 }
 
-function createTransitStationLineCandidate(
+function createTransitStationLineCandidates(
   line: TransitLineSummary,
   stationStopIndex: number,
-): Omit<TransitStationLineCandidate, 'stationStopIndex' | 'direction'> {
+): TransitStationLineCandidate[] {
   const stationNames = line.stationStops.map((stop) => stop.stationName);
-  return {
-    id: line.id,
-    name: line.name,
-    operator: line.operator,
-    firstLastBus: formatFirstLastBus(line),
-    forwardStations: stationNames.slice(stationStopIndex).join(' / '),
-    reverseStations: stationNames.slice(0, stationStopIndex + 1).reverse().join(' / '),
-    isOriginAtStation: stationStopIndex === 0,
-    isTerminalAtStation: stationStopIndex === stationNames.length - 1,
-  };
+  const directions: MaterialTransitTravelDirection[] =
+    stationNames.length > 1 ? ['forward', 'reverse'] : ['forward'];
+  return directions.map((travelDirection) => {
+    const orderedStationNames =
+      travelDirection === 'forward' ? stationNames : [...stationNames].reverse();
+    const currentStationIndex =
+      travelDirection === 'forward'
+        ? stationStopIndex
+        : orderedStationNames.length - stationStopIndex - 1;
+    return {
+      id: `${line.id}:${travelDirection}`,
+      lineId: line.id,
+      travelDirection,
+      name: line.name,
+      operator: line.operator,
+      firstLastBus: formatFirstLastBus(line),
+      destinationName: orderedStationNames.at(-1) ?? '',
+      stationNames: orderedStationNames,
+      currentStationIndex,
+      nextStationName: orderedStationNames[currentStationIndex + 1],
+      isOriginAtStation: currentStationIndex === 0,
+      isTerminalAtStation: currentStationIndex === orderedStationNames.length - 1,
+      stationStopIndex,
+    };
+  });
 }
 
 function resolveTransitLineDirection(input: {
   line: TransitLineSummary | undefined;
   stationStopIndex: number;
+  travelDirection: MaterialTransitTravelDirection;
   stationCoordinate: [number, number] | undefined;
   coordinateByStationSourceId: Map<string, [number, number]>;
   road: Awaited<ReturnType<typeof findMaterialRoadAtCoordinate>>;
@@ -322,20 +346,30 @@ function resolveTransitLineDirection(input: {
   if (!input.line || !input.stationCoordinate || !input.road) {
     return 'unknown';
   }
-  const nextStop = input.line.stationStops[input.stationStopIndex + 1];
-  const previousStop = input.line.stationStops[input.stationStopIndex - 1];
-  const adjacentCoordinate = nextStop?.stationSourceId
+  const step = input.travelDirection === 'forward' ? 1 : -1;
+  const nextStop = input.line.stationStops[input.stationStopIndex + step];
+  const previousStop = input.line.stationStops[input.stationStopIndex - step];
+  const nextCoordinate = nextStop?.stationSourceId
     ? input.coordinateByStationSourceId.get(nextStop.stationSourceId)
-    : previousStop?.stationSourceId
-      ? input.coordinateByStationSourceId.get(previousStop.stationSourceId)
-      : undefined;
-  if (!adjacentCoordinate) {
+    : undefined;
+  const previousCoordinate = previousStop?.stationSourceId
+    ? input.coordinateByStationSourceId.get(previousStop.stationSourceId)
+    : undefined;
+  const lineVectorX = nextCoordinate
+    ? nextCoordinate[0] - input.stationCoordinate[0]
+    : previousCoordinate
+      ? input.stationCoordinate[0] - previousCoordinate[0]
+      : 0;
+  const lineVectorZ = nextCoordinate
+    ? nextCoordinate[1] - input.stationCoordinate[1]
+    : previousCoordinate
+      ? input.stationCoordinate[1] - previousCoordinate[1]
+      : 0;
+  if (!nextCoordinate && !previousCoordinate) {
     return 'unknown';
   }
   const roadVectorX = input.road.projection.segmentEnd[0] - input.road.projection.segmentStart[0];
   const roadVectorZ = input.road.projection.segmentEnd[1] - input.road.projection.segmentStart[1];
-  const lineVectorX = adjacentCoordinate[0] - input.stationCoordinate[0];
-  const lineVectorZ = adjacentCoordinate[1] - input.stationCoordinate[1];
   const roadRunsNorthSouth = Math.abs(roadVectorZ) > Math.abs(roadVectorX);
   const axisDelta = roadRunsNorthSouth ? lineVectorZ : lineVectorX;
   if (Math.abs(axisDelta) < 0.001) {
@@ -367,24 +401,6 @@ function resolveMaterialTransitDirectionOptions(
       ];
 }
 
-function resolveNextStation(line: MaterialTransitStationLineOption): string {
-  return line.forwardStations.split(' / ').at(1) ?? line.reverseStations.split(' / ').at(1) ?? '';
-}
-
-function assignDetailStationFields(
-  candidates: Record<string, string>,
-  line: MaterialTransitStationLineOption,
-): void {
-  const forwardStations = line.forwardStations.split(' / ').filter(Boolean);
-  const reverseStations = line.reverseStations.split(' / ').filter(Boolean);
-  const stationNames = [...reverseStations.slice(1).reverse(), ...forwardStations];
-  const currentIndex = Math.max(stationNames.length - forwardStations.length, 0);
-  stationNames.slice(0, 12).forEach((stationName, index) => {
-    candidates[`routeStation${index + 1}`] = stationName;
-  });
-  candidates.currentStationPosition = currentIndex < 12 ? String(currentIndex + 1) : 'none';
-}
-
 function resolveTemplateLineCapacity(fields: MaterialTemplateField[]): number {
   const numberedSlots = fields
     .map((field) => field.key.match(/^route(\d+)Number$/)?.[1])
@@ -409,6 +425,15 @@ function formatFirstLastBus(line: TransitLineSummary): string {
     return `末 ${last}`;
   }
   return '首末班时间待维护';
+}
+
+async function resolveMaterialTransitLineNumber(lineId: string, lineName: string): Promise<string> {
+  const override = await findMaterialTransitLineNumber(lineId);
+  if (override) {
+    return override;
+  }
+  const defaultNumber = lineName.trim().replace(/路$/u, '').trim();
+  return defaultNumber || lineName.trim();
 }
 
 function getMarkerId(locationId: string): string {

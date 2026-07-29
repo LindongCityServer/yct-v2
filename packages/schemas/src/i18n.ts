@@ -16,6 +16,7 @@ export const entityTranslationUpdateSchema = z.object({
     en: z.string().trim().max(300).optional(),
   }),
   roadSignPinyin: z.string().trim().max(300).optional(),
+  materialLineNumber: z.string().trim().max(64).optional(),
 });
 
 export type LocalePreferenceInput = z.infer<typeof localePreferenceSchema>;

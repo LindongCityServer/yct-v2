@@ -33,12 +33,17 @@ export async function findRoadSignPinyin(roadName: string): Promise<string | und
     ?.roadSignPinyin;
 }
 
+export async function findMaterialTransitLineNumber(lineId: string): Promise<string | undefined> {
+  return (await findEntityTranslation('transit_line', lineId))?.materialLineNumber;
+}
+
 export async function upsertEntityTranslation(input: {
   entityKind: TranslatableEntityKind;
   entityId: string;
   sourceText: string;
   localizedLabels: LocalizedLabelMap;
   roadSignPinyin?: string;
+  materialLineNumber?: string;
   actorId: string;
 }): Promise<EntityTranslationRecord> {
   const snapshot = await readSnapshot();
@@ -54,13 +59,20 @@ export async function upsertEntityTranslation(input: {
     roadSignPinyin: Object.prototype.hasOwnProperty.call(input, 'roadSignPinyin')
       ? normalizeRoadSignPinyin(input.roadSignPinyin)
       : previous?.roadSignPinyin,
+    materialLineNumber: Object.prototype.hasOwnProperty.call(input, 'materialLineNumber')
+      ? normalizeMaterialTransitLineNumber(input.materialLineNumber)
+      : previous?.materialLineNumber,
     updatedBy: input.actorId,
     updatedAt,
   };
   const nextItems = snapshot.items.filter(
     (item) => item.entityKind !== input.entityKind || item.entityId !== input.entityId,
   );
-  if (Object.keys(record.localizedLabels).length > 0 || record.roadSignPinyin) {
+  if (
+    Object.keys(record.localizedLabels).length > 0 ||
+    record.roadSignPinyin ||
+    record.materialLineNumber
+  ) {
     nextItems.push(record);
   }
   await writeSnapshot({
@@ -76,6 +88,10 @@ export function normalizeRoadSignPinyin(value: string | undefined): string | und
     .replace(/[\s\u3000]+/gu, ' ')
     .toLocaleUpperCase('zh-CN');
   return normalized || undefined;
+}
+
+export function normalizeMaterialTransitLineNumber(value: string | undefined): string | undefined {
+  return value?.trim() || undefined;
 }
 
 export function buildEntityTranslationMap(

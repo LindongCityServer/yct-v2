@@ -605,6 +605,19 @@ export interface MaterialRoadPinyinOverrideDeletedPayload {
   occurredAt: ISODateTimeString;
 }
 
+export interface MaterialTransitLineNumberOverrideUpsertedPayload {
+  lineId: string;
+  lineNumber: string;
+  actorId: string;
+  occurredAt: ISODateTimeString;
+}
+
+export interface MaterialTransitLineNumberOverrideDeletedPayload {
+  lineId: string;
+  actorId: string;
+  occurredAt: ISODateTimeString;
+}
+
 export interface MapFavoritesUpdatedPayload {
   userId: string;
   markerIds: string[];
@@ -1100,6 +1113,8 @@ export type YctEventPayloadMap = {
   EntityTranslationUpdated: EntityTranslationUpdatedPayload;
   MaterialRoadPinyinOverrideUpserted: MaterialRoadPinyinOverrideUpsertedPayload;
   MaterialRoadPinyinOverrideDeleted: MaterialRoadPinyinOverrideDeletedPayload;
+  MaterialTransitLineNumberOverrideUpserted: MaterialTransitLineNumberOverrideUpsertedPayload;
+  MaterialTransitLineNumberOverrideDeleted: MaterialTransitLineNumberOverrideDeletedPayload;
   MapFavoritesUpdated: MapFavoritesUpdatedPayload;
   LdpassUserLinked: LdpassUserLinkedPayload;
   YctSessionStarted: YctSessionStartedPayload;

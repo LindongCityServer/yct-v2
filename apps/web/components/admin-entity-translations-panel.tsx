@@ -11,7 +11,10 @@ import { appPath } from '../lib/app-paths';
 import { roadNameTranslationEntityId } from '../lib/entity-translation-keys';
 import { isMapRoadGeometryMarker } from '../lib/map-road-geometry';
 
-type EntityTranslationDraft = LocalizedLabelMap & { roadSignPinyin?: string };
+type EntityTranslationDraft = LocalizedLabelMap & {
+  roadSignPinyin?: string;
+  materialLineNumber?: string;
+};
 
 interface TranslationEntity {
   kind: TranslatableEntityKind;
@@ -19,6 +22,7 @@ interface TranslationEntity {
   sourceText: string;
   typeLabel: string;
   supportsRoadSignPinyin: boolean;
+  supportsMaterialLineNumber: boolean;
 }
 
 interface TransitOverviewForTranslations {
@@ -93,7 +97,11 @@ export function AdminEntityTranslationsPanel() {
           Object.fromEntries(
             nextRecords.map((record) => [
               translationEntityKey(record),
-              { ...record.localizedLabels, roadSignPinyin: record.roadSignPinyin },
+              {
+                ...record.localizedLabels,
+                roadSignPinyin: record.roadSignPinyin,
+                materialLineNumber: record.materialLineNumber,
+              },
             ]),
           ),
         );
@@ -127,6 +135,7 @@ export function AdminEntityTranslationsPanel() {
             draft['zh-Hant'],
             draft.en,
             draft.roadSignPinyin,
+            draft.materialLineNumber,
           ]
             .filter(Boolean)
             .join(' '),
@@ -159,6 +168,9 @@ export function AdminEntityTranslationsPanel() {
           roadSignPinyin: entity.supportsRoadSignPinyin
             ? (drafts[key]?.roadSignPinyin ?? '')
             : undefined,
+          materialLineNumber: entity.supportsMaterialLineNumber
+            ? (drafts[key]?.materialLineNumber ?? '')
+            : undefined,
         }),
       });
       const data = (await response.json()) as {
@@ -180,6 +192,7 @@ export function AdminEntityTranslationsPanel() {
         [key]: {
           ...data.item!.localizedLabels,
           roadSignPinyin: data.item!.roadSignPinyin,
+          materialLineNumber: data.item!.materialLineNumber,
         },
       }));
       setStatus(`已保存：${entity.sourceText}`);
@@ -289,6 +302,17 @@ export function AdminEntityTranslationsPanel() {
                     maxLength={300}
                   />
                 </label>
+              ) : entity.supportsMaterialLineNumber ? (
+                <label>
+                  <span>物料线路编号</span>
+                  <input
+                    value={draft.materialLineNumber ?? ''}
+                    onChange={(event) =>
+                      updateDraft(entity, { materialLineNumber: event.currentTarget.value })
+                    }
+                    maxLength={64}
+                  />
+                </label>
               ) : (
                 <span className="admin-translation-pinyin-spacer" aria-hidden="true" />
               )}
@@ -325,6 +349,7 @@ function buildTranslationEntities(
       sourceText: marker.label,
       typeLabel: getMapMarkerTranslationTypeLabel(marker, iconDisplayNames),
       supportsRoadSignPinyin: isRoad,
+      supportsMaterialLineNumber: false,
     };
     entities.set(translationEntityKey(entity), entity);
   }
@@ -335,6 +360,7 @@ function buildTranslationEntities(
       sourceText: line.name,
       typeLabel: '线路名',
       supportsRoadSignPinyin: false,
+      supportsMaterialLineNumber: true,
     };
     entities.set(translationEntityKey(lineEntity), lineEntity);
     for (const stop of line.stationStops ?? []) {
@@ -347,6 +373,7 @@ function buildTranslationEntities(
         sourceText: stop.stationName,
         typeLabel: '站名',
         supportsRoadSignPinyin: false,
+        supportsMaterialLineNumber: false,
       };
       entities.set(translationEntityKey(stationEntity), stationEntity);
     }

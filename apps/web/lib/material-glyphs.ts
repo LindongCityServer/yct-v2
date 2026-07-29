@@ -106,7 +106,46 @@ export function renderMaterialGlyph(
     const suffix = config.suffixFieldKey ? (values[config.suffixFieldKey] ?? '') : '';
     return renderNostalgicAddressNumber(value, suffix, config);
   }
+  if (config.renderer === 'transit_station_list') {
+    const currentIndex = config.currentIndexFieldKey
+      ? Number.parseInt(values[config.currentIndexFieldKey] ?? '', 10)
+      : -1;
+    return renderTransitStationList(value, currentIndex, config);
+  }
   return renderVerticalChillJinshuSong(value, config);
+}
+
+function renderTransitStationList(
+  value: string,
+  currentIndex: number,
+  config: MaterialGlyphConfig,
+): string {
+  const stations = value
+    .split(/\r?\n|\s*\/\s*/u)
+    .map((station) => station.trim())
+    .filter(Boolean);
+  if (!stations.length) {
+    return '';
+  }
+  const leftCount = Math.ceil(stations.length / 2);
+  const rowCount = Math.max(leftCount, stations.length - leftCount);
+  const rowHeight = config.layoutHeight / rowCount;
+  const fontSize = Math.min(config.fontSize ?? 5, rowHeight * 0.72);
+  const columnWidth = config.layoutWidth / 2;
+  const maxTextWidth = columnWidth - 4;
+  const paths = stations.map((station, index) => {
+    const isLeft = index < leftCount;
+    const row = isLeft ? index : index - leftCount;
+    const x = columnWidth * (isLeft ? 0.5 : 1.5);
+    const y = rowHeight * (row + 0.7);
+    const color = index === currentIndex ? '#C11111' : '#1D2F78';
+    const textLength =
+      Array.from(station).length > 1
+        ? ` textLength="${formatNumber(maxTextWidth)}" lengthAdjust="spacingAndGlyphs"`
+        : '';
+    return `<text x="${formatNumber(x)}" y="${formatNumber(y)}" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="700" text-anchor="middle"${textLength}>${escapeXml(station)}</text>`;
+  });
+  return `<g>${paths.join('')}</g>`;
 }
 
 function renderNostalgicDigits(value: string, config: MaterialGlyphConfig): string {
@@ -263,4 +302,17 @@ function resolveMaterialFontPath(fileName: string): string {
 
 function formatNumber(value: number): string {
   return String(Math.round(value * 1_000) / 1_000);
+}
+
+function escapeXml(value: string): string {
+  return value.replace(/[<>&"']/g, (character) => {
+    const entityByCharacter: Record<string, string> = {
+      '<': '&lt;',
+      '>': '&gt;',
+      '&': '&amp;',
+      '"': '&quot;',
+      "'": '&apos;',
+    };
+    return entityByCharacter[character];
+  });
 }

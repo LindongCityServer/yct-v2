@@ -55,12 +55,18 @@ export const materialTemplateFieldSchema = z
       .optional(),
     glyph: z
       .object({
-        renderer: z.enum(['nostalgic_digits', 'nostalgic_address_number', 'chill_jinshu_vertical']),
+        renderer: z.enum([
+          'nostalgic_digits',
+          'nostalgic_address_number',
+          'chill_jinshu_vertical',
+          'transit_station_list',
+        ]),
         layoutWidth: z.number().positive().max(32_768),
         layoutHeight: z.number().positive().max(32_768),
         fontSize: z.number().positive().max(8_192).optional(),
         maxLetterSpacing: z.number().nonnegative().max(1_024).optional(),
         suffixFieldKey: fieldKeySchema.optional(),
+        currentIndexFieldKey: fieldKeySchema.optional(),
       })
       .optional(),
   })
@@ -118,6 +124,13 @@ export const materialTemplateFieldSchema = z
         code: 'custom',
         message: '怀旧门牌组合字形必须指定附标字段。',
         path: ['glyph', 'suffixFieldKey'],
+      });
+    }
+    if (field.glyph?.renderer === 'transit_station_list' && !field.glyph.currentIndexFieldKey) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '公交站点列表字形必须指定当前站索引字段。',
+        path: ['glyph', 'currentIndexFieldKey'],
       });
     }
   });
@@ -184,6 +197,23 @@ export const materialTemplateDraftSchema = z
             code: 'custom',
             message: '组合字形的附标字段必须引用另一个文本字段。',
             path: ['fields', fieldIndex, 'glyph', 'suffixFieldKey'],
+          });
+        }
+      }
+      const currentIndexFieldKey = field.glyph?.currentIndexFieldKey;
+      if (currentIndexFieldKey) {
+        const referencedField = template.fields.find(
+          (candidate) => candidate.key === currentIndexFieldKey,
+        );
+        if (
+          currentIndexFieldKey === field.key ||
+          !referencedField ||
+          (referencedField.kind !== 'number' && referencedField.kind !== 'text')
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            message: '公交站点列表字形的当前站索引字段必须是数字或文本字段。',
+            path: ['fields', fieldIndex, 'glyph', 'currentIndexFieldKey'],
           });
         }
       }

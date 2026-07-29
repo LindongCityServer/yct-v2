@@ -5,26 +5,6 @@ import type { MaterialTemplateRecord } from '@yct/contracts';
 const systemActorId = 'system';
 const systemPublishedAt = '2026-07-29T00:00:00.000Z';
 
-const detailStationPositionOptions = [
-  { value: 'none', label: '不标红当前站' },
-  ...Array.from({ length: 12 }, (_value, index) => ({
-    value: String(index + 1),
-    label: `第 ${index + 1} 站`,
-  })),
-];
-
-const detailStationPositionVariableValues = Object.fromEntries(
-  detailStationPositionOptions.map((option) => [
-    option.value,
-    Object.fromEntries(
-      Array.from({ length: 12 }, (_value, index) => [
-        `color${index + 1}`,
-        option.value === String(index + 1) ? '#C11111' : '#1D2F78',
-      ]),
-    ),
-  ]),
-);
-
 const busStopOverviewSource = createBusStopTemplateSource(
   'overview.svg',
   `<g id="material-dynamic-fields">
@@ -53,18 +33,7 @@ const busStopDetailSource = createBusStopTemplateSource(
   <text x="0" y="34" transform="translate(81 0) scale({{fit.routeFirstLast.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeFirstLast}}</text>
   <rect x="16" y="41" width="46" height="79" fill="#FFFFFF"/>
   <rect x="66" y="41" width="46" height="79" fill="#FFFFFF"/>
-  <text x="0" y="51" transform="translate(39 0) scale({{fit.routeStation1.scaleX}} 1)" fill="{{select.currentStationPosition.color1}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeStation1}}</text>
-  <text x="0" y="64" transform="translate(39 0) scale({{fit.routeStation2.scaleX}} 1)" fill="{{select.currentStationPosition.color2}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeStation2}}</text>
-  <text x="0" y="77" transform="translate(39 0) scale({{fit.routeStation3.scaleX}} 1)" fill="{{select.currentStationPosition.color3}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeStation3}}</text>
-  <text x="0" y="90" transform="translate(39 0) scale({{fit.routeStation4.scaleX}} 1)" fill="{{select.currentStationPosition.color4}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeStation4}}</text>
-  <text x="0" y="103" transform="translate(39 0) scale({{fit.routeStation5.scaleX}} 1)" fill="{{select.currentStationPosition.color5}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeStation5}}</text>
-  <text x="0" y="116" transform="translate(39 0) scale({{fit.routeStation6.scaleX}} 1)" fill="{{select.currentStationPosition.color6}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeStation6}}</text>
-  <text x="0" y="51" transform="translate(89 0) scale({{fit.routeStation7.scaleX}} 1)" fill="{{select.currentStationPosition.color7}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeStation7}}</text>
-  <text x="0" y="64" transform="translate(89 0) scale({{fit.routeStation8.scaleX}} 1)" fill="{{select.currentStationPosition.color8}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeStation8}}</text>
-  <text x="0" y="77" transform="translate(89 0) scale({{fit.routeStation9.scaleX}} 1)" fill="{{select.currentStationPosition.color9}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeStation9}}</text>
-  <text x="0" y="90" transform="translate(89 0) scale({{fit.routeStation10.scaleX}} 1)" fill="{{select.currentStationPosition.color10}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeStation10}}</text>
-  <text x="0" y="103" transform="translate(89 0) scale({{fit.routeStation11.scaleX}} 1)" fill="{{select.currentStationPosition.color11}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeStation11}}</text>
-  <text x="0" y="116" transform="translate(89 0) scale({{fit.routeStation12.scaleX}} 1)" fill="{{select.currentStationPosition.color12}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeStation12}}</text>
+  <g transform="translate(16 41)">{{glyph.routeStations}}</g>
 </g>`,
 );
 
@@ -451,20 +420,27 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             maxLength: 36,
             textFit: { maxWidth: 62, fontSize: 5, maxLetterSpacing: 0 },
           },
-          ...Array.from({ length: 12 }, (_value, index) => ({
-            key: `routeStation${index + 1}`,
-            label: `第 ${index + 1} 个站点`,
-            kind: 'text' as const,
-            maxLength: 24,
-            textFit: { maxWidth: 42, fontSize: 5, maxLetterSpacing: 0 },
-          })),
           {
-            key: 'currentStationPosition',
-            label: '当前站位置',
-            kind: 'select',
+            key: 'routeStations',
+            label: '完整站点列表（用 / 分隔）',
+            kind: 'text',
             required: true,
-            options: detailStationPositionOptions,
-            selectVariableValues: detailStationPositionVariableValues,
+            maxLength: 1000,
+            glyph: {
+              renderer: 'transit_station_list',
+              layoutWidth: 96,
+              layoutHeight: 79,
+              fontSize: 5,
+              currentIndexFieldKey: 'currentStationIndex',
+            },
+          },
+          {
+            key: 'currentStationIndex',
+            label: '当前站序号（从 0 开始）',
+            kind: 'number',
+            required: true,
+            minimum: 0,
+            maximum: 999,
           },
         ],
         defaultCanvas: {

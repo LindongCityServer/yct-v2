@@ -7,6 +7,7 @@ import type {
 import { publishDomainEvent } from './app-event-bus';
 import {
   findEntityTranslation,
+  normalizeMaterialTransitLineNumber,
   normalizeRoadSignPinyin,
   upsertEntityTranslation,
 } from './entity-translation-store';
@@ -23,6 +24,7 @@ export async function updateEntityTranslations(input: {
   sourceText: string;
   localizedLabels: LocalizedLabelMap;
   roadSignPinyin?: string;
+  materialLineNumber?: string;
   actorId: string;
 }): Promise<EntityTranslationRecord> {
   const previous = await findEntityTranslation(input.entityKind, input.entityId);
@@ -70,6 +72,39 @@ export async function updateEntityTranslations(input: {
             actor: { type: 'admin', id: input.actorId },
             payload: {
               roadName: record.sourceText,
+              actorId: input.actorId,
+              occurredAt,
+            },
+          }),
+    );
+  }
+  const nextLineNumber = normalizeMaterialTransitLineNumber(input.materialLineNumber);
+  if (
+    Object.prototype.hasOwnProperty.call(input, 'materialLineNumber') &&
+    previous?.materialLineNumber !== nextLineNumber
+  ) {
+    const occurredAt = record.updatedAt;
+    events.push(
+      nextLineNumber
+        ? publishDomainEvent({
+            eventId: `event_${randomUUID()}`,
+            type: 'MaterialTransitLineNumberOverrideUpserted',
+            occurredAt,
+            actor: { type: 'admin', id: input.actorId },
+            payload: {
+              lineId: record.entityId,
+              lineNumber: nextLineNumber,
+              actorId: input.actorId,
+              occurredAt,
+            },
+          })
+        : publishDomainEvent({
+            eventId: `event_${randomUUID()}`,
+            type: 'MaterialTransitLineNumberOverrideDeleted',
+            occurredAt,
+            actor: { type: 'admin', id: input.actorId },
+            payload: {
+              lineId: record.entityId,
               actorId: input.actorId,
               occurredAt,
             },

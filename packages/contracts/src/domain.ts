@@ -15,6 +15,7 @@ export interface EntityTranslationRecord {
   sourceText: string;
   localizedLabels: LocalizedLabelMap;
   roadSignPinyin?: string;
+  materialLineNumber?: string;
   updatedBy: string;
   updatedAt: ISODateTimeString;
 }
@@ -965,12 +966,17 @@ export interface MaterialTextFitConfig {
 }
 
 export interface MaterialGlyphConfig {
-  renderer: 'nostalgic_digits' | 'nostalgic_address_number' | 'chill_jinshu_vertical';
+  renderer:
+    | 'nostalgic_digits'
+    | 'nostalgic_address_number'
+    | 'chill_jinshu_vertical'
+    | 'transit_station_list';
   layoutWidth: number;
   layoutHeight: number;
   fontSize?: number;
   maxLetterSpacing?: number;
   suffixFieldKey?: string;
+  currentIndexFieldKey?: string;
 }
 
 export interface MaterialTemplateField {
