@@ -492,6 +492,16 @@ if ($SkipStaging) {
   New-Item -ItemType Directory -Force -Path $standaloneNextRoot | Out-Null
   Copy-Item -LiteralPath $staticRoot -Destination $standaloneNextRoot -Recurse -Force
   Copy-YctPublicAssets -Source $publicRoot -Destination (Join-Path $standaloneWebRoot "public")
+  $harmonyFontSourceRoot = Join-Path $webRoot "app\fonts\harmonyos-sans"
+  $harmonyFontDestinationRoot = Join-Path $standaloneWebRoot "public\fonts\harmonyos-sans"
+  New-Item -ItemType Directory -Force -Path $harmonyFontDestinationRoot | Out-Null
+  @("HarmonyOS_Sans_SC_Regular.ttf", "HarmonyOS_Sans_SC_Bold.ttf") | ForEach-Object {
+    $sourceFontPath = Join-Path $harmonyFontSourceRoot $_
+    if (-not (Test-Path -LiteralPath $sourceFontPath)) {
+      throw "Required material font does not exist: $sourceFontPath"
+    }
+    Copy-Item -LiteralPath $sourceFontPath -Destination (Join-Path $harmonyFontDestinationRoot $_) -Force
+  }
   $stagedServiceWorkerPath = Join-Path $standaloneWebRoot "public\sw.js"
   if (Test-Path -LiteralPath $stagedServiceWorkerPath) {
     $serviceWorker = [System.IO.File]::ReadAllText(
