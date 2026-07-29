@@ -84,15 +84,15 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             ],
             selectVariableValues: {
               dual_arrow: {
-                leftPath: 'M12 88 L22 73 V81 H36 V95 H22 V103 Z',
-                rightPath: 'M244 88 L234 73 V81 H220 V95 H234 V103 Z',
+                leftPath: 'M12 88 L22 73 V81 H32 V95 H22 V103 Z',
+                rightPath: 'M244 88 L234 73 V81 H224 V95 H234 V103 Z',
               },
               left_circle_right_arrow: {
                 leftPath: 'M24 78 A10 10 0 1 0 24 98 A10 10 0 1 0 24 78 Z',
-                rightPath: 'M244 88 L234 73 V81 H220 V95 H234 V103 Z',
+                rightPath: 'M244 88 L234 73 V81 H224 V95 H234 V103 Z',
               },
               left_arrow_right_circle: {
-                leftPath: 'M12 88 L22 73 V81 H36 V95 H22 V103 Z',
+                leftPath: 'M12 88 L22 73 V81 H32 V95 H22 V103 Z',
                 rightPath: 'M232 78 A10 10 0 1 0 232 98 A10 10 0 1 0 232 78 Z',
               },
             },
@@ -128,7 +128,7 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
   <text x="0" y="73" transform="translate(70 0) scale({{fit.roadNamePinyin.scaleX}} 1)" fill="#ffffff" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="17" font-weight="700" text-anchor="middle" letter-spacing="{{fit.roadNamePinyin.letterSpacing}}">{{roadNamePinyin}}</text>
   <text x="0" y="111" transform="translate(70 0) scale({{fit.postalCode.scaleX}} 1)" fill="#ffffff" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="15" font-weight="400" text-anchor="middle" letter-spacing="{{fit.postalCode.letterSpacing}}">邮政编码:{{postalCode}}</text>
   <g transform="translate(197 0) scale({{fit.buildingNumber.scaleX}} 1)">
-    <text x="0" y="107" fill="#A40000" text-anchor="middle"><tspan font-family="Arial, sans-serif" font-size="126" font-weight="700">{{buildingNumber}}</tspan><tspan font-family="'HarmonyOS Sans SC', sans-serif" font-size="63" font-weight="700">{{buildingSuffix}}</tspan></text>
+    <text x="0" y="107" fill="#A40000" text-anchor="middle"><tspan font-family="Arial, sans-serif" font-size="126" font-weight="700">{{buildingNumber}}</tspan><tspan font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="63" font-weight="700">{{buildingSuffix}}</tspan></text>
   </g>
 </svg>`,
         fields: [

@@ -2,8 +2,10 @@ import { UnminedCustomMarkerProvider } from '@yct/adapters';
 import type { MapGeometry, MapMarkerSnapshot, MaterialTemplateField } from '@yct/contracts';
 import {
   getMapRoadMarkerKind,
+  isMapRoadStartOnSignLeft,
   orderMapRoadCoordinates,
   projectPointOntoMapRoad,
+  resolveMapRoadSignDirectionMode,
   shouldUseVerticalMapRoadLabel,
 } from './map-road-geometry';
 import { toUppercaseRoadPinyin } from './chinese-pinyin';
@@ -86,8 +88,16 @@ export async function resolveRoadCoordinateMaterialInput(input: {
     throw new Error('当前服务器数据中没有可用于匹配的道路几何。');
   }
   const vertical = shouldUseVerticalMapRoadLabel(road.coordinates, road.projection.coordinate);
-  const directionMode = deriveRoadDirectionMode(road.projection, vertical);
-  const arrowMode = deriveRoadArrowMode(road.coordinates, road.projection.coordinate);
+  const directionMode = resolveMapRoadSignDirectionMode(
+    input.coordinate,
+    road.projection.coordinate,
+    vertical,
+  );
+  const arrowMode = deriveRoadArrowMode(
+    road.coordinates,
+    road.projection.coordinate,
+    directionMode,
+  );
   const candidates: Record<string, string> = {
     roadName: road.entry.label,
     roadNamePinyin: toUppercaseRoadPinyin(road.entry.label),
@@ -266,21 +276,10 @@ function extractRoadName(value: string): string {
   return matches?.at(-1) ?? '';
 }
 
-function deriveRoadDirectionMode(
-  projection: MatchedRoad['projection'],
-  vertical: boolean,
-): 'west_east' | 'east_west' | 'south_north' | 'north_south' {
-  const deltaX = projection.segmentEnd[0] - projection.segmentStart[0];
-  const deltaZ = projection.segmentEnd[1] - projection.segmentStart[1];
-  if (vertical) {
-    return deltaZ >= 0 ? 'north_south' : 'south_north';
-  }
-  return deltaX >= 0 ? 'west_east' : 'east_west';
-}
-
 function deriveRoadArrowMode(
   coordinates: Array<[number, number]>,
   installation: [number, number],
+  directionMode: ReturnType<typeof resolveMapRoadSignDirectionMode>,
 ): 'dual_arrow' | 'left_circle_right_arrow' | 'left_arrow_right_circle' {
   const start = coordinates[0];
   const end = coordinates.at(-1);
@@ -289,11 +288,12 @@ function deriveRoadArrowMode(
   }
   const startDistance = coordinateDistance(installation, start);
   const endDistance = coordinateDistance(installation, end);
+  const startIsLeft = isMapRoadStartOnSignLeft(start, end, directionMode);
   if (startDistance <= endpointCircleDistance && startDistance <= endDistance) {
-    return 'left_circle_right_arrow';
+    return startIsLeft ? 'left_circle_right_arrow' : 'left_arrow_right_circle';
   }
   if (endDistance <= endpointCircleDistance) {
-    return 'left_arrow_right_circle';
+    return startIsLeft ? 'left_arrow_right_circle' : 'left_circle_right_arrow';
   }
   return 'dual_arrow';
 }

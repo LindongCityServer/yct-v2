@@ -11,6 +11,12 @@ export interface MapRoadProjection {
   segmentStart: [number, number];
 }
 
+export type MapRoadSignDirectionMode =
+  | 'west_east'
+  | 'east_west'
+  | 'south_north'
+  | 'north_south';
+
 export function getMapRoadMarkerKind(
   marker: Pick<MapMarker, 'categoryId' | 'iconFileName' | 'label'>,
 ): MapRoadMarkerKind | undefined {
@@ -108,6 +114,34 @@ export function shouldUseVerticalMapRoadLabel(
   const xRange = Math.max(...xValues) - Math.min(...xValues);
   const zRange = Math.max(...zValues) - Math.min(...zValues);
   return zRange > Math.max(8, xRange * 1.35);
+}
+
+export function resolveMapRoadSignDirectionMode(
+  sourceCoordinate: [number, number],
+  projectedCoordinate: [number, number],
+  vertical: boolean,
+): MapRoadSignDirectionMode {
+  if (vertical) {
+    return sourceCoordinate[0] > projectedCoordinate[0] ? 'north_south' : 'south_north';
+  }
+  return sourceCoordinate[1] < projectedCoordinate[1] ? 'west_east' : 'east_west';
+}
+
+export function isMapRoadStartOnSignLeft(
+  start: [number, number],
+  end: [number, number],
+  directionMode: MapRoadSignDirectionMode,
+): boolean {
+  if (directionMode === 'west_east') {
+    return start[0] <= end[0];
+  }
+  if (directionMode === 'east_west') {
+    return start[0] >= end[0];
+  }
+  if (directionMode === 'north_south') {
+    return start[1] <= end[1];
+  }
+  return start[1] >= end[1];
 }
 
 function findRoadStartIndex(coordinates: Array<[number, number]>): number {
