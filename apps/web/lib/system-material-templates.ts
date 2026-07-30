@@ -482,7 +482,7 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             kind: 'text',
             required: true,
             maxLength: 16,
-            textFit: { maxWidth: 96, fontSize: 46, maxLetterSpacing: 0 },
+            textFit: { maxWidth: 49, fontSize: 46, maxLetterSpacing: 0 },
           },
           {
             key: 'terminalRole',
