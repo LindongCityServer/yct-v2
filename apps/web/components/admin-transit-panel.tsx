@@ -3927,8 +3927,8 @@ function TransitLineEditorDialog({
                           }
                         >
                           <option value="both">双向</option>
-                          <option value="up">仅上行</option>
-                          <option value="down">仅下行</option>
+                          <option value="down">仅正向（按站序）</option>
+                          <option value="up">仅反向（逆站序）</option>
                         </select>
                       </label>
                       <div className="transit-line-editor-row-actions">

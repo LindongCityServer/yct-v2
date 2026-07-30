@@ -16,6 +16,10 @@ import type {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { appPath } from '../lib/app-paths';
+import {
+  isTransitLineDirectionIncluded,
+  type TransitLineTravelDirection,
+} from '../lib/transit-line-direction';
 import { isTransitPoiMarkerCompatibleWithStation } from '../lib/transit-station-mode';
 import {
   buildVisualRoadGraph,
@@ -147,6 +151,7 @@ export function AdminTransitLineMapEditor({
   const [isSaving, setIsSaving] = useState(false);
   const [routePanelCollapsed, setRoutePanelCollapsed] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [previewDirection, setPreviewDirection] = useState<TransitLineTravelDirection>('forward');
 
   useEffect(() => {
     let cancelled = false;
@@ -272,14 +277,28 @@ export function AdminTransitLineMapEditor({
     () => nodes.flatMap((node) => (node.coordinate ? [node.coordinate] : [])),
     [nodes],
   );
-  const routeResolution = useMemo(
+  const fullRouteResolution = useMemo(
     () => resolveVisualRoute(controlCoordinates, routeMode, roadGraph),
     [controlCoordinates, roadGraph, routeMode],
   );
-  const resolvedRouteCoordinates = routeResolution.coordinates;
+  const previewNodes = useMemo(() => {
+    const includedNodes = nodes.filter((node) =>
+      isTransitLineDirectionIncluded(node.direction, previewDirection),
+    );
+    return previewDirection === 'forward' ? includedNodes : includedNodes.reverse();
+  }, [nodes, previewDirection]);
+  const previewControlCoordinates = useMemo(
+    () => previewNodes.flatMap((node) => (node.coordinate ? [node.coordinate] : [])),
+    [previewNodes],
+  );
+  const previewRouteResolution = useMemo(
+    () => resolveVisualRoute(previewControlCoordinates, routeMode, roadGraph),
+    [previewControlCoordinates, roadGraph, routeMode],
+  );
+  const resolvedRouteCoordinates = previewRouteResolution.coordinates;
   const routePreviewWarning =
-    routeMode === 'road' && routeResolution.unresolvedSegmentCount > 0
-      ? `${routeResolution.unresolvedSegmentCount} 个相邻节点暂时无法通过道路连通。`
+    routeMode === 'road' && previewRouteResolution.unresolvedSegmentCount > 0
+      ? `${previewRouteResolution.unresolvedSegmentCount} 个相邻节点暂时无法通过道路连通。`
       : '';
   const visibleTiles = useMemo(
     () => buildEditorTiles(mapView, viewportSize, data?.tileTemplate ?? null),
@@ -342,8 +361,14 @@ export function AdminTransitLineMapEditor({
       }
       const rect = stage.getBoundingClientRect();
       const coordinate = unprojectClientPoint(clientX, clientY, rect, mapView);
+      const snapCandidates =
+        effectiveTool === 'station'
+          ? pointMarkers.filter((marker) =>
+              isTransitPoiMarkerCompatibleWithStation(marker, [data.line.mode]),
+            )
+          : pointMarkers;
       const snapMarker = effectiveSnapEnabled
-        ? findNearestSnapMarker(coordinate, pointMarkers, mapView.zoom, 48)
+        ? findNearestSnapMarker(coordinate, snapCandidates, mapView.zoom, 48)
         : undefined;
       const resolvedCoordinate = snapMarker?.geometry.coordinates ?? coordinate;
 
@@ -717,7 +742,7 @@ export function AdminTransitLineMapEditor({
       setStatus('线路中仍有站点缺少地图坐标。');
       return;
     }
-    if (routeMode === 'road' && routeResolution.unresolvedSegmentCount > 0) {
+    if (routeMode === 'road' && fullRouteResolution.unresolvedSegmentCount > 0) {
       setStatus('沿路模式仍有节点无法通过道路连通，请补充途径点或切换为折线模式。');
       return;
     }
@@ -949,7 +974,7 @@ export function AdminTransitLineMapEditor({
               </g>
             ) : null;
           })}
-          {nodes.map((node, index) => {
+          {previewNodes.map((node, index) => {
             if (!node.coordinate) {
               return null;
             }
@@ -985,6 +1010,34 @@ export function AdminTransitLineMapEditor({
             <span>{`${nodes.filter((node) => node.kind === 'station').length} 站 · ${nodes.filter((node) => node.kind === 'waypoint').length} 途径点`}</span>
           </div>
           <div className="transit-visual-route-panel-actions">
+            <div className="segmented-control transit-visual-route-direction">
+              <div>
+                <button
+                  className={previewDirection === 'forward' ? 'is-active' : ''}
+                  type="button"
+                  aria-label="预览正向线路"
+                  aria-pressed={previewDirection === 'forward'}
+                  title="预览正向线路（按站序）"
+                  onClick={() => setPreviewDirection('forward')}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    arrow_forward
+                  </span>
+                </button>
+                <button
+                  className={previewDirection === 'reverse' ? 'is-active' : ''}
+                  type="button"
+                  aria-label="预览反向线路"
+                  aria-pressed={previewDirection === 'reverse'}
+                  title="预览反向线路（逆站序）"
+                  onClick={() => setPreviewDirection('reverse')}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    arrow_back
+                  </span>
+                </button>
+              </div>
+            </div>
             <div className="segmented-control transit-visual-route-mode">
               <div>
                 <button
@@ -1082,8 +1135,8 @@ export function AdminTransitLineMapEditor({
                   }
                 >
                   <option value="both">双向</option>
-                  <option value="up">仅上行</option>
-                  <option value="down">仅下行</option>
+                  <option value="down">仅正向（按站序）</option>
+                  <option value="up">仅反向（逆站序）</option>
                 </select>
                 <div className="transit-visual-node-actions">
                   <button

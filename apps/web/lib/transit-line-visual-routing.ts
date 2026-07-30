@@ -2,8 +2,10 @@ import type { MapMarkerSnapshot } from '@yct/contracts';
 import { getMapRoadMarkerKind, orderMapRoadCoordinates } from './map-road-geometry';
 
 export interface VisualRoadGraph {
-  adjacency: Map<string, VisualRoadEdge[]>;
-  nodes: VisualRoadNode[];
+  adjacency: ReadonlyMap<string, readonly VisualRoadEdge[]>;
+  nodes: readonly VisualRoadNode[];
+  nodesById: ReadonlyMap<string, VisualRoadNode>;
+  roadSegments: readonly VisualRoadSegment[];
 }
 
 export interface VisualRouteResolution {
@@ -11,23 +13,18 @@ export interface VisualRouteResolution {
   unresolvedSegmentCount: number;
 }
 
-interface VisualRoadNode {
+export interface VisualRoadNode {
   coordinate: [number, number];
   id: string;
   roadId: string;
 }
 
-interface VisualRoadEdge {
+export interface VisualRoadEdge {
   distance: number;
-  nodeId: string;
+  to: string;
 }
 
-interface QueueEntry {
-  distance: number;
-  nodeId: string;
-}
-
-interface VisualRoadSegment {
+export interface VisualRoadSegment {
   end: [number, number];
   endIsRoadTerminus: boolean;
   endNodeId: string;
@@ -38,12 +35,26 @@ interface VisualRoadSegment {
   startNodeId: string;
 }
 
+interface QueueEntry {
+  distance: number;
+  nodeId: string;
+}
+
 interface VisualRoadConnectionCandidate {
   distance: number;
   leftCoordinate: [number, number];
   leftSegmentId: string;
   rightCoordinate: [number, number];
   rightSegmentId: string;
+}
+
+interface VisualRoadAccessCandidate {
+  coordinate: [number, number];
+  distanceToPoint: number;
+  endNodeId: string;
+  roadId: string;
+  startDistance: number;
+  startNodeId: string;
 }
 
 export function buildVisualRoadGraph(
@@ -171,6 +182,7 @@ export function buildVisualRoadGraph(
     }
   }
 
+  const roadSegments: VisualRoadSegment[] = [];
   for (const segment of baseSegments) {
     const points = [
       { coordinate: segment.start, nodeId: segment.startNodeId, ratio: 0 },
@@ -187,9 +199,20 @@ export function buildVisualRoadGraph(
       }
       const previousNode = nodesById.get(previous.nodeId);
       const currentNode = nodesById.get(current.nodeId);
-      if (previousNode && currentNode) {
-        connectNodes(adjacency, previousNode, currentNode);
+      if (!previousNode || !currentNode) {
+        continue;
       }
+      roadSegments.push({
+        end: current.coordinate,
+        endIsRoadTerminus: segment.endIsRoadTerminus && current.ratio === 1,
+        endNodeId: current.nodeId,
+        id: `${segment.id}:${index - 1}`,
+        roadId: segment.roadId,
+        start: previous.coordinate,
+        startIsRoadTerminus: segment.startIsRoadTerminus && previous.ratio === 0,
+        startNodeId: previous.nodeId,
+      });
+      connectNodes(adjacency, previousNode, currentNode);
     }
   }
 
@@ -201,7 +224,7 @@ export function buildVisualRoadGraph(
     }
   }
 
-  return { adjacency, nodes };
+  return { adjacency, nodes, nodesById, roadSegments };
 }
 
 export function isVisualRoadMarker(
@@ -234,6 +257,7 @@ export function resolveVisualRoute(
   }
 
   const resolved: Array<[number, number]> = [];
+  const pathCache = new Map<string, { distance: number; nodeIds: string[] } | undefined>();
   let unresolvedSegmentCount = 0;
   for (let index = 1; index < controlPoints.length; index += 1) {
     const start = controlPoints[index - 1];
@@ -241,11 +265,11 @@ export function resolveVisualRoute(
     if (!start || !end) {
       continue;
     }
-    const segment = resolveRoadSegment(start, end, graph);
+    const segment = resolveRoadSegment(start, end, graph, pathCache);
     if (!segment.resolved) {
       unresolvedSegmentCount += 1;
     }
-    resolved.push(...(resolved.length > 0 ? segment.coordinates.slice(1) : segment.coordinates));
+    appendCoordinates(resolved, segment.coordinates);
   }
   return { coordinates: dedupeConsecutive(resolved), unresolvedSegmentCount };
 }
@@ -254,37 +278,175 @@ function resolveRoadSegment(
   start: [number, number],
   end: [number, number],
   graph: VisualRoadGraph,
+  pathCache: Map<string, { distance: number; nodeIds: string[] } | undefined>,
 ): { coordinates: Array<[number, number]>; resolved: boolean } {
-  const startNode = findNearestNode(start, graph.nodes);
-  const endNode = findNearestNode(end, graph.nodes);
-  if (!startNode || !endNode) {
-    return { coordinates: [start, end], resolved: false };
+  const startCandidates = findRoadAccessCandidates(start, end, graph);
+  const endCandidates = findRoadAccessCandidates(end, start, graph);
+  let bestCoordinates: Array<[number, number]> | undefined;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (const startAccess of startCandidates) {
+    for (const endAccess of endCandidates) {
+      const sameSegment = resolveSameRoadSegment(start, end, startAccess, endAccess);
+      if (sameSegment && sameSegment.distance < bestDistance) {
+        bestCoordinates = sameSegment.coordinates;
+        bestDistance = sameSegment.distance;
+      }
+
+      for (const startNodeId of [startAccess.startNodeId, startAccess.endNodeId]) {
+        for (const endNodeId of [endAccess.startNodeId, endAccess.endNodeId]) {
+          const pathKey = `${startNodeId}->${endNodeId}`;
+          if (!pathCache.has(pathKey)) {
+            pathCache.set(pathKey, findShortestNodePath(startNodeId, endNodeId, graph));
+          }
+          const path = pathCache.get(pathKey);
+          if (!path) {
+            continue;
+          }
+          const startNode = graph.nodesById.get(startNodeId);
+          const endNode = graph.nodesById.get(endNodeId);
+          if (!startNode || !endNode) {
+            continue;
+          }
+          const distance =
+            startAccess.distanceToPoint +
+            coordinateDistance(startAccess.coordinate, startNode.coordinate) +
+            path.distance +
+            coordinateDistance(endNode.coordinate, endAccess.coordinate) +
+            endAccess.distanceToPoint;
+          if (distance >= bestDistance) {
+            continue;
+          }
+          bestCoordinates = dedupeConsecutive([
+            start,
+            startAccess.coordinate,
+            ...path.nodeIds.flatMap((nodeId) => {
+              const node = graph.nodesById.get(nodeId);
+              return node ? [node.coordinate] : [];
+            }),
+            endAccess.coordinate,
+            end,
+          ]);
+          bestDistance = distance;
+        }
+      }
+    }
   }
-  const nodeIds = findShortestNodePath(startNode.id, endNode.id, graph);
-  if (nodeIds.length === 0) {
-    return { coordinates: [start, end], resolved: false };
+
+  return bestCoordinates
+    ? { coordinates: bestCoordinates, resolved: true }
+    : { coordinates: [start, end], resolved: false };
+}
+
+function resolveSameRoadSegment(
+  start: [number, number],
+  end: [number, number],
+  startAccess: VisualRoadAccessCandidate,
+  endAccess: VisualRoadAccessCandidate,
+): { coordinates: Array<[number, number]>; distance: number } | undefined {
+  if (
+    startAccess.roadId !== endAccess.roadId ||
+    startAccess.startNodeId !== endAccess.startNodeId ||
+    startAccess.endNodeId !== endAccess.endNodeId
+  ) {
+    return undefined;
   }
-  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
   return {
-    coordinates: dedupeConsecutive([
-      start,
-      ...nodeIds.flatMap((nodeId) => {
-        const node = nodeById.get(nodeId);
-        return node ? [node.coordinate] : [];
-      }),
-      end,
-    ]),
-    resolved: true,
+    coordinates: dedupeConsecutive([start, startAccess.coordinate, endAccess.coordinate, end]),
+    distance:
+      startAccess.distanceToPoint +
+      Math.abs(startAccess.startDistance - endAccess.startDistance) +
+      endAccess.distanceToPoint,
   };
+}
+
+function findRoadAccessCandidates(
+  point: [number, number],
+  target: [number, number],
+  graph: VisualRoadGraph,
+  limit = 12,
+): VisualRoadAccessCandidate[] {
+  const candidates = graph.roadSegments.map((segment) => {
+    const projection = projectPointToRoadSegment(point, segment);
+    return {
+      ...projection,
+      score:
+        projection.distanceToPoint +
+        getRoadAccessDirectionPenalty(point, target, projection.coordinate),
+    };
+  });
+  const byScore = [...candidates].sort((left, right) => left.score - right.score).slice(0, limit);
+  const byDistance = [...candidates]
+    .sort((left, right) => left.distanceToPoint - right.distanceToPoint)
+    .slice(0, limit);
+  const deduped = new Map<string, VisualRoadAccessCandidate>();
+  const addCandidate = (candidate: VisualRoadAccessCandidate) => {
+    const key = `${candidate.startNodeId}:${candidate.endNodeId}:${candidate.coordinate[0].toFixed(2)}:${candidate.coordinate[1].toFixed(2)}`;
+    if (!deduped.has(key)) {
+      deduped.set(key, candidate);
+    }
+  };
+
+  for (const candidate of byScore.slice(0, Math.ceil(limit * 0.6))) {
+    addCandidate(candidate);
+  }
+  for (const candidate of byDistance) {
+    addCandidate(candidate);
+    if (deduped.size >= limit) {
+      break;
+    }
+  }
+  for (const candidate of byScore) {
+    addCandidate(candidate);
+    if (deduped.size >= limit) {
+      break;
+    }
+  }
+  return [...deduped.values()];
+}
+
+function projectPointToRoadSegment(
+  point: [number, number],
+  segment: VisualRoadSegment,
+): VisualRoadAccessCandidate {
+  const projection = projectPointOntoSegment(segment.start, segment.end, point);
+  const totalDistance = coordinateDistance(segment.start, segment.end);
+  const startDistance = totalDistance * projection.ratio;
+  return {
+    coordinate: projection.coordinate,
+    distanceToPoint: coordinateDistance(point, projection.coordinate),
+    endNodeId: segment.endNodeId,
+    roadId: segment.roadId,
+    startDistance,
+    startNodeId: segment.startNodeId,
+  };
+}
+
+function getRoadAccessDirectionPenalty(
+  point: [number, number],
+  target: [number, number],
+  accessPoint: [number, number],
+): number {
+  const accessVector = [accessPoint[0] - point[0], accessPoint[1] - point[1]] as const;
+  const targetVector = [target[0] - point[0], target[1] - point[1]] as const;
+  const accessLength = Math.hypot(...accessVector);
+  const targetLength = Math.hypot(...targetVector);
+  if (accessLength === 0 || targetLength === 0) {
+    return 0;
+  }
+  const cosine =
+    (accessVector[0] * targetVector[0] + accessVector[1] * targetVector[1]) /
+    (accessLength * targetLength);
+  return (1 - Math.min(1, Math.max(-1, cosine))) * 18;
 }
 
 function findShortestNodePath(
   startNodeId: string,
   endNodeId: string,
   graph: VisualRoadGraph,
-): string[] {
+): { distance: number; nodeIds: string[] } | undefined {
   if (startNodeId === endNodeId) {
-    return [startNodeId];
+    return { distance: 0, nodeIds: [startNodeId] };
   }
   const distances = new Map<string, number>([[startNodeId, 0]]);
   const previous = new Map<string, string>();
@@ -301,29 +463,30 @@ function findShortestNodePath(
     }
     for (const edge of graph.adjacency.get(current.nodeId) ?? []) {
       const nextDistance = current.distance + edge.distance;
-      if (nextDistance >= (distances.get(edge.nodeId) ?? Number.POSITIVE_INFINITY)) {
+      if (nextDistance >= (distances.get(edge.to) ?? Number.POSITIVE_INFINITY)) {
         continue;
       }
-      distances.set(edge.nodeId, nextDistance);
-      previous.set(edge.nodeId, current.nodeId);
-      queue.push({ distance: nextDistance, nodeId: edge.nodeId });
+      distances.set(edge.to, nextDistance);
+      previous.set(edge.to, current.nodeId);
+      queue.push({ distance: nextDistance, nodeId: edge.to });
     }
   }
 
-  if (!distances.has(endNodeId)) {
-    return [];
+  const distance = distances.get(endNodeId);
+  if (distance === undefined) {
+    return undefined;
   }
-  const path = [endNodeId];
+  const nodeIds = [endNodeId];
   let cursor = endNodeId;
   while (cursor !== startNodeId) {
     const parent = previous.get(cursor);
     if (!parent) {
-      return [];
+      return undefined;
     }
-    path.push(parent);
+    nodeIds.push(parent);
     cursor = parent;
   }
-  return path.reverse();
+  return { distance, nodeIds: nodeIds.reverse() };
 }
 
 class MinQueue {
@@ -382,8 +545,8 @@ function connectNodes(
   right: VisualRoadNode,
   distance = coordinateDistance(left.coordinate, right.coordinate),
 ): void {
-  adjacency.get(left.id)?.push({ distance, nodeId: right.id });
-  adjacency.get(right.id)?.push({ distance, nodeId: left.id });
+  adjacency.get(left.id)?.push({ distance, to: right.id });
+  adjacency.get(right.id)?.push({ distance, to: left.id });
 }
 
 function collectConnectionCandidates(
@@ -537,20 +700,16 @@ function areCoordinatesClose(
   return coordinateDistance(left, right) <= tolerance;
 }
 
-function findNearestNode(
-  coordinate: [number, number],
-  nodes: VisualRoadNode[],
-): VisualRoadNode | undefined {
-  let selected: VisualRoadNode | undefined;
-  let selectedDistance = Number.POSITIVE_INFINITY;
-  for (const node of nodes) {
-    const distance = squaredDistance(coordinate, node.coordinate);
-    if (distance < selectedDistance) {
-      selected = node;
-      selectedDistance = distance;
+function appendCoordinates(
+  target: Array<[number, number]>,
+  coordinates: Array<[number, number]>,
+): void {
+  for (const coordinate of coordinates) {
+    const previous = target.at(-1);
+    if (!previous || previous[0] !== coordinate[0] || previous[1] !== coordinate[1]) {
+      target.push(coordinate);
     }
   }
-  return selected;
 }
 
 function dedupeConsecutive(coordinates: Array<[number, number]>): Array<[number, number]> {
@@ -561,11 +720,5 @@ function dedupeConsecutive(coordinates: Array<[number, number]>): Array<[number,
 }
 
 function coordinateDistance(left: [number, number], right: [number, number]): number {
-  return Math.sqrt(squaredDistance(left, right));
-}
-
-function squaredDistance(left: [number, number], right: [number, number]): number {
-  const deltaX = left[0] - right[0];
-  const deltaZ = left[1] - right[1];
-  return deltaX * deltaX + deltaZ * deltaZ;
+  return Math.hypot(left[0] - right[0], left[1] - right[1]);
 }

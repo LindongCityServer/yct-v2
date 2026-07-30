@@ -9695,7 +9695,7 @@ img.map-player-list-avatar.is-offline {
   font-size: 12px;
 }
 
-.transit-visual-route-mode button {
+:is(.transit-visual-route-direction, .transit-visual-route-mode) button {
   display: inline-grid;
   place-items: center;
   width: 36px;

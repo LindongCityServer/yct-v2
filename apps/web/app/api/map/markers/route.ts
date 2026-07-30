@@ -17,7 +17,20 @@ import { listPublishedPublicPoiSubmissions } from '../../../../lib/poi-submissio
 import { readRuntimeConfig, type RuntimeConfig } from '../../../../lib/runtime-config';
 import { createTimedCache } from '../../../../lib/server-cache';
 import { readTransitOverview } from '../../../../lib/transit-data';
-import type { TransitOverview, TransitLineSummary } from '../../../../lib/legacy-transit';
+import {
+  buildVisualRoadGraph,
+  resolveVisualRoute,
+} from '../../../../lib/transit-line-visual-routing';
+import {
+  isTransitLineDirectionIncluded,
+  type TransitLineTravelDirection,
+} from '../../../../lib/transit-line-direction';
+import { isTransitPoiMarkerCompatibleWithStation } from '../../../../lib/transit-station-mode';
+import type {
+  TransitLineStopSummary,
+  TransitOverview,
+  TransitLineSummary,
+} from '../../../../lib/legacy-transit';
 
 const providerMarkerSnapshotCache = createTimedCache<MapMarkerSnapshot>(60 * 1000);
 
@@ -41,10 +54,16 @@ export async function GET() {
   try {
     const staticSnapshot = await readStaticMarkerSnapshot(config);
     const staticSnapshotWithOverrides = await applyLegacyMapMarkerOverrides(staticSnapshot);
+    const routingMarkerSnapshot = mergeLocalMapMarkers(
+      staticSnapshotWithOverrides,
+      publishedPoiSubmissions,
+      categories,
+      [],
+    );
     const resolvedTransitLineMarkers = resolveTransitLineMarkerCoordinates(
       transitLinePoiMarkers,
       transitOverview,
-      staticSnapshotWithOverrides,
+      routingMarkerSnapshot,
     );
     const mergedSnapshot = applyMapMarkerTranslations(
       enrichMapMarkerPlaceRelations(
@@ -172,13 +191,11 @@ function resolveTransitLineMarkerCoordinates(
 
   const lineById = new Map(overview.lines.map((line) => [line.id, line]));
   const stationCoordinateIndex = buildStationCoordinateIndex(markerSnapshot.markers);
+  const markerById = new Map(markerSnapshot.markers.map((marker) => [marker.id, marker]));
+  const roadGraph = buildVisualRoadGraph(markerSnapshot.markers);
 
   return markers.map((marker) => {
-    if (
-      marker.categoryId !== 'transit-line' ||
-      marker.geometry.type !== 'MultiPoint' ||
-      marker.geometry.coordinates.length > 1
-    ) {
+    if (marker.categoryId !== 'transit-line' || marker.geometry.type !== 'MultiPoint') {
       return marker;
     }
 
@@ -188,15 +205,19 @@ function resolveTransitLineMarkerCoordinates(
       return marker;
     }
 
-    const coordinates = dedupeCoordinates(
-      line.stationNames
-        .map((stationName) => findStationCoordinate(stationName, line, stationCoordinateIndex))
-        .filter((coordinate): coordinate is [number, number] => Boolean(coordinate)),
+    const controlCoordinates = collectTransitLineControlCoordinates(
+      line,
+      'forward',
+      stationCoordinateIndex,
+      markerById,
     );
-
-    if (coordinates.length < 2) {
+    if (controlCoordinates.length < 2) {
       return marker;
     }
+    const routeMode =
+      line.routeMode ?? (line.mode === 'bus' || line.mode === 'coach' ? 'road' : 'straight');
+    const resolution = resolveVisualRoute(controlCoordinates, routeMode, roadGraph);
+    const coordinates = resolution.coordinates;
 
     return {
       ...marker,
@@ -204,9 +225,107 @@ function resolveTransitLineMarkerCoordinates(
         type: 'MultiPoint',
         coordinates,
       },
-      description: describeTransitLineCoordinates(marker.description, coordinates.length),
+      description: describeTransitLineCoordinates(
+        marker.description,
+        coordinates.length,
+        routeMode,
+        resolution.unresolvedSegmentCount,
+      ),
     };
   });
+}
+
+function collectTransitLineControlCoordinates(
+  line: TransitLineSummary,
+  direction: TransitLineTravelDirection,
+  index: Map<string, Marker[]>,
+  markerById: Map<string, Marker>,
+): Array<[number, number]> {
+  const stopByStationId = new Map(
+    line.stationStops.flatMap((stop) =>
+      stop.stationSourceId ? [[stop.stationSourceId, stop] as const] : [],
+    ),
+  );
+  const appendStopCoordinate = (
+    coordinates: Array<[number, number]>,
+    stop: TransitLineStopSummary | undefined,
+  ) => {
+    const coordinate = stop ? findStationCoordinate(stop, line, index, markerById) : undefined;
+    if (coordinate) {
+      coordinates.push(coordinate);
+    }
+  };
+
+  if (line.routeNodes?.length) {
+    const coordinates: Array<[number, number]> = [];
+    const directionalNodes = line.routeNodes.filter((node) => {
+      if (!isTransitLineDirectionIncluded(node.direction, direction)) {
+        return false;
+      }
+      if (node.kind === 'waypoint') {
+        return true;
+      }
+      return isTransitLineDirectionIncluded(
+        stopByStationId.get(node.stationSourceId)?.oneWay,
+        direction,
+      );
+    });
+    if (direction === 'reverse') {
+      directionalNodes.reverse();
+    }
+    for (const node of directionalNodes) {
+      if (node.kind === 'waypoint') {
+        coordinates.push([node.x, node.z]);
+      } else {
+        appendStopCoordinate(coordinates, stopByStationId.get(node.stationSourceId));
+      }
+    }
+    if (coordinates.length >= 2) {
+      return dedupeConsecutiveCoordinates(coordinates);
+    }
+  }
+
+  const pathBySegment = new Map<
+    string,
+    { path: NonNullable<typeof line.segmentPaths>[number]; reverse: boolean }
+  >();
+  for (const path of line.segmentPaths ?? []) {
+    pathBySegment.set(`${path.fromStationSourceId}\u0000${path.toStationSourceId}`, {
+      path,
+      reverse: false,
+    });
+    pathBySegment.set(`${path.toStationSourceId}\u0000${path.fromStationSourceId}`, {
+      path,
+      reverse: true,
+    });
+  }
+  const directionalStops = line.stationStops
+    .filter((stop) => isTransitLineDirectionIncluded(stop.oneWay, direction))
+    .sort((left, right) => left.sequence - right.sequence);
+  if (direction === 'reverse') {
+    directionalStops.reverse();
+  }
+  const coordinates: Array<[number, number]> = [];
+  for (const [stopIndex, stop] of directionalStops.entries()) {
+    appendStopCoordinate(coordinates, stop);
+    const nextStop = directionalStops[stopIndex + 1];
+    if (!stop.stationSourceId || !nextStop?.stationSourceId) {
+      continue;
+    }
+    const configuredPath = pathBySegment.get(
+      `${stop.stationSourceId}\u0000${nextStop.stationSourceId}`,
+    );
+    const waypoints = (configuredPath?.path.waypoints ?? []).filter((waypoint) =>
+      isTransitLineDirectionIncluded(waypoint.direction, direction),
+    );
+    if (configuredPath?.reverse) {
+      waypoints.reverse();
+    }
+    for (const waypoint of waypoints) {
+      coordinates.push([waypoint.x, waypoint.z]);
+    }
+  }
+  return dedupeConsecutiveCoordinates(coordinates);
 }
 
 function buildStationCoordinateIndex(markers: Marker[]): Map<string, Marker[]> {
@@ -231,70 +350,41 @@ function buildStationCoordinateIndex(markers: Marker[]): Map<string, Marker[]> {
 }
 
 function findStationCoordinate(
-  stationName: string,
+  stop: TransitLineStopSummary,
   line: TransitLineSummary,
   index: Map<string, Marker[]>,
+  markerById: Map<string, Marker>,
 ): [number, number] | undefined {
-  const candidates = index.get(normalizeMarkerLabelText(stationName)) ?? [];
-  const best = candidates
-    .filter(
-      (marker): marker is Marker & { geometry: Extract<Marker['geometry'], { type: 'Point' }> } =>
-        marker.geometry.type === 'Point',
-    )
-    .map((marker) => ({
-      marker,
-      score: getStationCoordinateScore(marker, line),
-    }))
-    .filter((candidate) => candidate.score > 0)
-    .sort((left, right) => right.score - left.score)[0];
-
-  return best?.marker.geometry.coordinates;
-}
-
-function getStationCoordinateScore(
-  marker: Marker & { geometry: Extract<Marker['geometry'], { type: 'Point' }> },
-  line: TransitLineSummary,
-): number {
-  const categoryId = marker.categoryId?.toLowerCase() ?? '';
-  const iconBaseName = getMarkerIconBaseName(marker.iconFileName);
-  const source = `${categoryId} ${iconBaseName}`;
-
-  if (line.mode === 'metro' && source.includes('metro')) {
-    return 100;
+  const isCompatiblePointMarker = (
+    marker: Marker,
+  ): marker is Marker & { geometry: Extract<Marker['geometry'], { type: 'Point' }> } =>
+    marker.geometry.type === 'Point' &&
+    isTransitPoiMarkerCompatibleWithStation(marker, [line.mode]);
+  const boundMarker = (stop.stationMarkerIds ?? [])
+    .flatMap((markerId) => {
+      const marker = markerById.get(markerId);
+      return marker ? [marker] : [];
+    })
+    .find(isCompatiblePointMarker);
+  if (boundMarker) {
+    return boundMarker.geometry.coordinates;
   }
-
-  if (line.mode === 'tram' && (source.includes('tram') || source.includes('rail'))) {
-    return 95;
-  }
-
-  if (line.mode === 'bus' && (source.includes('bus') || source.includes('stop'))) {
-    return 90;
-  }
-
-  if (line.mode === 'coach' && (source.includes('coach') || source.includes('bus'))) {
-    return 90;
-  }
-
-  if (line.mode === 'railway' && (source.includes('railway') || source.includes('station'))) {
-    return 90;
-  }
-
-  if (source.includes('station') || source.includes('stop')) {
-    return 60;
-  }
-
-  if (categoryId === 'road' || iconBaseName === 'road' || iconBaseName === 'roadpoint') {
-    return 0;
-  }
-
-  return 20;
+  const matched = (index.get(normalizeMarkerLabelText(stop.stationName)) ?? [])
+    .filter(isCompatiblePointMarker)
+    .sort((left, right) => left.id.localeCompare(right.id, 'zh-CN'))[0];
+  return matched?.geometry.coordinates;
 }
 
 function describeTransitLineCoordinates(
   description: string | undefined,
   coordinateCount: number,
+  routeMode: 'road' | 'straight',
+  unresolvedSegmentCount: number,
 ): string {
-  const coordinateText = `站点坐标直连 ${coordinateCount} 个点`;
+  const coordinateText =
+    routeMode === 'road'
+      ? `道路投影 ${coordinateCount} 个点${unresolvedSegmentCount > 0 ? `，${unresolvedSegmentCount} 段回退直线` : ''}`
+      : `折线连接 ${coordinateCount} 个点`;
   if (!description) {
     return coordinateText;
   }
@@ -446,6 +536,15 @@ function dedupeCoordinates(coordinates: Array<[number, number]>): Array<[number,
   }
 
   return deduped;
+}
+
+function dedupeConsecutiveCoordinates(
+  coordinates: Array<[number, number]>,
+): Array<[number, number]> {
+  return coordinates.filter((coordinate, index) => {
+    const previous = coordinates[index - 1];
+    return !previous || previous[0] !== coordinate[0] || previous[1] !== coordinate[1];
+  });
 }
 
 function orderRoadCoordinates(coordinates: Array<[number, number]>): Array<[number, number]> {

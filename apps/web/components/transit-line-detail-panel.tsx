@@ -8,6 +8,10 @@ import { appPath } from '../lib/app-paths';
 import { useI18n } from '../lib/client-i18n';
 import { formatFareTextWithoutCurrencyUnit } from '../lib/fare-display';
 import type { TransitLineStopSummary, TransitLineSummary } from '../lib/legacy-transit';
+import {
+  isTransitLineDirectionIncluded,
+  type TransitLineTravelDirection,
+} from '../lib/transit-line-direction';
 import { TitleWithBreaks } from './title-with-breaks';
 
 type Translate = ReturnType<typeof useI18n>['t'];
@@ -50,7 +54,7 @@ const fallbackModeProfiles: TransitModeProfile[] = [
   { mode: 'custom', label: '线路', color: '#168F78', icon: 'route', sortOrder: 6, enabled: true },
 ];
 
-type DirectionKey = 'forward' | 'reverse';
+type DirectionKey = TransitLineTravelDirection;
 type TransitMode = TransitLineSummary['mode'];
 
 export function TransitLineDetailPanel({
@@ -300,7 +304,7 @@ function isStationStopVisibleInDirection(
   stop: TransitLineStopSummary,
   direction: DirectionKey,
 ): boolean {
-  return direction === 'forward' ? stop.oneWay !== 'up' : stop.oneWay !== 'down';
+  return isTransitLineDirectionIncluded(stop.oneWay, direction);
 }
 
 function formatTransitStopOneWayLabel(

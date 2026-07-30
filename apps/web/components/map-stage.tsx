@@ -50,11 +50,17 @@ import {
   shouldUseVerticalMapRoadLabel,
 } from '../lib/map-road-geometry';
 import {
+  isTransitLineDirectionIncluded,
+  type TransitLineTravelDirection,
+} from '../lib/transit-line-direction';
+import { resolveVisualRoute } from '../lib/transit-line-visual-routing';
+import {
   buildMapMarkerSearchText,
   filterMapMarkers,
   getMapMarkerSearchMatchPriority,
 } from '../lib/map-marker-search';
 import { getTransitStationNameMatchKeys as getStationNameMatchKeys } from '../lib/transit-station-detail-match';
+import { isTransitPoiMarkerCompatibleWithStation } from '../lib/transit-station-mode';
 import {
   buildMapPlaceRelationIndex,
   dedupeEquivalentMapPlaceMarkers,
@@ -879,6 +885,10 @@ export function MapStage() {
   const [poiSubmitBusy, setPoiSubmitBusy] = useState(false);
   const [poiSubmitDialogOpen, setPoiSubmitDialogOpen] = useState(false);
   const [focusedMarkerId, setFocusedMarkerId] = useState<string | null>(null);
+  const [transitLineDirectionSelection, setTransitLineDirectionSelection] = useState<{
+    direction: TransitLineTravelDirection;
+    lineId: string;
+  } | null>(null);
   const [poiDetailTab, setPoiDetailTab] = useState<PoiDetailTab>('summary');
   const [secondaryPoiCategoryFilter, setSecondaryPoiCategoryFilter] = useState('all');
   const [secondaryPoiFloorFilter, setSecondaryPoiFloorFilter] = useState('all');
@@ -1480,6 +1490,10 @@ export function MapStage() {
   const focusedTransitLine = focusedTransitLineMarker
     ? findTransitLineByMarker(focusedTransitLineMarker, transitLineLookup)
     : undefined;
+  const focusedTransitLineDirection =
+    focusedTransitLine && transitLineDirectionSelection?.lineId === focusedTransitLine.id
+      ? transitLineDirectionSelection.direction
+      : 'forward';
   const metroTransitLineMarkers = useMemo(
     () =>
       transitLineMarkers.filter(
@@ -2042,6 +2056,25 @@ export function MapStage() {
   }, [loadStatus, roadTraceSource, staticPointMarkers]);
   const roadRoutingGraph = roadRoutingSnapshot.graph;
   const markerRoadAccessIndex = roadRoutingSnapshot.markerRoadAccessIndex;
+  const focusedDirectionalTransitLineMarker = useMemo(
+    () =>
+      focusedTransitLineMarker && focusedTransitLine
+        ? buildDirectionalTransitLineMarker(
+            focusedTransitLineMarker,
+            focusedTransitLine,
+            focusedTransitLineDirection,
+            pointMarkers,
+            roadRoutingGraph,
+          )
+        : undefined,
+    [
+      focusedTransitLine,
+      focusedTransitLineDirection,
+      focusedTransitLineMarker,
+      pointMarkers,
+      roadRoutingGraph,
+    ],
+  );
   const routeMarkerRoadAccessIndex = useMemo(() => {
     if (!routePlanDraft || !roadRoutingGraph) {
       return markerRoadAccessIndex;
@@ -2107,8 +2140,8 @@ export function MapStage() {
       return [];
     }
 
-    const traceSource = focusedTransitLineMarker
-      ? [focusedTransitLineMarker]
+    const traceSource = focusedDirectionalTransitLineMarker
+      ? [focusedDirectionalTransitLineMarker]
       : metroTransitLineMarkers;
 
     return projectTransitLineTraces(traceSource, mapView, viewportSize, focusedMarkerId).slice(
@@ -2118,6 +2151,7 @@ export function MapStage() {
   }, [
     focusedMarkerId,
     focusedMarker,
+    focusedDirectionalTransitLineMarker,
     focusedTransitLineMarker,
     linearFeaturesVisible,
     mapView,
@@ -3503,8 +3537,15 @@ export function MapStage() {
                 <div className="map-poi-detail-body">
                   {focusedTransitLine ? (
                     <TransitLineMapDetail
+                      direction={focusedTransitLineDirection}
                       line={focusedTransitLine}
                       lineColor={focusedMarker.accentColor}
+                      onDirectionChange={(direction) =>
+                        setTransitLineDirectionSelection({
+                          direction,
+                          lineId: focusedTransitLine.id,
+                        })
+                      }
                       onFocusStation={(stationName) =>
                         focusTransitStationStop(focusedTransitLine, stationName)
                       }
@@ -5126,17 +5167,20 @@ function TraceLayerView({
 }
 
 function TransitLineMapDetail({
+  direction,
   line,
   lineColor,
+  onDirectionChange,
   onFocusStation,
   t,
 }: Readonly<{
+  direction: TransitLineTravelDirection;
   line: TransitOverviewLine;
   lineColor?: string;
+  onDirectionChange: (direction: TransitLineTravelDirection) => void;
   onFocusStation: (stationName: string) => void;
   t: Translate;
 }>) {
-  const [direction, setDirection] = useState<'forward' | 'reverse'>('forward');
   const stationStops = getDirectionalLineStops(line, direction);
   const firstStationName =
     stationStops[0]?.displayStationName ?? line.displayFirstStationName ?? line.firstStationName;
@@ -5198,7 +5242,7 @@ function TransitLineMapDetail({
           type="button"
           role="tab"
           aria-selected={direction === 'forward'}
-          onClick={() => setDirection('forward')}
+          onClick={() => onDirectionChange('forward')}
         >
           {t('lineDetail.directionTo', {
             station: formatMarkerDisplayName(forwardDirectionName),
@@ -5209,7 +5253,7 @@ function TransitLineMapDetail({
           type="button"
           role="tab"
           aria-selected={direction === 'reverse'}
-          onClick={() => setDirection('reverse')}
+          onClick={() => onDirectionChange('reverse')}
         >
           {t('lineDetail.directionTo', {
             station: formatMarkerDisplayName(reverseDirectionName),
@@ -7739,9 +7783,7 @@ function buildDirectTransitLineOption(
     candidate.mode.mode,
     candidate.line,
     candidate.direction,
-    markerRoadAccessIndex,
     roadGraph,
-    routeCache,
   );
   const transitDistance = transitRoute.distance;
   const fare = quoteTransitRouteFare([
@@ -8011,18 +8053,14 @@ function buildTransferTransitLineOptions(
         originCandidate.candidate.mode.mode,
         originCandidate.candidate.line,
         originCandidate.candidate.direction,
-        markerRoadAccessIndex,
         roadGraph,
-        routeCache,
       );
       const secondTransitRoute = buildTransitSegmentRoute(
         secondSegment,
         destinationCandidate.candidate.mode.mode,
         destinationCandidate.candidate.line,
         destinationCandidate.candidate.direction,
-        markerRoadAccessIndex,
         roadGraph,
-        routeCache,
       );
       const firstTransitDistance = firstTransitRoute.distance;
       const secondTransitDistance = secondTransitRoute.distance;
@@ -8300,25 +8338,7 @@ function findTransitStationMarker(
 }
 
 function matchesTransitMarkerMode(marker: PointMarker, mode: RouteTransportMode): boolean {
-  if (mode === 'bus') {
-    return marker.categoryId === 'bus-stop';
-  }
-  if (mode === 'metro') {
-    return marker.categoryId === 'metro-station';
-  }
-  if (mode === 'tram') {
-    return marker.categoryId === 'tram-station';
-  }
-  if (mode === 'coach') {
-    return marker.categoryId === 'coach-station';
-  }
-  if (mode === 'railway') {
-    return marker.categoryId === 'railway-station';
-  }
-  if (mode === 'ferry') {
-    return marker.categoryId === 'ferry-port';
-  }
-  return marker.categoryId === 'airport';
+  return mode !== 'walk' && isTransitPoiMarkerCompatibleWithStation(marker, [mode]);
 }
 
 function findNearestRouteLineStop(
@@ -8378,9 +8398,7 @@ function buildTransitSegmentRoute(
   mode: RouteTransportMode,
   line: TransitOverviewLine,
   direction: 'forward' | 'reverse',
-  markerRoadAccessIndex: ReadonlyMap<string, RoadAccessCandidate[]>,
   roadGraph?: RoadRouteGraph,
-  routeCache?: RoutePlanningCache,
 ): { coordinates: Array<[number, number]>; distance: number; usesRoadGraph: boolean } {
   if (stops.length < 2) {
     return {
@@ -8391,7 +8409,11 @@ function buildTransitSegmentRoute(
   }
 
   const hasConfiguredLineGeometry = Boolean(line.segmentPaths?.length || line.routeNodes?.length);
-  if (!hasConfiguredLineGeometry && (!shouldUseRoadGraphForTransitMode(mode) || !roadGraph)) {
+  if (
+    !hasConfiguredLineGeometry &&
+    line.routeMode !== 'road' &&
+    (!shouldUseRoadGraphForTransitMode(mode) || !roadGraph)
+  ) {
     return {
       coordinates: stops.map((stop) => stop.center),
       distance: getTransitSegmentDistance(stops),
@@ -8411,38 +8433,21 @@ function buildTransitSegmentRoute(
     }
 
     const configuredSegment = getConfiguredTransitSegment(line, previous, current, direction);
-    if (configuredSegment) {
-      const segmentCoordinates = [previous.center, ...configuredSegment.waypoints, current.center];
-      appendRouteSegmentCoordinates(coordinates, segmentCoordinates);
-      distance += getCoordinateChainDistance(segmentCoordinates);
-      usesRoadGraph ||= configuredSegment.mode === 'road';
-      continue;
-    }
-
-    const roadSegment =
-      shouldUseRoadGraphForTransitMode(mode) && roadGraph
-        ? findRoadRouteBetweenCoordinates(
-            previous.center,
-            current.center,
-            roadGraph,
-            routeCache,
-            undefined,
-            {
-              destinationAccessCandidates: getIndexedMarkerRoadAccessCandidates(
-                markerRoadAccessIndex,
-                current.marker.id,
-              ),
-              originAccessCandidates: getIndexedMarkerRoadAccessCandidates(
-                markerRoadAccessIndex,
-                previous.marker.id,
-              ),
-            },
-          )
-        : undefined;
-    const segmentCoordinates = roadSegment?.coordinates ?? [previous.center, current.center];
+    const controlCoordinates = [
+      previous.center,
+      ...(configuredSegment?.waypoints ?? []),
+      current.center,
+    ];
+    const shouldFollowRoad =
+      configuredSegment?.mode === 'road' ||
+      (!configuredSegment && (line.routeMode === 'road' || shouldUseRoadGraphForTransitMode(mode)));
+    const resolution = shouldFollowRoad
+      ? resolveVisualRoute(controlCoordinates, 'road', roadGraph)
+      : undefined;
+    const segmentCoordinates = resolution?.coordinates ?? controlCoordinates;
     appendRouteSegmentCoordinates(coordinates, segmentCoordinates);
-    distance += roadSegment?.distance ?? getCoordinateDistance(previous.center, current.center);
-    usesRoadGraph ||= Boolean(roadSegment);
+    distance += getCoordinateChainDistance(segmentCoordinates);
+    usesRoadGraph ||= Boolean(resolution && resolution.unresolvedSegmentCount === 0);
   }
 
   return {
@@ -8462,6 +8467,29 @@ function getConfiguredTransitSegment(
   const toStationSourceId = current.stop.stationSourceId;
   if (!fromStationSourceId || !toStationSourceId) {
     return undefined;
+  }
+
+  let segmentStartId: string | undefined;
+  let pendingWaypoints: TransitLineRouteNodeSnapshot[] = [];
+  for (const node of line.routeNodes ?? []) {
+    if (node.kind === 'waypoint') {
+      pendingWaypoints.push(node);
+      continue;
+    }
+    if (segmentStartId === fromStationSourceId && node.stationSourceId === toStationSourceId) {
+      return {
+        mode: line.routeMode ?? 'straight',
+        waypoints: filterTransitRouteNodeWaypoints(pendingWaypoints, direction),
+      };
+    }
+    if (segmentStartId === toStationSourceId && node.stationSourceId === fromStationSourceId) {
+      return {
+        mode: line.routeMode ?? 'straight',
+        waypoints: filterTransitRouteNodeWaypoints(pendingWaypoints, direction).reverse(),
+      };
+    }
+    segmentStartId = node.stationSourceId;
+    pendingWaypoints = [];
   }
 
   const segmentPaths = line.segmentPaths ?? [];
@@ -8488,52 +8516,24 @@ function getConfiguredTransitSegment(
     };
   }
 
-  let segmentStartId: string | undefined;
-  let pendingWaypoints: TransitLineRouteNodeSnapshot[] = [];
-  for (const node of line.routeNodes ?? []) {
-    if (node.kind === 'waypoint') {
-      pendingWaypoints.push(node);
-      continue;
-    }
-    if (segmentStartId === fromStationSourceId && node.stationSourceId === toStationSourceId) {
-      return {
-        mode: line.routeMode ?? 'straight',
-        waypoints: filterTransitRouteNodeWaypoints(pendingWaypoints, direction),
-      };
-    }
-    if (segmentStartId === toStationSourceId && node.stationSourceId === fromStationSourceId) {
-      return {
-        mode: line.routeMode ?? 'straight',
-        waypoints: filterTransitRouteNodeWaypoints(pendingWaypoints, direction).reverse(),
-      };
-    }
-    segmentStartId = node.stationSourceId;
-    pendingWaypoints = [];
-  }
-
   return undefined;
 }
 
 function filterTransitSegmentWaypoints(
   waypoints: TransitLineSegmentPathSnapshot['waypoints'],
-  direction: 'forward' | 'reverse',
+  direction: TransitLineTravelDirection,
 ): TransitLineSegmentPathSnapshot['waypoints'] {
-  const expectedDirection = direction === 'forward' ? 'down' : 'up';
-  return waypoints.filter(
-    (waypoint) =>
-      !waypoint.direction ||
-      waypoint.direction === 'both' ||
-      waypoint.direction === expectedDirection,
+  return waypoints.filter((waypoint) =>
+    isTransitLineDirectionIncluded(waypoint.direction, direction),
   );
 }
 
 function filterTransitRouteNodeWaypoints(
   nodes: TransitLineRouteNodeSnapshot[],
-  direction: 'forward' | 'reverse',
+  direction: TransitLineTravelDirection,
 ): Array<[number, number]> {
-  const expectedDirection = direction === 'forward' ? 'down' : 'up';
   return nodes.flatMap((node) =>
-    node.kind === 'waypoint' && (node.direction === 'both' || node.direction === expectedDirection)
+    node.kind === 'waypoint' && isTransitLineDirectionIncluded(node.direction, direction)
       ? ([[node.x, node.z]] as Array<[number, number]>)
       : [],
   );
@@ -9967,9 +9967,52 @@ function PoiActionBar({
   );
 }
 
+function buildDirectionalTransitLineMarker(
+  marker: TransitLineMarker,
+  line: TransitOverviewLine,
+  direction: TransitLineTravelDirection,
+  pointMarkers: PointMarker[],
+  roadGraph?: RoadRouteGraph,
+): TransitLineMarker {
+  const mode = isRouteTransportMode(line.mode) ? line.mode : undefined;
+  const fallbackMarkerById = new Map(
+    pointMarkers.map((pointMarker) => [pointMarker.id, pointMarker]),
+  );
+  const stationMarkerIndex = buildTransitStationMarkerIndex(pointMarkers);
+  const stops = getDirectionalLineStops(line, direction)
+    .map((stop): Omit<TransitRouteStop, 'index'> | undefined => {
+      const stationMarker = mode
+        ? findTransitStationMarker(stop, stationMarkerIndex, pointMarkers, mode)
+        : (stop.stationMarkerIds ?? []).flatMap((markerId) => {
+            const pointMarker = fallbackMarkerById.get(markerId);
+            return pointMarker ? [pointMarker] : [];
+          })[0];
+      const center = stationMarker ? getMarkerCenter(stationMarker) : undefined;
+      return stationMarker && center ? { center, marker: stationMarker, stop } : undefined;
+    })
+    .filter((stop): stop is Omit<TransitRouteStop, 'index'> => Boolean(stop))
+    .map((stop, index): TransitRouteStop => ({ ...stop, index }));
+  if (stops.length < 2) {
+    return marker;
+  }
+
+  const route = buildTransitSegmentRoute(stops, mode ?? 'walk', line, direction, roadGraph);
+  if (route.coordinates.length < 2) {
+    return marker;
+  }
+
+  return {
+    ...marker,
+    geometry: {
+      type: 'MultiPoint',
+      coordinates: route.coordinates,
+    },
+  };
+}
+
 function getDirectionalLineStops(
   line: TransitOverviewLine,
-  direction: 'forward' | 'reverse',
+  direction: TransitLineTravelDirection,
 ): TransitLineStopForMap[] {
   const sourceStops: TransitLineStopForMap[] =
     line.stationStops && line.stationStops.length > 0
@@ -9990,9 +10033,9 @@ function getDirectionalLineStops(
 
 function isTransitLineStopVisibleInDirection(
   stop: TransitLineStopForMap,
-  direction: 'forward' | 'reverse',
+  direction: TransitLineTravelDirection,
 ): boolean {
-  return direction === 'forward' ? stop.oneWay !== 'up' : stop.oneWay !== 'down';
+  return isTransitLineDirectionIncluded(stop.oneWay, direction);
 }
 
 function formatTransitStopOneWayLabel(
@@ -11243,7 +11286,10 @@ function findTransitStationMarkerForLine(
       )
       .flatMap((stop) => stop.stationMarkerIds ?? []),
   );
-  const exactBoundMarker = markers.find((marker) => stopMarkerIds.has(marker.id));
+  const lineMode = isRouteTransportMode(line.mode) ? line.mode : 'walk';
+  const exactBoundMarker = markers.find(
+    (marker) => stopMarkerIds.has(marker.id) && matchesTransitMarkerMode(marker, lineMode),
+  );
   if (exactBoundMarker) {
     return exactBoundMarker;
   }
@@ -11252,6 +11298,7 @@ function findTransitStationMarkerForLine(
   const candidates = markers.filter(
     (marker) =>
       isTransitStationPoi(marker) &&
+      matchesTransitMarkerMode(marker, lineMode) &&
       getMarkerStationNameMatchKeys(marker).some((key) => stationKeys.has(key)),
   );
 
@@ -11273,15 +11320,17 @@ function findTransitLineStationMarkers(
     (line.stationStops ?? []).flatMap((stop) => stop.stationMarkerIds ?? []),
   );
   const stationKeys = new Set(line.stationNames.flatMap(getStationNameMatchKeys));
+  const lineMode = isRouteTransportMode(line.mode) ? line.mode : 'walk';
   return dedupeMarkersById(
     markers.filter(
       (marker) =>
-        boundMarkerIds.has(marker.id) ||
-        (isTransitStationPoi(marker) &&
-          getMarkerStationNameMatchKeys(marker).some((key) => stationKeys.has(key)) &&
-          findStationConnections(marker, connectionIndex).some(
-            (connection) => connection.id === line.id,
-          )),
+        matchesTransitMarkerMode(marker, lineMode) &&
+        (boundMarkerIds.has(marker.id) ||
+          (isTransitStationPoi(marker) &&
+            getMarkerStationNameMatchKeys(marker).some((key) => stationKeys.has(key)) &&
+            findStationConnections(marker, connectionIndex).some(
+              (connection) => connection.id === line.id,
+            ))),
     ),
   );
 }
