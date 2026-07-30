@@ -1,7 +1,9 @@
 'use client';
 
 import type { ApiListResponse, ServiceEntry, ServiceEntryGroup } from '@yct/contracts';
+import { appPath } from '../lib/app-paths';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+import { getLocalizedFaqContent } from '../lib/faq-translations';
 
 const serviceCategoryLabelKeys: Record<ServiceEntry['categoryId'], CommonMessageKey> = {
   operations: 'services.category.operations',
@@ -15,7 +17,8 @@ export function ServicesPageContent({
 }: Readonly<{
   serviceGroups: ApiListResponse<ServiceEntryGroup>;
 }>) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const faqContent = getLocalizedFaqContent(locale);
 
   return (
     <section className="module-panel" aria-labelledby="services-title">
@@ -34,28 +37,41 @@ export function ServicesPageContent({
                 <h2 id={`service-group-${group.categoryId}`}>
                   {t(serviceCategoryLabelKeys[group.categoryId])}
                 </h2>
-                <span className="muted">{t('services.itemCount', { count: group.items.length })}</span>
+                <span className="muted">
+                  {t('services.itemCount', { count: group.items.length })}
+                </span>
               </div>
               <div className="service-entry-grid">
-                {group.items.map((entry) => (
-                  <a
-                    className="service-entry"
-                    href={entry.href}
-                    target={entry.openMode === 'new_tab' ? '_blank' : undefined}
-                    rel={entry.openMode === 'new_tab' ? 'noreferrer' : undefined}
-                    key={entry.id}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      {entry.icon}
-                    </span>
-                    <span>
-                      <strong>{entry.title}</strong>
-                      {entry.description ? (
-                        <span className="muted">{entry.description}</span>
-                      ) : null}
-                    </span>
-                  </a>
-                ))}
+                {group.items.map((entry) => {
+                  const localizedEntry =
+                    entry.id === 'default-faq'
+                      ? {
+                          ...entry,
+                          title: faqContent.serviceTitle,
+                          description: faqContent.serviceDescription,
+                        }
+                      : entry;
+
+                  return (
+                    <a
+                      className="service-entry"
+                      href={appPath(localizedEntry.href)}
+                      target={localizedEntry.openMode === 'new_tab' ? '_blank' : undefined}
+                      rel={localizedEntry.openMode === 'new_tab' ? 'noreferrer' : undefined}
+                      key={localizedEntry.id}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        {localizedEntry.icon}
+                      </span>
+                      <span>
+                        <strong>{localizedEntry.title}</strong>
+                        {localizedEntry.description ? (
+                          <span className="muted">{localizedEntry.description}</span>
+                        ) : null}
+                      </span>
+                    </a>
+                  );
+                })}
               </div>
             </section>
           ))}

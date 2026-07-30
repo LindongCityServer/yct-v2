@@ -336,6 +336,18 @@ function buildDefaultServiceEntries(): ServiceEntry[] {
       sortOrder: 70,
       publishedAt: now,
     },
+    {
+      id: 'default-faq',
+      title: '常见问题',
+      description: '查看雨城通常用功能的使用说明与问题解答。',
+      categoryId: 'other',
+      icon: 'help',
+      href: '/services/faq',
+      openMode: 'same_tab',
+      status: 'published',
+      sortOrder: 10,
+      publishedAt: now,
+    },
   ];
 }
 

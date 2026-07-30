@@ -5,8 +5,10 @@ import type { MarkdownHeading } from './markdown-blocks';
 
 export function OperationTableOfContents({
   headings,
+  title = '文章目录',
 }: Readonly<{
   headings: MarkdownHeading[];
+  title?: string;
 }>) {
   const [expanded, setExpanded] = useState(false);
   const [activeHeadingId, setActiveHeadingId] = useState(headings[0]?.id ?? null);
@@ -57,11 +59,11 @@ export function OperationTableOfContents({
       <nav
         className="operation-toc-panel"
         id="operation-table-of-contents"
-        aria-label="文章目录"
+        aria-label={title}
         aria-hidden={!expanded}
         inert={!expanded}
       >
-        <span className="operation-toc-title">文章目录</span>
+        <span className="operation-toc-title">{title}</span>
         <ol>
           {headings.map((heading) => (
             <li className={`is-level-${heading.level}`} key={heading.id}>
@@ -94,8 +96,8 @@ export function OperationTableOfContents({
         type="button"
         aria-controls="operation-table-of-contents"
         aria-expanded={expanded}
-        aria-label={expanded ? '收起文章目录' : '展开文章目录'}
-        title={expanded ? '收起文章目录' : '展开文章目录'}
+        aria-label={expanded ? `收起${title}` : `展开${title}`}
+        title={expanded ? `收起${title}` : `展开${title}`}
         onClick={() => setExpanded((current) => !current)}
       >
         <span className="material-symbols-outlined" aria-hidden="true">

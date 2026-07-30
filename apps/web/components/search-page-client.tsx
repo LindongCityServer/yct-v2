@@ -12,6 +12,8 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+import { faqAnswerText } from '../lib/faq-content';
+import { getLocalizedFaqContent } from '../lib/faq-translations';
 import { filterMapMarkers } from '../lib/map-marker-search';
 import { normalizeTitleForSearch, TitleWithBreaks } from './title-with-breaks';
 
@@ -32,6 +34,7 @@ export function SearchPageClient({
   serviceGroups: ServiceEntryGroup[];
 }>) {
   const { locale, t } = useI18n();
+  const faqContent = useMemo(() => getLocalizedFaqContent(locale), [locale]);
   const [query, setQuery] = useState(initialQuery);
   const [activeCategory, setActiveCategory] = useState<SearchCategory>('all');
   const [markers, setMarkers] = useState<MapMarkerSnapshot['markers']>([]);
@@ -129,23 +132,58 @@ export function SearchPageClient({
     }
     return serviceGroups.flatMap((group) =>
       group.items
-        .filter((entry) =>
-          [entry.title, entry.description, group.title, entry.href]
+        .map((entry) => {
+          if (entry.id !== 'default-faq') {
+            return {
+              entry,
+              groupTitle: group.title,
+              title: entry.title,
+              description: entry.description,
+            };
+          }
+
+          return {
+            entry,
+            groupTitle: group.title,
+            title: faqContent.serviceTitle,
+            description: faqContent.serviceDescription,
+          };
+        })
+        .filter(({ entry, groupTitle, title, description }) =>
+          [title, description, groupTitle, entry.href]
             .filter(Boolean)
             .some((value) => normalizeTitleForSearch(value ?? '').includes(normalizedQuery)),
-        )
-        .map((entry) => ({ entry, groupTitle: group.title })),
+        ),
     );
-  }, [normalizedQuery, serviceGroups]);
+  }, [faqContent.serviceDescription, faqContent.serviceTitle, normalizedQuery, serviceGroups]);
+  const faqResults = useMemo(() => {
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    return faqContent.groups.flatMap((group) =>
+      group.items
+        .filter((item) =>
+          [item.question, faqAnswerText(item.answer), group.title, ...(item.keywords ?? [])].some(
+            (value) => normalizeTitleForSearch(value).includes(normalizedQuery),
+          ),
+        )
+        .map((item) => ({ item, groupTitle: group.title })),
+    );
+  }, [faqContent.groups, normalizedQuery]);
   const scheduleResults = scheduleResult?.trips ?? [];
   const totalResultCount =
-    operationResults.length + poiResults.length + scheduleResults.length + serviceResults.length;
+    operationResults.length +
+    poiResults.length +
+    scheduleResults.length +
+    serviceResults.length +
+    faqResults.length;
   const resultCounts: Record<SearchCategory, number> = {
     all: totalResultCount,
     operations: operationResults.length,
     poi: poiResults.length,
     schedules: scheduleResults.length,
-    services: serviceResults.length,
+    services: serviceResults.length + faqResults.length,
   };
   const isLoading = markerStatus === 'loading' || scheduleStatus === 'loading';
   const hasQuery = trimmedQuery.length > 0;
@@ -326,10 +364,10 @@ export function SearchPageClient({
                 <section className="search-result-group" aria-labelledby="search-services-title">
                   <h2 id="search-services-title">{t('search.resultGroup.services')}</h2>
                   <div className="search-result-list">
-                    {serviceResults.map(({ entry, groupTitle }) => (
+                    {serviceResults.map(({ entry, groupTitle, title, description }) => (
                       <a
                         className="search-result-item"
-                        href={entry.href}
+                        href={appPath(entry.href)}
                         target={entry.openMode === 'new_tab' ? '_blank' : undefined}
                         rel={entry.openMode === 'new_tab' ? 'noreferrer' : undefined}
                         key={entry.id}
@@ -339,14 +377,39 @@ export function SearchPageClient({
                         </span>
                         <span>
                           <strong>
-                            <TitleWithBreaks title={entry.title} />
+                            <TitleWithBreaks title={title} />
                           </strong>
                           <span className="muted">
                             {groupTitle}
-                            {entry.description ? ` · ${entry.description}` : ''}
+                            {description ? ` · ${description}` : ''}
                           </span>
                         </span>
                       </a>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {shouldShowServices && faqResults.length > 0 ? (
+                <section className="search-result-group" aria-labelledby="search-faq-title">
+                  <h2 id="search-faq-title">{faqContent.serviceTitle}</h2>
+                  <div className="search-result-list">
+                    {faqResults.map(({ item, groupTitle }) => (
+                      <Link
+                        className="search-result-item"
+                        href={appPath(`/services/faq#${item.id}`)}
+                        key={item.id}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          help
+                        </span>
+                        <span>
+                          <strong>{item.question}</strong>
+                          <span className="muted">
+                            {groupTitle} · {faqAnswerText(item.answer)}
+                          </span>
+                        </span>
+                      </Link>
                     ))}
                   </div>
                 </section>
