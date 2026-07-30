@@ -431,9 +431,20 @@ export type TransitNetworkHealthSuggestionKind =
   | 'improve_transfer'
   | 'improve_cross_connection'
   | 'reduce_corridor_overlap'
+  | 'improve_service_hours'
+  | 'improve_station_spacing'
+  | 'serve_demand_hotspots'
+  | 'improve_place_coverage'
+  | 'improve_road_coverage'
   | 'data_quality';
 
 export type TransitNetworkHealthSuggestionPriority = 'info' | 'attention';
+
+export type TransitNetworkHealthSuggestionDimension =
+  'topology' | 'operations' | 'scale' | 'places' | 'demand' | 'data_quality';
+
+export type TransitNetworkHealthPlaceCategory =
+  'residence' | 'employment' | 'education' | 'medical' | 'daily_life' | 'leisure' | 'transport';
 
 export interface TransitNetworkHealthOperatorRanks {
   stationCount: number;
@@ -441,10 +452,13 @@ export interface TransitNetworkHealthOperatorRanks {
   averageConnectivity: number;
   connectivityWeight: number;
   averageLinesPerSegment: number;
+  scheduleCoverageRate: number;
+  averageServiceSpanMinutes: number;
 }
 
 export interface TransitNetworkHealthOperatorStats {
   operator: string;
+  modes: Array<Exclude<TransportMode, 'walk'>>;
   lineCount: number;
   stationCount: number;
   topologySegmentCount: number;
@@ -454,22 +468,101 @@ export interface TransitNetworkHealthOperatorStats {
   averageLinesPerSegment: number;
   transferStationCount: number;
   componentCount: number;
+  scheduledLineCount: number;
+  scheduleCoverageRate: number;
+  averageServiceSpanMinutes: number;
+  earlyStartLineCount: number;
+  lateEndLineCount: number;
   ranks: TransitNetworkHealthOperatorRanks;
+}
+
+export interface TransitNetworkHealthOperatingStats {
+  scheduledLineCount: number;
+  scheduleCoverageRate: number;
+  averageServiceSpanMinutes: number;
+  shortestServiceSpanMinutes: number;
+  longestServiceSpanMinutes: number;
+  earlyStartLineCount: number;
+  lateEndLineCount: number;
+}
+
+export interface TransitNetworkHealthSpatialStats {
+  locatedStationCount: number;
+  stationLocationCoverageRate: number;
+  locatedSegmentCount: number;
+  approximateRouteLength: number;
+  averageStationSpacing: number;
+  networkSpanArea: number;
+  roadCount: number;
+  roadNodeCount: number;
+  coveredRoadNodeCount: number;
+  roadNodeCoverageRate: number;
+  catchmentRadius: number;
+}
+
+export interface TransitNetworkHealthPlaceCategoryStats {
+  category: TransitNetworkHealthPlaceCategory;
+  label: string;
+  placeCount: number;
+  coveredPlaceCount: number;
+  coverageRate: number;
+  nearbyPlacesPerStation: number;
+}
+
+export interface TransitNetworkHealthDemandHotspot {
+  stationName: string;
+  mode: Exclude<TransportMode, 'walk'>;
+  nearbyPlaceCount: number;
+  demandProxyScore: number;
+  leadingCategories: string[];
+}
+
+export interface TransitNetworkHealthPotentialDemandHotspot {
+  placeName: string;
+  nearbyPlaceCount: number;
+  demandProxyScore: number;
+  leadingCategories: string[];
+  servedByNetwork: boolean;
+}
+
+export interface TransitNetworkHealthPlanningStats {
+  sourcePlaceCount: number;
+  analyzedPlaceCount: number;
+  coveredPlaceCount: number;
+  placeCoverageRate: number;
+  totalDemandProxyScore: number;
+  attainedDemandProxyScore: number;
+  demandAttainmentRate: number;
+  averageDemandProxyScore: number;
+  placeCategories: TransitNetworkHealthPlaceCategoryStats[];
+  demandHotspots: TransitNetworkHealthDemandHotspot[];
+  potentialDemandHotspots: TransitNetworkHealthPotentialDemandHotspot[];
+}
+
+export type TransitNetworkHealthSuggestionTargetKind =
+  'operator' | 'line' | 'station' | 'segment' | 'place' | 'category' | 'road';
+
+export interface TransitNetworkHealthSuggestionTarget {
+  kind: TransitNetworkHealthSuggestionTargetKind;
+  label: string;
+  detail?: string;
 }
 
 export interface TransitNetworkHealthSuggestion {
   id: string;
   kind: TransitNetworkHealthSuggestionKind;
+  dimension: TransitNetworkHealthSuggestionDimension;
   priority: TransitNetworkHealthSuggestionPriority;
-  operator?: string;
+  operators?: string[];
   title: string;
   detail: string;
   evidence: string;
+  targetLabel?: string;
+  targets?: TransitNetworkHealthSuggestionTarget[];
+  targetCount?: number;
 }
 
-export interface TransitNetworkHealthReport {
-  analyzedAt: ISODateTimeString;
-  sourceMessage?: string;
+export interface TransitNetworkHealthScopeStats {
   lineCount: number;
   topologyLineCount: number;
   stationCount: number;
@@ -478,8 +571,33 @@ export interface TransitNetworkHealthReport {
   transferStationCount: number;
   stationIdentityFallbackCount: number;
   incompleteLineCount: number;
+  operating: TransitNetworkHealthOperatingStats;
+  spatial: TransitNetworkHealthSpatialStats;
+  planning: TransitNetworkHealthPlanningStats;
   operators: TransitNetworkHealthOperatorStats[];
   suggestions: TransitNetworkHealthSuggestion[];
+}
+
+export interface TransitNetworkHealthModeStats extends TransitNetworkHealthScopeStats {
+  mode: Exclude<TransportMode, 'walk'>;
+  label: string;
+  color: string;
+  icon: string;
+}
+
+export interface TransitNetworkHealthAnalysisSource {
+  id: 'topology' | 'operations' | 'places' | 'roads';
+  label: string;
+  detail: string;
+  status: 'ready' | 'partial' | 'unavailable';
+}
+
+export interface TransitNetworkHealthReport extends TransitNetworkHealthScopeStats {
+  analyzedAt: ISODateTimeString;
+  sourceMessage?: string;
+  planningSourceMessage?: string;
+  analysisSources: TransitNetworkHealthAnalysisSource[];
+  modes: TransitNetworkHealthModeStats[];
 }
 
 export interface TransitModeProfile {
