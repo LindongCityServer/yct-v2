@@ -5365,6 +5365,228 @@ img.map-player-list-avatar.is-offline {
   gap: var(--yct-space-3);
 }
 
+.metro-wayfinding-editor,
+.metro-wayfinding-toolbar,
+.metro-wayfinding-add-bar,
+.metro-wayfinding-element,
+.metro-wayfinding-element-body,
+.metro-wayfinding-main-segments,
+.metro-wayfinding-main-segments ol {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.metro-wayfinding-toolbar,
+.metro-wayfinding-color-row,
+.metro-wayfinding-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yct-space-3);
+}
+
+.metro-wayfinding-add-bar {
+  padding-block: var(--yct-space-3);
+  border-block: 1px solid var(--yct-color-border);
+}
+
+.metro-wayfinding-add-bar > span,
+.metro-wayfinding-main-segments > div > span {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metro-wayfinding-add-bar > div,
+.metro-wayfinding-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+}
+
+.metro-wayfinding-add-bar button,
+.metro-wayfinding-inline-actions button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  font-weight: 700;
+}
+
+.metro-wayfinding-add-bar button:disabled,
+.metro-wayfinding-inline-actions button:disabled,
+.metro-wayfinding-element-actions button:disabled,
+.metro-wayfinding-segment-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.metro-wayfinding-add-bar .material-symbols-outlined,
+.metro-wayfinding-inline-actions .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.metro-wayfinding-element-list {
+  display: flex;
+  overflow-x: auto;
+  gap: 2px;
+  margin: 0;
+  padding: 3px;
+  list-style: none;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+  scrollbar-width: thin;
+}
+
+.metro-wayfinding-element-list li {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.metro-wayfinding-element-list button {
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px minmax(0, auto);
+  align-items: center;
+  gap: 5px;
+  min-width: 88px;
+  max-width: 160px;
+  min-height: 40px;
+  padding: 0 var(--yct-space-2);
+  border: 0;
+  border-radius: calc(var(--yct-radius-md) - 2px);
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  text-align: left;
+}
+
+.metro-wayfinding-element-list button.is-icon-only {
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  min-width: 44px;
+  width: 44px;
+  padding-inline: 0;
+}
+
+.metro-wayfinding-element-list button:is(:hover, :focus-visible) {
+  background: var(--yct-material-hover-state);
+}
+
+.metro-wayfinding-element-list button.is-active {
+  background: var(--yct-color-surface-panel);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--yct-color-text) 14%, transparent);
+  color: var(--yct-color-primary);
+}
+
+.metro-wayfinding-element-list .material-symbols-outlined {
+  overflow: hidden;
+  font-size: 22px;
+}
+
+.metro-wayfinding-element-tab-summary {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metro-wayfinding-element-panel {
+  min-width: 0;
+  border-top: 1px solid var(--yct-color-border);
+}
+
+.metro-wayfinding-element {
+  padding-block: var(--yct-space-3);
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+.metro-wayfinding-element > header,
+.metro-wayfinding-main-segments > div,
+.metro-wayfinding-main-segments li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+}
+
+.metro-wayfinding-element > header strong,
+.metro-wayfinding-main-segments strong {
+  color: var(--yct-color-text);
+  font-size: 14px;
+}
+
+.metro-wayfinding-element-actions,
+.metro-wayfinding-segment-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.metro-wayfinding-element-actions .icon-button,
+.metro-wayfinding-segment-actions .icon-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+}
+
+.metro-wayfinding-main-segments {
+  padding: var(--yct-space-3);
+  border-left: 2px solid var(--yct-color-border);
+}
+
+.metro-wayfinding-main-segments ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.metro-wayfinding-main-segments li > .material-field,
+.metro-wayfinding-main-segments li > .metro-wayfinding-color-control {
+  flex: 1 1 180px;
+}
+
+.metro-wayfinding-color-control > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: var(--yct-space-2);
+}
+
+.metro-wayfinding-color-control input[type='color'] {
+  width: 40px;
+  min-height: 40px;
+  padding: 3px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.metro-wayfinding-toggle {
+  align-self: end;
+  min-height: 40px;
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.metro-wayfinding-toggle input {
+  accent-color: var(--yct-color-primary);
+}
+
+.metro-wayfinding-empty {
+  margin: 0;
+  padding: var(--yct-space-3) 0;
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+}
+
 .material-action-row,
 .admin-content-actions {
   display: flex;
@@ -5665,6 +5887,16 @@ img.map-player-list-avatar.is-offline {
 
   .material-field-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .metro-wayfinding-toolbar,
+  .metro-wayfinding-color-row,
+  .metro-wayfinding-field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .metro-wayfinding-main-segments li {
+    flex-wrap: wrap;
   }
 
   .admin-material-template,
@@ -13154,6 +13386,17 @@ img.map-player-list-avatar.is-offline {
   justify-content: flex-end;
   min-width: 40px;
   min-height: 40px;
+}
+
+.material-studio-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--yct-space-1);
+}
+
+.material-studio-topbar-actions .icon-button:disabled {
+  cursor: progress;
+  opacity: 0.45;
 }
 
 .secondary-topbar .secondary-actions .operation-toc-toggle {

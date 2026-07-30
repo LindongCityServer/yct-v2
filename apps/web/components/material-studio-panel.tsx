@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import {
+  publishMaterialStudioActionBlocked,
+  publishMaterialStudioState,
+  subscribeMaterialStudioActions,
+} from '../lib/client-material-studio-events';
+import { METRO_WAYFINDING_TEMPLATE_ID } from '../lib/metro-wayfinding';
 import { EmbeddedMapLocationPicker } from './embedded-map-location-picker';
+import { MetroWayfindingEditor } from './metro-wayfinding-editor';
 
 type MaterialFamily = 'road_sign' | 'address_sign' | 'bus_stop' | 'custom';
 type MaterialServerSource = 'transit_line' | 'transit_station' | 'map_location' | 'road_coordinate';
@@ -46,6 +53,8 @@ interface PublishedMaterialTemplate {
 interface TransitLineOption {
   id: string;
   name: string;
+  mode: string;
+  color?: string;
   operator?: string;
   stationCount: number;
   stations: Array<{
@@ -110,17 +119,21 @@ type StudioMode = 'manual' | 'server';
 const MATERIAL_PREVIEW_DIALOG_MEDIA_QUERY = '(max-width: 959px)';
 
 export function MaterialStudioPanel({
+  studioId,
   title,
   families,
   serverSource,
   serverSources,
   serverFamilies,
+  includedTemplateIds,
 }: Readonly<{
+  studioId: string;
   title: string;
   families: MaterialFamily[];
   serverSource?: MaterialServerSource;
   serverSources?: Partial<Record<MaterialFamily, MaterialServerSource>>;
   serverFamilies?: MaterialFamily[];
+  includedTemplateIds?: string[];
 }>) {
   const [items, setItems] = useState<PublishedMaterialTemplate[]>([]);
   const [drafts, setDrafts] = useState<MaterialDraft[]>([]);
@@ -148,15 +161,21 @@ export function MaterialStudioPanel({
   const [isPreviewDialogViewport, setIsPreviewDialogViewport] = useState(false);
   const [isSingleColumnViewport, setIsSingleColumnViewport] = useState(false);
   const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
-  const [statusText, setStatusText] = useState('正在读取模板');
+  const [workspaceBlockMessage, setWorkspaceBlockMessage] = useState('');
   const [isBusy, setIsBusy] = useState(false);
 
   const templates = useMemo(
-    () => items.filter((item) => families.includes(item.template.family)),
-    [families, items],
+    () =>
+      items.filter(
+        (item) =>
+          families.includes(item.template.family) ||
+          includedTemplateIds?.includes(item.id) === true,
+      ),
+    [families, includedTemplateIds, items],
   );
   const selected = templates.find((item) => item.id === selectedTemplateId) ?? templates[0];
   const activeCanvas = canvas ?? selected?.template.defaultCanvas ?? null;
+  const isMetroWayfinding = selected?.id === METRO_WAYFINDING_TEMPLATE_ID;
   const serverOverrideFields =
     selected?.template.fields.filter(
       (field) => field.serverOverride && field.userEditable !== false,
@@ -181,6 +200,19 @@ export function MaterialStudioPanel({
     [drafts],
   );
   const selectedLine = transitLines.find((line) => line.id === selectedLineId);
+  const metroLineColorOptions = useMemo(
+    () =>
+      transitLines
+        .filter(
+          (line) =>
+            line.mode === 'metro' && Boolean(line.color && /^#[0-9A-Fa-f]{6}$/.test(line.color)),
+        )
+        .map((line) => ({
+          value: line.color!.toUpperCase(),
+          label: `${line.name} · ${line.color!.toUpperCase()}`,
+        })),
+    [transitLines],
+  );
   const selectedTransitStation = transitStations.find(
     (station) => station.markerId === selectedTransitStationMarkerId,
   );
@@ -239,13 +271,17 @@ export function MaterialStudioPanel({
         message?: string;
       };
       if (!templateResponse.ok) {
-        setStatusText(templateData.message ?? '请先登录后使用物料工作台。');
+        setWorkspaceBlockMessage(templateData.message ?? '请先登录后使用物料工作台。');
         return;
       }
 
       const nextItems = templateData.items ?? [];
       setItems(nextItems);
-      const firstTemplate = nextItems.find((item) => families.includes(item.template.family));
+      const firstTemplate = nextItems.find(
+        (item) =>
+          families.includes(item.template.family) ||
+          includedTemplateIds?.includes(item.id) === true,
+      );
       if (firstTemplate) {
         setSelectedTemplateId((current) => current || firstTemplate.id);
       }
@@ -260,10 +296,16 @@ export function MaterialStudioPanel({
           })
           .catch(() => undefined),
       ];
-      if (
+      const requiresTransitLineList =
         serverSource === 'transit_line' ||
-        Object.values(serverSources ?? {}).includes('transit_line')
-      ) {
+        Object.values(serverSources ?? {}).includes('transit_line') ||
+        nextItems.some(
+          (item) =>
+            (families.includes(item.template.family) ||
+              includedTemplateIds?.includes(item.id) === true) &&
+            item.id === METRO_WAYFINDING_TEMPLATE_ID,
+        );
+      if (requiresTransitLineList) {
         pendingRequests.push(
           fetch(appPath('/api/materials/transit-lines'), { cache: 'no-store' })
             .then(async (response) => {
@@ -336,9 +378,10 @@ export function MaterialStudioPanel({
         );
       }
       await Promise.all(pendingRequests);
-      setStatusText(firstTemplate ? '已读取可用模板。' : '当前没有可用模板。');
+      setWorkspaceBlockMessage(firstTemplate ? '' : '当前没有可用模板。');
     } catch {
-      setStatusText('物料工作台暂时不可用。');
+      setItems([]);
+      setWorkspaceBlockMessage('物料工作台暂时不可用。');
     }
   };
 
@@ -443,7 +486,6 @@ export function MaterialStudioPanel({
 
   const selectTemplate = (templateId: string) => {
     setSelectedTemplateId(templateId);
-    setStatusText('');
     clearPreview();
   };
 
@@ -532,16 +574,44 @@ export function MaterialStudioPanel({
       ]),
     );
 
+  const blockAction = (message: string) => {
+    publishMaterialStudioActionBlocked({ studioId, message });
+  };
+
+  const getServerSelectionBlockMessage = (): string | null => {
+    if (activeServerSource === 'transit_station' && !selectedTransitStationMarkerId) {
+      return '请先选择服务器公交站。';
+    }
+    if (activeServerSource === 'transit_station' && !selectedTransitLineIds.length) {
+      return '请先选择至少一条同方向线路。';
+    }
+    if (activeServerSource === 'transit_line' && !selectedLineId) {
+      return '请先选择服务器线路。';
+    }
+    if (activeServerSource === 'map_location' && !selectedLocationId) {
+      return '请先选择服务器地点。';
+    }
+    if (activeServerSource === 'road_coordinate' && !roadCoordinate) {
+      return '请先选择路牌安装坐标。';
+    }
+    return null;
+  };
+
   const requestPreview = async () => {
     if (!selected || !activeCanvas) {
+      blockAction(workspaceBlockMessage || '当前没有可用模板。');
+      return;
+    }
+    const selectionBlockMessage = mode === 'server' ? getServerSelectionBlockMessage() : null;
+    if (selectionBlockMessage) {
+      blockAction(selectionBlockMessage);
       return;
     }
     const source = mode === 'server' ? buildServerSource() : undefined;
     if (mode === 'server' && !source) {
-      setStatusText('请先选择服务器数据。');
+      blockAction('请先选择服务器数据。');
       return;
     }
-    setStatusText('正在生成预览...');
     setIsBusy(true);
     try {
       const response = await fetch(appPath('/api/materials/previews'), {
@@ -568,13 +638,12 @@ export function MaterialStudioPanel({
       });
       if (!response.ok) {
         const data = (await response.json()) as { message?: string };
-        setStatusText(data.message ?? '生成预览失败。');
+        blockAction(data.message ?? '生成预览失败。');
         return;
       }
       await showPreviewBlob(response);
-      setStatusText('预览已更新。');
     } catch {
-      setStatusText('生成预览时发生网络错误。');
+      blockAction('生成预览时发生网络错误。');
     } finally {
       setIsBusy(false);
     }
@@ -582,6 +651,7 @@ export function MaterialStudioPanel({
 
   const submitManualDraft = async () => {
     if (!selected || !activeCanvas) {
+      blockAction(workspaceBlockMessage || '当前没有可提交的模板。');
       return;
     }
     setIsBusy(true);
@@ -598,7 +668,7 @@ export function MaterialStudioPanel({
       });
       const created = (await createResponse.json()) as MaterialDraft & { message?: string };
       if (!createResponse.ok || !created.id) {
-        setStatusText(created.message ?? '无法保存自定义物料。');
+        blockAction(created.message ?? '无法保存自定义物料。');
         return;
       }
       const submitResponse = await fetch(
@@ -607,13 +677,12 @@ export function MaterialStudioPanel({
       );
       const submitted = (await submitResponse.json()) as MaterialDraft & { message?: string };
       if (!submitResponse.ok) {
-        setStatusText(submitted.message ?? '物料已保存，但提交审核失败。');
+        blockAction(submitted.message ?? '物料已保存，但提交审核失败。');
         return;
       }
       setDrafts((current) => [submitted, ...current.filter((item) => item.id !== submitted.id)]);
-      setStatusText('自定义物料已提交审核。');
     } catch {
-      setStatusText('提交审核时发生网络错误。');
+      blockAction('提交审核时发生网络错误。');
     } finally {
       setIsBusy(false);
     }
@@ -629,13 +698,12 @@ export function MaterialStudioPanel({
       });
       if (!response.ok) {
         const data = (await response.json()) as { message?: string };
-        setStatusText(data.message ?? '下载物料失败。');
+        blockAction(data.message ?? '下载物料失败。');
         return;
       }
       await downloadBlob(response);
-      setStatusText('物料图片已下载。');
     } catch {
-      setStatusText('下载物料时发生网络错误。');
+      blockAction('下载物料时发生网络错误。');
     } finally {
       setIsBusy(false);
     }
@@ -643,16 +711,21 @@ export function MaterialStudioPanel({
 
   const exportManualDraft = async () => {
     if (!existingDraft) {
-      setStatusText('当前模板尚无已通过审核的自定义物料。');
+      blockAction('当前模板尚无审核通过的自定义物料，请先提交审核。');
       return;
     }
     await exportDraft(existingDraft);
   };
 
   const exportFromServer = async () => {
+    const selectionBlockMessage = getServerSelectionBlockMessage();
+    if (selectionBlockMessage) {
+      blockAction(selectionBlockMessage);
+      return;
+    }
     const source = buildServerSource();
     if (!selected || !activeCanvas || !source) {
-      setStatusText('请先选择模板和服务器数据。');
+      blockAction('请先选择模板和服务器数据。');
       return;
     }
     setIsBusy(true);
@@ -671,17 +744,51 @@ export function MaterialStudioPanel({
       });
       if (!response.ok) {
         const data = (await response.json()) as { message?: string };
-        setStatusText(data.message ?? '下载物料失败。');
+        blockAction(data.message ?? '下载物料失败。');
         return;
       }
       await downloadBlob(response);
-      setStatusText('已记录本次下载并保存图片。');
     } catch {
-      setStatusText('下载物料时发生网络错误。');
+      blockAction('下载物料时发生网络错误。');
     } finally {
       setIsBusy(false);
     }
   };
+
+  useEffect(() => {
+    publishMaterialStudioState({
+      studioId,
+      mode,
+      hasPreview: Boolean(previewUrl),
+      isBusy,
+    });
+  }, [isBusy, mode, previewUrl, studioId]);
+
+  useEffect(() =>
+    subscribeMaterialStudioActions(studioId, (action) => {
+      if (isBusy) {
+        blockAction('当前操作尚未完成，请稍候。');
+        return;
+      }
+      if (action === 'preview') {
+        void requestPreview();
+        return;
+      }
+      if (action === 'submit') {
+        if (mode !== 'manual') {
+          blockAction('服务器数据模板无需提交审核。');
+          return;
+        }
+        void submitManualDraft();
+        return;
+      }
+      if (mode === 'server') {
+        void exportFromServer();
+      } else {
+        void exportManualDraft();
+      }
+    }),
+  );
 
   return (
     <section
@@ -694,7 +801,6 @@ export function MaterialStudioPanel({
           <span className="eyebrow">物料工作台</span>
           <h1>{title}</h1>
         </div>
-        <p className="muted">{statusText}</p>
       </div>
 
       <div
@@ -725,6 +831,7 @@ export function MaterialStudioPanel({
             canvas={activeCanvas}
             onChange={updateCanvas}
             disabled={isBusy || !selected}
+            isMetroWayfinding={isMetroWayfinding}
           />
         </aside>
 
@@ -886,24 +993,6 @@ export function MaterialStudioPanel({
                   <p className="muted">当前方向没有可用线路。</p>
                 )}
               </fieldset>
-              <div className="material-action-row">
-                <PreviewButton
-                  onClick={() => void requestPreview()}
-                  disabled={isBusy || !selectedTransitLineIds.length}
-                />
-                <button
-                  type="button"
-                  className="is-primary"
-                  onClick={() => void exportFromServer()}
-                  disabled={isBusy || !selectedTransitLineIds.length}
-                  title="登录后下载无水印图片"
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    download
-                  </span>
-                  登录后下载无水印图片
-                </button>
-              </div>
             </>
           ) : mode === 'server' && activeServerSource === 'transit_line' ? (
             <>
@@ -945,21 +1034,6 @@ export function MaterialStudioPanel({
                   ))}
                 </select>
               </label>
-              <div className="material-action-row">
-                <PreviewButton onClick={() => void requestPreview()} disabled={isBusy} />
-                <button
-                  type="button"
-                  className="is-primary"
-                  onClick={() => void exportFromServer()}
-                  disabled={isBusy || !selectedLineId}
-                  title="登录后下载无水印图片"
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    download
-                  </span>
-                  登录后下载无水印图片
-                </button>
-              </div>
             </>
           ) : mode === 'server' && activeServerSource === 'map_location' ? (
             <>
@@ -989,24 +1063,6 @@ export function MaterialStudioPanel({
                   ))}
                 </select>
               </label>
-              <div className="material-action-row">
-                <PreviewButton
-                  onClick={() => void requestPreview()}
-                  disabled={isBusy || !selectedLocationId}
-                />
-                <button
-                  type="button"
-                  className="is-primary"
-                  onClick={() => void exportFromServer()}
-                  disabled={isBusy || !selectedLocationId}
-                  title="登录后下载无水印图片"
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    download
-                  </span>
-                  登录后下载无水印图片
-                </button>
-              </div>
             </>
           ) : mode === 'server' && activeServerSource === 'road_coordinate' ? (
             <>
@@ -1060,70 +1116,37 @@ export function MaterialStudioPanel({
                 tileTemplate={tileTemplate}
                 value={roadCoordinate}
               />
-              <div className="material-action-row">
-                <PreviewButton
-                  onClick={() => void requestPreview()}
-                  disabled={isBusy || !roadCoordinate}
-                />
-                <button
-                  type="button"
-                  className="is-primary"
-                  onClick={() => void exportFromServer()}
-                  disabled={isBusy || !roadCoordinate}
-                  title="登录后下载无水印图片"
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    download
-                  </span>
-                  登录后下载无水印图片
-                </button>
-              </div>
             </>
           ) : (
             <>
-              <div className="material-field-grid">
-                {selected.template.fields
-                  .filter((field) => field.userEditable !== false)
-                  .map((field) => (
-                    <MaterialFieldEditor
-                      key={field.key}
-                      field={field}
-                      value={input[field.key] ?? ''}
-                      disabled={isBusy}
-                      onChange={(value) => {
-                        setInput((current) => ({ ...current, [field.key]: value }));
-                        clearPreview();
-                      }}
-                    />
-                  ))}
-              </div>
-              <div className="material-action-row">
-                <PreviewButton onClick={() => void requestPreview()} disabled={isBusy} />
-                <button type="button" onClick={() => void submitManualDraft()} disabled={isBusy}>
-                  提交审核
-                </button>
-                <button
-                  type="button"
-                  className="is-primary"
-                  onClick={() => void exportManualDraft()}
-                  disabled={isBusy || !existingDraft}
-                  title={
-                    existingDraft
-                      ? '登录后下载审核通过的无水印图片'
-                      : '登录并提交自定义内容，审核通过后可下载无水印图片'
-                  }
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    download
-                  </span>
-                  登录后下载无水印图片
-                </button>
-              </div>
-              <p className="muted">
-                {existingDraft
-                  ? '当前模板已有审核通过版本，登录后可使用下载按钮获取无水印图片。'
-                  : '请先登录并提交自定义内容，审核通过后下载按钮才会启用。'}
-              </p>
+              {isMetroWayfinding ? (
+                <MetroWayfindingEditor
+                  value={input.layout ?? ''}
+                  disabled={isBusy}
+                  lineColorOptions={metroLineColorOptions}
+                  onChange={(value) => {
+                    setInput((current) => ({ ...current, layout: value }));
+                    clearPreview();
+                  }}
+                />
+              ) : (
+                <div className="material-field-grid">
+                  {selected.template.fields
+                    .filter((field) => field.userEditable !== false)
+                    .map((field) => (
+                      <MaterialFieldEditor
+                        key={field.key}
+                        field={field}
+                        value={input[field.key] ?? ''}
+                        disabled={isBusy}
+                        onChange={(value) => {
+                          setInput((current) => ({ ...current, [field.key]: value }));
+                          clearPreview();
+                        }}
+                      />
+                    ))}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -1220,12 +1243,12 @@ export function MaterialStudioPanel({
                       className="is-primary"
                       onClick={() => void exportDraft(draft)}
                       disabled={isBusy}
-                      title="登录后下载审核通过的无水印图片"
+                      title="下载图片"
                     >
                       <span className="material-symbols-outlined" aria-hidden="true">
                         download
                       </span>
-                      登录后下载无水印图片
+                      下载图片
                     </button>
                   ) : null}
                 </article>
@@ -1237,29 +1260,6 @@ export function MaterialStudioPanel({
         )}
       </section>
     </section>
-  );
-}
-
-function PreviewButton({
-  disabled,
-  onClick,
-}: Readonly<{
-  disabled: boolean;
-  onClick: () => void;
-}>) {
-  return (
-    <button
-      type="button"
-      className="icon-button"
-      aria-label="预览"
-      title="预览"
-      onClick={onClick}
-      disabled={disabled}
-    >
-      <span className="material-symbols-outlined" aria-hidden="true">
-        visibility
-      </span>
-    </button>
   );
 }
 
@@ -1310,10 +1310,12 @@ function resolveMaterialDownloadFileName(response: Response, fallback: string): 
 function CanvasEditor({
   canvas,
   disabled,
+  isMetroWayfinding,
   onChange,
 }: Readonly<{
   canvas: MaterialCanvas | null;
   disabled: boolean;
+  isMetroWayfinding: boolean;
   onChange: <TKey extends keyof MaterialCanvas>(key: TKey, value: MaterialCanvas[TKey]) => void;
 }>) {
   if (!canvas) {
@@ -1333,14 +1335,17 @@ function CanvasEditor({
     <fieldset className="material-canvas-editor" disabled={disabled}>
       <legend>尺寸</legend>
       <label>
-        <span>宽度（米）</span>
+        <span>{isMetroWayfinding ? '宽度（128 像素格数）' : '宽度（米）'}</span>
         <input
           type="number"
-          min="0.01"
+          min={isMetroWayfinding ? 1 : 0.01}
           max="64"
-          step="0.01"
+          step={isMetroWayfinding ? 1 : 0.01}
           value={canvas.widthM}
-          onChange={(event) => onChange('widthM', Number(event.currentTarget.value))}
+          onChange={(event) => {
+            const value = Number(event.currentTarget.value);
+            onChange('widthM', isMetroWayfinding ? Math.max(1, Math.round(value)) : value);
+          }}
         />
       </label>
       <label>
@@ -1350,7 +1355,8 @@ function CanvasEditor({
           min="0.01"
           max="64"
           step="0.01"
-          value={canvas.heightM}
+          value={isMetroWayfinding ? 1 : canvas.heightM}
+          disabled={isMetroWayfinding}
           onChange={(event) => onChange('heightM', Number(event.currentTarget.value))}
         />
       </label>
@@ -1369,6 +1375,7 @@ function CanvasEditor({
         <input
           type="checkbox"
           checked={canvas.alignToTile}
+          disabled={isMetroWayfinding}
           onChange={(event) => onChange('alignToTile', event.currentTarget.checked)}
         />
         <span>对齐到整数地图画尺寸</span>
