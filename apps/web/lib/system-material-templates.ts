@@ -85,6 +85,48 @@ function createBusStopTemplateSource(fileName: string, overlay: string): string 
 
 export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
   {
+    id: 'system_material_metro_wayfinding',
+    versions: [
+      {
+        version: 1,
+        status: 'published',
+        title: '地铁导视牌',
+        description:
+          '按 128 像素单元横向组合图标、文字、大文字、空白和分割线，支持线路号标识与逐元素配色。',
+        family: 'custom',
+        source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.widthPx}} {{canvas.heightPx}}">
+  <g>{{glyph.layout}}</g>
+</svg>`,
+        fields: [
+          {
+            key: 'layout',
+            label: '导视牌元素编排',
+            kind: 'text',
+            required: true,
+            defaultValue: '{"backgroundColor":"#262626","foregroundColor":"#FFFFFF","elements":[]}',
+            maxLength: 16_000,
+            glyph: {
+              renderer: 'metro_wayfinding',
+              layoutWidth: 512,
+              layoutHeight: 128,
+            },
+          },
+        ],
+        defaultCanvas: {
+          widthM: 4,
+          heightM: 1,
+          pxPerMeter: 128,
+          alignToTile: true,
+          tileSizePx: 128,
+        },
+        createdBy: systemActorId,
+        createdAt: systemPublishedAt,
+        publishedBy: systemActorId,
+        publishedAt: systemPublishedAt,
+      },
+    ],
+  },
+  {
     id: 'system_material_road_name_direction',
     versions: [
       {
@@ -364,15 +406,13 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             maxLength: 24,
             textFit: { maxWidth: 94, fontSize: 12, maxLetterSpacing: 3 },
           },
-          ...[1, 2, 3, 4, 5, 6].map((slot) =>
-            ({
-              key: `route${slot}Number`,
-              label: `第 ${slot} 条线路编号`,
-              kind: 'text' as const,
-              maxLength: 16,
-              textFit: { maxWidth: 38, fontSize: 20, maxLetterSpacing: 0 },
-            }),
-          ),
+          ...[1, 2, 3, 4, 5, 6].map((slot) => ({
+            key: `route${slot}Number`,
+            label: `第 ${slot} 条线路编号`,
+            kind: 'text' as const,
+            maxLength: 16,
+            textFit: { maxWidth: 38, fontSize: 20, maxLetterSpacing: 0 },
+          })),
         ],
         defaultCanvas: {
           widthM: 1,

@@ -1,0 +1,345 @@
+export const METRO_WAYFINDING_TEMPLATE_ID = 'system_material_metro_wayfinding';
+export const METRO_WAYFINDING_BACKGROUND = '#262626';
+export const METRO_WAYFINDING_FOREGROUND = '#FFFFFF';
+export const METRO_WAYFINDING_GAP = 16;
+export const METRO_WAYFINDING_PADDING = 22;
+export const METRO_WAYFINDING_HEIGHT = 128;
+
+export const metroWayfindingBackgroundPalette = [
+  { value: '#262626', label: '深灰色' },
+  { value: '#F2C94C', label: '黄色' },
+  { value: '#FFFFFF', label: '白色' },
+  { value: '#8A8A8A', label: '灰色' },
+  { value: '#123A63', label: '深蓝色' },
+  { value: '#14532D', label: '深绿色' },
+] as const;
+
+export const metroWayfindingForegroundPalette = [
+  { value: '#FFFFFF', label: '白色' },
+  { value: '#F2C94C', label: '黄色' },
+  { value: '#111111', label: '黑色' },
+  { value: '#8ED8FF', label: '浅蓝色' },
+] as const;
+
+export type MetroWayfindingColor = string;
+export type MetroWayfindingIconGroup = 'facility' | 'arrow';
+
+export interface MetroWayfindingIconOption {
+  id: string;
+  label: string;
+  symbol: string;
+  group: MetroWayfindingIconGroup;
+  defaultForegroundColor?: string;
+}
+
+export const metroWayfindingIconOptions: MetroWayfindingIconOption[] = [
+  { id: 'stairs', label: '楼梯', symbol: 'stairs', group: 'facility' },
+  { id: 'escalator', label: '扶梯', symbol: 'escalator', group: 'facility' },
+  { id: 'elevator', label: '电梯', symbol: 'elevator', group: 'facility' },
+  { id: 'nursing-room', label: '母婴室', symbol: 'breastfeeding', group: 'facility' },
+  { id: 'family-restroom', label: '第三卫生间', symbol: 'family_restroom', group: 'facility' },
+  { id: 'police', label: '警务室', symbol: 'local_police', group: 'facility' },
+  { id: 'waiting', label: '候车室', symbol: 'chair', group: 'facility' },
+  { id: 'exit', label: '出口', symbol: 'logout', group: 'facility' },
+  { id: 'subway', label: '地铁', symbol: 'subway', group: 'facility' },
+  { id: 'airplane', label: '飞机', symbol: 'flight', group: 'facility' },
+  { id: 'boat', label: '轮船', symbol: 'directions_boat', group: 'facility' },
+  { id: 'train', label: '火车', symbol: 'train', group: 'facility' },
+  { id: 'service', label: '服务台', symbol: 'support_agent', group: 'facility' },
+  { id: 'ticket', label: '售票机', symbol: 'confirmation_number', group: 'facility' },
+  {
+    id: 'no-entry',
+    label: '禁止进入',
+    symbol: 'block',
+    group: 'facility',
+    defaultForegroundColor: '#E53935',
+  },
+  { id: 'wheelchair', label: '轮椅', symbol: 'accessible', group: 'facility' },
+  { id: 'south-west', label: '左下', symbol: 'south_west', group: 'arrow' },
+  { id: 'west', label: '左', symbol: 'arrow_back', group: 'arrow' },
+  { id: 'north-west', label: '左上', symbol: 'arrow_insert', group: 'arrow' },
+  { id: 'north', label: '上', symbol: 'arrow_upward', group: 'arrow' },
+  { id: 'north-east', label: '右上', symbol: 'arrow_outward', group: 'arrow' },
+  { id: 'east', label: '右', symbol: 'arrow_forward', group: 'arrow' },
+  { id: 'south-east', label: '右下', symbol: 'south_east', group: 'arrow' },
+  { id: 'south', label: '下', symbol: 'arrow_downward', group: 'arrow' },
+  { id: 'u-turn-left', label: '左掉头', symbol: 'u_turn_left', group: 'arrow' },
+  { id: 'u-turn-right', label: '右掉头', symbol: 'u_turn_right', group: 'arrow' },
+];
+
+const legacyMetroWayfindingIconIds: Record<string, string> = {
+  'turn-left-up': 'west',
+  'turn-left-down': 'west',
+  'turn-right-up': 'east',
+  'turn-right-down': 'east',
+};
+
+export type MetroWayfindingTextMode = 'single' | 'double';
+export type MetroWayfindingTextAlign = 'left' | 'center' | 'right';
+export type MetroWayfindingSpaceMode = 'fixed' | 'flex';
+export type MetroWayfindingIconDirection = 'left' | 'right' | 'up' | 'down';
+
+export interface MetroWayfindingTextSegment {
+  kind: 'text';
+  value: string;
+}
+
+export interface MetroWayfindingLineSegment {
+  kind: 'line';
+  value: string;
+  color: MetroWayfindingColor;
+}
+
+export type MetroWayfindingMainSegment = MetroWayfindingTextSegment | MetroWayfindingLineSegment;
+
+export interface MetroWayfindingIconElement {
+  id: string;
+  type: 'icon';
+  iconId: string;
+  direction?: MetroWayfindingIconDirection;
+  framed: boolean;
+  backgroundColor?: MetroWayfindingColor;
+  foregroundColor?: MetroWayfindingColor;
+}
+
+export interface MetroWayfindingTextElement {
+  id: string;
+  type: 'text';
+  mode: MetroWayfindingTextMode;
+  align: MetroWayfindingTextAlign;
+  main: MetroWayfindingMainSegment[];
+  secondary: string;
+  secondMain: MetroWayfindingMainSegment[];
+  secondSecondary: string;
+  backgroundColor?: MetroWayfindingColor;
+  foregroundColor?: MetroWayfindingColor;
+}
+
+export interface MetroWayfindingLargeTextElement {
+  id: string;
+  type: 'largeText';
+  value: string;
+  suffix: string;
+  framed: boolean;
+  backgroundColor?: MetroWayfindingColor;
+  foregroundColor?: MetroWayfindingColor;
+}
+
+export interface MetroWayfindingSpaceElement {
+  id: string;
+  type: 'space';
+  mode: MetroWayfindingSpaceMode;
+  units: number;
+  backgroundColor?: MetroWayfindingColor;
+  foregroundColor?: MetroWayfindingColor;
+}
+
+export interface MetroWayfindingDividerElement {
+  id: string;
+  type: 'divider';
+  backgroundColor?: MetroWayfindingColor;
+  foregroundColor?: MetroWayfindingColor;
+}
+
+export type MetroWayfindingElement =
+  | MetroWayfindingIconElement
+  | MetroWayfindingTextElement
+  | MetroWayfindingLargeTextElement
+  | MetroWayfindingSpaceElement
+  | MetroWayfindingDividerElement;
+
+export interface MetroWayfindingLayout {
+  backgroundColor: MetroWayfindingColor;
+  foregroundColor: MetroWayfindingColor;
+  elements: MetroWayfindingElement[];
+}
+
+export const emptyMetroWayfindingLayout: MetroWayfindingLayout = {
+  backgroundColor: METRO_WAYFINDING_BACKGROUND,
+  foregroundColor: METRO_WAYFINDING_FOREGROUND,
+  elements: [],
+};
+
+export function createMetroWayfindingId(prefix = 'metro'): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function createMetroWayfindingElement(
+  type: MetroWayfindingElement['type'],
+  iconId = 'stairs',
+): MetroWayfindingElement {
+  const id = createMetroWayfindingId(type);
+  if (type === 'icon') {
+    const icon = metroWayfindingIconOptions.find((option) => option.id === iconId);
+    return {
+      id,
+      type,
+      iconId,
+      framed: false,
+      foregroundColor: icon?.defaultForegroundColor,
+    };
+  }
+  if (type === 'text') {
+    return {
+      id,
+      type,
+      mode: 'single',
+      align: 'center',
+      main: [{ kind: 'text', value: '' }],
+      secondary: '',
+      secondMain: [{ kind: 'text', value: '' }],
+      secondSecondary: '',
+    };
+  }
+  if (type === 'largeText') {
+    return { id, type, value: '', suffix: '', framed: false };
+  }
+  if (type === 'space') {
+    return { id, type, mode: 'fixed', units: 1 };
+  }
+  return { id, type };
+}
+
+export function parseMetroWayfindingLayout(value: string): MetroWayfindingLayout {
+  try {
+    const candidate = JSON.parse(value) as Partial<MetroWayfindingLayout>;
+    const elements = Array.isArray(candidate.elements)
+      ? candidate.elements.map(normalizeMetroWayfindingElement).filter(Boolean)
+      : [];
+    return {
+      backgroundColor: normalizeColor(candidate.backgroundColor, METRO_WAYFINDING_BACKGROUND),
+      foregroundColor: normalizeColor(candidate.foregroundColor, METRO_WAYFINDING_FOREGROUND),
+      elements: elements as MetroWayfindingElement[],
+    };
+  } catch {
+    return emptyMetroWayfindingLayout;
+  }
+}
+
+export function serializeMetroWayfindingLayout(layout: MetroWayfindingLayout): string {
+  return JSON.stringify(layout);
+}
+
+export function normalizeColor(value: unknown, fallback: string): string {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value)
+    ? value.toUpperCase()
+    : fallback;
+}
+
+function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const candidate = value as Partial<MetroWayfindingElement> & { id?: unknown; type?: unknown };
+  const id = typeof candidate.id === 'string' && candidate.id ? candidate.id.slice(0, 80) : null;
+  if (!id) {
+    return null;
+  }
+  const backgroundColor = normalizeOptionalColor(candidate.backgroundColor);
+  const foregroundColor = normalizeOptionalColor(candidate.foregroundColor);
+  if (candidate.type === 'icon') {
+    const migratedIconId =
+      typeof candidate.iconId === 'string'
+        ? (legacyMetroWayfindingIconIds[candidate.iconId] ?? candidate.iconId)
+        : '';
+    const iconId = metroWayfindingIconOptions.some((item) => item.id === migratedIconId)
+      ? migratedIconId
+      : 'stairs';
+    const icon = metroWayfindingIconOptions.find((item) => item.id === iconId);
+    return {
+      id,
+      type: 'icon',
+      iconId,
+      direction:
+        candidate.direction === 'left' ||
+        candidate.direction === 'right' ||
+        candidate.direction === 'up' ||
+        candidate.direction === 'down'
+          ? candidate.direction
+          : undefined,
+      framed: candidate.framed === true,
+      backgroundColor,
+      foregroundColor: foregroundColor ?? icon?.defaultForegroundColor,
+    };
+  }
+  if (candidate.type === 'text') {
+    const textCandidate = candidate as Partial<MetroWayfindingTextElement>;
+    return {
+      id,
+      type: 'text',
+      mode: textCandidate.mode === 'double' ? 'double' : 'single',
+      align:
+        textCandidate.align === 'left' || textCandidate.align === 'right'
+          ? textCandidate.align
+          : 'center',
+      main: normalizeMainSegments(textCandidate.main),
+      secondary: normalizeString(textCandidate.secondary, 160),
+      secondMain: Array.isArray(textCandidate.secondMain)
+        ? normalizeMainSegments(textCandidate.secondMain)
+        : [{ kind: 'text', value: normalizeString(textCandidate.secondMain, 160) }],
+      secondSecondary: normalizeString(textCandidate.secondSecondary, 160),
+      backgroundColor,
+      foregroundColor,
+    };
+  }
+  if (candidate.type === 'largeText') {
+    const largeText = candidate as Partial<MetroWayfindingLargeTextElement>;
+    return {
+      id,
+      type: 'largeText',
+      value: normalizeString(largeText.value, 160),
+      suffix: normalizeString(largeText.suffix, 24),
+      framed: largeText.framed === true,
+      backgroundColor,
+      foregroundColor,
+    };
+  }
+  if (candidate.type === 'space') {
+    const space = candidate as Partial<MetroWayfindingSpaceElement>;
+    return {
+      id,
+      type: 'space',
+      mode: space.mode === 'flex' ? 'flex' : 'fixed',
+      units: Math.max(1, Math.min(32, Math.round(Number(space.units) || 1))),
+      backgroundColor,
+      foregroundColor,
+    };
+  }
+  if (candidate.type === 'divider') {
+    return { id, type: 'divider', backgroundColor, foregroundColor };
+  }
+  return null;
+}
+
+function normalizeMainSegments(value: unknown): MetroWayfindingMainSegment[] {
+  if (!Array.isArray(value)) {
+    return [{ kind: 'text', value: '' }];
+  }
+  const segments = value
+    .map((segment): MetroWayfindingMainSegment | null => {
+      if (!segment || typeof segment !== 'object') {
+        return null;
+      }
+      const candidate = segment as Partial<MetroWayfindingMainSegment>;
+      if (candidate.kind === 'line') {
+        return {
+          kind: 'line',
+          value: normalizeString(candidate.value, 20),
+          color: normalizeColor(candidate.color, METRO_WAYFINDING_FOREGROUND),
+        };
+      }
+      return { kind: 'text', value: normalizeString(candidate.value, 160) };
+    })
+    .filter((segment): segment is MetroWayfindingMainSegment => Boolean(segment));
+  return segments.length ? segments : [{ kind: 'text', value: '' }];
+}
+
+function normalizeString(value: unknown, maxLength: number): string {
+  return typeof value === 'string' ? value.slice(0, maxLength) : '';
+}
+
+function normalizeOptionalColor(value: unknown): string | undefined {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value)
+    ? value.toUpperCase()
+    : undefined;
+}

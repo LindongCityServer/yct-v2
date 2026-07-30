@@ -28,6 +28,8 @@ type MaterialTransitLineDirection = MaterialTransitDirection | 'unknown';
 export interface MaterialTransitLineOption {
   id: string;
   name: string;
+  mode: string;
+  color?: string;
   operator?: string;
   stationCount: number;
   stations: Array<{
@@ -73,6 +75,8 @@ export async function listMaterialTransitLines(): Promise<MaterialTransitLineOpt
     .map((line) => ({
       id: line.id,
       name: line.name,
+      mode: line.mode,
+      color: line.color,
       operator: line.operator,
       stationCount: line.stationCount,
       stations: line.stationStops.flatMap((stop) =>

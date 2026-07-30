@@ -142,7 +142,11 @@ export function renderMaterialTemplateToSvg(input: {
   for (const field of input.template.fields) {
     if (field.glyph) {
       const key = `glyph.${field.key}`;
-      context[key] = renderMaterialGlyph(values[field.key], field.glyph, values);
+      context[key] = renderMaterialGlyph(values[field.key], field.glyph, {
+        ...values,
+        'canvas.widthPx': String(size.contentWidthPx),
+        'canvas.heightPx': String(size.contentHeightPx),
+      });
       trustedContext.add(key);
     }
     if (!field.textFit) {

@@ -1066,11 +1066,7 @@ export type MaterialTemplateFamily = 'road_sign' | 'address_sign' | 'bus_stop' |
 export type MaterialTemplateFieldKind = 'text' | 'number' | 'select' | 'color';
 export type MaterialDraftStatus = 'draft' | 'pending_review' | 'approved' | 'rejected';
 export type MaterialSourceKind =
-  | 'manual'
-  | 'transit_line'
-  | 'transit_station'
-  | 'map_location'
-  | 'road_coordinate';
+  'manual' | 'transit_line' | 'transit_station' | 'map_location' | 'road_coordinate';
 
 export interface MaterialTextFitConfig {
   maxWidth: number;
@@ -1090,7 +1086,8 @@ export interface MaterialGlyphConfig {
     | 'chill_jinshu_vertical'
     | 'transit_station_list'
     | 'transit_horizontal_station_list'
-    | 'transit_route_map';
+    | 'transit_route_map'
+    | 'metro_wayfinding';
   layoutWidth: number;
   layoutHeight: number;
   fontSize?: number;

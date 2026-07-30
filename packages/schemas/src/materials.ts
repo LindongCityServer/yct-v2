@@ -67,6 +67,7 @@ export const materialTemplateFieldSchema = z
           'transit_station_list',
           'transit_horizontal_station_list',
           'transit_route_map',
+          'metro_wayfinding',
         ]),
         layoutWidth: z.number().positive().max(32_768),
         layoutHeight: z.number().positive().max(32_768),
