@@ -273,7 +273,10 @@ export async function resolveTransitStationMaterialInput(input: {
     if (index === 0) {
       candidates.routeNumber = lineNumber;
       candidates.routeFirstLast = line.firstLastBus;
-      candidates.nextStation = line.nextStationName ?? '';
+      candidates.nextStation = line.isTerminalAtStation ? '终 点 站' : (line.nextStationName ?? '');
+      candidates.routeStationState = line.isTerminalAtStation
+        ? 'terminal_station'
+        : 'next_station';
       candidates.routeOrigin = line.stationNames[0] ?? '';
       candidates.routeTerminal = line.destinationName;
       candidates.routeStations = line.stationNames.join('\n');

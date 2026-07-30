@@ -25,7 +25,7 @@ const busStopDetailSource = createBusStopTemplateSource(
   <rect x="15" y="7" width="24" height="16" fill="#000099"/>
   <text x="0" y="19" transform="translate(27 0) scale({{fit.routeNumber.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="11" font-weight="700" text-anchor="middle">{{routeNumber}}</text>
   <rect x="40" y="6" width="73" height="18" fill="#FFFFFF"/>
-  <text x="42" y="12" fill="#C11111" font-family="'HarmonyOS Sans SC', sans-serif" font-size="4" font-weight="700">下一站</text>
+  <text x="42" y="12" fill="#C11111" opacity="{{select.routeStationState.nextStationCaptionOpacity}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="4" font-weight="700">下一站</text>
   <text x="0" y="15" transform="translate(80 0) scale({{fit.nextStation.scaleX}} 1)" fill="#C11111" font-family="'HarmonyOS Sans SC', sans-serif" font-size="7" font-weight="700" text-anchor="middle">{{nextStation}}</text>
   <text x="0" y="22" transform="translate(77 0) scale({{fit.routeOrigin.scaleX}} 1)" fill="#1D2F78" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeOrigin}} - {{routeTerminal}}</text>
   <rect x="15" y="25" width="98" height="13" fill="#377842"/>
@@ -394,6 +394,20 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             kind: 'text',
             maxLength: 24,
             textFit: { maxWidth: 58, fontSize: 7, maxLetterSpacing: 0 },
+          },
+          {
+            key: 'routeStationState',
+            label: '当前站状态',
+            kind: 'select',
+            required: true,
+            options: [
+              { value: 'next_station', label: '普通站' },
+              { value: 'terminal_station', label: '终点站' },
+            ],
+            selectVariableValues: {
+              next_station: { nextStationCaptionOpacity: '1' },
+              terminal_station: { nextStationCaptionOpacity: '0' },
+            },
           },
           {
             key: 'routeOrigin',
