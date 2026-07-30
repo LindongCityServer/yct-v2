@@ -330,7 +330,8 @@ function createTransitHorizontalStationLayout(
       rows: Array<Array<{ stationIndex: number; chunks: string[][] }>>;
     }
   | undefined {
-  const columnGap = Math.min(2, Math.max(1.2, fontSize * 0.2));
+  // 不同站名间需明显分隔；同站名断列另行使用紧凑间距。
+  const columnGap = fontSize * 0.5;
   const characterGap = fontSize * 0.12;
   const availableRowHeight = rowHeight - (allowsWrap ? 2 : 0);
   const maximumCharactersPerColumn = Math.max(
@@ -362,14 +363,23 @@ function createTransitHorizontalStationLayout(
     ...resolvedRows.map((row) => row.reduce((count, entry) => count + entry.chunks.length, 0)),
     1,
   );
+  const maximumInternalColumnGapCount = Math.max(
+    ...resolvedRows.map((row) =>
+      row.reduce((count, entry) => count + Math.max(entry.chunks.length - 1, 0), 0),
+    ),
+    0,
+  );
+  const stationColumnGapCount = Math.max(maximumColumnCount - maximumInternalColumnGapCount - 1, 0);
+  const columnWidth = Math.max(
+    1,
+    (layoutWidth - stationColumnGapCount * columnGap) / maximumColumnCount,
+  );
   return {
     fontSize,
-    columnWidth: Math.max(
-      1,
-      (layoutWidth - (maximumColumnCount - 1) * columnGap) / maximumColumnCount,
-    ),
+    columnWidth,
     columnGap,
-    wrappedColumnGap: Math.max(0.25, Math.min(0.55, columnGap * 0.35)),
+    // 同一站名换列时仅保留约 1px 的视觉间隔；不同站名仍使用完整列距。
+    wrappedColumnGap: -Math.max(0, columnWidth - fontSize - 1),
     rows: resolvedRows,
   };
 }
