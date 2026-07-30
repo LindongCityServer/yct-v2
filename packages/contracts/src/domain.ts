@@ -945,7 +945,7 @@ export type ServiceEntryOpenMode = 'same_tab' | 'new_tab';
 
 export type MaterialTemplateStatus = 'draft' | 'published' | 'archived';
 export type MaterialTemplateFamily = 'road_sign' | 'address_sign' | 'bus_stop' | 'custom';
-export type MaterialTemplateFieldKind = 'text' | 'number' | 'select';
+export type MaterialTemplateFieldKind = 'text' | 'number' | 'select' | 'color';
 export type MaterialDraftStatus = 'draft' | 'pending_review' | 'approved' | 'rejected';
 export type MaterialSourceKind =
   | 'manual'
@@ -970,13 +970,16 @@ export interface MaterialGlyphConfig {
     | 'nostalgic_digits'
     | 'nostalgic_address_number'
     | 'chill_jinshu_vertical'
-    | 'transit_station_list';
+    | 'transit_station_list'
+    | 'transit_horizontal_station_list'
+    | 'transit_route_map';
   layoutWidth: number;
   layoutHeight: number;
   fontSize?: number;
   maxLetterSpacing?: number;
   suffixFieldKey?: string;
   currentIndexFieldKey?: string;
+  colorFieldKey?: string;
 }
 
 export interface MaterialTemplateField {
@@ -984,6 +987,9 @@ export interface MaterialTemplateField {
   label: string;
   kind: MaterialTemplateFieldKind;
   required?: boolean;
+  defaultValue?: string;
+  userEditable?: boolean;
+  serverOverride?: boolean;
   maxLength?: number;
   minimum?: number;
   maximum?: number;

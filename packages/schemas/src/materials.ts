@@ -5,6 +5,8 @@ const fieldKeySchema = z
   .string()
   .trim()
   .regex(/^[a-z][a-zA-Z0-9_]{0,63}$/);
+const materialColorSchema = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
+const materialInputRecordSchema = z.record(fieldKeySchema, z.string().max(16_000));
 
 export const materialCanvasSchema = z.object({
   widthM: z.number().positive().max(64),
@@ -18,9 +20,12 @@ export const materialTemplateFieldSchema = z
   .object({
     key: fieldKeySchema,
     label: z.string().trim().min(1).max(48),
-    kind: z.enum(['text', 'number', 'select']),
+    kind: z.enum(['text', 'number', 'select', 'color']),
     required: z.boolean().optional(),
-    maxLength: z.number().int().min(1).max(1000).optional(),
+    defaultValue: z.string().max(16_000).optional(),
+    userEditable: z.boolean().optional(),
+    serverOverride: z.boolean().optional(),
+    maxLength: z.number().int().min(1).max(16_000).optional(),
     minimum: z.number().finite().optional(),
     maximum: z.number().finite().optional(),
     options: z
@@ -60,6 +65,8 @@ export const materialTemplateFieldSchema = z
           'nostalgic_address_number',
           'chill_jinshu_vertical',
           'transit_station_list',
+          'transit_horizontal_station_list',
+          'transit_route_map',
         ]),
         layoutWidth: z.number().positive().max(32_768),
         layoutHeight: z.number().positive().max(32_768),
@@ -67,12 +74,42 @@ export const materialTemplateFieldSchema = z
         maxLetterSpacing: z.number().nonnegative().max(1_024).optional(),
         suffixFieldKey: fieldKeySchema.optional(),
         currentIndexFieldKey: fieldKeySchema.optional(),
+        colorFieldKey: fieldKeySchema.optional(),
       })
       .optional(),
   })
   .superRefine((field, ctx) => {
     if (field.kind === 'select' && !field.options?.length) {
       ctx.addIssue({ code: 'custom', message: '下拉字段必须提供选项。', path: ['options'] });
+    }
+    if (
+      field.kind === 'color' &&
+      field.defaultValue &&
+      !materialColorSchema.safeParse(field.defaultValue).success
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '颜色默认值必须使用 #RRGGBB 格式。',
+        path: ['defaultValue'],
+      });
+    }
+    if (
+      field.kind === 'select' &&
+      field.defaultValue &&
+      !field.options?.some((option) => option.value === field.defaultValue)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '下拉字段默认值必须属于可选项。',
+        path: ['defaultValue'],
+      });
+    }
+    if (field.serverOverride && field.userEditable === false) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '服务器覆盖字段必须允许用户编辑。',
+        path: ['serverOverride'],
+      });
     }
     if (field.selectVariableValues && field.kind !== 'select') {
       ctx.addIssue({
@@ -126,11 +163,23 @@ export const materialTemplateFieldSchema = z
         path: ['glyph', 'suffixFieldKey'],
       });
     }
-    if (field.glyph?.renderer === 'transit_station_list' && !field.glyph.currentIndexFieldKey) {
+    if (
+      ['transit_station_list', 'transit_horizontal_station_list'].includes(
+        field.glyph?.renderer ?? '',
+      ) &&
+      !field.glyph?.currentIndexFieldKey
+    ) {
       ctx.addIssue({
         code: 'custom',
         message: '公交站点列表字形必须指定当前站索引字段。',
         path: ['glyph', 'currentIndexFieldKey'],
+      });
+    }
+    if (field.glyph?.renderer === 'transit_route_map' && !field.glyph.colorFieldKey) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '线路地图字形必须指定颜色字段。',
+        path: ['glyph', 'colorFieldKey'],
       });
     }
   });
@@ -217,6 +266,19 @@ export const materialTemplateDraftSchema = z
           });
         }
       }
+      const colorFieldKey = field.glyph?.colorFieldKey;
+      if (colorFieldKey) {
+        const referencedField = template.fields.find(
+          (candidate) => candidate.key === colorFieldKey,
+        );
+        if (colorFieldKey === field.key || !referencedField || referencedField.kind !== 'color') {
+          ctx.addIssue({
+            code: 'custom',
+            message: '线路地图字形的颜色字段必须引用另一个颜色字段。',
+            path: ['fields', fieldIndex, 'glyph', 'colorFieldKey'],
+          });
+        }
+      }
     }
 
     if (
@@ -256,7 +318,7 @@ export const materialTemplateRevisionSchema = materialTemplateDraftSchema.extend
 export const materialDraftInputSchema = z.object({
   templateId: idSchema,
   templateVersion: z.number().int().positive(),
-  input: z.record(fieldKeySchema, z.string().max(2000)),
+  input: materialInputRecordSchema,
   canvas: materialCanvasSchema,
 });
 
@@ -297,6 +359,7 @@ export const materialExportRequestSchema = z
     templateVersion: z.number().int().positive().optional(),
     canvas: materialCanvasSchema.optional(),
     source: materialServerSourceSchema.optional(),
+    input: materialInputRecordSchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (value.mode === 'custom' && !value.draftId) {
@@ -313,7 +376,7 @@ export const materialPreviewRequestSchema = z
     templateId: idSchema,
     templateVersion: z.number().int().positive(),
     canvas: materialCanvasSchema,
-    input: z.record(fieldKeySchema, z.string().max(2000)).optional(),
+    input: materialInputRecordSchema.optional(),
     source: materialServerSourceSchema.optional(),
   })
   .superRefine((value, ctx) => {
