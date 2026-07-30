@@ -43,7 +43,7 @@ const busStopTerminalSource = createBusStopTemplateSource(
   <rect x="12" y="18" width="104" height="22" fill="#FFFFFF"/>
   <text x="0" y="32" transform="translate(64 0) scale({{fit.stationName.scaleX}} 1)" fill="#073764" font-family="'HarmonyOS Sans SC', sans-serif" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text>
   <rect x="36.5" y="58" width="55" height="36" fill="#108433"/>
-  <text x="0" y="85" transform="translate(64 0) scale({{fit.routeNumber.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="46" font-weight="700" text-anchor="middle">{{routeNumber}}</text>
+  <text x="0" y="91" transform="translate(64 0) scale({{fit.routeNumber.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="46" font-weight="700" text-anchor="middle">{{routeNumber}}</text>
   <rect x="36.5" y="99" width="55" height="9" fill="#108433"/>
   <text x="64" y="106" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="6" font-weight="700" text-anchor="middle">{{terminalRole}}</text>
 </g>`,

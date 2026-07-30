@@ -5233,6 +5233,11 @@ img.map-player-list-avatar.is-offline {
   margin: 0;
 }
 
+.material-studio.is-busy,
+.material-studio.is-busy * {
+  cursor: progress !important;
+}
+
 .material-studio-layout {
   display: grid;
   grid-template-columns: minmax(240px, 280px) minmax(0, 1fr) minmax(240px, 340px);

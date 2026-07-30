@@ -222,6 +222,7 @@ export function MaterialStudioPanel({
       .map(Number);
     return slots?.length ? Math.max(...slots) : 1;
   }, [selected?.id, selected?.template.fields]);
+  const usesSingleTransitLineSelection = maximumTransitLineCount === 1;
 
   const loadWorkspace = async () => {
     try {
@@ -476,6 +477,7 @@ export function MaterialStudioPanel({
       setStatusText('请先选择服务器数据。');
       return;
     }
+    setStatusText('正在生成预览...');
     setIsBusy(true);
     try {
       const response = await fetch(appPath('/api/materials/previews'), {
@@ -616,7 +618,11 @@ export function MaterialStudioPanel({
   };
 
   return (
-    <section className="material-studio" aria-label={title}>
+    <section
+      className={isBusy ? 'material-studio is-busy' : 'material-studio'}
+      aria-label={title}
+      aria-busy={isBusy}
+    >
       <div className="section-heading material-studio-heading">
         <div>
           <span className="eyebrow">物料工作台</span>
@@ -738,24 +744,35 @@ export function MaterialStudioPanel({
                 </label>
               ) : null}
               <fieldset className="material-canvas-editor" disabled={isBusy || !selectedTransitStation}>
-                <legend>同方向线路（最多 {maximumTransitLineCount} 条）</legend>
+                <legend>
+                  同方向线路{usesSingleTransitLineSelection ? '（单选）' : `（最多 ${maximumTransitLineCount} 条）`}
+                </legend>
                 {selectableTransitLines.length ? (
                   selectableTransitLines.map((line) => {
                     const checked = selectedTransitLineIds.includes(line.id);
                     return (
                       <label className="material-checkbox-row" key={line.id}>
                         <input
-                          type="checkbox"
+                          type={usesSingleTransitLineSelection ? 'radio' : 'checkbox'}
+                          name={
+                            usesSingleTransitLineSelection
+                              ? `material-transit-line-${selectedTransitStation?.markerId ?? ''}`
+                              : undefined
+                          }
                           checked={checked}
                           disabled={
-                            !checked && selectedTransitLineIds.length >= maximumTransitLineCount
+                            !usesSingleTransitLineSelection &&
+                            !checked &&
+                            selectedTransitLineIds.length >= maximumTransitLineCount
                           }
                           onChange={(event) => {
                             const nextChecked = event.currentTarget.checked;
                             setSelectedTransitLineIds((current) =>
-                              nextChecked
-                                ? [...current, line.id].slice(0, maximumTransitLineCount)
-                                : current.filter((lineId) => lineId !== line.id),
+                              usesSingleTransitLineSelection
+                                ? [line.id]
+                                : nextChecked
+                                  ? [...current, line.id].slice(0, maximumTransitLineCount)
+                                  : current.filter((lineId) => lineId !== line.id),
                             );
                             clearPreview();
                           }}
