@@ -63,7 +63,7 @@ export function validateMaterialInput(
 
   const input: Record<string, string> = {};
   for (const field of fields) {
-    const value = rawInput[field.key]?.trim() ?? '';
+    const value = rawInput[field.key]?.trim() || field.defaultValue?.trim() || '';
     if (field.required && !value) {
       throw new MaterialInputError(`${field.label}不能为空。`);
     }
@@ -84,6 +84,9 @@ export function validateMaterialInput(
       if (field.maximum !== undefined && numberValue > field.maximum) {
         throw new MaterialInputError(`${field.label}不能大于 ${field.maximum}。`);
       }
+    }
+    if (field.kind === 'color' && value && !/^#[0-9A-Fa-f]{6}$/.test(value)) {
+      throw new MaterialInputError(`${field.label}必须使用 #RRGGBB 格式。`);
     }
     input[field.key] = value;
   }

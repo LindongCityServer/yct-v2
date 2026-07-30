@@ -16,6 +16,13 @@ interface NostalgicSuffixGlyph {
   sourceOffsetX: number;
 }
 
+interface TransitRouteMapPayload {
+  route: Array<[number, number]>;
+  roads: Array<[number, number, number, number]>;
+  stations: Array<[number, number, number]>;
+  currentStationIndex: number;
+}
+
 const nostalgicDigitGlyphs: Record<string, NostalgicDigitGlyph> = {
   '0': {
     advance: 58,
@@ -113,6 +120,17 @@ export function renderMaterialGlyph(
       : -1;
     return renderTransitStationList(value, currentIndex, config);
   }
+  if (config.renderer === 'transit_horizontal_station_list') {
+    const currentIndex = config.currentIndexFieldKey
+      ? Number.parseInt(values[config.currentIndexFieldKey] ?? '', 10)
+      : -1;
+    const color = config.colorFieldKey ? values[config.colorFieldKey] : undefined;
+    return renderTransitHorizontalStationList(value, currentIndex, color, config);
+  }
+  if (config.renderer === 'transit_route_map') {
+    const color = config.colorFieldKey ? values[config.colorFieldKey] : undefined;
+    return renderTransitRouteMap(value, color, config);
+  }
   return renderVerticalChillJinshuSong(value, config);
 }
 
@@ -180,6 +198,326 @@ function renderTransitStationName(
   return scaleX < 1
     ? `<g transform="translate(${formatNumber(centerX)} 0) scale(${formatNumber(scaleX)} 1) translate(-${formatNumber(centerX)} 0)">${content}</g>`
     : content;
+}
+
+function renderTransitHorizontalStationList(
+  value: string,
+  currentIndex: number,
+  rawColor: string | undefined,
+  config: MaterialGlyphConfig,
+): string {
+  const stations = value
+    .split(/\r?\n|\s*\/\s*/u)
+    .map((station) => station.replace(/[\s\u3000]+/gu, ''))
+    .filter(Boolean);
+  if (!stations.length) {
+    return '';
+  }
+  const preferredFontSize = config.fontSize ?? 4.5;
+  const singleRowLayout = resolveTransitHorizontalStationLayout(
+    stations,
+    config,
+    preferredFontSize,
+    1,
+  );
+  const twoRowLayout = resolveTransitHorizontalStationLayout(
+    stations,
+    config,
+    preferredFontSize,
+    2,
+  );
+  const layout = twoRowLayout.fontSize > singleRowLayout.fontSize ? twoRowLayout : singleRowLayout;
+  const accentColor = rawColor && /^#[0-9A-Fa-f]{6}$/.test(rawColor) ? rawColor : '#26CABA';
+  const backgrounds = layout.rows
+    .map(
+      (_, rowIndex) =>
+        `<rect x="0" y="${formatNumber(rowIndex * (layout.rowHeight + layout.rowGap))}" width="${formatNumber(config.layoutWidth)}" height="${formatNumber(layout.rowHeight)}" fill="#FFFFFF"/>`,
+    )
+    .join('');
+  const columns = layout.rows
+    .map((row, rowIndex) => {
+      let columnIndex = 0;
+      const rowTopPadding = layout.rows.length === 2 && rowIndex === 1 ? 2 : 0;
+      const startY =
+        rowIndex * (layout.rowHeight + layout.rowGap) + rowTopPadding + layout.fontSize * 0.82;
+      return row
+        .flatMap((entry) =>
+          entry.chunks.flatMap((characters) => {
+            const x =
+              columnIndex * (layout.columnWidth + layout.columnGap) + layout.columnWidth / 2;
+            columnIndex += 1;
+            const characterGap = Math.min(
+              layout.fontSize * 0.12,
+              Math.max(
+                (layout.rowHeight - rowTopPadding - characters.length * layout.fontSize) /
+                  Math.max(characters.length - 1, 1),
+                0,
+              ),
+            );
+            const color = entry.stationIndex === currentIndex ? '#E28336' : '#000000';
+            return characters.map(
+              (character, characterIndex) =>
+                `<text x="${formatNumber(x)}" y="${formatNumber(startY + characterIndex * (layout.fontSize + characterGap))}" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(layout.fontSize)}" font-weight="700" text-anchor="middle">${escapeXml(character)}</text>`,
+            );
+          }),
+        )
+        .join('');
+    })
+    .join('');
+  const dividerArrow =
+    layout.rows.length === 2
+      ? `<path d="M8 35L11.5 35L11.5 37L15 33L11.5 29L11.5 31L8 31L8 35Z" fill="${accentColor}"/>`
+      : '';
+  return `<g>${backgrounds}${columns}${dividerArrow}</g>`;
+}
+
+function resolveTransitHorizontalStationLayout(
+  stations: string[],
+  config: MaterialGlyphConfig,
+  preferredFontSize: number,
+  rowCount: 1 | 2,
+): {
+  fontSize: number;
+  rowHeight: number;
+  rowGap: number;
+  columnWidth: number;
+  columnGap: number;
+  rows: Array<Array<{ stationIndex: number; chunks: string[][] }>>;
+} {
+  const rowGap = rowCount === 2 ? 3 : 0;
+  const rowHeight = (config.layoutHeight - rowGap) / rowCount;
+  const stationsPerRow = Math.ceil(stations.length / rowCount);
+  const stationRows = Array.from({ length: rowCount }, (_, rowIndex) =>
+    stations.slice(rowIndex * stationsPerRow, (rowIndex + 1) * stationsPerRow),
+  );
+  let fallback: ReturnType<typeof createTransitHorizontalStationLayout> | undefined;
+  for (let fontSize = preferredFontSize; fontSize >= 1.5; fontSize -= 0.1) {
+    const candidate = createTransitHorizontalStationLayout(
+      stationRows,
+      config.layoutWidth,
+      rowHeight,
+      fontSize,
+      rowCount === 2,
+    );
+    if (!candidate) {
+      continue;
+    }
+    fallback = candidate;
+    if (fontSize <= candidate.columnWidth * 0.82) {
+      return { ...candidate, rowHeight, rowGap };
+    }
+  }
+  if (!fallback) {
+    throw new Error('无法计算公交站序的排版。');
+  }
+  return { ...fallback, rowHeight, rowGap };
+}
+
+function createTransitHorizontalStationLayout(
+  stationRows: string[][],
+  layoutWidth: number,
+  rowHeight: number,
+  fontSize: number,
+  allowsWrap: boolean,
+):
+  | {
+      fontSize: number;
+      columnWidth: number;
+      columnGap: number;
+      rows: Array<Array<{ stationIndex: number; chunks: string[][] }>>;
+    }
+  | undefined {
+  const columnGap = Math.min(2, Math.max(1.2, fontSize * 0.2));
+  const characterGap = fontSize * 0.12;
+  const availableRowHeight = rowHeight - (allowsWrap ? 2 : 0);
+  const maximumCharactersPerColumn = Math.max(
+    1,
+    Math.floor((availableRowHeight + characterGap) / (fontSize + characterGap)),
+  );
+  let stationIndex = 0;
+  const rows = stationRows.map((stations) =>
+    stations.map((station) => {
+      const characters = Array.from(station);
+      const chunks = splitTransitStationCharacters(
+        characters,
+        maximumCharactersPerColumn,
+        allowsWrap,
+      );
+      if (!chunks) {
+        return undefined;
+      }
+      const entry = { stationIndex, chunks };
+      stationIndex += 1;
+      return entry;
+    }),
+  );
+  if (rows.some((row) => row.some((entry) => entry === undefined))) {
+    return undefined;
+  }
+  const resolvedRows = rows as Array<Array<{ stationIndex: number; chunks: string[][] }>>;
+  const maximumColumnCount = Math.max(
+    ...resolvedRows.map((row) => row.reduce((count, entry) => count + entry.chunks.length, 0)),
+    1,
+  );
+  return {
+    fontSize,
+    columnWidth: Math.max(
+      1,
+      (layoutWidth - (maximumColumnCount - 1) * columnGap) / maximumColumnCount,
+    ),
+    columnGap,
+    rows: resolvedRows,
+  };
+}
+
+function splitTransitStationCharacters(
+  characters: string[],
+  maximumCharactersPerColumn: number,
+  allowsWrap: boolean,
+): string[][] | undefined {
+  if (characters.length <= maximumCharactersPerColumn) {
+    return [characters];
+  }
+  if (!allowsWrap) {
+    return undefined;
+  }
+  const columnCount = Math.ceil(characters.length / maximumCharactersPerColumn);
+  if (characters.length < columnCount * 3) {
+    return undefined;
+  }
+  const baseLength = Math.floor(characters.length / columnCount);
+  const longerColumnCount = characters.length % columnCount;
+  let offset = 0;
+  return Array.from({ length: columnCount }, (_, index) => {
+    const length = baseLength + (index < longerColumnCount ? 1 : 0);
+    const chunk = characters.slice(offset, offset + length);
+    offset += length;
+    return chunk;
+  });
+}
+
+function renderTransitRouteMap(
+  value: string,
+  rawColor: string | undefined,
+  config: MaterialGlyphConfig,
+): string {
+  const payload = parseTransitRouteMapPayload(value);
+  if (!payload) {
+    return '';
+  }
+  const color = rawColor && /^#[0-9A-Fa-f]{6}$/.test(rawColor) ? rawColor : '#26CABA';
+  const allCoordinates = [
+    ...payload.route,
+    ...payload.stations.map(([x, z]) => [x, z] as [number, number]),
+  ];
+  const minX = Math.min(...allCoordinates.map((coordinate) => coordinate[0]));
+  const maxX = Math.max(...allCoordinates.map((coordinate) => coordinate[0]));
+  const minZ = Math.min(...allCoordinates.map((coordinate) => coordinate[1]));
+  const maxZ = Math.max(...allCoordinates.map((coordinate) => coordinate[1]));
+  const spanX = Math.max(maxX - minX, 1);
+  const spanZ = Math.max(maxZ - minZ, 1);
+  const padding = 4;
+  const scale = Math.min(
+    (config.layoutWidth - padding * 2) / spanX,
+    (config.layoutHeight - padding * 2) / spanZ,
+  );
+  const offsetX = (config.layoutWidth - spanX * scale) / 2;
+  const offsetY = (config.layoutHeight - spanZ * scale) / 2;
+  const project = ([x, z]: [number, number]): [number, number] => [
+    offsetX + (x - minX) * scale,
+    offsetY + (z - minZ) * scale,
+  ];
+  const roads = payload.roads
+    .map(([startX, startZ, endX, endZ]) => {
+      const start = project([startX, startZ]);
+      const end = project([endX, endZ]);
+      return `<path d="M${formatNumber(start[0])} ${formatNumber(start[1])}L${formatNumber(end[0])} ${formatNumber(end[1])}" fill="none" stroke="#D4D4D4" stroke-width="0.75"/>`;
+    })
+    .join('');
+  const routePath = payload.route
+    .map((coordinate, index) => {
+      const point = project(coordinate);
+      return `${index ? 'L' : 'M'}${formatNumber(point[0])} ${formatNumber(point[1])}`;
+    })
+    .join('');
+  const stations = payload.stations
+    .map(([x, z, stationIndex]) => {
+      const point = project([x, z]);
+      const isCurrent = stationIndex === payload.currentStationIndex;
+      return `<circle cx="${formatNumber(point[0])}" cy="${formatNumber(point[1])}" r="${isCurrent ? '2.4' : '1.35'}" fill="${isCurrent ? '#E28336' : '#FFFFFF'}" stroke="${isCurrent ? '#FFFFFF' : color}" stroke-width="${isCurrent ? '0.9' : '0.65'}"/>`;
+    })
+    .join('');
+  return `<g><rect width="${formatNumber(config.layoutWidth)}" height="${formatNumber(config.layoutHeight)}" fill="#FFFFFF"/>${roads}<path d="${routePath}" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><path d="${routePath}" fill="none" stroke="${color}" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"/>${stations}</g>`;
+}
+
+function parseTransitRouteMapPayload(value: string): TransitRouteMapPayload | undefined {
+  let input: unknown;
+  try {
+    input = JSON.parse(value);
+  } catch {
+    throw new Error('线路地图数据不是有效的 JSON。');
+  }
+  if (!input || typeof input !== 'object') {
+    throw new Error('线路地图数据格式无效。');
+  }
+  const candidate = input as Partial<TransitRouteMapPayload>;
+  const route = parseCoordinatePairs(candidate.route, 256);
+  const roads = parseRoadSegments(candidate.roads, 256);
+  const stations = parseRouteStations(candidate.stations, 256);
+  const currentStationIndex = candidate.currentStationIndex;
+  if (!route || route.length < 2 || !roads || !stations || !Number.isInteger(currentStationIndex)) {
+    throw new Error('线路地图数据缺少有效的线路或站点坐标。');
+  }
+  return { route, roads, stations, currentStationIndex: currentStationIndex as number };
+}
+
+function parseCoordinatePairs(
+  value: unknown,
+  maximumCount: number,
+): Array<[number, number]> | undefined {
+  if (!Array.isArray(value) || value.length > maximumCount) {
+    return undefined;
+  }
+  const coordinates = value.filter(
+    (coordinate): coordinate is [number, number] =>
+      Array.isArray(coordinate) &&
+      coordinate.length === 2 &&
+      coordinate.every((part) => typeof part === 'number' && Number.isFinite(part)),
+  );
+  return coordinates.length === value.length ? coordinates : undefined;
+}
+
+function parseRoadSegments(
+  value: unknown,
+  maximumCount: number,
+): Array<[number, number, number, number]> | undefined {
+  if (!Array.isArray(value) || value.length > maximumCount) {
+    return undefined;
+  }
+  const segments = value.filter(
+    (segment): segment is [number, number, number, number] =>
+      Array.isArray(segment) &&
+      segment.length === 4 &&
+      segment.every((part) => typeof part === 'number' && Number.isFinite(part)),
+  );
+  return segments.length === value.length ? segments : undefined;
+}
+
+function parseRouteStations(
+  value: unknown,
+  maximumCount: number,
+): Array<[number, number, number]> | undefined {
+  if (!Array.isArray(value) || value.length > maximumCount) {
+    return undefined;
+  }
+  const stations = value.filter(
+    (station): station is [number, number, number] =>
+      Array.isArray(station) &&
+      station.length === 3 &&
+      station.every((part) => typeof part === 'number' && Number.isFinite(part)) &&
+      Number.isInteger(station[2]),
+  );
+  return stations.length === value.length ? stations : undefined;
 }
 
 function renderNostalgicDigits(value: string, config: MaterialGlyphConfig): string {

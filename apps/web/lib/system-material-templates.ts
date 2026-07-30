@@ -49,6 +49,25 @@ const busStopTerminalSource = createBusStopTemplateSource(
 </g>`,
 );
 
+const busStopHorizontalDetailSource = createBusStopTemplateSource(
+  'horizontal-detail.svg',
+  `<g id="material-dynamic-fields">
+  <rect x="3" y="3" width="178" height="24" fill="#FFFFFF"/>
+  <text x="0" y="25" transform="translate(25 0) scale({{fit.routeNumber.scaleX}} 1)" fill="{{accentColor}}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="29" font-weight="700" text-anchor="middle">{{routeNumber}}</text>
+  <text x="0" y="23" transform="translate(48 0) scale({{fit.routeSuffix.scaleX}} 1)" fill="#000000" font-family="'HarmonyOS Sans SC', sans-serif" font-size="12" font-weight="700">{{routeSuffix}}</text>
+  <text x="70" y="8" fill="#000000" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5.4" font-weight="700" text-anchor="middle">首末车时间</text>
+  <text x="0" y="11" transform="translate(111 0) scale({{fit.routeOrigin.scaleX}} 1)" fill="#000000" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5.4" font-weight="700" text-anchor="middle">{{routeOrigin}}</text>
+  <text x="0" y="22" transform="translate(111 0) scale({{fit.routeTerminal.scaleX}} 1)" fill="#000000" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5.4" font-weight="700" text-anchor="middle">{{routeTerminal}}</text>
+  <text x="0" y="11" transform="translate(179 0) scale({{fit.routeServiceTime.scaleX}} 1)" fill="#000000" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="end">{{routeServiceTime}}</text>
+  <text x="0" y="22" transform="translate(179 0) scale({{fit.routeServiceTime.scaleX}} 1)" fill="#000000" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="end">{{routeServiceTime}}</text>
+  <path d="M169 27.5L169 31.5L172.5 31.5L172.5 33.5L176 29.5L172.5 25.5L172.5 27.5L169 27.5Z" fill="{{accentColor}}"/>
+  <g transform="translate(3 33)">{{glyph.routeStations}}</g>
+  <g transform="translate(184 0)">{{glyph.routeMapData}}</g>
+  <rect x="0" y="106" width="256" height="22" fill="{{accentColor}}"/>
+  <text x="0" y="122" transform="translate(128 0) scale({{fit.footerText.scaleX}} 1)" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="{{fit.footerText.letterSpacing}}">{{footerText}}</text>
+</g>`,
+).replaceAll('#26CABA', '{{accentColor}}');
+
 function createBusStopTemplateSource(fileName: string, overlay: string): string {
   const sourcePath = [
     resolve(process.cwd(), 'public', 'material-templates', 'bus-stop', fileName),
@@ -459,6 +478,124 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
         ],
         defaultCanvas: {
           widthM: 1,
+          heightM: 1,
+          pxPerMeter: 128,
+          alignToTile: true,
+          tileSizePx: 128,
+        },
+        createdBy: systemActorId,
+        createdAt: systemPublishedAt,
+        publishedBy: systemActorId,
+        publishedAt: systemPublishedAt,
+      },
+    ],
+  },
+  {
+    id: 'system_material_bus_stop_horizontal_detail',
+    versions: [
+      {
+        version: 1,
+        status: 'published',
+        title: '公交站牌（横版线路详情）',
+        description: '按横版公交站牌原稿复现，显示完整竖排站序和基于地图线路几何生成的走向图。',
+        family: 'bus_stop',
+        source: busStopHorizontalDetailSource,
+        fields: [
+          {
+            key: 'accentColor',
+            label: '主题颜色',
+            kind: 'color',
+            required: true,
+            defaultValue: '#26CABA',
+            serverOverride: true,
+          },
+          {
+            key: 'routeNumber',
+            label: '线路编号',
+            kind: 'text',
+            required: true,
+            maxLength: 16,
+            textFit: { maxWidth: 46, fontSize: 29, maxLetterSpacing: 0 },
+          },
+          {
+            key: 'routeSuffix',
+            label: '线路后缀',
+            kind: 'text',
+            required: true,
+            maxLength: 16,
+            textFit: { maxWidth: 47, fontSize: 12, maxLetterSpacing: 0 },
+          },
+          {
+            key: 'routeOrigin',
+            label: '起点站',
+            kind: 'text',
+            required: true,
+            maxLength: 24,
+            textFit: { maxWidth: 46, fontSize: 5.4, maxLetterSpacing: 0 },
+          },
+          {
+            key: 'routeTerminal',
+            label: '终点站',
+            kind: 'text',
+            required: true,
+            maxLength: 24,
+            textFit: { maxWidth: 46, fontSize: 5.4, maxLetterSpacing: 0 },
+          },
+          {
+            key: 'routeServiceTime',
+            label: '运营时间',
+            kind: 'text',
+            required: true,
+            maxLength: 36,
+            textFit: { maxWidth: 42, fontSize: 5, maxLetterSpacing: 0 },
+          },
+          {
+            key: 'routeStations',
+            label: '完整站点列表（用 / 分隔）',
+            kind: 'text',
+            required: true,
+            maxLength: 1000,
+            glyph: {
+              renderer: 'transit_horizontal_station_list',
+              layoutWidth: 178,
+              layoutHeight: 66,
+              fontSize: 6,
+              currentIndexFieldKey: 'currentStationIndex',
+              colorFieldKey: 'accentColor',
+            },
+          },
+          {
+            key: 'currentStationIndex',
+            label: '当前站序号（从 0 开始）',
+            kind: 'number',
+            required: true,
+            minimum: 0,
+            maximum: 999,
+          },
+          {
+            key: 'footerText',
+            label: '底部方向与运营方文字',
+            kind: 'text',
+            required: true,
+            maxLength: 80,
+            textFit: { maxWidth: 228, fontSize: 12, maxLetterSpacing: 1.2 },
+          },
+          {
+            key: 'routeMapData',
+            label: '线路走向地图数据',
+            kind: 'text',
+            maxLength: 16000,
+            userEditable: false,
+            glyph: {
+              renderer: 'transit_route_map',
+              layoutWidth: 72,
+              layoutHeight: 106,
+              colorFieldKey: 'accentColor',
+            },
+          },
+        ],
+        defaultCanvas: {
+          widthM: 2,
           heightM: 1,
           pxPerMeter: 128,
           alignToTile: true,

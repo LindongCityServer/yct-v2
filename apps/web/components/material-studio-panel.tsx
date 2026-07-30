@@ -10,8 +10,11 @@ type MaterialServerSource = 'transit_line' | 'transit_station' | 'map_location' 
 interface MaterialField {
   key: string;
   label: string;
-  kind: 'text' | 'number' | 'select';
+  kind: 'text' | 'number' | 'select' | 'color';
   required?: boolean;
+  defaultValue?: string;
+  userEditable?: boolean;
+  serverOverride?: boolean;
   maxLength?: number;
   minimum?: number;
   maximum?: number;
@@ -154,6 +157,10 @@ export function MaterialStudioPanel({
   );
   const selected = templates.find((item) => item.id === selectedTemplateId) ?? templates[0];
   const activeCanvas = canvas ?? selected?.template.defaultCanvas ?? null;
+  const serverOverrideFields =
+    selected?.template.fields.filter(
+      (field) => field.serverOverride && field.userEditable !== false,
+    ) ?? [];
   const existingDraft = drafts
     .filter(
       (draft) =>
@@ -343,7 +350,11 @@ export function MaterialStudioPanel({
     if (!selected) {
       return;
     }
-    setInput(Object.fromEntries(selected.template.fields.map((field) => [field.key, ''])));
+    setInput(
+      Object.fromEntries(
+        selected.template.fields.map((field) => [field.key, field.defaultValue ?? '']),
+      ),
+    );
     setCanvas({
       ...selected.template.defaultCanvas,
       pxPerMeter: selected.template.defaultCanvas.tileSizePx,
@@ -513,6 +524,14 @@ export function MaterialStudioPanel({
     return undefined;
   };
 
+  const buildServerOverrides = () =>
+    Object.fromEntries(
+      serverOverrideFields.map((field) => [
+        field.key,
+        input[field.key] ?? field.defaultValue ?? '',
+      ]),
+    );
+
   const requestPreview = async () => {
     if (!selected || !activeCanvas) {
       return;
@@ -536,6 +555,7 @@ export function MaterialStudioPanel({
                 templateVersion: selected.template.version,
                 canvas: activeCanvas,
                 source,
+                input: buildServerOverrides(),
               }
             : {
                 mode: 'manual',
@@ -646,6 +666,7 @@ export function MaterialStudioPanel({
           templateVersion: selected.template.version,
           canvas: activeCanvas,
           source,
+          input: buildServerOverrides(),
         }),
       });
       if (!response.ok) {
@@ -730,6 +751,22 @@ export function MaterialStudioPanel({
               >
                 服务器数据
               </button>
+            </div>
+          ) : null}
+          {mode === 'server' && serverOverrideFields.length ? (
+            <div className="material-field-grid">
+              {serverOverrideFields.map((field) => (
+                <MaterialFieldEditor
+                  key={field.key}
+                  field={field}
+                  value={input[field.key] ?? field.defaultValue ?? ''}
+                  disabled={isBusy}
+                  onChange={(value) => {
+                    setInput((current) => ({ ...current, [field.key]: value }));
+                    clearPreview();
+                  }}
+                />
+              ))}
             </div>
           ) : null}
           {!selected ? (
@@ -1045,18 +1082,20 @@ export function MaterialStudioPanel({
           ) : (
             <>
               <div className="material-field-grid">
-                {selected.template.fields.map((field) => (
-                  <MaterialFieldEditor
-                    key={field.key}
-                    field={field}
-                    value={input[field.key] ?? ''}
-                    disabled={isBusy}
-                    onChange={(value) => {
-                      setInput((current) => ({ ...current, [field.key]: value }));
-                      clearPreview();
-                    }}
-                  />
-                ))}
+                {selected.template.fields
+                  .filter((field) => field.userEditable !== false)
+                  .map((field) => (
+                    <MaterialFieldEditor
+                      key={field.key}
+                      field={field}
+                      value={input[field.key] ?? ''}
+                      disabled={isBusy}
+                      onChange={(value) => {
+                        setInput((current) => ({ ...current, [field.key]: value }));
+                        clearPreview();
+                      }}
+                    />
+                  ))}
               </div>
               <div className="material-action-row">
                 <PreviewButton onClick={() => void requestPreview()} disabled={isBusy} />
@@ -1371,6 +1410,35 @@ function MaterialFieldEditor({
             </option>
           ))}
         </select>
+      ) : field.kind === 'color' ? (
+        <span
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '48px minmax(0, 1fr)',
+            gap: 8,
+            alignItems: 'center',
+          }}
+        >
+          <input
+            type="color"
+            aria-label={`${field.label}色板`}
+            value={/^#[0-9A-Fa-f]{6}$/.test(value) ? value : '#26CABA'}
+            required={field.required}
+            disabled={disabled}
+            onChange={(event) => onChange(event.currentTarget.value.toUpperCase())}
+            style={{ padding: 4 }}
+          />
+          <input
+            type="text"
+            aria-label={`${field.label}十六进制颜色`}
+            value={value}
+            maxLength={7}
+            required={field.required}
+            disabled={disabled}
+            placeholder="#26CABA"
+            onChange={(event) => onChange(event.currentTarget.value.toUpperCase())}
+          />
+        </span>
       ) : (
         <input
           type={field.kind === 'number' ? 'number' : 'text'}
@@ -1412,6 +1480,7 @@ function formatStudioDraftInput(
   }
   return (
     template.fields
+      .filter((field) => field.userEditable !== false)
       .map((field) => {
         const value = draft.input[field.key]?.trim();
         if (!value) {

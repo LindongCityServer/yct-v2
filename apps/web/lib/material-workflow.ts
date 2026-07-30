@@ -478,7 +478,14 @@ async function resolveMaterialExportSource(
       ok: true,
       templateId: request.templateId,
       template: template.template,
-      values: validateMaterialInput(template.template.fields, resolved.values),
+      values: validateMaterialInput(
+        template.template.fields,
+        applyMaterialServerOverrides(
+          template.template.fields,
+          resolved.values,
+          request.input ?? {},
+        ),
+      ),
       canvas: request.canvas,
       sourceKind: resolved.sourceKind,
       sourceRef: resolved.sourceRef,
@@ -530,7 +537,14 @@ async function resolveMaterialPreviewSource(request: MaterialPreviewRequestInput
       ok: true,
       templateId: request.templateId,
       template: template.template,
-      values: validateMaterialInput(template.template.fields, resolved.values),
+      values: validateMaterialInput(
+        template.template.fields,
+        applyMaterialServerOverrides(
+          template.template.fields,
+          resolved.values,
+          request.input ?? {},
+        ),
+      ),
       canvas: request.canvas,
       sourceKind: resolved.sourceKind,
       sourceRef: resolved.sourceRef,
@@ -639,6 +653,22 @@ function safeFileName(value: string): string {
   return sanitizeFileNamePart(value, 80) || 'material';
 }
 
+function applyMaterialServerOverrides(
+  fields: MaterialTemplateVersion['fields'],
+  resolvedValues: Record<string, string>,
+  overrides: Record<string, string>,
+): Record<string, string> {
+  const allowedKeys = new Set(
+    fields.filter((field) => field.serverOverride).map((field) => field.key),
+  );
+  for (const key of Object.keys(overrides)) {
+    if (!allowedKeys.has(key)) {
+      throw new MaterialInputError(`字段 ${key} 不允许覆盖服务器数据。`);
+    }
+  }
+  return { ...resolvedValues, ...overrides };
+}
+
 function sanitizeFileNamePart(value: string, maximumLength: number): string {
   return Array.from(
     value
@@ -659,11 +689,13 @@ function buildMaterialExportFileName(
   const ignoredFieldKeys = new Set([
     'currentStationIndex',
     'routeStations',
+    'routeMapData',
     'roadNamePinyin',
     'postalCode',
     'signColor',
     'directionMode',
     'arrowMode',
+    'accentColor',
   ]);
   const contentParts: string[] = [];
   for (const field of template.fields) {

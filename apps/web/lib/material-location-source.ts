@@ -75,6 +75,10 @@ export async function findMaterialRoadAtCoordinate(
   };
 }
 
+export async function listMaterialMapMarkers(): Promise<MapMarkerSnapshot['markers']> {
+  return readStaticLocationMarkers();
+}
+
 export async function resolveMaterialLocationInput(input: {
   locationId: string;
   fields: MaterialTemplateField[];
