@@ -236,16 +236,17 @@ function renderTransitHorizontalStationList(
     .join('');
   const columns = layout.rows
     .map((row, rowIndex) => {
-      let columnIndex = 0;
+      let cursorX = 0;
       const rowTopPadding = layout.rows.length === 2 && rowIndex === 1 ? 2 : 0;
       const startY =
         rowIndex * (layout.rowHeight + layout.rowGap) + rowTopPadding + layout.fontSize * 0.82;
       return row
         .flatMap((entry) =>
-          entry.chunks.flatMap((characters) => {
-            const x =
-              columnIndex * (layout.columnWidth + layout.columnGap) + layout.columnWidth / 2;
-            columnIndex += 1;
+          entry.chunks.flatMap((characters, chunkIndex) => {
+            const x = cursorX + layout.columnWidth / 2;
+            cursorX +=
+              layout.columnWidth +
+              (chunkIndex < entry.chunks.length - 1 ? layout.wrappedColumnGap : layout.columnGap);
             const characterGap = Math.min(
               layout.fontSize * 0.12,
               Math.max(
@@ -282,6 +283,7 @@ function resolveTransitHorizontalStationLayout(
   rowGap: number;
   columnWidth: number;
   columnGap: number;
+  wrappedColumnGap: number;
   rows: Array<Array<{ stationIndex: number; chunks: string[][] }>>;
 } {
   const rowGap = rowCount === 2 ? 3 : 0;
@@ -324,6 +326,7 @@ function createTransitHorizontalStationLayout(
       fontSize: number;
       columnWidth: number;
       columnGap: number;
+      wrappedColumnGap: number;
       rows: Array<Array<{ stationIndex: number; chunks: string[][] }>>;
     }
   | undefined {
@@ -366,6 +369,7 @@ function createTransitHorizontalStationLayout(
       (layoutWidth - (maximumColumnCount - 1) * columnGap) / maximumColumnCount,
     ),
     columnGap,
+    wrappedColumnGap: Math.max(0.25, Math.min(0.55, columnGap * 0.35)),
     rows: resolvedRows,
   };
 }
