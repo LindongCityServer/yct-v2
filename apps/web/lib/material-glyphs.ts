@@ -90,6 +90,7 @@ const nostalgicSuffixGlyphs: Record<string, NostalgicSuffixGlyph> = {
 };
 
 let chillJinshuSongFont: Font | undefined;
+let harmonyOsSansBoldFont: Font | undefined;
 
 export function renderMaterialGlyph(
   value: string,
@@ -139,13 +140,46 @@ function renderTransitStationList(
     const x = columnWidth * (isLeft ? 0.5 : 1.5);
     const y = rowHeight * (row + 0.7);
     const color = index === currentIndex ? '#C11111' : '#1D2F78';
-    const textLength =
-      Array.from(station).length > 1
-        ? ` textLength="${formatNumber(maxTextWidth)}" lengthAdjust="spacing"`
-        : '';
-    return `<text x="${formatNumber(x)}" y="${formatNumber(y)}" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="700" text-anchor="middle"${textLength}>${escapeXml(station)}</text>`;
+    return renderTransitStationName(station, x, y, maxTextWidth, fontSize, color);
   });
   return `<g>${paths.join('')}</g>`;
+}
+
+function renderTransitStationName(
+  station: string,
+  centerX: number,
+  y: number,
+  layoutWidth: number,
+  fontSize: number,
+  color: string,
+): string {
+  const characters = Array.from(station);
+  const attributes = `y="${formatNumber(y)}" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="700" text-anchor="middle"`;
+  if (characters.length === 1) {
+    return `<text x="${formatNumber(centerX)}" ${attributes}>${escapeXml(station)}</text>`;
+  }
+
+  const font = getHarmonyOsSansBoldFont();
+  const characterWidths = characters.map((character) => {
+    const glyph = font.charToGlyph(character);
+    return ((glyph.advanceWidth ?? font.unitsPerEm) / font.unitsPerEm) * fontSize;
+  });
+  const naturalWidth = characterWidths.reduce((sum, width) => sum + width, 0);
+  const scaleX = Math.min(1, layoutWidth / naturalWidth);
+  const contentWidth = scaleX < 1 ? naturalWidth : layoutWidth;
+  const letterSpacing = scaleX < 1 ? 0 : (layoutWidth - naturalWidth) / (characters.length - 1);
+  let cursorX = centerX - contentWidth / 2;
+  const content = characters
+    .map((character, index) => {
+      const characterWidth = characterWidths[index];
+      const x = cursorX + characterWidth / 2;
+      cursorX += characterWidth + (index < characters.length - 1 ? letterSpacing : 0);
+      return `<text x="${formatNumber(x)}" ${attributes}>${escapeXml(character)}</text>`;
+    })
+    .join('');
+  return scaleX < 1
+    ? `<g transform="translate(${formatNumber(centerX)} 0) scale(${formatNumber(scaleX)} 1) translate(-${formatNumber(centerX)} 0)">${content}</g>`
+    : content;
 }
 
 function renderNostalgicDigits(value: string, config: MaterialGlyphConfig): string {
@@ -276,6 +310,17 @@ function getChillJinshuSongFont(): Font {
   return chillJinshuSongFont;
 }
 
+function getHarmonyOsSansBoldFont(): Font {
+  if (harmonyOsSansBoldFont) {
+    return harmonyOsSansBoldFont;
+  }
+  const sourcePath = resolveMaterialFontPath('harmonyos-sans', 'HarmonyOS_Sans_SC_Bold.ttf');
+  const source = readFileSync(sourcePath);
+  const buffer = source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength);
+  harmonyOsSansBoldFont = parseOpenTypeFont(buffer);
+  return harmonyOsSansBoldFont;
+}
+
 function parseOpenTypeFont(buffer: ArrayBuffer): Font {
   const runtime = opentypeModule as unknown as {
     default?: { parse?: (source: ArrayBuffer) => Font };
@@ -288,14 +333,16 @@ function parseOpenTypeFont(buffer: ArrayBuffer): Font {
   return parse(buffer);
 }
 
-function resolveMaterialFontPath(fileName: string): string {
+function resolveMaterialFontPath(...relativePath: string[]): string {
   const candidates = [
-    resolve(process.cwd(), 'public', 'fonts', fileName),
-    resolve(process.cwd(), 'apps', 'web', 'public', 'fonts', fileName),
+    resolve(process.cwd(), 'public', 'fonts', ...relativePath),
+    resolve(process.cwd(), 'apps', 'web', 'public', 'fonts', ...relativePath),
+    resolve(process.cwd(), 'app', 'fonts', ...relativePath),
+    resolve(process.cwd(), 'apps', 'web', 'app', 'fonts', ...relativePath),
   ];
   const sourcePath = candidates.find((candidate) => existsSync(candidate));
   if (!sourcePath) {
-    throw new Error(`物料字体文件 ${fileName} 不存在。`);
+    throw new Error(`物料字体文件 ${relativePath.join('/')} 不存在。`);
   }
   return sourcePath;
 }
