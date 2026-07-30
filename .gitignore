@@ -1,6 +1,7 @@
 .next/
 .next-dev-logs/
 .deploy/
+.tmp/
 artifacts/
 .turbo/
 node_modules/
