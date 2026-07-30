@@ -141,7 +141,7 @@ function renderTransitStationList(
     const color = index === currentIndex ? '#C11111' : '#1D2F78';
     const textLength =
       Array.from(station).length > 1
-        ? ` textLength="${formatNumber(maxTextWidth)}" lengthAdjust="spacingAndGlyphs"`
+        ? ` textLength="${formatNumber(maxTextWidth)}" lengthAdjust="spacing"`
         : '';
     return `<text x="${formatNumber(x)}" y="${formatNumber(y)}" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="700" text-anchor="middle"${textLength}>${escapeXml(station)}</text>`;
   });
