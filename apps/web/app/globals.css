@@ -13665,7 +13665,7 @@ img.map-player-list-avatar.is-offline {
 
 :root[data-material-mode='advanced'] .modal-panel {
   border: 1px solid var(--yct-material-floating-border);
-  background: color-mix(in srgb, var(--yct-color-surface-panel) 42%, transparent);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 88%, transparent);
   -webkit-backdrop-filter: contrast(var(--yct-material-contrast))
     brightness(var(--yct-material-brightness)) saturate(var(--yct-material-saturation))
     blur(var(--yct-material-blur));
