@@ -225,6 +225,63 @@ function Copy-YctNextRuntimeDependencies {
   }
 }
 
+function Copy-YctMaterialRendererRuntimeDependencies {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [Parameter(Mandatory = $true)][string]$DestinationNodeModules
+  )
+
+  $sourceScope = Join-Path $Root "apps\web\node_modules\@resvg"
+  if (-not (Test-Path -LiteralPath $sourceScope)) {
+    throw "Cannot find @resvg runtime dependency. Run pnpm install before building the artifact."
+  }
+
+  $destinationScope = Join-Path $DestinationNodeModules "@resvg"
+  New-Item -ItemType Directory -Force -Path $destinationScope | Out-Null
+  Get-ChildItem -LiteralPath $sourceScope -Force | ForEach-Object {
+    Copy-YctNodeModuleEntry -Source $_ -Destination (Join-Path $destinationScope $_.Name)
+  }
+
+  $sourcePackage = Resolve-YctLinkedPath -Item (Get-Item -LiteralPath (Join-Path $sourceScope "resvg-js"))
+  $sourceNativeScope = Split-Path -Parent $sourcePackage
+  $nativePackages = Get-ChildItem -LiteralPath $sourceNativeScope -Directory -Filter "resvg-js-*" -ErrorAction SilentlyContinue
+  if (-not $nativePackages) {
+    throw "Cannot find @resvg native runtime dependency. Run pnpm install before building the artifact."
+  }
+  $nativePackages | ForEach-Object {
+    Copy-YctNodeModuleEntry -Source $_ -Destination (Join-Path $destinationScope $_.Name)
+  }
+}
+
+function Assert-YctMaterialRendererRuntimeDependency {
+  param(
+    [Parameter(Mandatory = $true)][string]$NodeCommand,
+    [Parameter(Mandatory = $true)][string]$NodeModules
+  )
+
+  $resvgEntry = Join-Path $NodeModules "@resvg\resvg-js\index.js"
+  if (-not (Test-Path -LiteralPath $resvgEntry)) {
+    throw "Staged Resvg entry does not exist: $resvgEntry"
+  }
+
+  $validationScript = @'
+import(process.argv[1])
+  .then(({ Resvg }) => {
+    const svg = Buffer.from('PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjwvc3ZnPg==', 'base64').toString('utf8');
+    const png = new Resvg(svg).render().asPng();
+    if (!png.length) process.exit(1);
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+'@
+  & $NodeCommand -e $validationScript ([System.Uri]::new($resvgEntry).AbsoluteUri)
+  if ($LASTEXITCODE -ne 0) {
+    throw "Staged Resvg runtime validation failed with exit code $LASTEXITCODE."
+  }
+}
+
 function Copy-YctTurbopackExternalRuntimeDependencies {
   param(
     [Parameter(Mandatory = $true)][string]$SourceNodeModules,
@@ -512,15 +569,23 @@ if ($SkipStaging) {
     Write-YctUtf8File -Path $stagedServiceWorkerPath -Content $serviceWorker
   }
   Copy-YctNextRuntimeDependencies -Root $root -DestinationNodeModules $standaloneWebNodeModules
+  Copy-YctMaterialRendererRuntimeDependencies -Root $root -DestinationNodeModules $standaloneWebNodeModules
   $sourceNextNodeModules = Join-Path $nextRoot "node_modules"
   $stagedNextNodeModules = Join-Path $standaloneNextRoot "node_modules"
   Copy-YctTurbopackExternalRuntimeDependencies `
     -SourceNodeModules $sourceNextNodeModules `
     -DestinationNodeModules $stagedNextNodeModules
   $nodeCommand = (Get-Command node.exe -ErrorAction Stop).Source
+  Copy-YctMaterialRendererRuntimeDependencies -Root $root -DestinationNodeModules $stagedNextNodeModules
   Assert-YctTurbopackExternalRuntimeDependencies `
     -NodeCommand $nodeCommand `
     -StagedNextNodeModules $stagedNextNodeModules
+  Assert-YctMaterialRendererRuntimeDependency `
+    -NodeCommand $nodeCommand `
+    -NodeModules $standaloneWebNodeModules
+  Assert-YctMaterialRendererRuntimeDependency `
+    -NodeCommand $nodeCommand `
+    -NodeModules $stagedNextNodeModules
 
   $startScript = @"
 param(

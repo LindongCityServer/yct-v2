@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import sharp from 'sharp';
+import { Resvg } from '@resvg/resvg-js';
 import type {
   MaterialCanvasConfig,
   MaterialTemplateField,
@@ -21,8 +21,6 @@ const prohibitedSourcePatterns = [
   // 仅允许同一 SVG 文档中定义的裁剪、渐变等本地片段引用，例如 url(#clip)。
   /url\s*\(\s*(?:["']\s*)?(?!#)/i,
 ];
-
-let harmonyOsFontFaceCss: string | undefined;
 
 export class MaterialTemplateSourceError extends Error {}
 export class MaterialInputError extends Error {}
@@ -162,10 +160,7 @@ export function renderMaterialTemplateToSvg(input: {
     throw new MaterialTemplateSourceError('模板 SVG 未能解析 viewBox。');
   }
   const children = resolved.replace(/^<svg\b[^>]*>/i, '').replace(/<\/svg>\s*$/i, '');
-  const fontDefinitions = children.includes('HarmonyOS Sans SC')
-    ? `<defs><style type="text/css">${getHarmonyOsFontFaceCss()}</style></defs>`
-    : '';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size.widthPx}" height="${size.heightPx}" viewBox="0 0 ${size.widthPx} ${size.heightPx}">${fontDefinitions}<svg x="0" y="0" width="${size.contentWidthPx}" height="${size.contentHeightPx}" viewBox="${sourceViewBox}">${children}</svg></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size.widthPx}" height="${size.heightPx}" viewBox="0 0 ${size.widthPx} ${size.heightPx}"><svg x="0" y="0" width="${size.contentWidthPx}" height="${size.contentHeightPx}" viewBox="${sourceViewBox}">${children}</svg></svg>`;
   return { svg, widthPx: size.widthPx, heightPx: size.heightPx };
 }
 
@@ -175,7 +170,17 @@ export async function renderMaterialTemplateToPng(input: {
   canvas: MaterialCanvasConfig;
 }): Promise<{ png: Buffer; widthPx: number; heightPx: number }> {
   const rendered = renderMaterialTemplateToSvg(input);
-  const png = await sharp(Buffer.from(rendered.svg, 'utf8')).png().toBuffer();
+  const png = new Resvg(rendered.svg, {
+    font: {
+      fontFiles: resolveMaterialFontFiles(),
+      // HarmonyOS 字体随部署包显式提供；仅保留系统字体供模板明确指定的 Arial 使用。
+      loadSystemFonts: true,
+      defaultFontFamily: 'HarmonyOS Sans SC',
+      sansSerifFamily: 'HarmonyOS Sans SC',
+    },
+  })
+    .render()
+    .asPng();
   return { png, widthPx: rendered.widthPx, heightPx: rendered.heightPx };
 }
 
@@ -256,20 +261,14 @@ function resolveTextFit(
   return { letterSpacing: 0, scaleX: naturalWidth ? config.maxWidth / naturalWidth : 1 };
 }
 
-function getHarmonyOsFontFaceCss(): string {
-  if (harmonyOsFontFaceCss) {
-    return harmonyOsFontFaceCss;
-  }
-  const regular = readMaterialFontAsDataUrl('HarmonyOS_Sans_SC_Regular.ttf');
-  const bold = readMaterialFontAsDataUrl('HarmonyOS_Sans_SC_Bold.ttf');
-  harmonyOsFontFaceCss = [
-    `@font-face{font-family:'HarmonyOS Sans SC';src:url('${regular}') format('truetype');font-style:normal;font-weight:400;}`,
-    `@font-face{font-family:'HarmonyOS Sans SC';src:url('${bold}') format('truetype');font-style:normal;font-weight:700;}`,
-  ].join('');
-  return harmonyOsFontFaceCss;
+function resolveMaterialFontFiles(): string[] {
+  return [
+    resolveMaterialFontPath('HarmonyOS_Sans_SC_Regular.ttf'),
+    resolveMaterialFontPath('HarmonyOS_Sans_SC_Bold.ttf'),
+  ];
 }
 
-function readMaterialFontAsDataUrl(fileName: string): string {
+function resolveMaterialFontPath(fileName: string): string {
   const relativePath = ['harmonyos-sans', fileName];
   const candidates = [
     resolve(process.cwd(), 'public', 'fonts', ...relativePath),
@@ -281,7 +280,7 @@ function readMaterialFontAsDataUrl(fileName: string): string {
   if (!sourcePath) {
     throw new Error(`物料字体文件 ${fileName} 不存在。`);
   }
-  return `data:font/ttf;base64,${readFileSync(sourcePath).toString('base64')}`;
+  return sourcePath;
 }
 
 function estimateTextWidth(value: string, fontSize: number): number {

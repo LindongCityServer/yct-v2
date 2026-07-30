@@ -6,6 +6,7 @@ const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   poweredByHeader: false,
+  serverExternalPackages: ['@resvg/resvg-js'],
   assetPrefix: normalizedBasePath || undefined,
   env: {
     NEXT_PUBLIC_YCT_BASE_PATH: normalizedBasePath,

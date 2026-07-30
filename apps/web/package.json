@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@resvg/resvg-js": "2.6.2",
     "@swc/helpers": "0.5.15",
     "@yct/adapters": "workspace:*",
     "@yct/contracts": "workspace:*",
@@ -25,7 +26,6 @@
     "qrcode": "^1.5.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "sharp": "^0.35.2",
     "web-push": "3.6.7",
     "zod": "^4.4.3"
   },
