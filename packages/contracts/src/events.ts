@@ -724,6 +724,21 @@ export interface MaterialExportRequestedPayload {
   outputHeightPx: number;
 }
 
+export interface MaterialPreviewGeneratedPayload {
+  previewId: string;
+  actorId?: string;
+  actorLabel: string;
+  templateId: string;
+  templateVersion: number;
+  sourceKind: MaterialSourceKind;
+  sourceRef?: string;
+  inputHash: string;
+  canvas: MaterialCanvasConfig;
+  outputWidthPx: number;
+  outputHeightPx: number;
+  generatedAt: ISODateTimeString;
+}
+
 export interface PoiCategoryProfileUpdatedPayload {
   categories: Array<{
     id: string;
@@ -1128,6 +1143,7 @@ export type YctEventPayloadMap = {
   MaterialTemplatePublished: MaterialTemplatePublishedPayload;
   MaterialDraftSubmitted: MaterialDraftSubmittedPayload;
   MaterialDraftReviewed: MaterialDraftReviewedPayload;
+  MaterialPreviewGenerated: MaterialPreviewGeneratedPayload;
   MaterialExportRequested: MaterialExportRequestedPayload;
   OperationsStrongReminderRulesUpdated: OperationsStrongReminderRulesUpdatedPayload;
   OperationsReminderDeliveryRefreshRequested: OperationsReminderDeliveryRefreshRequestedPayload;

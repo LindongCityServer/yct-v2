@@ -3,6 +3,7 @@ import type {
   MaterialCanvasConfig,
   MaterialDraft,
   MaterialExportAuditRecord,
+  MaterialSourceKind,
   MaterialTemplateRecord,
   MaterialTemplateVersion,
   YctEventPayloadMap,
@@ -69,6 +70,7 @@ export type MaterialPreviewResult = MaterialWorkflowResult & {
   png?: Buffer;
   widthPx?: number;
   heightPx?: number;
+  previewId?: string;
 };
 
 type PublishedMaterialTemplateSummary = Omit<MaterialTemplateVersion, 'source'>;
@@ -341,7 +343,7 @@ export async function prepareMaterialExport(input: {
     return {
       ok: true,
       png: rendered.png,
-      fileName: `${safeFileName(source.template.title)}_${audit.id.slice(-8)}.png`,
+      fileName: buildMaterialExportFileName(source.template, source.values, audit.id),
       audit,
     };
   } catch (error) {
@@ -351,22 +353,58 @@ export async function prepareMaterialExport(input: {
 
 export async function prepareMaterialPreview(input: {
   request: MaterialPreviewRequestInput;
+  actor?: {
+    id: string;
+    label: string;
+  };
+  anonymousLabel: string;
 }): Promise<MaterialPreviewResult> {
   const source = await resolveMaterialPreviewSource(input.request);
   if (!source.ok) {
     return source;
   }
   try {
+    const previewId = `material_preview_${randomUUID()}`;
+    const generatedAt = new Date().toISOString();
+    const actorLabel = input.actor?.label.trim() || input.anonymousLabel;
+    const watermarkActorLabel = Array.from(actorLabel).slice(0, 10).join('');
+    const traceId = previewId.slice('material_preview_'.length, 'material_preview_'.length + 12);
     const rendered = await renderMaterialTemplateToPng({
       template: source.template,
       values: source.values,
       canvas: source.canvas,
+      watermark: {
+        traceLines: [
+          `${watermarkActorLabel} | ${traceId}`,
+          generatedAt.replaceAll('-', '').replaceAll(':', '').replace('T', ' ').slice(0, 15) + 'Z',
+        ],
+      },
     });
+    await emitEvent(
+      'MaterialPreviewGenerated',
+      input.actor ? 'user' : 'anonymous',
+      input.actor?.id,
+      {
+        previewId,
+        actorId: input.actor?.id,
+        actorLabel,
+        templateId: source.templateId,
+        templateVersion: source.template.version,
+        sourceKind: source.sourceKind,
+        sourceRef: source.sourceRef,
+        inputHash: hashMaterialInput(source.values),
+        canvas: source.canvas,
+        outputWidthPx: rendered.widthPx,
+        outputHeightPx: rendered.heightPx,
+        generatedAt,
+      },
+    );
     return {
       ok: true,
       png: rendered.png,
       widthPx: rendered.widthPx,
       heightPx: rendered.heightPx,
+      previewId,
     };
   } catch (error) {
     return invalidInput(error);
@@ -383,7 +421,8 @@ async function resolveMaterialExportSource(
       template: MaterialTemplateVersion;
       values: Record<string, string>;
       canvas: MaterialCanvasConfig;
-      sourceKind: 'manual' | 'transit_line' | 'transit_station' | 'map_location' | 'road_coordinate';
+      sourceKind:
+        'manual' | 'transit_line' | 'transit_station' | 'map_location' | 'road_coordinate';
       sourceRef?: string;
       draftId?: string;
     }
@@ -452,9 +491,12 @@ async function resolveMaterialExportSource(
 async function resolveMaterialPreviewSource(request: MaterialPreviewRequestInput): Promise<
   | {
       ok: true;
+      templateId: string;
       template: MaterialTemplateVersion;
       values: Record<string, string>;
       canvas: MaterialCanvasConfig;
+      sourceKind: MaterialSourceKind;
+      sourceRef?: string;
     }
   | MaterialWorkflowFailure
 > {
@@ -470,9 +512,11 @@ async function resolveMaterialPreviewSource(request: MaterialPreviewRequestInput
     if (request.mode === 'manual') {
       return {
         ok: true,
+        templateId: request.templateId,
         template: template.template,
         values: validateMaterialInput(template.template.fields, request.input ?? {}),
         canvas: request.canvas,
+        sourceKind: 'manual',
       };
     }
     if (!request.source) {
@@ -484,9 +528,12 @@ async function resolveMaterialPreviewSource(request: MaterialPreviewRequestInput
     });
     return {
       ok: true,
+      templateId: request.templateId,
       template: template.template,
       values: validateMaterialInput(template.template.fields, resolved.values),
       canvas: request.canvas,
+      sourceKind: resolved.sourceKind,
+      sourceRef: resolved.sourceRef,
     };
   } catch (error) {
     return invalidInput(error);
@@ -589,20 +636,72 @@ function invalidInputMessage(message: string): MaterialWorkflowFailure {
 }
 
 function safeFileName(value: string): string {
-  return value.replace(/[\\/:*?"<>|]/g, '_').slice(0, 80) || 'material';
+  return sanitizeFileNamePart(value, 80) || 'material';
+}
+
+function sanitizeFileNamePart(value: string, maximumLength: number): string {
+  return Array.from(
+    value
+      .replace(/[\u0000-\u001f\\/:*?"<>|]/g, '_')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/[. ]+$/g, ''),
+  )
+    .slice(0, maximumLength)
+    .join('');
+}
+
+function buildMaterialExportFileName(
+  template: MaterialTemplateVersion,
+  values: Record<string, string>,
+  exportId: string,
+): string {
+  const ignoredFieldKeys = new Set([
+    'currentStationIndex',
+    'routeStations',
+    'roadNamePinyin',
+    'postalCode',
+    'signColor',
+    'directionMode',
+    'arrowMode',
+  ]);
+  const contentParts: string[] = [];
+  for (const field of template.fields) {
+    if (
+      ignoredFieldKeys.has(field.key) ||
+      (field.kind === 'select' && field.key !== 'terminalRole')
+    ) {
+      continue;
+    }
+    const value = sanitizeFileNamePart(values[field.key] ?? '', 20);
+    if (!value || contentParts.includes(value)) {
+      continue;
+    }
+    contentParts.push(value);
+    if (contentParts.length >= 3) {
+      break;
+    }
+  }
+  return (
+    [
+      sanitizeFileNamePart(template.title, 40) || 'material',
+      ...contentParts,
+      exportId.slice(-8),
+    ].join('_') + '.png'
+  );
 }
 
 async function emitEvent<TType extends YctEventType>(
   type: TType,
-  actorType: 'user' | 'admin',
-  actorId: string,
+  actorType: 'anonymous' | 'user' | 'admin',
+  actorId: string | undefined,
   payload: YctEventPayloadMap[TType],
 ): Promise<void> {
   await publishDomainEvent({
     eventId: `event_${randomUUID()}`,
     type,
     occurredAt: new Date().toISOString(),
-    actor: { type: actorType, id: actorId },
+    actor: actorId ? { type: actorType, id: actorId } : { type: actorType },
     payload,
   });
 }

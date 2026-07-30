@@ -104,6 +104,8 @@ interface MaterialDraft {
 
 type StudioMode = 'manual' | 'server';
 
+const MATERIAL_PREVIEW_DIALOG_MEDIA_QUERY = '(max-width: 959px)';
+
 export function MaterialStudioPanel({
   title,
   families,
@@ -140,6 +142,9 @@ export function MaterialStudioPanel({
   const [tileTemplate, setTileTemplate] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewSize, setPreviewSize] = useState<{ width: number; height: number } | null>(null);
+  const [isPreviewDialogViewport, setIsPreviewDialogViewport] = useState(false);
+  const [isSingleColumnViewport, setIsSingleColumnViewport] = useState(false);
+  const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
   const [statusText, setStatusText] = useState('正在读取模板');
   const [isBusy, setIsBusy] = useState(false);
 
@@ -204,16 +209,9 @@ export function MaterialStudioPanel({
         (line) =>
           line.direction === transitDirection &&
           (!requiresTransitTerminalRole ||
-            (transitTerminalRole === 'origin'
-              ? line.isOriginAtStation
-              : line.isTerminalAtStation)),
+            (transitTerminalRole === 'origin' ? line.isOriginAtStation : line.isTerminalAtStation)),
       ),
-    [
-      requiresTransitTerminalRole,
-      selectedTransitStation,
-      transitDirection,
-      transitTerminalRole,
-    ],
+    [requiresTransitTerminalRole, selectedTransitStation, transitDirection, transitTerminalRole],
   );
   const maximumTransitLineCount = useMemo(() => {
     const slots = selected?.template.fields
@@ -286,7 +284,9 @@ export function MaterialStudioPanel({
               if (response.ok) {
                 const stations = data.items ?? [];
                 setTransitStations(stations);
-                setSelectedTransitStationMarkerId((current) => current || stations[0]?.markerId || '');
+                setSelectedTransitStationMarkerId(
+                  (current) => current || stations[0]?.markerId || '',
+                );
               }
             })
             .catch(() => undefined),
@@ -392,6 +392,44 @@ export function MaterialStudioPanel({
     [previewUrl],
   );
 
+  useEffect(() => {
+    const previewDialogQuery = window.matchMedia(MATERIAL_PREVIEW_DIALOG_MEDIA_QUERY);
+    const singleColumnQuery = window.matchMedia('(max-width: 720px)');
+    const syncViewport = () => {
+      setIsPreviewDialogViewport(previewDialogQuery.matches);
+      setIsSingleColumnViewport(singleColumnQuery.matches);
+      if (!previewDialogQuery.matches) {
+        setIsPreviewDialogOpen(false);
+      }
+    };
+
+    syncViewport();
+    previewDialogQuery.addEventListener('change', syncViewport);
+    singleColumnQuery.addEventListener('change', syncViewport);
+    return () => {
+      previewDialogQuery.removeEventListener('change', syncViewport);
+      singleColumnQuery.removeEventListener('change', syncViewport);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isPreviewDialogOpen) {
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsPreviewDialogOpen(false);
+      }
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isPreviewDialogOpen]);
+
   const selectTemplate = (templateId: string) => {
     setSelectedTemplateId(templateId);
     setStatusText('');
@@ -401,6 +439,7 @@ export function MaterialStudioPanel({
   const clearPreview = () => {
     setPreviewUrl(null);
     setPreviewSize(null);
+    setIsPreviewDialogOpen(false);
   };
 
   const updateCanvas = <TKey extends keyof MaterialCanvas>(
@@ -425,7 +464,10 @@ export function MaterialStudioPanel({
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = objectUrl;
-    link.download = `${selected?.template.title ?? title}.png`;
+    link.download = resolveMaterialDownloadFileName(
+      response,
+      `${selected?.template.title ?? title}.png`,
+    );
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -440,6 +482,9 @@ export function MaterialStudioPanel({
       width: Number(response.headers.get('X-Yct-Material-Preview-Width')) || 0,
       height: Number(response.headers.get('X-Yct-Material-Preview-Height')) || 0,
     });
+    if (window.matchMedia(MATERIAL_PREVIEW_DIALOG_MEDIA_QUERY).matches) {
+      setIsPreviewDialogOpen(true);
+    }
   };
 
   const buildServerSource = () => {
@@ -631,7 +676,14 @@ export function MaterialStudioPanel({
         <p className="muted">{statusText}</p>
       </div>
 
-      <div className="material-studio-layout">
+      <div
+        className="material-studio-layout"
+        style={
+          isPreviewDialogViewport && !isSingleColumnViewport
+            ? { gridTemplateColumns: 'minmax(240px, 280px) minmax(0, 1fr)' }
+            : undefined
+        }
+      >
         <aside className="material-studio-sidebar">
           <label>
             <span>模板</span>
@@ -648,6 +700,14 @@ export function MaterialStudioPanel({
             </select>
           </label>
           {selected?.template.description ? <p>{selected.template.description}</p> : null}
+          <CanvasEditor
+            canvas={activeCanvas}
+            onChange={updateCanvas}
+            disabled={isBusy || !selected}
+          />
+        </aside>
+
+        <div className="material-studio-editor">
           {canUseServerSource ? (
             <div className="material-mode-switch" role="group" aria-label="数据来源">
               <button
@@ -672,14 +732,6 @@ export function MaterialStudioPanel({
               </button>
             </div>
           ) : null}
-          <CanvasEditor
-            canvas={activeCanvas}
-            onChange={updateCanvas}
-            disabled={isBusy || !selected}
-          />
-        </aside>
-
-        <div className="material-studio-editor">
           {!selected ? (
             <p className="material-studio-empty">暂无可用模板。</p>
           ) : mode === 'server' && activeServerSource === 'transit_station' ? (
@@ -743,9 +795,15 @@ export function MaterialStudioPanel({
                   </select>
                 </label>
               ) : null}
-              <fieldset className="material-canvas-editor" disabled={isBusy || !selectedTransitStation}>
+              <fieldset
+                className="material-canvas-editor"
+                disabled={isBusy || !selectedTransitStation}
+              >
                 <legend>
-                  同方向线路{usesSingleTransitLineSelection ? '（单选）' : `（最多 ${maximumTransitLineCount} 条）`}
+                  同方向线路
+                  {usesSingleTransitLineSelection
+                    ? '（单选）'
+                    : `（最多 ${maximumTransitLineCount} 条）`}
                 </legend>
                 {selectableTransitLines.length ? (
                   selectableTransitLines.map((line) => {
@@ -778,7 +836,8 @@ export function MaterialStudioPanel({
                           }}
                         />
                         <span>
-                          {line.name} · 往 {line.destinationName || '终点待维护'} · {line.firstLastBus}
+                          {line.name} · 往 {line.destinationName || '终点待维护'} ·{' '}
+                          {line.firstLastBus}
                           {line.operator ? ` · ${line.operator}` : ''}
                           {line.isOriginAtStation ? ' · 当前站始发' : ''}
                           {line.isTerminalAtStation ? ' · 当前站终到' : ''}
@@ -800,11 +859,12 @@ export function MaterialStudioPanel({
                   className="is-primary"
                   onClick={() => void exportFromServer()}
                   disabled={isBusy || !selectedTransitLineIds.length}
+                  title="登录后下载无水印图片"
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">
                     download
                   </span>
-                  下载图片
+                  登录后下载无水印图片
                 </button>
               </div>
             </>
@@ -855,11 +915,12 @@ export function MaterialStudioPanel({
                   className="is-primary"
                   onClick={() => void exportFromServer()}
                   disabled={isBusy || !selectedLineId}
+                  title="登录后下载无水印图片"
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">
                     download
                   </span>
-                  下载图片
+                  登录后下载无水印图片
                 </button>
               </div>
             </>
@@ -901,11 +962,12 @@ export function MaterialStudioPanel({
                   className="is-primary"
                   onClick={() => void exportFromServer()}
                   disabled={isBusy || !selectedLocationId}
+                  title="登录后下载无水印图片"
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">
                     download
                   </span>
-                  下载图片
+                  登录后下载无水印图片
                 </button>
               </div>
             </>
@@ -971,11 +1033,12 @@ export function MaterialStudioPanel({
                   className="is-primary"
                   onClick={() => void exportFromServer()}
                   disabled={isBusy || !roadCoordinate}
+                  title="登录后下载无水印图片"
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">
                     download
                   </span>
-                  下载图片
+                  登录后下载无水印图片
                 </button>
               </div>
             </>
@@ -1005,38 +1068,84 @@ export function MaterialStudioPanel({
                   className="is-primary"
                   onClick={() => void exportManualDraft()}
                   disabled={isBusy || !existingDraft}
+                  title={
+                    existingDraft
+                      ? '登录后下载审核通过的无水印图片'
+                      : '登录并提交自定义内容，审核通过后可下载无水印图片'
+                  }
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">
                     download
                   </span>
-                  下载图片
+                  登录后下载无水印图片
                 </button>
               </div>
-              {existingDraft ? <p className="muted">当前模板已有可下载的审核通过版本。</p> : null}
+              <p className="muted">
+                {existingDraft
+                  ? '当前模板已有审核通过版本，登录后可使用下载按钮获取无水印图片。'
+                  : '请先登录并提交自定义内容，审核通过后下载按钮才会启用。'}
+              </p>
             </>
           )}
         </div>
 
-        <section className="material-preview" aria-label="物料预览">
-          <div className="material-preview-heading">
-            <h2>预览</h2>
-            {previewSize?.width && previewSize.height ? (
-              <span>
-                {previewSize.width} × {previewSize.height} px
-              </span>
-            ) : null}
-          </div>
-          <div className="material-preview-stage">
-            {previewUrl ? (
-              <div className="material-preview-canvas">
-                <img src={previewUrl} alt={`${selected?.template.title ?? title}预览`} />
-              </div>
-            ) : (
-              <span>尚未生成预览</span>
-            )}
-          </div>
-        </section>
+        {!isPreviewDialogViewport ? (
+          <section className="material-preview" aria-label="物料预览">
+            <div className="material-preview-heading">
+              <h2>预览</h2>
+              <MaterialPreviewDescription previewSize={previewSize} />
+            </div>
+            <MaterialPreviewStage
+              previewUrl={previewUrl}
+              alt={`${selected?.template.title ?? title}预览`}
+            />
+          </section>
+        ) : null}
       </div>
+
+      {isPreviewDialogViewport && isPreviewDialogOpen && previewUrl ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) {
+              setIsPreviewDialogOpen(false);
+            }
+          }}
+        >
+          <section
+            className="modal-panel material-preview"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="material-preview-dialog-heading"
+            style={{ width: 'min(760px, 100%)' }}
+          >
+            <div className="material-preview-heading">
+              <div style={{ display: 'grid', gap: 2 }}>
+                <h2 id="material-preview-dialog-heading">预览</h2>
+                <MaterialPreviewDescription previewSize={previewSize} />
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="关闭预览"
+                title="关闭预览"
+                autoFocus
+                onClick={() => setIsPreviewDialogOpen(false)}
+                style={{ flex: '0 0 40px', width: 40 }}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  close
+                </span>
+              </button>
+            </div>
+            <MaterialPreviewStage
+              previewUrl={previewUrl}
+              alt={`${selected?.template.title ?? title}预览`}
+            />
+          </section>
+        </div>
+      ) : null}
 
       <section className="material-history" aria-labelledby="material-history-heading">
         <div className="material-history-heading">
@@ -1072,11 +1181,12 @@ export function MaterialStudioPanel({
                       className="is-primary"
                       onClick={() => void exportDraft(draft)}
                       disabled={isBusy}
+                      title="登录后下载审核通过的无水印图片"
                     >
                       <span className="material-symbols-outlined" aria-hidden="true">
                         download
                       </span>
-                      下载图片
+                      登录后下载无水印图片
                     </button>
                   ) : null}
                 </article>
@@ -1112,6 +1222,50 @@ function PreviewButton({
       </span>
     </button>
   );
+}
+
+function MaterialPreviewDescription({
+  previewSize,
+}: Readonly<{ previewSize: { width: number; height: number } | null }>) {
+  return (
+    <span>
+      预览含水印
+      {previewSize?.width && previewSize.height
+        ? ` · ${previewSize.width} × ${previewSize.height} px`
+        : ''}
+    </span>
+  );
+}
+
+function MaterialPreviewStage({
+  previewUrl,
+  alt,
+}: Readonly<{ previewUrl: string | null; alt: string }>) {
+  return (
+    <div className="material-preview-stage">
+      {previewUrl ? (
+        <div className="material-preview-canvas">
+          <img src={previewUrl} alt={alt} />
+        </div>
+      ) : (
+        <span>尚未生成预览</span>
+      )}
+    </div>
+  );
+}
+
+function resolveMaterialDownloadFileName(response: Response, fallback: string): string {
+  const disposition = response.headers.get('Content-Disposition');
+  const encodedFileName = disposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encodedFileName) {
+    try {
+      return decodeURIComponent(encodedFileName);
+    } catch {
+      return encodedFileName;
+    }
+  }
+  const plainFileName = disposition?.match(/filename="?([^";]+)"?/i)?.[1];
+  return plainFileName || fallback;
 }
 
 function CanvasEditor({

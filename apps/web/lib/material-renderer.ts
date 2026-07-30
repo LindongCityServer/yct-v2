@@ -25,6 +25,10 @@ const prohibitedSourcePatterns = [
 export class MaterialTemplateSourceError extends Error {}
 export class MaterialInputError extends Error {}
 
+export interface MaterialPreviewWatermark {
+  traceLines: [string, string];
+}
+
 export function validateMaterialTemplateSource(
   source: string,
   fields: MaterialTemplateField[] = [],
@@ -168,9 +172,18 @@ export async function renderMaterialTemplateToPng(input: {
   template: MaterialTemplateVersion;
   values: Record<string, string>;
   canvas: MaterialCanvasConfig;
+  watermark?: MaterialPreviewWatermark;
 }): Promise<{ png: Buffer; widthPx: number; heightPx: number }> {
   const rendered = renderMaterialTemplateToSvg(input);
-  const png = new Resvg(rendered.svg, {
+  const svg = input.watermark
+    ? appendMaterialPreviewWatermark(
+        rendered.svg,
+        rendered.widthPx,
+        rendered.heightPx,
+        input.watermark,
+      )
+    : rendered.svg;
+  const png = new Resvg(svg, {
     font: {
       fontFiles: resolveMaterialFontFiles(),
       // HarmonyOS 字体随部署包显式提供；仅保留系统字体供模板明确指定的 Arial 使用。
@@ -186,6 +199,30 @@ export async function renderMaterialTemplateToPng(input: {
 
 export function hashMaterialInput(input: Record<string, string>): string {
   return createHash('sha256').update(JSON.stringify(input)).digest('hex');
+}
+
+function appendMaterialPreviewWatermark(
+  svg: string,
+  widthPx: number,
+  heightPx: number,
+  watermark: MaterialPreviewWatermark,
+): string {
+  const shorterSide = Math.min(widthPx, heightPx);
+  const primaryFontSize = Math.max(11, Math.min(36, Math.round(shorterSide * 0.14)));
+  const strokeWidth = Math.max(1, Math.round(primaryFontSize * 0.08));
+  const tileWidth = Math.max(96, Math.min(240, Math.round(widthPx * 0.72)));
+  const tileHeight = Math.max(48, Math.min(96, Math.round(heightPx * 0.58)));
+  const traceWidthUnits = Math.max(
+    ...watermark.traceLines.map((line) => estimateTextWidth(line, 1)),
+    1,
+  );
+  const traceFontSize = Math.max(
+    4,
+    Math.min(8, Math.round(primaryFontSize * 0.4), (tileWidth * 0.88) / traceWidthUnits),
+  );
+  const patternId = 'yct-material-preview-watermark-pattern';
+  const overlay = `<defs><pattern id="${patternId}" width="${formatSvgNumber(tileWidth)}" height="${formatSvgNumber(tileHeight)}" patternUnits="userSpaceOnUse" patternTransform="rotate(-24)"><g font-family="'HarmonyOS Sans SC', sans-serif" text-anchor="middle" fill="#C11111" stroke="#FFFFFF" paint-order="stroke"><text x="${formatSvgNumber(tileWidth / 2)}" y="${formatSvgNumber(tileHeight * 0.36)}" fill-opacity="0.3" stroke-opacity="0.42" stroke-width="${formatSvgNumber(strokeWidth)}" font-size="${formatSvgNumber(primaryFontSize)}" font-weight="700">仅供预览</text><text x="${formatSvgNumber(tileWidth / 2)}" y="${formatSvgNumber(tileHeight * 0.55)}" fill-opacity="0.38" stroke-opacity="0.46" stroke-width="${formatSvgNumber(Math.max(0.5, strokeWidth * 0.55))}" font-size="${formatSvgNumber(traceFontSize)}" font-weight="700">${escapeXml(watermark.traceLines[0])}</text><text x="${formatSvgNumber(tileWidth / 2)}" y="${formatSvgNumber(tileHeight * 0.69)}" fill-opacity="0.38" stroke-opacity="0.46" stroke-width="${formatSvgNumber(Math.max(0.5, strokeWidth * 0.55))}" font-size="${formatSvgNumber(traceFontSize)}" font-weight="700">${escapeXml(watermark.traceLines[1])}</text></g></pattern></defs><rect id="yct-material-preview-watermark" x="0" y="0" width="${formatSvgNumber(widthPx)}" height="${formatSvgNumber(heightPx)}" fill="url(#${patternId})" pointer-events="none"/>`;
+  return svg.replace(/<\/svg>\s*$/i, `${overlay}</svg>`);
 }
 
 function alignToTile(value: number, tileSizePx: number): number {

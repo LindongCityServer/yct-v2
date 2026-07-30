@@ -15,13 +15,18 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  if (parsed.data.mode === 'manual' && !isLocalDevelopmentPreview(request)) {
-    const user = await requireActiveLdpassUser(request);
+  const localDevelopmentPreview = isLocalDevelopmentPreview(request);
+  const user = await requireActiveLdpassUser(request);
+  if (parsed.data.mode === 'manual' && !localDevelopmentPreview) {
     if (!user.ok) {
       return user.response;
     }
   }
-  const result = await prepareMaterialPreview({ request: parsed.data });
+  const result = await prepareMaterialPreview({
+    request: parsed.data,
+    actor: user.ok ? { id: user.ldpassUserId, label: user.username } : undefined,
+    anonymousLabel: localDevelopmentPreview ? '本地开发' : '匿名用户',
+  });
   if (!result.ok) {
     return NextResponse.json(result, { status: result.status ?? 400 });
   }
@@ -37,6 +42,7 @@ export async function POST(request: NextRequest) {
       'Cache-Control': 'no-store',
       'X-Yct-Material-Preview-Width': String(result.widthPx),
       'X-Yct-Material-Preview-Height': String(result.heightPx),
+      'X-Yct-Material-Preview-Id': result.previewId ?? '',
     },
   });
 }
