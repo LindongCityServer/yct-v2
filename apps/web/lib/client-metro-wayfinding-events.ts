@@ -8,6 +8,12 @@ export type MetroWayfindingCompositionAction =
   | { type: 'update'; elementId: string; patch: Partial<MetroWayfindingElement> }
   | { type: 'remove'; elementId: string }
   | { type: 'move'; elementId: string; direction: 'up' | 'down' }
+  | {
+      type: 'reorder';
+      elementId: string;
+      targetElementId: string;
+      placement: 'before' | 'after';
+    }
   | { type: 'replace'; layout: MetroWayfindingLayout };
 
 export interface MetroWayfindingCompositionChangedPayload {

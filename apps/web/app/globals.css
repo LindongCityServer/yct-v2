@@ -5475,6 +5475,34 @@ img.map-player-list-avatar.is-offline {
   text-align: left;
 }
 
+.metro-wayfinding-element-list button.is-draggable {
+  cursor: grab;
+}
+
+.metro-wayfinding-element-list button.is-dragging {
+  cursor: grabbing;
+  opacity: 0.45;
+}
+
+.metro-wayfinding-element-list button.is-drop-before::before,
+.metro-wayfinding-element-list button.is-drop-after::after {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--yct-color-primary);
+  content: '';
+}
+
+.metro-wayfinding-element-list button.is-drop-before::before {
+  left: -2px;
+}
+
+.metro-wayfinding-element-list button.is-drop-after::after {
+  right: -2px;
+}
+
 .metro-wayfinding-element-list button.is-icon-only {
   display: inline-grid;
   grid-template-columns: minmax(0, 1fr);

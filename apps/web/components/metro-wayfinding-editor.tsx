@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type DragEvent as ReactDragEvent,
   type KeyboardEvent,
 } from 'react';
 import { appPath } from '../lib/app-paths';
@@ -51,6 +52,11 @@ export function MetroWayfindingEditor({
   const [selectedElementId, setSelectedElementId] = useState(
     () => parseMetroWayfindingLayout(value).elements[0]?.id ?? '',
   );
+  const [draggedElementId, setDraggedElementId] = useState('');
+  const [dropTarget, setDropTarget] = useState<{
+    elementId: string;
+    placement: 'before' | 'after';
+  } | null>(null);
 
   useEffect(() => {
     const nextLayout = parseMetroWayfindingLayout(value);
@@ -121,6 +127,49 @@ export function MetroWayfindingEditor({
     }
   };
 
+  const handleElementDragStart = (event: ReactDragEvent<HTMLButtonElement>, elementId: string) => {
+    if (disabled || layout.elements.length < 2) {
+      event.preventDefault();
+      return;
+    }
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', elementId);
+    setDraggedElementId(elementId);
+    setSelectedElementId(elementId);
+  };
+
+  const handleElementDragOver = (
+    event: ReactDragEvent<HTMLButtonElement>,
+    targetElementId: string,
+  ) => {
+    if (!draggedElementId || draggedElementId === targetElementId) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const placement = event.clientX < bounds.left + bounds.width / 2 ? 'before' : 'after';
+    setDropTarget((current) =>
+      current?.elementId === targetElementId && current.placement === placement
+        ? current
+        : { elementId: targetElementId, placement },
+    );
+  };
+
+  const handleElementDrop = (event: ReactDragEvent<HTMLButtonElement>, targetElementId: string) => {
+    const elementId = draggedElementId || event.dataTransfer.getData('text/plain');
+    if (!elementId || elementId === targetElementId) return;
+    event.preventDefault();
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const placement = event.clientX < bounds.left + bounds.width / 2 ? 'before' : 'after';
+    dispatch({ type: 'reorder', elementId, targetElementId, placement });
+    setDraggedElementId('');
+    setDropTarget(null);
+  };
+
+  const handleElementDragEnd = () => {
+    setDraggedElementId('');
+    setDropTarget(null);
+  };
+
   return (
     <section className="metro-wayfinding-editor" aria-label="地铁导视牌编排">
       <div className="metro-wayfinding-toolbar">
@@ -156,6 +205,8 @@ export function MetroWayfindingEditor({
             const isSelected = element.id === selectedElement?.id;
             const isIconOnly =
               element.type === 'icon' || element.type === 'space' || element.type === 'divider';
+            const tabLabel = metroElementTabAriaLabel(element);
+            const canDrag = !disabled && layout.elements.length > 1;
             return (
               <li key={element.id} role="presentation">
                 <button
@@ -164,12 +215,24 @@ export function MetroWayfindingEditor({
                   role="tab"
                   aria-selected={isSelected}
                   aria-controls={`${editorId}-element-panel`}
-                  aria-label={metroElementTabAriaLabel(element)}
+                  aria-label={canDrag ? `${tabLabel}，可拖动更改顺序` : tabLabel}
+                  title={canDrag ? '拖动更改顺序' : undefined}
                   tabIndex={isSelected ? 0 : -1}
-                  className={[isSelected ? 'is-active' : '', isIconOnly ? 'is-icon-only' : '']
+                  draggable={canDrag}
+                  className={[
+                    isSelected ? 'is-active' : '',
+                    isIconOnly ? 'is-icon-only' : '',
+                    canDrag ? 'is-draggable' : '',
+                    draggedElementId === element.id ? 'is-dragging' : '',
+                    dropTarget?.elementId === element.id ? `is-drop-${dropTarget.placement}` : '',
+                  ]
                     .filter(Boolean)
                     .join(' ')}
                   onClick={() => setSelectedElementId(element.id)}
+                  onDragStart={(event) => handleElementDragStart(event, element.id)}
+                  onDragOver={(event) => handleElementDragOver(event, element.id)}
+                  onDrop={(event) => handleElementDrop(event, element.id)}
+                  onDragEnd={handleElementDragEnd}
                 >
                   <MetroWayfindingElementTabContent element={element} />
                 </button>
@@ -1242,6 +1305,17 @@ function reduceMetroWayfindingAction(
           : element,
       ),
     };
+  if (action.type === 'reorder') {
+    const sourceIndex = layout.elements.findIndex((element) => element.id === action.elementId);
+    if (sourceIndex < 0 || action.elementId === action.targetElementId) return layout;
+    const elements = [...layout.elements];
+    const [element] = elements.splice(sourceIndex, 1);
+    const targetIndex = elements.findIndex((item) => item.id === action.targetElementId);
+    if (!element || targetIndex < 0) return layout;
+    const insertionIndex = action.placement === 'before' ? targetIndex : targetIndex + 1;
+    elements.splice(insertionIndex, 0, element);
+    return { ...layout, elements };
+  }
   const index = layout.elements.findIndex((element) => element.id === action.elementId);
   const target = action.direction === 'up' ? index - 1 : index + 1;
   if (index < 0 || target < 0 || target >= layout.elements.length) return layout;
