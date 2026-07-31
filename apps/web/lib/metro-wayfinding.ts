@@ -13,9 +13,9 @@ export const metroWayfindingBackgroundPalette = [
   { value: '#262626', label: '深灰色' },
   { value: '#F2C94C', label: '黄色' },
   { value: '#FFFFFF', label: '白色' },
-  { value: '#8A8A8A', label: '灰色' },
-  { value: '#123A63', label: '深蓝色' },
-  { value: '#14532D', label: '深绿色' },
+  { value: '#4A4E54', label: '灰色' },
+  { value: '#0A124D', label: '深蓝色' },
+  { value: '#085E41', label: '深绿色' },
 ] as const;
 
 export const metroWayfindingForegroundPalette = [
@@ -380,6 +380,27 @@ export function createMetroWayfindingTextRow(
         segments: [{ kind: 'text', value: '' }],
       }
     : { id: createMetroWayfindingId('text-secondary'), kind, value: '' };
+}
+
+export function duplicateMetroWayfindingElement(
+  element: MetroWayfindingElement,
+): MetroWayfindingElement {
+  if (element.type !== 'text') {
+    return { ...element, id: createMetroWayfindingId(element.type) };
+  }
+  return {
+    ...element,
+    id: createMetroWayfindingId(element.type),
+    rows: element.rows.map((row) =>
+      row.kind === 'main'
+        ? {
+            ...row,
+            id: createMetroWayfindingId('text-main'),
+            segments: row.segments.map((segment) => ({ ...segment })),
+          }
+        : { ...row, id: createMetroWayfindingId('text-secondary') },
+    ),
+  };
 }
 
 export function resolveMetroWayfindingTextMetrics(

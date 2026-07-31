@@ -5,6 +5,11 @@ export const metroWayfindingCompositionChangedEventName =
 
 export type MetroWayfindingElementAction =
   | { type: 'add'; element: MetroWayfindingElement }
+  | {
+      type: 'duplicate';
+      elementId: string;
+      element: MetroWayfindingElement;
+    }
   | { type: 'update'; elementId: string; patch: Partial<MetroWayfindingElement> }
   | {
       type: 'changeType';

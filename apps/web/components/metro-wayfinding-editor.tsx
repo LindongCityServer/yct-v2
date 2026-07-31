@@ -21,6 +21,7 @@ import {
 import {
   createMetroWayfindingElement,
   createMetroWayfindingTextRow,
+  duplicateMetroWayfindingElement,
   METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE,
   METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE,
   metroWayfindingArrowOptions,
@@ -65,7 +66,6 @@ export function MetroWayfindingEditor({
   onChange: (value: string) => void;
 }>) {
   const editorId = useId();
-  const textSuggestionsId = `${editorId}-text-suggestions`;
   const [layout, setLayout] = useState(() => parseMetroWayfindingLayout(value));
   const layoutRef = useRef(layout);
   const [selection, setSelection] = useState(() => ({
@@ -117,7 +117,7 @@ export function MetroWayfindingEditor({
   );
 
   const dispatchComposition = (action: MetroWayfindingCompositionAction) => {
-    if (action.type === 'add') {
+    if (action.type === 'add' || action.type === 'duplicate') {
       setSelection({ rowIndex: action.rowIndex, elementId: action.element.id });
     } else if (
       action.type === 'remove' &&
@@ -259,13 +259,6 @@ export function MetroWayfindingEditor({
 
   return (
     <section className="metro-wayfinding-editor" aria-label="地铁导视牌编排">
-      {textSuggestions?.length ? (
-        <datalist id={textSuggestionsId}>
-          {textSuggestions.map((suggestion) => (
-            <option key={suggestion} value={suggestion} />
-          ))}
-        </datalist>
-      ) : null}
       <div className="metro-wayfinding-toolbar">
         <SegmentedControl
           label="版式"
@@ -633,6 +626,24 @@ function MetroWayfindingElementEditor({
           <button
             type="button"
             className="icon-button"
+            aria-label="创建元素副本"
+            title="创建元素副本"
+            disabled={disabled}
+            onClick={() =>
+              onAction({
+                type: 'duplicate',
+                elementId: element.id,
+                element: duplicateMetroWayfindingElement(element),
+              })
+            }
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              content_copy
+            </span>
+          </button>
+          <button
+            type="button"
+            className="icon-button"
             aria-label="移除元素"
             title="移除元素"
             disabled={disabled}
@@ -980,13 +991,11 @@ function TextElementFields({
               ) : (
                 <label className="material-field">
                   <span>副文本内容 · 字高 {formatMetroMetric(metrics.secondaryFontSize)}</span>
-                  <input
+                  <MetroWayfindingTextAutocompleteInput
                     value={row.value}
                     disabled={disabled}
-                    maxLength={160}
-                    onChange={(event) =>
-                      updateRow(row.id, { ...row, value: event.currentTarget.value })
-                    }
+                    suggestions={textSuggestions}
+                    onChange={(value) => updateRow(row.id, { ...row, value })}
                   />
                 </label>
               )}
@@ -1080,16 +1089,11 @@ function MainSegmentEditor({
   onChange: (segments: MetroWayfindingMainSegment[]) => void;
 }>) {
   const editorId = useId();
-  const textSuggestionsId = `${editorId}-text-suggestions`;
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(0);
   const [segmentDialog, setSegmentDialog] = useState<MetroWayfindingSegmentDialogState | null>(
     null,
   );
   const activeSegmentIndex = Math.min(selectedSegmentIndex, Math.max(segments.length - 1, 0));
-  const textContinuationSuggestion =
-    segmentDialog && segmentDialog.draft.kind !== 'line'
-      ? findTextContinuation(segmentDialog.draft.value, textSuggestions)
-      : undefined;
 
   const focusSegmentControl = (target: number | 'add') => {
     window.requestAnimationFrame(() => {
@@ -1208,13 +1212,6 @@ function MainSegmentEditor({
 
   return (
     <section className="metro-wayfinding-main-segments" aria-label={label}>
-      {textSuggestions?.length ? (
-        <datalist id={textSuggestionsId}>
-          {textSuggestions.map((suggestion) => (
-            <option key={suggestion} value={suggestion} />
-          ))}
-        </datalist>
-      ) : null}
       <div>
         <strong>{label}</strong>
         <span>字高 {formatMetroMetric(fontSize)}</span>
@@ -1387,37 +1384,18 @@ function MainSegmentEditor({
             ) : (
               <label className="material-field">
                 <span>{segmentDialog.draft.kind === 'boxed' ? '方框文本' : '文本内容'}</span>
-                <div className="metro-wayfinding-text-autocomplete">
-                  {textContinuationSuggestion ? (
-                    <span className="metro-wayfinding-text-autocomplete-ghost" aria-hidden="true">
-                      <span>{segmentDialog.draft.value}</span>
-                      <strong>
-                        {textContinuationSuggestion.slice(segmentDialog.draft.value.length)}
-                      </strong>
-                    </span>
-                  ) : null}
-                  <input
-                    autoFocus
-                    value={segmentDialog.draft.value}
-                    disabled={disabled}
-                    maxLength={160}
-                    list={textSuggestions?.length ? textSuggestionsId : undefined}
-                    onKeyDown={(event) => {
-                      if (event.key !== 'Tab' || !textContinuationSuggestion) return;
-                      event.preventDefault();
-                      updateDraft({
-                        ...segmentDialog.draft,
-                        value: textContinuationSuggestion,
-                      });
-                    }}
-                    onChange={(event) =>
-                      updateDraft({
-                        ...segmentDialog.draft,
-                        value: event.currentTarget.value,
-                      })
-                    }
-                  />
-                </div>
+                <MetroWayfindingTextAutocompleteInput
+                  autoFocus
+                  value={segmentDialog.draft.value}
+                  disabled={disabled}
+                  suggestions={textSuggestions}
+                  onChange={(value) =>
+                    updateDraft({
+                      ...segmentDialog.draft,
+                      value,
+                    })
+                  }
+                />
               </label>
             )}
             <footer>
@@ -1445,6 +1423,55 @@ function MainSegmentEditor({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function MetroWayfindingTextAutocompleteInput({
+  value,
+  disabled,
+  suggestions,
+  autoFocus = false,
+  onChange,
+}: Readonly<{
+  value: string;
+  disabled: boolean;
+  suggestions?: string[];
+  autoFocus?: boolean;
+  onChange: (value: string) => void;
+}>) {
+  const suggestionsId = useId();
+  const continuation = findTextContinuation(value, suggestions);
+  return (
+    <>
+      {suggestions?.length ? (
+        <datalist id={suggestionsId}>
+          {suggestions.map((suggestion) => (
+            <option key={suggestion} value={suggestion} />
+          ))}
+        </datalist>
+      ) : null}
+      <div className="metro-wayfinding-text-autocomplete">
+        {continuation ? (
+          <span className="metro-wayfinding-text-autocomplete-ghost" aria-hidden="true">
+            <span>{value}</span>
+            <strong>{continuation.slice(value.length)}</strong>
+          </span>
+        ) : null}
+        <input
+          autoFocus={autoFocus}
+          value={value}
+          disabled={disabled}
+          maxLength={160}
+          list={suggestions?.length ? suggestionsId : undefined}
+          onKeyDown={(event) => {
+            if (event.key !== 'Tab' || !continuation) return;
+            event.preventDefault();
+            onChange(continuation);
+          }}
+          onChange={(event) => onChange(event.currentTarget.value)}
+        />
+      </div>
+    </>
   );
 }
 
@@ -2246,6 +2273,13 @@ function reduceMetroWayfindingAction(
         ? { ...action.element, direction: 'right' as const }
         : action.element;
     return replaceMetroWayfindingRowElements(layout, action.rowIndex, [...elements, element]);
+  }
+  if (action.type === 'duplicate') {
+    const sourceIndex = elements.findIndex((element) => element.id === action.elementId);
+    if (sourceIndex < 0) return layout;
+    const duplicatedElements = [...elements];
+    duplicatedElements.splice(sourceIndex + 1, 0, action.element);
+    return replaceMetroWayfindingRowElements(layout, action.rowIndex, duplicatedElements);
   }
   if (action.type === 'remove')
     return replaceMetroWayfindingRowElements(
