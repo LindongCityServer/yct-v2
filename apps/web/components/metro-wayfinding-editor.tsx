@@ -19,11 +19,14 @@ import {
 import {
   createMetroWayfindingElement,
   createMetroWayfindingTextRow,
+  METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE,
+  METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE,
   metroWayfindingBackgroundPalette,
   metroWayfindingForegroundPalette,
   metroWayfindingIconOptions,
   parseMetroWayfindingLayout,
   resolveMetroFacilityIconAssetName,
+  resolveMetroWayfindingLayoutSizing,
   resolveMetroWayfindingTextMetrics,
   serializeMetroWayfindingLayout,
   type MetroWayfindingElement,
@@ -37,11 +40,13 @@ import {
 
 export function MetroWayfindingEditor({
   value,
+  canvasWidth,
   disabled,
   lineColorOptions,
   onChange,
 }: Readonly<{
   value: string;
+  canvasWidth: number;
   disabled: boolean;
   lineColorOptions: Array<{ value: string; label: string }>;
   onChange: (value: string) => void;
@@ -100,6 +105,7 @@ export function MetroWayfindingEditor({
   const selectedElementIndex = selectedElement
     ? layout.elements.findIndex((element) => element.id === selectedElement.id)
     : -1;
+  const layoutSizing = resolveMetroWayfindingLayoutSizing(layout, canvasWidth);
 
   useEffect(() => {
     const selectedTab = elementListRef.current?.querySelector<HTMLElement>(
@@ -304,7 +310,31 @@ export function MetroWayfindingEditor({
             分割线
           </button>
         </div>
+        {selectedElement ? (
+          <MetroTextInsertionSuggestions
+            element={selectedElement}
+            elements={layout.elements}
+            disabled={disabled}
+            lineColorOptions={lineColorOptions}
+            onAction={dispatch}
+          />
+        ) : null}
       </div>
+
+      {layoutSizing.isWidthInsufficient ? (
+        <p className="metro-wayfinding-width-warning" role="status">
+          <span className="material-symbols-outlined" aria-hidden="true">
+            warning
+          </span>
+          <span>
+            当前尺寸宽度不足，文字与大文字已统一横向压缩至
+            {Math.round(layoutSizing.textScaleX * 100)}%。
+            {layoutSizing.hasUnresolvedOverflow
+              ? '非文字元素仍超出可用宽度，请增加导视牌宽度。'
+              : ''}
+          </span>
+        </p>
+      ) : null}
 
       {selectedElement ? (
         <div
@@ -1212,6 +1242,218 @@ function MetroFacilityAssetIcon({
   );
 }
 
+interface MetroTextSuggestionTemplate {
+  id: string;
+  previewMain: string;
+  previewSecondary: string;
+  createRows: (lineColors: string[]) => MetroWayfindingTextRow[];
+}
+
+function createSimpleMetroTextSuggestion(
+  id: string,
+  main: string,
+  secondary: string,
+): MetroTextSuggestionTemplate {
+  return {
+    id,
+    previewMain: main,
+    previewSecondary: secondary,
+    createRows: () => createSuggestedTextRows([{ kind: 'text', value: main }], secondary),
+  };
+}
+
+const exitTextSuggestion = createSimpleMetroTextSuggestion('exit', '出口', 'EXIT');
+
+const metroTextSuggestionsByIconId: Record<string, MetroTextSuggestionTemplate[]> = {
+  elevator: [
+    createSimpleMetroTextSuggestion('accessible-elevator', '无障碍电梯', 'Accessible Elevator'),
+  ],
+  restroom: [createSimpleMetroTextSuggestion('restroom', '卫生间', 'Toilets')],
+  'mens-restroom': [createSimpleMetroTextSuggestion('mens-restroom', '男卫生间', 'Men')],
+  'womens-restroom': [createSimpleMetroTextSuggestion('womens-restroom', '女卫生间', 'Women')],
+  'nursing-room': [createSimpleMetroTextSuggestion('nursing-room', '母婴室', 'Baby Care')],
+  'family-restroom': [
+    createSimpleMetroTextSuggestion('family-restroom', '第三卫生间', 'Family Toilet'),
+  ],
+  waiting: [
+    createSimpleMetroTextSuggestion('waiting-room', '空调候车室', 'Air-conditioned Waiting Room'),
+  ],
+  exit: [exitTextSuggestion],
+  subway: [
+    createSimpleMetroTextSuggestion('subway-ride', '乘车', 'To Subway'),
+    createSimpleMetroTextSuggestion('subway-towards', '开往', 'To '),
+    {
+      id: 'subway-transfer-line',
+      previewMain: '换乘[线路]号线',
+      previewSecondary: 'Transfer to Line',
+      createRows: (lineColors) =>
+        createSuggestedTextRows(
+          [
+            { kind: 'text', value: '换乘' },
+            createSuggestedLineSegment(lineColors, 0),
+            { kind: 'text', value: '号线' },
+          ],
+          'Transfer to Line ',
+        ),
+    },
+    {
+      id: 'subway-two-lines',
+      previewMain: '[线路][线路]号线',
+      previewSecondary: 'Line',
+      createRows: (lineColors) =>
+        createSuggestedTextRows(
+          [
+            createSuggestedLineSegment(lineColors, 0),
+            createSuggestedLineSegment(lineColors, 1),
+            { kind: 'text', value: '号线' },
+          ],
+          'Line ',
+        ),
+    },
+  ],
+  service: [
+    createSimpleMetroTextSuggestion(
+      'passenger-service-center',
+      '乘客服务中心',
+      'Customer Service Center',
+    ),
+  ],
+  ticket: [
+    createSimpleMetroTextSuggestion('automatic-ticketing', '自动售票', 'Automatic Ticketing'),
+  ],
+  'meeting-point': [createSimpleMetroTextSuggestion('meeting-point', '会合点', 'Meeting Point')],
+  'no-entry': [createSimpleMetroTextSuggestion('no-entry', '禁止进入', 'No Entry')],
+};
+
+const exitLargeTextSuggestion: MetroTextSuggestionTemplate = {
+  id: 'exit-large-text-details',
+  previewMain: '主文本 / 副文本 / 主文本 / 副文本',
+  previewSecondary: '四行空白文字',
+  createRows: () => [
+    createSuggestedMainTextRow([{ kind: 'text', value: '' }]),
+    createSuggestedSecondaryTextRow(''),
+    createSuggestedMainTextRow([{ kind: 'text', value: '' }]),
+    createSuggestedSecondaryTextRow(''),
+  ],
+};
+
+function MetroTextInsertionSuggestions({
+  element,
+  elements,
+  disabled,
+  lineColorOptions,
+  onAction,
+}: Readonly<{
+  element: MetroWayfindingElement;
+  elements: MetroWayfindingElement[];
+  disabled: boolean;
+  lineColorOptions: Array<{ value: string; label: string }>;
+  onAction: (action: MetroWayfindingCompositionAction) => void;
+}>) {
+  const suggestions = resolveMetroTextSuggestionTemplates(element, elements);
+  if (!suggestions.length) return null;
+  const lineColors = lineColorOptions.map((option) => option.value);
+  const addSuggestion = (suggestion: MetroTextSuggestionTemplate) => {
+    const textElement = createMetroWayfindingElement('text') as MetroWayfindingTextElement;
+    const usesNoEntryDefaultForeground =
+      element.type === 'icon' &&
+      element.iconId === 'no-entry' &&
+      (element.foregroundColor ?? '#E53935').toUpperCase() === '#E53935';
+    onAction({
+      type: 'add',
+      element: {
+        ...textElement,
+        rows: suggestion.createRows(lineColors),
+        backgroundColor: element.backgroundColor,
+        foregroundColor: usesNoEntryDefaultForeground ? undefined : element.foregroundColor,
+      },
+    });
+  };
+
+  return (
+    <fieldset className="metro-wayfinding-text-suggestions" disabled={disabled}>
+      <legend>添加关联文字</legend>
+      <div>
+        {suggestions.map((suggestion) => (
+          <button
+            key={suggestion.id}
+            type="button"
+            aria-label={`添加${suggestion.previewMain}文字`}
+            onClick={() => addSuggestion(suggestion)}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              add
+            </span>
+            <span>
+              <strong>{suggestion.previewMain}</strong>
+              <small>{suggestion.previewSecondary}</small>
+            </span>
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function resolveMetroTextSuggestionTemplates(
+  element: MetroWayfindingElement,
+  elements: MetroWayfindingElement[],
+): MetroTextSuggestionTemplate[] {
+  const suggestions =
+    element.type === 'icon' ? [...(metroTextSuggestionsByIconId[element.iconId] ?? [])] : [];
+  if (
+    (element.type === 'largeText' || (element.type === 'icon' && element.iconId === 'exit')) &&
+    hasAdjacentExitAndLargeText(element, elements)
+  ) {
+    if (element.type === 'largeText') suggestions.push(exitTextSuggestion);
+    suggestions.push(exitLargeTextSuggestion);
+  }
+  return suggestions;
+}
+
+function hasAdjacentExitAndLargeText(
+  element: MetroWayfindingElement,
+  elements: MetroWayfindingElement[],
+): boolean {
+  const index = elements.findIndex((item) => item.id === element.id);
+  if (index < 0) return false;
+  return [elements[index - 1], elements[index + 1]].some((neighbor) =>
+    element.type === 'largeText'
+      ? neighbor?.type === 'icon' && neighbor.iconId === 'exit'
+      : neighbor?.type === 'largeText',
+  );
+}
+
+function createSuggestedTextRows(
+  mainSegments: MetroWayfindingMainSegment[],
+  secondary: string,
+): MetroWayfindingTextRow[] {
+  return [createSuggestedMainTextRow(mainSegments), createSuggestedSecondaryTextRow(secondary)];
+}
+
+function createSuggestedMainTextRow(
+  segments: MetroWayfindingMainSegment[],
+): MetroWayfindingTextRow {
+  const row = createMetroWayfindingTextRow('main');
+  return { id: row.id, kind: 'main', segments };
+}
+
+function createSuggestedSecondaryTextRow(value: string): MetroWayfindingTextRow {
+  const row = createMetroWayfindingTextRow('secondary');
+  return { id: row.id, kind: 'secondary', value };
+}
+
+function createSuggestedLineSegment(
+  lineColors: string[],
+  index: number,
+): MetroWayfindingLineSegment {
+  return {
+    kind: 'line',
+    value: '',
+    color: lineColors[index] ?? lineColors[0] ?? '#2F80ED',
+  };
+}
+
 function ElementColorFields({
   element,
   disabled,
@@ -1327,7 +1569,13 @@ function reduceMetroWayfindingAction(
 function metroElementLabel(element: MetroWayfindingElement): string {
   if (element.type === 'icon') return '图标 · 85 × 85';
   if (element.type === 'text') return `文字 · ${element.rows.length} 行`;
-  if (element.type === 'largeText') return '大文字 · 字高 78';
+  if (element.type === 'largeText') {
+    return `大文字 · 字高 ${
+      element.framed
+        ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
+        : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE
+    }`;
+  }
   if (element.type === 'space') return '空白元素';
   return '分割线 · 8 × 72';
 }

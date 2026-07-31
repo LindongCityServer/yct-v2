@@ -5440,6 +5440,78 @@ img.map-player-list-avatar.is-offline {
   font-size: 18px;
 }
 
+.metro-wayfinding-text-suggestions {
+  display: grid;
+  min-width: 0;
+  gap: var(--yct-space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.metro-wayfinding-text-suggestions legend {
+  margin-bottom: var(--yct-space-2);
+  padding: 0;
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metro-wayfinding-text-suggestions > div {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--yct-space-2);
+}
+
+.metro-wayfinding-add-bar .metro-wayfinding-text-suggestions button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  min-height: 50px;
+  padding: var(--yct-space-2);
+  text-align: left;
+}
+
+.metro-wayfinding-text-suggestions button > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.metro-wayfinding-text-suggestions strong,
+.metro-wayfinding-text-suggestions small {
+  overflow-wrap: anywhere;
+  letter-spacing: 0;
+}
+
+.metro-wayfinding-text-suggestions strong {
+  color: var(--yct-color-text);
+  font-size: 13px;
+}
+
+.metro-wayfinding-text-suggestions small {
+  color: var(--yct-color-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.metro-wayfinding-width-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--yct-space-2);
+  margin: 0;
+  padding: var(--yct-space-2) var(--yct-space-3);
+  border-block: 1px solid color-mix(in srgb, var(--yct-color-warning, #b87900) 28%, transparent);
+  background: color-mix(in srgb, var(--yct-color-warning, #b87900) 10%, transparent);
+  color: var(--yct-color-warning-strong, #8a5a00);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.metro-wayfinding-width-warning .material-symbols-outlined {
+  flex: 0 0 auto;
+  font-size: 18px;
+}
+
 .metro-wayfinding-element-list {
   display: flex;
   overflow-x: auto;

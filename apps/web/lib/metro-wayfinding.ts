@@ -5,6 +5,9 @@ export const METRO_WAYFINDING_GAP = 16;
 export const METRO_WAYFINDING_PADDING = 22;
 export const METRO_WAYFINDING_HEIGHT = 128;
 export const METRO_WAYFINDING_TEXT_HEIGHT = 85;
+export const METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE = 78;
+export const METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE = 85;
+export const METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE = 28;
 
 export const metroWayfindingBackgroundPalette = [
   { value: '#262626', label: '深灰色' },
@@ -285,6 +288,16 @@ export interface MetroWayfindingLayout {
   elements: MetroWayfindingElement[];
 }
 
+export interface MetroWayfindingLayoutSizing {
+  elementWidths: number[];
+  flexWidth: number;
+  textScaleX: number;
+  layoutScale: number;
+  totalDisplayWidth: number;
+  isWidthInsufficient: boolean;
+  hasUnresolvedOverflow: boolean;
+}
+
 export const emptyMetroWayfindingLayout: MetroWayfindingLayout = {
   backgroundColor: METRO_WAYFINDING_BACKGROUND,
   foregroundColor: METRO_WAYFINDING_FOREGROUND,
@@ -323,6 +336,154 @@ export function resolveMetroWayfindingTextMetrics(
   };
 }
 
+export function resolveMetroWayfindingLayoutSizing(
+  layout: MetroWayfindingLayout,
+  canvasWidth: number,
+): MetroWayfindingLayoutSizing {
+  const safeCanvasWidth = Math.max(Number.isFinite(canvasWidth) ? canvasWidth : 0, 0);
+  const innerWidth = Math.max(0, safeCanvasWidth - METRO_WAYFINDING_PADDING * 2);
+  const elementWidths = layout.elements.map(resolveMetroWayfindingElementWidth);
+  const gapWidth = Math.max(layout.elements.length - 1, 0) * METRO_WAYFINDING_GAP;
+  let textWidth = 0;
+  let nonTextWidth = 0;
+  let flexCount = 0;
+
+  layout.elements.forEach((element, index) => {
+    if (element.type === 'space' && element.mode === 'flex') {
+      flexCount += 1;
+    } else if (element.type === 'text' || element.type === 'largeText') {
+      textWidth += elementWidths[index] ?? 0;
+    } else {
+      nonTextWidth += elementWidths[index] ?? 0;
+    }
+  });
+
+  const naturalFixedWidth = textWidth + nonTextWidth + gapWidth;
+  const isWidthInsufficient = textWidth > 0 && naturalFixedWidth > innerWidth;
+  const textScaleX = isWidthInsufficient
+    ? Math.max(0, Math.min(1, (innerWidth - nonTextWidth - gapWidth) / textWidth))
+    : 1;
+  const layoutScale =
+    textWidth === 0 && naturalFixedWidth > innerWidth && naturalFixedWidth > 0
+      ? innerWidth / naturalFixedWidth
+      : 1;
+  const displayedFixedWidth = (nonTextWidth + textWidth * textScaleX + gapWidth) * layoutScale;
+  const remainingWidth = Math.max(0, innerWidth - displayedFixedWidth);
+  const flexWidth = flexCount > 0 ? remainingWidth / flexCount : 0;
+  const totalDisplayWidth = displayedFixedWidth + flexWidth * flexCount;
+
+  return {
+    elementWidths,
+    flexWidth,
+    textScaleX,
+    layoutScale,
+    totalDisplayWidth,
+    isWidthInsufficient,
+    hasUnresolvedOverflow: totalDisplayWidth > innerWidth + 0.001,
+  };
+}
+
+export function resolveMetroWayfindingElementWidth(element: MetroWayfindingElement): number {
+  if (element.type === 'icon' || element.type === 'divider') {
+    return element.type === 'divider' ? 8 : 85;
+  }
+  if (element.type === 'largeText') {
+    const mainFontSize = element.framed
+      ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
+      : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE;
+    const suffixGap = element.value && element.suffix ? 3 : 0;
+    const contentWidth =
+      estimateMetroWayfindingLargeTextWidth(element.value, mainFontSize) +
+      suffixGap +
+      estimateMetroWayfindingLargeTextWidth(
+        element.suffix,
+        METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE,
+      );
+    return Math.max(85, contentWidth + 8);
+  }
+  if (element.type === 'space') {
+    return element.mode === 'fixed' ? Math.max(1, element.units) * METRO_WAYFINDING_GAP : 0;
+  }
+  const metrics = resolveMetroWayfindingTextMetrics(element.rows);
+  const rowWidths = element.rows.map((row) =>
+    row.kind === 'main'
+      ? measureMetroWayfindingMainSegments(row.segments, metrics.mainFontSize)
+      : estimateMetroWayfindingTextWidth(row.value, metrics.secondaryFontSize),
+  );
+  return Math.max(85, ...rowWidths);
+}
+
+export function measureMetroWayfindingMainSegments(
+  segments: MetroWayfindingMainSegment[],
+  fontSize: number,
+): number {
+  const contentWidth = segments.reduce(
+    (width, segment) =>
+      width +
+      (segment.kind === 'line'
+        ? fontSize * 1.12
+        : estimateMetroWayfindingTextWidth(segment.value, fontSize)),
+    0,
+  );
+  return contentWidth + Math.max(segments.length - 1, 0) * fontSize * 0.12;
+}
+
+export function estimateMetroWayfindingTextWidth(value: string, fontSize: number): number {
+  return (
+    Array.from(value).reduce(
+      (width, character) => width + metroWayfindingCharacterWidthFactor(character),
+      0,
+    ) * fontSize
+  );
+}
+
+export function estimateMetroWayfindingLargeTextWidth(value: string, fontSize: number): number {
+  return (
+    Array.from(value).reduce(
+      (width, character) =>
+        width +
+        (isBasicLatinCharacter(character)
+          ? arialCharacterWidthFactor(character)
+          : metroWayfindingCharacterWidthFactor(character)),
+      0,
+    ) * fontSize
+  );
+}
+
+function isBasicLatinCharacter(character: string): boolean {
+  const codePoint = character.codePointAt(0) ?? 0;
+  return codePoint >= 0x20 && codePoint <= 0x7e;
+}
+
+function arialCharacterWidthFactor(character: string): number {
+  if (character === ' ') return 0.278;
+  if (/[0-9]/u.test(character)) return 0.556;
+  if (/[MW]/u.test(character)) return character === 'W' ? 0.944 : 0.833;
+  if (/[Iijl]/u.test(character)) return /[Iil]/u.test(character) ? 0.278 : 0.222;
+  if (/[mw]/u.test(character)) return character === 'm' ? 0.833 : 0.722;
+  if (/[frt]/u.test(character)) return character === 'f' ? 0.278 : 0.333;
+  if (/[,.:;!'|]/u.test(character)) return 0.278;
+  if (/[-+*/=()\[\]]/u.test(character)) return 0.584;
+  if (/[A-Z]/u.test(character)) return 0.667;
+  return 0.556;
+}
+
+function metroWayfindingCharacterWidthFactor(character: string): number {
+  const codePoint = character.codePointAt(0) ?? 0;
+  if (/\s/u.test(character)) return 0.34;
+  if (
+    (codePoint >= 0x2e80 && codePoint <= 0x9fff) ||
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+    (codePoint >= 0xff01 && codePoint <= 0xff60) ||
+    (codePoint >= 0xffe0 && codePoint <= 0xffe6)
+  ) {
+    return 1;
+  }
+  if (/[,.;:!?，。；：！？、]/u.test(character)) return 0.38;
+  if (/[A-Z0-9]/u.test(character)) return 0.62;
+  return 0.56;
+}
+
 export function createMetroWayfindingElement(
   type: MetroWayfindingElement['type'],
   iconId = 'stairs',
@@ -334,7 +495,7 @@ export function createMetroWayfindingElement(
       id,
       type,
       iconId,
-      framed: false,
+      framed: icon?.group !== 'arrow',
       foregroundColor: icon?.defaultForegroundColor,
     };
   }
@@ -343,11 +504,11 @@ export function createMetroWayfindingElement(
       id,
       type,
       align: 'center',
-      rows: [createMetroWayfindingTextRow('main')],
+      rows: [createMetroWayfindingTextRow('main'), createMetroWayfindingTextRow('secondary')],
     };
   }
   if (type === 'largeText') {
-    return { id, type, value: '', suffix: '', framed: false };
+    return { id, type, value: '', suffix: '', framed: true };
   }
   if (type === 'space') {
     return { id, type, mode: 'fixed', units: 1 };
@@ -527,6 +688,11 @@ function normalizeTextRows(value: unknown[], elementId: string): MetroWayfinding
           id: legacyTextRowId(elementId, 'main-1'),
           kind: 'main',
           segments: [{ kind: 'text', value: '' }],
+        },
+        {
+          id: legacyTextRowId(elementId, 'secondary-1'),
+          kind: 'secondary',
+          value: '',
         },
       ];
 }

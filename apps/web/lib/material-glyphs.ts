@@ -4,15 +4,20 @@ import * as opentypeModule from 'opentype.js';
 import type { Font } from 'opentype.js';
 import type { MaterialGlyphConfig } from '@yct/contracts';
 import {
+  estimateMetroWayfindingTextWidth,
+  measureMetroWayfindingMainSegments,
   METRO_WAYFINDING_GAP,
   METRO_WAYFINDING_HEIGHT,
-  METRO_WAYFINDING_PADDING,
+  METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE,
+  METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE,
+  METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE,
   METRO_WAYFINDING_TEXT_HEIGHT,
   METRO_WAYFINDING_FOREGROUND,
   metroWayfindingIconOptions,
   normalizeColor,
   parseMetroWayfindingLayout,
   resolveMetroFacilityIconAssetName,
+  resolveMetroWayfindingLayoutSizing,
   resolveMetroWayfindingTextMetrics,
   type MetroFacilityIconAssetName,
   type MetroWayfindingElement,
@@ -88,8 +93,6 @@ const nostalgicDigitGlyphs: Record<string, NostalgicDigitGlyph> = {
 };
 
 const nostalgicSuffixGlyphScale = 42.5 / 83.5;
-const metroLargeTextFontSize = 78;
-const metroLargeTextSuffixFontSize = 28;
 const nostalgicSuffixGlyphs: Record<string, NostalgicSuffixGlyph> = {
   甲: {
     advance: 59 * nostalgicSuffixGlyphScale,
@@ -162,20 +165,10 @@ function renderMetroWayfinding(value: string, canvasWidth: number, canvasHeight:
   const layout = parseMetroWayfindingLayout(value);
   const scale = canvasHeight / METRO_WAYFINDING_HEIGHT;
   const width = canvasWidth / scale;
-  const innerWidth = Math.max(0, width - METRO_WAYFINDING_PADDING * 2);
-  const metrics = layout.elements.map((element) => getMetroElementMetric(element));
-  const fixedWidth = metrics.reduce((sum, metric) => sum + metric.width, 0);
-  const flexCount = layout.elements.filter(
-    (element) => element.type === 'space' && element.mode === 'flex',
-  ).length;
-  const fixedGapWidth = Math.max(layout.elements.length - 1, 0) * METRO_WAYFINDING_GAP;
-  const remainingWidth = Math.max(0, innerWidth - fixedWidth - fixedGapWidth);
-  const flexWidth = flexCount ? remainingWidth / flexCount : 0;
-  const totalWidth = fixedWidth + fixedGapWidth + flexWidth * flexCount;
-  const layoutScale = totalWidth > innerWidth && totalWidth > 0 ? innerWidth / totalWidth : 1;
-  let cursor = (width - totalWidth * layoutScale) / 2;
+  const sizing = resolveMetroWayfindingLayoutSizing(layout, width);
+  let cursor = (width - sizing.totalDisplayWidth) / 2;
   const contentStart = cursor;
-  const contentEnd = contentStart + totalWidth * layoutScale;
+  const contentEnd = contentStart + sizing.totalDisplayWidth;
   const backgroundColor = normalizeColor(layout.backgroundColor, '#262626');
   const firstElementBackground = layout.elements[0]
     ? resolveMetroElementBackground(layout.elements[0], layout)
@@ -193,23 +186,35 @@ function renderMetroWayfinding(value: string, canvasWidth: number, canvasHeight:
       : '',
   ].join('');
   const children = layout.elements.map((element, index) => {
-    const metric = metrics[index]!;
+    const elementScaleX =
+      sizing.layoutScale *
+      (element.type === 'text' || element.type === 'largeText' ? sizing.textScaleX : 1);
     const elementWidth =
-      element.type === 'space' && element.mode === 'flex' ? flexWidth : metric.width;
-    const output = renderMetroWayfindingElement(element, cursor, elementWidth, layout, layoutScale);
+      element.type === 'space' && element.mode === 'flex'
+        ? sizing.flexWidth
+        : sizing.elementWidths[index]!;
+    const displayWidth = elementWidth * elementScaleX;
+    const output = renderMetroWayfindingElement(
+      element,
+      cursor,
+      elementWidth,
+      layout,
+      elementScaleX,
+      sizing.layoutScale,
+    );
     const nextElement = layout.elements[index + 1];
     const gap = nextElement
       ? renderMetroWayfindingGap(
           element,
           nextElement,
-          cursor + elementWidth * layoutScale,
+          cursor + displayWidth,
           layout,
-          layoutScale,
+          sizing.layoutScale,
         )
       : '';
     cursor +=
-      (elementWidth + (index < layout.elements.length - 1 ? METRO_WAYFINDING_GAP : 0)) *
-      layoutScale;
+      displayWidth +
+      (index < layout.elements.length - 1 ? METRO_WAYFINDING_GAP * sizing.layoutScale : 0);
     return `${output}${gap}`;
   });
   return `<g transform="scale(${formatNumber(scale)})" data-metro-wayfinding="true"><rect width="${formatNumber(width)}" height="128" fill="${backgroundColor}"/>${edgeBackgrounds}${children.join('')}</g>`;
@@ -237,50 +242,25 @@ function resolveMetroElementBackground(
   return normalizeColor(element.backgroundColor, layout.backgroundColor);
 }
 
-function getMetroElementMetric(element: MetroWayfindingElement): { width: number } {
-  if (element.type === 'icon' || element.type === 'divider') {
-    return { width: element.type === 'divider' ? 8 : 85 };
-  }
-  if (element.type === 'largeText') {
-    const suffixGap = element.value && element.suffix ? 3 : 0;
-    const contentWidth =
-      estimateMetroLargeTextWidth(element.value, metroLargeTextFontSize) +
-      suffixGap +
-      estimateMetroLargeTextWidth(element.suffix, metroLargeTextSuffixFontSize);
-    return { width: Math.max(85, contentWidth + 8) };
-  }
-  if (element.type === 'space') {
-    return {
-      width: element.mode === 'fixed' ? Math.max(1, element.units) * METRO_WAYFINDING_GAP : 0,
-    };
-  }
-  const metrics = resolveMetroWayfindingTextMetrics(element.rows);
-  const rowWidths = element.rows.map((row) =>
-    row.kind === 'main'
-      ? measureMetroMainSegments(row.segments, metrics.mainFontSize)
-      : estimateTextWidth(row.value, metrics.secondaryFontSize),
-  );
-  return { width: Math.max(85, ...rowWidths) };
-}
-
 function renderMetroWayfindingElement(
   element: MetroWayfindingElement,
   x: number,
   width: number,
   layout: ReturnType<typeof parseMetroWayfindingLayout>,
-  scale: number,
+  scaleX: number,
+  scaleY: number,
 ): string {
   const foreground = normalizeColor(
     element.foregroundColor,
     layout.foregroundColor || METRO_WAYFINDING_FOREGROUND,
   );
   const background = normalizeColor(element.backgroundColor, layout.backgroundColor);
-  const transform = `translate(${formatNumber(x)} 0) scale(${formatNumber(scale)} ${formatNumber(scale)})`;
+  const transform = `translate(${formatNumber(x)} 0) scale(${formatNumber(scaleX)} ${formatNumber(scaleY)})`;
   if (element.type === 'space') {
-    return `<rect x="${formatNumber(x)}" width="${formatNumber(width * scale)}" height="128" fill="${background}"/>`;
+    return `<rect x="${formatNumber(x)}" width="${formatNumber(width * scaleX)}" height="128" fill="${background}"/>`;
   }
   if (element.type === 'divider') {
-    return `<g><rect x="${formatNumber(x)}" width="${formatNumber(8 * scale)}" height="128" fill="${background}"/><rect x="${formatNumber(x)}" y="28" width="${formatNumber(8 * scale)}" height="72" fill="${foreground}"/></g>`;
+    return `<g><rect x="${formatNumber(x)}" width="${formatNumber(8 * scaleX)}" height="128" fill="${background}"/><rect x="${formatNumber(x)}" y="28" width="${formatNumber(8 * scaleX)}" height="72" fill="${foreground}"/></g>`;
   }
   if (element.type === 'icon') {
     const icon =
@@ -289,7 +269,13 @@ function renderMetroWayfindingElement(
     return `<g transform="${transform}" data-material-symbol="${escapeXml(icon.symbol)}"><rect width="85" height="128" fill="${background}"/>${renderMetroIcon(icon.symbol, icon.id, foreground, element.id, element.direction, element.framed)}</g>`;
   }
   if (element.type === 'largeText') {
-    const text = renderMetroLargeText(element.value, element.suffix, width, foreground);
+    const text = renderMetroLargeText(
+      element.value,
+      element.suffix,
+      width,
+      foreground,
+      element.framed,
+    );
     const frame = element.framed
       ? `<rect x="1.5" y="23" width="${formatNumber(width - 3)}" height="82" rx="8.5" fill="none" stroke="${foreground}" stroke-width="3"/>`
       : '';
@@ -342,7 +328,7 @@ function renderMetroMainSegments(
   textAnchor: string,
   baseline: number,
 ): string {
-  const totalWidth = measureMetroMainSegments(segments, fontSize);
+  const totalWidth = measureMetroWayfindingMainSegments(segments, fontSize);
   const contentScale = totalWidth > width && totalWidth > 0 ? width / totalWidth : 1;
   const renderedWidth = totalWidth * contentScale;
   const segmentGap = fontSize * 0.12;
@@ -363,7 +349,7 @@ function renderMetroMainSegments(
         return `<g transform="translate(${formatNumber(centerX)} ${formatNumber(baseline - fontSize * 0.32)})"><circle r="${formatNumber(diameter / 2)}" fill="${normalizeColor(segment.color, '#2F80ED')}"/><text y="${formatNumber(fontSize * 0.9 * 0.34)}" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize * 0.9)}" font-weight="400" text-anchor="middle" letter-spacing="${formatNumber(fontSize * -0.07)}">${escapeXml(segment.value)}</text></g>`;
       }
       const output = `<text x="${formatNumber(cursor)}" y="${formatNumber(baseline)}" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="400">${escapeXml(segment.value)}</text>`;
-      cursor += estimateTextWidth(segment.value, fontSize) + trailingGap;
+      cursor += estimateMetroWayfindingTextWidth(segment.value, fontSize) + trailingGap;
       return output;
     })
     .join('');
@@ -379,16 +365,31 @@ function renderMetroText(
   x = width / 2,
   y = 0,
 ): string {
-  const textWidth = estimateTextWidth(value, fontSize);
+  const textWidth = estimateMetroWayfindingTextWidth(value, fontSize);
   const scale = textWidth > width && textWidth > 0 ? width / textWidth : 1;
   return `<g transform="translate(${formatNumber(x)} 0) scale(${formatNumber(scale)} 1) translate(-${formatNumber(x)} 0)"><text x="${formatNumber(x)}" y="${formatNumber(y || fontSize)}" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="400" text-anchor="${textAnchor}">${escapeXml(value)}</text></g>`;
 }
 
-function renderMetroLargeText(value: string, suffix: string, width: number, color: string): string {
+function renderMetroLargeText(
+  value: string,
+  suffix: string,
+  width: number,
+  color: string,
+  framed: boolean,
+): string {
+  const mainFontSize = framed
+    ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
+    : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE;
   const suffixGap = value && suffix ? 3 : 0;
-  const mainMarkup = renderMetroLargeTextRuns(value, metroLargeTextFontSize, 400);
+  const mainMarkup = renderMetroLargeTextRuns(value, mainFontSize, 400);
   const suffixMarkup = suffix
-    ? renderMetroLargeTextRuns(suffix, metroLargeTextSuffixFontSize, 700, suffixGap, 13)
+    ? renderMetroLargeTextRuns(
+        suffix,
+        METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE,
+        700,
+        suffixGap,
+        13,
+      )
     : '';
   return `<text x="${formatNumber(width / 2 - suffixGap / 2)}" y="64" fill="${color}" text-anchor="middle" dominant-baseline="central" letter-spacing="0">${mainMarkup}${suffixMarkup}</text>`;
 }
@@ -423,19 +424,6 @@ function renderMetroLargeTextRuns(
       return `<tspan${offset} font-family="${fontFamily}" font-size="${formatNumber(fontSize)}" font-weight="${fontWeight}">${escapeXml(run.value)}</tspan>`;
     })
     .join('');
-}
-
-function measureMetroMainSegments(
-  segments: MetroWayfindingMainSegment[],
-  fontSize: number,
-): number {
-  const contentWidth = segments.reduce(
-    (width, segment) =>
-      width +
-      (segment.kind === 'line' ? fontSize * 1.12 : estimateTextWidth(segment.value, fontSize)),
-    0,
-  );
-  return contentWidth + Math.max(segments.length - 1, 0) * fontSize * 0.12;
 }
 
 function renderMetroIcon(
@@ -1188,35 +1176,9 @@ function estimateTextWidth(value: string, fontSize: number): number {
   );
 }
 
-function estimateMetroLargeTextWidth(value: string, fontSize: number): number {
-  return (
-    Array.from(value).reduce(
-      (width, character) =>
-        width +
-        (isBasicLatinCharacter(character)
-          ? arialCharacterWidthFactor(character)
-          : metroCharacterWidthFactor(character)),
-      0,
-    ) * fontSize
-  );
-}
-
 function isBasicLatinCharacter(character: string): boolean {
   const codePoint = character.codePointAt(0) ?? 0;
   return codePoint >= 0x20 && codePoint <= 0x7e;
-}
-
-function arialCharacterWidthFactor(character: string): number {
-  if (character === ' ') return 0.278;
-  if (/[0-9]/u.test(character)) return 0.556;
-  if (/[MW]/u.test(character)) return character === 'W' ? 0.944 : 0.833;
-  if (/[Iijl]/u.test(character)) return /[Iil]/u.test(character) ? 0.278 : 0.222;
-  if (/[mw]/u.test(character)) return character === 'm' ? 0.833 : 0.722;
-  if (/[frt]/u.test(character)) return character === 'f' ? 0.278 : 0.333;
-  if (/[.,:;!'|]/u.test(character)) return 0.278;
-  if (/[-+*/=()\[\]]/u.test(character)) return 0.584;
-  if (/[A-Z]/u.test(character)) return 0.667;
-  return 0.556;
 }
 
 function metroCharacterWidthFactor(character: string): number {

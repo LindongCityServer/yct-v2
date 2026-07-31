@@ -1122,6 +1122,11 @@ export function MaterialStudioPanel({
               {isMetroWayfinding ? (
                 <MetroWayfindingEditor
                   value={input.layout ?? ''}
+                  canvasWidth={
+                    activeCanvas
+                      ? (activeCanvas.widthM / Math.max(activeCanvas.heightM, Number.EPSILON)) * 128
+                      : 128
+                  }
                   disabled={isBusy}
                   lineColorOptions={metroLineColorOptions}
                   onChange={(value) => {
