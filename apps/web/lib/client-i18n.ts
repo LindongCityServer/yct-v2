@@ -242,12 +242,22 @@ export type CommonMessageKey =
   | 'map.metroInfrastructure.facility.elevator'
   | 'map.metroInfrastructure.facility.escalator'
   | 'map.metroInfrastructure.facility.escalatorAndStairs'
+  | 'map.metroInfrastructure.facility.exit'
+  | 'map.metroInfrastructure.facility.meetingPoint'
+  | 'map.metroInfrastructure.facility.mensRestroom'
   | 'map.metroInfrastructure.facility.nursingRoom'
+  | 'map.metroInfrastructure.facility.passengerServiceCenter'
   | 'map.metroInfrastructure.facility.platformDoor'
   | 'map.metroInfrastructure.facility.police'
   | 'map.metroInfrastructure.facility.stairs'
+  | 'map.metroInfrastructure.facility.subway'
+  | 'map.metroInfrastructure.facility.thirdRestroom'
+  | 'map.metroInfrastructure.facility.ticketMachine'
   | 'map.metroInfrastructure.facility.toilet'
   | 'map.metroInfrastructure.facility.waitingRoom'
+  | 'map.metroInfrastructure.facility.wheelchair'
+  | 'map.metroInfrastructure.facility.wheelchairLift'
+  | 'map.metroInfrastructure.facility.womensRestroom'
   | 'map.metroInfrastructure.floorEmpty'
   | 'map.metroInfrastructure.layer.concourse'
   | 'map.metroInfrastructure.layer.entrance'
@@ -1195,12 +1205,22 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.metroInfrastructure.facility.elevator': '电梯',
     'map.metroInfrastructure.facility.escalator': '扶梯',
     'map.metroInfrastructure.facility.escalatorAndStairs': '扶梯/楼梯',
+    'map.metroInfrastructure.facility.exit': '出口',
+    'map.metroInfrastructure.facility.meetingPoint': '会合点',
+    'map.metroInfrastructure.facility.mensRestroom': '男卫生间',
     'map.metroInfrastructure.facility.nursingRoom': '母婴室',
+    'map.metroInfrastructure.facility.passengerServiceCenter': '乘客服务中心',
     'map.metroInfrastructure.facility.platformDoor': '屏蔽门',
     'map.metroInfrastructure.facility.police': '警务室',
     'map.metroInfrastructure.facility.stairs': '楼梯',
+    'map.metroInfrastructure.facility.subway': '地铁',
+    'map.metroInfrastructure.facility.thirdRestroom': '第三卫生间',
+    'map.metroInfrastructure.facility.ticketMachine': '自动售票机',
     'map.metroInfrastructure.facility.toilet': '卫生间',
     'map.metroInfrastructure.facility.waitingRoom': '候车室',
+    'map.metroInfrastructure.facility.wheelchair': '无障碍设施',
+    'map.metroInfrastructure.facility.wheelchairLift': '轮椅升降机',
+    'map.metroInfrastructure.facility.womensRestroom': '女卫生间',
     'map.metroInfrastructure.floorEmpty': '暂无站内节点记录',
     'map.metroInfrastructure.layer.concourse': '站厅层',
     'map.metroInfrastructure.layer.entrance': '入口层',
@@ -2152,12 +2172,22 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.metroInfrastructure.facility.elevator': '電梯',
     'map.metroInfrastructure.facility.escalator': '扶梯',
     'map.metroInfrastructure.facility.escalatorAndStairs': '扶梯/樓梯',
+    'map.metroInfrastructure.facility.exit': '出口',
+    'map.metroInfrastructure.facility.meetingPoint': '會合點',
+    'map.metroInfrastructure.facility.mensRestroom': '男洗手間',
     'map.metroInfrastructure.facility.nursingRoom': '母嬰室',
+    'map.metroInfrastructure.facility.passengerServiceCenter': '乘客服務中心',
     'map.metroInfrastructure.facility.platformDoor': '屏蔽門',
     'map.metroInfrastructure.facility.police': '警務室',
     'map.metroInfrastructure.facility.stairs': '樓梯',
+    'map.metroInfrastructure.facility.subway': '地鐵',
+    'map.metroInfrastructure.facility.thirdRestroom': '第三洗手間',
+    'map.metroInfrastructure.facility.ticketMachine': '自動售票機',
     'map.metroInfrastructure.facility.toilet': '洗手間',
     'map.metroInfrastructure.facility.waitingRoom': '候車室',
+    'map.metroInfrastructure.facility.wheelchair': '無障礙設施',
+    'map.metroInfrastructure.facility.wheelchairLift': '輪椅升降機',
+    'map.metroInfrastructure.facility.womensRestroom': '女洗手間',
     'map.metroInfrastructure.floorEmpty': '暫無站內節點紀錄',
     'map.metroInfrastructure.layer.concourse': '站廳層',
     'map.metroInfrastructure.layer.entrance': '入口層',
@@ -3121,12 +3151,22 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.metroInfrastructure.facility.elevator': 'Elevator',
     'map.metroInfrastructure.facility.escalator': 'Escalator',
     'map.metroInfrastructure.facility.escalatorAndStairs': 'Escalator / stairs',
+    'map.metroInfrastructure.facility.exit': 'Exit',
+    'map.metroInfrastructure.facility.meetingPoint': 'Meeting point',
+    'map.metroInfrastructure.facility.mensRestroom': "Men's restroom",
     'map.metroInfrastructure.facility.nursingRoom': 'Nursing room',
+    'map.metroInfrastructure.facility.passengerServiceCenter': 'Passenger service center',
     'map.metroInfrastructure.facility.platformDoor': 'Platform screen door',
     'map.metroInfrastructure.facility.police': 'Police room',
     'map.metroInfrastructure.facility.stairs': 'Stairs',
+    'map.metroInfrastructure.facility.subway': 'Metro',
+    'map.metroInfrastructure.facility.thirdRestroom': 'All-gender family restroom',
+    'map.metroInfrastructure.facility.ticketMachine': 'Ticket machine',
     'map.metroInfrastructure.facility.toilet': 'Restroom',
     'map.metroInfrastructure.facility.waitingRoom': 'Waiting room',
+    'map.metroInfrastructure.facility.wheelchair': 'Accessible facility',
+    'map.metroInfrastructure.facility.wheelchairLift': 'Wheelchair lift',
+    'map.metroInfrastructure.facility.womensRestroom': "Women's restroom",
     'map.metroInfrastructure.floorEmpty': 'No station facilities recorded on this level',
     'map.metroInfrastructure.layer.concourse': 'Concourse level',
     'map.metroInfrastructure.layer.entrance': 'Entrance level',

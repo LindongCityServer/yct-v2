@@ -44,6 +44,7 @@ import {
 } from '../lib/client-map-settings';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { formatFareTextWithoutCurrencyUnit } from '../lib/fare-display';
+import type { MetroFacilityIconAssetName } from '../lib/metro-wayfinding';
 import {
   getMapRoadMarkerKind as getRoadMarkerKind,
   orderMapRoadCoordinates as orderRoadTracePoints,
@@ -10466,46 +10467,69 @@ function StationFacilityTrack({
 }>) {
   return (
     <div className={`map-metro-station-facility-track ${className}`.trim()}>
-      {facilities.map((facility, index) => (
-        <span
-          className="map-metro-station-facility-icon"
-          key={`${facility.type}-${facility.location ?? 'unpositioned'}-${index}`}
-          style={
-            {
-              '--station-detail-position': `${resolveStationDetailPosition(
-                facility.location,
-                carriageCount,
-              )}%`,
-            } as CSSProperties
-          }
-          title={`${formatStationFacilityType(facility.type, t)}${
-            facility.endFloor
-              ? ` · ${t('stationDetail.facilities.toFloor', { floor: facility.endFloor })}`
-              : ''
-          }${
-            facility.direction ? ` · ${formatStationFacilityDirection(facility.direction, t)}` : ''
-          }${facility.oneWay ? ` · ${formatStationFacilityOneWay(facility.oneWay, t)}` : ''}${
-            facility.orientation
-              ? ` · ${t('map.metroInfrastructure.facing', { orientation: facility.orientation })}`
-              : ''
-          }`}
-        >
+      {facilities.map((facility, index) => {
+        const verticalDirection = resolveStationFacilityVerticalDirection(
+          facility,
+          detail,
+          currentFloor,
+        );
+        return (
           <span
-            className={
-              shouldFlipStationFacility(facility, detail, currentFloor) !== isTemplateFlipped
-                ? 'map-metro-station-facility-symbols is-flipped'
-                : 'map-metro-station-facility-symbols'
+            className="map-metro-station-facility-icon"
+            key={`${facility.type}-${facility.location ?? 'unpositioned'}-${index}`}
+            style={
+              {
+                '--station-detail-position': `${resolveStationDetailPosition(
+                  facility.location,
+                  carriageCount,
+                )}%`,
+              } as CSSProperties
             }
-            aria-hidden="true"
+            title={`${formatStationFacilityType(facility.type, t)}${
+              facility.endFloor
+                ? ` · ${t('stationDetail.facilities.toFloor', { floor: facility.endFloor })}`
+                : ''
+            }${
+              facility.direction
+                ? ` · ${formatStationFacilityDirection(facility.direction, t)}`
+                : ''
+            }${facility.oneWay ? ` · ${formatStationFacilityOneWay(facility.oneWay, t)}` : ''}${
+              facility.orientation
+                ? ` · ${t('map.metroInfrastructure.facing', { orientation: facility.orientation })}`
+                : ''
+            }`}
           >
-            {getStationFacilityIcons(facility.type).map((icon) => (
-              <i className="material-symbols-outlined" key={icon}>
-                {icon}
-              </i>
-            ))}
+            <span
+              className={
+                shouldFlipStationFacility(facility, detail, currentFloor) !== isTemplateFlipped
+                  ? 'map-metro-station-facility-symbols is-flipped'
+                  : 'map-metro-station-facility-symbols'
+              }
+              aria-hidden="true"
+            >
+              {getStationFacilityIcons(facility.type, verticalDirection).map((icon) =>
+                icon.assetName ? (
+                  <i
+                    className="map-metro-station-facility-asset"
+                    key={icon.key}
+                    style={
+                      {
+                        '--map-metro-station-facility-asset': `url("${appPath(
+                          `/metro-facilities/plain/${icon.assetName}.svg`,
+                        )}")`,
+                      } as CSSProperties
+                    }
+                  />
+                ) : (
+                  <i className="material-symbols-outlined" key={icon.key}>
+                    {icon.symbol}
+                  </i>
+                ),
+              )}
+            </span>
           </span>
-        </span>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -10587,8 +10611,11 @@ function formatStationLayerType(value: string, t: Translate): string {
 }
 
 function formatStationFacilityType(value: string, t: Translate): string {
-  const labels: Record<string, CommonMessageKey> = {
+  const labels: Partial<Record<StationFacilityKind, CommonMessageKey>> = {
     toilet: 'map.metroInfrastructure.facility.toilet',
+    mens_restroom: 'map.metroInfrastructure.facility.mensRestroom',
+    womens_restroom: 'map.metroInfrastructure.facility.womensRestroom',
+    third_restroom: 'map.metroInfrastructure.facility.thirdRestroom',
     elevator: 'map.metroInfrastructure.facility.elevator',
     escalator_and_stairs: 'map.metroInfrastructure.facility.escalatorAndStairs',
     stairs: 'map.metroInfrastructure.facility.stairs',
@@ -10597,21 +10624,120 @@ function formatStationFacilityType(value: string, t: Translate): string {
     nursing_room: 'map.metroInfrastructure.facility.nursingRoom',
     police: 'map.metroInfrastructure.facility.police',
     waiting_room: 'map.metroInfrastructure.facility.waitingRoom',
+    wheelchair_lift: 'map.metroInfrastructure.facility.wheelchairLift',
+    wheelchair: 'map.metroInfrastructure.facility.wheelchair',
+    subway: 'map.metroInfrastructure.facility.subway',
+    passenger_service_center: 'map.metroInfrastructure.facility.passengerServiceCenter',
+    ticket_machine: 'map.metroInfrastructure.facility.ticketMachine',
+    meeting_point: 'map.metroInfrastructure.facility.meetingPoint',
+    exit: 'map.metroInfrastructure.facility.exit',
   };
-  return labels[value] ? t(labels[value]) : value;
+  const label = labels[resolveStationFacilityKind(value)];
+  return label ? t(label) : value;
 }
 
-function getStationFacilityIcons(value: string): string[] {
-  if (value.includes('escalator_and_stairs')) return ['stairs', 'escalator'];
-  if (value.includes('toilet')) return ['wc'];
-  if (value.includes('elevator')) return ['elevator'];
-  if (value.includes('stairs')) return ['stairs'];
-  if (value.includes('escalator')) return ['escalator'];
-  if (value.includes('door')) return ['door_open'];
-  if (value.includes('nursing_room')) return ['breastfeeding'];
-  if (value.includes('police')) return ['local_police'];
-  if (value.includes('waiting_room')) return ['airline_seat_recline_extra'];
-  return ['location_on'];
+type StationFacilityKind =
+  | 'toilet'
+  | 'mens_restroom'
+  | 'womens_restroom'
+  | 'third_restroom'
+  | 'elevator'
+  | 'escalator_and_stairs'
+  | 'stairs'
+  | 'escalator'
+  | 'platform_door'
+  | 'nursing_room'
+  | 'police'
+  | 'waiting_room'
+  | 'wheelchair_lift'
+  | 'wheelchair'
+  | 'subway'
+  | 'passenger_service_center'
+  | 'ticket_machine'
+  | 'meeting_point'
+  | 'exit'
+  | 'unknown';
+
+interface StationFacilityIcon {
+  key: string;
+  assetName?: MetroFacilityIconAssetName;
+  symbol?: string;
+}
+
+function resolveStationFacilityKind(value: string): StationFacilityKind {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/gu, '_');
+  if (normalized.includes('escalator_and_stairs')) return 'escalator_and_stairs';
+  if (/(?:mens|male|men)_?(?:restroom|toilet)/u.test(normalized)) return 'mens_restroom';
+  if (/(?:womens|female|women)_?(?:restroom|toilet)/u.test(normalized)) {
+    return 'womens_restroom';
+  }
+  if (/(?:third|family)_?(?:restroom|toilet)/u.test(normalized)) return 'third_restroom';
+  if (normalized.includes('wheelchair_lift')) return 'wheelchair_lift';
+  if (normalized.includes('nursing_room')) return 'nursing_room';
+  if (normalized.includes('waiting_room')) return 'waiting_room';
+  if (normalized.includes('passenger_service') || normalized.includes('service_center')) {
+    return 'passenger_service_center';
+  }
+  if (normalized.includes('ticket_machine') || normalized.includes('ticketing')) {
+    return 'ticket_machine';
+  }
+  if (normalized.includes('meeting_point') || normalized.includes('rendezvous')) {
+    return 'meeting_point';
+  }
+  if (normalized.includes('platform_door')) return 'platform_door';
+  if (normalized.includes('toilet') || normalized.includes('restroom')) return 'toilet';
+  if (normalized.includes('elevator')) return 'elevator';
+  if (normalized.includes('stairs')) return 'stairs';
+  if (normalized.includes('escalator')) return 'escalator';
+  if (normalized.includes('wheelchair') || normalized.includes('accessible')) return 'wheelchair';
+  if (normalized.includes('police')) return 'police';
+  if (normalized.includes('subway') || normalized.includes('metro')) return 'subway';
+  if (normalized.includes('exit')) return 'exit';
+  return 'unknown';
+}
+
+function getStationFacilityIcons(
+  value: string,
+  verticalDirection: 'upwards' | 'downwards' | 'same_floor',
+): StationFacilityIcon[] {
+  const kind = resolveStationFacilityKind(value);
+  const stairsAssetName = verticalDirection === 'downwards' ? 'stairs-down' : 'stairs-up';
+  if (kind === 'escalator_and_stairs') {
+    return [
+      { key: stairsAssetName, assetName: stairsAssetName },
+      { key: 'escalator', assetName: 'escalator' },
+    ];
+  }
+  const assets: Partial<Record<StationFacilityKind, MetroFacilityIconAssetName>> = {
+    toilet: 'restroom',
+    mens_restroom: 'mens-restroom',
+    womens_restroom: 'womens-restroom',
+    third_restroom: 'third-restroom',
+    elevator: 'accessible-elevator',
+    stairs: stairsAssetName,
+    escalator: 'escalator',
+    nursing_room: 'nursing-room',
+    waiting_room: 'waiting-room',
+    wheelchair_lift: 'wheelchair-lift',
+    subway: 'subway',
+    passenger_service_center: 'passenger-service-center',
+    ticket_machine: 'ticket-machine',
+    meeting_point: 'meeting-point',
+    exit: 'exit',
+  };
+  const assetName = assets[kind];
+  if (assetName) return [{ key: assetName, assetName }];
+  const symbols: Partial<Record<StationFacilityKind, string>> = {
+    platform_door: 'door_open',
+    police: 'local_police',
+    wheelchair: 'accessible',
+    unknown: 'location_on',
+  };
+  const symbol = symbols[kind] ?? 'location_on';
+  return [{ key: symbol, symbol }];
 }
 
 function hasDifferentUpwardsFacilityLayout(detail: TransitStationDetailSnapshot): boolean {
