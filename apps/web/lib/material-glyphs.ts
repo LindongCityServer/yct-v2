@@ -7,10 +7,14 @@ import {
   METRO_WAYFINDING_GAP,
   METRO_WAYFINDING_HEIGHT,
   METRO_WAYFINDING_PADDING,
+  METRO_WAYFINDING_TEXT_HEIGHT,
   METRO_WAYFINDING_FOREGROUND,
   metroWayfindingIconOptions,
   normalizeColor,
   parseMetroWayfindingLayout,
+  resolveMetroFacilityIconAssetName,
+  resolveMetroWayfindingTextMetrics,
+  type MetroFacilityIconAssetName,
   type MetroWayfindingElement,
   type MetroWayfindingMainSegment,
 } from './metro-wayfinding';
@@ -84,6 +88,8 @@ const nostalgicDigitGlyphs: Record<string, NostalgicDigitGlyph> = {
 };
 
 const nostalgicSuffixGlyphScale = 42.5 / 83.5;
+const metroLargeTextFontSize = 78;
+const metroLargeTextSuffixFontSize = 28;
 const nostalgicSuffixGlyphs: Record<string, NostalgicSuffixGlyph> = {
   甲: {
     advance: 59 * nostalgicSuffixGlyphScale,
@@ -110,6 +116,7 @@ const nostalgicSuffixGlyphs: Record<string, NostalgicSuffixGlyph> = {
 let chillJinshuSongFont: Font | undefined;
 let harmonyOsSansBoldFont: Font | undefined;
 const materialSymbolMarkupCache = new Map<string, { viewBox: string; content: string }>();
+const metroFacilityAssetMarkupCache = new Map<string, { viewBox: string; content: string }>();
 
 export function renderMaterialGlyph(
   value: string,
@@ -167,6 +174,24 @@ function renderMetroWayfinding(value: string, canvasWidth: number, canvasHeight:
   const totalWidth = fixedWidth + fixedGapWidth + flexWidth * flexCount;
   const layoutScale = totalWidth > innerWidth && totalWidth > 0 ? innerWidth / totalWidth : 1;
   let cursor = (width - totalWidth * layoutScale) / 2;
+  const contentStart = cursor;
+  const contentEnd = contentStart + totalWidth * layoutScale;
+  const backgroundColor = normalizeColor(layout.backgroundColor, '#262626');
+  const firstElementBackground = layout.elements[0]
+    ? resolveMetroElementBackground(layout.elements[0], layout)
+    : backgroundColor;
+  const lastElement = layout.elements.at(-1);
+  const lastElementBackground = lastElement
+    ? resolveMetroElementBackground(lastElement, layout)
+    : backgroundColor;
+  const edgeBackgrounds = [
+    firstElementBackground !== backgroundColor
+      ? `<rect width="${formatNumber(Math.max(contentStart, 0))}" height="128" fill="${firstElementBackground}"/>`
+      : '',
+    lastElementBackground !== backgroundColor
+      ? `<rect x="${formatNumber(contentEnd)}" width="${formatNumber(Math.max(width - contentEnd, 0))}" height="128" fill="${lastElementBackground}"/>`
+      : '',
+  ].join('');
   const children = layout.elements.map((element, index) => {
     const metric = metrics[index]!;
     const elementWidth =
@@ -187,8 +212,7 @@ function renderMetroWayfinding(value: string, canvasWidth: number, canvasHeight:
       layoutScale;
     return `${output}${gap}`;
   });
-  const backgroundColor = normalizeColor(layout.backgroundColor, '#262626');
-  return `<g transform="scale(${formatNumber(scale)})" data-metro-wayfinding="true"><rect width="${formatNumber(width)}" height="128" fill="${backgroundColor}"/>${children.join('')}</g>`;
+  return `<g transform="scale(${formatNumber(scale)})" data-metro-wayfinding="true"><rect width="${formatNumber(width)}" height="128" fill="${backgroundColor}"/>${edgeBackgrounds}${children.join('')}</g>`;
 }
 
 function renderMetroWayfindingGap(
@@ -198,12 +222,19 @@ function renderMetroWayfindingGap(
   layout: ReturnType<typeof parseMetroWayfindingLayout>,
   scale: number,
 ): string {
-  const leftBackground = normalizeColor(leftElement.backgroundColor, layout.backgroundColor);
-  const rightBackground = normalizeColor(rightElement.backgroundColor, layout.backgroundColor);
+  const leftBackground = resolveMetroElementBackground(leftElement, layout);
+  const rightBackground = resolveMetroElementBackground(rightElement, layout);
   if (leftBackground !== rightBackground) {
     return '';
   }
   return `<rect x="${formatNumber(x)}" width="${formatNumber(METRO_WAYFINDING_GAP * scale)}" height="${formatNumber(METRO_WAYFINDING_HEIGHT * scale)}" fill="${leftBackground}"/>`;
+}
+
+function resolveMetroElementBackground(
+  element: MetroWayfindingElement,
+  layout: ReturnType<typeof parseMetroWayfindingLayout>,
+): string {
+  return normalizeColor(element.backgroundColor, layout.backgroundColor);
 }
 
 function getMetroElementMetric(element: MetroWayfindingElement): { width: number } {
@@ -213,7 +244,9 @@ function getMetroElementMetric(element: MetroWayfindingElement): { width: number
   if (element.type === 'largeText') {
     const suffixGap = element.suffix ? 3 : 0;
     const contentWidth =
-      estimateTextWidth(element.value, 85) + suffixGap + estimateTextWidth(element.suffix, 28);
+      estimateTextWidth(element.value, metroLargeTextFontSize) +
+      suffixGap +
+      estimateTextWidth(element.suffix, metroLargeTextSuffixFontSize);
     return { width: Math.max(85, contentWidth + 8) };
   }
   if (element.type === 'space') {
@@ -221,11 +254,13 @@ function getMetroElementMetric(element: MetroWayfindingElement): { width: number
       width: element.mode === 'fixed' ? Math.max(1, element.units) * METRO_WAYFINDING_GAP : 0,
     };
   }
-  const mainWidth = measureMetroMainSegments(element.main, element.mode === 'single' ? 42 : 20);
-  const secondaryWidth = estimateTextWidth(element.secondary, element.mode === 'single' ? 28 : 14);
-  const secondMainWidth = measureMetroMainSegments(element.secondMain, 20);
-  const secondSecondaryWidth = estimateTextWidth(element.secondSecondary, 14);
-  return { width: Math.max(85, mainWidth, secondaryWidth, secondMainWidth, secondSecondaryWidth) };
+  const metrics = resolveMetroWayfindingTextMetrics(element.rows);
+  const rowWidths = element.rows.map((row) =>
+    row.kind === 'main'
+      ? measureMetroMainSegments(row.segments, metrics.mainFontSize)
+      : estimateTextWidth(row.value, metrics.secondaryFontSize),
+  );
+  return { width: Math.max(85, ...rowWidths) };
 }
 
 function renderMetroWayfindingElement(
@@ -251,63 +286,51 @@ function renderMetroWayfindingElement(
     const icon =
       metroWayfindingIconOptions.find((option) => option.id === element.iconId) ??
       metroWayfindingIconOptions[0]!;
-    const frame = element.framed
-      ? `<rect x="0" y="21.5" width="85" height="85" fill="none" stroke="${foreground}" stroke-width="2"/>`
-      : '';
-    return `<g transform="${transform}" data-material-symbol="${escapeXml(icon.symbol)}"><rect width="85" height="128" fill="${background}"/>${frame}${renderMetroIcon(icon.symbol, icon.id, foreground, element.direction)}</g>`;
+    return `<g transform="${transform}" data-material-symbol="${escapeXml(icon.symbol)}"><rect width="85" height="128" fill="${background}"/>${renderMetroIcon(icon.symbol, icon.id, foreground, element.id, element.direction, element.framed)}</g>`;
   }
   if (element.type === 'largeText') {
     const text = renderMetroLargeText(element.value, element.suffix, width, foreground);
     const frame = element.framed
-      ? `<rect x="0" y="21.5" width="${formatNumber(width)}" height="85" fill="none" stroke="${foreground}" stroke-width="2"/>`
+      ? `<rect x="1.5" y="23" width="${formatNumber(width - 3)}" height="82" rx="8.5" fill="none" stroke="${foreground}" stroke-width="3"/>`
       : '';
     return `<g transform="${transform}"><rect width="${formatNumber(width)}" height="128" fill="${background}"/>${frame}${text}</g>`;
   }
   const textAlign =
     element.align === 'left' ? 'start' : element.align === 'right' ? 'end' : 'middle';
   const textX = element.align === 'left' ? 0 : element.align === 'right' ? width : width / 2;
-  if (element.mode === 'double') {
-    const first = renderMetroMainSegments(
-      element.main,
-      20,
-      width,
-      foreground,
-      textX,
-      textAlign,
-      43,
-    );
-    const firstSecondary = renderMetroText(
-      element.secondSecondary,
-      14,
-      width,
-      foreground,
-      textAlign,
-      textX,
-      60,
-    );
-    const second = renderMetroMainSegments(
-      element.secondMain,
-      20,
-      width,
-      foreground,
-      textX,
-      textAlign,
-      86,
-    );
-    const secondSecondary = renderMetroText(
-      element.secondary,
-      14,
-      width,
-      foreground,
-      textAlign,
-      textX,
-      103,
-    );
-    return `<g transform="${transform}"><rect width="${formatNumber(width)}" height="128" fill="${background}"/>${first}${firstSecondary}${second}${secondSecondary}</g>`;
-  }
-  const main = renderMetroMainSegments(element.main, 42, width, foreground, textX, textAlign, 62);
-  const secondary = renderMetroText(element.secondary, 28, width, foreground, textAlign, textX, 97);
-  return `<g transform="${transform}"><rect width="${formatNumber(width)}" height="128" fill="${background}"/>${main}${secondary}</g>`;
+  const rows = renderMetroTextRows(element, width, foreground, textX, textAlign);
+  return `<g transform="${transform}"><rect width="${formatNumber(width)}" height="128" fill="${background}"/>${rows}</g>`;
+}
+
+function renderMetroTextRows(
+  element: Extract<MetroWayfindingElement, { type: 'text' }>,
+  width: number,
+  color: string,
+  textX: number,
+  textAnchor: string,
+): string {
+  const metrics = resolveMetroWayfindingTextMetrics(element.rows);
+  let rowTop = (METRO_WAYFINDING_HEIGHT - METRO_WAYFINDING_TEXT_HEIGHT) / 2 + metrics.spacing;
+  return element.rows
+    .map((row, index) => {
+      const fontSize = row.kind === 'main' ? metrics.mainFontSize : metrics.secondaryFontSize;
+      const baseline = rowTop + fontSize * 0.82;
+      const output =
+        row.kind === 'main'
+          ? renderMetroMainSegments(
+              row.segments,
+              fontSize,
+              width,
+              color,
+              textX,
+              textAnchor,
+              baseline,
+            )
+          : renderMetroText(row.value, fontSize, width, color, textAnchor, textX, baseline);
+      rowTop += fontSize + (index < element.rows.length - 1 ? metrics.spacing : 0);
+      return output;
+    })
+    .join('');
 }
 
 function renderMetroMainSegments(
@@ -322,6 +345,7 @@ function renderMetroMainSegments(
   const totalWidth = measureMetroMainSegments(segments, fontSize);
   const contentScale = totalWidth > width && totalWidth > 0 ? width / totalWidth : 1;
   const renderedWidth = totalWidth * contentScale;
+  const segmentGap = fontSize * 0.12;
   const startX =
     textAnchor === 'start'
       ? textX
@@ -330,15 +354,16 @@ function renderMetroMainSegments(
         : textX - renderedWidth / 2;
   let cursor = 0;
   const content = segments
-    .map((segment) => {
+    .map((segment, index) => {
+      const trailingGap = index < segments.length - 1 ? segmentGap : 0;
       if (segment.kind === 'line') {
         const diameter = fontSize * 1.12;
         const centerX = cursor + diameter / 2;
-        cursor += diameter;
+        cursor += diameter + trailingGap;
         return `<g transform="translate(${formatNumber(centerX)} ${formatNumber(baseline - fontSize * 0.32)})"><circle r="${formatNumber(diameter / 2)}" fill="${normalizeColor(segment.color, '#2F80ED')}"/><text y="${formatNumber(fontSize * 0.9 * 0.34)}" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize * 0.9)}" font-weight="400" text-anchor="middle" letter-spacing="${formatNumber(fontSize * -0.07)}">${escapeXml(segment.value)}</text></g>`;
       }
       const output = `<text x="${formatNumber(cursor)}" y="${formatNumber(baseline)}" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="400">${escapeXml(segment.value)}</text>`;
-      cursor += estimateTextWidth(segment.value, fontSize);
+      cursor += estimateTextWidth(segment.value, fontSize) + trailingGap;
       return output;
     })
     .join('');
@@ -360,47 +385,102 @@ function renderMetroText(
 }
 
 function renderMetroLargeText(value: string, suffix: string, width: number, color: string): string {
-  const mainSize = 85;
-  const suffixSize = 28;
   const suffixGap = suffix ? 3 : 0;
-  const mainWidth = estimateTextWidth(value, mainSize);
-  const suffixWidth = estimateTextWidth(suffix, suffixSize);
+  const mainWidth = estimateTextWidth(value, metroLargeTextFontSize);
+  const suffixWidth = estimateTextWidth(suffix, metroLargeTextSuffixFontSize);
   const contentWidth = Math.max(mainWidth + suffixGap + suffixWidth, 1);
   const startX = (width - contentWidth) / 2;
   const suffixX = mainWidth + suffixGap;
   const suffixMarkup = suffix
-    ? `<text x="${formatNumber(suffixX)}" y="100" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${suffixSize}" font-weight="700">${escapeXml(suffix)}</text>`
+    ? `<text x="${formatNumber(suffixX)}" y="99" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${metroLargeTextSuffixFontSize}" font-weight="700">${escapeXml(suffix)}</text>`
     : '';
-  return `<g transform="translate(${formatNumber(startX)} 0)"><text x="0" y="97" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${mainSize}" font-weight="400">${escapeXml(value)}</text>${suffixMarkup}</g>`;
+  return `<g transform="translate(${formatNumber(startX)} 0)"><text x="0" y="96" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${metroLargeTextFontSize}" font-weight="400">${escapeXml(value)}</text>${suffixMarkup}</g>`;
 }
 
 function measureMetroMainSegments(
   segments: MetroWayfindingMainSegment[],
   fontSize: number,
 ): number {
-  return segments.reduce(
+  const contentWidth = segments.reduce(
     (width, segment) =>
       width +
       (segment.kind === 'line' ? fontSize * 1.12 : estimateTextWidth(segment.value, fontSize)),
     0,
   );
+  return contentWidth + Math.max(segments.length - 1, 0) * fontSize * 0.12;
 }
 
 function renderMetroIcon(
   symbol: string,
   iconId: string,
   color: string,
+  instanceId: string,
   direction?: 'left' | 'right' | 'up' | 'down',
+  framed = false,
 ): string {
+  const assetName = resolveMetroFacilityIconAssetName(iconId, direction);
+  if (assetName) {
+    return renderMetroFacilityAsset(
+      assetName,
+      framed ? 'framed' : 'plain',
+      color,
+      instanceId,
+      resolveMetroFacilityAssetDirectionTransform(iconId, direction),
+    );
+  }
+
+  const frame = framed
+    ? renderMetroFacilityAsset('frame', 'framed', color, `${instanceId}-frame`)
+    : '';
   const { viewBox, content } = getMaterialSymbolMarkup(symbol);
   const transform = resolveMetroIconDirectionTransform(iconId, direction);
-  return `<g transform="${transform}"><svg x="0" y="21.5" width="85" height="85" viewBox="${viewBox}" fill="${color}" aria-hidden="true">${content}</svg></g>`;
+  return `${frame}<g transform="${transform}"><svg x="0" y="21.5" width="85" height="85" viewBox="${viewBox}" fill="${color}" aria-hidden="true">${content}</svg></g>`;
+}
+
+function renderMetroFacilityAsset(
+  assetName: MetroFacilityIconAssetName | 'frame',
+  variant: 'framed' | 'plain',
+  color: string,
+  instanceId: string,
+  transform = '',
+): string {
+  const { viewBox, content } = getMetroFacilityAssetMarkup(assetName, variant);
+  const namespacedContent = namespaceMetroFacilityAssetMarkup(
+    content,
+    `${instanceId}-${variant}-${assetName}`,
+  );
+  return `<g transform="${transform}"><svg x="0" y="21.5" width="85" height="85" viewBox="${viewBox}" color="${color}" fill="${color}" aria-hidden="true">${namespacedContent}</svg></g>`;
+}
+
+function resolveMetroFacilityAssetDirectionTransform(
+  iconId: string,
+  direction: 'left' | 'right' | 'up' | 'down' | undefined,
+): string {
+  if (iconId === 'stairs' || iconId === 'stairs-down' || iconId === 'escalator') {
+    return direction === 'left' ? 'translate(85 0) scale(-1 1)' : '';
+  }
+  if (iconId !== 'exit') {
+    return '';
+  }
+  if (direction === 'left') return 'rotate(-90 42.5 64)';
+  if (direction === 'up') return '';
+  if (direction === 'down') return 'rotate(180 42.5 64)';
+  return 'rotate(90 42.5 64)';
 }
 
 function resolveMetroIconDirectionTransform(
   iconId: string,
   direction: 'left' | 'right' | 'up' | 'down' | undefined,
 ): string {
+  if (iconId === 'no-entry') {
+    return 'rotate(-45 42.5 64)';
+  }
+  if (iconId === 'turn-left-up' || iconId === 'turn-left-down') {
+    return 'rotate(-90 42.5 64)';
+  }
+  if (iconId === 'turn-right-up' || iconId === 'turn-right-down') {
+    return 'rotate(90 42.5 64)';
+  }
   if (!direction || !['stairs', 'escalator', 'exit'].includes(iconId)) {
     return '';
   }
@@ -1001,6 +1081,44 @@ function getMaterialSymbolMarkup(symbol: string): { viewBox: string; content: st
   return markup;
 }
 
+function getMetroFacilityAssetMarkup(
+  assetName: MetroFacilityIconAssetName | 'frame',
+  variant: 'framed' | 'plain',
+): { viewBox: string; content: string } {
+  const cacheKey = `${variant}/${assetName}`;
+  const cached = metroFacilityAssetMarkupCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const sourcePath = resolveMetroFacilityAssetPath(variant, `${assetName}.svg`);
+  const source = readFileSync(sourcePath, 'utf8');
+  const viewBox = source.match(/\bviewBox="([^"]+)"/u)?.[1];
+  const content = source
+    .replace(/^\s*<svg\b[^>]*>/u, '')
+    .replace(/<\/svg>\s*$/u, '')
+    .trim();
+  if (!viewBox || !content) {
+    throw new Error(`地铁设施图标“${assetName}”格式无效。`);
+  }
+  const markup = { viewBox, content };
+  metroFacilityAssetMarkupCache.set(cacheKey, markup);
+  return markup;
+}
+
+function namespaceMetroFacilityAssetMarkup(content: string, instanceId: string): string {
+  const prefix = instanceId.replace(/[^a-zA-Z0-9_-]/gu, '-');
+  const ids = Array.from(content.matchAll(/\bid="([^"]+)"/gu), (match) => match[1]!);
+  return ids.reduce(
+    (markup, id) =>
+      markup
+        .replaceAll(`id="${id}"`, `id="${prefix}-${id}"`)
+        .replaceAll(`url(#${id})`, `url(#${prefix}-${id})`)
+        .replaceAll(`href="#${id}"`, `href="#${prefix}-${id}"`)
+        .replaceAll(`xlink:href="#${id}"`, `xlink:href="#${prefix}-${id}"`),
+    content,
+  );
+}
+
 function resolveMaterialSymbolPath(fileName: string): string {
   const candidates = [
     resolve(process.cwd(), 'public', 'material-symbols', 'outlined', fileName),
@@ -1009,6 +1127,18 @@ function resolveMaterialSymbolPath(fileName: string): string {
   const sourcePath = candidates.find((candidate) => existsSync(candidate));
   if (!sourcePath) {
     throw new Error(`Material Symbols 图标文件 ${fileName} 不存在。`);
+  }
+  return sourcePath;
+}
+
+function resolveMetroFacilityAssetPath(variant: 'framed' | 'plain', fileName: string): string {
+  const candidates = [
+    resolve(process.cwd(), 'public', 'metro-facilities', variant, fileName),
+    resolve(process.cwd(), 'apps', 'web', 'public', 'metro-facilities', variant, fileName),
+  ];
+  const sourcePath = candidates.find((candidate) => existsSync(candidate));
+  if (!sourcePath) {
+    throw new Error(`地铁设施图标文件 ${variant}/${fileName} 不存在。`);
   }
   return sourcePath;
 }

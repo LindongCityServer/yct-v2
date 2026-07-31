@@ -4,6 +4,7 @@ export const METRO_WAYFINDING_FOREGROUND = '#FFFFFF';
 export const METRO_WAYFINDING_GAP = 16;
 export const METRO_WAYFINDING_PADDING = 22;
 export const METRO_WAYFINDING_HEIGHT = 128;
+export const METRO_WAYFINDING_TEXT_HEIGHT = 85;
 
 export const metroWayfindingBackgroundPalette = [
   { value: '#262626', label: '深灰色' },
@@ -23,30 +24,140 @@ export const metroWayfindingForegroundPalette = [
 
 export type MetroWayfindingColor = string;
 export type MetroWayfindingIconGroup = 'facility' | 'arrow';
+export type MetroWayfindingIconDirection = 'left' | 'right' | 'up' | 'down';
+export type MetroFacilityIconAssetName =
+  | 'stairs-up'
+  | 'stairs-down'
+  | 'escalator'
+  | 'accessible-elevator'
+  | 'restroom'
+  | 'mens-restroom'
+  | 'womens-restroom'
+  | 'third-restroom'
+  | 'nursing-room'
+  | 'wheelchair-lift'
+  | 'waiting-room'
+  | 'exit'
+  | 'subway'
+  | 'passenger-service-center'
+  | 'ticket-machine'
+  | 'meeting-point';
 
 export interface MetroWayfindingIconOption {
   id: string;
   label: string;
   symbol: string;
   group: MetroWayfindingIconGroup;
+  assetName?: MetroFacilityIconAssetName;
+  assetNameByDirection?: Partial<Record<MetroWayfindingIconDirection, MetroFacilityIconAssetName>>;
   defaultForegroundColor?: string;
 }
 
 export const metroWayfindingIconOptions: MetroWayfindingIconOption[] = [
-  { id: 'stairs', label: '楼梯', symbol: 'stairs', group: 'facility' },
-  { id: 'escalator', label: '扶梯', symbol: 'escalator', group: 'facility' },
-  { id: 'elevator', label: '电梯', symbol: 'elevator', group: 'facility' },
-  { id: 'nursing-room', label: '母婴室', symbol: 'breastfeeding', group: 'facility' },
-  { id: 'family-restroom', label: '第三卫生间', symbol: 'family_restroom', group: 'facility' },
+  {
+    id: 'stairs',
+    label: '上楼',
+    symbol: 'stairs',
+    group: 'facility',
+    assetName: 'stairs-up',
+  },
+  {
+    id: 'stairs-down',
+    label: '下楼',
+    symbol: 'stairs',
+    group: 'facility',
+    assetName: 'stairs-down',
+  },
+  {
+    id: 'escalator',
+    label: '扶梯',
+    symbol: 'escalator',
+    group: 'facility',
+    assetName: 'escalator',
+  },
+  {
+    id: 'elevator',
+    label: '无障碍电梯',
+    symbol: 'elevator',
+    group: 'facility',
+    assetName: 'accessible-elevator',
+  },
+  {
+    id: 'restroom',
+    label: '卫生间',
+    symbol: 'wc',
+    group: 'facility',
+    assetName: 'restroom',
+  },
+  {
+    id: 'mens-restroom',
+    label: '男卫生间',
+    symbol: 'man',
+    group: 'facility',
+    assetName: 'mens-restroom',
+  },
+  {
+    id: 'womens-restroom',
+    label: '女卫生间',
+    symbol: 'woman',
+    group: 'facility',
+    assetName: 'womens-restroom',
+  },
+  {
+    id: 'nursing-room',
+    label: '母婴室',
+    symbol: 'breastfeeding',
+    group: 'facility',
+    assetName: 'nursing-room',
+  },
+  {
+    id: 'family-restroom',
+    label: '第三卫生间',
+    symbol: 'family_restroom',
+    group: 'facility',
+    assetName: 'third-restroom',
+  },
+  {
+    id: 'wheelchair-lift',
+    label: '轮椅升降机',
+    symbol: 'elevator',
+    group: 'facility',
+    assetName: 'wheelchair-lift',
+  },
   { id: 'police', label: '警务室', symbol: 'local_police', group: 'facility' },
-  { id: 'waiting', label: '候车室', symbol: 'chair', group: 'facility' },
-  { id: 'exit', label: '出口', symbol: 'logout', group: 'facility' },
-  { id: 'subway', label: '地铁', symbol: 'subway', group: 'facility' },
+  {
+    id: 'waiting',
+    label: '候车室',
+    symbol: 'airline_seat_recline_extra',
+    group: 'facility',
+    assetName: 'waiting-room',
+  },
+  { id: 'exit', label: '出口', symbol: 'logout', group: 'facility', assetName: 'exit' },
+  { id: 'subway', label: '地铁', symbol: 'subway', group: 'facility', assetName: 'subway' },
   { id: 'airplane', label: '飞机', symbol: 'flight', group: 'facility' },
   { id: 'boat', label: '轮船', symbol: 'directions_boat', group: 'facility' },
   { id: 'train', label: '火车', symbol: 'train', group: 'facility' },
-  { id: 'service', label: '服务台', symbol: 'support_agent', group: 'facility' },
-  { id: 'ticket', label: '售票机', symbol: 'confirmation_number', group: 'facility' },
+  {
+    id: 'service',
+    label: '乘客服务中心',
+    symbol: 'help',
+    group: 'facility',
+    assetName: 'passenger-service-center',
+  },
+  {
+    id: 'ticket',
+    label: '自动售票机',
+    symbol: 'confirmation_number',
+    group: 'facility',
+    assetName: 'ticket-machine',
+  },
+  {
+    id: 'meeting-point',
+    label: '会合点',
+    symbol: 'groups',
+    group: 'facility',
+    assetName: 'meeting-point',
+  },
   {
     id: 'no-entry',
     label: '禁止进入',
@@ -63,21 +174,24 @@ export const metroWayfindingIconOptions: MetroWayfindingIconOption[] = [
   { id: 'east', label: '右', symbol: 'arrow_forward', group: 'arrow' },
   { id: 'south-east', label: '右下', symbol: 'south_east', group: 'arrow' },
   { id: 'south', label: '下', symbol: 'arrow_downward', group: 'arrow' },
+  { id: 'turn-left-up', label: '先左后上', symbol: 'arrow_top_right', group: 'arrow' },
+  { id: 'turn-left-down', label: '先左后下', symbol: 'arrow_top_left', group: 'arrow' },
+  { id: 'turn-right-up', label: '先右后上', symbol: 'arrow_top_left', group: 'arrow' },
+  { id: 'turn-right-down', label: '先右后下', symbol: 'arrow_top_right', group: 'arrow' },
   { id: 'u-turn-left', label: '左掉头', symbol: 'u_turn_left', group: 'arrow' },
   { id: 'u-turn-right', label: '右掉头', symbol: 'u_turn_right', group: 'arrow' },
 ];
 
-const legacyMetroWayfindingIconIds: Record<string, string> = {
-  'turn-left-up': 'west',
-  'turn-left-down': 'west',
-  'turn-right-up': 'east',
-  'turn-right-down': 'east',
-};
-
-export type MetroWayfindingTextMode = 'single' | 'double';
 export type MetroWayfindingTextAlign = 'left' | 'center' | 'right';
 export type MetroWayfindingSpaceMode = 'fixed' | 'flex';
-export type MetroWayfindingIconDirection = 'left' | 'right' | 'up' | 'down';
+
+export function resolveMetroFacilityIconAssetName(
+  iconId: string,
+  direction?: MetroWayfindingIconDirection,
+): MetroFacilityIconAssetName | undefined {
+  const option = metroWayfindingIconOptions.find((item) => item.id === iconId);
+  return option?.assetNameByDirection?.[direction ?? 'right'] ?? option?.assetName;
+}
 
 export interface MetroWayfindingTextSegment {
   kind: 'text';
@@ -92,6 +206,20 @@ export interface MetroWayfindingLineSegment {
 
 export type MetroWayfindingMainSegment = MetroWayfindingTextSegment | MetroWayfindingLineSegment;
 
+export interface MetroWayfindingMainTextRow {
+  id: string;
+  kind: 'main';
+  segments: MetroWayfindingMainSegment[];
+}
+
+export interface MetroWayfindingSecondaryTextRow {
+  id: string;
+  kind: 'secondary';
+  value: string;
+}
+
+export type MetroWayfindingTextRow = MetroWayfindingMainTextRow | MetroWayfindingSecondaryTextRow;
+
 export interface MetroWayfindingIconElement {
   id: string;
   type: 'icon';
@@ -105,14 +233,17 @@ export interface MetroWayfindingIconElement {
 export interface MetroWayfindingTextElement {
   id: string;
   type: 'text';
-  mode: MetroWayfindingTextMode;
   align: MetroWayfindingTextAlign;
-  main: MetroWayfindingMainSegment[];
-  secondary: string;
-  secondMain: MetroWayfindingMainSegment[];
-  secondSecondary: string;
+  rows: MetroWayfindingTextRow[];
   backgroundColor?: MetroWayfindingColor;
   foregroundColor?: MetroWayfindingColor;
+}
+
+export interface MetroWayfindingTextMetrics {
+  mainFontSize: number;
+  secondaryFontSize: number;
+  spacing: number;
+  contentHeight: number;
 }
 
 export interface MetroWayfindingLargeTextElement {
@@ -164,6 +295,34 @@ export function createMetroWayfindingId(prefix = 'metro'): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+export function createMetroWayfindingTextRow(
+  kind: MetroWayfindingTextRow['kind'],
+): MetroWayfindingTextRow {
+  return kind === 'main'
+    ? {
+        id: createMetroWayfindingId('text-main'),
+        kind,
+        segments: [{ kind: 'text', value: '' }],
+      }
+    : { id: createMetroWayfindingId('text-secondary'), kind, value: '' };
+}
+
+export function resolveMetroWayfindingTextMetrics(
+  rows: MetroWayfindingTextRow[],
+): MetroWayfindingTextMetrics {
+  const mainRowCount = rows.filter((row) => row.kind === 'main').length;
+  const secondaryRowCount = rows.length - mainRowCount;
+  const heightFactor =
+    mainRowCount + (secondaryRowCount * 2) / 3 + (Math.max(rows.length, 1) + 1) / 6;
+  const mainFontSize = METRO_WAYFINDING_TEXT_HEIGHT / Math.max(heightFactor, 1 / 3);
+  return {
+    mainFontSize,
+    secondaryFontSize: (mainFontSize * 2) / 3,
+    spacing: mainFontSize / 6,
+    contentHeight: METRO_WAYFINDING_TEXT_HEIGHT,
+  };
+}
+
 export function createMetroWayfindingElement(
   type: MetroWayfindingElement['type'],
   iconId = 'stairs',
@@ -183,12 +342,8 @@ export function createMetroWayfindingElement(
     return {
       id,
       type,
-      mode: 'single',
       align: 'center',
-      main: [{ kind: 'text', value: '' }],
-      secondary: '',
-      secondMain: [{ kind: 'text', value: '' }],
-      secondSecondary: '',
+      rows: [createMetroWayfindingTextRow('main')],
     };
   }
   if (type === 'largeText') {
@@ -238,12 +393,9 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
   const backgroundColor = normalizeOptionalColor(candidate.backgroundColor);
   const foregroundColor = normalizeOptionalColor(candidate.foregroundColor);
   if (candidate.type === 'icon') {
-    const migratedIconId =
-      typeof candidate.iconId === 'string'
-        ? (legacyMetroWayfindingIconIds[candidate.iconId] ?? candidate.iconId)
-        : '';
-    const iconId = metroWayfindingIconOptions.some((item) => item.id === migratedIconId)
-      ? migratedIconId
+    const candidateIconId = typeof candidate.iconId === 'string' ? candidate.iconId : '';
+    const iconId = metroWayfindingIconOptions.some((item) => item.id === candidateIconId)
+      ? candidateIconId
       : 'stairs';
     const icon = metroWayfindingIconOptions.find((item) => item.id === iconId);
     return {
@@ -263,21 +415,24 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
     };
   }
   if (candidate.type === 'text') {
-    const textCandidate = candidate as Partial<MetroWayfindingTextElement>;
+    const textCandidate = candidate as Partial<MetroWayfindingTextElement> & {
+      mode?: unknown;
+      main?: unknown;
+      secondary?: unknown;
+      secondMain?: unknown;
+      secondSecondary?: unknown;
+    };
+    const rows = Array.isArray(textCandidate.rows)
+      ? normalizeTextRows(textCandidate.rows, id)
+      : migrateLegacyTextRows(textCandidate, id);
     return {
       id,
       type: 'text',
-      mode: textCandidate.mode === 'double' ? 'double' : 'single',
       align:
         textCandidate.align === 'left' || textCandidate.align === 'right'
           ? textCandidate.align
           : 'center',
-      main: normalizeMainSegments(textCandidate.main),
-      secondary: normalizeString(textCandidate.secondary, 160),
-      secondMain: Array.isArray(textCandidate.secondMain)
-        ? normalizeMainSegments(textCandidate.secondMain)
-        : [{ kind: 'text', value: normalizeString(textCandidate.secondMain, 160) }],
-      secondSecondary: normalizeString(textCandidate.secondSecondary, 160),
+      rows,
       backgroundColor,
       foregroundColor,
     };
@@ -332,6 +487,97 @@ function normalizeMainSegments(value: unknown): MetroWayfindingMainSegment[] {
     })
     .filter((segment): segment is MetroWayfindingMainSegment => Boolean(segment));
   return segments.length ? segments : [{ kind: 'text', value: '' }];
+}
+
+function normalizeTextRows(value: unknown[], elementId: string): MetroWayfindingTextRow[] {
+  const usedIds = new Set<string>();
+  const rows = value
+    .slice(0, 32)
+    .map((row, index): MetroWayfindingTextRow | null => {
+      if (!row || typeof row !== 'object') {
+        return null;
+      }
+      const candidate = row as Partial<MetroWayfindingTextRow>;
+      const fallbackId = legacyTextRowId(elementId, `row-${index + 1}`);
+      const candidateId =
+        typeof candidate.id === 'string' && candidate.id ? candidate.id.slice(0, 80) : fallbackId;
+      const id = usedIds.has(candidateId) ? fallbackId : candidateId;
+      usedIds.add(id);
+      if (candidate.kind === 'secondary') {
+        return {
+          id,
+          kind: 'secondary',
+          value: normalizeString(candidate.value, 160),
+        };
+      }
+      if (candidate.kind === 'main') {
+        return {
+          id,
+          kind: 'main',
+          segments: normalizeMainSegments(candidate.segments),
+        };
+      }
+      return null;
+    })
+    .filter((row): row is MetroWayfindingTextRow => Boolean(row));
+  return rows.length
+    ? rows
+    : [
+        {
+          id: legacyTextRowId(elementId, 'main-1'),
+          kind: 'main',
+          segments: [{ kind: 'text', value: '' }],
+        },
+      ];
+}
+
+function migrateLegacyTextRows(
+  candidate: {
+    mode?: unknown;
+    main?: unknown;
+    secondary?: unknown;
+    secondMain?: unknown;
+    secondSecondary?: unknown;
+  },
+  elementId: string,
+): MetroWayfindingTextRow[] {
+  const firstMain: MetroWayfindingMainTextRow = {
+    id: legacyTextRowId(elementId, 'main-1'),
+    kind: 'main',
+    segments: normalizeMainSegments(candidate.main),
+  };
+  if (candidate.mode !== 'double') {
+    return [
+      firstMain,
+      {
+        id: legacyTextRowId(elementId, 'secondary-1'),
+        kind: 'secondary',
+        value: normalizeString(candidate.secondary, 160),
+      },
+    ];
+  }
+  return [
+    firstMain,
+    {
+      id: legacyTextRowId(elementId, 'secondary-1'),
+      kind: 'secondary',
+      value: normalizeString(candidate.secondSecondary, 160),
+    },
+    {
+      id: legacyTextRowId(elementId, 'main-2'),
+      kind: 'main',
+      segments: normalizeMainSegments(candidate.secondMain),
+    },
+    {
+      id: legacyTextRowId(elementId, 'secondary-2'),
+      kind: 'secondary',
+      value: normalizeString(candidate.secondary, 160),
+    },
+  ];
+}
+
+function legacyTextRowId(elementId: string, suffix: string): string {
+  return `${elementId.slice(0, 56)}-${suffix}`;
 }
 
 function normalizeString(value: unknown, maxLength: number): string {

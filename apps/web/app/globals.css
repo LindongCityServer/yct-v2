@@ -4009,6 +4009,15 @@ img.map-player-list-avatar.is-offline {
   font-style: normal;
 }
 
+.map-metro-station-facility-asset {
+  display: block;
+  width: 21px;
+  height: 21px;
+  background: currentColor;
+  -webkit-mask: var(--map-metro-station-facility-asset) center / contain no-repeat;
+  mask: var(--map-metro-station-facility-asset) center / contain no-repeat;
+}
+
 .map-metro-station-carriages {
   display: grid;
   grid-template-columns: repeat(var(--station-carriage-count), minmax(0, 1fr));
@@ -5370,6 +5379,7 @@ img.map-player-list-avatar.is-offline {
 .metro-wayfinding-add-bar,
 .metro-wayfinding-element,
 .metro-wayfinding-element-body,
+.metro-wayfinding-text-row-list,
 .metro-wayfinding-main-segments,
 .metro-wayfinding-main-segments ol {
   display: grid;
@@ -5484,9 +5494,21 @@ img.map-player-list-avatar.is-offline {
   color: var(--yct-color-primary);
 }
 
-.metro-wayfinding-element-list .material-symbols-outlined {
+.metro-wayfinding-element-list .material-symbols-outlined,
+.metro-wayfinding-element-list .metro-wayfinding-facility-asset {
   overflow: hidden;
   font-size: 22px;
+}
+
+.metro-wayfinding-facility-asset {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 1em;
+  height: 1em;
+  background: currentColor;
+  -webkit-mask: var(--metro-wayfinding-facility-asset) center / contain no-repeat;
+  mask: var(--metro-wayfinding-facility-asset) center / contain no-repeat;
+  transform-origin: center;
 }
 
 .metro-wayfinding-element-tab-summary {
@@ -5537,6 +5559,56 @@ img.map-player-list-avatar.is-offline {
   min-height: 32px;
 }
 
+.metro-wayfinding-text-metrics {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  min-height: 40px;
+  padding: var(--yct-space-1) var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+}
+
+.metro-wayfinding-text-metrics span {
+  color: var(--yct-color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.metro-wayfinding-text-metrics strong {
+  overflow: hidden;
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metro-wayfinding-text-row-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.metro-wayfinding-text-row-list > li {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding-top: var(--yct-space-3);
+  border-top: 1px solid var(--yct-color-border);
+}
+
+.metro-wayfinding-text-row-list > li > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+}
+
+.metro-wayfinding-text-row-list > li > header > strong {
+  color: var(--yct-color-text);
+  font-size: 13px;
+}
+
 .metro-wayfinding-main-segments {
   padding: var(--yct-space-3);
   border-left: 2px solid var(--yct-color-border);
@@ -5578,6 +5650,107 @@ img.map-player-list-avatar.is-offline {
 
 .metro-wayfinding-toggle input {
   accent-color: var(--yct-color-primary);
+}
+
+.metro-wayfinding-segmented-control,
+.metro-wayfinding-icon-picker {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  gap: var(--yct-space-1);
+}
+
+.metro-wayfinding-segmented-control.is-wide,
+.metro-wayfinding-icon-picker {
+  grid-column: 1 / -1;
+}
+
+.metro-wayfinding-segmented-control legend,
+.metro-wayfinding-icon-picker legend {
+  padding: 0;
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metro-wayfinding-segmented-control > div {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(40px, 1fr);
+  min-width: 0;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+}
+
+.metro-wayfinding-segmented-control button,
+.metro-wayfinding-icon-picker button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 var(--yct-space-2);
+  gap: 4px;
+  border: 0;
+  border-radius: calc(var(--yct-radius-md) - 2px);
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metro-wayfinding-segmented-control button:is(:hover, :focus-visible),
+.metro-wayfinding-icon-picker button:is(:hover, :focus-visible) {
+  background: var(--yct-material-hover-state);
+}
+
+.metro-wayfinding-segmented-control button.is-active,
+.metro-wayfinding-icon-picker button.is-active {
+  background: var(--yct-color-surface-panel);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--yct-color-text) 14%, transparent);
+  color: var(--yct-color-primary);
+}
+
+.metro-wayfinding-segmented-control button:disabled,
+.metro-wayfinding-icon-picker button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.metro-wayfinding-segmented-control .material-symbols-outlined,
+.metro-wayfinding-segmented-control .metro-wayfinding-facility-asset {
+  flex: 0 0 auto;
+  font-size: 20px;
+}
+
+.metro-wayfinding-segmented-control button > span:last-child:not(.material-symbols-outlined) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metro-wayfinding-icon-picker > div {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: var(--yct-space-1);
+}
+
+.metro-wayfinding-icon-picker button {
+  flex-direction: column;
+  min-height: 68px;
+  padding-block: var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+}
+
+.metro-wayfinding-icon-picker .material-symbols-outlined,
+.metro-wayfinding-icon-picker .metro-wayfinding-facility-asset {
+  font-size: 28px;
 }
 
 .metro-wayfinding-empty {
@@ -13392,11 +13565,39 @@ img.map-player-list-avatar.is-offline {
   display: flex;
   align-items: center;
   gap: var(--yct-space-1);
+  margin-left: 0;
+  padding: 0;
 }
 
 .material-studio-topbar-actions .icon-button:disabled {
   cursor: progress;
   opacity: 0.45;
+}
+
+.secondary-topbar .secondary-actions .material-studio-topbar-actions .icon-button {
+  width: 40px;
+  height: 40px;
+  color: var(--yct-color-text);
+}
+
+.secondary-topbar
+  .secondary-actions
+  .material-studio-topbar-actions
+  .icon-button:is(:hover, :focus-visible) {
+  background: var(--yct-material-hover-state);
+}
+
+.secondary-topbar .secondary-actions .material-studio-topbar-actions .icon-button.is-primary {
+  background: var(--yct-color-primary);
+  color: #ffffff;
+}
+
+.secondary-topbar
+  .secondary-actions
+  .material-studio-topbar-actions
+  .icon-button.is-primary:is(:hover, :focus-visible) {
+  background: color-mix(in srgb, var(--yct-color-primary) 88%, #000000);
+  color: #ffffff;
 }
 
 .secondary-topbar .secondary-actions .operation-toc-toggle {
@@ -13448,6 +13649,13 @@ img.map-player-list-avatar.is-offline {
   border: 1px solid var(--yct-color-border);
   border-radius: var(--yct-radius-pill);
   background: var(--yct-color-surface-panel);
+}
+
+:root[data-embedded] .secondary-topbar .material-studio-topbar-actions {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 :root[data-embedded] .topbar > .icon-button {
@@ -14689,6 +14897,13 @@ img.map-player-list-avatar.is-offline {
   padding: 3px;
 }
 
+:root[data-material-mode='advanced']
+  .secondary-topbar
+  .secondary-actions
+  .material-studio-topbar-actions {
+  padding: 0;
+}
+
 :root[data-material-mode='advanced'] :is(.topbar-page-title, .secondary-title) {
   text-shadow: 0 1px 5px
     color-mix(
@@ -14809,6 +15024,31 @@ img.map-player-list-avatar.is-offline {
       var(--yct-color-surface-panel) var(--yct-material-text-shadow-strength),
       transparent
     );
+}
+
+:root[data-material-mode='advanced'] .secondary-topbar .secondary-actions .operation-toc-toggle {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  text-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-material-mode='advanced']
+  .secondary-topbar
+  .secondary-actions
+  .operation-toc-toggle:is(:hover, :focus-visible) {
+  background: var(--yct-material-hover-state);
+}
+
+:root[data-material-mode='advanced']
+  .secondary-topbar
+  .secondary-actions
+  .operation-toc.is-expanded
+  .operation-toc-toggle {
+  background: var(--yct-material-selected-state);
+  color: var(--yct-color-primary);
 }
 
 :root[data-material-mode='advanced'] :is(.hero-carousel-controls, .topbar-notice, .map-toast) {

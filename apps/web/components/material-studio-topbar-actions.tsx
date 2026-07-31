@@ -73,7 +73,7 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
       </button>
       <button
         type="button"
-        className="icon-button"
+        className="icon-button is-primary"
         aria-label="下载图片"
         title="下载图片"
         disabled={studioState.isBusy}
