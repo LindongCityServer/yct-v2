@@ -1,6 +1,6 @@
 # 雨城通 v2（Yuchengtong / YCT）重构目标与执行记忆
 
-更新时间：2026-07-07
+更新时间：2026-07-31
 
 本文档用于帮助后续协作记住“我要为雨城通 v2 做哪些工作、按什么顺序推进、哪些事情需要用户拍板”。它不替代需求文档，而是作为执行层的目标清单。
 
@@ -633,6 +633,22 @@ DESIGN.md
 - 已处理第一版：启用 Next.js `output: 'standalone'` 并新增 `scripts/web-build-artifact.ps1` / `pnpm web:artifact`，可在本地或 CI 生成上传服务器的 web 独立部署包，避免 2 核 4G 云服务器上开 Codex 拉仓库并执行完整构建。部署说明记录在 `docs/DEPLOYMENT.md`；当前服务器 Node.js 18.6.0 不满足仓库 `node >=20.9.0` 要求，正式运行 standalone 包前需要升级 Node。
 - 已处理第一版：针对云服务器部署时 `@swc/helpers/__/_interop_require_default` 与 `@next/env` 等 Next 运行时依赖缺失的问题，部署打包脚本会从 pnpm 的 `next@.../node_modules` 中解析并补拷贝真实依赖目录到 standalone 的 `apps/web/node_modules`；生成的启动脚本新增 `-NodePath` 参数，用于在宝塔内置 Node 最高仅 18.6.0 时改用便携版 Node 22。已用 `.deploy/web/start-yct-web.ps1` 在本机临时启动 3400 端口并验证 `/api/health` 返回 200。
 - 已处理补充：新增 `scripts/init-admin-membership.ps1`，部署包会携带为 `init-yct-admin.ps1`，可在没有 pnpm/tsx 的 standalone 服务器上直接把指定 `ldpassUserId` 写入 `.yct-data/admin-memberships.json` 或 `YCT_ADMIN_STORE_PATH` 指向的管理员成员文件；脚本现在会先读取部署目录下的 `.env` / `.env.production` / `.env.local` / `.env.production.local`，避免管理员初始化写到和运行中服务不同的仓储路径。已用临时仓储验证脚本可创建 `super_admin active` 成员。
+
+2026-07-31 已完成方向停靠点、RMP 线网和 FAQ 补充：
+
+- 线路停靠点可按正向、反向或本线路默认位置关联地图标记，并按“方向专属 -> 本线路默认 -> 普通站点标记”稳定回退。
+- 公共交通导视工作台可导入 RMP 版本 77 项目，校验文件大小、节点、边、具名站点和线路颜色，并将必要几何转换为受限快照。
+- RMP 快照保持只读；雨城通只允许补充线路显示名称，站点、站序、站名和拓扑仍需回到 RMP 修改后重新导入。
+- 登录用户可暂存、更新和删除自己的 RMP 项目，并通过 `MaterialTransitNetworkProjectImported`、`MaterialTransitNetworkProjectUpdated`、`MaterialTransitNetworkProjectDeleted` 事件解耦后续处理。
+- 地铁导视编辑器扩展为结构化主行、次行和顺序化内容段，支持线路标识、设施、箭头、框体和颜色；输入补全来自真实线网和地点数据。
+- FAQ 已补充账号、地图、出行、物料、RMP、离线、通知和数据隐私等高频问题，并同步维护简体中文、繁體中文和 English。
+
+后续重点：
+
+- 持续用 RMP 官方新旧版本样本验证兼容性，明确升级策略和错误报告。
+- 将 RMP 本地 JSON 草稿迁移到共享持久化存储，补乐观锁、配额、过期清理和多实例事件投递。
+- 用真实双向线路走查方向停靠位置，并为后台保存前增加变更摘要或差异预览。
+- 对物料工作台进行桌面端、移动端视觉回归和大线网导入性能验证。
 
 ## 13. 完成定义
 

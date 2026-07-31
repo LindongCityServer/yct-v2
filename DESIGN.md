@@ -141,6 +141,27 @@ components:
     textColor: '{colors.on-surface}'
     rounded: '{rounded.full}'
     height: 44px
+  segmented-control:
+    backgroundColor: '{colors.surface-muted}'
+    activeBackgroundColor: '{colors.surface-panel}'
+    activeTextColor: '{colors.primary}'
+    rounded: '{rounded.md}'
+    controlHeight: 40px
+    mobileControlHeight: 44px
+  modal:
+    backdropBackgroundColor: 'rgb(0 0 0 / 36%)'
+    backdropFilter: 'blur(8px)'
+    advancedBackdropFilter: 'blur(var(--yct-material-blur-soft))'
+    advancedPanelFilter: 'contrast + brightness + saturation + blur'
+    shortcutBackdropBackgroundColor: transparent
+    shortcutBackdropFilter: none
+  material-workbench:
+    maxWidth: 1120px
+    desktopColumns: 'minmax(240px, 280px) minmax(0, 1fr) minmax(240px, 340px)'
+    panelBackgroundColor: '{colors.surface-panel}'
+    panelRounded: '{rounded.md}'
+    controlHeight: 44px
+    controlRounded: '{rounded.md}'
 ---
 
 # Yuchengtong (YCT) Design System
@@ -202,6 +223,15 @@ components:
 - 地图控件需要有足够背景对比，但不能像装饰卡片一样抢主体。
 - 后台页面的层级应服务于信息密度，不做大面积浮动卡片。
 
+## Material Modes & Overlays
+
+- **性能材质**：使用不透明表面，不启用 `backdrop-filter`，保证低性能设备上的滚动和输入响应。
+- **高级材质**：浮动面板使用 `contrast + brightness + saturation + blur` 的完整背景滤镜，并使用半透明 `surface-panel` 表面维持文本对比度。
+- **Modal backdrop**：普通模式使用半透明黑色背景和模糊；高级材质模式只保留 `blur(var(--yct-material-blur-soft))`，不在整屏遮罩上叠加对比度、亮度或饱和度滤镜。
+- **Modal panel**：高级材质弹窗面板必须保留完整的 `contrast + brightness + saturation + blur` 组合，遮罩的简化不能向内覆盖面板材质。
+- **快捷键弹窗**：`shortcut-backdrop` 始终透明且不使用任何背景滤镜，只由弹窗面板本身建立层级。
+- **可访问性降级**：减少透明度或浏览器不支持背景滤镜时，浮动面板回退到不透明 `surface-panel`，文字阴影和滤镜同时关闭。
+
 ## Shapes
 
 - 默认卡片、侧边栏和工具容器使用更柔和的 `lg` 圆角；紧凑列表项仍优先使用 `md`。
@@ -226,6 +256,7 @@ components:
 - **PWA UI**：安装入口放在账号设置或更多服务中。离线状态用非阻塞提示，并标明数据更新时间。自定义矩形范围离线包的手动更新和删除入口放在账号设置页，范围列表需要显示名称、坐标范围、大小、更新时间和删除操作。
 - **PWA Install Copy**：安装入口可使用文案“安装雨城通。把 YCT 添加到主屏幕，快速查看运营信息、线路和站点详情。支持缓存已下载的自定义范围离线包，并在你允许后接收行程、运营、订票和检票提醒。”
 - **Theme Settings**：账号设置中提供浅色、深色、跟随系统和强调色选择。默认强调色跟随 `ldpass` 主题计划；如果用户选择自定义强调色，本地选择优先生效。
+- **Material Workbench**：路牌物料与公共交通导视共用同一工作台骨架。桌面端按“模板与尺寸 / 内容编辑 / 实时预览”组织为三列，平板在预览操作后使用弹窗，移动端收敛为单列；顶部栏只保留预览、提交审核和下载命令。工作区面板使用 `surface-panel`、1px 边框和 8px 圆角，不使用厚重阴影；表单控件保持 44px 触控高度，数据来源使用标准分段选择器，预览底板只用于识别透明区域，历史记录使用分隔列表而不是嵌套卡片。公共交通导视的数据来源分段控件需要明确区分服务器线网和已导入线网；导入 RMP 后展示文件摘要、兼容性提示和只读边界，只允许在独立弹窗中补充线路显示名称，不让用户误以为可以直接修改 RMP 固有的站点、站序、站名或拓扑。
 
 图标使用随项目本地嵌入的 Material Symbols Outlined；不要使用 `material-symbols-rounded`，避免部分图标无法清晰区分 `FILL` 填充状态。本地字体需要保留可变字体能力，继续通过 `font-variation-settings: 'FILL' 1` 表达选中态填充。
 
@@ -239,6 +270,7 @@ components:
 - Do 为移动端按钮和控件保留至少 44px 触控目标。
 - Do 为所有图标按钮提供 `aria-label` 或等效可访问名称。
 - Do 让后台界面偏信息密度和任务效率，而不是前台宣传风格。
+- Do 让两个物料工作台共享布局、控件状态与响应式规则，模板差异只进入编辑内容，不复制页面级样式。
 - Do 让线路颜色来自数据，同时保证文本和标签可读。
 - Don't 把地图、后台表格或整页分区包进装饰卡片。
 - Don't 使用卡片套卡片。

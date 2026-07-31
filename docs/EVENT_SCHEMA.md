@@ -1,6 +1,6 @@
 # YCT Event Schema
 
-更新时间：2026-07-16
+更新时间：2026-07-31
 
 本文档记录雨城通 v2 第一阶段的领域事件。后端业务 Service 只负责本模块校验和写库，成功后发布事件；通知、Push、缓存失效、搜索索引、`ldpass` 同步等副作用由监听器处理。
 
@@ -78,9 +78,12 @@ export interface PlayerLocationPresenceChangedPayload {
 | `TransitDataRevisionLineCreated`             | 管理员新增线路                | 地图线路图层、路线规划候选和管理员审计                                                                                                                                                                                                          |
 | `TransitDataRevisionLineDeleted`             | 管理员删除线路                | 地图线路图层、路线规划缓存、搜索索引和管理员审计                                                                                                                                                                                                |
 | `TransitModeProfileUpdated`                  | 地图/线路交通方式配置更新     | 线路颜色、图标、排序缓存刷新和管理员审计                                                                                                                                                                                                        |
+| `MaterialTransitNetworkProjectImported`      | 用户导入或重新导入 RMP 项目   | 暂存用户级物料线网草稿、恢复物料编辑上下文和记录来源审计；Payload 不携带完整线网快照                                                                                                                                                            |
+| `MaterialTransitNetworkProjectUpdated`       | 用户更新项目线路补充信息      | 刷新物料线网草稿中的主、副线路名称及更新时间；切换客户端当前数据源不会触发该事件                                                                                                                                                                |
+| `MaterialTransitNetworkProjectDeleted`       | 用户显式删除线网项目草稿      | 清理用户级物料线网草稿和相关缓存；仅切回服务器线网不会删除草稿                                                                                                                                                                                  |
 | `TileProviderSelected`                       | 地图瓦片源被选择              | 记录混合内容降级或管理员覆盖                                                                                                                                                                                                                    |
-| `PlayerLocationsObserved`                    | BDSLM 玩家位置源成功返回快照 | 持久化实时玩家位置、刷新地图位置缓存；Payload 仅包含来源、观测时间、在线玩家名列表和数量                                                                                                                                                |
-| `PlayerLocationPresenceChanged`              | 玩家上线或下线状态变化        | 持久化最后在线坐标、地图当前账号位置展示和审计；Payload 包含玩家名、前后状态、X/Z、观测时间与最后在线时间                                                                                                                               |
+| `PlayerLocationsObserved`                    | BDSLM 玩家位置源成功返回快照  | 持久化实时玩家位置、刷新地图位置缓存；Payload 仅包含来源、观测时间、在线玩家名列表和数量                                                                                                                                                        |
+| `PlayerLocationPresenceChanged`              | 玩家上线或下线状态变化        | 持久化最后在线坐标、地图当前账号位置展示和审计；Payload 包含玩家名、前后状态、X/Z、观测时间与最后在线时间                                                                                                                                       |
 | `TripReminderScheduled`                      | 行程提醒创建或同步到账号      | 定时任务、Web Push；登录用户同步待提醒记录到服务端时会发布该事件，payload 携带 `reminderId`、`remindAt`、`title`、`source` 和 `userId`                                                                                                          |
 | `TripReminderDeleted`                        | 账号侧行程提醒副本被删除      | 取消后续提醒、刷新账号历史；当前用于撤销旧站 `orders` 同步同意后删除账号侧 `legacy_order` 提醒副本                                                                                                                                              |
 | `PushPreferenceUpdated`                      | 用户更新通知偏好              | 推送订阅和免打扰策略刷新；当前登录用户在账号页修改通知偏好时会写入服务端偏好仓储并发布该事件                                                                                                                                                    |
@@ -211,12 +214,15 @@ POI 图片以 `imageUrls` 的数组顺序作为地图图库顺序，最多 12 �
 
 实体译名后台一次保存简体源名称、繁体中文和英文。Workflow 写入译名仓储后，分别为 `zh-Hant` 与 `en` 发布既有的 `EntityTranslationUpdated` 事件；删除某一译名同样发布事件，便于监听器统一失效地图、线路和站点搜索缓存。业务 Workflow 不直接调用这些下游模块。
 
+物料线网项目采用用户级草稿存储。RMP 导入成功后发布 `MaterialTransitNetworkProjectImported`；主、副线路名称等补充信息更新后发布 `MaterialTransitNetworkProjectUpdated`；用户显式删除草稿后发布 `MaterialTransitNetworkProjectDeleted`。切换物料工作台的服务器线网与项目线网只改变客户端当前数据源，不发布删除事件，也不清除已暂存项目。事件 Payload 只携带项目标识、用户标识、变更字段与时间，不携带完整线网快照。
+
 ## 4. 投递要求
 
 - 单机 MVP 可以先用 `InMemoryEventBus`。
 - 当前行程提醒投递已使用应用级共享内存事件总线连接 `TripReminderScheduled` 和通知投递监听器，投递记录持久化到 `.yct-data/push-delivery-store.json`。这解决单进程开发环境的监听器解耦，但不替代正式数据库 Outbox。
 - 当前工程已新增 `.yct-data/event-outbox-store.json` 作为单机开发阶段的本地事件 Outbox；业务 workflow 发布事件时先写 Outbox，再交给共享内存事件总线分发。受 `YCT_INTERNAL_TASK_TOKEN` 保护的 `/api/internal/events/process` 可重放 `queued` / `failed` 事件，用于开发期恢复失败监听器和审计验证；它仍不替代数据库事务内 Outbox。
 - 交通版本、线路、站点和交通方式配置变更后的概览/线路标记缓存失效由 `transit-cache-invalidation-listeners.ts` 订阅领域事件完成，交通 workflow 不直接调用缓存模块；Outbox 重放入口会先注册该监听器。
+- 线路停靠位置作为线路快照 `stops[].stopLocationRefs` 的一部分保存；位置变化继续发布 `TransitDataRevisionLineUpdated`，并在 `changedFields` 中记录 `stops`，无需新增耦合到地图或物料模块的专用事件。
 - 内部 Push 投递任务处理到期队列前，会按用户和通知类型检查最小投递间隔；触发限频时把投递延后到下一次允许时间，并记录 `push_rate_limited`。
 - 公开数据发布、Push、Webhook、票务同步必须进入 Transactional Outbox。
 - 事件处理器必须幂等，不能假设只投递一次。

@@ -213,6 +213,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -Target
 ```
 
 如果希望部署完成后直接启动：
+
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot C:\wwwroot\yct-v2 -StartAfterDeploy -Port 3300 -HostName 127.0.0.1 -BasePath v2 -NodePath "C:\node-v22\node.exe"
 ```
@@ -293,7 +294,7 @@ foreach ($relativePath in @(
 
 可以按下面理解：
 
-- `.yct-data`：账号会话、账号映射、管理员成员、交通数据版本、POI 投稿、POI 投稿图片、提醒、通知、票务草稿、离线范围请求等本地仓储；账号会话默认写入 `.yct-data/yct-account-sessions.json`，也可通过 `YCT_SESSION_STORE_PATH` 调整，当前 POI 投稿图片默认在 `.yct-data/poi-submission-images`。
+- `.yct-data`：账号会话、账号映射、管理员成员、交通数据版本、POI 投稿、POI 投稿图片、提醒、通知、票务草稿、离线范围请求和物料线网项目等本地仓储；账号会话默认写入 `.yct-data/yct-account-sessions.json`，也可通过 `YCT_SESSION_STORE_PATH` 调整，当前 POI 投稿图片默认在 `.yct-data/poi-submission-images`。RMP 线网草稿默认写入 `.yct-data/material-transit-network-project-store.json`，可通过 `YCT_MATERIAL_TRANSIT_NETWORK_PROJECT_STORE_PATH` 调整。
 - `runtime-assets`：部署包根目录下的运行时静态资源；当前 POI 分类图标默认在 `runtime-assets/poi-icons`。
 - `apps\web\public\content-assets`：内容后台上传的真实图片和附件。
 - `apps\web\public\legacy-assets`：如果它来自你本地打包机的 `public` 目录，通常已经包含在部署包里；只有当云端还保留了“没有重新打进包的额外旧资源”时，才需要额外手工保留。
@@ -488,7 +489,7 @@ node >=20.9.0
 以下内容应该保存在服务器持久目录或后续数据库/对象存储中，不随每次部署覆盖：
 
 - 部署根目录下的 `.env`、`.env.production`、`.env.local` 等真实环境变量文件。
-- `.yct-data` 本地运行时仓储，其中包含 POI 投稿图片目录 `.yct-data/poi-submission-images`。
+- `.yct-data` 本地运行时仓储，其中包含 POI 投稿图片目录 `.yct-data/poi-submission-images` 和 RMP 线网草稿；后者默认使用 `.yct-data/material-transit-network-project-store.json`。
 - `runtime-assets` 运行时静态资源目录；当前 POI 分类图标默认写入 `runtime-assets/poi-icons`，后续内容素材、旧资源和其他上传文件也会逐步迁入同类目录。
 - 后台上传素材目录 `apps/web/public/content-assets`。
 - 日志、备份和导入中间文件。
@@ -497,5 +498,6 @@ node >=20.9.0
 
 - 增加正式生产启动/停止脚本，和当前 `web:dev:*` 脚本区分。
 - 将 `.yct-data` 替换为数据库与 Transactional Outbox。
+- 将 RMP 线网草稿迁移到共享持久化存储，并补充乐观锁、用户配额、过期清理和多实例一致性。
 - 将后台上传素材迁移到对象存储或共享静态资源目录。当前部署脚本已经会保留与 `start-yct-web.ps1`、`deploy-yct-web.ps1` 平级的 `runtime-assets` 目录，POI 分类图标默认写入 `runtime-assets\poi-icons`；下一阶段再把内容素材、旧资源和后续可能的 `legacy-assets` 逐步迁到同类运行时静态资源目录，并由应用通过配置生成公开 URL。这样替换 standalone 包时不需要反复把上传素材塞回 `apps\web\public` 内部目录，也更适合多版本并行解压和切换。
 - 增加 GitHub Actions 构建 artifact，避免本机手动打包。
