@@ -327,8 +327,8 @@ export function MetroWayfindingEditor({
             warning
           </span>
           <span>
-            当前尺寸宽度不足，文字与大文字已统一横向压缩至
-            {Math.round(layoutSizing.textScaleX * 100)}%。
+            当前尺寸宽度不足，文字元素宽度与大文字已统一横向压缩至
+            {Math.round(layoutSizing.textScaleX * 100)}%，文字行按需适配。
             {layoutSizing.hasUnresolvedOverflow
               ? '非文字元素仍超出可用宽度，请增加导视牌宽度。'
               : ''}

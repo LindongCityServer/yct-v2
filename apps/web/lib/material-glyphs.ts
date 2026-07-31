@@ -186,13 +186,14 @@ function renderMetroWayfinding(value: string, canvasWidth: number, canvasHeight:
       : '',
   ].join('');
   const children = layout.elements.map((element, index) => {
-    const elementScaleX =
-      sizing.layoutScale *
-      (element.type === 'text' || element.type === 'largeText' ? sizing.textScaleX : 1);
-    const elementWidth =
+    const intrinsicElementWidth =
       element.type === 'space' && element.mode === 'flex'
         ? sizing.flexWidth
         : sizing.elementWidths[index]!;
+    const elementWidth =
+      element.type === 'text' ? intrinsicElementWidth * sizing.textScaleX : intrinsicElementWidth;
+    const elementScaleX =
+      sizing.layoutScale * (element.type === 'largeText' ? sizing.textScaleX : 1);
     const displayWidth = elementWidth * elementScaleX;
     const output = renderMetroWayfindingElement(
       element,
@@ -296,6 +297,7 @@ function renderMetroTextRows(
   textAnchor: string,
 ): string {
   const metrics = resolveMetroWayfindingTextMetrics(element.rows);
+  const rowScales = resolveMetroTextRowScales(element, width, metrics);
   let rowTop = (METRO_WAYFINDING_HEIGHT - METRO_WAYFINDING_TEXT_HEIGHT) / 2 + metrics.spacing;
   return element.rows
     .map((row, index) => {
@@ -306,13 +308,22 @@ function renderMetroTextRows(
           ? renderMetroMainSegments(
               row.segments,
               fontSize,
-              width,
               color,
               textX,
               textAnchor,
               baseline,
+              rowScales[index] ?? 1,
             )
-          : renderMetroText(row.value, fontSize, width, color, textAnchor, textX, baseline);
+          : renderMetroText(
+              row.value,
+              fontSize,
+              width,
+              color,
+              textAnchor,
+              textX,
+              baseline,
+              rowScales[index] ?? 1,
+            );
       rowTop += fontSize + (index < element.rows.length - 1 ? metrics.spacing : 0);
       return output;
     })
@@ -322,14 +333,13 @@ function renderMetroTextRows(
 function renderMetroMainSegments(
   segments: MetroWayfindingMainSegment[],
   fontSize: number,
-  width: number,
   color: string,
   textX: number,
   textAnchor: string,
   baseline: number,
+  contentScale: number,
 ): string {
   const totalWidth = measureMetroWayfindingMainSegments(segments, fontSize);
-  const contentScale = totalWidth > width && totalWidth > 0 ? width / totalWidth : 1;
   const renderedWidth = totalWidth * contentScale;
   const segmentGap = fontSize * 0.12;
   const startX =
@@ -346,9 +356,9 @@ function renderMetroMainSegments(
         const diameter = fontSize * 1.12;
         const centerX = cursor + diameter / 2;
         cursor += diameter + trailingGap;
-        return `<g transform="translate(${formatNumber(centerX)} ${formatNumber(baseline - fontSize * 0.32)})"><circle r="${formatNumber(diameter / 2)}" fill="${normalizeColor(segment.color, '#2F80ED')}"/><text y="${formatNumber(fontSize * 0.9 * 0.34)}" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize * 0.9)}" font-weight="400" text-anchor="middle" letter-spacing="${formatNumber(fontSize * -0.07)}">${escapeXml(segment.value)}</text></g>`;
+        return `<g transform="translate(${formatNumber(centerX)} ${formatNumber(baseline - fontSize * 0.32)})"><circle r="${formatNumber(diameter / 2)}" fill="${normalizeColor(segment.color, '#2F80ED')}"/><text y="${formatNumber(fontSize * 0.9 * 0.34)}" fill="#FFFFFF" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize * 0.9)}" font-weight="400" text-anchor="middle" letter-spacing="${formatNumber(fontSize * -0.07)}">${escapeXml(segment.value)}</text></g>`;
       }
-      const output = `<text x="${formatNumber(cursor)}" y="${formatNumber(baseline)}" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="400">${escapeXml(segment.value)}</text>`;
+      const output = `<text x="${formatNumber(cursor)}" y="${formatNumber(baseline)}" fill="${color}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="400">${escapeXml(segment.value)}</text>`;
       cursor += estimateMetroWayfindingTextWidth(segment.value, fontSize) + trailingGap;
       return output;
     })
@@ -364,10 +374,37 @@ function renderMetroText(
   textAnchor: string,
   x = width / 2,
   y = 0,
+  scale = 1,
 ): string {
-  const textWidth = estimateMetroWayfindingTextWidth(value, fontSize);
-  const scale = textWidth > width && textWidth > 0 ? width / textWidth : 1;
-  return `<g transform="translate(${formatNumber(x)} 0) scale(${formatNumber(scale)} 1) translate(-${formatNumber(x)} 0)"><text x="${formatNumber(x)}" y="${formatNumber(y || fontSize)}" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="400" text-anchor="${textAnchor}">${escapeXml(value)}</text></g>`;
+  return `<g transform="translate(${formatNumber(x)} 0) scale(${formatNumber(scale)} 1) translate(-${formatNumber(x)} 0)"><text x="${formatNumber(x)}" y="${formatNumber(y || fontSize)}" fill="${color}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="400" text-anchor="${textAnchor}">${escapeXml(value)}</text></g>`;
+}
+
+function resolveMetroTextRowScales(
+  element: Extract<MetroWayfindingElement, { type: 'text' }>,
+  width: number,
+  metrics: ReturnType<typeof resolveMetroWayfindingTextMetrics>,
+): number[] {
+  const rowWidths = element.rows.map((row) =>
+    row.kind === 'main'
+      ? measureMetroWayfindingMainSegments(row.segments, metrics.mainFontSize)
+      : estimateMetroWayfindingTextWidth(row.value, metrics.secondaryFontSize),
+  );
+  const scales = element.rows.map(() => 1);
+  let groupStart = 0;
+
+  while (groupStart < element.rows.length) {
+    const kind = element.rows[groupStart]!.kind;
+    let groupEnd = groupStart + 1;
+    while (groupEnd < element.rows.length && element.rows[groupEnd]!.kind === kind) {
+      groupEnd += 1;
+    }
+    const groupWidth = Math.max(...rowWidths.slice(groupStart, groupEnd), 0);
+    const groupScale = groupWidth > width && groupWidth > 0 ? width / groupWidth : 1;
+    scales.fill(groupScale, groupStart, groupEnd);
+    groupStart = groupEnd;
+  }
+
+  return scales;
 }
 
 function renderMetroLargeText(

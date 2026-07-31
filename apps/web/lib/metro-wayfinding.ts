@@ -431,15 +431,6 @@ export function measureMetroWayfindingMainSegments(
 export function estimateMetroWayfindingTextWidth(value: string, fontSize: number): number {
   return (
     Array.from(value).reduce(
-      (width, character) => width + metroWayfindingCharacterWidthFactor(character),
-      0,
-    ) * fontSize
-  );
-}
-
-export function estimateMetroWayfindingLargeTextWidth(value: string, fontSize: number): number {
-  return (
-    Array.from(value).reduce(
       (width, character) =>
         width +
         (isBasicLatinCharacter(character)
@@ -448,6 +439,10 @@ export function estimateMetroWayfindingLargeTextWidth(value: string, fontSize: n
       0,
     ) * fontSize
   );
+}
+
+export function estimateMetroWayfindingLargeTextWidth(value: string, fontSize: number): number {
+  return estimateMetroWayfindingTextWidth(value, fontSize);
 }
 
 function isBasicLatinCharacter(character: string): boolean {
