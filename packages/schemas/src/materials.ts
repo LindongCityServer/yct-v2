@@ -328,19 +328,37 @@ export const materialReviewDecisionSchema = z.object({
   reason: z.string().trim().max(500).optional(),
 });
 
-export const materialServerSourceSchema = z.discriminatedUnion('kind', [
+const materialTransitStationServerSourceSchema = z.object({
+  kind: z.literal('transit_station'),
+  stationMarkerId: idSchema,
+  direction: z.enum(['east', 'west', 'north', 'south']),
+  lineIds: z.array(idSchema).min(1).max(12),
+  terminalRole: z.enum(['origin', 'terminal']).optional(),
+});
+
+const materialTransitStationNetworkSourceSchema = z.object({
+  kind: z.literal('transit_station'),
+  networkNodeId: idSchema,
+  lineSelections: z
+    .array(
+      z.object({
+        lineKey: z.string().trim().min(1).max(120),
+        direction: z.enum(['east', 'west', 'north', 'south']),
+      }),
+    )
+    .min(1)
+    .max(12),
+  terminalRole: z.enum(['origin', 'terminal']).optional(),
+});
+
+export const materialServerSourceSchema = z.union([
   z.object({
     kind: z.literal('transit_line'),
     lineId: idSchema,
     stationSourceId: idSchema.optional(),
   }),
-  z.object({
-    kind: z.literal('transit_station'),
-    stationMarkerId: idSchema,
-    direction: z.enum(['east', 'west', 'north', 'south']),
-    lineIds: z.array(idSchema).min(1).max(12),
-    terminalRole: z.enum(['origin', 'terminal']).optional(),
-  }),
+  materialTransitStationServerSourceSchema,
+  materialTransitStationNetworkSourceSchema,
   z.object({
     kind: z.literal('map_location'),
     locationId: idSchema,
@@ -352,6 +370,89 @@ export const materialServerSourceSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 
+const materialTransitNetworkColorSchema = z
+  .string()
+  .regex(/^#[0-9a-f]{6}$/i)
+  .transform((value) => value.toUpperCase());
+
+const materialTransitNetworkNodeSchema = z.object({
+  id: z.string().trim().min(1).max(120),
+  kind: z.enum(['station', 'junction']),
+  names: z.array(z.string().trim().min(1).max(160)).max(8),
+  x: z.number().finite().min(-1_000_000).max(1_000_000),
+  y: z.number().finite().min(-1_000_000).max(1_000_000),
+  lineKeys: z.array(z.string().trim().min(1).max(120)).max(24),
+  lineColors: z.array(materialTransitNetworkColorSchema).max(24),
+});
+
+const materialTransitNetworkEdgeSchema = z.object({
+  id: z.string().trim().min(1).max(120),
+  source: z.string().trim().min(1).max(120),
+  target: z.string().trim().min(1).max(120),
+  lineKeys: z.array(z.string().trim().min(1).max(120)).min(1).max(4),
+  colors: z.array(materialTransitNetworkColorSchema).min(1).max(4),
+  pathKind: z.enum(['simple', 'diagonal', 'perpendicular', 'rotate-perpendicular', 'unknown']),
+  startFrom: z.enum(['from', 'to']).optional(),
+  offsetFrom: z.number().finite().min(-10_000).max(10_000).optional(),
+  offsetTo: z.number().finite().min(-10_000).max(10_000).optional(),
+  roundCornerFactor: z.number().finite().min(0).max(10_000).optional(),
+});
+
+export const materialTransitNetworkLineNameSchema = z.object({
+  lineKey: z.string().trim().min(1).max(120),
+  name: z.string().trim().min(1).max(120),
+  secondaryName: z.string().trim().min(1).max(120).optional(),
+});
+
+export const materialTransitNetworkSnapshotSchema = z
+  .object({
+    format: z.literal('rmp'),
+    version: z.number().int().positive().max(10_000),
+    nodes: z.array(materialTransitNetworkNodeSchema).min(1).max(2_000),
+    edges: z.array(materialTransitNetworkEdgeSchema).min(1).max(4_000),
+    lineNames: z.array(materialTransitNetworkLineNameSchema).max(256).optional(),
+  })
+  .superRefine((value, ctx) => {
+    const nodeIds = new Set(value.nodes.map((node) => node.id));
+    const lineIds = new Set<string>();
+    for (const [index, edge] of value.edges.entries()) {
+      if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: '线网连接引用了不存在的节点。',
+          path: ['edges', index],
+        });
+      }
+      edge.colors.forEach((_color, colorIndex) => {
+        const lineKey = edge.lineKeys[colorIndex] ?? edge.lineKeys[0];
+        if (lineKey) lineIds.add(lineKey);
+      });
+    }
+    const namedLineIds = new Set<string>();
+    for (const [index, line] of (value.lineNames ?? []).entries()) {
+      const lineId = line.lineKey;
+      if (!lineIds.has(lineId) || namedLineIds.has(lineId)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: namedLineIds.has(lineId)
+            ? '同一项目线路不能重复命名。'
+            : '线路名称引用了不存在的项目线路。',
+          path: ['lineNames', index],
+        });
+      }
+      namedLineIds.add(lineId);
+    }
+  });
+
+export const materialTransitNetworkProjectCreateSchema = z.object({
+  fileName: z.string().trim().min(1).max(260),
+  snapshot: materialTransitNetworkSnapshotSchema,
+});
+
+export const materialTransitNetworkProjectUpdateSchema = z.object({
+  lineNames: z.array(materialTransitNetworkLineNameSchema).max(256),
+});
+
 export const materialExportRequestSchema = z
   .object({
     mode: z.enum(['server', 'custom']),
@@ -360,6 +461,7 @@ export const materialExportRequestSchema = z
     templateVersion: z.number().int().positive().optional(),
     canvas: materialCanvasSchema.optional(),
     source: materialServerSourceSchema.optional(),
+    networkGeometry: materialTransitNetworkSnapshotSchema.optional(),
     input: materialInputRecordSchema.optional(),
   })
   .superRefine((value, ctx) => {
@@ -368,6 +470,17 @@ export const materialExportRequestSchema = z
     }
     if (value.mode === 'server' && (!value.templateId || !value.templateVersion || !value.source)) {
       ctx.addIssue({ code: 'custom', message: '服务器导出必须指定模板和真实数据来源。' });
+    }
+    if (
+      value.source?.kind === 'transit_station' &&
+      'networkNodeId' in value.source &&
+      !value.networkGeometry
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '项目站点选择必须同时提交导入的线网数据。',
+        path: ['networkGeometry'],
+      });
     }
   });
 
@@ -379,6 +492,7 @@ export const materialPreviewRequestSchema = z
     canvas: materialCanvasSchema,
     input: materialInputRecordSchema.optional(),
     source: materialServerSourceSchema.optional(),
+    networkGeometry: materialTransitNetworkSnapshotSchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (value.mode === 'manual' && !value.input) {
@@ -391,6 +505,17 @@ export const materialPreviewRequestSchema = z
         path: ['source'],
       });
     }
+    if (
+      value.source?.kind === 'transit_station' &&
+      'networkNodeId' in value.source &&
+      !value.networkGeometry
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '项目站点选择必须同时提交导入的线网数据。',
+        path: ['networkGeometry'],
+      });
+    }
   });
 
 export type MaterialTemplateDraftInput = z.infer<typeof materialTemplateDraftSchema>;
@@ -398,3 +523,12 @@ export type MaterialDraftInput = z.infer<typeof materialDraftInputSchema>;
 export type MaterialExportRequestInput = z.infer<typeof materialExportRequestSchema>;
 export type MaterialPreviewRequestInput = z.infer<typeof materialPreviewRequestSchema>;
 export type MaterialServerSourceInput = z.infer<typeof materialServerSourceSchema>;
+export type MaterialTransitNetworkSnapshotInput = z.infer<
+  typeof materialTransitNetworkSnapshotSchema
+>;
+export type MaterialTransitNetworkProjectCreateInput = z.infer<
+  typeof materialTransitNetworkProjectCreateSchema
+>;
+export type MaterialTransitNetworkProjectUpdateInput = z.infer<
+  typeof materialTransitNetworkProjectUpdateSchema
+>;

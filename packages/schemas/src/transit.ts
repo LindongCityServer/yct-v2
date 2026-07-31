@@ -17,6 +17,12 @@ const materialSymbolNameSchema = z
   .max(80)
   .regex(/^[a-z0-9_]+$/);
 const stationSourceIdSchema = z.string().trim().min(1).max(120);
+const transitLineStopLocationRefSchema = z.object({
+  scope: z.enum(['both', 'up', 'down']),
+  markerId: z.string().trim().min(1).max(220),
+  label: z.string().trim().min(1).max(160),
+  categoryId: z.string().trim().min(1).max(80).optional(),
+});
 const transitLineSegmentPathSchema = z
   .object({
     fromStationSourceId: stationSourceIdSchema,
@@ -153,6 +159,15 @@ export const transitLineDraftSchema = z.object({
       z.object({
         stationSourceId: stationSourceIdSchema,
         oneWay: z.enum(['up', 'down']).nullable().optional(),
+      }),
+    )
+    .max(256)
+    .optional(),
+  stopLocationRefs: z
+    .array(
+      z.object({
+        stationSourceId: stationSourceIdSchema,
+        refs: z.array(transitLineStopLocationRefSchema).max(12),
       }),
     )
     .max(256)

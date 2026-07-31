@@ -258,10 +258,21 @@ export type TransitDataRevisionStatus =
 export type TransitItemApprovalStatus =
   'imported' | 'pending_review' | 'approved' | 'rejected' | 'published' | 'archived';
 
+export type TransitLineStopLocationScope = 'both' | 'up' | 'down';
+
+export interface TransitLineStopLocationRef {
+  scope: TransitLineStopLocationScope;
+  markerId: string;
+  label: string;
+  categoryId?: string;
+}
+
 export interface TransitLineStopSnapshot {
   stationSourceId: string;
   sequence: number;
   oneWay?: 'up' | 'down';
+  /** 当前线路在该站按方向使用的具体地图停靠位置。 */
+  stopLocationRefs?: TransitLineStopLocationRef[];
   status?: string;
   travelTime?: number;
   platformSide?: string;
@@ -1067,6 +1078,59 @@ export type MaterialTemplateFieldKind = 'text' | 'number' | 'select' | 'color';
 export type MaterialDraftStatus = 'draft' | 'pending_review' | 'approved' | 'rejected';
 export type MaterialSourceKind =
   'manual' | 'transit_line' | 'transit_station' | 'map_location' | 'road_coordinate';
+
+export type MaterialTransitNetworkPathKind =
+  'simple' | 'diagonal' | 'perpendicular' | 'rotate-perpendicular' | 'unknown';
+
+export interface MaterialTransitNetworkNode {
+  id: string;
+  kind: 'station' | 'junction';
+  names: string[];
+  x: number;
+  y: number;
+  lineKeys: string[];
+  lineColors: string[];
+}
+
+export interface MaterialTransitNetworkEdge {
+  id: string;
+  source: string;
+  target: string;
+  lineKeys: string[];
+  colors: string[];
+  pathKind: MaterialTransitNetworkPathKind;
+  startFrom?: 'from' | 'to';
+  offsetFrom?: number;
+  offsetTo?: number;
+  roundCornerFactor?: number;
+}
+
+export interface MaterialTransitNetworkLineName {
+  lineKey: string;
+  name: string;
+  secondaryName?: string;
+}
+
+/**
+ * 物料渲染使用的只读线网几何快照。导入时会丢弃 RMP 图片和站点视觉属性，
+ * 只保留坐标、拓扑、换乘线路标识与颜色。
+ */
+export interface MaterialTransitNetworkSnapshot {
+  format: 'rmp';
+  version: number;
+  nodes: MaterialTransitNetworkNode[];
+  edges: MaterialTransitNetworkEdge[];
+  lineNames?: MaterialTransitNetworkLineName[];
+}
+
+export interface MaterialTransitNetworkProject {
+  id: string;
+  ownerId: string;
+  fileName: string;
+  snapshot: MaterialTransitNetworkSnapshot;
+  createdAt: ISODateTimeString;
+  updatedAt: ISODateTimeString;
+}
 
 export interface MaterialTextFitConfig {
   maxWidth: number;

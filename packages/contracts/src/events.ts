@@ -711,6 +711,27 @@ export interface MaterialDraftReviewedPayload {
   reason?: string;
 }
 
+export interface MaterialTransitNetworkProjectImportedPayload {
+  projectId: string;
+  ownerId: string;
+  fileName: string;
+  rmpVersion: number;
+  importedAt: ISODateTimeString;
+}
+
+export interface MaterialTransitNetworkProjectUpdatedPayload {
+  projectId: string;
+  ownerId: string;
+  changedFields: Array<'lineNames'>;
+  updatedAt: ISODateTimeString;
+}
+
+export interface MaterialTransitNetworkProjectDeletedPayload {
+  projectId: string;
+  ownerId: string;
+  deletedAt: ISODateTimeString;
+}
+
 export interface MaterialExportRequestedPayload {
   exportId: string;
   actorId: string;
@@ -1143,6 +1164,9 @@ export type YctEventPayloadMap = {
   MaterialTemplatePublished: MaterialTemplatePublishedPayload;
   MaterialDraftSubmitted: MaterialDraftSubmittedPayload;
   MaterialDraftReviewed: MaterialDraftReviewedPayload;
+  MaterialTransitNetworkProjectImported: MaterialTransitNetworkProjectImportedPayload;
+  MaterialTransitNetworkProjectUpdated: MaterialTransitNetworkProjectUpdatedPayload;
+  MaterialTransitNetworkProjectDeleted: MaterialTransitNetworkProjectDeletedPayload;
   MaterialPreviewGenerated: MaterialPreviewGeneratedPayload;
   MaterialExportRequested: MaterialExportRequestedPayload;
   OperationsStrongReminderRulesUpdated: OperationsStrongReminderRulesUpdatedPayload;
