@@ -29,8 +29,8 @@ export interface MaterialPreviewWatermark {
   traceLines: [string, string];
 }
 
-let materialWatermarkWordmarkMarkupCache:
-  | { viewBox: string; content: string }
+let materialWatermarkWordmarkImageCache:
+  | { dataUri: string; width: number; height: number }
   | undefined;
 
 export function validateMaterialTemplateSource(
@@ -221,19 +221,30 @@ function appendMaterialPreviewWatermark(
   const shorterSide = Math.min(widthPx, heightPx);
   const primaryFontSize = Math.max(10, Math.min(34, Math.round(shorterSide * 0.13)));
   const watermarkColor = '#777777';
-  const watermarkOpacity = 1;
-  const tileWidth = Math.max(96, Math.min(560, widthPx));
+  const watermarkOpacity = 0.62;
+  const layoutReferenceWidth = Math.max(200, Math.min(520, widthPx * 0.92));
   const traceWidthUnits = Math.max(
     ...watermark.traceLines.map((line) => estimateTextWidth(line, 1)),
     1,
   );
   const traceFontSize = Math.max(
     3,
-    Math.min(12, primaryFontSize * 0.72, (tileWidth * 0.44) / traceWidthUnits),
+    Math.min(12, primaryFontSize * 0.72, (layoutReferenceWidth * 0.38) / traceWidthUnits),
   );
   const traceLineHeight = traceFontSize * 1.38;
-  const logoWidth = Math.max(48, Math.min(tileWidth * 0.24, 130));
-  const logoHeight = logoWidth * (72 / 280);
+  const wordmark = getMaterialWatermarkWordmarkImage();
+  const logoWidth = Math.max(48, Math.min(layoutReferenceWidth * 0.22, 130));
+  const logoHeight = logoWidth * (wordmark.height / wordmark.width);
+  const traceBlockWidth = traceWidthUnits * traceFontSize * 1.05;
+  const previewBlockWidth = estimateTextWidth('仅供预览', primaryFontSize) * 1.05;
+  const blockGap = Math.max(64, primaryFontSize * 2.75);
+  const sidePadding = blockGap / 2;
+  const compositionWidth =
+    logoWidth +
+    traceBlockWidth +
+    previewBlockWidth +
+    blockGap * 2 +
+    sidePadding * 2;
   const rowHeight = Math.max(
     48,
     logoHeight + 16,
@@ -241,18 +252,25 @@ function appendMaterialPreviewWatermark(
     traceFontSize + traceLineHeight + 16,
   );
   const patternHeight = rowHeight * 2;
-  const wordmark = getMaterialWatermarkWordmarkMarkup();
   const patternId = 'yct-material-preview-watermark-pattern';
-  const renderPatternRow = (offsetX: number, centerY: number): string => {
-    const logoCenterX = offsetX + tileWidth * 0.15;
-    const traceCenterX = offsetX + tileWidth * 0.52;
-    const previewCenterX = offsetX + tileWidth * 0.87;
+  const renderWatermarkRow = (centerX: number, centerY: number): string => {
+    const contentStartX = centerX - compositionWidth / 2 + sidePadding;
+    const logoCenterX = contentStartX + logoWidth / 2;
+    const traceCenterX = contentStartX + logoWidth + blockGap + traceBlockWidth / 2;
+    const previewCenterX =
+      contentStartX +
+      logoWidth +
+      blockGap +
+      traceBlockWidth +
+      blockGap +
+      previewBlockWidth / 2;
     const traceFirstBaseline = centerY - traceLineHeight / 2 + traceFontSize * 0.34;
-    return `<g><svg x="${formatSvgNumber(logoCenterX - logoWidth / 2)}" y="${formatSvgNumber(centerY - logoHeight / 2)}" width="${formatSvgNumber(logoWidth)}" height="${formatSvgNumber(logoHeight)}" viewBox="${wordmark.viewBox}" overflow="visible"><g color="${watermarkColor}" opacity="${formatSvgNumber(watermarkOpacity)}">${wordmark.content}</g></svg>${renderMaterialWatermarkTraceLines(watermark.traceLines, traceCenterX, traceFirstBaseline, traceFontSize, traceLineHeight, watermarkColor, watermarkOpacity)}<text x="${formatSvgNumber(previewCenterX)}" y="${formatSvgNumber(centerY + primaryFontSize * 0.34)}" font-family="'HarmonyOS Sans SC', sans-serif" text-anchor="middle" fill="${watermarkColor}" fill-opacity="${formatSvgNumber(watermarkOpacity)}" font-size="${formatSvgNumber(primaryFontSize)}" font-weight="700">仅供预览</text></g>`;
+    return `<g><image x="${formatSvgNumber(logoCenterX - logoWidth / 2)}" y="${formatSvgNumber(centerY - logoHeight / 2)}" width="${formatSvgNumber(logoWidth)}" height="${formatSvgNumber(logoHeight)}" href="${wordmark.dataUri}" opacity="${formatSvgNumber(watermarkOpacity)}" preserveAspectRatio="xMidYMid meet"/>${renderMaterialWatermarkTraceLines(watermark.traceLines, traceCenterX, traceFirstBaseline, traceFontSize, traceLineHeight, watermarkColor, watermarkOpacity)}<text x="${formatSvgNumber(previewCenterX)}" y="${formatSvgNumber(centerY + primaryFontSize * 0.34)}" font-family="'HarmonyOS Sans SC', sans-serif" text-anchor="middle" fill="${watermarkColor}" fill-opacity="${formatSvgNumber(watermarkOpacity)}" font-size="${formatSvgNumber(primaryFontSize)}" font-weight="700">仅供预览</text></g>`;
   };
-  const firstRow = renderPatternRow(0, rowHeight / 2);
-  const secondRow = renderPatternRow(tileWidth * 0.25, rowHeight * 1.5);
-  const overlay = `<defs><pattern id="${patternId}" width="${formatSvgNumber(tileWidth)}" height="${formatSvgNumber(patternHeight)}" patternUnits="userSpaceOnUse" patternTransform="rotate(-24)">${firstRow}${secondRow}</pattern></defs><rect id="yct-material-preview-watermark" x="0" y="0" width="${formatSvgNumber(widthPx)}" height="${formatSvgNumber(heightPx)}" fill="url(#${patternId})" pointer-events="none"/>`;
+  const firstRow = renderWatermarkRow(compositionWidth / 2, rowHeight / 2);
+  const secondRowLeft = renderWatermarkRow(0, rowHeight * 1.5);
+  const secondRowRight = renderWatermarkRow(compositionWidth, rowHeight * 1.5);
+  const overlay = `<defs><pattern id="${patternId}" width="${formatSvgNumber(compositionWidth)}" height="${formatSvgNumber(patternHeight)}" patternUnits="userSpaceOnUse" patternTransform="rotate(-24)">${firstRow}${secondRowLeft}${secondRowRight}</pattern></defs><rect id="yct-material-preview-watermark" x="0" y="0" width="${formatSvgNumber(widthPx)}" height="${formatSvgNumber(heightPx)}" fill="url(#${patternId})" pointer-events="none"/>`;
   return svg.replace(/<\/svg>\s*$/i, `${overlay}</svg>`);
 }
 
@@ -268,35 +286,23 @@ function renderMaterialWatermarkTraceLines(
   return `<g font-family="'HarmonyOS Sans SC', sans-serif" text-anchor="middle" fill="${color}" fill-opacity="${formatSvgNumber(opacity)}" font-size="${formatSvgNumber(fontSize)}" font-weight="700">${lines.map((line, index) => `<text x="${formatSvgNumber(x)}" y="${formatSvgNumber(y + lineHeight * index)}">${escapeXml(line)}</text>`).join('')}</g>`;
 }
 
-function getMaterialWatermarkWordmarkMarkup(): { viewBox: string; content: string } {
-  if (materialWatermarkWordmarkMarkupCache) return materialWatermarkWordmarkMarkupCache;
-  const sourcePath = resolveMaterialPublicAssetPath('icons', 'yct-logo-wordmark.svg');
-  const source = readFileSync(sourcePath, 'utf8');
-  const viewBox = source.match(/\bviewBox="([^"]+)"/iu)?.[1];
-  const rawContent = source
-    .replace(/^\s*<svg\b[^>]*>/iu, '')
-    .replace(/<\/svg>\s*$/iu, '')
-    .trim();
-  if (!viewBox || !rawContent) {
-    throw new Error('雨城通 logo-wordmark 资源格式无效。');
-  }
-  const content = namespaceMaterialWatermarkMarkup(rawContent, 'yct-watermark-wordmark')
-    .replace(/\bfill="(?!none)[^"]+"/giu, 'fill="currentColor"')
-    .replace(/\bstop-color="[^"]+"/giu, 'stop-color="currentColor"');
-  materialWatermarkWordmarkMarkupCache = { viewBox, content };
-  return materialWatermarkWordmarkMarkupCache;
-}
-
-function namespaceMaterialWatermarkMarkup(content: string, prefix: string): string {
-  const ids = Array.from(content.matchAll(/\bid="([^"]+)"/gu), (match) => match[1]!);
-  return ids.reduce(
-    (markup, id) =>
-      markup
-        .replaceAll(`id="${id}"`, `id="${prefix}-${id}"`)
-        .replaceAll(`url(#${id})`, `url(#${prefix}-${id})`)
-        .replaceAll(`href="#${id}"`, `href="#${prefix}-${id}"`),
-    content,
+function getMaterialWatermarkWordmarkImage(): {
+  dataUri: string;
+  width: number;
+  height: number;
+} {
+  if (materialWatermarkWordmarkImageCache) return materialWatermarkWordmarkImageCache;
+  const sourcePath = resolveMaterialPublicAssetPath(
+    'material-templates',
+    'preview-watermark-wordmark.png',
   );
+  const png = readFileSync(sourcePath);
+  materialWatermarkWordmarkImageCache = {
+    dataUri: `data:image/png;base64,${Buffer.from(png).toString('base64')}`,
+    width: 1794,
+    height: 428,
+  };
+  return materialWatermarkWordmarkImageCache;
 }
 
 function resolveMaterialPublicAssetPath(...relativePath: string[]): string {
