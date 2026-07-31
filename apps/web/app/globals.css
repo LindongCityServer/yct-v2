@@ -419,6 +419,23 @@ body .material-symbols-outlined {
   box-shadow: var(--yct-shadow-floating);
   color: var(--yct-color-text-secondary);
   font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.login-required-notice {
+  position: fixed;
+  top: calc(64px + var(--yct-space-3));
+  right: var(--yct-space-4);
+  z-index: 120;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: var(--yct-space-2) var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  box-shadow: var(--yct-shadow-floating);
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .workspace {
@@ -15458,7 +15475,7 @@ img.map-player-list-avatar.is-offline {
     var(--yct-motion-easing-emphasized) both;
 }
 
-:is(.topbar-notice, .modal-panel, .map-layer-panel) {
+:is(.topbar-notice, .login-required-notice, .modal-panel, .map-layer-panel) {
   animation: yct-floating-enter var(--yct-motion-duration-enter) var(--yct-motion-easing-emphasized)
     both;
 }

@@ -216,6 +216,17 @@ POI 图片以 `imageUrls` 的数组顺序作为地图图库顺序，最多 12 �
 
 物料线网项目采用用户级草稿存储。RMP 导入成功后发布 `MaterialTransitNetworkProjectImported`；主、副线路名称等补充信息更新后发布 `MaterialTransitNetworkProjectUpdated`；用户显式删除草稿后发布 `MaterialTransitNetworkProjectDeleted`。切换物料工作台的服务器线网与项目线网只改变客户端当前数据源，不发布删除事件，也不清除已暂存项目。事件 Payload 只携带项目标识、用户标识、变更字段与时间，不携带完整线网快照。
 
+登录要求使用客户端瞬时事件统一处理，不进入领域 EventBus 或 Outbox：
+
+```ts
+interface LoginRequiredPayload {
+  message?: string;
+  durationMs?: number;
+}
+```
+
+用户触发的受保护操作收到 HTTP 401，或进入本身必须登录的页面时，调用方发布 `yct:auth-login-required`。根布局监听器展示提示，并在默认 2,400 ms 的提示周期结束后进入临东通登录流程。公开页面上的登录说明、匿名能力提示和后台静默会话探测不得发布该事件，避免无操作自动跳转。
+
 ## 4. 投递要求
 
 - 单机 MVP 可以先用 `InMemoryEventBus`。
