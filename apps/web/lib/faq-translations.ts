@@ -110,6 +110,23 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           },
         },
       },
+      'operations-and-updates': {
+        title: '營運資訊',
+        items: {
+          'operations-expired': {
+            question: '已過有效期的營運資訊還能查看嗎？',
+            answer:
+              '可以。首頁會把超過顯示有效期的內容移到目前分類下的「過期消息」摺疊區；切換分類後，只會顯示該分類目前及過期的內容。已撤回或尚未發布的內容不會在前台顯示。',
+            keywords: ['過期消息', '歷史公告', '有效期', '營運分類', '找不到公告'],
+          },
+          'server-status-refresh': {
+            question: '首頁的伺服器狀態和在線人數是即時的嗎？',
+            answer:
+              '伺服器狀態來自閘道的週期性查詢，頁面約每 15 秒重新整理一次，並非持續即時連線。短暫查詢失敗時會保留最近一次明確狀態；需要判斷特定玩家位置時，請進入地圖並結合「最近觀測」和「最後在線」時間查看。',
+            keywords: ['伺服器狀態', '在線人數', '延遲', '重新整理頻率', '狀態未更新'],
+          },
+        },
+      },
       'map-and-routes': {
         title: '地圖與路線',
         items: {
@@ -151,6 +168,12 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             answer:
               '玩家位置來自伺服器閘道的週期性觀測，不是瀏覽器 GPS 即時定位。網路、伺服器狀態和輪詢間隔都會帶來延遲，請結合「最近觀測」和「最後上線」時間判斷位置是否仍然有效。',
             keywords: ['即時位置', '玩家離線', '定位不準', '位置輪詢'],
+          },
+          'directional-stop-location': {
+            question: '為什麼同一車站在不同線路或方向上顯示的停靠位置不同？',
+            answer:
+              '車站可以為某條線路設定預設停靠位置，也可以分別設定正向和反向位置。線路詳情和路線規劃會優先使用目前方向的位置；未設定時依次回退到該線路預設位置和車站預設位置。',
+            keywords: ['停靠位置', '上下行', '正向', '反向', '站點位置', '乘車點'],
           },
           'map-tile-provider': {
             question: '衛星地圖看起來不夠新，怎樣切換瓦片來源？',
@@ -195,6 +218,24 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             answer:
               '是否提供訂票入口取決於該班次已發布資料中是否包含有效的訂票連結。沒有連結的班次仍可用於查詢，不能據此推斷該班次一定不可購買。',
             keywords: ['訂票', '購票', '預訂', '沒有連結', '僅查詢'],
+          },
+          'transit-screen-scope': {
+            question: '智運大屏和班次查詢有什麼不同？',
+            answer:
+              '智運大屏用於快速查看目前資料快照中的車站、線路、檢票口和近期班次；班次查詢提供日期、站點、服務類型和時段等詳細篩選。兩者都以目前已發布資料為準，頁面中的舊版入口可能讀取獨立資料來源。',
+            keywords: ['智運大屏', '近期班次', '班次查詢', '檢票口', '舊版大屏'],
+          },
+          'ticketing-unavailable': {
+            question: '為什麼班次可以查詢，卻顯示「暫不可訂」或不能建立訂單草稿？',
+            answer:
+              '可查詢不等於可售。建立新版訂單草稿需要有效的臨東通登入狀態，並且該班次已接入統一票務、設定真實票種和庫存，目前仍有可售餘量。舊版訂票連結只作為獨立參考入口，不代表新版票務已經可用。',
+            keywords: ['暫不可訂', '庫存待設定', '暫無餘票', '新票務待接入', '訂單草稿'],
+          },
+          'ticket-draft-not-issued': {
+            question: '建立訂單草稿後，是否已經買到票？',
+            answer:
+              '沒有。訂單草稿只會暫時佔用對應庫存，預設佔用 15 分鐘，不代表已經出票或取得可核銷憑證。草稿取消或逾時後會釋放佔用；只有後續狀態明確變為「已出票」並出現有效票券或憑證，才表示出票完成。',
+            keywords: ['訂單草稿', '占座', '庫存佔用', '15 分鐘', '已出票', '核銷憑證'],
           },
           'ride-code-login': {
             question: '點擊乘車碼後為什麼跳轉到帳號頁？',
@@ -308,6 +349,47 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
               '新版物料工具優先讀取已經發布的線路、站點和地點資料。內容仍處於草稿、審核中或缺少必要欄位時，不會成為可選資料來源；舊版產生器還可能使用獨立的舊資料。',
             keywords: ['路牌物料', '大眾運輸導視', '站牌產生器', '線路資料'],
           },
+          'material-review-download': {
+            question: '為什麼自訂物料可以預覽，卻還不能下載？',
+            answer: [
+              '在',
+              { text: '物料工具', href: '/services' },
+              '中，手動填寫的自訂物料需要先提交審核，審核通過後才能從物料歷史下載；預覽成功不代表已經通過審核。使用伺服器資料或已匯入專案的關聯資料模式，可以按目前所選資料直接匯出，無需提交自訂物料審核。',
+            ],
+            keywords: ['物料審核', '無法下載', '預覽', '自訂物料', '物料歷史', '關聯資料'],
+          },
+          'rmp-import-requirements': {
+            question: '匯入 RMP 線網專案失敗時，應檢查哪些內容？',
+            answer: [
+              'RMP 指',
+              {
+                text: '地鐵線路圖繪製器（Rail Map Painter）',
+                href: 'https://railmapgen.org/?app=rmp',
+              },
+              '。請在',
+              { text: '大眾運輸導視', href: '/services/transit-materials' },
+              '中選擇 JSON 格式的 RMP 專案檔案。目前支援 RMP v77 及以下版本，檔案不能超過 5 MB，最多包含 2,000 個節點和 4,000 條連接；專案還需要至少一個帶名稱的可識別車站，以及一條帶有效線路配色的連接。',
+            ],
+            keywords: ['RMP', 'JSON', '匯入失敗', '5 MB', 'v77', '線網專案'],
+          },
+          'rmp-import-readonly': {
+            question: '匯入 RMP 專案後，可以在物料工作台修改線網嗎？',
+            answer:
+              '不可以。工作台把 RMP 專案作為唯讀的自訂線網資料使用，不支援修改專案檔案固有的站點、站序、站名、連接或拓撲。需要調整這些內容時，請回到地鐵線路圖繪製器修改專案並重新匯入；工作台只允許補充線路主名稱和副名稱，再根據所選站點、方向和線路產生導視物料。',
+            keywords: ['RMP 唯讀', '修改站點', '修改站序', '修改站名', '重新匯入', '自訂線網'],
+          },
+          'rmp-project-storage': {
+            question: '匯入的 RMP 專案會保留嗎？切回伺服器線網會刪除它嗎？',
+            answer:
+              '有效專案會立即用於目前頁面。帳號處於可用登入狀態時，系統還會嘗試把它暫存為目前使用者的線網草稿：「已暫存」表示重新開啟頁面後可以恢復，「僅本頁」表示沒有儲存成功。切換到伺服器線網不會刪除草稿，只有使用「移除已匯入專案」才會清除它。',
+            keywords: ['RMP 暫存', '僅本頁', '已暫存', '伺服器線網', '刪除專案', '登入'],
+          },
+          'rmp-line-names-colors': {
+            question: '為什麼匯入 RMP 後顯示內部線路編號，線路名稱和顏色從哪裡來？',
+            answer:
+              'RMP 專案提供線網拓撲、車站名稱、線路標識和連接配色，但不一定包含適合顯示的業務線路名稱。可以使用「設定專案線路名稱」為每條線路補充主名稱和副名稱；線路顏色仍取自專案中的有效連接配色，修改名稱不會改變線網拓撲。',
+            keywords: ['線路編號', '線路名稱', '副名稱', '線路顏色', 'RMP 配色', '線網拓撲'],
+          },
           'network-health-meaning': {
             question: '大眾運輸網路健康度可以直接作為營運結論嗎？',
             answer:
@@ -386,6 +468,35 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           },
         },
       },
+      'operations-and-updates': {
+        title: 'Operations and Updates',
+        items: {
+          'operations-expired': {
+            question: 'Can I still read an update after its display period ends?',
+            answer:
+              'Yes. The home page moves content past its display period into the Expired Updates section under the current category. After changing categories, only current and expired content in that category is shown. Withdrawn or unpublished content is not visible publicly.',
+            keywords: [
+              'expired updates',
+              'old notice',
+              'display period',
+              'update category',
+              'missing notice',
+            ],
+          },
+          'server-status-refresh': {
+            question: 'Are the server status and online player count live?',
+            answer:
+              'Server status comes from periodic gateway queries. The page refreshes it about every 15 seconds rather than using a continuous live connection. A brief query failure keeps the last confirmed state. To check a specific player, open the map and use the last observed and last online times.',
+            keywords: [
+              'server status',
+              'online players',
+              'latency',
+              'refresh interval',
+              'status not updating',
+            ],
+          },
+        },
+      },
       'map-and-routes': {
         title: 'Map and Routes',
         items: {
@@ -431,6 +542,19 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
               'player offline',
               'inaccurate location',
               'location polling',
+            ],
+          },
+          'directional-stop-location': {
+            question: 'Why does one station use different stop locations by line or direction?',
+            answer:
+              'A station can have a default stop location for a line and separate locations for each travel direction. Line details and route planning prefer the location for the current direction, then fall back to the line default and finally the station default.',
+            keywords: [
+              'stop location',
+              'travel direction',
+              'inbound',
+              'outbound',
+              'station location',
+              'boarding point',
             ],
           },
           'map-tile-provider': {
@@ -483,6 +607,43 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             answer:
               'A booking entry is shown only when the published trip data includes a valid booking URL. A trip without a link can still be searched; this does not prove that the trip cannot be purchased.',
             keywords: ['booking', 'ticket purchase', 'reservation', 'no link', 'query only'],
+          },
+          'transit-screen-scope': {
+            question: 'How is Transit Screen different from Schedule Search?',
+            answer:
+              'Transit Screen gives a quick view of stations, lines, gates, and upcoming trips in the current data snapshot. Schedule Search provides detailed filters for dates, stops, service types, and time ranges. Both use currently published data, while a legacy screen link may read a separate source.',
+            keywords: [
+              'Transit Screen',
+              'upcoming trips',
+              'Schedule Search',
+              'gate',
+              'legacy screen',
+            ],
+          },
+          'ticketing-unavailable': {
+            question: 'Why is a searchable trip unavailable for booking or order drafts?',
+            answer:
+              'Searchable does not mean sellable. A new order draft requires an active LDPASS sign-in, a trip connected to unified ticketing, real fare and inventory configuration, and remaining capacity. A legacy booking link is only a separate reference and does not mean new ticketing is available.',
+            keywords: [
+              'unavailable',
+              'inventory pending',
+              'sold out',
+              'ticketing pending',
+              'order draft',
+            ],
+          },
+          'ticket-draft-not-issued': {
+            question: 'Have I bought a ticket after creating an order draft?',
+            answer:
+              'No. An order draft only holds the relevant inventory, for 15 minutes by default. It is not an issued ticket or a redeemable credential. Cancelling the draft or letting it expire releases the hold. Issuance is complete only after the status explicitly becomes Issued and a valid ticket or credential appears.',
+            keywords: [
+              'order draft',
+              'seat hold',
+              'inventory hold',
+              '15 minutes',
+              'issued',
+              'redemption credential',
+            ],
           },
           'ride-code-login': {
             question: 'Why does Ride Code take me to the account page?',
@@ -626,6 +787,78 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             answer:
               'New material tools prefer published line, station, and place data. Drafts, items under review, and content missing required fields are not selectable sources. Legacy generators may also use separate legacy data.',
             keywords: ['road sign material', 'transit wayfinding', 'stop generator', 'line data'],
+          },
+          'material-review-download': {
+            question: 'Why can I preview a custom material but not download it yet?',
+            answer: [
+              'In ',
+              { text: 'Material Tools', href: '/services' },
+              ', manually entered custom material must be submitted for review and approved before it can be downloaded from material history. A successful preview is not an approval. Linked-data mode using server data or an imported project can export the current selection directly without custom-material review.',
+            ],
+            keywords: [
+              'material review',
+              'cannot download',
+              'preview',
+              'custom material',
+              'material history',
+              'linked data',
+            ],
+          },
+          'rmp-import-requirements': {
+            question: 'What should I check when an RMP network project fails to import?',
+            answer: [
+              'RMP refers to ',
+              {
+                text: 'Rail Map Painter',
+                href: 'https://railmapgen.org/?app=rmp',
+              },
+              '. Select its JSON project file from ',
+              { text: 'Transit Wayfinding', href: '/services/transit-materials' },
+              '. The current importer supports RMP v77 and earlier, files up to 5 MB, 2,000 nodes, and 4,000 edges. The project also needs at least one recognized named station and one edge with valid line colors.',
+            ],
+            keywords: ['RMP', 'JSON', 'import failed', '5 MB', 'v77', 'network project'],
+          },
+          'rmp-import-readonly': {
+            question:
+              'Can I edit the network in the material workspace after importing an RMP project?',
+            answer:
+              'No. The workspace uses an RMP project as read-only custom network data. It cannot change intrinsic project information such as stations, station order, station names, edges, or topology. Make those changes in Rail Map Painter and import the project again. The workspace only lets you add primary and secondary line names, then create wayfinding material from selected stations, directions, and lines.',
+            keywords: [
+              'RMP read-only',
+              'edit station',
+              'edit station order',
+              'edit station name',
+              'import again',
+              'custom network',
+            ],
+          },
+          'rmp-project-storage': {
+            question:
+              'Is an imported RMP project kept, and does switching to server data delete it?',
+            answer:
+              'A valid project is available on the current page immediately. With an active signed-in account, the app also tries to store a network draft for that user. "Stored" means it can be restored after reopening the page; "This page only" means it was not saved. Switching to the server network does not delete the draft. Only Remove imported project clears it.',
+            keywords: [
+              'RMP storage',
+              'this page only',
+              'stored',
+              'server network',
+              'delete project',
+              'sign in',
+            ],
+          },
+          'rmp-line-names-colors': {
+            question:
+              'Why does an imported RMP show internal line IDs, and where do names and colors come from?',
+            answer:
+              'An RMP project provides network topology, station names, line identifiers, and edge colors, but it may not contain display-ready service names. Use Configure project line names to add a primary and secondary name for each line. Colors still come from valid colored edges in the project, and changing a name does not change the topology.',
+            keywords: [
+              'line ID',
+              'line name',
+              'secondary name',
+              'line color',
+              'RMP palette',
+              'network topology',
+            ],
           },
           'network-health-meaning': {
             question: 'Can transit network health be used as an operational conclusion?',
