@@ -426,6 +426,7 @@ function renderMetroIcon(
       color,
       instanceId,
       resolveMetroFacilityAssetDirectionTransform(iconId, direction),
+      framed ? 1 : 1.1,
     );
   }
 
@@ -434,7 +435,8 @@ function renderMetroIcon(
     : '';
   const { viewBox, content } = getMaterialSymbolMarkup(symbol);
   const transform = resolveMetroIconDirectionTransform(iconId, direction);
-  return `${frame}<g transform="${transform}"><svg x="0" y="21.5" width="85" height="85" viewBox="${viewBox}" fill="${color}" aria-hidden="true">${content}</svg></g>`;
+  const scaleTransform = resolveMetroIconScaleTransform(framed ? 0.9 : 1);
+  return `${frame}<g transform="${transform}"><g transform="${scaleTransform}"><svg x="0" y="21.5" width="85" height="85" viewBox="${viewBox}" fill="${color}" aria-hidden="true">${content}</svg></g></g>`;
 }
 
 function renderMetroFacilityAsset(
@@ -443,13 +445,19 @@ function renderMetroFacilityAsset(
   color: string,
   instanceId: string,
   transform = '',
+  scale = 1,
 ): string {
   const { viewBox, content } = getMetroFacilityAssetMarkup(assetName, variant);
   const namespacedContent = namespaceMetroFacilityAssetMarkup(
     content,
     `${instanceId}-${variant}-${assetName}`,
   );
-  return `<g transform="${transform}"><svg x="0" y="21.5" width="85" height="85" viewBox="${viewBox}" color="${color}" fill="${color}" aria-hidden="true">${namespacedContent}</svg></g>`;
+  const scaleTransform = resolveMetroIconScaleTransform(scale);
+  return `<g transform="${transform}"><g transform="${scaleTransform}"><svg x="0" y="21.5" width="85" height="85" viewBox="${viewBox}" color="${color}" fill="${color}" aria-hidden="true">${namespacedContent}</svg></g></g>`;
+}
+
+function resolveMetroIconScaleTransform(scale: number): string {
+  return scale === 1 ? '' : `translate(42.5 64) scale(${scale}) translate(-42.5 -64)`;
 }
 
 function resolveMetroFacilityAssetDirectionTransform(
