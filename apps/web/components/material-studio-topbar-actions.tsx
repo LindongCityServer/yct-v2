@@ -1,12 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { appPath } from '../lib/app-paths';
+import { publishLoginRequired } from '../lib/client-auth-events';
 import {
   requestMaterialStudioAction,
   subscribeMaterialStudioActionBlocked,
   subscribeMaterialStudioState,
   type MaterialStudioStateChangedPayload,
 } from '../lib/client-material-studio-events';
+
+type AccountStatus = 'not_configured' | 'anonymous' | 'active' | 'readonly' | 'unavailable';
+
+interface AccountStatusResponse {
+  accountStatus?: AccountStatus;
+}
 
 const initialState: Omit<MaterialStudioStateChangedPayload, 'studioId'> = {
   mode: 'manual',
@@ -17,6 +25,23 @@ const initialState: Omit<MaterialStudioStateChangedPayload, 'studioId'> = {
 export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: string }>) {
   const [studioState, setStudioState] = useState(initialState);
   const [blockedMessage, setBlockedMessage] = useState('');
+  const [accountStatus, setAccountStatus] = useState<AccountStatus>();
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(appPath('/api/account/status'), { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) return undefined;
+        return (await response.json()) as AccountStatusResponse;
+      })
+      .then((payload) => {
+        if (!cancelled) setAccountStatus(payload?.accountStatus);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(
     () =>
@@ -44,6 +69,13 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
     requestMaterialStudioAction({ studioId, action });
   };
   const previewLabel = studioState.hasPreview ? '更新预览' : '预览';
+  const reviewBadgeId = `${studioId}-review-watermark-badge`;
+  const isAnonymous = accountStatus === 'anonymous';
+  const showReviewBadge = isAnonymous || studioState.mode === 'manual';
+
+  const requestLogin = () => {
+    publishLoginRequired({ message: '登录后可提交审核并下载无水印图片。', durationMs: 0 });
+  };
 
   return (
     <div className="topbar-actions material-studio-topbar-actions">
@@ -59,18 +91,40 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
           {studioState.hasPreview ? 'refresh' : 'visibility'}
         </span>
       </button>
-      <button
-        type="button"
-        className="icon-button"
-        aria-label="提交审核"
-        title="提交审核"
-        disabled={studioState.isBusy}
-        onClick={() => requestAction('submit')}
-      >
-        <span className="material-symbols-outlined" aria-hidden="true">
-          publish
-        </span>
-      </button>
+      <div className="material-studio-review-action">
+        {showReviewBadge ? (
+          isAnonymous ? (
+            <button
+              id={reviewBadgeId}
+              type="button"
+              className="material-studio-review-badge is-login-action"
+              title="登录后可提交审核并下载无水印图片"
+              onClick={requestLogin}
+            >
+              登录去水印
+            </button>
+          ) : (
+            <span id={reviewBadgeId} className="material-studio-review-badge">
+              去水印需审核
+            </span>
+          )
+        ) : null}
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="提交审核"
+          aria-describedby={showReviewBadge ? reviewBadgeId : undefined}
+          title={
+            studioState.mode === 'manual' ? '提交审核；审核通过后可下载无水印图片' : '提交审核'
+          }
+          disabled={studioState.isBusy}
+          onClick={() => requestAction('submit')}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            publish
+          </span>
+        </button>
+      </div>
       <button
         type="button"
         className="icon-button is-primary"

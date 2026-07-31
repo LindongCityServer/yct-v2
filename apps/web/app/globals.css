@@ -5389,6 +5389,37 @@ img.map-player-list-avatar.is-offline {
   line-height: 1.4;
 }
 
+.transit-network-heading-import-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--yct-color-primary) 40%, var(--yct-color-border));
+  border-radius: var(--yct-radius-control);
+  background: var(--yct-color-primary-soft);
+  color: var(--yct-color-primary-hover);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.transit-network-source-heading .transit-network-heading-import-button span {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.transit-network-heading-import-button .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.transit-network-heading-import-button:is(:hover, :focus-visible) {
+  border-color: var(--yct-color-primary);
+  background: color-mix(in srgb, var(--yct-color-primary-soft) 72%, #ffffff);
+}
+
 .transit-network-import-button {
   display: inline-flex;
   align-items: center;
@@ -5412,7 +5443,7 @@ img.map-player-list-avatar.is-offline {
 
 .transit-network-import-summary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: var(--yct-space-2);
   padding-block: var(--yct-space-1);
@@ -5421,7 +5452,45 @@ img.map-player-list-avatar.is-offline {
 .transit-network-import-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 4px;
+}
+
+.transit-network-maintenance-button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-primary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.transit-network-maintenance-button .material-symbols-outlined {
+  font-size: 17px;
+}
+
+.transit-network-import-actions .transit-network-maintenance-button span {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.transit-network-maintenance-button:not(:disabled):is(:hover, :focus-visible) {
+  border-color: var(--yct-color-primary);
+  background: var(--yct-color-primary-soft);
+}
+
+.transit-network-maintenance-button:disabled {
+  color: var(--yct-color-text-muted);
+  cursor: default;
+  opacity: 0.72;
 }
 
 .transit-network-import-summary > div:first-child {
@@ -5513,10 +5582,51 @@ img.map-player-list-avatar.is-offline {
   max-height: min(720px, calc(100dvh - 32px));
 }
 
+.transit-network-station-name-dialog {
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(760px, calc(100dvh - 32px));
+}
+
 .transit-network-line-name-list {
   display: grid;
   gap: var(--yct-space-2);
   overflow-y: auto;
+}
+
+.transit-network-station-name-list {
+  display: grid;
+  gap: var(--yct-space-2);
+  overflow-y: auto;
+}
+
+.transit-network-station-name-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.1fr) repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.transit-network-station-name-row > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.transit-network-station-name-row strong,
+.transit-network-station-name-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transit-network-station-name-row strong {
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+}
+
+.transit-network-station-name-row span {
+  color: var(--yct-color-text-muted);
+  font-size: 11px;
 }
 
 .transit-network-line-name-list label {
@@ -5563,7 +5673,8 @@ img.map-player-list-avatar.is-offline {
 }
 
 @media (max-width: 520px) {
-  .transit-network-line-name-list label {
+  .transit-network-line-name-list label,
+  .transit-network-station-name-row {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--yct-space-1);
   }
@@ -14315,6 +14426,39 @@ img.map-player-list-avatar.is-offline {
   gap: var(--yct-space-1);
   margin-left: 0;
   padding: 0;
+}
+
+.material-studio-review-action {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.material-studio-review-badge {
+  max-width: 96px;
+  padding: 3px 6px;
+  border: 1px solid color-mix(in srgb, var(--yct-color-primary) 34%, transparent);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-primary-soft);
+  color: var(--yct-color-primary-hover);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+button.material-studio-review-badge {
+  font-family: inherit;
+}
+
+.material-studio-review-badge.is-login-action {
+  cursor: pointer;
+}
+
+.material-studio-review-badge.is-login-action:is(:hover, :focus-visible) {
+  border-color: var(--yct-color-primary);
+  background: color-mix(in srgb, var(--yct-color-primary-soft) 72%, #ffffff);
 }
 
 .material-studio-topbar-actions .icon-button:disabled {
