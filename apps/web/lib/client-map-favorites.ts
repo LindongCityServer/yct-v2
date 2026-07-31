@@ -1,5 +1,6 @@
 import type { UserMapFavorites } from '@yct/contracts';
 import { appPath } from './app-paths';
+import { publishLoginRequiredForResponse } from './client-auth-events';
 
 export const mapFavoriteStorageKey = 'yct.mapFavorites.v1';
 
@@ -71,6 +72,7 @@ export async function readServerMapFavoriteMarkerIds(): Promise<string[]> {
   });
 
   if (!response.ok) {
+    publishLoginRequiredForResponse(response);
     throw new Error('账号地图收藏暂不可用');
   }
 
@@ -89,6 +91,7 @@ export async function writeServerMapFavoriteMarkerIds(markerIds: string[]): Prom
   });
 
   if (!response.ok) {
+    publishLoginRequiredForResponse(response);
     throw new Error('账号地图收藏同步失败');
   }
 

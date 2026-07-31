@@ -4,6 +4,7 @@ import type { ApiItemResponse, TicketOrderListItem } from '@yct/contracts';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { publishLoginRequiredForResponse } from '../lib/client-auth-events';
 import { notifyTicketOrderStateChanged } from '../lib/client-ticket-orders';
 import { useI18n } from '../lib/client-i18n';
 import {
@@ -33,6 +34,15 @@ export function TicketOrderDetailPanel({
         message?: string;
       };
 
+      if (
+        publishLoginRequiredForResponse(response, {
+          message: t('travelSchedule.order.loginRequired'),
+        })
+      ) {
+        setItem(null);
+        setStatusText(t('travelSchedule.order.loginRequired'));
+        return;
+      }
       if (!response.ok || !data.item) {
         throw new Error(data.message ?? t('ticketOrderDetail.readFailed'));
       }
@@ -61,6 +71,14 @@ export function TicketOrderDetailPanel({
         message?: string;
       };
 
+      if (
+        publishLoginRequiredForResponse(response, {
+          message: t('travelSchedule.order.loginRequired'),
+        })
+      ) {
+        setStatusText(t('travelSchedule.order.loginRequired'));
+        return;
+      }
       if (!response.ok || !data.item) {
         throw new Error(data.message ?? t('ticketOrderDetail.cancelFailed'));
       }
@@ -123,7 +141,9 @@ export function TicketOrderDetailPanel({
           </h2>
           <p>{t('ticketOrderDetail.description')}</p>
         </div>
-        <span className="ticket-order-status-badge">{formatTicketOrderStatus(order.status, t)}</span>
+        <span className="ticket-order-status-badge">
+          {formatTicketOrderStatus(order.status, t)}
+        </span>
       </div>
 
       <dl className="ticket-order-detail-grid">
@@ -137,11 +157,23 @@ export function TicketOrderDetailPanel({
           value={t('ticketOrderDraft.passengerCount', { count: order.passengerCount })}
         />
         <DetailItem label={t('ticketOrderDetail.field.tripId')} value={order.tripInstanceId} />
-        <DetailItem label={t('ticketOrderDetail.field.fareProductId')} value={order.fareProductId} />
-        <DetailItem label={t('ticketOrderDetail.field.createdAt')} value={formatDateTime(order.createdAt, locale)} />
-        <DetailItem label={t('ticketOrderDetail.field.updatedAt')} value={formatDateTime(order.updatedAt, locale)} />
+        <DetailItem
+          label={t('ticketOrderDetail.field.fareProductId')}
+          value={order.fareProductId}
+        />
+        <DetailItem
+          label={t('ticketOrderDetail.field.createdAt')}
+          value={formatDateTime(order.createdAt, locale)}
+        />
+        <DetailItem
+          label={t('ticketOrderDetail.field.updatedAt')}
+          value={formatDateTime(order.updatedAt, locale)}
+        />
         {order.cancelledAt ? (
-          <DetailItem label={t('ticketOrderDetail.field.cancelledAt')} value={formatDateTime(order.cancelledAt, locale)} />
+          <DetailItem
+            label={t('ticketOrderDetail.field.cancelledAt')}
+            value={formatDateTime(order.cancelledAt, locale)}
+          />
         ) : null}
         {order.cancellationReason ? (
           <DetailItem
@@ -160,7 +192,10 @@ export function TicketOrderDetailPanel({
         </div>
         {inventoryHold ? (
           <dl className="ticket-order-detail-grid">
-            <DetailItem label={t('ticketOrderDetail.hold.id')} value={inventoryHold.inventoryHoldId} />
+            <DetailItem
+              label={t('ticketOrderDetail.hold.id')}
+              value={inventoryHold.inventoryHoldId}
+            />
             <DetailItem
               label={t('ticketOrderDetail.hold.status')}
               value={formatInventoryHoldStatus(inventoryHold.status, t)}
@@ -173,9 +208,15 @@ export function TicketOrderDetailPanel({
               label={t('ticketOrderDetail.hold.expiresAt')}
               value={formatTicketHoldExpiresAt(inventoryHold.expiresAt, locale)}
             />
-            <DetailItem label={t('ticketOrderDetail.hold.poolId')} value={inventoryHold.inventoryPoolId} />
+            <DetailItem
+              label={t('ticketOrderDetail.hold.poolId')}
+              value={inventoryHold.inventoryPoolId}
+            />
             {inventoryHold.releasedAt ? (
-              <DetailItem label={t('ticketOrderDetail.hold.releasedAt')} value={formatDateTime(inventoryHold.releasedAt, locale)} />
+              <DetailItem
+                label={t('ticketOrderDetail.hold.releasedAt')}
+                value={formatDateTime(inventoryHold.releasedAt, locale)}
+              />
             ) : null}
           </dl>
         ) : (

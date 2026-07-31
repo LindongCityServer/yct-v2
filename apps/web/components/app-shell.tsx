@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { publishLoginRequired, publishLoginRequiredForResponse } from '../lib/client-auth-events';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import {
   publishMapNavigationLayoutChanged,
@@ -182,8 +183,7 @@ export function AppShell({
     }
 
     if (accountStatus?.accountStatus !== 'active') {
-      showTopbarNotice(t('quickAction.rideCodeLoginRequired'));
-      router.push(appPath('/account'));
+      publishLoginRequired({ message: t('quickAction.rideCodeLoginRequired') });
       return;
     }
 
@@ -194,6 +194,13 @@ export function AppShell({
         cache: 'no-store',
       });
       const payload = (await response.json()) as RideCodeResponse;
+      if (
+        publishLoginRequiredForResponse(response, {
+          message: t('quickAction.rideCodeLoginRequired'),
+        })
+      ) {
+        return;
+      }
       if (!response.ok || !payload.actionUrl) {
         showTopbarNotice(payload.message ?? t('quickAction.rideCodeUnavailable'));
         return;

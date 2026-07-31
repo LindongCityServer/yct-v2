@@ -16,6 +16,7 @@ import type {
 } from '@yct/contracts';
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { publishLoginRequired, publishLoginRequiredForResponse } from '../lib/client-auth-events';
 import { notifyTicketOrderStateChanged } from '../lib/client-ticket-orders';
 import {
   clearTravelScheduleHistory,
@@ -64,7 +65,7 @@ export function TravelScheduleQueryPanel({
   const syncScheduleHistory = () => {
     setHistoryState(readTravelScheduleHistoryState());
   };
-  const refreshTicketOrders = async () => {
+  const refreshTicketOrders = async (startLoginWhenRequired = false) => {
     try {
       const response = await fetch(appPath('/api/travel/ticketing/orders'), { cache: 'no-store' });
       const data = (await response.json()) as Partial<ApiListResponse<TicketOrderListItem>> & {
@@ -74,6 +75,9 @@ export function TravelScheduleQueryPanel({
       if (response.status === 401) {
         setTicketOrders([]);
         setTicketOrderStatusText(t('travelSchedule.order.loginRequired'));
+        if (startLoginWhenRequired) {
+          publishLoginRequired({ message: t('travelSchedule.order.loginRequired') });
+        }
         return;
       }
 
@@ -105,6 +109,13 @@ export function TravelScheduleQueryPanel({
       const data = (await response.json()) as Partial<ApiItemResponse<TicketOrderListItem>> & {
         message?: string;
       };
+      if (
+        publishLoginRequiredForResponse(response, {
+          message: t('travelSchedule.order.loginRequired'),
+        })
+      ) {
+        return;
+      }
       if (!response.ok || !data.item) {
         throw new Error(data.message ?? t('travelSchedule.order.cancelFailed'));
       }
@@ -346,7 +357,7 @@ export function TravelScheduleQueryPanel({
         statusText={ticketOrderStatusText}
         tripById={tripById}
         onCancel={(orderId) => void cancelTicketOrder(orderId)}
-        onRefresh={() => void refreshTicketOrders()}
+        onRefresh={() => void refreshTicketOrders(true)}
       />
 
       {filteredTrips.length > 0 ? (
@@ -577,6 +588,13 @@ function ScheduleTripCard({
       const data = (await response.json()) as Partial<ApiItemResponse<TicketOrderDraftResult>> & {
         message?: string;
       };
+      if (
+        publishLoginRequiredForResponse(response, {
+          message: t('travelSchedule.order.loginRequired'),
+        })
+      ) {
+        return;
+      }
       if (!response.ok || !data.item) {
         throw new Error(data.message ?? t('travelSchedule.order.createFailed'));
       }

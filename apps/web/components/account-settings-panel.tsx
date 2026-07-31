@@ -60,6 +60,7 @@ import {
   type MaterialPreference,
 } from '../lib/client-material-preference';
 import { appPath } from '../lib/app-paths';
+import { publishLoginRequired, publishLoginRequiredForResponse } from '../lib/client-auth-events';
 import {
   clearMapFavoriteMarkers,
   readMapFavoriteState,
@@ -344,10 +345,13 @@ export function AccountSettingsPanel({
   const syncOfflinePackageState = () => {
     setOfflinePackageState(readOfflinePackageState());
   };
-  const refreshTicketOrders = async () => {
+  const refreshTicketOrders = async (startLoginWhenRequired = false) => {
     if (!auth.session?.user) {
       setTicketOrders([]);
       setTicketOrderStatusText(ticketOrderLockedText);
+      if (startLoginWhenRequired && !auth.session?.readonlyUser) {
+        publishLoginRequired({ message: t('travelSchedule.order.loginRequired') });
+      }
       return;
     }
 
@@ -361,6 +365,9 @@ export function AccountSettingsPanel({
       if (response.status === 401) {
         setTicketOrders([]);
         setTicketOrderStatusText(t('travelSchedule.order.loginRequired'));
+        publishLoginRequiredForResponse(response, {
+          message: t('travelSchedule.order.loginRequired'),
+        });
         return;
       }
 
@@ -393,6 +400,13 @@ export function AccountSettingsPanel({
         message?: string;
       };
 
+      if (
+        publishLoginRequiredForResponse(response, {
+          message: t('travelSchedule.order.loginRequired'),
+        })
+      ) {
+        return;
+      }
       if (!response.ok || !data.item) {
         throw new Error(data.message ?? t('ticketOrderDetail.cancelFailed'));
       }
@@ -599,6 +613,7 @@ export function AccountSettingsPanel({
       void syncBrowserPushDevice(enabled);
     } else if (enabled) {
       setPushDeviceStatusText(t('account.notification.statusLoginRequired'));
+      publishLoginRequired({ message: t('account.notification.statusLoginRequired') });
     } else {
       setPushDeviceStatusText('');
     }
@@ -912,6 +927,9 @@ export function AccountSettingsPanel({
         message?: string;
       };
 
+      if (publishLoginRequiredForResponse(response)) {
+        return;
+      }
       if (!response.ok || !data.syncedAt) {
         throw new Error(data.message ?? t('account.history.syncFailed'));
       }
@@ -1252,7 +1270,7 @@ export function AccountSettingsPanel({
             orders={ticketOrders}
             statusText={ticketOrderStatusText}
             onCancel={(orderId) => void cancelTicketOrder(orderId)}
-            onRefresh={() => void refreshTicketOrders()}
+            onRefresh={() => void refreshTicketOrders(true)}
           />
         </section>
 
@@ -1776,6 +1794,9 @@ async function ensureBrowserPushSubscription(): Promise<string> {
   });
   if (!response.ok) {
     const data = (await response.json().catch(() => ({}))) as { message?: string };
+    if (publishLoginRequiredForResponse(response)) {
+      throw new Error(data.message ?? '需要先使用临东通登录。');
+    }
     throw new Error(data.message ?? 'Push 设备订阅登记失败');
   }
 
@@ -1807,6 +1828,9 @@ async function revokeBrowserPushSubscription(): Promise<boolean> {
   });
   if (!response.ok) {
     const data = (await response.json().catch(() => ({}))) as { message?: string };
+    if (publishLoginRequiredForResponse(response)) {
+      throw new Error(data.message ?? '需要先使用临东通登录。');
+    }
     throw new Error(data.message ?? 'Push 设备订阅撤销失败');
   }
 
@@ -1867,6 +1891,7 @@ async function readServerTripReminders(): Promise<TripReminder[]> {
     cache: 'no-store',
   });
   if (!response.ok) {
+    publishLoginRequiredForResponse(response);
     throw new Error('账号提醒暂不可用');
   }
 
@@ -1891,6 +1916,7 @@ async function deleteServerTripReminderCopies(input: {
   };
 
   if (!response.ok) {
+    publishLoginRequiredForResponse(response);
     throw new Error(data.message ?? '账号提醒副本删除失败');
   }
 
@@ -1914,6 +1940,7 @@ async function readServerPushPreference(): Promise<{
     cache: 'no-store',
   });
   if (!response.ok) {
+    publishLoginRequiredForResponse(response);
     throw new Error('通知偏好暂不可用');
   }
 
@@ -1947,7 +1974,7 @@ async function writeServerPushPreference(input: {
     .filter((option) => input.preferences[option.key])
     .map((option) => notificationTypeToServerType[option.key]);
 
-  await fetch(appPath('/api/account/push-preferences'), {
+  const response = await fetch(appPath('/api/account/push-preferences'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1963,6 +1990,7 @@ async function writeServerPushPreference(input: {
       },
     }),
   });
+  publishLoginRequiredForResponse(response);
 }
 
 function readClientTimezone(): string {
@@ -2036,6 +2064,9 @@ async function requestServerOfflinePackage(offlinePackage: OfflinePackageRecord)
 
   if (!response.ok) {
     const data = (await response.json().catch(() => ({}))) as { message?: string };
+    if (publishLoginRequiredForResponse(response)) {
+      throw new Error(data.message ?? '需要先使用临东通登录。');
+    }
     throw new Error(data.message ?? '服务端离线包请求失败');
   }
 }
@@ -2045,6 +2076,7 @@ async function readServerOfflinePackageRequests(): Promise<AccountOfflinePackage
     cache: 'no-store',
   });
   if (!response.ok) {
+    publishLoginRequiredForResponse(response);
     throw new Error('账号离线范围暂不可用');
   }
 
@@ -2061,6 +2093,7 @@ async function deleteServerOfflinePackageRequest(packageId: string): Promise<voi
     body: JSON.stringify({ packageId }),
   });
   if (!response.ok) {
+    publishLoginRequiredForResponse(response);
     throw new Error('账号离线范围请求删除失败');
   }
 }

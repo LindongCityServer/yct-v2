@@ -26,6 +26,7 @@ import { getFontEmbedCSS, toBlob } from 'html-to-image';
 import LZString from 'lz-string';
 import QRCode from 'qrcode';
 import { appPath } from '../lib/app-paths';
+import { publishLoginRequiredForResponse } from '../lib/client-auth-events';
 import { readMapFavoriteMarkerIds, writeMapFavoriteMarkerIds } from '../lib/client-map-favorites';
 import {
   publishMapNearbySearchScopeChanged,
@@ -2882,6 +2883,9 @@ export function MapStage() {
           imageUrl?: string;
           message?: string;
         };
+        if (publishLoginRequiredForResponse(imageResponse)) {
+          return;
+        }
         if (!imageResponse.ok || !imageData.imageUrl) {
           setPoiSubmitStatus(imageData.message ?? t('map.poiSubmit.imageUploadFailed'));
           return;
@@ -2913,6 +2917,9 @@ export function MapStage() {
         }),
       });
       const data = (await response.json()) as { message?: string };
+      if (publishLoginRequiredForResponse(response)) {
+        return;
+      }
       if (!response.ok) {
         setPoiSubmitStatus(data.message ?? t('map.poiSubmit.submitFailed'));
         return;
