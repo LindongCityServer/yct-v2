@@ -69,19 +69,47 @@ export async function updateMaterialTransitNetworkProject(input: {
 }): Promise<MaterialTransitNetworkProjectResult> {
   const current = await findOwnedProject(input.projectId, input.ownerId);
   if (!current) return projectNotFound();
+  const stationNamesByNodeId = new Map(
+    (input.update.stationNames ?? []).map((station) => [station.nodeId, station.names] as const),
+  );
+  for (const nodeId of stationNamesByNodeId.keys()) {
+    const node = current.snapshot.nodes.find((candidate) => candidate.id === nodeId);
+    if (node?.kind !== 'station') {
+      return {
+        ok: false,
+        status: 400,
+        error: 'invalid_material_transit_network_project',
+        message: '站点名称引用了项目中不存在的车站。',
+      };
+    }
+  }
   const snapshotResult = materialTransitNetworkSnapshotSchema.safeParse({
     ...current.snapshot,
-    lineNames: input.update.lineNames.length ? input.update.lineNames : undefined,
+    nodes: stationNamesByNodeId.size
+      ? current.snapshot.nodes.map((node) => {
+          const names = stationNamesByNodeId.get(node.id);
+          return names ? { ...node, names } : node;
+        })
+      : current.snapshot.nodes,
+    lineNames:
+      input.update.lineNames === undefined
+        ? current.snapshot.lineNames
+        : input.update.lineNames.length
+          ? input.update.lineNames
+          : undefined,
   });
   if (!snapshotResult.success) {
     return {
       ok: false,
       status: 400,
       error: 'invalid_material_transit_network_project',
-      message: '线路名称引用了项目中不存在或重复的线路。',
+      message: '线路或站点名称补充信息与当前项目不匹配。',
     };
   }
   const now = new Date().toISOString();
+  const changedFields: Array<'lineNames' | 'stationNames'> = [];
+  if (input.update.lineNames !== undefined) changedFields.push('lineNames');
+  if (input.update.stationNames !== undefined) changedFields.push('stationNames');
   const project: MaterialTransitNetworkProject = {
     ...current,
     snapshot: snapshotResult.data,
@@ -96,7 +124,7 @@ export async function updateMaterialTransitNetworkProject(input: {
     payload: {
       projectId: project.id,
       ownerId: input.ownerId,
-      changedFields: ['lineNames'],
+      changedFields,
       updatedAt: now,
     },
   });

@@ -21,7 +21,7 @@ export interface TransitNetworkImportFailedPayload {
   message: string;
 }
 
-export interface TransitNetworkLineNamesChangedPayload {
+export interface TransitNetworkProjectSnapshotChangedPayload {
   studioId: string;
   snapshot: MaterialTransitNetworkSnapshot;
 }
@@ -33,7 +33,7 @@ export interface TransitNetworkLineNameEditorRequestedPayload {
 const sourceChangedEventName = 'yct:transit-network-source-changed';
 const importSucceededEventName = 'yct:transit-network-import-succeeded';
 const importFailedEventName = 'yct:transit-network-import-failed';
-const lineNamesChangedEventName = 'yct:transit-network-line-names-changed';
+const projectSnapshotChangedEventName = 'yct:transit-network-project-snapshot-changed';
 const lineNameEditorRequestedEventName = 'yct:transit-network-line-name-editor-requested';
 
 export function publishTransitNetworkSourceChanged(
@@ -54,10 +54,10 @@ export function publishTransitNetworkImportFailed(
   window.dispatchEvent(new CustomEvent(importFailedEventName, { detail: payload }));
 }
 
-export function publishTransitNetworkLineNamesChanged(
-  payload: TransitNetworkLineNamesChangedPayload,
+export function publishTransitNetworkProjectSnapshotChanged(
+  payload: TransitNetworkProjectSnapshotChangedPayload,
 ): void {
-  window.dispatchEvent(new CustomEvent(lineNamesChangedEventName, { detail: payload }));
+  window.dispatchEvent(new CustomEvent(projectSnapshotChangedEventName, { detail: payload }));
 }
 
 export function publishTransitNetworkLineNameEditorRequested(
@@ -78,16 +78,16 @@ export function subscribeTransitNetworkSourceChanged(
   return () => window.removeEventListener(sourceChangedEventName, handleEvent);
 }
 
-export function subscribeTransitNetworkLineNamesChanged(
+export function subscribeTransitNetworkProjectSnapshotChanged(
   studioId: string,
-  listener: (payload: TransitNetworkLineNamesChangedPayload) => void,
+  listener: (payload: TransitNetworkProjectSnapshotChangedPayload) => void,
 ): () => void {
   const handleEvent = (event: Event) => {
-    const payload = (event as CustomEvent<TransitNetworkLineNamesChangedPayload>).detail;
+    const payload = (event as CustomEvent<TransitNetworkProjectSnapshotChangedPayload>).detail;
     if (payload?.studioId === studioId) listener(payload);
   };
-  window.addEventListener(lineNamesChangedEventName, handleEvent);
-  return () => window.removeEventListener(lineNamesChangedEventName, handleEvent);
+  window.addEventListener(projectSnapshotChangedEventName, handleEvent);
+  return () => window.removeEventListener(projectSnapshotChangedEventName, handleEvent);
 }
 
 export function subscribeTransitNetworkLineNameEditorRequested(

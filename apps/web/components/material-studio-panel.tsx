@@ -12,7 +12,7 @@ import {
 } from '../lib/client-material-studio-events';
 import {
   publishTransitNetworkLineNameEditorRequested,
-  subscribeTransitNetworkLineNamesChanged,
+  subscribeTransitNetworkProjectSnapshotChanged,
   subscribeTransitNetworkSourceChanged,
 } from '../lib/client-transit-network-events';
 import { METRO_WAYFINDING_TEMPLATE_ID } from '../lib/metro-wayfinding';
@@ -535,7 +535,7 @@ export function MaterialStudioPanel({
 
   useEffect(
     () =>
-      subscribeTransitNetworkLineNamesChanged(studioId, ({ snapshot }) => {
+      subscribeTransitNetworkProjectSnapshotChanged(studioId, ({ snapshot }) => {
         setImportedTransitNetwork(snapshot);
         setSelectedTransitLineIds([]);
         clearPreview();
@@ -765,10 +765,10 @@ export function MaterialStudioPanel({
 
   const buildServerOverrides = () =>
     Object.fromEntries(
-      serverOverrideFields.map((field) => [
-        field.key,
-        input[field.key] ?? field.defaultValue ?? '',
-      ]),
+      serverOverrideFields.flatMap((field) => {
+        const value = input[field.key] ?? field.defaultValue ?? '';
+        return value.trim() ? [[field.key, value]] : [];
+      }),
     );
 
   const blockAction = (message: string) => {

@@ -127,7 +127,7 @@ export function listMaterialTransitNetworkPalette(
     edge.colors.forEach((color, index) => {
       if (optionByColor.has(color)) return;
       const lineKey = edge.lineKeys[index] ?? edge.lineKeys[0] ?? color;
-      const lineNames = findMaterialTransitNetworkLineNames(snapshot, lineKey);
+      const lineNames = resolveMaterialTransitNetworkLineNames(snapshot, lineKey);
       optionByColor.set(color, {
         value: color,
         label: `${formatMaterialTransitNetworkLineLabel(lineNames, lineKey)} · ${color}`,
@@ -149,7 +149,7 @@ export function listMaterialTransitNetworkNodeLines(
       if (!lineKey) return;
       const id = lineKey;
       if (!optionById.has(id)) {
-        const lineNames = findMaterialTransitNetworkLineNames(snapshot, lineKey);
+        const lineNames = resolveMaterialTransitNetworkLineNames(snapshot, lineKey);
         optionById.set(id, {
           id,
           lineKey,
@@ -178,12 +178,39 @@ export function listMaterialTransitNetworkLines(
         lineKey,
         color,
         label:
-          findMaterialTransitNetworkLineNames(snapshot, lineKey)?.name ?? formatLineKey(lineKey),
-        secondaryLabel: findMaterialTransitNetworkLineNames(snapshot, lineKey)?.secondaryName,
+          resolveMaterialTransitNetworkLineNames(snapshot, lineKey)?.name ?? formatLineKey(lineKey),
+        secondaryLabel: resolveMaterialTransitNetworkLineNames(snapshot, lineKey)?.secondaryName,
       });
     });
   }
   return Array.from(optionById.values());
+}
+
+export function listMaterialTransitNetworkNearbyStationNames(
+  snapshot: MaterialTransitNetworkSnapshot,
+  nodeId: string,
+  maximumCount = 3,
+): string[] {
+  if (maximumCount <= 0) return [];
+  const adjacentNodeIds = new Map<string, string[]>();
+  for (const edge of snapshot.edges) {
+    adjacentNodeIds.set(edge.source, [...(adjacentNodeIds.get(edge.source) ?? []), edge.target]);
+    adjacentNodeIds.set(edge.target, [...(adjacentNodeIds.get(edge.target) ?? []), edge.source]);
+  }
+  const nodeById = new Map(snapshot.nodes.map((node) => [node.id, node] as const));
+  const queue = [...(adjacentNodeIds.get(nodeId) ?? [])];
+  const visited = new Set([nodeId]);
+  const names: string[] = [];
+  while (queue.length && visited.size <= snapshot.nodes.length && names.length < maximumCount) {
+    const currentNodeId = queue.shift()!;
+    if (visited.has(currentNodeId)) continue;
+    visited.add(currentNodeId);
+    const node = nodeById.get(currentNodeId);
+    const primaryName = node?.kind === 'station' ? node.names[0]?.trim() : undefined;
+    if (primaryName && !names.includes(primaryName)) names.push(primaryName);
+    queue.push(...(adjacentNodeIds.get(currentNodeId) ?? []));
+  }
+  return names;
 }
 
 export function listMaterialTransitNetworkNodeDirections(
@@ -684,8 +711,8 @@ function collectMaterialTransitNetworkLineComponents(
       components.push({
         lineKey,
         color,
-        lineName: findMaterialTransitNetworkLineNames(snapshot, lineKey)?.name,
-        secondaryLineName: findMaterialTransitNetworkLineNames(snapshot, lineKey)?.secondaryName,
+        lineName: resolveMaterialTransitNetworkLineNames(snapshot, lineKey)?.name,
+        secondaryLineName: resolveMaterialTransitNetworkLineNames(snapshot, lineKey)?.secondaryName,
         edgeIds,
         nodeIds,
         matchedStationCount: 0,
@@ -717,11 +744,20 @@ function formatLineKey(value: string): string {
   return value.split(':').at(-1) || value;
 }
 
-function findMaterialTransitNetworkLineNames(
+export function resolveMaterialTransitNetworkLineNames(
   snapshot: MaterialTransitNetworkSnapshot,
   lineKey: string,
 ): NonNullable<MaterialTransitNetworkSnapshot['lineNames']>[number] | undefined {
-  return snapshot.lineNames?.find((line) => line.lineKey === lineKey);
+  const configuredNames = snapshot.lineNames?.find((line) => line.lineKey === lineKey);
+  if (configuredNames) return configuredNames;
+  const lineNumber = lineKey.match(/([0-9]+)$/u)?.[1];
+  return lineNumber
+    ? {
+        lineKey,
+        name: `${lineNumber}号线`,
+        secondaryName: `Line ${lineNumber}`,
+      }
+    : undefined;
 }
 
 interface MaterialTransitNetworkAdjacentEdge {
@@ -797,7 +833,7 @@ function findFarthestStationPath(
 }
 
 function formatMaterialTransitNetworkLineLabel(
-  lineNames: ReturnType<typeof findMaterialTransitNetworkLineNames>,
+  lineNames: ReturnType<typeof resolveMaterialTransitNetworkLineNames>,
   lineKey: string,
 ): string {
   if (!lineNames) return formatLineKey(lineKey);

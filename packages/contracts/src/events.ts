@@ -722,7 +722,7 @@ export interface MaterialTransitNetworkProjectImportedPayload {
 export interface MaterialTransitNetworkProjectUpdatedPayload {
   projectId: string;
   ownerId: string;
-  changedFields: Array<'lineNames'>;
+  changedFields: Array<'lineNames' | 'stationNames'>;
   updatedAt: ISODateTimeString;
 }
 

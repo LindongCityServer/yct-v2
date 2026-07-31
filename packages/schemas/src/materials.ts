@@ -404,6 +404,11 @@ export const materialTransitNetworkLineNameSchema = z.object({
   secondaryName: z.string().trim().min(1).max(120).optional(),
 });
 
+const materialTransitNetworkStationNameSchema = z.object({
+  nodeId: z.string().trim().min(1).max(120),
+  names: z.array(z.string().trim().min(1).max(160)).min(1).max(8),
+});
+
 export const materialTransitNetworkSnapshotSchema = z
   .object({
     format: z.literal('rmp'),
@@ -449,9 +454,27 @@ export const materialTransitNetworkProjectCreateSchema = z.object({
   snapshot: materialTransitNetworkSnapshotSchema,
 });
 
-export const materialTransitNetworkProjectUpdateSchema = z.object({
-  lineNames: z.array(materialTransitNetworkLineNameSchema).max(256),
-});
+export const materialTransitNetworkProjectUpdateSchema = z
+  .object({
+    lineNames: z.array(materialTransitNetworkLineNameSchema).max(256).optional(),
+    stationNames: z.array(materialTransitNetworkStationNameSchema).max(2_000).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.lineNames === undefined && value.stationNames === undefined) {
+      ctx.addIssue({ code: 'custom', message: '至少需要提供一项线网补充信息。' });
+    }
+    const nodeIds = new Set<string>();
+    for (const [index, stationName] of (value.stationNames ?? []).entries()) {
+      if (nodeIds.has(stationName.nodeId)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: '同一车站不能重复命名。',
+          path: ['stationNames', index, 'nodeId'],
+        });
+      }
+      nodeIds.add(stationName.nodeId);
+    }
+  });
 
 export const materialExportRequestSchema = z
   .object({
