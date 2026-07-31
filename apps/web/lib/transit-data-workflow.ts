@@ -792,6 +792,10 @@ export async function saveTransitLine(input: {
       stationSourceId: string;
       oneWay?: 'up' | 'down' | null;
     }>;
+    stopLocationRefs?: Array<{
+      stationSourceId: string;
+      refs: NonNullable<TransitDataRevision['lines'][number]['stops'][number]['stopLocationRefs']>;
+    }>;
     segmentPaths?: TransitDataRevision['lines'][number]['segmentPaths'];
     operator?: string;
     fare?: string;
@@ -866,6 +870,10 @@ export async function saveTransitLine(input: {
       ...stop,
       stationSourceId: resolveStationSourceId(stop.stationSourceId),
     })),
+    stopLocationRefs: input.patch.stopLocationRefs?.map((item) => ({
+      ...item,
+      stationSourceId: resolveStationSourceId(item.stationSourceId),
+    })),
     segmentPaths: input.patch.segmentPaths?.map((path) => ({
       ...path,
       fromStationSourceId: resolveStationSourceId(path.fromStationSourceId),
@@ -886,6 +894,28 @@ export async function saveTransitLine(input: {
   );
   if (missingStationIds.length > 0) {
     return invalidTransition(`线路引用了不存在的站点：${missingStationIds.slice(0, 6).join('、')}`);
+  }
+  const invalidStopLocationStationIds = (resolvedPatch.stopLocationRefs ?? [])
+    .map((item) => item.stationSourceId)
+    .filter((stationSourceId) => !nextStationSourceIds.includes(stationSourceId));
+  if (invalidStopLocationStationIds.length > 0) {
+    return invalidTransition(
+      `停靠位置引用了不在线路中的站点：${invalidStopLocationStationIds.slice(0, 6).join('、')}`,
+    );
+  }
+  const incompatibleStopLocation = (resolvedPatch.stopLocationRefs ?? [])
+    .flatMap((item) => item.refs)
+    .find((ref) => {
+      const markerModes = getTransitPoiMarkerModes({ categoryId: ref.categoryId });
+      return markerModes.length > 0 && !markerModes.includes(input.patch.mode);
+    });
+  if (incompatibleStopLocation) {
+    return {
+      ok: false,
+      status: 422,
+      error: 'transit_line_stop_location_mode_mismatch',
+      message: `线路交通方式与停靠位置「${incompatibleStopLocation.label}」的分类不匹配。`,
+    };
   }
 
   const line = input.lineSourceId
@@ -1143,6 +1173,10 @@ function buildTransitLineSnapshot(
       stationSourceId: string;
       oneWay?: 'up' | 'down' | null;
     }>;
+    stopLocationRefs?: Array<{
+      stationSourceId: string;
+      refs: NonNullable<TransitDataRevision['lines'][number]['stops'][number]['stopLocationRefs']>;
+    }>;
     segmentPaths?: TransitDataRevision['lines'][number]['segmentPaths'];
     operator?: string;
     fare?: string;
@@ -1163,6 +1197,15 @@ function buildTransitLineSnapshot(
       .map((stop) => [stop.stationSourceId.trim(), stop.oneWay ?? undefined] as const)
       .filter(([stationSourceId]) => Boolean(stationSourceId)),
   );
+  const stopLocationRefsByStationId =
+    patch.stopLocationRefs === undefined
+      ? undefined
+      : new Map(
+          patch.stopLocationRefs.map((item) => [
+            item.stationSourceId.trim(),
+            normalizeTransitLineStopLocationRefs(item.refs),
+          ]),
+        );
   const departureTimes = Array.from(
     new Set((patch.departureTimes ?? []).map((item) => item.trim()).filter(Boolean)),
   );
@@ -1211,6 +1254,9 @@ function buildTransitLineSnapshot(
       oneWay: oneWayByStationId.has(stationSourceId)
         ? oneWayByStationId.get(stationSourceId)
         : previousStopByStationId.get(stationSourceId)?.oneWay,
+      stopLocationRefs: stopLocationRefsByStationId
+        ? stopLocationRefsByStationId.get(stationSourceId) || undefined
+        : previousStopByStationId.get(stationSourceId)?.stopLocationRefs,
     })),
     segmentPaths: segmentPaths.length > 0 ? segmentPaths : undefined,
     operator: patch.operator?.trim() || undefined,
@@ -1228,6 +1274,30 @@ function buildTransitLineSnapshot(
     bookingUrl: patch.bookingUrl?.trim() || undefined,
     sourcePath: previous?.sourcePath,
   };
+}
+
+function normalizeTransitLineStopLocationRefs(
+  refs: NonNullable<TransitDataRevision['lines'][number]['stops'][number]['stopLocationRefs']>,
+): NonNullable<TransitDataRevision['lines'][number]['stops'][number]['stopLocationRefs']> {
+  const seen = new Set<string>();
+  return refs.flatMap((ref) => {
+    const markerId = ref.markerId.trim();
+    const label = ref.label.trim();
+    const key = `${ref.scope}\u0000${markerId}`;
+    if (!markerId || !label || seen.has(key)) {
+      return [];
+    }
+
+    seen.add(key);
+    return [
+      {
+        scope: ref.scope,
+        markerId,
+        label,
+        categoryId: ref.categoryId?.trim() || undefined,
+      },
+    ];
+  });
 }
 
 function getChangedTransitLineFields(

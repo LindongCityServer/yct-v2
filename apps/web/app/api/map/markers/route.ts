@@ -25,6 +25,7 @@ import {
   isTransitLineDirectionIncluded,
   type TransitLineTravelDirection,
 } from '../../../../lib/transit-line-direction';
+import { getTransitStopLocationMarkerIdsForDirection } from '../../../../lib/transit-stop-location';
 import { isTransitPoiMarkerCompatibleWithStation } from '../../../../lib/transit-station-mode';
 import type {
   TransitLineStopSummary,
@@ -250,7 +251,9 @@ function collectTransitLineControlCoordinates(
     coordinates: Array<[number, number]>,
     stop: TransitLineStopSummary | undefined,
   ) => {
-    const coordinate = stop ? findStationCoordinate(stop, line, index, markerById) : undefined;
+    const coordinate = stop
+      ? findStationCoordinate(stop, line, direction, index, markerById)
+      : undefined;
     if (coordinate) {
       coordinates.push(coordinate);
     }
@@ -352,6 +355,7 @@ function buildStationCoordinateIndex(markers: Marker[]): Map<string, Marker[]> {
 function findStationCoordinate(
   stop: TransitLineStopSummary,
   line: TransitLineSummary,
+  direction: TransitLineTravelDirection,
   index: Map<string, Marker[]>,
   markerById: Map<string, Marker>,
 ): [number, number] | undefined {
@@ -360,7 +364,16 @@ function findStationCoordinate(
   ): marker is Marker & { geometry: Extract<Marker['geometry'], { type: 'Point' }> } =>
     marker.geometry.type === 'Point' &&
     isTransitPoiMarkerCompatibleWithStation(marker, [line.mode]);
-  const boundMarker = (stop.stationMarkerIds ?? [])
+  const configuredLocationMarkerIds = new Set(
+    (stop.stopLocationRefs ?? []).map((ref) => ref.markerId),
+  );
+  const markerIds = [
+    ...getTransitStopLocationMarkerIdsForDirection(stop.stopLocationRefs, direction),
+    ...(stop.stationMarkerIds ?? []).filter(
+      (markerId) => !configuredLocationMarkerIds.has(markerId),
+    ),
+  ];
+  const boundMarker = markerIds
     .flatMap((markerId) => {
       const marker = markerById.get(markerId);
       return marker ? [marker] : [];

@@ -6,6 +6,7 @@ import type {
   TransitLineRouteNodeSnapshot,
   TransitLineSegmentPathSnapshot,
   TransitLineSnapshot,
+  TransitLineStopLocationRef,
   TransitModeSnapshotSummary,
   TransitStationDetailSnapshot,
   TransitStationSnapshot,
@@ -59,6 +60,7 @@ export interface TransitLineStopSummary {
   stationName: string;
   localizedStationName?: LocalizedLabelMap;
   stationMarkerIds?: string[];
+  stopLocationRefs?: TransitLineStopLocationRef[];
   sequence: number;
   oneWay?: 'up' | 'down';
   status?: string;
@@ -293,9 +295,10 @@ async function readLegacyTransitSnapshotUncached(
   };
 }
 
-async function readLegacyMetroStationDetails(
-  config: RuntimeConfig,
-): Promise<{ sourcePath: string; items: Array<TransitStationDetailSnapshot & { maxCarCount?: number }> } | null> {
+async function readLegacyMetroStationDetails(config: RuntimeConfig): Promise<{
+  sourcePath: string;
+  items: Array<TransitStationDetailSnapshot & { maxCarCount?: number }>;
+} | null> {
   try {
     const legacyFile = await readLegacyDataSourceFile(config, 'metro_station_detail.js');
     return {
@@ -312,7 +315,6 @@ async function readLegacyMetroStationDetails(
     }
     return null;
   }
-
 }
 
 async function readAndParseLegacyTransitSource(
@@ -452,7 +454,11 @@ function buildTransitLineStopSummaries(
       return {
         stationSourceId: stop.stationSourceId,
         stationName,
-        stationMarkerIds: getTransitStationMarkerIds(stationById.get(stop.stationSourceId)),
+        stationMarkerIds: getTransitStationMarkerIds(
+          stationById.get(stop.stationSourceId),
+          stop.stopLocationRefs,
+        ),
+        stopLocationRefs: stop.stopLocationRefs,
         sequence: stop.sequence,
         oneWay: stop.oneWay,
         status: stop.status,
@@ -464,16 +470,21 @@ function buildTransitLineStopSummaries(
     .sort((left, right) => left.sequence - right.sequence);
 }
 
-function getTransitStationMarkerIds(station: TransitStationSnapshot | undefined): string[] {
+function getTransitStationMarkerIds(
+  station: TransitStationSnapshot | undefined,
+  stopLocationRefs: TransitLineStopLocationRef[] | undefined,
+): string[] {
   if (!station) {
     return [];
   }
 
   return Array.from(
     new Set(
-      [station.boundPoiMarkerId, ...(station.boundPoiRefs ?? []).map((ref) => ref.markerId)].filter(
-        (markerId): markerId is string => Boolean(markerId?.trim()),
-      ),
+      [
+        ...(stopLocationRefs ?? []).map((ref) => ref.markerId),
+        station.boundPoiMarkerId,
+        ...(station.boundPoiRefs ?? []).map((ref) => ref.markerId),
+      ].filter((markerId): markerId is string => Boolean(markerId?.trim())),
     ),
   );
 }

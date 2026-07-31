@@ -14,6 +14,7 @@ import type {
   TransitLineRouteMode,
   TransitLineRouteNodeSnapshot,
   TransitLineSegmentPathSnapshot,
+  TransitLineStopLocationRef,
   TransitStationDetailSnapshot,
   TransitStationTransferSnapshot,
 } from '@yct/contracts';
@@ -54,6 +55,7 @@ import {
   isTransitLineDirectionIncluded,
   type TransitLineTravelDirection,
 } from '../lib/transit-line-direction';
+import { getTransitStopLocationMarkerIdsForDirection } from '../lib/transit-stop-location';
 import { resolveVisualRoute } from '../lib/transit-line-visual-routing';
 import {
   buildMapMarkerSearchText,
@@ -331,6 +333,7 @@ interface TransitLineStopForMap {
   displayStationName?: string;
   localizedStationName?: LocalizedLabelMap;
   stationMarkerIds?: string[];
+  stopLocationRefs?: TransitLineStopLocationRef[];
   sequence: number;
   oneWay?: 'up' | 'down';
   status?: string;
@@ -10024,9 +10027,22 @@ function getDirectionalLineStops(
           sequence,
         }));
 
-  const filteredStops = sourceStops.filter((stop) =>
-    isTransitLineStopVisibleInDirection(stop, direction),
-  );
+  const filteredStops = sourceStops
+    .filter((stop) => isTransitLineStopVisibleInDirection(stop, direction))
+    .map((stop) => {
+      const configuredLocationMarkerIds = new Set(
+        (stop.stopLocationRefs ?? []).map((ref) => ref.markerId),
+      );
+      return {
+        ...stop,
+        stationMarkerIds: [
+          ...getTransitStopLocationMarkerIdsForDirection(stop.stopLocationRefs, direction),
+          ...(stop.stationMarkerIds ?? []).filter(
+            (markerId) => !configuredLocationMarkerIds.has(markerId),
+          ),
+        ].filter((markerId, index, markerIds) => markerIds.indexOf(markerId) === index),
+      };
+    });
 
   const sortedStops = [...filteredStops].sort((left, right) => left.sequence - right.sequence);
   return direction === 'forward' ? sortedStops : sortedStops.reverse();
@@ -11400,7 +11416,7 @@ function findTransitStationMarkerForLine(
   line: TransitOverviewLine,
   connectionIndex: Map<string, TransitLineConnection[]>,
 ): PointMarker | undefined {
-  const stopMarkerIds = new Set(
+  const stopMarkerIds = dedupeValues(
     (line.stationStops ?? [])
       .filter((stop) =>
         getStationNameMatchKeys(stop.stationName).some((key) =>
@@ -11410,9 +11426,12 @@ function findTransitStationMarkerForLine(
       .flatMap((stop) => stop.stationMarkerIds ?? []),
   );
   const lineMode = isRouteTransportMode(line.mode) ? line.mode : 'walk';
-  const exactBoundMarker = markers.find(
-    (marker) => stopMarkerIds.has(marker.id) && matchesTransitMarkerMode(marker, lineMode),
-  );
+  const markerById = new Map(markers.map((marker) => [marker.id, marker] as const));
+  const exactBoundMarker = stopMarkerIds
+    .map((markerId) => markerById.get(markerId))
+    .find((marker): marker is PointMarker =>
+      Boolean(marker && matchesTransitMarkerMode(marker, lineMode)),
+    );
   if (exactBoundMarker) {
     return exactBoundMarker;
   }

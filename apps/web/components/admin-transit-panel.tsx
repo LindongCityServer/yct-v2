@@ -9,6 +9,7 @@ import type {
   TransitDepartureScheduleRule,
   TransitItemApprovalStatus,
   TransitLineRouteNodeSnapshot,
+  TransitLineStopLocationRef,
   TransitModeProfile,
   TransitStationDetailSnapshot,
   TravelScheduleQueryResult,
@@ -51,6 +52,10 @@ interface TransitLineEditorSubmitPayload {
   oneWayStops?: Array<{
     stationSourceId: string;
     oneWay?: 'up' | 'down' | null;
+  }>;
+  stopLocationRefs?: Array<{
+    stationSourceId: string;
+    refs: TransitLineStopLocationRef[];
   }>;
   segmentPaths?: TransitRevisionLine['segmentPaths'];
   operator?: string;
@@ -95,6 +100,7 @@ interface TransitLineRouteNodeDraft {
   direction: 'both' | 'up' | 'down';
   boundPoiMarkerId?: string;
   boundPoiLabel?: string;
+  stopLocationRefs?: TransitLineStopLocationRef[];
 }
 
 const transitStatusFilterOptions: Array<{ value: TransitStatusFilter; label: string }> = [
@@ -1868,6 +1874,7 @@ export function AdminTransitPanel() {
       {lineEditTarget ? (
         <TransitLineEditorDialog
           isBusy={isBusy}
+          mapMarkers={mapMarkers}
           modeProfiles={modeProfiles}
           revision={lineEditTarget.revision}
           line={lineEditTarget.line}
@@ -1896,6 +1903,7 @@ export function AdminTransitPanel() {
       {lineCreateTarget ? (
         <TransitLineEditorDialog
           isBusy={isBusy}
+          mapMarkers={mapMarkers}
           modeProfiles={modeProfiles}
           revision={lineCreateTarget}
           tilePreviewTemplate={tilePreviewTemplate}
@@ -3436,6 +3444,7 @@ function normalizeTransitStationPlatformSide(
 
 function TransitLineEditorDialog({
   isBusy,
+  mapMarkers,
   line,
   modeProfiles,
   onClose,
@@ -3446,6 +3455,7 @@ function TransitLineEditorDialog({
   tilePreviewTemplate,
 }: Readonly<{
   isBusy: boolean;
+  mapMarkers: MapMarker[];
   line?: TransitRevisionLine;
   modeProfiles: TransitModeProfile[];
   onClose: () => void;
@@ -3493,6 +3503,10 @@ function TransitLineEditorDialog({
     () => parseTransitLineRouteNodeDrafts(routeNodeDrafts, routeMode),
     [routeMode, routeNodeDrafts],
   );
+  const bindableStopLocationOptions = useMemo(
+    () => buildTransitBindablePoiOptions(mapMarkers, [mode]),
+    [mapMarkers, mode],
+  );
   const parsedStationSourceIds = parsedRoute.stationSourceIds;
   const missingStationSourceIds = parsedStationSourceIds.filter(
     (stationSourceId) => !stationById.has(stationSourceId),
@@ -3533,6 +3547,7 @@ function TransitLineEditorDialog({
       routeNodes: parsedRoute.routeNodes,
       stationSourceIds: parsedStationSourceIds,
       oneWayStops: parsedRoute.oneWayStops,
+      stopLocationRefs: buildTransitLineStopLocationPayload(routeNodeDrafts),
       segmentPaths: parsedRoute.segmentPaths,
       operator: operator.trim() || undefined,
       fare: fare.trim() || undefined,
@@ -3577,6 +3592,9 @@ function TransitLineEditorDialog({
         ? configuredModeOptions
         : [...configuredModeOptions, currentModeFallback]
       : supportedTransitModeProfiles;
+  const forwardTerminalName =
+    stationById.get(parsedStationSourceIds.at(-1) ?? '')?.name ?? '线路终点';
+  const reverseTerminalName = stationById.get(parsedStationSourceIds[0] ?? '')?.name ?? '线路起点';
 
   const updateRouteNode = (index: number, patch: Partial<TransitLineRouteNodeDraft>) => {
     setRouteNodeDrafts((current) =>
@@ -3585,6 +3603,33 @@ function TransitLineEditorDialog({
       ),
     );
     setError('');
+  };
+
+  const updateStopLocation = (
+    index: number,
+    scope: TransitLineStopLocationRef['scope'],
+    markerId: string,
+  ) => {
+    const node = routeNodeDrafts[index];
+    if (!node || node.kind !== 'station') {
+      return;
+    }
+
+    const retainedRefs = (node.stopLocationRefs ?? []).filter((ref) => ref.scope !== scope);
+    const option = bindableStopLocationOptions.find((item) => item.marker.id === markerId);
+    updateRouteNode(index, {
+      stopLocationRefs: option
+        ? [
+            ...retainedRefs,
+            {
+              scope,
+              markerId: option.marker.id,
+              label: option.marker.label,
+              categoryId: option.marker.categoryId,
+            },
+          ]
+        : retainedRefs,
+    });
   };
 
   const moveRouteNode = (index: number, offset: -1 | 1) => {
@@ -3826,6 +3871,13 @@ function TransitLineEditorDialog({
                   const stationDetail = station
                     ? findTransitStationDetail(revision.stationDetails, line?.name, station.name)
                     : undefined;
+                  const stopLocationOptions = station
+                    ? getPreferredTransitStopLocationOptions(
+                        bindableStopLocationOptions,
+                        station.name,
+                        node.stopLocationRefs,
+                      )
+                    : [];
                   return (
                     <div
                       className={
@@ -3931,6 +3983,54 @@ function TransitLineEditorDialog({
                           <option value="up">仅反向（逆站序）</option>
                         </select>
                       </label>
+                      {node.kind === 'station' ? (
+                        <details className="transit-line-stop-location-editor">
+                          <summary>
+                            <span className="material-symbols-outlined" aria-hidden="true">
+                              pin_drop
+                            </span>
+                            <span>
+                              停靠位置
+                              {node.stopLocationRefs?.length
+                                ? ` · 已配置 ${node.stopLocationRefs.length} 项`
+                                : ' · 使用车站默认位置'}
+                            </span>
+                          </summary>
+                          <div>
+                            {(
+                              [
+                                ['both', '本线路默认位置'],
+                                ['down', `正向 · 去 ${forwardTerminalName}`],
+                                ['up', `反向 · 去 ${reverseTerminalName}`],
+                              ] as const
+                            ).map(([scope, label]) => (
+                              <label key={scope}>
+                                <span>{label}</span>
+                                <select
+                                  value={
+                                    node.stopLocationRefs?.find((ref) => ref.scope === scope)
+                                      ?.markerId ?? ''
+                                  }
+                                  disabled={!station}
+                                  onChange={(event) =>
+                                    updateStopLocation(index, scope, event.currentTarget.value)
+                                  }
+                                >
+                                  <option value="">使用车站默认位置</option>
+                                  {stopLocationOptions.map((option) => (
+                                    <option value={option.marker.id} key={option.marker.id}>
+                                      {`${option.marker.label} · ${formatTransitCoordinatePair(option.coordinate)}`}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ))}
+                          </div>
+                          <p className="muted">
+                            方向位置优先于本线路默认位置；都未设置时使用车站默认位置。
+                          </p>
+                        </details>
+                      ) : null}
                       <div className="transit-line-editor-row-actions">
                         <button
                           type="button"
@@ -4707,6 +4807,57 @@ function buildTransitBindablePoiOptions(
     );
 }
 
+function getPreferredTransitStopLocationOptions(
+  options: TransitStationPoiBindingOption[],
+  stationName: string,
+  selectedRefs: TransitLineStopLocationRef[] | undefined,
+): TransitStationPoiBindingOption[] {
+  const normalizedStationName = normalizeSearchText(stationName);
+  const selectedMarkerIds = new Set((selectedRefs ?? []).map((ref) => ref.markerId));
+  const ranked = [...options].sort((left, right) => {
+    const leftLabel = normalizeSearchText(left.marker.label);
+    const rightLabel = normalizeSearchText(right.marker.label);
+    const leftScore = getTransitStopLocationOptionScore(
+      leftLabel,
+      normalizedStationName,
+      selectedMarkerIds.has(left.marker.id),
+    );
+    const rightScore = getTransitStopLocationOptionScore(
+      rightLabel,
+      normalizedStationName,
+      selectedMarkerIds.has(right.marker.id),
+    );
+    return (
+      rightScore - leftScore ||
+      left.marker.label.localeCompare(right.marker.label, 'zh-CN') ||
+      left.marker.id.localeCompare(right.marker.id, 'zh-CN')
+    );
+  });
+
+  const relevant = ranked.filter((option) => {
+    const label = normalizeSearchText(option.marker.label);
+    return (
+      selectedMarkerIds.has(option.marker.id) ||
+      label === normalizedStationName ||
+      label.includes(normalizedStationName) ||
+      normalizedStationName.includes(label)
+    );
+  });
+  return (relevant.length > 0 ? relevant : ranked).slice(0, 64);
+}
+
+function getTransitStopLocationOptionScore(
+  label: string,
+  stationName: string,
+  selected: boolean,
+): number {
+  if (selected) return 100;
+  if (label === stationName) return 80;
+  if (label.startsWith(stationName) || stationName.startsWith(label)) return 60;
+  if (label.includes(stationName) || stationName.includes(label)) return 40;
+  return 0;
+}
+
 function getTransitStationBoundPoiRefs(
   station: TransitRevisionStation,
 ): TransitStationPoiBindingRef[] {
@@ -5014,6 +5165,9 @@ function createTransitLineRouteNodeDraft(
 function buildTransitLineRouteNodeDrafts(
   line: TransitRevisionLine | undefined,
 ): TransitLineRouteNodeDraft[] {
+  const stopByStationId = new Map(
+    (line?.stops ?? []).map((stop) => [stop.stationSourceId, stop] as const),
+  );
   if (line?.routeNodes?.length) {
     return line.routeNodes.map((node, index) => ({
       id: `route-node-${node.kind}-${index}`,
@@ -5024,6 +5178,10 @@ function buildTransitLineRouteNodeDrafts(
       direction: node.direction ?? 'both',
       boundPoiMarkerId: node.kind === 'waypoint' ? node.boundPoiMarkerId : undefined,
       boundPoiLabel: node.kind === 'waypoint' ? node.boundPoiLabel : undefined,
+      stopLocationRefs:
+        node.kind === 'station'
+          ? stopByStationId.get(node.stationSourceId)?.stopLocationRefs
+          : undefined,
     }));
   }
 
@@ -5034,7 +5192,6 @@ function buildTransitLineRouteNodeDrafts(
     ];
   }
 
-  const stopByStationId = new Map(line.stops.map((stop) => [stop.stationSourceId, stop] as const));
   const pathBySegment = new Map(
     (line.segmentPaths ?? []).map((path) => [
       getTransitSegmentPathKey(path.fromStationSourceId, path.toStationSourceId),
@@ -5051,6 +5208,7 @@ function buildTransitLineRouteNodeDrafts(
       xText: '',
       zText: '',
       direction: oneWay ?? 'both',
+      stopLocationRefs: stopByStationId.get(stationSourceId)?.stopLocationRefs,
     });
     const nextStationSourceId = line.stationSourceIds[stationIndex + 1];
     if (!nextStationSourceId) {
@@ -5071,6 +5229,20 @@ function buildTransitLineRouteNodeDrafts(
     }
   });
   return drafts;
+}
+
+function buildTransitLineStopLocationPayload(
+  drafts: TransitLineRouteNodeDraft[],
+): NonNullable<TransitLineEditorSubmitPayload['stopLocationRefs']> {
+  const refsByStationId = new Map<string, TransitLineStopLocationRef[]>();
+  for (const draft of drafts) {
+    const stationSourceId = draft.kind === 'station' ? draft.stationSourceId.trim() : '';
+    if (stationSourceId) {
+      refsByStationId.set(stationSourceId, draft.stopLocationRefs ?? []);
+    }
+  }
+
+  return Array.from(refsByStationId, ([stationSourceId, refs]) => ({ stationSourceId, refs }));
 }
 
 function parseTransitLineRouteNodeDrafts(
