@@ -378,7 +378,6 @@ export async function prepareMaterialPreview(input: {
     const previewId = `material_preview_${randomUUID()}`;
     const generatedAt = new Date().toISOString();
     const actorLabel = input.actor?.label.trim() || input.anonymousLabel;
-    const watermarkActorId = compactMaterialWatermarkId(input.actor?.id ?? input.anonymousLabel);
     const materialId = compactMaterialWatermarkId(
       previewId.slice('material_preview_'.length),
     );
@@ -388,7 +387,7 @@ export async function prepareMaterialPreview(input: {
       canvas: source.canvas,
       watermark: {
         traceLines: [
-          `${watermarkActorId} | ${materialId}`,
+          `${actorLabel} | ${materialId}`,
           formatMaterialWatermarkTimestamp(generatedAt),
         ],
       },
@@ -668,7 +667,7 @@ function safeFileName(value: string): string {
 
 function compactMaterialWatermarkId(value: string): string {
   const normalized = value.trim();
-  return Array.from(normalized).slice(0, 16).join('');
+  return Array.from(normalized).slice(0, 12).join('');
 }
 
 function formatMaterialWatermarkTimestamp(value: string): string {

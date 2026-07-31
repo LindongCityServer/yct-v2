@@ -220,36 +220,39 @@ function appendMaterialPreviewWatermark(
 ): string {
   const shorterSide = Math.min(widthPx, heightPx);
   const primaryFontSize = Math.max(10, Math.min(34, Math.round(shorterSide * 0.13)));
-  const primaryStrokeWidth = Math.max(0.8, primaryFontSize * 0.1);
-  const watermarkFillOpacity = 0.3;
-  const watermarkStrokeOpacity = 0.56;
-  const tileWidth = Math.max(96, Math.min(340, Math.round(widthPx * 0.88)));
-  const tileHeight = Math.max(72, Math.min(150, Math.round(heightPx * 0.9)));
+  const watermarkColor = '#777777';
+  const watermarkOpacity = 1;
+  const tileWidth = Math.max(96, Math.min(560, widthPx));
   const traceWidthUnits = Math.max(
     ...watermark.traceLines.map((line) => estimateTextWidth(line, 1)),
     1,
   );
   const traceFontSize = Math.max(
-    5,
-    Math.min(12, primaryFontSize * 0.68, (tileWidth * 0.88) / traceWidthUnits),
+    3,
+    Math.min(12, primaryFontSize * 0.72, (tileWidth * 0.44) / traceWidthUnits),
   );
   const traceLineHeight = traceFontSize * 1.38;
-  const logoWidth = Math.max(54, Math.min(tileWidth * 0.46, 150));
+  const logoWidth = Math.max(48, Math.min(tileWidth * 0.24, 130));
   const logoHeight = logoWidth * (72 / 280);
-  const logoStrokeWidth = primaryStrokeWidth * (280 / logoWidth);
+  const rowHeight = Math.max(
+    48,
+    logoHeight + 16,
+    primaryFontSize + 18,
+    traceFontSize + traceLineHeight + 16,
+  );
+  const patternHeight = rowHeight * 2;
   const wordmark = getMaterialWatermarkWordmarkMarkup();
   const patternId = 'yct-material-preview-watermark-pattern';
-  const patternTrace = renderMaterialWatermarkTraceLines(
-    watermark.traceLines,
-    tileWidth * 0.5,
-    tileHeight * 0.52,
-    traceFontSize,
-    traceLineHeight,
-    primaryStrokeWidth,
-    watermarkFillOpacity,
-    watermarkStrokeOpacity,
-  );
-  const overlay = `<defs><pattern id="${patternId}" width="${formatSvgNumber(tileWidth)}" height="${formatSvgNumber(tileHeight)}" patternUnits="userSpaceOnUse" patternTransform="rotate(-24)"><svg x="${formatSvgNumber((tileWidth - logoWidth) / 2)}" y="${formatSvgNumber(tileHeight * 0.08)}" width="${formatSvgNumber(logoWidth)}" height="${formatSvgNumber(logoHeight)}" viewBox="${wordmark.viewBox}" overflow="visible"><g fill="#000000" fill-opacity="${formatSvgNumber(watermarkFillOpacity)}" stroke="#FFFFFF" stroke-opacity="${formatSvgNumber(watermarkStrokeOpacity)}" stroke-width="${formatSvgNumber(logoStrokeWidth)}" stroke-linejoin="round" paint-order="stroke">${wordmark.content}</g></svg>${patternTrace}<text x="${formatSvgNumber(tileWidth / 2)}" y="${formatSvgNumber(tileHeight * 0.88)}" font-family="'HarmonyOS Sans SC', sans-serif" text-anchor="middle" fill="#000000" fill-opacity="${formatSvgNumber(watermarkFillOpacity)}" stroke="#FFFFFF" stroke-opacity="${formatSvgNumber(watermarkStrokeOpacity)}" stroke-width="${formatSvgNumber(primaryStrokeWidth)}" paint-order="stroke" font-size="${formatSvgNumber(primaryFontSize)}" font-weight="700">仅供预览</text></pattern></defs><rect id="yct-material-preview-watermark" x="0" y="0" width="${formatSvgNumber(widthPx)}" height="${formatSvgNumber(heightPx)}" fill="url(#${patternId})" pointer-events="none"/>`;
+  const renderPatternRow = (offsetX: number, centerY: number): string => {
+    const logoCenterX = offsetX + tileWidth * 0.15;
+    const traceCenterX = offsetX + tileWidth * 0.52;
+    const previewCenterX = offsetX + tileWidth * 0.87;
+    const traceFirstBaseline = centerY - traceLineHeight / 2 + traceFontSize * 0.34;
+    return `<g><svg x="${formatSvgNumber(logoCenterX - logoWidth / 2)}" y="${formatSvgNumber(centerY - logoHeight / 2)}" width="${formatSvgNumber(logoWidth)}" height="${formatSvgNumber(logoHeight)}" viewBox="${wordmark.viewBox}" overflow="visible"><g color="${watermarkColor}" opacity="${formatSvgNumber(watermarkOpacity)}">${wordmark.content}</g></svg>${renderMaterialWatermarkTraceLines(watermark.traceLines, traceCenterX, traceFirstBaseline, traceFontSize, traceLineHeight, watermarkColor, watermarkOpacity)}<text x="${formatSvgNumber(previewCenterX)}" y="${formatSvgNumber(centerY + primaryFontSize * 0.34)}" font-family="'HarmonyOS Sans SC', sans-serif" text-anchor="middle" fill="${watermarkColor}" fill-opacity="${formatSvgNumber(watermarkOpacity)}" font-size="${formatSvgNumber(primaryFontSize)}" font-weight="700">仅供预览</text></g>`;
+  };
+  const firstRow = renderPatternRow(0, rowHeight / 2);
+  const secondRow = renderPatternRow(tileWidth * 0.25, rowHeight * 1.5);
+  const overlay = `<defs><pattern id="${patternId}" width="${formatSvgNumber(tileWidth)}" height="${formatSvgNumber(patternHeight)}" patternUnits="userSpaceOnUse" patternTransform="rotate(-24)">${firstRow}${secondRow}</pattern></defs><rect id="yct-material-preview-watermark" x="0" y="0" width="${formatSvgNumber(widthPx)}" height="${formatSvgNumber(heightPx)}" fill="url(#${patternId})" pointer-events="none"/>`;
   return svg.replace(/<\/svg>\s*$/i, `${overlay}</svg>`);
 }
 
@@ -259,11 +262,10 @@ function renderMaterialWatermarkTraceLines(
   y: number,
   fontSize: number,
   lineHeight: number,
-  strokeWidth: number,
-  fillOpacity: number,
-  strokeOpacity: number,
+  color: string,
+  opacity: number,
 ): string {
-  return `<g font-family="'HarmonyOS Sans SC', sans-serif" text-anchor="middle" fill="#000000" fill-opacity="${formatSvgNumber(fillOpacity)}" stroke="#FFFFFF" stroke-opacity="${formatSvgNumber(strokeOpacity)}" stroke-width="${formatSvgNumber(strokeWidth)}" paint-order="stroke" font-size="${formatSvgNumber(fontSize)}" font-weight="700">${lines.map((line, index) => `<text x="${formatSvgNumber(x)}" y="${formatSvgNumber(y + lineHeight * index)}">${escapeXml(line)}</text>`).join('')}</g>`;
+  return `<g font-family="'HarmonyOS Sans SC', sans-serif" text-anchor="middle" fill="${color}" fill-opacity="${formatSvgNumber(opacity)}" font-size="${formatSvgNumber(fontSize)}" font-weight="700">${lines.map((line, index) => `<text x="${formatSvgNumber(x)}" y="${formatSvgNumber(y + lineHeight * index)}">${escapeXml(line)}</text>`).join('')}</g>`;
 }
 
 function getMaterialWatermarkWordmarkMarkup(): { viewBox: string; content: string } {
@@ -279,8 +281,8 @@ function getMaterialWatermarkWordmarkMarkup(): { viewBox: string; content: strin
     throw new Error('雨城通 logo-wordmark 资源格式无效。');
   }
   const content = namespaceMaterialWatermarkMarkup(rawContent, 'yct-watermark-wordmark')
-    .replace(/\bfill="(?!none)[^"]+"/giu, 'fill="#000000"')
-    .replace(/\bstop-color="[^"]+"/giu, 'stop-color="#000000"');
+    .replace(/\bfill="(?!none)[^"]+"/giu, 'fill="currentColor"')
+    .replace(/\bstop-color="[^"]+"/giu, 'stop-color="currentColor"');
   materialWatermarkWordmarkMarkupCache = { viewBox, content };
   return materialWatermarkWordmarkMarkupCache;
 }
