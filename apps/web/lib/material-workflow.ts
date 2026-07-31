@@ -75,6 +75,17 @@ export type MaterialPreviewResult = MaterialWorkflowResult & {
 
 type PublishedMaterialTemplateSummary = Omit<MaterialTemplateVersion, 'source'>;
 
+const materialWatermarkTimestampFormatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+});
+
 export async function listPublishedMaterialTemplates(): Promise<
   Array<{ id: string; template: PublishedMaterialTemplateSummary }>
 > {
@@ -367,16 +378,18 @@ export async function prepareMaterialPreview(input: {
     const previewId = `material_preview_${randomUUID()}`;
     const generatedAt = new Date().toISOString();
     const actorLabel = input.actor?.label.trim() || input.anonymousLabel;
-    const watermarkActorLabel = Array.from(actorLabel).slice(0, 10).join('');
-    const traceId = previewId.slice('material_preview_'.length, 'material_preview_'.length + 12);
+    const watermarkActorId = compactMaterialWatermarkId(input.actor?.id ?? input.anonymousLabel);
+    const materialId = compactMaterialWatermarkId(
+      previewId.slice('material_preview_'.length),
+    );
     const rendered = await renderMaterialTemplateToPng({
       template: source.template,
       values: source.values,
       canvas: source.canvas,
       watermark: {
         traceLines: [
-          `${watermarkActorLabel} | ${traceId}`,
-          generatedAt.replaceAll('-', '').replaceAll(':', '').replace('T', ' ').slice(0, 15) + 'Z',
+          `${watermarkActorId} | ${materialId}`,
+          formatMaterialWatermarkTimestamp(generatedAt),
         ],
       },
     });
@@ -651,6 +664,21 @@ function invalidInputMessage(message: string): MaterialWorkflowFailure {
 
 function safeFileName(value: string): string {
   return sanitizeFileNamePart(value, 80) || 'material';
+}
+
+function compactMaterialWatermarkId(value: string): string {
+  const normalized = value.trim();
+  return Array.from(normalized).slice(0, 16).join('');
+}
+
+function formatMaterialWatermarkTimestamp(value: string): string {
+  const parts = Object.fromEntries(
+    materialWatermarkTimestampFormatter
+      .formatToParts(new Date(value))
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
 function applyMaterialServerOverrides(

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
 import type {
@@ -28,6 +28,10 @@ export class MaterialInputError extends Error {}
 export interface MaterialPreviewWatermark {
   traceLines: [string, string];
 }
+
+let materialWatermarkWordmarkMarkupCache:
+  | { viewBox: string; content: string }
+  | undefined;
 
 export function validateMaterialTemplateSource(
   source: string,
@@ -215,21 +219,94 @@ function appendMaterialPreviewWatermark(
   watermark: MaterialPreviewWatermark,
 ): string {
   const shorterSide = Math.min(widthPx, heightPx);
-  const primaryFontSize = Math.max(11, Math.min(36, Math.round(shorterSide * 0.14)));
-  const strokeWidth = Math.max(1, Math.round(primaryFontSize * 0.08));
-  const tileWidth = Math.max(96, Math.min(240, Math.round(widthPx * 0.72)));
-  const tileHeight = Math.max(48, Math.min(96, Math.round(heightPx * 0.58)));
+  const primaryFontSize = Math.max(10, Math.min(34, Math.round(shorterSide * 0.13)));
+  const primaryStrokeWidth = Math.max(0.8, primaryFontSize * 0.1);
+  const watermarkFillOpacity = 0.3;
+  const watermarkStrokeOpacity = 0.56;
+  const tileWidth = Math.max(96, Math.min(340, Math.round(widthPx * 0.88)));
+  const tileHeight = Math.max(72, Math.min(150, Math.round(heightPx * 0.9)));
   const traceWidthUnits = Math.max(
     ...watermark.traceLines.map((line) => estimateTextWidth(line, 1)),
     1,
   );
   const traceFontSize = Math.max(
-    4,
-    Math.min(8, Math.round(primaryFontSize * 0.4), (tileWidth * 0.88) / traceWidthUnits),
+    5,
+    Math.min(12, primaryFontSize * 0.68, (tileWidth * 0.88) / traceWidthUnits),
   );
+  const traceLineHeight = traceFontSize * 1.38;
+  const logoWidth = Math.max(54, Math.min(tileWidth * 0.46, 150));
+  const logoHeight = logoWidth * (72 / 280);
+  const logoStrokeWidth = primaryStrokeWidth * (280 / logoWidth);
+  const wordmark = getMaterialWatermarkWordmarkMarkup();
   const patternId = 'yct-material-preview-watermark-pattern';
-  const overlay = `<defs><pattern id="${patternId}" width="${formatSvgNumber(tileWidth)}" height="${formatSvgNumber(tileHeight)}" patternUnits="userSpaceOnUse" patternTransform="rotate(-24)"><g font-family="'HarmonyOS Sans SC', sans-serif" text-anchor="middle" fill="#C11111" stroke="#FFFFFF" paint-order="stroke"><text x="${formatSvgNumber(tileWidth / 2)}" y="${formatSvgNumber(tileHeight * 0.36)}" fill-opacity="0.3" stroke-opacity="0.42" stroke-width="${formatSvgNumber(strokeWidth)}" font-size="${formatSvgNumber(primaryFontSize)}" font-weight="700">仅供预览</text><text x="${formatSvgNumber(tileWidth / 2)}" y="${formatSvgNumber(tileHeight * 0.55)}" fill-opacity="0.38" stroke-opacity="0.46" stroke-width="${formatSvgNumber(Math.max(0.5, strokeWidth * 0.55))}" font-size="${formatSvgNumber(traceFontSize)}" font-weight="700">${escapeXml(watermark.traceLines[0])}</text><text x="${formatSvgNumber(tileWidth / 2)}" y="${formatSvgNumber(tileHeight * 0.69)}" fill-opacity="0.38" stroke-opacity="0.46" stroke-width="${formatSvgNumber(Math.max(0.5, strokeWidth * 0.55))}" font-size="${formatSvgNumber(traceFontSize)}" font-weight="700">${escapeXml(watermark.traceLines[1])}</text></g></pattern></defs><rect id="yct-material-preview-watermark" x="0" y="0" width="${formatSvgNumber(widthPx)}" height="${formatSvgNumber(heightPx)}" fill="url(#${patternId})" pointer-events="none"/>`;
+  const patternTrace = renderMaterialWatermarkTraceLines(
+    watermark.traceLines,
+    tileWidth * 0.5,
+    tileHeight * 0.52,
+    traceFontSize,
+    traceLineHeight,
+    primaryStrokeWidth,
+    watermarkFillOpacity,
+    watermarkStrokeOpacity,
+  );
+  const overlay = `<defs><pattern id="${patternId}" width="${formatSvgNumber(tileWidth)}" height="${formatSvgNumber(tileHeight)}" patternUnits="userSpaceOnUse" patternTransform="rotate(-24)"><svg x="${formatSvgNumber((tileWidth - logoWidth) / 2)}" y="${formatSvgNumber(tileHeight * 0.08)}" width="${formatSvgNumber(logoWidth)}" height="${formatSvgNumber(logoHeight)}" viewBox="${wordmark.viewBox}" overflow="visible"><g fill="#000000" fill-opacity="${formatSvgNumber(watermarkFillOpacity)}" stroke="#FFFFFF" stroke-opacity="${formatSvgNumber(watermarkStrokeOpacity)}" stroke-width="${formatSvgNumber(logoStrokeWidth)}" stroke-linejoin="round" paint-order="stroke">${wordmark.content}</g></svg>${patternTrace}<text x="${formatSvgNumber(tileWidth / 2)}" y="${formatSvgNumber(tileHeight * 0.88)}" font-family="'HarmonyOS Sans SC', sans-serif" text-anchor="middle" fill="#000000" fill-opacity="${formatSvgNumber(watermarkFillOpacity)}" stroke="#FFFFFF" stroke-opacity="${formatSvgNumber(watermarkStrokeOpacity)}" stroke-width="${formatSvgNumber(primaryStrokeWidth)}" paint-order="stroke" font-size="${formatSvgNumber(primaryFontSize)}" font-weight="700">仅供预览</text></pattern></defs><rect id="yct-material-preview-watermark" x="0" y="0" width="${formatSvgNumber(widthPx)}" height="${formatSvgNumber(heightPx)}" fill="url(#${patternId})" pointer-events="none"/>`;
   return svg.replace(/<\/svg>\s*$/i, `${overlay}</svg>`);
+}
+
+function renderMaterialWatermarkTraceLines(
+  lines: readonly string[],
+  x: number,
+  y: number,
+  fontSize: number,
+  lineHeight: number,
+  strokeWidth: number,
+  fillOpacity: number,
+  strokeOpacity: number,
+): string {
+  return `<g font-family="'HarmonyOS Sans SC', sans-serif" text-anchor="middle" fill="#000000" fill-opacity="${formatSvgNumber(fillOpacity)}" stroke="#FFFFFF" stroke-opacity="${formatSvgNumber(strokeOpacity)}" stroke-width="${formatSvgNumber(strokeWidth)}" paint-order="stroke" font-size="${formatSvgNumber(fontSize)}" font-weight="700">${lines.map((line, index) => `<text x="${formatSvgNumber(x)}" y="${formatSvgNumber(y + lineHeight * index)}">${escapeXml(line)}</text>`).join('')}</g>`;
+}
+
+function getMaterialWatermarkWordmarkMarkup(): { viewBox: string; content: string } {
+  if (materialWatermarkWordmarkMarkupCache) return materialWatermarkWordmarkMarkupCache;
+  const sourcePath = resolveMaterialPublicAssetPath('icons', 'yct-logo-wordmark.svg');
+  const source = readFileSync(sourcePath, 'utf8');
+  const viewBox = source.match(/\bviewBox="([^"]+)"/iu)?.[1];
+  const rawContent = source
+    .replace(/^\s*<svg\b[^>]*>/iu, '')
+    .replace(/<\/svg>\s*$/iu, '')
+    .trim();
+  if (!viewBox || !rawContent) {
+    throw new Error('雨城通 logo-wordmark 资源格式无效。');
+  }
+  const content = namespaceMaterialWatermarkMarkup(rawContent, 'yct-watermark-wordmark')
+    .replace(/\bfill="(?!none)[^"]+"/giu, 'fill="#000000"')
+    .replace(/\bstop-color="[^"]+"/giu, 'stop-color="#000000"');
+  materialWatermarkWordmarkMarkupCache = { viewBox, content };
+  return materialWatermarkWordmarkMarkupCache;
+}
+
+function namespaceMaterialWatermarkMarkup(content: string, prefix: string): string {
+  const ids = Array.from(content.matchAll(/\bid="([^"]+)"/gu), (match) => match[1]!);
+  return ids.reduce(
+    (markup, id) =>
+      markup
+        .replaceAll(`id="${id}"`, `id="${prefix}-${id}"`)
+        .replaceAll(`url(#${id})`, `url(#${prefix}-${id})`)
+        .replaceAll(`href="#${id}"`, `href="#${prefix}-${id}"`),
+    content,
+  );
+}
+
+function resolveMaterialPublicAssetPath(...relativePath: string[]): string {
+  const candidates = [
+    resolve(process.cwd(), 'public', ...relativePath),
+    resolve(process.cwd(), 'apps', 'web', 'public', ...relativePath),
+  ];
+  const sourcePath = candidates.find((candidate) => existsSync(candidate));
+  if (!sourcePath) {
+    throw new Error(`物料资源 ${relativePath.join('/')} 不存在。`);
+  }
+  return sourcePath;
 }
 
 function alignToTile(value: number, tileSizePx: number): number {
