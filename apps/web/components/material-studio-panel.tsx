@@ -1,15 +1,30 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import type { MaterialTransitNetworkSnapshot } from '@yct/contracts';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { findTextContinuation } from '../lib/text-continuation';
 import {
   publishMaterialStudioActionBlocked,
   publishMaterialStudioState,
   subscribeMaterialStudioActions,
 } from '../lib/client-material-studio-events';
+import {
+  publishTransitNetworkLineNameEditorRequested,
+  subscribeTransitNetworkLineNamesChanged,
+  subscribeTransitNetworkSourceChanged,
+} from '../lib/client-transit-network-events';
 import { METRO_WAYFINDING_TEMPLATE_ID } from '../lib/metro-wayfinding';
+import {
+  listMaterialTransitNetworkPalette,
+  listMaterialTransitNetworkNodeDirections,
+  listMaterialTransitNetworkNodeLineDirections,
+  listMaterialTransitNetworkNodeLines,
+  type MaterialTransitNetworkNodeLineOption,
+} from '../lib/rmp-transit-network';
 import { EmbeddedMapLocationPicker } from './embedded-map-location-picker';
 import { MetroWayfindingEditor } from './metro-wayfinding-editor';
+import { TransitNetworkSourceControl } from './transit-network-source-control';
 
 type MaterialFamily = 'road_sign' | 'address_sign' | 'bus_stop' | 'custom';
 type MaterialServerSource = 'transit_line' | 'transit_station' | 'map_location' | 'road_coordinate';
@@ -89,6 +104,16 @@ interface TransitStationOption {
     label: string;
   }>;
   lines: TransitStationLineOption[];
+  projectLines?: MaterialTransitNetworkNodeLineOption[];
+}
+
+interface ImportedTransitLineOption {
+  id: string;
+  lineKey: string;
+  direction: 'east' | 'west' | 'north' | 'south';
+  name: string;
+  secondaryName?: string;
+  color: string;
 }
 
 interface MaterialLocationOption {
@@ -118,6 +143,10 @@ type StudioMode = 'manual' | 'server';
 
 const MATERIAL_PREVIEW_DIALOG_MEDIA_QUERY = '(max-width: 959px)';
 
+function arraysEqual(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
 export function MaterialStudioPanel({
   studioId,
   title,
@@ -126,6 +155,7 @@ export function MaterialStudioPanel({
   serverSources,
   serverFamilies,
   includedTemplateIds,
+  allowTransitNetworkImport = false,
 }: Readonly<{
   studioId: string;
   title: string;
@@ -134,6 +164,7 @@ export function MaterialStudioPanel({
   serverSources?: Partial<Record<MaterialFamily, MaterialServerSource>>;
   serverFamilies?: MaterialFamily[];
   includedTemplateIds?: string[];
+  allowTransitNetworkImport?: boolean;
 }>) {
   const [items, setItems] = useState<PublishedMaterialTemplate[]>([]);
   const [drafts, setDrafts] = useState<MaterialDraft[]>([]);
@@ -147,6 +178,7 @@ export function MaterialStudioPanel({
   const [selectedLineId, setSelectedLineId] = useState('');
   const [selectedStationSourceId, setSelectedStationSourceId] = useState('');
   const [selectedTransitStationMarkerId, setSelectedTransitStationMarkerId] = useState('');
+  const [selectedImportedStationNodeId, setSelectedImportedStationNodeId] = useState('');
   const [transitDirection, setTransitDirection] = useState<'east' | 'west' | 'north' | 'south'>(
     'east',
   );
@@ -163,6 +195,9 @@ export function MaterialStudioPanel({
   const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
   const [workspaceBlockMessage, setWorkspaceBlockMessage] = useState('');
   const [isBusy, setIsBusy] = useState(false);
+  const [transitNetworkSource, setTransitNetworkSource] = useState<'server' | 'rmp'>('server');
+  const [importedTransitNetwork, setImportedTransitNetwork] =
+    useState<MaterialTransitNetworkSnapshot>();
 
   const templates = useMemo(
     () =>
@@ -200,22 +235,120 @@ export function MaterialStudioPanel({
     [drafts],
   );
   const selectedLine = transitLines.find((line) => line.id === selectedLineId);
-  const metroLineColorOptions = useMemo(
-    () =>
-      transitLines
-        .filter(
-          (line) =>
-            line.mode === 'metro' && Boolean(line.color && /^#[0-9A-Fa-f]{6}$/.test(line.color)),
-        )
-        .map((line) => ({
-          value: line.color!.toUpperCase(),
-          label: `${line.name} · ${line.color!.toUpperCase()}`,
-        })),
-    [transitLines],
+  const metroLineColorOptions = useMemo(() => {
+    if (transitNetworkSource === 'rmp' && importedTransitNetwork) {
+      return listMaterialTransitNetworkPalette(importedTransitNetwork);
+    }
+    return transitLines
+      .filter(
+        (line) =>
+          line.mode === 'metro' && Boolean(line.color && /^#[0-9A-Fa-f]{6}$/.test(line.color)),
+      )
+      .map((line) => ({
+        value: line.color!.toUpperCase(),
+        label: `${line.name} · ${line.color!.toUpperCase()}`,
+      }));
+  }, [importedTransitNetwork, transitLines, transitNetworkSource]);
+  const metroTextSuggestions = useMemo(() => {
+    const values = [
+      ...transitStations.map((station) => station.stationName),
+      ...locations.map((location) => location.label),
+      ...(importedTransitNetwork?.nodes.flatMap((node) => node.names) ?? []),
+    ];
+    return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort((a, b) =>
+      a.localeCompare(b, 'zh-CN'),
+    );
+  }, [importedTransitNetwork, locations, transitStations]);
+  const serverLocationSuggestions = useMemo(
+    () => Array.from(new Set(locations.map((location) => location.label.trim()).filter(Boolean))),
+    [locations],
+  );
+  const requiresTransitTerminalRole = Boolean(
+    selected?.template.fields.some((field) => field.key === 'terminalRole'),
   );
   const selectedTransitStation = transitStations.find(
     (station) => station.markerId === selectedTransitStationMarkerId,
   );
+  const importedTransitStations = useMemo<TransitStationOption[]>(() => {
+    if (!importedTransitNetwork) return [];
+    return importedTransitNetwork.nodes
+      .filter((node) => node.kind === 'station' && node.names.length)
+      .map((node) => {
+        const directions = new Set(
+          listMaterialTransitNetworkNodeDirections(importedTransitNetwork, node.id),
+        );
+        return {
+          markerId: node.id,
+          stationSourceId: '',
+          stationName: node.names[0]!,
+          coordinate: [node.x, node.y] as [number, number],
+          directionOptions: listDiagramDirectionOptions().filter((option) =>
+            directions.has(option.value),
+          ),
+          lines: [],
+          projectLines: listMaterialTransitNetworkNodeLines(importedTransitNetwork, node.id),
+        };
+      })
+      .sort((left, right) => left.stationName.localeCompare(right.stationName, 'zh-CN'));
+  }, [importedTransitNetwork]);
+  const selectedImportedTransitStation = importedTransitStations.find(
+    (station) => station.markerId === selectedImportedStationNodeId,
+  );
+  const activeTransitStation =
+    transitNetworkSource === 'rmp' ? selectedImportedTransitStation : selectedTransitStation;
+  const selectableImportedTransitLines = useMemo<ImportedTransitLineOption[]>(() => {
+    if (!importedTransitNetwork || !selectedImportedTransitStation) return [];
+    return (selectedImportedTransitStation.projectLines ?? []).flatMap((line) =>
+      listMaterialTransitNetworkNodeLineDirections(
+        importedTransitNetwork,
+        selectedImportedTransitStation.markerId,
+        line.lineKey,
+      ).map((direction) => ({
+        id: `${line.lineKey}\u0000${direction}`,
+        lineKey: line.lineKey,
+        direction,
+        name: line.label,
+        secondaryName: line.secondaryLabel,
+        color: line.color,
+      })),
+    );
+  }, [importedTransitNetwork, selectedImportedTransitStation]);
+  const selectableServerTransitLines = useMemo(
+    () =>
+      (selectedTransitStation?.lines ?? []).filter(
+        (line) =>
+          line.direction === transitDirection &&
+          (!requiresTransitTerminalRole ||
+            (transitTerminalRole === 'origin' ? line.isOriginAtStation : line.isTerminalAtStation)),
+      ),
+    [requiresTransitTerminalRole, selectedTransitStation, transitDirection, transitTerminalRole],
+  );
+  const selectableTransitLines = useMemo(
+    () =>
+      transitNetworkSource === 'rmp'
+        ? selectableImportedTransitLines.filter((line) => line.direction === transitDirection)
+        : selectableServerTransitLines,
+    [
+      selectableImportedTransitLines,
+      selectableServerTransitLines,
+      transitDirection,
+      transitNetworkSource,
+    ],
+  );
+  const primarySelectedTransitLine = selectedTransitStation?.lines.find(
+    (line) => line.id === selectedTransitLineIds[0],
+  );
+  const primarySelectedImportedLine = selectableImportedTransitLines.find(
+    (line) => line.id === selectedTransitLineIds[0],
+  );
+  const primaryServerTransitLine = transitLines.find(
+    (line) => line.id === primarySelectedTransitLine?.lineId,
+  );
+  const activeTransitLineColor =
+    transitNetworkSource === 'rmp'
+      ? primarySelectedImportedLine?.color
+      : primaryServerTransitLine?.color?.toUpperCase();
+  const linkedDataModeLabel = transitNetworkSource === 'rmp' ? '项目数据' : '服务器数据';
   const activeServerSource = selected
     ? (serverSources?.[selected.template.family] ?? serverSource)
     : serverSource;
@@ -239,19 +372,6 @@ export function MaterialStudioPanel({
       })
       .slice(0, 100);
   }, [locationQuery, locations]);
-  const requiresTransitTerminalRole = Boolean(
-    selected?.template.fields.some((field) => field.key === 'terminalRole'),
-  );
-  const selectableTransitLines = useMemo(
-    () =>
-      (selectedTransitStation?.lines ?? []).filter(
-        (line) =>
-          line.direction === transitDirection &&
-          (!requiresTransitTerminalRole ||
-            (transitTerminalRole === 'origin' ? line.isOriginAtStation : line.isTerminalAtStation)),
-      ),
-    [requiresTransitTerminalRole, selectedTransitStation, transitDirection, transitTerminalRole],
-  );
   const maximumTransitLineCount = useMemo(() => {
     const slots = selected?.template.fields
       .map((field) => field.key.match(/^route(\d+)Number$/)?.[1])
@@ -298,7 +418,9 @@ export function MaterialStudioPanel({
       ];
       const requiresTransitLineList =
         serverSource === 'transit_line' ||
+        serverSource === 'transit_station' ||
         Object.values(serverSources ?? {}).includes('transit_line') ||
+        Object.values(serverSources ?? {}).includes('transit_station') ||
         nextItems.some(
           (item) =>
             (families.includes(item.template.family) ||
@@ -341,13 +463,14 @@ export function MaterialStudioPanel({
             .catch(() => undefined),
         );
       }
-      if (
+      const requiresLocationList =
+        allowTransitNetworkImport ||
         serverSource === 'map_location' ||
         serverSource === 'road_coordinate' ||
         Object.values(serverSources ?? {}).some(
           (source) => source === 'map_location' || source === 'road_coordinate',
-        )
-      ) {
+        );
+      if (requiresLocationList) {
         pendingRequests.push(
           fetch(appPath('/api/materials/locations'), { cache: 'no-store' })
             .then(async (response) => {
@@ -360,6 +483,14 @@ export function MaterialStudioPanel({
             })
             .catch(() => undefined),
         );
+      }
+      if (
+        serverSource === 'map_location' ||
+        serverSource === 'road_coordinate' ||
+        Object.values(serverSources ?? {}).some(
+          (source) => source === 'map_location' || source === 'road_coordinate',
+        )
+      ) {
         pendingRequests.push(
           fetch(appPath('/api/map/tile-providers'), { cache: 'no-store' })
             .then(async (response) => {
@@ -388,6 +519,28 @@ export function MaterialStudioPanel({
   useEffect(() => {
     void loadWorkspace();
   }, []);
+
+  useEffect(
+    () =>
+      subscribeTransitNetworkSourceChanged(studioId, ({ source, snapshot, clearSnapshot }) => {
+        setTransitNetworkSource(source);
+        if (snapshot) setImportedTransitNetwork(snapshot);
+        if (clearSnapshot) setImportedTransitNetwork(undefined);
+        setSelectedTransitLineIds([]);
+        clearPreview();
+      }),
+    [studioId],
+  );
+
+  useEffect(
+    () =>
+      subscribeTransitNetworkLineNamesChanged(studioId, ({ snapshot }) => {
+        setImportedTransitNetwork(snapshot);
+        setSelectedTransitLineIds([]);
+        clearPreview();
+      }),
+    [studioId],
+  );
 
   useEffect(() => {
     if (!selected) {
@@ -420,22 +573,47 @@ export function MaterialStudioPanel({
   }, [activeServerSource, locations, roadCoordinate]);
 
   useEffect(() => {
+    if (transitNetworkSource !== 'rmp') return;
+    setSelectedImportedStationNodeId((current) =>
+      importedTransitStations.some((station) => station.markerId === current)
+        ? current
+        : (importedTransitStations[0]?.markerId ?? ''),
+    );
+  }, [importedTransitStations, transitNetworkSource]);
+
+  useEffect(() => {
     const selectableIds = new Set(selectableTransitLines.map((line) => line.id));
     setSelectedTransitLineIds((current) => {
       const retained = current.filter((lineId) => selectableIds.has(lineId));
-      if (retained.length > 0) {
-        return retained.slice(0, maximumTransitLineCount);
-      }
-      return selectableTransitLines.slice(0, maximumTransitLineCount).map((line) => line.id);
+      const next =
+        retained.length > 0
+          ? retained.slice(0, maximumTransitLineCount)
+          : selectableTransitLines.slice(0, maximumTransitLineCount).map((line) => line.id);
+      return arraysEqual(current, next) ? current : next;
     });
   }, [maximumTransitLineCount, selectableTransitLines]);
 
   useEffect(() => {
-    const options = selectedTransitStation?.directionOptions ?? [];
+    const options = activeTransitStation?.directionOptions ?? [];
     if (options.length && !options.some((option) => option.value === transitDirection)) {
       setTransitDirection(options[0]!.value);
     }
-  }, [selectedTransitStation, transitDirection]);
+  }, [activeTransitStation, transitDirection]);
+
+  useEffect(() => {
+    if (
+      !activeTransitLineColor ||
+      !selected?.template.fields.some((field) => field.key === 'accentColor')
+    ) {
+      return;
+    }
+    setInput((current) =>
+      current.accentColor === activeTransitLineColor
+        ? current
+        : { ...current, accentColor: activeTransitLineColor },
+    );
+    clearPreview();
+  }, [activeTransitLineColor, selected?.id]);
 
   useEffect(
     () => () => {
@@ -548,6 +726,24 @@ export function MaterialStudioPanel({
         stationSourceId: selectedStationSourceId || undefined,
       };
     }
+    if (
+      activeServerSource === 'transit_station' &&
+      transitNetworkSource === 'rmp' &&
+      selectedImportedStationNodeId
+    ) {
+      const lineSelections = selectedTransitLineIds.flatMap((selectedLineId) => {
+        const line = selectableImportedTransitLines.find(
+          (candidate) => candidate.id === selectedLineId,
+        );
+        return line ? [{ lineKey: line.lineKey, direction: line.direction }] : [];
+      });
+      return {
+        kind: 'transit_station' as const,
+        networkNodeId: selectedImportedStationNodeId,
+        lineSelections,
+        terminalRole: requiresTransitTerminalRole ? transitTerminalRole : undefined,
+      };
+    }
     if (activeServerSource === 'transit_station' && selectedTransitStationMarkerId) {
       return {
         kind: 'transit_station' as const,
@@ -579,11 +775,24 @@ export function MaterialStudioPanel({
   };
 
   const getServerSelectionBlockMessage = (): string | null => {
-    if (activeServerSource === 'transit_station' && !selectedTransitStationMarkerId) {
+    if (
+      activeServerSource === 'transit_station' &&
+      transitNetworkSource === 'rmp' &&
+      !selectedImportedStationNodeId
+    ) {
+      return '导入项目中没有可选择的站点。';
+    }
+    if (
+      activeServerSource === 'transit_station' &&
+      transitNetworkSource === 'server' &&
+      !selectedTransitStationMarkerId
+    ) {
       return '请先选择服务器公交站。';
     }
     if (activeServerSource === 'transit_station' && !selectedTransitLineIds.length) {
-      return '请先选择至少一条同方向线路。';
+      return transitNetworkSource === 'rmp'
+        ? '请先选择至少一条当前图上方向的项目线路。'
+        : '请先选择至少一条同方向线路。';
     }
     if (activeServerSource === 'transit_line' && !selectedLineId) {
       return '请先选择服务器线路。';
@@ -609,7 +818,7 @@ export function MaterialStudioPanel({
     }
     const source = mode === 'server' ? buildServerSource() : undefined;
     if (mode === 'server' && !source) {
-      blockAction('请先选择服务器数据。');
+      blockAction(`请先选择${linkedDataModeLabel}。`);
       return;
     }
     setIsBusy(true);
@@ -625,6 +834,8 @@ export function MaterialStudioPanel({
                 templateVersion: selected.template.version,
                 canvas: activeCanvas,
                 source,
+                networkGeometry:
+                  transitNetworkSource === 'rmp' ? importedTransitNetwork : undefined,
                 input: buildServerOverrides(),
               }
             : {
@@ -725,7 +936,7 @@ export function MaterialStudioPanel({
     }
     const source = buildServerSource();
     if (!selected || !activeCanvas || !source) {
-      blockAction('请先选择模板和服务器数据。');
+      blockAction(`请先选择模板和${linkedDataModeLabel}。`);
       return;
     }
     setIsBusy(true);
@@ -739,6 +950,7 @@ export function MaterialStudioPanel({
           templateVersion: selected.template.version,
           canvas: activeCanvas,
           source,
+          networkGeometry: transitNetworkSource === 'rmp' ? importedTransitNetwork : undefined,
           input: buildServerOverrides(),
         }),
       });
@@ -776,7 +988,7 @@ export function MaterialStudioPanel({
       }
       if (action === 'submit') {
         if (mode !== 'manual') {
-          blockAction('服务器数据模板无需提交审核。');
+          blockAction(`${linkedDataModeLabel}模式无需提交审核。`);
           return;
         }
         void submitManualDraft();
@@ -827,6 +1039,7 @@ export function MaterialStudioPanel({
             </select>
           </label>
           {selected?.template.description ? <p>{selected.template.description}</p> : null}
+          {allowTransitNetworkImport ? <TransitNetworkSourceControl studioId={studioId} /> : null}
           <CanvasEditor
             canvas={activeCanvas}
             onChange={updateCanvas}
@@ -856,7 +1069,7 @@ export function MaterialStudioPanel({
                   clearPreview();
                 }}
               >
-                服务器数据
+                {linkedDataModeLabel}
               </button>
             </div>
           ) : null}
@@ -868,6 +1081,7 @@ export function MaterialStudioPanel({
                   field={field}
                   value={input[field.key] ?? field.defaultValue ?? ''}
                   disabled={isBusy}
+                  suggestions={field.key === 'roadName' ? serverLocationSuggestions : undefined}
                   onChange={(value) => {
                     setInput((current) => ({ ...current, [field.key]: value }));
                     clearPreview();
@@ -881,25 +1095,56 @@ export function MaterialStudioPanel({
           ) : mode === 'server' && activeServerSource === 'transit_station' ? (
             <>
               <label className="material-field">
-                <span>服务器公交站</span>
+                <span>{transitNetworkSource === 'rmp' ? '项目站点' : '服务器公交站'}</span>
                 <select
-                  value={selectedTransitStationMarkerId}
+                  value={
+                    transitNetworkSource === 'rmp'
+                      ? selectedImportedStationNodeId
+                      : selectedTransitStationMarkerId
+                  }
                   onChange={(event) => {
-                    setSelectedTransitStationMarkerId(event.currentTarget.value);
+                    if (transitNetworkSource === 'rmp') {
+                      setSelectedImportedStationNodeId(event.currentTarget.value);
+                    } else {
+                      setSelectedTransitStationMarkerId(event.currentTarget.value);
+                    }
                     setSelectedTransitLineIds([]);
                     clearPreview();
                   }}
-                  disabled={isBusy || !transitStations.length}
+                  disabled={
+                    isBusy ||
+                    (transitNetworkSource === 'rmp'
+                      ? !importedTransitStations.length
+                      : !transitStations.length)
+                  }
                 >
-                  {transitStations.map((station) => (
-                    <option key={station.markerId} value={station.markerId}>
-                      {station.stationName} · {station.lines.length} 条公交线路
-                    </option>
-                  ))}
+                  {(transitNetworkSource === 'rmp' ? importedTransitStations : transitStations).map(
+                    (station) => (
+                      <option key={station.markerId} value={station.markerId}>
+                        {station.stationName} ·{' '}
+                        {transitNetworkSource === 'rmp'
+                          ? `${station.projectLines?.length ?? 0} 条项目线路`
+                          : `${station.lines.length} 条公交线路`}
+                      </option>
+                    ),
+                  )}
                 </select>
               </label>
+              {transitNetworkSource === 'rmp' && activeTransitStation?.projectLines?.length ? (
+                <div className="transit-network-station-lines" aria-label="当前站点的项目线路">
+                  <span>项目线路</span>
+                  <div>
+                    {activeTransitStation.projectLines.map((line) => (
+                      <span key={line.id} title={`${line.lineKey} · ${line.color}`}>
+                        <i style={{ backgroundColor: line.color }} aria-hidden="true" />
+                        {line.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <label className="material-field">
-                <span>道路行车方向</span>
+                <span>{transitNetworkSource === 'rmp' ? '图上行车方向' : '道路行车方向'}</span>
                 <select
                   value={transitDirection}
                   onChange={(event) => {
@@ -910,12 +1155,10 @@ export function MaterialStudioPanel({
                     clearPreview();
                   }}
                   disabled={
-                    isBusy ||
-                    !selectedTransitStation ||
-                    !selectedTransitStation.directionOptions.length
+                    isBusy || !activeTransitStation || !activeTransitStation.directionOptions.length
                   }
                 >
-                  {selectedTransitStation?.directionOptions.map((option) => (
+                  {activeTransitStation?.directionOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -932,7 +1175,7 @@ export function MaterialStudioPanel({
                       setSelectedTransitLineIds([]);
                       clearPreview();
                     }}
-                    disabled={isBusy || !selectedTransitStation}
+                    disabled={isBusy || !activeTransitStation}
                   >
                     <option value="origin">始发站</option>
                     <option value="terminal">终点站</option>
@@ -941,16 +1184,60 @@ export function MaterialStudioPanel({
               ) : null}
               <fieldset
                 className="material-canvas-editor"
-                disabled={isBusy || !selectedTransitStation}
+                disabled={isBusy || !activeTransitStation}
               >
                 <legend>
-                  同方向线路
+                  {transitNetworkSource === 'rmp' ? '项目线路' : '同方向线路'}
                   {usesSingleTransitLineSelection
                     ? '（单选）'
                     : `（最多 ${maximumTransitLineCount} 条）`}
                 </legend>
-                {selectableTransitLines.length ? (
-                  selectableTransitLines.map((line) => {
+                {transitNetworkSource === 'rmp' && selectableTransitLines.length ? (
+                  selectableImportedTransitLines
+                    .filter((line) => line.direction === transitDirection)
+                    .map((line) => {
+                      const checked = selectedTransitLineIds.includes(line.id);
+                      return (
+                        <label className="material-checkbox-row" key={line.id}>
+                          <input
+                            type={usesSingleTransitLineSelection ? 'radio' : 'checkbox'}
+                            name={
+                              usesSingleTransitLineSelection
+                                ? `material-transit-line-${activeTransitStation?.markerId ?? ''}`
+                                : undefined
+                            }
+                            checked={checked}
+                            disabled={
+                              !usesSingleTransitLineSelection &&
+                              !checked &&
+                              selectedTransitLineIds.length >= maximumTransitLineCount
+                            }
+                            onChange={(event) => {
+                              const nextChecked = event.currentTarget.checked;
+                              setSelectedTransitLineIds((current) =>
+                                usesSingleTransitLineSelection
+                                  ? [line.id]
+                                  : nextChecked
+                                    ? [...current, line.id].slice(0, maximumTransitLineCount)
+                                    : current.filter((lineId) => lineId !== line.id),
+                              );
+                              clearPreview();
+                            }}
+                          />
+                          <i
+                            className="transit-network-line-swatch"
+                            style={{ backgroundColor: line.color }}
+                            aria-hidden="true"
+                          />
+                          <span>
+                            {line.name}
+                            {line.secondaryName ? ` / ${line.secondaryName}` : ''}
+                          </span>
+                        </label>
+                      );
+                    })
+                ) : transitNetworkSource === 'server' && selectableServerTransitLines.length ? (
+                  selectableServerTransitLines.map((line) => {
                     const checked = selectedTransitLineIds.includes(line.id);
                     return (
                       <label className="material-checkbox-row" key={line.id}>
@@ -958,7 +1245,7 @@ export function MaterialStudioPanel({
                           type={usesSingleTransitLineSelection ? 'radio' : 'checkbox'}
                           name={
                             usesSingleTransitLineSelection
-                              ? `material-transit-line-${selectedTransitStation?.markerId ?? ''}`
+                              ? `material-transit-line-${activeTransitStation?.markerId ?? ''}`
                               : undefined
                           }
                           checked={checked}
@@ -990,7 +1277,25 @@ export function MaterialStudioPanel({
                     );
                   })
                 ) : (
-                  <p className="muted">当前方向没有可用线路。</p>
+                  <div className="transit-network-match-empty">
+                    <p className="muted">
+                      {transitNetworkSource === 'rmp'
+                        ? '当前项目站点在该图上方向没有线路连接。'
+                        : '当前方向没有可用线路。'}
+                    </p>
+                    {transitNetworkSource === 'rmp' &&
+                    activeTransitStation?.projectLines?.length ? (
+                      <button
+                        type="button"
+                        onClick={() => publishTransitNetworkLineNameEditorRequested({ studioId })}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          edit
+                        </span>
+                        配置线路名称
+                      </button>
+                    ) : null}
+                  </div>
                 )}
               </fieldset>
             </>
@@ -1126,6 +1431,7 @@ export function MaterialStudioPanel({
                   canvasHeight={activeCanvas?.heightM ?? 1}
                   disabled={isBusy}
                   lineColorOptions={metroLineColorOptions}
+                  textSuggestions={metroTextSuggestions}
                   onCanvasHeightChange={(height) => updateCanvas('heightM', height)}
                   onChange={(value) => {
                     setInput((current) => ({ ...current, layout: value }));
@@ -1142,6 +1448,9 @@ export function MaterialStudioPanel({
                         field={field}
                         value={input[field.key] ?? ''}
                         disabled={isBusy}
+                        suggestions={
+                          field.key === 'roadName' ? serverLocationSuggestions : undefined
+                        }
                         onChange={(value) => {
                           setInput((current) => ({ ...current, [field.key]: value }));
                           clearPreview();
@@ -1394,13 +1703,18 @@ function MaterialFieldEditor({
   field,
   value,
   disabled,
+  suggestions,
   onChange,
 }: Readonly<{
   field: MaterialField;
   value: string;
   disabled: boolean;
+  suggestions?: string[];
   onChange: (value: string) => void;
 }>) {
+  const suggestionsId = useId();
+  const continuationSuggestion =
+    field.kind === 'text' ? findTextContinuation(value, suggestions) : undefined;
   return (
     <label className="material-field">
       <span>
@@ -1449,6 +1763,34 @@ function MaterialFieldEditor({
             onChange={(event) => onChange(event.currentTarget.value.toUpperCase())}
           />
         </span>
+      ) : field.kind === 'text' && suggestions?.length ? (
+        <div className="material-field-text-autocomplete">
+          <datalist id={suggestionsId}>
+            {suggestions.map((suggestion) => (
+              <option key={suggestion} value={suggestion} />
+            ))}
+          </datalist>
+          {continuationSuggestion ? (
+            <span className="material-field-text-autocomplete-ghost" aria-hidden="true">
+              <span>{value}</span>
+              <strong>{continuationSuggestion.slice(value.length)}</strong>
+            </span>
+          ) : null}
+          <input
+            type="text"
+            value={value}
+            maxLength={field.maxLength}
+            required={field.required}
+            disabled={disabled}
+            list={suggestionsId}
+            onKeyDown={(event) => {
+              if (event.key !== 'Tab' || !continuationSuggestion) return;
+              event.preventDefault();
+              onChange(continuationSuggestion);
+            }}
+            onChange={(event) => onChange(event.currentTarget.value)}
+          />
+        </div>
       ) : (
         <input
           type={field.kind === 'number' ? 'number' : 'text'}
@@ -1463,6 +1805,15 @@ function MaterialFieldEditor({
       )}
     </label>
   );
+}
+
+function listDiagramDirectionOptions(): TransitStationOption['directionOptions'] {
+  return [
+    { value: 'east', label: '向图右' },
+    { value: 'west', label: '向图左' },
+    { value: 'north', label: '向图上' },
+    { value: 'south', label: '向图下' },
+  ];
 }
 
 function formatCoordinate(value: number): string {

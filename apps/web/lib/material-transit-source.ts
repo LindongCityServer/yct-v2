@@ -1,4 +1,5 @@
 import type {
+  MaterialTransitNetworkSnapshot,
   MaterialTemplateField,
   TransitLineRouteMode,
   TransitLineRouteNodeSnapshot,
@@ -14,11 +15,21 @@ import {
 import { findMaterialTransitLineNumber } from './entity-translation-store';
 import { readTransitOverview } from './transit-data';
 import {
+  findMaterialTransitNetworkLine,
+  findMaterialTransitNetworkNodeByName,
+  findMaterialTransitNetworkPath,
+  getMaterialTransitNetworkEdgePoints,
+  resolveMaterialTransitNetworkRoute,
+  type MaterialTransitNetworkLineMatch,
+  type MaterialTransitNetworkRoute,
+} from './rmp-transit-network';
+import {
   buildVisualRoadGraph,
   resolveVisualRoute,
   type VisualRoadGraph,
 } from './transit-line-visual-routing';
 import type { TransitLineStopSummary, TransitLineSummary } from './legacy-transit';
+import { getTransitStopLocationMarkerIdsForDirection } from './transit-stop-location';
 
 export type MaterialTransitDirection = 'east' | 'west' | 'north' | 'south';
 export type MaterialTransitTerminalRole = 'origin' | 'terminal';
@@ -113,7 +124,7 @@ export async function listMaterialTransitStations(): Promise<MaterialTransitStat
       if (!stop.stationSourceId || coordinateByStationSourceId.has(stop.stationSourceId)) {
         continue;
       }
-      const location = findBusStopLocation(stop, locationByMarkerId, locationByName);
+      const location = findBusStopLocation(stop, 'forward', locationByMarkerId, locationByName);
       if (location?.coordinate) {
         coordinateByStationSourceId.set(stop.stationSourceId, location.coordinate);
       }
@@ -138,23 +149,28 @@ export async function listMaterialTransitStations(): Promise<MaterialTransitStat
       if (!stop.stationSourceId) {
         return;
       }
-      const location = findBusStopLocation(stop, locationByMarkerId, locationByName);
-      if (!location) {
-        return;
-      }
-      const markerId = getMarkerId(location.id);
-      const current = candidateByMarkerId.get(markerId) ?? {
-        marker: location,
-        stationSourceId: stop.stationSourceId,
-        stationName: stop.stationName,
-        candidates: [],
-      };
       for (const lineCandidate of createTransitStationLineCandidates(line, stationStopIndex)) {
+        const location = findBusStopLocation(
+          stop,
+          lineCandidate.travelDirection,
+          locationByMarkerId,
+          locationByName,
+        );
+        if (!location) {
+          continue;
+        }
+        const markerId = getMarkerId(location.id);
+        const current = candidateByMarkerId.get(markerId) ?? {
+          marker: location,
+          stationSourceId: stop.stationSourceId,
+          stationName: stop.stationName,
+          candidates: [],
+        };
         if (!current.candidates.some((candidate) => candidate.id === lineCandidate.id)) {
           current.candidates.push(lineCandidate);
         }
+        candidateByMarkerId.set(markerId, current);
       }
-      candidateByMarkerId.set(markerId, current);
     });
   }
 
@@ -199,6 +215,7 @@ export async function resolveTransitLineMaterialInput(input: {
   lineId: string;
   stationSourceId?: string;
   fields: MaterialTemplateField[];
+  networkGeometry?: MaterialTransitNetworkSnapshot;
 }): Promise<{ values: Record<string, string>; sourceRef: string }> {
   const overview = await readTransitOverview();
   const line = overview.lines.find((item) => item.id === input.lineId);
@@ -221,19 +238,47 @@ export async function resolveTransitLineMaterialInput(input: {
     roadNameEn: '',
     direction: `${line.firstStationName ?? ''} - ${destination}`.trim(),
   };
+  const networkLineMatch = input.networkGeometry
+    ? findMaterialTransitNetworkLine(input.networkGeometry, {
+        name: line.name,
+        color: line.color,
+        stationNames: line.stationNames,
+      })
+    : undefined;
+  candidates.accentColor = networkLineMatch?.color ?? line.color ?? '';
   return {
     values: mapTemplateFields(input.fields, candidates),
-    sourceRef: `transit_line:${line.id}${selectedStop?.stationSourceId ? `:${selectedStop.stationSourceId}` : ''}`,
+    sourceRef: appendTransitNetworkSourceRef(
+      `transit_line:${line.id}${selectedStop?.stationSourceId ? `:${selectedStop.stationSourceId}` : ''}`,
+      input.networkGeometry,
+      Boolean(networkLineMatch),
+    ),
   };
 }
 
-export async function resolveTransitStationMaterialInput(input: {
-  stationMarkerId: string;
-  direction: MaterialTransitDirection;
-  lineIds: string[];
-  terminalRole?: MaterialTransitTerminalRole;
-  fields: MaterialTemplateField[];
-}): Promise<{ values: Record<string, string>; sourceRef: string }> {
+export async function resolveTransitStationMaterialInput(
+  input: {
+    terminalRole?: MaterialTransitTerminalRole;
+    fields: MaterialTemplateField[];
+    networkGeometry?: MaterialTransitNetworkSnapshot;
+  } & (
+    | {
+        stationMarkerId: string;
+        direction: MaterialTransitDirection;
+        lineIds: string[];
+      }
+    | {
+        networkNodeId: string;
+        lineSelections: Array<{
+          lineKey: string;
+          direction: MaterialTransitDirection;
+        }>;
+      }
+  ),
+): Promise<{ values: Record<string, string>; sourceRef: string }> {
+  if ('networkNodeId' in input) {
+    return resolveTransitNetworkStationMaterialInput(input);
+  }
   const [stations, overview] = await Promise.all([
     listMaterialTransitStations(),
     readTransitOverview(),
@@ -253,6 +298,7 @@ export async function resolveTransitStationMaterialInput(input: {
   if (new Set(input.lineIds).size !== input.lineIds.length) {
     throw new Error('公交线路不能重复选择。');
   }
+  const sourceSelectionRef = `marker=${station.markerId};direction=${input.direction};lines=${input.lineIds.join(',')}`;
   const maximumLineCount = resolveTemplateLineCapacity(input.fields);
   if (selectedLines.length > maximumLineCount) {
     throw new Error(`当前模板最多支持 ${maximumLineCount} 条公交线路。`);
@@ -280,14 +326,28 @@ export async function resolveTransitStationMaterialInput(input: {
     selectedLines.map((line) => resolveMaterialTransitLineDisplay(line.lineId, line.name)),
   );
   const primaryLine = selectedLines[0];
-  const routeMapData =
-    primaryLine && input.fields.some((field) => field.key === 'routeMapData')
+  const primaryOverviewLine = primaryLine
+    ? overview.lines.find((line) => line.id === primaryLine.lineId)
+    : undefined;
+  const usesRouteMapData = input.fields.some((field) => field.key === 'routeMapData');
+  const routeMap =
+    primaryLine && usesRouteMapData
       ? await createTransitRouteMapData({
-          line: overview.lines.find((line) => line.id === primaryLine.lineId),
+          line: primaryOverviewLine,
           travelDirection: primaryLine.travelDirection,
           currentStationIndex: primaryLine.currentStationIndex,
+          networkGeometry: input.networkGeometry,
         })
-      : '';
+      : { data: '', usedImportedGeometry: false };
+  const networkLineMatch =
+    input.networkGeometry && primaryOverviewLine
+      ? findMaterialTransitNetworkLine(input.networkGeometry, {
+          name: primaryOverviewLine.name,
+          color: primaryOverviewLine.color,
+          stationNames: primaryOverviewLine.stationNames,
+        })
+      : undefined;
+  candidates.accentColor = networkLineMatch?.color ?? primaryOverviewLine?.color ?? '';
   selectedLines.forEach((line, index) => {
     const slot = index + 1;
     const lineDisplay = lineDisplays[index];
@@ -312,7 +372,7 @@ export async function resolveTransitStationMaterialInput(input: {
       ]
         .filter(Boolean)
         .join('　');
-      candidates.routeMapData = routeMapData;
+      candidates.routeMapData = routeMap.data;
     }
   });
   if (input.terminalRole) {
@@ -320,14 +380,159 @@ export async function resolveTransitStationMaterialInput(input: {
   }
   return {
     values: mapTemplateFields(input.fields, candidates),
-    sourceRef: `transit_station:${station.markerId};direction=${input.direction};lines=${input.lineIds.join(',')}${input.terminalRole ? `;terminal=${input.terminalRole}` : ''}`,
+    sourceRef: appendTransitNetworkSourceRef(
+      `transit_station:${sourceSelectionRef}${input.terminalRole ? `;terminal=${input.terminalRole}` : ''}`,
+      input.networkGeometry,
+      usesRouteMapData ? routeMap.usedImportedGeometry : Boolean(networkLineMatch),
+    ),
   };
+}
+
+function resolveTransitNetworkStationMaterialInput(input: {
+  networkNodeId: string;
+  lineSelections: Array<{
+    lineKey: string;
+    direction: MaterialTransitDirection;
+  }>;
+  terminalRole?: MaterialTransitTerminalRole;
+  fields: MaterialTemplateField[];
+  networkGeometry?: MaterialTransitNetworkSnapshot;
+}): { values: Record<string, string>; sourceRef: string } {
+  const snapshot = input.networkGeometry;
+  if (!snapshot) {
+    throw new Error('项目站点选择缺少导入的线网数据。');
+  }
+  const station = snapshot.nodes.find(
+    (node) => node.id === input.networkNodeId && node.kind === 'station' && node.names.length,
+  );
+  if (!station) {
+    throw new Error('所选项目站点不存在。');
+  }
+  if (
+    new Set(input.lineSelections.map((selection) => selection.lineKey)).size !==
+    input.lineSelections.length
+  ) {
+    throw new Error('项目线路不能重复选择。');
+  }
+  const maximumLineCount = resolveTemplateLineCapacity(input.fields);
+  if (input.lineSelections.length > maximumLineCount) {
+    throw new Error(`当前模板最多支持 ${maximumLineCount} 条公交线路。`);
+  }
+
+  const routes = input.lineSelections.map((selection) => {
+    const route = resolveMaterialTransitNetworkRoute(snapshot, {
+      nodeId: station.id,
+      lineKey: selection.lineKey,
+      direction: selection.direction,
+    });
+    if (!route) {
+      throw new Error('所选项目线路不经过当前站点，或与选择的图上方向不符。');
+    }
+    const orderedStations = route.nodeIds.flatMap((nodeId) => {
+      const node = snapshot.nodes.find((candidate) => candidate.id === nodeId);
+      return node?.kind === 'station' && node.names.length ? [node] : [];
+    });
+    const currentStationIndex = orderedStations.findIndex((node) => node.id === station.id);
+    if (currentStationIndex < 0) {
+      throw new Error('无法在项目线路中定位当前站点。');
+    }
+    return { route, orderedStations, currentStationIndex };
+  });
+
+  const candidates: Record<string, string> = {
+    stationName: station.names[0] ?? '',
+    stationNamePinyin: station.names[1] ?? toUppercaseRoadPinyin(station.names[0] ?? ''),
+  };
+  routes.forEach(({ route, orderedStations, currentStationIndex }, index) => {
+    const slot = index + 1;
+    const lineName =
+      route.line.lineName ?? route.line.lineKey.split(':').at(-1) ?? route.line.lineKey;
+    const lineDisplay = parseMaterialTransitLineDisplay(lineName);
+    candidates[`route${slot}Number`] = lineDisplay.number;
+    candidates[`route${slot}FirstLast`] = '';
+    if (index !== 0) return;
+
+    const destinationName = orderedStations.at(-1)?.names[0] ?? '';
+    const nextStationName = orderedStations[currentStationIndex + 1]?.names[0] ?? '';
+    const isTerminal = currentStationIndex === orderedStations.length - 1;
+    candidates.accentColor = route.line.color;
+    candidates.routeNumber = lineDisplay.number;
+    candidates.routeSuffix = lineDisplay.suffix;
+    candidates.routeFirstLast = '';
+    candidates.nextStation = isTerminal ? '终 点 站' : nextStationName;
+    candidates.routeStationState = isTerminal ? 'terminal_station' : 'next_station';
+    candidates.routeOrigin = orderedStations[0]?.names[0] ?? '';
+    candidates.routeTerminal = destinationName;
+    candidates.routeStations = orderedStations.map((node) => node.names[0] ?? '').join('\n');
+    candidates.currentStationIndex = String(currentStationIndex);
+    candidates.routeServiceTime = '';
+    candidates.operator = '';
+    candidates.footerText = destinationName ? `开往 ${destinationName}` : '';
+    candidates.routeMapData = createProjectTransitRouteMapData({
+      snapshot,
+      route,
+      orderedStations,
+      currentStationIndex,
+    });
+  });
+  if (input.terminalRole) {
+    candidates.terminalRole = input.terminalRole === 'origin' ? '始发站' : '终点站';
+  }
+  return {
+    values: mapTemplateFields(input.fields, candidates),
+    sourceRef: `transit_network_project:v${snapshot.version};station=${station.id};lines=${input.lineSelections
+      .map((selection) => `${selection.lineKey}@${selection.direction}`)
+      .join(',')}`,
+  };
+}
+
+function createProjectTransitRouteMapData(input: {
+  snapshot: MaterialTransitNetworkSnapshot;
+  route: MaterialTransitNetworkRoute;
+  orderedStations: MaterialTransitNetworkSnapshot['nodes'];
+  currentStationIndex: number;
+}): string {
+  const routeCoordinates: Array<[number, number]> = [];
+  for (const step of input.route.steps) {
+    appendRouteCoordinates(
+      routeCoordinates,
+      getMaterialTransitNetworkEdgePoints(input.snapshot, step.edge, step.reverse),
+    );
+  }
+  const transfers = input.orderedStations.flatMap((node, index) => {
+    const colors = Array.from(
+      new Set(node.lineColors.filter((color) => color !== input.route.line.color)),
+    ).slice(0, 8);
+    return colors.length
+      ? [
+          [roundMapNumber(node.x), roundMapNumber(node.y), index, colors] as [
+            number,
+            number,
+            number,
+            string[],
+          ],
+        ]
+      : [];
+  });
+  const payload: TransitRouteMapPayload = {
+    route: sampleRouteCoordinates(routeCoordinates, 120).map(roundCoordinate),
+    roads: createImportedNetworkContextSegments(input.snapshot, input.route.line, 160),
+    stations: input.orderedStations.map((node, index) => [
+      roundMapNumber(node.x),
+      roundMapNumber(node.y),
+      index,
+    ]),
+    transfers,
+    currentStationIndex: input.currentStationIndex,
+  };
+  return JSON.stringify(payload);
 }
 
 interface TransitRouteMapPayload {
   route: Array<[number, number]>;
   roads: Array<[number, number, number, number]>;
   stations: Array<[number, number, number]>;
+  transfers?: Array<[number, number, number, string[]]>;
   currentStationIndex: number;
 }
 
@@ -335,9 +540,21 @@ async function createTransitRouteMapData(input: {
   line: TransitLineSummary | undefined;
   travelDirection: MaterialTransitTravelDirection;
   currentStationIndex: number;
-}): Promise<string> {
+  networkGeometry?: MaterialTransitNetworkSnapshot;
+}): Promise<{ data: string; usedImportedGeometry: boolean }> {
   if (!input.line) {
-    return '';
+    return { data: '', usedImportedGeometry: false };
+  }
+  if (input.networkGeometry) {
+    const imported = createImportedTransitRouteMapData({
+      line: input.line,
+      travelDirection: input.travelDirection,
+      currentStationIndex: input.currentStationIndex,
+      networkGeometry: input.networkGeometry,
+    });
+    if (imported) {
+      return { data: imported, usedImportedGeometry: true };
+    }
   }
   const [locations, markers] = await Promise.all([
     listMaterialLocations(),
@@ -354,7 +571,8 @@ async function createTransitRouteMapData(input: {
       ? input.line.stationStops
       : [...input.line.stationStops].reverse();
   const locatedStops = orderedStops.map((stop, index) => ({
-    coordinate: findBusStopLocation(stop, locationByMarkerId, locationByName)?.coordinate,
+    coordinate: findBusStopLocation(stop, input.travelDirection, locationByMarkerId, locationByName)
+      ?.coordinate,
     index,
     stop,
   }));
@@ -397,7 +615,7 @@ async function createTransitRouteMapData(input: {
     );
   }
   if (route.length < 2) {
-    return '';
+    return { data: '', usedImportedGeometry: false };
   }
 
   const sampledRoute = sampleRouteCoordinates(route, 120).map(roundCoordinate);
@@ -413,7 +631,115 @@ async function createTransitRouteMapData(input: {
     ),
     currentStationIndex: input.currentStationIndex,
   };
+  return { data: JSON.stringify(payload), usedImportedGeometry: false };
+}
+
+function createImportedTransitRouteMapData(input: {
+  line: TransitLineSummary;
+  travelDirection: MaterialTransitTravelDirection;
+  currentStationIndex: number;
+  networkGeometry: MaterialTransitNetworkSnapshot;
+}): string | undefined {
+  const lineMatch = findMaterialTransitNetworkLine(input.networkGeometry, {
+    name: input.line.name,
+    color: input.line.color,
+    stationNames: input.line.stationNames,
+  });
+  if (!lineMatch) return undefined;
+  const orderedStops =
+    input.travelDirection === 'forward'
+      ? input.line.stationStops
+      : [...input.line.stationStops].reverse();
+  const locatedStops = orderedStops.map((stop, index) => ({
+    index,
+    node: findMaterialTransitNetworkNodeByName(
+      input.networkGeometry,
+      stop.stationName,
+      lineMatch.nodeIds,
+    ),
+  }));
+  if (locatedStops.filter((stop) => stop.node).length < 2) return undefined;
+
+  const route: Array<[number, number]> = [];
+  for (let index = 1; index < locatedStops.length; index += 1) {
+    const previous = locatedStops[index - 1]?.node;
+    const current = locatedStops[index]?.node;
+    if (!previous || !current) return undefined;
+    const path = findMaterialTransitNetworkPath(
+      input.networkGeometry,
+      lineMatch.edgeIds,
+      previous.id,
+      current.id,
+    );
+    if (!path) return undefined;
+    for (const step of path) {
+      appendRouteCoordinates(
+        route,
+        getMaterialTransitNetworkEdgePoints(input.networkGeometry, step.edge, step.reverse),
+      );
+    }
+  }
+  if (route.length < 2) return undefined;
+
+  const roads = createImportedNetworkContextSegments(input.networkGeometry, lineMatch, 160);
+  const transfers = locatedStops.flatMap((stop) => {
+    if (!stop.node) return [];
+    const colors = stop.node.lineColors.filter((color) => color !== lineMatch.color);
+    return colors.length
+      ? [
+          [
+            roundMapNumber(stop.node.x),
+            roundMapNumber(stop.node.y),
+            stop.index,
+            Array.from(new Set(colors)).slice(0, 8),
+          ] as [number, number, number, string[]],
+        ]
+      : [];
+  });
+  const payload: TransitRouteMapPayload = {
+    route: sampleRouteCoordinates(route, 120).map(roundCoordinate),
+    roads,
+    stations: locatedStops.flatMap((stop) =>
+      stop.node ? [[roundMapNumber(stop.node.x), roundMapNumber(stop.node.y), stop.index]] : [],
+    ),
+    transfers,
+    currentStationIndex: input.currentStationIndex,
+  };
   return JSON.stringify(payload);
+}
+
+function createImportedNetworkContextSegments(
+  snapshot: MaterialTransitNetworkSnapshot,
+  selectedLine: MaterialTransitNetworkLineMatch,
+  maximumCount: number,
+): Array<[number, number, number, number]> {
+  const segments: Array<[number, number, number, number]> = [];
+  for (const edge of snapshot.edges) {
+    if (selectedLine.edgeIds.has(edge.id)) continue;
+    const points = getMaterialTransitNetworkEdgePoints(snapshot, edge);
+    for (let index = 1; index < points.length; index += 1) {
+      const previous = points[index - 1];
+      const current = points[index];
+      if (!previous || !current) continue;
+      segments.push([
+        roundMapNumber(previous[0]),
+        roundMapNumber(previous[1]),
+        roundMapNumber(current[0]),
+        roundMapNumber(current[1]),
+      ]);
+      if (segments.length >= maximumCount) return segments;
+    }
+  }
+  return segments;
+}
+
+function appendTransitNetworkSourceRef(
+  sourceRef: string,
+  snapshot: MaterialTransitNetworkSnapshot | undefined,
+  matched: boolean,
+): string {
+  if (!snapshot) return sourceRef;
+  return `${sourceRef};network=rmp:v${snapshot.version}:${matched ? 'matched' : 'fallback'}`;
 }
 
 function getConfiguredTransitSegment(
@@ -598,10 +924,20 @@ function roundMapNumber(value: number): number {
 
 function findBusStopLocation(
   stop: TransitLineStopSummary,
+  direction: MaterialTransitTravelDirection,
   locationByMarkerId: Map<string, MaterialLocationOption>,
   locationByName: Map<string, MaterialLocationOption>,
 ): MaterialLocationOption | undefined {
-  for (const markerId of stop.stationMarkerIds ?? []) {
+  const configuredLocationMarkerIds = new Set(
+    (stop.stopLocationRefs ?? []).map((ref) => ref.markerId),
+  );
+  const markerIds = [
+    ...getTransitStopLocationMarkerIdsForDirection(stop.stopLocationRefs, direction),
+    ...(stop.stationMarkerIds ?? []).filter(
+      (markerId) => !configuredLocationMarkerIds.has(markerId),
+    ),
+  ];
+  for (const markerId of markerIds) {
     const location = locationByMarkerId.get(markerId);
     if (location) {
       return location;
@@ -617,30 +953,36 @@ function createTransitStationLineCandidates(
   const stationNames = line.stationStops.map((stop) => stop.stationName);
   const directions: MaterialTransitTravelDirection[] =
     stationNames.length > 1 ? ['forward', 'reverse'] : ['forward'];
-  return directions.map((travelDirection) => {
+  return directions.flatMap((travelDirection) => {
+    const stop = line.stationStops[stationStopIndex];
+    if (stop && !isMaterialRouteDirectionIncluded(stop.oneWay, travelDirection)) {
+      return [];
+    }
     const orderedStationNames =
       travelDirection === 'forward' ? stationNames : [...stationNames].reverse();
     const currentStationIndex =
       travelDirection === 'forward'
         ? stationStopIndex
         : orderedStationNames.length - stationStopIndex - 1;
-    return {
-      id: `${line.id}:${travelDirection}`,
-      lineId: line.id,
-      travelDirection,
-      name: line.name,
-      operator: line.operator,
-      firstLastBus: formatFirstLastBus(line),
-      firstBus: line.firstLastBus?.first?.trim(),
-      lastBus: line.firstLastBus?.last?.trim(),
-      destinationName: orderedStationNames.at(-1) ?? '',
-      stationNames: orderedStationNames,
-      currentStationIndex,
-      nextStationName: orderedStationNames[currentStationIndex + 1],
-      isOriginAtStation: currentStationIndex === 0,
-      isTerminalAtStation: currentStationIndex === orderedStationNames.length - 1,
-      stationStopIndex,
-    };
+    return [
+      {
+        id: `${line.id}:${travelDirection}`,
+        lineId: line.id,
+        travelDirection,
+        name: line.name,
+        operator: line.operator,
+        firstLastBus: formatFirstLastBus(line),
+        firstBus: line.firstLastBus?.first?.trim(),
+        lastBus: line.firstLastBus?.last?.trim(),
+        destinationName: orderedStationNames.at(-1) ?? '',
+        stationNames: orderedStationNames,
+        currentStationIndex,
+        nextStationName: orderedStationNames[currentStationIndex + 1],
+        isOriginAtStation: currentStationIndex === 0,
+        isTerminalAtStation: currentStationIndex === orderedStationNames.length - 1,
+        stationStopIndex,
+      },
+    ];
   });
 }
 
@@ -733,12 +1075,12 @@ function formatFirstLastBus(line: TransitLineSummary): string {
   if (last) {
     return `末 ${last}`;
   }
-  return '首末班时间待维护';
+  return '';
 }
 
 function formatServiceTimeRange(first: string | undefined, last: string | undefined): string {
   if (!first && !last) {
-    return '时间待维护';
+    return '';
   }
   if (!first) {
     return `末 ${last}`;
@@ -769,6 +1111,10 @@ async function resolveMaterialTransitLineDisplay(
   if (override) {
     return { number: override, suffix: getTransitLineSuffix(lineName) };
   }
+  return parseMaterialTransitLineDisplay(lineName);
+}
+
+function parseMaterialTransitLineDisplay(lineName: string): { number: string; suffix: string } {
   const normalizedName = lineName.trim();
   const match = normalizedName.match(/^(.*?)(路.*)$/u);
   if (match?.[1]?.trim() && match[2]) {

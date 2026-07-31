@@ -4,6 +4,7 @@ import * as opentypeModule from 'opentype.js';
 import type { Font } from 'opentype.js';
 import type { MaterialGlyphConfig } from '@yct/contracts';
 import {
+  estimateMetroWayfindingLargeTextWidth,
   estimateMetroWayfindingTextWidth,
   measureMetroWayfindingMainSegments,
   METRO_WAYFINDING_GAP,
@@ -24,6 +25,8 @@ import {
   type MetroArrowIconAssetName,
   type MetroFacilityIconAssetName,
   type MetroWayfindingElement,
+  type MetroWayfindingFrameFillMode,
+  type MetroWayfindingFrameShape,
   type MetroWayfindingMainSegment,
 } from './metro-wayfinding';
 
@@ -43,6 +46,7 @@ interface TransitRouteMapPayload {
   route: Array<[number, number]>;
   roads: Array<[number, number, number, number]>;
   stations: Array<[number, number, number]>;
+  transfers?: Array<[number, number, number, string[]]>;
   currentStationIndex: number;
 }
 
@@ -284,6 +288,13 @@ function renderMetroWayfindingElement(
     return `<g><rect x="${formatNumber(x)}" width="${formatNumber(8 * scaleX)}" height="128" fill="${background}"/><rect x="${formatNumber(x)}" y="28" width="${formatNumber(8 * scaleX)}" height="72" fill="${foreground}"/></g>`;
   }
   if (element.type === 'facility' || element.type === 'arrow') {
+    const hasFrame = element.type === 'arrow' ? element.framed : element.frameShape !== 'none';
+    const frameFillColor =
+      element.frameFillMode === 'color'
+        ? normalizeColor(element.frameFillColor, foreground)
+        : foreground;
+    const graphicForeground =
+      hasFrame && element.frameFillMode === 'inverse' ? background : foreground;
     const icon =
       metroWayfindingIconOptions.find((option) => option.id === element.iconId) ??
       metroWayfindingIconOptions[0]!;
@@ -291,17 +302,21 @@ function renderMetroWayfindingElement(
       element.type === 'arrow'
         ? renderMetroArrowAsset(
             resolveMetroArrowIconAssetName(element.iconId) ?? 'south-west',
-            foreground,
+            graphicForeground,
             element.id,
             element.framed,
+            element.frameFillMode,
+            frameFillColor,
           )
         : renderMetroIcon(
             icon.symbol,
             icon.id,
-            foreground,
+            graphicForeground,
             element.id,
             element.direction,
-            element.framed,
+            element.frameShape,
+            element.frameFillMode,
+            frameFillColor,
           );
     const dataAttribute =
       element.type === 'arrow'
@@ -310,22 +325,34 @@ function renderMetroWayfindingElement(
     return `<g transform="${transform}" ${dataAttribute}><rect width="85" height="128" fill="${background}"/>${graphic}</g>`;
   }
   if (element.type === 'largeText') {
+    const frameFillColor =
+      element.frameFillMode === 'color'
+        ? normalizeColor(element.frameFillColor, foreground)
+        : foreground;
+    const contentColor =
+      element.frameShape !== 'none' && element.frameFillMode === 'inverse'
+        ? background
+        : foreground;
     const text = renderMetroLargeText(
       element.value,
       element.suffix,
       width,
-      foreground,
-      element.framed,
+      contentColor,
+      element.frameShape,
     );
-    const frame = element.framed
-      ? `<rect x="1.5" y="23" width="${formatNumber(width - 3)}" height="82" rx="8.5" fill="none" stroke="${foreground}" stroke-width="3"/>`
-      : '';
+    const frame = renderMetroLargeTextFrame(
+      element.frameShape,
+      width,
+      foreground,
+      element.frameFillMode,
+      frameFillColor,
+    );
     return `<g transform="${transform}"><rect width="${formatNumber(width)}" height="128" fill="${background}"/>${frame}${text}</g>`;
   }
   const textAlign =
     element.align === 'left' ? 'start' : element.align === 'right' ? 'end' : 'middle';
   const textX = element.align === 'left' ? 0 : element.align === 'right' ? width : width / 2;
-  const rows = renderMetroTextRows(element, width, foreground, textX, textAlign);
+  const rows = renderMetroTextRows(element, width, foreground, background, textX, textAlign);
   return `<g transform="${transform}"><rect width="${formatNumber(width)}" height="128" fill="${background}"/>${rows}</g>`;
 }
 
@@ -333,6 +360,7 @@ function renderMetroTextRows(
   element: Extract<MetroWayfindingElement, { type: 'text' }>,
   width: number,
   color: string,
+  background: string,
   textX: number,
   textAnchor: string,
 ): string {
@@ -349,6 +377,7 @@ function renderMetroTextRows(
               row.segments,
               fontSize,
               color,
+              background,
               textX,
               textAnchor,
               baseline,
@@ -374,6 +403,7 @@ function renderMetroMainSegments(
   segments: MetroWayfindingMainSegment[],
   fontSize: number,
   color: string,
+  background: string,
   textX: number,
   textAnchor: string,
   baseline: number,
@@ -395,8 +425,12 @@ function renderMetroMainSegments(
       if (segment.kind === 'line') {
         const diameter = fontSize * 1.12;
         const centerX = cursor + diameter / 2;
+        const lineColor = normalizeColor(segment.color, '#2F80ED');
+        const shouldInvert = lineColor.toUpperCase() === background.toUpperCase();
+        const badgeBackground = shouldInvert ? color : lineColor;
+        const badgeForeground = shouldInvert ? lineColor : '#FFFFFF';
         cursor += diameter + trailingGap;
-        return `<g transform="translate(${formatNumber(centerX)} ${formatNumber(baseline - fontSize * 0.32)})"><circle r="${formatNumber(diameter / 2)}" fill="${normalizeColor(segment.color, '#2F80ED')}"/><text y="${formatNumber(fontSize * 0.9 * 0.34)}" fill="#FFFFFF" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize * 0.9)}" font-weight="400" text-anchor="middle" letter-spacing="${formatNumber(fontSize * -0.07)}">${escapeXml(segment.value)}</text></g>`;
+        return `<g transform="translate(${formatNumber(centerX)} ${formatNumber(baseline - fontSize * 0.32)})"><circle r="${formatNumber(diameter / 2)}" fill="${badgeBackground}"/><text y="${formatNumber(fontSize * 0.9 * 0.34)}" fill="${badgeForeground}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize * 0.9)}" font-weight="400" text-anchor="middle" letter-spacing="${formatNumber(fontSize * -0.07)}">${escapeXml(segment.value)}</text></g>`;
       }
       const textWidth = estimateMetroWayfindingTextWidth(segment.value, fontSize);
       const horizontalPadding = segment.kind === 'boxed' ? fontSize * 0.16 : 0;
@@ -463,11 +497,12 @@ function renderMetroLargeText(
   suffix: string,
   width: number,
   color: string,
-  framed: boolean,
+  frameShape: MetroWayfindingFrameShape,
 ): string {
-  const mainFontSize = framed
-    ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
-    : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE;
+  const mainFontSize =
+    frameShape !== 'none'
+      ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
+      : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE;
   const suffixGap = value && suffix ? 3 : 0;
   const mainMarkup = renderMetroLargeTextRuns(value, mainFontSize, 400);
   const suffixMarkup = suffix
@@ -479,7 +514,38 @@ function renderMetroLargeText(
         13,
       )
     : '';
-  return `<text x="${formatNumber(width / 2 - suffixGap / 2)}" y="64" fill="${color}" text-anchor="middle" dominant-baseline="central" letter-spacing="0">${mainMarkup}${suffixMarkup}</text>`;
+  const text = `<text x="${formatNumber(width / 2 - suffixGap / 2)}" y="64" fill="${color}" text-anchor="middle" dominant-baseline="central" letter-spacing="0">${mainMarkup}${suffixMarkup}</text>`;
+  if (frameShape !== 'circle') {
+    return text;
+  }
+  const contentWidth =
+    estimateMetroWayfindingLargeTextWidth(value, mainFontSize) +
+    suffixGap +
+    estimateMetroWayfindingLargeTextWidth(suffix, METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE);
+  const scaleX = contentWidth > 72 ? 72 / contentWidth : 1;
+  return scaleX < 1
+    ? `<g transform="translate(${formatNumber(width / 2)} 0) scale(${formatNumber(scaleX)} 1) translate(${formatNumber(-width / 2)} 0)">${text}</g>`
+    : text;
+}
+
+function renderMetroLargeTextFrame(
+  frameShape: MetroWayfindingFrameShape,
+  width: number,
+  color: string,
+  frameFillMode: MetroWayfindingFrameFillMode,
+  frameFillColor: string,
+): string {
+  const usesFill = frameFillMode !== 'none';
+  if (frameShape === 'rectangle') {
+    return usesFill
+      ? `<rect x="0" y="21.5" width="${formatNumber(width)}" height="85" rx="10" fill="${frameFillColor}"/>`
+      : `<rect x="1.5" y="23" width="${formatNumber(width - 3)}" height="82" rx="8.5" fill="none" stroke="${color}" stroke-width="3"/>`;
+  }
+  return frameShape === 'circle'
+    ? usesFill
+      ? `<circle cx="${formatNumber(width / 2)}" cy="64" r="42.5" fill="${frameFillColor}"/>`
+      : `<circle cx="${formatNumber(width / 2)}" cy="64" r="41" fill="none" stroke="${color}" stroke-width="3"/>`
+    : '';
 }
 
 function renderMetroLargeTextRuns(
@@ -520,27 +586,71 @@ function renderMetroIcon(
   color: string,
   instanceId: string,
   direction?: 'left' | 'right' | 'up' | 'down',
-  framed = false,
+  frameShape: MetroWayfindingFrameShape = 'none',
+  frameFillMode: MetroWayfindingFrameFillMode = 'none',
+  frameFillColor = color,
 ): string {
   const assetName = resolveMetroFacilityIconAssetName(iconId, direction);
   if (assetName) {
-    return renderMetroFacilityAsset(
+    if (frameShape === 'rectangle' && frameFillMode === 'none') {
+      return renderMetroFacilityAsset(
+        assetName,
+        'framed',
+        color,
+        instanceId,
+        resolveMetroFacilityAssetDirectionTransform(iconId, direction),
+      );
+    }
+    const frame = renderMetroFacilityFrame(
+      frameShape,
+      color,
+      instanceId,
+      frameFillMode,
+      frameFillColor,
+    );
+    const icon = renderMetroFacilityAsset(
       assetName,
-      framed ? 'framed' : 'plain',
+      'plain',
       color,
       instanceId,
       resolveMetroFacilityAssetDirectionTransform(iconId, direction),
-      framed ? 1 : 1.1,
+      frameShape === 'circle' ? 0.86 : frameShape === 'rectangle' ? 0.9 : 1.1,
     );
+    return `${frame}${icon}`;
   }
 
-  const frame = framed
-    ? renderMetroFacilityAsset('frame', 'framed', color, `${instanceId}-frame`)
-    : '';
+  const frame = renderMetroFacilityFrame(
+    frameShape,
+    color,
+    instanceId,
+    frameFillMode,
+    frameFillColor,
+  );
   const { viewBox, content } = getMaterialSymbolMarkup(symbol);
   const transform = resolveMetroIconDirectionTransform(iconId, direction);
-  const scaleTransform = resolveMetroIconScaleTransform(framed ? 0.9 : 1);
+  const scaleTransform = resolveMetroIconScaleTransform(
+    frameShape === 'rectangle' ? 0.9 : frameShape === 'circle' ? 0.84 : 1,
+  );
   return `${frame}<g transform="${transform}"><g transform="${scaleTransform}"><svg x="0" y="21.5" width="85" height="85" viewBox="${viewBox}" fill="${color}" aria-hidden="true">${content}</svg></g></g>`;
+}
+
+function renderMetroFacilityFrame(
+  frameShape: MetroWayfindingFrameShape,
+  color: string,
+  instanceId: string,
+  frameFillMode: MetroWayfindingFrameFillMode,
+  frameFillColor: string,
+): string {
+  if (frameShape === 'rectangle') {
+    return frameFillMode === 'none'
+      ? renderMetroFacilityAsset('frame', 'framed', color, `${instanceId}-frame`)
+      : `<rect x="0" y="21.5" width="85" height="85" rx="8.5" fill="${frameFillColor}"/>`;
+  }
+  return frameShape === 'circle'
+    ? frameFillMode === 'none'
+      ? `<circle cx="42.5" cy="64" r="41" fill="none" stroke="${color}" stroke-width="3"/>`
+      : `<circle cx="42.5" cy="64" r="42.5" fill="${frameFillColor}"/>`
+    : '';
 }
 
 function renderMetroFacilityAsset(
@@ -565,9 +675,11 @@ function renderMetroArrowAsset(
   color: string,
   instanceId: string,
   framed: boolean,
+  frameFillMode: MetroWayfindingFrameFillMode,
+  frameFillColor: string,
 ): string {
   const frame = framed
-    ? renderMetroFacilityAsset('frame', 'framed', color, `${instanceId}-frame`)
+    ? renderMetroFacilityFrame('rectangle', color, instanceId, frameFillMode, frameFillColor)
     : '';
   const { viewBox, content } = getMetroArrowAssetMarkup(assetName);
   const namespacedContent = namespaceMetroFacilityAssetMarkup(
@@ -943,11 +1055,21 @@ function renderTransitRouteMap(
       return `${index ? 'L' : 'M'}${formatNumber(point[0])} ${formatNumber(point[1])}`;
     })
     .join('');
+  const transferColorsByStation = new Map(
+    (payload.transfers ?? []).map((transfer) => [transfer[2], transfer[3]] as const),
+  );
   const stations = payload.stations
     .map(([x, z, stationIndex]) => {
       const point = project([x, z]);
       const isCurrent = stationIndex === payload.currentStationIndex;
-      return `<circle cx="${formatNumber(point[0])}" cy="${formatNumber(point[1])}" r="${isCurrent ? '2.4' : '1.35'}" fill="${isCurrent ? '#E28336' : '#FFFFFF'}" stroke="${isCurrent ? '#FFFFFF' : color}" stroke-width="${isCurrent ? '0.9' : '0.65'}"/>`;
+      const transferRings = (transferColorsByStation.get(stationIndex) ?? [])
+        .slice(0, 3)
+        .map(
+          (transferColor, index) =>
+            `<circle cx="${formatNumber(point[0])}" cy="${formatNumber(point[1])}" r="${formatNumber(2.05 + index * 0.42)}" fill="none" stroke="${transferColor}" stroke-width="0.34"/>`,
+        )
+        .join('');
+      return `${transferRings}<circle cx="${formatNumber(point[0])}" cy="${formatNumber(point[1])}" r="${isCurrent ? '2.4' : '1.35'}" fill="${isCurrent ? '#E28336' : '#FFFFFF'}" stroke="${isCurrent ? '#FFFFFF' : color}" stroke-width="${isCurrent ? '0.9' : '0.65'}"/>`;
     })
     .join('');
   return `<g><rect width="${formatNumber(config.layoutWidth)}" height="${formatNumber(config.layoutHeight)}" fill="#FFFFFF"/>${roads}<path d="${routePath}" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><path d="${routePath}" fill="none" stroke="${color}" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"/>${stations}</g>`;
@@ -967,11 +1089,19 @@ function parseTransitRouteMapPayload(value: string): TransitRouteMapPayload | un
   const route = parseCoordinatePairs(candidate.route, 256);
   const roads = parseRoadSegments(candidate.roads, 256);
   const stations = parseRouteStations(candidate.stations, 256);
+  const transfers = parseRouteTransfers(candidate.transfers, 256);
   const currentStationIndex = candidate.currentStationIndex;
-  if (!route || route.length < 2 || !roads || !stations || !Number.isInteger(currentStationIndex)) {
+  if (
+    !route ||
+    route.length < 2 ||
+    !roads ||
+    !stations ||
+    !transfers ||
+    !Number.isInteger(currentStationIndex)
+  ) {
     throw new Error('线路地图数据缺少有效的线路或站点坐标。');
   }
-  return { route, roads, stations, currentStationIndex: currentStationIndex as number };
+  return { route, roads, stations, transfers, currentStationIndex: currentStationIndex as number };
 }
 
 function parseCoordinatePairs(
@@ -1021,6 +1151,25 @@ function parseRouteStations(
       Number.isInteger(station[2]),
   );
   return stations.length === value.length ? stations : undefined;
+}
+
+function parseRouteTransfers(
+  value: unknown,
+  maximumCount: number,
+): Array<[number, number, number, string[]]> | undefined {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > maximumCount) return undefined;
+  const transfers = value.filter(
+    (transfer): transfer is [number, number, number, string[]] =>
+      Array.isArray(transfer) &&
+      transfer.length === 4 &&
+      transfer.slice(0, 2).every((part) => typeof part === 'number' && Number.isFinite(part)) &&
+      Number.isInteger(transfer[2]) &&
+      Array.isArray(transfer[3]) &&
+      transfer[3].length <= 8 &&
+      transfer[3].every((color) => typeof color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(color)),
+  );
+  return transfers.length === value.length ? transfers : undefined;
 }
 
 function renderNostalgicDigits(value: string, config: MaterialGlyphConfig): string {
@@ -1235,9 +1384,10 @@ function getMetroFacilityAssetMarkup(
   return markup;
 }
 
-function getMetroArrowAssetMarkup(
-  assetName: MetroArrowIconAssetName,
-): { viewBox: string; content: string } {
+function getMetroArrowAssetMarkup(assetName: MetroArrowIconAssetName): {
+  viewBox: string;
+  content: string;
+} {
   const cached = metroArrowAssetMarkupCache.get(assetName);
   if (cached) return cached;
   const sourcePath = resolveMetroArrowAssetPath(`${assetName}.svg`);

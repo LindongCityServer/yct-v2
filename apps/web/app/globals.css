@@ -5229,13 +5229,35 @@ img.map-player-list-avatar.is-offline {
 .admin-materials-panel {
   display: grid;
   gap: var(--yct-space-4);
-  width: min(1120px, calc(100% - 32px));
   margin: 0 auto;
   padding: var(--yct-space-5) 0;
 }
 
+.material-studio {
+  width: min(1120px, 100%);
+  padding-top: 0;
+  padding-bottom: var(--yct-space-6);
+}
+
+.admin-materials-panel {
+  width: min(1120px, calc(100% - 32px));
+}
+
 .material-studio-heading {
   align-items: end;
+  padding-bottom: var(--yct-space-3);
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+.material-studio-heading h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.material-studio-heading .eyebrow {
+  display: block;
+  margin-bottom: var(--yct-space-1);
 }
 
 .material-studio-heading .muted {
@@ -5258,12 +5280,13 @@ img.map-player-list-avatar.is-offline {
 .material-studio-editor,
 .material-preview {
   display: grid;
+  align-content: start;
   gap: var(--yct-space-3);
   min-width: 0;
   padding: var(--yct-space-4);
   border: 1px solid var(--yct-color-border);
-  border-radius: 6px;
-  background: var(--yct-color-surface);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
 }
 
 .material-studio-sidebar > label,
@@ -5271,9 +5294,9 @@ img.map-player-list-avatar.is-offline {
 .material-canvas-editor > label {
   display: grid;
   gap: var(--yct-space-1);
-  color: var(--yct-color-text-muted);
-  font-size: 12px;
-  font-weight: 700;
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+  font-weight: 650;
 }
 
 .material-studio-sidebar > label select,
@@ -5282,12 +5305,24 @@ img.map-player-list-avatar.is-offline {
 .material-canvas-editor input {
   width: 100%;
   min-width: 0;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 var(--yct-space-3);
   border: 1px solid var(--yct-color-border);
   border-radius: var(--yct-radius-md);
   background: var(--yct-color-surface-panel);
   color: var(--yct-color-text);
+  font: inherit;
+  transition:
+    border-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    box-shadow var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.material-studio-sidebar > label select:focus-visible,
+.material-field :is(input, select):focus-visible,
+.material-canvas-editor input:focus-visible {
+  border-color: var(--yct-color-primary);
+  outline: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--yct-color-primary) 18%, transparent);
 }
 
 .material-studio-sidebar > p,
@@ -5298,17 +5333,242 @@ img.map-player-list-avatar.is-offline {
   line-height: 1.55;
 }
 
+.transit-network-source {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding-top: var(--yct-space-3);
+  border-top: 1px solid var(--yct-color-border);
+}
+
+.transit-network-source-heading,
+.transit-network-source-heading > div,
+.transit-network-import-summary {
+  min-width: 0;
+}
+
+.transit-network-source-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+}
+
+.transit-network-source-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.transit-network-source-heading h2 {
+  margin: 0;
+  color: var(--yct-color-text);
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.transit-network-source-heading span,
+.transit-network-import-summary span {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.transit-network-import-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--yct-space-2);
+  min-height: 42px;
+  padding: 0 var(--yct-space-3);
+  border: 1px dashed var(--yct-color-border-strong);
+  border-radius: var(--yct-radius-md);
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transit-network-import-button:is(:hover, :focus-visible) {
+  border-color: var(--yct-color-primary);
+  color: var(--yct-color-primary);
+}
+
+.transit-network-import-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--yct-space-2);
+  padding-block: var(--yct-space-1);
+}
+
+.transit-network-import-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.transit-network-import-summary > div:first-child {
+  display: grid;
+  min-width: 0;
+}
+
+.transit-network-import-summary strong {
+  overflow: hidden;
+  color: var(--yct-color-text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transit-network-palette {
+  display: flex;
+  align-items: center;
+  max-width: 70px;
+}
+
+.transit-network-palette > span {
+  width: 12px;
+  height: 12px;
+  margin-left: -3px;
+  border: 1px solid var(--yct-color-surface-panel);
+  border-radius: 50%;
+}
+
+.transit-network-palette > span:first-child {
+  margin-left: 0;
+}
+
+.transit-network-palette small {
+  margin-left: 3px;
+  color: var(--yct-color-text-muted);
+  font-size: 10px;
+}
+
+.transit-network-import-error,
+.transit-network-match-warning {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.transit-network-import-error {
+  color: var(--yct-color-error);
+}
+
+.transit-network-station-lines {
+  display: grid;
+  gap: var(--yct-space-1);
+}
+
+.transit-network-station-lines > span {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.transit-network-station-lines > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-1) var(--yct-space-2);
+}
+
+.transit-network-station-lines > div > span,
+.transit-network-line-name-list label > span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+}
+
+.transit-network-station-lines i,
+.transit-network-line-name-list i {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  border: 1px solid color-mix(in srgb, var(--yct-color-text) 18%, transparent);
+  border-radius: 3px;
+}
+
+.transit-network-line-name-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(720px, calc(100dvh - 32px));
+}
+
+.transit-network-line-name-list {
+  display: grid;
+  gap: var(--yct-space-2);
+  overflow-y: auto;
+}
+
+.transit-network-line-name-list label {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.8fr) repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: var(--yct-space-3);
+}
+
+.transit-network-line-name-list label > span strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transit-network-match-empty {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: var(--yct-space-2);
+}
+
+.transit-network-match-empty > p {
+  margin: 0;
+}
+
+.transit-network-match-empty > button {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 36px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-primary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transit-network-match-empty > button .material-symbols-outlined {
+  font-size: 18px;
+}
+
+@media (max-width: 520px) {
+  .transit-network-line-name-list label {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--yct-space-1);
+  }
+}
+
+.transit-network-match-warning {
+  color: var(--yct-color-warning-strong);
+}
+
 .material-mode-switch {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px;
-  padding: 2px;
-  border-radius: 6px;
-  background: var(--yct-color-surface-panel);
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
 }
 
 .material-mode-switch button,
 .material-action-row button,
+.material-history-item button,
 .admin-materials-panel button {
   min-height: 38px;
   padding: 0 var(--yct-space-3);
@@ -5317,15 +5577,35 @@ img.map-player-list-avatar.is-offline {
   background: var(--yct-color-surface-panel);
   color: var(--yct-color-text-secondary);
   font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    background-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
 }
 
 .material-mode-switch button {
+  min-height: 40px;
   border-color: transparent;
+  background: transparent;
+}
+
+.material-mode-switch button:not(.is-active):not(:disabled):is(:hover, :focus-visible),
+.material-history-item button:not(.is-primary):not(:disabled):is(:hover, :focus-visible) {
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 72%, transparent);
+  color: var(--yct-color-text);
 }
 
 .material-mode-switch button.is-active {
-  background: var(--yct-color-surface);
+  background: var(--yct-color-surface-panel);
   color: var(--yct-color-primary);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--yct-color-text) 12%, transparent);
+}
+
+.material-mode-switch button:focus-visible,
+.material-history-item button:focus-visible {
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: 2px;
 }
 
 .material-canvas-editor {
@@ -5378,9 +5658,9 @@ img.map-player-list-avatar.is-offline {
 .metro-wayfinding-toolbar,
 .metro-wayfinding-element,
 .metro-wayfinding-element-body,
+.metro-wayfinding-text-row-editor,
 .metro-wayfinding-text-row-list,
-.metro-wayfinding-main-segments,
-.metro-wayfinding-main-segments ol {
+.metro-wayfinding-main-segments {
   display: grid;
   gap: var(--yct-space-3);
 }
@@ -5393,7 +5673,44 @@ img.map-player-list-avatar.is-offline {
   gap: var(--yct-space-3);
 }
 
-.metro-wayfinding-main-segments > div > span {
+.metro-wayfinding-text-autocomplete,
+.material-field-text-autocomplete {
+  position: relative;
+  min-width: 0;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.metro-wayfinding-text-autocomplete-ghost,
+.material-field-text-autocomplete-ghost {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--yct-radius-md);
+  color: transparent;
+  font: inherit;
+  pointer-events: none;
+  white-space: pre;
+}
+
+.metro-wayfinding-text-autocomplete-ghost strong,
+.material-field-text-autocomplete-ghost strong {
+  color: var(--yct-color-text-muted);
+  font-weight: 500;
+}
+
+.metro-wayfinding-text-autocomplete > input,
+.material-field-text-autocomplete > input {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+}
+
+.metro-wayfinding-main-segments > div:first-child > span {
   color: var(--yct-color-text-muted);
   font-size: 12px;
   font-weight: 700;
@@ -5696,8 +6013,8 @@ img.map-player-list-avatar.is-offline {
 }
 
 .metro-wayfinding-element > header,
-.metro-wayfinding-main-segments > div,
-.metro-wayfinding-main-segments li {
+.metro-wayfinding-text-row-item > header,
+.metro-wayfinding-main-segments > div:first-child {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -5705,7 +6022,8 @@ img.map-player-list-avatar.is-offline {
 }
 
 .metro-wayfinding-element > header strong,
-.metro-wayfinding-main-segments strong {
+.metro-wayfinding-text-row-item > header > strong,
+.metro-wayfinding-main-segments > div:first-child strong {
   color: var(--yct-color-text);
   font-size: 14px;
 }
@@ -5756,39 +6074,226 @@ img.map-player-list-avatar.is-offline {
   list-style: none;
 }
 
-.metro-wayfinding-text-row-list > li {
+.metro-wayfinding-text-row-item {
   display: grid;
+  min-width: 0;
   gap: var(--yct-space-2);
   padding-top: var(--yct-space-3);
   border-top: 1px solid var(--yct-color-border);
 }
 
-.metro-wayfinding-text-row-list > li > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--yct-space-2);
-}
-
-.metro-wayfinding-text-row-list > li > header > strong {
-  color: var(--yct-color-text);
-  font-size: 13px;
-}
-
 .metro-wayfinding-main-segments {
-  padding: var(--yct-space-3);
+  min-width: 0;
+  padding-left: var(--yct-space-3);
   border-left: 2px solid var(--yct-color-border);
 }
 
-.metro-wayfinding-main-segments ol {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.metro-wayfinding-main-segment-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  min-width: 0;
+  gap: 3px;
 }
 
-.metro-wayfinding-main-segments li > .material-field,
-.metro-wayfinding-main-segments li > .metro-wayfinding-color-control {
-  flex: 1 1 180px;
+.metro-wayfinding-main-segment-tabs {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  gap: var(--yct-space-2);
+  margin: 0;
+  padding: 1px;
+  list-style: none;
+  scrollbar-width: thin;
+}
+
+.metro-wayfinding-main-segment-tabs > li {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.metro-wayfinding-main-segment-tabs button {
+  display: inline-grid;
+  grid-template-columns: 18px minmax(0, auto);
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 176px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  text-align: left;
+}
+
+.metro-wayfinding-main-segment-tabs button:is(:hover, :focus-visible) {
+  border-color: var(--yct-color-primary);
+  background: color-mix(in srgb, var(--yct-color-primary) 7%, var(--yct-color-surface-panel));
+}
+
+.metro-wayfinding-main-segment-tabs button.is-active {
+  border-color: var(--yct-color-primary);
+  background: color-mix(in srgb, var(--yct-color-primary) 10%, var(--yct-color-surface-panel));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--yct-color-primary) 16%, transparent);
+  color: var(--yct-color-primary);
+}
+
+.metro-wayfinding-main-segment-tabs button.is-boxed {
+  border-color: var(--yct-color-text-secondary);
+  border-radius: 2px;
+}
+
+.metro-wayfinding-main-segment-tabs button.is-line {
+  border-color: color-mix(
+    in srgb,
+    var(--metro-wayfinding-segment-color) 72%,
+    var(--yct-color-border)
+  );
+  background: color-mix(
+    in srgb,
+    var(--metro-wayfinding-segment-color) 12%,
+    var(--yct-color-surface-panel)
+  );
+}
+
+.metro-wayfinding-main-segment-tabs button.is-line.is-active {
+  border-color: var(--metro-wayfinding-segment-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--metro-wayfinding-segment-color) 22%, transparent);
+}
+
+.metro-wayfinding-main-segment-tabs button.is-line .material-symbols-outlined {
+  color: var(--metro-wayfinding-segment-color);
+}
+
+.metro-wayfinding-main-segment-tabs .material-symbols-outlined {
+  overflow: hidden;
+  font-size: 20px;
+}
+
+.metro-wayfinding-main-segment-tab-summary {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metro-wayfinding-main-segment-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+}
+
+.metro-wayfinding-main-segment-toolbar > button {
+  min-height: 38px;
+  padding: 0 var(--yct-space-2);
+  border: 0;
+  background: transparent;
+  color: var(--yct-color-primary);
+}
+
+.metro-wayfinding-main-segment-toolbar > button.icon-button {
+  width: 38px;
+  min-width: 38px;
+  padding: 0;
+}
+
+.metro-wayfinding-main-segment-toolbar > button:last-child {
+  display: grid;
+  grid-template-columns: 18px auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.metro-wayfinding-main-segment-toolbar > button:is(:hover, :focus-visible) {
+  background: var(--yct-material-hover-state);
+}
+
+.metro-wayfinding-main-segment-toolbar > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.modal-backdrop.metro-wayfinding-segment-dialog-backdrop {
+  z-index: 120;
+}
+
+.modal-panel.metro-wayfinding-segment-dialog {
+  width: min(520px, 100%);
+  gap: var(--yct-space-3);
+}
+
+.metro-wayfinding-segment-dialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+}
+
+.metro-wayfinding-segment-dialog > header > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.metro-wayfinding-segment-dialog h2 {
+  margin: 0;
+  color: var(--yct-color-text);
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.metro-wayfinding-segment-dialog > header span:not(.material-symbols-outlined) {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+}
+
+.metro-wayfinding-segment-dialog > footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--yct-space-2);
+  padding-top: var(--yct-space-2);
+  border-top: 1px solid var(--yct-color-border);
+}
+
+.metro-wayfinding-segment-dialog > footer > button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--yct-space-1);
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  font-weight: 700;
+}
+
+.metro-wayfinding-segment-dialog > footer > button.is-primary {
+  border-color: var(--yct-color-primary);
+  background: var(--yct-color-primary);
+  color: #fff;
+}
+
+.metro-wayfinding-segment-dialog > footer > .metro-wayfinding-segment-dialog-delete {
+  margin-right: auto;
+  border-color: color-mix(in srgb, var(--yct-color-error) 36%, var(--yct-color-border));
+  color: var(--yct-color-error);
+}
+
+.metro-wayfinding-segment-dialog > footer > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .metro-wayfinding-color-control > div {
@@ -5928,6 +6433,7 @@ img.map-player-list-avatar.is-offline {
 }
 
 .material-action-row button,
+.material-history-item button,
 .admin-materials-panel button.is-primary {
   display: inline-flex;
   align-items: center;
@@ -5936,13 +6442,21 @@ img.map-player-list-avatar.is-offline {
 }
 
 .material-action-row button.is-primary,
+.material-history-item button.is-primary,
 .admin-materials-panel button.is-primary {
   border-color: var(--yct-color-primary);
   background: var(--yct-color-primary);
   color: #fff;
 }
 
+.material-history-item button.is-primary:is(:hover, :focus-visible) {
+  border-color: var(--yct-color-primary-hover);
+  background: var(--yct-color-primary-hover);
+}
+
 .material-action-row button:disabled,
+.material-mode-switch button:disabled,
+.material-history-item button:disabled,
 .admin-materials-panel button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
@@ -5969,25 +6483,32 @@ img.map-player-list-avatar.is-offline {
   font-size: 16px;
 }
 
-.material-preview-heading span {
+.material-preview-heading > span,
+.material-preview-heading > div > span {
   color: var(--yct-color-text-muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
 .material-preview-stage {
+  --material-preview-grid-background: color-mix(
+    in srgb,
+    var(--yct-color-surface-muted) 82%,
+    var(--yct-color-secondary)
+  );
+  --material-preview-grid-cell: color-mix(in srgb, var(--yct-color-surface-panel) 72%, transparent);
   display: grid;
   place-items: center;
   min-height: 260px;
   overflow: hidden;
-  border: 1px solid var(--yct-color-border-subtle);
+  border: 1px solid var(--yct-color-border);
   border-radius: var(--yct-radius-md);
-  background-color: #d7e6ef;
+  background-color: var(--material-preview-grid-background);
   background-image:
-    linear-gradient(45deg, #edf5f7 25%, transparent 25%),
-    linear-gradient(-45deg, #edf5f7 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #edf5f7 75%),
-    linear-gradient(-45deg, transparent 75%, #edf5f7 75%);
+    linear-gradient(45deg, var(--material-preview-grid-cell) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--material-preview-grid-cell) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--material-preview-grid-cell) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--material-preview-grid-cell) 75%);
   background-position:
     0 0,
     0 10px,
@@ -6001,8 +6522,8 @@ img.map-player-list-avatar.is-offline {
   max-width: 100%;
   overflow: hidden;
   line-height: 0;
-  outline: 1px solid rgba(17, 52, 70, 0.5);
-  box-shadow: 0 3px 12px rgba(17, 52, 70, 0.18);
+  outline: 1px solid color-mix(in srgb, var(--yct-color-text) 42%, transparent);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--yct-color-text) 18%, transparent);
 }
 
 .material-preview-canvas img {
@@ -6045,7 +6566,7 @@ img.map-player-list-avatar.is-offline {
   min-width: 42px;
   padding: 4px var(--yct-space-2);
   border-radius: var(--yct-radius-pill);
-  background: var(--yct-color-surface-panel);
+  background: var(--yct-color-surface-muted);
   color: var(--yct-color-text-secondary);
   font-size: 12px;
   text-align: center;
@@ -6203,7 +6724,11 @@ img.map-player-list-avatar.is-offline {
 }
 
 @media (max-width: 720px) {
-  .material-studio,
+  .material-studio {
+    width: 100%;
+    padding-block: 0 var(--yct-space-4);
+  }
+
   .admin-materials-panel {
     width: min(100% - 24px, 1120px);
     padding-block: var(--yct-space-3);
@@ -6211,6 +6736,11 @@ img.map-player-list-avatar.is-offline {
 
   .material-studio-layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .material-mode-switch button,
+  .material-history-item button {
+    min-height: 44px;
   }
 
   .material-preview-stage {
@@ -6227,8 +6757,12 @@ img.map-player-list-avatar.is-offline {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .metro-wayfinding-main-segments li {
-    flex-wrap: wrap;
+  .metro-wayfinding-main-segment-control {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .metro-wayfinding-main-segment-toolbar {
+    justify-content: flex-end;
   }
 
   .admin-material-template,
@@ -9861,6 +10395,40 @@ img.map-player-list-avatar.is-offline {
   background: color-mix(in srgb, var(--yct-color-primary) 6%, var(--yct-color-surface-panel));
 }
 
+.transit-line-stop-location-editor {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--yct-color-border);
+  padding-top: var(--yct-space-2);
+}
+
+.transit-line-stop-location-editor > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-1);
+  color: var(--yct-color-text-secondary);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transit-line-stop-location-editor > summary::marker {
+  content: '';
+}
+
+.transit-line-stop-location-editor > summary .material-symbols-outlined {
+  color: var(--yct-color-primary);
+}
+
+.transit-line-stop-location-editor > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--yct-space-2);
+  margin-top: var(--yct-space-2);
+}
+
+.transit-line-stop-location-editor > p {
+  margin: var(--yct-space-2) 0 0;
+}
+
 .transit-line-waypoint-coordinate-fields {
   display: grid;
   grid-column: span 2;
@@ -10581,6 +11149,10 @@ img.map-player-list-avatar.is-offline {
   .transit-line-waypoint-coordinate-fields {
     grid-column: auto;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .transit-line-stop-location-editor > div {
+    grid-template-columns: 1fr;
   }
 
   .transit-line-editor-row-actions {
@@ -15111,12 +15683,8 @@ img.map-player-list-avatar.is-offline {
 
 :root[data-material-mode='advanced'] .modal-backdrop {
   background: rgb(0 0 0 / 44%);
-  -webkit-backdrop-filter: contrast(var(--yct-material-contrast))
-    brightness(var(--yct-material-brightness-dark)) saturate(var(--yct-material-saturation))
-    blur(var(--yct-material-blur-soft));
-  backdrop-filter: contrast(var(--yct-material-contrast))
-    brightness(var(--yct-material-brightness-dark)) saturate(var(--yct-material-saturation))
-    blur(var(--yct-material-blur-soft));
+  -webkit-backdrop-filter: blur(var(--yct-material-blur-soft));
+  backdrop-filter: blur(var(--yct-material-blur-soft));
 }
 
 :root[data-material-mode='advanced'] .modal-panel {
@@ -15127,6 +15695,12 @@ img.map-player-list-avatar.is-offline {
     blur(var(--yct-material-blur));
   backdrop-filter: contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
     saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+}
+
+:root .modal-backdrop.shortcut-backdrop {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 :root[data-embedded][data-material-mode='advanced'] .topbar {

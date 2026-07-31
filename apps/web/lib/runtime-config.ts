@@ -25,6 +25,7 @@ export interface RuntimeConfig {
   serviceEntryStorePath: string;
   materialTemplateStorePath: string;
   materialDraftStorePath: string;
+  materialTransitNetworkProjectStorePath: string;
   materialExportAuditStorePath: string;
   transitDataStorePath: string;
   transitModeProfileStorePath: string;
@@ -142,6 +143,9 @@ export function readRuntimeConfig(): RuntimeConfig {
     materialDraftStorePath:
       emptyToUndefined(process.env.YCT_MATERIAL_DRAFT_STORE_PATH) ??
       '.yct-data/material-draft-store.json',
+    materialTransitNetworkProjectStorePath:
+      emptyToUndefined(process.env.YCT_MATERIAL_TRANSIT_NETWORK_PROJECT_STORE_PATH) ??
+      '.yct-data/material-transit-network-project-store.json',
     materialExportAuditStorePath:
       emptyToUndefined(process.env.YCT_MATERIAL_EXPORT_AUDIT_STORE_PATH) ??
       '.yct-data/material-export-audit-store.json',

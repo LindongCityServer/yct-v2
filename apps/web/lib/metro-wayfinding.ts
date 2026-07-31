@@ -244,9 +244,7 @@ export interface MetroWayfindingBoxedTextSegment {
 }
 
 export type MetroWayfindingMainSegment =
-  | MetroWayfindingTextSegment
-  | MetroWayfindingLineSegment
-  | MetroWayfindingBoxedTextSegment;
+  MetroWayfindingTextSegment | MetroWayfindingLineSegment | MetroWayfindingBoxedTextSegment;
 
 export interface MetroWayfindingMainTextRow {
   id: string;
@@ -262,12 +260,17 @@ export interface MetroWayfindingSecondaryTextRow {
 
 export type MetroWayfindingTextRow = MetroWayfindingMainTextRow | MetroWayfindingSecondaryTextRow;
 
+export type MetroWayfindingFrameShape = 'none' | 'rectangle' | 'circle';
+export type MetroWayfindingFrameFillMode = 'none' | 'inverse' | 'color';
+
 export interface MetroWayfindingFacilityElement {
   id: string;
   type: 'facility';
   iconId: string;
   direction?: MetroWayfindingIconDirection;
-  framed: boolean;
+  frameShape: MetroWayfindingFrameShape;
+  frameFillMode: MetroWayfindingFrameFillMode;
+  frameFillColor?: MetroWayfindingColor;
   backgroundColor?: MetroWayfindingColor;
   foregroundColor?: MetroWayfindingColor;
 }
@@ -277,6 +280,8 @@ export interface MetroWayfindingArrowElement {
   type: 'arrow';
   iconId: string;
   framed: boolean;
+  frameFillMode: MetroWayfindingFrameFillMode;
+  frameFillColor?: MetroWayfindingColor;
   backgroundColor?: MetroWayfindingColor;
   foregroundColor?: MetroWayfindingColor;
 }
@@ -302,7 +307,9 @@ export interface MetroWayfindingLargeTextElement {
   type: 'largeText';
   value: string;
   suffix: string;
-  framed: boolean;
+  frameShape: MetroWayfindingFrameShape;
+  frameFillMode: MetroWayfindingFrameFillMode;
+  frameFillColor?: MetroWayfindingColor;
   backgroundColor?: MetroWayfindingColor;
   foregroundColor?: MetroWayfindingColor;
 }
@@ -443,9 +450,13 @@ export function resolveMetroWayfindingElementWidth(element: MetroWayfindingEleme
     return element.type === 'divider' ? 8 : 85;
   }
   if (element.type === 'largeText') {
-    const mainFontSize = element.framed
-      ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
-      : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE;
+    if (element.frameShape === 'circle') {
+      return 85;
+    }
+    const mainFontSize =
+      element.frameShape !== 'none'
+        ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
+        : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE;
     const suffixGap = element.value && element.suffix ? 3 : 0;
     const contentWidth =
       estimateMetroWayfindingLargeTextWidth(element.value, mainFontSize) +
@@ -550,13 +561,14 @@ export function createMetroWayfindingElement(
       id,
       type,
       iconId,
-      framed: true,
+      frameShape: 'rectangle',
+      frameFillMode: 'none',
       foregroundColor: icon?.defaultForegroundColor,
     };
   }
   if (type === 'arrow') {
     const arrowId = resolveMetroArrowIconAssetName(iconId) ?? 'south-west';
-    return { id, type, iconId: arrowId, framed: false };
+    return { id, type, iconId: arrowId, framed: false, frameFillMode: 'none' };
   }
   if (type === 'text') {
     return {
@@ -567,7 +579,14 @@ export function createMetroWayfindingElement(
     };
   }
   if (type === 'largeText') {
-    return { id, type, value: '', suffix: '', framed: true };
+    return {
+      id,
+      type,
+      value: '',
+      suffix: '',
+      frameShape: 'rectangle',
+      frameFillMode: 'none',
+    };
   }
   if (type === 'space') {
     return { id, type, mode: 'fixed', units: 1 };
@@ -628,6 +647,9 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
     iconId?: unknown;
     direction?: unknown;
     framed?: unknown;
+    frameShape?: unknown;
+    frameFillMode?: unknown;
+    frameFillColor?: unknown;
     backgroundColor?: unknown;
     foregroundColor?: unknown;
   };
@@ -641,8 +663,7 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
     const candidateIconId = typeof candidate.iconId === 'string' ? candidate.iconId : '';
     const candidateIcon = metroWayfindingIconOptions.find((item) => item.id === candidateIconId);
     const type =
-      candidate.type === 'arrow' ||
-      (candidate.type === 'icon' && candidateIcon?.group === 'arrow')
+      candidate.type === 'arrow' || (candidate.type === 'icon' && candidateIcon?.group === 'arrow')
         ? 'arrow'
         : 'facility';
     const options = type === 'arrow' ? metroWayfindingArrowOptions : metroWayfindingFacilityOptions;
@@ -651,19 +672,32 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
       ? candidateIconId
       : fallbackIconId;
     const icon = options.find((item) => item.id === iconId);
+    if (type === 'arrow') {
+      return {
+        id,
+        type,
+        iconId,
+        framed: candidate.framed === true,
+        frameFillMode: normalizeMetroWayfindingFrameFillMode(candidate.frameFillMode),
+        frameFillColor: normalizeOptionalColor(candidate.frameFillColor),
+        backgroundColor,
+        foregroundColor: foregroundColor ?? icon?.defaultForegroundColor,
+      };
+    }
     return {
       id,
       type,
       iconId,
       direction:
-        type === 'facility' &&
-        (candidate.direction === 'left' ||
-          candidate.direction === 'right' ||
-          candidate.direction === 'up' ||
-          candidate.direction === 'down')
+        candidate.direction === 'left' ||
+        candidate.direction === 'right' ||
+        candidate.direction === 'up' ||
+        candidate.direction === 'down'
           ? candidate.direction
           : undefined,
-      framed: candidate.framed === true,
+      frameShape: normalizeMetroWayfindingFrameShape(candidate.frameShape, candidate.framed),
+      frameFillMode: normalizeMetroWayfindingFrameFillMode(candidate.frameFillMode),
+      frameFillColor: normalizeOptionalColor(candidate.frameFillColor),
       backgroundColor,
       foregroundColor: foregroundColor ?? icon?.defaultForegroundColor,
     };
@@ -698,7 +732,16 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
       type: 'largeText',
       value: normalizeString(largeText.value, 160),
       suffix: normalizeString(largeText.suffix, 24),
-      framed: largeText.framed === true,
+      frameShape: normalizeMetroWayfindingFrameShape(
+        (largeText as { frameShape?: unknown }).frameShape,
+        (largeText as { framed?: unknown }).framed,
+      ),
+      frameFillMode: normalizeMetroWayfindingFrameFillMode(
+        (largeText as { frameFillMode?: unknown }).frameFillMode,
+      ),
+      frameFillColor: normalizeOptionalColor(
+        (largeText as { frameFillColor?: unknown }).frameFillColor,
+      ),
       backgroundColor,
       foregroundColor,
     };
@@ -718,6 +761,21 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
     return { id, type: 'divider', backgroundColor, foregroundColor };
   }
   return null;
+}
+
+function normalizeMetroWayfindingFrameShape(
+  frameShape: unknown,
+  legacyFramed: unknown,
+): MetroWayfindingFrameShape {
+  return frameShape === 'rectangle' || frameShape === 'circle'
+    ? frameShape
+    : legacyFramed === true
+      ? 'rectangle'
+      : 'none';
+}
+
+function normalizeMetroWayfindingFrameFillMode(value: unknown): MetroWayfindingFrameFillMode {
+  return value === 'inverse' || value === 'color' ? value : 'none';
 }
 
 function normalizeMainSegments(value: unknown): MetroWayfindingMainSegment[] {

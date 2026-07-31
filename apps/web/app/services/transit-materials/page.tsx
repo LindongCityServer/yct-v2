@@ -20,6 +20,7 @@ export default function TransitMaterialsPage() {
         serverSources={{ bus_stop: 'transit_station' }}
         serverFamilies={['bus_stop']}
         includedTemplateIds={[METRO_WAYFINDING_TEMPLATE_ID]}
+        allowTransitNetworkImport
       />
     </SecondaryShell>
   );

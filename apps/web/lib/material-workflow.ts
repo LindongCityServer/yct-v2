@@ -378,9 +378,7 @@ export async function prepareMaterialPreview(input: {
     const previewId = `material_preview_${randomUUID()}`;
     const generatedAt = new Date().toISOString();
     const actorLabel = input.actor?.label.trim() || input.anonymousLabel;
-    const materialId = compactMaterialWatermarkId(
-      previewId.slice('material_preview_'.length),
-    );
+    const materialId = compactMaterialWatermarkId(previewId.slice('material_preview_'.length));
     const rendered = await renderMaterialTemplateToPng({
       template: source.template,
       values: source.values,
@@ -485,6 +483,7 @@ async function resolveMaterialExportSource(
     const resolved = await resolveServerMaterialInput({
       source: request.source,
       fields: template.template.fields,
+      networkGeometry: request.networkGeometry,
     });
     return {
       ok: true,
@@ -544,6 +543,7 @@ async function resolveMaterialPreviewSource(request: MaterialPreviewRequestInput
     const resolved = await resolveServerMaterialInput({
       source: request.source,
       fields: template.template.fields,
+      networkGeometry: request.networkGeometry,
     });
     return {
       ok: true,
@@ -569,6 +569,7 @@ async function resolveMaterialPreviewSource(request: MaterialPreviewRequestInput
 async function resolveServerMaterialInput(input: {
   source: MaterialServerSourceInput;
   fields: MaterialTemplateVersion['fields'];
+  networkGeometry?: MaterialPreviewRequestInput['networkGeometry'];
 }): Promise<{
   sourceKind: 'transit_line' | 'transit_station' | 'map_location' | 'road_coordinate';
   values: Record<string, string>;
@@ -579,17 +580,28 @@ async function resolveServerMaterialInput(input: {
       lineId: input.source.lineId,
       stationSourceId: input.source.stationSourceId,
       fields: input.fields,
+      networkGeometry: input.networkGeometry,
     });
     return { ...resolved, sourceKind: 'transit_line' };
   }
   if (input.source.kind === 'transit_station') {
-    const resolved = await resolveTransitStationMaterialInput({
-      stationMarkerId: input.source.stationMarkerId,
-      direction: input.source.direction,
-      lineIds: input.source.lineIds,
-      terminalRole: input.source.terminalRole,
-      fields: input.fields,
-    });
+    const resolved =
+      'networkNodeId' in input.source
+        ? await resolveTransitStationMaterialInput({
+            networkNodeId: input.source.networkNodeId,
+            lineSelections: input.source.lineSelections,
+            terminalRole: input.source.terminalRole,
+            fields: input.fields,
+            networkGeometry: input.networkGeometry,
+          })
+        : await resolveTransitStationMaterialInput({
+            stationMarkerId: input.source.stationMarkerId,
+            direction: input.source.direction,
+            lineIds: input.source.lineIds,
+            terminalRole: input.source.terminalRole,
+            fields: input.fields,
+            networkGeometry: input.networkGeometry,
+          });
     return { ...resolved, sourceKind: 'transit_station' };
   }
   if (input.source.kind === 'road_coordinate') {
