@@ -1122,13 +1122,11 @@ export function MaterialStudioPanel({
               {isMetroWayfinding ? (
                 <MetroWayfindingEditor
                   value={input.layout ?? ''}
-                  canvasWidth={
-                    activeCanvas
-                      ? (activeCanvas.widthM / Math.max(activeCanvas.heightM, Number.EPSILON)) * 128
-                      : 128
-                  }
+                  canvasWidth={activeCanvas ? activeCanvas.widthM * 128 : 128}
+                  canvasHeight={activeCanvas?.heightM ?? 1}
                   disabled={isBusy}
                   lineColorOptions={metroLineColorOptions}
+                  onCanvasHeightChange={(height) => updateCanvas('heightM', height)}
                   onChange={(value) => {
                     setInput((current) => ({ ...current, layout: value }));
                     clearPreview();
@@ -1354,13 +1352,13 @@ function CanvasEditor({
         />
       </label>
       <label>
-        <span>高度（米）</span>
+        <span>{isMetroWayfinding ? '高度（128 像素格数）' : '高度（米）'}</span>
         <input
           type="number"
-          min="0.01"
-          max="64"
-          step="0.01"
-          value={isMetroWayfinding ? 1 : canvas.heightM}
+          min={isMetroWayfinding ? 1 : 0.01}
+          max={isMetroWayfinding ? 2 : 64}
+          step={isMetroWayfinding ? 1 : 0.01}
+          value={canvas.heightM}
           disabled={isMetroWayfinding}
           onChange={(event) => onChange('heightM', Number(event.currentTarget.value))}
         />

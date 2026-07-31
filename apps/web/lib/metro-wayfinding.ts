@@ -45,6 +45,21 @@ export type MetroFacilityIconAssetName =
   | 'passenger-service-center'
   | 'ticket-machine'
   | 'meeting-point';
+export type MetroArrowIconAssetName =
+  | 'south-west'
+  | 'west'
+  | 'north-west'
+  | 'north'
+  | 'north-east'
+  | 'east'
+  | 'south-east'
+  | 'south'
+  | 'turn-left-up'
+  | 'turn-left-down'
+  | 'turn-right-up'
+  | 'turn-right-down'
+  | 'u-turn-left'
+  | 'u-turn-right';
 
 export interface MetroWayfindingIconOption {
   id: string;
@@ -185,6 +200,13 @@ export const metroWayfindingIconOptions: MetroWayfindingIconOption[] = [
   { id: 'u-turn-right', label: '右掉头', symbol: 'u_turn_right', group: 'arrow' },
 ];
 
+export const metroWayfindingFacilityOptions = metroWayfindingIconOptions.filter(
+  (option) => option.group === 'facility',
+);
+export const metroWayfindingArrowOptions = metroWayfindingIconOptions.filter(
+  (option) => option.group === 'arrow',
+);
+
 export type MetroWayfindingTextAlign = 'left' | 'center' | 'right';
 export type MetroWayfindingSpaceMode = 'fixed' | 'flex';
 
@@ -194,6 +216,14 @@ export function resolveMetroFacilityIconAssetName(
 ): MetroFacilityIconAssetName | undefined {
   const option = metroWayfindingIconOptions.find((item) => item.id === iconId);
   return option?.assetNameByDirection?.[direction ?? 'right'] ?? option?.assetName;
+}
+
+export function resolveMetroArrowIconAssetName(
+  iconId: string,
+): MetroArrowIconAssetName | undefined {
+  return metroWayfindingArrowOptions.some((option) => option.id === iconId)
+    ? (iconId as MetroArrowIconAssetName)
+    : undefined;
 }
 
 export interface MetroWayfindingTextSegment {
@@ -223,11 +253,20 @@ export interface MetroWayfindingSecondaryTextRow {
 
 export type MetroWayfindingTextRow = MetroWayfindingMainTextRow | MetroWayfindingSecondaryTextRow;
 
-export interface MetroWayfindingIconElement {
+export interface MetroWayfindingFacilityElement {
   id: string;
-  type: 'icon';
+  type: 'facility';
   iconId: string;
   direction?: MetroWayfindingIconDirection;
+  framed: boolean;
+  backgroundColor?: MetroWayfindingColor;
+  foregroundColor?: MetroWayfindingColor;
+}
+
+export interface MetroWayfindingArrowElement {
+  id: string;
+  type: 'arrow';
+  iconId: string;
   framed: boolean;
   backgroundColor?: MetroWayfindingColor;
   foregroundColor?: MetroWayfindingColor;
@@ -276,16 +315,21 @@ export interface MetroWayfindingDividerElement {
 }
 
 export type MetroWayfindingElement =
-  | MetroWayfindingIconElement
+  | MetroWayfindingFacilityElement
+  | MetroWayfindingArrowElement
   | MetroWayfindingTextElement
   | MetroWayfindingLargeTextElement
   | MetroWayfindingSpaceElement
   | MetroWayfindingDividerElement;
 
+export type MetroWayfindingLayoutMode = 'single' | 'double';
+
 export interface MetroWayfindingLayout {
   backgroundColor: MetroWayfindingColor;
   foregroundColor: MetroWayfindingColor;
-  elements: MetroWayfindingElement[];
+  mode: MetroWayfindingLayoutMode;
+  dividerBetweenRows: boolean;
+  rows: MetroWayfindingElement[][];
 }
 
 export interface MetroWayfindingLayoutSizing {
@@ -301,7 +345,9 @@ export interface MetroWayfindingLayoutSizing {
 export const emptyMetroWayfindingLayout: MetroWayfindingLayout = {
   backgroundColor: METRO_WAYFINDING_BACKGROUND,
   foregroundColor: METRO_WAYFINDING_FOREGROUND,
-  elements: [],
+  mode: 'single',
+  dividerBetweenRows: false,
+  rows: [[]],
 };
 
 export function createMetroWayfindingId(prefix = 'metro'): string {
@@ -337,18 +383,18 @@ export function resolveMetroWayfindingTextMetrics(
 }
 
 export function resolveMetroWayfindingLayoutSizing(
-  layout: MetroWayfindingLayout,
+  elements: MetroWayfindingElement[],
   canvasWidth: number,
 ): MetroWayfindingLayoutSizing {
   const safeCanvasWidth = Math.max(Number.isFinite(canvasWidth) ? canvasWidth : 0, 0);
   const innerWidth = Math.max(0, safeCanvasWidth - METRO_WAYFINDING_PADDING * 2);
-  const elementWidths = layout.elements.map(resolveMetroWayfindingElementWidth);
-  const gapWidth = Math.max(layout.elements.length - 1, 0) * METRO_WAYFINDING_GAP;
+  const elementWidths = elements.map(resolveMetroWayfindingElementWidth);
+  const gapWidth = Math.max(elements.length - 1, 0) * METRO_WAYFINDING_GAP;
   let textWidth = 0;
   let nonTextWidth = 0;
   let flexCount = 0;
 
-  layout.elements.forEach((element, index) => {
+  elements.forEach((element, index) => {
     if (element.type === 'space' && element.mode === 'flex') {
       flexCount += 1;
     } else if (element.type === 'text' || element.type === 'largeText') {
@@ -384,7 +430,7 @@ export function resolveMetroWayfindingLayoutSizing(
 }
 
 export function resolveMetroWayfindingElementWidth(element: MetroWayfindingElement): number {
-  if (element.type === 'icon' || element.type === 'divider') {
+  if (element.type === 'facility' || element.type === 'arrow' || element.type === 'divider') {
     return element.type === 'divider' ? 8 : 85;
   }
   if (element.type === 'largeText') {
@@ -484,15 +530,19 @@ export function createMetroWayfindingElement(
   iconId = 'stairs',
 ): MetroWayfindingElement {
   const id = createMetroWayfindingId(type);
-  if (type === 'icon') {
-    const icon = metroWayfindingIconOptions.find((option) => option.id === iconId);
+  if (type === 'facility') {
+    const icon = metroWayfindingFacilityOptions.find((option) => option.id === iconId);
     return {
       id,
       type,
       iconId,
-      framed: icon?.group !== 'arrow',
+      framed: true,
       foregroundColor: icon?.defaultForegroundColor,
     };
+  }
+  if (type === 'arrow') {
+    const arrowId = resolveMetroArrowIconAssetName(iconId) ?? 'south-west';
+    return { id, type, iconId: arrowId, framed: false };
   }
   if (type === 'text') {
     return {
@@ -513,14 +563,25 @@ export function createMetroWayfindingElement(
 
 export function parseMetroWayfindingLayout(value: string): MetroWayfindingLayout {
   try {
-    const candidate = JSON.parse(value) as Partial<MetroWayfindingLayout>;
-    const elements = Array.isArray(candidate.elements)
-      ? candidate.elements.map(normalizeMetroWayfindingElement).filter(Boolean)
-      : [];
+    const candidate = JSON.parse(value) as Partial<MetroWayfindingLayout> & {
+      elements?: unknown;
+      rows?: unknown;
+    };
+    const candidateRows = Array.isArray(candidate.rows)
+      ? candidate.rows.slice(0, 2).map(normalizeMetroWayfindingElements)
+      : [normalizeMetroWayfindingElements(candidate.elements)];
+    const mode =
+      candidate.mode === 'double' || (candidate.mode !== 'single' && candidateRows.length > 1)
+        ? 'double'
+        : 'single';
+    const rows = candidateRows.length ? candidateRows : [[]];
+    if (mode === 'double' && rows.length < 2) rows.push([]);
     return {
       backgroundColor: normalizeColor(candidate.backgroundColor, METRO_WAYFINDING_BACKGROUND),
       foregroundColor: normalizeColor(candidate.foregroundColor, METRO_WAYFINDING_FOREGROUND),
-      elements: elements as MetroWayfindingElement[],
+      mode,
+      dividerBetweenRows: candidate.dividerBetweenRows === true,
+      rows,
     };
   } catch {
     return emptyMetroWayfindingLayout;
@@ -537,32 +598,55 @@ export function normalizeColor(value: unknown, fallback: string): string {
     : fallback;
 }
 
+function normalizeMetroWayfindingElements(value: unknown): MetroWayfindingElement[] {
+  return Array.isArray(value)
+    ? (value.map(normalizeMetroWayfindingElement).filter(Boolean) as MetroWayfindingElement[])
+    : [];
+}
+
 function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement | null {
   if (!value || typeof value !== 'object') {
     return null;
   }
-  const candidate = value as Partial<MetroWayfindingElement> & { id?: unknown; type?: unknown };
+  const candidate = value as {
+    id?: unknown;
+    type?: unknown;
+    iconId?: unknown;
+    direction?: unknown;
+    framed?: unknown;
+    backgroundColor?: unknown;
+    foregroundColor?: unknown;
+  };
   const id = typeof candidate.id === 'string' && candidate.id ? candidate.id.slice(0, 80) : null;
   if (!id) {
     return null;
   }
   const backgroundColor = normalizeOptionalColor(candidate.backgroundColor);
   const foregroundColor = normalizeOptionalColor(candidate.foregroundColor);
-  if (candidate.type === 'icon') {
+  if (candidate.type === 'icon' || candidate.type === 'facility' || candidate.type === 'arrow') {
     const candidateIconId = typeof candidate.iconId === 'string' ? candidate.iconId : '';
-    const iconId = metroWayfindingIconOptions.some((item) => item.id === candidateIconId)
+    const candidateIcon = metroWayfindingIconOptions.find((item) => item.id === candidateIconId);
+    const type =
+      candidate.type === 'arrow' ||
+      (candidate.type === 'icon' && candidateIcon?.group === 'arrow')
+        ? 'arrow'
+        : 'facility';
+    const options = type === 'arrow' ? metroWayfindingArrowOptions : metroWayfindingFacilityOptions;
+    const fallbackIconId = type === 'arrow' ? 'south-west' : 'stairs';
+    const iconId = options.some((item) => item.id === candidateIconId)
       ? candidateIconId
-      : 'stairs';
-    const icon = metroWayfindingIconOptions.find((item) => item.id === iconId);
+      : fallbackIconId;
+    const icon = options.find((item) => item.id === iconId);
     return {
       id,
-      type: 'icon',
+      type,
       iconId,
       direction:
-        candidate.direction === 'left' ||
-        candidate.direction === 'right' ||
-        candidate.direction === 'up' ||
-        candidate.direction === 'down'
+        type === 'facility' &&
+        (candidate.direction === 'left' ||
+          candidate.direction === 'right' ||
+          candidate.direction === 'up' ||
+          candidate.direction === 'down')
           ? candidate.direction
           : undefined,
       framed: candidate.framed === true,

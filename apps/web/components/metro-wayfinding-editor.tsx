@@ -15,16 +15,19 @@ import {
   dispatchMetroWayfindingCompositionAction,
   subscribeMetroWayfindingCompositionActions,
   type MetroWayfindingCompositionAction,
+  type MetroWayfindingElementAction,
 } from '../lib/client-metro-wayfinding-events';
 import {
   createMetroWayfindingElement,
   createMetroWayfindingTextRow,
   METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE,
   METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE,
+  metroWayfindingArrowOptions,
   metroWayfindingBackgroundPalette,
+  metroWayfindingFacilityOptions,
   metroWayfindingForegroundPalette,
-  metroWayfindingIconOptions,
   parseMetroWayfindingLayout,
+  resolveMetroArrowIconAssetName,
   resolveMetroFacilityIconAssetName,
   resolveMetroWayfindingLayoutSizing,
   resolveMetroWayfindingTextMetrics,
@@ -32,6 +35,7 @@ import {
   type MetroWayfindingElement,
   type MetroWayfindingIconOption,
   type MetroWayfindingLargeTextElement,
+  type MetroWayfindingLayoutMode,
   type MetroWayfindingLineSegment,
   type MetroWayfindingMainSegment,
   type MetroWayfindingTextElement,
@@ -41,45 +45,62 @@ import {
 export function MetroWayfindingEditor({
   value,
   canvasWidth,
+  canvasHeight,
   disabled,
   lineColorOptions,
+  onCanvasHeightChange,
   onChange,
 }: Readonly<{
   value: string;
   canvasWidth: number;
+  canvasHeight: number;
   disabled: boolean;
   lineColorOptions: Array<{ value: string; label: string }>;
+  onCanvasHeightChange: (height: 1 | 2) => void;
   onChange: (value: string) => void;
 }>) {
   const editorId = useId();
-  const elementListRef = useRef<HTMLOListElement>(null);
   const [layout, setLayout] = useState(() => parseMetroWayfindingLayout(value));
-  const [selectedElementId, setSelectedElementId] = useState(
-    () => parseMetroWayfindingLayout(value).elements[0]?.id ?? '',
-  );
-  const [draggedElementId, setDraggedElementId] = useState('');
+  const layoutRef = useRef(layout);
+  const [selection, setSelection] = useState(() => ({
+    rowIndex: 0,
+    elementId: parseMetroWayfindingLayout(value).rows[0]?.[0]?.id ?? '',
+  }));
+  const [draggedElement, setDraggedElement] = useState<{
+    rowIndex: number;
+    elementId: string;
+  } | null>(null);
   const [dropTarget, setDropTarget] = useState<{
+    rowIndex: number;
     elementId: string;
     placement: 'before' | 'after';
   } | null>(null);
 
   useEffect(() => {
     const nextLayout = parseMetroWayfindingLayout(value);
+    layoutRef.current = nextLayout;
     setLayout(nextLayout);
-    setSelectedElementId((current) =>
-      nextLayout.elements.some((element) => element.id === current)
-        ? current
-        : (nextLayout.elements[0]?.id ?? ''),
-    );
+    setSelection((current) => {
+      const rowIndex = nextLayout.mode === 'double' ? Math.min(current.rowIndex, 1) : 0;
+      const row = nextLayout.rows[rowIndex] ?? [];
+      if (row.some((element) => element.id === current.elementId)) {
+        return { rowIndex, elementId: current.elementId };
+      }
+      return { rowIndex, elementId: row[0]?.id ?? '' };
+    });
   }, [value]);
+
+  useEffect(() => {
+    const desiredHeight = layout.mode === 'double' ? 2 : 1;
+    if (canvasHeight !== desiredHeight) onCanvasHeightChange(desiredHeight);
+  }, [canvasHeight, layout.mode, onCanvasHeightChange]);
 
   const applyAction = useCallback(
     (action: MetroWayfindingCompositionAction) => {
-      setLayout((current) => {
-        const next = reduceMetroWayfindingAction(current, action);
-        onChange(serializeMetroWayfindingLayout(next));
-        return next;
-      });
+      const next = reduceMetroWayfindingAction(layoutRef.current, action);
+      layoutRef.current = next;
+      setLayout(next);
+      onChange(serializeMetroWayfindingLayout(next));
     },
     [onChange],
   );
@@ -89,103 +110,164 @@ export function MetroWayfindingEditor({
     [applyAction, editorId],
   );
 
-  const dispatch = (action: MetroWayfindingCompositionAction) => {
+  const dispatchComposition = (action: MetroWayfindingCompositionAction) => {
     if (action.type === 'add') {
-      setSelectedElementId(action.element.id);
-    } else if (action.type === 'remove' && action.elementId === selectedElementId) {
-      const removedIndex = layout.elements.findIndex((element) => element.id === action.elementId);
-      setSelectedElementId(
-        layout.elements[removedIndex + 1]?.id ?? layout.elements[removedIndex - 1]?.id ?? '',
-      );
+      setSelection({ rowIndex: action.rowIndex, elementId: action.element.id });
+    } else if (
+      action.type === 'remove' &&
+      action.rowIndex === selection.rowIndex &&
+      action.elementId === selection.elementId
+    ) {
+      const actionElements = layout.rows[action.rowIndex] ?? [];
+      const removedIndex = actionElements.findIndex((element) => element.id === action.elementId);
+      setSelection({
+        rowIndex: action.rowIndex,
+        elementId:
+          actionElements[removedIndex + 1]?.id ?? actionElements[removedIndex - 1]?.id ?? '',
+      });
     }
     dispatchMetroWayfindingCompositionAction({ editorId, action });
   };
+  const dispatchElement = (rowIndex: number, action: MetroWayfindingElementAction) =>
+    dispatchComposition({ ...action, rowIndex });
+  const activeElements = layout.rows[selection.rowIndex] ?? [];
   const selectedElement =
-    layout.elements.find((element) => element.id === selectedElementId) ?? layout.elements[0];
+    activeElements.find((element) => element.id === selection.elementId) ?? activeElements[0];
   const selectedElementIndex = selectedElement
-    ? layout.elements.findIndex((element) => element.id === selectedElement.id)
+    ? activeElements.findIndex((element) => element.id === selectedElement.id)
     : -1;
-  const layoutSizing = resolveMetroWayfindingLayoutSizing(layout, canvasWidth);
+  const visibleRows = layout.rows.slice(0, layout.mode === 'double' ? 2 : 1);
+  const rowSizings = visibleRows.map((elements) =>
+    resolveMetroWayfindingLayoutSizing(elements, canvasWidth),
+  );
+  const tightestRowSizing = rowSizings.reduce((current, candidate) =>
+    candidate.textScaleX < current.textScaleX ? candidate : current,
+  );
+  const layoutSizing = {
+    ...tightestRowSizing,
+    isWidthInsufficient: rowSizings.some((sizing) => sizing.isWidthInsufficient),
+    hasUnresolvedOverflow: rowSizings.some((sizing) => sizing.hasUnresolvedOverflow),
+  };
 
   useEffect(() => {
-    const selectedTab = elementListRef.current?.querySelector<HTMLElement>(
-      '[role="tab"][aria-selected="true"]',
-    );
-    selectedTab?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-  }, [selectedElementId]);
+    document
+      .getElementById(`${editorId}-${selection.elementId}-tab`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+  }, [editorId, selection.elementId]);
 
-  const handleElementNavigationKeyDown = (event: KeyboardEvent<HTMLOListElement>) => {
-    if (!layout.elements.length) return;
-    let nextIndex = selectedElementIndex;
+  const handleElementNavigationKeyDown = (
+    event: KeyboardEvent<HTMLOListElement>,
+    rowIndex: number,
+  ) => {
+    const target = event.target as HTMLElement;
+    const elements = layout.rows[rowIndex] ?? [];
+    if (!target.matches('[role="tab"]') || !elements.length) return;
+    let nextIndex = elements.findIndex((element) => element.id === target.dataset.elementId);
     if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex -= 1;
     else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex += 1;
     else if (event.key === 'Home') nextIndex = 0;
-    else if (event.key === 'End') nextIndex = layout.elements.length - 1;
+    else if (event.key === 'End') nextIndex = elements.length - 1;
     else return;
     event.preventDefault();
-    const nextElement =
-      layout.elements[Math.max(0, Math.min(layout.elements.length - 1, nextIndex))];
+    const nextElement = elements[Math.max(0, Math.min(elements.length - 1, nextIndex))];
     if (nextElement) {
-      setSelectedElementId(nextElement.id);
+      setSelection({ rowIndex, elementId: nextElement.id });
       window.requestAnimationFrame(() => {
         document.getElementById(`${editorId}-${nextElement.id}-tab`)?.focus();
       });
     }
   };
 
-  const handleElementDragStart = (event: ReactDragEvent<HTMLButtonElement>, elementId: string) => {
-    if (disabled || layout.elements.length < 2) {
+  const handleElementDragStart = (
+    event: ReactDragEvent<HTMLButtonElement>,
+    rowIndex: number,
+    elementId: string,
+  ) => {
+    if (disabled || (layout.rows[rowIndex]?.length ?? 0) < 2) {
       event.preventDefault();
       return;
     }
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', elementId);
-    setDraggedElementId(elementId);
-    setSelectedElementId(elementId);
+    setDraggedElement({ rowIndex, elementId });
+    setSelection({ rowIndex, elementId });
   };
 
   const handleElementDragOver = (
     event: ReactDragEvent<HTMLButtonElement>,
+    rowIndex: number,
     targetElementId: string,
   ) => {
-    if (!draggedElementId || draggedElementId === targetElementId) return;
+    if (
+      !draggedElement ||
+      draggedElement.rowIndex !== rowIndex ||
+      draggedElement.elementId === targetElementId
+    )
+      return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
     const bounds = event.currentTarget.getBoundingClientRect();
     const placement = event.clientX < bounds.left + bounds.width / 2 ? 'before' : 'after';
     setDropTarget((current) =>
-      current?.elementId === targetElementId && current.placement === placement
+      current?.rowIndex === rowIndex &&
+      current.elementId === targetElementId &&
+      current.placement === placement
         ? current
-        : { elementId: targetElementId, placement },
+        : { rowIndex, elementId: targetElementId, placement },
     );
   };
 
-  const handleElementDrop = (event: ReactDragEvent<HTMLButtonElement>, targetElementId: string) => {
-    const elementId = draggedElementId || event.dataTransfer.getData('text/plain');
+  const handleElementDrop = (
+    event: ReactDragEvent<HTMLButtonElement>,
+    rowIndex: number,
+    targetElementId: string,
+  ) => {
+    if (draggedElement?.rowIndex !== rowIndex) return;
+    const elementId = draggedElement.elementId || event.dataTransfer.getData('text/plain');
     if (!elementId || elementId === targetElementId) return;
     event.preventDefault();
     const bounds = event.currentTarget.getBoundingClientRect();
     const placement = event.clientX < bounds.left + bounds.width / 2 ? 'before' : 'after';
-    dispatch({ type: 'reorder', elementId, targetElementId, placement });
-    setDraggedElementId('');
+    dispatchElement(rowIndex, { type: 'reorder', elementId, targetElementId, placement });
+    setDraggedElement(null);
     setDropTarget(null);
   };
 
   const handleElementDragEnd = () => {
-    setDraggedElementId('');
+    setDraggedElement(null);
     setDropTarget(null);
+  };
+
+  const changeLayoutMode = (mode: MetroWayfindingLayoutMode) => {
+    const rows = layout.rows.map((row) => [...row]);
+    if (mode === 'double' && rows.length < 2) rows.push([]);
+    if (mode === 'single' && selection.rowIndex !== 0) {
+      setSelection({ rowIndex: 0, elementId: rows[0]?.[0]?.id ?? '' });
+    }
+    dispatchComposition({ type: 'replace', layout: { ...layout, mode, rows } });
   };
 
   return (
     <section className="metro-wayfinding-editor" aria-label="地铁导视牌编排">
       <div className="metro-wayfinding-toolbar">
+        <SegmentedControl
+          label="版式"
+          value={layout.mode}
+          options={[
+            { value: 'single', label: '单行', icon: 'view_stream' },
+            { value: 'double', label: '双行', icon: 'table_rows' },
+          ]}
+          disabled={disabled}
+          wide
+          onChange={changeLayoutMode}
+        />
         <ColorControl
           label="导视牌底色"
           value={layout.backgroundColor}
           palette={metroWayfindingBackgroundPalette}
           disabled={disabled}
           onChange={(backgroundColor) =>
-            dispatch({ type: 'replace', layout: { ...layout, backgroundColor } })
+            dispatchComposition({ type: 'replace', layout: { ...layout, backgroundColor } })
           }
         />
         <ColorControl
@@ -194,132 +276,122 @@ export function MetroWayfindingEditor({
           palette={metroWayfindingForegroundPalette}
           disabled={disabled}
           onChange={(foregroundColor) =>
-            dispatch({ type: 'replace', layout: { ...layout, foregroundColor } })
+            dispatchComposition({ type: 'replace', layout: { ...layout, foregroundColor } })
           }
         />
-      </div>
-
-      {layout.elements.length ? (
-        <ol
-          ref={elementListRef}
-          className="metro-wayfinding-element-list"
-          role="tablist"
-          aria-label="已添加元素"
-          onKeyDown={handleElementNavigationKeyDown}
-        >
-          {layout.elements.map((element) => {
-            const isSelected = element.id === selectedElement?.id;
-            const isIconOnly =
-              element.type === 'icon' || element.type === 'space' || element.type === 'divider';
-            const tabLabel = metroElementTabAriaLabel(element);
-            const canDrag = !disabled && layout.elements.length > 1;
-            return (
-              <li key={element.id} role="presentation">
-                <button
-                  id={`${editorId}-${element.id}-tab`}
-                  type="button"
-                  role="tab"
-                  aria-selected={isSelected}
-                  aria-controls={`${editorId}-element-panel`}
-                  aria-label={canDrag ? `${tabLabel}，可拖动更改顺序` : tabLabel}
-                  title={canDrag ? '拖动更改顺序' : undefined}
-                  tabIndex={isSelected ? 0 : -1}
-                  draggable={canDrag}
-                  className={[
-                    isSelected ? 'is-active' : '',
-                    isIconOnly ? 'is-icon-only' : '',
-                    canDrag ? 'is-draggable' : '',
-                    draggedElementId === element.id ? 'is-dragging' : '',
-                    dropTarget?.elementId === element.id ? `is-drop-${dropTarget.placement}` : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  onClick={() => setSelectedElementId(element.id)}
-                  onDragStart={(event) => handleElementDragStart(event, element.id)}
-                  onDragOver={(event) => handleElementDragOver(event, element.id)}
-                  onDrop={(event) => handleElementDrop(event, element.id)}
-                  onDragEnd={handleElementDragEnd}
-                >
-                  <MetroWayfindingElementTabContent element={element} />
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      ) : (
-        <p className="metro-wayfinding-empty">从下方选择元素，横向编排导视内容。</p>
-      )}
-
-      <div className="metro-wayfinding-add-bar" aria-label="添加导视元素">
-        <span>添加元素</span>
-        <div>
-          <button
-            type="button"
-            onClick={() => dispatch({ type: 'add', element: createMetroWayfindingElement('icon') })}
-            disabled={disabled}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              stairs
-            </span>
-            图标
-          </button>
-          <button
-            type="button"
-            onClick={() => dispatch({ type: 'add', element: createMetroWayfindingElement('text') })}
-            disabled={disabled}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              text_fields
-            </span>
-            文字
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              dispatch({ type: 'add', element: createMetroWayfindingElement('largeText') })
-            }
-            disabled={disabled}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              title
-            </span>
-            大文字
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              dispatch({ type: 'add', element: createMetroWayfindingElement('space') })
-            }
-            disabled={disabled}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              space_bar
-            </span>
-            空白
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              dispatch({ type: 'add', element: createMetroWayfindingElement('divider') })
-            }
-            disabled={disabled}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              vertical_split
-            </span>
-            分割线
-          </button>
-        </div>
-        {selectedElement ? (
-          <MetroTextInsertionSuggestions
-            element={selectedElement}
-            elements={layout.elements}
-            disabled={disabled}
-            lineColorOptions={lineColorOptions}
-            onAction={dispatch}
-          />
+        {layout.mode === 'double' ? (
+          <label className="material-checkbox-row metro-wayfinding-toggle">
+            <input
+              type="checkbox"
+              checked={layout.dividerBetweenRows}
+              disabled={disabled}
+              onChange={(event) =>
+                dispatchComposition({
+                  type: 'replace',
+                  layout: { ...layout, dividerBetweenRows: event.currentTarget.checked },
+                })
+              }
+            />
+            <span>添加行间分割线</span>
+          </label>
         ) : null}
       </div>
+
+      <div className="metro-wayfinding-row-lists">
+        {visibleRows.map((elements, rowIndex) => (
+          <div
+            key={rowIndex}
+            className={`metro-wayfinding-row-list${layout.mode === 'single' ? ' is-single' : ''}`}
+          >
+            {layout.mode === 'double' ? <strong>{rowIndex === 0 ? '第一行' : '第二行'}</strong> : null}
+            <ol
+              className="metro-wayfinding-element-list"
+              role="tablist"
+              aria-label={`${rowIndex === 0 ? '第一行' : '第二行'}已添加元素`}
+              onKeyDown={(event) => handleElementNavigationKeyDown(event, rowIndex)}
+            >
+              {elements.map((element) => {
+                const isSelected =
+                  rowIndex === selection.rowIndex && element.id === selectedElement?.id;
+                const isIconOnly =
+                  element.type === 'facility' ||
+                  element.type === 'arrow' ||
+                  element.type === 'space' ||
+                  element.type === 'divider';
+                const tabLabel = metroElementTabAriaLabel(element);
+                const canDrag = !disabled && elements.length > 1;
+                return (
+                  <li key={element.id} role="presentation">
+                    <button
+                      id={`${editorId}-${element.id}-tab`}
+                      type="button"
+                      role="tab"
+                      data-element-id={element.id}
+                      aria-selected={isSelected}
+                      aria-controls={`${editorId}-element-panel`}
+                      aria-label={canDrag ? `${tabLabel}，可拖动更改顺序` : tabLabel}
+                      title={canDrag ? '拖动更改顺序' : undefined}
+                      tabIndex={isSelected ? 0 : -1}
+                      draggable={canDrag}
+                      className={[
+                        isSelected ? 'is-active' : '',
+                        isIconOnly ? 'is-icon-only' : '',
+                        canDrag ? 'is-draggable' : '',
+                        draggedElement?.rowIndex === rowIndex &&
+                        draggedElement.elementId === element.id
+                          ? 'is-dragging'
+                          : '',
+                        dropTarget?.rowIndex === rowIndex &&
+                        dropTarget.elementId === element.id
+                          ? `is-drop-${dropTarget.placement}`
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onClick={() => setSelection({ rowIndex, elementId: element.id })}
+                      onDragStart={(event) => handleElementDragStart(event, rowIndex, element.id)}
+                      onDragOver={(event) => handleElementDragOver(event, rowIndex, element.id)}
+                      onDrop={(event) => handleElementDrop(event, rowIndex, element.id)}
+                      onDragEnd={handleElementDragEnd}
+                    >
+                      <MetroWayfindingElementTabContent element={element} />
+                    </button>
+                  </li>
+                );
+              })}
+              <li className="metro-wayfinding-element-list-add" role="presentation">
+                <button
+                  type="button"
+                  className="is-icon-only"
+                  aria-label={`向${rowIndex === 0 ? '第一行' : '第二行'}添加元素`}
+                  title="添加元素"
+                  onClick={() =>
+                    dispatchElement(rowIndex, {
+                      type: 'add',
+                      element: createMetroWayfindingElement('facility'),
+                    })
+                  }
+                  disabled={disabled}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    add
+                  </span>
+                </button>
+              </li>
+            </ol>
+          </div>
+        ))}
+      </div>
+
+      {selectedElement ? (
+        <MetroWayfindingInsertionSuggestions
+          element={selectedElement}
+          elements={activeElements}
+          disabled={disabled}
+          lineColorOptions={lineColorOptions}
+          onAction={(action) => dispatchElement(selection.rowIndex, action)}
+        />
+      ) : null}
 
       {layoutSizing.isWidthInsufficient ? (
         <p className="metro-wayfinding-width-warning" role="status">
@@ -347,9 +419,9 @@ export function MetroWayfindingEditor({
             element={selectedElement}
             disabled={disabled}
             isFirst={selectedElementIndex === 0}
-            isLast={selectedElementIndex === layout.elements.length - 1}
+            isLast={selectedElementIndex === activeElements.length - 1}
             lineColorOptions={lineColorOptions}
-            onAction={dispatch}
+            onAction={(action) => dispatchElement(selection.rowIndex, action)}
           />
         </div>
       ) : null}
@@ -360,10 +432,10 @@ export function MetroWayfindingEditor({
 function MetroWayfindingElementTabContent({
   element,
 }: Readonly<{ element: MetroWayfindingElement }>) {
-  if (element.type === 'icon') {
+  if (element.type === 'facility') {
     const icon =
-      metroWayfindingIconOptions.find((option) => option.id === element.iconId) ??
-      metroWayfindingIconOptions[0]!;
+      metroWayfindingFacilityOptions.find((option) => option.id === element.iconId) ??
+      metroWayfindingFacilityOptions[0]!;
     const assetName = resolveMetroFacilityIconAssetName(icon.id, element.direction);
     if (assetName) {
       return (
@@ -382,6 +454,9 @@ function MetroWayfindingElementTabContent({
         {icon.symbol}
       </span>
     );
+  }
+  if (element.type === 'arrow') {
+    return <MetroArrowAssetIcon assetName={element.iconId} />;
   }
   if (element.type === 'text') {
     const alignmentIcon = {
@@ -427,14 +502,18 @@ function MetroWayfindingElementTabContent({
 }
 
 function metroElementTabAriaLabel(element: MetroWayfindingElement): string {
-  if (element.type === 'icon') {
+  if (element.type === 'facility') {
     const label =
-      metroWayfindingIconOptions.find((option) => option.id === element.iconId)?.label ?? '图标';
+      metroWayfindingFacilityOptions.find((option) => option.id === element.iconId)?.label ??
+      '设施';
     const direction =
       element.direction && ['stairs', 'stairs-down', 'escalator', 'exit'].includes(element.iconId)
         ? { left: '向左', right: '向右', up: '向上', down: '向下' }[element.direction]
         : '';
     return `${label}${direction ? `，${direction}` : ''}`;
+  }
+  if (element.type === 'arrow') {
+    return metroWayfindingArrowOptions.find((option) => option.id === element.iconId)?.label ?? '箭头';
   }
   if (element.type === 'text') {
     const alignmentLabel = { left: '左对齐', center: '居中', right: '右对齐' }[element.align];
@@ -485,7 +564,7 @@ function MetroWayfindingElementEditor({
   isFirst: boolean;
   isLast: boolean;
   lineColorOptions: Array<{ value: string; label: string }>;
-  onAction: (action: MetroWayfindingCompositionAction) => void;
+  onAction: (action: MetroWayfindingElementAction) => void;
 }>) {
   const patch = (nextPatch: Partial<MetroWayfindingElement>) =>
     onAction({ type: 'update', elementId: element.id, patch: nextPatch });
@@ -534,8 +613,28 @@ function MetroWayfindingElementEditor({
         </div>
       </header>
       <div className="metro-wayfinding-element-body">
-        {element.type === 'icon' ? (
-          <IconElementFields element={element} disabled={disabled} patch={patch} />
+        <SegmentedControl
+          label="元素类型"
+          value={element.type}
+          options={[
+            { value: 'facility', label: '设施', icon: 'accessible' },
+            { value: 'arrow', label: '箭头', icon: 'arrow_forward' },
+            { value: 'text', label: '文字', icon: 'text_fields' },
+            { value: 'largeText', label: '大文字', icon: 'title' },
+            { value: 'space', label: '空白', icon: 'space_bar' },
+            { value: 'divider', label: '分割线', icon: 'split_scene' },
+          ]}
+          disabled={disabled}
+          wide
+          onChange={(elementType) =>
+            onAction({ type: 'changeType', elementId: element.id, elementType })
+          }
+        />
+        {element.type === 'facility' ? (
+          <FacilityElementFields element={element} disabled={disabled} patch={patch} />
+        ) : null}
+        {element.type === 'arrow' ? (
+          <ArrowElementFields element={element} disabled={disabled} patch={patch} />
         ) : null}
         {element.type === 'text' ? (
           <TextElementFields
@@ -560,28 +659,27 @@ function MetroWayfindingElementEditor({
   );
 }
 
-function IconElementFields({
+function FacilityElementFields({
   element,
   disabled,
   patch,
 }: Readonly<{
-  element: Extract<MetroWayfindingElement, { type: 'icon' }>;
+  element: Extract<MetroWayfindingElement, { type: 'facility' }>;
   disabled: boolean;
   patch: (patch: Partial<MetroWayfindingElement>) => void;
 }>) {
   const currentIcon =
-    metroWayfindingIconOptions.find((option) => option.id === element.iconId) ??
-    metroWayfindingIconOptions[0]!;
-  const pickerGroup = metroIconPickerGroupById(element.iconId);
-  const pickerOptions = metroIconPickerOptions(pickerGroup);
+    metroWayfindingFacilityOptions.find((option) => option.id === element.iconId) ??
+    metroWayfindingFacilityOptions[0]!;
   const selectIcon = (iconId: string) => {
-    const nextIcon = metroWayfindingIconOptions.find((option) => option.id === iconId);
+    const nextIcon = metroWayfindingFacilityOptions.find((option) => option.id === iconId);
     const shouldClearPreviousDefault =
       currentIcon.defaultForegroundColor === element.foregroundColor;
     patch({
       iconId,
-      direction: nextIcon?.group === 'arrow' ? undefined : element.direction,
-      framed: nextIcon?.group !== currentIcon.group ? nextIcon?.group !== 'arrow' : element.framed,
+      direction: ['stairs', 'stairs-down', 'escalator', 'exit'].includes(iconId)
+        ? (element.direction ?? 'right')
+        : undefined,
       foregroundColor:
         nextIcon?.defaultForegroundColor ??
         (shouldClearPreviousDefault ? undefined : element.foregroundColor),
@@ -590,18 +688,10 @@ function IconElementFields({
 
   return (
     <div className="metro-wayfinding-field-grid">
-      <SegmentedControl
-        label="图标类型"
-        value={pickerGroup}
-        options={metroIconPickerGroups}
-        disabled={disabled}
-        wide
-        onChange={(group) => selectIcon(metroIconPickerOptions(group)[0]!.id)}
-      />
       <IconChoiceGrid
-        label={pickerGroup === 'facility' ? '设施图标' : '箭头图标'}
+        label="设施图标"
         value={element.iconId}
-        options={pickerOptions.map((option) => {
+        options={metroWayfindingFacilityOptions.map((option) => {
           const assetName = resolveMetroFacilityIconAssetName(option.id);
           return {
             ...option,
@@ -654,6 +744,40 @@ function IconElementFields({
           onChange={(direction) => patch({ direction })}
         />
       ) : null}
+      <label className="material-checkbox-row metro-wayfinding-toggle">
+        <input
+          type="checkbox"
+          checked={element.framed}
+          disabled={disabled}
+          onChange={(event) => patch({ framed: event.currentTarget.checked })}
+        />
+        <span>添加外框</span>
+      </label>
+    </div>
+  );
+}
+
+function ArrowElementFields({
+  element,
+  disabled,
+  patch,
+}: Readonly<{
+  element: Extract<MetroWayfindingElement, { type: 'arrow' }>;
+  disabled: boolean;
+  patch: (patch: Partial<MetroWayfindingElement>) => void;
+}>) {
+  return (
+    <div className="metro-wayfinding-field-grid">
+      <IconChoiceGrid
+        label="箭头"
+        value={element.iconId}
+        options={metroWayfindingArrowOptions.map((option) => ({
+          ...option,
+          arrowAssetName: resolveMetroArrowIconAssetName(option.id),
+        }))}
+        disabled={disabled}
+        onChange={(iconId) => patch({ iconId })}
+      />
       <label className="material-checkbox-row metro-wayfinding-toggle">
         <input
           type="checkbox"
@@ -1043,30 +1167,9 @@ function SpaceElementFields({
   );
 }
 
-type MetroIconPickerGroup = MetroWayfindingIconOption['group'];
-
-const metroIconPickerGroups: Array<{ value: MetroIconPickerGroup; label: string }> = [
-  { value: 'facility', label: '设施' },
-  { value: 'arrow', label: '箭头' },
-];
-
-function metroIconPickerGroupById(iconId: string): MetroIconPickerGroup {
-  return metroWayfindingIconOptions.find((option) => option.id === iconId)?.group ?? 'facility';
-}
-
-function metroIconPickerOptions(group: MetroIconPickerGroup): MetroWayfindingIconOption[] {
-  return metroWayfindingIconOptions.filter((option) => option.group === group);
-}
-
 function metroIconPreviewStyle(iconId: string): { transform: string } | undefined {
   if (iconId === 'no-entry') {
     return { transform: 'rotate(-45deg)' };
-  }
-  if (iconId === 'turn-left-up' || iconId === 'turn-left-down') {
-    return { transform: 'rotate(-90deg)' };
-  }
-  if (iconId === 'turn-right-up' || iconId === 'turn-right-down') {
-    return { transform: 'rotate(90deg)' };
   }
   return undefined;
 }
@@ -1186,6 +1289,7 @@ function IconChoiceGrid({
   value: string;
   options: ReadonlyArray<
     Pick<MetroWayfindingIconOption, 'id' | 'label' | 'symbol' | 'assetName'> & {
+      arrowAssetName?: string;
       iconStyle?: { transform: string };
     }
   >;
@@ -1205,7 +1309,9 @@ function IconChoiceGrid({
             title={option.label}
             onClick={() => onChange(option.id)}
           >
-            {option.assetName ? (
+            {option.arrowAssetName ? (
+              <MetroArrowAssetIcon assetName={option.arrowAssetName} />
+            ) : option.assetName ? (
               <MetroFacilityAssetIcon assetName={option.assetName} style={option.iconStyle} />
             ) : (
               <span
@@ -1243,18 +1349,34 @@ function MetroFacilityAssetIcon({
   );
 }
 
-interface MetroTextSuggestionTemplate {
+function MetroArrowAssetIcon({ assetName }: Readonly<{ assetName: string }>) {
+  const assetUrl = appPath(`/metro-arrows/${assetName}.svg`);
+  return (
+    <span
+      className="metro-wayfinding-facility-asset metro-wayfinding-arrow-asset"
+      aria-hidden="true"
+      style={
+        {
+          '--metro-wayfinding-facility-asset': `url("${assetUrl}")`,
+        } as CSSProperties
+      }
+    />
+  );
+}
+
+interface MetroInsertionSuggestionTemplate {
   id: string;
   previewMain: string;
   previewSecondary: string;
-  createRows: (lineColors: string[]) => MetroWayfindingTextRow[];
+  kind?: 'text' | 'flex-space' | 'right-text';
+  createRows?: (lineColors: string[]) => MetroWayfindingTextRow[];
 }
 
 function createSimpleMetroTextSuggestion(
   id: string,
   main: string,
   secondary: string,
-): MetroTextSuggestionTemplate {
+): MetroInsertionSuggestionTemplate {
   return {
     id,
     previewMain: main,
@@ -1265,7 +1387,7 @@ function createSimpleMetroTextSuggestion(
 
 const exitTextSuggestion = createSimpleMetroTextSuggestion('exit', '出口', 'EXIT');
 
-const metroTextSuggestionsByIconId: Record<string, MetroTextSuggestionTemplate[]> = {
+const metroTextSuggestionsByIconId: Record<string, MetroInsertionSuggestionTemplate[]> = {
   elevator: [
     createSimpleMetroTextSuggestion('accessible-elevator', '无障碍电梯', 'Accessible Elevator'),
   ],
@@ -1326,7 +1448,7 @@ const metroTextSuggestionsByIconId: Record<string, MetroTextSuggestionTemplate[]
   'no-entry': [createSimpleMetroTextSuggestion('no-entry', '禁止进入', 'No Entry')],
 };
 
-const exitLargeTextSuggestion: MetroTextSuggestionTemplate = {
+const exitLargeTextSuggestion: MetroInsertionSuggestionTemplate = {
   id: 'exit-large-text-details',
   previewMain: '主文本 / 副文本 / 主文本 / 副文本',
   previewSecondary: '四行空白文字',
@@ -1338,7 +1460,21 @@ const exitLargeTextSuggestion: MetroTextSuggestionTemplate = {
   ],
 };
 
-function MetroTextInsertionSuggestions({
+const leftTextFlexSpaceSuggestion: MetroInsertionSuggestionTemplate = {
+  id: 'left-text-flex-space',
+  kind: 'flex-space',
+  previewMain: '平分剩余宽度',
+  previewSecondary: '追加弹性空白',
+};
+
+const flexSpaceRightTextSuggestion: MetroInsertionSuggestionTemplate = {
+  id: 'flex-space-right-text',
+  kind: 'right-text',
+  previewMain: '右对齐文字',
+  previewSecondary: '追加空白主文本与副文本',
+};
+
+function MetroWayfindingInsertionSuggestions({
   element,
   elements,
   disabled,
@@ -1349,22 +1485,39 @@ function MetroTextInsertionSuggestions({
   elements: MetroWayfindingElement[];
   disabled: boolean;
   lineColorOptions: Array<{ value: string; label: string }>;
-  onAction: (action: MetroWayfindingCompositionAction) => void;
+  onAction: (action: MetroWayfindingElementAction) => void;
 }>) {
-  const suggestions = resolveMetroTextSuggestionTemplates(element, elements);
+  const suggestions = resolveMetroInsertionSuggestionTemplates(element, elements);
   if (!suggestions.length) return null;
   const lineColors = lineColorOptions.map((option) => option.value);
-  const addSuggestion = (suggestion: MetroTextSuggestionTemplate) => {
-    const textElement = createMetroWayfindingElement('text') as MetroWayfindingTextElement;
+  const addSuggestion = (suggestion: MetroInsertionSuggestionTemplate) => {
     const usesNoEntryDefaultForeground =
-      element.type === 'icon' &&
+      element.type === 'facility' &&
       element.iconId === 'no-entry' &&
       (element.foregroundColor ?? '#E53935').toUpperCase() === '#E53935';
+    if (suggestion.kind === 'flex-space') {
+      const spaceElement = createMetroWayfindingElement('space') as Extract<
+        MetroWayfindingElement,
+        { type: 'space' }
+      >;
+      onAction({
+        type: 'add',
+        element: {
+          ...spaceElement,
+          mode: 'flex',
+          backgroundColor: element.backgroundColor,
+          foregroundColor: element.foregroundColor,
+        },
+      });
+      return;
+    }
+    const textElement = createMetroWayfindingElement('text') as MetroWayfindingTextElement;
     onAction({
       type: 'add',
       element: {
         ...textElement,
-        rows: suggestion.createRows(lineColors),
+        align: suggestion.kind === 'right-text' ? 'right' : textElement.align,
+        rows: suggestion.createRows?.(lineColors) ?? textElement.rows,
         backgroundColor: element.backgroundColor,
         foregroundColor: usesNoEntryDefaultForeground ? undefined : element.foregroundColor,
       },
@@ -1373,13 +1526,13 @@ function MetroTextInsertionSuggestions({
 
   return (
     <fieldset className="metro-wayfinding-text-suggestions" disabled={disabled}>
-      <legend>添加关联文字</legend>
+      <legend>插入建议</legend>
       <div>
         {suggestions.map((suggestion) => (
           <button
             key={suggestion.id}
             type="button"
-            aria-label={`添加${suggestion.previewMain}文字`}
+            aria-label={`添加${suggestion.previewMain}`}
             onClick={() => addSuggestion(suggestion)}
           >
             <span className="material-symbols-outlined" aria-hidden="true">
@@ -1396,18 +1549,25 @@ function MetroTextInsertionSuggestions({
   );
 }
 
-function resolveMetroTextSuggestionTemplates(
+function resolveMetroInsertionSuggestionTemplates(
   element: MetroWayfindingElement,
   elements: MetroWayfindingElement[],
-): MetroTextSuggestionTemplate[] {
+): MetroInsertionSuggestionTemplate[] {
   const suggestions =
-    element.type === 'icon' ? [...(metroTextSuggestionsByIconId[element.iconId] ?? [])] : [];
+    element.type === 'facility' ? [...(metroTextSuggestionsByIconId[element.iconId] ?? [])] : [];
   if (
-    (element.type === 'largeText' || (element.type === 'icon' && element.iconId === 'exit')) &&
+    (element.type === 'largeText' ||
+      (element.type === 'facility' && element.iconId === 'exit')) &&
     hasAdjacentExitAndLargeText(element, elements)
   ) {
     if (element.type === 'largeText') suggestions.push(exitTextSuggestion);
     suggestions.push(exitLargeTextSuggestion);
+  }
+  if (element.type === 'text' && element.align === 'left') {
+    suggestions.push(leftTextFlexSpaceSuggestion);
+  }
+  if (element.type === 'space' && element.mode === 'flex') {
+    suggestions.push(flexSpaceRightTextSuggestion);
   }
   return suggestions;
 }
@@ -1420,7 +1580,7 @@ function hasAdjacentExitAndLargeText(
   if (index < 0) return false;
   return [elements[index - 1], elements[index + 1]].some((neighbor) =>
     element.type === 'largeText'
-      ? neighbor?.type === 'icon' && neighbor.iconId === 'exit'
+      ? neighbor?.type === 'facility' && neighbor.iconId === 'exit'
       : neighbor?.type === 'largeText',
   );
 }
@@ -1533,42 +1693,96 @@ function reduceMetroWayfindingAction(
   action: MetroWayfindingCompositionAction,
 ) {
   if (action.type === 'replace') return action.layout;
-  if (action.type === 'add') return { ...layout, elements: [...layout.elements, action.element] };
+  const elements = layout.rows[action.rowIndex];
+  if (!elements) return layout;
+  if (action.type === 'add') {
+    const previousElement = elements.at(-1);
+    const element =
+      action.element.type === 'facility' &&
+      previousElement?.type === 'text' &&
+      previousElement.align === 'right'
+        ? { ...action.element, direction: 'right' as const }
+        : action.element;
+    return replaceMetroWayfindingRowElements(layout, action.rowIndex, [
+      ...elements,
+      element,
+    ]);
+  }
   if (action.type === 'remove')
-    return {
-      ...layout,
-      elements: layout.elements.filter((element) => element.id !== action.elementId),
-    };
+    return replaceMetroWayfindingRowElements(
+      layout,
+      action.rowIndex,
+      elements.filter((element) => element.id !== action.elementId),
+    );
   if (action.type === 'update')
-    return {
-      ...layout,
-      elements: layout.elements.map((element) =>
+    return replaceMetroWayfindingRowElements(
+      layout,
+      action.rowIndex,
+      elements.map((element) =>
         element.id === action.elementId
           ? ({ ...element, ...action.patch } as MetroWayfindingElement)
           : element,
       ),
-    };
+    );
+  if (action.type === 'changeType') {
+    return replaceMetroWayfindingRowElements(
+      layout,
+      action.rowIndex,
+      elements.map((element, index) => {
+        if (element.id !== action.elementId || element.type === action.elementType) return element;
+        const replacement = createMetroWayfindingElement(action.elementType);
+        const direction =
+          replacement.type === 'facility' &&
+          [elements[index - 1], elements[index + 1]].some(
+            (neighbor) => neighbor?.type === 'text' && neighbor.align === 'right',
+          )
+            ? 'right'
+            : replacement.type === 'facility'
+              ? replacement.direction
+              : undefined;
+        return {
+          ...replacement,
+          id: element.id,
+          backgroundColor: element.backgroundColor,
+          foregroundColor: element.foregroundColor ?? replacement.foregroundColor,
+          ...(replacement.type === 'facility' ? { direction } : {}),
+        } as MetroWayfindingElement;
+      }),
+    );
+  }
   if (action.type === 'reorder') {
-    const sourceIndex = layout.elements.findIndex((element) => element.id === action.elementId);
+    const sourceIndex = elements.findIndex((element) => element.id === action.elementId);
     if (sourceIndex < 0 || action.elementId === action.targetElementId) return layout;
-    const elements = [...layout.elements];
-    const [element] = elements.splice(sourceIndex, 1);
-    const targetIndex = elements.findIndex((item) => item.id === action.targetElementId);
+    const reorderedElements = [...elements];
+    const [element] = reorderedElements.splice(sourceIndex, 1);
+    const targetIndex = reorderedElements.findIndex((item) => item.id === action.targetElementId);
     if (!element || targetIndex < 0) return layout;
     const insertionIndex = action.placement === 'before' ? targetIndex : targetIndex + 1;
-    elements.splice(insertionIndex, 0, element);
-    return { ...layout, elements };
+    reorderedElements.splice(insertionIndex, 0, element);
+    return replaceMetroWayfindingRowElements(layout, action.rowIndex, reorderedElements);
   }
-  const index = layout.elements.findIndex((element) => element.id === action.elementId);
+  const index = elements.findIndex((element) => element.id === action.elementId);
   const target = action.direction === 'up' ? index - 1 : index + 1;
-  if (index < 0 || target < 0 || target >= layout.elements.length) return layout;
-  const elements = [...layout.elements];
-  [elements[index], elements[target]] = [elements[target]!, elements[index]!];
-  return { ...layout, elements };
+  if (index < 0 || target < 0 || target >= elements.length) return layout;
+  const movedElements = [...elements];
+  [movedElements[index], movedElements[target]] = [movedElements[target]!, movedElements[index]!];
+  return replaceMetroWayfindingRowElements(layout, action.rowIndex, movedElements);
+}
+
+function replaceMetroWayfindingRowElements(
+  layout: ReturnType<typeof parseMetroWayfindingLayout>,
+  rowIndex: number,
+  elements: MetroWayfindingElement[],
+) {
+  return {
+    ...layout,
+    rows: layout.rows.map((row, index) => (index === rowIndex ? elements : row)),
+  };
 }
 
 function metroElementLabel(element: MetroWayfindingElement): string {
-  if (element.type === 'icon') return '图标 · 85 × 85';
+  if (element.type === 'facility') return '设施图标 · 85 × 85';
+  if (element.type === 'arrow') return '箭头 · 85 × 85';
   if (element.type === 'text') return `文字 · ${element.rows.length} 行`;
   if (element.type === 'largeText') {
     return `大文字 · 字高 ${

@@ -3,9 +3,14 @@ import type { MetroWayfindingElement, MetroWayfindingLayout } from './metro-wayf
 export const metroWayfindingCompositionChangedEventName =
   'yct:metro-wayfinding-composition-changed';
 
-export type MetroWayfindingCompositionAction =
+export type MetroWayfindingElementAction =
   | { type: 'add'; element: MetroWayfindingElement }
   | { type: 'update'; elementId: string; patch: Partial<MetroWayfindingElement> }
+  | {
+      type: 'changeType';
+      elementId: string;
+      elementType: MetroWayfindingElement['type'];
+    }
   | { type: 'remove'; elementId: string }
   | { type: 'move'; elementId: string; direction: 'up' | 'down' }
   | {
@@ -13,7 +18,10 @@ export type MetroWayfindingCompositionAction =
       elementId: string;
       targetElementId: string;
       placement: 'before' | 'after';
-    }
+    };
+
+export type MetroWayfindingCompositionAction =
+  | (MetroWayfindingElementAction & { rowIndex: number })
   | { type: 'replace'; layout: MetroWayfindingLayout };
 
 export interface MetroWayfindingCompositionChangedPayload {

@@ -103,8 +103,9 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             label: '导视牌元素编排',
             kind: 'text',
             required: true,
-            defaultValue: '{"backgroundColor":"#262626","foregroundColor":"#FFFFFF","elements":[]}',
-            maxLength: 16_000,
+            defaultValue:
+              '{"backgroundColor":"#262626","foregroundColor":"#FFFFFF","mode":"single","dividerBetweenRows":false,"rows":[[]]}',
+            maxLength: 32_000,
             glyph: {
               renderer: 'metro_wayfinding',
               layoutWidth: 512,

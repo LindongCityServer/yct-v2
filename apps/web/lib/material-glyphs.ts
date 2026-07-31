@@ -11,14 +11,17 @@ import {
   METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE,
   METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE,
   METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE,
+  METRO_WAYFINDING_PADDING,
   METRO_WAYFINDING_TEXT_HEIGHT,
   METRO_WAYFINDING_FOREGROUND,
   metroWayfindingIconOptions,
   normalizeColor,
   parseMetroWayfindingLayout,
+  resolveMetroArrowIconAssetName,
   resolveMetroFacilityIconAssetName,
   resolveMetroWayfindingLayoutSizing,
   resolveMetroWayfindingTextMetrics,
+  type MetroArrowIconAssetName,
   type MetroFacilityIconAssetName,
   type MetroWayfindingElement,
   type MetroWayfindingMainSegment,
@@ -120,6 +123,7 @@ let chillJinshuSongFont: Font | undefined;
 let harmonyOsSansBoldFont: Font | undefined;
 const materialSymbolMarkupCache = new Map<string, { viewBox: string; content: string }>();
 const metroFacilityAssetMarkupCache = new Map<string, { viewBox: string; content: string }>();
+const metroArrowAssetMarkupCache = new Map<string, { viewBox: string; content: string }>();
 
 export function renderMaterialGlyph(
   value: string,
@@ -163,17 +167,34 @@ export function renderMaterialGlyph(
 
 function renderMetroWayfinding(value: string, canvasWidth: number, canvasHeight: number): string {
   const layout = parseMetroWayfindingLayout(value);
-  const scale = canvasHeight / METRO_WAYFINDING_HEIGHT;
+  const rowCount = layout.mode === 'double' ? 2 : 1;
+  const scale = canvasHeight / (METRO_WAYFINDING_HEIGHT * rowCount);
   const width = canvasWidth / scale;
-  const sizing = resolveMetroWayfindingLayoutSizing(layout, width);
+  const rows = Array.from({ length: rowCount }, (_unused, index) =>
+    renderMetroWayfindingRow(layout, layout.rows[index] ?? [], width, index),
+  ).join('');
+  const rowDivider =
+    rowCount === 2 && layout.dividerBetweenRows
+      ? `<rect x="${formatNumber(METRO_WAYFINDING_PADDING)}" y="124" width="${formatNumber(Math.max(width - METRO_WAYFINDING_PADDING * 2, 0))}" height="8" fill="${normalizeColor(layout.foregroundColor, METRO_WAYFINDING_FOREGROUND)}"/>`
+      : '';
+  return `<g transform="scale(${formatNumber(scale)})" data-metro-wayfinding="true" data-metro-wayfinding-mode="${layout.mode}"><rect width="${formatNumber(width)}" height="${METRO_WAYFINDING_HEIGHT * rowCount}" fill="${normalizeColor(layout.backgroundColor, '#262626')}"/>${rows}${rowDivider}</g>`;
+}
+
+function renderMetroWayfindingRow(
+  layout: ReturnType<typeof parseMetroWayfindingLayout>,
+  elements: MetroWayfindingElement[],
+  width: number,
+  rowIndex: number,
+): string {
+  const sizing = resolveMetroWayfindingLayoutSizing(elements, width);
   let cursor = (width - sizing.totalDisplayWidth) / 2;
   const contentStart = cursor;
   const contentEnd = contentStart + sizing.totalDisplayWidth;
   const backgroundColor = normalizeColor(layout.backgroundColor, '#262626');
-  const firstElementBackground = layout.elements[0]
-    ? resolveMetroElementBackground(layout.elements[0], layout)
+  const firstElementBackground = elements[0]
+    ? resolveMetroElementBackground(elements[0], layout)
     : backgroundColor;
-  const lastElement = layout.elements.at(-1);
+  const lastElement = elements.at(-1);
   const lastElementBackground = lastElement
     ? resolveMetroElementBackground(lastElement, layout)
     : backgroundColor;
@@ -185,7 +206,7 @@ function renderMetroWayfinding(value: string, canvasWidth: number, canvasHeight:
       ? `<rect x="${formatNumber(contentEnd)}" width="${formatNumber(Math.max(width - contentEnd, 0))}" height="128" fill="${lastElementBackground}"/>`
       : '',
   ].join('');
-  const children = layout.elements.map((element, index) => {
+  const children = elements.map((element, index) => {
     const intrinsicElementWidth =
       element.type === 'space' && element.mode === 'flex'
         ? sizing.flexWidth
@@ -203,7 +224,7 @@ function renderMetroWayfinding(value: string, canvasWidth: number, canvasHeight:
       elementScaleX,
       sizing.layoutScale,
     );
-    const nextElement = layout.elements[index + 1];
+    const nextElement = elements[index + 1];
     const gap = nextElement
       ? renderMetroWayfindingGap(
           element,
@@ -214,11 +235,10 @@ function renderMetroWayfinding(value: string, canvasWidth: number, canvasHeight:
         )
       : '';
     cursor +=
-      displayWidth +
-      (index < layout.elements.length - 1 ? METRO_WAYFINDING_GAP * sizing.layoutScale : 0);
+      displayWidth + (index < elements.length - 1 ? METRO_WAYFINDING_GAP * sizing.layoutScale : 0);
     return `${output}${gap}`;
   });
-  return `<g transform="scale(${formatNumber(scale)})" data-metro-wayfinding="true"><rect width="${formatNumber(width)}" height="128" fill="${backgroundColor}"/>${edgeBackgrounds}${children.join('')}</g>`;
+  return `<g transform="translate(0 ${rowIndex * METRO_WAYFINDING_HEIGHT})" data-metro-wayfinding-row="${rowIndex + 1}"><rect width="${formatNumber(width)}" height="128" fill="${backgroundColor}"/>${edgeBackgrounds}${children.join('')}</g>`;
 }
 
 function renderMetroWayfindingGap(
@@ -263,11 +283,31 @@ function renderMetroWayfindingElement(
   if (element.type === 'divider') {
     return `<g><rect x="${formatNumber(x)}" width="${formatNumber(8 * scaleX)}" height="128" fill="${background}"/><rect x="${formatNumber(x)}" y="28" width="${formatNumber(8 * scaleX)}" height="72" fill="${foreground}"/></g>`;
   }
-  if (element.type === 'icon') {
+  if (element.type === 'facility' || element.type === 'arrow') {
     const icon =
       metroWayfindingIconOptions.find((option) => option.id === element.iconId) ??
       metroWayfindingIconOptions[0]!;
-    return `<g transform="${transform}" data-material-symbol="${escapeXml(icon.symbol)}"><rect width="85" height="128" fill="${background}"/>${renderMetroIcon(icon.symbol, icon.id, foreground, element.id, element.direction, element.framed)}</g>`;
+    const graphic =
+      element.type === 'arrow'
+        ? renderMetroArrowAsset(
+            resolveMetroArrowIconAssetName(element.iconId) ?? 'south-west',
+            foreground,
+            element.id,
+            element.framed,
+          )
+        : renderMetroIcon(
+            icon.symbol,
+            icon.id,
+            foreground,
+            element.id,
+            element.direction,
+            element.framed,
+          );
+    const dataAttribute =
+      element.type === 'arrow'
+        ? `data-metro-arrow="${escapeXml(element.iconId)}"`
+        : `data-material-symbol="${escapeXml(icon.symbol)}"`;
+    return `<g transform="${transform}" ${dataAttribute}><rect width="85" height="128" fill="${background}"/>${graphic}</g>`;
   }
   if (element.type === 'largeText') {
     const text = renderMetroLargeText(
@@ -507,6 +547,24 @@ function renderMetroFacilityAsset(
   );
   const scaleTransform = resolveMetroIconScaleTransform(scale);
   return `<g transform="${transform}"><g transform="${scaleTransform}"><svg x="0" y="21.5" width="85" height="85" viewBox="${viewBox}" color="${color}" fill="${color}" aria-hidden="true">${namespacedContent}</svg></g></g>`;
+}
+
+function renderMetroArrowAsset(
+  assetName: MetroArrowIconAssetName,
+  color: string,
+  instanceId: string,
+  framed: boolean,
+): string {
+  const frame = framed
+    ? renderMetroFacilityAsset('frame', 'framed', color, `${instanceId}-frame`)
+    : '';
+  const { viewBox, content } = getMetroArrowAssetMarkup(assetName);
+  const namespacedContent = namespaceMetroFacilityAssetMarkup(
+    content,
+    `${instanceId}-arrow-${assetName}`,
+  );
+  const scaleTransform = resolveMetroIconScaleTransform(framed ? 0.9 : 1);
+  return `${frame}<g transform="${scaleTransform}"><svg x="0" y="21.5" width="85" height="85" viewBox="${viewBox}" color="${color}" fill="${color}" aria-hidden="true">${namespacedContent}</svg></g>`;
 }
 
 function resolveMetroIconScaleTransform(scale: number): string {
@@ -1166,6 +1224,24 @@ function getMetroFacilityAssetMarkup(
   return markup;
 }
 
+function getMetroArrowAssetMarkup(
+  assetName: MetroArrowIconAssetName,
+): { viewBox: string; content: string } {
+  const cached = metroArrowAssetMarkupCache.get(assetName);
+  if (cached) return cached;
+  const sourcePath = resolveMetroArrowAssetPath(`${assetName}.svg`);
+  const source = readFileSync(sourcePath, 'utf8');
+  const viewBox = source.match(/\bviewBox="([^"]+)"/u)?.[1];
+  const content = source
+    .replace(/^\s*<svg\b[^>]*>/u, '')
+    .replace(/<\/svg>\s*$/u, '')
+    .trim();
+  if (!viewBox || !content) throw new Error(`地铁箭头图标“${assetName}”格式无效。`);
+  const markup = { viewBox, content };
+  metroArrowAssetMarkupCache.set(assetName, markup);
+  return markup;
+}
+
 function namespaceMetroFacilityAssetMarkup(content: string, instanceId: string): string {
   const prefix = instanceId.replace(/[^a-zA-Z0-9_-]/gu, '-');
   const ids = Array.from(content.matchAll(/\bid="([^"]+)"/gu), (match) => match[1]!);
@@ -1201,6 +1277,16 @@ function resolveMetroFacilityAssetPath(variant: 'framed' | 'plain', fileName: st
   if (!sourcePath) {
     throw new Error(`地铁设施图标文件 ${variant}/${fileName} 不存在。`);
   }
+  return sourcePath;
+}
+
+function resolveMetroArrowAssetPath(fileName: string): string {
+  const candidates = [
+    resolve(process.cwd(), 'public', 'metro-arrows', fileName),
+    resolve(process.cwd(), 'apps', 'web', 'public', 'metro-arrows', fileName),
+  ];
+  const sourcePath = candidates.find((candidate) => existsSync(candidate));
+  if (!sourcePath) throw new Error(`地铁箭头图标文件 ${fileName} 不存在。`);
   return sourcePath;
 }
 
