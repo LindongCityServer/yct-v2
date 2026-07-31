@@ -5452,12 +5452,40 @@ img.map-player-list-avatar.is-offline {
   gap: var(--yct-space-2);
 }
 
-.metro-wayfinding-editor > .metro-wayfinding-text-suggestions button {
+.metro-wayfinding-text-suggestions button {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
   min-height: 50px;
   padding: var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
   text-align: left;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.metro-wayfinding-text-suggestions button:hover:not(:disabled) {
+  border-color: var(--yct-color-accent);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-accent);
+}
+
+.metro-wayfinding-text-suggestions button:focus-visible {
+  outline: 2px solid var(--yct-color-accent);
+  outline-offset: 2px;
+}
+
+.metro-wayfinding-text-suggestions button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--yct-color-accent) 14%, var(--yct-color-surface-muted));
+}
+
+.metro-wayfinding-text-suggestions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .metro-wayfinding-text-suggestions button > span:last-child {

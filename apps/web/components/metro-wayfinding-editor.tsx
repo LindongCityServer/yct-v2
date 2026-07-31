@@ -990,7 +990,7 @@ function MainSegmentEditor({
               </>
             ) : (
               <label className="material-field">
-                <span>文本段</span>
+                <span>{segment.kind === 'boxed' ? '方框文本段' : '文本段'}</span>
                 <input
                   value={segment.value}
                   disabled={disabled}
@@ -1052,6 +1052,16 @@ function MainSegmentEditor({
             text_fields
           </span>
           文本段
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange([...segments, { kind: 'boxed', value: '' }])}
+          disabled={disabled}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            crop_square
+          </span>
+          方框文本
         </button>
         <button
           type="button"
@@ -1370,6 +1380,7 @@ interface MetroInsertionSuggestionTemplate {
   previewSecondary: string;
   kind?: 'text' | 'flex-space' | 'right-text' | 'facility';
   facilityIconId?: string;
+  icon?: string;
   createRows?: (lineColors: string[]) => MetroWayfindingTextRow[];
 }
 
@@ -1388,6 +1399,17 @@ function createSimpleMetroTextSuggestion(
 
 const exitTextSuggestion = createSimpleMetroTextSuggestion('exit', '出口', 'EXIT');
 
+const exitBoxedTextSuggestion: MetroInsertionSuggestionTemplate = {
+  id: 'exit-boxed-text-rows',
+  previewMain: '方框主文本 / 方框主文本',
+  previewSecondary: '追加两行空白方框文字',
+  icon: 'crop_square',
+  createRows: () => [
+    createSuggestedMainTextRow([{ kind: 'boxed', value: '' }]),
+    createSuggestedMainTextRow([{ kind: 'boxed', value: '' }]),
+  ],
+};
+
 const metroTextSuggestionsByIconId: Record<string, MetroInsertionSuggestionTemplate[]> = {
   elevator: [
     createSimpleMetroTextSuggestion('accessible-elevator', '无障碍电梯', 'Accessible Elevator'),
@@ -1402,7 +1424,7 @@ const metroTextSuggestionsByIconId: Record<string, MetroInsertionSuggestionTempl
   waiting: [
     createSimpleMetroTextSuggestion('waiting-room', '空调候车室', 'Air-conditioned Waiting Room'),
   ],
-  exit: [exitTextSuggestion],
+  exit: [exitTextSuggestion, exitBoxedTextSuggestion],
   subway: [
     createSimpleMetroTextSuggestion('subway-ride', '乘车', 'To Subway'),
     createSimpleMetroTextSuggestion('subway-towards', '开往', 'To '),
@@ -1612,7 +1634,7 @@ function MetroWayfindingSuggestionIcon({
   if (suggestion.kind !== 'facility' || !suggestion.facilityIconId) {
     return (
       <span className="material-symbols-outlined" aria-hidden="true">
-        add
+        {suggestion.icon ?? 'add'}
       </span>
     );
   }

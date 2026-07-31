@@ -398,8 +398,19 @@ function renderMetroMainSegments(
         cursor += diameter + trailingGap;
         return `<g transform="translate(${formatNumber(centerX)} ${formatNumber(baseline - fontSize * 0.32)})"><circle r="${formatNumber(diameter / 2)}" fill="${normalizeColor(segment.color, '#2F80ED')}"/><text y="${formatNumber(fontSize * 0.9 * 0.34)}" fill="#FFFFFF" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize * 0.9)}" font-weight="400" text-anchor="middle" letter-spacing="${formatNumber(fontSize * -0.07)}">${escapeXml(segment.value)}</text></g>`;
       }
-      const output = `<text x="${formatNumber(cursor)}" y="${formatNumber(baseline)}" fill="${color}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="400">${escapeXml(segment.value)}</text>`;
-      cursor += estimateMetroWayfindingTextWidth(segment.value, fontSize) + trailingGap;
+      const textWidth = estimateMetroWayfindingTextWidth(segment.value, fontSize);
+      const horizontalPadding = segment.kind === 'boxed' ? fontSize * 0.16 : 0;
+      const segmentWidth =
+        segment.kind === 'boxed'
+          ? Math.max(fontSize * 1.05, textWidth + horizontalPadding * 2)
+          : textWidth;
+      const textX = cursor + (segmentWidth - textWidth) / 2;
+      const frame =
+        segment.kind === 'boxed'
+          ? `<rect x="${formatNumber(cursor + fontSize * 0.02)}" y="${formatNumber(baseline - fontSize * 0.84)}" width="${formatNumber(segmentWidth - fontSize * 0.04)}" height="${formatNumber(fontSize * 1.05)}" rx="${formatNumber(fontSize * 0.11)}" fill="none" stroke="${color}" stroke-width="${formatNumber(Math.max(1, fontSize * 0.04))}"/>`
+          : '';
+      const output = `${frame}<text x="${formatNumber(textX)}" y="${formatNumber(baseline)}" fill="${color}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="400">${escapeXml(segment.value)}</text>`;
+      cursor += segmentWidth + trailingGap;
       return output;
     })
     .join('');

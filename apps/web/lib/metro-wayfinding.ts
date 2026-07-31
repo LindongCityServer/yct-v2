@@ -32,6 +32,7 @@ export type MetroFacilityIconAssetName =
   | 'stairs-up'
   | 'stairs-down'
   | 'escalator'
+  | 'escalator-and-stairs'
   | 'accessible-elevator'
   | 'restroom'
   | 'mens-restroom'
@@ -237,7 +238,15 @@ export interface MetroWayfindingLineSegment {
   color: MetroWayfindingColor;
 }
 
-export type MetroWayfindingMainSegment = MetroWayfindingTextSegment | MetroWayfindingLineSegment;
+export interface MetroWayfindingBoxedTextSegment {
+  kind: 'boxed';
+  value: string;
+}
+
+export type MetroWayfindingMainSegment =
+  | MetroWayfindingTextSegment
+  | MetroWayfindingLineSegment
+  | MetroWayfindingBoxedTextSegment;
 
 export interface MetroWayfindingMainTextRow {
   id: string;
@@ -468,7 +477,12 @@ export function measureMetroWayfindingMainSegments(
       width +
       (segment.kind === 'line'
         ? fontSize * 1.12
-        : estimateMetroWayfindingTextWidth(segment.value, fontSize)),
+        : segment.kind === 'boxed'
+          ? Math.max(
+              fontSize * 1.05,
+              estimateMetroWayfindingTextWidth(segment.value, fontSize) + fontSize * 0.32,
+            )
+          : estimateMetroWayfindingTextWidth(segment.value, fontSize)),
     0,
   );
   return contentWidth + Math.max(segments.length - 1, 0) * fontSize * 0.12;
@@ -722,6 +736,9 @@ function normalizeMainSegments(value: unknown): MetroWayfindingMainSegment[] {
           value: normalizeString(candidate.value, 20),
           color: normalizeColor(candidate.color, METRO_WAYFINDING_FOREGROUND),
         };
+      }
+      if (candidate.kind === 'boxed') {
+        return { kind: 'boxed', value: normalizeString(candidate.value, 160) };
       }
       return { kind: 'text', value: normalizeString(candidate.value, 160) };
     })
