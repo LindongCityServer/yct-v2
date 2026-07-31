@@ -866,11 +866,11 @@ function renderTransitHorizontalStationList(
         .join('');
     })
     .join('');
-  const dividerArrow =
+  const secondRowArrow =
     layout.rows.length === 2
-      ? `<path d="M8 35L11.5 35L11.5 37L15 33L11.5 29L11.5 31L8 31L8 35Z" fill="${accentColor}"/>`
+      ? `<path d="M5 35L8.5 35L8.5 37L12 33L8.5 29L8.5 31L5 31L5 35Z" fill="${accentColor}"/>`
       : '';
-  return `<g>${backgrounds}${columns}${dividerArrow}</g>`;
+  return `<g>${backgrounds}${columns}${secondRowArrow}</g>`;
 }
 
 function resolveTransitHorizontalStationLayout(
@@ -1072,7 +1072,7 @@ function renderTransitRouteMap(
       return `${transferRings}<circle cx="${formatNumber(point[0])}" cy="${formatNumber(point[1])}" r="${isCurrent ? '2.4' : '1.35'}" fill="${isCurrent ? '#E28336' : '#FFFFFF'}" stroke="${isCurrent ? '#FFFFFF' : color}" stroke-width="${isCurrent ? '0.9' : '0.65'}"/>`;
     })
     .join('');
-  return `<g><rect width="${formatNumber(config.layoutWidth)}" height="${formatNumber(config.layoutHeight)}" fill="#FFFFFF"/>${roads}<path d="${routePath}" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><path d="${routePath}" fill="none" stroke="${color}" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"/>${stations}</g>`;
+  return `<svg x="0" y="0" width="${formatNumber(config.layoutWidth)}" height="${formatNumber(config.layoutHeight)}" viewBox="0 0 ${formatNumber(config.layoutWidth)} ${formatNumber(config.layoutHeight)}" overflow="hidden"><rect width="${formatNumber(config.layoutWidth)}" height="${formatNumber(config.layoutHeight)}" fill="#FFFFFF"/>${roads}<path d="${routePath}" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><path d="${routePath}" fill="none" stroke="${color}" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"/>${stations}</svg>`;
 }
 
 function parseTransitRouteMapPayload(value: string): TransitRouteMapPayload | undefined {

@@ -366,12 +366,7 @@ export async function resolveTransitStationMaterialInput(
       candidates.currentStationIndex = String(line.currentStationIndex);
       candidates.routeServiceTime = formatServiceTimeRange(line.firstBus, line.lastBus);
       candidates.operator = line.operator ?? '';
-      candidates.footerText = [
-        line.destinationName ? `开往 ${line.destinationName}` : '',
-        line.operator,
-      ]
-        .filter(Boolean)
-        .join('　');
+      candidates.footerText = line.destinationName ? `开往 ${line.destinationName}` : '';
       candidates.routeMapData = routeMap.data;
     }
   });
@@ -1109,22 +1104,29 @@ async function resolveMaterialTransitLineDisplay(
 ): Promise<{ number: string; suffix: string }> {
   const override = await findMaterialTransitLineNumber(lineId);
   if (override) {
-    return { number: override, suffix: getTransitLineSuffix(lineName) };
+    const normalizedOverride = override.trim();
+    return /^[0-9０-９]+$/u.test(normalizedOverride)
+      ? { number: normalizedOverride, suffix: getTransitLineSuffix(lineName) }
+      : parseMaterialTransitLineDisplay(normalizedOverride);
   }
   return parseMaterialTransitLineDisplay(lineName);
 }
 
 function parseMaterialTransitLineDisplay(lineName: string): { number: string; suffix: string } {
   const normalizedName = lineName.trim();
-  const match = normalizedName.match(/^(.*?)(路.*)$/u);
-  if (match?.[1]?.trim() && match[2]) {
-    return { number: match[1].trim(), suffix: match[2] };
+  const numericPrefixMatch = normalizedName.match(/^([0-9０-９]+)(.+)$/u);
+  if (numericPrefixMatch) {
+    return { number: numericPrefixMatch[1], suffix: numericPrefixMatch[2] };
+  }
+  const roadSuffixMatch = normalizedName.match(/^(.*?)(路.*)$/u);
+  if (roadSuffixMatch?.[1]?.trim() && roadSuffixMatch[2]) {
+    return { number: roadSuffixMatch[1].trim(), suffix: roadSuffixMatch[2] };
   }
   return { number: normalizedName, suffix: '路' };
 }
 
 function getTransitLineSuffix(lineName: string): string {
-  return lineName.trim().match(/路.*$/u)?.[0] ?? '路';
+  return parseMaterialTransitLineDisplay(lineName).suffix;
 }
 
 function getMarkerId(locationId: string): string {

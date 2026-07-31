@@ -29,8 +29,9 @@ const busStopDetailSource = createBusStopTemplateSource(
   <text x="0" y="15" transform="translate(80 0) scale({{fit.nextStation.scaleX}} 1)" fill="#C11111" font-family="'HarmonyOS Sans SC', sans-serif" font-size="7" font-weight="700" text-anchor="middle">{{nextStation}}</text>
   <text x="0" y="22" transform="translate(77 0) scale({{fit.routeOrigin.scaleX}} 1)" fill="#1D2F78" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeOrigin}} - {{routeTerminal}}</text>
   <rect x="15" y="25" width="98" height="13" fill="#377842"/>
-  <text x="18" y="34" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="6" font-weight="700">首末车时间</text>
-  <text x="0" y="34" transform="translate(81 0) scale({{fit.routeFirstLast.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeFirstLast}}</text>
+  <text x="18" y="31" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700">首末车时间</text>
+  <text x="0" y="31" transform="translate(81 0) scale({{fit.routeFirstLast.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="4.5" font-weight="700" text-anchor="middle">{{routeFirstLast}}</text>
+  <text x="0" y="36.5" transform="translate(64 0) scale({{fit.operator.scaleX}} 1)" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="3.5" font-weight="700" text-anchor="middle">{{operator}}</text>
   <rect x="16" y="41" width="46" height="79" fill="#FFFFFF"/>
   <rect x="66" y="41" width="46" height="79" fill="#FFFFFF"/>
   <g transform="translate(16 41)">{{glyph.routeStations}}</g>
@@ -64,7 +65,7 @@ const busStopHorizontalDetailSource = createBusStopTemplateSource(
   <g transform="translate(3 33)">{{glyph.routeStations}}</g>
   <g transform="translate(184 0)">{{glyph.routeMapData}}</g>
   <rect x="0" y="106" width="256" height="22" fill="{{accentColor}}"/>
-  <text x="0" y="122" transform="translate(128 0) scale({{fit.footerText.scaleX}} 1)" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="{{fit.footerText.letterSpacing}}">{{footerText}}</text>
+  <text x="0" y="122" transform="translate(128 0) scale({{fit.footerText.scaleX}} 1)" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="{{fit.footerText.letterSpacing}}">{{footerText}}　{{operator}}</text>
 </g>`,
 ).replaceAll('#26CABA', '{{accentColor}}');
 
@@ -489,10 +490,19 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
           },
           {
             key: 'routeFirstLast',
-            label: '首末班车时间',
+            label: '首末班车时间（可选）',
             kind: 'text',
+            serverOverride: true,
             maxLength: 36,
-            textFit: { maxWidth: 62, fontSize: 5, maxLetterSpacing: 0 },
+            textFit: { maxWidth: 62, fontSize: 4.5, maxLetterSpacing: 0 },
+          },
+          {
+            key: 'operator',
+            label: '线路运营方（可选）',
+            kind: 'text',
+            serverOverride: true,
+            maxLength: 48,
+            textFit: { maxWidth: 92, fontSize: 3.5, maxLetterSpacing: 0 },
           },
           {
             key: 'routeStations',
@@ -584,8 +594,9 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
           },
           {
             key: 'routeServiceTime',
-            label: '运营时间',
+            label: '首末班车时间（可选）',
             kind: 'text',
+            serverOverride: true,
             maxLength: 36,
             textFit: { maxWidth: 42, fontSize: 5, maxLetterSpacing: 0 },
           },
@@ -614,10 +625,22 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
           },
           {
             key: 'footerText',
-            label: '底部方向与运营方文字',
+            label: '底部行车方向文字',
             kind: 'text',
             maxLength: 80,
-            textFit: { maxWidth: 228, fontSize: 12, maxLetterSpacing: 1.2 },
+            textFit: {
+              maxWidth: 228,
+              fontSize: 12,
+              maxLetterSpacing: 1.2,
+              additionalFields: [{ fieldKey: 'operator', fontSize: 12 }],
+            },
+          },
+          {
+            key: 'operator',
+            label: '线路运营方（可选）',
+            kind: 'text',
+            serverOverride: true,
+            maxLength: 48,
           },
           {
             key: 'routeMapData',
