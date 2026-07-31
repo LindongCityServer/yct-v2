@@ -3,6 +3,7 @@
 import type { MaterialTransitNetworkSnapshot } from '@yct/contracts';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { publishLoginRequiredForResponse } from '../lib/client-auth-events';
 import { findTextContinuation } from '../lib/text-continuation';
 import {
   publishMaterialStudioActionBlocked,
@@ -391,7 +392,7 @@ export function MaterialStudioPanel({
         message?: string;
       };
       if (!templateResponse.ok) {
-        setWorkspaceBlockMessage(templateData.message ?? '请先登录后使用物料工作台。');
+        setWorkspaceBlockMessage(templateData.message ?? '无法读取物料模板。');
         return;
       }
 
@@ -690,15 +691,15 @@ export function MaterialStudioPanel({
     clearPreview();
   };
 
-  const downloadBlob = async (response: Response) => {
+  const downloadBlob = async (
+    response: Response,
+    fallbackFileName = `${selected?.template.title ?? title}.png`,
+  ) => {
     const blob = await response.blob();
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = objectUrl;
-    link.download = resolveMaterialDownloadFileName(
-      response,
-      `${selected?.template.title ?? title}.png`,
-    );
+    link.download = resolveMaterialDownloadFileName(response, fallbackFileName);
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -806,50 +807,66 @@ export function MaterialStudioPanel({
     return null;
   };
 
-  const requestPreview = async () => {
+  const fetchWatermarkedPreview = async (): Promise<Response | undefined> => {
     if (!selected || !activeCanvas) {
       blockAction(workspaceBlockMessage || '当前没有可用模板。');
-      return;
+      return undefined;
     }
     const selectionBlockMessage = mode === 'server' ? getServerSelectionBlockMessage() : null;
     if (selectionBlockMessage) {
       blockAction(selectionBlockMessage);
-      return;
+      return undefined;
     }
     const source = mode === 'server' ? buildServerSource() : undefined;
     if (mode === 'server' && !source) {
       blockAction(`请先选择${linkedDataModeLabel}。`);
+      return undefined;
+    }
+
+    const response = await fetch(appPath('/api/materials/previews'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(
+        mode === 'server'
+          ? {
+              mode: 'server',
+              templateId: selected.id,
+              templateVersion: selected.template.version,
+              canvas: activeCanvas,
+              source,
+              networkGeometry: transitNetworkSource === 'rmp' ? importedTransitNetwork : undefined,
+              input: buildServerOverrides(),
+            }
+          : {
+              mode: 'manual',
+              templateId: selected.id,
+              templateVersion: selected.template.version,
+              canvas: activeCanvas,
+              input,
+            },
+      ),
+    });
+    if (!response.ok) {
+      const data = (await response.json()) as { message?: string };
+      blockAction(data.message ?? '生成预览失败。');
+      return undefined;
+    }
+    return response;
+  };
+
+  const downloadWatermarkedPreview = async () => {
+    const response = await fetchWatermarkedPreview();
+    if (!response) {
       return;
     }
+    await downloadBlob(response, `${selected?.template.title ?? title}-带水印预览.png`);
+  };
+
+  const requestPreview = async () => {
     setIsBusy(true);
     try {
-      const response = await fetch(appPath('/api/materials/previews'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          mode === 'server'
-            ? {
-                mode: 'server',
-                templateId: selected.id,
-                templateVersion: selected.template.version,
-                canvas: activeCanvas,
-                source,
-                networkGeometry:
-                  transitNetworkSource === 'rmp' ? importedTransitNetwork : undefined,
-                input: buildServerOverrides(),
-              }
-            : {
-                mode: 'manual',
-                templateId: selected.id,
-                templateVersion: selected.template.version,
-                canvas: activeCanvas,
-                input,
-              },
-        ),
-      });
-      if (!response.ok) {
-        const data = (await response.json()) as { message?: string };
-        blockAction(data.message ?? '生成预览失败。');
+      const response = await fetchWatermarkedPreview();
+      if (!response) {
         return;
       }
       await showPreviewBlob(response);
@@ -878,6 +895,9 @@ export function MaterialStudioPanel({
         }),
       });
       const created = (await createResponse.json()) as MaterialDraft & { message?: string };
+      if (publishLoginRequiredForResponse(createResponse)) {
+        return;
+      }
       if (!createResponse.ok || !created.id) {
         blockAction(created.message ?? '无法保存自定义物料。');
         return;
@@ -887,6 +907,9 @@ export function MaterialStudioPanel({
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
       );
       const submitted = (await submitResponse.json()) as MaterialDraft & { message?: string };
+      if (publishLoginRequiredForResponse(submitResponse)) {
+        return;
+      }
       if (!submitResponse.ok) {
         blockAction(submitted.message ?? '物料已保存，但提交审核失败。');
         return;
@@ -907,6 +930,10 @@ export function MaterialStudioPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: 'custom', draftId: draft.id }),
       });
+      if (response.status === 401 || response.status === 403) {
+        await downloadWatermarkedPreview();
+        return;
+      }
       if (!response.ok) {
         const data = (await response.json()) as { message?: string };
         blockAction(data.message ?? '下载物料失败。');
@@ -922,7 +949,14 @@ export function MaterialStudioPanel({
 
   const exportManualDraft = async () => {
     if (!existingDraft) {
-      blockAction('当前模板尚无审核通过的自定义物料，请先提交审核。');
+      setIsBusy(true);
+      try {
+        await downloadWatermarkedPreview();
+      } catch {
+        blockAction('下载带水印预览时发生网络错误。');
+      } finally {
+        setIsBusy(false);
+      }
       return;
     }
     await exportDraft(existingDraft);
@@ -954,6 +988,10 @@ export function MaterialStudioPanel({
           input: buildServerOverrides(),
         }),
       });
+      if (response.status === 401 || response.status === 403) {
+        await downloadWatermarkedPreview();
+        return;
+      }
       if (!response.ok) {
         const data = (await response.json()) as { message?: string };
         blockAction(data.message ?? '下载物料失败。');

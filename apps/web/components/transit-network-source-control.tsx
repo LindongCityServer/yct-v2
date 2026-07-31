@@ -4,6 +4,7 @@ import type { ChangeEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MaterialTransitNetworkProject, MaterialTransitNetworkSnapshot } from '@yct/contracts';
 import { appPath } from '../lib/app-paths';
+import { publishLoginRequiredForResponse } from '../lib/client-auth-events';
 import {
   publishTransitNetworkImportFailed,
   publishTransitNetworkImportSucceeded,
@@ -84,6 +85,15 @@ export function TransitNetworkSourceControl({ studioId }: Readonly<{ studioId: s
         const data = (await response.json()) as MaterialTransitNetworkProject & {
           message?: string;
         };
+        if (response.status === 401) {
+          setProjectId('');
+          setErrorMessage('未登录，当前导入仅在本页有效。');
+          return;
+        }
+        if (publishLoginRequiredForResponse(response)) {
+          setProjectId('');
+          return;
+        }
         if (!response.ok) throw new Error(data.message ?? '无法暂存 RMP 项目。');
         setProjectId(data.id);
         setSnapshot(data.snapshot);
@@ -110,6 +120,10 @@ export function TransitNetworkSourceControl({ studioId }: Readonly<{ studioId: s
           appPath(`/api/materials/transit-network-projects/${projectId}`),
           { method: 'DELETE' },
         );
+        if (publishLoginRequiredForResponse(response)) {
+          setIsPersisting(false);
+          return;
+        }
         if (!response.ok) {
           const data = (await response.json()) as { message?: string };
           throw new Error(data.message ?? '无法删除暂存的线网项目。');
@@ -172,6 +186,9 @@ export function TransitNetworkSourceControl({ studioId }: Readonly<{ studioId: s
         const data = (await response.json()) as MaterialTransitNetworkProject & {
           message?: string;
         };
+        if (publishLoginRequiredForResponse(response)) {
+          return;
+        }
         if (!response.ok) throw new Error(data.message ?? '无法保存线路名称。');
         savedSnapshot = data.snapshot;
       }

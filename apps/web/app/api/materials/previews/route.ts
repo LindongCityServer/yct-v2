@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { materialPreviewRequestSchema } from '@yct/schemas';
 import { requireActiveLdpassUser } from '../../../../lib/user-auth';
 import { prepareMaterialPreview } from '../../../../lib/material-workflow';
+import { resolveClientIp } from '../../../../lib/request-client-ip';
 
 export async function POST(request: NextRequest) {
   const parsed = materialPreviewRequestSchema.safeParse(await request.json());
@@ -15,17 +16,11 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  const localDevelopmentPreview = isLocalDevelopmentPreview(request);
   const user = await requireActiveLdpassUser(request);
-  if (parsed.data.mode === 'manual' && !localDevelopmentPreview) {
-    if (!user.ok) {
-      return user.response;
-    }
-  }
   const result = await prepareMaterialPreview({
     request: parsed.data,
     actor: user.ok ? { id: user.ldpassUserId, label: user.username } : undefined,
-    anonymousLabel: localDevelopmentPreview ? '本地开发' : '匿名用户',
+    anonymousLabel: resolveClientIp(request.headers),
   });
   if (!result.ok) {
     return NextResponse.json(result, { status: result.status ?? 400 });
@@ -45,11 +40,4 @@ export async function POST(request: NextRequest) {
       'X-Yct-Material-Preview-Id': result.previewId ?? '',
     },
   });
-}
-
-function isLocalDevelopmentPreview(request: NextRequest): boolean {
-  if (process.env.NODE_ENV !== 'development') {
-    return false;
-  }
-  return ['localhost', '127.0.0.1', '::1', '[::1]'].includes(request.nextUrl.hostname);
 }
