@@ -1327,7 +1327,7 @@ function reduceMetroWayfindingAction(
 function metroElementLabel(element: MetroWayfindingElement): string {
   if (element.type === 'icon') return '图标 · 85 × 85';
   if (element.type === 'text') return `文字 · ${element.rows.length} 行`;
-  if (element.type === 'largeText') return '大文字 · 字高 85';
+  if (element.type === 'largeText') return '大文字 · 字高 78';
   if (element.type === 'space') return '空白元素';
   return '分割线 · 8 × 72';
 }

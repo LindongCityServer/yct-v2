@@ -242,11 +242,11 @@ function getMetroElementMetric(element: MetroWayfindingElement): { width: number
     return { width: element.type === 'divider' ? 8 : 85 };
   }
   if (element.type === 'largeText') {
-    const suffixGap = element.suffix ? 3 : 0;
+    const suffixGap = element.value && element.suffix ? 3 : 0;
     const contentWidth =
-      estimateTextWidth(element.value, metroLargeTextFontSize) +
+      estimateMetroLargeTextWidth(element.value, metroLargeTextFontSize) +
       suffixGap +
-      estimateTextWidth(element.suffix, metroLargeTextSuffixFontSize);
+      estimateMetroLargeTextWidth(element.suffix, metroLargeTextSuffixFontSize);
     return { width: Math.max(85, contentWidth + 8) };
   }
   if (element.type === 'space') {
@@ -385,16 +385,44 @@ function renderMetroText(
 }
 
 function renderMetroLargeText(value: string, suffix: string, width: number, color: string): string {
-  const suffixGap = suffix ? 3 : 0;
-  const mainWidth = estimateTextWidth(value, metroLargeTextFontSize);
-  const suffixWidth = estimateTextWidth(suffix, metroLargeTextSuffixFontSize);
-  const contentWidth = Math.max(mainWidth + suffixGap + suffixWidth, 1);
-  const startX = (width - contentWidth) / 2;
-  const suffixX = mainWidth + suffixGap;
+  const suffixGap = value && suffix ? 3 : 0;
+  const mainMarkup = renderMetroLargeTextRuns(value, metroLargeTextFontSize, 400);
   const suffixMarkup = suffix
-    ? `<text x="${formatNumber(suffixX)}" y="99" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${metroLargeTextSuffixFontSize}" font-weight="700">${escapeXml(suffix)}</text>`
+    ? renderMetroLargeTextRuns(suffix, metroLargeTextSuffixFontSize, 700, suffixGap, 13)
     : '';
-  return `<g transform="translate(${formatNumber(startX)} 0)"><text x="0" y="96" fill="${color}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="${metroLargeTextFontSize}" font-weight="400">${escapeXml(value)}</text>${suffixMarkup}</g>`;
+  return `<text x="${formatNumber(width / 2 - suffixGap / 2)}" y="64" fill="${color}" text-anchor="middle" dominant-baseline="central" letter-spacing="0">${mainMarkup}${suffixMarkup}</text>`;
+}
+
+function renderMetroLargeTextRuns(
+  value: string,
+  fontSize: number,
+  fontWeight: 400 | 700,
+  firstDx = 0,
+  firstDy = 0,
+): string {
+  const runs = Array.from(value).reduce<Array<{ value: string; usesArial: boolean }>>(
+    (result, character) => {
+      const usesArial = isBasicLatinCharacter(character);
+      const previous = result.at(-1);
+      if (previous?.usesArial === usesArial) {
+        previous.value += character;
+      } else {
+        result.push({ value: character, usesArial });
+      }
+      return result;
+    },
+    [],
+  );
+  return runs
+    .map((run, index) => {
+      const offset =
+        index === 0 ? ` dx="${formatNumber(firstDx)}" dy="${formatNumber(firstDy)}"` : '';
+      const fontFamily = run.usesArial
+        ? "Arial, 'HarmonyOS Sans SC', sans-serif"
+        : "'HarmonyOS Sans SC', sans-serif";
+      return `<tspan${offset} font-family="${fontFamily}" font-size="${formatNumber(fontSize)}" font-weight="${fontWeight}">${escapeXml(run.value)}</tspan>`;
+    })
+    .join('');
 }
 
 function measureMetroMainSegments(
@@ -1158,6 +1186,37 @@ function estimateTextWidth(value: string, fontSize: number): number {
       0,
     ) * fontSize
   );
+}
+
+function estimateMetroLargeTextWidth(value: string, fontSize: number): number {
+  return (
+    Array.from(value).reduce(
+      (width, character) =>
+        width +
+        (isBasicLatinCharacter(character)
+          ? arialCharacterWidthFactor(character)
+          : metroCharacterWidthFactor(character)),
+      0,
+    ) * fontSize
+  );
+}
+
+function isBasicLatinCharacter(character: string): boolean {
+  const codePoint = character.codePointAt(0) ?? 0;
+  return codePoint >= 0x20 && codePoint <= 0x7e;
+}
+
+function arialCharacterWidthFactor(character: string): number {
+  if (character === ' ') return 0.278;
+  if (/[0-9]/u.test(character)) return 0.556;
+  if (/[MW]/u.test(character)) return character === 'W' ? 0.944 : 0.833;
+  if (/[Iijl]/u.test(character)) return /[Iil]/u.test(character) ? 0.278 : 0.222;
+  if (/[mw]/u.test(character)) return character === 'm' ? 0.833 : 0.722;
+  if (/[frt]/u.test(character)) return character === 'f' ? 0.278 : 0.333;
+  if (/[.,:;!'|]/u.test(character)) return 0.278;
+  if (/[-+*/=()\[\]]/u.test(character)) return 0.584;
+  if (/[A-Z]/u.test(character)) return 0.667;
+  return 0.556;
 }
 
 function metroCharacterWidthFactor(character: string): number {
