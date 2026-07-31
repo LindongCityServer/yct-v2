@@ -1368,7 +1368,8 @@ interface MetroInsertionSuggestionTemplate {
   id: string;
   previewMain: string;
   previewSecondary: string;
-  kind?: 'text' | 'flex-space' | 'right-text';
+  kind?: 'text' | 'flex-space' | 'right-text' | 'facility';
+  facilityIconId?: string;
   createRows?: (lineColors: string[]) => MetroWayfindingTextRow[];
 }
 
@@ -1487,9 +1488,9 @@ function MetroWayfindingInsertionSuggestions({
   lineColorOptions: Array<{ value: string; label: string }>;
   onAction: (action: MetroWayfindingElementAction) => void;
 }>) {
-  const suggestions = resolveMetroInsertionSuggestionTemplates(element, elements);
-  if (!suggestions.length) return null;
   const lineColors = lineColorOptions.map((option) => option.value);
+  const suggestions = resolveMetroInsertionSuggestionTemplates(element, elements, lineColors);
+  if (!suggestions.length) return null;
   const addSuggestion = (suggestion: MetroInsertionSuggestionTemplate) => {
     const usesNoEntryDefaultForeground =
       element.type === 'facility' &&
@@ -1507,6 +1508,21 @@ function MetroWayfindingInsertionSuggestions({
           mode: 'flex',
           backgroundColor: element.backgroundColor,
           foregroundColor: element.foregroundColor,
+        },
+      });
+      return;
+    }
+    if (suggestion.kind === 'facility' && suggestion.facilityIconId) {
+      const facilityElement = createMetroWayfindingElement(
+        'facility',
+        suggestion.facilityIconId,
+      ) as Extract<MetroWayfindingElement, { type: 'facility' }>;
+      onAction({
+        type: 'add',
+        element: {
+          ...facilityElement,
+          backgroundColor: element.backgroundColor,
+          foregroundColor: facilityElement.foregroundColor ?? element.foregroundColor,
         },
       });
       return;
@@ -1535,9 +1551,7 @@ function MetroWayfindingInsertionSuggestions({
             aria-label={`添加${suggestion.previewMain}`}
             onClick={() => addSuggestion(suggestion)}
           >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              add
-            </span>
+            <MetroWayfindingSuggestionIcon suggestion={suggestion} />
             <span>
               <strong>{suggestion.previewMain}</strong>
               <small>{suggestion.previewSecondary}</small>
@@ -1552,6 +1566,7 @@ function MetroWayfindingInsertionSuggestions({
 function resolveMetroInsertionSuggestionTemplates(
   element: MetroWayfindingElement,
   elements: MetroWayfindingElement[],
+  lineColors: string[],
 ): MetroInsertionSuggestionTemplate[] {
   const suggestions =
     element.type === 'facility' ? [...(metroTextSuggestionsByIconId[element.iconId] ?? [])] : [];
@@ -1569,7 +1584,85 @@ function resolveMetroInsertionSuggestionTemplates(
   if (element.type === 'space' && element.mode === 'flex') {
     suggestions.push(flexSpaceRightTextSuggestion);
   }
+  if (element.type === 'text' && element.align === 'right') {
+    for (const [iconId, iconSuggestions] of Object.entries(metroTextSuggestionsByIconId)) {
+      const matches = iconSuggestions.some((suggestion) =>
+        suggestion.createRows
+          ? metroTextRowsMatch(element.rows, suggestion.createRows(lineColors))
+          : false,
+      );
+      if (!matches) continue;
+      const option = metroWayfindingFacilityOptions.find((item) => item.id === iconId);
+      if (!option) continue;
+      suggestions.push({
+        id: `matching-facility-${iconId}`,
+        kind: 'facility',
+        facilityIconId: iconId,
+        previewMain: option.label,
+        previewSecondary: '追加对应设施图标',
+      });
+    }
+  }
   return suggestions;
+}
+
+function MetroWayfindingSuggestionIcon({
+  suggestion,
+}: Readonly<{ suggestion: MetroInsertionSuggestionTemplate }>) {
+  if (suggestion.kind !== 'facility' || !suggestion.facilityIconId) {
+    return (
+      <span className="material-symbols-outlined" aria-hidden="true">
+        add
+      </span>
+    );
+  }
+  const option = metroWayfindingFacilityOptions.find(
+    (item) => item.id === suggestion.facilityIconId,
+  );
+  if (!option) return null;
+  const assetName = resolveMetroFacilityIconAssetName(option.id);
+  return assetName ? (
+    <MetroFacilityAssetIcon
+      assetName={assetName}
+      style={metroFacilityAssetPreviewStyle(option.id, undefined)}
+    />
+  ) : (
+    <span
+      className="material-symbols-outlined"
+      aria-hidden="true"
+      style={metroIconPreviewStyle(option.id)}
+    >
+      {option.symbol}
+    </span>
+  );
+}
+
+function metroTextRowsMatch(
+  currentRows: MetroWayfindingTextRow[],
+  suggestedRows: MetroWayfindingTextRow[],
+): boolean {
+  return metroTextRowsMatchSignature(currentRows) === metroTextRowsMatchSignature(suggestedRows);
+}
+
+function metroTextRowsMatchSignature(rows: MetroWayfindingTextRow[]): string {
+  return JSON.stringify(
+    rows.map((row) =>
+      row.kind === 'main'
+        ? {
+            kind: row.kind,
+            segments: row.segments.map((segment) =>
+              segment.kind === 'line'
+                ? { kind: segment.kind }
+                : { kind: segment.kind, value: normalizeMetroSuggestionText(segment.value) },
+            ),
+          }
+        : { kind: row.kind, value: normalizeMetroSuggestionText(row.value) },
+    ),
+  );
+}
+
+function normalizeMetroSuggestionText(value: string): string {
+  return value.trim().replace(/\s+/gu, ' ').toLocaleLowerCase();
 }
 
 function hasAdjacentExitAndLargeText(

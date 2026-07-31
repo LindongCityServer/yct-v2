@@ -5501,6 +5501,10 @@ img.map-player-list-avatar.is-offline {
   font-size: 18px;
 }
 
+.metro-wayfinding-text-suggestions .metro-wayfinding-facility-asset {
+  font-size: 18px;
+}
+
 .metro-wayfinding-row-lists {
   display: grid;
   gap: var(--yct-space-2);
