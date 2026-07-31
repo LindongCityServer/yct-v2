@@ -10706,10 +10706,7 @@ function getStationFacilityIcons(
   const kind = resolveStationFacilityKind(value);
   const stairsAssetName = verticalDirection === 'downwards' ? 'stairs-down' : 'stairs-up';
   if (kind === 'escalator_and_stairs') {
-    return [
-      { key: stairsAssetName, assetName: stairsAssetName },
-      { key: 'escalator', assetName: 'escalator' },
-    ];
+    return [{ key: 'escalator-and-stairs', assetName: 'escalator-and-stairs' }];
   }
   const assets: Partial<Record<StationFacilityKind, MetroFacilityIconAssetName>> = {
     toilet: 'restroom',
