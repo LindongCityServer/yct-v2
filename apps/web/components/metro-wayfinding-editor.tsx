@@ -581,6 +581,7 @@ function IconElementFields({
     patch({
       iconId,
       direction: nextIcon?.group === 'arrow' ? undefined : element.direction,
+      framed: nextIcon?.group !== currentIcon.group ? nextIcon?.group !== 'arrow' : element.framed,
       foregroundColor:
         nextIcon?.defaultForegroundColor ??
         (shouldClearPreviousDefault ? undefined : element.foregroundColor),
