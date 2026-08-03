@@ -1,6 +1,31 @@
 import { appPath } from './app-paths';
+import type { TileProviderDescriptor } from '@yct/contracts';
 
 export type MapTileProxySource = 'fresh-http' | 'safe-https-static' | 'unmined-static';
+
+export interface MapTileTemplateSelection {
+  freshTileTemplate: string | null;
+  tileTemplate: string | null;
+}
+
+export function selectMapTileTemplates(
+  providers: TileProviderDescriptor[],
+): MapTileTemplateSelection {
+  const fallbackProvider =
+    providers.find((provider) => provider.sourceKind === 'safe-https-static') ??
+    providers.find((provider) => provider.id === 'lindong-unmined-static');
+  const freshProvider = providers.find(
+    (provider) =>
+      provider.sourceKind === 'fresh-http' ||
+      provider.sourceKind === 'proxied' ||
+      provider.id === 'lindong-fresh-http',
+  );
+
+  return {
+    freshTileTemplate: freshProvider?.tileTemplate ?? null,
+    tileTemplate: fallbackProvider?.tileTemplate ?? null,
+  };
+}
 
 export function buildUnminedTileTemplate(baseUrl: string): string {
   const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;

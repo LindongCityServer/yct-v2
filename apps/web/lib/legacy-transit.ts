@@ -7,6 +7,7 @@ import type {
   TransitLineSegmentPathSnapshot,
   TransitLineSnapshot,
   TransitLineStopLocationRef,
+  TransitOperationStatus,
   TransitModeSnapshotSummary,
   TransitStationDetailSnapshot,
   TransitStationSnapshot,
@@ -32,6 +33,7 @@ export interface TransitLineSummary {
   id: string;
   mode: LegacyTransitMode;
   name: string;
+  operationStatus: TransitOperationStatus;
   localizedName?: LocalizedLabelMap;
   color?: string;
   maxCarCount?: number;
@@ -58,6 +60,7 @@ export interface TransitLineSummary {
 export interface TransitLineStopSummary {
   stationSourceId?: string;
   stationName: string;
+  operationStatus: TransitOperationStatus;
   localizedStationName?: LocalizedLabelMap;
   stationMarkerIds?: string[];
   stopLocationRefs?: TransitLineStopLocationRef[];
@@ -401,6 +404,7 @@ export function buildTransitOverview(
       id: line.sourceId,
       mode: line.mode,
       name: line.name,
+      operationStatus: line.operationStatus ?? 'operating',
       maxCarCount: line.maxCarCount,
       color: line.color,
       operator: line.operator,
@@ -454,6 +458,8 @@ function buildTransitLineStopSummaries(
       return {
         stationSourceId: stop.stationSourceId,
         stationName,
+        operationStatus:
+          stationById.get(stop.stationSourceId)?.operationStatus ?? 'operating',
         stationMarkerIds: getTransitStationMarkerIds(
           stationById.get(stop.stationSourceId),
           stop.stopLocationRefs,

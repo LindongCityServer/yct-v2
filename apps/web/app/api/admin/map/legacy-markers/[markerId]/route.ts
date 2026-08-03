@@ -43,6 +43,7 @@ export async function PATCH(
       imageUrls: parsed.data.imageUrls,
       imageUrl: parsed.data.imageUrl,
       geometry: parsed.data.geometry,
+      spatial: parsed.data.spatial,
       parentMarkerId: parsed.data.parentMarkerId || undefined,
       floorLabel: parsed.data.floorLabel || undefined,
       boundRegionMarkerIds: parsed.data.boundRegionMarkerIds,

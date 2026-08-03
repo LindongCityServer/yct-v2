@@ -1,20 +1,48 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { cache } from 'react';
 import { SecondaryShell } from '../../../../components/app-shell';
+import { AdminEditLink } from '../../../../components/admin-edit-link';
 import { TransitLineDetailPanel } from '../../../../components/transit-line-detail-panel';
 import { readTransitOverview } from '../../../../lib/transit-data';
 import { readTransitStationDetails } from '../../../../lib/transit-station-details';
+import { createPageMetadata } from '../../../../lib/site-metadata';
 
 export const dynamic = 'force-dynamic';
 
-export default async function MapTransitLineDetailPage({
-  params,
-}: Readonly<{
+type MapTransitLineDetailPageProps = Readonly<{
   params: Promise<{ id: string }>;
-}>) {
+}>;
+
+const readTransitOverviewForPage = cache(readTransitOverview);
+
+export async function generateMetadata({
+  params,
+}: MapTransitLineDetailPageProps): Promise<Metadata> {
+  const { id } = await params;
+  const decodedId = decodeSegment(id);
+  const overview = await readTransitOverviewForPage();
+  const line = overview.lines.find((item) => item.id === decodedId);
+
+  if (!line) {
+    return createPageMetadata({
+      title: '线路详情',
+      description: '查看雨城通公共交通线路的走向、停靠站点与运营信息。',
+      noIndex: true,
+    });
+  }
+
+  return createPageMetadata({
+    title: line.name,
+    description: `在雨城通查看${line.name}的线路走向、${line.stationCount}个停靠站及运营信息。`,
+  });
+}
+
+export default async function MapTransitLineDetailPage({ params }: MapTransitLineDetailPageProps) {
   const { id } = await params;
   const decodedId = decodeSegment(id);
   const [overview, stationDetails] = await Promise.all([
-    readTransitOverview(),
+    readTransitOverviewForPage(),
     readTransitStationDetails(),
   ]);
   const line = overview.lines.find((item) => item.id === decodedId);
@@ -24,7 +52,16 @@ export default async function MapTransitLineDetailPage({
   }
 
   return (
-    <SecondaryShell title={line.name} backHref="/map">
+    <SecondaryShell
+      title={line.name}
+      backHref="/map"
+      secondaryActions={
+        <AdminEditLink
+          href={`/admin/transit?section=lines&lineId=${encodeURIComponent(line.id)}`}
+          label="编辑线路"
+        />
+      }
+    >
       <TransitLineDetailPanel
         line={line}
         modeProfiles={overview.modeProfiles}

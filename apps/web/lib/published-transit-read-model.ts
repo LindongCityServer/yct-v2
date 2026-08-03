@@ -86,6 +86,113 @@ export async function readPublishedTransitEntitySnapshot(): Promise<
   };
 }
 
+export function filterPublicOperatingTransitSnapshot(
+  snapshot: PublishedTransitEntitySnapshot,
+): PublishedTransitEntitySnapshot {
+  const lines = snapshot.lines.filter(
+    (line) => (line.operationStatus ?? 'operating') === 'operating',
+  );
+  const referencedStationIds = new Set(lines.flatMap((line) => line.stationSourceIds));
+  const stations = snapshot.stations.filter((station) =>
+    referencedStationIds.has(station.sourceId),
+  );
+
+  return {
+    ...snapshot,
+    lines,
+    stations,
+    summary: buildPublishedTransitSummary(lines, stations),
+  };
+}
+
+export function filterMapVisibleTransitSnapshot(
+  snapshot: PublishedTransitEntitySnapshot,
+): PublishedTransitEntitySnapshot {
+  const lines = snapshot.lines.filter(
+    (line) => (line.operationStatus ?? 'operating') !== 'closed',
+  );
+  const referencedStationIds = new Set(lines.flatMap((line) => line.stationSourceIds));
+  // 关闭站点仍需保留为线路几何锚点，是否公开由地图标记聚合层决定。
+  const stations = snapshot.stations.filter((station) =>
+    referencedStationIds.has(station.sourceId),
+  );
+  return {
+    ...snapshot,
+    lines,
+    stations,
+    summary: buildPublishedTransitSummary(lines, stations),
+  };
+}
+
+export function getTransitStationMarkerOperationStatuses(
+  snapshot: PublishedTransitEntitySnapshot,
+): Map<string, 'operating' | 'planned' | 'closed'> {
+  const statusByMarkerId = new Map<string, 'operating' | 'planned' | 'closed'>();
+  for (const station of snapshot.stations) {
+    const status = getTransitStationMapOperationStatus(snapshot, station.sourceId);
+    for (const markerId of [
+      station.boundPoiMarkerId,
+      ...(station.boundPoiRefs ?? []).map((ref) => ref.markerId),
+    ]) {
+      if (!markerId) continue;
+      const current = statusByMarkerId.get(markerId);
+      if (!current || transitOperationStatusRank(status) > transitOperationStatusRank(current)) {
+        statusByMarkerId.set(markerId, status);
+      }
+    }
+  }
+  return statusByMarkerId;
+}
+
+export function getTransitStationMapOperationStatus(
+  snapshot: PublishedTransitEntitySnapshot,
+  stationSourceId: string,
+): 'operating' | 'planned' | 'closed' {
+  const station = snapshot.stations.find((item) => item.sourceId === stationSourceId);
+  const stationStatus = station?.operationStatus ?? 'operating';
+  if (stationStatus === 'closed') {
+    return 'closed';
+  }
+
+  const servingLineStatuses = snapshot.lines
+    .filter((line) => line.stationSourceIds.includes(stationSourceId))
+    .map((line) => line.operationStatus ?? 'operating')
+    .filter((status) => status !== 'closed');
+  if (servingLineStatuses.length === 0) {
+    return 'closed';
+  }
+  if (stationStatus === 'planned') {
+    return 'planned';
+  }
+  return servingLineStatuses.includes('operating') ? 'operating' : 'planned';
+}
+
+export function getNonPublicTransitStationMarkerIds(
+  snapshot: PublishedTransitEntitySnapshot,
+): Set<string> {
+  const publicMarkerIds = new Set<string>();
+  const nonPublicMarkerIds = new Set<string>();
+  for (const station of snapshot.stations) {
+    const target =
+      (station.operationStatus ?? 'operating') === 'operating'
+        ? publicMarkerIds
+        : nonPublicMarkerIds;
+    for (const markerId of [
+      station.boundPoiMarkerId,
+      ...(station.boundPoiRefs ?? []).map((ref) => ref.markerId),
+    ]) {
+      if (markerId) {
+        target.add(markerId);
+      }
+    }
+  }
+  return new Set([...nonPublicMarkerIds].filter((markerId) => !publicMarkerIds.has(markerId)));
+}
+
+function transitOperationStatusRank(status: 'operating' | 'planned' | 'closed'): number {
+  return status === 'operating' ? 3 : status === 'planned' ? 2 : 1;
+}
+
 function buildPublishedTransitSummary(
   lines: TransitDataRevision['lines'],
   stations: TransitDataRevision['stations'],

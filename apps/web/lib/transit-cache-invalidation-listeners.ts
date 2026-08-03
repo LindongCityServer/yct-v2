@@ -11,6 +11,7 @@ const cacheInvalidationEventTypes = [
   'TransitDataRevisionLineCreated',
   'TransitDataRevisionLineDeleted',
   'TransitLineApprovalChanged',
+  'TransitOperationStatusChanged',
   'TransitModeProfileCreated',
   'TransitModeProfileDeleted',
   'TransitModeProfileUpdated',

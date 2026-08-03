@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   MapGeometry,
+  MapMarkerSpatialMetadata,
   PoiFacilitySnapshot,
   PoiSubmission,
   PoiSubmissionStatus,
@@ -46,6 +47,7 @@ export async function createLocalPoiSubmission(input: {
   imageUrls?: string[];
   imageUrl?: string;
   geometry: MapGeometry;
+  spatial?: MapMarkerSpatialMetadata;
   parentMarkerId?: string;
   floorLabel?: string;
   boundRegionMarkerIds?: string[];
@@ -68,6 +70,7 @@ export async function createLocalPoiSubmission(input: {
     imageUrls: normalizePoiImageUrls(input.imageUrls, input.imageUrl),
     imageUrl: normalizePoiImageUrls(input.imageUrls, input.imageUrl)?.[0],
     geometry: input.geometry,
+    spatial: input.spatial,
     parentMarkerId: input.parentMarkerId,
     floorLabel: input.floorLabel,
     boundRegionMarkerIds: input.boundRegionMarkerIds,

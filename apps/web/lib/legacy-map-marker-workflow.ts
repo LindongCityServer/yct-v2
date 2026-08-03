@@ -104,6 +104,7 @@ function getChangedLegacyMapMarkerFields(
   | 'imageUrls'
   | 'imageUrl'
   | 'geometry'
+  | 'spatial'
   | 'parentMarkerId'
   | 'floorLabel'
   | 'boundRegionMarkerIds'
@@ -133,6 +134,7 @@ function getChangedLegacyMapMarkerFields(
   const geometryChanged =
     patch.geometry !== undefined &&
     JSON.stringify(previousGeometry) !== JSON.stringify(patch.geometry);
+  const spatialChanged = JSON.stringify(previous?.spatial) !== JSON.stringify(patch.spatial);
 
   const regionBindingsChanged =
     JSON.stringify(previous?.boundRegionMarkerIds ?? []) !==
@@ -143,6 +145,7 @@ function getChangedLegacyMapMarkerFields(
     ...textFields,
     ...(imageUrlsChanged ? (['imageUrls', 'imageUrl'] as const) : []),
     ...(geometryChanged ? (['geometry'] as const) : []),
+    ...(spatialChanged ? (['spatial'] as const) : []),
     ...(regionBindingsChanged ? (['boundRegionMarkerIds'] as const) : []),
     ...(facilitiesChanged ? (['facilities'] as const) : []),
   ];

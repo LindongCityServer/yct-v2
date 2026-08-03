@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type {
   MapGeometry,
+  MapMarkerSpatialMetadata,
   PoiFacilitySnapshot,
   PoiSubmission,
   PoiSubmissionStatus,
@@ -41,6 +42,7 @@ export async function submitPublicPoi(input: {
   imageUrls?: string[];
   imageUrl?: string;
   geometry: MapGeometry;
+  spatial?: MapMarkerSpatialMetadata;
   parentMarkerId?: string;
   floorLabel?: string;
   boundRegionMarkerIds?: string[];
@@ -62,6 +64,7 @@ export async function createPoiSubmissionByAdmin(input: {
   imageUrls?: string[];
   imageUrl?: string;
   geometry: MapGeometry;
+  spatial?: MapMarkerSpatialMetadata;
   parentMarkerId?: string;
   floorLabel?: string;
   boundRegionMarkerIds?: string[];
@@ -83,6 +86,7 @@ async function createSubmittedPoi(input: {
   imageUrls?: string[];
   imageUrl?: string;
   geometry: MapGeometry;
+  spatial?: MapMarkerSpatialMetadata;
   parentMarkerId?: string;
   floorLabel?: string;
   boundRegionMarkerIds?: string[];
@@ -102,6 +106,7 @@ async function createSubmittedPoi(input: {
     imageUrls: normalizePoiImageUrls(input.imageUrls, input.imageUrl),
     imageUrl: normalizePoiImageUrls(input.imageUrls, input.imageUrl)?.[0],
     geometry: input.geometry,
+    spatial: input.spatial,
     parentMarkerId: normalizeOptionalText(input.parentMarkerId),
     floorLabel: normalizeOptionalText(input.floorLabel),
     boundRegionMarkerIds: normalizeIdList(input.boundRegionMarkerIds),
@@ -142,6 +147,7 @@ async function createSubmittedPoi(input: {
         imageUrls: submitted.imageUrls,
         imageUrl: submitted.imageUrl,
         geometry: submitted.geometry,
+        spatial: submitted.spatial,
         parentMarkerId: submitted.parentMarkerId,
         floorLabel: submitted.floorLabel,
         boundRegionMarkerIds: submitted.boundRegionMarkerIds,
@@ -212,6 +218,7 @@ export async function updatePoiSubmissionByAdmin(input: {
   imageUrls?: string[];
   imageUrl?: string;
   geometry?: MapGeometry;
+  spatial?: MapMarkerSpatialMetadata;
   parentMarkerId?: string;
   floorLabel?: string;
   boundRegionMarkerIds?: string[];
@@ -251,6 +258,7 @@ export async function updatePoiSubmissionByAdmin(input: {
     imageUrls,
     imageUrl: imageUrls?.[0],
     geometry: input.geometry ?? submission.geometry,
+    spatial: input.spatial,
     parentMarkerId: normalizeOptionalText(input.parentMarkerId),
     floorLabel: normalizeOptionalText(input.floorLabel),
     boundRegionMarkerIds: normalizeIdList(input.boundRegionMarkerIds),
@@ -398,6 +406,7 @@ export async function publishPoiSubmission(input: {
         imageUrls: updated.imageUrls,
         imageUrl: updated.imageUrl,
         geometry: updated.geometry,
+        spatial: updated.spatial,
         parentMarkerId: updated.parentMarkerId,
         floorLabel: updated.floorLabel,
         boundRegionMarkerIds: updated.boundRegionMarkerIds,
@@ -492,6 +501,7 @@ function getChangedPoiSubmissionFields(
     | 'addressRoadMarkerId'
   > & {
     geometry: MapGeometry;
+    spatial?: MapMarkerSpatialMetadata;
     boundRegionMarkerIds?: string[];
     facilities?: PoiFacilitySnapshot[];
   },
@@ -504,6 +514,7 @@ function getChangedPoiSubmissionFields(
   | 'imageUrls'
   | 'imageUrl'
   | 'geometry'
+  | 'spatial'
   | 'parentMarkerId'
   | 'floorLabel'
   | 'boundRegionMarkerIds'
@@ -527,6 +538,7 @@ function getChangedPoiSubmissionFields(
     ] as const
   ).filter((field) => (submission[field] ?? '') !== (patch[field] ?? ''));
   const geometryChanged = JSON.stringify(submission.geometry) !== JSON.stringify(patch.geometry);
+  const spatialChanged = JSON.stringify(submission.spatial) !== JSON.stringify(patch.spatial);
   const imageUrlsChanged =
     JSON.stringify(normalizePoiImageUrls(submission.imageUrls, submission.imageUrl) ?? []) !==
     JSON.stringify(patch.imageUrls ?? []);
@@ -540,6 +552,7 @@ function getChangedPoiSubmissionFields(
     ...textFields,
     ...(imageUrlsChanged ? (['imageUrls', 'imageUrl'] as const) : []),
     ...(geometryChanged ? (['geometry'] as const) : []),
+    ...(spatialChanged ? (['spatial'] as const) : []),
     ...(regionBindingsChanged ? (['boundRegionMarkerIds'] as const) : []),
     ...(facilitiesChanged ? (['facilities'] as const) : []),
   ];

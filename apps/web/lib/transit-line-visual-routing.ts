@@ -1,11 +1,18 @@
-import type { MapMarkerSnapshot } from '@yct/contracts';
-import { getMapRoadMarkerKind, orderMapRoadCoordinates } from './map-road-geometry';
+import type { MapMarkerSnapshot, MapNetworkDirection, MapTravelMode } from '@yct/contracts';
+import {
+  collectMapRoadConnectionProjections,
+  getMapRoadMarkerKind,
+  orderMapRoadCoordinates,
+} from './map-road-geometry';
 
 export interface VisualRoadGraph {
   adjacency: ReadonlyMap<string, readonly VisualRoadEdge[]>;
+  defaultTravelMode: MapTravelMode;
+  defaultY: number;
   nodes: readonly VisualRoadNode[];
   nodesById: ReadonlyMap<string, VisualRoadNode>;
   roadSegments: readonly VisualRoadSegment[];
+  verticalTolerance: number;
 }
 
 export interface VisualRouteResolution {
@@ -17,22 +24,35 @@ export interface VisualRoadNode {
   coordinate: [number, number];
   id: string;
   roadId: string;
+  y: number;
 }
 
 export interface VisualRoadEdge {
+  allowedModes: readonly MapTravelMode[];
   distance: number;
   to: string;
 }
 
 export interface VisualRoadSegment {
+  allowedModes: readonly MapTravelMode[];
+  direction: MapNetworkDirection;
   end: [number, number];
   endIsRoadTerminus: boolean;
   endNodeId: string;
+  endY: number;
   id: string;
   roadId: string;
   start: [number, number];
   startIsRoadTerminus: boolean;
   startNodeId: string;
+  startY: number;
+}
+
+export interface VisualRoadGraphOptions {
+  defaultY?: number;
+  defaultTravelMode?: MapTravelMode;
+  verticalTolerance?: number;
+  worldId?: string;
 }
 
 interface QueueEntry {
@@ -40,39 +60,65 @@ interface QueueEntry {
   nodeId: string;
 }
 
-interface VisualRoadConnectionCandidate {
-  distance: number;
-  leftCoordinate: [number, number];
-  leftSegmentId: string;
-  rightCoordinate: [number, number];
-  rightSegmentId: string;
-}
-
 interface VisualRoadAccessCandidate {
   coordinate: [number, number];
   distanceToPoint: number;
+  direction: MapNetworkDirection;
   endNodeId: string;
   roadId: string;
+  segmentLength: number;
+  segmentRatio: number;
   startDistance: number;
   startNodeId: string;
 }
 
+const allMapTravelModes: readonly MapTravelMode[] = ['walk', 'taxi', 'bus', 'coach'];
+
 export function buildVisualRoadGraph(
   markers: MapMarkerSnapshot['markers'],
+  junctionSnapTolerance = 30,
+  options: VisualRoadGraphOptions = {},
 ): VisualRoadGraph | undefined {
+  const defaultY = options.defaultY ?? 64;
+  const verticalTolerance = Math.max(0, options.verticalTolerance ?? 0);
   const roads = markers.flatMap((marker) => {
-    if (!isVisualRoadMarker(marker)) {
+    if (
+      !isVisualRoadMarker(marker) ||
+      (options.worldId && marker.spatial?.worldId && marker.spatial.worldId !== options.worldId)
+    ) {
       return [];
     }
-    if (marker.geometry.type === 'LineString') {
-      return marker.geometry.coordinates.length >= 2
-        ? [{ id: marker.id, coordinates: dedupeConsecutive(marker.geometry.coordinates) }]
+    const allowedModes = resolveVisualRoadAllowedModes(marker);
+    if (allowedModes.length === 0) {
+      return [];
+    }
+    const direction = marker.spatial?.direction ?? 'both';
+    const fallbackY = marker.spatial?.defaultY ?? defaultY;
+    const createRoad = (coordinates: Array<[number, number]>, shouldOrder: boolean) => {
+      const orderedCoordinates = shouldOrder ? orderMapRoadCoordinates(coordinates) : coordinates;
+      const points = dedupeRoadPoints(
+        orderedCoordinates.map((coordinate, index) => ({
+          coordinate,
+          y: marker.spatial?.coordinateY?.[index] ?? fallbackY,
+        })),
+      );
+      return points.length >= 2
+        ? [
+            {
+              allowedModes,
+              direction,
+              id: marker.id,
+              points,
+              verticalConnector: marker.spatial?.verticalConnectorKind !== undefined,
+            },
+          ]
         : [];
+    };
+    if (marker.geometry.type === 'LineString') {
+      return createRoad(marker.geometry.coordinates, false);
     }
     if (marker.geometry.type === 'MultiPoint') {
-      return marker.geometry.coordinates.length >= 2
-        ? [{ id: marker.id, coordinates: orderMapRoadCoordinates(marker.geometry.coordinates) }]
-        : [];
+      return createRoad(marker.geometry.coordinates, marker.spatial?.coordinateY === undefined);
     }
     return [];
   });
@@ -82,10 +128,11 @@ export function buildVisualRoadGraph(
   const baseSegments: VisualRoadSegment[] = [];
 
   for (const road of roads) {
-    const roadNodes = road.coordinates.map((coordinate, index) => ({
-      coordinate,
+    const roadNodes = road.points.map((point, index) => ({
+      coordinate: point.coordinate,
       id: `${road.id}:${index}`,
       roadId: road.id,
+      y: point.y,
     }));
     for (const node of roadNodes) {
       nodes.push(node);
@@ -95,16 +142,24 @@ export function buildVisualRoadGraph(
     for (let index = 1; index < roadNodes.length; index += 1) {
       const previous = roadNodes[index - 1];
       const current = roadNodes[index];
-      if (previous && current) {
+      if (
+        previous &&
+        current &&
+        (road.verticalConnector || Math.abs(previous.y - current.y) <= verticalTolerance)
+      ) {
         baseSegments.push({
+          allowedModes: road.allowedModes,
+          direction: road.direction,
           end: current.coordinate,
           endIsRoadTerminus: index === roadNodes.length - 1,
           endNodeId: current.id,
+          endY: current.y,
           id: `${previous.id}->${current.id}`,
           roadId: road.id,
           start: previous.coordinate,
           startIsRoadTerminus: index === 1,
           startNodeId: previous.id,
+          startY: previous.y,
         });
       }
     }
@@ -122,6 +177,7 @@ export function buildVisualRoadGraph(
   const connectionKeys = new Set<string>();
   const segmentPointNodeIds = new Map<string, string>();
   const resolvedConnections: Array<{
+    allowedModes: readonly MapTravelMode[];
     distance: number;
     leftNodeId: string;
     rightNodeId: string;
@@ -148,6 +204,7 @@ export function buildVisualRoadGraph(
       coordinate,
       id: `road-virtual:${virtualNodeIndex}`,
       roadId: segment.roadId,
+      y: interpolateSegmentY(segment, coordinate),
     };
     virtualNodeIndex += 1;
     nodes.push(node);
@@ -157,10 +214,25 @@ export function buildVisualRoadGraph(
     return { coordinate, nodeId: node.id, ratio: getSegmentRatio(segment, coordinate) };
   };
 
-  for (const candidate of collectConnectionCandidates(baseSegments, 100)) {
+  for (const candidate of collectMapRoadConnectionProjections(
+    baseSegments,
+    junctionSnapTolerance,
+  )) {
     const leftSegment = segmentById.get(candidate.leftSegmentId);
     const rightSegment = segmentById.get(candidate.rightSegmentId);
     if (!leftSegment || !rightSegment) {
+      continue;
+    }
+    if (
+      Math.abs(
+        interpolateSegmentY(leftSegment, candidate.leftCoordinate) -
+          interpolateSegmentY(rightSegment, candidate.rightCoordinate),
+      ) > verticalTolerance
+    ) {
+      continue;
+    }
+    const allowedModes = intersectTravelModes(leftSegment.allowedModes, rightSegment.allowedModes);
+    if (allowedModes.length === 0) {
       continue;
     }
     const leftPoint = ensureSegmentPointNode(leftSegment, candidate.leftCoordinate);
@@ -175,6 +247,7 @@ export function buildVisualRoadGraph(
     if (!connectionKeys.has(connectionKey)) {
       connectionKeys.add(connectionKey);
       resolvedConnections.push({
+        allowedModes,
         distance: candidate.distance,
         leftNodeId: leftPoint.nodeId,
         rightNodeId: rightPoint.nodeId,
@@ -203,16 +276,27 @@ export function buildVisualRoadGraph(
         continue;
       }
       roadSegments.push({
+        allowedModes: segment.allowedModes,
+        direction: segment.direction,
         end: current.coordinate,
         endIsRoadTerminus: segment.endIsRoadTerminus && current.ratio === 1,
         endNodeId: current.nodeId,
+        endY: currentNode.y,
         id: `${segment.id}:${index - 1}`,
         roadId: segment.roadId,
         start: previous.coordinate,
         startIsRoadTerminus: segment.startIsRoadTerminus && previous.ratio === 0,
         startNodeId: previous.nodeId,
+        startY: previousNode.y,
       });
-      connectNodes(adjacency, previousNode, currentNode);
+      connectNodes(
+        adjacency,
+        previousNode,
+        currentNode,
+        undefined,
+        segment.allowedModes,
+        segment.direction,
+      );
     }
   }
 
@@ -220,31 +304,48 @@ export function buildVisualRoadGraph(
     const leftNode = nodesById.get(connection.leftNodeId);
     const rightNode = nodesById.get(connection.rightNodeId);
     if (leftNode && rightNode) {
-      connectNodes(adjacency, leftNode, rightNode, connection.distance);
+      connectNodes(adjacency, leftNode, rightNode, connection.distance, connection.allowedModes);
     }
   }
 
-  return { adjacency, nodes, nodesById, roadSegments };
+  return {
+    adjacency,
+    defaultTravelMode: options.defaultTravelMode ?? 'bus',
+    defaultY,
+    nodes,
+    nodesById,
+    roadSegments,
+    verticalTolerance,
+  };
 }
 
 export function isVisualRoadMarker(
-  marker: Pick<MapMarkerSnapshot['markers'][number], 'categoryId' | 'iconFileName' | 'label'>,
+  marker: Pick<
+    MapMarkerSnapshot['markers'][number],
+    'categoryId' | 'iconFileName' | 'label' | 'spatial'
+  >,
 ): boolean {
-  return getMapRoadMarkerKind(marker) !== undefined;
+  return (
+    getMapRoadMarkerKind(marker) !== undefined ||
+    marker.categoryId === 'pedestrian-path' ||
+    marker.spatial?.networkKind !== undefined
+  );
 }
 
 export function resolveVisualRouteCoordinates(
   controlPoints: Array<[number, number]>,
   mode: 'road' | 'straight',
   graph: VisualRoadGraph | undefined,
+  travelMode?: MapTravelMode,
 ): Array<[number, number]> {
-  return resolveVisualRoute(controlPoints, mode, graph).coordinates;
+  return resolveVisualRoute(controlPoints, mode, graph, travelMode).coordinates;
 }
 
 export function resolveVisualRoute(
   controlPoints: Array<[number, number]>,
   mode: 'road' | 'straight',
   graph: VisualRoadGraph | undefined,
+  travelMode?: MapTravelMode,
 ): VisualRouteResolution {
   if (controlPoints.length < 2 || mode === 'straight') {
     return { coordinates: dedupeConsecutive(controlPoints), unresolvedSegmentCount: 0 };
@@ -256,6 +357,8 @@ export function resolveVisualRoute(
     };
   }
 
+  const effectiveTravelMode = travelMode ?? graph.defaultTravelMode;
+
   const resolved: Array<[number, number]> = [];
   const pathCache = new Map<string, { distance: number; nodeIds: string[] } | undefined>();
   let unresolvedSegmentCount = 0;
@@ -265,7 +368,7 @@ export function resolveVisualRoute(
     if (!start || !end) {
       continue;
     }
-    const segment = resolveRoadSegment(start, end, graph, pathCache);
+    const segment = resolveRoadSegment(start, end, graph, effectiveTravelMode, pathCache);
     if (!segment.resolved) {
       unresolvedSegmentCount += 1;
     }
@@ -278,10 +381,11 @@ function resolveRoadSegment(
   start: [number, number],
   end: [number, number],
   graph: VisualRoadGraph,
+  travelMode: MapTravelMode,
   pathCache: Map<string, { distance: number; nodeIds: string[] } | undefined>,
 ): { coordinates: Array<[number, number]>; resolved: boolean } {
-  const startCandidates = findRoadAccessCandidates(start, end, graph);
-  const endCandidates = findRoadAccessCandidates(end, start, graph);
+  const startCandidates = findRoadAccessCandidates(start, end, graph, travelMode);
+  const endCandidates = findRoadAccessCandidates(end, start, graph, travelMode);
   let bestCoordinates: Array<[number, number]> | undefined;
   let bestDistance = Number.POSITIVE_INFINITY;
 
@@ -293,11 +397,11 @@ function resolveRoadSegment(
         bestDistance = sameSegment.distance;
       }
 
-      for (const startNodeId of [startAccess.startNodeId, startAccess.endNodeId]) {
-        for (const endNodeId of [endAccess.startNodeId, endAccess.endNodeId]) {
+      for (const startNodeId of getDepartureNodeIds(startAccess)) {
+        for (const endNodeId of getArrivalNodeIds(endAccess)) {
           const pathKey = `${startNodeId}->${endNodeId}`;
           if (!pathCache.has(pathKey)) {
-            pathCache.set(pathKey, findShortestNodePath(startNodeId, endNodeId, graph));
+            pathCache.set(pathKey, findShortestNodePath(startNodeId, endNodeId, graph, travelMode));
           }
           const path = pathCache.get(pathKey);
           if (!path) {
@@ -351,6 +455,13 @@ function resolveSameRoadSegment(
   ) {
     return undefined;
   }
+  const travelDirection = Math.sign(endAccess.segmentRatio - startAccess.segmentRatio);
+  if (
+    (travelDirection > 0 && startAccess.direction === 'reverse') ||
+    (travelDirection < 0 && startAccess.direction === 'forward')
+  ) {
+    return undefined;
+  }
   return {
     coordinates: dedupeConsecutive([start, startAccess.coordinate, endAccess.coordinate, end]),
     distance:
@@ -364,17 +475,29 @@ function findRoadAccessCandidates(
   point: [number, number],
   target: [number, number],
   graph: VisualRoadGraph,
+  travelMode: MapTravelMode,
   limit = 12,
 ): VisualRoadAccessCandidate[] {
-  const candidates = graph.roadSegments.map((segment) => {
-    const projection = projectPointToRoadSegment(point, segment);
-    return {
-      ...projection,
-      score:
-        projection.distanceToPoint +
-        getRoadAccessDirectionPenalty(point, target, projection.coordinate),
-    };
-  });
+  const candidates = graph.roadSegments
+    .filter((segment) => {
+      if (!segment.allowedModes.includes(travelMode)) {
+        return false;
+      }
+      const projection = projectPointToRoadSegment(point, segment);
+      return (
+        Math.abs(interpolateSegmentY(segment, projection.coordinate) - graph.defaultY) <=
+        graph.verticalTolerance
+      );
+    })
+    .map((segment) => {
+      const projection = projectPointToRoadSegment(point, segment);
+      return {
+        ...projection,
+        score:
+          projection.distanceToPoint +
+          getRoadAccessDirectionPenalty(point, target, projection.coordinate),
+      };
+    });
   const byScore = [...candidates].sort((left, right) => left.score - right.score).slice(0, limit);
   const byDistance = [...candidates]
     .sort((left, right) => left.distanceToPoint - right.distanceToPoint)
@@ -415,11 +538,34 @@ function projectPointToRoadSegment(
   return {
     coordinate: projection.coordinate,
     distanceToPoint: coordinateDistance(point, projection.coordinate),
+    direction: segment.direction,
     endNodeId: segment.endNodeId,
     roadId: segment.roadId,
+    segmentLength: totalDistance,
+    segmentRatio: projection.ratio,
     startDistance,
     startNodeId: segment.startNodeId,
   };
+}
+
+function getDepartureNodeIds(candidate: VisualRoadAccessCandidate): string[] {
+  if (candidate.direction === 'forward') {
+    return [candidate.endNodeId];
+  }
+  if (candidate.direction === 'reverse') {
+    return [candidate.startNodeId];
+  }
+  return [candidate.startNodeId, candidate.endNodeId];
+}
+
+function getArrivalNodeIds(candidate: VisualRoadAccessCandidate): string[] {
+  if (candidate.direction === 'forward') {
+    return [candidate.startNodeId];
+  }
+  if (candidate.direction === 'reverse') {
+    return [candidate.endNodeId];
+  }
+  return [candidate.startNodeId, candidate.endNodeId];
 }
 
 function getRoadAccessDirectionPenalty(
@@ -444,6 +590,7 @@ function findShortestNodePath(
   startNodeId: string,
   endNodeId: string,
   graph: VisualRoadGraph,
+  travelMode: MapTravelMode,
 ): { distance: number; nodeIds: string[] } | undefined {
   if (startNodeId === endNodeId) {
     return { distance: 0, nodeIds: [startNodeId] };
@@ -462,6 +609,9 @@ function findShortestNodePath(
       break;
     }
     for (const edge of graph.adjacency.get(current.nodeId) ?? []) {
+      if (!edge.allowedModes.includes(travelMode)) {
+        continue;
+      }
       const nextDistance = current.distance + edge.distance;
       if (nextDistance >= (distances.get(edge.to) ?? Number.POSITIVE_INFINITY)) {
         continue;
@@ -543,105 +693,51 @@ function connectNodes(
   adjacency: Map<string, VisualRoadEdge[]>,
   left: VisualRoadNode,
   right: VisualRoadNode,
-  distance = coordinateDistance(left.coordinate, right.coordinate),
+  distance = visualNodeDistance(left, right),
+  allowedModes: readonly MapTravelMode[] = allMapTravelModes,
+  direction: MapNetworkDirection = 'both',
 ): void {
-  adjacency.get(left.id)?.push({ distance, to: right.id });
-  adjacency.get(right.id)?.push({ distance, to: left.id });
+  if (direction !== 'reverse') {
+    adjacency.get(left.id)?.push({ allowedModes, distance, to: right.id });
+  }
+  if (direction !== 'forward') {
+    adjacency.get(right.id)?.push({ allowedModes, distance, to: left.id });
+  }
 }
 
-function collectConnectionCandidates(
-  segments: VisualRoadSegment[],
-  threshold: number,
-): VisualRoadConnectionCandidate[] {
-  const candidates = new Map<string, VisualRoadConnectionCandidate>();
-  for (let leftIndex = 0; leftIndex < segments.length; leftIndex += 1) {
-    for (let rightIndex = leftIndex + 1; rightIndex < segments.length; rightIndex += 1) {
-      const left = segments[leftIndex];
-      const right = segments[rightIndex];
-      if (!left || !right || left.roadId === right.roadId) {
-        continue;
-      }
-      for (const candidate of getSegmentConnectionCandidates(left, right, threshold)) {
-        const key = [
-          left.id,
-          right.id,
-          candidate.leftCoordinate[0].toFixed(2),
-          candidate.leftCoordinate[1].toFixed(2),
-          candidate.rightCoordinate[0].toFixed(2),
-          candidate.rightCoordinate[1].toFixed(2),
-        ].join(':');
-        candidates.set(key, {
-          ...candidate,
-          leftSegmentId: left.id,
-          rightSegmentId: right.id,
-        });
-      }
-    }
-  }
-  return [...candidates.values()].sort((left, right) => left.distance - right.distance);
+function visualNodeDistance(left: VisualRoadNode, right: VisualRoadNode): number {
+  return Math.hypot(
+    left.coordinate[0] - right.coordinate[0],
+    left.coordinate[1] - right.coordinate[1],
+    left.y - right.y,
+  );
 }
 
-function getSegmentConnectionCandidates(
-  left: VisualRoadSegment,
-  right: VisualRoadSegment,
-  threshold: number,
-): Array<{
-  distance: number;
-  leftCoordinate: [number, number];
-  rightCoordinate: [number, number];
-}> {
-  const intersection = getSegmentIntersection(left.start, left.end, right.start, right.end);
-  if (intersection) {
-    return [{ distance: 0, leftCoordinate: intersection, rightCoordinate: intersection }];
+function resolveVisualRoadAllowedModes(
+  marker: Pick<MapMarkerSnapshot['markers'][number], 'categoryId' | 'spatial'>,
+): readonly MapTravelMode[] {
+  if (marker.spatial?.allowedModes) {
+    return [...new Set(marker.spatial.allowedModes)];
   }
+  if (marker.spatial?.networkKind === 'pedestrian' || marker.categoryId === 'pedestrian-path') {
+    return ['walk'];
+  }
+  return allMapTravelModes;
+}
 
-  const pairs: Array<{
-    leftCoordinate: [number, number];
-    rightCoordinate: [number, number];
-  }> = [];
-  if (left.startIsRoadTerminus) {
-    pairs.push({
-      leftCoordinate: left.start,
-      rightCoordinate: projectPointOntoSegment(right.start, right.end, left.start).coordinate,
-    });
-  }
-  if (left.endIsRoadTerminus) {
-    pairs.push({
-      leftCoordinate: left.end,
-      rightCoordinate: projectPointOntoSegment(right.start, right.end, left.end).coordinate,
-    });
-  }
-  if (right.startIsRoadTerminus) {
-    pairs.push({
-      leftCoordinate: projectPointOntoSegment(left.start, left.end, right.start).coordinate,
-      rightCoordinate: right.start,
-    });
-  }
-  if (right.endIsRoadTerminus) {
-    pairs.push({
-      leftCoordinate: projectPointOntoSegment(left.start, left.end, right.end).coordinate,
-      rightCoordinate: right.end,
-    });
-  }
+function intersectTravelModes(
+  left: readonly MapTravelMode[],
+  right: readonly MapTravelMode[],
+): readonly MapTravelMode[] {
+  return left.filter((mode) => right.includes(mode));
+}
 
-  const deduped = new Map<
-    string,
-    { distance: number; leftCoordinate: [number, number]; rightCoordinate: [number, number] }
-  >();
-  for (const pair of pairs) {
-    const candidate = {
-      ...pair,
-      distance: coordinateDistance(pair.leftCoordinate, pair.rightCoordinate),
-    };
-    if (candidate.distance > threshold) {
-      continue;
-    }
-    const key = `${pair.leftCoordinate[0].toFixed(2)}:${pair.leftCoordinate[1].toFixed(2)}:${pair.rightCoordinate[0].toFixed(2)}:${pair.rightCoordinate[1].toFixed(2)}`;
-    if (!deduped.has(key)) {
-      deduped.set(key, candidate);
-    }
-  }
-  return [...deduped.values()];
+function interpolateSegmentY(
+  segment: Pick<VisualRoadSegment, 'end' | 'endY' | 'start' | 'startY'>,
+  coordinate: [number, number],
+): number {
+  const ratio = projectPointOntoSegment(segment.start, segment.end, coordinate).ratio;
+  return segment.startY + (segment.endY - segment.startY) * ratio;
 }
 
 function projectPointOntoSegment(
@@ -665,27 +761,6 @@ function projectPointOntoSegment(
     coordinate: [start[0] + deltaX * ratio, start[1] + deltaZ * ratio],
     ratio,
   };
-}
-
-function getSegmentIntersection(
-  leftStart: [number, number],
-  leftEnd: [number, number],
-  rightStart: [number, number],
-  rightEnd: [number, number],
-): [number, number] | undefined {
-  const leftVector: [number, number] = [leftEnd[0] - leftStart[0], leftEnd[1] - leftStart[1]];
-  const rightVector: [number, number] = [rightEnd[0] - rightStart[0], rightEnd[1] - rightStart[1]];
-  const denominator = leftVector[0] * rightVector[1] - leftVector[1] * rightVector[0];
-  if (Math.abs(denominator) < 0.000001) {
-    return undefined;
-  }
-  const delta: [number, number] = [rightStart[0] - leftStart[0], rightStart[1] - leftStart[1]];
-  const leftRatio = (delta[0] * rightVector[1] - delta[1] * rightVector[0]) / denominator;
-  const rightRatio = (delta[0] * leftVector[1] - delta[1] * leftVector[0]) / denominator;
-  if (leftRatio < 0 || leftRatio > 1 || rightRatio < 0 || rightRatio > 1) {
-    return undefined;
-  }
-  return [leftStart[0] + leftVector[0] * leftRatio, leftStart[1] + leftVector[1] * leftRatio];
 }
 
 function getSegmentRatio(segment: VisualRoadSegment, coordinate: [number, number]): number {
@@ -716,6 +791,17 @@ function dedupeConsecutive(coordinates: Array<[number, number]>): Array<[number,
   return coordinates.filter((coordinate, index) => {
     const previous = coordinates[index - 1];
     return !previous || coordinate[0] !== previous[0] || coordinate[1] !== previous[1];
+  });
+}
+
+function dedupeRoadPoints<T extends { coordinate: [number, number] }>(points: T[]): T[] {
+  return points.filter((point, index) => {
+    const previous = points[index - 1];
+    return (
+      !previous ||
+      point.coordinate[0] !== previous.coordinate[0] ||
+      point.coordinate[1] !== previous.coordinate[1]
+    );
   });
 }
 

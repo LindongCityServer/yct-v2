@@ -23,12 +23,17 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { appPath } from '../lib/app-paths';
+import { publishAdminDataChanged } from '../lib/client-admin-data-events';
+import { selectMapTileTemplates } from '../lib/map-tile-templates';
 import {
   getTransitStationServiceModes,
   isTransitPoiMarkerCompatibleWithStation,
 } from '../lib/transit-station-mode';
 import { findTransitStationDetail } from '../lib/transit-station-detail-match';
-import { EmbeddedMapLocationPicker } from './embedded-map-location-picker';
+import { CurrentPlayerLocationButton } from './current-player-location-button';
+import { AdminRefreshButton } from './admin-refresh-button';
+import { LayeredMapTile } from './layered-map-tile';
+import { WorldCoordinatePicker } from './world-coordinate-picker';
 import type { TransitStationDetailUpdateInput } from '@yct/schemas';
 
 type TransitStatusFilter = TransitItemApprovalStatus | 'all' | 'todo' | 'legacy';
@@ -44,6 +49,7 @@ type MapMarker = MapMarkerSnapshot['markers'][number];
 interface TransitLineEditorSubmitPayload {
   mode: TransitRevisionLine['mode'];
   name: string;
+  operationStatus: NonNullable<TransitRevisionLine['operationStatus']>;
   color?: string;
   maxCarCount?: number;
   routeMode?: TransitRevisionLine['routeMode'];
@@ -141,8 +147,24 @@ const scheduleRejectReasonPresets = [
 ];
 
 const supportedTransitModeProfiles: TransitModeProfile[] = [
-  { mode: 'metro', label: '地铁', color: '#2584E8', icon: 'subway', sortOrder: 0, enabled: true },
-  { mode: 'tram', label: '有轨', color: '#C64255', icon: 'tram', sortOrder: 1, enabled: true },
+  {
+    mode: 'metro',
+    label: '地铁',
+    color: '#2584E8',
+    icon: 'subway',
+    sortOrder: 0,
+    enabled: true,
+    showPlannedSegments: false,
+  },
+  {
+    mode: 'tram',
+    label: '有轨',
+    color: '#C64255',
+    icon: 'tram',
+    sortOrder: 1,
+    enabled: true,
+    showPlannedSegments: false,
+  },
   {
     mode: 'bus',
     label: '公交',
@@ -150,6 +172,7 @@ const supportedTransitModeProfiles: TransitModeProfile[] = [
     icon: 'directions_bus',
     sortOrder: 2,
     enabled: true,
+    showPlannedSegments: false,
   },
   {
     mode: 'coach',
@@ -158,6 +181,7 @@ const supportedTransitModeProfiles: TransitModeProfile[] = [
     icon: 'airport_shuttle',
     sortOrder: 3,
     enabled: true,
+    showPlannedSegments: false,
   },
   {
     mode: 'ferry',
@@ -166,6 +190,7 @@ const supportedTransitModeProfiles: TransitModeProfile[] = [
     icon: 'directions_boat',
     sortOrder: 4,
     enabled: true,
+    showPlannedSegments: false,
   },
   {
     mode: 'railway',
@@ -174,8 +199,17 @@ const supportedTransitModeProfiles: TransitModeProfile[] = [
     icon: 'train',
     sortOrder: 5,
     enabled: true,
+    showPlannedSegments: false,
   },
-  { mode: 'custom', label: '线路', color: '#168F78', icon: 'route', sortOrder: 6, enabled: true },
+  {
+    mode: 'custom',
+    label: '线路',
+    color: '#168F78',
+    icon: 'route',
+    sortOrder: 6,
+    enabled: true,
+    showPlannedSegments: false,
+  },
 ];
 
 const supportedTravelServiceProfiles: TravelScheduleServiceProfile[] = [
@@ -214,7 +248,15 @@ const supportedTravelServiceProfiles: TravelScheduleServiceProfile[] = [
   { kind: 'custom', label: '自定义', color: '#168F78', icon: 'route', sortOrder: 4, enabled: true },
 ];
 
-export function AdminTransitPanel() {
+export function AdminTransitPanel({
+  initialSection = 'lines',
+  initialLineId,
+  initialTripInstanceId,
+}: Readonly<{
+  initialSection?: TransitAdminSection;
+  initialLineId?: string;
+  initialTripInstanceId?: string;
+}>) {
   const [revisions, setRevisions] = useState<TransitDataRevision[]>([]);
   const [modeProfiles, setModeProfiles] = useState<TransitModeProfile[]>([]);
   const [serviceProfiles, setServiceProfiles] = useState<TravelScheduleServiceProfile[]>([]);
@@ -227,21 +269,22 @@ export function AdminTransitPanel() {
     useState('正在读取可排班服务配置');
   const [scheduleStatusText, setScheduleStatusText] = useState('正在读取统一班次摘要');
   const [scheduleRevisionStatusText, setScheduleRevisionStatusText] = useState('正在读取班次');
+  const [tilePreviewFreshTemplate, setTilePreviewFreshTemplate] = useState<string | null>(null);
   const [tilePreviewTemplate, setTilePreviewTemplate] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [profileBusy, setProfileBusy] = useState(false);
   const [serviceProfileBusy, setServiceProfileBusy] = useState(false);
   const [scheduleRevisionBusy, setScheduleRevisionBusy] = useState(false);
-  const [activeSection, setActiveSection] = useState<TransitAdminSection>('lines');
+  const [activeSection, setActiveSection] = useState<TransitAdminSection>(initialSection);
   const [statusFilter, setStatusFilter] = useState<TransitStatusFilter>('all');
   const [modeFilter, setModeFilter] = useState<TransitModeFilter>('all');
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialLineId ?? '');
   const [selectedTransitLineKeys, setSelectedTransitLineKeys] = useState<Set<string>>(
     () => new Set(),
   );
   const [scheduleStatusFilter, setScheduleStatusFilter] = useState<ScheduleStatusFilter>('all');
   const [scheduleServiceFilter, setScheduleServiceFilter] = useState<ScheduleServiceFilter>('all');
-  const [scheduleQuery, setScheduleQuery] = useState('');
+  const [scheduleQuery, setScheduleQuery] = useState(initialTripInstanceId ?? '');
   const [selectedScheduleTripKeys, setSelectedScheduleTripKeys] = useState<Set<string>>(
     () => new Set(),
   );
@@ -352,6 +395,7 @@ export function AdminTransitPanel() {
             revision.sourceFiles.join(' '),
             transitItemApprovalStatusLabel(itemStatus),
             line.name,
+            line.sourceId,
             formatTransitMode(line.mode),
             line.operator,
             line.fare,
@@ -398,6 +442,7 @@ export function AdminTransitPanel() {
             revision.sourceFiles.join(' '),
             transitItemApprovalStatusLabel(itemStatus),
             trip.lineName,
+            trip.tripInstanceId,
             trip.tripCode,
             trip.stationNames.join(' '),
             trip.operator,
@@ -419,6 +464,20 @@ export function AdminTransitPanel() {
     scheduleStatusFilter !== 'all' ||
     scheduleServiceFilter !== 'all' ||
     scheduleQuery.trim().length > 0;
+  const deepLinkedTransitLineKey = useMemo(() => {
+    const row = initialLineId
+      ? allTransitLineRows.find(({ line }) => line.sourceId === initialLineId)
+      : undefined;
+    return row ? getTransitLineSelectionKey(row.revision.revisionId, row.line.sourceId) : undefined;
+  }, [allTransitLineRows, initialLineId]);
+  const deepLinkedScheduleTripKey = useMemo(() => {
+    const row = initialTripInstanceId
+      ? allScheduleTripRows.find(({ trip }) => trip.tripInstanceId === initialTripInstanceId)
+      : undefined;
+    return row
+      ? getScheduleTripSelectionKey(row.revision.revisionId, row.trip.tripInstanceId)
+      : undefined;
+  }, [allScheduleTripRows, initialTripInstanceId]);
   const currentSectionStatusText = useMemo(() => {
     if (activeSection === 'lines') {
       return statusText;
@@ -515,6 +574,17 @@ export function AdminTransitPanel() {
     });
   }, [scheduleRevisions]);
 
+  useEffect(() => {
+    if (!deepLinkedTransitLineKey && !deepLinkedScheduleTripKey) {
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      document.querySelector('.transit-entity-row.is-deep-linked')?.scrollIntoView({
+        block: 'center',
+      });
+    });
+  }, [deepLinkedScheduleTripKey, deepLinkedTransitLineKey]);
+
   const toggleTransitLineSelection = (revisionId: string, lineSourceId: string) => {
     const key = getTransitLineSelectionKey(revisionId, lineSourceId);
     setSelectedTransitLineKeys((current) => {
@@ -606,11 +676,9 @@ export function AdminTransitPanel() {
       return;
     }
 
-    const preferredProvider =
-      data.items?.find((provider) => provider.sourceKind === 'safe-https-static') ??
-      data.items?.find((provider) => provider.id === 'lindong-unmined-static') ??
-      data.items?.[0];
-    setTilePreviewTemplate(preferredProvider?.tileTemplate ?? null);
+    const tileTemplates = selectMapTileTemplates(data.items ?? []);
+    setTilePreviewTemplate(tileTemplates.tileTemplate);
+    setTilePreviewFreshTemplate(tileTemplates.freshTileTemplate);
   };
 
   const loadMapMarkers = async () => {
@@ -705,6 +773,27 @@ export function AdminTransitPanel() {
     setScheduleRevisionStatusText(tripCount > 0 ? `已读取 ${tripCount} 个班次` : '暂无班次');
   };
 
+  const reloadTransitData = () =>
+    Promise.all([
+      loadRevisions(),
+      loadModeProfiles(),
+      loadServiceProfiles(),
+      loadScheduleSummary(),
+      loadScheduleRevisions(),
+      loadTilePreviewConfig(),
+      loadMapMarkers(),
+    ]);
+
+  const notifyTransitDataChanged = (
+    reason: 'record_created' | 'record_updated' | 'record_archived' | 'status_changed',
+  ) => {
+    publishAdminDataChanged({
+      resource: 'transit',
+      reason,
+      occurredAt: new Date().toISOString(),
+    });
+  };
+
   const importLatest = async () => {
     setIsBusy(true);
     try {
@@ -722,6 +811,7 @@ export function AdminTransitPanel() {
       }
 
       setStatusText('已从旧站导入最新交通数据');
+      notifyTransitDataChanged('record_created');
       await loadRevisions();
     } finally {
       setIsBusy(false);
@@ -745,6 +835,7 @@ export function AdminTransitPanel() {
       }
 
       setScheduleRevisionStatusText('已导入当前统一班次快照');
+      notifyTransitDataChanged('record_created');
       await Promise.all([loadScheduleRevisions(), loadScheduleSummary()]);
     } finally {
       setScheduleRevisionBusy(false);
@@ -805,6 +896,7 @@ export function AdminTransitPanel() {
       setRevisions((current) =>
         current.map((revision) => (revision.revisionId === data.revisionId ? data : revision)),
       );
+      notifyTransitDataChanged(action === 'archive' ? 'record_archived' : 'status_changed');
       return true;
     } finally {
       setIsBusy(false);
@@ -816,7 +908,9 @@ export function AdminTransitPanel() {
     stationSourceId: string,
     payload: {
       x: number;
+      y?: number;
       z: number;
+      operationStatus: NonNullable<TransitRevisionStation['operationStatus']>;
       boundPoiRefs?: TransitStationPoiBindingRef[];
       boundPoiLabel?: string;
       boundPoiMarkerId?: string;
@@ -849,6 +943,7 @@ export function AdminTransitPanel() {
       );
       setLineCreateTarget((current) => (current?.revisionId === data.revisionId ? data : current));
       setStatusText(`已修正站点坐标：${stationSourceId}`);
+      notifyTransitDataChanged('record_updated');
       return null;
     } finally {
       setIsBusy(false);
@@ -895,6 +990,7 @@ export function AdminTransitPanel() {
         return detail && current ? { ...current, revision: data, detail } : null;
       });
       setStatusText(`已更新站内设施信息：${detailSourceId}`);
+      notifyTransitDataChanged('record_updated');
       return null;
     } finally {
       setIsBusy(false);
@@ -938,6 +1034,7 @@ export function AdminTransitPanel() {
         current.map((revision) => (revision.revisionId === data.revisionId ? data : revision)),
       );
       setStatusText(lineSourceId ? `已更新线路：${payload.name}` : `已新增线路：${payload.name}`);
+      notifyTransitDataChanged(lineSourceId ? 'record_updated' : 'record_created');
       const savedLineSourceId =
         lineSourceId ??
         data.lines.find((candidate) => !previousLineSourceIds.has(candidate.sourceId))?.sourceId;
@@ -973,6 +1070,7 @@ export function AdminTransitPanel() {
         current.map((revision) => (revision.revisionId === data.revisionId ? data : revision)),
       );
       setStatusText(`已删除线路：${line.name}`);
+      notifyTransitDataChanged('record_archived');
     } finally {
       setIsBusy(false);
     }
@@ -1034,6 +1132,7 @@ export function AdminTransitPanel() {
       setScheduleRevisions((current) =>
         current.map((revision) => (revision.revisionId === data.revisionId ? data : revision)),
       );
+      notifyTransitDataChanged(action === 'archive' ? 'record_archived' : 'status_changed');
       return true;
     } finally {
       setScheduleRevisionBusy(false);
@@ -1092,6 +1191,7 @@ export function AdminTransitPanel() {
         current.map((revision) => (revision.revisionId === data.revisionId ? data : revision)),
       );
       setScheduleRevisionStatusText(`已修正班次：${tripInstanceId}`);
+      notifyTransitDataChanged('record_updated');
       await loadScheduleSummary();
       return null;
     } finally {
@@ -1147,6 +1247,7 @@ export function AdminTransitPanel() {
         current.map((revision) => (revision.revisionId === data.revisionId ? data : revision)),
       );
       setScheduleRevisionStatusText(`已新增班次：${payload.lineName}`);
+      notifyTransitDataChanged('record_created');
       await loadScheduleSummary();
       return null;
     } finally {
@@ -1180,6 +1281,7 @@ export function AdminTransitPanel() {
         current.map((revision) => (revision.revisionId === data.revisionId ? data : revision)),
       );
       setScheduleRevisionStatusText(`已删除班次：${formatTripDiffLabel(trip)}`);
+      notifyTransitDataChanged('record_archived');
       await loadScheduleSummary();
     } finally {
       setScheduleRevisionBusy(false);
@@ -1275,14 +1377,17 @@ export function AdminTransitPanel() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          modes: modeProfiles.map(({ mode, label, color, icon, sortOrder, enabled }) => ({
-            mode,
-            label,
-            color,
-            icon,
-            sortOrder,
-            enabled,
-          })),
+          modes: modeProfiles.map(
+            ({ mode, label, color, icon, sortOrder, enabled, showPlannedSegments }) => ({
+              mode,
+              label,
+              color,
+              icon,
+              sortOrder,
+              enabled,
+              showPlannedSegments,
+            }),
+          ),
         }),
       });
       const data = (await response.json()) as { items?: TransitModeProfile[]; message?: string };
@@ -1293,6 +1398,7 @@ export function AdminTransitPanel() {
 
       setModeProfiles(data.items ?? []);
       setProfileStatusText('交通方式配置已保存');
+      notifyTransitDataChanged('record_updated');
     } finally {
       setProfileBusy(false);
     }
@@ -1326,6 +1432,7 @@ export function AdminTransitPanel() {
 
       setServiceProfiles(data.items ?? []);
       setServiceProfileStatusText('可排班服务配置已保存');
+      notifyTransitDataChanged('record_updated');
     } finally {
       setServiceProfileBusy(false);
     }
@@ -1335,7 +1442,15 @@ export function AdminTransitPanel() {
     <section className="module-panel admin-operations-panel" aria-labelledby="admin-transit-title">
       <div className="section-heading">
         <h1 id="admin-transit-title">线路与班次后台</h1>
-        <span className="muted">{currentSectionStatusText}</span>
+        <div className="admin-content-actions">
+          <span className="muted">{currentSectionStatusText}</span>
+          <AdminRefreshButton
+            disabled={isBusy || profileBusy || serviceProfileBusy || scheduleRevisionBusy}
+            label="刷新交通后台"
+            onRefresh={reloadTransitData}
+            resource="transit"
+          />
+        </div>
       </div>
       <fieldset className="segmented-control admin-page-segmented-control">
         <legend>线路与班次后台系列</legend>
@@ -1444,6 +1559,7 @@ export function AdminTransitPanel() {
           </div>
 
           <TransitLineEntityList
+            highlightedKey={deepLinkedTransitLineKey}
             isBusy={isBusy}
             isAllVisibleSelected={isAllVisibleTransitLinesSelected}
             rows={transitLineRows}
@@ -1561,6 +1677,7 @@ export function AdminTransitPanel() {
             </button>
           </div>
           <ScheduleTripEntityList
+            highlightedKey={deepLinkedScheduleTripKey}
             isBusy={scheduleRevisionBusy}
             isAllVisibleSelected={isAllVisibleScheduleTripsSelected}
             rows={scheduleTripRows}
@@ -1685,6 +1802,18 @@ export function AdminTransitPanel() {
                     }
                   />
                   <span>启用</span>
+                </label>
+                <label className="transit-mode-profile-toggle">
+                  <input
+                    type="checkbox"
+                    checked={profile.showPlannedSegments}
+                    onChange={(event) =>
+                      updateModeProfileDraft(profile.mode, {
+                        showPlannedSegments: event.currentTarget.checked,
+                      })
+                    }
+                  />
+                  <span>显示规划区段</span>
                 </label>
                 <button
                   className="transit-profile-delete-button"
@@ -1833,6 +1962,7 @@ export function AdminTransitPanel() {
           mapMarkers={mapMarkers}
           revision={stationEditTarget.revision}
           station={stationEditTarget.station}
+          tilePreviewFreshTemplate={tilePreviewFreshTemplate}
           tilePreviewTemplate={tilePreviewTemplate}
           onClose={() => setStationEditTarget(null)}
           onSubmit={async (payload) => {
@@ -1878,6 +2008,7 @@ export function AdminTransitPanel() {
           modeProfiles={modeProfiles}
           revision={lineEditTarget.revision}
           line={lineEditTarget.line}
+          tilePreviewFreshTemplate={tilePreviewFreshTemplate}
           tilePreviewTemplate={tilePreviewTemplate}
           onClose={() => setLineEditTarget(null)}
           onEditStation={(station) =>
@@ -1906,6 +2037,7 @@ export function AdminTransitPanel() {
           mapMarkers={mapMarkers}
           modeProfiles={modeProfiles}
           revision={lineCreateTarget}
+          tilePreviewFreshTemplate={tilePreviewFreshTemplate}
           tilePreviewTemplate={tilePreviewTemplate}
           onClose={() => setLineCreateTarget(null)}
           onEditStation={(station) => setStationEditTarget({ revision: lineCreateTarget, station })}
@@ -2033,6 +2165,7 @@ function TravelScheduleAdminSummary({
 }
 
 function TransitLineEntityList({
+  highlightedKey,
   isAllVisibleSelected,
   isBusy,
   onBatchAction,
@@ -2048,6 +2181,7 @@ function TransitLineEntityList({
   selectedKeys,
   selectedBatchCount,
 }: Readonly<{
+  highlightedKey?: string;
   isAllVisibleSelected: boolean;
   isBusy: boolean;
   onBatchAction: (action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive') => void;
@@ -2141,7 +2275,11 @@ function TransitLineEntityList({
           const selectionKey = getTransitLineSelectionKey(revision.revisionId, line.sourceId);
           return (
             <article
-              className="admin-content-item transit-entity-row"
+              className={
+                selectionKey === highlightedKey
+                  ? 'admin-content-item transit-entity-row is-deep-linked'
+                  : 'admin-content-item transit-entity-row'
+              }
               key={`${revision.revisionId}-${line.sourceId}`}
             >
               <label className="admin-content-select" aria-label={`选择线路 ${line.name}`}>
@@ -2232,6 +2370,7 @@ function TransitLineEntityList({
 }
 
 function ScheduleTripEntityList({
+  highlightedKey,
   isAllVisibleSelected,
   isBusy,
   onBatchAction,
@@ -2247,6 +2386,7 @@ function ScheduleTripEntityList({
   selectedKeys,
   selectedBatchCount,
 }: Readonly<{
+  highlightedKey?: string;
   isAllVisibleSelected: boolean;
   isBusy: boolean;
   onBatchAction: (action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive') => void;
@@ -2343,7 +2483,11 @@ function ScheduleTripEntityList({
           );
           return (
             <article
-              className="admin-content-item transit-entity-row"
+              className={
+                selectionKey === highlightedKey
+                  ? 'admin-content-item transit-entity-row is-deep-linked'
+                  : 'admin-content-item transit-entity-row'
+              }
               key={`${revision.revisionId}-${trip.tripInstanceId}`}
             >
               <label
@@ -2757,24 +2901,32 @@ function TransitStationCoordinateDialog({
   onSubmit,
   revision,
   station,
+  tilePreviewFreshTemplate,
   tilePreviewTemplate,
 }: Readonly<{
   isBusy: boolean;
   onClose: () => void;
   onSubmit: (payload: {
     x: number;
+    y?: number;
     z: number;
     boundPoiRefs?: TransitStationPoiBindingRef[];
     boundPoiLabel?: string;
     boundPoiMarkerId?: string;
+    operationStatus: NonNullable<TransitRevisionStation['operationStatus']>;
   }) => Promise<string | null>;
   mapMarkers: MapMarker[];
   revision: TransitDataRevision;
   station: TransitRevisionStation;
+  tilePreviewFreshTemplate: string | null;
   tilePreviewTemplate: string | null;
 }>) {
   const [xValue, setXValue] = useState(station.x === undefined ? '' : String(station.x));
+  const [yValue, setYValue] = useState(station.y === undefined ? '' : String(station.y));
   const [zValue, setZValue] = useState(station.z === undefined ? '' : String(station.z));
+  const [operationStatus, setOperationStatus] = useState<
+    NonNullable<TransitRevisionStation['operationStatus']>
+  >(station.operationStatus ?? 'operating');
   const initialBoundPoiRefs = getTransitStationBoundPoiRefs(station);
   const [boundPoiRefs, setBoundPoiRefs] =
     useState<TransitStationPoiBindingRef[]>(initialBoundPoiRefs);
@@ -2845,15 +2997,18 @@ function TransitStationCoordinateDialog({
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const x = Number(xValue);
+    const y = yValue.trim() ? Number(yValue) : undefined;
     const z = Number(zValue);
-    if (!Number.isFinite(x) || !Number.isFinite(z)) {
-      setError('请填写有效的 X/Z 坐标。');
+    if (!Number.isFinite(x) || !Number.isFinite(z) || (y !== undefined && !Number.isFinite(y))) {
+      setError('请填写有效的 X/Y/Z 坐标。');
       return;
     }
 
     const submitError = await onSubmit({
       x,
+      y,
       z,
+      operationStatus,
       boundPoiRefs,
       boundPoiMarkerId: boundPoiRefs[0]?.markerId,
       boundPoiLabel: boundPoiRefs[0]?.label,
@@ -3021,39 +3176,62 @@ function TransitStationCoordinateDialog({
         </div>
         <div className="transit-station-coordinate-form">
           <label>
-            <span>X 坐标</span>
-            <input
-              inputMode="decimal"
-              value={xValue}
-              onChange={(event) => {
-                setXValue(event.currentTarget.value);
-                setError('');
-              }}
-            />
-          </label>
-          <label>
-            <span>Z 坐标</span>
-            <input
-              inputMode="decimal"
-              value={zValue}
-              onChange={(event) => {
-                setZValue(event.currentTarget.value);
-                setError('');
-              }}
-            />
+            <span>开通状态</span>
+            <select
+              value={operationStatus}
+              onChange={(event) =>
+                setOperationStatus(
+                  event.currentTarget.value as NonNullable<
+                    TransitRevisionStation['operationStatus']
+                  >,
+                )
+              }
+            >
+              <option value="operating">已开通</option>
+              <option value="planned">未开通</option>
+              <option value="closed">已关闭</option>
+            </select>
           </label>
         </div>
-        <TransitStationCoordinatePicker
-          boundPoi={selectedBoundPoi ?? selectedBoundPoiOptions[0] ?? null}
-          contextMarkers={contextMarkers}
-          currentCoordinate={currentCoordinate}
-          onPick={(coordinate) => {
-            setXValue(String(roundCoordinateValue(coordinate[0])));
-            setZValue(String(roundCoordinateValue(coordinate[1])));
+        <WorldCoordinatePicker
+          ariaLabel="在地图预览中点选站点坐标"
+          emptyContent="当前没有可用于地图点选的基准坐标，请先绑定一个 POI 或手动输入坐标。"
+          value={{ x: xValue, y: yValue, z: zValue }}
+          onChange={(coordinate) => {
+            setXValue(coordinate.x);
+            setYValue(coordinate.y);
+            setZValue(coordinate.z);
             setError('');
           }}
-          originalCoordinate={originalCoordinate}
-          tilePreviewTemplate={tilePreviewTemplate}
+          markers={contextMarkers.map((marker) => ({
+            coordinate: marker.coordinate,
+            id: marker.marker.id,
+            label: marker.marker.label,
+            tone:
+              marker.relation === 'bound-poi'
+                ? 'bound'
+                : marker.relation === 'road'
+                  ? 'road'
+                  : marker.relation === 'station'
+                    ? 'station'
+                    : marker.relation === 'nearby'
+                      ? 'nearby'
+                      : 'default',
+          }))}
+          originalValue={originalCoordinate}
+          referenceValue={(selectedBoundPoi ?? selectedBoundPoiOptions[0])?.coordinate ?? null}
+          freshTileTemplate={tilePreviewFreshTemplate}
+          tileTemplate={tilePreviewTemplate}
+          yPlaceholder="留空继承地图默认高度 64"
+          actions={
+            <CurrentPlayerLocationButton
+              onUse={(coordinate) => {
+                setXValue(String(roundCoordinateValue(coordinate[0])));
+                setZValue(String(roundCoordinateValue(coordinate[1])));
+                setError('');
+              }}
+            />
+          }
         />
         {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
         <div className="admin-content-actions">
@@ -3066,54 +3244,6 @@ function TransitStationCoordinateDialog({
         </div>
       </form>
     </div>
-  );
-}
-
-function TransitStationCoordinatePicker({
-  boundPoi,
-  contextMarkers,
-  currentCoordinate,
-  onPick,
-  originalCoordinate,
-  tilePreviewTemplate,
-}: Readonly<{
-  boundPoi: TransitStationPoiBindingOption | null;
-  contextMarkers: TransitStationAuditContextMarker[];
-  currentCoordinate: [number, number] | null;
-  onPick: (coordinate: [number, number]) => void;
-  originalCoordinate: [number, number] | null;
-  tilePreviewTemplate: string | null;
-}>) {
-  return (
-    <EmbeddedMapLocationPicker
-      ariaLabel="在地图预览中点选站点坐标"
-      emptyContent="当前没有可用于地图点选的基准坐标，请先绑定一个 POI 或手动输入坐标。"
-      footer={
-        currentCoordinate
-          ? `点击地图回填坐标 · 当前 ${formatTransitCoordinatePair(currentCoordinate)}`
-          : '点击地图回填坐标'
-      }
-      markers={contextMarkers.map((marker) => ({
-        coordinate: marker.coordinate,
-        id: marker.marker.id,
-        label: marker.marker.label,
-        tone:
-          marker.relation === 'bound-poi'
-            ? 'bound'
-            : marker.relation === 'road'
-              ? 'road'
-              : marker.relation === 'station'
-                ? 'station'
-                : marker.relation === 'nearby'
-                  ? 'nearby'
-                  : 'default',
-      }))}
-      onChange={onPick}
-      originalValue={originalCoordinate}
-      referenceValue={boundPoi?.coordinate ?? null}
-      tileTemplate={tilePreviewTemplate}
-      value={currentCoordinate}
-    />
   );
 }
 
@@ -3452,6 +3582,7 @@ function TransitLineEditorDialog({
   onEditStationDetail,
   onSubmit,
   revision,
+  tilePreviewFreshTemplate,
   tilePreviewTemplate,
 }: Readonly<{
   isBusy: boolean;
@@ -3467,12 +3598,16 @@ function TransitLineEditorDialog({
   ) => void;
   onSubmit: (payload: TransitLineEditorSubmitPayload) => Promise<TransitLineEditorSubmitResult>;
   revision: TransitDataRevision;
+  tilePreviewFreshTemplate: string | null;
   tilePreviewTemplate: string | null;
 }>) {
   const router = useRouter();
   const initialMode = line?.mode ?? modeProfiles.find((profile) => profile.enabled)?.mode ?? 'bus';
   const [mode, setMode] = useState<TransitRevisionLine['mode']>(initialMode);
   const [name, setName] = useState(line?.name ?? '');
+  const [operationStatus, setOperationStatus] = useState<
+    NonNullable<TransitRevisionLine['operationStatus']>
+  >(line?.operationStatus ?? 'operating');
   const [color, setColor] = useState(line?.color ?? '');
   const [maxCarCount, setMaxCarCount] = useState(
     line?.maxCarCount === undefined ? '' : String(line.maxCarCount),
@@ -3500,8 +3635,13 @@ function TransitLineEditorDialog({
     [revision.stations],
   );
   const parsedRoute = useMemo(
-    () => parseTransitLineRouteNodeDrafts(routeNodeDrafts, routeMode),
-    [routeMode, routeNodeDrafts],
+    () =>
+      preserveTransitSegmentOperationStatuses(
+        parseTransitLineRouteNodeDrafts(routeNodeDrafts, routeMode),
+        line?.segmentPaths,
+        routeMode,
+      ),
+    [line?.segmentPaths, routeMode, routeNodeDrafts],
   );
   const bindableStopLocationOptions = useMemo(
     () => buildTransitBindablePoiOptions(mapMarkers, [mode]),
@@ -3541,6 +3681,7 @@ function TransitLineEditorDialog({
     const result = await onSubmit({
       mode,
       name: name.trim(),
+      operationStatus,
       color: color.trim() || undefined,
       maxCarCount: maxCarCount.trim() ? Number(maxCarCount) : undefined,
       routeMode,
@@ -3732,6 +3873,23 @@ function TransitLineEditorDialog({
                 </select>
               </label>
               <label>
+                <span>开通状态</span>
+                <select
+                  value={operationStatus}
+                  onChange={(event) =>
+                    setOperationStatus(
+                      event.currentTarget.value as NonNullable<
+                        TransitRevisionLine['operationStatus']
+                      >,
+                    )
+                  }
+                >
+                  <option value="operating">已开通</option>
+                  <option value="planned">未开通</option>
+                  <option value="closed">已关闭</option>
+                </select>
+              </label>
+              <label>
                 <span>标识色</span>
                 <span className="transit-line-color-field">
                   <input
@@ -3787,6 +3945,7 @@ function TransitLineEditorDialog({
                 segmentPaths={parsedRoute.segmentPaths}
                 stationById={stationById}
                 stationSourceIds={parsedStationSourceIds}
+                tilePreviewFreshTemplate={tilePreviewFreshTemplate}
                 tilePreviewTemplate={tilePreviewTemplate}
               />
             </div>
@@ -4136,12 +4295,14 @@ function TransitLineOrderMapPreview({
   segmentPaths,
   stationById,
   stationSourceIds,
+  tilePreviewFreshTemplate,
   tilePreviewTemplate,
 }: Readonly<{
   color?: string;
   segmentPaths?: TransitRevisionLine['segmentPaths'];
   stationById: Map<string, TransitRevisionStation>;
   stationSourceIds: string[];
+  tilePreviewFreshTemplate: string | null;
   tilePreviewTemplate: string | null;
 }>) {
   const model = buildTransitLineOrderPreviewModel({
@@ -4158,7 +4319,11 @@ function TransitLineOrderMapPreview({
     );
   }
 
-  const tiles = buildTransitPreviewTiles(model.bounds, tilePreviewTemplate);
+  const tiles = buildTransitPreviewTiles(
+    model.bounds,
+    tilePreviewTemplate,
+    tilePreviewFreshTemplate,
+  );
 
   return (
     <div className="transit-line-order-map" aria-label="线路站序小地图预览">
@@ -4166,14 +4331,12 @@ function TransitLineOrderMapPreview({
         {tiles.length > 0 ? (
           <span className="transit-revision-geometry-tiles" aria-hidden="true">
             {tiles.map((tile) => (
-              <img
-                draggable={false}
+              <LayeredMapTile
+                className="transit-revision-geometry-tile"
+                fallbackUrl={tile.fallbackUrl}
+                freshUrl={tile.freshUrl}
                 key={tile.id}
-                loading="lazy"
-                onError={(event) => {
-                  event.currentTarget.style.visibility = 'hidden';
-                }}
-                src={tile.url}
+                tileKey={tile.id}
                 style={buildTransitTileStyle(tile)}
               />
             ))}
@@ -4699,17 +4862,19 @@ function buildTransitStationCoordinatePickerModel(input: {
 
 interface TransitVisibleTile {
   displaySize: number;
+  fallbackUrl?: string;
+  freshUrl?: string;
   id: string;
   left: number;
   top: number;
-  url: string;
 }
 
 function buildTransitPreviewTiles(
   bounds: { maxX: number; maxZ: number; minX: number; minZ: number },
   tileTemplate: string | null,
+  freshTileTemplate: string | null,
 ): TransitVisibleTile[] {
-  if (!tileTemplate) {
+  if (!tileTemplate && !freshTileTemplate) {
     return [];
   }
 
@@ -4735,7 +4900,12 @@ function buildTransitPreviewTiles(
         id: `${tileZoom}:${tileX}:${tileZ}`,
         left: 130 + (tileX * tileSize * view.scale) / tileScale - view.centerX * view.scale,
         top: 80 + (tileZ * tileSize * view.scale) / tileScale - view.centerZ * view.scale,
-        url: buildTransitPreviewTileUrl(tileTemplate, tileZoom, tileX, tileZ),
+        fallbackUrl: tileTemplate
+          ? buildTransitPreviewTileUrl(tileTemplate, tileZoom, tileX, tileZ)
+          : undefined,
+        freshUrl: freshTileTemplate
+          ? buildTransitPreviewTileUrl(freshTileTemplate, tileZoom, tileX, tileZ)
+          : undefined,
       });
     }
   }
@@ -5353,6 +5523,57 @@ function formatTransitDepartureRulesForEditor(line: TransitRevisionLine | undefi
     return line.departureRules.map((rule) => rule.sourceText).join('\n');
   }
   return (line?.departureTimes ?? []).join('\n');
+}
+
+function preserveTransitSegmentOperationStatuses(
+  parsed: ReturnType<typeof parseTransitLineRouteNodeDrafts>,
+  previousPaths: TransitRevisionLine['segmentPaths'],
+  routeMode: NonNullable<TransitRevisionLine['routeMode']>,
+): ReturnType<typeof parseTransitLineRouteNodeDrafts> {
+  if (parsed.error) {
+    return parsed;
+  }
+  const previousPathByKey = new Map(
+    (previousPaths ?? []).map((path) => [
+      transitSegmentStatusKey(path.fromStationSourceId, path.toStationSourceId),
+      path,
+    ]),
+  );
+  const pathByKey = new Map(
+    parsed.segmentPaths.map((path) => [
+      transitSegmentStatusKey(path.fromStationSourceId, path.toStationSourceId),
+      path,
+    ]),
+  );
+  for (let index = 1; index < parsed.stationSourceIds.length; index += 1) {
+    const fromStationSourceId = parsed.stationSourceIds[index - 1];
+    const toStationSourceId = parsed.stationSourceIds[index];
+    if (!fromStationSourceId || !toStationSourceId) {
+      continue;
+    }
+    const key = transitSegmentStatusKey(fromStationSourceId, toStationSourceId);
+    const previousPath = previousPathByKey.get(key);
+    const operationStatus = previousPath?.operationStatus ?? 'operating';
+    const existing = pathByKey.get(key);
+    if (existing) {
+      existing.operationStatus = operationStatus;
+      existing.travelMinutes = previousPath?.travelMinutes;
+    } else if (operationStatus !== 'operating' || previousPath?.travelMinutes !== undefined) {
+      parsed.segmentPaths.push({
+        fromStationSourceId,
+        toStationSourceId,
+        mode: routeMode,
+        operationStatus,
+        travelMinutes: previousPath?.travelMinutes,
+        waypoints: [],
+      });
+    }
+  }
+  return parsed;
+}
+
+function transitSegmentStatusKey(leftStationId: string, rightStationId: string): string {
+  return [leftStationId, rightStationId].sort().join('\u0000');
 }
 
 function parseTransitDepartureScheduleText(value: string): {

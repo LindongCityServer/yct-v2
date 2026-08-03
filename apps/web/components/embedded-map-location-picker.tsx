@@ -1,6 +1,7 @@
 'use client';
 
 import type { MouseEvent, ReactNode } from 'react';
+import { LayeredMapTile } from './layered-map-tile';
 
 export interface EmbeddedMapLocationMarker {
   coordinate: [number, number];
@@ -18,10 +19,11 @@ interface CoordinateBounds {
 
 interface VisibleTile {
   displaySize: number;
+  fallbackUrl?: string;
+  freshUrl?: string;
   id: string;
   left: number;
   top: number;
-  url: string;
 }
 
 const stageWidth = 260;
@@ -36,6 +38,7 @@ export function EmbeddedMapLocationPicker({
   onChange,
   originalValue,
   referenceValue,
+  freshTileTemplate,
   tileTemplate,
   value,
 }: Readonly<{
@@ -46,6 +49,7 @@ export function EmbeddedMapLocationPicker({
   onChange: (coordinate: [number, number]) => void;
   originalValue?: [number, number] | null;
   referenceValue?: [number, number] | null;
+  freshTileTemplate?: string | null;
   tileTemplate?: string | null;
   value: [number, number] | null;
 }>) {
@@ -66,7 +70,7 @@ export function EmbeddedMapLocationPicker({
     ...markers.map((marker) => marker.coordinate),
   ];
   const bounds = expandBounds(getCoordinateBounds(coordinates), 120);
-  const tiles = buildVisibleTiles(bounds, tileTemplate ?? null);
+  const tiles = buildVisibleTiles(bounds, tileTemplate ?? null, freshTileTemplate ?? null);
   const project = (coordinate: [number, number]) => projectCoordinate(coordinate, bounds);
   const handlePick = (event: MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -88,14 +92,12 @@ export function EmbeddedMapLocationPicker({
         {tiles.length > 0 ? (
           <span className="embedded-map-location-picker-tiles">
             {tiles.map((tile) => (
-              <img
-                draggable={false}
+              <LayeredMapTile
+                className="embedded-map-location-picker-tile"
+                fallbackUrl={tile.fallbackUrl}
+                freshUrl={tile.freshUrl}
                 key={tile.id}
-                loading="lazy"
-                onError={(event) => {
-                  event.currentTarget.style.visibility = 'hidden';
-                }}
-                src={tile.url}
+                tileKey={tile.id}
                 style={{
                   height: `${(tile.displaySize / stageHeight) * 100}%`,
                   left: `${(tile.left / stageWidth) * 100}%`,
@@ -236,8 +238,12 @@ function buildView(bounds: CoordinateBounds): {
   };
 }
 
-function buildVisibleTiles(bounds: CoordinateBounds, tileTemplate: string | null): VisibleTile[] {
-  if (!tileTemplate) {
+function buildVisibleTiles(
+  bounds: CoordinateBounds,
+  tileTemplate: string | null,
+  freshTileTemplate: string | null,
+): VisibleTile[] {
+  if (!tileTemplate && !freshTileTemplate) {
     return [];
   }
 
@@ -260,12 +266,17 @@ function buildVisibleTiles(bounds: CoordinateBounds, tileTemplate: string | null
     for (let tileZ = minTileZ; tileZ <= maxTileZ; tileZ += 1) {
       tiles.push({
         displaySize,
+        fallbackUrl: tileTemplate
+          ? buildTileUrl(tileTemplate, tileZoom, tileX, tileZ)
+          : undefined,
+        freshUrl: freshTileTemplate
+          ? buildTileUrl(freshTileTemplate, tileZoom, tileX, tileZ)
+          : undefined,
         id: `${tileZoom}:${tileX}:${tileZ}`,
         left:
           stageWidth / 2 + (tileX * tileSize * view.scale) / tileScale - view.centerX * view.scale,
         top:
           stageHeight / 2 + (tileZ * tileSize * view.scale) / tileScale - view.centerZ * view.scale,
-        url: buildTileUrl(tileTemplate, tileZoom, tileX, tileZ),
       });
     }
   }

@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
     imageUrls: parsed.data.imageUrls,
     imageUrl: parsed.data.imageUrl,
     geometry: parsed.data.geometry,
+    spatial: parsed.data.spatial,
     parentMarkerId: parsed.data.parentMarkerId,
     floorLabel: parsed.data.floorLabel,
     boundRegionMarkerIds: parsed.data.boundRegionMarkerIds,

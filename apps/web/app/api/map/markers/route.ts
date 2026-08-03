@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { UnminedCustomMarkerProvider } from '@yct/adapters';
-import type { EntityTranslationRecord, MapMarkerSnapshot } from '@yct/contracts';
+import type { EntityTranslationRecord, MapMarkerSnapshot, MapSpatialProfile } from '@yct/contracts';
 import { createApiMeta } from '../../../../lib/api-meta';
 import { roadNameTranslationEntityId } from '../../../../lib/entity-translation-keys';
 import { isMapRoadGeometryMarker } from '../../../../lib/map-road-geometry';
@@ -12,6 +12,13 @@ import {
 import { readTransitLinePoiMarkers } from '../../../../lib/map-transit-line-markers';
 import { enrichMapMarkerPlaceRelations } from '../../../../lib/map-place-relations';
 import { applyLegacyMapMarkerOverrides } from '../../../../lib/legacy-map-marker-override-store';
+import { readMapSpatialProfile } from '../../../../lib/map-spatial-profile-store';
+import {
+  getTransitStationMapOperationStatus,
+  getTransitStationMarkerOperationStatuses,
+  type PublishedTransitEntitySnapshot,
+  readPublishedTransitEntitySnapshot,
+} from '../../../../lib/published-transit-read-model';
 import { readPoiCategories } from '../../../../lib/poi-categories';
 import { listPublishedPublicPoiSubmissions } from '../../../../lib/poi-submission-store';
 import { readRuntimeConfig, type RuntimeConfig } from '../../../../lib/runtime-config';
@@ -44,36 +51,50 @@ export async function GET() {
     transitLinePoiMarkers,
     transitOverview,
     entityTranslations,
+    mapSpatialProfile,
+    publishedTransitSnapshot,
   ] = await Promise.all([
     readPoiCategories().catch(() => []),
     listPublishedPublicPoiSubmissions(),
     readTransitLinePoiMarkers().catch(() => []),
     readTransitOverview().catch(() => null),
     listEntityTranslations(),
+    readMapSpatialProfile(),
+    readPublishedTransitEntitySnapshot(),
   ]);
 
   try {
     const staticSnapshot = await readStaticMarkerSnapshot(config);
-    const staticSnapshotWithOverrides = await applyLegacyMapMarkerOverrides(staticSnapshot);
-    const routingMarkerSnapshot = mergeLocalMapMarkers(
-      staticSnapshotWithOverrides,
-      publishedPoiSubmissions,
-      categories,
-      [],
+    // 先应用单点覆盖，再按覆盖后的名称重建道路点组；最后再应用点组覆盖。
+    // 这样旧点被改名后仍能进入原点组，不会重新以独立 POI 出现。
+    const staticSnapshotWithPointOverrides = await applyLegacyMapMarkerOverrides(staticSnapshot, {
+      hideRoadPointGroupSources: false,
+    });
+    const staticSnapshotWithOverrides = await applyLegacyMapMarkerOverrides(
+      groupRoadEndpointMarkers(staticSnapshotWithPointOverrides),
+      { hideRoadPointGroupSources: true },
+    );
+    const routingMarkerSnapshot = applyTransitStationMapVisibility(
+      mergeLocalMapMarkers(staticSnapshotWithOverrides, publishedPoiSubmissions, categories, []),
+      publishedTransitSnapshot,
     );
     const resolvedTransitLineMarkers = resolveTransitLineMarkerCoordinates(
       transitLinePoiMarkers,
       transitOverview,
       routingMarkerSnapshot,
+      mapSpatialProfile,
     );
     const mergedSnapshot = applyMapMarkerTranslations(
       enrichMapMarkerPlaceRelations(
         normalizeMarkerSnapshotText(
-          mergeLocalMapMarkers(
-            staticSnapshotWithOverrides,
-            publishedPoiSubmissions,
-            categories,
-            resolvedTransitLineMarkers,
+          applyTransitStationMapVisibility(
+            mergeLocalMapMarkers(
+              staticSnapshotWithOverrides,
+              publishedPoiSubmissions,
+              categories,
+              resolvedTransitLineMarkers,
+            ),
+            publishedTransitSnapshot,
           ),
         ),
       ),
@@ -99,14 +120,17 @@ export async function GET() {
     const localSnapshot = applyMapMarkerTranslations(
       enrichMapMarkerPlaceRelations(
         normalizeMarkerSnapshotText(
-          mergeLocalMapMarkers(
-            {
-              fetchedAt: new Date().toISOString(),
-              markers: [],
-            },
-            publishedPoiSubmissions,
-            categories,
-            transitLinePoiMarkers,
+          applyTransitStationMapVisibility(
+            mergeLocalMapMarkers(
+              {
+                fetchedAt: new Date().toISOString(),
+                markers: [],
+              },
+              publishedPoiSubmissions,
+              categories,
+              transitLinePoiMarkers,
+            ),
+            publishedTransitSnapshot,
           ),
         ),
       ),
@@ -166,6 +190,99 @@ function applyMapMarkerTranslations(
 
 type Marker = MapMarkerSnapshot['markers'][number];
 
+function applyTransitStationMapVisibility(
+  snapshot: MapMarkerSnapshot,
+  transitSnapshot: PublishedTransitEntitySnapshot | undefined,
+): MapMarkerSnapshot {
+  if (!transitSnapshot) {
+    return snapshot;
+  }
+
+  const statusByMarkerId = getTransitStationMarkerOperationStatuses(transitSnapshot);
+  const annotatedMarkers = snapshot.markers.map((marker) => {
+    const operationStatus = statusByMarkerId.get(marker.id);
+    return operationStatus ? { ...marker, transitOperationStatus: operationStatus } : marker;
+  });
+  const existingMarkerIds = new Set(annotatedMarkers.map((marker) => marker.id));
+  const syntheticStations = transitSnapshot.stations.flatMap((station): Marker[] => {
+    const boundMarkerIds = [
+      station.boundPoiMarkerId,
+      ...(station.boundPoiRefs ?? []).map((ref) => ref.markerId),
+    ].filter((markerId): markerId is string => Boolean(markerId));
+    if (
+      station.x === undefined ||
+      station.z === undefined ||
+      boundMarkerIds.some((markerId) => existingMarkerIds.has(markerId))
+    ) {
+      return [];
+    }
+    const operationStatus = getTransitStationMapOperationStatus(transitSnapshot, station.sourceId);
+    const servingLine = transitSnapshot.lines.find(
+      (line) =>
+        line.stationSourceIds.includes(station.sourceId) &&
+        (line.operationStatus ?? 'operating') !== 'closed',
+    );
+    return [
+      {
+        id: `transit-station-${stableMarkerId(station.sourceId)}`,
+        label: station.name,
+        categoryId: getTransitStationCategoryId(servingLine?.mode),
+        geometry: { type: 'Point', coordinates: [station.x, station.z] },
+        spatial: station.y === undefined ? undefined : { defaultY: station.y },
+        symbolIcon: getTransitStationSymbolIcon(servingLine?.mode),
+        accentColor: servingLine?.color,
+        description: `${formatTransitModeName(servingLine?.mode)} · ${
+          operationStatus === 'planned' ? '未开通' : '已开通'
+        }`,
+        transitOperationStatus: operationStatus,
+      },
+    ];
+  });
+
+  return {
+    ...snapshot,
+    markers: [...annotatedMarkers, ...syntheticStations],
+  };
+}
+
+type PublishedTransitMode = PublishedTransitEntitySnapshot['lines'][number]['mode'];
+
+function getTransitStationCategoryId(mode: PublishedTransitMode | undefined): string {
+  return {
+    metro: 'metro-station',
+    tram: 'tram-station',
+    bus: 'bus-stop',
+    coach: 'coach-station',
+    ferry: 'ferry-port',
+    railway: 'railway-station',
+    custom: 'map-marker',
+  }[mode ?? 'custom'];
+}
+
+function getTransitStationSymbolIcon(mode: PublishedTransitMode | undefined): string {
+  return {
+    metro: 'subway',
+    tram: 'tram',
+    bus: 'directions_bus',
+    coach: 'airport_shuttle',
+    ferry: 'directions_boat',
+    railway: 'train',
+    custom: 'location_on',
+  }[mode ?? 'custom'];
+}
+
+function formatTransitModeName(mode: PublishedTransitMode | undefined): string {
+  return {
+    metro: '地铁站',
+    tram: '有轨电车站',
+    bus: '公交站',
+    coach: '客运站',
+    ferry: '轮渡码头',
+    railway: '铁路站',
+    custom: '交通站点',
+  }[mode ?? 'custom'];
+}
+
 async function readStaticMarkerSnapshot(config: RuntimeConfig): Promise<MapMarkerSnapshot> {
   const provider = new UnminedCustomMarkerProvider({
     id: 'unmined-custom-markers',
@@ -176,8 +293,7 @@ async function readStaticMarkerSnapshot(config: RuntimeConfig): Promise<MapMarke
 
   return providerMarkerSnapshotCache.read(
     [provider.id, config.unminedMapBaseUrl, config.markerBdslmTimeoutMs].join('|'),
-    async () =>
-      groupRoadEndpointMarkers(normalizeMarkerSnapshotText(await provider.fetchMarkers('default'))),
+    async () => normalizeMarkerSnapshotText(await provider.fetchMarkers('default')),
   );
 }
 
@@ -185,6 +301,7 @@ function resolveTransitLineMarkerCoordinates(
   markers: Marker[],
   overview: TransitOverview | null,
   markerSnapshot: MapMarkerSnapshot,
+  spatialProfile: MapSpatialProfile,
 ): Marker[] {
   if (!overview) {
     return markers;
@@ -193,7 +310,15 @@ function resolveTransitLineMarkerCoordinates(
   const lineById = new Map(overview.lines.map((line) => [line.id, line]));
   const stationCoordinateIndex = buildStationCoordinateIndex(markerSnapshot.markers);
   const markerById = new Map(markerSnapshot.markers.map((marker) => [marker.id, marker]));
-  const roadGraph = buildVisualRoadGraph(markerSnapshot.markers);
+  const roadGraph = buildVisualRoadGraph(
+    markerSnapshot.markers,
+    spatialProfile.roadTiming.junctionSnapTolerance,
+    {
+      defaultY: spatialProfile.defaultY,
+      verticalTolerance: spatialProfile.verticalTolerance,
+      worldId: spatialProfile.worldId,
+    },
+  );
 
   return markers.map((marker) => {
     if (marker.categoryId !== 'transit-line' || marker.geometry.type !== 'MultiPoint') {
@@ -217,7 +342,12 @@ function resolveTransitLineMarkerCoordinates(
     }
     const routeMode =
       line.routeMode ?? (line.mode === 'bus' || line.mode === 'coach' ? 'road' : 'straight');
-    const resolution = resolveVisualRoute(controlCoordinates, routeMode, roadGraph);
+    const resolution = resolveVisualRoute(
+      controlCoordinates,
+      routeMode,
+      roadGraph,
+      line.mode === 'coach' ? 'coach' : 'bus',
+    );
     const coordinates = resolution.coordinates;
 
     return {
@@ -430,35 +560,51 @@ function groupRoadEndpointMarkers(snapshot: MapMarkerSnapshot): MapMarkerSnapsho
 
   const endpointMarkers: Marker[] = Array.from(roadGroups.entries())
     .filter(([, markers]) => markers.length > 1)
-    .map(([label, markers]): Marker => ({
-      id: `road-endpoints-${stableMarkerId(label)}`,
-      label,
-      categoryId: 'road',
-      geometry: {
-        type: 'MultiPoint',
-        coordinates: orderRoadCoordinates(
-          dedupeCoordinates(
-            markers
-              .filter(
-                (
-                  marker,
-                ): marker is Marker & {
-                  geometry: Extract<Marker['geometry'], { type: 'Point' }>;
-                } => marker.geometry.type === 'Point',
-              )
-              .map((marker) => marker.geometry.coordinates),
-          ),
-        ),
-      },
-      iconFileName: markers.find((marker) => marker.iconFileName)?.iconFileName,
-    }))
+    .map(([label, markers]): Marker => {
+      const pointMarkers = markers.filter(
+        (
+          marker,
+        ): marker is Marker & {
+          geometry: Extract<Marker['geometry'], { type: 'Point' }>;
+        } => marker.geometry.type === 'Point',
+      );
+      const coordinates = orderRoadCoordinates(
+        dedupeCoordinates(pointMarkers.map((marker) => marker.geometry.coordinates)),
+      );
+      const markerByCoordinate = new Map(
+        pointMarkers.map((marker) => [
+          `${marker.geometry.coordinates[0]}:${marker.geometry.coordinates[1]}`,
+          marker,
+        ]),
+      );
+      return {
+        id: `road-endpoints-${stableMarkerId(label)}`,
+        label,
+        categoryId: 'road',
+        geometry: { type: 'MultiPoint', coordinates },
+        spatial: {
+          networkKind: 'road',
+          direction: 'both',
+          coordinateY: coordinates.map((coordinate) => {
+            const marker = markerByCoordinate.get(`${coordinate[0]}:${coordinate[1]}`);
+            return marker?.spatial?.coordinateY?.[0] ?? marker?.spatial?.defaultY ?? null;
+          }),
+        },
+        iconFileName: markers.find((marker) => marker.iconFileName)?.iconFileName,
+      };
+    })
     .filter(
       (marker) => marker.geometry.type === 'MultiPoint' && marker.geometry.coordinates.length > 1,
     );
 
   return {
     ...snapshot,
-    markers: [...snapshot.markers, ...endpointMarkers],
+    markers: [
+      ...snapshot.markers,
+      ...endpointMarkers.filter(
+        (marker) => !snapshot.markers.some((item) => item.id === marker.id),
+      ),
+    ],
   };
 }
 
@@ -516,6 +662,9 @@ function isRoadEndpointSourceMarker(
   const iconBaseName = getMarkerIconBaseName(marker.iconFileName);
   return (
     marker.categoryId === 'road' ||
+    marker.categoryId === 'roadpoint' ||
+    marker.categoryId === 'highway-s1' ||
+    marker.categoryId === 'toll-gate' ||
     iconBaseName === 'road' ||
     iconBaseName === 'roadpoint' ||
     iconBaseName === 'highway-s1' ||
@@ -632,9 +781,11 @@ function mergeLocalMapMarkers(
       imageUrls: submission.imageUrls,
       imageUrl: submission.imageUrl,
       geometry:
-        submission.categoryId === 'road' && submission.geometry.type === 'LineString'
+        (submission.categoryId === 'road' || submission.spatial?.networkKind) &&
+        submission.geometry.type === 'LineString'
           ? { type: 'MultiPoint', coordinates: submission.geometry.coordinates }
           : submission.geometry,
+      spatial: submission.spatial,
       iconFileName: submission.iconFileName ?? category?.iconMapping.defaultIconFileName,
       parentMarkerId: submission.parentMarkerId,
       floorLabel: submission.floorLabel,

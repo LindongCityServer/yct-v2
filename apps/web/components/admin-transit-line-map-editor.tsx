@@ -8,6 +8,7 @@ import type {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   MapMarkerSnapshot,
+  MapSpatialProfile,
   TileProviderDescriptor,
   TransitDataRevision,
   TransitLineRouteNodeSnapshot,
@@ -16,6 +17,8 @@ import type {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { appPath } from '../lib/app-paths';
+import { publishAdminDataChanged } from '../lib/client-admin-data-events';
+import { selectMapTileTemplates } from '../lib/map-tile-templates';
 import {
   isTransitLineDirectionIncluded,
   type TransitLineTravelDirection,
@@ -28,6 +31,8 @@ import {
   resolveVisualRouteCoordinates,
   type VisualRoadGraph,
 } from '../lib/transit-line-visual-routing';
+import { CurrentPlayerLocationButton } from './current-player-location-button';
+import { LayeredMapTile } from './layered-map-tile';
 
 type TransitLine = TransitDataRevision['lines'][number];
 type TransitStation = TransitDataRevision['stations'][number];
@@ -110,17 +115,23 @@ interface EditorPinchGesture {
 
 interface VisibleTile {
   displaySize: number;
+  fallbackUrl?: string;
+  freshUrl?: string;
   id: string;
   left: number;
   top: number;
-  url: string;
 }
 
 interface EditorData {
+  defaultY: number;
+  junctionSnapTolerance: number;
   line: TransitLine;
   markers: MapMarkerSnapshot['markers'];
   revision: TransitDataRevision;
+  freshTileTemplate: string | null;
   tileTemplate: string | null;
+  verticalTolerance: number;
+  worldId: string;
 }
 
 const defaultView: MapView = { centerX: 0, centerZ: 0, zoom: -1 };
@@ -152,16 +163,24 @@ export function AdminTransitLineMapEditor({
   const [routePanelCollapsed, setRoutePanelCollapsed] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [previewDirection, setPreviewDirection] = useState<TransitLineTravelDirection>('forward');
+  const [segmentOperationStatusByKey, setSegmentOperationStatusByKey] = useState<
+    Record<string, NonNullable<TransitLineSegmentPathSnapshot['operationStatus']>>
+  >({});
+  const [segmentTravelMinutesByKey, setSegmentTravelMinutesByKey] = useState<
+    Record<string, string>
+  >({});
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const [revisionResponse, markerResponse, tileResponse] = await Promise.all([
-          fetch(appPath('/api/admin/transit/datasets'), { cache: 'no-store' }),
-          fetch(appPath('/api/map/markers'), { cache: 'no-store' }),
-          fetch(appPath('/api/map/tile-providers'), { cache: 'no-store' }),
-        ]);
+        const [revisionResponse, markerResponse, tileResponse, spatialProfileResponse] =
+          await Promise.all([
+            fetch(appPath('/api/admin/transit/datasets'), { cache: 'no-store' }),
+            fetch(appPath('/api/map/markers'), { cache: 'no-store' }),
+            fetch(appPath('/api/map/tile-providers'), { cache: 'no-store' }),
+            fetch(appPath('/api/map/spatial-profile'), { cache: 'no-store' }),
+          ]);
         const revisionData = (await revisionResponse.json()) as {
           items?: TransitDataRevision[];
           message?: string;
@@ -171,6 +190,9 @@ export function AdminTransitLineMapEditor({
           message?: string;
         };
         const tileData = (await tileResponse.json()) as { items?: TileProviderDescriptor[] };
+        const spatialProfileData = (await spatialProfileResponse.json().catch(() => ({}))) as {
+          profile?: MapSpatialProfile;
+        };
         if (!revisionResponse.ok) {
           throw new Error(revisionData.message ?? '交通数据版本读取失败。');
         }
@@ -182,14 +204,46 @@ export function AdminTransitLineMapEditor({
           throw new Error('找不到需要编辑的线路或交通数据版本。');
         }
         const markers = markerResponse.ok ? (markerData.snapshot?.markers ?? []) : [];
-        const tileTemplate = selectTileTemplate(tileData.items ?? []);
+        const tileTemplates = selectMapTileTemplates(tileData.items ?? []);
         if (cancelled) {
           return;
         }
         const initialNodes = buildInitialEditorNodes(line, revision.stations);
-        setData({ line, markers, revision, tileTemplate });
+        setData({
+          defaultY: spatialProfileData.profile?.defaultY ?? 64,
+          junctionSnapTolerance: spatialProfileData.profile?.roadTiming.junctionSnapTolerance ?? 30,
+          line,
+          markers,
+          revision,
+          freshTileTemplate: tileTemplates.freshTileTemplate,
+          tileTemplate: tileTemplates.tileTemplate,
+          verticalTolerance: spatialProfileData.profile?.verticalTolerance ?? 0,
+          worldId: spatialProfileData.profile?.worldId ?? 'lindong-overworld',
+        });
         setNodes(initialNodes);
         setRouteMode(line.routeMode ?? defaultRouteMode(line));
+        setSegmentOperationStatusByKey(
+          Object.fromEntries(
+            (line.segmentPaths ?? []).map((path) => [
+              segmentOperationStatusKey(path.fromStationSourceId, path.toStationSourceId),
+              path.operationStatus ?? 'operating',
+            ]),
+          ),
+        );
+        setSegmentTravelMinutesByKey(
+          Object.fromEntries(
+            (line.segmentPaths ?? []).flatMap((path) =>
+              path.travelMinutes === undefined
+                ? []
+                : [
+                    [
+                      segmentOperationStatusKey(path.fromStationSourceId, path.toStationSourceId),
+                      String(path.travelMinutes),
+                    ],
+                  ],
+            ),
+          ),
+        );
         setMapView(fitEditorView(initialNodes, markers));
         setStatus('');
       } catch (error) {
@@ -272,7 +326,18 @@ export function AdminTransitLineMapEditor({
     () => data?.markers.filter(hasPointGeometry).slice(0, 800) ?? [],
     [data],
   );
-  const roadGraph = useMemo(() => (data ? buildVisualRoadGraph(data.markers) : undefined), [data]);
+  const roadGraph = useMemo(
+    () =>
+      data
+        ? buildVisualRoadGraph(data.markers, data.junctionSnapTolerance, {
+            defaultTravelMode: data.line.mode === 'coach' ? 'coach' : 'bus',
+            defaultY: data.defaultY,
+            verticalTolerance: data.verticalTolerance,
+            worldId: data.worldId,
+          })
+        : undefined,
+    [data],
+  );
   const controlCoordinates = useMemo(
     () => nodes.flatMap((node) => (node.coordinate ? [node.coordinate] : [])),
     [nodes],
@@ -301,8 +366,14 @@ export function AdminTransitLineMapEditor({
       ? `${previewRouteResolution.unresolvedSegmentCount} 个相邻节点暂时无法通过道路连通。`
       : '';
   const visibleTiles = useMemo(
-    () => buildEditorTiles(mapView, viewportSize, data?.tileTemplate ?? null),
-    [data?.tileTemplate, mapView, viewportSize],
+    () =>
+      buildEditorTiles(
+        mapView,
+        viewportSize,
+        data?.tileTemplate ?? null,
+        data?.freshTileTemplate ?? null,
+      ),
+    [data?.freshTileTemplate, data?.tileTemplate, mapView, viewportSize],
   );
   const effectiveTool: EditorTool =
     controlDown && activeTool === 'station'
@@ -747,7 +818,13 @@ export function AdminTransitLineMapEditor({
       return;
     }
 
-    const segmentPaths = buildEditorSegmentPaths(nodes, routeMode, roadGraph);
+    const segmentPaths = buildEditorSegmentPaths(
+      nodes,
+      routeMode,
+      roadGraph,
+      segmentOperationStatusByKey,
+      segmentTravelMinutesByKey,
+    );
     const routeNodes: TransitLineRouteNodeSnapshot[] = nodes.map((node) =>
       node.kind === 'station'
         ? {
@@ -864,6 +941,11 @@ export function AdminTransitLineMapEditor({
         setStatus(result.message ?? '线路保存失败。');
         return;
       }
+      publishAdminDataChanged({
+        resource: 'transit',
+        reason: 'record_updated',
+        occurredAt: new Date().toISOString(),
+      });
       router.push(appPath('/admin/transit'));
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '线路保存失败。');
@@ -917,17 +999,18 @@ export function AdminTransitLineMapEditor({
       >
         <div className="transit-visual-map-tiles" aria-hidden="true">
           {visibleTiles.map((tile) => (
-            <img
-              draggable={false}
+            <LayeredMapTile
+              className="transit-visual-map-tile"
+              fallbackUrl={tile.fallbackUrl}
+              freshUrl={tile.freshUrl}
               key={tile.id}
-              src={tile.url}
+              tileKey={tile.id}
               style={{
                 height: tile.displaySize,
                 left: tile.left,
                 top: tile.top,
                 width: tile.displaySize,
               }}
-              alt=""
             />
           ))}
         </div>
@@ -1083,97 +1166,118 @@ export function AdminTransitLineMapEditor({
         {routePanelCollapsed ? null : (
           <div className="transit-visual-node-list">
             {nodes.map((node, index) => (
-              <div
-                className={`transit-visual-node-row is-${node.kind}${selectedNodeId === node.id ? ' is-selected' : ''}`}
-                key={node.id}
-              >
-                <button
-                  className="transit-visual-node-focus"
-                  type="button"
-                  aria-label={
-                    node.coordinate
-                      ? `在地图定位${node.kind === 'station' ? node.name : '途径点'}`
-                      : `在地图设置${node.kind === 'station' ? node.name : '途径点'}坐标`
-                  }
-                  title={node.coordinate ? '在地图定位' : '在地图设置坐标'}
-                  onClick={() => focusNode(node)}
+              <div key={node.id}>
+                <div
+                  className={`transit-visual-node-row is-${node.kind}${selectedNodeId === node.id ? ' is-selected' : ''}`}
                 >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    {node.kind === 'station' ? 'location_on' : 'add_road'}
-                  </span>
-                </button>
-                <div className="transit-visual-node-main">
-                  {node.kind === 'station' && node.draftClientId ? (
-                    <input
-                      value={node.name}
-                      placeholder="填写新站点名称"
-                      aria-label={`第 ${index + 1} 个新站点名称`}
-                      onChange={(event) =>
-                        updateNode(node.id, (current) =>
-                          current.kind === 'station'
-                            ? { ...current, name: event.currentTarget.value }
-                            : current,
-                        )
-                      }
-                    />
-                  ) : (
-                    <strong>{node.kind === 'station' ? node.name : `途径点 ${index + 1}`}</strong>
-                  )}
-                  <span>
-                    {node.coordinate ? formatCoordinate(node.coordinate) : '缺少坐标'}
-                    {node.boundPoiLabel ? ` · ${node.boundPoiLabel}` : ''}
-                  </span>
-                </div>
-                <select
-                  value={node.direction}
-                  aria-label={`${node.kind === 'station' ? '站点' : '途径点'}方向`}
-                  onChange={(event) =>
-                    updateNode(node.id, (current) => ({
-                      ...current,
-                      direction: event.currentTarget.value as Direction,
-                    }))
-                  }
-                >
-                  <option value="both">双向</option>
-                  <option value="down">仅正向（按站序）</option>
-                  <option value="up">仅反向（逆站序）</option>
-                </select>
-                <div className="transit-visual-node-actions">
                   <button
+                    className="transit-visual-node-focus"
                     type="button"
-                    title="上移"
-                    aria-label="上移"
-                    disabled={index === 0}
-                    onClick={() => moveNode(index, -1)}
+                    aria-label={
+                      node.coordinate
+                        ? `在地图定位${node.kind === 'station' ? node.name : '途径点'}`
+                        : `在地图设置${node.kind === 'station' ? node.name : '途径点'}坐标`
+                    }
+                    title={node.coordinate ? '在地图定位' : '在地图设置坐标'}
+                    onClick={() => focusNode(node)}
                   >
                     <span className="material-symbols-outlined" aria-hidden="true">
-                      arrow_upward
+                      {node.kind === 'station' ? 'location_on' : 'add_road'}
                     </span>
                   </button>
-                  <button
-                    type="button"
-                    title="下移"
-                    aria-label="下移"
-                    disabled={index === nodes.length - 1}
-                    onClick={() => moveNode(index, 1)}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      arrow_downward
+                  <div className="transit-visual-node-main">
+                    {node.kind === 'station' && node.draftClientId ? (
+                      <input
+                        value={node.name}
+                        placeholder="填写新站点名称"
+                        aria-label={`第 ${index + 1} 个新站点名称`}
+                        onChange={(event) =>
+                          updateNode(node.id, (current) =>
+                            current.kind === 'station'
+                              ? { ...current, name: event.currentTarget.value }
+                              : current,
+                          )
+                        }
+                      />
+                    ) : (
+                      <strong>{node.kind === 'station' ? node.name : `途径点 ${index + 1}`}</strong>
+                    )}
+                    <span>
+                      {node.coordinate ? formatCoordinate(node.coordinate) : '缺少坐标'}
+                      {node.boundPoiLabel ? ` · ${node.boundPoiLabel}` : ''}
                     </span>
-                  </button>
-                  <button
-                    type="button"
-                    title="删除"
-                    aria-label="删除"
-                    onClick={() =>
-                      setNodes((current) => current.filter((item) => item.id !== node.id))
+                  </div>
+                  <select
+                    value={node.direction}
+                    aria-label={`${node.kind === 'station' ? '站点' : '途径点'}方向`}
+                    onChange={(event) =>
+                      updateNode(node.id, (current) => ({
+                        ...current,
+                        direction: event.currentTarget.value as Direction,
+                      }))
                     }
                   >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      close
-                    </span>
-                  </button>
+                    <option value="both">双向</option>
+                    <option value="down">仅正向（按站序）</option>
+                    <option value="up">仅反向（逆站序）</option>
+                  </select>
+                  <div className="transit-visual-node-actions">
+                    <button
+                      type="button"
+                      title="上移"
+                      aria-label="上移"
+                      disabled={index === 0}
+                      onClick={() => moveNode(index, -1)}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        arrow_upward
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      title="下移"
+                      aria-label="下移"
+                      disabled={index === nodes.length - 1}
+                      onClick={() => moveNode(index, 1)}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        arrow_downward
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      title="删除"
+                      aria-label="删除"
+                      onClick={() =>
+                        setNodes((current) => current.filter((item) => item.id !== node.id))
+                      }
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        close
+                      </span>
+                    </button>
+                  </div>
                 </div>
+                {node.kind === 'station' ? (
+                  <TransitSegmentOperationStatusEditor
+                    fromNode={node}
+                    nextStationNode={findNextEditorStationNode(nodes, index)}
+                    statusByKey={segmentOperationStatusByKey}
+                    travelMinutesByKey={segmentTravelMinutesByKey}
+                    onChange={(key, operationStatus) =>
+                      setSegmentOperationStatusByKey((current) => ({
+                        ...current,
+                        [key]: operationStatus,
+                      }))
+                    }
+                    onTravelMinutesChange={(key, travelMinutes) =>
+                      setSegmentTravelMinutesByKey((current) => ({
+                        ...current,
+                        [key]: travelMinutes,
+                      }))
+                    }
+                  />
+                ) : null}
               </div>
             ))}
           </div>
@@ -1237,6 +1341,26 @@ export function AdminTransitLineMapEditor({
             location_searching
           </span>
         </button>
+        <CurrentPlayerLocationButton
+          title="追加当前位置为途径点"
+          onUse={(coordinate) => {
+            const waypoint: EditorWaypointNode = {
+              id: createClientId('waypoint'),
+              kind: 'waypoint',
+              coordinate: roundCoordinate(coordinate),
+              direction: 'both',
+            };
+            setNodes((current) =>
+              insertEditorNode(current, waypoint, insertionMode, routeMode, roadGraph),
+            );
+            setMapView((current) => ({
+              ...current,
+              centerX: coordinate[0],
+              centerZ: coordinate[1],
+            }));
+            setStatus('已追加当前位置为途径点。');
+          }}
+        />
       </nav>
       <nav className="transit-visual-viewport-controls" aria-label="地图视野工具">
         <button type="button" aria-label="放大" title="放大" onClick={() => zoomBy(0.5)}>
@@ -1423,6 +1547,11 @@ function buildEditorSegmentPaths(
   nodes: EditorNode[],
   routeMode: 'road' | 'straight',
   graph: VisualRoadGraph | undefined,
+  operationStatusByKey: Record<
+    string,
+    NonNullable<TransitLineSegmentPathSnapshot['operationStatus']>
+  >,
+  travelMinutesByKey: Record<string, string>,
 ): TransitLineSegmentPathSnapshot[] {
   const stationIndexes = nodes.flatMap((node, index) => (node.kind === 'station' ? [index] : []));
   const paths: TransitLineSegmentPathSnapshot[] = [];
@@ -1455,16 +1584,99 @@ function buildEditorSegmentPaths(
         boundPoiLabel: authored?.boundPoiLabel,
       };
     });
-    if (waypoints.length > 0) {
+    const operationStatus =
+      operationStatusByKey[segmentOperationStatusKey(from.stationSourceId, to.stationSourceId)] ??
+      'operating';
+    const travelMinutesText =
+      travelMinutesByKey[
+        segmentOperationStatusKey(from.stationSourceId, to.stationSourceId)
+      ]?.trim();
+    const travelMinutes = travelMinutesText ? Number(travelMinutesText) : undefined;
+    if (waypoints.length > 0 || operationStatus !== 'operating' || travelMinutes !== undefined) {
       paths.push({
         fromStationSourceId: from.stationSourceId,
         toStationSourceId: to.stationSourceId,
         mode: routeMode,
+        operationStatus,
+        travelMinutes,
         waypoints,
       });
     }
   }
   return paths;
+}
+
+function TransitSegmentOperationStatusEditor({
+  fromNode,
+  nextStationNode,
+  onChange,
+  onTravelMinutesChange,
+  statusByKey,
+  travelMinutesByKey,
+}: Readonly<{
+  fromNode: EditorStationNode;
+  nextStationNode: EditorStationNode | undefined;
+  onChange: (
+    key: string,
+    operationStatus: NonNullable<TransitLineSegmentPathSnapshot['operationStatus']>,
+  ) => void;
+  onTravelMinutesChange: (key: string, travelMinutes: string) => void;
+  statusByKey: Record<string, NonNullable<TransitLineSegmentPathSnapshot['operationStatus']>>;
+  travelMinutesByKey: Record<string, string>;
+}>) {
+  if (!nextStationNode) {
+    return null;
+  }
+  const key = segmentOperationStatusKey(fromNode.stationSourceId, nextStationNode.stationSourceId);
+  return (
+    <div className="transit-visual-segment-status">
+      <span>
+        {fromNode.name} 至 {nextStationNode.name}
+      </span>
+      <label>
+        <span>运营状态</span>
+        <select
+          value={statusByKey[key] ?? 'operating'}
+          onChange={(event) =>
+            onChange(
+              key,
+              event.currentTarget.value as NonNullable<
+                TransitLineSegmentPathSnapshot['operationStatus']
+              >,
+            )
+          }
+        >
+          <option value="operating">已运营</option>
+          <option value="planned">规划中</option>
+          <option value="closed">已关闭</option>
+        </select>
+      </label>
+      <label>
+        <span>区间用时（分钟，留空自动估算）</span>
+        <input
+          type="number"
+          min={0.01}
+          max={1440}
+          step="0.01"
+          value={travelMinutesByKey[key] ?? ''}
+          onChange={(event) => onTravelMinutesChange(key, event.currentTarget.value)}
+        />
+      </label>
+    </div>
+  );
+}
+
+function findNextEditorStationNode(
+  nodes: EditorNode[],
+  currentIndex: number,
+): EditorStationNode | undefined {
+  return nodes
+    .slice(currentIndex + 1)
+    .find((node): node is EditorStationNode => node.kind === 'station');
+}
+
+function segmentOperationStatusKey(leftStationId: string, rightStationId: string): string {
+  return [leftStationId, rightStationId].sort().join('\u0000');
 }
 
 function limitPathCoordinates(
@@ -1518,8 +1730,9 @@ function buildEditorTiles(
   view: MapView,
   size: ViewportSize,
   tileTemplate: string | null,
+  freshTileTemplate: string | null,
 ): VisibleTile[] {
-  if (!tileTemplate || size.width <= 0 || size.height <= 0) {
+  if ((!tileTemplate && !freshTileTemplate) || size.width <= 0 || size.height <= 0) {
     return [];
   }
   const scale = getEditorScale(view.zoom);
@@ -1543,7 +1756,10 @@ function buildEditorTiles(
         displaySize,
         left: size.width / 2 + (tileX * tileSize * scale) / tileScale - view.centerX * scale,
         top: size.height / 2 + (tileZ * tileSize * scale) / tileScale - view.centerZ * scale,
-        url: buildTileUrl(tileTemplate, tileZoom, tileX, tileZ),
+        fallbackUrl: tileTemplate ? buildTileUrl(tileTemplate, tileZoom, tileX, tileZ) : undefined,
+        freshUrl: freshTileTemplate
+          ? buildTileUrl(freshTileTemplate, tileZoom, tileX, tileZ)
+          : undefined,
       });
     }
   }
@@ -1682,15 +1898,6 @@ function orderRoadPoints(coordinates: Array<[number, number]>): Array<[number, n
     }
   }
   return ordered;
-}
-
-function selectTileTemplate(providers: TileProviderDescriptor[]): string | null {
-  return (
-    providers.find((provider) => provider.sourceKind === 'safe-https-static')?.tileTemplate ??
-    providers.find((provider) => provider.id === 'lindong-unmined-static')?.tileTemplate ??
-    providers[0]?.tileTemplate ??
-    null
-  );
 }
 
 function defaultRouteMode(line: TransitLine): 'road' | 'straight' {

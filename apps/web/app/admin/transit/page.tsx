@@ -1,10 +1,27 @@
 import { SecondaryShell } from '../../../components/app-shell';
 import { AdminTransitPanel } from '../../../components/admin-transit-panel';
 import { AdminSectionNavigation } from '../../../components/admin-section-navigation';
+import { pageMetadata } from '../../../lib/site-metadata';
 
 export const dynamic = 'force-dynamic';
+export const metadata = pageMetadata.adminTransit;
 
-export default function AdminTransitPage() {
+export default async function AdminTransitPage({
+  searchParams,
+}: Readonly<{
+  searchParams?: Promise<{
+    section?: string | string[];
+    lineId?: string | string[];
+    tripInstanceId?: string | string[];
+  }>;
+}>) {
+  const resolved = searchParams ? await searchParams : undefined;
+  const rawSection = Array.isArray(resolved?.section) ? resolved.section[0] : resolved?.section;
+  const lineId = Array.isArray(resolved?.lineId) ? resolved.lineId[0] : resolved?.lineId;
+  const tripInstanceId = Array.isArray(resolved?.tripInstanceId)
+    ? resolved.tripInstanceId[0]
+    : resolved?.tripInstanceId;
+  const section = rawSection === 'trips' || rawSection === 'profiles' ? rawSection : 'lines';
   return (
     <SecondaryShell
       title="线路与班次后台"
@@ -12,7 +29,11 @@ export default function AdminTransitPage() {
       desktopBackHref="/account"
       desktopNavigation={<AdminSectionNavigation currentPath="/admin/transit" includeOverview />}
     >
-      <AdminTransitPanel />
+      <AdminTransitPanel
+        initialSection={section}
+        initialLineId={lineId}
+        initialTripInstanceId={tripInstanceId}
+      />
     </SecondaryShell>
   );
 }

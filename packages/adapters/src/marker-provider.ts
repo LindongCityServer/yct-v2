@@ -52,8 +52,13 @@ const semanticPoiIconCategories: SemanticPoiIconCategory[] = [
     id: 'metro-entrance',
     name: '地铁出入口',
     sortOrder: 30,
-    match: (_fileName, baseName) =>
-      baseName === 'way-in' || baseName === 'way-out' || /^exit(?:-[a-z0-9]+)?$/i.test(baseName),
+    match: (_fileName, baseName) => /^exit(?:-[a-z0-9]+)?$/i.test(baseName),
+  },
+  {
+    id: 'ordinary-entrance',
+    name: '普通出入口',
+    sortOrder: 35,
+    match: (_fileName, baseName) => baseName === 'way-in' || baseName === 'way-out',
   },
   {
     id: 'bus-stop',

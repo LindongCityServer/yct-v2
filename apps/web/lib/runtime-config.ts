@@ -1,4 +1,5 @@
 import type { PushNotificationType } from '@yct/contracts';
+import path from 'node:path';
 import { appPath } from './app-paths';
 
 export interface RuntimeConfig {
@@ -46,6 +47,8 @@ export interface RuntimeConfig {
   eventOutboxStorePath: string;
   localePreferenceStorePath: string;
   mapFavoriteStorePath: string;
+  mapSpatialProfileStorePath: string;
+  administrativeAreaStorePath: string;
   playerLocationStorePath: string;
   notificationPreferenceStorePath: string;
   pushSubscriptionStorePath: string;
@@ -82,6 +85,17 @@ function emptyToUndefined(value: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function resolveRuntimePath(value: string | undefined, fallback: string): string;
+function resolveRuntimePath(value: string | undefined): string | undefined;
+function resolveRuntimePath(value: string | undefined, fallback?: string): string | undefined {
+  const configuredPath = emptyToUndefined(value) ?? fallback;
+  const runtimeRoot = emptyToUndefined(process.env.YCT_RUNTIME_ROOT);
+  if (!configuredPath || !runtimeRoot || path.isAbsolute(configuredPath)) {
+    return configuredPath;
+  }
+  return path.resolve(runtimeRoot, configuredPath);
+}
+
 export function readRuntimeConfig(): RuntimeConfig {
   return {
     siteUrl: emptyToUndefined(process.env.YCT_PUBLIC_SITE_URL) ?? 'http://localhost:3000',
@@ -107,119 +121,171 @@ export function readRuntimeConfig(): RuntimeConfig {
       14_400,
     ),
     ldpassRideWebhookSecret: emptyToUndefined(process.env.LDPASS_RIDE_WEBHOOK_SECRET),
-    rideCodeSessionStorePath:
-      emptyToUndefined(process.env.YCT_RIDE_CODE_SESSION_STORE_PATH) ??
+    rideCodeSessionStorePath: resolveRuntimePath(
+      process.env.YCT_RIDE_CODE_SESSION_STORE_PATH,
       '.yct-data/ride-code-sessions.json',
-    rideGateConfigStorePath:
-      emptyToUndefined(process.env.YCT_RIDE_GATE_CONFIG_STORE_PATH) ??
+    ),
+    rideGateConfigStorePath: resolveRuntimePath(
+      process.env.YCT_RIDE_GATE_CONFIG_STORE_PATH,
       '.yct-data/ride-gate-config.json',
+    ),
     rideGatewayToken: emptyToUndefined(process.env.YCT_RIDE_GATEWAY_TOKEN),
-    yctSessionStorePath:
-      emptyToUndefined(process.env.YCT_SESSION_STORE_PATH) ?? '.yct-data/yct-account-sessions.json',
-    yctUserLinkStorePath:
-      emptyToUndefined(process.env.YCT_USER_LINK_STORE_PATH) ?? '.yct-data/yct-user-links.json',
-    adminStorePath:
-      emptyToUndefined(process.env.YCT_ADMIN_STORE_PATH) ?? '.yct-data/admin-memberships.json',
-    contentStorePath:
-      emptyToUndefined(process.env.YCT_CONTENT_STORE_PATH) ?? '.yct-data/content-store.json',
-    operationsReminderRuleStorePath:
-      emptyToUndefined(process.env.YCT_OPERATIONS_REMINDER_RULE_STORE_PATH) ??
+    yctSessionStorePath: resolveRuntimePath(
+      process.env.YCT_SESSION_STORE_PATH,
+      '.yct-data/yct-account-sessions.json',
+    ),
+    yctUserLinkStorePath: resolveRuntimePath(
+      process.env.YCT_USER_LINK_STORE_PATH,
+      '.yct-data/yct-user-links.json',
+    ),
+    adminStorePath: resolveRuntimePath(
+      process.env.YCT_ADMIN_STORE_PATH,
+      '.yct-data/admin-memberships.json',
+    ),
+    contentStorePath: resolveRuntimePath(
+      process.env.YCT_CONTENT_STORE_PATH,
+      '.yct-data/content-store.json',
+    ),
+    operationsReminderRuleStorePath: resolveRuntimePath(
+      process.env.YCT_OPERATIONS_REMINDER_RULE_STORE_PATH,
       '.yct-data/operations-reminder-rule-store.json',
-    operationsReminderSourceStateStorePath:
-      emptyToUndefined(process.env.YCT_OPERATIONS_REMINDER_SOURCE_STATE_STORE_PATH) ??
+    ),
+    operationsReminderSourceStateStorePath: resolveRuntimePath(
+      process.env.YCT_OPERATIONS_REMINDER_SOURCE_STATE_STORE_PATH,
       '.yct-data/operations-reminder-source-state.json',
-    contentAssetStorePath:
-      emptyToUndefined(process.env.YCT_CONTENT_ASSET_STORE_PATH) ??
+    ),
+    contentAssetStorePath: resolveRuntimePath(
+      process.env.YCT_CONTENT_ASSET_STORE_PATH,
       '.yct-data/content-asset-store.json',
-    contentAssetUploadDir:
-      emptyToUndefined(process.env.YCT_CONTENT_ASSET_UPLOAD_DIR) ??
+    ),
+    contentAssetUploadDir: resolveRuntimePath(
+      process.env.YCT_CONTENT_ASSET_UPLOAD_DIR,
       'apps/web/public/content-assets',
-    serviceEntryStorePath:
-      emptyToUndefined(process.env.YCT_SERVICE_ENTRY_STORE_PATH) ??
+    ),
+    serviceEntryStorePath: resolveRuntimePath(
+      process.env.YCT_SERVICE_ENTRY_STORE_PATH,
       '.yct-data/service-entry-store.json',
-    materialTemplateStorePath:
-      emptyToUndefined(process.env.YCT_MATERIAL_TEMPLATE_STORE_PATH) ??
+    ),
+    materialTemplateStorePath: resolveRuntimePath(
+      process.env.YCT_MATERIAL_TEMPLATE_STORE_PATH,
       '.yct-data/material-template-store.json',
-    materialDraftStorePath:
-      emptyToUndefined(process.env.YCT_MATERIAL_DRAFT_STORE_PATH) ??
+    ),
+    materialDraftStorePath: resolveRuntimePath(
+      process.env.YCT_MATERIAL_DRAFT_STORE_PATH,
       '.yct-data/material-draft-store.json',
-    materialTransitNetworkProjectStorePath:
-      emptyToUndefined(process.env.YCT_MATERIAL_TRANSIT_NETWORK_PROJECT_STORE_PATH) ??
+    ),
+    materialTransitNetworkProjectStorePath: resolveRuntimePath(
+      process.env.YCT_MATERIAL_TRANSIT_NETWORK_PROJECT_STORE_PATH,
       '.yct-data/material-transit-network-project-store.json',
-    materialExportAuditStorePath:
-      emptyToUndefined(process.env.YCT_MATERIAL_EXPORT_AUDIT_STORE_PATH) ??
+    ),
+    materialExportAuditStorePath: resolveRuntimePath(
+      process.env.YCT_MATERIAL_EXPORT_AUDIT_STORE_PATH,
       '.yct-data/material-export-audit-store.json',
-    transitDataStorePath:
-      emptyToUndefined(process.env.YCT_TRANSIT_DATA_STORE_PATH) ??
+    ),
+    transitDataStorePath: resolveRuntimePath(
+      process.env.YCT_TRANSIT_DATA_STORE_PATH,
       '.yct-data/transit-data-store.json',
-    transitModeProfileStorePath:
-      emptyToUndefined(process.env.YCT_TRANSIT_MODE_PROFILE_STORE_PATH) ??
+    ),
+    transitModeProfileStorePath: resolveRuntimePath(
+      process.env.YCT_TRANSIT_MODE_PROFILE_STORE_PATH,
       '.yct-data/transit-mode-profile-store.json',
-    travelScheduleRevisionStorePath:
-      emptyToUndefined(process.env.YCT_TRAVEL_SCHEDULE_REVISION_STORE_PATH) ??
+    ),
+    travelScheduleRevisionStorePath: resolveRuntimePath(
+      process.env.YCT_TRAVEL_SCHEDULE_REVISION_STORE_PATH,
       '.yct-data/travel-schedule-revision-store.json',
-    travelServiceProfileStorePath:
-      emptyToUndefined(process.env.YCT_TRAVEL_SERVICE_PROFILE_STORE_PATH) ??
+    ),
+    travelServiceProfileStorePath: resolveRuntimePath(
+      process.env.YCT_TRAVEL_SERVICE_PROFILE_STORE_PATH,
       '.yct-data/travel-service-profile-store.json',
-    ticketingCatalogStorePath:
-      emptyToUndefined(process.env.YCT_TICKETING_CATALOG_STORE_PATH) ??
+    ),
+    ticketingCatalogStorePath: resolveRuntimePath(
+      process.env.YCT_TICKETING_CATALOG_STORE_PATH,
       '.yct-data/ticketing-catalog-store.json',
-    ticketOrderStorePath:
-      emptyToUndefined(process.env.YCT_TICKET_ORDER_STORE_PATH) ??
+    ),
+    ticketOrderStorePath: resolveRuntimePath(
+      process.env.YCT_TICKET_ORDER_STORE_PATH,
       '.yct-data/ticket-order-store.json',
-    poiSubmissionStorePath:
-      emptyToUndefined(process.env.YCT_POI_SUBMISSION_STORE_PATH) ??
+    ),
+    poiSubmissionStorePath: resolveRuntimePath(
+      process.env.YCT_POI_SUBMISSION_STORE_PATH,
       '.yct-data/poi-submission-store.json',
-    poiSubmissionImageUploadDir:
-      emptyToUndefined(process.env.YCT_POI_SUBMISSION_IMAGE_UPLOAD_DIR) ??
+    ),
+    poiSubmissionImageUploadDir: resolveRuntimePath(
+      process.env.YCT_POI_SUBMISSION_IMAGE_UPLOAD_DIR,
       '.yct-data/poi-submission-images',
-    entityTranslationStorePath:
-      emptyToUndefined(process.env.YCT_ENTITY_TRANSLATION_STORE_PATH) ??
+    ),
+    entityTranslationStorePath: resolveRuntimePath(
+      process.env.YCT_ENTITY_TRANSLATION_STORE_PATH,
       '.yct-data/entity-translation-store.json',
-    poiSubmissionImageReviewStorePath:
-      emptyToUndefined(process.env.YCT_POI_SUBMISSION_IMAGE_REVIEW_STORE_PATH) ??
+    ),
+    poiSubmissionImageReviewStorePath: resolveRuntimePath(
+      process.env.YCT_POI_SUBMISSION_IMAGE_REVIEW_STORE_PATH,
       '.yct-data/poi-submission-image-review-store.json',
-    poiCategoryProfileStorePath:
-      emptyToUndefined(process.env.YCT_POI_CATEGORY_PROFILE_STORE_PATH) ??
+    ),
+    poiCategoryProfileStorePath: resolveRuntimePath(
+      process.env.YCT_POI_CATEGORY_PROFILE_STORE_PATH,
       '.yct-data/poi-category-profile-store.json',
-    poiCategoryIconMetadataStorePath:
-      emptyToUndefined(process.env.YCT_POI_CATEGORY_ICON_METADATA_STORE_PATH) ??
+    ),
+    poiCategoryIconMetadataStorePath: resolveRuntimePath(
+      process.env.YCT_POI_CATEGORY_ICON_METADATA_STORE_PATH,
       '.yct-data/poi-category-icon-metadata-store.json',
-    poiConflictDecisionStorePath:
-      emptyToUndefined(process.env.YCT_POI_CONFLICT_DECISION_STORE_PATH) ??
+    ),
+    poiConflictDecisionStorePath: resolveRuntimePath(
+      process.env.YCT_POI_CONFLICT_DECISION_STORE_PATH,
       '.yct-data/poi-conflict-decision-store.json',
-    legacyMapMarkerOverrideStorePath:
-      emptyToUndefined(process.env.YCT_LEGACY_MAP_MARKER_OVERRIDE_STORE_PATH) ??
+    ),
+    legacyMapMarkerOverrideStorePath: resolveRuntimePath(
+      process.env.YCT_LEGACY_MAP_MARKER_OVERRIDE_STORE_PATH,
       '.yct-data/legacy-map-marker-overrides.json',
-    poiIconUploadDir:
-      emptyToUndefined(process.env.YCT_POI_ICON_UPLOAD_DIR) ?? 'runtime-assets/poi-icons',
-    offlinePackageStorePath:
-      emptyToUndefined(process.env.YCT_OFFLINE_PACKAGE_STORE_PATH) ??
+    ),
+    poiIconUploadDir: resolveRuntimePath(
+      process.env.YCT_POI_ICON_UPLOAD_DIR,
+      'runtime-assets/poi-icons',
+    ),
+    offlinePackageStorePath: resolveRuntimePath(
+      process.env.YCT_OFFLINE_PACKAGE_STORE_PATH,
       '.yct-data/offline-package-store.json',
-    eventOutboxStorePath:
-      emptyToUndefined(process.env.YCT_EVENT_OUTBOX_STORE_PATH) ??
+    ),
+    eventOutboxStorePath: resolveRuntimePath(
+      process.env.YCT_EVENT_OUTBOX_STORE_PATH,
       '.yct-data/event-outbox-store.json',
-    localePreferenceStorePath:
-      emptyToUndefined(process.env.YCT_LOCALE_PREFERENCE_STORE_PATH) ??
+    ),
+    localePreferenceStorePath: resolveRuntimePath(
+      process.env.YCT_LOCALE_PREFERENCE_STORE_PATH,
       '.yct-data/locale-preference-store.json',
-    mapFavoriteStorePath:
-      emptyToUndefined(process.env.YCT_MAP_FAVORITE_STORE_PATH) ??
+    ),
+    mapFavoriteStorePath: resolveRuntimePath(
+      process.env.YCT_MAP_FAVORITE_STORE_PATH,
       '.yct-data/map-favorite-store.json',
-    playerLocationStorePath:
-      emptyToUndefined(process.env.YCT_PLAYER_LOCATION_STORE_PATH) ??
+    ),
+    mapSpatialProfileStorePath: resolveRuntimePath(
+      process.env.YCT_MAP_SPATIAL_PROFILE_STORE_PATH,
+      '.yct-data/map-spatial-profile-store.json',
+    ),
+    administrativeAreaStorePath: resolveRuntimePath(
+      process.env.YCT_ADMINISTRATIVE_AREA_STORE_PATH,
+      '.yct-data/administrative-area-store.json',
+    ),
+    playerLocationStorePath: resolveRuntimePath(
+      process.env.YCT_PLAYER_LOCATION_STORE_PATH,
       '.yct-data/player-location-store.json',
-    notificationPreferenceStorePath:
-      emptyToUndefined(process.env.YCT_NOTIFICATION_PREFERENCE_STORE_PATH) ??
+    ),
+    notificationPreferenceStorePath: resolveRuntimePath(
+      process.env.YCT_NOTIFICATION_PREFERENCE_STORE_PATH,
       '.yct-data/notification-preference-store.json',
-    pushSubscriptionStorePath:
-      emptyToUndefined(process.env.YCT_PUSH_SUBSCRIPTION_STORE_PATH) ??
+    ),
+    pushSubscriptionStorePath: resolveRuntimePath(
+      process.env.YCT_PUSH_SUBSCRIPTION_STORE_PATH,
       '.yct-data/push-subscription-store.json',
-    pushDeliveryStorePath:
-      emptyToUndefined(process.env.YCT_PUSH_DELIVERY_STORE_PATH) ??
+    ),
+    pushDeliveryStorePath: resolveRuntimePath(
+      process.env.YCT_PUSH_DELIVERY_STORE_PATH,
       '.yct-data/push-delivery-store.json',
-    internalTaskRunStorePath:
-      emptyToUndefined(process.env.YCT_INTERNAL_TASK_RUN_STORE_PATH) ??
+    ),
+    internalTaskRunStorePath: resolveRuntimePath(
+      process.env.YCT_INTERNAL_TASK_RUN_STORE_PATH,
       '.yct-data/internal-task-run-store.json',
+    ),
     webPushSubject: emptyToUndefined(process.env.YCT_WEB_PUSH_SUBJECT),
     webPushPublicKey:
       emptyToUndefined(process.env.YCT_WEB_PUSH_PUBLIC_KEY) ??
@@ -234,9 +300,10 @@ export function readRuntimeConfig(): RuntimeConfig {
       5 * 60 * 1000,
     ),
     internalTaskToken: emptyToUndefined(process.env.YCT_INTERNAL_TASK_TOKEN),
-    tripReminderStorePath:
-      emptyToUndefined(process.env.YCT_TRIP_REMINDER_STORE_PATH) ??
+    tripReminderStorePath: resolveRuntimePath(
+      process.env.YCT_TRIP_REMINDER_STORE_PATH,
       '.yct-data/trip-reminder-store.json',
+    ),
     tileFreshHttpTemplate:
       emptyToUndefined(process.env.YCT_TILE_FRESH_HTTP_TEMPLATE) ??
       'http://ld.cmsy.xyz:19136/tiles/zoom.{z}/{xd}/{yd}/tile.{x}.{y}.webp',
@@ -247,7 +314,7 @@ export function readRuntimeConfig(): RuntimeConfig {
       emptyToUndefined(process.env.YCT_MARKER_BDSLM_BASE_URL) ?? 'http://ld.cmsy.xyz:19136',
     markerBdslmTimeoutMs: Number(process.env.YCT_MARKER_BDSLM_TIMEOUT_MS ?? 6000),
     legacyDataSource: parseLegacyDataSource(process.env.YCT_LEGACY_DATA_SOURCE),
-    legacyDataDir: emptyToUndefined(process.env.YCT_LEGACY_DATA_DIR),
+    legacyDataDir: resolveRuntimePath(process.env.YCT_LEGACY_DATA_DIR),
     legacyDataRemoteBaseUrl:
       emptyToUndefined(process.env.YCT_LEGACY_DATA_REMOTE_BASE_URL) ??
       'https://yct.shangxiaoguan.top/data',
@@ -262,9 +329,10 @@ export function readRuntimeConfig(): RuntimeConfig {
       'https://haojin.guanmu233.cn/data/flight_data.txt',
     legacyAssetPublicPrefix:
       emptyToUndefined(process.env.YCT_LEGACY_ASSET_PUBLIC_PREFIX) ?? appPath('/legacy-assets'),
-    legacyAssetDownloadReportPath:
-      emptyToUndefined(process.env.YCT_LEGACY_ASSET_DOWNLOAD_REPORT_PATH) ??
+    legacyAssetDownloadReportPath: resolveRuntimePath(
+      process.env.YCT_LEGACY_ASSET_DOWNLOAD_REPORT_PATH,
       '.yct-data/legacy-assets-download-report.json',
+    ),
     poiIconCandidates: parsePoiIconCandidates(process.env.YCT_POI_ICON_CANDIDATES),
   };
 }

@@ -4,6 +4,7 @@ import type {
   TransitLineRouteMode,
   TransitLineRouteNodeSnapshot,
   TransitLineSegmentPathSnapshot,
+  TransitOperationStatus,
 } from '@yct/contracts';
 import { toUppercaseRoadPinyin } from './chinese-pinyin';
 import {
@@ -13,7 +14,8 @@ import {
   type MaterialLocationOption,
 } from './material-location-source';
 import { findMaterialTransitLineNumber } from './entity-translation-store';
-import { readTransitOverview } from './transit-data';
+import { readMapSpatialProfile } from './map-spatial-profile-store';
+import { readMaterialTransitOverview } from './transit-data';
 import {
   findMaterialTransitNetworkLine,
   findMaterialTransitNetworkNodeByName,
@@ -40,6 +42,7 @@ export interface MaterialTransitLineOption {
   id: string;
   name: string;
   mode: string;
+  operationStatus: TransitOperationStatus;
   color?: string;
   operator?: string;
   stationCount: number;
@@ -81,12 +84,13 @@ interface TransitStationLineCandidate extends Omit<MaterialTransitStationLineOpt
 }
 
 export async function listMaterialTransitLines(): Promise<MaterialTransitLineOption[]> {
-  const overview = await readTransitOverview();
+  const overview = await readMaterialTransitOverview();
   return overview.lines
     .map((line) => ({
       id: line.id,
       name: line.name,
       mode: line.mode,
+      operationStatus: line.operationStatus,
       color: line.color,
       operator: line.operator,
       stationCount: line.stationCount,
@@ -104,7 +108,10 @@ export async function listMaterialTransitLines(): Promise<MaterialTransitLineOpt
  * 无法获得相邻站点或道路坐标时保留为 unknown，不与已识别方向混选。
  */
 export async function listMaterialTransitStations(): Promise<MaterialTransitStationOption[]> {
-  const [overview, locations] = await Promise.all([readTransitOverview(), listMaterialLocations()]);
+  const [overview, locations] = await Promise.all([
+    readMaterialTransitOverview(),
+    listMaterialLocations(),
+  ]);
   const busStopLocations = locations.filter(
     (location) => location.categoryId.trim().toLowerCase() === 'bus-stop',
   );
@@ -217,7 +224,7 @@ export async function resolveTransitLineMaterialInput(input: {
   fields: MaterialTemplateField[];
   networkGeometry?: MaterialTransitNetworkSnapshot;
 }): Promise<{ values: Record<string, string>; sourceRef: string }> {
-  const overview = await readTransitOverview();
+  const overview = await readMaterialTransitOverview();
   const line = overview.lines.find((item) => item.id === input.lineId);
   if (!line) {
     throw new Error('所选线路不存在或尚未发布。');
@@ -281,7 +288,7 @@ export async function resolveTransitStationMaterialInput(
   }
   const [stations, overview] = await Promise.all([
     listMaterialTransitStations(),
-    readTransitOverview(),
+    readMaterialTransitOverview(),
   ]);
   const station = stations.find((item) => item.markerId === input.stationMarkerId);
   if (!station) {
@@ -551,9 +558,10 @@ async function createTransitRouteMapData(input: {
       return { data: imported, usedImportedGeometry: true };
     }
   }
-  const [locations, markers] = await Promise.all([
+  const [locations, markers, mapSpatialProfile] = await Promise.all([
     listMaterialLocations(),
     listMaterialMapMarkers(),
+    readMapSpatialProfile(),
   ]);
   const locationByMarkerId = new Map(
     locations.map((location) => [getMarkerId(location.id), location] as const),
@@ -571,7 +579,11 @@ async function createTransitRouteMapData(input: {
     index,
     stop,
   }));
-  const graph = buildVisualRoadGraph(markers);
+  const graph = buildVisualRoadGraph(markers, mapSpatialProfile.roadTiming.junctionSnapTolerance, {
+    defaultY: mapSpatialProfile.defaultY,
+    verticalTolerance: mapSpatialProfile.verticalTolerance,
+    worldId: mapSpatialProfile.worldId,
+  });
   const route: Array<[number, number]> = [];
   for (let index = 1; index < locatedStops.length; index += 1) {
     const previous = locatedStops[index - 1];
@@ -599,7 +611,12 @@ async function createTransitRouteMapData(input: {
     appendRouteCoordinates(
       route,
       followsRoad
-        ? resolveVisualRoute(controlCoordinates, 'road', graph).coordinates
+        ? resolveVisualRoute(
+            controlCoordinates,
+            'road',
+            graph,
+            input.line.mode === 'coach' ? 'coach' : 'bus',
+          ).coordinates
         : controlCoordinates,
     );
   }

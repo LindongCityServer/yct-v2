@@ -303,6 +303,9 @@ export type CommonMessageKey =
   | 'map.layer.players'
   | 'map.layer.playersHidden'
   | 'map.layer.playersVisible'
+  | 'map.layer.perspective'
+  | 'map.layer.perspectiveHidden'
+  | 'map.layer.perspectiveVisible'
   | 'map.layer.submitPoi'
   | 'map.layer.tileProvider'
   | 'map.layer.tileProviderAria'
@@ -358,6 +361,9 @@ export type CommonMessageKey =
   | 'map.poi.objectFallback'
   | 'map.poi.openDetail'
   | 'map.poi.openingHours'
+  | 'map.poi.operations'
+  | 'map.poi.operationsEmpty'
+  | 'map.poi.operationsLoading'
   | 'map.poi.parent'
   | 'map.poi.boundRegions'
   | 'map.poi.parentFallback'
@@ -470,6 +476,11 @@ export type CommonMessageKey =
   | 'map.route.defaultView'
   | 'map.route.depart'
   | 'map.route.destination'
+  | 'map.route.taxiDirect'
+  | 'map.route.taxiNote'
+  | 'map.route.taxiWithDistance'
+  | 'map.route.taxiWalkFromDropoff'
+  | 'map.route.taxiWalkToPickup'
   | 'map.route.directTitle'
   | 'map.route.distance.blocks'
   | 'map.route.duration.short'
@@ -495,6 +506,7 @@ export type CommonMessageKey =
   | 'map.route.mode.bus'
   | 'map.route.mode.coach'
   | 'map.route.mode.collapse'
+  | 'map.route.mode.taxi'
   | 'map.route.mode.ferry'
   | 'map.route.mode.metro'
   | 'map.route.mode.more'
@@ -516,6 +528,11 @@ export type CommonMessageKey =
   | 'map.route.road.enter'
   | 'map.route.selectDestination'
   | 'map.route.selectOrigin'
+  | 'map.route.sort.time'
+  | 'map.route.sort.fare'
+  | 'map.route.sort.transfers'
+  | 'map.route.sort.walking'
+  | 'map.route.sortAria'
   | 'map.route.copyStatus'
   | 'map.route.share'
   | 'map.route.shareOpened'
@@ -606,6 +623,7 @@ export type CommonMessageKey =
   | 'operations.serverStatus.title'
   | 'operations.serverStatus.unknown'
   | 'operations.serverStatusAria'
+  | 'operations.social.afdian'
   | 'operations.social.bilibili'
   | 'operations.social.qq'
   | 'operations.social.qqChannel'
@@ -1262,6 +1280,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.layer.players': '玩家位置',
     'map.layer.playersHidden': '已隐藏在线/离线玩家',
     'map.layer.playersVisible': '显示在线/离线玩家',
+    'map.layer.perspective': '俯视 2.5D',
+    'map.layer.perspectiveHidden': '按二维区域显示',
+    'map.layer.perspectiveVisible': '显示立体 POI 体块',
     'map.layer.submitPoi': '投稿 POI',
     'map.layer.tileProvider': '瓦片源',
     'map.layer.tileProviderAria': '瓦片源',
@@ -1317,6 +1338,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.objectFallback': '地图对象',
     'map.poi.openDetail': '打开详情',
     'map.poi.openingHours': '营业时间',
+    'map.poi.operations': '运营消息',
+    'map.poi.operationsEmpty': '当前没有生效中的运营消息',
+    'map.poi.operationsLoading': '正在读取运营消息',
     'map.poi.parent': '所属地点',
     'map.poi.boundRegions': '所属区域',
     'map.poi.parentFallback': '父地点',
@@ -1433,6 +1457,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.depart': '{name} 出发',
     'map.route.destination': '终点',
     'map.route.directTitle': '{mode}直达',
+    'map.route.taxiDirect': '打车直达',
+    'map.route.taxiNote':
+      '出租车只沿道路行驶；移动时间按后台默认限速 {speed} km/h 与路口延误估算，计价规则由后台维护。',
+    'map.route.taxiWithDistance': '乘出租车沿道路行驶 {distance} {duration}',
+    'map.route.taxiWalkFromDropoff': '下车后步行 {distance} {duration}',
+    'map.route.taxiWalkToPickup': '步行到道路上车点 {distance} {duration}',
     'map.route.distance.blocks': '{count} 格',
     'map.route.duration.short': '约 {count} 分',
     'map.route.duration.step': '{count}分钟',
@@ -1457,6 +1487,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.mode.bus': '公交',
     'map.route.mode.coach': '客运',
     'map.route.mode.collapse': '收起',
+    'map.route.mode.taxi': '打车',
     'map.route.mode.ferry': '轮渡',
     'map.route.mode.metro': '地铁',
     'map.route.mode.more': '更多{count}',
@@ -1478,6 +1509,11 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.road.enter': '进入{road}',
     'map.route.selectDestination': '选择终点',
     'map.route.selectOrigin': '选择起点',
+    'map.route.sort.time': '按时间排序',
+    'map.route.sort.fare': '按票价排序',
+    'map.route.sort.transfers': '按换乘次数排序',
+    'map.route.sort.walking': '按步行距离排序',
+    'map.route.sortAria': '路线排序方式',
     'map.route.copyStatus': '已复制路线链接',
     'map.route.share': '分享路线',
     'map.route.shareOpened': '已打开系统分享面板',
@@ -1500,9 +1536,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.transitNote.default':
       '已按真实线路站序生成候选；站间耗时优先使用旧数据 travelTime，缺失时仍按距离估算。',
     'map.route.transitNote.fallbackRoad':
-      '已尝试使用旧地图道路端点图生成公交/客运站间路径；当前路网缺失或不连通的片段仍按直线估算。站间耗时优先使用旧数据 travelTime。',
+      '公交/客运站间要求沿道路行驶；当前路网缺失或不连通时不会生成该候选。站间耗时优先使用后台区间用时，其次使用旧数据 travelTime。',
     'map.route.transitNote.road':
-      '公交/客运站间已优先沿旧地图道路端点图生成，并按 100 格规则连通相邻道路；无法连通的片段回退为直线估算。站间耗时优先使用旧数据 travelTime。',
+      '公交/客运站间只沿旧地图道路中心线生成，并仅在中心线平面相交处推断路口；无法连通的候选已排除。站间耗时优先使用后台区间用时，其次使用旧数据 travelTime。',
     'map.route.transitNote.transfer':
       '已按真实线路站序组合一次换乘候选；换乘距离和缺失站间耗时仍为估算。',
     'map.route.turn.left': '左转',
@@ -1516,7 +1552,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.walkFromAccess': '经 {access} 步行至终点 {distance} {duration}',
     'map.route.walkNote.direct': '当前未找到可连通道路图，步行暂按直线估算。',
     'map.route.walkNote.road':
-      '步行默认优先使用旧地图道路端点图和 100 格连通候选；无法连通的片段会回退直线估算。',
+      '步行默认优先使用旧地图道路中心线，并只在中心线平面交点换路；无法连通的片段会回退直线估算。',
     'map.route.walkRoadWithDistance': '沿道路步行 {distance} {duration}',
     'map.route.walkStraight': '直线步行',
     'map.route.walkToAccess': '步行至 {access} {distance} {duration}',
@@ -1575,6 +1611,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operations.serverStatus.title': '服务器状态',
     'operations.serverStatus.unknown': '状态未知',
     'operations.serverStatusAria': '服务器状态与在线玩家',
+    'operations.social.afdian': '爱发电',
     'operations.social.bilibili': 'Bilibili',
     'operations.social.qq': 'QQ 群',
     'operations.social.qqChannel': 'QQ 频道',
@@ -2229,6 +2266,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.layer.players': '玩家位置',
     'map.layer.playersHidden': '已隱藏線上/離線玩家',
     'map.layer.playersVisible': '顯示線上/離線玩家',
+    'map.layer.perspective': '俯視 2.5D',
+    'map.layer.perspectiveHidden': '按二維區域顯示',
+    'map.layer.perspectiveVisible': '顯示立體 POI 體塊',
     'map.layer.submitPoi': '投稿 POI',
     'map.layer.tileProvider': '瓦片源',
     'map.layer.tileProviderAria': '瓦片源',
@@ -2284,6 +2324,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.objectFallback': '地圖物件',
     'map.poi.openDetail': '開啟詳情',
     'map.poi.openingHours': '營業時間',
+    'map.poi.operations': '營運消息',
+    'map.poi.operationsEmpty': '目前沒有生效中的營運消息',
+    'map.poi.operationsLoading': '正在讀取營運消息',
     'map.poi.parent': '所屬地點',
     'map.poi.boundRegions': '所屬區域',
     'map.poi.parentFallback': '父地點',
@@ -2400,6 +2443,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.depart': '{name} 出發',
     'map.route.destination': '終點',
     'map.route.directTitle': '{mode}直達',
+    'map.route.taxiDirect': '乘車直達',
+    'map.route.taxiNote':
+      '計程車只沿道路行駛；移動時間按後台預設限速 {speed} km/h 與路口延誤估算，計價規則由後台維護。',
+    'map.route.taxiWithDistance': '乘計程車沿道路行駛 {distance} {duration}',
+    'map.route.taxiWalkFromDropoff': '下車後步行 {distance} {duration}',
+    'map.route.taxiWalkToPickup': '步行到道路上車點 {distance} {duration}',
     'map.route.distance.blocks': '{count} 格',
     'map.route.duration.short': '約 {count} 分',
     'map.route.duration.step': '{count}分鐘',
@@ -2424,6 +2473,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.mode.bus': '公交',
     'map.route.mode.coach': '客運',
     'map.route.mode.collapse': '收合',
+    'map.route.mode.taxi': '乘車',
     'map.route.mode.ferry': '輪渡',
     'map.route.mode.metro': '地鐵',
     'map.route.mode.more': '更多{count}',
@@ -2445,6 +2495,11 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.road.enter': '進入{road}',
     'map.route.selectDestination': '選擇終點',
     'map.route.selectOrigin': '選擇起點',
+    'map.route.sort.time': '按時間排序',
+    'map.route.sort.fare': '按票價排序',
+    'map.route.sort.transfers': '按轉乘次數排序',
+    'map.route.sort.walking': '按步行距離排序',
+    'map.route.sortAria': '路線排序方式',
     'map.route.copyStatus': '已複製路線連結',
     'map.route.share': '分享路線',
     'map.route.shareOpened': '已開啟系統分享面板',
@@ -2467,9 +2522,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.transitNote.default':
       '已按真實線路站序生成候選；站間耗時優先使用舊資料 travelTime，缺失時仍按距離估算。',
     'map.route.transitNote.fallbackRoad':
-      '已嘗試使用舊地圖道路端點圖生成公交/客運站間路徑；目前路網缺失或不連通的片段仍按直線估算。站間耗時優先使用舊資料 travelTime。',
+      '公交/客運站間要求沿道路行駛；目前路網缺失或不連通時不會生成該候選。站間耗時優先使用後台區間用時，其次使用舊資料 travelTime。',
     'map.route.transitNote.road':
-      '公交/客運站間已優先沿舊地圖道路端點圖生成，並按 100 格規則連通相鄰道路；無法連通的片段回退為直線估算。站間耗時優先使用舊資料 travelTime。',
+      '公交/客運站間只沿舊地圖道路中心線生成，並僅在中心線平面相交處推斷路口；無法連通的候選已排除。站間耗時優先使用後台區間用時，其次使用舊資料 travelTime。',
     'map.route.transitNote.transfer':
       '已按真實線路站序組合一次換乘候選；換乘距離和缺失站間耗時仍為估算。',
     'map.route.turn.left': '左轉',
@@ -2483,7 +2538,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.walkFromAccess': '經 {access} 步行至終點 {distance} {duration}',
     'map.route.walkNote.direct': '目前未找到可連通道路圖，步行暫按直線估算。',
     'map.route.walkNote.road':
-      '步行預設優先使用舊地圖道路端點圖和 100 格連通候選；無法連通的片段會回退直線估算。',
+      '步行預設優先使用舊地圖道路中心線，並只在中心線平面交點換路；無法連通的片段會回退直線估算。',
     'map.route.walkRoadWithDistance': '沿道路步行 {distance} {duration}',
     'map.route.walkStraight': '直線步行',
     'map.route.walkToAccess': '步行至 {access} {distance} {duration}',
@@ -2542,6 +2597,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operations.serverStatus.title': '伺服器狀態',
     'operations.serverStatus.unknown': '狀態未知',
     'operations.serverStatusAria': '伺服器狀態與在線玩家',
+    'operations.social.afdian': '愛發電',
     'operations.social.bilibili': 'Bilibili',
     'operations.social.qq': 'QQ 群',
     'operations.social.qqChannel': 'QQ 頻道',
@@ -3208,6 +3264,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.layer.players': 'Player locations',
     'map.layer.playersHidden': 'Online/offline players hidden',
     'map.layer.playersVisible': 'Online/offline players visible',
+    'map.layer.perspective': 'Top-down 2.5D',
+    'map.layer.perspectiveHidden': 'Showing flat areas',
+    'map.layer.perspectiveVisible': 'Showing extruded POI volumes',
     'map.layer.submitPoi': 'Submit POI',
     'map.layer.tileProvider': 'Tile source',
     'map.layer.tileProviderAria': 'Tile source',
@@ -3263,6 +3322,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.objectFallback': 'Map object',
     'map.poi.openDetail': 'Open details',
     'map.poi.openingHours': 'Opening hours',
+    'map.poi.operations': 'Service updates',
+    'map.poi.operationsEmpty': 'There are no active service updates',
+    'map.poi.operationsLoading': 'Loading service updates',
     'map.poi.parent': 'Parent place',
     'map.poi.boundRegions': 'Containing areas',
     'map.poi.parentFallback': 'Parent place',
@@ -3382,6 +3444,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.depart': 'Depart from {name}',
     'map.route.destination': 'Destination',
     'map.route.directTitle': 'Direct {mode}',
+    'map.route.taxiDirect': 'Taxi directly',
+    'map.route.taxiNote':
+      'Taxis stay on roads. Travel time uses the admin default speed of {speed} km/h plus junction delay, and fare rules are admin-managed.',
+    'map.route.taxiWithDistance': 'Take a taxi along roads for {distance}, {duration}',
+    'map.route.taxiWalkFromDropoff': 'Walk {distance} after drop-off, {duration}',
+    'map.route.taxiWalkToPickup': 'Walk {distance} to the roadside pickup point, {duration}',
     'map.route.distance.blocks': '{count} blocks',
     'map.route.duration.short': 'about {count} min',
     'map.route.duration.step': '{count} min',
@@ -3407,6 +3475,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.mode.bus': 'Bus',
     'map.route.mode.coach': 'Coach',
     'map.route.mode.collapse': 'Collapse',
+    'map.route.mode.taxi': 'Taxi',
     'map.route.mode.ferry': 'Ferry',
     'map.route.mode.metro': 'Metro',
     'map.route.mode.more': '+{count} more',
@@ -3428,6 +3497,11 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.road.enter': 'to {road}',
     'map.route.selectDestination': 'Select destination',
     'map.route.selectOrigin': 'Select origin',
+    'map.route.sort.time': 'Sort by time',
+    'map.route.sort.fare': 'Sort by fare',
+    'map.route.sort.transfers': 'Sort by transfers',
+    'map.route.sort.walking': 'Sort by walking',
+    'map.route.sortAria': 'Route sorting',
     'map.route.copyStatus': 'Route link copied',
     'map.route.share': 'Share route',
     'map.route.shareOpened': 'System share panel opened',
@@ -3450,9 +3524,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.transitNote.default':
       'Candidate routes are generated from real line stop order; travelTime is preferred for inter-stop duration, and missing data is still estimated from distance.',
     'map.route.transitNote.fallbackRoad':
-      'YCT tried to route bus/coach inter-stop paths through the legacy road graph; missing or disconnected road segments still fall back to straight-line estimates. Inter-stop duration prefers legacy travelTime data.',
+      'Bus and coach inter-stop travel must use roads; a candidate is omitted when the legacy road graph is missing or disconnected. Admin interval time takes priority over legacy travelTime data.',
     'map.route.transitNote.road':
-      'Bus/coach inter-stop paths prefer the legacy road endpoint graph and connect nearby roads within 100 blocks; disconnected segments fall back to straight-line estimates. Inter-stop duration prefers legacy travelTime data.',
+      'Bus and coach inter-stop paths use only legacy road centerlines, with junctions inferred only at planar centerline intersections. Disconnected candidates are omitted. Admin interval time takes priority over legacy travelTime data.',
     'map.route.transitNote.transfer':
       'One-transfer candidates are composed from real line stop order; transfer distance and missing inter-stop duration are still estimated.',
     'map.route.turn.left': 'Turn left',
@@ -3467,7 +3541,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.walkNote.direct':
       'No connected road graph was found, so walking is estimated as a straight line for now.',
     'map.route.walkNote.road':
-      'Walking prefers the legacy road endpoint graph and 100-block connection candidates; disconnected segments fall back to straight-line estimates.',
+      'Walking prefers legacy road centerlines and changes roads only at plan-view centerline intersections; disconnected segments fall back to straight-line estimates.',
     'map.route.walkRoadWithDistance': 'Walk along roads {distance} {duration}',
     'map.route.walkStraight': 'Straight-line walk',
     'map.route.walkToAccess': 'Walk to {access} {distance} {duration}',
@@ -3527,6 +3601,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operations.serverStatus.title': 'Server Status',
     'operations.serverStatus.unknown': 'Unknown',
     'operations.serverStatusAria': 'Server status and online players',
+    'operations.social.afdian': 'Afdian',
     'operations.social.bilibili': 'Bilibili',
     'operations.social.qq': 'QQ Group',
     'operations.social.qqChannel': 'QQ Channel',

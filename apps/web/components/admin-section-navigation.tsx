@@ -51,6 +51,18 @@ const adminEntries = [
     description: '审核 POI 投稿，维护分类、图标和地图资料。',
   },
   {
+    path: '/admin/map-settings',
+    icon: 'map',
+    title: '地图设置',
+    description: '维护主世界、默认高度和道路规划基础参数。',
+  },
+  {
+    path: '/admin/map-areas',
+    icon: 'account_tree',
+    title: '行政区划',
+    description: '维护独立行政区划边界、层级和公开状态。',
+  },
+  {
     path: '/admin/translations',
     icon: 'translate',
     title: '名称翻译',

@@ -1,4 +1,5 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { readRuntimeConfig } from './runtime-config';
 
@@ -212,10 +213,34 @@ async function readSnapshot(): Promise<PlayerLocationSnapshot> {
 
 async function writeSnapshot(snapshot: PlayerLocationSnapshot): Promise<void> {
   const storePath = resolveStorePath();
-  await mkdir(path.dirname(storePath), { recursive: true });
-  const temporaryPath = `${storePath}.${process.pid}.tmp`;
-  await writeFile(temporaryPath, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8');
-  await rename(temporaryPath, storePath);
+  const directory = path.dirname(storePath);
+  const content = `${JSON.stringify(snapshot, null, 2)}\n`;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const temporaryPath = `${storePath}.${process.pid}.${randomUUID()}.tmp`;
+    try {
+      await mkdir(directory, { recursive: true });
+      await writeFile(temporaryPath, content, { encoding: 'utf8', flag: 'wx' });
+      await rename(temporaryPath, storePath);
+      return;
+    } catch (error) {
+      if (!isMissingPathError(error) || attempt === 2) {
+        throw error;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+    } finally {
+      await rm(temporaryPath, { force: true }).catch(() => undefined);
+    }
+  }
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return Boolean(
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'ENOENT',
+  );
 }
 
 function resolveStorePath(): string {

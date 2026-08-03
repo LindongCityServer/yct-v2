@@ -52,6 +52,7 @@ export interface TransitDataActionResult {
 export type TransitLineEditableField =
   | 'mode'
   | 'name'
+  | 'operationStatus'
   | 'color'
   | 'maxCarCount'
   | 'routeMode'
@@ -528,7 +529,9 @@ export async function updateTransitStationCoordinate(input: {
   stationSourceId: string;
   actorId: string;
   x: number;
+  y?: number;
   z: number;
+  operationStatus: TransitDataRevision['stations'][number]['operationStatus'];
   boundPoiRefs?: TransitDataRevision['stations'][number]['boundPoiRefs'];
   boundPoiMarkerId?: string;
   boundPoiLabel?: string;
@@ -582,13 +585,15 @@ export async function updateTransitStationCoordinate(input: {
 
   if (
     station.x === input.x &&
+    station.y === input.y &&
     station.z === input.z &&
+    (station.operationStatus ?? 'operating') === input.operationStatus &&
     JSON.stringify(previousBoundPoiRefs) === JSON.stringify(nextBoundPoiRefs)
   ) {
     return { ok: true, revision };
   }
 
-  const previousCoordinate = { x: station.x, z: station.z };
+  const previousCoordinate = { x: station.x, y: station.y, z: station.z };
   const previousBoundPoi = {
     markerId: station.boundPoiMarkerId,
     label: station.boundPoiLabel,
@@ -598,7 +603,9 @@ export async function updateTransitStationCoordinate(input: {
       ? {
           ...item,
           x: input.x,
+          y: input.y,
           z: input.z,
+          operationStatus: input.operationStatus,
           boundPoiRefs: nextBoundPoiRefs.length > 0 ? nextBoundPoiRefs : undefined,
           boundPoiMarkerId: nextBoundPoiMarkerId,
           boundPoiLabel: nextBoundPoiLabel,
@@ -635,12 +642,15 @@ export async function updateTransitStationCoordinate(input: {
       updatedBy: input.actorId,
       updatedAt,
       previousCoordinate,
+      previousOperationStatus: station.operationStatus ?? 'operating',
       previousBoundPoi,
       previousBoundPoiRefs,
       nextCoordinate: {
         x: input.x,
+        y: input.y,
         z: input.z,
       },
+      nextOperationStatus: input.operationStatus ?? 'operating',
       nextBoundPoi: nextBoundPoiMarkerId
         ? {
             markerId: nextBoundPoiMarkerId,
@@ -649,6 +659,19 @@ export async function updateTransitStationCoordinate(input: {
         : undefined,
       nextBoundPoiRefs,
     });
+    const previousOperationStatus = station.operationStatus ?? 'operating';
+    if (previousOperationStatus !== input.operationStatus) {
+      await emitEvent('TransitOperationStatusChanged', input.actorId, {
+        entityType: 'station',
+        entityId: station.sourceId,
+        entityName: station.name,
+        revisionId: updated.revisionId,
+        previousStatus: previousOperationStatus,
+        nextStatus: input.operationStatus ?? 'operating',
+        changedBy: input.actorId,
+        changedAt: updatedAt,
+      });
+    }
   }
 
   return { ok: true, revision: updated };
@@ -783,6 +806,7 @@ export async function saveTransitLine(input: {
   patch: {
     mode: TransitDataRevision['lines'][number]['mode'];
     name: string;
+    operationStatus: TransitDataRevision['lines'][number]['operationStatus'];
     color?: string;
     maxCarCount?: number;
     routeMode?: TransitDataRevision['lines'][number]['routeMode'];
@@ -840,6 +864,7 @@ export async function saveTransitLine(input: {
       sourceId,
       name: draft.name.trim(),
       aliases: [],
+      operationStatus: input.patch.operationStatus,
       x: draft.x,
       z: draft.z,
       boundPoiMarkerId,
@@ -979,6 +1004,20 @@ export async function saveTransitLine(input: {
         stationCountBefore: line.stationSourceIds.length,
         stationCountAfter: nextLine.stationSourceIds.length,
       });
+      const previousOperationStatus = line.operationStatus ?? 'operating';
+      const nextOperationStatus = nextLine.operationStatus ?? 'operating';
+      if (previousOperationStatus !== nextOperationStatus) {
+        await emitEvent('TransitOperationStatusChanged', input.actorId, {
+          entityType: 'line',
+          entityId: line.sourceId,
+          entityName: nextLine.name,
+          revisionId: updated.revisionId,
+          previousStatus: previousOperationStatus,
+          nextStatus: nextOperationStatus,
+          changedBy: input.actorId,
+          changedAt: updatedAt,
+        });
+      }
     } else {
       await emitEvent('TransitDataRevisionLineCreated', input.actorId, {
         datasetId: updated.datasetId,
@@ -1137,6 +1176,7 @@ export async function updateTransitLineStationOrder(input: {
     patch: {
       mode: line.mode,
       name: line.name,
+      operationStatus: line.operationStatus ?? 'operating',
       color: line.color,
       maxCarCount: line.maxCarCount,
       routeMode: line.routeMode,
@@ -1164,6 +1204,7 @@ function buildTransitLineSnapshot(
   patch: {
     mode: TransitDataRevision['lines'][number]['mode'];
     name: string;
+    operationStatus: TransitDataRevision['lines'][number]['operationStatus'];
     color?: string;
     maxCarCount?: number;
     routeMode?: TransitDataRevision['lines'][number]['routeMode'];
@@ -1239,6 +1280,7 @@ function buildTransitLineSnapshot(
     archivedAt: previous?.archivedAt,
     mode: patch.mode,
     name: patch.name.trim(),
+    operationStatus: patch.operationStatus ?? 'operating',
     color: patch.color?.trim() || undefined,
     maxCarCount:
       patch.maxCarCount !== undefined && Number.isInteger(patch.maxCarCount)
@@ -1307,6 +1349,7 @@ function getChangedTransitLineFields(
   const fields: TransitLineEditableField[] = [
     'mode',
     'name',
+    'operationStatus',
     'color',
     'maxCarCount',
     'routeMode',
@@ -1422,7 +1465,17 @@ function normalizeTransitLineSegmentPaths(
         z: point.z,
         direction: point.direction,
       }));
-    if (path.mode === 'road' && waypoints.length === 0) {
+    const operationStatus = path.operationStatus ?? 'operating';
+    const travelMinutes =
+      typeof path.travelMinutes === 'number' && Number.isFinite(path.travelMinutes)
+        ? path.travelMinutes
+        : undefined;
+    if (
+      path.mode === 'road' &&
+      waypoints.length === 0 &&
+      operationStatus === 'operating' &&
+      travelMinutes === undefined
+    ) {
       continue;
     }
 
@@ -1430,6 +1483,8 @@ function normalizeTransitLineSegmentPaths(
       fromStationSourceId,
       toStationSourceId,
       mode: path.mode,
+      operationStatus,
+      travelMinutes,
       waypoints,
       note: path.note?.trim() || undefined,
     });

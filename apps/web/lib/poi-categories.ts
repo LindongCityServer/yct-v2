@@ -56,7 +56,36 @@ async function readPoiCategoriesUncached(
   }
 
   const profileCategories = await listPoiCategoryProfiles().catch(() => []);
-  return mergePoiCategoryProfiles(baseCategories, profileCategories);
+  return mergePoiCategoryProfiles(ensureRequiredMapCategories(baseCategories), profileCategories);
+}
+
+function ensureRequiredMapCategories(categories: PoiCategory[]): PoiCategory[] {
+  const result = [...categories];
+  const iconFileNames = Array.from(
+    new Set(categories.flatMap((category) => category.iconMapping.iconFileNames)),
+  );
+  const addCategory = (id: string, name: string, preferredIcons: string[], sortOrder: number) => {
+    if (result.some((category) => category.id === id)) {
+      return;
+    }
+    const availableIcons = preferredIcons.filter((fileName) => iconFileNames.includes(fileName));
+    const defaultIconFileName = availableIcons[0] ?? preferredIcons[0] ?? '';
+    result.push({
+      id,
+      name,
+      acceptsPublicSubmissions: true,
+      sortOrder,
+      iconMapping: {
+        categoryId: id,
+        defaultIconFileName,
+        iconFileNames: availableIcons.length > 0 ? availableIcons : [defaultIconFileName],
+      },
+    });
+  };
+
+  addCategory('pedestrian-path', '通道 / 步行路', ['way-in.png', 'road.png'], 15);
+  addCategory('ordinary-entrance', '普通出入口', ['way-in.png', 'way-out.png'], 35);
+  return result;
 }
 
 export function findPoiCategory(
@@ -86,6 +115,7 @@ function mergePoiCategoryProfiles(
   }
 
   return Array.from(merged.values()).sort(
-    (left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'zh-CN'),
+    (left, right) =>
+      left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, 'zh-CN'),
   );
 }

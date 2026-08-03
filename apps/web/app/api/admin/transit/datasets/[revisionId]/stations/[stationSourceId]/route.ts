@@ -33,7 +33,9 @@ export async function PATCH(
     stationSourceId: decodeSegment(stationSourceId),
     actorId: admin.ldpassUserId,
     x: parsed.data.x,
+    y: parsed.data.y,
     z: parsed.data.z,
+    operationStatus: parsed.data.operationStatus,
     boundPoiRefs: parsed.data.boundPoiRefs?.map((ref) => ({
       markerId: ref.markerId.trim(),
       label: ref.label.trim(),

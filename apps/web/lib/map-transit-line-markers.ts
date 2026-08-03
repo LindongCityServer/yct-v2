@@ -2,12 +2,16 @@ import type {
   MapMarkerSnapshot,
   TransitLineSnapshot,
   TransitModeProfile,
+  TransitOperationStatus,
   TransitStationSnapshot,
 } from '@yct/contracts';
 import { appPath } from './app-paths';
 import { readLegacyTransitSnapshot } from './legacy-transit';
 import { createTimedCache } from './server-cache';
-import { readPublishedTransitEntitySnapshot } from './published-transit-read-model';
+import {
+  filterMapVisibleTransitSnapshot,
+  readPublishedTransitEntitySnapshot,
+} from './published-transit-read-model';
 import { readTransitModeProfiles } from './transit-mode-profile-store';
 
 const transitLinePoiMarkerCache = createTimedCache<MapMarkerSnapshot['markers']>(60 * 1000);
@@ -35,7 +39,12 @@ async function readTransitLinePoiMarkersUncached(): Promise<MapMarkerSnapshot['m
 
   return snapshot.lines.map((line) => {
     const profile = modeProfileByMode.get(line.mode);
-    const coordinates = collectLineCoordinates(line, stationById);
+    const transitLineSegments = collectLineSegments(line, stationById).filter(
+      (segment): segment is VisibleTransitLineSegment =>
+        segment.operationStatus === 'operating' ||
+        (segment.operationStatus === 'planned' && profile?.showPlannedSegments === true),
+    );
+    const coordinates = transitLineSegments.flatMap((segment) => segment.coordinates);
     return {
       id: `transit-line-${line.sourceId}`,
       label: line.name,
@@ -46,9 +55,82 @@ async function readTransitLinePoiMarkersUncached(): Promise<MapMarkerSnapshot['m
       },
       symbolIcon: profile?.icon ?? 'route',
       accentColor: line.color ?? profile?.color,
+      transitLineSegments,
       description: buildLineDescription(line, profile, coordinates.length),
       href: appPath(`/map?marker=${encodeURIComponent(`transit-line-${line.sourceId}`)}`),
     };
+  });
+}
+
+interface TransitLineSegmentCandidate {
+  coordinates: Array<[number, number]>;
+  operationStatus: TransitOperationStatus;
+}
+
+type VisibleTransitLineSegment = NonNullable<
+  MapMarkerSnapshot['markers'][number]['transitLineSegments']
+>[number];
+
+function collectLineSegments(
+  line: TransitLineSnapshot,
+  stationById: Map<string, TransitStationSnapshot>,
+): TransitLineSegmentCandidate[] {
+  const pathByKey = new Map(
+    (line.segmentPaths ?? []).map((path) => [
+      `${path.fromStationSourceId}->${path.toStationSourceId}`,
+      path,
+    ]),
+  );
+  const routeNodeWaypointsByKey = new Map<string, Array<[number, number]>>();
+  let previousRouteNodeStationId: string | undefined;
+  let pendingRouteNodeWaypoints: Array<[number, number]> = [];
+  for (const node of line.routeNodes ?? []) {
+    if (node.kind === 'waypoint') {
+      pendingRouteNodeWaypoints.push([node.x, node.z]);
+      continue;
+    }
+    if (previousRouteNodeStationId) {
+      routeNodeWaypointsByKey.set(
+        `${previousRouteNodeStationId}->${node.stationSourceId}`,
+        pendingRouteNodeWaypoints,
+      );
+    }
+    previousRouteNodeStationId = node.stationSourceId;
+    pendingRouteNodeWaypoints = [];
+  }
+
+  return line.stationSourceIds.slice(0, -1).flatMap((fromStationSourceId, index) => {
+    const toStationSourceId = line.stationSourceIds[index + 1];
+    if (!toStationSourceId) {
+      return [];
+    }
+    const from = stationById.get(fromStationSourceId);
+    const to = stationById.get(toStationSourceId);
+    if (
+      from?.x === undefined ||
+      from.z === undefined ||
+      to?.x === undefined ||
+      to.z === undefined
+    ) {
+      return [];
+    }
+    const directPath = pathByKey.get(`${fromStationSourceId}->${toStationSourceId}`);
+    const reversePath = directPath
+      ? undefined
+      : pathByKey.get(`${toStationSourceId}->${fromStationSourceId}`);
+    const path = directPath ?? reversePath;
+    const waypoints = path
+      ? path.waypoints.map((waypoint) => [waypoint.x, waypoint.z] as [number, number])
+      : [...(routeNodeWaypointsByKey.get(`${fromStationSourceId}->${toStationSourceId}`) ?? [])];
+    if (reversePath) {
+      waypoints.reverse();
+    }
+    return [
+      {
+        coordinates: [[from.x, from.z] as [number, number], ...waypoints, [to.x, to.z]],
+        operationStatus: resolveVisibleSegmentOperationStatus(line, path),
+      },
+    ];
   });
 }
 
@@ -58,9 +140,10 @@ async function readTransitSnapshotForMap(): Promise<{
 } | null> {
   const publishedSnapshot = await readPublishedTransitEntitySnapshot();
   if (publishedSnapshot) {
+    const publicSnapshot = filterMapVisibleTransitSnapshot(publishedSnapshot);
     return {
-      lines: publishedSnapshot.lines,
-      stations: publishedSnapshot.stations,
+      lines: publicSnapshot.lines,
+      stations: publicSnapshot.stations,
     };
   }
 
@@ -75,89 +158,19 @@ async function readTransitSnapshotForMap(): Promise<{
   };
 }
 
-function collectLineCoordinates(
+function resolveVisibleSegmentOperationStatus(
   line: TransitLineSnapshot,
-  stationById: Map<string, TransitStationSnapshot>,
-): Array<[number, number]> {
-  const seen = new Set<string>();
-  const coordinates: Array<[number, number]> = [];
-
-  const appendCoordinate = (coordinate: [number, number] | undefined) => {
-    if (!coordinate || !Number.isFinite(coordinate[0]) || !Number.isFinite(coordinate[1])) {
-      return;
-    }
-    const key = `${coordinate[0]}:${coordinate[1]}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      coordinates.push(coordinate);
-    }
-  };
-
-  if (line.routeNodes?.length && line.routeMode !== 'road') {
-    for (const node of line.routeNodes) {
-      if (node.kind === 'waypoint') {
-        appendCoordinate([node.x, node.z]);
-        continue;
-      }
-      const station = stationById.get(node.stationSourceId);
-      appendCoordinate(
-        station?.x !== undefined && station.z !== undefined ? [station.x, station.z] : undefined,
-      );
-    }
-    return coordinates;
-  }
-
-  const segmentPathByKey = new Map(
-    (line.segmentPaths ?? []).map((path) => [
-      `${path.fromStationSourceId}->${path.toStationSourceId}`,
-      path,
-    ]),
-  );
-
-  if (line.routeNodes?.length) {
-    let previousStationSourceId: string | undefined;
-    let pendingWaypoints: Array<[number, number]> = [];
-    for (const node of line.routeNodes) {
-      if (node.kind === 'waypoint') {
-        pendingWaypoints.push([node.x, node.z]);
-        continue;
-      }
-
-      if (previousStationSourceId) {
-        const segmentPath = segmentPathByKey.get(
-          `${previousStationSourceId}->${node.stationSourceId}`,
-        );
-        const segmentCoordinates = segmentPath?.waypoints.length
-          ? segmentPath.waypoints.map((waypoint) => [waypoint.x, waypoint.z] as [number, number])
-          : pendingWaypoints;
-        segmentCoordinates.forEach(appendCoordinate);
-      }
-      const station = stationById.get(node.stationSourceId);
-      appendCoordinate(
-        station?.x !== undefined && station.z !== undefined ? [station.x, station.z] : undefined,
-      );
-      previousStationSourceId = node.stationSourceId;
-      pendingWaypoints = [];
-    }
-    pendingWaypoints.forEach(appendCoordinate);
-    return coordinates;
-  }
-
-  for (const [index, stationSourceId] of line.stationSourceIds.entries()) {
-    const station = stationById.get(stationSourceId);
-    appendCoordinate(
-      station?.x !== undefined && station.z !== undefined ? [station.x, station.z] : undefined,
-    );
-    const nextStationSourceId = line.stationSourceIds[index + 1];
-    const path = nextStationSourceId
-      ? segmentPathByKey.get(`${stationSourceId}->${nextStationSourceId}`)
-      : undefined;
-    for (const waypoint of path?.waypoints ?? []) {
-      appendCoordinate([waypoint.x, waypoint.z]);
-    }
-  }
-
-  return coordinates;
+  path: NonNullable<TransitLineSnapshot['segmentPaths']>[number] | undefined,
+): TransitOperationStatus {
+  const statuses: TransitOperationStatus[] = [
+    line.operationStatus ?? 'operating',
+    path?.operationStatus ?? 'operating',
+  ];
+  return statuses.includes('closed')
+    ? 'closed'
+    : statuses.includes('planned')
+      ? 'planned'
+      : 'operating';
 }
 
 function buildLineDescription(

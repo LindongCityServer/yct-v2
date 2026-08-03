@@ -17,8 +17,24 @@ import { TitleWithBreaks } from './title-with-breaks';
 type Translate = ReturnType<typeof useI18n>['t'];
 
 const fallbackModeProfiles: TransitModeProfile[] = [
-  { mode: 'metro', label: '地铁', color: '#2584E8', icon: 'subway', sortOrder: 0, enabled: true },
-  { mode: 'tram', label: '有轨', color: '#C64255', icon: 'tram', sortOrder: 1, enabled: true },
+  {
+    mode: 'metro',
+    label: '地铁',
+    color: '#2584E8',
+    icon: 'subway',
+    sortOrder: 0,
+    enabled: true,
+    showPlannedSegments: false,
+  },
+  {
+    mode: 'tram',
+    label: '有轨',
+    color: '#C64255',
+    icon: 'tram',
+    sortOrder: 1,
+    enabled: true,
+    showPlannedSegments: false,
+  },
   {
     mode: 'bus',
     label: '公交',
@@ -26,6 +42,7 @@ const fallbackModeProfiles: TransitModeProfile[] = [
     icon: 'directions_bus',
     sortOrder: 2,
     enabled: true,
+    showPlannedSegments: false,
   },
   {
     mode: 'coach',
@@ -34,6 +51,7 @@ const fallbackModeProfiles: TransitModeProfile[] = [
     icon: 'airport_shuttle',
     sortOrder: 3,
     enabled: true,
+    showPlannedSegments: false,
   },
   {
     mode: 'ferry',
@@ -42,6 +60,7 @@ const fallbackModeProfiles: TransitModeProfile[] = [
     icon: 'directions_boat',
     sortOrder: 4,
     enabled: true,
+    showPlannedSegments: false,
   },
   {
     mode: 'railway',
@@ -50,8 +69,17 @@ const fallbackModeProfiles: TransitModeProfile[] = [
     icon: 'train',
     sortOrder: 5,
     enabled: true,
+    showPlannedSegments: false,
   },
-  { mode: 'custom', label: '线路', color: '#168F78', icon: 'route', sortOrder: 6, enabled: true },
+  {
+    mode: 'custom',
+    label: '线路',
+    color: '#168F78',
+    icon: 'route',
+    sortOrder: 6,
+    enabled: true,
+    showPlannedSegments: false,
+  },
 ];
 
 type DirectionKey = TransitLineTravelDirection;
@@ -290,6 +318,7 @@ function getDirectionalStationStops(
       ? line.stationStops
       : line.stationNames.map((stationName, sequence) => ({
           stationName,
+          operationStatus: 'operating',
           sequence,
         }));
   const filteredStops = sourceStops.filter((stop) =>

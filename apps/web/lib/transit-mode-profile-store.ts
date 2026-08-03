@@ -19,6 +19,7 @@ export const defaultTransitModeProfiles: TransitModeProfile[] = [
     icon: 'subway',
     sortOrder: 0,
     enabled: true,
+    showPlannedSegments: false,
   },
   {
     mode: 'tram',
@@ -27,6 +28,7 @@ export const defaultTransitModeProfiles: TransitModeProfile[] = [
     icon: 'tram',
     sortOrder: 1,
     enabled: true,
+    showPlannedSegments: false,
   },
   {
     mode: 'bus',
@@ -35,6 +37,7 @@ export const defaultTransitModeProfiles: TransitModeProfile[] = [
     icon: 'directions_bus',
     sortOrder: 2,
     enabled: true,
+    showPlannedSegments: false,
   },
   {
     mode: 'coach',
@@ -43,6 +46,7 @@ export const defaultTransitModeProfiles: TransitModeProfile[] = [
     icon: 'airport_shuttle',
     sortOrder: 3,
     enabled: true,
+    showPlannedSegments: false,
   },
   {
     mode: 'ferry',
@@ -51,6 +55,7 @@ export const defaultTransitModeProfiles: TransitModeProfile[] = [
     icon: 'directions_boat',
     sortOrder: 4,
     enabled: true,
+    showPlannedSegments: false,
   },
   {
     mode: 'railway',
@@ -59,6 +64,7 @@ export const defaultTransitModeProfiles: TransitModeProfile[] = [
     icon: 'train',
     sortOrder: 5,
     enabled: true,
+    showPlannedSegments: false,
   },
   {
     mode: 'custom',
@@ -67,6 +73,7 @@ export const defaultTransitModeProfiles: TransitModeProfile[] = [
     icon: 'route',
     sortOrder: 6,
     enabled: true,
+    showPlannedSegments: false,
   },
 ];
 
@@ -131,7 +138,11 @@ async function writeSnapshot(snapshot: TransitModeProfileStoreSnapshot): Promise
 function normalizeProfiles(modes: TransitModeProfile[]): TransitModeProfile[] {
   const byMode = new Map<TransitModeProfile['mode'], TransitModeProfile>();
   for (const mode of modes) {
-    byMode.set(mode.mode, { ...mode, enabled: mode.enabled ?? true });
+    byMode.set(mode.mode, {
+      ...mode,
+      enabled: mode.enabled ?? true,
+      showPlannedSegments: mode.showPlannedSegments ?? false,
+    });
   }
 
   return Array.from(byMode.values()).sort((left, right) => left.sortOrder - right.sortOrder);

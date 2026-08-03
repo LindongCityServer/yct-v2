@@ -2,6 +2,7 @@
 
 import type {
   MapGeometry,
+  MapMarkerSpatialMetadata,
   MapMarkerSnapshot,
   PoiCategory,
   PoiFacilitySnapshot,
@@ -17,13 +18,19 @@ import type {
 } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { publishAdminDataChanged } from '../lib/client-admin-data-events';
+import { selectMapTileTemplates } from '../lib/map-tile-templates';
 import {
   findPoiAddressMarkerMatches,
   inferPoiFloorLabel,
   selectUnambiguousAddressMarker,
 } from '../lib/poi-address-inference';
-import { EmbeddedMapLocationPicker } from './embedded-map-location-picker';
+import type { EmbeddedMapLocationMarker } from './embedded-map-location-picker';
+import { CurrentPlayerLocationButton } from './current-player-location-button';
+import { AdminRefreshButton } from './admin-refresh-button';
+import { LayeredMapTile } from './layered-map-tile';
 import { PoiFacilityEditor } from './poi-facility-editor';
+import { WorldCoordinatePicker } from './world-coordinate-picker';
 
 type StatusFilter = PoiSubmissionStatus | 'all' | 'todo' | 'blocked' | 'legacy';
 type PoiAdminSection = 'submissions' | 'categories';
@@ -96,6 +103,7 @@ interface PoiSubmissionEditInput {
   href: string;
   imageUrls: string[];
   geometry: MapGeometry;
+  spatial?: MapMarkerSpatialMetadata;
   parentMarkerId: string;
   floorLabel: string;
   boundRegionMarkerIds: string[];
@@ -115,6 +123,7 @@ interface LegacyPoiMarkerEditInput {
   href: string;
   imageUrls: string[];
   geometry: MapGeometry;
+  spatial?: MapMarkerSpatialMetadata;
   parentMarkerId: string;
   floorLabel: string;
   boundRegionMarkerIds: string[];
@@ -165,11 +174,13 @@ interface PoiTileRegionIndex {
 }
 
 interface PoiTilePreviewConfig {
+  freshTileTemplate?: string | null;
   tileTemplate?: string | null;
   regionIndex?: PoiTileRegionIndex;
 }
 
 const defaultMarkerIconBaseUrl = 'https://map.shangxiaoguan.top/';
+const defaultRoadTravelModes = ['walk', 'taxi', 'bus', 'coach'] as const;
 
 const statusFilterOptions: Array<{ value: StatusFilter; label: string }> = [
   { value: 'all', label: '全部状态' },
@@ -202,19 +213,21 @@ const poiRejectReasonPresets = [
   '该地点疑似已存在，请确认后避免重复投稿。',
 ];
 
-export function AdminPoiPanel() {
+export function AdminPoiPanel({ initialMarkerId }: Readonly<{ initialMarkerId?: string }>) {
   const [submissions, setSubmissions] = useState<AdminPoiSubmission[]>([]);
   const [categories, setCategories] = useState<PoiCategory[]>([]);
   const [mapMarkers, setMapMarkers] = useState<MapMarker[]>([]);
   const [conflictDecisions, setConflictDecisions] = useState<PoiConflictDecision[]>([]);
   const [imageReviews, setImageReviews] = useState<PoiSubmissionImageReview[]>([]);
   const [categoryIconBaseUrl, setCategoryIconBaseUrl] = useState(defaultMarkerIconBaseUrl);
+  const [tilePreviewFreshTemplate, setTilePreviewFreshTemplate] = useState<string | null>(null);
   const [tilePreviewTemplate, setTilePreviewTemplate] = useState<string | null>(null);
   const [tilePreviewRegionResponse, setTilePreviewRegionResponse] =
     useState<PoiTileRegionResponse | null>(null);
   const [statusText, setStatusText] = useState('正在读取 POI 投稿');
   const [categoryStatusText, setCategoryStatusText] = useState('正在读取 POI 分类');
   const [isBusy, setIsBusy] = useState(false);
+  const [poiDataLoaded, setPoiDataLoaded] = useState(false);
   const [activeSection, setActiveSection] = useState<PoiAdminSection>('submissions');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('todo');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -235,6 +248,7 @@ export function AdminPoiPanel() {
   const [bulkPublishTargets, setBulkPublishTargets] = useState<AdminPoiSubmission[] | null>(null);
   const [isCategoryEditorOpen, setIsCategoryEditorOpen] = useState(false);
   const [categoryEditorTargetId, setCategoryEditorTargetId] = useState<string | null>(null);
+  const initialMarkerHandledRef = useRef(false);
 
   const categoryById = useMemo(() => {
     const entries = categories.map((category) => [category.id, category] as const);
@@ -407,14 +421,14 @@ export function AdminPoiPanel() {
   const legacyMapMarkers = useMemo(() => {
     const groupedRoadLabels = new Set(
       mapMarkers
-        .filter((marker) => marker.categoryId === 'road' && marker.geometry.type === 'MultiPoint')
+        .filter((marker) => isRoadReferenceMarker(marker) && marker.geometry.type === 'MultiPoint')
         .map((marker) => normalizeSearchText(marker.label)),
     );
     return mapMarkers.filter(
       (marker) =>
         isLegacyPoiMapMarker(marker) &&
         !(
-          marker.categoryId === 'road' &&
+          isRoadReferenceMarker(marker) &&
           marker.geometry.type === 'Point' &&
           groupedRoadLabels.has(normalizeSearchText(marker.label))
         ),
@@ -499,10 +513,11 @@ export function AdminPoiPanel() {
   }, [mapMarkers, submissions]);
   const tilePreviewConfig = useMemo<PoiTilePreviewConfig>(
     () => ({
+      freshTileTemplate: tilePreviewFreshTemplate,
       tileTemplate: tilePreviewTemplate,
       regionIndex: buildPoiTileRegionIndex(tilePreviewRegionResponse),
     }),
-    [tilePreviewRegionResponse, tilePreviewTemplate],
+    [tilePreviewFreshTemplate, tilePreviewRegionResponse, tilePreviewTemplate],
   );
   const detailTarget = useMemo(
     () => submissions.find((submission) => submission.id === detailTargetId) ?? null,
@@ -595,19 +610,20 @@ export function AdminPoiPanel() {
       return;
     }
 
-    const preferredProvider =
-      data.items?.find((provider) => provider.sourceKind === 'safe-https-static') ??
-      data.items?.find((provider) => provider.id === 'lindong-unmined-static') ??
-      data.items?.[0];
-    setTilePreviewTemplate(preferredProvider?.tileTemplate ?? null);
+    const tileTemplates = selectMapTileTemplates(data.items ?? []);
+    setTilePreviewTemplate(tileTemplates.tileTemplate);
+    setTilePreviewFreshTemplate(tileTemplates.freshTileTemplate);
 
-    if (!preferredProvider) {
+    const fallbackProvider =
+      data.items?.find((provider) => provider.sourceKind === 'safe-https-static') ??
+      data.items?.find((provider) => provider.id === 'lindong-unmined-static');
+    if (!tileTemplates.tileTemplate || !fallbackProvider) {
+      setTilePreviewRegionResponse(null);
       return;
     }
-
     if (
-      preferredProvider.sourceKind !== 'safe-https-static' &&
-      preferredProvider.id !== 'lindong-unmined-static'
+      fallbackProvider.sourceKind !== 'safe-https-static' &&
+      fallbackProvider.id !== 'lindong-unmined-static'
     ) {
       setTilePreviewRegionResponse(null);
       return;
@@ -623,14 +639,73 @@ export function AdminPoiPanel() {
     setTilePreviewRegionResponse(regionData);
   };
 
+  const reloadPoiData = () =>
+    Promise.all([
+      loadSubmissions(),
+      loadCategories(),
+      loadMapMarkers(),
+      loadConflictDecisions(),
+      loadImageReviews(),
+      loadTilePreviewConfig(),
+    ]).then((result) => {
+      setPoiDataLoaded(true);
+      return result;
+    });
+
+  const notifyPoiDataChanged = (
+    reason: 'submission_created' | 'status_changed' | 'record_updated' | 'record_archived',
+  ) => {
+    publishAdminDataChanged({
+      resource: 'poi',
+      reason,
+      occurredAt: new Date().toISOString(),
+    });
+  };
+
   useEffect(() => {
-    void loadSubmissions();
-    void loadCategories();
-    void loadMapMarkers();
-    void loadConflictDecisions();
-    void loadImageReviews();
-    void loadTilePreviewConfig();
+    void reloadPoiData();
   }, []);
+
+  useEffect(() => {
+    if (!initialMarkerId || initialMarkerHandledRef.current || !poiDataLoaded) {
+      return;
+    }
+
+    initialMarkerHandledRef.current = true;
+    setActiveSection('submissions');
+    setStatusFilter('all');
+    setCategoryFilter('all');
+    const submission = submissions.find(
+      (item) => item.id === initialMarkerId || `poi-${item.id}` === initialMarkerId,
+    );
+    if (submission) {
+      setQuery(submission.title);
+      setSelectedSubmissionIds(new Set([submission.id]));
+      setSelectedLegacyMarkerIds(new Set());
+      setStatusText(`已定位 POI：${submission.title}`);
+    } else {
+      const legacyMarker = mapMarkers.find((marker) => marker.id === initialMarkerId);
+      if (legacyMarker) {
+        setQuery(legacyMarker.label);
+        setSelectedSubmissionIds(new Set());
+        setSelectedLegacyMarkerIds(new Set([legacyMarker.id]));
+        setStatusText(`已定位旧 POI：${legacyMarker.label}`);
+      } else {
+        setQuery(initialMarkerId);
+        setStatusText('未找到要编辑的 POI。');
+      }
+    }
+
+    window.requestAnimationFrame(() => {
+      document
+        .querySelector(
+          '.admin-poi-item.is-deep-linked, .admin-poi-legacy-marker-item.is-deep-linked',
+        )
+        ?.scrollIntoView({
+          block: 'center',
+        });
+    });
+  }, [initialMarkerId, mapMarkers, poiDataLoaded, submissions]);
 
   useEffect(() => {
     setSelectedSubmissionIds((current) => {
@@ -748,8 +823,9 @@ export function AdminPoiPanel() {
         return false;
       }
 
-      setStatusText('操作已完成');
-      await loadSubmissions();
+      notifyPoiDataChanged(action === 'archive' ? 'record_archived' : 'status_changed');
+      await reloadPoiData();
+      setStatusText('操作已完成，列表与地图资料已刷新。');
       return true;
     } finally {
       setIsBusy(false);
@@ -800,7 +876,10 @@ export function AdminPoiPanel() {
         }
       }
 
-      await loadSubmissions();
+      await reloadPoiData();
+      if (successCount > 0) {
+        notifyPoiDataChanged('status_changed');
+      }
       setSelectedSubmissionIds((current) => {
         const next = new Set(current);
         targets.forEach((submission) => {
@@ -851,9 +930,8 @@ export function AdminPoiPanel() {
         return data.message ?? 'POI 投稿修正失败';
       }
 
-      setSubmissions((current) =>
-        current.map((submission) => (submission.id === poiId ? data : submission)),
-      );
+      notifyPoiDataChanged('record_updated');
+      await reloadPoiData();
       setStatusText(
         data.status === 'published'
           ? `已修正 ${data.title} 的投稿资料，公开地图会同步读取最新版本。`
@@ -880,7 +958,8 @@ export function AdminPoiPanel() {
         return data.message ?? '新增 POI 失败';
       }
 
-      setSubmissions((current) => [data, ...current]);
+      notifyPoiDataChanged('submission_created');
+      await reloadPoiData();
       setStatusFilter('pending_review');
       setStatusText(`已新增 ${data.title}，当前进入待审核队列。`);
       return null;
@@ -908,7 +987,8 @@ export function AdminPoiPanel() {
         return data.message ?? '旧有标记点保存失败';
       }
 
-      await loadMapMarkers();
+      notifyPoiDataChanged('record_updated');
+      await reloadPoiData();
       setStatusText(`已保存旧有标记点：${input.label.trim()}`);
       return null;
     } finally {
@@ -931,7 +1011,8 @@ export function AdminPoiPanel() {
         return false;
       }
 
-      await loadMapMarkers();
+      notifyPoiDataChanged('record_archived');
+      await reloadPoiData();
       setStatusText(`已删除旧有标记点：${marker.label}`);
       return true;
     } finally {
@@ -999,6 +1080,7 @@ export function AdminPoiPanel() {
       }
 
       setConflictDecisions(data.items ?? []);
+      notifyPoiDataChanged('record_updated');
       setStatusText(decision === 'unresolved' ? '已重置冲突提示判断' : '已保存冲突提示判断');
     } finally {
       setIsBusy(false);
@@ -1035,6 +1117,7 @@ export function AdminPoiPanel() {
       }
 
       setImageReviews(data.items ?? []);
+      notifyPoiDataChanged('record_updated');
       setStatusText(decision === 'unreviewed' ? '已重置图片审核状态' : '已保存图片审核状态');
     } finally {
       setIsBusy(false);
@@ -1150,7 +1233,15 @@ export function AdminPoiPanel() {
     <section className="module-panel admin-operations-panel" aria-labelledby="admin-poi-title">
       <div className="section-heading">
         <h1 id="admin-poi-title">POI 后台</h1>
-        <span className="muted">{currentSectionStatusText}</span>
+        <div className="admin-content-actions">
+          <span className="muted">{currentSectionStatusText}</span>
+          <AdminRefreshButton
+            disabled={isBusy}
+            label="刷新 POI"
+            onRefresh={reloadPoiData}
+            resource="poi"
+          />
+        </div>
       </div>
       <fieldset className="segmented-control admin-page-segmented-control">
         <legend>工作区</legend>
@@ -1429,6 +1520,7 @@ export function AdminPoiPanel() {
           }}
           onSaved={(message) => {
             setCategoryStatusText(message);
+            notifyPoiDataChanged('record_updated');
             void loadCategories();
           }}
         />
@@ -1596,7 +1688,13 @@ function LegacyPoiMarkerItem({
 }>) {
   const coordinate = getGeometryRepresentativeCoordinate(marker.geometry);
   return (
-    <article className="admin-content-item admin-poi-legacy-marker-item">
+    <article
+      className={
+        isSelected
+          ? 'admin-content-item admin-poi-legacy-marker-item is-deep-linked'
+          : 'admin-content-item admin-poi-legacy-marker-item'
+      }
+    >
       <label className="admin-content-select" aria-label={`选择旧有 POI ${marker.label}`}>
         <input type="checkbox" checked={isSelected} onChange={onToggleSelected} />
       </label>
@@ -1786,6 +1884,541 @@ function AdminPoiBusinessDetailsFields({
   );
 }
 
+function normalizePoiSpatialInput(
+  spatial: MapMarkerSpatialMetadata | undefined,
+  categoryId: string,
+  geometryType?: MapGeometry['type'],
+): MapMarkerSpatialMetadata | undefined {
+  const isRoadGeometry = geometryType === 'LineString';
+  const isRoadCategory = isRoadPoiCategory(categoryId);
+  const networkKind =
+    spatial?.networkKind ??
+    (isRoadCategory || isRoadGeometry
+      ? 'road'
+      : categoryId === 'pedestrian-path'
+        ? 'pedestrian'
+        : undefined);
+  const allowedModes = spatial?.allowedModes?.length
+    ? spatial.allowedModes
+    : networkKind === 'road'
+      ? defaultRoadTravelModes
+      : networkKind === 'pedestrian'
+        ? (['walk'] as const)
+        : undefined;
+  return compactPoiSpatialMetadata({
+    ...spatial,
+    networkKind,
+    direction: networkKind ? (spatial?.direction ?? 'both') : spatial?.direction,
+    allowedModes: allowedModes ? [...allowedModes] : undefined,
+  });
+}
+
+function compactPoiSpatialMetadata(
+  spatial: MapMarkerSpatialMetadata,
+): MapMarkerSpatialMetadata | undefined {
+  const style = spatial.style
+    ? Object.fromEntries(
+        Object.entries(spatial.style).filter(([, item]) => item !== undefined && item !== ''),
+      )
+    : undefined;
+  const compacted: MapMarkerSpatialMetadata = {
+    ...spatial,
+    worldId: spatial.worldId?.trim() || undefined,
+    coordinateY: spatial.coordinateY?.length ? spatial.coordinateY : undefined,
+    allowedModes: spatial.allowedModes?.length
+      ? Array.from(new Set(spatial.allowedModes))
+      : undefined,
+    style: style && Object.keys(style).length > 0 ? style : undefined,
+    dynamicSymbol: spatial.dynamicSymbol?.ref.trim()
+      ? { ...spatial.dynamicSymbol, ref: spatial.dynamicSymbol.ref.trim() }
+      : undefined,
+  };
+  return Object.values(compacted).some((item) => item !== undefined) ? compacted : undefined;
+}
+
+function updatePoiSpatialStyle(
+  value: MapMarkerSpatialMetadata | undefined,
+  update: (patch: Partial<MapMarkerSpatialMetadata>) => void,
+  patch: Partial<NonNullable<MapMarkerSpatialMetadata['style']>>,
+) {
+  update({ style: { ...value?.style, ...patch } });
+}
+
+function parseOptionalFiniteNumber(value: string): number | undefined {
+  if (!value.trim()) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function formatCoordinateYList(values: Array<number | null> | undefined): string {
+  return values?.map((value) => value ?? '').join(', ') ?? '';
+}
+
+function isRoadPoiCategory(categoryId: string): boolean {
+  return ['road', 'roadpoint', 'highway-s1', 'toll-gate'].includes(categoryId.trim().toLowerCase());
+}
+
+function formatPointCoordinateY(value: MapMarkerSpatialMetadata | undefined): string {
+  const y = value?.coordinateY?.[0] ?? value?.defaultY;
+  return y === undefined || y === null ? '' : String(y);
+}
+
+function updatePoiPointCoordinateY(
+  value: MapMarkerSpatialMetadata | undefined,
+  yText: string,
+): MapMarkerSpatialMetadata | undefined | null {
+  const y = yText.trim() ? Number(yText) : undefined;
+  if (y !== undefined && !Number.isFinite(y)) {
+    return null;
+  }
+  return compactPoiSpatialMetadata({
+    ...value,
+    defaultY: undefined,
+    coordinateY: y === undefined ? undefined : [y],
+  });
+}
+
+function toEmbeddedPoiContextMarker(marker: PoiAuditContextMarker): EmbeddedMapLocationMarker {
+  return {
+    coordinate: marker.coordinate,
+    id: marker.marker.id,
+    label: marker.marker.label,
+    tone:
+      marker.relation === 'same-category'
+        ? 'same-category'
+        : marker.relation === 'road'
+          ? 'road'
+          : marker.relation === 'station'
+            ? 'station'
+            : 'nearby',
+  };
+}
+
+function parseCoordinateYList(value: string): Array<number | null> | undefined {
+  const parts = value.split(',').map((item) => item.trim());
+  if (parts.every((item) => !item)) {
+    return undefined;
+  }
+  return parts.map((item) => parseOptionalFiniteNumber(item) ?? null);
+}
+
+function parseCommaSeparatedValues(value: string): string[] | undefined {
+  const values = Array.from(
+    new Set(
+      value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
+  return values.length > 0 ? values : undefined;
+}
+
+function buildMapVolumeFromGeometry(
+  geometry: MapGeometry,
+  firstY: number,
+  secondY: number,
+): MapMarkerSpatialMetadata['volume'] {
+  const minY = Math.min(firstY, secondY);
+  const maxY = Math.max(firstY, secondY);
+  if (geometry.type === 'Rectangle') {
+    return { type: 'ExtrudedRectangle', bounds: geometry.bounds, minY, maxY };
+  }
+  if (geometry.type === 'MultiRectangle') {
+    return {
+      type: 'MultiExtrudedRectangle',
+      volumes: geometry.rectangles.map((bounds) => ({ bounds, minY, maxY })),
+    };
+  }
+  if (geometry.type === 'Polygon') {
+    return { type: 'ExtrudedPolygon', coordinates: geometry.coordinates, minY, maxY };
+  }
+  if (geometry.type === 'MultiPolygon') {
+    return {
+      type: 'MultiExtrudedPolygon',
+      volumes: geometry.coordinates.map((coordinates) => ({ coordinates, minY, maxY })),
+    };
+  }
+  return undefined;
+}
+
+function getVolumeHeightBounds(
+  volume: MapMarkerSpatialMetadata['volume'],
+): { minY: number; maxY: number } | undefined {
+  if (!volume) {
+    return undefined;
+  }
+  if (volume.type === 'ExtrudedRectangle' || volume.type === 'ExtrudedPolygon') {
+    return { minY: volume.minY, maxY: volume.maxY };
+  }
+  const minY = Math.min(...volume.volumes.map((item) => item.minY));
+  const maxY = Math.max(...volume.volumes.map((item) => item.maxY));
+  return Number.isFinite(minY) && Number.isFinite(maxY) ? { minY, maxY } : undefined;
+}
+
+function PoiSpatialMetadataEditor({
+  categoryId,
+  geometry,
+  onChange,
+  value,
+}: Readonly<{
+  categoryId: string;
+  geometry?: MapGeometry;
+  onChange: (value: MapMarkerSpatialMetadata | undefined) => void;
+  value?: MapMarkerSpatialMetadata;
+}>) {
+  const normalizedValue = normalizePoiSpatialInput(value, categoryId, geometry?.type);
+  const update = (patch: Partial<MapMarkerSpatialMetadata>) => {
+    onChange(compactPoiSpatialMetadata({ ...normalizedValue, ...patch }));
+  };
+  const toggleMode = (mode: NonNullable<MapMarkerSpatialMetadata['allowedModes']>[number]) => {
+    const modes = new Set(normalizedValue?.allowedModes ?? []);
+    if (modes.has(mode)) {
+      modes.delete(mode);
+    } else {
+      modes.add(mode);
+    }
+    update({ allowedModes: Array.from(modes) });
+  };
+  const volumeBounds = getVolumeHeightBounds(normalizedValue?.volume);
+  const volumeSupported = Boolean(
+    geometry && ['Rectangle', 'MultiRectangle', 'Polygon', 'MultiPolygon'].includes(geometry.type),
+  );
+
+  return (
+    <>
+      <fieldset className="admin-poi-spatial-editor">
+        <legend>路网与通行</legend>
+        <div className="admin-poi-edit-coordinate-fields">
+          <label>
+            <span>网络类型</span>
+            <select
+              value={normalizedValue?.networkKind ?? ''}
+              onChange={(event) => {
+                const networkKind =
+                  (event.currentTarget.value as MapMarkerSpatialMetadata['networkKind']) ||
+                  undefined;
+                update({
+                  networkKind,
+                  allowedModes:
+                    networkKind !== value?.networkKind
+                      ? networkKind === 'road'
+                        ? [...defaultRoadTravelModes]
+                        : networkKind === 'pedestrian'
+                          ? ['walk']
+                          : undefined
+                      : normalizedValue?.allowedModes,
+                });
+              }}
+            >
+              <option value="">非路网 POI</option>
+              <option value="road">道路</option>
+              <option value="pedestrian">通道 / 步行路</option>
+            </select>
+          </label>
+          <label>
+            <span>方向</span>
+            <select
+              value={normalizedValue?.direction ?? 'both'}
+              onChange={(event) =>
+                update({
+                  direction: event.currentTarget.value as NonNullable<
+                    MapMarkerSpatialMetadata['direction']
+                  >,
+                })
+              }
+            >
+              <option value="both">双向</option>
+              <option value="forward">沿点序单向</option>
+              <option value="reverse">逆点序单向</option>
+            </select>
+          </label>
+        </div>
+        <fieldset>
+          <legend>允许通行方式</legend>
+          <div className="admin-inline-checkboxes">
+            {(
+              [
+                ['walk', '步行'],
+                ['taxi', '出租车'],
+                ['bus', '公交'],
+                ['coach', '客运'],
+              ] as const
+            ).map(([mode, label]) => (
+              <label key={mode}>
+                <input
+                  type="checkbox"
+                  checked={normalizedValue?.allowedModes?.includes(mode) ?? false}
+                  onChange={() => toggleMode(mode)}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <div className="admin-poi-edit-coordinate-fields">
+          <label>
+            <span>跨层连接器</span>
+            <select
+              value={normalizedValue?.verticalConnectorKind ?? ''}
+              onChange={(event) =>
+                update({
+                  verticalConnectorKind:
+                    (event.currentTarget
+                      .value as MapMarkerSpatialMetadata['verticalConnectorKind']) || undefined,
+                })
+              }
+            >
+              <option value="">不是跨层连接器</option>
+              <option value="ramp">匝道 / 坡道</option>
+              <option value="stairs">楼梯</option>
+              <option value="escalator">扶梯</option>
+              <option value="elevator">电梯</option>
+            </select>
+          </label>
+          <label className="admin-inline-checkbox">
+            <input
+              type="checkbox"
+              checked={normalizedValue?.accessible ?? false}
+              onChange={(event) => update({ accessible: event.currentTarget.checked || undefined })}
+            />
+            <span>无障碍可通行</span>
+          </label>
+        </div>
+      </fieldset>
+      <fieldset className="admin-poi-spatial-editor">
+        <legend>地图展示与立体样式</legend>
+        <div className="admin-poi-edit-coordinate-fields">
+          <label>
+            <span>填充颜色</span>
+            <input
+              type="color"
+              value={normalizedValue?.style?.fillColor ?? '#3b82f6'}
+              onChange={(event) =>
+                updatePoiSpatialStyle(normalizedValue, update, {
+                  fillColor: event.currentTarget.value,
+                })
+              }
+            />
+          </label>
+          <label>
+            <span>填充透明度</span>
+            <input
+              type="number"
+              min="0"
+              max="1"
+              step="0.05"
+              value={normalizedValue?.style?.fillOpacity ?? ''}
+              onChange={(event) =>
+                updatePoiSpatialStyle(normalizedValue, update, {
+                  fillOpacity: parseOptionalFiniteNumber(event.currentTarget.value),
+                })
+              }
+            />
+          </label>
+          <label>
+            <span>描边颜色</span>
+            <input
+              type="color"
+              value={normalizedValue?.style?.strokeColor ?? '#2563eb'}
+              onChange={(event) =>
+                updatePoiSpatialStyle(normalizedValue, update, {
+                  strokeColor: event.currentTarget.value,
+                })
+              }
+            />
+          </label>
+          <label>
+            <span>描边透明度</span>
+            <input
+              type="number"
+              min="0"
+              max="1"
+              step="0.05"
+              value={normalizedValue?.style?.strokeOpacity ?? ''}
+              onChange={(event) =>
+                updatePoiSpatialStyle(normalizedValue, update, {
+                  strokeOpacity: parseOptionalFiniteNumber(event.currentTarget.value),
+                })
+              }
+            />
+          </label>
+        </div>
+        <label>
+          <span>绑定线路色（线路 ID，逗号分隔，首个有效值优先）</span>
+          <input
+            value={normalizedValue?.style?.lineColorTransitLineIds?.join(', ') ?? ''}
+            onChange={(event) =>
+              updatePoiSpatialStyle(normalizedValue, update, {
+                lineColorTransitLineIds: parseCommaSeparatedValues(event.currentTarget.value),
+              })
+            }
+          />
+        </label>
+        <label className="admin-inline-checkbox">
+          <input
+            type="checkbox"
+            disabled={!volumeSupported}
+            checked={Boolean(normalizedValue?.volume)}
+            onChange={(event) => {
+              const minY = normalizedValue?.defaultY ?? 64;
+              update({
+                volume:
+                  event.currentTarget.checked && geometry
+                    ? buildMapVolumeFromGeometry(geometry, minY, minY + 4)
+                    : undefined,
+              });
+            }}
+          />
+          <span>按当前区域生成 2.5D 体块</span>
+        </label>
+        {normalizedValue?.volume && geometry ? (
+          <div className="admin-poi-edit-coordinate-fields">
+            <label>
+              <span>体块底部 Y</span>
+              <input
+                type="number"
+                value={volumeBounds?.minY ?? ''}
+                onChange={(event) => {
+                  const minY = parseOptionalFiniteNumber(event.currentTarget.value);
+                  if (minY !== undefined) {
+                    update({
+                      volume: buildMapVolumeFromGeometry(
+                        geometry,
+                        minY,
+                        volumeBounds?.maxY ?? minY + 4,
+                      ),
+                    });
+                  }
+                }}
+              />
+            </label>
+            <label>
+              <span>体块顶部 Y</span>
+              <input
+                type="number"
+                value={volumeBounds?.maxY ?? ''}
+                onChange={(event) => {
+                  const maxY = parseOptionalFiniteNumber(event.currentTarget.value);
+                  if (maxY !== undefined) {
+                    update({
+                      volume: buildMapVolumeFromGeometry(
+                        geometry,
+                        volumeBounds?.minY ?? maxY - 4,
+                        maxY,
+                      ),
+                    });
+                  }
+                }}
+              />
+            </label>
+          </div>
+        ) : null}
+      </fieldset>
+      <fieldset className="admin-poi-spatial-editor">
+        <legend>标记符号</legend>
+        <div className="admin-poi-edit-coordinate-fields">
+          <label>
+            <span>动态编号图标</span>
+            <select
+              value={value?.dynamicSymbol?.kind ?? ''}
+              onChange={(event) => {
+                const kind = event.currentTarget.value as NonNullable<
+                  MapMarkerSpatialMetadata['dynamicSymbol']
+                >['kind'];
+                update({
+                  dynamicSymbol: kind ? { kind, ref: value?.dynamicSymbol?.ref ?? '1' } : undefined,
+                });
+              }}
+            >
+              <option value="">使用静态图标</option>
+              <option value="metro_exit">地铁出入口编号</option>
+              <option value="road_ref">道路编号</option>
+              <option value="highway_ref">高速公路编号</option>
+            </select>
+          </label>
+          <label>
+            <span>编号</span>
+            <input
+              value={value?.dynamicSymbol?.ref ?? ''}
+              disabled={!value?.dynamicSymbol}
+              onChange={(event) =>
+                value?.dynamicSymbol &&
+                update({
+                  dynamicSymbol: { ...value.dynamicSymbol, ref: event.currentTarget.value },
+                })
+              }
+              maxLength={12}
+            />
+          </label>
+        </div>
+      </fieldset>
+    </>
+  );
+}
+
+function PoiWorldMetadataEditor({
+  isPoint,
+  onChange,
+  value,
+}: Readonly<{
+  isPoint: boolean;
+  onChange: (value: MapMarkerSpatialMetadata | undefined) => void;
+  value?: MapMarkerSpatialMetadata;
+}>) {
+  const [coordinateYText, setCoordinateYText] = useState(() =>
+    formatCoordinateYList(value?.coordinateY),
+  );
+  useEffect(
+    () => setCoordinateYText(formatCoordinateYList(value?.coordinateY)),
+    [value?.coordinateY],
+  );
+  const update = (patch: Partial<MapMarkerSpatialMetadata>) =>
+    onChange(compactPoiSpatialMetadata({ ...value, ...patch }));
+
+  return (
+    <fieldset className="admin-poi-spatial-editor">
+      <legend>世界与高度</legend>
+      <div className="admin-poi-edit-coordinate-fields">
+        <label>
+          <span>世界 ID</span>
+          <input
+            value={value?.worldId ?? ''}
+            onChange={(event) => update({ worldId: event.currentTarget.value || undefined })}
+            placeholder="留空继承地图主世界"
+          />
+        </label>
+        {!isPoint ? (
+          <label>
+            <span>默认 Y</span>
+            <input
+              type="number"
+              value={value?.defaultY ?? ''}
+              onChange={(event) =>
+                update({ defaultY: parseOptionalFiniteNumber(event.currentTarget.value) })
+              }
+              placeholder="64"
+            />
+          </label>
+        ) : null}
+      </div>
+      {!isPoint ? (
+        <label>
+          <span>逐坐标 Y（按点序，逗号分隔；空项继承默认 Y）</span>
+          <input
+            value={coordinateYText}
+            onChange={(event) => setCoordinateYText(event.currentTarget.value)}
+            onBlur={() => update({ coordinateY: parseCoordinateYList(coordinateYText) })}
+            placeholder="64, 64, 72"
+          />
+        </label>
+      ) : null}
+    </fieldset>
+  );
+}
+
 function EditLegacyPoiMarkerDialog({
   categories,
   iconBaseUrl,
@@ -1817,6 +2450,11 @@ function EditLegacyPoiMarkerDialog({
     href: marker.href ?? '',
     imageUrls: getPoiImageUrls(marker),
     geometry: marker.geometry,
+    spatial: normalizePoiSpatialInput(
+      marker.spatial,
+      marker.categoryId ?? '',
+      marker.geometry.type,
+    ),
     parentMarkerId: marker.parentMarkerId ?? '',
     floorLabel: marker.floorLabel ?? '',
     boundRegionMarkerIds: marker.boundRegionMarkerIds ?? [],
@@ -1840,6 +2478,11 @@ function EditLegacyPoiMarkerDialog({
         next.iconFileName = nextCategory?.iconMapping.iconFileNames.includes(current.iconFileName)
           ? current.iconFileName
           : '';
+        next.spatial = normalizePoiSpatialInput(
+          current.spatial,
+          patch.categoryId,
+          geometryDraft.type,
+        );
       }
       return next;
     });
@@ -1872,6 +2515,11 @@ function EditLegacyPoiMarkerDialog({
       href: form.href.trim(),
       imageUrls: normalizePoiImageUrlList(form.imageUrls),
       geometry: geometryResult.geometry,
+      spatial: normalizePoiSpatialInput(
+        form.spatial,
+        form.categoryId,
+        geometryResult.geometry.type,
+      ),
       parentMarkerId: form.parentMarkerId.trim(),
       floorLabel: form.floorLabel.trim(),
       boundRegionMarkerIds: form.boundRegionMarkerIds,
@@ -1983,11 +2631,24 @@ function EditLegacyPoiMarkerDialog({
         <LegacyPoiGeometryEditor
           draft={geometryDraft}
           originalGeometry={marker.geometry}
+          spatial={form.spatial}
           tilePreviewConfig={tilePreviewConfig}
           onChange={(draft) => {
             setGeometryDraft(draft);
             setError('');
           }}
+          onSpatialChange={(spatial) => updateForm({ spatial })}
+        />
+        <PoiWorldMetadataEditor
+          isPoint={geometryDraft.type === 'Point'}
+          value={form.spatial}
+          onChange={(spatial) => updateForm({ spatial })}
+        />
+        <PoiSpatialMetadataEditor
+          categoryId={form.categoryId}
+          geometry={buildMapGeometryFromDraft(geometryDraft).geometry}
+          value={form.spatial}
+          onChange={(spatial) => updateForm({ spatial })}
         />
         <ParentMarkerSelect
           categories={categories}
@@ -2019,57 +2680,47 @@ function EditLegacyPoiMarkerDialog({
 function LegacyPoiGeometryEditor({
   draft,
   onChange,
+  onSpatialChange,
   originalGeometry,
+  spatial,
   tilePreviewConfig,
 }: Readonly<{
   draft: PoiGeometryDraft;
   onChange: (draft: PoiGeometryDraft) => void;
+  onSpatialChange: (spatial: MapMarkerSpatialMetadata | undefined) => void;
   originalGeometry: MapGeometry;
+  spatial?: MapMarkerSpatialMetadata;
   tilePreviewConfig: PoiTilePreviewConfig;
 }>) {
+  const [pointYText, setPointYText] = useState(() => formatPointCoordinateY(spatial));
+  useEffect(() => setPointYText(formatPointCoordinateY(spatial)), [spatial?.coordinateY]);
+
   if (draft.type === 'Point') {
-    const currentCoordinate = parseCoordinateDraft(draft.coordinate);
     const originalCoordinate =
       originalGeometry.type === 'Point'
         ? originalGeometry.coordinates
         : getGeometryRepresentativeCoordinate(originalGeometry);
     return (
       <div className="admin-poi-edit-coordinate">
-        <div className="admin-poi-edit-coordinate-fields">
-          <label>
-            <span>X 坐标</span>
-            <input
-              inputMode="decimal"
-              value={draft.coordinate.x}
-              onChange={(event) =>
-                onChange({
-                  type: 'Point',
-                  coordinate: { ...draft.coordinate, x: event.currentTarget.value },
-                })
+        <WorldCoordinatePicker
+          ariaLabel="在坐标预览中点选新的 POI 坐标"
+          value={{ x: draft.coordinate.x, y: pointYText, z: draft.coordinate.z }}
+          onChange={(coordinate) => {
+            setPointYText(coordinate.y);
+            onChange({ type: 'Point', coordinate: { x: coordinate.x, z: coordinate.z } });
+            const nextSpatial = updatePoiPointCoordinateY(spatial, coordinate.y);
+            if (nextSpatial !== null) onSpatialChange(nextSpatial);
+          }}
+          originalValue={originalCoordinate}
+          freshTileTemplate={tilePreviewConfig.freshTileTemplate}
+          tileTemplate={tilePreviewConfig.tileTemplate}
+          actions={
+            <CurrentPlayerLocationButton
+              title="使用当前绑定玩家的位置"
+              onUse={(coordinate) =>
+                onChange({ type: 'Point', coordinate: coordinateToDraft(coordinate) })
               }
             />
-          </label>
-          <label>
-            <span>Z 坐标</span>
-            <input
-              inputMode="decimal"
-              value={draft.coordinate.z}
-              onChange={(event) =>
-                onChange({
-                  type: 'Point',
-                  coordinate: { ...draft.coordinate, z: event.currentTarget.value },
-                })
-              }
-            />
-          </label>
-        </div>
-        <PoiPointCoordinatePicker
-          contextMarkers={[]}
-          currentCoordinate={currentCoordinate}
-          originalCoordinate={originalCoordinate}
-          tilePreviewConfig={tilePreviewConfig}
-          onPick={(coordinate) =>
-            onChange({ type: 'Point', coordinate: coordinateToDraft(coordinate) })
           }
         />
       </div>
@@ -2300,7 +2951,13 @@ function PoiSubmissionReviewItem({
   };
 
   return (
-    <article className="admin-content-item admin-poi-item">
+    <article
+      className={
+        isSelected
+          ? 'admin-content-item admin-poi-item is-deep-linked'
+          : 'admin-content-item admin-poi-item'
+      }
+    >
       <label className="admin-content-select">
         <input
           type="checkbox"
@@ -2908,15 +3565,12 @@ function PoiAuditTileLayer({
   return (
     <div className="admin-poi-audit-map-tiles" aria-hidden="true">
       {tiles.map((tile) => (
-        <img
+        <LayeredMapTile
           className="admin-poi-audit-map-tile"
-          draggable={false}
+          fallbackUrl={tile.fallbackUrl}
+          freshUrl={tile.freshUrl}
           key={tile.id}
-          loading="lazy"
-          onError={(event) => {
-            event.currentTarget.style.visibility = 'hidden';
-          }}
-          src={tile.url}
+          tileKey={tile.id}
           style={buildPoiTileStyle(tile)}
         />
       ))}
@@ -3436,10 +4090,21 @@ function EditPoiSubmissionDialog({
     address: submission?.address ?? '',
     addressRoadMarkerId: submission?.addressRoadMarkerId ?? '',
     facilities: submission?.facilities ?? [],
+    spatial: normalizePoiSpatialInput(
+      submission?.spatial,
+      submission?.categoryId ?? categories[0]?.id ?? '',
+      submission?.geometry.type,
+    ),
   }));
   const [geometryDraft, setGeometryDraft] = useState<PoiGeometryDraft>(() =>
     submission ? createPoiGeometryDraft(submission.geometry) : createEmptyPoiGeometryDraft('Point'),
   );
+  const [pointYText, setPointYText] = useState(() => formatPointCoordinateY(submission?.spatial));
+  useEffect(() => {
+    if (geometryDraft.type === 'Point') {
+      setPointYText(formatPointCoordinateY(form.spatial));
+    }
+  }, [form.spatial?.coordinateY, form.spatial?.defaultY, geometryDraft.type]);
   const [error, setError] = useState('');
   const originalPointCoordinate =
     submission?.geometry.type === 'Point' ? submission.geometry.coordinates : null;
@@ -3459,6 +4124,11 @@ function EditPoiSubmissionDialog({
         next.iconFileName = nextCategory?.iconMapping.iconFileNames.includes(current.iconFileName)
           ? current.iconFileName
           : '';
+        next.spatial = normalizePoiSpatialInput(
+          current.spatial,
+          patch.categoryId,
+          geometryDraft.type,
+        );
       }
       return next;
     });
@@ -3467,6 +4137,10 @@ function EditPoiSubmissionDialog({
 
   const updateGeometryDraft = (draft: PoiGeometryDraft) => {
     setGeometryDraft(draft);
+    setForm((current) => ({
+      ...current,
+      spatial: normalizePoiSpatialInput(current.spatial, current.categoryId, draft.type),
+    }));
     setError('');
   };
 
@@ -3500,6 +4174,11 @@ function EditPoiSubmissionDialog({
       href: form.href.trim(),
       imageUrls: normalizePoiImageUrlList(form.imageUrls),
       geometry: geometryResult.geometry,
+      spatial: normalizePoiSpatialInput(
+        form.spatial,
+        form.categoryId,
+        geometryResult.geometry.type,
+      ),
       parentMarkerId: form.parentMarkerId.trim(),
       floorLabel: form.floorLabel.trim(),
       boundRegionMarkerIds: form.boundRegionMarkerIds,
@@ -3624,51 +4303,37 @@ function EditPoiSubmissionDialog({
         />
         {geometryDraft.type === 'Point' ? (
           <div className="admin-poi-edit-coordinate">
-            <div className="admin-poi-edit-coordinate-fields">
-              <label>
-                <span>X 坐标</span>
-                <input
-                  inputMode="decimal"
-                  value={geometryDraft.coordinate.x}
-                  onChange={(event) => {
-                    updateGeometryDraft({
-                      type: 'Point',
-                      coordinate: {
-                        ...geometryDraft.coordinate,
-                        x: event.currentTarget.value,
-                      },
-                    });
-                  }}
-                />
-              </label>
-              <label>
-                <span>Z 坐标</span>
-                <input
-                  inputMode="decimal"
-                  value={geometryDraft.coordinate.z}
-                  onChange={(event) => {
-                    updateGeometryDraft({
-                      type: 'Point',
-                      coordinate: {
-                        ...geometryDraft.coordinate,
-                        z: event.currentTarget.value,
-                      },
-                    });
-                  }}
-                />
-              </label>
-            </div>
-            <PoiPointCoordinatePicker
-              contextMarkers={contextMarkers}
-              currentCoordinate={currentPointCoordinate}
-              originalCoordinate={originalPointCoordinate}
-              tilePreviewConfig={tilePreviewConfig}
-              onPick={(coordinate) => {
+            <WorldCoordinatePicker
+              ariaLabel="在坐标预览中点选新的 POI 坐标"
+              value={{
+                x: geometryDraft.coordinate.x,
+                y: pointYText,
+                z: geometryDraft.coordinate.z,
+              }}
+              onChange={(coordinate) => {
+                setPointYText(coordinate.y);
                 updateGeometryDraft({
                   type: 'Point',
-                  coordinate: coordinateToDraft(coordinate),
+                  coordinate: { x: coordinate.x, z: coordinate.z },
                 });
+                const nextSpatial = updatePoiPointCoordinateY(form.spatial, coordinate.y);
+                if (nextSpatial !== null) updateForm({ spatial: nextSpatial });
               }}
+              markers={contextMarkers.map(toEmbeddedPoiContextMarker)}
+              originalValue={originalPointCoordinate}
+              freshTileTemplate={tilePreviewConfig.freshTileTemplate}
+              tileTemplate={tilePreviewConfig.tileTemplate}
+              actions={
+                <CurrentPlayerLocationButton
+                  title="使用当前绑定玩家的位置"
+                  onUse={(coordinate) => {
+                    updateGeometryDraft({
+                      type: 'Point',
+                      coordinate: coordinateToDraft(coordinate),
+                    });
+                  }}
+                />
+              }
             />
             {submission && pointMapCoordinate ? (
               <a
@@ -3689,6 +4354,17 @@ function EditPoiSubmissionDialog({
             onChange={updateGeometryDraft}
           />
         )}
+        <PoiWorldMetadataEditor
+          isPoint={geometryDraft.type === 'Point'}
+          value={form.spatial}
+          onChange={(spatial) => updateForm({ spatial })}
+        />
+        <PoiSpatialMetadataEditor
+          categoryId={form.categoryId}
+          geometry={buildMapGeometryFromDraft(geometryDraft).geometry}
+          value={form.spatial}
+          onChange={(spatial) => updateForm({ spatial })}
+        />
         {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
         <div className="admin-content-actions">
           <button type="button" onClick={onClose} disabled={isBusy}>
@@ -4334,6 +5010,10 @@ function PoiGeometryVisualEditor({
             undo
           </span>
         </button>
+        <CurrentPlayerLocationButton
+          title="追加当前绑定玩家的位置"
+          onUse={(coordinate) => onChange(appendPoiGeometryDraftCoordinate(draft, coordinate))}
+        />
       </div>
     </section>
   );
@@ -4664,48 +5344,6 @@ function PoiMultiPolygonEditor({
   );
 }
 
-function PoiPointCoordinatePicker({
-  contextMarkers,
-  currentCoordinate,
-  onPick,
-  originalCoordinate,
-  tilePreviewConfig,
-}: Readonly<{
-  contextMarkers: PoiAuditContextMarker[];
-  currentCoordinate: [number, number] | null;
-  onPick: (coordinate: [number, number]) => void;
-  originalCoordinate: [number, number] | null;
-  tilePreviewConfig: PoiTilePreviewConfig;
-}>) {
-  return (
-    <EmbeddedMapLocationPicker
-      ariaLabel="在坐标预览中点选新的 POI 坐标"
-      footer={
-        currentCoordinate
-          ? `点击预览区域回填坐标 · 当前 ${formatCoordinatePair(currentCoordinate)}`
-          : '点击预览区域回填坐标'
-      }
-      markers={contextMarkers.map((marker) => ({
-        coordinate: marker.coordinate,
-        id: marker.marker.id,
-        label: marker.marker.label,
-        tone:
-          marker.relation === 'same-category'
-            ? 'same-category'
-            : marker.relation === 'road'
-              ? 'road'
-              : marker.relation === 'station'
-                ? 'station'
-                : 'nearby',
-      }))}
-      onChange={onPick}
-      originalValue={originalCoordinate}
-      tileTemplate={tilePreviewConfig.tileTemplate}
-      value={currentCoordinate}
-    />
-  );
-}
-
 interface PoiCategoryDraft {
   id: string;
   name: string;
@@ -4963,6 +5601,11 @@ function PoiCategoryProfileDialog({
       }
       setIconDisplayNames((current) => ({ ...current, [iconKey]: data.displayName! }));
       setLocalStatus(`已将图标命名为：${data.displayName}`);
+      publishAdminDataChanged({
+        resource: 'poi',
+        reason: 'record_updated',
+        occurredAt: new Date().toISOString(),
+      });
     } finally {
       setRenamingIconKey(null);
     }
@@ -5604,10 +6247,11 @@ interface PoiAuditMapView {
 
 interface PoiVisibleTile {
   displaySize: number;
+  fallbackUrl?: string;
+  freshUrl?: string;
   id: string;
   left: number;
   top: number;
-  url: string;
 }
 
 const poiAuditPreviewWidth = 220;
@@ -5636,7 +6280,7 @@ function buildPoiAuditPreviewTiles(
   bounds: { minX: number; minZ: number; maxX: number; maxZ: number },
   config: PoiTilePreviewConfig,
 ): PoiVisibleTile[] {
-  if (!config.tileTemplate) {
+  if (!config.tileTemplate && !config.freshTileTemplate) {
     return [];
   }
 
@@ -5656,12 +6300,21 @@ function buildPoiAuditPreviewTiles(
 
   for (let tileX = minTileX; tileX <= maxTileX; tileX += 1) {
     for (let tileZ = minTileZ; tileZ <= maxTileZ; tileZ += 1) {
-      if (config.regionIndex && !hasPoiPreviewTile(tileX, tileZ, tileZoom, config.regionIndex)) {
+      const hasFallbackTile =
+        Boolean(config.tileTemplate) &&
+        (!config.regionIndex || hasPoiPreviewTile(tileX, tileZ, tileZoom, config.regionIndex));
+      if (!hasFallbackTile && !config.freshTileTemplate) {
         continue;
       }
 
       tiles.push({
         displaySize: tileDisplaySize,
+        fallbackUrl: hasFallbackTile
+          ? buildPoiPreviewTileUrl(config.tileTemplate!, tileZoom, tileX, tileZ)
+          : undefined,
+        freshUrl: config.freshTileTemplate
+          ? buildPoiPreviewTileUrl(config.freshTileTemplate, tileZoom, tileX, tileZ)
+          : undefined,
         id: `${tileZoom}:${tileX}:${tileZ}`,
         left:
           poiAuditPreviewWidth / 2 +
@@ -5671,7 +6324,6 @@ function buildPoiAuditPreviewTiles(
           poiAuditPreviewHeight / 2 +
           (tileZ * poiPreviewTileSize * view.scale) / tileScale -
           view.centerZ * view.scale,
-        url: buildPoiPreviewTileUrl(config.tileTemplate, tileZoom, tileX, tileZ),
       });
     }
   }
@@ -6377,7 +7029,7 @@ function isRoadReferenceMarker(
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
-  return /\b(road|roadpoint|highway)\b/.test(text);
+  return /\b(road|roadpoint|highway|toll-gate)\b/.test(text);
 }
 
 function findAddressRoadMarkers(address: string, markers: MapMarker[]): MapMarker[] {
