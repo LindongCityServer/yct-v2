@@ -1,6 +1,6 @@
 # YCT Event Schema
 
-更新时间：2026-07-31
+更新时间：2026-08-02
 
 本文档记录雨城通 v2 第一阶段的领域事件。后端业务 Service 只负责本模块校验和写库，成功后发布事件；通知、Push、缓存失效、搜索索引、`ldpass` 同步等副作用由监听器处理。
 
@@ -48,10 +48,14 @@ export interface PlayerLocationPresenceChangedPayload {
 | 事件                                         | 触发节点                      | 主要用途                                                                                                                                                                                                                                        |
 | -------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ContentDraftUpdated`                        | 内容草稿保存或驳回后重开编辑  | 编辑器回填、审计、缓存刷新；当前后台重新载入草稿或驳回内容并保存时会发布该事件                                                                                                                                                                  |
+| `ContentPoiBindingsUpdated`                  | 运营内容关联 POI 发生变化     | 刷新按 POI 查询的运营消息投影；Payload 包含 `contentId`、`revisionId`、完整 `poiMarkerIds` 和操作者                                                                                                                                             |
+| `ContentLegacyAdopted`                       | 单条旧站内容创建为本地草稿    | 记录稳定的旧站来源 ID、正文来源类型和所属批次；监听器不得借此绕过审核直接发布                                                                                                                                                                   |
+| `ContentLegacyMigrationCompleted`            | 一次性旧内容迁移批次完成      | 记录候选、创建、跳过、HTML 正文和摘要回退数量；只在本批次实际创建了草稿时发布                                                                                                                                                                   |
 | `ContentSubmitted`                           | 内容修订提交审核              | 审核待办、站内通知                                                                                                                                                                                                                              |
 | `ContentReviewed`                            | 管理员审核内容                | 通知投稿者、记录审计                                                                                                                                                                                                                            |
 | `ContentPublished`                           | 内容版本发布                  | 刷新首页、搜索索引、缓存                                                                                                                                                                                                                        |
 | `ContentArchived`                            | 内容被归档或下线              | 从公开入口撤下、刷新首页与搜索缓存、记录审计                                                                                                                                                                                                    |
+| `ContentRestored`                            | 管理员将归档内容恢复为草稿    | 重开编辑、记录审计；恢复不会自动提交审核或重新发布                                                                                                                                                                                              |
 | `ContentAssetImported`                       | 内容素材从旧清单或适配器导入  | 素材审核待办、来源追踪、审计                                                                                                                                                                                                                    |
 | `ContentAssetUploaded`                       | 管理员上传内容素材            | 素材审核待办、去重、来源追踪、审计                                                                                                                                                                                                              |
 | `ContentAssetReviewed`                       | 管理员审核内容素材            | 内容发布校验、通知投稿者、记录审计                                                                                                                                                                                                              |
@@ -82,6 +86,7 @@ export interface PlayerLocationPresenceChangedPayload {
 | `MaterialTransitNetworkProjectUpdated`       | 用户更新项目线路补充信息      | 刷新物料线网草稿中的主、副线路名称及更新时间；切换客户端当前数据源不会触发该事件                                                                                                                                                                |
 | `MaterialTransitNetworkProjectDeleted`       | 用户显式删除线网项目草稿      | 清理用户级物料线网草稿和相关缓存；仅切回服务器线网不会删除草稿                                                                                                                                                                                  |
 | `TileProviderSelected`                       | 地图瓦片源被选择              | 记录混合内容降级或管理员覆盖                                                                                                                                                                                                                    |
+| `MapSpatialProfileUpdated`                   | 管理员更新地图空间设置        | 地图空间读取缓存、路线速度成本和管理员审计；Payload 携带稳定地图配置及本次变更字段                                                                                                                                                              |
 | `PlayerLocationsObserved`                    | BDSLM 玩家位置源成功返回快照  | 持久化实时玩家位置、刷新地图位置缓存；Payload 仅包含来源、观测时间、在线玩家名列表和数量                                                                                                                                                        |
 | `PlayerLocationPresenceChanged`              | 玩家上线或下线状态变化        | 持久化最后在线坐标、地图当前账号位置展示和审计；Payload 包含玩家名、前后状态、X/Z、观测时间与最后在线时间                                                                                                                                       |
 | `TripReminderScheduled`                      | 行程提醒创建或同步到账号      | 定时任务、Web Push；登录用户同步待提醒记录到服务端时会发布该事件，payload 携带 `reminderId`、`remindAt`、`title`、`source` 和 `userId`                                                                                                          |
@@ -119,6 +124,8 @@ export interface PlayerLocationPresenceChangedPayload {
 | `AdminInitialized`                           | 命令行初始化首位超级管理员    | 安全审计                                                                                                                                                                                                                                        |
 
 ## 3. 地图与线路编辑 Payload
+
+地图空间设置事件 `MapSpatialProfileUpdated` 已进入 `packages/contracts/src/events.ts`；正规道路图、交通运营状态、站内布局、行政区划和玩家位置写入几何的下一阶段事件草案见 `docs/MAP_SPATIAL_ROUTING_ARCHITECTURE.md` 第 13 节。其余草案进入实现时必须同步落到契约源码和本文件事件清单，未进入契约源码前不得由监听器依赖。
 
 ```ts
 export interface PoiSubmittedPayload {
@@ -227,7 +234,91 @@ interface LoginRequiredPayload {
 
 用户触发的受保护操作收到 HTTP 401，或进入本身必须登录的页面时，调用方发布 `yct:auth-login-required`。根布局监听器展示提示，并在默认 2,400 ms 的提示周期结束后进入临东通登录流程。公开页面上的登录说明、匿名能力提示和后台静默会话探测不得发布该事件，避免无操作自动跳转。
 
-## 4. 投递要求
+临东市服务器静态门户使用浏览器 `CustomEvent` 解耦头图和入口交互。这些事件只存在于当前页面，不进入领域 EventBus 或 Outbox：
+
+```ts
+interface PortalHeroRequestedPayload {
+  reason: 'initial' | 'manual';
+  source: 'page-load' | 'hero-control';
+}
+
+interface PortalHeroSelectedPayload {
+  heroId: string;
+  poiId: string;
+  label: string;
+  imageUrl: string;
+  mapUrl: string;
+  reason: 'initial' | 'manual';
+}
+
+interface PortalEntryActivatedPayload {
+  entryId: string;
+  group: 'hero' | 'story' | 'tools' | 'maps' | 'services' | 'community' | 'friends';
+  targetUrl: string;
+}
+
+type PortalWechatPosterVisibilitySource =
+  'community-entry' | 'close-button' | 'backdrop' | 'escape';
+
+interface PortalWechatPosterVisibilityRequestedPayload {
+  visible: boolean;
+  source: PortalWechatPosterVisibilitySource;
+}
+
+interface PortalWechatPosterVisibilityChangedPayload {
+  visible: boolean;
+  source: PortalWechatPosterVisibilitySource;
+}
+
+interface PortalLegacyWordPressResolutionRequestedPayload {
+  postId: string;
+  contentId: `wordpress_content_${string}`;
+  resolutionUrl: string;
+  targetUrl: string;
+}
+
+type PortalLegacyWordPressResolutionStatus = 'published' | 'not_published' | 'unavailable';
+
+interface PortalLegacyWordPressResolutionCompletedPayload extends PortalLegacyWordPressResolutionRequestedPayload {
+  status: PortalLegacyWordPressResolutionStatus;
+  httpStatus?: number;
+}
+
+interface PortalLegacyWordPressNoticeVisibilityPayload {
+  visible: boolean;
+  reason: 'not_published' | 'unavailable';
+  source: 'resolution' | 'close-button';
+}
+```
+
+- `portal:hero-requested`：页面加载或用户点击换图按钮后请求选择头图。
+- `portal:hero-selected`：头图、地点名称和地图直达链接已经原子更新。
+- `portal:entry-activated`：用户打开工具、城市服务或社区入口。
+- `portal:wechat-poster-visibility-requested`：社交入口或关闭控件请求改变微信公众号海报的可见状态。
+- `portal:wechat-poster-visibility-changed`：微信公众号海报已经打开或关闭。
+- `portal:legacy-wordpress-resolution-requested`：把旧链接中的 `p` 转换为内容 ID，并请求查询公开状态。
+- `portal:legacy-wordpress-resolution-completed`：返回已发布、未发布或暂时不可用状态；只有已发布状态触发跳转。
+- `portal:legacy-wordpress-notice-visibility-requested`：未发布或查询失败时请求显示提示，或由关闭按钮请求隐藏。
+- `portal:legacy-wordpress-notice-visibility-changed`：旧链接提示的实际可见状态已经改变。
+
+门户当前不监听这些事件进行网络上报。以后增加访问统计时只能新增监听器，不得把统计请求直接写进随机头图或入口跳转逻辑；监听器必须避免写入账号、Cookie 或其他身份信息。
+
+## 4. 已落地地图空间事件
+
+以下事件已在 `packages/contracts/src/events.ts` 注册，文档只作监听边界摘要，字段定义以契约源码为准：
+
+| 事件                                       | 关键 Payload                                 | 监听职责                                   |
+| ------------------------------------------ | -------------------------------------------- | ------------------------------------------ |
+| `PoiSubmitted`                             | `poiId`、`geometry`、可选 `spatial`          | POI 审核、地图读取模型和道路接入索引       |
+| `PoiSubmissionUpdated`                     | `poiId`、`changedFields`（含 `spatial`）     | 失效地图/搜索/路由接入缓存                 |
+| `TransitDataRevisionStationUpdated`        | `nextCoordinate`（含可选 Y）、运营状态前后值 | 刷新站点、线路和路线规划读取模型           |
+| `MapSpatialProfileUpdated`                 | `profile`、`changedFields`                   | 刷新默认高度、道路成本、票价和地图配置缓存 |
+| `AdministrativeAreaCreated` / `Updated`    | `area`、更新字段                             | 更新独立行政区划草稿和空间索引             |
+| `AdministrativeAreaPublished` / `Archived` | `area`、前一状态（归档时）                   | 更新公开行政区划图层与搜索归属索引         |
+
+当前位置按钮本身是客户端瞬时动作；只有几何保存成功后才沿既有 POI/线路更新事件发布，不单独制造“按钮点击”领域事件。动态编号、道路方向、高度、通行方式和 POI 样式都作为 `spatial` 的同一快照保存，避免监听器读取互相矛盾的半成品字段。
+
+## 5. 投递要求
 
 - 单机 MVP 可以先用 `InMemoryEventBus`。
 - 当前行程提醒投递已使用应用级共享内存事件总线连接 `TripReminderScheduled` 和通知投递监听器，投递记录持久化到 `.yct-data/push-delivery-store.json`。这解决单进程开发环境的监听器解耦，但不替代正式数据库 Outbox。
@@ -240,8 +331,9 @@ interface LoginRequiredPayload {
 - 事件 Payload 只放业务键和必要快照，不放密码、密钥、完整 Cookie 或私有运维信息。
 - 客运、轮渡、航班统一查询订票平台的详细事件边界见 `docs/TRAVEL_TICKETING_PLATFORM.md`，契约源码见 `packages/contracts/src/events.ts`。
 
-## 5. 状态机与校验
+## 6. 状态机与校验
 
 - 内容修订、素材审核和 POI 投稿的状态转换由 `@yct/domain` 的纯函数维护。
+- 内容归档恢复严格按 `archived -> draft -> pending_review` 流转，分别发布 `ContentRestored` 与 `ContentSubmitted`，不得通过导入脚本把历史内容直接改成公开状态。
 - Markdown、素材上传、地图几何、瓦片模板、POI 分类和旧数据导入批次由 `@yct/schemas` 做运行时校验。
 - API 或 Service 在写库前必须先通过 schema 校验；写库成功后再发布领域事件。
