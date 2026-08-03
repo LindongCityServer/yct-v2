@@ -1,0 +1,23 @@
+{
+  "generatedAt": "2026-08-02",
+  "items": [
+    {
+      "id": "road-materials",
+      "file": "road-materials.webp",
+      "source": "用户提供的路牌与楼牌工作台封面",
+      "processing": "保留透明通道，居中裁切为 1200 × 750"
+    },
+    {
+      "id": "transit-materials",
+      "file": "transit-materials.webp",
+      "source": "用户提供的公共交通导视工作台封面",
+      "processing": "保留透明通道，居中裁切为 1200 × 750"
+    },
+    {
+      "id": "dynamic-route-map",
+      "file": "dynamic-route-map.webp",
+      "source": "用户提供的动态线路图成品封面",
+      "processing": "保留透明通道，居中裁切为 1200 × 750"
+    }
+  ]
+}

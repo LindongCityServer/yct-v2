@@ -1,0 +1,68 @@
+{
+  "source": "https://yct.shangxiaoguan.top/v2/api/map/markers",
+  "retrievedAt": "2026-08-02T12:00:00+08:00",
+  "items": [
+    {
+      "file": "city-government.jpg",
+      "poiId": "unmined-marker-168--1428--685",
+      "label": "临东市政府",
+      "sourceImage": "https://yct.shangxiaoguan.top/v2/api/map/poi-submission-images/33b6f126350714acbdb70de2.jpg"
+    },
+    {
+      "file": "snow-government.webp",
+      "poiId": "unmined-marker-170-642-3952",
+      "label": "雪乡乡政府",
+      "sourceImage": "https://yct.shangxiaoguan.top/v2/api/map/poi-submission-images/e4996729a2160cd828da9d6b.webp"
+    },
+    {
+      "file": "luojiabao-station.webp",
+      "poiId": "unmined-marker-174--3238-1018",
+      "label": "骆家堡站",
+      "sourceImage": "https://yct.shangxiaoguan.top/v2/api/map/poi-submission-images/fdb62a5bd7ab4b54983a7a27.avif",
+      "transformed": "转换为 WebP 以提高静态门户兼容性"
+    },
+    {
+      "file": "telegraph-building.webp",
+      "poiId": "unmined-marker-202--1661--605",
+      "label": "电报大楼",
+      "sourceImage": "https://yct.shangxiaoguan.top/v2/api/map/poi-submission-images/e9029daeaa65e55ea1c096c5.webp"
+    },
+    {
+      "file": "foreign-affairs-building.webp",
+      "poiId": "unmined-marker-208--804--161",
+      "label": "外事大厦",
+      "sourceImage": "https://yct.shangxiaoguan.top/v2/api/map/poi-submission-images/58399aecf0a60897745893b2.webp"
+    },
+    {
+      "file": "first-high-school.webp",
+      "poiId": "unmined-marker-327--242--3176",
+      "label": "临东市第一高级中学",
+      "sourceImage": "https://yct.shangxiaoguan.top/v2/api/map/poi-submission-images/9019336a002178a0fb9b35ff.webp"
+    },
+    {
+      "file": "snow-coach-station.webp",
+      "poiId": "unmined-marker-355-811-4668",
+      "label": "雪乡客运站",
+      "sourceImage": "https://yct.shangxiaoguan.top/v2/api/map/poi-submission-images/5be43581d46c45d50f7f2972.webp"
+    },
+    {
+      "file": "lindong-station-exit.webp",
+      "poiId": "unmined-marker-369--2129--1058",
+      "label": "临东站 B 出口",
+      "sourceImage": "https://yct.shangxiaoguan.top/v2/api/map/poi-submission-images/3c963136a821a7c9d9c3cd74.webp"
+    },
+    {
+      "file": "dingxiang-market.webp",
+      "poiId": "poi-local_poi_b6f75fe6-ac93-4825-a201-90c1e83aedaf",
+      "label": "爱临丁香超市",
+      "sourceImage": "https://yct.shangxiaoguan.top/v2/api/map/poi-submission-images/b0b15c77b96ca795203c27ab.jpg",
+      "transformed": "缩放并转换为 WebP"
+    },
+    {
+      "file": "zhaoda-plaza.webp",
+      "poiId": "poi-local_poi_9f5f6533-8231-4b6b-9f7b-1cf54923faaf",
+      "label": "兆达商业广场",
+      "sourceImage": "https://yct.shangxiaoguan.top/v2/api/map/poi-submission-images/788eee6d9d6796b9937b10dc.webp"
+    }
+  ]
+}

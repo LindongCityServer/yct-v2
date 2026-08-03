@@ -1,0 +1,713 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="临东市服务器始于 2016 年。十几位建设者把对不同家乡的记忆带进同一个 Minecraft 世界。"
+      data-i18n-content="meta.description"
+    />
+    <meta name="application-name" content="个人学习网站" data-i18n-content="meta.siteName" />
+    <meta property="og:site_name" content="个人学习网站" data-i18n-content="meta.siteName" />
+    <meta name="theme-color" content="#17211d" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b100e" media="(prefers-color-scheme: dark)" />
+    <title>个人学习网站｜临东市服务器</title>
+    <link rel="icon" href="./assets/favicon.png" type="image/png" />
+    <link rel="stylesheet" href="./portal.css" />
+    <script src="./site-config.js" defer></script>
+    <script src="./portal-i18n.js" defer></script>
+    <script src="./legacy-wordpress-redirect.js" defer></script>
+    <script src="./portal.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content" data-i18n="a11y.skip">跳到主要内容</a>
+
+    <aside
+      class="legacy-link-notice"
+      id="legacy-link-notice"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      hidden
+    >
+      <span class="legacy-link-notice-icon material-icon icon-link" aria-hidden="true"></span>
+      <div class="legacy-link-notice-copy">
+        <strong id="legacy-link-notice-title" data-i18n="legacyLink.notPublishedTitle"
+          >对应内容尚未在雨城通发布</strong
+        >
+        <p id="legacy-link-notice-body" data-i18n="legacyLink.notPublishedBody">
+          这个旧链接对应的文章还没有在雨城通公开，你仍可以从本页继续浏览。
+        </p>
+      </div>
+      <button
+        class="legacy-link-notice-close"
+        id="legacy-link-notice-close"
+        type="button"
+        aria-label="关闭旧链接提示"
+        title="关闭"
+        data-i18n-aria-label="legacyLink.closeLabel"
+        data-i18n-title="legacyLink.close"
+      >
+        <span class="material-icon icon-close" aria-hidden="true"></span>
+      </button>
+    </aside>
+
+    <main id="main-content">
+      <section class="hero" aria-labelledby="page-title">
+        <img
+          class="hero-image"
+          id="hero-image"
+          src="./assets/hero/city-government.jpg"
+          alt="临东市政府与周边城市景观"
+          fetchpriority="high"
+          decoding="async"
+        />
+        <div class="hero-shade" aria-hidden="true"></div>
+
+        <header class="site-header">
+          <a
+            class="header-brand"
+            href="./"
+            aria-label="临东市服务器首页"
+            data-i18n-aria-label="header.home"
+          >
+            <img src="./assets/logo-white.png" alt="临东 LINDONG" />
+          </a>
+          <div class="header-actions">
+            <nav class="header-nav" aria-label="页面导航" data-i18n-aria-label="header.navLabel">
+              <a href="#tools" data-i18n="header.tools">创作工具</a>
+              <a href="#maps" data-i18n="header.maps">城市地图</a>
+              <a href="#services" data-i18n="header.services">服务器服务</a>
+              <a href="#community" data-i18n="header.community">加入临东</a>
+            </nav>
+            <div
+              class="language-switcher"
+              role="group"
+              aria-label="语言"
+              data-i18n-aria-label="language.label"
+            >
+              <img src="./assets/icons/language.svg" alt="" aria-hidden="true" />
+              <button type="button" data-locale="zh-CN" aria-pressed="true">简</button>
+              <button type="button" data-locale="zh-Hant" aria-pressed="false">繁</button>
+              <button type="button" data-locale="en" aria-pressed="false">EN</button>
+            </div>
+          </div>
+        </header>
+
+        <div class="hero-content">
+          <p class="hero-kicker" data-i18n="hero.kicker">始于 2016 年</p>
+          <h1 id="page-title" data-i18n="hero.title">临东市服务器</h1>
+          <p class="hero-slogan" data-i18n="hero.slogan">向往临东 美好生活</p>
+          <p class="hero-summary" data-i18n="hero.summary">
+            十几位建设者，把各自对家乡的记忆带进同一个 Minecraft 世界，慢慢拼成了今天的临东。
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#tools">
+              <span data-i18n="hero.useTools">使用创作工具</span>
+              <span class="material-icon icon-arrow-downward" aria-hidden="true"></span>
+            </a>
+            <a
+              class="button button-secondary"
+              data-link-key="yctMap"
+              data-entry-id="hero-yct-map"
+              data-entry-group="hero"
+              href="https://yct.shangxiaoguan.top/map"
+            >
+              <span data-i18n="hero.browseCity">浏览城市</span>
+              <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+            </a>
+          </div>
+        </div>
+
+        <div class="hero-place">
+          <a
+            id="hero-place-link"
+            data-entry-id="hero-poi"
+            data-entry-group="hero"
+            href="https://yct.shangxiaoguan.top/map?marker=unmined-marker-168--1428--685"
+          >
+            <span class="hero-place-label" data-i18n="hero.showing">正在展示</span>
+            <strong id="hero-place-name">临东市政府</strong>
+            <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+          </a>
+          <button
+            class="hero-next"
+            id="hero-next"
+            type="button"
+            aria-label="换一处临东景观"
+            title="换一处临东景观"
+            data-i18n-aria-label="hero.next"
+            data-i18n-title="hero.next"
+          >
+            <span class="material-icon icon-refresh" aria-hidden="true"></span>
+          </button>
+        </div>
+      </section>
+
+      <section class="story section-band" aria-labelledby="story-title">
+        <div class="section-inner story-layout">
+          <div class="section-heading">
+            <p class="section-kicker" data-i18n="story.kicker">认识临东</p>
+            <h2 id="story-title" class="phrase-title" data-i18n-html="story.title">
+              <span>一座由不同家乡</span><span>拼成的城市</span>
+            </h2>
+          </div>
+          <div class="story-copy">
+            <p data-i18n="story.paragraph1">
+              临东从一份存档出发，经历联机、中国版房间与独立服务器，逐渐成为一座由许多人共同建设的虚拟城市。熟悉的街道、公交、车站、学校和社区被带到同一个世界里，也留下了每个人对家乡不同的理解。
+            </p>
+            <p data-i18n="story.paragraph2">
+              近十年里，玩家来来往往，建设却没有停下。地图、导视、影像、年度报告和纪念活动又把这座城市带到游戏之外：有人在这里找到归属，有人把想法变成作品，也有人从一件工具开始认识临东。
+            </p>
+            <div class="story-resources" aria-labelledby="story-resources-title">
+              <p class="story-resources-title" id="story-resources-title" data-i18n="story.more">
+                继续了解
+              </p>
+              <div class="story-resource-links">
+                <a
+                  class="story-resource-link"
+                  data-link-key="lindongWiki"
+                  data-entry-id="lindong-wiki"
+                  data-entry-group="story"
+                  href="https://wiki.shangxiaoguan.top/%E4%B8%B4%E4%B8%9C%E5%B8%82"
+                >
+                  <span data-i18n="story.cityWiki">Wiki：临东市</span>
+                  <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                </a>
+                <a
+                  class="story-resource-link"
+                  data-link-key="annualReports"
+                  data-entry-id="annual-reports"
+                  data-entry-group="story"
+                  href="https://wiki.shangxiaoguan.top/%E5%88%86%E7%B1%BB:%E6%9C%8D%E5%8A%A1%E5%99%A8%E5%B9%B4%E5%BA%A6%E6%8A%A5%E5%91%8A"
+                >
+                  <span data-i18n="story.annualReports">历年年度报告</span>
+                  <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                </a>
+                <a
+                  class="story-resource-link"
+                  data-link-key="annualReport2025"
+                  data-entry-id="annual-report-2025"
+                  data-entry-group="story"
+                  href="https://yct.shangxiaoguan.top/operations/local_content_4f81ff67-00d4-4152-a833-5a3099f1e8b6"
+                >
+                  <span data-i18n="story.annualReport2025">2025 年度报告</span>
+                  <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="tools section-band" id="tools" aria-labelledby="tools-title">
+        <div class="section-inner">
+          <div class="section-heading section-heading-row">
+            <div>
+              <span class="section-symbol"
+                ><img src="./assets/icons/construction.svg" alt=""
+              /></span>
+              <p class="section-kicker" data-i18n="tools.kicker">不必先了解 Minecraft</p>
+              <h2 id="tools-title" data-i18n="tools.title">创作工具</h2>
+            </div>
+            <p data-i18n="tools.intro">
+              路牌、公共交通导视与动态线路图都可独立使用。选择一个任务，直接开始创作。
+            </p>
+          </div>
+
+          <div class="tool-grid">
+            <a
+              class="tool-card tool-card-road"
+              data-link-key="roadMaterials"
+              data-entry-id="road-materials"
+              data-entry-group="tools"
+              href="https://yct.shangxiaoguan.top/services/road-materials"
+            >
+              <span class="tool-card-media">
+                <img
+                  src="./assets/tools/road-materials.webp"
+                  alt="多个临东道路指示牌、路名牌和楼牌成品拼贴"
+                  data-i18n-alt="tools.roadAlt"
+                  width="1200"
+                  height="750"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </span>
+              <span class="card-index">01</span>
+              <span class="card-title" data-i18n="tools.roadTitle">路牌与楼牌工作台</span>
+              <span class="card-description" data-i18n="tools.roadDescription"
+                >设计道路指示牌、路名牌和楼栋地名标志。</span
+              >
+              <span class="card-open material-icon icon-arrow-outward" aria-hidden="true"></span>
+            </a>
+            <a
+              class="tool-card"
+              data-link-key="transitMaterials"
+              data-entry-id="transit-materials"
+              data-entry-group="tools"
+              href="https://yct.shangxiaoguan.top/services/transit-materials"
+            >
+              <span class="tool-card-media">
+                <img
+                  src="./assets/tools/transit-materials.webp"
+                  alt="公交站牌、线路牌与轨道交通导视成品拼贴"
+                  data-i18n-alt="tools.transitAlt"
+                  width="1200"
+                  height="750"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </span>
+              <span class="card-index">02</span>
+              <span class="card-title" data-i18n="tools.transitTitle">公共交通导视</span>
+              <span class="card-description" data-i18n-html="tools.transitDescription">
+                使用服务器线网或导入的
+                <abbr title="地铁线路图绘制器（Rail Map Painter）">RMP</abbr>
+                项目，制作公交站牌与轨道交通导视。
+              </span>
+              <span class="card-open material-icon icon-arrow-outward" aria-hidden="true"></span>
+            </a>
+            <article class="tool-card tool-card-with-actions">
+              <span class="tool-card-media">
+                <img
+                  src="./assets/tools/dynamic-route-map.webp"
+                  alt="多种动态线路图成品拼贴"
+                  data-i18n-alt="tools.dynamicAlt"
+                  width="1200"
+                  height="750"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </span>
+              <span class="card-index">03</span>
+              <span class="card-title" data-i18n="tools.dynamicTitle">动态线路图</span>
+              <span class="card-description" data-i18n="tools.dynamicDescription"
+                >导入线路数据，展示车辆运行、到站与播报信息。</span
+              >
+              <div class="card-actions">
+                <a
+                  data-link-key="dynamicRouteMap"
+                  data-entry-id="dynamic-route-map"
+                  data-entry-group="tools"
+                  href="https://yct.shangxiaoguan.top/dynamic_routemap/"
+                >
+                  <span data-i18n="tools.openDynamic">打开线路图</span>
+                  <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                </a>
+                <a
+                  data-link-key="dataComposer"
+                  data-entry-id="data-composer"
+                  data-entry-group="tools"
+                  href="https://yct.shangxiaoguan.top/data_composer/"
+                >
+                  <span data-i18n="tools.editData">编辑线路数据</span>
+                  <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                </a>
+              </div>
+            </article>
+          </div>
+
+          <nav
+            class="generator-links"
+            aria-label="尚未迁移的工具"
+            data-i18n-aria-label="tools.legacyLabel"
+          >
+            <span data-i18n="tools.notMigrated">尚未迁移</span>
+            <a
+              data-link-key="telegramPaperGenerator"
+              data-entry-id="telegram-paper-generator"
+              data-entry-group="tools"
+              href="https://yct.shangxiaoguan.top/generator/dianbao.html"
+              ><span data-i18n="tools.telegram">电报纸生成器</span>
+              <span class="material-icon icon-arrow-outward" aria-hidden="true"></span
+            ></a>
+          </nav>
+        </div>
+      </section>
+
+      <section class="maps section-band" id="maps" aria-labelledby="maps-title">
+        <div class="section-inner map-layout">
+          <div class="map-intro">
+            <span class="section-symbol"><img src="./assets/icons/map.svg" alt="" /></span>
+            <p class="section-kicker" data-i18n="maps.kicker">地图入口</p>
+            <h2 id="maps-title" data-i18n="maps.title">从雨城通地图开始</h2>
+            <p data-i18n="maps.intro">
+              一个整合入口，两套原始地图。地点、线路和路线规划都集中在这里。
+            </p>
+          </div>
+          <div class="map-directory">
+            <a
+              class="map-primary"
+              data-link-key="yctMap"
+              data-entry-id="yct-map"
+              data-entry-group="maps"
+              href="https://yct.shangxiaoguan.top/map"
+            >
+              <span class="map-recommendation" data-i18n="maps.recommended">推荐</span>
+              <span>
+                <strong data-i18n="maps.yctTitle">雨城通地图</strong>
+                <small data-i18n="maps.yctDescription"
+                  >整合地点、公共交通、路线规划与底图切换</small
+                >
+              </span>
+              <span
+                class="service-arrow material-icon icon-arrow-outward"
+                aria-hidden="true"
+              ></span>
+            </a>
+            <div
+              class="map-source-list"
+              aria-label="原始地图入口"
+              data-i18n-aria-label="maps.sources"
+            >
+              <a
+                data-link-key="staticMap"
+                data-entry-id="static-map"
+                data-entry-group="maps"
+                href="https://map.shangxiaoguan.top/"
+              >
+                <span>
+                  <strong data-i18n="maps.staticTitle">高清静态地图</strong>
+                  <small data-i18n="maps.staticDescription"
+                    >HTTPS · 精细瓦片与地点标记，更新较慢</small
+                  >
+                </span>
+                <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+              </a>
+              <a
+                data-link-key="freshMap"
+                data-entry-id="fresh-map"
+                data-entry-group="maps"
+                href="http://ld.cmsy.xyz:19136/"
+              >
+                <span>
+                  <strong data-i18n="maps.liveTitle">较新实时地图</strong>
+                  <small data-i18n="maps.liveDescription"
+                    >HTTP · 较新瓦片与玩家位置，浏览器可能提示不安全</small
+                  >
+                </span>
+                <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="services section-band" id="services" aria-labelledby="services-title">
+        <div class="section-inner service-layout">
+          <div class="service-intro">
+            <span class="section-symbol"><img src="./assets/icons/hub.svg" alt="" /></span>
+            <p class="section-kicker" data-i18n="services.kicker">进入这座城市</p>
+            <h2 id="services-title" data-i18n="services.title">城市与服务器服务</h2>
+            <p data-i18n="services.intro">
+              从公共交通与生活服务，到统一账号、建设资料和视觉物料，在这里选择需要的入口。
+            </p>
+          </div>
+
+          <div class="service-list">
+            <a
+              data-link-key="yct"
+              data-entry-id="yct"
+              data-entry-group="services"
+              href="https://yct.shangxiaoguan.top/"
+            >
+              <span class="service-number">01</span>
+              <span>
+                <strong data-i18n="services.yctTitle">雨城通</strong>
+                <small data-i18n="services.yctDescription">公共交通、运营信息与生活服务</small>
+              </span>
+              <span
+                class="service-arrow material-icon icon-arrow-outward"
+                aria-hidden="true"
+              ></span>
+            </a>
+            <a
+              href="https://ldpass.shangxiaoguan.top/"
+              data-entry-id="ldpass"
+              data-entry-group="services"
+            >
+              <span class="service-number">02</span>
+              <span>
+                <strong data-i18n="services.passTitle">临东通</strong>
+                <small data-i18n="services.passDescription">统一账号与身份入口</small>
+              </span>
+              <span
+                class="service-arrow material-icon icon-arrow-outward"
+                aria-hidden="true"
+              ></span>
+            </a>
+            <a
+              href="https://wiki.shangxiaoguan.top/"
+              data-entry-id="wiki"
+              data-entry-group="services"
+            >
+              <span class="service-number">03</span>
+              <span>
+                <strong data-i18n="services.wikiTitle">服务器 Wiki</strong>
+                <small data-i18n="services.wikiDescription">资料、规则、历史与建设档案</small>
+              </span>
+              <span
+                class="service-arrow material-icon icon-arrow-outward"
+                aria-hidden="true"
+              ></span>
+            </a>
+            <a
+              data-link-key="productGallery"
+              data-entry-id="product-gallery"
+              data-entry-group="services"
+              href="https://yct.shangxiaoguan.top/product_gallery/"
+            >
+              <span class="service-number">04</span>
+              <span>
+                <strong data-i18n="services.galleryTitle">物料与周边图鉴</strong>
+                <small data-i18n="services.galleryDescription"
+                  >临东视觉物料、纪念品与实体周边档案</small
+                >
+              </span>
+              <span
+                class="service-arrow material-icon icon-arrow-outward"
+                aria-hidden="true"
+              ></span>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="community section-band" id="community" aria-labelledby="community-title">
+        <div class="section-inner community-layout">
+          <div class="community-copy">
+            <span class="section-symbol section-symbol-dark"
+              ><img src="./assets/icons/groups.svg" alt=""
+            /></span>
+            <p class="section-kicker" data-i18n="community.kicker">继续了解，或者一起建设</p>
+            <h2 id="community-title" data-i18n="community.title">临东仍在生长</h2>
+            <p data-i18n="community.intro">
+              从视频和社区动态认识临东，加入讨论，或者通过爱发电支持服务器、地图和公共工具继续运行。
+            </p>
+          </div>
+
+          <nav
+            class="social-links"
+            aria-label="临东社区与社交账号"
+            data-i18n-aria-label="community.navLabel"
+          >
+            <a
+              href="https://jq.qq.com/?_wv=1027&amp;k=2ohkcKQI"
+              data-entry-id="qq-group"
+              data-entry-group="community"
+            >
+              <img src="./assets/social/qq.png" alt="" aria-hidden="true" />
+              <span data-i18n="community.qq">QQ 群</span>
+              <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+            </a>
+            <a
+              href="https://space.bilibili.com/106279202"
+              data-entry-id="bilibili"
+              data-entry-group="community"
+            >
+              <img src="./assets/social/bilibili.png" alt="" aria-hidden="true" />
+              <span>Bilibili</span>
+              <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+            </a>
+            <a
+              id="wechat-poster-trigger"
+              href="./assets/social/wechat-poster.png"
+              aria-haspopup="dialog"
+              aria-controls="wechat-dialog"
+              data-entry-id="wechat"
+              data-entry-group="community"
+            >
+              <img src="./assets/social/wechat.png" alt="" aria-hidden="true" />
+              <span data-i18n="community.wechat">微信</span>
+              <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+            </a>
+            <a
+              href="https://pd.qq.com/g/58ocn0s744"
+              data-entry-id="qq-channel"
+              data-entry-group="community"
+            >
+              <img src="./assets/social/qq-channel.png" alt="" aria-hidden="true" />
+              <span data-i18n="community.qqChannel">QQ 频道</span>
+              <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+            </a>
+            <a
+              class="social-support"
+              href="https://afdian.com/a/LindongCityServer"
+              data-entry-id="afdian"
+              data-entry-group="community"
+            >
+              <img src="./assets/social/afdian.png" alt="" aria-hidden="true" />
+              <span data-i18n="community.support">爱发电支持</span>
+              <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+            </a>
+          </nav>
+        </div>
+      </section>
+
+      <section class="friends section-band" id="friends" aria-labelledby="friends-title">
+        <div class="section-inner">
+          <div class="section-heading section-heading-row">
+            <div>
+              <span class="section-symbol"><img src="./assets/icons/link.svg" alt="" /></span>
+              <p class="section-kicker" data-i18n="friends.kicker">共同建设的世界</p>
+              <h2 id="friends-title" data-i18n="friends.title">友情链接</h2>
+            </div>
+            <p data-i18n="friends.intro">在临东之外，看看这些服务器、社区与创作项目。</p>
+          </div>
+          <nav class="friend-links" aria-label="友情链接" data-i18n-aria-label="friends.navLabel">
+            <a
+              href="https://hydcraft.cn/"
+              data-entry-id="friend-hydcraft"
+              data-entry-group="friends"
+              ><span>HydCraft Portal</span
+              ><span class="material-icon icon-arrow-outward" aria-hidden="true"></span
+            ></a>
+            <a
+              href="https://dmr.fandom.com/zh/wiki/DMR%E7%A4%BE%E5%8C%BA"
+              data-entry-id="friend-dmr"
+              data-entry-group="friends"
+              ><span>DMR Wiki</span
+              ><span class="material-icon icon-arrow-outward" aria-hidden="true"></span
+            ></a>
+            <a
+              href="https://wiki.hokubu.cn/"
+              data-entry-id="friend-hokubu"
+              data-entry-group="friends"
+              ><span>HokubuWiki</span
+              ><span class="material-icon icon-arrow-outward" aria-hidden="true"></span
+            ></a>
+            <a
+              href="http://emltsj.cn:8003/"
+              data-entry-id="friend-emltsj"
+              data-entry-group="friends"
+              ><span class="friend-name"
+                ><span data-i18n="friends.emltsj">湖水工艺服务器 Wiki</span
+                ><small class="friend-status friend-status-inactive" data-i18n="friends.inactive"
+                  >不活跃</small
+                ></span
+              ><span class="material-icon icon-arrow-outward" aria-hidden="true"></span
+            ></a>
+            <a href="https://www.bc413.com/" data-entry-id="friend-bc413" data-entry-group="friends"
+              ><span class="friend-name"
+                ><span>BC413</span
+                ><small class="friend-status" data-i18n="friends.pending">待确认</small></span
+              ><span class="material-icon icon-arrow-outward" aria-hidden="true"></span
+            ></a>
+            <a
+              href="https://urasaka.miraheze.org/"
+              data-entry-id="friend-urasaka"
+              data-entry-group="friends"
+              ><span class="friend-name"
+                ><span>Urazaka·浦坂</span
+                ><small class="friend-status friend-status-inactive" data-i18n="friends.inactive"
+                  >不活跃</small
+                ></span
+              ><span class="material-icon icon-arrow-outward" aria-hidden="true"></span
+            ></a>
+            <a
+              href="https://huinan.fandom.com/zh/wiki/%E5%9B%9E%E5%8D%97%E5%B8%82%E6%9C%8D%E5%8A%A1%E5%99%A8_Wiki"
+              data-entry-id="friend-huinan"
+              data-entry-group="friends"
+              ><span class="friend-name"
+                ><span data-i18n="friends.huinan">回南市服务器 Wiki（Fandom）</span
+                ><small class="friend-status friend-status-inactive" data-i18n="friends.inactive"
+                  >不活跃</small
+                ></span
+              ><span class="material-icon icon-arrow-outward" aria-hidden="true"></span
+            ></a>
+            <a
+              href="http://101.200.60.217/"
+              data-entry-id="friend-feiyue"
+              data-entry-group="friends"
+              ><span class="friend-name"
+                ><span data-i18n="friends.feiyue">飞跃工作室</span
+                ><small class="friend-status" data-i18n="friends.pending">待确认</small></span
+              ><span class="material-icon icon-arrow-outward" aria-hidden="true"></span
+            ></a>
+          </nav>
+          <p class="friend-contact">
+            <span data-i18n="friends.contactPrompt">希望交换友链？欢迎通过</span>
+            <a
+              href="#community"
+              data-entry-id="friend-contact"
+              data-entry-group="friends"
+              data-i18n="friends.contactLink"
+              >社交账号联系我们</a
+            ><span data-i18n="friends.contactEnd">。</span>
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="section-inner footer-layout">
+        <div>
+          <strong data-i18n="footer.siteName">个人学习网站</strong>
+          <p data-i18n="footer.description">
+            shangxiaoguan.top ·
+            临东市服务器与相关公共工具的个人学习、创作入口。原个人站点已停止更新，历史文章与媒体资料已完成归档保全。
+          </p>
+          <p class="ai-disclosure" data-i18n="footer.aiDisclosure">
+            本网页部分代码由人工智能辅助生成，并经人工审阅与调整。
+          </p>
+        </div>
+        <div class="filings" aria-label="备案信息" data-i18n-aria-label="footer.filings">
+          <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">
+            辽ICP备2021004959号-1
+          </a>
+          <a
+            href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=21100502000117"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <img src="./assets/police-record.png" alt="" aria-hidden="true" />
+            辽公网安备 21100502000117号
+          </a>
+        </div>
+      </div>
+    </footer>
+
+    <dialog class="wechat-dialog" id="wechat-dialog" aria-labelledby="wechat-dialog-title">
+      <div class="wechat-dialog-header">
+        <div>
+          <span data-i18n="wechatDialog.kicker">微信公众号</span>
+          <h2 id="wechat-dialog-title" data-i18n="wechatDialog.title">临东微志</h2>
+        </div>
+        <button
+          class="wechat-dialog-close"
+          id="wechat-dialog-close"
+          type="button"
+          aria-label="关闭微信公众号海报"
+          title="关闭"
+          data-i18n-aria-label="wechatDialog.closeLabel"
+          data-i18n-title="wechatDialog.close"
+        >
+          <span class="material-icon icon-close" aria-hidden="true"></span>
+        </button>
+      </div>
+      <img
+        class="wechat-poster"
+        src="./assets/social/wechat-poster.png"
+        alt="临东微志微信公众号二维码海报"
+        data-i18n-alt="wechatDialog.posterAlt"
+        loading="lazy"
+        decoding="async"
+      />
+      <div class="wechat-dialog-footer">
+        <span data-i18n="wechatDialog.footer">临东市服务器微信公众号</span>
+        <a
+          href="./assets/social/wechat-poster.png"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-entry-id="wechat-poster-original"
+          data-entry-group="community"
+        >
+          <span data-i18n="wechatDialog.original">查看原图</span>
+          <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+        </a>
+      </div>
+    </dialog>
+  </body>
+</html>
