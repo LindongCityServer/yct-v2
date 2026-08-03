@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { AdminRefreshButton } from './admin-refresh-button';
 
 interface AdminPendingReviewSummary {
   contents: number;
@@ -23,39 +24,28 @@ export function AdminHomeOverview() {
   const [summary, setSummary] = useState<AdminPendingReviewSummary | null>(null);
   const [statusText, setStatusText] = useState('正在读取后台待办');
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadSummary() {
-      try {
-        const response = await fetch(appPath('/api/account/status'), { cache: 'no-store' });
-        const data = (await response.json()) as AccountStatusResponse;
-        if (cancelled) {
-          return;
-        }
-
-        if (!response.ok || !data.admin) {
-          setStatusText(data.message ?? '后台概览暂不可用');
-          return;
-        }
-
-        setSummary(data.admin.pendingReview);
-        setStatusText(
-          data.admin.pendingReviewCount > 0
-            ? `共有 ${data.admin.pendingReviewCount} 项待处理`
-            : '当前没有待审核项目',
-        );
-      } catch {
-        if (!cancelled) {
-          setStatusText('后台概览暂不可用');
-        }
+  const loadSummary = async () => {
+    try {
+      const response = await fetch(appPath('/api/account/status'), { cache: 'no-store' });
+      const data = (await response.json()) as AccountStatusResponse;
+      if (!response.ok || !data.admin) {
+        setStatusText(data.message ?? '后台概览暂不可用');
+        return;
       }
-    }
 
+      setSummary(data.admin.pendingReview);
+      setStatusText(
+        data.admin.pendingReviewCount > 0
+          ? `共有 ${data.admin.pendingReviewCount} 项待处理`
+          : '当前没有待审核项目',
+      );
+    } catch {
+      setStatusText('后台概览暂不可用');
+    }
+  };
+
+  useEffect(() => {
     void loadSummary();
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   const metrics = [
@@ -78,9 +68,12 @@ export function AdminHomeOverview() {
           </span>
           <h2 id="admin-home-overview-title">概览</h2>
         </div>
-        <span className="muted" role="status">
-          {statusText}
-        </span>
+        <div className="admin-content-actions">
+          <span className="muted" role="status">
+            {statusText}
+          </span>
+          <AdminRefreshButton label="刷新概览" onRefresh={loadSummary} resource="all" />
+        </div>
       </div>
       <div className="admin-home-overview-grid">
         {metrics.map((metric) => (

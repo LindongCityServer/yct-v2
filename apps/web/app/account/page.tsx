@@ -2,8 +2,11 @@ import { cookies } from 'next/headers';
 import { SecondaryShell } from '../../components/app-shell';
 import { AccountSettingsPanel } from '../../components/account-settings-panel';
 import { readRuntimeConfig } from '../../lib/runtime-config';
+import { pageMetadata } from '../../lib/site-metadata';
 import { readYctServerSession } from '../../lib/yct-server-session-store';
 import { yctSessionCookieName } from '../../lib/yct-session';
+
+export const metadata = pageMetadata.account;
 
 export default async function AccountPage({
   searchParams,

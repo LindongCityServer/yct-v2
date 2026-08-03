@@ -1,8 +1,10 @@
 import { SecondaryShell } from '../../components/app-shell';
 import { AdminHomeOverview } from '../../components/admin-home-overview';
 import { AdminSectionNavigation } from '../../components/admin-section-navigation';
+import { pageMetadata } from '../../lib/site-metadata';
 
 export const dynamic = 'force-dynamic';
+export const metadata = pageMetadata.admin;
 
 export default function AdminHomePage() {
   return (

@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { publishAdminDataChanged } from '../lib/client-admin-data-events';
+import { AdminRefreshButton } from './admin-refresh-button';
 
 type MaterialFamily = 'road_sign' | 'address_sign' | 'bus_stop' | 'custom';
 type TemplateStatus = 'draft' | 'published' | 'archived';
@@ -227,6 +229,11 @@ export function AdminMaterialsPanel() {
       }
       closeEditor();
       setStatusText(editingRecord ? '模板修订已创建。' : '模板草稿已创建。');
+      publishAdminDataChanged({
+        resource: 'materials',
+        reason: 'record_created',
+        occurredAt: new Date().toISOString(),
+      });
       await loadState();
     } catch {
       setEditorError('模板保存时发生网络错误。');
@@ -250,6 +257,11 @@ export function AdminMaterialsPanel() {
         return;
       }
       setStatusText('模板版本已发布。');
+      publishAdminDataChanged({
+        resource: 'materials',
+        reason: 'status_changed',
+        occurredAt: new Date().toISOString(),
+      });
       await loadState();
     } catch {
       setStatusText('发布模板时发生网络错误。');
@@ -275,6 +287,11 @@ export function AdminMaterialsPanel() {
         return;
       }
       setStatusText(decision === 'approved' ? '物料已审核通过。' : '物料已驳回。');
+      publishAdminDataChanged({
+        resource: 'materials',
+        reason: 'status_changed',
+        occurredAt: new Date().toISOString(),
+      });
       await loadState();
     } catch {
       setStatusText('审核物料时发生网络错误。');
@@ -304,12 +321,20 @@ export function AdminMaterialsPanel() {
           <span className="eyebrow">物料后台</span>
           <h1>模板与审核</h1>
         </div>
-        <button type="button" className="is-primary" onClick={openCreate} disabled={isBusy}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            add
-          </span>
-          新建模板
-        </button>
+        <div className="admin-content-actions">
+          <AdminRefreshButton
+            disabled={isBusy}
+            label="刷新物料"
+            onRefresh={loadState}
+            resource="materials"
+          />
+          <button type="button" className="is-primary" onClick={openCreate} disabled={isBusy}>
+            <span className="material-symbols-outlined" aria-hidden="true">
+              add
+            </span>
+            新建模板
+          </button>
+        </div>
       </div>
       <p className="muted">{statusText}</p>
 

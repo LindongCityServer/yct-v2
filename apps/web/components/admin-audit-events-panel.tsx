@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { AdminRefreshButton } from './admin-refresh-button';
 
 type AdminAuditStatusFilter = AdminAuditEventRecord['status'] | 'all';
 
@@ -211,17 +212,12 @@ export function AdminAuditEventsPanel() {
         </datalist>
       </div>
       <div className="admin-toolbar">
-        <button
-          className="secondary-action-button"
-          type="button"
+        <AdminRefreshButton
           disabled={isBusy}
-          onClick={() => void loadAuditEvents()}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            refresh
-          </span>
-          <span>刷新审计</span>
-        </button>
+          label="刷新审计"
+          onRefresh={loadAuditEvents}
+          resource="audit"
+        />
       </div>
       <div className="admin-content-list" aria-label="后台审计事件列表">
         {auditEvents.map((event) => (

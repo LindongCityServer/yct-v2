@@ -8,8 +8,10 @@ import type {
 } from '@yct/contracts';
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { roadNameTranslationEntityId } from '../lib/entity-translation-keys';
 import { isMapRoadGeometryMarker } from '../lib/map-road-geometry';
+import { AdminRefreshButton } from './admin-refresh-button';
 
 type EntityTranslationDraft = LocalizedLabelMap & {
   roadSignPinyin?: string;
@@ -55,67 +57,59 @@ export function AdminEntityTranslationsPanel() {
   const [status, setStatus] = useState('正在读取可翻译实体');
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const [markerResponse, transitResponse, translationResponse, iconMetadataResponse] =
-          await Promise.all([
-            fetch(appPath('/api/map/markers'), { cache: 'no-store' }),
-            fetch(appPath('/api/transit/overview'), { cache: 'no-store' }),
-            fetch(appPath('/api/admin/entity-translations'), { cache: 'no-store' }),
-            fetch(appPath('/api/admin/map/poi-category-icons'), { cache: 'no-store' }),
-          ]);
-        const markerData = (await markerResponse.json()) as { snapshot?: MapMarkerSnapshot };
-        const transitData = (await transitResponse.json()) as TransitOverviewForTranslations;
-        const translationData = (await translationResponse.json()) as {
-          items?: EntityTranslationRecord[];
-          message?: string;
-        };
-        const iconMetadataData = (await iconMetadataResponse.json()) as PoiIconMetadataResponse;
-        if (!translationResponse.ok) {
-          throw new Error(translationData.message ?? '翻译仓储读取失败');
-        }
-        if (cancelled) {
-          return;
-        }
-        const nextRecords = translationData.items ?? [];
-        setEntities(
-          buildTranslationEntities(
-            markerData.snapshot?.markers ?? [],
-            transitData,
-            new Map(
-              (iconMetadataResponse.ok ? (iconMetadataData.items ?? []) : []).map((item) => [
-                item.fileName,
-                item.displayName,
-              ]),
-            ),
-          ),
-        );
-        setRecords(nextRecords);
-        setDrafts(
-          Object.fromEntries(
-            nextRecords.map((record) => [
-              translationEntityKey(record),
-              {
-                ...record.localizedLabels,
-                roadSignPinyin: record.roadSignPinyin,
-                materialLineNumber: record.materialLineNumber,
-              },
+  const load = async () => {
+    try {
+      const [markerResponse, transitResponse, translationResponse, iconMetadataResponse] =
+        await Promise.all([
+          fetch(appPath('/api/map/markers'), { cache: 'no-store' }),
+          fetch(appPath('/api/transit/overview'), { cache: 'no-store' }),
+          fetch(appPath('/api/admin/entity-translations'), { cache: 'no-store' }),
+          fetch(appPath('/api/admin/map/poi-category-icons'), { cache: 'no-store' }),
+        ]);
+      const markerData = (await markerResponse.json()) as { snapshot?: MapMarkerSnapshot };
+      const transitData = (await transitResponse.json()) as TransitOverviewForTranslations;
+      const translationData = (await translationResponse.json()) as {
+        items?: EntityTranslationRecord[];
+        message?: string;
+      };
+      const iconMetadataData = (await iconMetadataResponse.json()) as PoiIconMetadataResponse;
+      if (!translationResponse.ok) {
+        throw new Error(translationData.message ?? '翻译仓储读取失败');
+      }
+      const nextRecords = translationData.items ?? [];
+      setEntities(
+        buildTranslationEntities(
+          markerData.snapshot?.markers ?? [],
+          transitData,
+          new Map(
+            (iconMetadataResponse.ok ? (iconMetadataData.items ?? []) : []).map((item) => [
+              item.fileName,
+              item.displayName,
             ]),
           ),
-        );
-        setStatus('翻译资料已读取');
-      } catch (error) {
-        if (!cancelled) {
-          setStatus(error instanceof Error ? error.message : '翻译资料读取失败');
-        }
-      }
+        ),
+      );
+      setRecords(nextRecords);
+      setDrafts(
+        Object.fromEntries(
+          nextRecords.map((record) => [
+            translationEntityKey(record),
+            {
+              ...record.localizedLabels,
+              roadSignPinyin: record.roadSignPinyin,
+              materialLineNumber: record.materialLineNumber,
+            },
+          ]),
+        ),
+      );
+      setStatus('翻译资料已读取');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : '翻译资料读取失败');
     }
+  };
+
+  useEffect(() => {
     void load();
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   const filteredEntities = useMemo(() => {
@@ -195,6 +189,11 @@ export function AdminEntityTranslationsPanel() {
           materialLineNumber: data.item!.materialLineNumber,
         },
       }));
+      publishAdminDataChanged({
+        resource: 'translations',
+        reason: 'record_updated',
+        occurredAt: new Date().toISOString(),
+      });
       setStatus(`已保存：${entity.sourceText}`);
     } catch {
       setStatus('翻译保存失败');
@@ -213,7 +212,10 @@ export function AdminEntityTranslationsPanel() {
           <h1 id="translations-title">地名与交通名称翻译</h1>
           <p className="muted">源名称保持简体中文；未填写的语种自动回退到源名称。</p>
         </div>
-        <span className="muted">已维护 {records.length} 项</span>
+        <div className="admin-content-actions">
+          <span className="muted">已维护 {records.length} 项</span>
+          <AdminRefreshButton label="刷新翻译" onRefresh={load} resource="translations" />
+        </div>
       </div>
 
       <div className="admin-translation-toolbar">

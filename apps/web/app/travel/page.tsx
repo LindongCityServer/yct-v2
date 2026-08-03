@@ -1,9 +1,11 @@
 import { AppShell } from '../../components/app-shell';
 import { TravelPageContent } from '../../components/travel-page-content';
+import { pageMetadata } from '../../lib/site-metadata';
 import { readTransitOverview } from '../../lib/transit-data';
 import { readTransitScreenSnapshot } from '../../lib/transit-screen';
 
 export const dynamic = 'force-dynamic';
+export const metadata = pageMetadata.travel;
 
 export default async function TravelPage() {
   const [overview, screen] = await Promise.all([

@@ -1,8 +1,10 @@
 import { SecondaryShell } from '../../../components/app-shell';
 import { TransitScreenDetailPanel } from '../../../components/transit-screen-detail-panel';
+import { pageMetadata } from '../../../lib/site-metadata';
 import { readTransitScreenSnapshot } from '../../../lib/transit-screen';
 
 export const dynamic = 'force-dynamic';
+export const metadata = pageMetadata.travelScreen;
 
 export default async function TransitScreenPage() {
   const screen = await readTransitScreenSnapshot();

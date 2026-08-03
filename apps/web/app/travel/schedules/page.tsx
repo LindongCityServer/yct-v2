@@ -1,8 +1,10 @@
 import { SecondaryShell } from '../../../components/app-shell';
+import { pageMetadata } from '../../../lib/site-metadata';
 import { TravelScheduleQueryPanel } from '../../../components/travel-schedule-query-panel';
 import { readTravelScheduleQuery } from '../../../lib/travel-schedules';
 
 export const dynamic = 'force-dynamic';
+export const metadata = pageMetadata.travelSchedules;
 
 export default async function TravelSchedulesPage({
   searchParams,

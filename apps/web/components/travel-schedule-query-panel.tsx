@@ -28,6 +28,7 @@ import { createTripReminder, formatTripReminderTime } from '../lib/client-trip-r
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { formatFareTextWithoutCurrencyUnit } from '../lib/fare-display';
 import { TicketOrderDraftPanel } from './ticket-order-draft-panel';
+import { AdminEditLink } from './admin-edit-link';
 
 type ServiceFilter = TicketableServiceKind | 'all';
 type Translate = ReturnType<typeof useI18n>['t'];
@@ -701,6 +702,10 @@ function ScheduleTripCard({
         />
       </dl>
       <div className="schedule-trip-actions">
+        <AdminEditLink
+          href={`/admin/transit?section=trips&tripInstanceId=${encodeURIComponent(trip.tripInstanceId)}`}
+          label="编辑班次"
+        />
         <button className="secondary-action-button is-primary" type="button" onClick={addReminder}>
           <span className="material-symbols-outlined" aria-hidden="true">
             add_alarm

@@ -1,8 +1,10 @@
 import { SecondaryShell } from '../../../components/app-shell';
 import { AdminAuditEventsPanel } from '../../../components/admin-audit-events-panel';
 import { AdminSectionNavigation } from '../../../components/admin-section-navigation';
+import { pageMetadata } from '../../../lib/site-metadata';
 
 export const dynamic = 'force-dynamic';
+export const metadata = pageMetadata.adminAuditEvents;
 
 export default function AdminAuditEventsPage() {
   return (

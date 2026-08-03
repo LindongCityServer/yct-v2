@@ -3,6 +3,8 @@
 import type { YctAdminMembership, YctAdminRole, YctUserLink } from '@yct/contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { publishAdminDataChanged } from '../lib/client-admin-data-events';
+import { AdminRefreshButton } from './admin-refresh-button';
 
 interface AdminMembershipDirectory {
   memberships: YctAdminMembership[];
@@ -87,6 +89,11 @@ export function AdminMembershipPanel() {
           ? `已授予 ${user.usernameSnapshot} ${formatRole(data.role)}权限`
           : `已停用 ${user.usernameSnapshot} 的本地管理员权限`,
       );
+      publishAdminDataChanged({
+        resource: 'membership',
+        reason: 'record_updated',
+        occurredAt: new Date().toISOString(),
+      });
     } catch {
       setStatusText('管理员权限更新失败');
     } finally {
@@ -104,9 +111,17 @@ export function AdminMembershipPanel() {
           <h1 id="admin-membership-title">管理员成员</h1>
           <span className="muted">仅显示至少登录过一次雨城通的真实用户。</span>
         </div>
-        <span className="muted" role="status">
-          {statusText}
-        </span>
+        <div className="admin-content-actions">
+          <span className="muted" role="status">
+            {statusText}
+          </span>
+          <AdminRefreshButton
+            disabled={busyUserId !== null}
+            label="刷新成员"
+            onRefresh={load}
+            resource="membership"
+          />
+        </div>
       </div>
       {directory ? (
         <>

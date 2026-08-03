@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { publishAdminDataChanged } from '../lib/client-admin-data-events';
+import { AdminRefreshButton } from './admin-refresh-button';
 
 interface AdminServiceEntry {
   id: string;
@@ -229,6 +231,11 @@ export function AdminServicesPanel() {
 
       setStatusText(editingEntry ? '服务入口已更新。' : '服务入口草稿已创建。');
       closeEditor();
+      publishAdminDataChanged({
+        resource: 'services',
+        reason: editingEntry ? 'record_updated' : 'record_created',
+        occurredAt: new Date().toISOString(),
+      });
       await loadEntries();
     } finally {
       setIsBusy(false);
@@ -267,6 +274,11 @@ export function AdminServicesPanel() {
       }
 
       setStatusText(action === 'archive' ? '服务入口已移除出公开列表。' : '服务入口状态已更新。');
+      publishAdminDataChanged({
+        resource: 'services',
+        reason: action === 'archive' ? 'record_archived' : 'status_changed',
+        occurredAt: new Date().toISOString(),
+      });
       await loadEntries();
     } finally {
       setIsBusy(false);
@@ -300,8 +312,13 @@ export function AdminServicesPanel() {
           ? '系统默认入口已删除，并保留本地覆盖记录。'
           : entry.status === 'published'
             ? '服务入口已从公开列表移除。'
-            : '服务入口已删除。',
+          : '服务入口已删除。',
       );
+      publishAdminDataChanged({
+        resource: 'services',
+        reason: 'record_archived',
+        occurredAt: new Date().toISOString(),
+      });
       await loadEntries();
     } finally {
       setIsBusy(false);
@@ -312,7 +329,15 @@ export function AdminServicesPanel() {
     <section className="module-panel admin-operations-panel" aria-labelledby="admin-services-title">
       <div className="section-heading">
         <h1 id="admin-services-title">服务入口管理</h1>
-        <span className="muted">{statusText}</span>
+        <div className="admin-content-actions">
+          <span className="muted">{statusText}</span>
+          <AdminRefreshButton
+            disabled={isBusy}
+            label="刷新服务"
+            onRefresh={loadEntries}
+            resource="services"
+          />
+        </div>
       </div>
 
       <div className="admin-report-summary admin-poi-summary" aria-label="服务入口摘要">

@@ -6,15 +6,11 @@ import { LoginRequiredBridge } from '../components/login-required-bridge';
 import { PreferenceBridge } from '../components/preference-bridge';
 import { PwaBridge } from '../components/pwa-bridge';
 import { appPath } from '../lib/app-paths';
+import { createSiteMetadata } from '../lib/site-metadata';
 import './globals.css';
 
 export const metadata: Metadata = {
-  applicationName: 'Yuchengtong',
-  title: {
-    default: '雨城通',
-    template: '%s - 雨城通',
-  },
-  description: '雨城通 Yuchengtong',
+  ...createSiteMetadata(),
   icons: {
     icon: [
       { url: appPath('/icons/yct-logo.svg'), type: 'image/svg+xml' },
