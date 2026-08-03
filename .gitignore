@@ -2,6 +2,7 @@
 .next-dev-logs/
 .deploy/
 .tmp/
+tmp/
 artifacts/
 .turbo/
 node_modules/
@@ -9,6 +10,7 @@ dist/
 coverage/
 .yct-data/
 apps/web/public/content-assets/
+apps/web/runtime-assets/
 *.tsbuildinfo
 packages/schemas/src/*.js
 *.log

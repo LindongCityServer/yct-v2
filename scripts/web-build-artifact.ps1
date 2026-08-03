@@ -134,6 +134,32 @@ function Copy-YctDirectoryChildren {
   }
 }
 
+function Remove-YctRuntimeEnvironmentFiles {
+  param([Parameter(Mandatory = $true)][string]$StageRoot)
+
+  $forbiddenNames = @(".env", ".env.production", ".env.local", ".env.production.local")
+  Get-ChildItem -LiteralPath $StageRoot -Recurse -Force -File |
+    Where-Object { $_.Name -in $forbiddenNames } |
+    ForEach-Object {
+      Remove-Item -LiteralPath $_.FullName -Force
+    }
+}
+
+function Assert-YctNoRuntimeEnvironmentFiles {
+  param([Parameter(Mandatory = $true)][string]$StageRoot)
+
+  $forbiddenNames = @(".env", ".env.production", ".env.local", ".env.production.local")
+  $forbiddenFiles = @(
+    Get-ChildItem -LiteralPath $StageRoot -Recurse -Force -File |
+      Where-Object { $_.Name -in $forbiddenNames }
+  )
+  if ($forbiddenFiles.Count -gt 0) {
+    $relativePaths = $forbiddenFiles |
+      ForEach-Object { [System.IO.Path]::GetRelativePath($StageRoot, $_.FullName) }
+    throw "Deployment staging contains runtime environment files: $($relativePaths -join ', ')"
+  }
+}
+
 function Copy-YctPublicAssets {
   param(
     [Parameter(Mandatory = $true)][string]$Source,
@@ -639,12 +665,34 @@ function Import-YctEnvFiles {
   }
 }
 
+function Resolve-YctRuntimePaths {
+  param([Parameter(Mandatory = `$true)][string]`$Root)
+
+  foreach (`$key in [Environment]::GetEnvironmentVariables("Process").Keys) {
+    if (`$key -notmatch '^YCT_.*_(?:STORE_PATH|UPLOAD_DIR|DATA_DIR|REPORT_PATH)$') {
+      continue
+    }
+
+    `$value = [Environment]::GetEnvironmentVariable([string]`$key, "Process")
+    if ([string]::IsNullOrWhiteSpace(`$value) -or [System.IO.Path]::IsPathRooted(`$value)) {
+      continue
+    }
+
+    [Environment]::SetEnvironmentVariable(
+      [string]`$key,
+      [System.IO.Path]::GetFullPath((Join-Path `$Root `$value)),
+      "Process"
+    )
+  }
+}
+
 `$serverPath = Join-Path `$PSScriptRoot "apps\web\server.js"
 if (-not (Test-Path -LiteralPath `$serverPath)) {
   throw "Cannot find standalone server: `$serverPath"
 }
 
 Import-YctEnvFiles -Root `$PSScriptRoot
+Resolve-YctRuntimePaths -Root `$PSScriptRoot
 
 `$normalizedBasePath = `$BasePath.Trim().TrimEnd("/")
 if (`$normalizedBasePath -eq "/") {
@@ -656,6 +704,7 @@ if (`$normalizedBasePath -and -not `$normalizedBasePath.StartsWith("/")) {
 
 `$env:PORT = [string]`$Port
 `$env:HOSTNAME = `$HostName
+`$env:YCT_RUNTIME_ROOT = `$PSScriptRoot
 `$env:YCT_BASE_PATH = `$normalizedBasePath
 `$env:NEXT_PUBLIC_YCT_BASE_PATH = `$normalizedBasePath
 
@@ -663,20 +712,29 @@ if (`$normalizedBasePath -and -not `$normalizedBasePath.StartsWith("/")) {
 & `$nodeCommand `$serverPath
 "@
 
-  $startBasePathArgument = $basePathValue.TrimStart("/")
+  $startBasePathArgument = if ($basePathValue) { $basePathValue.TrimStart("/") } else { "/" }
+  $publicPathPrefix = $basePathValue
+  $publicHealthPath = "$publicPathPrefix/api/health"
+  $publicMapPath = "$publicPathPrefix/map"
+  $publicMarkerPath = "$publicPathPrefix/api/map/markers"
+  $publicServiceWorkerPath = "$publicPathPrefix/sw.js"
+  $publicStaticPath = "$publicPathPrefix/_next/static/..."
+  $publicLdpassStartPath = "$publicPathPrefix/api/auth/ldpass/start"
+  $publicCallbackPath = "$publicPathPrefix/auth/ldpass/callback"
+  $buildMountLabel = if ($basePathValue) { $basePathValue } else { "/ (site root)" }
 
   $deploymentNotes = @"
 Yuchengtong web standalone deployment
 
-Build base path: $basePathValue
+Build base path: $buildMountLabel
 Build id: $buildId
-Required Node.js: >=20.9.0. The current repository uses Next.js 16, so Node.js 18.6.0 on the server should be upgraded before running this bundle.
+Required Node.js: >=20.9.0. This server currently uses C:\node-v24\node.exe in the examples below.
 
 Recommended deploy command after extracting this bundle to a separate folder:
   powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot "C:\wwwroot\yct-v2"
 
 Deploy and start in one step:
-  powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot "C:\wwwroot\yct-v2" -StartAfterDeploy -Port 3300 -HostName 127.0.0.1 -BasePath "$startBasePathArgument" -NodePath "C:\node-v22\node.exe"
+  powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot "C:\wwwroot\yct-v2" -StartAfterDeploy -Port 3300 -HostName 127.0.0.1 -BasePath "$startBasePathArgument" -NodePath "C:\node-v24\node.exe"
 
 Runtime config check example:
   powershell -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -BasePath "$startBasePathArgument"
@@ -687,6 +745,9 @@ Deployment smoke check example:
 Unified internal task runner example:
   powershell -NoProfile -ExecutionPolicy Bypass -File .\run-yct-internal-tasks.ps1 -Origin http://127.0.0.1:3300 -BasePath "$startBasePathArgument"
 
+One-time legacy content migration preview:
+  powershell -NoProfile -ExecutionPolicy Bypass -File .\migrate-yct-legacy-content.ps1 -Origin http://127.0.0.1:3300 -BasePath "$startBasePathArgument" -EnvironmentRoot "C:\wwwroot\yct-v2"
+
 Continuous player location poller example:
   powershell -NoProfile -ExecutionPolicy Bypass -File .\run-yct-player-location-poller.ps1 -Origin http://127.0.0.1:3300 -BasePath "$startBasePathArgument" -IntervalSeconds 15
 
@@ -694,21 +755,25 @@ Initialize a YCT administrator without pnpm:
   powershell -NoProfile -ExecutionPolicy Bypass -File .\init-yct-admin.ps1 -LdpassUserId "<ldpassUserId>"
 
 Start command example:
-  powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath "$startBasePathArgument" -NodePath "C:\node-v22\node.exe"
+  powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath "$startBasePathArgument" -NodePath "C:\node-v24\node.exe"
 
 Notes:
 - Do not upload local .env files, .yct-data, or runtime-assets into this bundle.
+- ENVIRONMENT.example is a key inventory, not a production environment file. merge-yct-env.ps1 only appends keys that are missing from the existing production .env; it never replaces existing values or secrets.
 - Keep real environment files (.env, .env.production, .env.local), server-side runtime stores, runtime-assets, uploaded content assets, logs, and backups outside the deployment bundle. In the extracted deployment directory, place those environment files at the same level as start-yct-web.ps1, .yct-data, and runtime-assets. start-yct-web.ps1 will import them before launching the standalone server.
 - start-yct-web.ps1 loads .env -> .env.production -> .env.local -> .env.production.local, and later files override earlier ones. These values also override inherited shell / PM2 environment variables for the same keys so stale localhost settings do not leak into production.
 - deploy-yct-web.ps1 will automatically preserve .env, .env.production, .env.local, .env.production.local, .yct-data, runtime-assets, and apps\web\public\content-assets from the old deployment directory before replacing files.
+- For ordinary releases after the WordPress and legacy content migrations, follow POST_MIGRATION_DEPLOYMENT.md. Do not rerun either one-time migration during deployment.
 - init-yct-admin.ps1 writes .yct-data\admin-memberships.json by default, or YCT_ADMIN_STORE_PATH when that environment variable is set. This file is runtime data and must not be committed.
 - run-yct-player-location-poller.ps1 must run as a separate long-lived process with the same YCT_INTERNAL_TASK_TOKEN as the web server. It keeps polling the player provider while no browser is visiting the site, so offline locations are persisted after disconnects.
 - If the reverse proxy is mounted at /v2, build and start with BasePath /v2. If it is mounted at the site root later, rebuild with an empty BasePath.
 - Stop the old process before deployment and unpack this bundle into an empty deployment directory, or clean the old standalone files first. Do not merge it over an old .next directory: server.js, .next/server, and .next/static must come from the same build.
 - When replacing an existing deployment in place, preserve at least .yct-data, runtime-assets, and apps\web\public\content-assets from the old directory before clearing files. Copying only .yct-data is not enough if the site already contains uploaded content assets or POI category icons.
 - If returning users still see an older version, check that the old Node process is stopped, the deployment directory does not contain stale .next/static files, and the reverse proxy or browser Service Worker is not serving cached HTML/RSC responses.
-- After deployment, /v2/api/health should return JSON containing buildId '$buildId' and basePath '$basePathValue'. Then /v2/map, /v2/api/map/markers, /v2/sw.js, and the /v2/_next/static assets referenced by the page HTML should all return 200. The first line of /v2/sw.js should contain: const YCT_SW_VERSION = '$buildId';
-- If ldpass login still jumps to localhost or 127.0.0.1, inspect /v2/api/auth/ldpass/start directly. The redirect Location should contain redirect_uri=https://yct.shangxiaoguan.top/v2/auth/ldpass/callback and Set-Cookie should include both yct.ldpass_state and yct.ldpass_return_origin.
+- After deployment, $publicHealthPath should return JSON containing buildId '$buildId' and basePath '$basePathValue'. Then $publicMapPath, $publicMarkerPath, $publicServiceWorkerPath, and the $publicStaticPath assets referenced by the page HTML should all return 200. The first line of $publicServiceWorkerPath should contain: const YCT_SW_VERSION = '$buildId';
+- If ldpass login still jumps to localhost or 127.0.0.1, inspect $publicLdpassStartPath directly. The redirect Location should contain redirect_uri=https://yct.shangxiaoguan.top$publicCallbackPath and Set-Cookie should include both yct.ldpass_state and yct.ldpass_return_origin.
+- For the one-time /v2 to site-root cutover, follow ROOT_PATH_MIGRATION.md and install nginx/yct-root-locations.conf only after reviewing the documented old-static-site compatibility rules.
+- For the one-time import of the old content_data.js and content/*.html files, follow LEGACY_CONTENT_MIGRATION.md. Preview first; -Apply only creates missing drafts and never overwrites an existing contentId.
 "@
 
   Write-YctUtf8File -Path (Join-Path $stageRoot "start-yct-web.ps1") -Content $startScript
@@ -716,13 +781,36 @@ Notes:
   Copy-Item -LiteralPath (Join-Path $root "scripts\check-runtime-config.ps1") -Destination (Join-Path $stageRoot "check-runtime-config.ps1") -Force
   Copy-Item -LiteralPath (Join-Path $root "scripts\check-web-deployment-smoke.ps1") -Destination (Join-Path $stageRoot "check-yct-web-smoke.ps1") -Force
   Copy-Item -LiteralPath (Join-Path $root "scripts\run-web-internal-tasks.ps1") -Destination (Join-Path $stageRoot "run-yct-internal-tasks.ps1") -Force
+  Copy-Item -LiteralPath (Join-Path $root "scripts\run-yct-legacy-content-migration.ps1") -Destination (Join-Path $stageRoot "migrate-yct-legacy-content.ps1") -Force
   Copy-Item -LiteralPath (Join-Path $root "scripts\run-web-player-location-poller.ps1") -Destination (Join-Path $stageRoot "run-yct-player-location-poller.ps1") -Force
   Copy-Item -LiteralPath (Join-Path $root "scripts\init-admin-membership.ps1") -Destination (Join-Path $stageRoot "init-yct-admin.ps1") -Force
+  Copy-Item -LiteralPath (Join-Path $root "scripts\merge-yct-env-example.ps1") -Destination (Join-Path $stageRoot "merge-yct-env.ps1") -Force
+  Copy-Item -LiteralPath (Join-Path $root "scripts\prepare-yct-root-migration.ps1") -Destination (Join-Path $stageRoot "prepare-yct-root-migration.ps1") -Force
+  Copy-Item -LiteralPath (Join-Path $root ".env.example") -Destination (Join-Path $stageRoot "ENVIRONMENT.example") -Force
+  Copy-Item -LiteralPath (Join-Path $root "docs\ROOT_PATH_MIGRATION.md") -Destination (Join-Path $stageRoot "ROOT_PATH_MIGRATION.md") -Force
+  Copy-Item -LiteralPath (Join-Path $root "docs\LEGACY_CONTENT_MIGRATION.md") -Destination (Join-Path $stageRoot "LEGACY_CONTENT_MIGRATION.md") -Force
+  Copy-Item -LiteralPath (Join-Path $root "docs\POST_MIGRATION_DEPLOYMENT.md") -Destination (Join-Path $stageRoot "POST_MIGRATION_DEPLOYMENT.md") -Force
+  $stageNginxRoot = Join-Path $stageRoot "nginx"
+  New-Item -ItemType Directory -Force -Path $stageNginxRoot | Out-Null
+  Copy-Item -LiteralPath (Join-Path $root "deploy\nginx\yct-root-locations.conf") -Destination (Join-Path $stageNginxRoot "yct-root-locations.conf") -Force
   Write-YctUtf8File -Path (Join-Path $stageRoot "DEPLOYMENT.txt") -Content $deploymentNotes
+  Remove-YctRuntimeEnvironmentFiles -StageRoot $stageRoot
 }
 
+Assert-YctNoRuntimeEnvironmentFiles -StageRoot $stageRoot
 $consistencyBuildId = if ($SkipStaging) { "" } else { $buildId }
 Assert-YctStagedWebAssetConsistency -StageRoot $stageRoot -BasePath $basePathValue -BuildId $consistencyBuildId
+
+$reportedBuildId = $buildId
+if ($SkipStaging) {
+  $stagedServiceWorkerPath = Join-Path $stageRoot "apps\web\public\sw.js"
+  $stagedServiceWorkerFirstLine = Get-Content -LiteralPath $stagedServiceWorkerPath -Encoding UTF8 -TotalCount 1
+  if ($stagedServiceWorkerFirstLine -match "^const YCT_SW_VERSION = '([^']+)';$") {
+    $reportedBuildId = $Matches[1]
+  } else {
+    throw "Cannot determine the staged build id from apps\web\public\sw.js."
+  }
+}
 
 if ($ValidateOnly) {
   $result = [pscustomobject]@{
@@ -730,10 +818,15 @@ if ($ValidateOnly) {
     StagingDirectory = $stageRoot
     SkippedStaging = [bool]$SkipStaging
     BasePath = $basePathValue
-    BuildId = if ($SkipStaging) { $null } else { $buildId }
+    BuildId = $reportedBuildId
     StartScript = "start-yct-web.ps1"
     DeployScript = "deploy-yct-web.ps1"
     ConfigCheckScript = "check-runtime-config.ps1"
+    EnvMergeScript = "merge-yct-env.ps1"
+    RootMigrationGuide = "ROOT_PATH_MIGRATION.md"
+    PostMigrationDeploymentGuide = "POST_MIGRATION_DEPLOYMENT.md"
+    LegacyContentMigrationGuide = "LEGACY_CONTENT_MIGRATION.md"
+    LegacyContentMigrationScript = "migrate-yct-legacy-content.ps1"
     SmokeCheckScript = "check-yct-web-smoke.ps1"
     InternalTaskScript = "run-yct-internal-tasks.ps1"
     InitAdminScript = "init-yct-admin.ps1"
@@ -807,19 +900,27 @@ try {
   throw
 }
 
+$artifactSha256 = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash
+$checksumPath = "$artifactPath.sha256"
+$checksumLine = "$artifactSha256  $([System.IO.Path]::GetFileName($artifactPath))$([Environment]::NewLine)"
+Write-YctUtf8File -Path $checksumPath -Content $checksumLine
+
 $result = [pscustomobject]@{
   Artifact = $artifactPath
+  ArtifactSha256 = $artifactSha256
+  ChecksumFile = $checksumPath
   ArchiveFormat = $ArchiveFormat
   ArchiveTool = $archiveTool
   StagingDirectory = $stageRoot
   SkippedStaging = [bool]$SkipStaging
   BasePath = $basePathValue
-  BuildId = $buildId
+  BuildId = $reportedBuildId
   StartScript = "start-yct-web.ps1"
   DeployScript = "deploy-yct-web.ps1"
   ConfigCheckScript = "check-runtime-config.ps1"
   SmokeCheckScript = "check-yct-web-smoke.ps1"
   InternalTaskScript = "run-yct-internal-tasks.ps1"
+  LegacyContentMigrationScript = "migrate-yct-legacy-content.ps1"
   InitAdminScript = "init-yct-admin.ps1"
   NodeRequirement = ">=20.9.0"
 }

@@ -2,6 +2,10 @@
 
 本文档记录当前 Next.js 版本的推荐部署流程，重点是减少云服务器构建时的内存和磁盘压力。
 
+`yct.shangxiaoguan.top` 从 `/v2` 首次切到域名根路径、保留旧静态站、合入 WordPress 快照及后续根路径发版的逐步说明见 [ROOT_PATH_MIGRATION.md](./ROOT_PATH_MIGRATION.md)。该流程对生产 `.env`、素材外置、Nginx 路由、回滚和旧 Service Worker 退役有额外约束，首次切换不要只照本文的通用替换步骤执行。
+
+如果 WordPress 和旧 `content_data.js` 已经迁移完成，后续普通发版请直接按 [POST_MIGRATION_DEPLOYMENT.md](./POST_MIGRATION_DEPLOYMENT.md) 执行。该流程会保留上次部署后产生的数据，并明确禁止重跑一次性迁移。
+
 ## 构建产物在哪里
 
 直接运行：
@@ -203,6 +207,8 @@ pnpm web:player-locations:run
 ```
 
 部署包中对应脚本为 `run-yct-player-location-poller.ps1`。建议使用 Windows 服务、计划任务守护进程或 PM2 运行它；默认每 15 秒采集一次，停止采集器不会影响 Web 主进程。
+
+玩家位置快照默认使用 `YCT_PLAYER_LOCATION_STORE_PATH=.yct-data/player-location-store.json`。Next standalone 启动时会把工作目录切到 `apps\\web`；部署包提供的 `start-yct-web.ps1` 会把 `*_STORE_PATH`、`*_UPLOAD_DIR`、`*_DATA_DIR` 和 `*_REPORT_PATH` 这类相对路径统一解析到部署根目录，因此使用该启动器时会写入根目录下的 `.yct-data`。如果 PM2、宝塔或 Windows 服务直接启动 `apps\\web\\server.js`，必须把这些运行时路径配置为绝对路径，例如 `C:\\wwwroot\\yct-v2\\.yct-data\\player-location-store.json`，确保应用更新到新的版本目录时仍然写入同一份持久数据。Web 进程和部署脚本必须使用同一份路径；替换部署目录前先停止 Web 进程和玩家位置采集器，避免正在写入的临时文件被搬走。
 
 把 `artifacts/yct-web-*` 上传到服务器后，推荐先解压到一个新的临时目录，再从这个临时目录执行包内的 `deploy-yct-web.ps1`。这个脚本会自动把旧部署目录中的环境文件、`.yct-data`、`runtime-assets` 和 `apps\web\public\content-assets` 迁走，替换部署文件，再把这些持久数据放回去。
 

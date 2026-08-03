@@ -78,7 +78,7 @@ function Resolve-YctConfiguredPath {
 
 $resolvedEnvironmentRoot = [System.IO.Path]::GetFullPath($EnvironmentRoot)
 if (-not (Test-Path -LiteralPath $resolvedEnvironmentRoot -PathType Container)) {
-  throw "EnvironmentRoot 不存在：$resolvedEnvironmentRoot"
+  throw "EnvironmentRoot does not exist: $resolvedEnvironmentRoot"
 }
 
 $effectiveEnvironment = Get-YctEffectiveEnvironment -Root $resolvedEnvironmentRoot
@@ -88,16 +88,16 @@ $resolvedTaskToken = if (-not [string]::IsNullOrWhiteSpace($TaskToken)) {
   [string]$effectiveEnvironment["YCT_INTERNAL_TASK_TOKEN"]
 }
 if ([string]::IsNullOrWhiteSpace($resolvedTaskToken)) {
-  throw "未提供 TaskToken，生产 .env* 中也没有 YCT_INTERNAL_TASK_TOKEN。"
+  throw "TaskToken was not provided and YCT_INTERNAL_TASK_TOKEN is missing from the production environment files."
 }
 
 $legacySource = ([string]$effectiveEnvironment["YCT_LEGACY_DATA_SOURCE"]).Trim().ToLowerInvariant()
 $legacyDataDirValue = ([string]$effectiveEnvironment["YCT_LEGACY_DATA_DIR"]).Trim()
 if ($legacySource -eq "remote") {
-  throw "当前 YCT_LEGACY_DATA_SOURCE=remote。一次性正式迁移必须改为 local 后重启 Web 进程。"
+  throw "YCT_LEGACY_DATA_SOURCE is remote. Set it to local and restart the web process before running the one-time migration."
 }
 if ([string]::IsNullOrWhiteSpace($legacyDataDirValue)) {
-  throw "生产 .env* 缺少 YCT_LEGACY_DATA_DIR。"
+  throw "YCT_LEGACY_DATA_DIR is missing from the production environment files."
 }
 
 $legacyDataDir = Resolve-YctConfiguredPath `
@@ -105,7 +105,7 @@ $legacyDataDir = Resolve-YctConfiguredPath `
   -Value $legacyDataDirValue
 $contentDataPath = Join-Path $legacyDataDir "content_data.js"
 if (-not (Test-Path -LiteralPath $contentDataPath -PathType Leaf)) {
-  throw "找不到旧运营消息文件：$contentDataPath"
+  throw "Legacy operations content file was not found: $contentDataPath"
 }
 
 $legacyRoot = if ((Split-Path -Leaf $legacyDataDir).ToLowerInvariant() -eq "data") {
@@ -115,13 +115,13 @@ $legacyRoot = if ((Split-Path -Leaf $legacyDataDir).ToLowerInvariant() -eq "data
 }
 $legacyContentRoot = Join-Path $legacyRoot "content"
 if (-not (Test-Path -LiteralPath $legacyContentRoot -PathType Container)) {
-  throw "找不到旧独立内容页面目录：$legacyContentRoot"
+  throw "Legacy standalone content directory was not found: $legacyContentRoot"
 }
 
 $legacyHtmlFiles = @(Get-ChildItem -LiteralPath $legacyContentRoot -File -Filter "*.htm*")
 $normalizedOrigin = $Origin.Trim().TrimEnd("/")
 if ([string]::IsNullOrWhiteSpace($normalizedOrigin)) {
-  throw "Origin 不能为空。"
+  throw "Origin cannot be empty."
 }
 $normalizedBasePath = Normalize-YctBasePath -Value $BasePath
 $targetUrl = "$normalizedOrigin$normalizedBasePath/api/internal/operations/legacy-content/migrate"
@@ -130,11 +130,11 @@ $body = @{
   actorId = $ActorId
 } | ConvertTo-Json -Depth 4
 
-Write-Host "YCT 旧内容一次性迁移"
-Write-Host "- 模式：$(if ($Apply) { 'apply' } else { 'preview' })"
-Write-Host "- 旧运营消息：$contentDataPath"
-Write-Host "- 旧 HTML 目录：$legacyContentRoot（发现 $($legacyHtmlFiles.Count) 个文件）"
-Write-Host "- 接口：$targetUrl"
+Write-Host "YCT one-time legacy content migration"
+Write-Host "- Mode: $(if ($Apply) { 'apply' } else { 'preview' })"
+Write-Host "- Legacy operations content: $contentDataPath"
+Write-Host "- Legacy HTML directory: $legacyContentRoot ($($legacyHtmlFiles.Count) file(s))"
+Write-Host "- Endpoint: $targetUrl"
 
 try {
   $response = Invoke-RestMethod `
@@ -148,7 +148,7 @@ try {
   if ([string]::IsNullOrWhiteSpace($detail)) {
     $detail = $_.Exception.Message
   }
-  throw "旧内容迁移接口调用失败：$detail"
+  throw "Legacy content migration endpoint failed: $detail"
 }
 
 $response | ConvertTo-Json -Depth 10
