@@ -17,7 +17,7 @@ const contentRevisionTransitions: Record<ContentRevisionStatus, ContentRevisionS
   approved: ['published', 'archived'],
   rejected: ['draft', 'archived'],
   published: ['archived'],
-  archived: [],
+  archived: ['draft'],
 };
 
 const contentAssetTransitions: Record<ContentAssetStatus, ContentAssetStatus[]> = {

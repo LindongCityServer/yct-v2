@@ -43,11 +43,20 @@ export interface OperationsFeedItem extends ContentSummary {
   legacyImageSourceUrl?: string;
   legacyLink?: string;
   legacySourcePath?: string;
+  relatedPoiMarkerIds?: string[];
 }
 
 export interface OperationsContentDetail extends OperationsFeedItem {
   markdown: string;
   sourceKind: 'legacy_content_data' | 'local_content_store';
+}
+
+export type LegacyWordPressContentResolutionStatus = 'published' | 'not_published' | 'unavailable';
+
+export interface LegacyWordPressContentResolutionResponse {
+  postId: string;
+  contentId: string;
+  status: LegacyWordPressContentResolutionStatus;
 }
 
 export interface OperationsStrongReminderItem {
@@ -216,4 +225,33 @@ export interface LegacyHtmlContentMigrationPreview {
     warningCount: number;
   };
   items: LegacyHtmlContentMigrationItem[];
+}
+
+export type LegacyContentMigrationBodyKind = 'operations_summary' | 'html_page';
+
+export type LegacyContentMigrationItemStatus = 'ready' | 'created' | 'skipped_existing';
+
+export interface LegacyContentMigrationItem {
+  contentId: string;
+  title: string;
+  categoryId: string;
+  bodyKind: LegacyContentMigrationBodyKind;
+  markdownLength: number;
+  assetCount: number;
+  warnings: string[];
+  status: LegacyContentMigrationItemStatus;
+}
+
+export interface LegacyContentMigrationResult {
+  mode: 'preview' | 'apply';
+  batchId?: string;
+  summary: {
+    candidateCount: number;
+    htmlPageCount: number;
+    summaryFallbackCount: number;
+    createdCount: number;
+    skippedExistingCount: number;
+    warningCount: number;
+  };
+  items: LegacyContentMigrationItem[];
 }

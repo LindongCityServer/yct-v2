@@ -1,10 +1,12 @@
 import type {
   MapGeometry,
+  MapMarkerSpatialMetadata,
   LocalizedLabelMap,
   PoiCategory,
   TileFreshness,
   TileProviderDescriptor,
   TransitLine,
+  TransitOperationStatus,
   TransitStation,
   YctProfileId,
 } from './domain';
@@ -27,6 +29,7 @@ export interface MapMarkerSnapshot {
     localizedLabels?: LocalizedLabelMap;
     categoryId?: string;
     geometry: MapGeometry;
+    spatial?: MapMarkerSpatialMetadata;
     iconFileName?: string;
     symbolIcon?: string;
     accentColor?: string;
@@ -48,6 +51,12 @@ export interface MapMarkerSnapshot {
       description: string;
     }>;
     playerLocation?: MapPlayerLocationMetadata;
+    /** 交通对象的运营状态；closed 仅作路线几何锚点，公开地图默认不渲染。 */
+    transitOperationStatus?: TransitOperationStatus;
+    transitLineSegments?: Array<{
+      coordinates: Array<[number, number]>;
+      operationStatus: 'operating' | 'planned';
+    }>;
   }>;
 }
 

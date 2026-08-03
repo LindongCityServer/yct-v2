@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { idSchema, nonEmptyTextSchema, urlSchema } from './common';
 
 const coordinateSchema = z.tuple([z.number().finite(), z.number().finite()]);
+const colorWithAlphaSchema = z.string().regex(/^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$/);
 
 export const rectangleBoundsSchema = z
   .object({
@@ -18,6 +19,54 @@ export const rectangleBoundsSchema = z
     message: 'minZ 必须小于 maxZ',
     path: ['maxZ'],
   });
+
+export const mapSpatialProfileUpdateSchema = z.object({
+  worldName: z.string().trim().min(1).max(80),
+  defaultY: z.number().finite().min(-4096).max(4096),
+  verticalTolerance: z.number().finite().min(0).max(16),
+  defaultDrivingSpeedKmh: z.number().finite().positive().max(1000),
+  roadTiming: z.object({
+    defaultBusSpeedKmh: z.number().finite().positive().max(1000),
+    junctionSnapTolerance: z.number().finite().min(0).max(64),
+    taxiJunctionDelaySeconds: z.number().finite().min(0).max(3600),
+    busJunctionDelaySeconds: z.number().finite().min(0).max(3600),
+  }),
+  taxiFare: z
+    .object({
+      baseFareCents: z.number().int().min(0).max(1_000_000),
+      baseDistanceMeters: z.number().int().positive().max(1_000_000),
+      incrementDistanceMeters: z.number().int().positive().max(1_000_000),
+      incrementFareCents: z.number().int().positive().max(1_000_000),
+      longDistanceThresholdMeters: z.number().int().positive().max(10_000_000),
+      longDistanceSurchargePermille: z.number().int().min(0).max(10_000),
+      longDistanceSurchargeScope: z.enum(['excess_distance', 'whole_metered_fare']),
+    })
+    .refine((value) => value.longDistanceThresholdMeters >= value.baseDistanceMeters, {
+      message: '返空费起算距离不能小于起步里程',
+      path: ['longDistanceThresholdMeters'],
+    }),
+  transitFare: z.object({
+    busDefaultFareCents: z.number().int().min(0).max(1_000_000),
+    ferryDefaultFareCents: z.number().int().min(0).max(1_000_000),
+    railDistanceBands: z
+      .array(
+        z.object({
+          maximumDistanceMeters: z.number().int().positive().max(100_000_000),
+          fareCents: z.number().int().min(0).max(1_000_000),
+        }),
+      )
+      .min(1)
+      .max(64)
+      .refine(
+        (bands) =>
+          bands.every(
+            (band, index) =>
+              index === 0 || band.maximumDistanceMeters > bands[index - 1]!.maximumDistanceMeters,
+          ),
+        '轨道票价里程上限必须严格递增',
+      ),
+  }),
+});
 
 export const mapGeometrySchema = z.discriminatedUnion('type', [
   z.object({
@@ -52,6 +101,159 @@ export const mapGeometrySchema = z.discriminatedUnion('type', [
       .max(32),
   }),
 ]);
+
+const mapStyleBindingSchema = z.object({
+  fillColor: colorWithAlphaSchema.optional(),
+  fillOpacity: z.number().finite().min(0).max(1).optional(),
+  strokeColor: colorWithAlphaSchema.optional(),
+  strokeOpacity: z.number().finite().min(0).max(1).optional(),
+  lineColorTransitLineIds: z.array(z.string().trim().min(1).max(120)).max(16).optional(),
+});
+
+const mapVolumeGeometrySchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('ExtrudedRectangle'),
+    bounds: rectangleBoundsSchema,
+    minY: z.number().finite(),
+    maxY: z.number().finite(),
+  }),
+  z.object({
+    type: z.literal('MultiExtrudedRectangle'),
+    volumes: z
+      .array(
+        z.object({
+          bounds: rectangleBoundsSchema,
+          minY: z.number().finite(),
+          maxY: z.number().finite(),
+        }),
+      )
+      .min(1)
+      .max(256),
+  }),
+  z.object({
+    type: z.literal('ExtrudedPolygon'),
+    coordinates: z.array(z.array(coordinateSchema).min(4).max(2000)).min(1).max(64),
+    minY: z.number().finite(),
+    maxY: z.number().finite(),
+  }),
+  z.object({
+    type: z.literal('MultiExtrudedPolygon'),
+    volumes: z
+      .array(
+        z.object({
+          coordinates: z.array(z.array(coordinateSchema).min(4).max(2000)).min(1).max(64),
+          minY: z.number().finite(),
+          maxY: z.number().finite(),
+        }),
+      )
+      .min(1)
+      .max(64),
+  }),
+]);
+
+export const mapMarkerSpatialMetadataSchema = z
+  .object({
+    worldId: z.string().trim().min(1).max(120).optional(),
+    defaultY: z.number().finite().optional(),
+    coordinateY: z.array(z.number().finite().nullable()).max(100_000).optional(),
+    networkKind: z.enum(['road', 'pedestrian']).optional(),
+    direction: z.enum(['both', 'forward', 'reverse']).default('both'),
+    allowedModes: z
+      .array(z.enum(['walk', 'taxi', 'bus', 'coach']))
+      .max(4)
+      .transform((modes) => Array.from(new Set(modes)))
+      .optional(),
+    verticalConnectorKind: z.enum(['ramp', 'stairs', 'escalator', 'elevator']).optional(),
+    accessible: z.boolean().optional(),
+    style: mapStyleBindingSchema.optional(),
+    volume: mapVolumeGeometrySchema.optional(),
+    dynamicSymbol: z
+      .object({
+        kind: z.enum(['metro_exit', 'road_ref', 'highway_ref']),
+        ref: z
+          .string()
+          .trim()
+          .min(1)
+          .max(12)
+          .regex(/^[A-Za-z0-9-]+$/),
+        variant: z.string().trim().min(1).max(40).optional(),
+        backgroundColor: colorWithAlphaSchema.optional(),
+        textColor: colorWithAlphaSchema.optional(),
+      })
+      .optional(),
+    parentPlaceId: z.string().trim().min(1).max(220).optional(),
+    stationId: z.string().trim().min(1).max(160).optional(),
+    ref: z.string().trim().min(1).max(40).optional(),
+  })
+  .superRefine((value, context) => {
+    const volumes = value.volume
+      ? value.volume.type === 'ExtrudedRectangle' || value.volume.type === 'ExtrudedPolygon'
+        ? [value.volume]
+        : value.volume.volumes
+      : [];
+    volumes.forEach((volume, index) => {
+      if (volume.maxY <= volume.minY) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: '立体 POI 的 maxY 必须大于 minY。',
+          path: ['volume', 'volumes', index, 'maxY'],
+        });
+      }
+    });
+    if (value.verticalConnectorKind && !value.networkKind) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '跨层连接器必须同时指定道路或步行网络类型。',
+        path: ['verticalConnectorKind'],
+      });
+    }
+  });
+
+const administrativeAreaBoundarySchema = z.union([
+  z.object({ type: z.literal('Rectangle'), bounds: rectangleBoundsSchema }),
+  z.object({
+    type: z.literal('MultiRectangle'),
+    rectangles: z.array(rectangleBoundsSchema).min(1).max(256),
+  }),
+  z.object({
+    type: z.literal('Polygon'),
+    coordinates: z.array(z.array(coordinateSchema).min(4).max(2000)).min(1).max(64),
+  }),
+  z.object({
+    type: z.literal('MultiPolygon'),
+    coordinates: z
+      .array(z.array(z.array(coordinateSchema).min(4).max(2000)).min(1).max(64))
+      .min(1)
+      .max(32),
+  }),
+]);
+
+export const administrativeAreaUpsertSchema = z
+  .object({
+    code: z.string().trim().min(1).max(80),
+    name: z.string().trim().min(1).max(160),
+    level: z.enum(['country', 'province', 'prefecture', 'county', 'township', 'custom']),
+    parentAreaId: z.string().trim().min(1).max(160).optional(),
+    boundary: administrativeAreaBoundarySchema,
+    labelPosition: coordinateSchema.optional(),
+    style: mapStyleBindingSchema.optional(),
+    minZoom: z.number().finite().min(-20).max(20).optional(),
+    maxZoom: z.number().finite().min(-20).max(20).optional(),
+  })
+  .refine(
+    (value) =>
+      value.minZoom === undefined || value.maxZoom === undefined || value.minZoom <= value.maxZoom,
+    { message: 'minZoom 不能大于 maxZoom。', path: ['maxZoom'] },
+  );
+
+export const administrativeAreaStatusActionSchema = z.object({
+  action: z.enum(['publish', 'archive', 'restore']),
+});
+
+export type AdministrativeAreaUpsertInput = z.infer<typeof administrativeAreaUpsertSchema>;
+export type AdministrativeAreaStatusActionInput = z.infer<
+  typeof administrativeAreaStatusActionSchema
+>;
 
 export const tileProviderConfigSchema = z.object({
   id: idSchema,
@@ -179,6 +381,7 @@ export const poiSubmissionSchema = z
     imageUrls: poiSubmissionImageUrlsSchema,
     imageUrl: poiSubmissionImageUrlSchema.optional(),
     geometry: mapGeometrySchema,
+    spatial: mapMarkerSpatialMetadataSchema.optional(),
     parentMarkerId: poiParentMarkerIdSchema,
     floorLabel: poiFloorLabelSchema,
     boundRegionMarkerIds: poiBoundRegionMarkerIdsSchema,
@@ -204,6 +407,7 @@ const poiSubmissionAdminUpdateBaseSchema = z.object({
   imageUrls: poiSubmissionImageUrlsSchema,
   imageUrl: z.union([poiSubmissionImageUrlSchema, z.literal('')]).optional(),
   geometry: mapGeometrySchema.optional(),
+  spatial: mapMarkerSpatialMetadataSchema.optional(),
   parentMarkerId: z.union([poiParentMarkerIdSchema.unwrap(), z.literal('')]).optional(),
   floorLabel: z.union([poiFloorLabelSchema.unwrap(), z.literal('')]).optional(),
   boundRegionMarkerIds: poiBoundRegionMarkerIdsSchema,
@@ -248,6 +452,7 @@ export const legacyMapMarkerAdminUpdateSchema = z
     imageUrls: poiSubmissionImageUrlsSchema,
     imageUrl: z.union([poiSubmissionImageUrlSchema, z.literal('')]).optional(),
     geometry: mapGeometrySchema.optional(),
+    spatial: mapMarkerSpatialMetadataSchema.optional(),
     parentMarkerId: z.union([poiParentMarkerIdSchema.unwrap(), z.literal('')]).optional(),
     floorLabel: z.union([poiFloorLabelSchema.unwrap(), z.literal('')]).optional(),
     boundRegionMarkerIds: poiBoundRegionMarkerIdsSchema,
@@ -270,6 +475,7 @@ export const mapFavoritesSchema = z.object({
 });
 
 export type TileProviderConfigInput = z.infer<typeof tileProviderConfigSchema>;
+export type MapSpatialProfileUpdateInput = z.infer<typeof mapSpatialProfileUpdateSchema>;
 export type PoiCategoryInput = z.infer<typeof poiCategorySchema>;
 export type PoiCategoryProfileUpdateInput = z.infer<typeof poiCategoryProfileUpdateSchema>;
 export type PoiSubmissionInput = z.infer<typeof poiSubmissionSchema>;

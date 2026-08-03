@@ -28,6 +28,13 @@ const transitLineSegmentPathSchema = z
     fromStationSourceId: stationSourceIdSchema,
     toStationSourceId: stationSourceIdSchema,
     mode: z.enum(['straight', 'road']),
+    operationStatus: z.enum(['operating', 'planned', 'closed']).default('operating'),
+    travelMinutes: z
+      .number()
+      .finite()
+      .positive()
+      .max(24 * 60)
+      .optional(),
     waypoints: z
       .array(
         z.object({
@@ -42,7 +49,11 @@ const transitLineSegmentPathSchema = z
     note: z.string().trim().max(120).optional(),
   })
   .superRefine((path, context) => {
-    if (path.mode === 'road' && path.waypoints.length === 0) {
+    if (
+      path.mode === 'road' &&
+      path.waypoints.length === 0 &&
+      path.operationStatus === 'operating'
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         message: '沿道路走行的站间路径至少需要 1 个途径点。',
@@ -123,6 +134,7 @@ export const transitModeProfileSchema = z.object({
   icon: materialSymbolNameSchema,
   sortOrder: z.number().int().min(0).max(999),
   enabled: z.boolean().default(true),
+  showPlannedSegments: z.boolean().default(false),
 });
 
 export const transitModeProfileUpdateSchema = z.object({
@@ -149,6 +161,7 @@ export const travelScheduleRevisionImportSchema = z.object({
 export const transitLineDraftSchema = z.object({
   mode: transitModeSchema,
   name: z.string().trim().min(1).max(120),
+  operationStatus: z.enum(['operating', 'planned', 'closed']).default('operating'),
   color: colorHexSchema.optional(),
   maxCarCount: z.number().int().min(1).max(64).optional(),
   routeMode: z.enum(['straight', 'road']).optional(),
@@ -217,7 +230,9 @@ export const travelScheduleTripDraftSchema = travelScheduleTripUpdateSchema.exte
 
 export const transitStationCoordinateUpdateSchema = z.object({
   x: z.number().finite(),
+  y: z.number().finite().optional(),
   z: z.number().finite(),
+  operationStatus: z.enum(['operating', 'planned', 'closed']).default('operating'),
   boundPoiRefs: z
     .array(
       z.object({

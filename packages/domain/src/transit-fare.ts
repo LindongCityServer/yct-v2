@@ -1,4 +1,9 @@
-import type { TransitFareBreakdownItem, TransitFareQuote, TransportMode } from '@yct/contracts';
+import type {
+  TransitFareBreakdownItem,
+  TransitFareProfile,
+  TransitFareQuote,
+  TransportMode,
+} from '@yct/contracts';
 
 export interface TransitFareLeg {
   mode: TransportMode;
@@ -9,17 +14,24 @@ export interface TransitFareLeg {
 }
 
 const blocksPerKilometer = 1_000;
-const railFareThresholds = [
-  { maximumKilometers: 6, amount: 2 },
-  { maximumKilometers: 10, amount: 3 },
-  { maximumKilometers: 14, amount: 4 },
-  { maximumKilometers: 21, amount: 5 },
-  { maximumKilometers: 28, amount: 6 },
-  { maximumKilometers: 38, amount: 7 },
-  { maximumKilometers: 48, amount: 8 },
-] as const;
+const defaultTransitFareProfile: TransitFareProfile = {
+  busDefaultFareCents: 200,
+  ferryDefaultFareCents: 200,
+  railDistanceBands: [
+    { maximumDistanceMeters: 6_000, fareCents: 200 },
+    { maximumDistanceMeters: 10_000, fareCents: 300 },
+    { maximumDistanceMeters: 14_000, fareCents: 400 },
+    { maximumDistanceMeters: 21_000, fareCents: 500 },
+    { maximumDistanceMeters: 28_000, fareCents: 600 },
+    { maximumDistanceMeters: 38_000, fareCents: 700 },
+    { maximumDistanceMeters: 48_000, fareCents: 800 },
+  ],
+};
 
-export function quoteTransitRouteFare(legs: TransitFareLeg[]): TransitFareQuote {
+export function quoteTransitRouteFare(
+  legs: TransitFareLeg[],
+  profile: TransitFareProfile = defaultTransitFareProfile,
+): TransitFareQuote {
   const chargeableLegs = legs.filter((leg) => leg.mode !== 'walk' && leg.mode !== 'custom');
   if (chargeableLegs.length === 0) {
     return {
@@ -47,11 +59,11 @@ export function quoteTransitRouteFare(legs: TransitFareLeg[]): TransitFareQuote 
           continuousRailLegs.push(nextLeg);
         }
       }
-      breakdown.push(quoteContinuousRailFare(continuousRailLegs));
+      breakdown.push(quoteContinuousRailFare(continuousRailLegs, profile));
       continue;
     }
 
-    breakdown.push(quoteSingleLegFare(leg));
+    breakdown.push(quoteSingleLegFare(leg, profile));
   }
 
   const knownItems = breakdown.filter((item) => item.amount !== undefined);
@@ -75,17 +87,23 @@ export function quoteTransitRouteFare(legs: TransitFareLeg[]): TransitFareQuote 
   };
 }
 
-export function calculateContinuousRailFare(distanceKilometers: number): number {
-  const normalizedDistance = Math.max(0, distanceKilometers);
-  return (
-    railFareThresholds.find((threshold) => normalizedDistance <= threshold.maximumKilometers)
-      ?.amount ??
-    railFareThresholds.at(-1)?.amount ??
-    8
-  );
+export function calculateContinuousRailFare(
+  distanceKilometers: number,
+  profile: TransitFareProfile = defaultTransitFareProfile,
+): number {
+  const distanceMeters = Math.max(0, distanceKilometers) * blocksPerKilometer;
+  const fareCents =
+    profile.railDistanceBands.find((band) => distanceMeters <= band.maximumDistanceMeters)
+      ?.fareCents ??
+    profile.railDistanceBands.at(-1)?.fareCents ??
+    0;
+  return centsToAmount(fareCents);
 }
 
-function quoteContinuousRailFare(legs: TransitFareLeg[]): TransitFareBreakdownItem {
+function quoteContinuousRailFare(
+  legs: TransitFareLeg[],
+  profile: TransitFareProfile,
+): TransitFareBreakdownItem {
   const distanceBlocks = legs.reduce((total, leg) => total + Math.max(0, leg.distanceBlocks), 0);
   const distanceKilometers = distanceBlocks / blocksPerKilometer;
   return {
@@ -94,17 +112,20 @@ function quoteContinuousRailFare(legs: TransitFareLeg[]): TransitFareBreakdownIt
     lineNames: uniqueValues(legs.map((leg) => leg.lineName)),
     rule: 'rail_distance',
     status: 'estimated',
-    amount: calculateContinuousRailFare(distanceKilometers),
+    amount: calculateContinuousRailFare(distanceKilometers, profile),
     distanceKilometers: roundDistance(distanceKilometers),
   };
 }
 
-function quoteSingleLegFare(leg: TransitFareLeg): TransitFareBreakdownItem {
+function quoteSingleLegFare(
+  leg: TransitFareLeg,
+  profile: TransitFareProfile,
+): TransitFareBreakdownItem {
   if (leg.mode === 'ferry') {
     return createSingleLegBreakdown(leg, {
       rule: 'ferry_flat',
       status: 'exact',
-      amount: 2,
+      amount: centsToAmount(profile.ferryDefaultFareCents),
     });
   }
 
@@ -113,7 +134,7 @@ function quoteSingleLegFare(leg: TransitFareLeg): TransitFareBreakdownItem {
     return createSingleLegBreakdown(leg, {
       rule: 'bus_default_flat',
       status: 'exact',
-      amount: 2,
+      amount: centsToAmount(profile.busDefaultFareCents),
     });
   }
 
@@ -171,6 +192,10 @@ function sumAmounts(items: TransitFareBreakdownItem[]): number {
 
 function roundDistance(distanceKilometers: number): number {
   return Number(distanceKilometers.toFixed(2));
+}
+
+function centsToAmount(cents: number): number {
+  return Number((Math.max(0, cents) / 100).toFixed(2));
 }
 
 function uniqueValues<T>(values: T[]): T[] {

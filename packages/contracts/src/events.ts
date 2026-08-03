@@ -1,9 +1,12 @@
 import type {
+  AdministrativeArea,
   AccentTone,
   ISODateTimeString,
   LocaleCode,
   LocalePreference,
+  MapSpatialProfile,
   MapGeometry,
+  MapMarkerSpatialMetadata,
   MaterialCanvasConfig,
   MaterialDraftStatus,
   MaterialSourceKind,
@@ -18,6 +21,7 @@ import type {
   TicketableServiceKind,
   TransitDataRevisionStatus,
   TransitItemApprovalStatus,
+  TransitOperationStatus,
   TransitModeProfile,
   TransitModeSnapshotSummary,
   TravelScheduleRevisionStatus,
@@ -61,11 +65,30 @@ export interface ContentDraftUpdatedPayload {
   previousStatus: 'draft' | 'pending_review' | 'approved' | 'rejected' | 'published';
 }
 
+export interface ContentPoiBindingsUpdatedPayload {
+  contentId: string;
+  revisionId: string;
+  poiMarkerIds: string[];
+  updatedBy: string;
+}
+
 export interface ContentLegacyAdoptedPayload {
   contentId: string;
   revisionId: string;
   legacySourceId: string;
   title: string;
+  batchId?: string;
+  sourceKind?: 'operations_summary' | 'html_page';
+}
+
+export interface ContentLegacyMigrationCompletedPayload {
+  batchId: string;
+  candidateCount: number;
+  createdCount: number;
+  skippedExistingCount: number;
+  htmlPageCount: number;
+  summaryFallbackCount: number;
+  importedBy: string;
 }
 
 export interface ContentReviewedPayload {
@@ -86,6 +109,14 @@ export interface ContentArchivedPayload {
   contentId: string;
   revisionId: string;
   previousStatus: 'draft' | 'pending_review' | 'approved' | 'rejected' | 'published';
+}
+
+export interface ContentRestoredPayload {
+  contentId: string;
+  revisionId: string;
+  title: string;
+  categoryId: string;
+  previousStatus: 'archived';
 }
 
 export interface ContentAssetImportedPayload {
@@ -123,6 +154,7 @@ export interface PoiSubmittedPayload {
   imageUrls?: string[];
   imageUrl?: string;
   geometry: MapGeometry;
+  spatial?: MapMarkerSpatialMetadata;
   parentMarkerId?: string;
   floorLabel?: string;
   boundRegionMarkerIds?: string[];
@@ -154,6 +186,7 @@ export interface PoiSubmissionUpdatedPayload {
     | 'imageUrls'
     | 'imageUrl'
     | 'geometry'
+    | 'spatial'
     | 'parentMarkerId'
     | 'floorLabel'
     | 'boundRegionMarkerIds'
@@ -180,6 +213,7 @@ export interface PoiPublishedPayload {
   imageUrls?: string[];
   imageUrl?: string;
   geometry: MapGeometry;
+  spatial?: MapMarkerSpatialMetadata;
   parentMarkerId?: string;
   floorLabel?: string;
   boundRegionMarkerIds?: string[];
@@ -248,8 +282,10 @@ export interface TransitDataRevisionStationUpdatedPayload {
   updatedAt: ISODateTimeString;
   previousCoordinate?: {
     x?: number;
+    y?: number;
     z?: number;
   };
+  previousOperationStatus?: TransitOperationStatus;
   previousBoundPoi?: {
     markerId?: string;
     label?: string;
@@ -261,8 +297,10 @@ export interface TransitDataRevisionStationUpdatedPayload {
   }>;
   nextCoordinate: {
     x: number;
+    y?: number;
     z: number;
   };
+  nextOperationStatus: TransitOperationStatus;
   nextBoundPoi?: {
     markerId?: string;
     label?: string;
@@ -318,6 +356,7 @@ export interface TransitDataRevisionLineUpdatedPayload {
   changedFields: Array<
     | 'mode'
     | 'name'
+    | 'operationStatus'
     | 'color'
     | 'maxCarCount'
     | 'routeMode'
@@ -335,6 +374,17 @@ export interface TransitDataRevisionLineUpdatedPayload {
   >;
   stationCountBefore: number;
   stationCountAfter: number;
+}
+
+export interface TransitOperationStatusChangedPayload {
+  entityType: 'line' | 'station';
+  entityId: string;
+  entityName: string;
+  revisionId: string;
+  previousStatus: TransitOperationStatus;
+  nextStatus: TransitOperationStatus;
+  changedBy: string;
+  changedAt: ISODateTimeString;
 }
 
 export interface TransitDataRevisionLineCreatedPayload {
@@ -392,6 +442,49 @@ export interface TileProviderSelectedPayload {
   providerId: string;
   sourceKind: TileProviderSourceKind;
   reason: 'default' | 'mixed-content-risk' | 'admin-override' | 'profile-config';
+}
+
+export interface MapSpatialProfileUpdatedPayload {
+  profile: MapSpatialProfile;
+  changedFields: Array<
+    | 'worldName'
+    | 'defaultY'
+    | 'verticalTolerance'
+    | 'defaultDrivingSpeedKmh'
+    | 'roadTiming'
+    | 'taxiFare'
+    | 'transitFare'
+  >;
+  updatedBy: string;
+  updatedAt: ISODateTimeString;
+}
+
+export interface AdministrativeAreaCreatedPayload {
+  area: AdministrativeArea;
+}
+
+export interface AdministrativeAreaUpdatedPayload {
+  area: AdministrativeArea;
+  changedFields: Array<
+    | 'code'
+    | 'name'
+    | 'level'
+    | 'parentAreaId'
+    | 'boundary'
+    | 'labelPosition'
+    | 'style'
+    | 'minZoom'
+    | 'maxZoom'
+  >;
+}
+
+export interface AdministrativeAreaPublishedPayload {
+  area: AdministrativeArea;
+}
+
+export interface AdministrativeAreaArchivedPayload {
+  area: AdministrativeArea;
+  previousStatus: Exclude<AdministrativeArea['status'], 'archived'>;
 }
 
 export interface PlayerLocationsObservedPayload {
@@ -832,6 +925,7 @@ export interface LegacyMapMarkerUpdatedPayload {
     | 'imageUrls'
     | 'imageUrl'
     | 'geometry'
+    | 'spatial'
     | 'parentMarkerId'
     | 'floorLabel'
     | 'boundRegionMarkerIds'
@@ -1093,11 +1187,14 @@ export interface AdminMembershipUpdatedPayload {
 
 export type YctEventPayloadMap = {
   ContentDraftUpdated: ContentDraftUpdatedPayload;
+  ContentPoiBindingsUpdated: ContentPoiBindingsUpdatedPayload;
   ContentLegacyAdopted: ContentLegacyAdoptedPayload;
+  ContentLegacyMigrationCompleted: ContentLegacyMigrationCompletedPayload;
   ContentSubmitted: ContentSubmittedPayload;
   ContentReviewed: ContentReviewedPayload;
   ContentPublished: ContentPublishedPayload;
   ContentArchived: ContentArchivedPayload;
+  ContentRestored: ContentRestoredPayload;
   ContentAssetImported: ContentAssetImportedPayload;
   ContentAssetUploaded: ContentAssetUploadedPayload;
   ContentAssetReviewed: ContentAssetReviewedPayload;
@@ -1127,10 +1224,16 @@ export type YctEventPayloadMap = {
   TransitDataRevisionLineCreated: TransitDataRevisionLineCreatedPayload;
   TransitDataRevisionLineDeleted: TransitDataRevisionLineDeletedPayload;
   TransitLineApprovalChanged: TransitLineApprovalChangedPayload;
+  TransitOperationStatusChanged: TransitOperationStatusChangedPayload;
   TransitModeProfileCreated: TransitModeProfileCreatedPayload;
   TransitModeProfileDeleted: TransitModeProfileDeletedPayload;
   TransitModeProfileUpdated: TransitModeProfileUpdatedPayload;
   TileProviderSelected: TileProviderSelectedPayload;
+  MapSpatialProfileUpdated: MapSpatialProfileUpdatedPayload;
+  AdministrativeAreaCreated: AdministrativeAreaCreatedPayload;
+  AdministrativeAreaUpdated: AdministrativeAreaUpdatedPayload;
+  AdministrativeAreaPublished: AdministrativeAreaPublishedPayload;
+  AdministrativeAreaArchived: AdministrativeAreaArchivedPayload;
   PlayerLocationsObserved: PlayerLocationsObservedPayload;
   PlayerLocationPresenceChanged: PlayerLocationPresenceChangedPayload;
   ServerStatusObserved: ServerStatusObservedPayload;

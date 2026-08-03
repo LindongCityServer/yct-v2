@@ -22,6 +22,7 @@ export interface EntityTranslationRecord {
 
 export type TransportMode =
   'metro' | 'tram' | 'bus' | 'coach' | 'ferry' | 'railway' | 'walk' | 'custom';
+export type FareTransportMode = TransportMode | 'taxi';
 
 export type TransitFareQuoteStatus = 'exact' | 'estimated' | 'partial' | 'unavailable';
 
@@ -31,11 +32,12 @@ export type TransitFareRule =
   | 'rail_distance'
   | 'coach_configured'
   | 'ferry_flat'
+  | 'taxi_metered'
   | 'configured'
   | 'unconfigured';
 
 export interface TransitFareBreakdownItem {
-  modes: TransportMode[];
+  modes: FareTransportMode[];
   lineIds: string[];
   lineNames: string[];
   rule: TransitFareRule;
@@ -150,11 +152,153 @@ export type MapGeometry =
   | { type: 'Polygon'; coordinates: Array<Array<[number, number]>> }
   | { type: 'MultiPolygon'; coordinates: Array<Array<Array<[number, number]>>> };
 
+export interface WorldPosition {
+  worldId: string;
+  x: number;
+  z: number;
+  y?: number;
+}
+
+export type MapNetworkDirection = 'both' | 'forward' | 'reverse';
+export type MapNetworkKind = 'road' | 'pedestrian';
+export type MapVerticalConnectorKind = 'ramp' | 'stairs' | 'escalator' | 'elevator';
+export type MapTravelMode = 'walk' | 'taxi' | 'bus' | 'coach';
+
+export interface MapStyleBinding {
+  fillColor?: string;
+  fillOpacity?: number;
+  strokeColor?: string;
+  strokeOpacity?: number;
+  lineColorTransitLineIds?: string[];
+}
+
+export interface MapDynamicSymbol {
+  kind: 'metro_exit' | 'road_ref' | 'highway_ref';
+  ref: string;
+  variant?: string;
+  backgroundColor?: string;
+  textColor?: string;
+}
+
+export type MapVolumeGeometry =
+  | {
+      type: 'ExtrudedRectangle';
+      bounds: RectangleBounds;
+      minY: number;
+      maxY: number;
+    }
+  | {
+      type: 'MultiExtrudedRectangle';
+      volumes: Array<{ bounds: RectangleBounds; minY: number; maxY: number }>;
+    }
+  | {
+      type: 'ExtrudedPolygon';
+      coordinates: Array<Array<[number, number]>>;
+      minY: number;
+      maxY: number;
+    }
+  | {
+      type: 'MultiExtrudedPolygon';
+      volumes: Array<{
+        coordinates: Array<Array<[number, number]>>;
+        minY: number;
+        maxY: number;
+      }>;
+    };
+
+export interface MapMarkerSpatialMetadata {
+  worldId?: string;
+  defaultY?: number;
+  /** 与二维几何展开后的坐标顺序一致；空值继承 defaultY 或地图默认 Y。 */
+  coordinateY?: Array<number | null>;
+  networkKind?: MapNetworkKind;
+  direction?: MapNetworkDirection;
+  allowedModes?: MapTravelMode[];
+  verticalConnectorKind?: MapVerticalConnectorKind;
+  accessible?: boolean;
+  style?: MapStyleBinding;
+  volume?: MapVolumeGeometry;
+  dynamicSymbol?: MapDynamicSymbol;
+  parentPlaceId?: string;
+  stationId?: string;
+  ref?: string;
+}
+
+export type AdministrativeAreaLevel =
+  'country' | 'province' | 'prefecture' | 'county' | 'township' | 'custom';
+
+export type AdministrativeAreaStatus = 'draft' | 'published' | 'archived';
+
+export interface AdministrativeArea {
+  id: string;
+  code: string;
+  name: string;
+  level: AdministrativeAreaLevel;
+  parentAreaId?: string;
+  /** 仅允许 Rectangle、MultiRectangle、Polygon 或 MultiPolygon。 */
+  boundary: MapGeometry;
+  labelPosition?: [number, number];
+  style?: MapStyleBinding;
+  minZoom?: number;
+  maxZoom?: number;
+  status: AdministrativeAreaStatus;
+  createdAt: ISODateTimeString;
+  createdBy: string;
+  updatedAt: ISODateTimeString;
+  updatedBy: string;
+  publishedAt?: ISODateTimeString;
+  archivedAt?: ISODateTimeString;
+}
+
 export interface RectangleBounds {
   minX: number;
   minZ: number;
   maxX: number;
   maxZ: number;
+}
+
+export type TaxiLongDistanceSurchargeScope = 'excess_distance' | 'whole_metered_fare';
+
+export interface TaxiFareProfile {
+  baseFareCents: number;
+  baseDistanceMeters: number;
+  incrementDistanceMeters: number;
+  incrementFareCents: number;
+  longDistanceThresholdMeters: number;
+  longDistanceSurchargePermille: number;
+  longDistanceSurchargeScope: TaxiLongDistanceSurchargeScope;
+}
+
+export interface RailDistanceFareBand {
+  maximumDistanceMeters: number;
+  fareCents: number;
+}
+
+export interface TransitFareProfile {
+  busDefaultFareCents: number;
+  ferryDefaultFareCents: number;
+  railDistanceBands: RailDistanceFareBand[];
+}
+
+export interface RoadTimingProfile {
+  defaultBusSpeedKmh: number;
+  junctionSnapTolerance: number;
+  taxiJunctionDelaySeconds: number;
+  busJunctionDelaySeconds: number;
+}
+
+export interface MapSpatialProfile {
+  mapId: string;
+  worldId: string;
+  worldName: string;
+  defaultY: number;
+  verticalTolerance: number;
+  defaultDrivingSpeedKmh: number;
+  roadTiming: RoadTimingProfile;
+  taxiFare: TaxiFareProfile;
+  transitFare: TransitFareProfile;
+  updatedAt?: ISODateTimeString;
+  updatedBy?: string;
 }
 
 export type TileProviderSourceKind = 'fresh-http' | 'safe-https-static' | 'proxied' | 'custom';
@@ -208,6 +352,7 @@ export interface PoiSubmission {
   /** @deprecated 兼容旧消费者，值始终等于 imageUrls 的第一项。 */
   imageUrl?: string;
   geometry: MapGeometry;
+  spatial?: MapMarkerSpatialMetadata;
   parentMarkerId?: string;
   floorLabel?: string;
   boundRegionMarkerIds?: string[];
@@ -285,6 +430,7 @@ export interface TransitLineStopSnapshot {
 }
 
 export type TransitLineSegmentPathMode = 'straight' | 'road';
+export type TransitOperationStatus = 'operating' | 'planned' | 'closed';
 
 export interface TransitLineSegmentWaypointSnapshot {
   x: number;
@@ -298,6 +444,8 @@ export interface TransitLineSegmentPathSnapshot {
   fromStationSourceId: string;
   toStationSourceId: string;
   mode: TransitLineSegmentPathMode;
+  operationStatus?: TransitOperationStatus;
+  travelMinutes?: number;
   waypoints: TransitLineSegmentWaypointSnapshot[];
   note?: string;
 }
@@ -330,6 +478,8 @@ export interface TransitLineSnapshot {
   sourceId: string;
   mode: Exclude<TransportMode, 'walk'>;
   name: string;
+  /** 运营状态与审批/发布状态正交；未设置的旧数据按 operating 解释。 */
+  operationStatus?: TransitOperationStatus;
   approvalStatus?: TransitItemApprovalStatus;
   submittedBy?: string;
   submittedAt?: ISODateTimeString;
@@ -369,9 +519,12 @@ export interface TransitStationSnapshot {
   sourceId: string;
   name: string;
   aliases: string[];
+  /** 未开通或关闭的站点可供物料使用，但不得进入公众路线规划。 */
+  operationStatus?: TransitOperationStatus;
   diagramX?: number;
   diagramY?: number;
   x?: number;
+  y?: number;
   z?: number;
   boundPoiRefs?: TransitStationPoiBindingSnapshot[];
   boundPoiMarkerId?: string;
@@ -618,6 +771,7 @@ export interface TransitModeProfile {
   icon: string;
   sortOrder: number;
   enabled: boolean;
+  showPlannedSegments: boolean;
   updatedAt?: ISODateTimeString;
   updatedBy?: string;
 }
