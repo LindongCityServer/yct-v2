@@ -26,6 +26,11 @@ const categories = [
 
 const operationsSocialLinks = [
   {
+    href: 'https://afdian.com/a/LindongCityServer',
+    iconFile: 'afdian.png',
+    labelKey: 'operations.social.afdian',
+  },
+  {
     href: 'https://jq.qq.com/?_wv=1027&k=2ohkcKQI',
     iconFile: 'qq.png',
     labelKey: 'operations.social.qq',
