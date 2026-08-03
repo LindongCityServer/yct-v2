@@ -1,13 +1,18 @@
 export const METRO_WAYFINDING_TEMPLATE_ID = 'system_material_metro_wayfinding';
 export const METRO_WAYFINDING_BACKGROUND = '#262626';
 export const METRO_WAYFINDING_FOREGROUND = '#FFFFFF';
+export const METRO_WAYFINDING_WARNING_FOREGROUND = '#E53935';
 export const METRO_WAYFINDING_GAP = 16;
 export const METRO_WAYFINDING_PADDING = 22;
 export const METRO_WAYFINDING_HEIGHT = 128;
 export const METRO_WAYFINDING_TEXT_HEIGHT = 85;
+export const METRO_WAYFINDING_SECONDARY_TEXT_MAX_HEIGHT = 28;
+export const METRO_WAYFINDING_DIVIDER_WIDTH = 4;
 export const METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE = 78;
 export const METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE = 85;
 export const METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE = 28;
+export const METRO_WAYFINDING_PROJECT_FORMAT = 'yct.metro-wayfinding.project';
+export const METRO_WAYFINDING_PROJECT_SCHEMA_VERSION = 1;
 
 export const metroWayfindingBackgroundPalette = [
   { value: '#262626', label: '深灰色' },
@@ -23,6 +28,7 @@ export const metroWayfindingForegroundPalette = [
   { value: '#F2C94C', label: '黄色' },
   { value: '#111111', label: '黑色' },
   { value: '#8ED8FF', label: '浅蓝色' },
+  { value: METRO_WAYFINDING_WARNING_FOREGROUND, label: '警告红' },
 ] as const;
 
 export type MetroWayfindingColor = string;
@@ -182,7 +188,7 @@ export const metroWayfindingIconOptions: MetroWayfindingIconOption[] = [
     label: '禁止进入',
     symbol: 'block',
     group: 'facility',
-    defaultForegroundColor: '#E53935',
+    defaultForegroundColor: METRO_WAYFINDING_WARNING_FOREGROUND,
   },
   { id: 'wheelchair', label: '轮椅', symbol: 'accessible', group: 'facility' },
   { id: 'south-west', label: '左下', symbol: 'south_west', group: 'arrow' },
@@ -209,6 +215,7 @@ export const metroWayfindingArrowOptions = metroWayfindingIconOptions.filter(
 );
 
 export type MetroWayfindingTextAlign = 'left' | 'center' | 'right';
+export type MetroWayfindingTextWritingMode = 'horizontal' | 'vertical';
 export type MetroWayfindingSpaceMode = 'fixed' | 'flex';
 
 export function resolveMetroFacilityIconAssetName(
@@ -260,6 +267,12 @@ export interface MetroWayfindingSecondaryTextRow {
 
 export type MetroWayfindingTextRow = MetroWayfindingMainTextRow | MetroWayfindingSecondaryTextRow;
 
+export function hasMetroWayfindingTextRowContent(row: MetroWayfindingTextRow): boolean {
+  return row.kind === 'main'
+    ? row.segments.some((segment) => segment.kind !== 'text' || segment.value.trim().length > 0)
+    : row.value.trim().length > 0;
+}
+
 export type MetroWayfindingFrameShape = 'none' | 'rectangle' | 'circle';
 export type MetroWayfindingFrameFillMode = 'none' | 'inverse' | 'color';
 
@@ -271,6 +284,7 @@ export interface MetroWayfindingFacilityElement {
   frameShape: MetroWayfindingFrameShape;
   frameFillMode: MetroWayfindingFrameFillMode;
   frameFillColor?: MetroWayfindingColor;
+  frameStroke: boolean;
   backgroundColor?: MetroWayfindingColor;
   foregroundColor?: MetroWayfindingColor;
 }
@@ -282,6 +296,7 @@ export interface MetroWayfindingArrowElement {
   framed: boolean;
   frameFillMode: MetroWayfindingFrameFillMode;
   frameFillColor?: MetroWayfindingColor;
+  frameStroke: boolean;
   backgroundColor?: MetroWayfindingColor;
   foregroundColor?: MetroWayfindingColor;
 }
@@ -290,6 +305,7 @@ export interface MetroWayfindingTextElement {
   id: string;
   type: 'text';
   align: MetroWayfindingTextAlign;
+  writingMode: MetroWayfindingTextWritingMode;
   rows: MetroWayfindingTextRow[];
   backgroundColor?: MetroWayfindingColor;
   foregroundColor?: MetroWayfindingColor;
@@ -310,6 +326,7 @@ export interface MetroWayfindingLargeTextElement {
   frameShape: MetroWayfindingFrameShape;
   frameFillMode: MetroWayfindingFrameFillMode;
   frameFillColor?: MetroWayfindingColor;
+  frameStroke: boolean;
   backgroundColor?: MetroWayfindingColor;
   foregroundColor?: MetroWayfindingColor;
 }
@@ -338,7 +355,7 @@ export type MetroWayfindingElement =
   | MetroWayfindingSpaceElement
   | MetroWayfindingDividerElement;
 
-export type MetroWayfindingLayoutMode = 'single' | 'double';
+export type MetroWayfindingLayoutMode = 'single' | 'double' | 'vertical';
 
 export interface MetroWayfindingLayout {
   backgroundColor: MetroWayfindingColor;
@@ -346,6 +363,37 @@ export interface MetroWayfindingLayout {
   mode: MetroWayfindingLayoutMode;
   dividerBetweenRows: boolean;
   rows: MetroWayfindingElement[][];
+}
+
+export interface MetroWayfindingProjectCanvas {
+  widthM: number;
+  heightM: number;
+  pxPerMeter: number;
+  alignToTile: boolean;
+  tileSizePx: number;
+}
+
+export interface MetroWayfindingProjectFile {
+  format: typeof METRO_WAYFINDING_PROJECT_FORMAT;
+  schemaVersion: typeof METRO_WAYFINDING_PROJECT_SCHEMA_VERSION;
+  template: {
+    id: string;
+    version: number;
+  };
+  canvas: MetroWayfindingProjectCanvas;
+  layout: MetroWayfindingLayout;
+  exportedAt: string;
+}
+
+export interface MetroWayfindingLayoutSummaryRow {
+  label: string;
+  content: string;
+}
+
+export interface MetroWayfindingLayoutSummary {
+  modeLabel: string;
+  sizeLabel: string;
+  rows: MetroWayfindingLayoutSummaryRow[];
 }
 
 export interface MetroWayfindingLayoutSizing {
@@ -356,6 +404,14 @@ export interface MetroWayfindingLayoutSizing {
   totalDisplayWidth: number;
   isWidthInsufficient: boolean;
   hasUnresolvedOverflow: boolean;
+}
+
+export interface MetroWayfindingVerticalLayoutSizing {
+  elementHeights: number[];
+  flexHeight: number;
+  textScaleY: number;
+  totalDisplayHeight: number;
+  isHeightInsufficient: boolean;
 }
 
 export const emptyMetroWayfindingLayout: MetroWayfindingLayout = {
@@ -413,7 +469,7 @@ export function resolveMetroWayfindingTextMetrics(
   const mainFontSize = METRO_WAYFINDING_TEXT_HEIGHT / Math.max(heightFactor, 1 / 3);
   return {
     mainFontSize,
-    secondaryFontSize: (mainFontSize * 2) / 3,
+    secondaryFontSize: Math.min(METRO_WAYFINDING_SECONDARY_TEXT_MAX_HEIGHT, (mainFontSize * 2) / 3),
     spacing: mainFontSize / 6,
     contentHeight: METRO_WAYFINDING_TEXT_HEIGHT,
   };
@@ -466,9 +522,98 @@ export function resolveMetroWayfindingLayoutSizing(
   };
 }
 
+export function resolveMetroWayfindingVerticalLayoutSizing(
+  elements: MetroWayfindingElement[],
+  canvasHeight: number,
+): MetroWayfindingVerticalLayoutSizing {
+  const safeCanvasHeight = Math.max(Number.isFinite(canvasHeight) ? canvasHeight : 0, 0);
+  const innerHeight = Math.max(0, safeCanvasHeight - METRO_WAYFINDING_PADDING * 2);
+  const elementHeights = elements.map(resolveMetroWayfindingVerticalElementHeight);
+  const gapHeight = Math.max(elements.length - 1, 0) * METRO_WAYFINDING_GAP;
+  const verticalTextHeight = elements.reduce(
+    (height, element, index) =>
+      height +
+      (element.type === 'text' && element.writingMode === 'vertical' ? elementHeights[index]! : 0),
+    0,
+  );
+  const nonVerticalTextHeight = elements.reduce(
+    (height, element, index) =>
+      height +
+      (element.type === 'space' && element.mode === 'flex'
+        ? 0
+        : element.type === 'text' && element.writingMode === 'vertical'
+          ? 0
+          : elementHeights[index]!),
+    0,
+  );
+  const naturalFixedHeight = nonVerticalTextHeight + verticalTextHeight + gapHeight;
+  const isHeightInsufficient = naturalFixedHeight > innerHeight + 0.001;
+  const textScaleY =
+    isHeightInsufficient && verticalTextHeight > 0
+      ? Math.max(
+          0,
+          Math.min(1, (innerHeight - nonVerticalTextHeight - gapHeight) / verticalTextHeight),
+        )
+      : 1;
+  const displayedFixedHeight = nonVerticalTextHeight + verticalTextHeight * textScaleY + gapHeight;
+  const flexCount = elements.filter(
+    (element) => element.type === 'space' && element.mode === 'flex',
+  ).length;
+  const flexHeight =
+    flexCount > 0 ? Math.max(0, innerHeight - displayedFixedHeight) / flexCount : 0;
+  const totalDisplayHeight = displayedFixedHeight + flexHeight * flexCount;
+  return {
+    elementHeights,
+    flexHeight,
+    textScaleY,
+    totalDisplayHeight,
+    isHeightInsufficient,
+  };
+}
+
+export function resolveMetroWayfindingVerticalElementHeight(
+  element: MetroWayfindingElement,
+): number {
+  if (element.type === 'space') {
+    return element.mode === 'fixed' ? Math.max(1, element.units) * METRO_WAYFINDING_GAP : 0;
+  }
+  if (element.type === 'divider') {
+    return METRO_WAYFINDING_DIVIDER_WIDTH;
+  }
+  if (element.type === 'largeText') {
+    return METRO_WAYFINDING_TEXT_HEIGHT;
+  }
+  if (element.type === 'facility' || element.type === 'arrow') {
+    return METRO_WAYFINDING_TEXT_HEIGHT;
+  }
+  if (element.type !== 'text') {
+    return 0;
+  }
+  const rows = element.rows.filter(hasMetroWayfindingTextRowContent);
+  if (rows.length === 0) {
+    return 0;
+  }
+  const metrics = resolveMetroWayfindingTextMetrics(rows);
+  if (element.writingMode !== 'vertical') {
+    return rows.reduce(
+      (height, row, index) =>
+        height +
+        (row.kind === 'main' ? metrics.mainFontSize : metrics.secondaryFontSize) +
+        (index < rows.length - 1 ? metrics.spacing : 0),
+      0,
+    );
+  }
+  const rowHeights = rows.map((row) =>
+    row.kind === 'main'
+      ? measureMetroWayfindingMainSegments(row.segments, metrics.mainFontSize)
+      : estimateMetroWayfindingTextWidth(row.value, metrics.secondaryFontSize),
+  );
+  return Math.max(0, ...rowHeights);
+}
+
 export function resolveMetroWayfindingElementWidth(element: MetroWayfindingElement): number {
   if (element.type === 'facility' || element.type === 'arrow' || element.type === 'divider') {
-    return element.type === 'divider' ? 8 : 85;
+    return element.type === 'divider' ? METRO_WAYFINDING_DIVIDER_WIDTH : 85;
   }
   if (element.type === 'largeText') {
     if (element.frameShape === 'circle') {
@@ -497,7 +642,7 @@ export function resolveMetroWayfindingElementWidth(element: MetroWayfindingEleme
       ? measureMetroWayfindingMainSegments(row.segments, metrics.mainFontSize)
       : estimateMetroWayfindingTextWidth(row.value, metrics.secondaryFontSize),
   );
-  return Math.max(85, ...rowWidths);
+  return Math.max(0, ...rowWidths);
 }
 
 export function measureMetroWayfindingMainSegments(
@@ -582,20 +727,29 @@ export function createMetroWayfindingElement(
       id,
       type,
       iconId,
-      frameShape: 'rectangle',
+      frameShape: iconId === 'no-entry' ? 'none' : 'rectangle',
       frameFillMode: 'none',
+      frameStroke: false,
       foregroundColor: icon?.defaultForegroundColor,
     };
   }
   if (type === 'arrow') {
     const arrowId = resolveMetroArrowIconAssetName(iconId) ?? 'south-west';
-    return { id, type, iconId: arrowId, framed: false, frameFillMode: 'none' };
+    return {
+      id,
+      type,
+      iconId: arrowId,
+      framed: false,
+      frameFillMode: 'none',
+      frameStroke: false,
+    };
   }
   if (type === 'text') {
     return {
       id,
       type,
       align: 'center',
+      writingMode: 'horizontal',
       rows: [createMetroWayfindingTextRow('main'), createMetroWayfindingTextRow('secondary')],
     };
   }
@@ -607,6 +761,7 @@ export function createMetroWayfindingElement(
       suffix: '',
       frameShape: 'rectangle',
       frameFillMode: 'none',
+      frameStroke: false,
     };
   }
   if (type === 'space') {
@@ -625,9 +780,11 @@ export function parseMetroWayfindingLayout(value: string): MetroWayfindingLayout
       ? candidate.rows.slice(0, 2).map(normalizeMetroWayfindingElements)
       : [normalizeMetroWayfindingElements(candidate.elements)];
     const mode =
-      candidate.mode === 'double' || (candidate.mode !== 'single' && candidateRows.length > 1)
-        ? 'double'
-        : 'single';
+      candidate.mode === 'vertical'
+        ? 'vertical'
+        : candidate.mode === 'double' || (candidate.mode !== 'single' && candidateRows.length > 1)
+          ? 'double'
+          : 'single';
     const rows = candidateRows.length ? candidateRows : [[]];
     if (mode === 'double' && rows.length < 2) rows.push([]);
     return {
@@ -644,6 +801,137 @@ export function parseMetroWayfindingLayout(value: string): MetroWayfindingLayout
 
 export function serializeMetroWayfindingLayout(layout: MetroWayfindingLayout): string {
   return JSON.stringify(layout);
+}
+
+export function summarizeMetroWayfindingLayout(
+  layout: MetroWayfindingLayout,
+  canvas?: Pick<MetroWayfindingProjectCanvas, 'widthM' | 'heightM' | 'pxPerMeter'>,
+): MetroWayfindingLayoutSummary {
+  const modeLabel =
+    layout.mode === 'vertical' ? '竖向' : layout.mode === 'double' ? '双行' : '单行';
+  const widthM = canvas?.widthM ?? (layout.mode === 'vertical' ? 1 : 0);
+  const heightM = canvas?.heightM ?? (layout.mode === 'double' ? 2 : 1);
+  const pxPerMeter = canvas?.pxPerMeter ?? 128;
+  const sizeLabel = canvas
+    ? `${widthM} × ${heightM} 格（${Math.round(widthM * pxPerMeter)} × ${Math.round(heightM * pxPerMeter)} px）`
+    : '尺寸待定';
+  const visibleRows = layout.rows.slice(0, layout.mode === 'double' ? 2 : 1);
+  const rows = visibleRows.length
+    ? visibleRows.map((elements, index) => ({
+        label: layout.mode === 'vertical' ? '竖向内容' : `${index + 1} 行`,
+        content: elements.map(summarizeMetroWayfindingElement).join(' → ') || '空白',
+      }))
+    : [{ label: layout.mode === 'vertical' ? '竖向内容' : '1 行', content: '空白' }];
+  return { modeLabel, sizeLabel, rows };
+}
+
+export function buildMetroWayfindingProjectFileName(input: {
+  title: string;
+  canvas: Pick<MetroWayfindingProjectCanvas, 'widthM' | 'heightM'>;
+  layout: MetroWayfindingLayout;
+}): string {
+  const summary = summarizeMetroWayfindingLayout(input.layout, {
+    ...input.canvas,
+    pxPerMeter: 128,
+  });
+  const descriptors = input.layout.rows
+    .slice(0, input.layout.mode === 'double' ? 2 : 1)
+    .flatMap((elements) =>
+      elements.flatMap((element) => {
+        if (element.type === 'text') {
+          return element.rows
+            .flatMap((row) =>
+              row.kind === 'main' ? row.segments.map((segment) => segment.value) : [row.value],
+            )
+            .filter((value) => value.trim());
+        }
+        if (element.type === 'largeText') return [`${element.value}${element.suffix}`];
+        if (element.type === 'facility' || element.type === 'arrow') {
+          return [
+            metroWayfindingIconOptions.find((option) => option.id === element.iconId)?.label ?? '',
+          ];
+        }
+        return [];
+      }),
+    )
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .slice(0, 3);
+  const safePart = (value: string, fallback: string) =>
+    value
+      .replace(/[\u0000-\u001f\\/:*?"<>|]/g, '_')
+      .replace(/\s+/g, '_')
+      .replace(/^[_ .]+|[_ .]+$/g, '')
+      .slice(0, 24) || fallback;
+  const parts = [
+    safePart(input.title, '地铁导视牌'),
+    summary.modeLabel,
+    `${input.canvas.widthM}x${input.canvas.heightM}格`,
+    ...descriptors.map((value) => safePart(value, '元素')),
+  ];
+  return `${parts.join('_')}.yct-metro-wayfinding.json`;
+}
+
+function summarizeMetroWayfindingElement(element: MetroWayfindingElement): string {
+  if (element.type === 'facility') {
+    const label = metroWayfindingIconOptions.find((option) => option.id === element.iconId)?.label;
+    const frameLabel =
+      element.frameShape === 'none' ? '' : `，${element.frameShape === 'circle' ? '圆框' : '方框'}`;
+    return `图标：${label ?? '设施'}${frameLabel}`;
+  }
+  if (element.type === 'arrow') {
+    return `箭头：${metroWayfindingArrowOptions.find((option) => option.id === element.iconId)?.label ?? '方向'}`;
+  }
+  if (element.type === 'text') {
+    const alignmentLabel = { left: '左对齐', center: '居中', right: '右对齐' }[element.align];
+    const writingModeLabel = element.writingMode === 'vertical' ? '竖排' : '横排';
+    const value = element.rows
+      .map((row) =>
+        row.kind === 'main'
+          ? row.segments
+              .map((segment) =>
+                segment.kind === 'line' ? `[${segment.value || '线路'}]` : segment.value,
+              )
+              .join('')
+          : row.value,
+      )
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .join(' / ');
+    return `文字（${writingModeLabel}·${alignmentLabel}）：${value || '空白'}`;
+  }
+  if (element.type === 'largeText') {
+    return `大文字：${`${element.value}${element.suffix}` || '空白'}`;
+  }
+  if (element.type === 'space') {
+    return element.mode === 'flex' ? '弹性空白' : `固定空白：${element.units} 格`;
+  }
+  return `分割线：${METRO_WAYFINDING_DIVIDER_WIDTH} px`;
+}
+
+export function createMetroWayfindingProjectFile(input: {
+  templateId: string;
+  templateVersion: number;
+  canvas: MetroWayfindingProjectCanvas;
+  layout: MetroWayfindingLayout;
+  exportedAt?: string;
+}): MetroWayfindingProjectFile {
+  return {
+    format: METRO_WAYFINDING_PROJECT_FORMAT,
+    schemaVersion: METRO_WAYFINDING_PROJECT_SCHEMA_VERSION,
+    template: {
+      id: input.templateId,
+      version: input.templateVersion,
+    },
+    canvas: { ...input.canvas },
+    layout: input.layout,
+    exportedAt: input.exportedAt ?? new Date().toISOString(),
+  };
+}
+
+export function serializeMetroWayfindingProjectFile(project: MetroWayfindingProjectFile): string {
+  return `${JSON.stringify(project, null, 2)}\n`;
 }
 
 export function normalizeColor(value: unknown, fallback: string): string {
@@ -671,6 +959,7 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
     frameShape?: unknown;
     frameFillMode?: unknown;
     frameFillColor?: unknown;
+    frameStroke?: unknown;
     backgroundColor?: unknown;
     foregroundColor?: unknown;
   };
@@ -701,6 +990,7 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
         framed: candidate.framed === true,
         frameFillMode: normalizeMetroWayfindingFrameFillMode(candidate.frameFillMode),
         frameFillColor: normalizeOptionalColor(candidate.frameFillColor),
+        frameStroke: candidate.frameStroke === true,
         backgroundColor,
         foregroundColor: foregroundColor ?? icon?.defaultForegroundColor,
       };
@@ -719,6 +1009,7 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
       frameShape: normalizeMetroWayfindingFrameShape(candidate.frameShape, candidate.framed),
       frameFillMode: normalizeMetroWayfindingFrameFillMode(candidate.frameFillMode),
       frameFillColor: normalizeOptionalColor(candidate.frameFillColor),
+      frameStroke: candidate.frameStroke === true,
       backgroundColor,
       foregroundColor: foregroundColor ?? icon?.defaultForegroundColor,
     };
@@ -741,6 +1032,7 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
         textCandidate.align === 'left' || textCandidate.align === 'right'
           ? textCandidate.align
           : 'center',
+      writingMode: textCandidate.writingMode === 'vertical' ? 'vertical' : 'horizontal',
       rows,
       backgroundColor,
       foregroundColor,
@@ -763,6 +1055,7 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
       frameFillColor: normalizeOptionalColor(
         (largeText as { frameFillColor?: unknown }).frameFillColor,
       ),
+      frameStroke: (largeText as { frameStroke?: unknown }).frameStroke === true,
       backgroundColor,
       foregroundColor,
     };

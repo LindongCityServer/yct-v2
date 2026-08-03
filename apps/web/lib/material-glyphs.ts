@@ -8,6 +8,7 @@ import {
   estimateMetroWayfindingTextWidth,
   measureMetroWayfindingMainSegments,
   METRO_WAYFINDING_GAP,
+  METRO_WAYFINDING_DIVIDER_WIDTH,
   METRO_WAYFINDING_HEIGHT,
   METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE,
   METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE,
@@ -15,13 +16,16 @@ import {
   METRO_WAYFINDING_PADDING,
   METRO_WAYFINDING_TEXT_HEIGHT,
   METRO_WAYFINDING_FOREGROUND,
+  hasMetroWayfindingTextRowContent,
   metroWayfindingIconOptions,
   normalizeColor,
   parseMetroWayfindingLayout,
   resolveMetroArrowIconAssetName,
   resolveMetroFacilityIconAssetName,
   resolveMetroWayfindingLayoutSizing,
+  resolveMetroWayfindingElementWidth,
   resolveMetroWayfindingTextMetrics,
+  resolveMetroWayfindingVerticalLayoutSizing,
   type MetroArrowIconAssetName,
   type MetroFacilityIconAssetName,
   type MetroWayfindingElement,
@@ -171,6 +175,9 @@ export function renderMaterialGlyph(
 
 function renderMetroWayfinding(value: string, canvasWidth: number, canvasHeight: number): string {
   const layout = parseMetroWayfindingLayout(value);
+  if (layout.mode === 'vertical') {
+    return renderMetroWayfindingVertical(layout, canvasWidth, canvasHeight);
+  }
   const rowCount = layout.mode === 'double' ? 2 : 1;
   const scale = canvasHeight / (METRO_WAYFINDING_HEIGHT * rowCount);
   const width = canvasWidth / scale;
@@ -179,9 +186,100 @@ function renderMetroWayfinding(value: string, canvasWidth: number, canvasHeight:
   ).join('');
   const rowDivider =
     rowCount === 2 && layout.dividerBetweenRows
-      ? `<rect x="${formatNumber(METRO_WAYFINDING_PADDING)}" y="124" width="${formatNumber(Math.max(width - METRO_WAYFINDING_PADDING * 2, 0))}" height="8" fill="${normalizeColor(layout.foregroundColor, METRO_WAYFINDING_FOREGROUND)}"/>`
+      ? `<rect x="${formatNumber(METRO_WAYFINDING_PADDING)}" y="${formatNumber(METRO_WAYFINDING_HEIGHT - METRO_WAYFINDING_DIVIDER_WIDTH / 2)}" width="${formatNumber(Math.max(width - METRO_WAYFINDING_PADDING * 2, 0))}" height="${METRO_WAYFINDING_DIVIDER_WIDTH}" fill="${normalizeColor(layout.foregroundColor, METRO_WAYFINDING_FOREGROUND)}"/>`
       : '';
   return `<g transform="scale(${formatNumber(scale)})" data-metro-wayfinding="true" data-metro-wayfinding-mode="${layout.mode}"><rect width="${formatNumber(width)}" height="${METRO_WAYFINDING_HEIGHT * rowCount}" fill="${normalizeColor(layout.backgroundColor, '#262626')}"/>${rows}${rowDivider}</g>`;
+}
+
+function renderMetroWayfindingVertical(
+  layout: ReturnType<typeof parseMetroWayfindingLayout>,
+  canvasWidth: number,
+  canvasHeight: number,
+): string {
+  const width = Math.max(canvasWidth, 1);
+  const height = Math.max(canvasHeight, METRO_WAYFINDING_HEIGHT);
+  const elements = layout.rows[0] ?? [];
+  const sizing = resolveMetroWayfindingVerticalLayoutSizing(elements, height);
+  let cursorY = METRO_WAYFINDING_PADDING;
+  const children = elements.map((element, index) => {
+    const intrinsicElementHeight =
+      element.type === 'space' && element.mode === 'flex'
+        ? sizing.flexHeight
+        : sizing.elementHeights[index]!;
+    const elementScaleY =
+      element.type === 'text' && element.writingMode === 'vertical' ? sizing.textScaleY : 1;
+    const elementHeight = intrinsicElementHeight * elementScaleY;
+    const nextElement = elements[index + 1];
+    const output = renderMetroWayfindingVerticalElement(
+      element,
+      cursorY,
+      elementHeight,
+      width,
+      layout,
+      intrinsicElementHeight,
+    );
+    const gap =
+      nextElement &&
+      resolveMetroElementBackground(element, layout) ===
+        resolveMetroElementBackground(nextElement, layout)
+        ? `<rect x="0" y="${formatNumber(cursorY + elementHeight)}" width="${formatNumber(width)}" height="${METRO_WAYFINDING_GAP}" fill="${resolveMetroElementBackground(element, layout)}"/>`
+        : '';
+    cursorY += elementHeight + (nextElement ? METRO_WAYFINDING_GAP : 0);
+    return `${output}${gap}`;
+  });
+  return `<g data-metro-wayfinding="true" data-metro-wayfinding-mode="vertical"><rect width="${formatNumber(width)}" height="${formatNumber(height)}" fill="${normalizeColor(layout.backgroundColor, '#262626')}"/>${children.join('')}</g>`;
+}
+
+function renderMetroWayfindingVerticalElement(
+  element: MetroWayfindingElement,
+  y: number,
+  height: number,
+  width: number,
+  layout: ReturnType<typeof parseMetroWayfindingLayout>,
+  contentHeight = height,
+): string {
+  const background = resolveMetroElementBackground(element, layout);
+  const foreground = normalizeColor(
+    element.foregroundColor,
+    layout.foregroundColor || METRO_WAYFINDING_FOREGROUND,
+  );
+  if (element.type === 'space') {
+    return `<rect x="0" y="${formatNumber(y)}" width="${formatNumber(width)}" height="${formatNumber(height)}" fill="${background}"/>`;
+  }
+  if (element.type === 'divider') {
+    return `<g transform="translate(0 ${formatNumber(y)})"><rect width="${formatNumber(width)}" height="${formatNumber(height)}" fill="${background}"/><rect x="28" width="${formatNumber(Math.max(width - 56, 0))}" height="${METRO_WAYFINDING_DIVIDER_WIDTH}" fill="${foreground}"/></g>`;
+  }
+  if (element.type === 'text' && element.writingMode === 'vertical') {
+    const content = renderMetroVerticalTextRows(element, width, foreground, background, height);
+    return `<g transform="translate(0 ${formatNumber(y)})"><rect width="${formatNumber(width)}" height="${formatNumber(height)}" fill="${background}"/>${content}</g>`;
+  }
+
+  const naturalWidth =
+    element.type === 'facility' || element.type === 'arrow'
+      ? 85
+      : Math.max(resolveMetroWayfindingElementWidth(element), 1);
+  const availableWidth = Math.max(width - METRO_WAYFINDING_PADDING * 2, 1);
+  const usesRowWidthCompression = element.type === 'text';
+  const contentWidth = usesRowWidthCompression
+    ? Math.min(naturalWidth, availableWidth)
+    : naturalWidth;
+  const scaleX = usesRowWidthCompression ? 1 : Math.min(1, availableWidth / naturalWidth);
+  const displayWidth = contentWidth * scaleX;
+  const x = (width - displayWidth) / 2;
+  const centeredElement =
+    element.type === 'text' ? { ...element, align: 'center' as const } : element;
+  const content = renderMetroWayfindingElement(
+    centeredElement,
+    x,
+    contentWidth,
+    layout,
+    scaleX,
+    1,
+    element.type === 'text',
+    contentHeight,
+    element.type === 'facility' || element.type === 'arrow' ? -21.5 : 0,
+  );
+  return `<g transform="translate(0 ${formatNumber(y)})"><rect width="${formatNumber(width)}" height="${formatNumber(height)}" fill="${background}"/>${content}</g>`;
 }
 
 function renderMetroWayfindingRow(
@@ -274,6 +372,9 @@ function renderMetroWayfindingElement(
   layout: ReturnType<typeof parseMetroWayfindingLayout>,
   scaleX: number,
   scaleY: number,
+  textTopAligned = false,
+  elementHeight = METRO_WAYFINDING_HEIGHT,
+  iconOffsetY = 0,
 ): string {
   const foreground = normalizeColor(
     element.foregroundColor,
@@ -282,10 +383,10 @@ function renderMetroWayfindingElement(
   const background = normalizeColor(element.backgroundColor, layout.backgroundColor);
   const transform = `translate(${formatNumber(x)} 0) scale(${formatNumber(scaleX)} ${formatNumber(scaleY)})`;
   if (element.type === 'space') {
-    return `<rect x="${formatNumber(x)}" width="${formatNumber(width * scaleX)}" height="128" fill="${background}"/>`;
+    return `<rect x="${formatNumber(x)}" width="${formatNumber(width * scaleX)}" height="${formatNumber(elementHeight)}" fill="${background}"/>`;
   }
   if (element.type === 'divider') {
-    return `<g><rect x="${formatNumber(x)}" width="${formatNumber(8 * scaleX)}" height="128" fill="${background}"/><rect x="${formatNumber(x)}" y="28" width="${formatNumber(8 * scaleX)}" height="72" fill="${foreground}"/></g>`;
+    return `<g><rect x="${formatNumber(x)}" width="${formatNumber(METRO_WAYFINDING_DIVIDER_WIDTH * scaleX)}" height="128" fill="${background}"/><rect x="${formatNumber(x)}" y="28" width="${formatNumber(METRO_WAYFINDING_DIVIDER_WIDTH * scaleX)}" height="72" fill="${foreground}"/></g>`;
   }
   if (element.type === 'facility' || element.type === 'arrow') {
     const hasFrame = element.type === 'arrow' ? element.framed : element.frameShape !== 'none';
@@ -307,6 +408,7 @@ function renderMetroWayfindingElement(
             element.framed,
             element.frameFillMode,
             frameFillColor,
+            element.frameStroke,
           )
         : renderMetroIcon(
             icon.symbol,
@@ -317,12 +419,17 @@ function renderMetroWayfindingElement(
             element.frameShape,
             element.frameFillMode,
             frameFillColor,
+            element.frameStroke,
           );
     const dataAttribute =
       element.type === 'arrow'
         ? `data-metro-arrow="${escapeXml(element.iconId)}"`
         : `data-material-symbol="${escapeXml(icon.symbol)}"`;
-    return `<g transform="${transform}" ${dataAttribute}><rect width="85" height="128" fill="${background}"/>${graphic}</g>`;
+    const positionedGraphic =
+      iconOffsetY === 0
+        ? graphic
+        : `<g transform="translate(0 ${formatNumber(iconOffsetY)})">${graphic}</g>`;
+    return `<g transform="${transform}" ${dataAttribute}><rect width="85" height="${formatNumber(elementHeight)}" fill="${background}"/>${positionedGraphic}</g>`;
   }
   if (element.type === 'largeText') {
     const frameFillColor =
@@ -339,6 +446,7 @@ function renderMetroWayfindingElement(
       width,
       contentColor,
       element.frameShape,
+      elementHeight,
     );
     const frame = renderMetroLargeTextFrame(
       element.frameShape,
@@ -346,14 +454,130 @@ function renderMetroWayfindingElement(
       foreground,
       element.frameFillMode,
       frameFillColor,
+      elementHeight,
+      element.frameStroke,
     );
-    return `<g transform="${transform}"><rect width="${formatNumber(width)}" height="128" fill="${background}"/>${frame}${text}</g>`;
+    return `<g transform="${transform}"><rect width="${formatNumber(width)}" height="${formatNumber(elementHeight)}" fill="${background}"/>${frame}${text}</g>`;
   }
   const textAlign =
     element.align === 'left' ? 'start' : element.align === 'right' ? 'end' : 'middle';
   const textX = element.align === 'left' ? 0 : element.align === 'right' ? width : width / 2;
-  const rows = renderMetroTextRows(element, width, foreground, background, textX, textAlign);
-  return `<g transform="${transform}"><rect width="${formatNumber(width)}" height="128" fill="${background}"/>${rows}</g>`;
+  const rows = renderMetroTextRows(
+    element,
+    width,
+    foreground,
+    background,
+    textX,
+    textAlign,
+    textTopAligned,
+  );
+  return `<g transform="${transform}"><rect width="${formatNumber(width)}" height="${formatNumber(elementHeight)}" fill="${background}"/>${rows}</g>`;
+}
+
+function renderMetroVerticalTextRows(
+  element: Extract<MetroWayfindingElement, { type: 'text' }>,
+  width: number,
+  color: string,
+  background: string,
+  maxHeight = Number.POSITIVE_INFINITY,
+): string {
+  const rows = element.rows.filter(hasMetroWayfindingTextRowContent);
+  if (rows.length === 0) {
+    return '';
+  }
+  const metrics = resolveMetroWayfindingTextMetrics(rows);
+  const columns = rows.map((row) => ({
+    row,
+    fontSize: row.kind === 'main' ? metrics.mainFontSize : metrics.secondaryFontSize,
+    height:
+      row.kind === 'main'
+        ? measureMetroWayfindingMainSegments(row.segments, metrics.mainFontSize)
+        : estimateMetroWayfindingTextWidth(row.value, metrics.secondaryFontSize),
+  }));
+  const contentWidth =
+    columns.reduce((total, column) => total + column.fontSize, 0) +
+    Math.max(columns.length - 1, 0) * metrics.spacing;
+  const availableWidth = Math.max(width - METRO_WAYFINDING_PADDING * 2, 1);
+  const scaleX = contentWidth > 0 ? Math.min(1, availableWidth / contentWidth) : 1;
+  const contentX = (width - contentWidth * scaleX) / 2;
+  let cursorRight = contentWidth;
+  const markup = columns
+    .map(({ row, fontSize, height }) => {
+      const x = cursorRight - fontSize / 2;
+      cursorRight -= fontSize + metrics.spacing;
+      const columnMarkup =
+        row.kind === 'main'
+          ? renderMetroVerticalMainSegments(row.segments, fontSize, color, background, x)
+          : renderMetroVerticalTextRun(row.value, fontSize, color, x, 0);
+      const columnScaleY = height > maxHeight && height > 0 ? maxHeight / height : 1;
+      return `<g transform="scale(1 ${formatNumber(columnScaleY)})">${columnMarkup}</g>`;
+    })
+    .join('');
+  return `<g transform="translate(${formatNumber(contentX)} 0) scale(${formatNumber(scaleX)} 1)">${markup}</g>`;
+}
+
+function renderMetroVerticalMainSegments(
+  segments: MetroWayfindingMainSegment[],
+  fontSize: number,
+  color: string,
+  background: string,
+  x: number,
+): string {
+  const segmentGap = fontSize * 0.12;
+  let cursorY = 0;
+  return segments
+    .map((segment, index) => {
+      const trailingGap = index < segments.length - 1 ? segmentGap : 0;
+      if (segment.kind === 'line') {
+        const diameter = fontSize * 1.12;
+        const centerY = cursorY + diameter / 2;
+        const lineColor = normalizeColor(segment.color, '#2F80ED');
+        const shouldInvert = lineColor.toUpperCase() === background.toUpperCase();
+        const badgeBackground = shouldInvert ? color : lineColor;
+        const badgeForeground = shouldInvert ? lineColor : '#FFFFFF';
+        const output = `<g transform="translate(${formatNumber(x)} ${formatNumber(centerY)})"><circle r="${formatNumber(diameter / 2)}" fill="${badgeBackground}"/><text x="0" y="${formatNumber(fontSize * 0.9 * 0.34)}" transform="rotate(90)" fill="${badgeForeground}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize * 0.9)}" font-weight="400" text-anchor="middle" letter-spacing="${formatNumber(fontSize * -0.07)}">${escapeXml(segment.value)}</text></g>`;
+        cursorY += diameter + trailingGap;
+        return output;
+      }
+      const textHeight = estimateMetroWayfindingTextWidth(segment.value, fontSize);
+      const verticalPadding = segment.kind === 'boxed' ? fontSize * 0.16 : 0;
+      const segmentHeight =
+        segment.kind === 'boxed'
+          ? Math.max(fontSize * 1.05, textHeight + verticalPadding * 2)
+          : textHeight;
+      const textY = cursorY + (segmentHeight - textHeight) / 2;
+      const frame =
+        segment.kind === 'boxed'
+          ? `<rect x="${formatNumber(x - fontSize * 0.525)}" y="${formatNumber(cursorY + fontSize * 0.02)}" width="${formatNumber(fontSize * 1.05)}" height="${formatNumber(segmentHeight - fontSize * 0.04)}" rx="${formatNumber(fontSize * 0.11)}" fill="none" stroke="${color}" stroke-width="${formatNumber(Math.max(1, fontSize * 0.04))}"/>`
+          : '';
+      const output = `${frame}${renderMetroVerticalTextRun(segment.value, fontSize, color, x, textY)}`;
+      cursorY += segmentHeight + trailingGap;
+      return output;
+    })
+    .join('');
+}
+
+function renderMetroVerticalTextRun(
+  value: string,
+  fontSize: number,
+  color: string,
+  x: number,
+  startY: number,
+): string {
+  let cursorY = startY;
+  return Array.from(value)
+    .map((character) => {
+      const shouldRotate = /[A-Za-z0-9]/u.test(character);
+      const advance = estimateMetroWayfindingTextWidth(character, fontSize);
+      const output = /\s/u.test(character)
+        ? ''
+        : shouldRotate
+          ? `<text transform="translate(${formatNumber(x - fontSize * 0.3)} ${formatNumber(cursorY)}) rotate(90)" fill="${color}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="400">${escapeXml(character)}</text>`
+          : `<text x="${formatNumber(x)}" y="${formatNumber(cursorY + fontSize * 0.82)}" fill="${color}" font-family="Arial, 'HarmonyOS Sans SC', sans-serif" font-size="${formatNumber(fontSize)}" font-weight="400" text-anchor="middle">${escapeXml(character)}</text>`;
+      cursorY += advance;
+      return output;
+    })
+    .join('');
 }
 
 function renderMetroTextRows(
@@ -363,11 +587,19 @@ function renderMetroTextRows(
   background: string,
   textX: number,
   textAnchor: string,
+  topAligned = false,
 ): string {
-  const metrics = resolveMetroWayfindingTextMetrics(element.rows);
-  const rowScales = resolveMetroTextRowScales(element, width, metrics);
-  let rowTop = (METRO_WAYFINDING_HEIGHT - METRO_WAYFINDING_TEXT_HEIGHT) / 2 + metrics.spacing;
-  return element.rows
+  const rows = topAligned ? element.rows.filter(hasMetroWayfindingTextRowContent) : element.rows;
+  if (rows.length === 0) {
+    return '';
+  }
+  const visibleElement = rows.length === element.rows.length ? element : { ...element, rows };
+  const metrics = resolveMetroWayfindingTextMetrics(rows);
+  const rowScales = resolveMetroTextRowScales(visibleElement, width, metrics);
+  let rowTop = topAligned
+    ? 0
+    : (METRO_WAYFINDING_HEIGHT - METRO_WAYFINDING_TEXT_HEIGHT) / 2 + metrics.spacing;
+  return rows
     .map((row, index) => {
       const fontSize = row.kind === 'main' ? metrics.mainFontSize : metrics.secondaryFontSize;
       const baseline = rowTop + fontSize * 0.82;
@@ -393,7 +625,7 @@ function renderMetroTextRows(
               baseline,
               rowScales[index] ?? 1,
             );
-      rowTop += fontSize + (index < element.rows.length - 1 ? metrics.spacing : 0);
+      rowTop += fontSize + (index < rows.length - 1 ? metrics.spacing : 0);
       return output;
     })
     .join('');
@@ -498,6 +730,7 @@ function renderMetroLargeText(
   width: number,
   color: string,
   frameShape: MetroWayfindingFrameShape,
+  height: number,
 ): string {
   const mainFontSize =
     frameShape !== 'none'
@@ -514,7 +747,7 @@ function renderMetroLargeText(
         13,
       )
     : '';
-  const text = `<text x="${formatNumber(width / 2 - suffixGap / 2)}" y="64" fill="${color}" text-anchor="middle" dominant-baseline="central" letter-spacing="0">${mainMarkup}${suffixMarkup}</text>`;
+  const text = `<text x="${formatNumber(width / 2 - suffixGap / 2)}" y="${formatNumber(height / 2)}" fill="${color}" text-anchor="middle" dominant-baseline="central" letter-spacing="0">${mainMarkup}${suffixMarkup}</text>`;
   if (frameShape !== 'circle') {
     return text;
   }
@@ -534,17 +767,24 @@ function renderMetroLargeTextFrame(
   color: string,
   frameFillMode: MetroWayfindingFrameFillMode,
   frameFillColor: string,
+  height: number,
+  frameStroke: boolean,
 ): string {
   const usesFill = frameFillMode !== 'none';
+  const frameY = (height - METRO_WAYFINDING_TEXT_HEIGHT) / 2;
   if (frameShape === 'rectangle') {
     return usesFill
-      ? `<rect x="0" y="21.5" width="${formatNumber(width)}" height="85" rx="10" fill="${frameFillColor}"/>`
-      : `<rect x="1.5" y="23" width="${formatNumber(width - 3)}" height="82" rx="8.5" fill="none" stroke="${color}" stroke-width="3"/>`;
+      ? frameStroke
+        ? `<rect x="1.5" y="${formatNumber(frameY + 1.5)}" width="${formatNumber(width - 3)}" height="${formatNumber(METRO_WAYFINDING_TEXT_HEIGHT - 3)}" rx="8.5" fill="${frameFillColor}" stroke="${color}" stroke-width="3"/>`
+        : `<rect x="0" y="${formatNumber(frameY)}" width="${formatNumber(width)}" height="${METRO_WAYFINDING_TEXT_HEIGHT}" rx="10" fill="${frameFillColor}"/>`
+      : `<rect x="1.5" y="${formatNumber(frameY + 1.5)}" width="${formatNumber(width - 3)}" height="${formatNumber(METRO_WAYFINDING_TEXT_HEIGHT - 3)}" rx="8.5" fill="none" stroke="${color}" stroke-width="3"/>`;
   }
   return frameShape === 'circle'
     ? usesFill
-      ? `<circle cx="${formatNumber(width / 2)}" cy="64" r="42.5" fill="${frameFillColor}"/>`
-      : `<circle cx="${formatNumber(width / 2)}" cy="64" r="41" fill="none" stroke="${color}" stroke-width="3"/>`
+      ? frameStroke
+        ? `<circle cx="${formatNumber(width / 2)}" cy="${formatNumber(height / 2)}" r="41" fill="${frameFillColor}" stroke="${color}" stroke-width="3"/>`
+        : `<circle cx="${formatNumber(width / 2)}" cy="${formatNumber(height / 2)}" r="42.5" fill="${frameFillColor}"/>`
+      : `<circle cx="${formatNumber(width / 2)}" cy="${formatNumber(height / 2)}" r="41" fill="none" stroke="${color}" stroke-width="3"/>`
     : '';
 }
 
@@ -589,6 +829,7 @@ function renderMetroIcon(
   frameShape: MetroWayfindingFrameShape = 'none',
   frameFillMode: MetroWayfindingFrameFillMode = 'none',
   frameFillColor = color,
+  frameStroke = false,
 ): string {
   const assetName = resolveMetroFacilityIconAssetName(iconId, direction);
   if (assetName) {
@@ -607,6 +848,7 @@ function renderMetroIcon(
       instanceId,
       frameFillMode,
       frameFillColor,
+      frameStroke,
     );
     const icon = renderMetroFacilityAsset(
       assetName,
@@ -625,6 +867,7 @@ function renderMetroIcon(
     instanceId,
     frameFillMode,
     frameFillColor,
+    frameStroke,
   );
   const { viewBox, content } = getMaterialSymbolMarkup(symbol);
   const transform = resolveMetroIconDirectionTransform(iconId, direction);
@@ -640,16 +883,21 @@ function renderMetroFacilityFrame(
   instanceId: string,
   frameFillMode: MetroWayfindingFrameFillMode,
   frameFillColor: string,
+  frameStroke: boolean,
 ): string {
   if (frameShape === 'rectangle') {
     return frameFillMode === 'none'
       ? renderMetroFacilityAsset('frame', 'framed', color, `${instanceId}-frame`)
-      : `<rect x="0" y="21.5" width="85" height="85" rx="8.5" fill="${frameFillColor}"/>`;
+      : frameStroke
+        ? `<rect x="1.5" y="23" width="82" height="82" rx="7" fill="${frameFillColor}" stroke="${color}" stroke-width="3"/>`
+        : `<rect x="0" y="21.5" width="85" height="85" rx="8.5" fill="${frameFillColor}"/>`;
   }
   return frameShape === 'circle'
     ? frameFillMode === 'none'
       ? `<circle cx="42.5" cy="64" r="41" fill="none" stroke="${color}" stroke-width="3"/>`
-      : `<circle cx="42.5" cy="64" r="42.5" fill="${frameFillColor}"/>`
+      : frameStroke
+        ? `<circle cx="42.5" cy="64" r="41" fill="${frameFillColor}" stroke="${color}" stroke-width="3"/>`
+        : `<circle cx="42.5" cy="64" r="42.5" fill="${frameFillColor}"/>`
     : '';
 }
 
@@ -677,9 +925,17 @@ function renderMetroArrowAsset(
   framed: boolean,
   frameFillMode: MetroWayfindingFrameFillMode,
   frameFillColor: string,
+  frameStroke: boolean,
 ): string {
   const frame = framed
-    ? renderMetroFacilityFrame('rectangle', color, instanceId, frameFillMode, frameFillColor)
+    ? renderMetroFacilityFrame(
+        'rectangle',
+        color,
+        instanceId,
+        frameFillMode,
+        frameFillColor,
+        frameStroke,
+      )
     : '';
   const { viewBox, content } = getMetroArrowAssetMarkup(assetName);
   const namespacedContent = namespaceMetroFacilityAssetMarkup(

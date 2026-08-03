@@ -20,6 +20,7 @@ const initialState: Omit<MaterialStudioStateChangedPayload, 'studioId'> = {
   mode: 'manual',
   hasPreview: false,
   isBusy: false,
+  canExportProject: false,
 };
 
 export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: string }>) {
@@ -64,7 +65,7 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
     };
   }, [studioId]);
 
-  const requestAction = (action: 'preview' | 'submit' | 'download') => {
+  const requestAction = (action: 'preview' | 'submit' | 'download' | 'export-project') => {
     setBlockedMessage('');
     requestMaterialStudioAction({ studioId, action });
   };
@@ -125,6 +126,20 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
           </span>
         </button>
       </div>
+      {studioState.canExportProject ? (
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="导出工程文件"
+          title="导出工程文件"
+          disabled={studioState.isBusy}
+          onClick={() => requestAction('export-project')}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            save
+          </span>
+        </button>
+      ) : null}
       <button
         type="button"
         className="icon-button is-primary"

@@ -1,0 +1,144 @@
+{
+  "format": "yct.metro-wayfinding.project",
+  "schemaVersion": 1,
+  "template": {
+    "id": "system_material_metro_wayfinding",
+    "version": 1
+  },
+  "canvas": {
+    "widthM": 3,
+    "heightM": 1,
+    "pxPerMeter": 128,
+    "alignToTile": false,
+    "tileSizePx": 128
+  },
+  "layout": {
+    "backgroundColor": "#262626",
+    "foregroundColor": "#FFFFFF",
+    "mode": "single",
+    "dividerBetweenRows": true,
+    "rows": [
+      [
+        {
+          "id": "facility-msbfaf4z-vwu0qp",
+          "type": "arrow",
+          "iconId": "south",
+          "framed": false,
+          "frameFillMode": "none"
+        },
+        {
+          "id": "facility-msbfais3-ezdmdu",
+          "type": "facility",
+          "iconId": "subway",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "text-msbfalw5-44e5jx",
+          "type": "text",
+          "align": "left",
+          "writingMode": "horizontal",
+          "rows": [
+            {
+              "id": "text-main-msbfalw5-jvm2pp",
+              "kind": "main",
+              "segments": [
+                {
+                  "kind": "line",
+                  "value": "4",
+                  "color": "#6E3E94"
+                },
+                {
+                  "kind": "text",
+                  "value": "号线"
+                }
+              ]
+            },
+            {
+              "id": "text-secondary-msbfalw5-zg1l08",
+              "kind": "secondary",
+              "value": "Line 4"
+            }
+          ]
+        },
+        {
+          "id": "space-msbfba3b-0ul43c",
+          "type": "space",
+          "mode": "flex",
+          "units": 1
+        }
+      ],
+      [
+        {
+          "id": "facility-msbf5mvh-x5vxqp",
+          "type": "arrow",
+          "iconId": "west",
+          "framed": false,
+          "frameFillMode": "none"
+        },
+        {
+          "id": "facility-msbf5tug-gm1jld",
+          "type": "facility",
+          "iconId": "exit",
+          "direction": "left",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "text-msbf5za3-3809hw",
+          "type": "text",
+          "align": "left",
+          "writingMode": "horizontal",
+          "rows": [
+            {
+              "id": "text-main-msbf5za3-voy2zy",
+              "kind": "main",
+              "segments": [
+                {
+                  "kind": "text",
+                  "value": "出口"
+                }
+              ]
+            },
+            {
+              "id": "text-secondary-msbf5za3-hl2qow",
+              "kind": "secondary",
+              "value": "EXIT"
+            }
+          ]
+        },
+        {
+          "id": "space-msbf657a-d08sfi",
+          "type": "space",
+          "mode": "flex",
+          "units": 1
+        },
+        {
+          "id": "facility-msbf66wf-lbwpxd",
+          "type": "divider"
+        },
+        {
+          "id": "facility-msbf69fs-ci3716",
+          "type": "space",
+          "mode": "flex",
+          "units": 1
+        },
+        {
+          "id": "facility-msbf6ccy-5ykeve",
+          "type": "facility",
+          "iconId": "elevator",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "facility-msbf6jnk-76abpx",
+          "type": "arrow",
+          "iconId": "north",
+          "framed": false,
+          "frameFillMode": "none"
+        }
+      ]
+    ]
+  },
+  "exportedAt": "2026-08-02T06:33:00.201Z"
+}

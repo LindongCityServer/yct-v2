@@ -1,4 +1,4 @@
-export type MaterialStudioAction = 'preview' | 'submit' | 'download';
+export type MaterialStudioAction = 'preview' | 'submit' | 'download' | 'export-project';
 
 export interface MaterialStudioActionRequestedPayload {
   studioId: string;
@@ -10,6 +10,7 @@ export interface MaterialStudioStateChangedPayload {
   mode: 'manual' | 'server';
   hasPreview: boolean;
   isBusy: boolean;
+  canExportProject: boolean;
 }
 
 export interface MaterialStudioActionBlockedPayload {

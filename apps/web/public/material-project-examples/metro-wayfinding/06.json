@@ -1,0 +1,119 @@
+{
+  "format": "yct.metro-wayfinding.project",
+  "schemaVersion": 1,
+  "template": {
+    "id": "system_material_metro_wayfinding",
+    "version": 1
+  },
+  "canvas": {
+    "widthM": 5,
+    "heightM": 1,
+    "pxPerMeter": 128,
+    "alignToTile": false,
+    "tileSizePx": 128
+  },
+  "layout": {
+    "backgroundColor": "#262626",
+    "foregroundColor": "#FFFFFF",
+    "mode": "single",
+    "dividerBetweenRows": false,
+    "rows": [
+      [
+        {
+          "id": "facility-msbffndu-g2v5of",
+          "type": "facility",
+          "iconId": "exit",
+          "direction": "up",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "facility-msbfpeqj-qo359s",
+          "type": "largeText",
+          "value": "D",
+          "suffix": "",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "text-msbfpjj1-vvla4u",
+          "type": "text",
+          "align": "left",
+          "writingMode": "horizontal",
+          "rows": [
+            {
+              "id": "text-main-msbfpjj1-ijmdwt",
+              "kind": "main",
+              "segments": [
+                {
+                  "kind": "text",
+                  "value": "中华路 路南"
+                }
+              ]
+            },
+            {
+              "id": "text-secondary-msbfpjj1-q9qorz",
+              "kind": "secondary",
+              "value": "ZHONGHUALU South-side"
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "id": "facility-msbf69fs-ci3716",
+          "type": "space",
+          "mode": "flex",
+          "units": 1
+        },
+        {
+          "id": "facility-msbfktrl-cal8z4",
+          "type": "text",
+          "align": "right",
+          "writingMode": "horizontal",
+          "rows": [
+            {
+              "id": "text-main-msbfkv9t-a6qh4i",
+              "kind": "main",
+              "segments": [
+                {
+                  "kind": "text",
+                  "value": "出口"
+                }
+              ]
+            },
+            {
+              "id": "text-secondary-msbfkv9t-m66q55",
+              "kind": "secondary",
+              "value": "EXIT"
+            }
+          ]
+        },
+        {
+          "id": "facility-msbf6ccy-5ykeve",
+          "type": "largeText",
+          "value": "C",
+          "suffix": "",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "largeText-msbfkfre-p2b5z4",
+          "type": "largeText",
+          "value": "B",
+          "suffix": "",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "facility-msbf6jnk-76abpx",
+          "type": "arrow",
+          "iconId": "east",
+          "framed": false,
+          "frameFillMode": "none"
+        }
+      ]
+    ]
+  },
+  "exportedAt": "2026-08-02T06:45:43.274Z"
+}

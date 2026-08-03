@@ -1,0 +1,180 @@
+{
+  "format": "yct.metro-wayfinding.project",
+  "schemaVersion": 1,
+  "template": {
+    "id": "system_material_metro_wayfinding",
+    "version": 1
+  },
+  "canvas": {
+    "widthM": 6,
+    "heightM": 1,
+    "pxPerMeter": 128,
+    "alignToTile": false,
+    "tileSizePx": 128
+  },
+  "layout": {
+    "backgroundColor": "#262626",
+    "foregroundColor": "#FFFFFF",
+    "mode": "single",
+    "dividerBetweenRows": false,
+    "rows": [
+      [
+        {
+          "id": "facility-msbfaf4z-vwu0qp",
+          "type": "arrow",
+          "iconId": "north",
+          "framed": false,
+          "frameFillMode": "none"
+        },
+        {
+          "id": "facility-msbffndu-g2v5of",
+          "type": "facility",
+          "iconId": "exit",
+          "direction": "up",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "text-msbfmaw2-8f8i67",
+          "type": "text",
+          "align": "left",
+          "writingMode": "horizontal",
+          "rows": [
+            {
+              "id": "text-main-msbfmaw2-9rdkrm",
+              "kind": "main",
+              "segments": [
+                {
+                  "kind": "text",
+                  "value": "出口"
+                }
+              ]
+            },
+            {
+              "id": "text-secondary-msbfmaw2-xx3mq8",
+              "kind": "secondary",
+              "value": "EXIT"
+            }
+          ]
+        },
+        {
+          "id": "space-msbfjg17-rb38pg",
+          "type": "space",
+          "mode": "flex",
+          "units": 1
+        },
+        {
+          "id": "facility-msbfmoo9-snv9oz",
+          "type": "divider"
+        },
+        {
+          "id": "space-msbfmj2m-x3cjl4",
+          "type": "space",
+          "mode": "flex",
+          "units": 1
+        },
+        {
+          "id": "text-msbfn1c3-3vrrhs",
+          "type": "text",
+          "align": "right",
+          "writingMode": "horizontal",
+          "rows": [
+            {
+              "id": "text-main-msbfn1c3-e5jmoq",
+              "kind": "main",
+              "segments": [
+                {
+                  "kind": "text",
+                  "value": "换乘"
+                },
+                {
+                  "kind": "line",
+                  "value": "10",
+                  "color": "#62AA3C"
+                },
+                {
+                  "kind": "text",
+                  "value": "号线"
+                }
+              ]
+            },
+            {
+              "id": "text-secondary-msbfn1c3-cd06il",
+              "kind": "secondary",
+              "value": "Transfer to Line 10"
+            }
+          ]
+        },
+        {
+          "id": "facility-msbfmym0-cg0bgh",
+          "type": "facility",
+          "iconId": "subway",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "facility-msbfnddc-kf2t9h",
+          "type": "arrow",
+          "iconId": "north",
+          "framed": false,
+          "frameFillMode": "none"
+        }
+      ],
+      [
+        {
+          "id": "facility-msbf69fs-ci3716",
+          "type": "space",
+          "mode": "flex",
+          "units": 1
+        },
+        {
+          "id": "facility-msbfktrl-cal8z4",
+          "type": "text",
+          "align": "right",
+          "writingMode": "horizontal",
+          "rows": [
+            {
+              "id": "text-main-msbfkv9t-a6qh4i",
+              "kind": "main",
+              "segments": [
+                {
+                  "kind": "text",
+                  "value": "出口"
+                }
+              ]
+            },
+            {
+              "id": "text-secondary-msbfkv9t-m66q55",
+              "kind": "secondary",
+              "value": "EXIT"
+            }
+          ]
+        },
+        {
+          "id": "facility-msbf6ccy-5ykeve",
+          "type": "largeText",
+          "value": "C",
+          "suffix": "",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "largeText-msbfkfre-p2b5z4",
+          "type": "largeText",
+          "value": "B",
+          "suffix": "",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "facility-msbf6jnk-76abpx",
+          "type": "arrow",
+          "iconId": "east",
+          "framed": false,
+          "frameFillMode": "none"
+        }
+      ]
+    ]
+  },
+  "exportedAt": "2026-08-02T06:43:08.741Z"
+}

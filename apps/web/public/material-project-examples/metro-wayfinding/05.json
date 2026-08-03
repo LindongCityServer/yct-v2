@@ -1,0 +1,156 @@
+{
+  "format": "yct.metro-wayfinding.project",
+  "schemaVersion": 1,
+  "template": {
+    "id": "system_material_metro_wayfinding",
+    "version": 1
+  },
+  "canvas": {
+    "widthM": 5,
+    "heightM": 2,
+    "pxPerMeter": 128,
+    "alignToTile": false,
+    "tileSizePx": 128
+  },
+  "layout": {
+    "backgroundColor": "#0A124D",
+    "foregroundColor": "#FFFFFF",
+    "mode": "double",
+    "dividerBetweenRows": false,
+    "rows": [
+      [
+        {
+          "id": "facility-msbfaf4z-vwu0qp",
+          "type": "arrow",
+          "iconId": "west",
+          "framed": false,
+          "frameFillMode": "none"
+        },
+        {
+          "id": "facility-msbffndu-g2v5of",
+          "type": "largeText",
+          "value": "10",
+          "suffix": "",
+          "frameShape": "circle",
+          "frameFillMode": "color",
+          "frameFillColor": "#62AA3C"
+        },
+        {
+          "id": "facility-msbfiehs-i2zz6e",
+          "type": "text",
+          "align": "left",
+          "writingMode": "horizontal",
+          "rows": [
+            {
+              "id": "text-main-msbfifhs-18z118",
+              "kind": "main",
+              "segments": [
+                {
+                  "kind": "text",
+                  "value": "号线"
+                }
+              ]
+            },
+            {
+              "id": "text-secondary-msbfifhs-7l9yrx",
+              "kind": "secondary",
+              "value": "Line 10"
+            }
+          ]
+        },
+        {
+          "id": "facility-msbfiw3s-qtqb7q",
+          "type": "largeText",
+          "value": "A",
+          "suffix": "",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "text-msbfj3nh-jxz42w",
+          "type": "text",
+          "align": "left",
+          "writingMode": "horizontal",
+          "rows": [
+            {
+              "id": "text-main-msbfj3nh-ztbwlu",
+              "kind": "main",
+              "segments": [
+                {
+                  "kind": "text",
+                  "value": "出口"
+                }
+              ]
+            },
+            {
+              "id": "text-secondary-msbfj3nh-gr4xhn",
+              "kind": "secondary",
+              "value": "EXIT"
+            }
+          ]
+        },
+        {
+          "id": "space-msbfjg17-rb38pg",
+          "type": "space",
+          "mode": "flex",
+          "units": 1
+        }
+      ],
+      [
+        {
+          "id": "facility-msbf69fs-ci3716",
+          "type": "space",
+          "mode": "flex",
+          "units": 1
+        },
+        {
+          "id": "facility-msbfktrl-cal8z4",
+          "type": "text",
+          "align": "right",
+          "writingMode": "horizontal",
+          "rows": [
+            {
+              "id": "text-main-msbfkv9t-a6qh4i",
+              "kind": "main",
+              "segments": [
+                {
+                  "kind": "text",
+                  "value": "出口"
+                }
+              ]
+            },
+            {
+              "id": "text-secondary-msbfkv9t-m66q55",
+              "kind": "secondary",
+              "value": "EXIT"
+            }
+          ]
+        },
+        {
+          "id": "facility-msbf6ccy-5ykeve",
+          "type": "largeText",
+          "value": "C",
+          "suffix": "",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "largeText-msbfkfre-p2b5z4",
+          "type": "largeText",
+          "value": "B",
+          "suffix": "",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "facility-msbf6jnk-76abpx",
+          "type": "arrow",
+          "iconId": "east",
+          "framed": false,
+          "frameFillMode": "none"
+        }
+      ]
+    ]
+  },
+  "exportedAt": "2026-08-02T06:40:43.157Z"
+}

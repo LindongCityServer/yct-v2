@@ -1,4 +1,9 @@
 import type { MetroWayfindingElement, MetroWayfindingLayout } from './metro-wayfinding';
+import type {
+  MetroWayfindingImportPreview,
+  MetroWayfindingImportSource,
+  MetroWayfindingImportWarning,
+} from './metro-wayfinding-import';
 
 export const metroWayfindingCompositionChangedEventName =
   'yct:metro-wayfinding-composition-changed';
@@ -34,6 +39,56 @@ export interface MetroWayfindingCompositionChangedPayload {
   action: MetroWayfindingCompositionAction;
 }
 
+export interface ExternalWayfindingProjectSelectedPayload {
+  editorId: string;
+  files: Array<{ name: string; size: number }>;
+}
+
+export interface ExternalWayfindingProjectParsedPayload {
+  editorId: string;
+  preview: MetroWayfindingImportPreview;
+}
+
+export interface ExternalWayfindingConversionWarningsRaisedPayload {
+  editorId: string;
+  source: MetroWayfindingImportSource;
+  warnings: MetroWayfindingImportWarning[];
+}
+
+export interface MetroWayfindingProjectImportedPayload {
+  editorId: string;
+  preview: MetroWayfindingImportPreview;
+}
+
+export interface ExternalWayfindingImportFailedPayload {
+  editorId: string;
+  message: string;
+}
+
+export type MetroWayfindingImportLifecycleEvent =
+  | {
+      type: 'ExternalWayfindingProjectSelected';
+      payload: ExternalWayfindingProjectSelectedPayload;
+    }
+  | {
+      type: 'ExternalWayfindingProjectParsed';
+      payload: ExternalWayfindingProjectParsedPayload;
+    }
+  | {
+      type: 'ExternalWayfindingConversionWarningsRaised';
+      payload: ExternalWayfindingConversionWarningsRaisedPayload;
+    }
+  | {
+      type: 'MetroWayfindingProjectImported';
+      payload: MetroWayfindingProjectImportedPayload;
+    }
+  | {
+      type: 'ExternalWayfindingImportFailed';
+      payload: ExternalWayfindingImportFailedPayload;
+    };
+
+export const metroWayfindingImportLifecycleEventName = 'yct:metro-wayfinding-import-lifecycle';
+
 export function dispatchMetroWayfindingCompositionAction(
   payload: MetroWayfindingCompositionChangedPayload,
 ): void {
@@ -57,4 +112,28 @@ export function subscribeMetroWayfindingCompositionActions(
   };
   window.addEventListener(metroWayfindingCompositionChangedEventName, handleEvent);
   return () => window.removeEventListener(metroWayfindingCompositionChangedEventName, handleEvent);
+}
+
+export function publishMetroWayfindingImportLifecycleEvent(
+  event: MetroWayfindingImportLifecycleEvent,
+): void {
+  window.dispatchEvent(
+    new CustomEvent<MetroWayfindingImportLifecycleEvent>(metroWayfindingImportLifecycleEventName, {
+      detail: event,
+    }),
+  );
+}
+
+export function subscribeMetroWayfindingImportLifecycleEvents(
+  editorId: string,
+  listener: (event: MetroWayfindingImportLifecycleEvent) => void,
+): () => void {
+  const handleEvent = (event: Event) => {
+    const detail = (event as CustomEvent<MetroWayfindingImportLifecycleEvent>).detail;
+    if (detail?.payload.editorId === editorId) {
+      listener(detail);
+    }
+  };
+  window.addEventListener(metroWayfindingImportLifecycleEventName, handleEvent);
+  return () => window.removeEventListener(metroWayfindingImportLifecycleEventName, handleEvent);
 }

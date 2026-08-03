@@ -1,8 +1,9 @@
 'use client';
 
-import type { MaterialTransitNetworkSnapshot } from '@yct/contracts';
-import { useEffect, useId, useMemo, useState } from 'react';
+import type { MaterialTransitNetworkSnapshot, TileProviderDescriptor } from '@yct/contracts';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { selectMapTileTemplates } from '../lib/map-tile-templates';
 import { publishLoginRequiredForResponse } from '../lib/client-auth-events';
 import { findTextContinuation } from '../lib/text-continuation';
 import {
@@ -15,9 +16,23 @@ import {
   subscribeTransitNetworkProjectSnapshotChanged,
   subscribeTransitNetworkSourceChanged,
 } from '../lib/client-transit-network-events';
-import { METRO_WAYFINDING_TEMPLATE_ID } from '../lib/metro-wayfinding';
 import {
-  listMaterialTransitNetworkPalette,
+  buildMetroWayfindingProjectFileName,
+  createMetroWayfindingProjectFile,
+  METRO_WAYFINDING_PROJECT_FORMAT,
+  METRO_WAYFINDING_PROJECT_SCHEMA_VERSION,
+  METRO_WAYFINDING_TEMPLATE_ID,
+  parseMetroWayfindingLayout,
+  serializeMetroWayfindingLayout,
+  serializeMetroWayfindingProjectFile,
+  summarizeMetroWayfindingLayout,
+} from '../lib/metro-wayfinding';
+import {
+  metroWayfindingExampleSources,
+  type MetroWayfindingExample,
+} from '../lib/metro-wayfinding-examples';
+import {
+  listMaterialTransitNetworkLines,
   listMaterialTransitNetworkNodeDirections,
   listMaterialTransitNetworkNodeLineDirections,
   listMaterialTransitNetworkNodeLines,
@@ -70,6 +85,7 @@ interface TransitLineOption {
   id: string;
   name: string;
   mode: string;
+  operationStatus: 'operating' | 'planned' | 'closed';
   color?: string;
   operator?: string;
   stationCount: number;
@@ -188,6 +204,7 @@ export function MaterialStudioPanel({
   const [selectedLocationId, setSelectedLocationId] = useState('');
   const [locationQuery, setLocationQuery] = useState('');
   const [roadCoordinate, setRoadCoordinate] = useState<[number, number] | null>(null);
+  const [freshTileTemplate, setFreshTileTemplate] = useState<string | null>(null);
   const [tileTemplate, setTileTemplate] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewSize, setPreviewSize] = useState<{ width: number; height: number } | null>(null);
@@ -196,9 +213,13 @@ export function MaterialStudioPanel({
   const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
   const [workspaceBlockMessage, setWorkspaceBlockMessage] = useState('');
   const [isBusy, setIsBusy] = useState(false);
+  const [isPreviewRendering, setIsPreviewRendering] = useState(false);
   const [transitNetworkSource, setTransitNetworkSource] = useState<'server' | 'rmp'>('server');
   const [importedTransitNetwork, setImportedTransitNetwork] =
     useState<MaterialTransitNetworkSnapshot>();
+  const [metroWayfindingExamples, setMetroWayfindingExamples] = useState<MetroWayfindingExample[]>(
+    [],
+  );
 
   const templates = useMemo(
     () =>
@@ -212,6 +233,9 @@ export function MaterialStudioPanel({
   const selected = templates.find((item) => item.id === selectedTemplateId) ?? templates[0];
   const activeCanvas = canvas ?? selected?.template.defaultCanvas ?? null;
   const isMetroWayfinding = selected?.id === METRO_WAYFINDING_TEMPLATE_ID;
+  const metroWayfindingLayoutMode = isMetroWayfinding
+    ? parseMetroWayfindingLayout(input.layout ?? '').mode
+    : undefined;
   const serverOverrideFields =
     selected?.template.fields.filter(
       (field) => field.serverOverride && field.userEditable !== false,
@@ -237,29 +261,40 @@ export function MaterialStudioPanel({
   );
   const selectedLine = transitLines.find((line) => line.id === selectedLineId);
   const metroLineColorOptions = useMemo(() => {
-    if (transitNetworkSource === 'rmp' && importedTransitNetwork) {
-      return listMaterialTransitNetworkPalette(importedTransitNetwork);
-    }
-    return transitLines
+    const serverOptions = transitLines
       .filter(
         (line) =>
           line.mode === 'metro' && Boolean(line.color && /^#[0-9A-Fa-f]{6}$/.test(line.color)),
       )
       .map((line) => ({
         value: line.color!.toUpperCase(),
-        label: `${line.name} · ${line.color!.toUpperCase()}`,
+        label: `${line.name}${line.operationStatus === 'planned' ? '（未开通）' : ''} · ${line.color!.toUpperCase()}`,
+        aliases: [line.name],
       }));
+    const projectOptions = importedTransitNetwork
+      ? listMaterialTransitNetworkLines(importedTransitNetwork).map((line) => ({
+          value: line.color.toUpperCase(),
+          label: `${line.label}${line.secondaryLabel ? ` / ${line.secondaryLabel}` : ''} · ${line.color.toUpperCase()}`,
+          aliases: [line.label, line.secondaryLabel, line.lineKey].filter(
+            (value): value is string => Boolean(value),
+          ),
+        }))
+      : [];
+    return transitNetworkSource === 'rmp'
+      ? [...projectOptions, ...serverOptions]
+      : [...serverOptions, ...projectOptions];
   }, [importedTransitNetwork, transitLines, transitNetworkSource]);
   const metroTextSuggestions = useMemo(() => {
     const values = [
       ...transitStations.map((station) => station.stationName),
+      ...transitLines.flatMap((line) => line.stations.map((station) => station.stationName)),
       ...locations.map((location) => location.label),
       ...(importedTransitNetwork?.nodes.flatMap((node) => node.names) ?? []),
     ];
     return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort((a, b) =>
       a.localeCompare(b, 'zh-CN'),
     );
-  }, [importedTransitNetwork, locations, transitStations]);
+  }, [importedTransitNetwork, locations, transitLines, transitStations]);
   const serverLocationSuggestions = useMemo(
     () => Array.from(new Set(locations.map((location) => location.label.trim()).filter(Boolean))),
     [locations],
@@ -495,16 +530,13 @@ export function MaterialStudioPanel({
         pendingRequests.push(
           fetch(appPath('/api/map/tile-providers'), { cache: 'no-store' })
             .then(async (response) => {
-              const data = (await response.json()) as {
-                items?: Array<{ sourceKind?: string; tileTemplate?: string }>;
-              };
+              const data = (await response.json()) as { items?: TileProviderDescriptor[] };
               if (!response.ok) {
                 return;
               }
-              const provider = (data.items ?? []).find(
-                (item) => item.sourceKind === 'safe-https-static' && item.tileTemplate,
-              );
-              setTileTemplate(provider?.tileTemplate ?? null);
+              const tileTemplates = selectMapTileTemplates(data.items ?? []);
+              setTileTemplate(tileTemplates.tileTemplate);
+              setFreshTileTemplate(tileTemplates.freshTileTemplate);
             })
             .catch(() => undefined),
         );
@@ -557,6 +589,80 @@ export function MaterialStudioPanel({
       pxPerMeter: selected.template.defaultCanvas.tileSizePx,
     });
   }, [selected?.id, selected?.template.version]);
+
+  useEffect(() => {
+    if (!isMetroWayfinding) {
+      setMetroWayfindingExamples([]);
+      return;
+    }
+    let cancelled = false;
+    const loadExamples = async () => {
+      const loaded = await Promise.all(
+        metroWayfindingExampleSources.map(async (source) => {
+          try {
+            const response = await fetch(appPath(source.path), { cache: 'force-cache' });
+            if (!response.ok) return null;
+            const candidate = (await response.json()) as Partial<MetroWayfindingExample['project']>;
+            if (
+              candidate.format !== METRO_WAYFINDING_PROJECT_FORMAT ||
+              candidate.schemaVersion !== METRO_WAYFINDING_PROJECT_SCHEMA_VERSION ||
+              candidate.template?.id !== METRO_WAYFINDING_TEMPLATE_ID ||
+              !candidate.layout ||
+              !candidate.canvas
+            ) {
+              return null;
+            }
+            const layout = parseMetroWayfindingLayout(JSON.stringify(candidate.layout));
+            const canvas = {
+              widthM: Number(candidate.canvas.widthM) || 1,
+              heightM: Number(candidate.canvas.heightM) || 1,
+              pxPerMeter: Number(candidate.canvas.pxPerMeter) || 128,
+              alignToTile: candidate.canvas.alignToTile === true,
+              tileSizePx: Number(candidate.canvas.tileSizePx) || 128,
+            };
+            return {
+              source,
+              project: {
+                ...candidate,
+                format: METRO_WAYFINDING_PROJECT_FORMAT,
+                schemaVersion: METRO_WAYFINDING_PROJECT_SCHEMA_VERSION,
+                template: {
+                  id: METRO_WAYFINDING_TEMPLATE_ID,
+                  version: Number(candidate.template.version) || 1,
+                },
+                canvas,
+                layout,
+                exportedAt: candidate.exportedAt ?? '',
+              },
+              summary: summarizeMetroWayfindingLayout(layout, canvas),
+            } satisfies MetroWayfindingExample;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      if (!cancelled) {
+        setMetroWayfindingExamples(
+          loaded.filter((example): example is MetroWayfindingExample => example !== null),
+        );
+      }
+    };
+    void loadExamples();
+    return () => {
+      cancelled = true;
+    };
+  }, [isMetroWayfinding]);
+
+  useEffect(() => {
+    if (!isMetroWayfinding) {
+      return;
+    }
+    setCanvas((current) =>
+      current && (current.pxPerMeter !== 128 || current.tileSizePx !== 128 || current.alignToTile)
+        ? { ...current, pxPerMeter: 128, tileSizePx: 128, alignToTile: false }
+        : current,
+    );
+  }, [isMetroWayfinding]);
 
   useEffect(() => {
     if (!canUseServerSource && mode === 'server') {
@@ -668,6 +774,17 @@ export function MaterialStudioPanel({
     clearPreview();
   };
 
+  const loadMetroWayfindingExample = (example: MetroWayfindingExample) => {
+    if (!isMetroWayfinding) return;
+    setMode('manual');
+    setInput((current) => ({
+      ...current,
+      layout: serializeMetroWayfindingLayout(example.project.layout),
+    }));
+    setCanvas({ ...example.project.canvas });
+    clearPreview();
+  };
+
   const clearPreview = () => {
     setPreviewUrl(null);
     setPreviewSize(null);
@@ -706,15 +823,46 @@ export function MaterialStudioPanel({
     URL.revokeObjectURL(objectUrl);
   };
 
-  const showPreviewBlob = async (response: Response) => {
+  const exportMetroWayfindingProject = () => {
+    if (!selected || !activeCanvas || !isMetroWayfinding || mode !== 'manual') {
+      blockAction('只有手动编辑的地铁导视牌可以导出工程文件。');
+      return;
+    }
+    const project = createMetroWayfindingProjectFile({
+      templateId: selected.id,
+      templateVersion: selected.template.version,
+      canvas: activeCanvas,
+      layout: parseMetroWayfindingLayout(input.layout ?? ''),
+    });
+    const blob = new Blob([serializeMetroWayfindingProjectFile(project)], {
+      type: 'application/json;charset=utf-8',
+    });
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = buildMetroWayfindingProjectFileName({
+      title: selected.template.title,
+      canvas: activeCanvas,
+      layout: project.layout,
+    });
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+  };
+
+  const showPreviewBlob = async (response: Response, openDialog = true, signal?: AbortSignal) => {
     const blob = await response.blob();
+    if (signal?.aborted) {
+      return;
+    }
     const objectUrl = URL.createObjectURL(blob);
     setPreviewUrl(objectUrl);
     setPreviewSize({
       width: Number(response.headers.get('X-Yct-Material-Preview-Width')) || 0,
       height: Number(response.headers.get('X-Yct-Material-Preview-Height')) || 0,
     });
-    if (window.matchMedia(MATERIAL_PREVIEW_DIALOG_MEDIA_QUERY).matches) {
+    if (openDialog && window.matchMedia(MATERIAL_PREVIEW_DIALOG_MEDIA_QUERY).matches) {
       setIsPreviewDialogOpen(true);
     }
   };
@@ -807,7 +955,34 @@ export function MaterialStudioPanel({
     return null;
   };
 
-  const fetchWatermarkedPreview = async (): Promise<Response | undefined> => {
+  const buildPreviewRequestBody = () => {
+    if (!selected || !activeCanvas) {
+      return undefined;
+    }
+    const source = mode === 'server' ? buildServerSource() : undefined;
+    if (mode === 'server' && (!source || getServerSelectionBlockMessage())) {
+      return undefined;
+    }
+    return mode === 'server'
+      ? {
+          mode: 'server' as const,
+          templateId: selected.id,
+          templateVersion: selected.template.version,
+          canvas: activeCanvas,
+          source: source!,
+          networkGeometry: transitNetworkSource === 'rmp' ? importedTransitNetwork : undefined,
+          input: buildServerOverrides(),
+        }
+      : {
+          mode: 'manual' as const,
+          templateId: selected.id,
+          templateVersion: selected.template.version,
+          canvas: activeCanvas,
+          input,
+        };
+  };
+
+  const fetchWatermarkedPreview = async (signal?: AbortSignal): Promise<Response | undefined> => {
     if (!selected || !activeCanvas) {
       blockAction(workspaceBlockMessage || '当前没有可用模板。');
       return undefined;
@@ -823,28 +998,15 @@ export function MaterialStudioPanel({
       return undefined;
     }
 
+    const requestBody = buildPreviewRequestBody();
+    if (!requestBody) {
+      return undefined;
+    }
     const response = await fetch(appPath('/api/materials/previews'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(
-        mode === 'server'
-          ? {
-              mode: 'server',
-              templateId: selected.id,
-              templateVersion: selected.template.version,
-              canvas: activeCanvas,
-              source,
-              networkGeometry: transitNetworkSource === 'rmp' ? importedTransitNetwork : undefined,
-              input: buildServerOverrides(),
-            }
-          : {
-              mode: 'manual',
-              templateId: selected.id,
-              templateVersion: selected.template.version,
-              canvas: activeCanvas,
-              input,
-            },
-      ),
+      body: JSON.stringify(requestBody),
+      signal,
     });
     if (!response.ok) {
       const data = (await response.json()) as { message?: string };
@@ -853,6 +1015,44 @@ export function MaterialStudioPanel({
     }
     return response;
   };
+
+  const livePreviewRequestKey = JSON.stringify(buildPreviewRequestBody() ?? null);
+  useEffect(() => {
+    if (livePreviewRequestKey === 'null') {
+      setIsPreviewRendering(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      setIsPreviewRendering(true);
+      void fetch(appPath('/api/materials/previews'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: livePreviewRequestKey,
+        signal: controller.signal,
+      })
+        .then(async (response) => {
+          if (!response.ok || controller.signal.aborted) {
+            return;
+          }
+          await showPreviewBlob(response, false, controller.signal);
+        })
+        .catch((error: unknown) => {
+          if (!(error instanceof DOMException && error.name === 'AbortError')) {
+            setIsPreviewRendering(false);
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) {
+            setIsPreviewRendering(false);
+          }
+        });
+    }, 300);
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [livePreviewRequestKey]);
 
   const downloadWatermarkedPreview = async () => {
     const response = await fetchWatermarkedPreview();
@@ -1011,8 +1211,9 @@ export function MaterialStudioPanel({
       mode,
       hasPreview: Boolean(previewUrl),
       isBusy,
+      canExportProject: isMetroWayfinding && mode === 'manual',
     });
-  }, [isBusy, mode, previewUrl, studioId]);
+  }, [isBusy, isMetroWayfinding, mode, previewUrl, studioId]);
 
   useEffect(() =>
     subscribeMaterialStudioActions(studioId, (action) => {
@@ -1030,6 +1231,10 @@ export function MaterialStudioPanel({
           return;
         }
         void submitManualDraft();
+        return;
+      }
+      if (action === 'export-project') {
+        exportMetroWayfindingProject();
         return;
       }
       if (mode === 'server') {
@@ -1083,6 +1288,7 @@ export function MaterialStudioPanel({
             onChange={updateCanvas}
             disabled={isBusy || !selected}
             isMetroWayfinding={isMetroWayfinding}
+            metroWayfindingLayoutMode={metroWayfindingLayoutMode}
           />
         </aside>
 
@@ -1355,6 +1561,7 @@ export function MaterialStudioPanel({
                   {transitLines.map((line) => (
                     <option key={line.id} value={line.id}>
                       {line.name} · {line.stationCount} 站
+                      {line.operationStatus === 'planned' ? ' · 未开通' : ''}
                       {line.operator ? ` · ${line.operator}` : ''}
                     </option>
                   ))}
@@ -1456,6 +1663,7 @@ export function MaterialStudioPanel({
                   setRoadCoordinate(coordinate);
                   clearPreview();
                 }}
+                freshTileTemplate={freshTileTemplate}
                 tileTemplate={tileTemplate}
                 value={roadCoordinate}
               />
@@ -1470,7 +1678,10 @@ export function MaterialStudioPanel({
                   disabled={isBusy}
                   lineColorOptions={metroLineColorOptions}
                   textSuggestions={metroTextSuggestions}
+                  examples={metroWayfindingExamples}
+                  onLoadExample={loadMetroWayfindingExample}
                   onCanvasHeightChange={(height) => updateCanvas('heightM', height)}
+                  onCanvasWidthChange={(width) => updateCanvas('widthM', width)}
                   onChange={(value) => {
                     setInput((current) => ({ ...current, layout: value }));
                     clearPreview();
@@ -1505,7 +1716,10 @@ export function MaterialStudioPanel({
           <section className="material-preview" aria-label="物料预览">
             <div className="material-preview-heading">
               <h2>预览</h2>
-              <MaterialPreviewDescription previewSize={previewSize} />
+              <MaterialPreviewDescription
+                previewSize={previewSize}
+                isRendering={isPreviewRendering}
+              />
             </div>
             <MaterialPreviewStage
               previewUrl={previewUrl}
@@ -1535,7 +1749,10 @@ export function MaterialStudioPanel({
             <div className="material-preview-heading">
               <div style={{ display: 'grid', gap: 2 }}>
                 <h2 id="material-preview-dialog-heading">预览</h2>
-                <MaterialPreviewDescription previewSize={previewSize} />
+                <MaterialPreviewDescription
+                  previewSize={previewSize}
+                  isRendering={isPreviewRendering}
+                />
               </div>
               <button
                 type="button"
@@ -1614,14 +1831,19 @@ export function MaterialStudioPanel({
 }
 
 function MaterialPreviewDescription({
+  isRendering,
   previewSize,
-}: Readonly<{ previewSize: { width: number; height: number } | null }>) {
+}: Readonly<{
+  isRendering: boolean;
+  previewSize: { width: number; height: number } | null;
+}>) {
   return (
     <span>
       预览含水印
       {previewSize?.width && previewSize.height
         ? ` · ${previewSize.width} × ${previewSize.height} px`
         : ''}
+      {isRendering ? ' · 更新中' : ''}
     </span>
   );
 }
@@ -1630,11 +1852,30 @@ function MaterialPreviewStage({
   previewUrl,
   alt,
 }: Readonly<{ previewUrl: string | null; alt: string }>) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !previewUrl) {
+      return;
+    }
+    const image = new Image();
+    image.onload = () => {
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext('2d');
+      context?.clearRect(0, 0, canvas.width, canvas.height);
+      context?.drawImage(image, 0, 0);
+    };
+    image.src = previewUrl;
+    return () => {
+      image.onload = null;
+    };
+  }, [previewUrl]);
   return (
     <div className="material-preview-stage">
       {previewUrl ? (
         <div className="material-preview-canvas">
-          <img src={previewUrl} alt={alt} />
+          <canvas ref={canvasRef} role="img" aria-label={alt} />
         </div>
       ) : (
         <span>尚未生成预览</span>
@@ -1661,13 +1902,36 @@ function CanvasEditor({
   canvas,
   disabled,
   isMetroWayfinding,
+  metroWayfindingLayoutMode,
   onChange,
 }: Readonly<{
   canvas: MaterialCanvas | null;
   disabled: boolean;
   isMetroWayfinding: boolean;
+  metroWayfindingLayoutMode?: 'single' | 'double' | 'vertical';
   onChange: <TKey extends keyof MaterialCanvas>(key: TKey, value: MaterialCanvas[TKey]) => void;
 }>) {
+  const metroLayoutMode = metroWayfindingLayoutMode ?? 'single';
+  const isMetroVertical = isMetroWayfinding && metroLayoutMode === 'vertical';
+
+  useEffect(() => {
+    if (!canvas || !isMetroWayfinding) {
+      return;
+    }
+    const fixedHeight = metroLayoutMode === 'double' ? 2 : 1;
+    const currentLength = isMetroVertical ? canvas.heightM : canvas.widthM;
+    const normalizedLength = Math.min(64, Math.max(1, Math.round(currentLength)));
+    if (currentLength !== normalizedLength) {
+      onChange(isMetroVertical ? 'heightM' : 'widthM', normalizedLength);
+    }
+    if (isMetroVertical && canvas.widthM !== 1) {
+      onChange('widthM', 1);
+    }
+    if (!isMetroVertical && canvas.heightM !== fixedHeight) {
+      onChange('heightM', fixedHeight);
+    }
+  }, [canvas, isMetroVertical, isMetroWayfinding, metroLayoutMode, onChange]);
+
   if (!canvas) {
     return null;
   }
@@ -1680,36 +1944,53 @@ function CanvasEditor({
   const outputHeight = canvas.alignToTile
     ? Math.ceil(heightPx / canvas.tileSizePx) * canvas.tileSizePx
     : heightPx;
+  const metroLength = isMetroVertical ? canvas.heightM : canvas.widthM;
+  const updateMetroLength = (value: number) => {
+    const length = Math.min(64, Math.max(1, Math.round(value)));
+    onChange(isMetroVertical ? 'heightM' : 'widthM', length);
+  };
 
   return (
     <fieldset className="material-canvas-editor" disabled={disabled}>
       <legend>尺寸</legend>
-      <label>
-        <span>{isMetroWayfinding ? '宽度（128 像素格数）' : '宽度（米）'}</span>
-        <input
-          type="number"
-          min={isMetroWayfinding ? 1 : 0.01}
-          max="64"
-          step={isMetroWayfinding ? 1 : 0.01}
-          value={canvas.widthM}
-          onChange={(event) => {
-            const value = Number(event.currentTarget.value);
-            onChange('widthM', isMetroWayfinding ? Math.max(1, Math.round(value)) : value);
-          }}
-        />
-      </label>
-      <label>
-        <span>{isMetroWayfinding ? '高度（128 像素格数）' : '高度（米）'}</span>
-        <input
-          type="number"
-          min={isMetroWayfinding ? 1 : 0.01}
-          max={isMetroWayfinding ? 2 : 64}
-          step={isMetroWayfinding ? 1 : 0.01}
-          value={canvas.heightM}
-          disabled={isMetroWayfinding}
-          onChange={(event) => onChange('heightM', Number(event.currentTarget.value))}
-        />
-      </label>
+      {isMetroWayfinding ? (
+        <label>
+          <span>导视牌长度（128 像素格数）</span>
+          <input
+            type="number"
+            min="1"
+            max="64"
+            step="1"
+            value={metroLength}
+            onChange={(event) => updateMetroLength(Number(event.currentTarget.value))}
+          />
+        </label>
+      ) : (
+        <>
+          <label>
+            <span>宽度（米）</span>
+            <input
+              type="number"
+              min="0.01"
+              max="64"
+              step="0.01"
+              value={canvas.widthM}
+              onChange={(event) => onChange('widthM', Number(event.currentTarget.value))}
+            />
+          </label>
+          <label>
+            <span>高度（米）</span>
+            <input
+              type="number"
+              min="0.01"
+              max="64"
+              step="0.01"
+              value={canvas.heightM}
+              onChange={(event) => onChange('heightM', Number(event.currentTarget.value))}
+            />
+          </label>
+        </>
+      )}
       <label>
         <span>对齐单位（像素）</span>
         <input
@@ -1718,6 +1999,7 @@ function CanvasEditor({
           max="4096"
           step="1"
           value={canvas.tileSizePx}
+          disabled={isMetroWayfinding}
           onChange={(event) => onChange('tileSizePx', Number(event.currentTarget.value))}
         />
       </label>

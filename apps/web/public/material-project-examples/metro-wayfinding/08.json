@@ -1,0 +1,171 @@
+{
+  "format": "yct.metro-wayfinding.project",
+  "schemaVersion": 1,
+  "template": {
+    "id": "system_material_metro_wayfinding",
+    "version": 1
+  },
+  "canvas": {
+    "widthM": 8,
+    "heightM": 1,
+    "pxPerMeter": 128,
+    "alignToTile": false,
+    "tileSizePx": 128
+  },
+  "layout": {
+    "backgroundColor": "#262626",
+    "foregroundColor": "#FFFFFF",
+    "mode": "single",
+    "dividerBetweenRows": false,
+    "rows": [
+      [
+        {
+          "id": "facility-msbffndu-g2v5of",
+          "type": "arrow",
+          "iconId": "west",
+          "framed": false,
+          "frameFillMode": "none"
+        },
+        {
+          "id": "facility-msbfsmvk-z1dae3",
+          "type": "facility",
+          "iconId": "subway",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "text-msbfsp4i-uqqq46",
+          "type": "text",
+          "align": "left",
+          "writingMode": "horizontal",
+          "rows": [
+            {
+              "id": "text-main-msbfsp4i-k78fui",
+              "kind": "main",
+              "segments": [
+                {
+                  "kind": "text",
+                  "value": "开往建筑大学"
+                }
+              ]
+            },
+            {
+              "id": "text-secondary-msbfsp4i-431da3",
+              "kind": "secondary",
+              "value": "To JIANZHUDAXUE"
+            }
+          ]
+        },
+        {
+          "id": "space-msbftcjh-nrinkh",
+          "type": "space",
+          "mode": "flex",
+          "units": 1
+        },
+        {
+          "id": "facility-msbftdps-6cte4o",
+          "type": "divider"
+        },
+        {
+          "id": "facility-msbftfvr-z5fawm",
+          "type": "space",
+          "mode": "flex",
+          "units": 1
+        },
+        {
+          "id": "text-msbftlz6-xwijjw",
+          "type": "text",
+          "align": "right",
+          "writingMode": "horizontal",
+          "rows": [
+            {
+              "id": "text-main-msbftlz6-uk43kp",
+              "kind": "main",
+              "segments": [
+                {
+                  "kind": "text",
+                  "value": "开往怒江公园"
+                }
+              ]
+            },
+            {
+              "id": "text-secondary-msbftlz6-eao2oi",
+              "kind": "secondary",
+              "value": "To NUJIANGGONGYUAN"
+            }
+          ]
+        },
+        {
+          "id": "facility-msbfu2xt-ioqdho",
+          "type": "facility",
+          "iconId": "subway",
+          "direction": "right",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "facility-msbfu5yz-w4vj6r",
+          "type": "arrow",
+          "iconId": "east",
+          "framed": false,
+          "frameFillMode": "none"
+        }
+      ],
+      [
+        {
+          "id": "facility-msbf69fs-ci3716",
+          "type": "space",
+          "mode": "flex",
+          "units": 1
+        },
+        {
+          "id": "facility-msbfktrl-cal8z4",
+          "type": "text",
+          "align": "right",
+          "writingMode": "horizontal",
+          "rows": [
+            {
+              "id": "text-main-msbfkv9t-a6qh4i",
+              "kind": "main",
+              "segments": [
+                {
+                  "kind": "text",
+                  "value": "出口"
+                }
+              ]
+            },
+            {
+              "id": "text-secondary-msbfkv9t-m66q55",
+              "kind": "secondary",
+              "value": "EXIT"
+            }
+          ]
+        },
+        {
+          "id": "facility-msbf6ccy-5ykeve",
+          "type": "largeText",
+          "value": "C",
+          "suffix": "",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "largeText-msbfkfre-p2b5z4",
+          "type": "largeText",
+          "value": "B",
+          "suffix": "",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "facility-msbf6jnk-76abpx",
+          "type": "arrow",
+          "iconId": "east",
+          "framed": false,
+          "frameFillMode": "none"
+        }
+      ]
+    ]
+  },
+  "exportedAt": "2026-08-02T06:47:41.318Z"
+}

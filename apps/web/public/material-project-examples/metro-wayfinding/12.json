@@ -1,0 +1,166 @@
+{
+  "format": "yct.metro-wayfinding.project",
+  "schemaVersion": 1,
+  "template": {
+    "id": "system_material_metro_wayfinding",
+    "version": 1
+  },
+  "canvas": {
+    "widthM": 7,
+    "heightM": 1,
+    "pxPerMeter": 128,
+    "alignToTile": false,
+    "tileSizePx": 128
+  },
+  "layout": {
+    "backgroundColor": "#62AA3C",
+    "foregroundColor": "#FFFFFF",
+    "mode": "single",
+    "dividerBetweenRows": false,
+    "rows": [
+      [
+        {
+          "id": "facility-msbffndu-g2v5of",
+          "type": "arrow",
+          "iconId": "west",
+          "framed": false,
+          "frameFillMode": "none"
+        },
+        {
+          "id": "facility-msbfsmvk-z1dae3",
+          "type": "text",
+          "align": "left",
+          "writingMode": "horizontal",
+          "rows": [
+            {
+              "id": "text-main-msbg22y0-0ci9zz",
+              "kind": "main",
+              "segments": [
+                {
+                  "kind": "text",
+                  "value": "换乘"
+                },
+                {
+                  "kind": "line",
+                  "value": "10",
+                  "color": "#62AA3C"
+                },
+                {
+                  "kind": "text",
+                  "value": "号线"
+                }
+              ]
+            },
+            {
+              "id": "text-secondary-msbfwlt2-pme4dz",
+              "kind": "secondary",
+              "value": "Transfer to Line 10"
+            }
+          ]
+        },
+        {
+          "id": "facility-msbfvbn9-23zdlz",
+          "type": "largeText",
+          "value": "F",
+          "suffix": "",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "largeText-msbg5w7l-hsx3ws",
+          "type": "largeText",
+          "value": "G",
+          "suffix": "",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "largeText-msbg5yez-ica4fg",
+          "type": "largeText",
+          "value": "H",
+          "suffix": "",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "facility-msbfxsct-8jb9ib",
+          "type": "text",
+          "align": "left",
+          "writingMode": "vertical",
+          "rows": [
+            {
+              "id": "text-main-msbfxsv9-xaxz4p",
+              "kind": "main",
+              "segments": [
+                {
+                  "kind": "text",
+                  "value": "出口"
+                }
+              ]
+            },
+            {
+              "id": "text-secondary-msbfxsv9-nosxxj",
+              "kind": "secondary",
+              "value": "EXIT"
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "id": "facility-msbf69fs-ci3716",
+          "type": "space",
+          "mode": "flex",
+          "units": 1
+        },
+        {
+          "id": "facility-msbfktrl-cal8z4",
+          "type": "text",
+          "align": "right",
+          "writingMode": "horizontal",
+          "rows": [
+            {
+              "id": "text-main-msbfkv9t-a6qh4i",
+              "kind": "main",
+              "segments": [
+                {
+                  "kind": "text",
+                  "value": "出口"
+                }
+              ]
+            },
+            {
+              "id": "text-secondary-msbfkv9t-m66q55",
+              "kind": "secondary",
+              "value": "EXIT"
+            }
+          ]
+        },
+        {
+          "id": "facility-msbf6ccy-5ykeve",
+          "type": "largeText",
+          "value": "C",
+          "suffix": "",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "largeText-msbfkfre-p2b5z4",
+          "type": "largeText",
+          "value": "B",
+          "suffix": "",
+          "frameShape": "rectangle",
+          "frameFillMode": "none"
+        },
+        {
+          "id": "facility-msbf6jnk-76abpx",
+          "type": "arrow",
+          "iconId": "east",
+          "framed": false,
+          "frameFillMode": "none"
+        }
+      ]
+    ]
+  },
+  "exportedAt": "2026-08-02T06:57:02.734Z"
+}
