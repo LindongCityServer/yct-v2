@@ -4,6 +4,8 @@ import { appPath } from '../lib/app-paths';
 type MarkdownBlock =
   | { type: 'heading'; level: 2 | 3 | 4; text: string }
   | { type: 'paragraph'; text: string }
+  | { type: 'divider' }
+  | { type: 'table'; headers: string[]; rows: string[][] }
   | { type: 'list'; ordered: boolean; items: string[] }
   | { type: 'quote'; text: string }
   | { type: 'image'; alt: string; src: string };
@@ -74,6 +76,33 @@ function renderMarkdownBlock(block: MarkdownBlock, index: number, headingId?: st
     }
     case 'quote':
       return <blockquote key={index}>{renderInlineMarkdown(block.text)}</blockquote>;
+    case 'divider':
+      return <hr key={index} />;
+    case 'table':
+      return (
+        <div className="markdown-table-wrapper" key={index}>
+          <table>
+            <thead>
+              <tr>
+                {block.headers.map((header, cellIndex) => (
+                  <th scope="col" key={`${index}-header-${cellIndex}`}>
+                    {renderInlineMarkdown(header)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {block.rows.map((row, rowIndex) => (
+                <tr key={`${index}-row-${rowIndex}`}>
+                  {row.map((cell, cellIndex) => (
+                    <td key={`${index}-${rowIndex}-${cellIndex}`}>{renderInlineMarkdown(cell)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
     case 'image':
       return renderMarkdownImage(block, index);
     case 'paragraph':
@@ -111,6 +140,12 @@ function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
       continue;
     }
 
+    if (isMarkdownDivider(line)) {
+      blocks.push({ type: 'divider' });
+      index += 1;
+      continue;
+    }
+
     const heading = /^(#{1,3})\s+(.+)$/.exec(line);
     if (heading) {
       blocks.push({
@@ -126,6 +161,13 @@ function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
     if (image) {
       blocks.push(image);
       index += 1;
+      continue;
+    }
+
+    const table = parseTableBlock(lines, index);
+    if (table) {
+      blocks.push(table.block);
+      index = table.nextIndex;
       continue;
     }
 
@@ -152,6 +194,79 @@ function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
   }
 
   return blocks;
+}
+
+function parseTableBlock(
+  lines: string[],
+  startIndex: number,
+): { block: Extract<MarkdownBlock, { type: 'table' }>; nextIndex: number } | undefined {
+  const headers = parseMarkdownTableRow(lines[startIndex]);
+  const separator = parseMarkdownTableRow(lines[startIndex + 1] ?? '');
+  if (
+    !headers ||
+    headers.length === 0 ||
+    !separator ||
+    separator.length !== headers.length ||
+    !separator.every(isMarkdownTableSeparatorCell)
+  ) {
+    return undefined;
+  }
+
+  const rows: string[][] = [];
+  let index = startIndex + 2;
+  while (index < lines.length) {
+    const row = parseMarkdownTableRow(lines[index]);
+    if (!row) {
+      break;
+    }
+    rows.push(headers.map((_, cellIndex) => row[cellIndex] ?? ''));
+    index += 1;
+  }
+
+  return {
+    block: { type: 'table', headers, rows },
+    nextIndex: index,
+  };
+}
+
+function parseMarkdownTableRow(line: string | undefined): string[] | undefined {
+  if (!line || !line.includes('|')) {
+    return undefined;
+  }
+
+  let source = line.trim();
+  if (source.startsWith('|')) {
+    source = source.slice(1);
+  }
+  if (source.endsWith('|') && !source.endsWith('\\|')) {
+    source = source.slice(0, -1);
+  }
+
+  const cells: string[] = [];
+  let cell = '';
+  let escaped = false;
+  for (const character of source) {
+    if (escaped) {
+      cell += character;
+      escaped = false;
+    } else if (character === '\\') {
+      escaped = true;
+    } else if (character === '|') {
+      cells.push(cell.trim());
+      cell = '';
+    } else {
+      cell += character;
+    }
+  }
+  if (escaped) {
+    cell += '\\';
+  }
+  cells.push(cell.trim());
+  return cells.length > 0 ? cells : undefined;
+}
+
+function isMarkdownTableSeparatorCell(value: string): boolean {
+  return /^:?-{3,}:?$/.test(value.trim());
 }
 
 function parseImageLine(line: string): MarkdownBlock | undefined {
@@ -261,11 +376,16 @@ function collectParagraph(
     const line = lines[index].trim();
     if (
       !line ||
+      isMarkdownDivider(line) ||
       /^(#{1,3})\s+(.+)$/.test(line) ||
       parseImageLine(line) ||
       parseListItem(line) ||
       /^\s*>\s?/.test(line)
     ) {
+      break;
+    }
+
+    if (parseTableBlock(lines, index)) {
       break;
     }
 
@@ -277,6 +397,10 @@ function collectParagraph(
     lines: paragraphLines,
     nextIndex: index,
   };
+}
+
+function isMarkdownDivider(line: string): boolean {
+  return /^(?:-{3,}|(?:\*\s*){3,}|(?:_\s*){3,})$/.test(line);
 }
 
 function renderInlineMarkdown(text: string): ReactNode[] {

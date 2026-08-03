@@ -18,6 +18,13 @@ export function ensureOperationsReminderRefreshListenersRegistered(): void {
   eventBus.subscribe('ContentPublished', async (event) => {
     await refreshOperationsRemindersForContentEvent(event);
   });
+  eventBus.subscribe('ContentDraftUpdated', async (event) => {
+    if (event.payload.previousStatus !== 'published') {
+      return;
+    }
+
+    await refreshOperationsRemindersForContentEvent(event);
+  });
   eventBus.subscribe('ContentArchived', async (event) => {
     if (event.payload.previousStatus !== 'published') {
       return;
@@ -28,9 +35,14 @@ export function ensureOperationsReminderRefreshListenersRegistered(): void {
 }
 
 async function refreshOperationsRemindersForContentEvent(
-  event: Extract<YctEvent, { type: 'ContentPublished' | 'ContentArchived' }>,
+  event: Extract<
+    YctEvent,
+    { type: 'ContentPublished' | 'ContentDraftUpdated' | 'ContentArchived' }
+  >,
 ): Promise<void> {
-  const matchesReminderRule = await hasEnabledContentReminderRuleForContent(event.payload.contentId);
+  const matchesReminderRule = await hasEnabledContentReminderRuleForContent(
+    event.payload.contentId,
+  );
   if (!matchesReminderRule) {
     return;
   }

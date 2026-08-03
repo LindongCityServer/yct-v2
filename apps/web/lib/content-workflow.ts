@@ -21,9 +21,11 @@ import {
   withRevisionStatus,
 } from './content-store';
 import { readLegacyOperationsDetails } from './legacy-content';
+import { ensureContentPoiReadModelListenersRegistered } from './content-poi-read-model';
 import { ensureOperationsReminderRefreshListenersRegistered } from './operations-reminder-refresh-listeners';
 
 ensureOperationsReminderRefreshListenersRegistered();
+ensureContentPoiReadModelListenersRegistered();
 
 export interface ContentActionResult {
   ok: boolean;
@@ -119,6 +121,14 @@ export async function createContentDraft(input: {
     ...input,
     assetIds,
   });
+  if (record.metadata.relatedPoiMarkerIds?.length) {
+    await emitEvent('ContentPoiBindingsUpdated', input.actorId, {
+      contentId: record.contentId,
+      revisionId: record.revision.id,
+      poiMarkerIds: record.metadata.relatedPoiMarkerIds,
+      updatedBy: input.actorId,
+    });
+  }
   return { ok: true, record };
 }
 
@@ -128,6 +138,7 @@ export async function updateContentDraft(input: {
   categoryId: string;
   markdown: string;
   assetIds: string[];
+  scheduledAt?: string;
   metadata: StoredContentMetadata;
   actorId: string;
 }): Promise<ContentActionResult> {
@@ -147,6 +158,12 @@ export async function updateContentDraft(input: {
     return invalidTransition('只有草稿、待审核、待发布、已发布或已驳回的内容可以继续编辑。');
   }
 
+  const publishedScheduledAt =
+    record.revision.status === 'published' ? record.revision.scheduledAt : undefined;
+  if (publishedScheduledAt && !input.scheduledAt) {
+    return invalidTransition('已发布的定时内容必须保留定时发布时间。');
+  }
+
   const markdownAssetRecords = await findContentAssetRecordsByPublicPaths(
     extractContentAssetPaths(input.markdown),
   );
@@ -154,7 +171,17 @@ export async function updateContentDraft(input: {
     ...input.assetIds,
     ...markdownAssetRecords.map((assetRecord) => assetRecord.asset.id),
   ]);
-  if (record.revision.status === 'published') {
+  const publishedContentChanged =
+    record.revision.title !== input.title ||
+    record.revision.categoryId !== input.categoryId ||
+    record.revision.markdown !== input.markdown ||
+    JSON.stringify(record.revision.assetIds) !== JSON.stringify(assetIds);
+  const previousPoiMarkerIds = record.metadata.relatedPoiMarkerIds ?? [];
+  const nextPoiMarkerIds = input.metadata.relatedPoiMarkerIds ?? [];
+  const poiBindingsChanged =
+    JSON.stringify(previousPoiMarkerIds) !== JSON.stringify(nextPoiMarkerIds);
+
+  if (record.revision.status === 'published' && publishedContentChanged) {
     const assetRecords = await findContentAssetRecordsByIds(assetIds);
     const foundAssetIds = new Set(assetRecords.map((assetRecord) => assetRecord.asset.id));
     const missingAssetIds = assetIds.filter((assetId) => !foundAssetIds.has(assetId));
@@ -182,6 +209,18 @@ export async function updateContentDraft(input: {
       : record.revision.status === 'draft'
         ? record.revision.status
         : transitionContentRevisionStatus('rejected', 'draft').status;
+  const nextScheduledAt =
+    nextStatus === 'published'
+      ? publishedScheduledAt
+        ? (input.scheduledAt ?? publishedScheduledAt)
+        : record.revision.scheduledAt
+      : undefined;
+  const nextPublishedAt =
+    nextStatus === 'published'
+      ? publishedScheduledAt
+        ? nextScheduledAt
+        : record.revision.publishedAt
+      : undefined;
 
   const updated = await updateContentRecord(input.contentId, (current) => ({
     ...current,
@@ -196,10 +235,14 @@ export async function updateContentDraft(input: {
       reviewedAt: nextStatus === 'draft' ? undefined : current.revision.reviewedAt,
       reviewedBy: nextStatus === 'draft' ? undefined : current.revision.reviewedBy,
       reviewReason: nextStatus === 'draft' ? undefined : current.revision.reviewReason,
-      publishedAt: nextStatus === 'draft' ? undefined : current.revision.publishedAt,
-      scheduledAt: nextStatus === 'draft' ? undefined : current.revision.scheduledAt,
+      publishedAt: nextPublishedAt,
+      scheduledAt: nextScheduledAt,
     },
-    metadata: mergeContentMetadata(current.metadata, input.metadata),
+    metadata: mergeContentMetadata(
+      current.metadata,
+      input.metadata,
+      record.revision.status === 'published',
+    ),
     updatedAt: new Date().toISOString(),
   }));
 
@@ -211,6 +254,14 @@ export async function updateContentDraft(input: {
       categoryId: updated.revision.categoryId,
       previousStatus,
     });
+    if (poiBindingsChanged) {
+      await emitEvent('ContentPoiBindingsUpdated', input.actorId, {
+        contentId: updated.contentId,
+        revisionId: updated.revision.id,
+        poiMarkerIds: updated.metadata.relatedPoiMarkerIds ?? [],
+        updatedBy: input.actorId,
+      });
+    }
   }
 
   return { ok: true, record: updated };
@@ -397,6 +448,48 @@ export async function archiveContentRevision(input: {
   return { ok: true, record: updated };
 }
 
+export async function restoreContentRevision(input: {
+  contentId: string;
+  actorId: string;
+}): Promise<ContentActionResult> {
+  const record = await findContentRecord(input.contentId);
+  if (!record) {
+    return notFound();
+  }
+  if (record.revision.status !== 'archived') {
+    return invalidTransition('只有已归档的内容可以恢复为草稿。');
+  }
+
+  const transition = transitionContentRevisionStatus(record.revision.status, 'draft');
+  if (!transition.ok) {
+    return invalidTransition(transition.reason);
+  }
+
+  const updated = await updateContentRecord(input.contentId, (current) =>
+    withRevisionStatus(current, 'draft', {
+      submittedBy: undefined,
+      submittedAt: undefined,
+      reviewedBy: undefined,
+      reviewedAt: undefined,
+      reviewReason: undefined,
+      publishedAt: undefined,
+      scheduledAt: undefined,
+    }),
+  );
+
+  if (updated) {
+    await emitEvent('ContentRestored', input.actorId, {
+      contentId: updated.contentId,
+      revisionId: updated.revision.id,
+      title: updated.revision.title,
+      categoryId: updated.revision.categoryId,
+      previousStatus: 'archived',
+    });
+  }
+
+  return { ok: true, record: updated };
+}
+
 function notFound(): ContentActionResult {
   return {
     ok: false,
@@ -472,6 +565,7 @@ function hasMeaningfulContentBody(markdown: string): boolean {
 function mergeContentMetadata(
   current: StoredContentMetadata,
   patch: StoredContentMetadata,
+  preserveExpiresAt = false,
 ): StoredContentMetadata {
   return {
     ...current,
@@ -481,7 +575,8 @@ function mergeContentMetadata(
     customTags: patch.customTags,
     coverColor: patch.coverColor,
     coverImageUrl: patch.coverImageUrl,
-    expiresAt: patch.expiresAt,
+    expiresAt: preserveExpiresAt ? current.expiresAt : patch.expiresAt,
+    relatedPoiMarkerIds: patch.relatedPoiMarkerIds,
   };
 }
 

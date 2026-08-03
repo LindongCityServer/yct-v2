@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MarkdownHeading } from './markdown-blocks';
 
 export function OperationTableOfContents({
@@ -12,6 +12,7 @@ export function OperationTableOfContents({
 }>) {
   const [expanded, setExpanded] = useState(false);
   const [activeHeadingId, setActiveHeadingId] = useState(headings[0]?.id ?? null);
+  const tocRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const headingElements = headings
@@ -50,12 +51,28 @@ export function OperationTableOfContents({
     };
   }, [headings]);
 
+  useEffect(() => {
+    if (!expanded) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node) || !tocRef.current?.contains(target)) {
+        setExpanded(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [expanded]);
+
   if (headings.length === 0) {
     return null;
   }
 
   return (
-    <aside className={expanded ? 'operation-toc is-expanded' : 'operation-toc'}>
+    <aside ref={tocRef} className={expanded ? 'operation-toc is-expanded' : 'operation-toc'}>
       <nav
         className="operation-toc-panel"
         id="operation-table-of-contents"

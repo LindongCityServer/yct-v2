@@ -12,6 +12,7 @@ export interface StoredContentMetadata {
   coverColor?: string;
   coverImageUrl?: string;
   expiresAt?: ISODateTimeString;
+  relatedPoiMarkerIds?: string[];
 }
 
 export interface StoredContentPublishSnapshot {
@@ -38,6 +39,21 @@ export interface StoredContentRecord {
 interface ContentStoreSnapshot {
   version: 1;
   records: StoredContentRecord[];
+}
+
+export interface CreateContentRecordInput {
+  contentId?: string;
+  title: string;
+  categoryId: string;
+  markdown: string;
+  assetIds: string[];
+  metadata: StoredContentMetadata;
+  actorId: string;
+}
+
+export interface CreateMissingContentRecordsResult {
+  createdRecords: StoredContentRecord[];
+  skippedContentIds: string[];
 }
 
 const emptySnapshot: ContentStoreSnapshot = {
@@ -70,41 +86,56 @@ export async function findContentRecord(
   return records.find((record) => record.contentId === contentId);
 }
 
-export async function createContentRecord(input: {
-  contentId?: string;
-  title: string;
-  categoryId: string;
-  markdown: string;
-  assetIds: string[];
-  metadata: StoredContentMetadata;
-  actorId: string;
-}): Promise<StoredContentRecord> {
+export async function createContentRecord(
+  input: CreateContentRecordInput,
+): Promise<StoredContentRecord> {
   const snapshot = await readSnapshot();
   const now = new Date().toISOString();
-  const contentId = input.contentId?.trim() || `local_content_${randomUUID()}`;
-  const revisionId = `local_revision_${randomUUID()}`;
-  const record: StoredContentRecord = {
-    contentId,
-    revision: {
-      id: revisionId,
-      contentId,
-      title: input.title,
-      categoryId: input.categoryId,
-      markdown: input.markdown,
-      status: 'draft',
-      assetIds: input.assetIds,
-      submittedBy: input.actorId,
-    },
-    metadata: input.metadata,
-    createdAt: now,
-    updatedAt: now,
-  };
+  const record = buildContentRecord(input, now);
 
   await writeSnapshot({
     ...snapshot,
     records: [...snapshot.records, record],
   });
   return record;
+}
+
+export async function createMissingContentRecords(
+  inputs: Array<CreateContentRecordInput & { contentId: string }>,
+): Promise<CreateMissingContentRecordsResult> {
+  const snapshot = await readSnapshot();
+  const now = new Date().toISOString();
+  const knownContentIds = new Set(snapshot.records.map((record) => record.contentId));
+  const createdRecords: StoredContentRecord[] = [];
+  const skippedContentIds: string[] = [];
+
+  for (const input of inputs) {
+    const contentId = input.contentId.trim();
+    if (!contentId) {
+      throw new Error('批量创建内容时 contentId 不能为空。');
+    }
+
+    if (knownContentIds.has(contentId)) {
+      skippedContentIds.push(contentId);
+      continue;
+    }
+
+    const record = buildContentRecord({ ...input, contentId }, now);
+    createdRecords.push(record);
+    knownContentIds.add(contentId);
+  }
+
+  if (createdRecords.length > 0) {
+    await writeSnapshot({
+      ...snapshot,
+      records: [...snapshot.records, ...createdRecords],
+    });
+  }
+
+  return {
+    createdRecords,
+    skippedContentIds,
+  };
 }
 
 export async function updateContentRecord(
@@ -167,4 +198,27 @@ function resolveStorePath(): string {
   return path.isAbsolute(config.contentStorePath)
     ? config.contentStorePath
     : path.join(/*turbopackIgnore: true*/ process.cwd(), config.contentStorePath);
+}
+
+function buildContentRecord(
+  input: CreateContentRecordInput,
+  now: ISODateTimeString,
+): StoredContentRecord {
+  const contentId = input.contentId?.trim() || `local_content_${randomUUID()}`;
+  return {
+    contentId,
+    revision: {
+      id: `local_revision_${randomUUID()}`,
+      contentId,
+      title: input.title,
+      categoryId: input.categoryId,
+      markdown: input.markdown,
+      status: 'draft',
+      assetIds: input.assetIds,
+      submittedBy: input.actorId,
+    },
+    metadata: input.metadata,
+    createdAt: now,
+    updatedAt: now,
+  };
 }

@@ -127,6 +127,7 @@ async function readLocalOperationsDetails(): Promise<ApiListResponse<OperationsC
         ),
         coverColor: record.metadata.coverColor,
         coverImageUrl: record.metadata.coverImageUrl,
+        relatedPoiMarkerIds: record.metadata.relatedPoiMarkerIds,
         markdown: record.revision.markdown,
         sourceKind: 'local_content_store',
       };

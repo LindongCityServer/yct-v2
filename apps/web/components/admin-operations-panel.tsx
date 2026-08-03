@@ -15,8 +15,11 @@ import type {
 } from '@yct/contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { appBasePath, appPath } from '../lib/app-paths';
+import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { MarkdownBlocks } from './markdown-blocks';
 import { TitleWithBreaks } from './title-with-breaks';
+import { AdminRefreshButton } from './admin-refresh-button';
+import { ContentPoiBindingEditor } from './content-poi-binding-editor';
 
 interface AdminContentMetadata {
   excerpt?: string;
@@ -26,6 +29,7 @@ interface AdminContentMetadata {
   coverColor?: string;
   coverImageUrl?: string;
   expiresAt?: string;
+  relatedPoiMarkerIds?: string[];
 }
 
 interface AdminContentRecord {
@@ -58,7 +62,7 @@ interface AdminContentRecord {
 }
 
 type AdminContentStatusFilter = AdminContentRecord['revision']['status'] | 'all';
-type AdminContentAction = 'submit' | 'approve' | 'reject' | 'publish' | 'archive';
+type AdminContentAction = 'restore' | 'submit' | 'approve' | 'reject' | 'publish' | 'archive';
 
 interface AdminContentActionOptions {
   mode?: 'immediate' | 'scheduled';
@@ -196,7 +200,9 @@ const reminderToneOptions: Array<{
   { value: 'danger', label: '警告' },
 ];
 
-export function AdminOperationsPanel() {
+export function AdminOperationsPanel({
+  initialContentId,
+}: Readonly<{ initialContentId?: string }>) {
   const [records, setRecords] = useState<AdminContentRecord[]>([]);
   const [reminderRules, setReminderRules] = useState<OperationsStrongReminderRule[]>([]);
   const [reminderPreview, setReminderPreview] = useState<ReminderPreviewResponse | null>(null);
@@ -251,7 +257,9 @@ export function AdminOperationsPanel() {
   const [coverColor, setCoverColor] = useState('');
   const [coverImageUrl, setCoverImageUrl] = useState('');
   const [expiresAtValue, setExpiresAtValue] = useState('');
+  const [scheduledAtValue, setScheduledAtValue] = useState('');
   const [assetIdsText, setAssetIdsText] = useState('');
+  const [relatedPoiMarkerIds, setRelatedPoiMarkerIds] = useState<string[]>([]);
   const [showInBanner, setShowInBanner] = useState(false);
   const [selectedAssetFile, setSelectedAssetFile] = useState<File | null>(null);
   const [recentUploadedAsset, setRecentUploadedAsset] = useState<AdminContentAssetRecord | null>(
@@ -271,6 +279,7 @@ export function AdminOperationsPanel() {
   const [reminderEndsAtValue, setReminderEndsAtValue] = useState('');
   const [reminderSortOrderValue, setReminderSortOrderValue] = useState('0');
   const assetFileInputRef = useRef<HTMLInputElement | null>(null);
+  const initialContentHandledRef = useRef(false);
 
   const sortedRecords = useMemo(
     () => [...records].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
@@ -301,6 +310,10 @@ export function AdminOperationsPanel() {
   const currentEditingContentRecord = useMemo(
     () => records.find((record) => record.contentId === editingContentId) ?? null,
     [editingContentId, records],
+  );
+  const editingPublishedScheduledContent = Boolean(
+    currentEditingContentRecord?.revision.status === 'published' &&
+    currentEditingContentRecord.revision.scheduledAt,
   );
   const draftAssetIds = useMemo(
     () =>
@@ -338,7 +351,9 @@ export function AdminOperationsPanel() {
             assetIds: draftAssetIds,
             status: currentEditingContentRecord?.revision.status ?? 'draft',
             publishedAt: currentEditingContentRecord?.revision.publishedAt,
-            scheduledAt: currentEditingContentRecord?.revision.scheduledAt,
+            scheduledAt:
+              parseDateTimeLocalInput(scheduledAtValue) ??
+              currentEditingContentRecord?.revision.scheduledAt,
             reviewReason: currentEditingContentRecord?.revision.reviewReason,
           },
           metadata: {
@@ -349,6 +364,7 @@ export function AdminOperationsPanel() {
             coverColor: coverColor.trim() || undefined,
             coverImageUrl: coverImageUrl.trim() || undefined,
             expiresAt: parseDateTimeLocalInput(expiresAtValue) ?? undefined,
+            relatedPoiMarkerIds,
           },
           publishHistory: currentEditingContentRecord?.publishHistory,
           updatedAt: currentEditingContentRecord?.updatedAt ?? new Date().toISOString(),
@@ -369,7 +385,9 @@ export function AdminOperationsPanel() {
       editingContentId,
       excerpt,
       expiresAtValue,
+      scheduledAtValue,
       markdown,
+      relatedPoiMarkerIds,
       showInBanner,
       title,
       customTagsText,
@@ -466,6 +484,10 @@ export function AdminOperationsPanel() {
   );
   const batchSubmitContentRecords = useMemo(
     () => selectedContentRecords.filter((record) => record.revision.status === 'draft'),
+    [selectedContentRecords],
+  );
+  const batchRestoreContentRecords = useMemo(
+    () => selectedContentRecords.filter((record) => record.revision.status === 'archived'),
     [selectedContentRecords],
   );
   const batchArchiveContentRecords = useMemo(
@@ -733,6 +755,11 @@ export function AdminOperationsPanel() {
         data.syncResult?.message ??
           (forceRefresh ? '已强制同步公告源并尝试重算运营提醒。' : '已同步公告源。'),
       );
+      publishAdminDataChanged({
+        resource: 'operations',
+        reason: 'record_updated',
+        occurredAt: new Date().toISOString(),
+      });
     } finally {
       setIsBusy(false);
     }
@@ -758,6 +785,11 @@ export function AdminOperationsPanel() {
           ? `统一任务已运行：事件 ${data.taskRun.events.dispatched} 条，通知处理 ${data.taskRun.notifications.processed} 条`
           : '统一任务已运行。',
       );
+      publishAdminDataChanged({
+        resource: 'operations',
+        reason: 'record_updated',
+        occurredAt: new Date().toISOString(),
+      });
     } finally {
       setIsBusy(false);
     }
@@ -781,6 +813,11 @@ export function AdminOperationsPanel() {
           ? `已手动重算 ${data.candidates.length} 条提醒候选与 ${data.deliveries.length} 条投递记录`
           : '已手动重算，但当前没有运营提醒候选或投递记录',
       );
+      publishAdminDataChanged({
+        resource: 'operations',
+        reason: 'record_updated',
+        occurredAt: new Date().toISOString(),
+      });
     } finally {
       setIsBusy(false);
     }
@@ -837,8 +874,8 @@ export function AdminOperationsPanel() {
     setLegacyHtmlStatusText(`已转换 ${data.item.summary.convertedCount} 个旧专题页面`);
   };
 
-  useEffect(() => {
-    void Promise.all([
+  const reloadOperationsData = () =>
+    Promise.all([
       loadRecords(),
       loadReminderRules(),
       loadReminderPreview(),
@@ -846,6 +883,9 @@ export function AdminOperationsPanel() {
       loadLegacyAssetReport(),
       loadLegacyHtmlPreview(),
     ]);
+
+  useEffect(() => {
+    void reloadOperationsData();
   }, []);
 
   useEffect(() => {
@@ -863,7 +903,9 @@ export function AdminOperationsPanel() {
     setCoverColor('');
     setCoverImageUrl('');
     setExpiresAtValue('');
+    setScheduledAtValue('');
     setAssetIdsText('');
+    setRelatedPoiMarkerIds([]);
     setShowInBanner(false);
     setIsContentEditorOpen(false);
   };
@@ -898,7 +940,9 @@ export function AdminOperationsPanel() {
     setCoverColor(record.metadata.coverColor ?? '');
     setCoverImageUrl(record.metadata.coverImageUrl ?? '');
     setExpiresAtValue(toDateTimeLocalInput(record.metadata.expiresAt));
+    setScheduledAtValue(toDateTimeLocalInput(record.revision.scheduledAt));
     setAssetIdsText(record.revision.assetIds.join('\n'));
+    setRelatedPoiMarkerIds(record.metadata.relatedPoiMarkerIds ?? []);
     setShowInBanner(record.metadata.showInBanner);
     setStatusText(
       record.revision.status === 'rejected'
@@ -931,12 +975,43 @@ export function AdminOperationsPanel() {
         ...current.filter((item) => item.contentId !== data.contentId),
         { ...data, sourceKind: 'local_content_store' },
       ]);
+      publishAdminDataChanged({
+        resource: 'operations',
+        reason: 'record_created',
+        occurredAt: new Date().toISOString(),
+      });
       loadRecordToEditor({ ...data, sourceKind: 'local_content_store' });
       setStatusText('旧消息已接管为本地草稿。公开页会继续显示旧版本，待新草稿发布后替换。');
     } finally {
       setIsBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (!initialContentId || initialContentHandledRef.current || records.length === 0) {
+      return;
+    }
+    const record = records.find((item) => item.contentId === initialContentId);
+    initialContentHandledRef.current = true;
+    setActiveSection('contents');
+    setContentStatusFilter('all');
+    setContentCategoryFilter('all');
+    setContentSearchText(initialContentId);
+    if (!record) {
+      setStatusText('未找到要编辑的运营消息。');
+      return;
+    }
+    if (record.sourceKind === 'legacy_content_data') {
+      void adoptLegacyRecordToEditor(record);
+    } else {
+      loadRecordToEditor(record);
+    }
+    window.requestAnimationFrame(() => {
+      document.querySelector('.admin-content-record-item.is-deep-linked')?.scrollIntoView({
+        block: 'center',
+      });
+    });
+  }, [initialContentId, records]);
 
   const loadReminderToEditor = (rule: OperationsStrongReminderRule) => {
     setActiveSection('reminders');
@@ -969,6 +1044,13 @@ export function AdminOperationsPanel() {
         setStatusText('有效期格式无效。');
         return;
       }
+      const scheduledAt = scheduledAtValue.trim()
+        ? parseDateTimeLocalInput(scheduledAtValue)
+        : undefined;
+      if (editingPublishedScheduledContent && !scheduledAt) {
+        setStatusText('已发布的定时内容必须填写有效的定时发布时间。');
+        return;
+      }
       const bannerSortOrder = parseBannerSortOrderInput(bannerSortOrderValue);
       if (bannerSortOrderValue.trim() && bannerSortOrder === undefined) {
         setStatusText('重点排序必须是整数。');
@@ -989,7 +1071,9 @@ export function AdminOperationsPanel() {
           coverColor: coverColor.trim() || undefined,
           coverImageUrl: coverImageUrl.trim() || undefined,
           expiresAt,
+          scheduledAt,
           assetIds: parseAssetIds(assetIdsText),
+          relatedPoiMarkerIds,
         }),
       });
       const data = (await response.json()) as { message?: string };
@@ -999,6 +1083,11 @@ export function AdminOperationsPanel() {
       }
 
       resetEditor();
+      publishAdminDataChanged({
+        resource: 'operations',
+        reason: editingContentId ? 'record_updated' : 'record_created',
+        occurredAt: new Date().toISOString(),
+      });
       setStatusText(
         editingContentId
           ? previousEditingStatus === 'published'
@@ -1020,13 +1109,15 @@ export function AdminOperationsPanel() {
     options: AdminContentActionOptions = {},
   ) => {
     const endpoint =
-      action === 'submit'
-        ? appPath(`/api/admin/operations/contents/${encodeURIComponent(contentId)}/submit`)
-        : action === 'publish'
-          ? appPath(`/api/admin/operations/contents/${encodeURIComponent(contentId)}/publish`)
-          : action === 'archive'
-            ? appPath(`/api/admin/operations/contents/${encodeURIComponent(contentId)}/archive`)
-            : appPath(`/api/admin/operations/contents/${encodeURIComponent(contentId)}/review`);
+      action === 'restore'
+        ? appPath(`/api/admin/operations/contents/${encodeURIComponent(contentId)}/restore`)
+        : action === 'submit'
+          ? appPath(`/api/admin/operations/contents/${encodeURIComponent(contentId)}/submit`)
+          : action === 'publish'
+            ? appPath(`/api/admin/operations/contents/${encodeURIComponent(contentId)}/publish`)
+            : action === 'archive'
+              ? appPath(`/api/admin/operations/contents/${encodeURIComponent(contentId)}/archive`)
+              : appPath(`/api/admin/operations/contents/${encodeURIComponent(contentId)}/review`);
     const body =
       action === 'approve'
         ? { decision: 'approved' }
@@ -1069,6 +1160,11 @@ export function AdminOperationsPanel() {
       if (action === 'publish') {
         setPublishTarget(null);
       }
+      publishAdminDataChanged({
+        resource: 'operations',
+        reason: 'status_changed',
+        occurredAt: new Date().toISOString(),
+      });
       setStatusText('操作已完成');
       await loadRecords();
       return true;
@@ -1079,10 +1175,16 @@ export function AdminOperationsPanel() {
 
   const runBatchContentAction = async (
     targetRecords: AdminContentRecord[],
-    action: Extract<AdminContentAction, 'submit' | 'archive'>,
+    action: Extract<AdminContentAction, 'restore' | 'submit' | 'archive'>,
   ) => {
     if (targetRecords.length === 0) {
-      setStatusText(action === 'submit' ? '没有可提交审核的草稿。' : '没有可归档的内容。');
+      setStatusText(
+        action === 'restore'
+          ? '没有可恢复的归档内容。'
+          : action === 'submit'
+            ? '没有可提交审核的草稿。'
+            : '没有可归档的内容。',
+      );
       return false;
     }
 
@@ -1098,20 +1200,32 @@ export function AdminOperationsPanel() {
 
       await loadRecords();
 
+      if (failedTitles.length < targetRecords.length) {
+        publishAdminDataChanged({
+          resource: 'operations',
+          reason: 'status_changed',
+          occurredAt: new Date().toISOString(),
+        });
+      }
+
       if (failedTitles.length > 0) {
         setStatusText(`批量操作部分失败：${failedTitles.slice(0, 2).join('；')}`);
         return false;
       }
 
-      setSelectedContentIds((current) => {
-        const next = new Set(current);
-        targetRecords.forEach((record) => next.delete(record.contentId));
-        return next;
-      });
+      if (action !== 'restore') {
+        setSelectedContentIds((current) => {
+          const next = new Set(current);
+          targetRecords.forEach((record) => next.delete(record.contentId));
+          return next;
+        });
+      }
       setStatusText(
-        action === 'submit'
-          ? `已提交 ${targetRecords.length} 条内容进入审核。`
-          : `已归档 ${targetRecords.length} 条内容。`,
+        action === 'restore'
+          ? `已将 ${targetRecords.length} 条归档内容恢复为草稿，可继续编辑或提交审核。`
+          : action === 'submit'
+            ? `已提交 ${targetRecords.length} 条内容进入审核。`
+            : `已归档 ${targetRecords.length} 条内容。`,
       );
       return true;
     } finally {
@@ -1171,6 +1285,7 @@ export function AdminOperationsPanel() {
     setCoverImageUrl('');
     setExpiresAtValue('');
     setAssetIdsText('');
+    setRelatedPoiMarkerIds([]);
     setShowInBanner(false);
     setIsContentEditorOpen(true);
   };
@@ -1241,6 +1356,11 @@ export function AdminOperationsPanel() {
     setReminderStatusText(successMessage);
     resetReminderEditor();
     await loadReminderPreview();
+    publishAdminDataChanged({
+      resource: 'operations',
+      reason: 'record_updated',
+      occurredAt: new Date().toISOString(),
+    });
     return true;
   };
 
@@ -1359,6 +1479,11 @@ export function AdminOperationsPanel() {
         } 条`,
       );
       await loadContentAssets();
+      publishAdminDataChanged({
+        resource: 'operations',
+        reason: 'record_updated',
+        occurredAt: new Date().toISOString(),
+      });
     } finally {
       setIsBusy(false);
     }
@@ -1396,6 +1521,11 @@ export function AdminOperationsPanel() {
       }
       setAssetStatusText(data.reused ? '素材已存在，已复用记录' : '素材已上传，等待审核');
       await loadContentAssets();
+      publishAdminDataChanged({
+        resource: 'operations',
+        reason: 'record_created',
+        occurredAt: new Date().toISOString(),
+      });
     } finally {
       setIsBusy(false);
     }
@@ -1424,6 +1554,11 @@ export function AdminOperationsPanel() {
 
       setAssetStatusText('素材审核已更新');
       await loadContentAssets();
+      publishAdminDataChanged({
+        resource: 'operations',
+        reason: 'status_changed',
+        occurredAt: new Date().toISOString(),
+      });
     } finally {
       setIsBusy(false);
     }
@@ -1442,6 +1577,7 @@ export function AdminOperationsPanel() {
     setCoverImageUrl('');
     setExpiresAtValue('');
     setAssetIdsText('');
+    setRelatedPoiMarkerIds([]);
     setShowInBanner(false);
     setStatusText('旧专题正文已载入编辑器');
   };
@@ -1453,7 +1589,15 @@ export function AdminOperationsPanel() {
     >
       <div className="section-heading">
         <h1 id="admin-operations-title">内容管理</h1>
-        <span className="muted">{currentSectionStatusText}</span>
+        <div className="admin-content-actions">
+          <span className="muted">{currentSectionStatusText}</span>
+          <AdminRefreshButton
+            disabled={isBusy}
+            label="刷新内容后台"
+            onRefresh={reloadOperationsData}
+            resource="operations"
+          />
+        </div>
       </div>
       <fieldset className="segmented-control admin-page-segmented-control">
         <legend>内容后台系列</legend>
@@ -1573,13 +1717,31 @@ export function AdminOperationsPanel() {
               />
             </label>
             <label>
-              <span>有效期</span>
+              <span>
+                有效期
+                {currentEditingContentRecord?.revision.status === 'published'
+                  ? '（已发布内容不可修改）'
+                  : ''}
+              </span>
               <input
                 type="datetime-local"
                 value={expiresAtValue}
+                disabled={currentEditingContentRecord?.revision.status === 'published'}
                 onChange={(event) => setExpiresAtValue(event.currentTarget.value)}
               />
             </label>
+            {editingPublishedScheduledContent ? (
+              <label>
+                <span>定时发布时间</span>
+                <input
+                  type="datetime-local"
+                  value={scheduledAtValue}
+                  required
+                  onChange={(event) => setScheduledAtValue(event.currentTarget.value)}
+                />
+                <small className="muted">修改后会同步调整这篇已发布内容的生效时间。</small>
+              </label>
+            ) : null}
             <div className="admin-editor-markdown-grid">
               <label className="admin-editor-markdown">
                 <span>Markdown 正文</span>
@@ -1638,6 +1800,10 @@ export function AdminOperationsPanel() {
                 onChange={(event) => setAssetIdsText(event.currentTarget.value)}
               />
             </label>
+            <ContentPoiBindingEditor
+              selectedIds={relatedPoiMarkerIds}
+              onChange={setRelatedPoiMarkerIds}
+            />
             <label className="checkbox-row">
               <input
                 type="checkbox"
@@ -2458,7 +2624,14 @@ export function AdminOperationsPanel() {
               />
               <span>{`选择当前列表 ${selectedVisibleContentRecords.length}/${filteredContentRecords.length}`}</span>
             </label>
-            <span className="muted">{`已选 ${selectedContentRecords.length} 条，可提交 ${batchSubmitContentRecords.length} 条，可归档 ${batchArchiveContentRecords.length} 条`}</span>
+            <span className="muted">{`已选 ${selectedContentRecords.length} 条，可恢复 ${batchRestoreContentRecords.length} 条，可提交 ${batchSubmitContentRecords.length} 条，可归档 ${batchArchiveContentRecords.length} 条`}</span>
+            <button
+              type="button"
+              disabled={isBusy || batchRestoreContentRecords.length === 0}
+              onClick={() => void runBatchContentAction(batchRestoreContentRecords, 'restore')}
+            >
+              批量恢复草稿
+            </button>
             <button
               type="button"
               disabled={isBusy || batchSubmitContentRecords.length === 0}
@@ -2540,7 +2713,11 @@ export function AdminOperationsPanel() {
 
               return (
                 <article
-                  className="admin-content-item admin-content-record-item"
+                  className={
+                    record.contentId === initialContentId
+                      ? 'admin-content-item admin-content-record-item is-deep-linked'
+                      : 'admin-content-item admin-content-record-item'
+                  }
                   key={record.contentId}
                 >
                   <label className="admin-content-select">
@@ -2571,6 +2748,9 @@ export function AdminOperationsPanel() {
                       {record.metadata.customTags?.length
                         ? ` · 标签 ${record.metadata.customTags.join(' / ')}`
                         : ''}
+                      {record.metadata.relatedPoiMarkerIds?.length
+                        ? ` · 关联 POI ${record.metadata.relatedPoiMarkerIds.length}`
+                        : ''}
                       {record.sourceKind === 'legacy_content_data'
                         ? ' · 旧项目数据（接管后可编辑）'
                         : ''}
@@ -2581,6 +2761,13 @@ export function AdminOperationsPanel() {
                     <ContentReviewSnapshot preview={reviewPreview} />
                   </div>
                   <div className="admin-content-actions">
+                    <button
+                      type="button"
+                      disabled={isBusy || record.revision.status !== 'archived'}
+                      onClick={() => runAction(record.contentId, 'restore')}
+                    >
+                      恢复草稿
+                    </button>
                     <button
                       type="button"
                       disabled={
@@ -3883,6 +4070,15 @@ function buildContentMetadataDiffs(
   }
   if ((baseline.expiresAt ?? '') !== (current.expiresAt ?? '')) {
     diffs.push(`有效期：${baseline.expiresAt ?? '未设置'} -> ${current.expiresAt ?? '未设置'}`);
+  }
+
+  const poiDiff = describeStringListDiff(
+    baseline.relatedPoiMarkerIds ?? [],
+    current.relatedPoiMarkerIds ?? [],
+    '关联 POI',
+  );
+  if (poiDiff) {
+    diffs.push(poiDiff);
   }
 
   const tagDiff = describeStringListDiff(

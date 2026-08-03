@@ -1,10 +1,18 @@
 import { SecondaryShell } from '../../../components/app-shell';
 import { AdminOperationsPanel } from '../../../components/admin-operations-panel';
 import { AdminSectionNavigation } from '../../../components/admin-section-navigation';
+import { pageMetadata } from '../../../lib/site-metadata';
 
 export const dynamic = 'force-dynamic';
+export const metadata = pageMetadata.adminOperations;
 
-export default function AdminOperationsPage() {
+export default async function AdminOperationsPage({
+  searchParams,
+}: Readonly<{ searchParams?: Promise<{ contentId?: string | string[] }> }>) {
+  const resolved = searchParams ? await searchParams : undefined;
+  const contentId = Array.isArray(resolved?.contentId)
+    ? resolved.contentId[0]
+    : resolved?.contentId;
   return (
     <SecondaryShell
       title="内容后台"
@@ -12,7 +20,7 @@ export default function AdminOperationsPage() {
       desktopBackHref="/account"
       desktopNavigation={<AdminSectionNavigation currentPath="/admin/operations" includeOverview />}
     >
-      <AdminOperationsPanel />
+      <AdminOperationsPanel initialContentId={contentId} />
     </SecondaryShell>
   );
 }

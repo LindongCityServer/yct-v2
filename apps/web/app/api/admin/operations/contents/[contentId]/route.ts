@@ -35,6 +35,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     categoryId: parsed.data.categoryId,
     markdown: parsed.data.markdown,
     assetIds: parsed.data.assetIds,
+    scheduledAt: parsed.data.scheduledAt,
     actorId: admin.ldpassUserId,
     metadata: {
       excerpt: parsed.data.excerpt,
@@ -44,6 +45,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       coverColor: parsed.data.coverColor,
       coverImageUrl: parsed.data.coverImageUrl,
       expiresAt: parsed.data.expiresAt,
+      relatedPoiMarkerIds: parsed.data.relatedPoiMarkerIds,
     },
   });
 

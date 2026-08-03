@@ -16,6 +16,7 @@ export const adminContentDraftSchema = contentRevisionDraftSchema.extend({
   coverColor: z.string().trim().max(120).optional(),
   coverImageUrl: contentCoverImageUrlSchema.optional(),
   expiresAt: z.string().datetime({ offset: true }).optional(),
+  relatedPoiMarkerIds: z.array(z.string().trim().min(1).max(220)).max(100).default([]),
 });
 
 export type AdminContentDraftInput = z.infer<typeof adminContentDraftSchema>;

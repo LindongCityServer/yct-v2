@@ -1,22 +1,47 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { cache } from 'react';
 import type { OperationsContentDetail } from '@yct/contracts';
 import { SecondaryShell } from '../../../components/app-shell';
+import { AdminEditLink } from '../../../components/admin-edit-link';
 import { MarkdownBlocks, extractMarkdownHeadings } from '../../../components/markdown-blocks';
 import { OperationTableOfContents } from '../../../components/operation-table-of-contents';
+import { OperationRelatedPois } from '../../../components/operation-related-pois';
 import { TitleWithBreaks } from '../../../components/title-with-breaks';
 import { appPath } from '../../../lib/app-paths';
 import { readOperationDetail } from '../../../lib/operations-content';
+import { createPageMetadata, normalizeMetadataDescription } from '../../../lib/site-metadata';
 
 export const dynamic = 'force-dynamic';
 
-export default async function OperationDetailPage({
-  params,
-}: Readonly<{
+type OperationDetailPageProps = Readonly<{
   params: Promise<{ id: string }>;
-}>) {
+}>;
+
+const readOperationPageDetail = cache(readOperationDetail);
+
+export async function generateMetadata({ params }: OperationDetailPageProps): Promise<Metadata> {
+  const { id } = await params;
+  const { item } = await readOperationPageDetail(decodeSegment(id));
+
+  if (!item) {
+    return createPageMetadata({
+      title: '运营信息',
+      description: '查看雨城通发布的交通运营动态、服务公告与服务器资讯。',
+      noIndex: true,
+    });
+  }
+
+  return createPageMetadata({
+    title: item.title,
+    description: normalizeMetadataDescription(item.excerpt, '查看雨城通发布的运营信息与详情。'),
+  });
+}
+
+export default async function OperationDetailPage({ params }: OperationDetailPageProps) {
   const { id } = await params;
   const decodedId = decodeSegment(id);
-  const { item } = await readOperationDetail(decodedId);
+  const { item } = await readOperationPageDetail(decodedId);
 
   if (!item) {
     notFound();
@@ -28,7 +53,15 @@ export default async function OperationDetailPage({
     <SecondaryShell
       title="运营信息"
       titleKey="page.operations"
-      secondaryActions={<OperationTableOfContents headings={headings} />}
+      secondaryActions={
+        <>
+          <AdminEditLink
+            href={`/admin/operations?contentId=${encodeURIComponent(item.id)}`}
+            label="编辑运营消息"
+          />
+          <OperationTableOfContents headings={headings} />
+        </>
+      }
     >
       <article className="operation-detail">
         <header className="operation-detail-header">
@@ -78,6 +111,8 @@ export default async function OperationDetailPage({
         ) : (
           <LegacyBodyFallback item={item} />
         )}
+
+        <OperationRelatedPois markerIds={item.relatedPoiMarkerIds} />
 
         {item.legacyImageSourceUrl || item.legacyLink ? (
           <p className="operation-source-note">
