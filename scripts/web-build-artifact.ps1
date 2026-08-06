@@ -764,6 +764,7 @@ Notes:
 - start-yct-web.ps1 loads .env -> .env.production -> .env.local -> .env.production.local, and later files override earlier ones. These values also override inherited shell / PM2 environment variables for the same keys so stale localhost settings do not leak into production.
 - deploy-yct-web.ps1 will automatically preserve .env, .env.production, .env.local, .env.production.local, .yct-data, runtime-assets, and apps\web\public\content-assets from the old deployment directory before replacing files.
 - For ordinary releases after the WordPress and legacy content migrations, follow POST_MIGRATION_DEPLOYMENT.md. Do not rerun either one-time migration during deployment.
+- Before any server-side configuration or release operation, read SERVER_PRODUCTION_CONFIG_RUNBOOK.md and follow its secret, single-instance, push, ldpass, and data-preservation rules.
 - init-yct-admin.ps1 writes .yct-data\admin-memberships.json by default, or YCT_ADMIN_STORE_PATH when that environment variable is set. This file is runtime data and must not be committed.
 - run-yct-player-location-poller.ps1 must run as a separate long-lived process with the same YCT_INTERNAL_TASK_TOKEN as the web server. It keeps polling the player provider while no browser is visiting the site, so offline locations are persisted after disconnects.
 - If the reverse proxy is mounted at /v2, build and start with BasePath /v2. If it is mounted at the site root later, rebuild with an empty BasePath.
@@ -790,6 +791,11 @@ Notes:
   Copy-Item -LiteralPath (Join-Path $root "docs\ROOT_PATH_MIGRATION.md") -Destination (Join-Path $stageRoot "ROOT_PATH_MIGRATION.md") -Force
   Copy-Item -LiteralPath (Join-Path $root "docs\LEGACY_CONTENT_MIGRATION.md") -Destination (Join-Path $stageRoot "LEGACY_CONTENT_MIGRATION.md") -Force
   Copy-Item -LiteralPath (Join-Path $root "docs\POST_MIGRATION_DEPLOYMENT.md") -Destination (Join-Path $stageRoot "POST_MIGRATION_DEPLOYMENT.md") -Force
+  Copy-Item -LiteralPath (Join-Path $root "docs\SERVER_PRODUCTION_CONFIG_RUNBOOK.md") -Destination (Join-Path $stageRoot "SERVER_PRODUCTION_CONFIG_RUNBOOK.md") -Force
+  Copy-Item -LiteralPath (Join-Path $root "docs\DEPLOYMENT.md") -Destination (Join-Path $stageRoot "DEPLOYMENT.md") -Force
+  Copy-Item -LiteralPath (Join-Path $root "docs\DATA_MIGRATION.md") -Destination (Join-Path $stageRoot "DATA_MIGRATION.md") -Force
+  Copy-Item -LiteralPath (Join-Path $root "docs\LDPASS_INTEGRATION.md") -Destination (Join-Path $stageRoot "LDPASS_INTEGRATION.md") -Force
+  Copy-Item -LiteralPath (Join-Path $root "docs\RIDE_CODE_GATEWAY.md") -Destination (Join-Path $stageRoot "RIDE_CODE_GATEWAY.md") -Force
   $stageNginxRoot = Join-Path $stageRoot "nginx"
   New-Item -ItemType Directory -Force -Path $stageNginxRoot | Out-Null
   Copy-Item -LiteralPath (Join-Path $root "deploy\nginx\yct-root-locations.conf") -Destination (Join-Path $stageNginxRoot "yct-root-locations.conf") -Force
@@ -826,6 +832,7 @@ if ($ValidateOnly) {
     RootMigrationGuide = "ROOT_PATH_MIGRATION.md"
     PostMigrationDeploymentGuide = "POST_MIGRATION_DEPLOYMENT.md"
     LegacyContentMigrationGuide = "LEGACY_CONTENT_MIGRATION.md"
+    ServerProductionConfigRunbook = "SERVER_PRODUCTION_CONFIG_RUNBOOK.md"
     LegacyContentMigrationScript = "migrate-yct-legacy-content.ps1"
     SmokeCheckScript = "check-yct-web-smoke.ps1"
     InternalTaskScript = "run-yct-internal-tasks.ps1"
@@ -921,6 +928,7 @@ $result = [pscustomobject]@{
   SmokeCheckScript = "check-yct-web-smoke.ps1"
   InternalTaskScript = "run-yct-internal-tasks.ps1"
   LegacyContentMigrationScript = "migrate-yct-legacy-content.ps1"
+  ServerProductionConfigRunbook = "SERVER_PRODUCTION_CONFIG_RUNBOOK.md"
   InitAdminScript = "init-yct-admin.ps1"
   NodeRequirement = ">=20.9.0"
 }
