@@ -72,6 +72,10 @@ export function normalizeMetadataDescription(value: string | undefined, fallback
   return normalized.length > 160 ? `${normalized.slice(0, 157)}...` : normalized;
 }
 
+export function serializeJsonLd(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+
 export const pageMetadata = {
   account: createPageMetadata({
     title: '账号设置',

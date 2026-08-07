@@ -57,6 +57,7 @@ pnpm typecheck
 - [地图接入](docs/MAP_INTEGRATION.md)
 - [物料模板与线网来源](docs/MATERIAL_TEMPLATE_SOURCE.md)
 - [部署说明](docs/DEPLOYMENT.md)
+- [AI 接入基线](docs/AI_ACCESS.md)
 
 ## 提交前检查
 

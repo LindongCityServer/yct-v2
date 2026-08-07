@@ -11,18 +11,34 @@ export function proxy(request: NextRequest) {
     ? NextResponse.rewrite(createRewriteUrl(request, rewrittenPathname))
     : NextResponse.next();
   const isServiceWorker = pathname.endsWith('/sw.js') || pathname === '/sw.js';
+  const isAiPublicSurface = isPublicAiSurface(pathname);
 
   if (
-    isServiceWorker ||
-    (!pathname.includes('/_next/static/') &&
-      !pathname.includes('/_next/image') &&
-      !staticAssetPattern.test(pathname))
+    !isAiPublicSurface &&
+    (isServiceWorker ||
+      (!pathname.includes('/_next/static/') &&
+        !pathname.includes('/_next/image') &&
+        !staticAssetPattern.test(pathname)))
   ) {
     response.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
     response.headers.set('Pragma', 'no-cache');
   }
 
   return response;
+}
+
+function isPublicAiSurface(pathname: string): boolean {
+  const publicApiPath = appBasePath ? `${appBasePath}/api/v1/public` : '/api/v1/public';
+  const discoveryPaths = [
+    appBasePath ? `${appBasePath}/robots.txt` : '/robots.txt',
+    appBasePath ? `${appBasePath}/sitemap.xml` : '/sitemap.xml',
+    appBasePath ? `${appBasePath}/llms.txt` : '/llms.txt',
+  ];
+  return (
+    pathname === publicApiPath ||
+    pathname.startsWith(`${publicApiPath}/`) ||
+    discoveryPaths.includes(pathname)
+  );
 }
 
 function resolveRewrittenPathname(pathname: string): string | undefined {

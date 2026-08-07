@@ -10,7 +10,12 @@ import { OperationRelatedPois } from '../../../components/operation-related-pois
 import { TitleWithBreaks } from '../../../components/title-with-breaks';
 import { appPath } from '../../../lib/app-paths';
 import { readOperationDetail } from '../../../lib/operations-content';
-import { createPageMetadata, normalizeMetadataDescription } from '../../../lib/site-metadata';
+import { publicSiteUrl } from '../../../lib/public-api';
+import {
+  createPageMetadata,
+  normalizeMetadataDescription,
+  serializeJsonLd,
+} from '../../../lib/site-metadata';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,10 +37,15 @@ export async function generateMetadata({ params }: OperationDetailPageProps): Pr
     });
   }
 
-  return createPageMetadata({
-    title: item.title,
-    description: normalizeMetadataDescription(item.excerpt, '查看雨城通发布的运营信息与详情。'),
-  });
+  return {
+    ...createPageMetadata({
+      title: item.title,
+      description: normalizeMetadataDescription(item.excerpt, '查看雨城通发布的运营信息与详情。'),
+    }),
+    alternates: {
+      canonical: appPath(`/operations/${encodeURIComponent(item.id)}`),
+    },
+  };
 }
 
 export default async function OperationDetailPage({ params }: OperationDetailPageProps) {
@@ -64,6 +74,25 @@ export default async function OperationDetailPage({ params }: OperationDetailPag
       }
     >
       <article className="operation-detail">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: serializeJsonLd({
+              '@context': 'https://schema.org',
+              '@type': 'Article',
+              headline: item.title,
+              description: item.excerpt,
+              datePublished: item.publishedAt,
+              dateModified: item.publishedAt,
+              mainEntityOfPage: publicSiteUrl(`/operations/${encodeURIComponent(item.id)}`),
+              isPartOf: {
+                '@type': 'WebSite',
+                name: '雨城通',
+                url: publicSiteUrl('/'),
+              },
+            }),
+          }}
+        />
         <header className="operation-detail-header">
           <div className="feed-item-meta">
             <span>{item.categoryId}</span>
