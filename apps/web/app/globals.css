@@ -5279,17 +5279,17 @@ img.map-player-list-avatar.is-offline {
   min-width: 40px;
   min-height: 40px;
   padding: 0;
-  border: 1px solid var(--yct-color-border);
+  border: 1px solid transparent;
   border-radius: var(--yct-radius-pill);
-  background: color-mix(in srgb, var(--yct-color-surface-panel) 92%, transparent);
+  background: transparent;
   color: var(--yct-color-text);
-  box-shadow: var(--yct-shadow-floating);
+  box-shadow: none;
   font: inherit;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  -webkit-backdrop-filter: blur(var(--yct-material-blur-medium));
-  backdrop-filter: blur(var(--yct-material-blur-medium));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   transition:
     background-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
     border-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
@@ -15413,7 +15413,7 @@ button.material-studio-review-badge {
   color: var(--yct-color-primary);
 }
 
-:root:is([data-embedded], [data-material-mode='advanced'])
+:root[data-material-mode='advanced']
   .secondary-topbar
   .secondary-actions:has(> .admin-edit-link):has(> .operation-toc) {
   height: 40px;
@@ -15424,12 +15424,10 @@ button.material-studio-review-badge {
   box-shadow: var(--yct-shadow-floating);
 }
 
-:root:is([data-embedded], [data-material-mode='advanced'])
-  .secondary-topbar
-  .secondary-actions:has(> .admin-edit-link):has(> .operation-toc)
+.secondary-topbar
+  .secondary-actions:has(> .admin-edit-link)
   > .admin-edit-link,
-:root:is([data-embedded], [data-material-mode='advanced'])
-  .secondary-topbar
+.secondary-topbar
   .secondary-actions:has(> .admin-edit-link):has(> .operation-toc)
   > .operation-toc
   .operation-toc-toggle {
@@ -15438,13 +15436,13 @@ button.material-studio-review-badge {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
+  filter: none;
   text-shadow: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
 
-:root:is([data-embedded], [data-material-mode='advanced'])
-  .secondary-topbar
+.secondary-topbar
   .secondary-actions:has(> .admin-edit-link):has(> .operation-toc)
   > .operation-toc
   .operation-toc-toggle {
@@ -15452,9 +15450,8 @@ button.material-studio-review-badge {
   min-width: 38px;
 }
 
-:root:is([data-embedded], [data-material-mode='advanced'])
-  .secondary-topbar
-  .secondary-actions:has(> .admin-edit-link):has(> .operation-toc)
+.secondary-topbar
+  .secondary-actions:has(> .admin-edit-link)
   > .admin-edit-link:is(:hover, :focus-visible) {
   background: var(--yct-material-hover-state);
   color: var(--yct-color-text);
@@ -15497,15 +15494,8 @@ button.material-studio-review-badge {
   backdrop-filter: blur(var(--yct-material-blur-medium));
 }
 
-:root[data-embedded]
-  .secondary-topbar
-  .secondary-actions:has(> .admin-edit-link):has(> .operation-toc) {
-  background: color-mix(in srgb, var(--yct-color-surface-panel) 92%, transparent);
-  -webkit-backdrop-filter: blur(var(--yct-material-blur-medium));
-  backdrop-filter: blur(var(--yct-material-blur-medium));
-}
-
-:root[data-embedded] .topbar > .icon-button {
+:root[data-embedded] .topbar:not(.secondary-topbar) > .icon-button,
+:root[data-embedded][data-material-mode='advanced'] .secondary-topbar > .icon-button {
   border-color: var(--yct-color-border);
   background: color-mix(in srgb, var(--yct-color-surface-panel) 92%, transparent);
   box-shadow: var(--yct-shadow-floating);
@@ -15513,8 +15503,10 @@ button.material-studio-review-badge {
   backdrop-filter: blur(var(--yct-material-blur-medium));
 }
 
-:root[data-embedded] .topbar > .icon-button:hover,
-:root[data-embedded] .topbar > .icon-button:focus-visible,
+:root[data-embedded] .topbar:not(.secondary-topbar) > .icon-button:hover,
+:root[data-embedded] .topbar:not(.secondary-topbar) > .icon-button:focus-visible,
+:root[data-embedded][data-material-mode='advanced'] .secondary-topbar > .icon-button:hover,
+:root[data-embedded][data-material-mode='advanced'] .secondary-topbar > .icon-button:focus-visible,
 :root[data-embedded] .topbar-actions > .icon-button:hover,
 :root[data-embedded] .topbar-actions > .icon-button:focus-visible,
 :root[data-embedded] .topbar-actions > .account-button:hover,
@@ -16659,7 +16651,10 @@ button.material-studio-review-badge {
 }
 
 :root:not([data-embedded])[data-material-mode='performance']
-  :is(.topbar > :has(> :is(button, a)), .topbar > :is(button, a):not(.brand)) {
+  :is(
+    .topbar > :has(> :is(button, a)):not(.secondary-actions),
+    .topbar > :is(button, a):not(.brand)
+  ) {
   background: var(--yct-color-surface-panel);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
@@ -17030,7 +17025,10 @@ button.material-studio-review-badge {
   }
 
   :root:not([data-material-mode='advanced']):not([data-embedded])
-    :is(.topbar > :has(> :is(button, a)), .topbar > :is(button, a):not(.brand)) {
+    :is(
+      .topbar > :has(> :is(button, a)):not(.secondary-actions),
+      .topbar > :is(button, a):not(.brand)
+    ) {
     background: var(--yct-color-surface-panel) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
