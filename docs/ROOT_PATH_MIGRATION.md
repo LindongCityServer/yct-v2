@@ -145,7 +145,7 @@ archived --ContentRestored--> draft --ContentSubmitted--> pending_review
 ```powershell
 Set-Location 'C:\wwwroot\yct-release-root-时间戳'
 
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\prepare-yct-root-migration.ps1'
 ```
 
@@ -166,7 +166,7 @@ Get-NetTCPConnection -LocalPort 3300 -State Listen -ErrorAction SilentlyContinue
 ### 4.3 备份、搬素材并合并 `.env`
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\prepare-yct-root-migration.ps1' `
   -Apply
 ```
@@ -182,10 +182,10 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 
 在新包目录运行：
 
-命令行中的根路径统一写成 `-BasePath '/'`。Windows PowerShell 5.1 会丢弃传给另一个 `powershell.exe` 的显式空字符串参数，而脚本会安全地把 `/` 归一化为内部空 BasePath；不要写 `-BasePath ''` 或 `-BasePath '\'`。
+部署命令统一使用 PowerShell 7（`pwsh`），根路径统一写成 `-BasePath '/'`。脚本会安全地把 `/` 归一化为内部空 BasePath；不要写 `-BasePath ''` 或 `-BasePath '\'`。
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\deploy-yct-web.ps1' `
   -TargetRoot 'C:\wwwroot\yct-v2' `
   -BasePath '/'
@@ -198,11 +198,11 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 ```powershell
 Set-Location 'C:\wwwroot\yct-v2'
 
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\check-runtime-config.ps1' `
   -BasePath '/'
 
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\start-yct-web.ps1' `
   -Port 3300 `
   -HostName 127.0.0.1 `
@@ -213,7 +213,7 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 配置检查应显示站点为 `https://yct.shangxiaoguan.top`，回调为 `https://yct.shangxiaoguan.top/auth/ldpass/callback`，BasePath 为 `/`。Node 启动后先直接验收内网端口：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\check-yct-web-smoke.ps1' `
   -Origin 'http://127.0.0.1:3300' `
   -BasePath '/' `
@@ -240,7 +240,7 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 ### 4.7 公网验收
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File 'C:\wwwroot\yct-v2\check-yct-web-smoke.ps1' `
   -Origin 'https://yct.shangxiaoguan.top' `
   -BasePath '/'

@@ -33,38 +33,38 @@ apps/web/.next/standalone
 在本地开发机或 CI 上构建部署包：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2
 ```
 
 生成 `zip` 时脚本会优先使用 7-Zip，其次回退到 `tar.exe -a`，最后才使用 PowerShell `Compress-Archive`。如果 7-Zip 不在 PATH 或常见安装目录，可以显式指定：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -SevenZipPath "C:\Program Files\7-Zip\7z.exe"
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -SevenZipPath "C:\Program Files\7-Zip\7z.exe"
 ```
 
 也可以通过环境变量复用同一路径：
 
 ```powershell
 $env:YCT_7Z_PATH = "C:\Program Files\7-Zip\7z.exe"
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2
 ```
 
 如果没有可用的 7-Zip，且 zip 压缩在 Windows 上耗时过长或留下 0 字节临时文件，可以改用 `tar.gz`：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -ArchiveFormat tar.gz
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -ArchiveFormat tar.gz
 ```
 
 如果压缩本身仍然很慢，可以生成不压缩的 `tar` 包：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -ArchiveFormat tar
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -ArchiveFormat tar
 ```
 
 如果上一次命令已经完成 staging，只是在归档阶段中断，可以复用 `.deploy/web` 直接重试归档：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -ArchiveFormat zip -SkipBuild -SkipStaging
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -ArchiveFormat zip -SkipBuild -SkipStaging
 ```
 
 如果未来从 `/v2` 切回站点根路径，改为：
@@ -97,7 +97,7 @@ pnpm web:artifact
 如果只想验证当前 staging 目录里的 standalone 产物是否完整，而不重新压缩大包，可以使用：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -SkipBuild -SkipStaging -ValidateOnly
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -SkipBuild -SkipStaging -ValidateOnly
 ```
 
 该校验会检查 staged HTML/RSC 引用的 `_next/static`、图标、manifest 和 service worker 是否存在；当脚本本次重新生成 staging 时，还会检查 `apps/web/public/sw.js` 的 `YCT_SW_VERSION` 是否已经被改写为本次构建号。当 `BasePath` 为 `/v2` 时，也会拦截没有 `/v2` 前缀的同源静态资源链接。
@@ -112,6 +112,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.p
 C:\wwwroot\yct-v2\
 ├─ start-yct-web.ps1
 ├─ DEPLOYMENT.txt
+├─ AI_ACCESS.md
 ├─ .env                         # 推荐放这里
 ├─ .env.production              # 如果你习惯拆环境文件，也放这里
 ├─ .yct-data\
@@ -133,19 +134,19 @@ C:\wwwroot\yct-v2\
 如果你怀疑线上虽然有 `.env` 但应用仍提示 `ldpass_not_configured`，可以先在部署目录运行：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1
 ```
 
 如果当前实例通过启动参数挂载在 `/v2`，建议显式带上：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -BasePath v2
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -BasePath v2
 ```
 
 如果你只是想在本地临时验证某个访问入口会生成什么回调地址，也可以额外传入实际访问的 Origin：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -Origin http://localhost:3300 -BasePath v2
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -Origin http://localhost:3300 -BasePath v2
 ```
 
 这个脚本会按生产环境优先级检查 `.env`、`.env.production`、`.env.local`、`.env.production.local`，只输出配置项是否存在、来源文件、推导出的回调地址和告警，不会打印敏感值。部署包根目录也会附带同名脚本，解压后无需依赖仓库源码或 `tsx`。
@@ -153,7 +154,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -
 如果需要在只有 standalone 部署包、没有 pnpm 的服务器上指定首位或追加雨城通管理员，可在部署根目录运行：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\init-yct-admin.ps1 -LdpassUserId "<ldpassUserId>"
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\init-yct-admin.ps1 -LdpassUserId "<ldpassUserId>"
 ```
 
 脚本默认写入 `.yct-data\admin-memberships.json`；如果配置了 `YCT_ADMIN_STORE_PATH`，则写入该变量指向的管理员成员文件。这个文件属于运行时数据，替换部署包时要随 `.yct-data` 一起保留，不要提交到 GitHub。
@@ -187,7 +188,7 @@ Invoke-RestMethod `
 如果你更希望只打一个统一入口，当前 `/api/internal/tasks/run` 已经把这一步并进去了：默认会先同步客运公告源，再重放事件 Outbox、处理到期 Push 投递并清理过期票务占座。仓库和部署包里都附带一个 PowerShell 调用脚本：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\run-yct-internal-tasks.ps1 `
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\run-yct-internal-tasks.ps1 `
   -Origin http://127.0.0.1:3300 `
   -BasePath v2
 ```
@@ -215,13 +216,13 @@ pnpm web:player-locations:run
 推荐命令：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot C:\wwwroot\yct-v2
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot C:\wwwroot\yct-v2
 ```
 
 如果希望部署完成后直接启动：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot C:\wwwroot\yct-v2 -StartAfterDeploy -Port 3300 -HostName 127.0.0.1 -BasePath v2 -NodePath "C:\node-v22\node.exe"
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot C:\wwwroot\yct-v2 -StartAfterDeploy -Port 3300 -HostName 127.0.0.1 -BasePath v2 -NodePath "C:\node-v22\node.exe"
 ```
 
 这个脚本默认会保留：
@@ -326,7 +327,7 @@ tar -xf .\yct-web-20260704-xxxxxx.tar -C C:\wwwroot\yct-v2
 如果你没有使用 `deploy-yct-web.ps1` 自动启动，也可以在部署目录中手工运行：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath v2 -NodePath "C:\node-v22\node.exe"
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath v2 -NodePath "C:\node-v22\node.exe"
 ```
 
 如果未来站点不再挂载 `/v2`，需要重新用空 BasePath 构建，并以空 BasePath 启动。
@@ -378,7 +379,7 @@ Invoke-WebRequest -Uri "https://yct.shangxiaoguan.top/v2/api/health?check=$(Get-
 部署包中还会附带一个现成的烟雾检查脚本，可把上面的几步合并成一次检查：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\check-yct-web-smoke.ps1 -Origin "https://yct.shangxiaoguan.top" -BasePath "v2"
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-yct-web-smoke.ps1 -Origin "https://yct.shangxiaoguan.top" -BasePath "v2"
 ```
 
 它会依次检查：
@@ -388,6 +389,34 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\check-yct-web-smoke.ps1 -O
 - `/v2/api/map/markers`
 - `/v2/sw.js` 的首行构建号
 - `/v2/api/auth/ldpass/start` 的 `location` 与 `yct.ldpass_return_origin` cookie（可用 `-SkipLdpass` 跳过）
+
+### A+B 公共 AI 入口验收
+
+本次公共 AI 基线不需要单独部署模型、向量数据库或 Worker，但公网反代必须把以下路径转发到同一个 Next standalone 实例，不得落到旧静态站或旧 API：
+
+```text
+/robots.txt
+/sitemap.xml
+/llms.txt
+/api/v1/public
+/api/v1/public/openapi
+```
+
+`check-yct-web-smoke.ps1` 已经包含这些检查。除了 HTTP 状态码，还会确认：
+
+- `robots.txt` 允许版本化公共 API，且 `sitemap.xml` 返回有效 sitemap 文档。
+- `llms.txt` 链接到 OpenAPI 文档。
+- 公共 API 目录返回 `apiVersion: v1`，OpenAPI 返回 `3.1.x`。
+- 公共 API 的 `canonicalUrl` 和 `documentationUrl` 不得指向 `localhost`、`127.0.0.1`、`0.0.0.0` 或内部端口；公网检查时必须匹配当前域名和 BasePath。
+- 公共 API 保留 `Access-Control-Allow-Origin: *`、公开短缓存 `Cache-Control` 和 `X-Robots-Tag: noindex`。
+
+生产环境 `YCT_PUBLIC_SITE_URL` 只填写公网 Origin，例如：
+
+```dotenv
+YCT_PUBLIC_SITE_URL=https://yct.shangxiaoguan.top
+```
+
+不要把 `/v2` 写入 `YCT_PUBLIC_SITE_URL`；挂载路径由构建和启动参数的 `BasePath` 单独控制。反代可以增加限流、访问日志和缓存，但不能改写公共 API 的 `data/meta` 响应结构、查询参数或上述响应头。当前 A+B 只提供只读已发布数据，不需要新增数据库、模型服务或常驻 AI 进程。
 
 可以用下面的命令快速核对云端 Service Worker 是否已经换成当前部署包里的版本：
 
@@ -450,7 +479,7 @@ netsh interface ipv4 show excludedportrange protocol=tcp
 如果 `3300` 落在排除范围内，直接换一个内部端口，例如：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3400 -HostName 127.0.0.1 -BasePath v2 -NodePath "C:\node-v22\node.exe"
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3400 -HostName 127.0.0.1 -BasePath v2 -NodePath "C:\node-v22\node.exe"
 ```
 
 然后把宝塔反向代理目标同步改为：

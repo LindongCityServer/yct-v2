@@ -745,6 +745,11 @@ if (`$normalizedBasePath -and -not `$normalizedBasePath.StartsWith("/")) {
   $publicStaticPath = "$publicPathPrefix/_next/static/..."
   $publicLdpassStartPath = "$publicPathPrefix/api/auth/ldpass/start"
   $publicCallbackPath = "$publicPathPrefix/auth/ldpass/callback"
+  $publicRobotsPath = "$publicPathPrefix/robots.txt"
+  $publicSitemapPath = "$publicPathPrefix/sitemap.xml"
+  $publicLlmsPath = "$publicPathPrefix/llms.txt"
+  $publicApiPath = "$publicPathPrefix/api/v1/public"
+  $publicOpenApiPath = "$publicPathPrefix/api/v1/public/openapi"
   $buildMountLabel = if ($basePathValue) { $basePathValue } else { "/ (site root)" }
 
   $deploymentNotes = @"
@@ -755,31 +760,38 @@ Build id: $buildId
 Required Node.js: >=20.9.0. This server currently uses C:\node-v24\node.exe in the examples below.
 
 Recommended deploy command after extracting this bundle to a separate folder:
-  powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot "C:\wwwroot\yct-v2"
+  pwsh -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot "C:\wwwroot\yct-v2"
 
 Deploy and start in one step:
-  powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot "C:\wwwroot\yct-v2" -StartAfterDeploy -Port 3300 -HostName 127.0.0.1 -BasePath "$startBasePathArgument" -NodePath "C:\node-v24\node.exe"
+  pwsh -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot "C:\wwwroot\yct-v2" -StartAfterDeploy -Port 3300 -HostName 127.0.0.1 -BasePath "$startBasePathArgument" -NodePath "C:\node-v24\node.exe"
 
 Runtime config check example:
-  powershell -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -BasePath "$startBasePathArgument"
+  pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -BasePath "$startBasePathArgument"
 
 Deployment smoke check example:
-  powershell -NoProfile -ExecutionPolicy Bypass -File .\check-yct-web-smoke.ps1 -Origin "https://yct.shangxiaoguan.top" -BasePath "$startBasePathArgument"
+  pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-yct-web-smoke.ps1 -Origin "https://yct.shangxiaoguan.top" -BasePath "$startBasePathArgument"
+
+AI/public-data smoke check (included in the deployment smoke check):
+  $publicRobotsPath
+  $publicSitemapPath
+  $publicLlmsPath
+  $publicApiPath
+  $publicOpenApiPath
 
 Unified internal task runner example:
-  powershell -NoProfile -ExecutionPolicy Bypass -File .\run-yct-internal-tasks.ps1 -Origin http://127.0.0.1:3300 -BasePath "$startBasePathArgument"
+  pwsh -NoProfile -ExecutionPolicy Bypass -File .\run-yct-internal-tasks.ps1 -Origin http://127.0.0.1:3300 -BasePath "$startBasePathArgument"
 
 One-time legacy content migration preview:
-  powershell -NoProfile -ExecutionPolicy Bypass -File .\migrate-yct-legacy-content.ps1 -Origin http://127.0.0.1:3300 -BasePath "$startBasePathArgument" -EnvironmentRoot "C:\wwwroot\yct-v2"
+  pwsh -NoProfile -ExecutionPolicy Bypass -File .\migrate-yct-legacy-content.ps1 -Origin http://127.0.0.1:3300 -BasePath "$startBasePathArgument" -EnvironmentRoot "C:\wwwroot\yct-v2"
 
 Continuous player location poller example:
-  powershell -NoProfile -ExecutionPolicy Bypass -File .\run-yct-player-location-poller.ps1 -Origin http://127.0.0.1:3300 -BasePath "$startBasePathArgument" -IntervalSeconds 15
+  pwsh -NoProfile -ExecutionPolicy Bypass -File .\run-yct-player-location-poller.ps1 -Origin http://127.0.0.1:3300 -BasePath "$startBasePathArgument" -IntervalSeconds 15
 
 Initialize a YCT administrator without pnpm:
-  powershell -NoProfile -ExecutionPolicy Bypass -File .\init-yct-admin.ps1 -LdpassUserId "<ldpassUserId>"
+  pwsh -NoProfile -ExecutionPolicy Bypass -File .\init-yct-admin.ps1 -LdpassUserId "<ldpassUserId>"
 
 Start command example:
-  powershell -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath "$startBasePathArgument" -NodePath "C:\node-v24\node.exe"
+  pwsh -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath "$startBasePathArgument" -NodePath "C:\node-v24\node.exe"
 
 Notes:
 - Do not upload local .env files, .yct-data, or runtime-assets into this bundle.
@@ -788,6 +800,7 @@ Notes:
 - start-yct-web.ps1 loads .env -> .env.production -> .env.local -> .env.production.local, and later files override earlier ones. These values also override inherited shell / PM2 environment variables for the same keys so stale localhost settings do not leak into production.
 - deploy-yct-web.ps1 will automatically preserve .env, .env.production, .env.local, .env.production.local, .yct-data, runtime-assets, and apps\web\public\content-assets from the old deployment directory before replacing files.
 - For ordinary releases after the WordPress and legacy content migrations, follow POST_MIGRATION_DEPLOYMENT.md. Do not rerun either one-time migration during deployment.
+- For the A+B public-data surface and future MCP boundary, read AI_ACCESS.md before changing public routes, caching, CORS, or canonical URLs.
 - Before any server-side configuration or release operation, read SERVER_PRODUCTION_CONFIG_RUNBOOK.md and follow its secret, single-instance, push, ldpass, and data-preservation rules.
 - init-yct-admin.ps1 writes .yct-data\admin-memberships.json by default, or YCT_ADMIN_STORE_PATH when that environment variable is set. This file is runtime data and must not be committed.
 - run-yct-player-location-poller.ps1 must run as a separate long-lived process with the same YCT_INTERNAL_TASK_TOKEN as the web server. It keeps polling the player provider while no browser is visiting the site, so offline locations are persisted after disconnects.
@@ -796,6 +809,11 @@ Notes:
 - When replacing an existing deployment in place, preserve at least .yct-data, runtime-assets, and apps\web\public\content-assets from the old directory before clearing files. Copying only .yct-data is not enough if the site already contains uploaded content assets or POI category icons.
 - If returning users still see an older version, check that the old Node process is stopped, the deployment directory does not contain stale .next/static files, and the reverse proxy or browser Service Worker is not serving cached HTML/RSC responses.
 - After deployment, $publicHealthPath should return JSON containing buildId '$buildId' and basePath '$basePathValue'. Then $publicMapPath, $publicMarkerPath, $publicServiceWorkerPath, and the $publicStaticPath assets referenced by the page HTML should all return 200. The first line of $publicServiceWorkerPath should contain: const YCT_SW_VERSION = '$buildId';
+- The A+B public-data surface must remain on the same public origin and BasePath: $publicRobotsPath, $publicSitemapPath, $publicLlmsPath, $publicApiPath, and $publicOpenApiPath. Do not route these paths to the legacy static site or an internal API.
+- YCT_PUBLIC_SITE_URL must be the public origin only (for example, https://yct.shangxiaoguan.top), while BasePath is supplied separately. The public API catalog must not return localhost, 127.0.0.1, 0.0.0.0, or an internal port in canonicalUrl/documentationUrl.
+- The public API is read-only and returns only published data. Preserve its Access-Control-Allow-Origin, Cache-Control, and X-Robots-Tag response headers; do not replace them with a blanket no-store or authenticated-only reverse-proxy rule.
+- If the reverse proxy applies rate limits, access logs, or caching to $publicApiPath, configure those rules at the proxy layer without changing query strings or the JSON response envelope. Do not invent a rate limit value without checking expected traffic and the server capacity.
+- llms.txt is a navigation document, not a source of time-sensitive facts. AI clients should follow $publicOpenApiPath and inspect sourceStatus, generatedAt, asOf, timezone, and canonicalUrl before presenting data.
 - If ldpass login still jumps to localhost or 127.0.0.1, inspect $publicLdpassStartPath directly. The redirect Location should contain redirect_uri=https://yct.shangxiaoguan.top$publicCallbackPath and Set-Cookie should include both yct.ldpass_state and yct.ldpass_return_origin.
 - For the one-time /v2 to site-root cutover, follow ROOT_PATH_MIGRATION.md and install nginx/yct-root-locations.conf only after reviewing the documented old-static-site compatibility rules.
 - For the one-time import of the old content_data.js and content/*.html files, follow LEGACY_CONTENT_MIGRATION.md. Preview first; -Apply only creates missing drafts and never overwrites an existing contentId.
@@ -817,6 +835,7 @@ Notes:
   Copy-Item -LiteralPath (Join-Path $root "docs\POST_MIGRATION_DEPLOYMENT.md") -Destination (Join-Path $stageRoot "POST_MIGRATION_DEPLOYMENT.md") -Force
   Copy-Item -LiteralPath (Join-Path $root "docs\SERVER_PRODUCTION_CONFIG_RUNBOOK.md") -Destination (Join-Path $stageRoot "SERVER_PRODUCTION_CONFIG_RUNBOOK.md") -Force
   Copy-Item -LiteralPath (Join-Path $root "docs\DEPLOYMENT.md") -Destination (Join-Path $stageRoot "DEPLOYMENT.md") -Force
+  Copy-Item -LiteralPath (Join-Path $root "docs\AI_ACCESS.md") -Destination (Join-Path $stageRoot "AI_ACCESS.md") -Force
   Copy-Item -LiteralPath (Join-Path $root "docs\DATA_MIGRATION.md") -Destination (Join-Path $stageRoot "DATA_MIGRATION.md") -Force
   Copy-Item -LiteralPath (Join-Path $root "docs\LDPASS_INTEGRATION.md") -Destination (Join-Path $stageRoot "LDPASS_INTEGRATION.md") -Force
   Copy-Item -LiteralPath (Join-Path $root "docs\RIDE_CODE_GATEWAY.md") -Destination (Join-Path $stageRoot "RIDE_CODE_GATEWAY.md") -Force
@@ -857,6 +876,7 @@ if ($ValidateOnly) {
     PostMigrationDeploymentGuide = "POST_MIGRATION_DEPLOYMENT.md"
     LegacyContentMigrationGuide = "LEGACY_CONTENT_MIGRATION.md"
     ServerProductionConfigRunbook = "SERVER_PRODUCTION_CONFIG_RUNBOOK.md"
+    AiAccessGuide = "AI_ACCESS.md"
     LegacyContentMigrationScript = "migrate-yct-legacy-content.ps1"
     SmokeCheckScript = "check-yct-web-smoke.ps1"
     InternalTaskScript = "run-yct-internal-tasks.ps1"
@@ -970,6 +990,7 @@ $result = [pscustomobject]@{
   InternalTaskScript = "run-yct-internal-tasks.ps1"
   LegacyContentMigrationScript = "migrate-yct-legacy-content.ps1"
   ServerProductionConfigRunbook = "SERVER_PRODUCTION_CONFIG_RUNBOOK.md"
+  AiAccessGuide = "AI_ACCESS.md"
   InitAdminScript = "init-yct-admin.ps1"
   NodeRequirement = ">=20.9.0"
 }

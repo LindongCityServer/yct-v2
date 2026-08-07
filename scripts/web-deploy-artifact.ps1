@@ -336,7 +336,7 @@ if (
   (Test-Path -LiteralPath $envMergeScript -PathType Leaf) -and
   (Test-Path -LiteralPath $envExamplePath -PathType Leaf)
 ) {
-  & powershell -NoProfile -ExecutionPolicy Bypass `
+  & pwsh -NoProfile -ExecutionPolicy Bypass `
     -File $envMergeScript `
     -TargetEnv $targetEnvPath `
     -ExampleEnv $envExamplePath `
@@ -353,7 +353,7 @@ $cliBasePath = if ([string]::IsNullOrWhiteSpace($BasePath)) { "/" } else { $Base
 $configCheckScript = Join-Path $resolvedTargetRoot "check-runtime-config.ps1"
 if (Test-Path -LiteralPath $configCheckScript) {
   try {
-    $configCheckJson = & powershell -NoProfile -ExecutionPolicy Bypass -File $configCheckScript -BasePath $cliBasePath -Json
+    $configCheckJson = & pwsh -NoProfile -ExecutionPolicy Bypass -File $configCheckScript -BasePath $cliBasePath -Json
     if ($LASTEXITCODE -ne 0) {
       throw "check-runtime-config.ps1 exited with code $LASTEXITCODE."
     }
@@ -386,5 +386,5 @@ if (Test-Path -LiteralPath $configCheckScript) {
 
 if ($StartAfterDeploy) {
   $startScript = Join-Path $resolvedTargetRoot "start-yct-web.ps1"
-  & powershell -NoProfile -ExecutionPolicy Bypass -File $startScript -Port $Port -HostName $HostName -BasePath $cliBasePath -NodePath $NodePath
+  & pwsh -NoProfile -ExecutionPolicy Bypass -File $startScript -Port $Port -HostName $HostName -BasePath $cliBasePath -NodePath $NodePath
 }

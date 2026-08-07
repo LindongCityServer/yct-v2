@@ -6,13 +6,13 @@
 
 生产环境的事实来源是服务器当前运行态，不是部署包，也不是最初迁移时的冷归档：
 
-| 内容 | 生产位置 | 普通发版处理 |
-| --- | --- | --- |
-| 文章、迁移结果、账号、审核、事件 Outbox 等 | `C:\wwwroot\yct-v2\.yct-data` | 整体备份、整体保留 |
-| 生产环境变量和密钥 | `C:\wwwroot\yct-v2\.env*` | 保留现有值，只补缺失键 |
-| 运行时图标等资源 | `C:\wwwroot\yct-v2\runtime-assets` | 整体备份、整体保留 |
-| 内容实体素材 | `C:\wwwroot\yct-runtime\content-assets` | 位于程序目录外，不随发版替换 |
-| 旧静态站 | `C:\wwwroot\yct.shangxiaoguan.top` | 继续只读保留 |
+| 内容                                       | 生产位置                                | 普通发版处理                 |
+| ------------------------------------------ | --------------------------------------- | ---------------------------- |
+| 文章、迁移结果、账号、审核、事件 Outbox 等 | `C:\wwwroot\yct-v2\.yct-data`           | 整体备份、整体保留           |
+| 生产环境变量和密钥                         | `C:\wwwroot\yct-v2\.env*`               | 保留现有值，只补缺失键       |
+| 运行时图标等资源                           | `C:\wwwroot\yct-v2\runtime-assets`      | 整体备份、整体保留           |
+| 内容实体素材                               | `C:\wwwroot\yct-runtime\content-assets` | 位于程序目录外，不随发版替换 |
+| 旧静态站                                   | `C:\wwwroot\yct.shangxiaoguan.top`      | 继续只读保留                 |
 
 迁移完成后，最初记录的 76 条内容、1291 个素材或旧 SHA-256 只用于证明当时的迁移快照。只要线上发生过编辑、发布、投稿、账号登录或事件投递，当前文件数量和哈希就可能合法变化，不能再用旧哈希覆盖或否定当前生产数据。
 
@@ -89,12 +89,12 @@ $yctDataFiles = @(Get-ChildItem -LiteralPath $yctDataRoot -Recurse -Force -File)
 
 在新包解压目录执行：
 
-Windows PowerShell 5.1 调用另一个 `powershell.exe` 时会丢弃显式空字符串参数，因此根路径统一传 `-BasePath '/'`。脚本会把 `/` 归一化为应用内部的空 BasePath；不要传 `''`，也不要用反斜杠 `\`。
+部署命令统一使用 PowerShell 7（`pwsh`）。根路径统一传 `-BasePath '/'`，脚本会把 `/` 归一化为应用内部的空 BasePath；不要传 `''`，也不要用反斜杠 `\`。
 
 ```powershell
 Set-Location 'C:\wwwroot\yct-release-时间戳'
 
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\deploy-yct-web.ps1' `
   -TargetRoot 'C:\wwwroot\yct-v2' `
   -BasePath '/' `
@@ -124,11 +124,11 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 ```powershell
 Set-Location 'C:\wwwroot\yct-v2'
 
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\check-runtime-config.ps1' `
   -BasePath '/'
 
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\start-yct-web.ps1' `
   -Port 3300 `
   -HostName 127.0.0.1 `
@@ -139,19 +139,38 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 先执行内网检查，再执行公网检查：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\check-yct-web-smoke.ps1' `
   -Origin 'http://127.0.0.1:3300' `
   -BasePath '/' `
   -SkipLdpass
 
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\check-yct-web-smoke.ps1' `
   -Origin 'https://yct.shangxiaoguan.top' `
   -BasePath '/'
 ```
 
 还要人工核对后台中的 WordPress 归档文章、旧站迁入草稿、上次发版后新建或编辑的内容、内容图片、账号登录和地图数据。全部正常后再恢复玩家位置采集器和计划任务，并确认同一时刻只有一个 Web 实例写这份 JSON 数据库。
+
+### 5.1 A+B 公共 AI 入口
+
+当前版本的 AI 接入是站点可发现性和公共只读 API，不需要额外启动模型、向量数据库或索引 Worker。恢复定时任务前，先使用部署包内的烟雾检查确认以下入口都由本次 Web 构建提供：
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass `
+  -File '.\check-yct-web-smoke.ps1' `
+  -Origin 'https://yct.shangxiaoguan.top' `
+  -BasePath '/'
+```
+
+脚本会检查：
+
+- `/robots.txt`、`/sitemap.xml`、`/llms.txt`
+- `/api/v1/public` 和 `/api/v1/public/openapi`
+- 公共 API 的 `apiVersion`、OpenAPI 版本、canonical URL、CORS、缓存和 `X-Robots-Tag`
+
+如果公网反代仍挂载在 `/v2`，所有路径都必须带 `/v2`，并使用 `-BasePath 'v2'`。如果公共 API 目录返回的 canonical URL 指向 localhost、内部端口、错误域名或错误 BasePath，先修正 `YCT_PUBLIC_SITE_URL` 与反代头，不要恢复后台定时任务。
 
 ## 6. 回滚
 
@@ -172,5 +191,6 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 5. 上次发版后产生的账号、投稿、审核、事件 Outbox 和上传素材仍可读取。
 6. 根路径健康检查、深链刷新、API、ldpass 回调、`sw.js` 和内容图片正常。
 7. 失败部署可以从时间戳备份恢复，且不会通过重跑迁移来“修复”数据。
+8. `robots.txt`、`sitemap.xml`、`llms.txt`、公共 API 目录和 OpenAPI 均通过部署包烟雾检查，且 canonical URL、CORS、缓存和 `X-Robots-Tag` 正确。
 
 当前仍是单机 JSON 存储，这是最大的架构边界：不能让两个实例共享写入同一 `.yct-data`。需要多实例时，应先迁移到支持事务的数据库，并把现有事件机制升级为 Transactional Outbox；仅把 JSON 放到共享磁盘并不能解决并发覆盖问题。

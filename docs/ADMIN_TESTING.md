@@ -38,7 +38,7 @@ npm run admin:init -- <ldpassUserId>
 如果当前只有 standalone 部署包，没有 pnpm、tsx 或源码脚本，可以在部署包解压后的目录运行随包附带的 PowerShell 脚本：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\init-yct-admin.ps1 -LdpassUserId "<ldpassUserId>"
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\init-yct-admin.ps1 -LdpassUserId "<ldpassUserId>"
 ```
 
 该脚本默认写入当前目录下 `.yct-data/admin-memberships.json`；如果部署目录下的 `.env`、`.env.production`、`.env.local` 或进程环境设置了 `YCT_ADMIN_STORE_PATH`，脚本会先读取这些环境文件，再写入该变量指向的位置。管理员成员文件是运行时数据，替换部署包时需要和 `.env`、`.yct-data` 一起保留或迁移。

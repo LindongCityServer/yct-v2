@@ -30,13 +30,13 @@ Nginx/宝塔反向代理 + Node.js standalone。
 
 代码仓库的根路径迁移方案使用：
 
-| 项目 | 当前期望 | 说明 |
-| --- | --- | --- |
-| 公网地址 | `https://yct.shangxiaoguan.top` | 生产 `YCT_PUBLIC_SITE_URL` 应使用这个站点根，不附加 `/v2`。 |
-| Node 监听 | `127.0.0.1:3300` | 以实际进程和 Nginx 配置为准，不要假设端口。 |
-| 稳定部署根目录 | `C:\wwwroot\yct-v2` | 以服务器实际目录为准；不能把 `wwwroot` 总目录当作目标根。 |
-| BasePath | 根路径时为空，命令行可传 `/` | 构建、启动、反代三者必须一致；若线上仍在 `/v2`，先读 [ROOT_PATH_MIGRATION.md](./ROOT_PATH_MIGRATION.md)，不要直接改成根路径。 |
-| 运行时数据 | `.yct-data`、`runtime-assets`、`apps\web\public\content-assets` | 必须与代码目录分开保护，发版不得清空。 |
+| 项目           | 当前期望                                                        | 说明                                                                                                                          |
+| -------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 公网地址       | `https://yct.shangxiaoguan.top`                                 | 生产 `YCT_PUBLIC_SITE_URL` 应使用这个站点根，不附加 `/v2`。                                                                   |
+| Node 监听      | `127.0.0.1:3300`                                                | 以实际进程和 Nginx 配置为准，不要假设端口。                                                                                   |
+| 稳定部署根目录 | `C:\wwwroot\yct-v2`                                             | 以服务器实际目录为准；不能把 `wwwroot` 总目录当作目标根。                                                                     |
+| BasePath       | 根路径时为空，命令行可传 `/`                                    | 构建、启动、反代三者必须一致；若线上仍在 `/v2`，先读 [ROOT_PATH_MIGRATION.md](./ROOT_PATH_MIGRATION.md)，不要直接改成根路径。 |
+| 运行时数据     | `.yct-data`、`runtime-assets`、`apps\web\public\content-assets` | 必须与代码目录分开保护，发版不得清空。                                                                                        |
 
 服务器 CLI 必须通过只读命令确认实际状态，例如：
 
@@ -79,6 +79,8 @@ LDPASS_CLIENT_ID=yuchengtong
 - `LDPASS_CLIENT_ID` 必须是临东通后台已启用并绑定到 `yct` 发卡方的应用。
 - Nginx 必须把 `Host`、`X-Forwarded-Host`、`X-Forwarded-Proto` 和外部端口正确传给 Node。
   内部 `3300` 不能被拼进公网回调地址。
+- `robots.txt`、`sitemap.xml`、`llms.txt`、`/api/v1/public` 和 `/api/v1/public/openapi` 必须由同一个 Next standalone 实例提供，不能回落到旧静态站。公共 API 的 canonical URL 必须使用当前公网 Origin 和 BasePath。
+- 公共 API 必须保留应用返回的 CORS、短缓存和 `X-Robots-Tag: noindex` 响应头。反代可以增加限流和访问日志，但不能改写查询参数或 `data/meta` 响应结构。
 - 根路径部署时回调应为：
   `https://yct.shangxiaoguan.top/auth/ldpass/callback`。
   `/v2/auth/ldpass/callback` 只属于旧的 `/v2` 挂载，不得混用。
@@ -173,7 +175,7 @@ YCT_MARKER_BDSLM_BASE_URL=http://ld.cmsy.xyz:19136
 
 ```powershell
 Set-Location 'C:\wwwroot\yct-v2'
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\check-runtime-config.ps1' `
   -BasePath '/' `
   -Json
@@ -196,6 +198,11 @@ Invoke-WebRequest "https://yct.shangxiaoguan.top/api/health?check=$stamp" -UseBa
   Select-Object -ExpandProperty Content
 Invoke-WebRequest "https://yct.shangxiaoguan.top/auth/ldpass/callback?state=test" -UseBasicParsing |
   Select-Object StatusCode,Headers
+
+pwsh -NoProfile -ExecutionPolicy Bypass `
+  -File '.\check-yct-web-smoke.ps1' `
+  -Origin 'https://yct.shangxiaoguan.top' `
+  -BasePath '/'
 ```
 
 公网和内网的 `/api/health` 应指向同一构建号；回调测试可以返回应用自己的状态错误或 302，但不能是
@@ -209,7 +216,7 @@ Nginx 404。若线上仍为 `/v2`，将地址替换为 `/v2/api/health`、`/v2/a
 3. 用真实 `YCT_INTERNAL_TASK_TOKEN` 调用统一任务脚本：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\run-yct-internal-tasks.ps1' `
   -Origin 'http://127.0.0.1:3300' `
   -BasePath '/' `
@@ -254,6 +261,7 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 - 内外网健康接口构建号不一致，或返回 404/502。
 - 页面、API、`_next/static` 或 `sw.js` 不是同一次构建。
 - ldpass 回调落到 `localhost`、`127.0.0.1`、内部端口或错误 BasePath。
+- A+B 公共入口返回 404，公共 API canonical URL 指向内网，或 CORS、缓存、`X-Robots-Tag` 验收失败。
 - 账号页无法读取公钥，内部任务仍报告 `web_push_not_configured`。
 - 临东通 Webhook 签名失败、设备事件拒绝原因不明或出现重复扣款风险。
 - `.yct-data`、上传素材、旧内容或管理员文件数量/哈希异常。

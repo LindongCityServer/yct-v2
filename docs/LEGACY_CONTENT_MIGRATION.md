@@ -96,7 +96,7 @@ Copy-Item -LiteralPath 'C:\wwwroot\yct-v2\.yct-data' -Destination $yctBackup -Re
 ```powershell
 Set-Location 'C:\wwwroot\yct-release-时间戳'
 
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\deploy-yct-web.ps1' `
   -TargetRoot 'C:\wwwroot\yct-v2' `
   -BasePath '/'
@@ -107,7 +107,7 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 ```powershell
 Set-Location 'C:\wwwroot\yct-v2'
 
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\start-yct-web.ps1' `
   -Port 3300 `
   -HostName 127.0.0.1 `
@@ -118,7 +118,7 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 先执行内网烟雾检查，不要直接开始写入：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\check-yct-web-smoke.ps1' `
   -Origin 'http://127.0.0.1:3300' `
   -BasePath '/' `
@@ -130,7 +130,7 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 默认命令只预览，不写内容库：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\migrate-yct-legacy-content.ps1' `
   -Origin 'http://127.0.0.1:3300' `
   -BasePath '/' `
@@ -147,7 +147,7 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 确认预览后，在 Web 单实例运行、后台无人编辑内容的维护窗口执行：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass `
+pwsh -NoProfile -ExecutionPolicy Bypass `
   -File '.\migrate-yct-legacy-content.ps1' `
   -Origin 'http://127.0.0.1:3300' `
   -BasePath '/' `

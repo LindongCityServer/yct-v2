@@ -181,13 +181,13 @@ GET /api/auth/logout
 部署目录中也可以先运行：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -BasePath v2
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -BasePath v2
 ```
 
 如果只是想验证本地某个访问入口会生成什么回跳地址，也可以传入当前访问的 Origin：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -Origin http://localhost:3300 -BasePath v2
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -Origin http://localhost:3300 -BasePath v2
 ```
 
 它会只输出配置是否存在、来源文件、推导出的 `allowed_origin` / `redirect_uri` 和常见告警，不会打印敏感密钥。

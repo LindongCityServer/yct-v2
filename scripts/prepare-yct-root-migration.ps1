@@ -275,7 +275,7 @@ if (
   (Test-Path -LiteralPath $envMergeScript -PathType Leaf) -and
   (Test-Path -LiteralPath $envExamplePath -PathType Leaf)
 ) {
-  & powershell -NoProfile -ExecutionPolicy Bypass `
+  & pwsh -NoProfile -ExecutionPolicy Bypass `
     -File $envMergeScript `
     -TargetEnv $envPath `
     -ExampleEnv $envExamplePath `

@@ -83,12 +83,73 @@ $mapUrl = Join-YctUrl -OriginValue $Origin -PathValue "$normalizedBasePath/map?c
 $markersUrl = Join-YctUrl -OriginValue $Origin -PathValue "$normalizedBasePath/api/map/markers?check=$cacheBuster"
 $serviceWorkerUrl = Join-YctUrl -OriginValue $Origin -PathValue "$normalizedBasePath/sw.js?check=$cacheBuster"
 $ldpassStartUrl = Join-YctUrl -OriginValue $Origin -PathValue "$normalizedBasePath/api/auth/ldpass/start?check=$cacheBuster"
+$robotsUrl = Join-YctUrl -OriginValue $Origin -PathValue "$normalizedBasePath/robots.txt?check=$cacheBuster"
+$sitemapUrl = Join-YctUrl -OriginValue $Origin -PathValue "$normalizedBasePath/sitemap.xml?check=$cacheBuster"
+$llmsUrl = Join-YctUrl -OriginValue $Origin -PathValue "$normalizedBasePath/llms.txt?check=$cacheBuster"
+$publicApiUrl = Join-YctUrl -OriginValue $Origin -PathValue "$normalizedBasePath/api/v1/public?check=$cacheBuster"
+$publicOpenApiUrl = Join-YctUrl -OriginValue $Origin -PathValue "$normalizedBasePath/api/v1/public/openapi?check=$cacheBuster"
 
 $healthResponse = Get-YctResponse -Url $healthUrl
 $healthJson = $healthResponse.Content | ConvertFrom-Json
 $mapResponse = Get-YctResponse -Url $mapUrl
 $markersResponse = Get-YctResponse -Url $markersUrl
 $serviceWorkerFirstLine = Read-YctServiceWorkerFirstLine -Url $serviceWorkerUrl
+$robotsResponse = Get-YctResponse -Url $robotsUrl
+$sitemapResponse = Get-YctResponse -Url $sitemapUrl
+$llmsResponse = Get-YctResponse -Url $llmsUrl
+$publicApiResponse = Get-YctResponse -Url $publicApiUrl
+$publicApiJson = $publicApiResponse.Content | ConvertFrom-Json
+$publicOpenApiResponse = Get-YctResponse -Url $publicOpenApiUrl
+$publicOpenApiJson = $publicOpenApiResponse.Content | ConvertFrom-Json
+
+if ($robotsResponse.Content -notmatch '/api/v1/public') {
+  throw "robots.txt does not advertise the versioned public API allow rule."
+}
+if ($sitemapResponse.Content -notmatch '<(?:urlset|sitemapindex)(?:\s|>)') {
+  throw "sitemap.xml did not return a sitemap document."
+}
+if ($llmsResponse.Content -notmatch '/api/v1/public/openapi') {
+  throw "llms.txt does not link to the public OpenAPI document."
+}
+if ([string]$publicApiJson.meta.apiVersion -ne 'v1') {
+  throw "Public API catalog did not return apiVersion v1."
+}
+if ([string]$publicOpenApiJson.openapi -notmatch '^3\.1(?:\.|$)') {
+  throw "Public OpenAPI document did not return an OpenAPI 3.1 version."
+}
+
+$publicCanonicalUrl = [string]$publicApiJson.meta.canonicalUrl
+$publicDocumentationUrl = [string]$publicApiJson.data.documentationUrl
+foreach ($candidateUrl in @($publicCanonicalUrl, $publicDocumentationUrl)) {
+  $candidateUri = $null
+  if (-not [Uri]::TryCreate($candidateUrl, [UriKind]::Absolute, [ref]$candidateUri)) {
+    throw "Public API returned a non-absolute canonical URL: $candidateUrl"
+  }
+  if ($candidateUri.Host -in @('localhost', '127.0.0.1', '0.0.0.0', '::1')) {
+    throw "Public API returned a local canonical URL: $candidateUrl"
+  }
+}
+
+$originUri = [Uri]($Origin.TrimEnd('/'))
+$isLoopbackOrigin = [System.Net.IPAddress]::Loopback.ToString() -eq $originUri.Host -or
+  $originUri.Host -eq 'localhost' -or
+  $originUri.Host -eq '::1'
+if (-not $isLoopbackOrigin -and $publicCanonicalUrl -notlike "$($Origin.TrimEnd('/'))$normalizedBasePath/api/v1/public*") {
+  throw "Public API canonical URL does not match the checked public origin and base path: $publicCanonicalUrl"
+}
+
+$publicCorsHeader = [string]$publicApiResponse.Headers['Access-Control-Allow-Origin']
+if ($publicCorsHeader -ne '*') {
+  throw "Public API did not return Access-Control-Allow-Origin: * (actual: $publicCorsHeader)"
+}
+$publicCacheHeader = [string]$publicApiResponse.Headers['Cache-Control']
+if ($publicCacheHeader -notmatch 'public') {
+  throw "Public API did not return a public cache policy (actual: $publicCacheHeader)"
+}
+$publicRobotsHeader = [string]$publicApiResponse.Headers['X-Robots-Tag']
+if ($publicRobotsHeader -notmatch 'noindex') {
+  throw "Public API did not return X-Robots-Tag: noindex (actual: $publicRobotsHeader)"
+}
 
 $result = [ordered]@{
   origin = $Origin.TrimEnd("/")
@@ -107,6 +168,35 @@ $result = [ordered]@{
   markers = [ordered]@{
     url = $markersUrl
     statusCode = [int]$markersResponse.StatusCode
+  }
+  aiAccess = [ordered]@{
+    robots = [ordered]@{
+      url = $robotsUrl
+      statusCode = [int]$robotsResponse.StatusCode
+    }
+    sitemap = [ordered]@{
+      url = $sitemapUrl
+      statusCode = [int]$sitemapResponse.StatusCode
+    }
+    llms = [ordered]@{
+      url = $llmsUrl
+      statusCode = [int]$llmsResponse.StatusCode
+      hasOpenApiLink = $llmsResponse.Content -match '/api/v1/public/openapi'
+    }
+    publicApi = [ordered]@{
+      url = $publicApiUrl
+      statusCode = [int]$publicApiResponse.StatusCode
+      apiVersion = [string]$publicApiJson.meta.apiVersion
+      canonicalUrl = $publicCanonicalUrl
+      cors = $publicCorsHeader
+      cacheControl = $publicCacheHeader
+      robots = $publicRobotsHeader
+    }
+    openApi = [ordered]@{
+      url = $publicOpenApiUrl
+      statusCode = [int]$publicOpenApiResponse.StatusCode
+      version = [string]$publicOpenApiJson.openapi
+    }
   }
   serviceWorker = [ordered]@{
     url = $serviceWorkerUrl
@@ -140,6 +230,15 @@ Write-Output (
 )
 Write-Output ("Map: {0}" -f [string]$result.map.statusCode)
 Write-Output ("Markers: {0}" -f [string]$result.markers.statusCode)
+Write-Output (
+  "AI access: robots={0} sitemap={1} llms={2} publicApi={3} openApi={4} canonical={5}" -f
+  [string]$result.aiAccess.robots.statusCode,
+  [string]$result.aiAccess.sitemap.statusCode,
+  [string]$result.aiAccess.llms.statusCode,
+  [string]$result.aiAccess.publicApi.statusCode,
+  [string]$result.aiAccess.openApi.statusCode,
+  [string]$result.aiAccess.publicApi.canonicalUrl
+)
 Write-Output ("SW: {0}" -f [string]$result.serviceWorker.firstLine)
 
 if (-not $SkipLdpass) {
