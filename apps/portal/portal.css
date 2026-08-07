@@ -100,6 +100,21 @@ a {
   mask-image: url('./assets/icons/link.svg');
 }
 
+.icon-hub {
+  -webkit-mask-image: url('./assets/icons/hub.svg');
+  mask-image: url('./assets/icons/hub.svg');
+}
+
+.icon-construction {
+  -webkit-mask-image: url('./assets/icons/construction.svg');
+  mask-image: url('./assets/icons/construction.svg');
+}
+
+.icon-map {
+  -webkit-mask-image: url('./assets/icons/map.svg');
+  mask-image: url('./assets/icons/map.svg');
+}
+
 button,
 a {
   -webkit-tap-highlight-color: transparent;
@@ -714,13 +729,72 @@ h1 {
   cursor: help;
 }
 
-.card-open {
-  grid-column: 2;
-  justify-self: end;
-  align-self: end;
+.tool-details {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.tool-detail-row,
+.tool-detail-label,
+.tool-detail-links,
+.tool-detail-links a {
+  display: flex;
+  align-items: center;
+}
+
+.tool-detail-row,
+.tool-detail-links {
+  flex-wrap: wrap;
+}
+
+.tool-detail-row {
+  gap: 5px 10px;
+}
+
+.tool-detail-label {
+  gap: 6px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.tool-detail-label .material-icon {
+  width: 14px;
+  height: 14px;
   color: var(--green-dark);
-  width: 20px;
-  height: 20px;
+}
+
+.tool-detail-value {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.tool-detail-links {
+  gap: 5px 12px;
+}
+
+.tool-detail-links a {
+  gap: 4px;
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.tool-detail-links a .material-icon {
+  width: 13px;
+  height: 13px;
+  opacity: 0.68;
+}
+
+.tool-detail-links a:hover,
+.tool-detail-links a:focus-visible {
+  color: var(--green-dark);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  outline: none;
 }
 
 .tool-card:hover,
@@ -741,6 +815,9 @@ h1 {
 }
 
 .card-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--ink);
   font-size: 13px;
   font-weight: 700;
@@ -1401,6 +1478,12 @@ body.dialog-open {
 
   .friend-links {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .header-nav a:nth-child(-n + 2) {
+    display: none;
   }
 }
 

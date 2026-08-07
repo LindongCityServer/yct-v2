@@ -217,13 +217,7 @@
           </div>
 
           <div class="tool-grid">
-            <a
-              class="tool-card tool-card-road"
-              data-link-key="roadMaterials"
-              data-entry-id="road-materials"
-              data-entry-group="tools"
-              href="https://yct.shangxiaoguan.top/services/road-materials"
-            >
+            <article class="tool-card tool-card-road">
               <span class="tool-card-media">
                 <img
                   src="./assets/tools/road-materials.webp"
@@ -240,15 +234,39 @@
               <span class="card-description" data-i18n="tools.roadDescription"
                 >设计道路指示牌、路名牌和楼栋地名标志。</span
               >
-              <span class="card-open material-icon icon-arrow-outward" aria-hidden="true"></span>
-            </a>
-            <a
-              class="tool-card"
-              data-link-key="transitMaterials"
-              data-entry-id="transit-materials"
-              data-entry-group="tools"
-              href="https://yct.shangxiaoguan.top/services/transit-materials"
-            >
+              <div class="tool-details">
+                <div class="tool-detail-row">
+                  <span class="tool-detail-label">
+                    <span class="material-icon icon-construction" aria-hidden="true"></span>
+                    <span data-i18n="tools.roadInputLabel">手动输入</span>
+                  </span>
+                  <span class="tool-detail-value" data-i18n="tools.roadInputDetail"
+                    >道路、地名和编号</span
+                  >
+                </div>
+                <div class="tool-detail-row">
+                  <span class="tool-detail-label">
+                    <span class="material-icon icon-map" aria-hidden="true"></span>
+                    <span data-i18n="tools.roadLocationLabel">服务器位置</span>
+                  </span>
+                  <span class="tool-detail-value" data-i18n="tools.roadLocationDetail"
+                    >道路坐标或楼牌标记点</span
+                  >
+                </div>
+              </div>
+              <div class="card-actions">
+                <a
+                  data-link-key="roadMaterials"
+                  data-entry-id="road-materials"
+                  data-entry-group="tools"
+                  href="https://yct.shangxiaoguan.top/services/road-materials"
+                >
+                  <span data-i18n="tools.openRoad">打开路牌工作台</span>
+                  <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                </a>
+              </div>
+            </article>
+            <article class="tool-card tool-card-transit">
               <span class="tool-card-media">
                 <img
                   src="./assets/tools/transit-materials.webp"
@@ -262,13 +280,72 @@
               </span>
               <span class="card-index">02</span>
               <span class="card-title" data-i18n="tools.transitTitle">公共交通导视</span>
-              <span class="card-description" data-i18n-html="tools.transitDescription">
-                使用服务器线网或导入的
-                <abbr title="地铁线路图绘制器（Rail Map Painter）">RMP</abbr>
-                项目，制作公交站牌与轨道交通导视。
+              <span class="card-description" data-i18n="tools.transitDescription">
+                选择服务器线网或导入兼容项目，制作公交站牌与轨道交通导视。
               </span>
-              <span class="card-open material-icon icon-arrow-outward" aria-hidden="true"></span>
-            </a>
+              <div class="tool-details">
+                <div class="tool-detail-row">
+                  <span class="tool-detail-label">
+                    <span class="material-icon icon-hub" aria-hidden="true"></span>
+                    <span data-i18n="tools.transitNetworkLabel">自定义线网</span>
+                  </span>
+                  <span class="tool-detail-links">
+                    <a
+                      data-link-key="railMapPainter"
+                      data-entry-id="rail-map-painter"
+                      data-entry-group="tools"
+                      href="https://railmapgen.org/?app=rmp"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <span data-i18n="tools.transitRmpProject">RMP 项目</span>
+                      <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                    </a>
+                  </span>
+                </div>
+                <div class="tool-detail-row">
+                  <span class="tool-detail-label">
+                    <span class="material-icon icon-construction" aria-hidden="true"></span>
+                    <span data-i18n="tools.transitContinueLabel">继续编辑</span>
+                  </span>
+                  <span class="tool-detail-links">
+                    <a
+                      data-link-key="nalVitool"
+                      data-entry-id="nal-vitool"
+                      data-entry-group="tools"
+                      href="https://centralgo.site/vitool/vitool.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <span data-i18n="tools.transitNalProject">NaL VITool 项目</span>
+                      <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                    </a>
+                    <a
+                      data-link-key="chitoseSignMaker"
+                      data-entry-id="chitose-sign-maker"
+                      data-entry-group="tools"
+                      href="https://signmaker.chitose.city/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <span data-i18n="tools.transitChitoseProject">千岁导视牌项目</span>
+                      <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                    </a>
+                  </span>
+                </div>
+              </div>
+              <div class="card-actions">
+                <a
+                  data-link-key="transitMaterials"
+                  data-entry-id="transit-materials"
+                  data-entry-group="tools"
+                  href="https://yct.shangxiaoguan.top/services/transit-materials"
+                >
+                  <span data-i18n="tools.openTransit">打开导视工作台</span>
+                  <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                </a>
+              </div>
+            </article>
             <article class="tool-card tool-card-with-actions">
               <span class="tool-card-media">
                 <img
@@ -589,10 +666,9 @@
                 ></span
               ><span class="material-icon icon-arrow-outward" aria-hidden="true"></span
             ></a>
-            <a href="https://www.bc413.com/" data-entry-id="friend-bc413" data-entry-group="friends"
+            <a href="https://www.akio.top/" data-entry-id="friend-akio" data-entry-group="friends"
               ><span class="friend-name"
-                ><span>BC413</span
-                ><small class="friend-status" data-i18n="friends.pending">待确认</small></span
+                ><span>御坂秋生の小窝</span></span
               ><span class="material-icon icon-arrow-outward" aria-hidden="true"></span
             ></a>
             <a

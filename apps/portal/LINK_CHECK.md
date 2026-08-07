@@ -32,10 +32,10 @@
 | 湖水工艺服务器 Wiki         | `http://emltsj.cn:8003`                               | DNS 失败 | 当前无法解析域名、仅提供 HTTP，项目已标记为不活跃 |
 | 飞跃工作室                  | `http://101.200.60.217`                               | 连接失败 | 当前无法连接，且仅提供 HTTP IP 地址               |
 | 回南市服务器 Wiki（Fandom） | `https://huinan.fandom.com/zh/wiki/回南市服务器_Wiki` | 可访问   | 已人工确认；自动请求仍可能被 Fandom 拒绝          |
-| BC413                       | `https://www.bc413.com/`                              | DNS 失败 | 当前无法解析域名                                  |
+| 御坂秋生の小窝             | `https://www.akio.top/`                               | 200      | 主页可正常访问                                    |
 | HokubuWiki                  | `https://wiki.hokubu.cn/`                             | 200      | 重定向到 Wiki 首页后可访问                        |
 
-Wiki 当前列出九项友链；门户有意排除指向 `https://shangxiaoguan.top` 的“上小官的个人心得”，因为部署后它只会指回门户自身。其余八项没有因检查失败擅自删除。维护建议是先在 Wiki 核实并修订失效项，再同步门户。
+门户有意排除指向 `https://shangxiaoguan.top` 的“上小官的个人心得”，因为部署后它只会指回门户自身。其余友链没有因检查失败擅自删除；维护时应同步核对门户与 Wiki 的友链清单。
 
 ## 已知协议风险
 
