@@ -58,6 +58,30 @@ function Resolve-YctOutputPath {
   return [System.IO.Path]::GetFullPath((Join-Path $Root $Path))
 }
 
+function Get-YctFileSha256 {
+  param([Parameter(Mandatory = $true)][string]$Path)
+
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    throw "Cannot calculate SHA-256 for missing file: $Path"
+  }
+
+  $stream = $null
+  $sha256 = $null
+  try {
+    $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    $hashBytes = $sha256.ComputeHash($stream)
+    return ([System.BitConverter]::ToString($hashBytes)).Replace("-", "")
+  } finally {
+    if ($null -ne $sha256) {
+      $sha256.Dispose()
+    }
+    if ($null -ne $stream) {
+      $stream.Dispose()
+    }
+  }
+}
+
 function Resolve-YctSevenZipPath {
   param([string]$Path)
 
@@ -849,6 +873,8 @@ $tar = Get-Command tar.exe -ErrorAction SilentlyContinue
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $artifactPath = Join-Path $outputRoot "yct-web-$timestamp.$ArchiveFormat"
 $temporaryArtifactPath = Join-Path $outputRoot "yct-web-$timestamp.tmp.$ArchiveFormat"
+$checksumPath = "$artifactPath.sha256"
+$temporaryChecksumPath = "$checksumPath.tmp"
 $archiveTool = $null
 
 if (Test-Path -LiteralPath $artifactPath) {
@@ -856,6 +882,12 @@ if (Test-Path -LiteralPath $artifactPath) {
 }
 if (Test-Path -LiteralPath $temporaryArtifactPath) {
   Remove-Item -LiteralPath $temporaryArtifactPath -Force
+}
+if (Test-Path -LiteralPath $checksumPath) {
+  Remove-Item -LiteralPath $checksumPath -Force
+}
+if (Test-Path -LiteralPath $temporaryChecksumPath) {
+  Remove-Item -LiteralPath $temporaryChecksumPath -Force
 }
 
 try {
@@ -899,18 +931,27 @@ try {
     Compress-Archive -Path (Join-Path $stageRoot "*") -DestinationPath $temporaryArtifactPath -CompressionLevel Optimal
   }
 
+  $artifactSha256 = Get-YctFileSha256 -Path $temporaryArtifactPath
+  $checksumLine = "$artifactSha256  $([System.IO.Path]::GetFileName($artifactPath))$([Environment]::NewLine)"
+  Write-YctUtf8File -Path $temporaryChecksumPath -Content $checksumLine
+
   Move-Item -LiteralPath $temporaryArtifactPath -Destination $artifactPath -Force
+  Move-Item -LiteralPath $temporaryChecksumPath -Destination $checksumPath -Force
 } catch {
   if (Test-Path -LiteralPath $temporaryArtifactPath) {
     Remove-Item -LiteralPath $temporaryArtifactPath -Force -ErrorAction SilentlyContinue
   }
+  if (Test-Path -LiteralPath $temporaryChecksumPath) {
+    Remove-Item -LiteralPath $temporaryChecksumPath -Force -ErrorAction SilentlyContinue
+  }
+  if (Test-Path -LiteralPath $artifactPath) {
+    Remove-Item -LiteralPath $artifactPath -Force -ErrorAction SilentlyContinue
+  }
+  if (Test-Path -LiteralPath $checksumPath) {
+    Remove-Item -LiteralPath $checksumPath -Force -ErrorAction SilentlyContinue
+  }
   throw
 }
-
-$artifactSha256 = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash
-$checksumPath = "$artifactPath.sha256"
-$checksumLine = "$artifactSha256  $([System.IO.Path]::GetFileName($artifactPath))$([Environment]::NewLine)"
-Write-YctUtf8File -Path $checksumPath -Content $checksumLine
 
 $result = [pscustomobject]@{
   Artifact = $artifactPath
