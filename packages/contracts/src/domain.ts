@@ -229,6 +229,8 @@ export type AdministrativeAreaLevel =
 
 export type AdministrativeAreaStatus = 'draft' | 'published' | 'archived';
 
+export const ADMINISTRATIVE_AREA_DEFAULT_MAX_ZOOM = 0;
+
 export interface AdministrativeArea {
   id: string;
   code: string;
@@ -237,6 +239,9 @@ export interface AdministrativeArea {
   parentAreaId?: string;
   /** 仅允许 Rectangle、MultiRectangle、Polygon 或 MultiPolygon。 */
   boundary: MapGeometry;
+  /** 绑定后标签跟随该 POI 的代表位置；未绑定时自动放在区域内靠近几何中心的位置。 */
+  labelPositionPoiId?: string;
+  /** @deprecated 兼容旧行政区划固定标签坐标，新数据应使用自动位置或 labelPositionPoiId。 */
   labelPosition?: [number, number];
   style?: MapStyleBinding;
   minZoom?: number;

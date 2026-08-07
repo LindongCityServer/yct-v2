@@ -313,7 +313,7 @@ interface PortalLegacyWordPressNoticeVisibilityPayload {
 | `PoiSubmissionUpdated`                     | `poiId`、`changedFields`（含 `spatial`）     | 失效地图/搜索/路由接入缓存                 |
 | `TransitDataRevisionStationUpdated`        | `nextCoordinate`（含可选 Y）、运营状态前后值 | 刷新站点、线路和路线规划读取模型           |
 | `MapSpatialProfileUpdated`                 | `profile`、`changedFields`                   | 刷新默认高度、道路成本、票价和地图配置缓存 |
-| `AdministrativeAreaCreated` / `Updated`    | `area`、更新字段                             | 更新独立行政区划草稿和空间索引             |
+| `AdministrativeAreaCreated` / `Updated`    | `area`、更新字段（含标签 POI 绑定）          | 更新独立行政区划草稿和空间索引             |
 | `AdministrativeAreaPublished` / `Archived` | `area`、前一状态（归档时）                   | 更新公开行政区划图层与搜索归属索引         |
 
 当前位置按钮本身是客户端瞬时动作；只有几何保存成功后才沿既有 POI/线路更新事件发布，不单独制造“按钮点击”领域事件。动态编号、道路方向、高度、通行方式和 POI 样式都作为 `spatial` 的同一快照保存，避免监听器读取互相矛盾的半成品字段。

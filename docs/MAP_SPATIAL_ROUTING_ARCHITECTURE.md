@@ -258,11 +258,13 @@ export interface AdministrativeArea {
   level: string;
   parentAreaId?: string;
   boundary: MapGeometry;
-  labelPosition: WorldPosition;
+  labelPositionPoiId?: string;
+  labelPosition?: [number, number]; // 仅兼容旧固定坐标
+  maxZoom?: number;
 }
 ```
 
-行政区划需要独立层级、稳定代码、父区域、边界版本和标签点。POI 所属行政区可通过空间计算生成读取模型，并允许管理员覆盖；不能继续把 `boundRegionMarkerIds` 当作行政区真相。
+行政区划需要独立层级、稳定代码、父区域、边界版本和标签锚点。标签默认复用区域 POI 的“区域内尽量靠近几何中心”布局算法，也可通过 `labelPositionPoiId` 跟随某个 POI 的代表位置；`labelPosition` 只兼容旧固定坐标。未设置 `maxZoom` 的旧数据按共享常量 `ADMINISTRATIVE_AREA_DEFAULT_MAX_ZOOM`（当前为 `0`）处理，避免在街区级缩放中持续占用标签空间。POI 所属行政区可通过空间计算生成读取模型，并允许管理员覆盖；不能继续把 `boundRegionMarkerIds` 当作行政区真相。
 
 ## 12. 动态编号图标
 

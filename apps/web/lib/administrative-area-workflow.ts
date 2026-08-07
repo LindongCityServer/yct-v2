@@ -57,6 +57,7 @@ export async function updateAdministrativeArea(input: {
       'level',
       'parentAreaId',
       'boundary',
+      'labelPositionPoiId',
       'labelPosition',
       'style',
       'minZoom',

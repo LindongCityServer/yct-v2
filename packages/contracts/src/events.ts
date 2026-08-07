@@ -471,6 +471,7 @@ export interface AdministrativeAreaUpdatedPayload {
     | 'level'
     | 'parentAreaId'
     | 'boundary'
+    | 'labelPositionPoiId'
     | 'labelPosition'
     | 'style'
     | 'minZoom'

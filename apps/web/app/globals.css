@@ -1537,14 +1537,25 @@ body .material-symbols-outlined {
   left: var(--administrative-area-left);
   top: var(--administrative-area-top);
   padding: 2px 5px;
+  border: 1px solid transparent;
   border-radius: 3px;
   background: color-mix(in srgb, var(--yct-color-surface-panel) 82%, transparent);
   color: var(--yct-color-text-secondary);
+  font-family: inherit;
   font-size: 11px;
   font-weight: 750;
   line-height: 1.2;
+  pointer-events: auto;
   transform: translate(-50%, -50%);
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.map-administrative-area-label:is(:hover, :focus-visible, .is-selected) {
+  border-color: var(--yct-color-primary);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-primary-hover);
+  outline: none;
 }
 
 .map-shape-poi-path {
@@ -9007,10 +9018,64 @@ img.map-player-list-avatar.is-offline {
 }
 
 .admin-map-area-editor {
+  width: min(920px, calc(100vw - 32px));
   padding: var(--yct-space-4);
   border: 1px solid var(--yct-color-border);
   border-radius: var(--yct-radius-md);
   background: var(--yct-color-surface-panel);
+}
+
+.admin-map-area-fieldset {
+  display: grid;
+  gap: var(--yct-space-3);
+  margin: 0;
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+}
+
+.admin-map-area-fieldset > legend {
+  padding: 0 var(--yct-space-1);
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.admin-map-area-color-control {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.admin-map-area-color-swatch {
+  --admin-map-area-color: var(--yct-color-text-muted);
+  width: 28px;
+  height: 28px;
+  border: 1px solid color-mix(in srgb, var(--admin-map-area-color) 70%, #000000);
+  border-radius: var(--yct-radius-sm);
+  background: var(--admin-map-area-color);
+}
+
+.admin-map-area-opacity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yct-space-3);
+}
+
+.admin-map-area-opacity-grid input {
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .admin-map-area-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-map-area-opacity-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .admin-poi-spatial-editor > legend,

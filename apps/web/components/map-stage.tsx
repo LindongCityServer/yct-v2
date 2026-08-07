@@ -23,6 +23,7 @@ import type {
   TransitStationDetailSnapshot,
   TransitStationTransferSnapshot,
 } from '@yct/contracts';
+import { ADMINISTRATIVE_AREA_DEFAULT_MAX_ZOOM } from '@yct/contracts';
 import { quoteTaxiFare, quoteTransitRouteFare } from '@yct/domain';
 import { useSearchParams } from 'next/navigation';
 import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react';
@@ -334,7 +335,10 @@ interface ProjectedAdministrativeArea {
   area: AdministrativeArea;
   centerLeft: number;
   centerTop: number;
+  fillColor?: string;
   path: string;
+  showLabel: boolean;
+  strokeColor?: string;
 }
 
 interface TransitOverviewLine {
@@ -956,6 +960,9 @@ export function MapStage() {
   const [poiSubmitBusy, setPoiSubmitBusy] = useState(false);
   const [poiSubmitDialogOpen, setPoiSubmitDialogOpen] = useState(false);
   const [focusedMarkerId, setFocusedMarkerId] = useState<string | null>(null);
+  const [selectedAdministrativeAreaId, setSelectedAdministrativeAreaId] = useState<string | null>(
+    null,
+  );
   const [transitLineDirectionSelection, setTransitLineDirectionSelection] = useState<{
     direction: TransitLineTravelDirection;
     lineId: string;
@@ -2142,8 +2149,19 @@ export function MapStage() {
     ],
   );
   const projectedAdministrativeAreas = useMemo(
-    () => projectAdministrativeAreas(administrativeAreas, mapView, viewportSize),
-    [administrativeAreas, mapView, viewportSize],
+    () =>
+      projectAdministrativeAreas(
+        administrativeAreas,
+        markerSnapshot,
+        new Map(
+          (localizedTransitOverview?.lines ?? []).flatMap((line) =>
+            line.color ? [[line.id, line.color] as const] : [],
+          ),
+        ),
+        mapView,
+        viewportSize,
+      ),
+    [administrativeAreas, localizedTransitOverview?.lines, mapView, markerSnapshot, viewportSize],
   );
   const {
     markers: projectedMarkers,
@@ -2693,6 +2711,7 @@ export function MapStage() {
         fitMarkerToMapView(marker, current, viewportSize, effectiveMapVisibleRect),
       );
       setFocusedMarkerId(marker.id);
+      setSelectedAdministrativeAreaId(null);
       setPoiDetailTab('summary');
       setPoiDetailCollapsed(false);
       setNearbySearchCenter(null);
@@ -4310,40 +4329,58 @@ export function MapStage() {
         {hasMapOverlay || Boolean(visibleTiles?.tiles.length) ? (
           <div className="map-marker-layer" aria-label={t('map.overlay.aria')}>
             {projectedAdministrativeAreas.length > 0 ? (
-              <div className="map-administrative-area-layer" aria-hidden="true">
+              <div className="map-administrative-area-layer">
                 <svg
                   viewBox={`0 0 ${Math.max(1, viewportSize.width)} ${Math.max(1, viewportSize.height)}`}
+                  aria-hidden="true"
                 >
-                  {projectedAdministrativeAreas.map((area) => (
-                    <path
-                      d={area.path}
-                      key={area.area.id}
+                  {projectedAdministrativeAreas
+                    .filter((area) => area.area.id === selectedAdministrativeAreaId)
+                    .map((area) => (
+                      <path
+                        className="is-selected"
+                        d={area.path}
+                        key={area.area.id}
+                        style={
+                          {
+                            '--administrative-area-fill': area.fillColor,
+                            '--administrative-area-fill-opacity':
+                              area.area.style?.fillOpacity ?? 0.14,
+                            '--administrative-area-stroke': area.strokeColor,
+                            '--administrative-area-stroke-opacity':
+                              area.area.style?.strokeOpacity ?? 0.72,
+                          } as CSSProperties
+                        }
+                      />
+                    ))}
+                </svg>
+                {projectedAdministrativeAreas
+                  .filter((area) => area.showLabel)
+                  .map((area) => (
+                    <button
+                      className={`map-administrative-area-label${
+                        area.area.id === selectedAdministrativeAreaId ? ' is-selected' : ''
+                      }`}
+                      key={`${area.area.id}-label`}
+                      type="button"
+                      aria-pressed={area.area.id === selectedAdministrativeAreaId}
                       style={
                         {
-                          '--administrative-area-fill': area.area.style?.fillColor,
-                          '--administrative-area-fill-opacity': area.area.style?.fillOpacity ?? 0,
-                          '--administrative-area-stroke': area.area.style?.strokeColor,
-                          '--administrative-area-stroke-opacity':
-                            area.area.style?.strokeOpacity ?? 1,
+                          '--administrative-area-left': `${area.centerLeft}px`,
+                          '--administrative-area-top': `${area.centerTop}px`,
                         } as CSSProperties
                       }
-                    />
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={() => {
+                        setFocusedMarkerId(null);
+                        setSelectedAdministrativeAreaId((current) =>
+                          current === area.area.id ? null : area.area.id,
+                        );
+                      }}
+                    >
+                      {area.area.name}
+                    </button>
                   ))}
-                </svg>
-                {projectedAdministrativeAreas.map((area) => (
-                  <span
-                    className="map-administrative-area-label"
-                    key={`${area.area.id}-label`}
-                    style={
-                      {
-                        '--administrative-area-left': `${area.centerLeft}px`,
-                        '--administrative-area-top': `${area.centerTop}px`,
-                      } as CSSProperties
-                    }
-                  >
-                    {area.area.name}
-                  </span>
-                ))}
               </div>
             ) : null}
             {visibleProjectedRoadTraces.length ? (
@@ -14228,16 +14265,15 @@ function getMapMarkerVolumeHeight(marker: ShapeMarker): number {
 
 function projectAdministrativeAreas(
   areas: readonly AdministrativeArea[],
+  markers: readonly CenterableMarker[],
+  transitLineColorById: ReadonlyMap<string, string>,
   view: MapView,
   size: ViewportSize,
 ): ProjectedAdministrativeArea[] {
   if (size.width <= 0 || size.height <= 0) return [];
   const scale = getScale(view.zoom);
   return areas.flatMap((area) => {
-    if (
-      (area.minZoom !== undefined && view.zoom < area.minZoom) ||
-      (area.maxZoom !== undefined && view.zoom > area.maxZoom)
-    ) {
+    if (area.minZoom !== undefined && view.zoom < area.minZoom) {
       return [];
     }
     const sets = getAdministrativeAreaCoordinateSets(area.boundary);
@@ -14263,13 +14299,37 @@ function projectAdministrativeAreas(
         ].join(' ');
       })
       .join(' ');
-    const labelPosition = area.labelPosition ?? averageAdministrativeAreaCoordinate(sets);
+    const geometryCenterCoordinate = getAdministrativeAreaGeometryCenter(sets);
+    const geometryCenter = {
+      left: size.width / 2 + (geometryCenterCoordinate[0] - view.centerX) * scale,
+      top: size.height / 2 + (geometryCenterCoordinate[1] - view.centerZ) * scale,
+    };
+    const boundPoi = area.labelPositionPoiId
+      ? markers.find((marker) => marker.id === area.labelPositionPoiId)
+      : undefined;
+    const boundPoiPosition = boundPoi ? getMarkerCenter(boundPoi) : undefined;
+    const legacyPosition = area.labelPositionPoiId ? undefined : area.labelPosition;
+    const fixedPosition = boundPoiPosition ?? legacyPosition;
+    const automaticAnchor =
+      findAreaLabelAnchor(projectedSets, geometryCenter, area.name) ?? geometryCenter;
+    const labelAnchor = fixedPosition
+      ? {
+          left: size.width / 2 + (fixedPosition[0] - view.centerX) * scale,
+          top: size.height / 2 + (fixedPosition[1] - view.centerZ) * scale,
+        }
+      : automaticAnchor;
+    const boundLineColor = area.style?.lineColorTransitLineIds
+      ?.map((lineId) => transitLineColorById.get(lineId))
+      .find((color): color is string => Boolean(color));
     return [
       {
         area,
-        centerLeft: size.width / 2 + (labelPosition[0] - view.centerX) * scale,
-        centerTop: size.height / 2 + (labelPosition[1] - view.centerZ) * scale,
+        centerLeft: labelAnchor.left,
+        centerTop: labelAnchor.top,
+        fillColor: area.style?.fillColor ?? boundLineColor,
         path,
+        showLabel: view.zoom <= (area.maxZoom ?? ADMINISTRATIVE_AREA_DEFAULT_MAX_ZOOM),
+        strokeColor: area.style?.strokeColor ?? boundLineColor,
       },
     ];
   });
@@ -14287,15 +14347,13 @@ function getAdministrativeAreaCoordinateSets(
   return [];
 }
 
-function averageAdministrativeAreaCoordinate(
+function getAdministrativeAreaGeometryCenter(
   sets: Array<Array<[number, number]>>,
 ): [number, number] {
   const coordinates = sets.flat();
   if (coordinates.length === 0) return [0, 0];
-  return [
-    coordinates.reduce((total, coordinate) => total + coordinate[0], 0) / coordinates.length,
-    coordinates.reduce((total, coordinate) => total + coordinate[1], 0) / coordinates.length,
-  ];
+  const bounds = getCoordinateBounds(coordinates);
+  return [(bounds.minX + bounds.maxX) / 2, (bounds.minZ + bounds.maxZ) / 2];
 }
 
 interface ProjectedShapeCoordinateSet {

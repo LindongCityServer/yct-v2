@@ -35,7 +35,8 @@ import { WorldCoordinatePicker } from './world-coordinate-picker';
 type StatusFilter = PoiSubmissionStatus | 'all' | 'todo' | 'blocked' | 'legacy';
 type PoiAdminSection = 'submissions' | 'categories';
 type PoiCategoryBoardFilter = 'all' | 'public_enabled' | 'public_disabled';
-type MapMarker = MapMarkerSnapshot['markers'][number];
+export type AdminMapMarker = MapMarkerSnapshot['markers'][number];
+type MapMarker = AdminMapMarker;
 
 interface PoiSubmissionImageMetadata {
   fileName: string;
@@ -173,11 +174,16 @@ interface PoiTileRegionIndex {
   groups: Map<string, PoiTileRegionResponse['regions'][number]>;
 }
 
-interface PoiTilePreviewConfig {
+export interface PoiTilePreviewConfig {
   freshTileTemplate?: string | null;
   tileTemplate?: string | null;
   regionIndex?: PoiTileRegionIndex;
 }
+
+export type RegionMapGeometry = Extract<
+  MapGeometry,
+  { type: 'Rectangle' | 'MultiRectangle' | 'Polygon' | 'MultiPolygon' }
+>;
 
 const defaultMarkerIconBaseUrl = 'https://map.shangxiaoguan.top/';
 const defaultRoadTravelModes = ['walk', 'taxi', 'bus', 'coach'] as const;
@@ -4382,11 +4388,13 @@ function EditPoiSubmissionDialog({
 function PoiNonPointGeometryEditor({
   contextMarkers,
   draft,
+  entityLabel = 'POI',
   onChange,
   tilePreviewConfig,
 }: Readonly<{
   contextMarkers: PoiAuditContextMarker[];
   draft: PoiGeometryDraft;
+  entityLabel?: string;
   onChange: (draft: PoiGeometryDraft) => void;
   tilePreviewConfig: PoiTilePreviewConfig;
 }>) {
@@ -4441,11 +4449,82 @@ function PoiNonPointGeometryEditor({
       <PoiGeometryVisualEditor
         contextMarkers={contextMarkers}
         draft={draft}
+        entityLabel={entityLabel}
         tilePreviewConfig={tilePreviewConfig}
         onChange={onChange}
       />
       {fields}
     </div>
+  );
+}
+
+export function RegionGeometryEditor({
+  geometryType,
+  markers,
+  onChange,
+  tilePreviewConfig,
+  value,
+}: Readonly<{
+  geometryType: RegionMapGeometry['type'];
+  markers: AdminMapMarker[];
+  onChange: (value: RegionMapGeometry) => void;
+  tilePreviewConfig: PoiTilePreviewConfig;
+  value?: RegionMapGeometry;
+}>) {
+  const [draft, setDraft] = useState<PoiGeometryDraft>(() =>
+    value?.type === geometryType
+      ? createPoiGeometryDraft(value)
+      : createEmptyPoiGeometryDraft(geometryType),
+  );
+
+  useEffect(() => {
+    setDraft(
+      value?.type === geometryType
+        ? createPoiGeometryDraft(value)
+        : createEmptyPoiGeometryDraft(geometryType),
+    );
+  }, [geometryType, value]);
+
+  const contextMarkers = useMemo(() => {
+    const center = value ? getGeometryRepresentativeCoordinate(value) : null;
+    if (!center) {
+      return [];
+    }
+    return markers
+      .flatMap((marker) => {
+        const coordinate = getGeometryRepresentativeCoordinate(marker.geometry);
+        if (!coordinate) {
+          return [];
+        }
+        return [
+          {
+            marker,
+            coordinate,
+            distanceBlocks: Math.hypot(coordinate[0] - center[0], coordinate[1] - center[1]),
+            relation: 'nearby' as const,
+          },
+        ];
+      })
+      .sort((left, right) => left.distanceBlocks - right.distanceBlocks)
+      .slice(0, 24);
+  }, [markers, value]);
+
+  const update = (nextDraft: PoiGeometryDraft) => {
+    setDraft(nextDraft);
+    const geometry = buildMapGeometryFromDraft(nextDraft).geometry;
+    if (geometry && isRegionGeometry(geometry)) {
+      onChange(geometry);
+    }
+  };
+
+  return (
+    <PoiNonPointGeometryEditor
+      contextMarkers={contextMarkers}
+      draft={draft}
+      entityLabel="行政区划"
+      onChange={update}
+      tilePreviewConfig={tilePreviewConfig}
+    />
   );
 }
 
@@ -4762,11 +4841,13 @@ function PoiRegionBindingsFieldset({
 function PoiGeometryVisualEditor({
   contextMarkers,
   draft,
+  entityLabel,
   onChange,
   tilePreviewConfig,
 }: Readonly<{
   contextMarkers: PoiAuditContextMarker[];
   draft: Exclude<PoiGeometryDraft, { type: 'Point' }>;
+  entityLabel: string;
   onChange: (draft: PoiGeometryDraft) => void;
   tilePreviewConfig: PoiTilePreviewConfig;
 }>) {
@@ -4878,7 +4959,7 @@ function PoiGeometryVisualEditor({
   const removable = canRemovePoiGeometryDraftCoordinate(draft);
 
   return (
-    <section className="admin-poi-geometry-map-editor" aria-label="POI 几何地图编辑">
+    <section className="admin-poi-geometry-map-editor" aria-label={`${entityLabel}几何地图编辑`}>
       <div className="admin-poi-audit-map-header">
         <strong>地图编辑</strong>
         <span>{geometryLabelFromDraft(draft)}</span>
@@ -4888,9 +4969,9 @@ function PoiGeometryVisualEditor({
         role="application"
         aria-label={
           tool === 'pan'
-            ? '拖移 POI 几何地图'
+            ? `拖移${entityLabel}几何地图`
             : tool === 'move'
-              ? '拖移 POI 几何控制点'
+              ? `拖移${entityLabel}几何控制点`
               : '在地图上添加几何节点'
         }
         onPointerDown={handlePointerDown}
@@ -7232,7 +7313,7 @@ function createPoiGeometryDraft(geometry: MapGeometry): PoiGeometryDraft {
   };
 }
 
-function isRegionGeometry(geometry: MapGeometry): boolean {
+function isRegionGeometry(geometry: MapGeometry): geometry is RegionMapGeometry {
   return (
     geometry.type === 'Rectangle' ||
     geometry.type === 'MultiRectangle' ||

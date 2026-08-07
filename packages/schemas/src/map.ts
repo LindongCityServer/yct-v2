@@ -233,11 +233,24 @@ export const administrativeAreaUpsertSchema = z
     code: z.string().trim().min(1).max(80),
     name: z.string().trim().min(1).max(160),
     level: z.enum(['country', 'province', 'prefecture', 'county', 'township', 'custom']),
-    parentAreaId: z.string().trim().min(1).max(160).optional(),
+    parentAreaId: z
+      .union([z.string().trim().min(1).max(160), z.null()])
+      .optional()
+      .transform((value) => value ?? undefined),
     boundary: administrativeAreaBoundarySchema,
-    labelPosition: coordinateSchema.optional(),
+    labelPositionPoiId: z
+      .union([z.string().trim().min(1).max(220), z.null()])
+      .optional()
+      .transform((value) => value ?? undefined),
+    labelPosition: z
+      .union([coordinateSchema, z.null()])
+      .optional()
+      .transform((value) => value ?? undefined),
     style: mapStyleBindingSchema.optional(),
-    minZoom: z.number().finite().min(-20).max(20).optional(),
+    minZoom: z
+      .union([z.number().finite().min(-20).max(20), z.null()])
+      .optional()
+      .transform((value) => value ?? undefined),
     maxZoom: z.number().finite().min(-20).max(20).optional(),
   })
   .refine(
