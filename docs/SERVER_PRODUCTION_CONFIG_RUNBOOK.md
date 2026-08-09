@@ -159,6 +159,8 @@ YCT_LEGACY_PUBLIC_BASE_URL=https://yct.shangxiaoguan.top
 YCT_FLIGHT_DATA_URL=https://haojin.guanmu233.cn/data/flight_data.txt
 YCT_UNMINED_MAP_BASE_URL=https://map.shangxiaoguan.top/
 YCT_MARKER_BDSLM_BASE_URL=http://ld.cmsy.xyz:19136
+YCT_MAP_MARKER_PUBLIC_SNAPSHOT_STORE_PATH=.yct-data/map-marker-public-snapshot.json
+YCT_MAP_SHARE_LINK_STORE_PATH=.yct-data/map-share-links.json
 ```
 
 - `YCT_INTERNAL_TASK_TOKEN` 同时保护事件重放、Push 处理、运营提醒同步、统一任务入口和玩家位置
@@ -167,6 +169,7 @@ YCT_MARKER_BDSLM_BASE_URL=http://ld.cmsy.xyz:19136
   可访问就自动重跑导入；迁移文档中的“一次性迁移”只能人工确认后执行。
 - `YCT_MARKER_BDSLM_BASE_URL`、瓦片地址和航班地址属于外部依赖。修改前先用只读 HTTP 请求确认
   目标确实返回当前格式，不得用模拟数据掩盖源站故障。
+- `YCT_MAP_MARKER_PUBLIC_SNAPSHOT_STORE_PATH` 和 `YCT_MAP_SHARE_LINK_STORE_PATH` 属于持久运行数据，必须和 `.yct-data` 一起备份；不要把它们放入部署包。删除短链接仓储会使已分享的 `/s/<token>` 失效。
 
 ## 配置检查和验收顺序
 
@@ -225,6 +228,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass `
 
 响应中如果出现 `web_push_not_configured`、缺少 VAPID 或持续 `deferred`，不要宣称推送已恢复。
 统一任务应只运行一个实例；可用 Windows 任务计划程序按 1--5 分钟执行。
+统一任务还会后台刷新公开地图快照；如果地图外部源不可用，先保留最近一次成功快照并检查其 `asOf`，不要让 AI 请求直接承担外部源超时。
 
 ### 临东通验收
 

@@ -88,6 +88,7 @@ $sitemapUrl = Join-YctUrl -OriginValue $Origin -PathValue "$normalizedBasePath/s
 $llmsUrl = Join-YctUrl -OriginValue $Origin -PathValue "$normalizedBasePath/llms.txt?check=$cacheBuster"
 $publicApiUrl = Join-YctUrl -OriginValue $Origin -PathValue "$normalizedBasePath/api/v1/public?check=$cacheBuster"
 $publicOpenApiUrl = Join-YctUrl -OriginValue $Origin -PathValue "$normalizedBasePath/api/v1/public/openapi?check=$cacheBuster"
+$publicMarkersUrl = Join-YctUrl -OriginValue $Origin -PathValue "$normalizedBasePath/api/v1/public/map/markers?check=$cacheBuster"
 
 $healthResponse = Get-YctResponse -Url $healthUrl
 $healthJson = $healthResponse.Content | ConvertFrom-Json
@@ -101,9 +102,21 @@ $publicApiResponse = Get-YctResponse -Url $publicApiUrl
 $publicApiJson = $publicApiResponse.Content | ConvertFrom-Json
 $publicOpenApiResponse = Get-YctResponse -Url $publicOpenApiUrl
 $publicOpenApiJson = $publicOpenApiResponse.Content | ConvertFrom-Json
+$publicMarkersResponse = Get-YctResponse -Url $publicMarkersUrl
+$publicMarkersJson = $publicMarkersResponse.Content | ConvertFrom-Json
 
 if ($robotsResponse.Content -notmatch '/api/v1/public') {
   throw "robots.txt does not advertise the versioned public API allow rule."
+}
+$robotsHost = ([regex]::Match([string]$robotsResponse.Content, '(?m)^Host:\s*(.+)$')).Groups[1].Value.Trim()
+$robotsSitemap = ([regex]::Match([string]$robotsResponse.Content, '(?m)^Sitemap:\s*(.+)$')).Groups[1].Value.Trim()
+$expectedRobotsHost = $Origin.TrimEnd('/')
+$expectedRobotsSitemap = Join-YctUrl -OriginValue $Origin -PathValue "$normalizedBasePath/sitemap.xml"
+if ($robotsHost -ne $expectedRobotsHost) {
+  throw "robots.txt Host does not match the checked public origin (actual: $robotsHost; expected: $expectedRobotsHost)."
+}
+if ($robotsSitemap -ne $expectedRobotsSitemap) {
+  throw "robots.txt Sitemap does not match the checked public origin and base path (actual: $robotsSitemap; expected: $expectedRobotsSitemap)."
 }
 if ($sitemapResponse.Content -notmatch '<(?:urlset|sitemapindex)(?:\s|>)') {
   throw "sitemap.xml did not return a sitemap document."
@@ -116,6 +129,12 @@ if ([string]$publicApiJson.meta.apiVersion -ne 'v1') {
 }
 if ([string]$publicOpenApiJson.openapi -notmatch '^3\.1(?:\.|$)') {
   throw "Public OpenAPI document did not return an OpenAPI 3.1 version."
+}
+if ([int]$publicMarkersResponse.StatusCode -ne 200) {
+  throw "Public map markers did not return HTTP 200 (actual: $($publicMarkersResponse.StatusCode))."
+}
+if ([string]$publicMarkersJson.meta.apiVersion -ne 'v1') {
+  throw "Public map markers did not return apiVersion v1."
 }
 
 $publicCanonicalUrl = [string]$publicApiJson.meta.canonicalUrl
@@ -173,6 +192,8 @@ $result = [ordered]@{
     robots = [ordered]@{
       url = $robotsUrl
       statusCode = [int]$robotsResponse.StatusCode
+      host = $robotsHost
+      sitemap = $robotsSitemap
     }
     sitemap = [ordered]@{
       url = $sitemapUrl
@@ -196,6 +217,13 @@ $result = [ordered]@{
       url = $publicOpenApiUrl
       statusCode = [int]$publicOpenApiResponse.StatusCode
       version = [string]$publicOpenApiJson.openapi
+    }
+    publicMapMarkers = [ordered]@{
+      url = $publicMarkersUrl
+      statusCode = [int]$publicMarkersResponse.StatusCode
+      sourceStatus = [string]$publicMarkersJson.meta.sourceStatus
+      asOf = [string]$publicMarkersJson.meta.asOf
+      markerCount = @($publicMarkersJson.data.markers).Count
     }
   }
   serviceWorker = [ordered]@{
@@ -231,12 +259,14 @@ Write-Output (
 Write-Output ("Map: {0}" -f [string]$result.map.statusCode)
 Write-Output ("Markers: {0}" -f [string]$result.markers.statusCode)
 Write-Output (
-  "AI access: robots={0} sitemap={1} llms={2} publicApi={3} openApi={4} canonical={5}" -f
+  "AI access: robots={0} host={1} sitemap={2} llms={3} publicApi={4} openApi={5} markers={6} canonical={7}" -f
   [string]$result.aiAccess.robots.statusCode,
+  [string]$result.aiAccess.robots.host,
   [string]$result.aiAccess.sitemap.statusCode,
   [string]$result.aiAccess.llms.statusCode,
   [string]$result.aiAccess.publicApi.statusCode,
   [string]$result.aiAccess.openApi.statusCode,
+  [string]$result.aiAccess.publicMapMarkers.statusCode,
   [string]$result.aiAccess.publicApi.canonicalUrl
 )
 Write-Output ("SW: {0}" -f [string]$result.serviceWorker.firstLine)

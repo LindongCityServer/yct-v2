@@ -167,8 +167,9 @@ pwsh -NoProfile -ExecutionPolicy Bypass `
 脚本会检查：
 
 - `/robots.txt`、`/sitemap.xml`、`/llms.txt`
-- `/api/v1/public` 和 `/api/v1/public/openapi`
+- `/api/v1/public`、`/api/v1/public/openapi` 和 `/api/v1/public/map/markers`
 - 公共 API 的 `apiVersion`、OpenAPI 版本、canonical URL、CORS、缓存和 `X-Robots-Tag`
+- `robots.txt` 的公网 `Host` 和 `Sitemap` 地址
 
 如果公网反代仍挂载在 `/v2`，所有路径都必须带 `/v2`，并使用 `-BasePath 'v2'`。如果公共 API 目录返回的 canonical URL 指向 localhost、内部端口、错误域名或错误 BasePath，先修正 `YCT_PUBLIC_SITE_URL` 与反代头，不要恢复后台定时任务。
 

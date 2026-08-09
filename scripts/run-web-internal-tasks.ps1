@@ -67,4 +67,18 @@ $response = Invoke-RestMethod `
   -ContentType "application/json; charset=utf-8" `
   -Body $jsonBody
 
+# 由内部任务在后台刷新公开地图快照，避免 AI 请求承担外部地图源的冷启动耗时。
+$mapMarkerUrl = "$normalizedOrigin$normalizedBasePath/api/map/markers"
+$mapMarkerResponse = Invoke-WebRequest `
+  -Uri $mapMarkerUrl `
+  -Headers @{ "Cache-Control" = "no-cache" } `
+  -SkipHttpErrorCheck
+$mapMarkerJson = $mapMarkerResponse.Content | ConvertFrom-Json
+$response | Add-Member -NotePropertyName mapMarkerSnapshot -NotePropertyValue ([pscustomobject]@{
+  url = $mapMarkerUrl
+  statusCode = [int]$mapMarkerResponse.StatusCode
+  sourceStatus = [string]$mapMarkerJson.meta.sourceStatus
+  fetchedAt = [string]$mapMarkerJson.snapshot.fetchedAt
+}) -Force
+
 $response | ConvertTo-Json -Depth 8
