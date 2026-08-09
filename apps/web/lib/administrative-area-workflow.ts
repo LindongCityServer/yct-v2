@@ -8,10 +8,24 @@ import {
   saveAdministrativeArea,
 } from './administrative-area-store';
 
+let administrativeAreaMutationTail: Promise<void> = Promise.resolve();
+
 export interface AdministrativeAreaActionResult {
   ok: boolean;
   area?: AdministrativeArea;
   areas?: AdministrativeArea[];
+  changedFields?: Array<
+    | 'code'
+    | 'name'
+    | 'level'
+    | 'parentAreaId'
+    | 'boundary'
+    | 'labelPositionPoiId'
+    | 'labelPosition'
+    | 'style'
+    | 'minZoom'
+    | 'maxZoom'
+  >;
   status?: number;
   error?: string;
   message?: string;
@@ -21,21 +35,29 @@ export async function createAdministrativeArea(input: {
   actorId: string;
   area: AdministrativeAreaUpsertInput;
 }): Promise<AdministrativeAreaActionResult> {
-  const validation = await validateAreaReferences(input.area);
-  if (!validation.ok) return validation;
-  const now = new Date().toISOString();
-  const area: AdministrativeArea = {
-    id: `administrative_area_${randomUUID()}`,
-    ...input.area,
-    status: 'draft',
-    createdAt: now,
-    createdBy: input.actorId,
-    updatedAt: now,
-    updatedBy: input.actorId,
-  };
-  await saveAdministrativeArea(area);
-  await emitAdministrativeAreaEvent('AdministrativeAreaCreated', input.actorId, { area });
-  return { ok: true, area };
+  const result = await withAdministrativeAreaMutation(async () => {
+    const areaInput = normalizeAdministrativeAreaInput(input.area);
+    const validation = await validateAreaReferences(areaInput);
+    if (!validation.ok) return validation;
+    const now = new Date().toISOString();
+    const area: AdministrativeArea = {
+      id: `administrative_area_${randomUUID()}`,
+      ...areaInput,
+      status: 'draft',
+      createdAt: now,
+      createdBy: input.actorId,
+      updatedAt: now,
+      updatedBy: input.actorId,
+    };
+    await saveAdministrativeArea(area);
+    return { ok: true, area };
+  });
+  if (result.ok && result.area) {
+    await emitAdministrativeAreaEvent('AdministrativeAreaCreated', input.actorId, {
+      area: result.area,
+    });
+  }
+  return result;
 }
 
 export async function updateAdministrativeArea(input: {
@@ -43,40 +65,46 @@ export async function updateAdministrativeArea(input: {
   actorId: string;
   area: AdministrativeAreaUpsertInput;
 }): Promise<AdministrativeAreaActionResult> {
-  const current = await findAdministrativeArea(input.id);
-  if (!current) return notFound();
-  if (current.status === 'archived') {
-    return invalidState('已归档行政区划必须先恢复为草稿后才能修改。');
-  }
-  const validation = await validateAreaReferences(input.area, input.id);
-  if (!validation.ok) return validation;
-  const changedFields = (
-    [
-      'code',
-      'name',
-      'level',
-      'parentAreaId',
-      'boundary',
-      'labelPositionPoiId',
-      'labelPosition',
-      'style',
-      'minZoom',
-      'maxZoom',
-    ] as const
-  ).filter((field) => JSON.stringify(current[field]) !== JSON.stringify(input.area[field]));
-  if (changedFields.length === 0) return { ok: true, area: current };
-  const area: AdministrativeArea = {
-    ...current,
-    ...input.area,
-    updatedAt: new Date().toISOString(),
-    updatedBy: input.actorId,
-  };
-  await saveAdministrativeArea(area);
-  await emitAdministrativeAreaEvent('AdministrativeAreaUpdated', input.actorId, {
-    area,
-    changedFields,
+  const result = await withAdministrativeAreaMutation(async () => {
+    const current = await findAdministrativeArea(input.id);
+    if (!current) return notFound();
+    if (current.status === 'archived') {
+      return invalidState('已归档行政区划必须先恢复为草稿后才能修改。');
+    }
+    const areaInput = normalizeAdministrativeAreaInput(input.area);
+    const validation = await validateAreaReferences(areaInput, input.id);
+    if (!validation.ok) return validation;
+    const changedFields = (
+      [
+        'code',
+        'name',
+        'level',
+        'parentAreaId',
+        'boundary',
+        'labelPositionPoiId',
+        'labelPosition',
+        'style',
+        'minZoom',
+        'maxZoom',
+      ] as const
+    ).filter((field) => JSON.stringify(current[field]) !== JSON.stringify(areaInput[field]));
+    if (changedFields.length === 0) return { ok: true, area: current };
+    const area: AdministrativeArea = {
+      ...current,
+      ...areaInput,
+      updatedAt: new Date().toISOString(),
+      updatedBy: input.actorId,
+    };
+    await saveAdministrativeArea(area);
+    return { ok: true, area, changedFields };
   });
-  return { ok: true, area };
+  if (result.ok && result.area && 'changedFields' in result && result.changedFields?.length) {
+    await emitAdministrativeAreaEvent('AdministrativeAreaUpdated', input.actorId, {
+      area: result.area,
+      changedFields: result.changedFields,
+    });
+  }
+  return result;
 }
 
 export async function changeAdministrativeAreaStatus(input: {
@@ -124,7 +152,13 @@ async function validateAreaReferences(
   currentId?: string,
 ): Promise<AdministrativeAreaActionResult> {
   const areas = await listAdministrativeAreas();
-  if (areas.some((item) => item.code === area.code && item.id !== currentId)) {
+  const normalizedCode = normalizeAdministrativeAreaCode(area.code);
+  if (
+    areas.some(
+      (item) =>
+        normalizeAdministrativeAreaCode(item.code) === normalizedCode && item.id !== currentId,
+    )
+  ) {
     return {
       ok: false,
       status: 409,
@@ -153,6 +187,33 @@ async function validateAreaReferences(
     }
   }
   return { ok: true };
+}
+
+function normalizeAdministrativeAreaInput(
+  area: AdministrativeAreaUpsertInput,
+): AdministrativeAreaUpsertInput {
+  return {
+    ...area,
+    code: normalizeAdministrativeAreaCode(area.code),
+  };
+}
+
+function normalizeAdministrativeAreaCode(value: string): string {
+  return value.trim().normalize('NFKC').toLocaleLowerCase('zh-CN');
+}
+
+async function withAdministrativeAreaMutation<T>(operation: () => Promise<T>): Promise<T> {
+  const previous = administrativeAreaMutationTail;
+  let release!: () => void;
+  administrativeAreaMutationTail = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  try {
+    return await operation();
+  } finally {
+    release();
+  }
 }
 
 function notFound(): AdministrativeAreaActionResult {

@@ -36,6 +36,9 @@ import {
   createMetroWayfindingElement,
   createMetroWayfindingTextRow,
   duplicateMetroWayfindingElement,
+  METRO_WAYFINDING_COMBINATION_DEFAULT_SCALE,
+  METRO_WAYFINDING_COMBINATION_MAX_SCALE,
+  METRO_WAYFINDING_COMBINATION_MIN_SCALE,
   METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE,
   METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE,
   METRO_WAYFINDING_DIVIDER_WIDTH,
@@ -52,6 +55,10 @@ import {
   resolveMetroWayfindingVerticalLayoutSizing,
   serializeMetroWayfindingLayout,
   type MetroWayfindingElement,
+  type MetroWayfindingCombinationChild,
+  type MetroWayfindingCombinationElement,
+  type MetroWayfindingCombinationFillMode,
+  type MetroWayfindingCombinationStripePosition,
   type MetroWayfindingFrameFillMode,
   type MetroWayfindingFrameShape,
   type MetroWayfindingIconOption,
@@ -60,6 +67,7 @@ import {
   type MetroWayfindingLineSegment,
   type MetroWayfindingMainSegment,
   type MetroWayfindingTextElement,
+  type MetroWayfindingTextAlign,
   type MetroWayfindingTextRow,
 } from '../lib/metro-wayfinding';
 
@@ -623,7 +631,7 @@ export function MetroWayfindingEditor({
             warning
           </span>
           <span>
-            当前尺寸宽度不足，文字元素宽度与大文字已统一横向压缩至
+            当前尺寸宽度不足，文字、大文字与组合框已统一横向压缩至
             {Math.round(layoutSizing.textScaleX * 100)}%，文字行按需适配。
             {layoutSizing.hasUnresolvedOverflow
               ? '非文字元素仍超出可用宽度，请增加导视牌宽度。'
@@ -953,6 +961,18 @@ function MetroWayfindingElementTabContent({
       </>
     );
   }
+  if (element.type === 'combination') {
+    return (
+      <>
+        <span className="material-symbols-outlined" aria-hidden="true">
+          widgets
+        </span>
+        <span className="metro-wayfinding-element-tab-summary">
+          {element.children.length ? `${element.children.length} 个子元素` : '组合框'}
+        </span>
+      </>
+    );
+  }
   if (element.type === 'space') {
     return (
       <span className="material-symbols-outlined" aria-hidden="true">
@@ -999,6 +1019,9 @@ function metroElementTabAriaLabel(
   if (element.type === 'largeText') {
     const summary = [element.value, element.suffix].filter(Boolean).join('');
     return summary ? `大文字，${summary}` : '大文字';
+  }
+  if (element.type === 'combination') {
+    return `组合框，${element.children.length} 个子元素，缩放 ${Math.round(element.scale * 100)}%`;
   }
   if (element.type === 'space') {
     return element.mode === 'flex' ? '弹性空白' : `固定空白，${element.units} 格`;
@@ -1125,6 +1148,7 @@ function MetroWayfindingElementEditor({
             { value: 'arrow', label: '箭头', icon: 'arrow_forward' },
             { value: 'text', label: '文字', icon: 'text_fields' },
             { value: 'largeText', label: '大文字', icon: 'title' },
+            { value: 'combination', label: '组合框', icon: 'widgets' },
             { value: 'space', label: '空白', icon: 'space_bar' },
             { value: 'divider', label: '分割线', icon: 'split_scene' },
           ]}
@@ -1173,6 +1197,18 @@ function MetroWayfindingElementEditor({
             element={element}
             disabled={disabled}
             lineColorOptions={lineColorOptions}
+            patch={patch}
+          />
+        ) : null}
+        {element.type === 'combination' ? (
+          <CombinationElementFields
+            element={element}
+            disabled={disabled}
+            lineColorOptions={lineColorOptions}
+            backgroundColorOptions={backgroundColorOptions}
+            inheritedBackgroundColor={inheritedBackgroundColor}
+            inheritedForegroundColor={inheritedForegroundColor}
+            textSuggestions={textSuggestions}
             patch={patch}
           />
         ) : null}
@@ -1421,7 +1457,8 @@ function TextElementFields({
             <li key={row.id} className="metro-wayfinding-text-row-item">
               <header>
                 <strong>
-                  第 {index + 1} 行 · {row.kind === 'main' ? '主文本' : '副文本'}
+                  第 {index + 1} 行 ·{' '}
+                  {row.kind === 'main' ? '主文本' : '副文本·粗体'}
                 </strong>
                 <div className="metro-wayfinding-element-actions">
                   <button
@@ -2013,6 +2050,449 @@ function LargeTextElementFields({
   );
 }
 
+function CombinationElementFields({
+  element,
+  disabled,
+  lineColorOptions,
+  backgroundColorOptions,
+  inheritedBackgroundColor,
+  inheritedForegroundColor,
+  textSuggestions,
+  patch,
+}: Readonly<{
+  element: MetroWayfindingCombinationElement;
+  disabled: boolean;
+  lineColorOptions: Array<{ value: string; label: string }>;
+  backgroundColorOptions: Array<{ value: string; label: string }>;
+  inheritedBackgroundColor: string;
+  inheritedForegroundColor: string;
+  textSuggestions?: string[];
+  patch: (patch: Partial<MetroWayfindingElement>) => void;
+}>) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedChildId, setSelectedChildId] = useState(element.children[0]?.id ?? '');
+  const selectedChild =
+    element.children.find((child) => child.id === selectedChildId) ?? element.children[0];
+
+  useEffect(() => {
+    if (!element.children.some((child) => child.id === selectedChildId)) {
+      setSelectedChildId(element.children[0]?.id ?? '');
+    }
+  }, [element.children, selectedChildId]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isOpen]);
+
+  const updateChildren = (children: MetroWayfindingCombinationChild[]) => patch({ children });
+  const updateChild = (childId: string, nextPatch: Partial<MetroWayfindingElement>) =>
+    updateChildren(
+      element.children.map((child) =>
+        child.id === childId
+          ? ({ ...child, ...nextPatch } as MetroWayfindingCombinationChild)
+          : child,
+      ),
+    );
+  const addChild = (type: 'facility' | 'text' | 'largeText' | 'space') => {
+    const child = createMetroWayfindingElement(type) as MetroWayfindingCombinationChild;
+    updateChildren([...element.children, child]);
+    setSelectedChildId(child.id);
+  };
+  const changeChildType = (
+    child: MetroWayfindingCombinationChild,
+    type: 'facility' | 'text' | 'largeText' | 'space',
+  ) => {
+    const replacement = createMetroWayfindingElement(type) as MetroWayfindingCombinationChild;
+    updateChild(child.id, {
+      ...replacement,
+      id: child.id,
+      backgroundColor: child.backgroundColor,
+      foregroundColor: child.foregroundColor,
+    });
+  };
+  const moveChild = (index: number, direction: 'up' | 'down') => {
+    const target = direction === 'up' ? index - 1 : index + 1;
+    if (target < 0 || target >= element.children.length) return;
+    const children = [...element.children];
+    [children[index], children[target]] = [children[target]!, children[index]!];
+    updateChildren(children);
+  };
+  const removeChild = (childId: string) => {
+    const children = element.children.filter((child) => child.id !== childId);
+    updateChildren(children);
+    if (childId === selectedChildId) setSelectedChildId(children[0]?.id ?? '');
+  };
+
+  const childBackground =
+    element.frameFillMode === 'inverse'
+      ? (element.foregroundColor ?? inheritedForegroundColor)
+      : element.frameFillMode === 'color'
+        ? (element.frameFillColor ?? element.foregroundColor ?? inheritedForegroundColor)
+        : (element.backgroundColor ?? inheritedBackgroundColor);
+  const childForeground =
+    element.frameFillMode === 'inverse'
+      ? (element.backgroundColor ?? inheritedBackgroundColor)
+      : (element.foregroundColor ?? inheritedForegroundColor);
+
+  return (
+    <>
+      <div className="metro-wayfinding-field-grid">
+        <label className="material-field">
+          <span>组合框缩放倍数</span>
+          <input
+            type="number"
+            min={METRO_WAYFINDING_COMBINATION_MIN_SCALE}
+            max={METRO_WAYFINDING_COMBINATION_MAX_SCALE}
+            step="0.05"
+            value={element.scale}
+            disabled={disabled}
+            onChange={(event) =>
+              patch({
+                scale: Math.max(
+                  METRO_WAYFINDING_COMBINATION_MIN_SCALE,
+                  Math.min(
+                    METRO_WAYFINDING_COMBINATION_MAX_SCALE,
+                    Math.round(
+                      (Number(event.currentTarget.value) ||
+                        METRO_WAYFINDING_COMBINATION_DEFAULT_SCALE) * 100,
+                    ) / 100,
+                  ),
+                ),
+              })
+            }
+          />
+        </label>
+        <CombinationFillControl
+          mode={element.frameFillMode}
+          color={element.frameFillColor}
+          stroke={element.frameStroke}
+          stripePosition={element.stripePosition}
+          fallbackColor={element.foregroundColor ?? inheritedForegroundColor}
+          lineColorOptions={lineColorOptions}
+          disabled={disabled}
+          patch={patch}
+        />
+        <button
+          type="button"
+          className="secondary-action-button metro-wayfinding-combination-edit-button"
+          disabled={disabled}
+          onClick={() => setIsOpen(true)}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            tune
+          </span>
+          <span>编辑组合内容（{element.children.length}）</span>
+        </button>
+      </div>
+      {isOpen ? (
+        <div
+          className="modal-backdrop metro-wayfinding-combination-dialog-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setIsOpen(false);
+          }}
+        >
+          <section
+            className="modal-panel metro-wayfinding-combination-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`${element.id}-combination-heading`}
+          >
+            <header>
+              <div>
+                <span>组合框子元素</span>
+                <h2 id={`${element.id}-combination-heading`}>编辑组合内容</h2>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="关闭组合框编辑"
+                title="关闭"
+                onClick={() => setIsOpen(false)}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  close
+                </span>
+              </button>
+            </header>
+            <p className="muted">
+              支持设施图标、文字、大文字和固定或弹性空格，子元素不会超出组合框。
+            </p>
+            {element.children.length ? (
+              <ol
+                className="metro-wayfinding-combination-child-list"
+                role="tablist"
+                aria-label="组合框子元素列表"
+              >
+                {element.children.map((child, index) => (
+                  <li key={child.id}>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={child.id === selectedChild?.id}
+                      className={child.id === selectedChild?.id ? 'is-active' : undefined}
+                      onClick={() => setSelectedChildId(child.id)}
+                    >
+                      <MetroWayfindingElementTabContent element={child} layoutMode="single" />
+                      <span className="metro-wayfinding-combination-child-index">{index + 1}</span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="muted metro-wayfinding-combination-empty">组合框还没有子元素。</p>
+            )}
+            <div className="metro-wayfinding-combination-add-actions" aria-label="添加组合框子元素">
+              {[
+                ['facility', '设施图标', 'accessible'],
+                ['text', '文字', 'text_fields'],
+                ['largeText', '大文字', 'title'],
+                ['space', '空格', 'space_bar'],
+              ].map(([type, label, icon]) => (
+                <button
+                  key={type}
+                  type="button"
+                  className="secondary-action-button"
+                  disabled={disabled || element.children.length >= 32}
+                  onClick={() => addChild(type as 'facility' | 'text' | 'largeText' | 'space')}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    {icon}
+                  </span>
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+            {selectedChild ? (
+              <div className="metro-wayfinding-combination-child-editor">
+                <header>
+                  <strong>{metroElementLabel(selectedChild)}</strong>
+                  <div className="metro-wayfinding-element-actions">
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="子元素上移"
+                      title="上移"
+                      disabled={disabled || element.children.indexOf(selectedChild) === 0}
+                      onClick={() => moveChild(element.children.indexOf(selectedChild), 'up')}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        arrow_upward
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="子元素下移"
+                      title="下移"
+                      disabled={
+                        disabled ||
+                        element.children.indexOf(selectedChild) === element.children.length - 1
+                      }
+                      onClick={() => moveChild(element.children.indexOf(selectedChild), 'down')}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        arrow_downward
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="复制子元素"
+                      title="复制"
+                      disabled={disabled || element.children.length >= 32}
+                      onClick={() => {
+                        const copy = duplicateMetroWayfindingElement(
+                          selectedChild,
+                        ) as MetroWayfindingCombinationChild;
+                        const index = element.children.indexOf(selectedChild);
+                        const children = [...element.children];
+                        children.splice(index + 1, 0, copy);
+                        updateChildren(children);
+                        setSelectedChildId(copy.id);
+                      }}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        content_copy
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="删除子元素"
+                      title="删除"
+                      disabled={disabled}
+                      onClick={() => removeChild(selectedChild.id)}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        delete
+                      </span>
+                    </button>
+                  </div>
+                </header>
+                <SegmentedControl
+                  label="子元素类型"
+                  value={selectedChild.type}
+                  options={[
+                    { value: 'facility', label: '设施', icon: 'accessible' },
+                    { value: 'text', label: '文字', icon: 'text_fields' },
+                    { value: 'largeText', label: '大文字', icon: 'title' },
+                    { value: 'space', label: '空格', icon: 'space_bar' },
+                  ]}
+                  disabled={disabled}
+                  wide
+                  onChange={(type) => changeChildType(selectedChild, type)}
+                />
+                <ElementColorFields
+                  element={selectedChild}
+                  disabled={disabled}
+                  backgroundColorOptions={backgroundColorOptions}
+                  inheritedBackgroundColor={childBackground}
+                  inheritedForegroundColor={childForeground}
+                  patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
+                />
+                {selectedChild.type === 'facility' ? (
+                  <FacilityElementFields
+                    element={selectedChild}
+                    disabled={disabled}
+                    lineColorOptions={lineColorOptions}
+                    patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
+                  />
+                ) : null}
+                {selectedChild.type === 'text' ? (
+                  <TextElementFields
+                    element={selectedChild}
+                    layoutMode="single"
+                    disabled={disabled}
+                    lineColorOptions={lineColorOptions}
+                    textSuggestions={textSuggestions}
+                    patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
+                  />
+                ) : null}
+                {selectedChild.type === 'largeText' ? (
+                  <LargeTextElementFields
+                    element={selectedChild}
+                    disabled={disabled}
+                    lineColorOptions={lineColorOptions}
+                    patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
+                  />
+                ) : null}
+                {selectedChild.type === 'space' ? (
+                  <SpaceElementFields
+                    element={selectedChild}
+                    disabled={disabled}
+                    patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+            <footer>
+              <button type="button" className="is-primary" onClick={() => setIsOpen(false)}>
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  check
+                </span>
+                完成
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function CombinationFillControl({
+  mode,
+  color,
+  stroke,
+  stripePosition,
+  fallbackColor,
+  lineColorOptions,
+  disabled,
+  patch,
+}: Readonly<{
+  mode: MetroWayfindingCombinationFillMode;
+  color?: string;
+  stroke: boolean;
+  stripePosition: MetroWayfindingCombinationStripePosition;
+  fallbackColor: string;
+  lineColorOptions: Array<{ value: string; label: string }>;
+  disabled: boolean;
+  patch: (patch: Partial<MetroWayfindingElement>) => void;
+}>) {
+  const fillColor = color ?? lineColorOptions[0]?.value ?? fallbackColor;
+  const fillColorOptions = mergeMetroColorOptions(
+    lineColorOptions,
+    metroWayfindingForegroundPalette,
+  );
+  return (
+    <>
+      <SegmentedControl
+        label="组合框填充"
+        value={mode}
+        options={[
+          { value: 'none', label: '无填充', icon: 'border_outer' },
+          { value: 'inverse', label: '反色填充', icon: 'invert_colors' },
+          { value: 'color', label: '颜色填充', icon: 'palette' },
+          { value: 'stripe', label: '无填充+色带', icon: 'view_sidebar' },
+        ]}
+        disabled={disabled}
+        wide
+        onChange={(frameFillMode) =>
+          patch({
+            frameFillMode,
+            ...((frameFillMode === 'color' || frameFillMode === 'stripe') && !color
+              ? { frameFillColor: fillColor }
+              : {}),
+          })
+        }
+      />
+      {mode === 'color' || mode === 'stripe' ? (
+        <ColorControl
+          label={mode === 'stripe' ? '色带颜色' : '组合框填充色'}
+          value={fillColor}
+          palette={fillColorOptions}
+          disabled={disabled}
+          onChange={(frameFillColor) => patch({ frameFillColor })}
+        />
+      ) : null}
+      {mode === 'stripe' ? (
+        <SegmentedControl
+          label="色带位置"
+          value={stripePosition}
+          options={[
+            { value: 'left', label: '左', icon: 'align_horizontal_left' },
+            { value: 'right', label: '右', icon: 'align_horizontal_right' },
+            { value: 'bottom', label: '下', icon: 'vertical_align_bottom' },
+          ]}
+          disabled={disabled}
+          wide
+          onChange={(nextPosition) => patch({ stripePosition: nextPosition })}
+        />
+      ) : null}
+      <label className="material-checkbox-row metro-wayfinding-toggle">
+        <input
+          type="checkbox"
+          checked={stroke}
+          disabled={disabled}
+          onChange={(event) => patch({ frameStroke: event.currentTarget.checked })}
+        />
+        <span>添加前景色描边</span>
+      </label>
+    </>
+  );
+}
+
 function SpaceElementFields({
   element,
   disabled,
@@ -2265,6 +2745,7 @@ interface MetroInsertionSuggestionTemplate {
   kind?: 'text' | 'flex-space' | 'right-text' | 'facility';
   facilityIconId?: string;
   facilityFrameShape?: MetroWayfindingFrameShape;
+  textAlign?: MetroWayfindingTextAlign;
   icon?: string;
   createRows?: (lineColors: string[]) => MetroWayfindingTextRow[];
 }
@@ -2297,15 +2778,27 @@ const exitBoxedTextSuggestion: MetroInsertionSuggestionTemplate = {
 };
 
 const metroTextSuggestionsByIconId: Record<string, MetroInsertionSuggestionTemplate[]> = {
+  stairs: [createSimpleMetroTextSuggestion('stairs', '楼梯', 'Stairs')],
+  escalator: [createSimpleMetroTextSuggestion('escalator', '自动扶梯', 'Escalator')],
   elevator: [
     createSimpleMetroTextSuggestion('accessible-elevator', '无障碍电梯', 'Accessible Elevator'),
   ],
-  restroom: [createSimpleMetroTextSuggestion('restroom', '卫生间', 'Toilets')],
+  restroom: [createSimpleMetroTextSuggestion('restroom', '卫生间', 'Restrooms')],
   'mens-restroom': [createSimpleMetroTextSuggestion('mens-restroom', '男卫生间', 'Men')],
   'womens-restroom': [createSimpleMetroTextSuggestion('womens-restroom', '女卫生间', 'Women')],
   'nursing-room': [createSimpleMetroTextSuggestion('nursing-room', '母婴室', 'Baby Care')],
   'family-restroom': [
     createSimpleMetroTextSuggestion('family-restroom', '第三卫生间', 'Family Toilet'),
+  ],
+  wheelchair: [
+    createSimpleMetroTextSuggestion('accessible-facilities', '无障碍设施', 'Accessible Facilities'),
+  ],
+  'wheelchair-lift': [
+    createSimpleMetroTextSuggestion(
+      'wheelchair-platform-lift',
+      '轮椅升降平台',
+      'Wheelchair Platform Lift',
+    ),
   ],
   waiting: [
     createSimpleMetroTextSuggestion('waiting-room', '空调候车室', 'Air-conditioned Waiting Room'),
@@ -2383,6 +2876,19 @@ const flexSpaceRightTextSuggestion: MetroInsertionSuggestionTemplate = {
   previewSecondary: '追加右对齐主文本与副文本',
 };
 
+const arrowLeadingTextSuggestion: MetroInsertionSuggestionTemplate = {
+  id: 'db21-arrow-leading-text',
+  kind: 'text',
+  textAlign: 'left',
+  previewMain: '箭头右侧双语文字',
+  previewSecondary: '按 DB21/T 2573-2023 左对齐',
+  icon: 'format_align_left',
+  createRows: () => [
+    createSuggestedMainTextRow([{ kind: 'text', value: '' }]),
+    createSuggestedSecondaryTextRow(''),
+  ],
+};
+
 function MetroWayfindingInsertionSuggestions({
   element,
   elements,
@@ -2444,7 +2950,9 @@ function MetroWayfindingInsertionSuggestions({
       type: 'add',
       element: {
         ...textElement,
-        align: suggestion.kind === 'right-text' ? 'right' : textElement.align,
+        align:
+          suggestion.textAlign ??
+          (suggestion.kind === 'right-text' ? 'right' : textElement.align),
         rows: suggestion.createRows?.(lineColors) ?? textElement.rows,
         backgroundColor: element.backgroundColor,
         foregroundColor: usesNoEntryDefaultForeground ? undefined : element.foregroundColor,
@@ -2498,6 +3006,9 @@ function resolveMetroInsertionSuggestionTemplates(
         ? [terminalTextSuggestion]
         : [...(metroTextSuggestionsByIconId[element.iconId] ?? [])]
       : [];
+  if (element.type === 'arrow') {
+    suggestions.push(arrowLeadingTextSuggestion);
+  }
   if (
     (element.type === 'largeText' || (element.type === 'facility' && element.iconId === 'exit')) &&
     hasAdjacentExitAndLargeText(element, elements)
@@ -2651,7 +3162,7 @@ function createSuggestedMainTextRow(
 
 function createSuggestedSecondaryTextRow(value: string): MetroWayfindingTextRow {
   const row = createMetroWayfindingTextRow('secondary');
-  return { id: row.id, kind: 'secondary', value };
+  return { id: row.id, kind: 'secondary', value, bold: true };
 }
 
 function createSuggestedLineSegment(
@@ -2866,6 +3377,9 @@ function metroElementLabel(element: MetroWayfindingElement): string {
         ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
         : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE
     }`;
+  }
+  if (element.type === 'combination') {
+    return `组合框 · ${Math.round(element.scale * 100)}% · ${element.children.length} 个子元素`;
   }
   if (element.type === 'space') return '空白元素';
   return `分割线 · ${METRO_WAYFINDING_DIVIDER_WIDTH} × 72`;

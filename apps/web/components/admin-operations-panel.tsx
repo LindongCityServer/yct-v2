@@ -13,13 +13,15 @@ import type {
   OperationsStrongReminderRule,
   PushDelivery,
 } from '@yct/contracts';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { appBasePath, appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
+import { publishEditorDraftChanged } from '../lib/client-editor-events';
 import { MarkdownBlocks } from './markdown-blocks';
 import { TitleWithBreaks } from './title-with-breaks';
 import { AdminRefreshButton } from './admin-refresh-button';
 import { ContentPoiBindingEditor } from './content-poi-binding-editor';
+import { VisualEditorShell } from './visual-editor-shell';
 
 interface AdminContentMetadata {
   excerpt?: string;
@@ -201,9 +203,18 @@ const reminderToneOptions: Array<{
 ];
 
 export function AdminOperationsPanel({
+  editorMode = 'panel',
   initialContentId,
-}: Readonly<{ initialContentId?: string }>) {
+  onEditorClose,
+  startNew = false,
+}: Readonly<{
+  editorMode?: 'page' | 'panel';
+  initialContentId?: string;
+  onEditorClose?: () => void;
+  startNew?: boolean;
+}>) {
   const [records, setRecords] = useState<AdminContentRecord[]>([]);
+  const [recordsLoaded, setRecordsLoaded] = useState(false);
   const [reminderRules, setReminderRules] = useState<OperationsStrongReminderRule[]>([]);
   const [reminderPreview, setReminderPreview] = useState<ReminderPreviewResponse | null>(null);
   const [assetRecords, setAssetRecords] = useState<AdminContentAssetRecord[]>([]);
@@ -261,6 +272,7 @@ export function AdminOperationsPanel({
   const [assetIdsText, setAssetIdsText] = useState('');
   const [relatedPoiMarkerIds, setRelatedPoiMarkerIds] = useState<string[]>([]);
   const [showInBanner, setShowInBanner] = useState(false);
+  const [isContentEditorDirty, setIsContentEditorDirty] = useState(false);
   const [selectedAssetFile, setSelectedAssetFile] = useState<File | null>(null);
   const [recentUploadedAsset, setRecentUploadedAsset] = useState<AdminContentAssetRecord | null>(
     null,
@@ -280,6 +292,8 @@ export function AdminOperationsPanel({
   const [reminderSortOrderValue, setReminderSortOrderValue] = useState('0');
   const assetFileInputRef = useRef<HTMLInputElement | null>(null);
   const initialContentHandledRef = useRef(false);
+  const initialNewContentHandledRef = useRef(false);
+  const editorSessionId = `markdown:${initialContentId ?? (startNew ? 'new' : 'panel')}`;
 
   const sortedRecords = useMemo(
     () => [...records].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
@@ -690,10 +704,12 @@ export function AdminOperationsPanel({
     const data = (await response.json()) as { items?: AdminContentRecord[]; message?: string };
     if (!response.ok) {
       setStatusText(data.message ?? '内容后台暂不可用');
+      setRecordsLoaded(true);
       return;
     }
 
     setRecords(data.items ?? []);
+    setRecordsLoaded(true);
     setStatusText(
       data.items?.length ? `已读取 ${data.items.length} 条内容记录` : '暂无后台内容记录',
     );
@@ -892,6 +908,24 @@ export function AdminOperationsPanel({
     setVisibleAssetCount(12);
   }, [assetSearchText, assetSourceFilter, assetStatusFilter, assetWorkspace]);
 
+  const setContentEditorClean = () => {
+    setIsContentEditorDirty(false);
+    publishEditorDraftChanged({
+      dirty: false,
+      editorKind: 'markdown',
+      sessionId: editorSessionId,
+    });
+  };
+
+  const markContentEditorDirty = () => {
+    setIsContentEditorDirty(true);
+    publishEditorDraftChanged({
+      dirty: true,
+      editorKind: 'markdown',
+      sessionId: editorSessionId,
+    });
+  };
+
   const resetEditor = () => {
     setEditingContentId(null);
     setTitle('');
@@ -908,6 +942,10 @@ export function AdminOperationsPanel({
     setRelatedPoiMarkerIds([]);
     setShowInBanner(false);
     setIsContentEditorOpen(false);
+    setContentEditorClean();
+    if (editorMode === 'page') {
+      onEditorClose?.();
+    }
   };
 
   const resetReminderEditor = () => {
@@ -944,6 +982,7 @@ export function AdminOperationsPanel({
     setAssetIdsText(record.revision.assetIds.join('\n'));
     setRelatedPoiMarkerIds(record.metadata.relatedPoiMarkerIds ?? []);
     setShowInBanner(record.metadata.showInBanner);
+    setContentEditorClean();
     setStatusText(
       record.revision.status === 'rejected'
         ? '已载入已驳回内容，修改后保存会回到草稿状态。'
@@ -988,7 +1027,7 @@ export function AdminOperationsPanel({
   };
 
   useEffect(() => {
-    if (!initialContentId || initialContentHandledRef.current || records.length === 0) {
+    if (!initialContentId || initialContentHandledRef.current || !recordsLoaded) {
       return;
     }
     const record = records.find((item) => item.contentId === initialContentId);
@@ -1011,7 +1050,7 @@ export function AdminOperationsPanel({
         block: 'center',
       });
     });
-  }, [initialContentId, records]);
+  }, [initialContentId, records, recordsLoaded]);
 
   const loadReminderToEditor = (rule: OperationsStrongReminderRule) => {
     setActiveSection('reminders');
@@ -1273,6 +1312,16 @@ export function AdminOperationsPanel({
     setSelectedContentIds(new Set());
   };
 
+  const openContentEditorPage = (contentId?: string) => {
+    const params = new URLSearchParams();
+    if (contentId) {
+      params.set('contentId', contentId);
+    } else {
+      params.set('new', '1');
+    }
+    window.location.assign(appPath(`/admin/operations/editor?${params.toString()}`));
+  };
+
   const openCreateContentEditor = () => {
     setEditingContentId(null);
     setTitle('');
@@ -1287,8 +1336,17 @@ export function AdminOperationsPanel({
     setAssetIdsText('');
     setRelatedPoiMarkerIds([]);
     setShowInBanner(false);
+    setContentEditorClean();
     setIsContentEditorOpen(true);
   };
+
+  useEffect(() => {
+    if (editorMode !== 'page' || !startNew || initialNewContentHandledRef.current) {
+      return;
+    }
+    initialNewContentHandledRef.current = true;
+    openCreateContentEditor();
+  }, [editorMode, startNew]);
 
   const openCreateReminderEditor = () => {
     setActiveSection('reminders');
@@ -1584,7 +1642,9 @@ export function AdminOperationsPanel({
 
   return (
     <section
-      className="module-panel admin-operations-panel"
+      className={`module-panel admin-operations-panel${
+        editorMode === 'page' ? ' is-content-editor-page' : ''
+      }`}
       aria-labelledby="admin-operations-title"
     >
       <div className="section-heading">
@@ -1630,13 +1690,27 @@ export function AdminOperationsPanel({
       </fieldset>
 
       {isContentEditorOpen ? (
-        <div className="modal-backdrop" role="presentation" onMouseDown={resetEditor}>
+        <ContentEditorSurface
+          editorMode={editorMode}
+          editorSessionId={editorSessionId}
+          editingContentId={editingContentId}
+          isBusy={isBusy}
+          isDirty={isContentEditorDirty}
+          status={statusText}
+          onClose={resetEditor}
+          onSave={() => void saveDraft()}
+        >
           <section
-            className="modal-panel admin-content-editor-dialog"
-            role="dialog"
-            aria-modal="true"
+            className={
+              editorMode === 'page'
+                ? 'admin-content-editor-dialog'
+                : 'modal-panel admin-content-editor-dialog'
+            }
+            role={editorMode === 'page' ? undefined : 'dialog'}
+            aria-modal={editorMode === 'page' ? undefined : true}
             aria-label="创建内容草稿"
-            onMouseDown={(event) => event.stopPropagation()}
+            onChangeCapture={markContentEditorDirty}
+            onMouseDown={editorMode === 'page' ? undefined : (event) => event.stopPropagation()}
           >
             {editingContentId ? (
               <p className="muted">{`当前正在编辑 ${editingContentId.slice(-8).toUpperCase()} 内容`}</p>
@@ -1669,7 +1743,10 @@ export function AdminOperationsPanel({
                   className={!coverColor.trim() ? 'is-selected' : ''}
                   type="button"
                   aria-pressed={!coverColor.trim()}
-                  onClick={() => setCoverColor('')}
+                  onClick={() => {
+                    setCoverColor('');
+                    markContentEditorDirty();
+                  }}
                 >
                   <span className="admin-cover-color-swatch is-none" aria-hidden="true" />
                   <span>不设置</span>
@@ -1680,7 +1757,10 @@ export function AdminOperationsPanel({
                     className="is-selected"
                     type="button"
                     aria-pressed="true"
-                    onClick={() => setCoverColor('')}
+                    onClick={() => {
+                      setCoverColor('');
+                      markContentEditorDirty();
+                    }}
                   >
                     <span
                       className="admin-cover-color-swatch"
@@ -1696,7 +1776,10 @@ export function AdminOperationsPanel({
                     type="button"
                     aria-pressed={coverColor.trim() === option.value}
                     key={option.value}
-                    onClick={() => setCoverColor(option.value)}
+                    onClick={() => {
+                      setCoverColor(option.value);
+                      markContentEditorDirty();
+                    }}
                   >
                     <span
                       className="admin-cover-color-swatch"
@@ -1802,7 +1885,10 @@ export function AdminOperationsPanel({
             </label>
             <ContentPoiBindingEditor
               selectedIds={relatedPoiMarkerIds}
-              onChange={setRelatedPoiMarkerIds}
+              onChange={(markerIds) => {
+                setRelatedPoiMarkerIds(markerIds);
+                markContentEditorDirty();
+              }}
             />
             <label className="checkbox-row">
               <input
@@ -1847,7 +1933,23 @@ export function AdminOperationsPanel({
               </button>
             </div>
           </section>
-        </div>
+        </ContentEditorSurface>
+      ) : editorMode === 'page' ? (
+        <VisualEditorShell
+          backHref="/admin/operations"
+          editorKind="markdown"
+          isBusy={isBusy}
+          sessionId={editorSessionId}
+          status={statusText}
+          title={startNew ? '新建内容' : '编辑内容'}
+        >
+          <div className="visual-editor-empty-state">
+            <span className="material-symbols-outlined" aria-hidden="true">
+              progress_activity
+            </span>
+            <p>{recordsLoaded ? statusText : '正在读取内容编辑数据。'}</p>
+          </div>
+        </VisualEditorShell>
       ) : null}
 
       {activeSection === 'reminders' ? (
@@ -2606,7 +2708,7 @@ export function AdminOperationsPanel({
               className="secondary-action-button is-primary"
               type="button"
               disabled={isBusy}
-              onClick={openCreateContentEditor}
+              onClick={() => openContentEditorPage()}
             >
               <span className="material-symbols-outlined" aria-hidden="true">
                 add
@@ -2775,13 +2877,7 @@ export function AdminOperationsPanel({
                         record.revision.status === 'archived' ||
                         editingContentId === record.contentId
                       }
-                      onClick={() => {
-                        if (record.sourceKind === 'legacy_content_data') {
-                          void adoptLegacyRecordToEditor(record);
-                          return;
-                        }
-                        loadRecordToEditor(record);
-                      }}
+                      onClick={() => openContentEditorPage(record.contentId)}
                     >
                       {record.sourceKind === 'legacy_content_data' ? '接管编辑' : '编辑'}
                     </button>
@@ -2893,6 +2989,59 @@ export function AdminOperationsPanel({
         />
       ) : null}
     </section>
+  );
+}
+
+function ContentEditorSurface({
+  children,
+  editorMode,
+  editorSessionId,
+  editingContentId,
+  isBusy,
+  isDirty,
+  onClose,
+  onSave,
+  status,
+}: Readonly<{
+  children: ReactNode;
+  editorMode: 'page' | 'panel';
+  editorSessionId: string;
+  editingContentId: string | null;
+  isBusy: boolean;
+  isDirty: boolean;
+  onClose: () => void;
+  onSave: () => void;
+  status: string;
+}>) {
+  if (editorMode === 'page') {
+    return (
+      <VisualEditorShell
+        actions={
+          <button className="is-primary" type="button" disabled={isBusy} onClick={onSave}>
+            <span className="material-symbols-outlined" aria-hidden="true">
+              {editingContentId ? 'save' : 'add'}
+            </span>
+            <span>{editingContentId ? '保存草稿' : '创建草稿'}</span>
+          </button>
+        }
+        backHref="/admin/operations"
+        editorKind="markdown"
+        isBusy={isBusy}
+        isDirty={isDirty}
+        onSave={onSave}
+        sessionId={editorSessionId}
+        status={status}
+        title={editingContentId ? '编辑内容' : '新建内容'}
+      >
+        {children}
+      </VisualEditorShell>
+    );
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      {children}
+    </div>
   );
 }
 

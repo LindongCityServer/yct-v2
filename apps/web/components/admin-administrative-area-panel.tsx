@@ -9,7 +9,7 @@ import type {
   TileProviderDescriptor,
 } from '@yct/contracts';
 import { ADMINISTRATIVE_AREA_DEFAULT_MAX_ZOOM } from '@yct/contracts';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { selectMapTileTemplates } from '../lib/map-tile-templates';
@@ -82,6 +82,7 @@ export function AdminAdministrativeAreaPanel() {
   const [status, setStatus] = useState('正在读取行政区划');
   const [busy, setBusy] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const saveInFlightRef = useRef(false);
 
   const colorOptions = useMemo(
     () => [
@@ -169,6 +170,9 @@ export function AdminAdministrativeAreaPanel() {
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (saveInFlightRef.current) {
+      return;
+    }
     if (!form.boundary) {
       setStatus('请在地图中完成行政区划边界');
       return;
@@ -179,6 +183,17 @@ export function AdminAdministrativeAreaPanel() {
       return;
     }
 
+    const normalizedCode = normalizeAdministrativeAreaCode(form.code);
+    const duplicate = areas.find(
+      (area) =>
+        area.id !== target?.id && normalizeAdministrativeAreaCode(area.code) === normalizedCode,
+    );
+    if (duplicate) {
+      setStatus(`行政区划代码已存在：${duplicate.name}（${duplicate.code}），请修改代码。`);
+      return;
+    }
+
+    saveInFlightRef.current = true;
     setBusy(true);
     try {
       const payload = {
@@ -205,7 +220,11 @@ export function AdminAdministrativeAreaPanel() {
       );
       const data = (await response.json()) as { message?: string };
       if (!response.ok) {
-        setStatus(data.message ?? '行政区划保存失败');
+        setStatus(
+          response.status === 409
+            ? (data.message ?? '行政区划代码已存在，请修改代码或编辑已有记录。')
+            : (data.message ?? '行政区划保存失败'),
+        );
         return;
       }
       setStatus(target ? '行政区划已保存' : '行政区划已创建为草稿');
@@ -220,6 +239,7 @@ export function AdminAdministrativeAreaPanel() {
       setStatus('行政区划保存失败，请检查网络后重试');
     } finally {
       setBusy(false);
+      saveInFlightRef.current = false;
     }
   };
 
@@ -259,7 +279,7 @@ export function AdminAdministrativeAreaPanel() {
     semanticColorOptions.at(-1)!;
 
   return (
-    <section className="admin-map-area-panel">
+    <section className={`admin-map-area-panel${busy ? ' is-busy' : ''}`} aria-busy={busy}>
       <div className="section-heading">
         <div>
           <h2>行政区划</h2>
@@ -561,7 +581,19 @@ export function AdminAdministrativeAreaPanel() {
                 取消
               </button>
               <button type="submit" disabled={busy}>
-                {busy ? '保存中' : '保存'}
+                {busy ? (
+                  <>
+                    <span
+                      className="material-symbols-outlined busy-state-indicator"
+                      aria-hidden="true"
+                    >
+                      progress_activity
+                    </span>
+                    保存中
+                  </>
+                ) : (
+                  '保存'
+                )}
               </button>
             </div>
           </form>
@@ -593,6 +625,10 @@ function areaToForm(area: AdministrativeArea): AreaForm {
     minZoom: area.minZoom === undefined ? '' : String(area.minZoom),
     maxZoom: String(area.maxZoom ?? ADMINISTRATIVE_AREA_DEFAULT_MAX_ZOOM),
   };
+}
+
+function normalizeAdministrativeAreaCode(value: string): string {
+  return value.trim().normalize('NFKC').toLocaleLowerCase('zh-CN');
 }
 
 function buildAreaStyle(form: AreaForm, option: AreaColorOption): MapStyleBinding {

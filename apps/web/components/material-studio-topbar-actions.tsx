@@ -9,6 +9,7 @@ import {
   subscribeMaterialStudioState,
   type MaterialStudioStateChangedPayload,
 } from '../lib/client-material-studio-events';
+import { publishToastRequested } from '../lib/client-toast-events';
 
 type AccountStatus = 'not_configured' | 'anonymous' | 'active' | 'readonly' | 'unavailable';
 
@@ -25,7 +26,6 @@ const initialState: Omit<MaterialStudioStateChangedPayload, 'studioId'> = {
 
 export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: string }>) {
   const [studioState, setStudioState] = useState(initialState);
-  const [blockedMessage, setBlockedMessage] = useState('');
   const [accountStatus, setAccountStatus] = useState<AccountStatus>();
 
   useEffect(() => {
@@ -53,20 +53,16 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
   );
 
   useEffect(() => {
-    let timeoutId: number | undefined;
-    const unsubscribe = subscribeMaterialStudioActionBlocked(studioId, (message) => {
-      setBlockedMessage(message);
-      window.clearTimeout(timeoutId);
-      timeoutId = window.setTimeout(() => setBlockedMessage(''), 5000);
+    return subscribeMaterialStudioActionBlocked(studioId, (message) => {
+      publishToastRequested({
+        dedupeKey: `material-studio-blocked:${studioId}`,
+        message,
+        tone: 'warning',
+      });
     });
-    return () => {
-      window.clearTimeout(timeoutId);
-      unsubscribe();
-    };
   }, [studioId]);
 
   const requestAction = (action: 'preview' | 'submit' | 'download' | 'export-project') => {
-    setBlockedMessage('');
     requestMaterialStudioAction({ studioId, action });
   };
   const previewLabel = studioState.hasPreview ? '更新预览' : '预览';
@@ -152,11 +148,6 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
           download
         </span>
       </button>
-      {blockedMessage ? (
-        <div className="topbar-notice" role="alert">
-          {blockedMessage}
-        </div>
-      ) : null}
     </div>
   );
 }

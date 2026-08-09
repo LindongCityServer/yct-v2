@@ -1,5 +1,6 @@
 import {
   createMetroWayfindingId,
+  METRO_WAYFINDING_COMBINATION_DEFAULT_SCALE,
   METRO_WAYFINDING_BACKGROUND,
   METRO_WAYFINDING_FOREGROUND,
   METRO_WAYFINDING_PROJECT_FORMAT,
@@ -8,6 +9,8 @@ import {
   parseMetroWayfindingLayout,
   summarizeMetroWayfindingLayout,
   type MetroWayfindingArrowElement,
+  type MetroWayfindingCombinationChild,
+  type MetroWayfindingCombinationElement,
   type MetroWayfindingElement,
   type MetroWayfindingFacilityElement,
   type MetroWayfindingLayout,
@@ -74,6 +77,8 @@ interface ElementColors {
   backgroundColor?: string;
   foregroundColor?: string;
 }
+
+type NalVisualSeries = 'classic' | 'experimental' | 'mixed' | 'unknown';
 
 const CHITOSE_BACKGROUND = '#FFFFFF';
 const CHITOSE_FOREGROUND = '#111111';
@@ -361,7 +366,9 @@ export function resolveMetroWayfindingImportPreview(
       ...preview.layout,
       backgroundColor: METRO_WAYFINDING_BACKGROUND,
       foregroundColor: METRO_WAYFINDING_FOREGROUND,
-      rows: preview.layout.rows.map((row) => row.map(normalizeImportedElementToSemanticStyle)),
+      rows: preview.layout.rows.map((row) =>
+        row.flatMap(normalizeImportedElementToSemanticElements),
+      ),
     },
     warnings: preview.warnings.filter((warning) => !styleOnlyWarnings.has(warning.code)),
   };
@@ -400,6 +407,29 @@ function normalizeImportedElementToSemanticStyle(
       frameFillMode: 'none',
       frameFillColor: undefined,
       frameStroke: false,
+      backgroundColor: undefined,
+      foregroundColor: undefined,
+    };
+  }
+  if (element.type === 'text') {
+    return {
+      ...element,
+      rows: element.rows.map((row) => (row.kind === 'secondary' ? { ...row, bold: true } : row)),
+      backgroundColor: undefined,
+      foregroundColor: undefined,
+    };
+  }
+  if (element.type === 'combination') {
+    return {
+      ...element,
+      children: element.children.map(
+        (child) =>
+          normalizeImportedElementToSemanticStyle(child) as MetroWayfindingCombinationChild,
+      ),
+      frameFillMode: 'none',
+      frameFillColor: undefined,
+      frameStroke: false,
+      stripePosition: 'left',
       backgroundColor: undefined,
       foregroundColor: undefined,
     };
@@ -503,6 +533,14 @@ function parseNalDocument(fileName: string, root: JsonObject): ParsedImportDocum
         : hasClassicStyle
           ? '北京地铁经典系列（车头标）'
           : '北京地铁系列（未检测到系列特征）';
+  const visualSeries: NalVisualSeries =
+    hasExperimentalStyle && hasClassicStyle
+      ? 'mixed'
+      : hasExperimentalStyle
+        ? 'experimental'
+        : hasClassicStyle
+          ? 'classic'
+          : 'unknown';
   if (hasExperimentalStyle && hasClassicStyle) {
     warningCollector.add(
       'nal-mixed-series',
@@ -510,11 +548,11 @@ function parseNalDocument(fileName: string, root: JsonObject): ParsedImportDocum
     );
   }
   const rows = layerEntries.map(([, rawGroups]) =>
-    parseNalGroups(rawGroups as unknown[], definitions, warningCollector),
+    parseNalGroups(rawGroups as unknown[], definitions, warningCollector, visualSeries),
   );
   warningCollector.add(
     'nal-style-approximation',
-    '字体、双色图标和分组间距已按当前地铁导视模板近似转换。',
+    '字体、双色图标和分组间距已按当前模板近似转换；线路组件已按经典填充框或实验色带恢复。',
   );
   return {
     source: 'nal-vitool',
@@ -535,6 +573,7 @@ function parseNalGroups(
   rawGroups: unknown[],
   definitions: JsonObject,
   warnings: ReturnType<typeof createWarningCollector>,
+  visualSeries: NalVisualSeries,
 ): MetroWayfindingElement[] {
   const groups = rawGroups.filter(isObject);
   const result: MetroWayfindingElement[] = [];
@@ -558,7 +597,7 @@ function parseNalGroups(
         }
         return;
       }
-      const elements = parseNalAsset(asset, definitions, warnings);
+      const elements = parseNalAsset(asset, definitions, warnings, visualSeries);
       result.push(...elements);
     });
   });
@@ -569,6 +608,7 @@ function parseNalAsset(
   asset: string,
   definitions: JsonObject,
   warnings: ReturnType<typeof createWarningCollector>,
+  visualSeries: NalVisualSeries,
 ): MetroWayfindingElement[] {
   const assetName = asset.split(/[\\/]/u).at(-1) ?? asset;
   const definition = resolveNalTextDefinition(assetName, definitions);
@@ -601,7 +641,14 @@ function parseNalAsset(
     ];
   }
   if (assetName === 'line@12.svg' || assetName === 'clss@10.svg') {
-    return [createRouteTextElement('10', '号线', 'Line 10', NAL_LINE_10_COLOR)];
+    const series = assetName.startsWith('line@')
+      ? 'experimental'
+      : assetName.startsWith('clss@')
+        ? 'classic'
+        : visualSeries === 'classic'
+          ? 'classic'
+          : 'experimental';
+    return [createRouteCombinationElement('10', '号线', 'Line 10', NAL_LINE_10_COLOR, series)];
   }
   const facilityMapping = nalFacilityAssetMap[assetName];
   if (facilityMapping) {
@@ -733,7 +780,9 @@ function parseChitoseComponent(
     const lineNumber = largeText || asString(dataset.lineId).replace(/^L/iu, '');
     const lineColor =
       extractFirstCssColor(markup) || extractFirstCssColor(style) || METRO_WAYFINDING_FOREGROUND;
-    return [createRouteTextElement(lineNumber, cn, en, lineColor, align, colors)];
+    return [
+      createRouteCombinationElement(lineNumber, cn, en, lineColor, 'chongqing', align, colors),
+    ];
   }
   if (classNames.includes('exitNumber')) {
     return largeText ? [createLargeTextElement(largeText, 'none', colors)] : [];
@@ -914,9 +963,38 @@ function createMultilineTextElement(
         id: createMetroWayfindingId('text-secondary-import'),
         kind: 'secondary' as const,
         value: value.slice(0, 160),
+        bold: true,
       })),
     ],
     ...colors,
+  };
+}
+
+function createRouteCombinationElement(
+  lineNumber: string,
+  suffix: string,
+  secondary: string,
+  color: string,
+  style: 'classic' | 'experimental' | 'chongqing',
+  align: MetroWayfindingTextAlign = 'left',
+  colors: ElementColors = {},
+): MetroWayfindingCombinationElement {
+  const foregroundColor = colors.foregroundColor ?? resolveReadableForeground(color);
+  const children: MetroWayfindingCombinationChild[] = [
+    createLargeTextElement(lineNumber, 'none'),
+    createTextElement(suffix, secondary, align),
+  ];
+  return {
+    id: createMetroWayfindingId('combination-import'),
+    type: 'combination',
+    scale: METRO_WAYFINDING_COMBINATION_DEFAULT_SCALE,
+    children,
+    frameFillMode: style === 'classic' ? 'color' : 'stripe',
+    frameFillColor: color,
+    frameStroke: style === 'classic',
+    stripePosition: style === 'experimental' ? 'bottom' : 'left',
+    backgroundColor: colors.backgroundColor,
+    foregroundColor,
   };
 }
 
@@ -925,10 +1003,8 @@ function createRouteTextElement(
   suffix: string,
   secondary: string,
   color: string,
-  align: MetroWayfindingTextAlign = 'left',
-  colors: ElementColors = {},
 ): Extract<MetroWayfindingElement, { type: 'text' }> {
-  const element = createTextElement('', secondary, align, colors);
+  const element = createTextElement('', secondary, 'left');
   element.rows[0] = {
     id: createMetroWayfindingId('text-main-import'),
     kind: 'main',
@@ -938,6 +1014,26 @@ function createRouteTextElement(
     ],
   };
   return element;
+}
+
+function normalizeImportedElementToSemanticElements(
+  element: MetroWayfindingElement,
+): MetroWayfindingElement[] {
+  if (element.type === 'combination') {
+    const lineNumber = element.children.find((child) => child.type === 'largeText')?.value.trim();
+    const hasText = element.children.some((child) => child.type === 'text');
+    if (lineNumber && hasText) {
+      return [
+        createRouteTextElement(
+          lineNumber,
+          '号线',
+          `Line ${lineNumber}`,
+          element.frameFillColor ?? NAL_LINE_10_COLOR,
+        ),
+      ];
+    }
+  }
+  return [normalizeImportedElementToSemanticStyle(element)];
 }
 
 function createFacilityElement(
@@ -1010,6 +1106,17 @@ function createDividerElement(
     foregroundColor,
     backgroundColor,
   };
+}
+
+function resolveReadableForeground(color: string | undefined): string {
+  if (!color) return METRO_WAYFINDING_FOREGROUND;
+  const hex = color.trim().replace(/^#/u, '');
+  if (!/^[0-9a-f]{6}$/iu.test(hex)) return METRO_WAYFINDING_FOREGROUND;
+  const red = Number.parseInt(hex.slice(0, 2), 16);
+  const green = Number.parseInt(hex.slice(2, 4), 16);
+  const blue = Number.parseInt(hex.slice(4, 6), 16);
+  const luminance = (red * 299 + green * 587 + blue * 114) / 1000;
+  return luminance >= 168 ? CHITOSE_FOREGROUND : METRO_WAYFINDING_FOREGROUND;
 }
 
 function buildRowSources(

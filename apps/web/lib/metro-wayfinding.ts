@@ -11,6 +11,14 @@ export const METRO_WAYFINDING_DIVIDER_WIDTH = 4;
 export const METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE = 78;
 export const METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE = 85;
 export const METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE = 28;
+export const METRO_WAYFINDING_COMBINATION_MIN_SCALE = 0.25;
+export const METRO_WAYFINDING_COMBINATION_MAX_SCALE = 1;
+export const METRO_WAYFINDING_COMBINATION_DEFAULT_SCALE = 0.65;
+export const METRO_WAYFINDING_COMBINATION_MIN_WIDTH = 85;
+export const METRO_WAYFINDING_COMBINATION_PADDING = 8;
+export const METRO_WAYFINDING_COMBINATION_STRIPE_WIDTH = 24;
+export const METRO_WAYFINDING_COMBINATION_STRIPE_TOP = 20;
+export const METRO_WAYFINDING_COMBINATION_FLEX_MIN_WIDTH = 16;
 export const METRO_WAYFINDING_PROJECT_FORMAT = 'yct.metro-wayfinding.project';
 export const METRO_WAYFINDING_PROJECT_SCHEMA_VERSION = 1;
 
@@ -263,6 +271,7 @@ export interface MetroWayfindingSecondaryTextRow {
   id: string;
   kind: 'secondary';
   value: string;
+  bold: boolean;
 }
 
 export type MetroWayfindingTextRow = MetroWayfindingMainTextRow | MetroWayfindingSecondaryTextRow;
@@ -275,6 +284,8 @@ export function hasMetroWayfindingTextRowContent(row: MetroWayfindingTextRow): b
 
 export type MetroWayfindingFrameShape = 'none' | 'rectangle' | 'circle';
 export type MetroWayfindingFrameFillMode = 'none' | 'inverse' | 'color';
+export type MetroWayfindingCombinationFillMode = MetroWayfindingFrameFillMode | 'stripe';
+export type MetroWayfindingCombinationStripePosition = 'left' | 'right' | 'bottom';
 
 export interface MetroWayfindingFacilityElement {
   id: string;
@@ -347,13 +358,33 @@ export interface MetroWayfindingDividerElement {
   foregroundColor?: MetroWayfindingColor;
 }
 
+export type MetroWayfindingCombinationChild =
+  | MetroWayfindingFacilityElement
+  | MetroWayfindingTextElement
+  | MetroWayfindingLargeTextElement
+  | MetroWayfindingSpaceElement;
+
+export interface MetroWayfindingCombinationElement {
+  id: string;
+  type: 'combination';
+  scale: number;
+  children: MetroWayfindingCombinationChild[];
+  frameFillMode: MetroWayfindingCombinationFillMode;
+  frameFillColor?: MetroWayfindingColor;
+  frameStroke: boolean;
+  stripePosition: MetroWayfindingCombinationStripePosition;
+  backgroundColor?: MetroWayfindingColor;
+  foregroundColor?: MetroWayfindingColor;
+}
+
 export type MetroWayfindingElement =
   | MetroWayfindingFacilityElement
   | MetroWayfindingArrowElement
   | MetroWayfindingTextElement
   | MetroWayfindingLargeTextElement
   | MetroWayfindingSpaceElement
-  | MetroWayfindingDividerElement;
+  | MetroWayfindingDividerElement
+  | MetroWayfindingCombinationElement;
 
 export type MetroWayfindingLayoutMode = 'single' | 'double' | 'vertical';
 
@@ -414,6 +445,17 @@ export interface MetroWayfindingVerticalLayoutSizing {
   isHeightInsufficient: boolean;
 }
 
+export interface MetroWayfindingCombinationSizing {
+  width: number;
+  contentX: number;
+  contentWidth: number;
+  elementWidths: number[];
+  flexWidth: number;
+  textScaleX: number;
+  layoutScale: number;
+  totalDisplayWidth: number;
+}
+
 export const emptyMetroWayfindingLayout: MetroWayfindingLayout = {
   backgroundColor: METRO_WAYFINDING_BACKGROUND,
   foregroundColor: METRO_WAYFINDING_FOREGROUND,
@@ -435,12 +477,21 @@ export function createMetroWayfindingTextRow(
         kind,
         segments: [{ kind: 'text', value: '' }],
       }
-    : { id: createMetroWayfindingId('text-secondary'), kind, value: '' };
+    : { id: createMetroWayfindingId('text-secondary'), kind, value: '', bold: true };
 }
 
 export function duplicateMetroWayfindingElement(
   element: MetroWayfindingElement,
 ): MetroWayfindingElement {
+  if (element.type === 'combination') {
+    return {
+      ...element,
+      id: createMetroWayfindingId(element.type),
+      children: element.children.map(
+        (child) => duplicateMetroWayfindingElement(child) as MetroWayfindingCombinationChild,
+      ),
+    };
+  }
   if (element.type !== 'text') {
     return { ...element, id: createMetroWayfindingId(element.type) };
   }
@@ -481,19 +532,30 @@ export function resolveMetroWayfindingLayoutSizing(
 ): MetroWayfindingLayoutSizing {
   const safeCanvasWidth = Math.max(Number.isFinite(canvasWidth) ? canvasWidth : 0, 0);
   const innerWidth = Math.max(0, safeCanvasWidth - METRO_WAYFINDING_PADDING * 2);
-  const elementWidths = elements.map(resolveMetroWayfindingElementWidth);
+  const naturalElementWidths = elements.map(resolveMetroWayfindingElementWidth);
   const gapWidth = Math.max(elements.length - 1, 0) * METRO_WAYFINDING_GAP;
   let textWidth = 0;
   let nonTextWidth = 0;
   let flexCount = 0;
+  const flexibleCombinationIndexes: number[] = [];
 
   elements.forEach((element, index) => {
     if (element.type === 'space' && element.mode === 'flex') {
       flexCount += 1;
-    } else if (element.type === 'text' || element.type === 'largeText') {
-      textWidth += elementWidths[index] ?? 0;
+    } else if (
+      element.type === 'text' ||
+      element.type === 'largeText' ||
+      element.type === 'combination'
+    ) {
+      textWidth += naturalElementWidths[index] ?? 0;
+      if (
+        element.type === 'combination' &&
+        element.children.some((child) => child.type === 'space' && child.mode === 'flex')
+      ) {
+        flexibleCombinationIndexes.push(index);
+      }
     } else {
-      nonTextWidth += elementWidths[index] ?? 0;
+      nonTextWidth += naturalElementWidths[index] ?? 0;
     }
   });
 
@@ -508,8 +570,14 @@ export function resolveMetroWayfindingLayoutSizing(
       : 1;
   const displayedFixedWidth = (nonTextWidth + textWidth * textScaleX + gapWidth) * layoutScale;
   const remainingWidth = Math.max(0, innerWidth - displayedFixedWidth);
-  const flexWidth = flexCount > 0 ? remainingWidth / flexCount : 0;
-  const totalDisplayWidth = displayedFixedWidth + flexWidth * flexCount;
+  const flexSlotCount = flexCount + flexibleCombinationIndexes.length;
+  const flexWidth = flexSlotCount > 0 ? remainingWidth / flexSlotCount : 0;
+  const elementWidths = [...naturalElementWidths];
+  flexibleCombinationIndexes.forEach((index) => {
+    const scale = Math.max(textScaleX * layoutScale, Number.EPSILON);
+    elementWidths[index] = (elementWidths[index] ?? 0) + flexWidth / scale;
+  });
+  const totalDisplayWidth = displayedFixedWidth + flexWidth * flexSlotCount;
 
   return {
     elementWidths,
@@ -583,6 +651,9 @@ export function resolveMetroWayfindingVerticalElementHeight(
   if (element.type === 'largeText') {
     return METRO_WAYFINDING_TEXT_HEIGHT;
   }
+  if (element.type === 'combination') {
+    return METRO_WAYFINDING_HEIGHT * normalizeMetroWayfindingCombinationScale(element.scale);
+  }
   if (element.type === 'facility' || element.type === 'arrow') {
     return METRO_WAYFINDING_TEXT_HEIGHT;
   }
@@ -606,7 +677,7 @@ export function resolveMetroWayfindingVerticalElementHeight(
   const rowHeights = rows.map((row) =>
     row.kind === 'main'
       ? measureMetroWayfindingMainSegments(row.segments, metrics.mainFontSize)
-      : estimateMetroWayfindingTextWidth(row.value, metrics.secondaryFontSize),
+      : measureMetroWayfindingSecondaryText(row.value, metrics.secondaryFontSize, row.bold),
   );
   return Math.max(0, ...rowHeights);
 }
@@ -633,6 +704,12 @@ export function resolveMetroWayfindingElementWidth(element: MetroWayfindingEleme
       );
     return Math.max(85, contentWidth + 8);
   }
+  if (element.type === 'combination') {
+    return (
+      resolveMetroWayfindingCombinationSizing(element).width *
+      normalizeMetroWayfindingCombinationScale(element.scale)
+    );
+  }
   if (element.type === 'space') {
     return element.mode === 'fixed' ? Math.max(1, element.units) * METRO_WAYFINDING_GAP : 0;
   }
@@ -640,9 +717,69 @@ export function resolveMetroWayfindingElementWidth(element: MetroWayfindingEleme
   const rowWidths = element.rows.map((row) =>
     row.kind === 'main'
       ? measureMetroWayfindingMainSegments(row.segments, metrics.mainFontSize)
-      : estimateMetroWayfindingTextWidth(row.value, metrics.secondaryFontSize),
+      : measureMetroWayfindingSecondaryText(row.value, metrics.secondaryFontSize, row.bold),
   );
   return Math.max(0, ...rowWidths);
+}
+
+export function resolveMetroWayfindingCombinationSizing(
+  element: MetroWayfindingCombinationElement,
+  targetWidth?: number,
+): MetroWayfindingCombinationSizing {
+  const contentX =
+    METRO_WAYFINDING_COMBINATION_PADDING +
+    (element.frameFillMode === 'stripe' && element.stripePosition === 'left'
+      ? METRO_WAYFINDING_COMBINATION_STRIPE_WIDTH
+      : 0);
+  const rightInset =
+    METRO_WAYFINDING_COMBINATION_PADDING +
+    (element.frameFillMode === 'stripe' && element.stripePosition === 'right'
+      ? METRO_WAYFINDING_COMBINATION_STRIPE_WIDTH
+      : 0);
+  const elementWidths = element.children.map(resolveMetroWayfindingElementWidth);
+  const gapWidth = Math.max(element.children.length - 1, 0) * METRO_WAYFINDING_GAP;
+  let fixedWidth = 0;
+  let flexCount = 0;
+
+  element.children.forEach((child, index) => {
+    if (child.type === 'space' && child.mode === 'flex') {
+      flexCount += 1;
+    } else {
+      fixedWidth += elementWidths[index] ?? 0;
+    }
+  });
+
+  const minimumContentWidth = Math.max(
+    0,
+    METRO_WAYFINDING_COMBINATION_MIN_WIDTH - contentX - rightInset,
+  );
+  const naturalContentWidth = Math.max(
+    minimumContentWidth,
+    fixedWidth + gapWidth + flexCount * METRO_WAYFINDING_COMBINATION_FLEX_MIN_WIDTH,
+  );
+  const naturalWidth = contentX + naturalContentWidth + rightInset;
+  const width = Math.max(
+    naturalWidth,
+    Number.isFinite(targetWidth) ? Number(targetWidth) : naturalWidth,
+  );
+  const contentWidth = Math.max(0, width - contentX - rightInset);
+  const flexWidth =
+    flexCount > 0
+      ? Math.max(
+          METRO_WAYFINDING_COMBINATION_FLEX_MIN_WIDTH,
+          (contentWidth - fixedWidth - gapWidth) / flexCount,
+        )
+      : 0;
+  return {
+    width,
+    contentX,
+    contentWidth,
+    elementWidths,
+    flexWidth,
+    textScaleX: 1,
+    layoutScale: 1,
+    totalDisplayWidth: fixedWidth + gapWidth + flexWidth * flexCount,
+  };
 }
 
 export function measureMetroWayfindingMainSegments(
@@ -676,6 +813,14 @@ export function estimateMetroWayfindingTextWidth(value: string, fontSize: number
       0,
     ) * fontSize
   );
+}
+
+export function measureMetroWayfindingSecondaryText(
+  value: string,
+  fontSize: number,
+  bold: boolean,
+): number {
+  return estimateMetroWayfindingTextWidth(value, fontSize) * (bold ? 1.06 : 1);
 }
 
 export function estimateMetroWayfindingLargeTextWidth(value: string, fontSize: number): number {
@@ -764,6 +909,17 @@ export function createMetroWayfindingElement(
       frameStroke: false,
     };
   }
+  if (type === 'combination') {
+    return {
+      id,
+      type,
+      scale: METRO_WAYFINDING_COMBINATION_DEFAULT_SCALE,
+      children: [],
+      frameFillMode: 'none',
+      frameStroke: false,
+      stripePosition: 'left',
+    };
+  }
   if (type === 'space') {
     return { id, type, mode: 'fixed', units: 1 };
   }
@@ -846,6 +1002,9 @@ export function buildMetroWayfindingProjectFileName(input: {
             .filter((value) => value.trim());
         }
         if (element.type === 'largeText') return [`${element.value}${element.suffix}`];
+        if (element.type === 'combination') {
+          return element.children.flatMap(extractMetroWayfindingElementDescriptors);
+        }
         if (element.type === 'facility' || element.type === 'arrow') {
           return [
             metroWayfindingIconOptions.find((option) => option.id === element.iconId)?.label ?? '',
@@ -904,10 +1063,34 @@ function summarizeMetroWayfindingElement(element: MetroWayfindingElement): strin
   if (element.type === 'largeText') {
     return `大文字：${`${element.value}${element.suffix}` || '空白'}`;
   }
+  if (element.type === 'combination') {
+    const content = element.children.map(summarizeMetroWayfindingElement).join(' + ');
+    const fillLabel =
+      element.frameFillMode === 'stripe'
+        ? `色带·${{ left: '左', right: '右', bottom: '下' }[element.stripePosition]}`
+        : { none: '无填充', inverse: '反色', color: '颜色填充' }[element.frameFillMode];
+    return `组合框（${formatMetroWayfindingScale(element.scale)}·${fillLabel}）：${content || '空白'}`;
+  }
   if (element.type === 'space') {
     return element.mode === 'flex' ? '弹性空白' : `固定空白：${element.units} 格`;
   }
   return `分割线：${METRO_WAYFINDING_DIVIDER_WIDTH} px`;
+}
+
+function extractMetroWayfindingElementDescriptors(element: MetroWayfindingElement): string[] {
+  if (element.type === 'text') {
+    return element.rows.flatMap((row) =>
+      row.kind === 'main' ? row.segments.map((segment) => segment.value) : [row.value],
+    );
+  }
+  if (element.type === 'largeText') return [`${element.value}${element.suffix}`];
+  if (element.type === 'facility' || element.type === 'arrow') {
+    return [metroWayfindingIconOptions.find((option) => option.id === element.iconId)?.label ?? ''];
+  }
+  if (element.type === 'combination') {
+    return element.children.flatMap(extractMetroWayfindingElementDescriptors);
+  }
+  return [];
 }
 
 export function createMetroWayfindingProjectFile(input: {
@@ -1060,6 +1243,24 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
       foregroundColor,
     };
   }
+  if (candidate.type === 'combination') {
+    const combination = candidate as Partial<MetroWayfindingCombinationElement>;
+    return {
+      id,
+      type: 'combination',
+      scale: normalizeMetroWayfindingCombinationScale(combination.scale),
+      children: normalizeMetroWayfindingCombinationChildren(combination.children),
+      frameFillMode: normalizeMetroWayfindingCombinationFillMode(combination.frameFillMode),
+      frameFillColor: normalizeOptionalColor(combination.frameFillColor),
+      frameStroke: combination.frameStroke === true,
+      stripePosition:
+        combination.stripePosition === 'right' || combination.stripePosition === 'bottom'
+          ? combination.stripePosition
+          : 'left',
+      backgroundColor,
+      foregroundColor,
+    };
+  }
   if (candidate.type === 'space') {
     const space = candidate as Partial<MetroWayfindingSpaceElement>;
     return {
@@ -1090,6 +1291,56 @@ function normalizeMetroWayfindingFrameShape(
 
 function normalizeMetroWayfindingFrameFillMode(value: unknown): MetroWayfindingFrameFillMode {
   return value === 'inverse' || value === 'color' ? value : 'none';
+}
+
+function normalizeMetroWayfindingCombinationFillMode(
+  value: unknown,
+): MetroWayfindingCombinationFillMode {
+  return value === 'stripe' ? value : normalizeMetroWayfindingFrameFillMode(value);
+}
+
+function normalizeMetroWayfindingCombinationScale(value: unknown): number {
+  const scale = Number(value);
+  return Math.max(
+    METRO_WAYFINDING_COMBINATION_MIN_SCALE,
+    Math.min(
+      METRO_WAYFINDING_COMBINATION_MAX_SCALE,
+      Number.isFinite(scale)
+        ? Math.round(scale * 100) / 100
+        : METRO_WAYFINDING_COMBINATION_DEFAULT_SCALE,
+    ),
+  );
+}
+
+function formatMetroWayfindingScale(value: number): string {
+  return `${Math.round(normalizeMetroWayfindingCombinationScale(value) * 100) / 100} 倍`;
+}
+
+function normalizeMetroWayfindingCombinationChildren(
+  value: unknown,
+): MetroWayfindingCombinationChild[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(0, 32)
+    .filter((child) => {
+      if (!child || typeof child !== 'object') return false;
+      const type = (child as { type?: unknown }).type;
+      return (
+        type === 'icon' ||
+        type === 'facility' ||
+        type === 'text' ||
+        type === 'largeText' ||
+        type === 'space'
+      );
+    })
+    .map(normalizeMetroWayfindingElement)
+    .filter(
+      (element): element is MetroWayfindingCombinationChild =>
+        element?.type === 'facility' ||
+        element?.type === 'text' ||
+        element?.type === 'largeText' ||
+        element?.type === 'space',
+    );
 }
 
 function normalizeMainSegments(value: unknown): MetroWayfindingMainSegment[] {
@@ -1137,6 +1388,7 @@ function normalizeTextRows(value: unknown[], elementId: string): MetroWayfinding
           id,
           kind: 'secondary',
           value: normalizeString(candidate.value, 160),
+          bold: true,
         };
       }
       if (candidate.kind === 'main') {
@@ -1161,6 +1413,7 @@ function normalizeTextRows(value: unknown[], elementId: string): MetroWayfinding
           id: legacyTextRowId(elementId, 'secondary-1'),
           kind: 'secondary',
           value: '',
+          bold: true,
         },
       ];
 }
@@ -1187,6 +1440,7 @@ function migrateLegacyTextRows(
         id: legacyTextRowId(elementId, 'secondary-1'),
         kind: 'secondary',
         value: normalizeString(candidate.secondary, 160),
+        bold: true,
       },
     ];
   }
@@ -1196,6 +1450,7 @@ function migrateLegacyTextRows(
       id: legacyTextRowId(elementId, 'secondary-1'),
       kind: 'secondary',
       value: normalizeString(candidate.secondSecondary, 160),
+      bold: true,
     },
     {
       id: legacyTextRowId(elementId, 'main-2'),
@@ -1206,6 +1461,7 @@ function migrateLegacyTextRows(
       id: legacyTextRowId(elementId, 'secondary-2'),
       kind: 'secondary',
       value: normalizeString(candidate.secondary, 160),
+      bold: true,
     },
   ];
 }
