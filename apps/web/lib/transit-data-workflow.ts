@@ -25,6 +25,7 @@ import {
   isTransitPoiMarkerCompatibleWithStation,
 } from './transit-station-mode';
 import { ensureTransitCacheInvalidationListenersRegistered } from './transit-cache-invalidation-listeners';
+import { ensureRoutingTopologyInvalidationListenersRegistered } from './routing-topology-invalidation-listeners';
 import {
   createTransitDataRevision,
   findTransitDataRevision,
@@ -40,6 +41,7 @@ import {
 } from './transit-station-detail-match';
 
 ensureTransitCacheInvalidationListenersRegistered();
+ensureRoutingTopologyInvalidationListenersRegistered();
 
 export interface TransitDataActionResult {
   ok: boolean;

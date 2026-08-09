@@ -47,6 +47,8 @@ export interface RuntimeConfig {
   eventOutboxStorePath: string;
   localePreferenceStorePath: string;
   mapFavoriteStorePath: string;
+  mapMarkerPublicSnapshotStorePath: string;
+  mapShareLinkStorePath: string;
   mapSpatialProfileStorePath: string;
   administrativeAreaStorePath: string;
   playerLocationStorePath: string;
@@ -257,6 +259,14 @@ export function readRuntimeConfig(): RuntimeConfig {
     mapFavoriteStorePath: resolveRuntimePath(
       process.env.YCT_MAP_FAVORITE_STORE_PATH,
       '.yct-data/map-favorite-store.json',
+    ),
+    mapMarkerPublicSnapshotStorePath: resolveRuntimePath(
+      process.env.YCT_MAP_MARKER_PUBLIC_SNAPSHOT_STORE_PATH,
+      '.yct-data/map-marker-public-snapshot.json',
+    ),
+    mapShareLinkStorePath: resolveRuntimePath(
+      process.env.YCT_MAP_SHARE_LINK_STORE_PATH,
+      '.yct-data/map-share-links.json',
     ),
     mapSpatialProfileStorePath: resolveRuntimePath(
       process.env.YCT_MAP_SPATIAL_PROFILE_STORE_PATH,

@@ -9,6 +9,7 @@ import type { OperationsReminderSourceSyncResult } from './operations-reminder-s
 import { syncTransitServiceNoticeReminderSource } from './operations-reminder-source-sync-workflow';
 import { processExpiredTicketOrders } from './ticket-order-workflow';
 import { ensureRideCodeListenersRegistered } from './ride-code-workflow';
+import { ensureRoutingTopologyInvalidationListenersRegistered } from './routing-topology-invalidation-listeners';
 
 export interface InternalTaskRunResult {
   processedAt: string;
@@ -57,6 +58,7 @@ export async function runInternalTasks(
   ensureNotificationDeliveryListenersRegistered();
   ensureOperationsReminderRefreshListenersRegistered();
   ensureRideCodeListenersRegistered();
+  ensureRoutingTopologyInvalidationListenersRegistered();
   const processedAt = new Date().toISOString();
   const actorType = input.actorType ?? 'system';
   const actorId = input.actorId?.trim() || undefined;

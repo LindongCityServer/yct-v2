@@ -4,6 +4,7 @@ import type {
   ApiListResponse,
   ApiMeta,
   AdministrativeArea,
+  CompactMapRouteShareState,
   LocaleCode,
   MapGeometry,
   MapMarkerSnapshot,
@@ -34,6 +35,7 @@ import QRCode from 'qrcode';
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { publishLoginRequiredForResponse } from '../lib/client-auth-events';
+import { publishToastRequested } from '../lib/client-toast-events';
 import { readMapFavoriteMarkerIds, writeMapFavoriteMarkerIds } from '../lib/client-map-favorites';
 import {
   publishMapNearbySearchScopeChanged,
@@ -44,6 +46,7 @@ import {
   subscribeMapNavigationLayoutChanged,
   subscribeMapRouteShortcutRequested,
   subscribeMapTileProviderSelected,
+  subscribeMapViewShortcutRequested,
   subscribeMapZoomRequested,
   type MapNearbySearchScope,
 } from '../lib/client-map-ui-events';
@@ -572,6 +575,7 @@ interface RoutePlanningCache {
   accessCandidatesByPair: Map<string, RoadAccessCandidate[]>;
   pathByNodePair: Map<string, RoadRoutePath | undefined>;
   roadRouteByPair: Map<string, ResolvedRoadRoute | null>;
+  traversalBarriers: RouteTraversalBarrier[];
 }
 
 interface RoadRoutingSnapshot {
@@ -581,7 +585,12 @@ interface RoadRoutingSnapshot {
 
 type RoadRoutingStatus = 'loading' | 'ready';
 
-type RoadRouteStrategy = 'shortest' | 'fewer-turns';
+type RoadRouteStrategy =
+  | 'shortest'
+  | 'fewer-turns'
+  | 'fewest-segments'
+  | 'alternative-1'
+  | 'alternative-2';
 
 type MapShareMode = 'link' | 'text' | 'image';
 type MapShareCopyKind = 'link' | 'text' | 'coordinate' | 'teleport';
@@ -634,6 +643,7 @@ interface RoadRouteAccessOptions {
 }
 
 interface ResolvedWalkRoute {
+  blockedByTraversalBarrier: boolean;
   coordinates: Array<[number, number]>;
   details: RoutePlanStepDetail[];
   distance: number;
@@ -673,16 +683,7 @@ interface SharedRoutePlanState {
   selectedOptionId?: string;
 }
 
-type CompactRoutePlanShareState = [
-  origin: string,
-  destination: string,
-  originLabel: string,
-  destinationLabel: string,
-  originId: string,
-  destinationId: string,
-  modes: string,
-  selectedOptionId: string,
-];
+type CompactRoutePlanShareState = CompactMapRouteShareState;
 
 interface SharedCoordinateFocusState {
   coordinate: [number, number];
@@ -778,6 +779,7 @@ const markerCategoryFallbackNames: Record<string, string> = {
   sports: '体育',
   'tram-station': '有轨电车站',
   'transit-line': '线路',
+  water: '水域',
 };
 
 const markerCategoryMessageKeys: Record<string, CommonMessageKey> = {
@@ -807,6 +809,7 @@ const markerCategoryMessageKeys: Record<string, CommonMessageKey> = {
   sports: 'map.categoryName.sports',
   'tram-station': 'map.categoryName.tramStation',
   'transit-line': 'map.categoryName.transitLine',
+  water: 'map.categoryName.water',
 };
 
 const routeTransportModeOptions: RouteTransportModeOption[] = [
@@ -894,6 +897,7 @@ export function MapStage() {
   const searchParams = useSearchParams();
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const activePointersRef = useRef<Map<number, ActivePointer>>(new Map());
   const pinchRef = useRef<PinchState | null>(null);
@@ -997,7 +1001,6 @@ export function MapStage() {
   const [editingRouteEndpoint, setEditingRouteEndpoint] = useState<RouteEndpointKind | null>(null);
   const [routeEndpointQuery, setRouteEndpointQuery] = useState('');
   const [shareTarget, setShareTarget] = useState<MapShareTarget | null>(null);
-  const [shareActionStatus, setShareActionStatus] = useState('');
   const [roadRoutingStatus, setRoadRoutingStatus] = useState<RoadRoutingStatus>('ready');
   const [roadRoutingSnapshot, setRoadRoutingSnapshot] = useState<RoadRoutingSnapshot>(() => ({
     markerRoadAccessIndex: new Map(),
@@ -1055,12 +1058,13 @@ export function MapStage() {
         return;
       }
 
+      const rect = viewport.getBoundingClientRect();
       const safeRect = normalizeMapVisibleRect(mapVisibleRectRef.current, currentSize);
-      const safeCenterX = (safeRect.left + safeRect.right) / 2;
-      const safeCenterY = (safeRect.top + safeRect.bottom) / 2;
+      const pointerX = clamp(event.clientX - rect.left, safeRect.left, safeRect.right);
+      const pointerY = clamp(event.clientY - rect.top, safeRect.top, safeRect.bottom);
       routeManuallyZoomedRef.current = true;
       setMapView(
-        zoomMapViewAroundScreenPoint(currentView, nextZoom, currentSize, safeCenterX, safeCenterY),
+        zoomMapViewAroundScreenPoint(currentView, nextZoom, currentSize, pointerX, pointerY),
       );
     };
 
@@ -1479,6 +1483,29 @@ export function MapStage() {
   const staticShapeMarkers = useMemo(
     () => localizedStaticMarkerSnapshot.filter(isShapeMarker),
     [localizedStaticMarkerSnapshot],
+  );
+  const routeTraversalBarriers = useMemo(
+    () =>
+      localizedStaticRoutingMarkerSnapshot.flatMap((marker): RouteTraversalBarrier[] => {
+        const explicitBarrier = marker.spatial?.traversalBarrier;
+        const waterCategory = marker.categoryId?.trim().toLowerCase() === 'water';
+        if (
+          !isRegionMarker(marker) ||
+          (!waterCategory && explicitBarrier?.kind !== 'blocked_area')
+        ) {
+          return [];
+        }
+        return [
+          {
+            blockedModes: explicitBarrier?.blockedModes?.length
+              ? explicitBarrier.blockedModes
+              : ['walk', 'taxi', 'bus', 'coach'],
+            geometry: marker.geometry,
+            id: marker.id,
+          },
+        ];
+      }),
+    [localizedStaticRoutingMarkerSnapshot],
   );
   const endpointGroupMarkers = useMemo(
     () => markerSnapshot.filter(isEndpointGroupMarker),
@@ -2397,6 +2424,7 @@ export function MapStage() {
             taxiFare: mapSpatialProfile?.taxiFare,
             transitFare: mapSpatialProfile?.transitFare,
             pointMarkers: staticRoutingPointMarkers,
+            traversalBarriers: routeTraversalBarriers,
             secondaryPoiIndex,
             secondaryPoiParentIndex,
             transitLines: localizedTransitOverview?.lines ?? [],
@@ -2410,6 +2438,7 @@ export function MapStage() {
       mapSpatialProfile?.taxiFare,
       mapSpatialProfile?.transitFare,
       staticRoutingPointMarkers,
+      routeTraversalBarriers,
       routePlanDraft,
       routeTransportModes,
       secondaryPoiIndex,
@@ -2481,14 +2510,6 @@ export function MapStage() {
     routePlanRequest,
     t,
   ]);
-  useEffect(() => {
-    if (!shareActionStatus) {
-      return undefined;
-    }
-
-    const timer = window.setTimeout(() => setShareActionStatus(''), 3200);
-    return () => window.clearTimeout(timer);
-  }, [shareActionStatus]);
   const selectedRouteTrace = useMemo(
     () =>
       routeResultActive && selectedRouteOption
@@ -2693,7 +2714,7 @@ export function MapStage() {
 
   useEffect(() => subscribeMapZoomRequested(({ delta }) => zoomBy(delta)), [zoomBy]);
 
-  const resetView = () => {
+  const resetView = useCallback(() => {
     setMapView((current) =>
       fitCoordinatesToMapView(
         [preferredCurrentLocation],
@@ -2703,7 +2724,20 @@ export function MapStage() {
         effectiveMapVisibleRect,
       ),
     );
-  };
+  }, [effectiveMapVisibleRect, preferredCurrentLocation, viewportSize]);
+
+  useEffect(
+    () =>
+      subscribeMapViewShortcutRequested(({ command }) => {
+        if (command === 'focus_search') {
+          setMarkerListExpanded(true);
+          searchInputRef.current?.focus();
+          return;
+        }
+        resetView();
+      }),
+    [resetView],
+  );
 
   const focusMapMarker = useCallback(
     (marker: CenterableMarker) => {
@@ -3507,6 +3541,7 @@ export function MapStage() {
                 search
               </span>
               <input
+                ref={searchInputRef}
                 type="search"
                 aria-label={t('map.search.aria')}
                 value={markerQuery}
@@ -5105,13 +5140,7 @@ export function MapStage() {
           target={shareTarget}
           t={t}
           onClose={() => setShareTarget(null)}
-          onComplete={setShareActionStatus}
         />
-      ) : null}
-      {shareActionStatus ? (
-        <div className="map-toast" role="status">
-          {shareActionStatus}
-        </div>
       ) : null}
       <MapStageLegal />
     </section>
@@ -5123,26 +5152,51 @@ function MapShareDialog({
   target,
   t,
   onClose,
-  onComplete,
 }: Readonly<{
   locale: LocaleCode;
   target: MapShareTarget;
   t: Translate;
   onClose: () => void;
-  onComplete: (status: string) => void;
 }>) {
   const previewRef = useRef<HTMLElement | null>(null);
   const [busyMode, setBusyMode] = useState<MapShareMode | null>(null);
   const [copyKind, setCopyKind] = useState<MapShareCopyKind>('link');
   const [busyCopy, setBusyCopy] = useState<MapShareCopyKind | null>(null);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
-  const payload = useMemo(() => buildMapSharePayload(target, t), [target, t]);
+  const [shortShareUrl, setShortShareUrl] = useState<string | null>(null);
+  const [shortShareLinkLoading, setShortShareLinkLoading] = useState(true);
+  const payload = useMemo(
+    () => buildMapSharePayload(target, t, shortShareUrl ?? undefined),
+    [shortShareUrl, t, target],
+  );
   const copyOptions = useMemo(
     () => mapShareCopyKinds.filter((kind) => Boolean(getMapShareCopyValue(payload, kind))),
     [payload],
   );
   const selectedCopyKind = copyOptions.includes(copyKind) ? copyKind : copyOptions[0];
   const useWordmarkLogo = locale !== 'en';
+
+  useEffect(() => {
+    let cancelled = false;
+    setShortShareLinkLoading(true);
+    setShortShareUrl(null);
+    void createMapShortShareLink(target)
+      .then((url) => {
+        if (!cancelled) {
+          setShortShareUrl(url);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) {
+          setShortShareLinkLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [target]);
 
   useEffect(() => {
     let cancelled = false;
@@ -5188,10 +5242,18 @@ function MapShareDialog({
         previewElement: previewRef.current,
         t,
       });
-      onComplete(status);
+      publishToastRequested({
+        dedupeKey: 'map-share-action',
+        message: status,
+        tone: 'success',
+      });
       onClose();
     } catch {
-      onComplete(t('map.share.unavailable'));
+      publishToastRequested({
+        dedupeKey: 'map-share-action',
+        message: t('map.share.unavailable'),
+        tone: 'error',
+      });
     } finally {
       setBusyMode(null);
     }
@@ -5211,9 +5273,17 @@ function MapShareDialog({
     setBusyCopy(kind);
     try {
       await copyTextToClipboard(value);
-      onComplete(successMessage);
+      publishToastRequested({
+        dedupeKey: 'map-share-action',
+        message: successMessage,
+        tone: 'success',
+      });
     } catch {
-      onComplete(t('map.share.unavailable'));
+      publishToastRequested({
+        dedupeKey: 'map-share-action',
+        message: t('map.share.unavailable'),
+        tone: 'error',
+      });
     } finally {
       setBusyCopy(null);
     }
@@ -5365,13 +5435,27 @@ function MapShareDialog({
               <button
                 className="secondary-action-button"
                 type="button"
-                disabled={busyMode !== null || busyCopy !== null || !selectedCopyKind}
+                aria-busy={
+                  busyCopy !== null || (selectedCopyKind === 'link' && shortShareLinkLoading)
+                }
+                disabled={
+                  busyMode !== null ||
+                  busyCopy !== null ||
+                  !selectedCopyKind ||
+                  (selectedCopyKind === 'link' && shortShareLinkLoading)
+                }
                 onClick={() => void performCopy()}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
-                  content_copy
+                  {busyCopy || (selectedCopyKind === 'link' && shortShareLinkLoading)
+                    ? 'progress_activity'
+                    : 'content_copy'}
                 </span>
-                <span>{busyCopy ? t('map.share.processing') : t('map.share.copy')}</span>
+                <span>
+                  {busyCopy || (selectedCopyKind === 'link' && shortShareLinkLoading)
+                    ? t('map.share.processing')
+                    : t('map.share.copy')}
+                </span>
               </button>
             </div>
           ) : null}
@@ -5382,16 +5466,24 @@ function MapShareDialog({
               }
               type="button"
               key={mode}
+              aria-busy={busyMode === mode || (mode === 'link' && shortShareLinkLoading)}
               disabled={
-                busyMode !== null || busyCopy !== null || (mode === 'image' && !qrCodeDataUrl)
+                busyMode !== null ||
+                busyCopy !== null ||
+                (mode === 'image' && !qrCodeDataUrl) ||
+                (mode === 'link' && shortShareLinkLoading)
               }
               onClick={() => void performShare(mode)}
             >
               <span className="material-symbols-outlined" aria-hidden="true">
-                {mapShareModeIcons[mode]}
+                {mode === 'link' && shortShareLinkLoading
+                  ? 'progress_activity'
+                  : mapShareModeIcons[mode]}
               </span>
               <span>
-                {busyMode === mode ? t('map.share.processing') : t(mapShareModeLabelKeys[mode])}
+                {busyMode === mode || (mode === 'link' && shortShareLinkLoading)
+                  ? t('map.share.processing')
+                  : t(mapShareModeLabelKeys[mode])}
               </span>
             </button>
           ))}
@@ -5426,6 +5518,12 @@ type RegionGeometry = Extract<
   MapGeometry,
   { type: 'Rectangle' | 'MultiRectangle' | 'Polygon' | 'MultiPolygon' }
 >;
+
+interface RouteTraversalBarrier {
+  blockedModes: MapTravelMode[];
+  geometry: RegionGeometry;
+  id: string;
+}
 
 type CenterableMarker = LocalizedMapMarker;
 
@@ -6255,9 +6353,10 @@ function buildRoutePlanOptions(input: {
   roadTiming?: MapSpatialProfile['roadTiming'];
   taxiFare?: MapSpatialProfile['taxiFare'];
   transitFare?: MapSpatialProfile['transitFare'];
+  traversalBarriers: RouteTraversalBarrier[];
 }): RoutePlanOption[] {
   const roadGraph = input.roadGraph;
-  const routeCache = createRoutePlanningCache();
+  const routeCache = createRoutePlanningCache(input.traversalBarriers);
   const draft = resolveRoutePlanDraftAccessPoints(
     input.draft,
     input.secondaryPoiIndex,
@@ -6292,64 +6391,68 @@ function buildRoutePlanOptions(input: {
       input.t,
       directWalkAccessOptions,
     );
+    const acceptedWalkRoutes: ResolvedWalkRoute[] = [];
     const directDistance = directWalkRoute.distance + endpointAccessDistance;
     const directMinutes =
       estimateResolvedWalkRouteMinutes(directWalkRoute) +
       estimateRouteMinutes(endpointAccessDistance, 72);
     const directCoordinates = buildRouteTraceCoordinates(draft, directWalkRoute.coordinates);
     const directRoadLabels = createRouteRoadLabelsFromSegments(directWalkRoute.roadSegments);
-    options.push({
-      id: 'walk-direct',
-      title: input.t('map.route.walkDirect'),
-      summary: `${formatRoutePlanDistance(directDistance, input.t)} · ${input.t(
-        directWalkRoute.usesRoadGraph
-          ? 'map.route.summary.roadEstimate'
-          : 'map.route.summary.directEstimate',
-      )}`,
-      icon: 'directions_walk',
-      color:
-        routeTransportModeOptions.find((option) => option.mode === 'walk')?.color ??
-        'var(--yct-color-text-secondary)',
-      coordinates: directCoordinates,
-      traceSegments: [createRouteTraceSegment('walk', directCoordinates)],
-      roadLabels: directRoadLabels,
-      markerIds: getRouteEndpointMarkerIds(draft),
-      modes: ['walk'],
-      estimatedDistance: directDistance,
-      estimatedMinutes: directMinutes,
-      transferCount: 0,
-      walkingDistance: directDistance,
-      steps: [
-        createRoutePlaceStep(input.t('map.route.depart', { name: draft.originLabel }), 'origin'),
-        ...createRouteEndpointAccessSteps(draft, 'origin', input.t),
-        createRouteWalkStep(
-          input.t(
-            directWalkRoute.usesRoadGraph
-              ? 'map.route.walkRoadWithDistance'
-              : 'map.route.walkWithDistance',
-            {
-              distance: formatRoutePlanDistance(directWalkRoute.distance, input.t),
-              duration: formatRouteStepMinutes(
-                estimateRouteMinutes(
-                  directWalkRoute.distance,
-                  directWalkRoute.usesRoadGraph ? 64 : 72,
+    if (!directWalkRoute.blockedByTraversalBarrier) {
+      acceptedWalkRoutes.push(directWalkRoute);
+      options.push({
+        id: 'walk-direct',
+        title: input.t('map.route.walkDirect'),
+        summary: `${formatRoutePlanDistance(directDistance, input.t)} · ${input.t(
+          directWalkRoute.usesRoadGraph
+            ? 'map.route.summary.roadEstimate'
+            : 'map.route.summary.directEstimate',
+        )}`,
+        icon: 'directions_walk',
+        color:
+          routeTransportModeOptions.find((option) => option.mode === 'walk')?.color ??
+          'var(--yct-color-text-secondary)',
+        coordinates: directCoordinates,
+        traceSegments: [createRouteTraceSegment('walk', directCoordinates)],
+        roadLabels: directRoadLabels,
+        markerIds: getRouteEndpointMarkerIds(draft),
+        modes: ['walk'],
+        estimatedDistance: directDistance,
+        estimatedMinutes: directMinutes,
+        transferCount: 0,
+        walkingDistance: directDistance,
+        steps: [
+          createRoutePlaceStep(input.t('map.route.depart', { name: draft.originLabel }), 'origin'),
+          ...createRouteEndpointAccessSteps(draft, 'origin', input.t),
+          createRouteWalkStep(
+            input.t(
+              directWalkRoute.usesRoadGraph
+                ? 'map.route.walkRoadWithDistance'
+                : 'map.route.walkWithDistance',
+              {
+                distance: formatRoutePlanDistance(directWalkRoute.distance, input.t),
+                duration: formatRouteStepMinutes(
+                  estimateRouteMinutes(
+                    directWalkRoute.distance,
+                    directWalkRoute.usesRoadGraph ? 64 : 72,
+                  ),
+                  input.t,
                 ),
-                input.t,
-              ),
-            },
+              },
+            ),
+            directWalkRoute.details,
           ),
-          directWalkRoute.details,
-        ),
-        ...createRouteEndpointAccessSteps(draft, 'destination', input.t),
-        createRoutePlaceStep(
-          input.t('map.route.arrive', { name: draft.destinationLabel }),
-          'destination',
-        ),
-      ],
-      note: directWalkRoute.usesRoadGraph
-        ? input.t('map.route.walkNote.road')
-        : input.t('map.route.walkNote.direct'),
-    });
+          ...createRouteEndpointAccessSteps(draft, 'destination', input.t),
+          createRoutePlaceStep(
+            input.t('map.route.arrive', { name: draft.destinationLabel }),
+            'destination',
+          ),
+        ],
+        note: directWalkRoute.usesRoadGraph
+          ? input.t('map.route.walkNote.road')
+          : input.t('map.route.walkNote.direct'),
+      });
+    }
 
     const fewerTurnWalkRoute = buildWalkRouteBetweenCoordinates(
       draft.origin,
@@ -6361,6 +6464,7 @@ function buildRoutePlanOptions(input: {
       'fewer-turns',
     );
     if (shouldAddFewerTurnWalkRoute(directWalkRoute, fewerTurnWalkRoute)) {
+      acceptedWalkRoutes.push(fewerTurnWalkRoute);
       const fewerTurnDistance = fewerTurnWalkRoute.distance + endpointAccessDistance;
       const fewerTurnMinutes =
         estimateResolvedWalkRouteMinutes(fewerTurnWalkRoute) +
@@ -6410,83 +6514,254 @@ function buildRoutePlanOptions(input: {
         note: input.t('map.route.walkNote.road'),
       });
     }
-  }
 
-  if (input.enabledModes.taxi && roadGraph) {
-    const drivingRoute = findRoadRouteBetweenCoordinates(
+    const fewestSegmentWalkRoute = buildWalkRouteBetweenCoordinates(
       draft.origin,
       draft.destination,
       roadGraph,
       routeCache,
       input.t,
-      {
-        destinationAccessCandidates: destinationRoadAccessCandidates,
-        originAccessCandidates: originRoadAccessCandidates,
-      },
-      'shortest',
-      'taxi',
+      directWalkAccessOptions,
+      'fewest-segments',
     );
-    if (drivingRoute) {
-      const taxiRoute = splitTaxiRoadRoute(draft, drivingRoute);
-      if (taxiRoute.taxiDistance > 0 && taxiRoute.taxiCoordinates.length >= 2) {
-        const drivingSpeedBlocksPerMinute = Math.max(1, (input.defaultDrivingSpeedKmh * 1000) / 60);
-        const taxiMinutes = estimateVehicleRouteMinutes(
-          taxiRoute.taxiDistance,
-          input.defaultDrivingSpeedKmh,
-          drivingRoute.junctionCount,
-          input.roadTiming?.taxiJunctionDelaySeconds ?? 8,
-        );
-        const taxiAccessMinutes = estimateRouteMinutes(taxiRoute.walkingDistance, 72);
-        options.push({
-          id: 'taxi-direct',
-          title: input.t('map.route.taxiDirect'),
-          summary: `${formatRoutePlanDistance(taxiRoute.taxiDistance, input.t)} · ${input.t(
-            'map.route.summary.roadEstimate',
-          )}`,
-          icon: 'local_taxi',
-          color: routeTaxiTraceColor,
-          coordinates: taxiRoute.coordinates,
-          traceSegments: taxiRoute.traceSegments,
-          roadLabels: createRouteRoadLabelsFromSegments(
-            taxiRoute.taxiSegments,
-            routeTaxiTraceColor,
-          ),
-          markerIds: getRouteEndpointMarkerIds(draft),
-          modes: ['taxi'],
-          estimatedDistance: taxiRoute.taxiDistance + taxiRoute.walkingDistance,
-          estimatedMinutes: taxiMinutes + taxiAccessMinutes,
-          fare: input.taxiFare ? quoteTaxiFare(taxiRoute.taxiDistance, input.taxiFare) : undefined,
-          transferCount: 0,
-          walkingDistance: taxiRoute.walkingDistance,
-          steps: [
-            createRoutePlaceStep(
-              input.t('map.route.depart', { name: draft.originLabel }),
-              'origin',
-            ),
-            ...createTaxiRoadAccessSteps(taxiRoute.originWalkDistance, 'origin', input.t),
-            createRouteTaxiStep(
-              input.t('map.route.taxiWithDistance', {
-                distance: formatRoutePlanDistance(taxiRoute.taxiDistance, input.t),
-                duration: formatRouteStepMinutes(taxiMinutes, input.t),
-              }),
-              buildRoadRouteStepDetails(
-                taxiRoute.taxiSegments,
+    if (shouldAddAlternativeWalkRoute(directWalkRoute, fewestSegmentWalkRoute)) {
+      acceptedWalkRoutes.push(fewestSegmentWalkRoute);
+      const fewestSegmentDistance = fewestSegmentWalkRoute.distance + endpointAccessDistance;
+      const fewestSegmentMinutes =
+        estimateResolvedWalkRouteMinutes(fewestSegmentWalkRoute) +
+        estimateRouteMinutes(endpointAccessDistance, 72);
+      const fewestSegmentCoordinates = buildRouteTraceCoordinates(
+        draft,
+        fewestSegmentWalkRoute.coordinates,
+      );
+      options.push({
+        id: 'walk-fewest-segments',
+        title: input.t('map.route.walkFewestSegments'),
+        summary: `${formatRoutePlanDistance(fewestSegmentDistance, input.t)} · ${input.t(
+          'map.route.summary.roadEstimate',
+        )}`,
+        icon: 'conversion_path',
+        color:
+          routeTransportModeOptions.find((option) => option.mode === 'walk')?.color ??
+          'var(--yct-color-text-secondary)',
+        coordinates: fewestSegmentCoordinates,
+        traceSegments: [createRouteTraceSegment('walk', fewestSegmentCoordinates)],
+        roadLabels: createRouteRoadLabelsFromSegments(fewestSegmentWalkRoute.roadSegments),
+        markerIds: getRouteEndpointMarkerIds(draft),
+        modes: ['walk'],
+        estimatedDistance: fewestSegmentDistance,
+        estimatedMinutes: fewestSegmentMinutes,
+        transferCount: 0,
+        walkingDistance: fewestSegmentDistance,
+        steps: [
+          createRoutePlaceStep(input.t('map.route.depart', { name: draft.originLabel }), 'origin'),
+          ...createRouteEndpointAccessSteps(draft, 'origin', input.t),
+          createRouteWalkStep(
+            input.t('map.route.walkRoadWithDistance', {
+              distance: formatRoutePlanDistance(fewestSegmentWalkRoute.distance, input.t),
+              duration: formatRouteStepMinutes(
+                estimateRouteMinutes(fewestSegmentWalkRoute.distance, 64),
                 input.t,
-                'taxi',
-                drivingSpeedBlocksPerMinute,
               ),
-            ),
-            ...createTaxiRoadAccessSteps(taxiRoute.destinationWalkDistance, 'destination', input.t),
-            createRoutePlaceStep(
-              input.t('map.route.arrive', { name: draft.destinationLabel }),
-              'destination',
-            ),
-          ],
-          note: input.t('map.route.taxiNote', {
-            speed: Math.round(input.defaultDrivingSpeedKmh),
-          }),
-        });
+            }),
+            fewestSegmentWalkRoute.details,
+          ),
+          ...createRouteEndpointAccessSteps(draft, 'destination', input.t),
+          createRoutePlaceStep(
+            input.t('map.route.arrive', { name: draft.destinationLabel }),
+            'destination',
+          ),
+        ],
+        note: input.t('map.route.walkNote.road'),
+      });
+    }
+
+    for (const [alternativeIndex, strategy] of (
+      [
+        [1, 'alternative-1'],
+        [2, 'alternative-2'],
+      ] as const
+    )) {
+      const alternativeRoute = buildWalkRouteBetweenCoordinates(
+        draft.origin,
+        draft.destination,
+        roadGraph,
+        routeCache,
+        input.t,
+        directWalkAccessOptions,
+        strategy,
+      );
+      if (
+        !shouldAddDiversifiedWalkRoute(directWalkRoute, alternativeRoute, acceptedWalkRoutes)
+      ) {
+        continue;
       }
+      acceptedWalkRoutes.push(alternativeRoute);
+
+      const distance = alternativeRoute.distance + endpointAccessDistance;
+      const minutes =
+        estimateResolvedWalkRouteMinutes(alternativeRoute) +
+        estimateRouteMinutes(endpointAccessDistance, 72);
+      const coordinates = buildRouteTraceCoordinates(draft, alternativeRoute.coordinates);
+      options.push({
+        id: `walk-alternative-${alternativeIndex}`,
+        title: input.t(
+          alternativeIndex === 1
+            ? 'map.route.walkAlternativeOne'
+            : 'map.route.walkAlternativeTwo',
+        ),
+        summary: `${formatRoutePlanDistance(distance, input.t)} · ${input.t(
+          'map.route.summary.roadEstimate',
+        )}`,
+        icon: 'alt_route',
+        color:
+          routeTransportModeOptions.find((option) => option.mode === 'walk')?.color ??
+          'var(--yct-color-text-secondary)',
+        coordinates,
+        traceSegments: [createRouteTraceSegment('walk', coordinates)],
+        roadLabels: createRouteRoadLabelsFromSegments(alternativeRoute.roadSegments),
+        markerIds: getRouteEndpointMarkerIds(draft),
+        modes: ['walk'],
+        estimatedDistance: distance,
+        estimatedMinutes: minutes,
+        transferCount: 0,
+        walkingDistance: distance,
+        steps: [
+          createRoutePlaceStep(input.t('map.route.depart', { name: draft.originLabel }), 'origin'),
+          ...createRouteEndpointAccessSteps(draft, 'origin', input.t),
+          createRouteWalkStep(
+            input.t('map.route.walkRoadWithDistance', {
+              distance: formatRoutePlanDistance(alternativeRoute.distance, input.t),
+              duration: formatRouteStepMinutes(
+                estimateRouteMinutes(alternativeRoute.distance, 64),
+                input.t,
+              ),
+            }),
+            alternativeRoute.details,
+          ),
+          ...createRouteEndpointAccessSteps(draft, 'destination', input.t),
+          createRoutePlaceStep(
+            input.t('map.route.arrive', { name: draft.destinationLabel }),
+            'destination',
+          ),
+        ],
+        note: input.t('map.route.walkNote.road'),
+      });
+    }
+  }
+
+  if (input.enabledModes.taxi && roadGraph) {
+    const taxiOptionKeys = new Set<string>();
+    const acceptedTaxiSegments: RoadRouteInstructionSegment[][] = [];
+    for (const taxiStrategy of [
+      'fewest-segments',
+      'shortest',
+      'alternative-1',
+      'alternative-2',
+    ] as const) {
+      const drivingRoute = findRoadRouteBetweenCoordinates(
+        draft.origin,
+        draft.destination,
+        roadGraph,
+        routeCache,
+        input.t,
+        {
+          destinationAccessCandidates: destinationRoadAccessCandidates,
+          originAccessCandidates: originRoadAccessCandidates,
+        },
+        taxiStrategy,
+        'taxi',
+      );
+      if (!drivingRoute) {
+        continue;
+      }
+      if (isRoadRouteDirectAccessBlocked(drivingRoute, routeCache.traversalBarriers, 'walk')) {
+        continue;
+      }
+
+      const taxiRoute = splitTaxiRoadRoute(draft, drivingRoute);
+      if (taxiRoute.taxiDistance <= 0 || taxiRoute.taxiCoordinates.length < 2) {
+        continue;
+      }
+      const taxiOptionKey = taxiRoute.taxiSegments
+        .map((segment) => segment.roadId ?? segment.label)
+        .join('|');
+      if (taxiOptionKeys.has(taxiOptionKey)) {
+        continue;
+      }
+      if (
+        (taxiStrategy === 'alternative-1' || taxiStrategy === 'alternative-2') &&
+        !isRoadRouteTopologicallyDistinct(taxiRoute.taxiSegments, acceptedTaxiSegments)
+      ) {
+        continue;
+      }
+      taxiOptionKeys.add(taxiOptionKey);
+      acceptedTaxiSegments.push(taxiRoute.taxiSegments);
+
+      const drivingSpeedBlocksPerMinute = Math.max(1, (input.defaultDrivingSpeedKmh * 1000) / 60);
+      const taxiMinutes = estimateVehicleRouteMinutes(
+        taxiRoute.taxiDistance,
+        input.defaultDrivingSpeedKmh,
+        drivingRoute.junctionCount,
+        input.roadTiming?.taxiJunctionDelaySeconds ?? 8,
+      );
+      const taxiAccessMinutes = estimateRouteMinutes(taxiRoute.walkingDistance, 72);
+      options.push({
+        id:
+          taxiStrategy === 'shortest'
+            ? 'taxi-direct'
+            : taxiStrategy === 'fewest-segments'
+              ? 'taxi-fewest-segments'
+              : `taxi-${taxiStrategy}`,
+        title: input.t(
+          taxiStrategy === 'shortest'
+            ? 'map.route.taxiDirect'
+            : taxiStrategy === 'fewest-segments'
+              ? 'map.route.taxiFewestSegments'
+              : taxiStrategy === 'alternative-1'
+                ? 'map.route.taxiAlternativeOne'
+                : 'map.route.taxiAlternativeTwo',
+        ),
+        summary: `${formatRoutePlanDistance(taxiRoute.taxiDistance, input.t)} · ${input.t(
+          'map.route.summary.roadEstimate',
+        )}`,
+        icon: 'local_taxi',
+        color: routeTaxiTraceColor,
+        coordinates: taxiRoute.coordinates,
+        traceSegments: taxiRoute.traceSegments,
+        roadLabels: createRouteRoadLabelsFromSegments(taxiRoute.taxiSegments, routeTaxiTraceColor),
+        markerIds: getRouteEndpointMarkerIds(draft),
+        modes: ['taxi'],
+        estimatedDistance: taxiRoute.taxiDistance + taxiRoute.walkingDistance,
+        estimatedMinutes: taxiMinutes + taxiAccessMinutes,
+        fare: input.taxiFare ? quoteTaxiFare(taxiRoute.taxiDistance, input.taxiFare) : undefined,
+        transferCount: 0,
+        walkingDistance: taxiRoute.walkingDistance,
+        steps: [
+          createRoutePlaceStep(input.t('map.route.depart', { name: draft.originLabel }), 'origin'),
+          ...createTaxiRoadAccessSteps(taxiRoute.originWalkDistance, 'origin', input.t),
+          createRouteTaxiStep(
+            input.t('map.route.taxiWithDistance', {
+              distance: formatRoutePlanDistance(taxiRoute.taxiDistance, input.t),
+              duration: formatRouteStepMinutes(taxiMinutes, input.t),
+            }),
+            buildRoadRouteStepDetails(
+              taxiRoute.taxiSegments,
+              input.t,
+              'taxi',
+              drivingSpeedBlocksPerMinute,
+            ),
+          ),
+          ...createTaxiRoadAccessSteps(taxiRoute.destinationWalkDistance, 'destination', input.t),
+          createRoutePlaceStep(
+            input.t('map.route.arrive', { name: draft.destinationLabel }),
+            'destination',
+          ),
+        ],
+        note: input.t('map.route.taxiNote', {
+          speed: Math.round(input.defaultDrivingSpeedKmh),
+        }),
+      });
     }
   }
 
@@ -6495,11 +6770,12 @@ function buildRoutePlanOptions(input: {
   return prepareRoutePlanOptions(options);
 }
 
-function createRoutePlanningCache(): RoutePlanningCache {
+function createRoutePlanningCache(traversalBarriers: RouteTraversalBarrier[]): RoutePlanningCache {
   return {
     accessCandidatesByPair: new Map(),
     pathByNodePair: new Map(),
     roadRouteByPair: new Map(),
+    traversalBarriers,
   };
 }
 
@@ -6517,11 +6793,133 @@ function shouldAddFewerTurnWalkRoute(
 
   const directTurns = countRoadRouteTurns(directRoute.roadSegments ?? []);
   const fewerTurns = countRoadRouteTurns(fewerTurnRoute.roadSegments ?? []);
-  if (fewerTurns >= directTurns) {
+  if (fewerTurns > directTurns) {
     return false;
   }
 
   return fewerTurnRoute.distance <= directRoute.distance * 1.55 + 240;
+}
+
+function shouldAddAlternativeWalkRoute(
+  directRoute: ResolvedWalkRoute,
+  alternativeRoute: ResolvedWalkRoute,
+): boolean {
+  if (!directRoute.usesRoadGraph || !alternativeRoute.usesRoadGraph) {
+    return false;
+  }
+  if (areCoordinateChainsEquivalent(directRoute.coordinates, alternativeRoute.coordinates)) {
+    return false;
+  }
+  const directTurns = countRoadRouteTurns(directRoute.roadSegments ?? []);
+  const alternativeTurns = countRoadRouteTurns(alternativeRoute.roadSegments ?? []);
+  return (
+    alternativeTurns <= directTurns + 1 &&
+    alternativeRoute.distance <= directRoute.distance * 1.4 + 180
+  );
+}
+
+function shouldAddDiversifiedWalkRoute(
+  directRoute: ResolvedWalkRoute,
+  candidate: ResolvedWalkRoute,
+  acceptedRoutes: readonly ResolvedWalkRoute[],
+): boolean {
+  if (
+    candidate.blockedByTraversalBarrier ||
+    !directRoute.usesRoadGraph ||
+    !candidate.usesRoadGraph ||
+    candidate.distance > directRoute.distance * 1.85 + 320
+  ) {
+    return false;
+  }
+
+  const candidateSegments = candidate.roadSegments ?? [];
+  return acceptedRoutes.every(
+    (accepted) =>
+      getRoadRouteSegmentOverlapRatio(candidateSegments, accepted.roadSegments ?? []) <= 0.82,
+  );
+}
+
+function isRoadRouteTopologicallyDistinct(
+  candidate: readonly RoadRouteInstructionSegment[],
+  acceptedRoutes: readonly RoadRouteInstructionSegment[][],
+): boolean {
+  const candidateDistance = getRoadInstructionSegmentsDistance(candidate);
+  const shortestAcceptedDistance = Math.min(
+    ...acceptedRoutes.map(getRoadInstructionSegmentsDistance),
+  );
+  if (
+    Number.isFinite(shortestAcceptedDistance) &&
+    candidateDistance > shortestAcceptedDistance * 1.85 + 500
+  ) {
+    return false;
+  }
+  return acceptedRoutes.every(
+    (accepted) => getRoadRouteSegmentOverlapRatio(candidate, accepted) <= 0.82,
+  );
+}
+
+function getRoadRouteSegmentOverlapRatio(
+  left: readonly RoadRouteInstructionSegment[],
+  right: readonly RoadRouteInstructionSegment[],
+): number {
+  const leftEdges = collectRoadInstructionEdgeLengths(left);
+  const rightEdges = collectRoadInstructionEdgeLengths(right);
+  const leftDistance = sumMapValues(leftEdges);
+  const rightDistance = sumMapValues(rightEdges);
+  const comparableDistance = Math.min(leftDistance, rightDistance);
+  if (comparableDistance <= 0) {
+    return 0;
+  }
+
+  let sharedDistance = 0;
+  for (const [key, distance] of leftEdges) {
+    sharedDistance += Math.min(distance, rightEdges.get(key) ?? 0);
+  }
+  return sharedDistance / comparableDistance;
+}
+
+function collectRoadInstructionEdgeLengths(
+  segments: readonly RoadRouteInstructionSegment[],
+): Map<string, number> {
+  const result = new Map<string, number>();
+  for (const segment of segments) {
+    if (segment.kind !== 'road' && segment.kind !== 'connection') {
+      continue;
+    }
+    for (let index = 1; index < segment.coordinates.length; index += 1) {
+      const from = segment.coordinates[index - 1];
+      const to = segment.coordinates[index];
+      if (!from || !to) {
+        continue;
+      }
+      const fromKey = `${from[0].toFixed(1)},${from[1].toFixed(1)}`;
+      const toKey = `${to[0].toFixed(1)},${to[1].toFixed(1)}`;
+      const key = fromKey < toKey ? `${fromKey}>${toKey}` : `${toKey}>${fromKey}`;
+      result.set(key, (result.get(key) ?? 0) + getCoordinateDistance(from, to));
+    }
+  }
+  return result;
+}
+
+function getRoadInstructionSegmentsDistance(
+  segments: readonly RoadRouteInstructionSegment[],
+): number {
+  return segments.reduce(
+    (total, segment) =>
+      total +
+      (segment.kind === 'road' || segment.kind === 'connection'
+        ? getCoordinateChainDistance(segment.coordinates)
+        : 0),
+    0,
+  );
+}
+
+function sumMapValues(values: ReadonlyMap<string, number>): number {
+  let total = 0;
+  for (const value of values.values()) {
+    total += value;
+  }
+  return total;
 }
 
 function areCoordinateChainsEquivalent(
@@ -6611,7 +7009,7 @@ function getRouteOptionLimit(enabledModes: EnabledRouteTransportModes): number {
   const enabledCount = routeTransportModeOptions.filter(
     (option) => enabledModes[option.mode],
   ).length;
-  return Math.min(10, Math.max(3, enabledCount + 2));
+  return Math.min(16, Math.max(6, enabledCount + 5));
 }
 
 function selectRoutePlanOptions(
@@ -6710,6 +7108,13 @@ function haveEquivalentRouteModes(left: RoutePlanOption, right: RoutePlanOption)
 }
 
 function dominatesRouteOption(left: RoutePlanOption, right: RoutePlanOption): boolean {
+  if (
+    left.modes.length === 1 &&
+    (left.modes[0] === 'walk' || left.modes[0] === 'taxi') &&
+    !areCoordinateChainsEquivalent(left.coordinates, right.coordinates)
+  ) {
+    return false;
+  }
   const noWorse =
     left.estimatedMinutes <= right.estimatedMinutes &&
     left.walkingDistance <= right.walkingDistance &&
@@ -6916,11 +7321,27 @@ function resolveRoutePlanDraftAccessPoints(
         routeCache,
         t,
       ).distance;
-      const endpointAccessDistance =
-        (origin.accessId ? getCoordinateDistance(draft.origin, origin.coordinate) : 0) +
-        (destination.accessId
-          ? getCoordinateDistance(draft.destination, destination.coordinate)
-          : 0);
+      const originAccessDistance = origin.accessId
+        ? isDirectTraversalBlocked(
+            draft.origin,
+            origin.coordinate,
+            routeCache.traversalBarriers,
+            'walk',
+          )
+          ? Number.POSITIVE_INFINITY
+          : getCoordinateDistance(draft.origin, origin.coordinate)
+        : 0;
+      const destinationAccessDistance = destination.accessId
+        ? isDirectTraversalBlocked(
+            draft.destination,
+            destination.coordinate,
+            routeCache.traversalBarriers,
+            'walk',
+          )
+          ? Number.POSITIVE_INFINITY
+          : getCoordinateDistance(draft.destination, destination.coordinate)
+        : 0;
+      const endpointAccessDistance = originAccessDistance + destinationAccessDistance;
       return {
         destination,
         directionDistance:
@@ -6936,7 +7357,7 @@ function resolveRoutePlanDraftAccessPoints(
       left.totalWalkingDistance - right.totalWalkingDistance ||
       left.directionDistance - right.directionDistance,
   );
-  const selected = pairs[0];
+  const selected = pairs.find((pair) => Number.isFinite(pair.totalWalkingDistance));
   const origin = selected?.origin ?? { coordinate: draft.origin };
   const destination = selected?.destination ?? { coordinate: draft.destination };
 
@@ -7671,6 +8092,18 @@ function findRoadRoutePath(
   strategy: RoadRouteStrategy = 'shortest',
   travelMode: MapTravelMode = 'walk',
 ): RoadRoutePath | undefined {
+  if (strategy === 'alternative-1' || strategy === 'alternative-2') {
+    return findDiversifiedRoadRoutePath(
+      graph,
+      originId,
+      destinationId,
+      travelMode,
+      strategy === 'alternative-1' ? 1 : 2,
+    );
+  }
+  if (strategy === 'fewest-segments') {
+    return findFewestSegmentRoadRoutePath(graph, originId, destinationId, travelMode);
+  }
   if (strategy === 'fewer-turns') {
     return findFewerTurnRoadRoutePath(graph, originId, destinationId, travelMode);
   }
@@ -7770,6 +8203,276 @@ function findRoadRoutePath(
     });
   }
 
+  return { coordinates, distance, nodes, segments };
+}
+
+function findDiversifiedRoadRoutePath(
+  graph: RoadRouteGraph,
+  originId: string,
+  destinationId: string,
+  travelMode: MapTravelMode,
+  alternativeIndex: number,
+): RoadRoutePath | undefined {
+  const shortest = findRoadRoutePath(graph, originId, destinationId, 'shortest', travelMode);
+  if (!shortest) {
+    return undefined;
+  }
+
+  const previousPaths = [shortest];
+  for (let index = 0; index < alternativeIndex; index += 1) {
+    const penalizedEdgeKeys = new Set<string>();
+    const penalizedRoadIds = new Set<string>();
+    for (const path of previousPaths) {
+      collectRoadRoutePathPenaltyKeys(path, graph, penalizedEdgeKeys, penalizedRoadIds);
+    }
+    const nextPath = findPenalizedRoadRoutePath(
+      graph,
+      originId,
+      destinationId,
+      travelMode,
+      penalizedEdgeKeys,
+      penalizedRoadIds,
+    );
+    if (!nextPath) {
+      return undefined;
+    }
+    previousPaths.push(nextPath);
+  }
+
+  return previousPaths.at(-1);
+}
+
+function findPenalizedRoadRoutePath(
+  graph: RoadRouteGraph,
+  originId: string,
+  destinationId: string,
+  travelMode: MapTravelMode,
+  penalizedEdgeKeys: ReadonlySet<string>,
+  penalizedRoadIds: ReadonlySet<string>,
+): RoadRoutePath | undefined {
+  if (originId === destinationId) {
+    return findRoadRoutePath(graph, originId, destinationId, 'shortest', travelMode);
+  }
+
+  const scores = new Map<string, number>();
+  const previous = new Map<string, string>();
+  const unvisited = new Set(graph.nodes.map((node) => node.id));
+  for (const node of graph.nodes) {
+    scores.set(node.id, node.id === originId ? 0 : Number.POSITIVE_INFINITY);
+  }
+
+  while (unvisited.size > 0) {
+    const currentId = findNearestUnvisitedRoadRouteNode(unvisited, scores);
+    if (!currentId) {
+      break;
+    }
+    if (currentId === destinationId) {
+      break;
+    }
+    unvisited.delete(currentId);
+    const currentScore = scores.get(currentId) ?? Number.POSITIVE_INFINITY;
+    if (!Number.isFinite(currentScore)) {
+      break;
+    }
+
+    for (const edge of graph.adjacency.get(currentId) ?? []) {
+      if (!edge.allowedModes.includes(travelMode) || !unvisited.has(edge.to)) {
+        continue;
+      }
+      const exactEdgePenalty = penalizedEdgeKeys.has(getRoadRouteEdgeKey(currentId, edge))
+        ? edge.distance * 6 + 240
+        : 0;
+      const sameRoadPenalty = edge.roadId && penalizedRoadIds.has(edge.roadId)
+        ? edge.distance * 1.5
+        : 0;
+      const nextScore = currentScore + edge.distance + exactEdgePenalty + sameRoadPenalty;
+      if (nextScore < (scores.get(edge.to) ?? Number.POSITIVE_INFINITY)) {
+        scores.set(edge.to, nextScore);
+        previous.set(edge.to, currentId);
+      }
+    }
+  }
+
+  if (!Number.isFinite(scores.get(destinationId) ?? Number.POSITIVE_INFINITY)) {
+    return undefined;
+  }
+
+  const pathIds = [destinationId];
+  let currentId = destinationId;
+  while (currentId !== originId) {
+    const previousId = previous.get(currentId);
+    if (!previousId) {
+      return undefined;
+    }
+    pathIds.push(previousId);
+    currentId = previousId;
+  }
+  pathIds.reverse();
+
+  const nodes = pathIds
+    .map((id) => graph.nodesById.get(id))
+    .filter((node): node is RoadRouteNode => Boolean(node));
+  if (nodes.length < 2) {
+    return undefined;
+  }
+
+  const coordinates: Array<[number, number]> = [];
+  const segments: RoadRouteInstructionSegment[] = [];
+  let distance = 0;
+  for (let index = 1; index < pathIds.length; index += 1) {
+    const fromId = pathIds[index - 1];
+    const toId = pathIds[index];
+    const edge = fromId ? graph.adjacency.get(fromId)?.find((item) => item.to === toId) : undefined;
+    if (!edge) {
+      return undefined;
+    }
+    appendRouteSegmentCoordinates(coordinates, edge.coordinates);
+    distance += edge.distance;
+    segments.push({
+      coordinates: edge.coordinates,
+      kind: edge.kind,
+      label: edge.label,
+      roadId: edge.roadId,
+    });
+  }
+
+  return { coordinates, distance, nodes, segments };
+}
+
+function collectRoadRoutePathPenaltyKeys(
+  path: RoadRoutePath,
+  graph: RoadRouteGraph,
+  edgeKeys: Set<string>,
+  roadIds: Set<string>,
+): void {
+  for (let index = 1; index < path.nodes.length; index += 1) {
+    const fromId = path.nodes[index - 1]?.id;
+    const toId = path.nodes[index]?.id;
+    const edge = fromId ? graph.adjacency.get(fromId)?.find((item) => item.to === toId) : undefined;
+    if (!fromId || !edge) {
+      continue;
+    }
+    edgeKeys.add(getRoadRouteEdgeKey(fromId, edge));
+    if (edge.roadId) {
+      roadIds.add(edge.roadId);
+    }
+  }
+}
+
+function getRoadRouteEdgeKey(fromId: string, edge: RoadRouteEdge): string {
+  return `${fromId}>${edge.to}|${edge.roadId ?? edge.label}|${edge.kind}`;
+}
+
+function findFewestSegmentRoadRoutePath(
+  graph: RoadRouteGraph,
+  originId: string,
+  destinationId: string,
+  travelMode: MapTravelMode,
+): RoadRoutePath | undefined {
+  const originNode = graph.nodesById.get(originId);
+  if (!originNode) {
+    return undefined;
+  }
+  if (originId === destinationId) {
+    return {
+      coordinates: [originNode.coordinate],
+      distance: 0,
+      nodes: [originNode],
+      segments: [],
+    };
+  }
+
+  const segmentWeight = 100_000;
+  const distances = new Map<string, number>();
+  const segmentCounts = new Map<string, number>();
+  const previous = new Map<string, string>();
+  const unvisited = new Set(graph.nodes.map((node) => node.id));
+  for (const node of graph.nodes) {
+    distances.set(node.id, node.id === originId ? 0 : Number.POSITIVE_INFINITY);
+    segmentCounts.set(node.id, node.id === originId ? 0 : Number.POSITIVE_INFINITY);
+  }
+
+  while (unvisited.size > 0) {
+    let currentId: string | undefined;
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (const nodeId of unvisited) {
+      const count = segmentCounts.get(nodeId) ?? Number.POSITIVE_INFINITY;
+      const distance = distances.get(nodeId) ?? Number.POSITIVE_INFINITY;
+      const score = count * segmentWeight + distance;
+      if (score < bestScore) {
+        bestScore = score;
+        currentId = nodeId;
+      }
+    }
+    if (!currentId || !Number.isFinite(bestScore)) {
+      break;
+    }
+    unvisited.delete(currentId);
+    if (currentId === destinationId) {
+      break;
+    }
+
+    const currentCount = segmentCounts.get(currentId) ?? Number.POSITIVE_INFINITY;
+    const currentDistance = distances.get(currentId) ?? Number.POSITIVE_INFINITY;
+    for (const edge of graph.adjacency.get(currentId) ?? []) {
+      if (!edge.allowedModes.includes(travelMode) || !unvisited.has(edge.to)) {
+        continue;
+      }
+      const nextCount = currentCount + 1;
+      const nextDistance = currentDistance + edge.distance;
+      const nextScore = nextCount * segmentWeight + nextDistance;
+      const existingCount = segmentCounts.get(edge.to) ?? Number.POSITIVE_INFINITY;
+      const existingDistance = distances.get(edge.to) ?? Number.POSITIVE_INFINITY;
+      if (nextScore < existingCount * segmentWeight + existingDistance) {
+        segmentCounts.set(edge.to, nextCount);
+        distances.set(edge.to, nextDistance);
+        previous.set(edge.to, currentId);
+      }
+    }
+  }
+
+  const distance = distances.get(destinationId);
+  if (distance === undefined || !Number.isFinite(distance)) {
+    return undefined;
+  }
+  const pathIds = [destinationId];
+  let currentId = destinationId;
+  while (currentId !== originId) {
+    const previousId = previous.get(currentId);
+    if (!previousId) {
+      return undefined;
+    }
+    pathIds.push(previousId);
+    currentId = previousId;
+  }
+
+  const nodes = pathIds
+    .reverse()
+    .map((id) => graph.nodesById.get(id))
+    .filter((node): node is RoadRouteNode => Boolean(node));
+  if (nodes.length < 2) {
+    return undefined;
+  }
+
+  const coordinates: Array<[number, number]> = [];
+  const segments: RoadRouteInstructionSegment[] = [];
+  for (let index = 1; index < pathIds.length; index += 1) {
+    const previousId = pathIds[index - 1];
+    const currentId = pathIds[index];
+    const edge = previousId
+      ? graph.adjacency.get(previousId)?.find((item) => item.to === currentId)
+      : undefined;
+    if (!edge) {
+      continue;
+    }
+    appendRouteSegmentCoordinates(coordinates, edge.coordinates);
+    segments.push({
+      coordinates: edge.coordinates,
+      kind: edge.kind,
+      label: edge.label,
+      roadId: edge.roadId,
+    });
+  }
   return { coordinates, distance, nodes, segments };
 }
 
@@ -7962,8 +8665,10 @@ function buildRoadRouteStepDetails(
 ): RoutePlanStepDetail[] {
   const groups: Array<{
     distance: number;
+    end: [number, number];
     label: string;
     kind: RoadRouteInstructionSegment['kind'];
+    start: [number, number];
     vector: [number, number];
   }> = [];
 
@@ -7993,24 +8698,27 @@ function buildRoadRouteStepDetails(
     ) {
       lastGroup.distance += distance;
       lastGroup.kind = 'road';
+      lastGroup.end = end;
       lastGroup.vector = vector;
     } else {
       groups.push({
         distance,
+        end,
         kind: segment.kind,
         label: segment.label,
+        start,
         vector,
       });
     }
   }
 
-  return groups.map((group, index) =>
+  return compactShortRoadInstructionGroups(groups).map((group, index, compactedGroups) =>
     createRouteStepDetail(
       index === 0
         ? travelMode === 'taxi'
           ? 'local_taxi'
           : 'directions_walk'
-        : getTurnInstructionIcon(groups[index - 1]?.vector, group.vector),
+        : getTurnInstructionIcon(compactedGroups[index - 1]?.vector, group.vector),
       formatRoadRouteStepLabel(group.kind, group.label, t),
       `${formatRoutePlanDistance(group.distance, t)} ${formatRouteStepMinutes(
         estimateRouteMinutes(
@@ -8026,6 +8734,41 @@ function buildRoadRouteStepDetails(
       'process',
     ),
   );
+}
+
+function compactShortRoadInstructionGroups(
+  groups: Array<{
+    distance: number;
+    end: [number, number];
+    label: string;
+    kind: RoadRouteInstructionSegment['kind'];
+    start: [number, number];
+    vector: [number, number];
+  }>,
+): typeof groups {
+  const compacted = groups.map((group) => ({ ...group }));
+  const shortSegmentDistance = 24;
+  for (let index = 1; index < compacted.length - 1; index += 1) {
+    const current = compacted[index];
+    const next = compacted[index + 1];
+    if (
+      !current ||
+      !next ||
+      current.distance > shortSegmentDistance ||
+      (current.kind !== 'road' && current.kind !== 'connection') ||
+      (next.kind !== 'road' && next.kind !== 'connection')
+    ) {
+      continue;
+    }
+
+    // 很短的中间路段只会制造一次“刚转弯又转弯”的噪声，合并到下一条指令。
+    next.distance += current.distance;
+    next.start = current.start;
+    next.vector = [next.end[0] - next.start[0], next.end[1] - next.start[1]];
+    compacted.splice(index, 1);
+    index -= 1;
+  }
+  return compacted;
 }
 
 function formatRoadRouteStepLabel(
@@ -8082,8 +8825,12 @@ function buildWalkRouteBetweenCoordinates(
         strategy,
       )
     : undefined;
-  if (roadRoute) {
+  if (
+    roadRoute &&
+    !isRoadRouteDirectAccessBlocked(roadRoute, routeCache?.traversalBarriers ?? [], 'walk')
+  ) {
     return {
+      blockedByTraversalBarrier: false,
       coordinates: roadRoute.coordinates,
       distance: roadRoute.distance,
       details: roadRoute.details,
@@ -8093,21 +8840,126 @@ function buildWalkRouteBetweenCoordinates(
   }
 
   const distance = getCoordinateDistance(origin, destination);
+  const blockedByTraversalBarrier = isDirectTraversalBlocked(
+    origin,
+    destination,
+    routeCache?.traversalBarriers ?? [],
+    'walk',
+  );
   const minutes = estimateRouteMinutes(distance, 72);
   return {
+    blockedByTraversalBarrier,
     coordinates: [origin, destination],
-    distance,
-    details: [
-      createRouteStepDetail(
-        'directions_walk',
-        t ? t('map.route.walkStraight') : '直线步行',
-        `${formatRoutePlanDistance(distance, t)} ${formatRouteStepMinutes(minutes, t)}`,
-        'process',
-      ),
-    ],
+    distance: blockedByTraversalBarrier ? Number.POSITIVE_INFINITY : distance,
+    details: blockedByTraversalBarrier
+      ? []
+      : [
+          createRouteStepDetail(
+            'directions_walk',
+            t ? t('map.route.walkStraight') : '直线步行',
+            `${formatRoutePlanDistance(distance, t)} ${formatRouteStepMinutes(minutes, t)}`,
+            'process',
+          ),
+        ],
     roadSegments: [],
     usesRoadGraph: false,
   };
+}
+
+function isDirectTraversalBlocked(
+  origin: [number, number],
+  destination: [number, number],
+  barriers: RouteTraversalBarrier[],
+  mode: MapTravelMode,
+): boolean {
+  return barriers.some(
+    (barrier) =>
+      barrier.blockedModes.includes(mode) &&
+      doesCoordinateSegmentCrossRegion(origin, destination, barrier.geometry),
+  );
+}
+
+function isRoadRouteDirectAccessBlocked(
+  route: ResolvedRoadRoute,
+  barriers: RouteTraversalBarrier[],
+  mode: MapTravelMode,
+): boolean {
+  return route.roadSegments.some(
+    (segment) =>
+      (segment.kind === 'approach' || segment.kind === 'depart') &&
+      segment.coordinates.some((coordinate, index) => {
+        const next = segment.coordinates[index + 1];
+        return Boolean(next && isDirectTraversalBlocked(coordinate, next, barriers, mode));
+      }),
+  );
+}
+
+function doesCoordinateSegmentCrossRegion(
+  origin: [number, number],
+  destination: [number, number],
+  region: RegionGeometry,
+): boolean {
+  if (isCoordinateInsideRegion(origin, region) || isCoordinateInsideRegion(destination, region)) {
+    return true;
+  }
+
+  return getRegionBoundaryRings(region).some((ring) => {
+    for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index++) {
+      const start = ring[previous];
+      const end = ring[index];
+      if (start && end && doCoordinateSegmentsIntersect(origin, destination, start, end)) {
+        return true;
+      }
+    }
+    return false;
+  });
+}
+
+function getRegionBoundaryRings(region: RegionGeometry): Array<Array<[number, number]>> {
+  if (region.type === 'Rectangle') {
+    return [rectangleBoundsToMapCoordinates(region.bounds)];
+  }
+  if (region.type === 'MultiRectangle') {
+    return region.rectangles.map(rectangleBoundsToMapCoordinates);
+  }
+  if (region.type === 'Polygon') {
+    return region.coordinates;
+  }
+  return region.coordinates.flat();
+}
+
+function doCoordinateSegmentsIntersect(
+  firstStart: [number, number],
+  firstEnd: [number, number],
+  secondStart: [number, number],
+  secondEnd: [number, number],
+): boolean {
+  const firstSideStart = getCoordinateOrientation(firstStart, firstEnd, secondStart);
+  const firstSideEnd = getCoordinateOrientation(firstStart, firstEnd, secondEnd);
+  const secondSideStart = getCoordinateOrientation(secondStart, secondEnd, firstStart);
+  const secondSideEnd = getCoordinateOrientation(secondStart, secondEnd, firstEnd);
+
+  if (firstSideStart * firstSideEnd < 0 && secondSideStart * secondSideEnd < 0) {
+    return true;
+  }
+  return (
+    (firstSideStart === 0 && isCoordinateOnSegment(secondStart, firstStart, firstEnd)) ||
+    (firstSideEnd === 0 && isCoordinateOnSegment(secondEnd, firstStart, firstEnd)) ||
+    (secondSideStart === 0 && isCoordinateOnSegment(firstStart, secondStart, secondEnd)) ||
+    (secondSideEnd === 0 && isCoordinateOnSegment(firstEnd, secondStart, secondEnd))
+  );
+}
+
+function getCoordinateOrientation(
+  [originX, originZ]: [number, number],
+  [targetX, targetZ]: [number, number],
+  [pointX, pointZ]: [number, number],
+): -1 | 0 | 1 {
+  const cross = (targetX - originX) * (pointZ - originZ) - (targetZ - originZ) * (pointX - originX);
+  if (Math.abs(cross) <= 1e-9) {
+    return 0;
+  }
+  return cross < 0 ? -1 : 1;
 }
 
 function buildWalkRouteToTransitStop(input: {
@@ -8276,6 +9128,7 @@ function appendTransitStopAccessSegment(input: {
   const internalDistance = getCoordinateDistance(input.access.coordinate, input.stopCoordinate);
   const internalMinutes = estimateRouteMinutes(internalDistance, 72);
   return {
+    blockedByTraversalBarrier: input.externalRoute.blockedByTraversalBarrier,
     coordinates: dedupeConsecutiveCoordinates([
       ...input.externalRoute.coordinates,
       input.stopCoordinate,
@@ -8311,6 +9164,7 @@ function prependTransitStopAccessSegment(input: {
   const internalDistance = getCoordinateDistance(input.stopCoordinate, input.access.coordinate);
   const internalMinutes = estimateRouteMinutes(internalDistance, 72);
   return {
+    blockedByTraversalBarrier: input.externalRoute.blockedByTraversalBarrier,
     coordinates: dedupeConsecutiveCoordinates([
       input.stopCoordinate,
       ...input.externalRoute.coordinates,
@@ -8690,6 +9544,9 @@ function buildDirectTransitLineOption(
     stop: destinationStop,
     t,
   });
+  if (accessRoute.blockedByTraversalBarrier || egressRoute.blockedByTraversalBarrier) {
+    return undefined;
+  }
   const accessDistance = accessRoute.distance;
   const egressDistance = egressRoute.distance;
   const endpointAccessDistance = getRouteEndpointAccessDistance(draft);
@@ -8988,6 +9845,13 @@ function buildTransferTransitLineOptions(
           ),
         },
       );
+      if (
+        accessRoute.blockedByTraversalBarrier ||
+        egressRoute.blockedByTraversalBarrier ||
+        transferRoute.blockedByTraversalBarrier
+      ) {
+        continue;
+      }
       const accessDistance = accessRoute.distance;
       const egressDistance = egressRoute.distance;
       const firstTransitRoute = buildTransitSegmentRoute(
@@ -9841,6 +10705,14 @@ function getRoadRouteStrategyScore(
     return route.distance;
   }
 
+  if (strategy === 'fewest-segments') {
+    return route.roadSegments.length * 100_000 + route.distance;
+  }
+
+  if (strategy === 'alternative-1' || strategy === 'alternative-2') {
+    return route.distance;
+  }
+
   return route.distance + countRoadRouteTurns(route.roadSegments) * 520;
 }
 
@@ -10592,11 +11464,15 @@ function formatRouteStepMinutes(minutes: number, t?: Translate): string {
   return t ? t('map.route.duration.step', { count }) : `${count}分钟`;
 }
 
-function buildMapSharePayload(target: MapShareTarget, t: Translate): MapSharePayload {
+function buildMapSharePayload(
+  target: MapShareTarget,
+  t: Translate,
+  shortShareUrl?: string,
+): MapSharePayload {
   if (target.kind === 'marker') {
     const label = formatMarkerDisplayName(target.marker.label);
     const coordinate = getCenterableMarkerPrimaryCoordinate(target.marker);
-    const url = buildMapMarkerShareUrl(target.marker);
+    const url = shortShareUrl ?? buildMapMarkerShareUrl(target.marker);
     const category = target.marker.categoryId
       ? getMarkerCategoryDisplayName(target.marker.categoryId, t)
       : formatMarkerDetail(target.marker, t);
@@ -10629,7 +11505,8 @@ function buildMapSharePayload(target: MapShareTarget, t: Translate): MapSharePay
   }
 
   const routeTitle = `${target.draft.originLabel} → ${target.draft.destinationLabel}`;
-  const url = buildRoutePlanShareUrl(target.draft, target.enabledModes, target.option?.id);
+  const url =
+    shortShareUrl ?? buildRoutePlanShareUrl(target.draft, target.enabledModes, target.option?.id);
   const optionSummary = target.option
     ? [
         target.option.title,
@@ -10670,6 +11547,33 @@ function buildMapSharePayload(target: MapShareTarget, t: Translate): MapSharePay
     title: routeTitle,
     url,
   };
+}
+
+async function createMapShortShareLink(target: MapShareTarget): Promise<string> {
+  const body =
+    target.kind === 'marker'
+      ? { kind: 'marker' as const, markerId: target.marker.id }
+      : {
+          kind: 'route' as const,
+          state: buildCompactRoutePlanShareState(
+            target.draft,
+            target.enabledModes,
+            target.option?.id,
+          ),
+        };
+  const response = await fetch(appPath('/api/map/share-links'), {
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw new Error(`Map share link creation failed: ${response.status}`);
+  }
+  const payload = (await response.json()) as { url?: string };
+  if (!payload.url) {
+    throw new Error('Map share link response is missing url');
+  }
+  return new URL(payload.url, window.location.origin).toString();
 }
 
 function getMapShareCopyValue(
@@ -10859,7 +11763,12 @@ function getCenterableMarkerPrimaryCoordinate(marker: CenterableMarker): [number
 
 function buildMapMarkerShareUrl(marker: CenterableMarker): string {
   const url = new URL(appPath('/map'), window.location.origin);
-  url.searchParams.set('ms', encodeBase64UrlText(marker.id));
+  const compactParams = new URLSearchParams({ ms: encodeBase64UrlText(marker.id) });
+  const readableParams = new URLSearchParams({ m: marker.id });
+  url.search =
+    compactParams.toString().length < readableParams.toString().length
+      ? compactParams.toString()
+      : readableParams.toString();
   return url.toString();
 }
 
@@ -10986,13 +11895,13 @@ function buildCompactRoutePlanShareState(
     .map((mode) => mode.mode);
 
   return [
-    formatCoordinateParam(draft.origin),
-    formatCoordinateParam(draft.destination),
+    formatCompactCoordinateParam(draft.origin),
+    formatCompactCoordinateParam(draft.destination),
     draft.originLabel !== formatPoint(draft.origin) ? draft.originLabel : '',
     draft.destinationLabel !== formatPoint(draft.destination) ? draft.destinationLabel : '',
     draft.originId ?? '',
     draft.destinationId ?? '',
-    modes.join('.'),
+    formatRouteTransportModeMask(modes),
     selectedOptionId ?? '',
   ];
 }
@@ -11138,11 +12047,21 @@ function formatCoordinateParam([x, z]: [number, number]): string {
   return `${roundCoordinateForParam(x)},${roundCoordinateForParam(z)}`;
 }
 
+function formatCompactCoordinateParam([x, z]: [number, number]): string {
+  return `~${Math.round(x * 100).toString(36)}.${Math.round(z * 100).toString(36)}`;
+}
+
 function roundCoordinateForParam(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
 function parseCoordinateParam(value: string | null): [number, number] | null {
+  if (value?.startsWith('~')) {
+    const [xValue, zValue] = value.slice(1).split('.');
+    const x = xValue ? Number.parseInt(xValue, 36) / 100 : Number.NaN;
+    const z = zValue ? Number.parseInt(zValue, 36) / 100 : Number.NaN;
+    return Number.isFinite(x) && Number.isFinite(z) ? [x, z] : null;
+  }
   const parts = value?.split(',').map((part) => Number(part.trim()));
   if (!parts || parts.length !== 2) {
     return null;
@@ -11157,11 +12076,26 @@ function parseRouteTransportModes(value: string | null): EnabledRouteTransportMo
     return enabledModes;
   }
 
-  const selectedModes = new Set(value.split(',').map((mode) => mode.trim()));
+  const selectedModes = value.startsWith('~')
+    ? new Set(
+        routeTransportModeOptions.flatMap((mode, index) =>
+          (Number.parseInt(value.slice(1), 36) & (1 << index)) !== 0 ? [mode.mode] : [],
+        ),
+      )
+    : new Set(value.split(',').map((mode) => mode.trim()));
   for (const mode of routeTransportModeOptions) {
     enabledModes[mode.mode] = selectedModes.has(mode.mode);
   }
   return enabledModes;
+}
+
+function formatRouteTransportModeMask(modes: RouteTransportMode[]): string {
+  const selected = new Set(modes);
+  const mask = routeTransportModeOptions.reduce(
+    (value, mode, index) => value | (selected.has(mode.mode) ? 1 << index : 0),
+    0,
+  );
+  return `~${mask.toString(36)}`;
 }
 
 function normalizeMapSharedFocusValue(value: string | null): string | null {

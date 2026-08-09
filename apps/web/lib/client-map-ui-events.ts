@@ -45,6 +45,13 @@ export interface MapRouteShortcutRequestedPayload {
   source: 'keyboard';
 }
 
+export const mapViewShortcutRequestedEventName = 'yct:map-view-shortcut-requested';
+
+export interface MapViewShortcutRequestedPayload {
+  command: 'focus_search' | 'reset_view';
+  source: 'keyboard';
+}
+
 export const mapShortcutContextChangedEventName = 'yct:map-shortcut-context-changed';
 
 export interface MapShortcutContextChangedPayload {
@@ -115,6 +122,33 @@ export function subscribeMapRouteShortcutRequested(
   window.addEventListener(mapRouteShortcutRequestedEventName, handleShortcutRequested);
   return () =>
     window.removeEventListener(mapRouteShortcutRequestedEventName, handleShortcutRequested);
+}
+
+export function publishMapViewShortcutRequested(payload: MapViewShortcutRequestedPayload): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent<MapViewShortcutRequestedPayload>(mapViewShortcutRequestedEventName, {
+      detail: payload,
+    }),
+  );
+}
+
+export function subscribeMapViewShortcutRequested(
+  listener: (payload: MapViewShortcutRequestedPayload) => void,
+): () => void {
+  if (typeof window === 'undefined') {
+    return () => undefined;
+  }
+
+  const handleShortcutRequested = (event: Event) => {
+    listener((event as CustomEvent<MapViewShortcutRequestedPayload>).detail);
+  };
+  window.addEventListener(mapViewShortcutRequestedEventName, handleShortcutRequested);
+  return () =>
+    window.removeEventListener(mapViewShortcutRequestedEventName, handleShortcutRequested);
 }
 
 export function publishMapShortcutContextChanged(payload: MapShortcutContextChangedPayload): void {

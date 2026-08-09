@@ -6,6 +6,9 @@ import {
   upsertLegacyMapMarkerOverride,
   type LegacyMapMarkerPatch,
 } from './legacy-map-marker-override-store';
+import { ensureRoutingTopologyInvalidationListenersRegistered } from './routing-topology-invalidation-listeners';
+
+ensureRoutingTopologyInvalidationListenersRegistered();
 
 export interface LegacyMapMarkerActionResult {
   ok: boolean;

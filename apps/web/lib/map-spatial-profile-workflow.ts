@@ -3,6 +3,9 @@ import type { MapSpatialProfile } from '@yct/contracts';
 import type { MapSpatialProfileUpdateInput } from '@yct/schemas';
 import { publishDomainEvent } from './app-event-bus';
 import { readMapSpatialProfile, writeMapSpatialProfile } from './map-spatial-profile-store';
+import { ensureRoutingTopologyInvalidationListenersRegistered } from './routing-topology-invalidation-listeners';
+
+ensureRoutingTopologyInvalidationListenersRegistered();
 
 export async function getMapSpatialProfile(): Promise<MapSpatialProfile> {
   return readMapSpatialProfile();

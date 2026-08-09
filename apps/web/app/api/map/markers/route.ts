@@ -11,6 +11,7 @@ import {
 } from '../../../../lib/entity-translation-store';
 import { readTransitLinePoiMarkers } from '../../../../lib/map-transit-line-markers';
 import { enrichMapMarkerPlaceRelations } from '../../../../lib/map-place-relations';
+import { writePublicMapMarkerSnapshot } from '../../../../lib/map-marker-public-snapshot-store';
 import { applyLegacyMapMarkerOverrides } from '../../../../lib/legacy-map-marker-override-store';
 import { readMapSpatialProfile } from '../../../../lib/map-spatial-profile-store';
 import {
@@ -101,7 +102,7 @@ export async function GET() {
       entityTranslations,
     );
 
-    return NextResponse.json({
+    const response = {
       meta: createApiMeta(
         'ready',
         [
@@ -115,7 +116,9 @@ export async function GET() {
       ),
       snapshot: mergedSnapshot,
       iconBaseUrl,
-    });
+    };
+    await writePublicMapMarkerSnapshot(response).catch(() => undefined);
+    return NextResponse.json(response);
   } catch (error) {
     const localSnapshot = applyMapMarkerTranslations(
       enrichMapMarkerPlaceRelations(
@@ -137,14 +140,16 @@ export async function GET() {
       entityTranslations,
     );
     if (localSnapshot.markers.length > 0) {
-      return NextResponse.json({
+      const response = {
         meta: createApiMeta(
           'ready',
           `外部标记源暂不可用，当前仅显示 ${localSnapshot.markers.length} 个本地地图对象。`,
         ),
         snapshot: localSnapshot,
         iconBaseUrl,
-      });
+      };
+      await writePublicMapMarkerSnapshot(response).catch(() => undefined);
+      return NextResponse.json(response);
     }
 
     return NextResponse.json(

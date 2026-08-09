@@ -21,6 +21,9 @@ import {
 } from './poi-submission-store';
 import { listPoiSubmissionImageReviews } from './poi-submission-image-review-store';
 import { listPoiConflictDecisions } from './poi-conflict-decision-store';
+import { ensureRoutingTopologyInvalidationListenersRegistered } from './routing-topology-invalidation-listeners';
+
+ensureRoutingTopologyInvalidationListenersRegistered();
 
 export interface PoiSubmissionActionResult {
   ok: boolean;
