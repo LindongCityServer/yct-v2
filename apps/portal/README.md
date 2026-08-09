@@ -31,7 +31,7 @@ const yctBaseUrl = 'https://yct.shangxiaoguan.top/';
 - `portal:legacy-wordpress-notice-visibility-requested`：未发布或暂时无法确认时请求显示提示，或由关闭按钮请求隐藏。
 - `portal:legacy-wordpress-notice-visibility-changed`：提示的实际可见状态已经改变。
 
-只有 `published` 会使用 `location.replace()` 前往雨城通内容页，不在浏览器历史中留下无意义的中转页。`not_published` 会提示后留在门户；数据源或网络异常使用 `unavailable`，不会误称内容尚未发布。雨城通接口只复用公开内容读取模型，不读取或暴露草稿状态。
+只有 `published` 会使用 `location.replace()` 前往雨城通内容页，不在浏览器历史中留下无意义的中转页。`not_published` 会提示后留在门户；数据源、网络或 CORS 异常使用 `unavailable`，不会误称内容尚未发布。两种提示都提供由已校验 `p` 参数生成的雨城通内容页手动入口；顶层页面导航不受跨域读取限制。雨城通接口只复用公开内容读取模型，不读取或暴露草稿状态。
 
 旧链接查询由门户跨域访问 `https://yct.shangxiaoguan.top/api/operations/legacy-wordpress/[p]`。该公开只读接口不使用 Cookie，并返回 `Access-Control-Allow-Origin: *`。根域当前的 CSP 还必须在原策略中加入：
 

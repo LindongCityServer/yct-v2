@@ -26,20 +26,28 @@
     <aside
       class="legacy-link-notice"
       id="legacy-link-notice"
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
       hidden
     >
       <span class="legacy-link-notice-icon material-icon icon-link" aria-hidden="true"></span>
-      <div class="legacy-link-notice-copy">
+      <div class="legacy-link-notice-copy" role="status" aria-live="polite" aria-atomic="true">
         <strong id="legacy-link-notice-title" data-i18n="legacyLink.notPublishedTitle"
           >对应内容尚未在雨城通发布</strong
         >
         <p id="legacy-link-notice-body" data-i18n="legacyLink.notPublishedBody">
-          这个旧链接对应的文章还没有在雨城通公开，你仍可以从本页继续浏览。
+          自动检查显示这篇文章尚未在雨城通公开。你可以手动尝试打开对应页面，或继续浏览本页。
         </p>
       </div>
+      <a
+        class="legacy-link-notice-open"
+        id="legacy-link-notice-open"
+        href="https://yct.shangxiaoguan.top/"
+        data-entry-id="legacy-wordpress-manual-open"
+        data-entry-group="story"
+        hidden
+      >
+        <span data-i18n="legacyLink.open">手动打开</span>
+        <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+      </a>
       <button
         class="legacy-link-notice-close"
         id="legacy-link-notice-close"

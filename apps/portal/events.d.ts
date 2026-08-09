@@ -64,6 +64,7 @@ export interface PortalLegacyWordPressNoticeVisibilityPayload {
   visible: boolean;
   reason: PortalLegacyWordPressNoticeReason;
   source: PortalLegacyWordPressNoticeSource;
+  targetUrl?: string;
 }
 
 export interface LindongPortalEventMap {

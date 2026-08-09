@@ -136,10 +136,11 @@
       'friends.huinan': '回南市服务器 Wiki（Fandom）',
       'legacyLink.notPublishedTitle': '对应内容尚未在雨城通发布',
       'legacyLink.notPublishedBody':
-        '这个旧链接对应的文章还没有在雨城通公开，你仍可以从本页继续浏览。',
+        '自动检查显示这篇文章尚未在雨城通公开。你可以手动尝试打开对应页面，或继续浏览本页。',
       'legacyLink.unavailableTitle': '暂时无法确认对应内容',
       'legacyLink.unavailableBody':
-        '雨城通暂时无法完成链接检查，你仍可以从本页继续浏览。',
+        '自动检查可能受跨域策略或网络影响，暂时无法确认内容状态。你可以手动打开对应页面，或继续浏览本页。',
+      'legacyLink.open': '手动打开',
       'legacyLink.close': '关闭',
       'legacyLink.closeLabel': '关闭旧链接提示',
       'footer.siteName': '个人学习网站',
@@ -281,10 +282,11 @@
       'friends.huinan': '回南市伺服器 Wiki（Fandom）',
       'legacyLink.notPublishedTitle': '對應內容尚未在雨城通發佈',
       'legacyLink.notPublishedBody':
-        '這個舊連結對應的文章尚未在雨城通公開，你仍可從本頁繼續瀏覽。',
+        '自動檢查顯示這篇文章尚未在雨城通公開。你可以手動嘗試開啟對應頁面，或繼續瀏覽本頁。',
       'legacyLink.unavailableTitle': '暫時無法確認對應內容',
       'legacyLink.unavailableBody':
-        '雨城通暫時無法完成連結檢查，你仍可從本頁繼續瀏覽。',
+        '自動檢查可能受跨來源政策或網路影響，暫時無法確認內容狀態。你可以手動開啟對應頁面，或繼續瀏覽本頁。',
+      'legacyLink.open': '手動開啟',
       'legacyLink.close': '關閉',
       'legacyLink.closeLabel': '關閉舊連結提示',
       'footer.siteName': '个人学习网站',
@@ -430,10 +432,11 @@
       'friends.huinan': 'Huinan City Server Wiki (Fandom)',
       'legacyLink.notPublishedTitle': 'This content is not yet published on Yuchengtong',
       'legacyLink.notPublishedBody':
-        'The article behind this old link is not yet public on Yuchengtong. You can continue browsing this page.',
+        'The automatic check reports that this article is not yet public on Yuchengtong. You can try opening the page manually or continue here.',
       'legacyLink.unavailableTitle': 'The linked content could not be checked',
       'legacyLink.unavailableBody':
-        'Yuchengtong cannot check this link right now. You can continue browsing this page.',
+        'Cross-origin policy or network conditions may have blocked the automatic check. You can open the page manually or continue here.',
+      'legacyLink.open': 'Open manually',
       'legacyLink.close': 'Close',
       'legacyLink.closeLabel': 'Dismiss the old-link notice',
       'footer.siteName': '个人学习网站',

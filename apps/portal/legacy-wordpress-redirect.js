@@ -15,6 +15,7 @@
   const notice = document.querySelector('#legacy-link-notice');
   const noticeTitle = document.querySelector('#legacy-link-notice-title');
   const noticeBody = document.querySelector('#legacy-link-notice-body');
+  const noticeOpen = document.querySelector('#legacy-link-notice-open');
   const noticeClose = document.querySelector('#legacy-link-notice-close');
   let activeResolutionToken;
   let activeNoticeReason = 'not_published';
@@ -49,6 +50,32 @@
         config.yctBaseUrl,
       ).toString(),
     };
+  }
+
+  function resolveManualTargetUrl(value) {
+    if (typeof value !== 'string') {
+      return null;
+    }
+
+    try {
+      const target = new URL(value, config.yctBaseUrl);
+      const yctBase = new URL(config.yctBaseUrl);
+      const contentPathPrefix = new URL(
+        'operations/wordpress_content_',
+        config.yctBaseUrl,
+      ).pathname;
+      const postId = target.pathname.slice(contentPathPrefix.length);
+      if (
+        target.origin !== yctBase.origin ||
+        !target.pathname.startsWith(contentPathPrefix) ||
+        !/^\d{1,20}$/.test(postId)
+      ) {
+        return null;
+      }
+      return target.toString();
+    } catch {
+      return null;
+    }
   }
 
   async function resolvePublishedContent(detail) {
@@ -115,11 +142,11 @@
       reason === 'not_published'
         ? {
             title: '对应内容尚未在雨城通发布',
-            body: '这个旧链接对应的文章还没有在雨城通公开，你仍可以从本页继续浏览。',
+            body: '自动检查显示这篇文章尚未在雨城通公开。你可以手动尝试打开对应页面，或继续浏览本页。',
           }
         : {
             title: '暂时无法确认对应内容',
-            body: '雨城通暂时无法完成链接检查，你仍可以从本页继续浏览。',
+            body: '自动检查可能受跨域策略或网络影响，暂时无法确认内容状态。你可以手动打开对应页面，或继续浏览本页。',
           };
     noticeTitle.dataset.i18n = titleKey;
     noticeBody.dataset.i18n = bodyKey;
@@ -145,7 +172,7 @@
     const reason = detail?.status === 'not_published' ? 'not_published' : 'unavailable';
     document.dispatchEvent(
       new CustomEvent(eventNames.noticeVisibilityRequested, {
-        detail: { visible: true, reason, source: 'resolution' },
+        detail: { visible: true, reason, source: 'resolution', targetUrl: detail?.targetUrl },
       }),
     );
   });
@@ -160,6 +187,13 @@
       activeNoticeReason =
         event.detail?.reason === 'not_published' ? 'not_published' : 'unavailable';
       localizeNotice(activeNoticeReason);
+      const targetUrl = resolveManualTargetUrl(event.detail?.targetUrl);
+      if (noticeOpen && targetUrl) {
+        noticeOpen.href = targetUrl;
+        noticeOpen.hidden = false;
+      } else if (noticeOpen) {
+        noticeOpen.hidden = true;
+      }
       notice.hidden = false;
     } else {
       notice.hidden = true;
