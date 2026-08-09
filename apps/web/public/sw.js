@@ -12,6 +12,7 @@ const YCT_CORE_URLS = [
   '/travel/schedules',
   '/travel/screen',
   '/services',
+  '/services/changelog',
   '/map',
   '/offline',
   '/manifest.webmanifest',

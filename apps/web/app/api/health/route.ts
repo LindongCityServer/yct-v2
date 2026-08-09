@@ -9,6 +9,7 @@ export function GET() {
     name: 'Yuchengtong',
     abbreviation: 'YCT',
     buildId: process.env.NEXT_PUBLIC_YCT_BUILD_ID ?? 'dev',
+    releaseVersion: process.env.NEXT_PUBLIC_YCT_RELEASE_VERSION ?? '2.0.0',
     basePath: appBasePath || '/',
     siteUrl: config.siteUrl,
     ldpassConfigured: Boolean(config.ldpassBaseUrl && config.ldpassClientId),

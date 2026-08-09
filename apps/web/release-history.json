@@ -1,0 +1,2638 @@
+{
+  "schemaVersion": 1,
+  "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
+  "releases": [
+    {
+      "version": "2.8.0",
+      "releasedAt": "2026-08-07T08:20:35+08:00",
+      "changeCount": 4,
+      "themes": ["api", "map", "portal", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "map",
+          "summary": "支持可视化编辑行政区划",
+          "changeId": "b815d627"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "scope": "web",
+          "summary": "优化玩家列表与次级顶栏样式",
+          "changeId": "a3f91e33"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "portal",
+          "summary": "完善工具入口与友链展示",
+          "changeId": "95136976"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "api",
+          "summary": "提供公共只读接口与 AI 发现入口",
+          "changeId": "3f3e1d3e"
+        }
+      ]
+    },
+    {
+      "version": "2.7.17",
+      "releasedAt": "2026-08-04T01:32:34+08:00",
+      "changeCount": 7,
+      "themes": ["content", "map", "material", "portal", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "统一站点元信息与后台刷新",
+          "changeId": "636875b9"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "content",
+          "summary": "支持旧内容迁移与地点关联",
+          "changeId": "19b95574"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "map",
+          "summary": "支持空间配置与交通路线规划",
+          "changeId": "c2f32ab8"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "material",
+          "summary": "支持导视项目导入与示例加载",
+          "changeId": "6d76b0fb"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "增加爱发电运营入口",
+          "changeId": "a96a1e9e"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "scope": "web",
+          "summary": "完善地图内容与物料界面样式",
+          "changeId": "f0e15da1"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "portal",
+          "summary": "新增临东门户静态站点",
+          "changeId": "7ae150ac"
+        }
+      ]
+    },
+    {
+      "version": "2.7.16",
+      "releasedAt": "2026-07-31T22:51:59+08:00",
+      "changeCount": 4,
+      "themes": ["web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "完善RMP线网导入与站名维护",
+          "changeId": "daa547f6"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "完善地铁导视元素编辑",
+          "changeId": "4d90631b"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "优化公交线路物料渲染",
+          "changeId": "cb006207"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "完善物料工作台状态提示与布局",
+          "changeId": "a4d309cf"
+        }
+      ]
+    },
+    {
+      "version": "2.7.15",
+      "releasedAt": "2026-07-31T19:20:08+08:00",
+      "changeCount": 3,
+      "themes": ["auth", "material"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "auth",
+          "summary": "统一处理登录要求跳转",
+          "changeId": "7b8755bc"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "auth",
+          "summary": "统一受保护操作登录跳转",
+          "changeId": "e9d529e3"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "material",
+          "summary": "支持匿名预览和水印下载",
+          "changeId": "abb8f6cd"
+        }
+      ]
+    },
+    {
+      "version": "2.7.14",
+      "releasedAt": "2026-07-31T18:17:59+08:00",
+      "changeCount": 2,
+      "themes": ["materials", "transit"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "transit",
+          "summary": "支持按方向配置停靠位置",
+          "changeId": "0fbfd428"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "materials",
+          "summary": "支持RMP线网与导视编辑",
+          "changeId": "36a53a54"
+        }
+      ]
+    },
+    {
+      "version": "2.7.13",
+      "releasedAt": "2026-07-31T14:59:25+08:00",
+      "changeCount": 3,
+      "themes": ["web"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "web",
+          "summary": "修复预览水印透明度和截断",
+          "changeId": "0564835b"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "支持导视牌方框文本",
+          "changeId": "9826f24b"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "web",
+          "summary": "替换扶梯及楼梯组合图标",
+          "changeId": "4205787d"
+        }
+      ]
+    },
+    {
+      "version": "2.7.12",
+      "releasedAt": "2026-07-31T13:43:51+08:00",
+      "changeCount": 4,
+      "themes": ["web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "完善地铁导视牌双行编排",
+          "changeId": "09b359a3"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "支持文字反向推荐设施图标",
+          "changeId": "37029eae"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "重构物料预览追溯水印",
+          "changeId": "b7c1e94c"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "横向交错排列预览水印",
+          "changeId": "ce64447d"
+        }
+      ]
+    },
+    {
+      "version": "2.7.11",
+      "releasedAt": "2026-07-31T12:28:40+08:00",
+      "changeCount": 4,
+      "themes": ["web"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "web",
+          "summary": "校正导视牌大文字排版",
+          "changeId": "e6a6144d"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "完善地铁导视牌文字编排",
+          "changeId": "f04a3a3d"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "web",
+          "summary": "区分导视图标默认外框",
+          "changeId": "b6e0d770"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "web",
+          "summary": "优化导视文本分组压缩",
+          "changeId": "69da84b8"
+        }
+      ]
+    },
+    {
+      "version": "2.7.10",
+      "releasedAt": "2026-07-31T11:26:32+08:00",
+      "changeCount": 4,
+      "themes": ["web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "完善地铁导视牌编辑能力",
+          "changeId": "ee589086"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "统一地铁车站设施图标",
+          "changeId": "492cea3d"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "web",
+          "summary": "调整导视牌图标缩放规则",
+          "changeId": "334c88d6"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "支持拖放调整导视元素顺序",
+          "changeId": "7c019024"
+        }
+      ]
+    },
+    {
+      "version": "2.7.9",
+      "releasedAt": "2026-07-31T00:37:39+08:00",
+      "changeCount": 2,
+      "themes": ["web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "添加地铁导视牌渲染模板",
+          "changeId": "5b4adf24"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "接入地铁导视牌编辑工作台",
+          "changeId": "ac93a18e"
+        }
+      ]
+    },
+    {
+      "version": "2.7.8",
+      "releasedAt": "2026-07-30T17:33:58+08:00",
+      "changeCount": 6,
+      "themes": ["service", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "service",
+          "summary": "添加横版公交站牌详情模板",
+          "changeId": "a27a00de"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "修正横版站牌背景与断行间距",
+          "changeId": "7eab176a"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "调整横版站牌站序间距",
+          "changeId": "44fccdb4"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "优化线路方向与地图匹配",
+          "changeId": "e9639b7b"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "完善公交线网健康分析",
+          "changeId": "46960b4c"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "添加多语言常见问题服务",
+          "changeId": "b38a00d7"
+        }
+      ]
+    },
+    {
+      "version": "2.7.7",
+      "releasedAt": "2026-07-30T10:47:32+08:00",
+      "changeCount": 4,
+      "themes": ["service", "web"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "调整公交站名两端对齐方式",
+          "changeId": "7e35e67e"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "修正公交站名末字间距",
+          "changeId": "e2beb13e"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "service",
+          "summary": "完善物料预览与下载提示",
+          "changeId": "a30d77eb"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "scope": "web",
+          "summary": "提高模态弹窗背景不透明度",
+          "changeId": "ab0ce79f"
+        }
+      ]
+    },
+    {
+      "version": "2.7.6",
+      "releasedAt": "2026-07-30T08:31:58+08:00",
+      "changeCount": 6,
+      "themes": ["service"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "完善公交站牌双向生成",
+          "changeId": "12eb59e5"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "限制始发终点线路号宽度",
+          "changeId": "06a025bf"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "优化公交站牌预览交互",
+          "changeId": "1004567b"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "调整公交线路概览编号颜色",
+          "changeId": "168ac393"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "更新公交线路概览编号颜色",
+          "changeId": "7706b894"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "标注公交线路终点站",
+          "changeId": "79ae7a35"
+        }
+      ]
+    },
+    {
+      "version": "2.7.5",
+      "releasedAt": "2026-07-30T00:39:54+08:00",
+      "changeCount": 1,
+      "themes": ["service"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "service",
+          "summary": "支持公交站牌模板生成",
+          "changeId": "067c66df"
+        }
+      ]
+    },
+    {
+      "version": "2.7.4",
+      "releasedAt": "2026-07-29T22:27:20+08:00",
+      "changeCount": 1,
+      "themes": ["service"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "service",
+          "summary": "展示物料审批详情和历史记录",
+          "changeId": "9307c84e"
+        }
+      ]
+    },
+    {
+      "version": "2.7.3",
+      "releasedAt": "2026-07-29T17:55:21+08:00",
+      "changeCount": 3,
+      "themes": ["admin", "service", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "支持维护道路路牌拼音",
+          "changeId": "e975513a"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "修正楼牌地址和字形排版",
+          "changeId": "8b4f6454"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "web",
+          "summary": "统一物料对齐单位和输出清晰度",
+          "changeId": "ecd56201"
+        }
+      ]
+    },
+    {
+      "version": "2.7.2",
+      "releasedAt": "2026-07-29T16:05:43+08:00",
+      "changeCount": 4,
+      "themes": ["service"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "修正楼牌字形和组合排版",
+          "changeId": "0976627b"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "调整路牌方位和楼牌附标",
+          "changeId": "9f8bdd6f"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "上移道路方向牌文字基线",
+          "changeId": "4a9cf023"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "缩小路牌副名称和方位字号",
+          "changeId": "3e659ecd"
+        }
+      ]
+    },
+    {
+      "version": "2.7.1",
+      "releasedAt": "2026-07-29T14:37:34+08:00",
+      "changeCount": 2,
+      "themes": ["service"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "service",
+          "summary": "支持路牌地点匹配和怀旧楼牌",
+          "changeId": "574f1a26"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "修正物料模板边框和字体布局",
+          "changeId": "7faf1216"
+        }
+      ]
+    },
+    {
+      "version": "2.7.0",
+      "releasedAt": "2026-07-29T11:52:01+08:00",
+      "changeCount": 1,
+      "themes": ["service"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "service",
+          "summary": "新增旧版路牌与楼牌模板",
+          "changeId": "47cf84fc"
+        }
+      ]
+    },
+    {
+      "version": "2.6.2",
+      "releasedAt": "2026-07-28T21:49:13+08:00",
+      "changeCount": 2,
+      "themes": ["admin", "web"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "修复编辑表单和设施弹窗",
+          "changeId": "f161d1ec"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "接入乘车码预授权网关",
+          "changeId": "d481132c"
+        }
+      ]
+    },
+    {
+      "version": "2.6.1",
+      "releasedAt": "2026-07-28T20:41:51+08:00",
+      "changeCount": 3,
+      "themes": ["service"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "service",
+          "summary": "支持物料预览和地点生成",
+          "changeId": "f064f83e"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "修正物料 SVG 命名空间校验",
+          "changeId": "9541d7c2"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "service",
+          "summary": "新增公共交通网络健康度分析",
+          "changeId": "0ee7beb9"
+        }
+      ]
+    },
+    {
+      "version": "2.6.0",
+      "releasedAt": "2026-07-28T19:28:30+08:00",
+      "changeCount": 2,
+      "themes": ["service"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "service",
+          "summary": "新增物料工作台基础能力",
+          "changeId": "25687ef1"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "service",
+          "summary": "放开物料只读数据访问",
+          "changeId": "6271776b"
+        }
+      ]
+    },
+    {
+      "version": "2.5.3",
+      "releasedAt": "2026-07-28T17:13:46+08:00",
+      "changeCount": 3,
+      "themes": ["operations", "transit", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "transit",
+          "summary": "接管旧版站内设施编辑",
+          "changeId": "9e5b98f9"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "operations",
+          "summary": "修复旧消息归档与封面色选择",
+          "changeId": "afeaa910"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "web",
+          "summary": "调整模态材质与移动端强提醒",
+          "changeId": "00d15b14"
+        }
+      ]
+    },
+    {
+      "version": "2.5.2",
+      "releasedAt": "2026-07-27T23:44:44+08:00",
+      "changeCount": 5,
+      "themes": ["admin", "transit", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "支持接管编辑旧消息",
+          "changeId": "12098a48"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "transit",
+          "summary": "校验站点交通方式并开放设施编辑",
+          "changeId": "01e9e6bb"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "优化父地点候选选择",
+          "changeId": "3ee4aca5"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "增强地图地点详情与分享交互",
+          "changeId": "4a8d4a81"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "scope": "web",
+          "summary": "调整地图设施与高级材质表现",
+          "changeId": "8f26ad50"
+        }
+      ]
+    },
+    {
+      "version": "2.5.1",
+      "releasedAt": "2026-07-27T19:04:33+08:00",
+      "changeCount": 4,
+      "themes": ["account", "operations", "transit", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "升级高级材质与快捷交互",
+          "changeId": "e53d4ec3"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "operations",
+          "summary": "展示服务器状态与内容导航",
+          "changeId": "77784233"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "account",
+          "summary": "支持临东通乘车码核销",
+          "changeId": "e57c9a68"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "transit",
+          "summary": "支持站内设施与票价信息展示",
+          "changeId": "e61cc9f4"
+        }
+      ]
+    },
+    {
+      "version": "2.5.0",
+      "releasedAt": "2026-07-23T22:41:57+08:00",
+      "changeCount": 5,
+      "themes": ["admin", "identity", "map", "transit", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "identity",
+          "summary": "完善账号会话与成员管理",
+          "changeId": "f55cd6bd"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "支持实体名称翻译维护",
+          "changeId": "2c7fec4f"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "map",
+          "summary": "完善兴趣点管理与玩家位置展示",
+          "changeId": "9d9b670a"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "transit",
+          "summary": "统一线路编辑与班次入口",
+          "changeId": "0f7229c8"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "完善多语言界面与嵌入态样式",
+          "changeId": "42b3e6a0"
+        }
+      ]
+    },
+    {
+      "version": "2.4.1",
+      "releasedAt": "2026-07-15T21:17:44+08:00",
+      "changeCount": 5,
+      "themes": ["admin", "admin-poi", "map", "transit", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "统一后台导航并开放默认服务入口维护",
+          "changeId": "176a7ed6"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin-poi",
+          "summary": "完善结构化资料与几何地图编辑",
+          "changeId": "680b77ae"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "transit",
+          "summary": "增强线路可视化编辑与途径点展示",
+          "changeId": "2f567bae"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "map",
+          "summary": "完善路线规划与道路语义展示",
+          "changeId": "fa64bdb8"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "scope": "web",
+          "summary": "统一地图编辑与后台响应式布局",
+          "changeId": "e8ff5c4a"
+        }
+      ]
+    },
+    {
+      "version": "2.4.0",
+      "releasedAt": "2026-07-14T16:50:01+08:00",
+      "changeCount": 5,
+      "themes": ["admin", "admin-poi", "map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin-poi",
+          "summary": "融合旧POI并完善批量管理",
+          "changeId": "bd925bb8"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "独立审计页面并增加首页概览",
+          "changeId": "8b047043"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "归档移除已发布服务入口",
+          "changeId": "3bcf67da"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "map",
+          "summary": "显示标记点距离和道路全长",
+          "changeId": "af50b07d"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "优化后台布局与线路编辑器样式",
+          "changeId": "39f7c7b4"
+        }
+      ]
+    },
+    {
+      "version": "2.3.25",
+      "releasedAt": "2026-07-10T13:33:55+08:00",
+      "changeCount": 2,
+      "themes": ["admin"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "汇总POI发布阻塞计数",
+          "changeId": "1cc8ae0b"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "筛选阻塞发布的POI",
+          "changeId": "f46751e5"
+        }
+      ]
+    },
+    {
+      "version": "2.3.24",
+      "releasedAt": "2026-07-10T12:33:08+08:00",
+      "changeCount": 3,
+      "themes": ["admin"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "拦截待合并POI发布",
+          "changeId": "71c8949d"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "支持反转线性POI点序",
+          "changeId": "9a7dddf3"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "提示POI父子地点关系",
+          "changeId": "1d48bd62"
+        }
+      ]
+    },
+    {
+      "version": "2.3.23",
+      "releasedAt": "2026-07-10T11:31:03+08:00",
+      "changeCount": 3,
+      "themes": ["admin"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "展示POI图片审计信息",
+          "changeId": "78633dcd"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "审核POI投稿图片",
+          "changeId": "f254bc37"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "拦截不合格POI图片发布",
+          "changeId": "fa87a458"
+        }
+      ]
+    },
+    {
+      "version": "2.3.22",
+      "releasedAt": "2026-07-10T10:18:28+08:00",
+      "changeCount": 3,
+      "themes": ["admin"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "预览POI审核地图上下文",
+          "changeId": "2334e555"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "支持点选修正POI坐标",
+          "changeId": "03fd1150"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "标记POI冲突提示决策",
+          "changeId": "a35fba46"
+        }
+      ]
+    },
+    {
+      "version": "2.3.21",
+      "releasedAt": "2026-07-10T09:05:23+08:00",
+      "changeCount": 1,
+      "themes": ["admin"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "确认POI公开发布",
+          "changeId": "53bf2424"
+        }
+      ]
+    },
+    {
+      "version": "2.3.20",
+      "releasedAt": "2026-07-10T00:42:50+08:00",
+      "changeCount": 4,
+      "themes": ["admin", "map"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "map",
+          "summary": "适配深色模式地图底图",
+          "changeId": "5736f74e"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "支持修正点状POI坐标",
+          "changeId": "c9a6f188"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "预览POI投稿几何",
+          "changeId": "0b6e488f"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "添加POI驳回常用原因",
+          "changeId": "2266d0a7"
+        }
+      ]
+    },
+    {
+      "version": "2.3.19",
+      "releasedAt": "2026-07-09T23:28:00+08:00",
+      "changeCount": 3,
+      "themes": ["admin"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "预览POI分类图标可读性",
+          "changeId": "1c50a205"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "提示POI投稿相近标记",
+          "changeId": "5a1f18ee"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "支持修正POI投稿资料",
+          "changeId": "16988dc6"
+        }
+      ]
+    },
+    {
+      "version": "2.3.18",
+      "releasedAt": "2026-07-09T22:17:14+08:00",
+      "changeCount": 1,
+      "themes": ["admin"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "支持删除POI分类图标",
+          "changeId": "460e144b"
+        }
+      ]
+    },
+    {
+      "version": "2.3.17",
+      "releasedAt": "2026-07-09T20:58:40+08:00",
+      "changeCount": 3,
+      "themes": ["admin"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "改进POI审核工作台",
+          "changeId": "4e3ecaf3"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "管理POI分类图标配置",
+          "changeId": "7b9629f0"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "支持上传POI分类图标",
+          "changeId": "f7befd85"
+        }
+      ]
+    },
+    {
+      "version": "2.3.16",
+      "releasedAt": "2026-07-09T18:02:52+08:00",
+      "changeCount": 2,
+      "themes": ["admin", "i18n"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "i18n",
+          "summary": "翻译地图线路时间兜底",
+          "changeId": "c5c7e9e9"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "继承临东通管理员权限",
+          "changeId": "4ac44675"
+        }
+      ]
+    },
+    {
+      "version": "2.3.15",
+      "releasedAt": "2026-07-09T13:09:13+08:00",
+      "changeCount": 3,
+      "themes": ["i18n", "map"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "map",
+          "summary": "限制道路投影候选范围",
+          "changeId": "da87b6a7"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "map",
+          "summary": "调整道路投影点归属规则",
+          "changeId": "99013485"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "i18n",
+          "summary": "翻译运营强提醒时间窗",
+          "changeId": "373f3135"
+        }
+      ]
+    },
+    {
+      "version": "2.3.14",
+      "releasedAt": "2026-07-09T12:06:13+08:00",
+      "changeCount": 2,
+      "themes": ["admin", "map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "增加POI投稿坐标审核辅助入口",
+          "changeId": "ec07877c"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "map",
+          "summary": "压缩路线分享状态参数",
+          "changeId": "52853824"
+        }
+      ]
+    },
+    {
+      "version": "2.3.13",
+      "releasedAt": "2026-07-09T10:35:47+08:00",
+      "changeCount": 2,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "map",
+          "summary": "优化路线结果标记和道路标签",
+          "changeId": "8fdd9c5d"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "map",
+          "summary": "增加少转弯步行候选",
+          "changeId": "5dc02ab8"
+        }
+      ]
+    },
+    {
+      "version": "2.3.12",
+      "releasedAt": "2026-07-09T09:18:26+08:00",
+      "changeCount": 2,
+      "themes": ["i18n", "map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "i18n",
+          "summary": "翻译账号本地历史文案",
+          "changeId": "a761bc11"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "map",
+          "summary": "统一路线端点图标和分享图字体",
+          "changeId": "d0ed97f8"
+        }
+      ]
+    },
+    {
+      "version": "2.3.11",
+      "releasedAt": "2026-07-09T07:41:57+08:00",
+      "changeCount": 4,
+      "themes": ["i18n"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "i18n",
+          "summary": "翻译账号身份入口文案",
+          "changeId": "2356d3aa"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "i18n",
+          "summary": "翻译账号通知设置文案",
+          "changeId": "3b97719e"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "i18n",
+          "summary": "翻译 PWA 安装缓存文案",
+          "changeId": "71be65dd"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "i18n",
+          "summary": "修正账号票务草稿文案",
+          "changeId": "4e5b06aa"
+        }
+      ]
+    },
+    {
+      "version": "2.3.10",
+      "releasedAt": "2026-07-09T06:37:50+08:00",
+      "changeCount": 2,
+      "themes": ["i18n", "map"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "map",
+          "summary": "恢复分享预览本地图标",
+          "changeId": "add2e5ce"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "i18n",
+          "summary": "补充离线范围和大屏详情文案",
+          "changeId": "401ffe81"
+        }
+      ]
+    },
+    {
+      "version": "2.3.9",
+      "releasedAt": "2026-07-09T05:18:20+08:00",
+      "changeCount": 2,
+      "themes": ["i18n"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "i18n",
+          "summary": "翻译地图线路单向停靠",
+          "changeId": "82e95806"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "i18n",
+          "summary": "翻译地图默认地点文案",
+          "changeId": "d6c5c728"
+        }
+      ]
+    },
+    {
+      "version": "2.3.8",
+      "releasedAt": "2026-07-09T02:35:16+08:00",
+      "changeCount": 3,
+      "themes": ["i18n", "map"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "map",
+          "summary": "校验 POI 投稿图片文件签名",
+          "changeId": "8ba5676b"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "i18n",
+          "summary": "补充地图 POI 详情文案",
+          "changeId": "f0bc1525"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "i18n",
+          "summary": "翻译 POI 关联地点分组",
+          "changeId": "2344badd"
+        }
+      ]
+    },
+    {
+      "version": "2.3.7",
+      "releasedAt": "2026-07-09T01:33:54+08:00",
+      "changeCount": 4,
+      "themes": ["admin", "map", "operations", "ui"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "ui",
+          "summary": "本地嵌入 Material Symbols 图标字体",
+          "changeId": "13326760"
+        },
+        {
+          "category": "perf",
+          "breaking": false,
+          "scope": "operations",
+          "summary": "优化首页图片加载策略",
+          "changeId": "87e0a5a6"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "增加 POI 投稿图片预览",
+          "changeId": "d9ff0021"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "map",
+          "summary": "避免 POI 图片写入部署前缀",
+          "changeId": "b1805443"
+        }
+      ]
+    },
+    {
+      "version": "2.3.6",
+      "releasedAt": "2026-07-09T00:13:25+08:00",
+      "changeCount": 1,
+      "themes": ["ui"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "ui",
+          "summary": "修复分享图并迁移首页社交入口",
+          "changeId": "16b7804f"
+        }
+      ]
+    },
+    {
+      "version": "2.3.5",
+      "releasedAt": "2026-07-08T22:00:13+08:00",
+      "changeCount": 1,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "map",
+          "summary": "增加路线分享面板与投影提示",
+          "changeId": "b5e5fea9"
+        }
+      ]
+    },
+    {
+      "version": "2.3.4",
+      "releasedAt": "2026-07-08T20:02:34+08:00",
+      "changeCount": 1,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "map",
+          "summary": "改进路线投影与地图翻译",
+          "changeId": "0b4ec699"
+        }
+      ]
+    },
+    {
+      "version": "2.3.3",
+      "releasedAt": "2026-07-08T18:23:03+08:00",
+      "changeCount": 6,
+      "themes": ["account", "admin", "map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "map",
+          "summary": "完善地图翻译与分享反馈",
+          "changeId": "4fe7a29b"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "account",
+          "summary": "使用 Minotar 头像回退",
+          "changeId": "d0774243"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "初始化脚本读取环境文件",
+          "changeId": "94a2fd93"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "account",
+          "summary": "替换旧版 Minecraft 头像源",
+          "changeId": "b5dbe568"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "map",
+          "summary": "收敛道路投影连通规则",
+          "changeId": "ec71c5dc"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "map",
+          "summary": "保留最近道路接入候选",
+          "changeId": "8baa62d0"
+        }
+      ]
+    },
+    {
+      "version": "2.3.2",
+      "releasedAt": "2026-07-08T13:09:21+08:00",
+      "changeCount": 2,
+      "themes": ["map", "travel"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "map",
+          "summary": "优化父子地点接驳和分类翻译",
+          "changeId": "66410bfb"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "scope": "travel",
+          "summary": "调整跨日到达上标样式",
+          "changeId": "f3a2e0be"
+        }
+      ]
+    },
+    {
+      "version": "2.3.1",
+      "releasedAt": "2026-07-08T11:30:24+08:00",
+      "changeCount": 2,
+      "themes": ["map", "shell"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "shell",
+          "summary": "调整标题栏品牌标识切换",
+          "changeId": "739793b6"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "map",
+          "summary": "优化路线接驳与出入口规则",
+          "changeId": "7f9bb826"
+        }
+      ]
+    },
+    {
+      "version": "2.3.0",
+      "releasedAt": "2026-07-08T08:57:15+08:00",
+      "changeCount": 1,
+      "themes": ["i18n"],
+      "changes": [
+        {
+          "category": "feat",
+          "scope": "i18n",
+          "summary": "完善运营提醒与多语言覆盖",
+          "breaking": false,
+          "changeId": "01be9f77"
+        }
+      ]
+    },
+    {
+      "version": "2.2.6",
+      "releasedAt": "2026-07-06T17:09:08+08:00",
+      "changeCount": 2,
+      "themes": ["map", "transit"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "提升路线规划复用效率",
+          "changeId": "37eebe04"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "细化交通数据校验报告",
+          "changeId": "1d0acf33"
+        }
+      ]
+    },
+    {
+      "version": "2.2.5",
+      "releasedAt": "2026-07-06T16:07:15+08:00",
+      "changeCount": 2,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "完善路线规划道路连通",
+          "changeId": "248ddcc7"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "优化路线规划加载反馈",
+          "changeId": "bbaa6504"
+        }
+      ]
+    },
+    {
+      "version": "2.2.4",
+      "releasedAt": "2026-07-06T13:16:50+08:00",
+      "changeCount": 2,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "接入出行页翻译并优化路线起点",
+          "changeId": "cdcf8339"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "优化地图详情和运营页翻译",
+          "changeId": "e905b611"
+        }
+      ]
+    },
+    {
+      "version": "2.2.3",
+      "releasedAt": "2026-07-06T11:43:32+08:00",
+      "changeCount": 2,
+      "themes": ["i18n"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "接入HarmonyOS Sans字体设置",
+          "changeId": "c08f0067"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "接入服务页翻译和路网参考",
+          "changeId": "e2bf044f"
+        }
+      ]
+    },
+    {
+      "version": "2.2.2",
+      "releasedAt": "2026-07-06T10:13:13+08:00",
+      "changeCount": 4,
+      "themes": ["i18n", "map", "offline"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "禁止缓存Service Worker静态响应",
+          "changeId": "924b5eff"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "接入二级页标题翻译文案",
+          "changeId": "46b38a9f"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "保留路线态路网线条",
+          "changeId": "875e8fc1"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "公交客运路线接入道路图",
+          "changeId": "d5d2d4ad"
+        }
+      ]
+    },
+    {
+      "version": "2.2.1",
+      "releasedAt": "2026-07-06T09:07:14+08:00",
+      "changeCount": 4,
+      "themes": ["account", "content", "map", "search"],
+      "changes": [
+        {
+          "category": "perf",
+          "breaking": false,
+          "summary": "延迟加载首页消息封面",
+          "changeId": "4b8dc2d6"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "区分路线规划地图高亮颜色",
+          "changeId": "f56ddfe9"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "接入账号偏好翻译文案",
+          "changeId": "a92b90b4"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "接入搜索页翻译文案",
+          "changeId": "1240283f"
+        }
+      ]
+    },
+    {
+      "version": "2.2.0",
+      "releasedAt": "2026-07-06T06:50:12+08:00",
+      "changeCount": 2,
+      "themes": ["i18n", "transit"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "补全票务订单详情字段",
+          "changeId": "d5821867"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "接入公共导航翻译目录",
+          "changeId": "fc011b2e"
+        }
+      ]
+    },
+    {
+      "version": "2.1.20",
+      "releasedAt": "2026-07-06T05:37:45+08:00",
+      "changeCount": 3,
+      "themes": ["map", "offline", "transit"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "规范客运站名并压住页面缓存",
+          "changeId": "08aaf110"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "刷新PWA缓存并优化跨日标记",
+          "changeId": "3925a199"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "禁止缓存Service Worker脚本",
+          "changeId": "13fee7d5"
+        }
+      ]
+    },
+    {
+      "version": "2.1.19",
+      "releasedAt": "2026-07-05T23:12:44+08:00",
+      "changeCount": 1,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "补全地铁折线并同步地图收藏",
+          "changeId": "dd6208de"
+        }
+      ]
+    },
+    {
+      "version": "2.1.18",
+      "releasedAt": "2026-07-05T22:02:16+08:00",
+      "changeCount": 3,
+      "themes": ["account"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增加账号语言偏好接口",
+          "changeId": "65961a6c"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增加客户端语言偏好工具",
+          "changeId": "ee06c057"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "接入账号语言偏好设置",
+          "changeId": "59016244"
+        }
+      ]
+    },
+    {
+      "version": "2.1.17",
+      "releasedAt": "2026-07-05T20:59:10+08:00",
+      "changeCount": 5,
+      "themes": ["map", "transit"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "提升地图路线引导标记层级",
+          "changeId": "3d99ab2d"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "强化选中线路轨迹样式",
+          "changeId": "0eef98bd"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "聚焦线路覆盖常驻地铁线",
+          "changeId": "561f7cf2"
+        },
+        {
+          "category": "perf",
+          "breaking": false,
+          "summary": "优化地图线路查找",
+          "changeId": "4b9cf62b"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "明确线路站点直连文案",
+          "changeId": "fec4d855"
+        }
+      ]
+    },
+    {
+      "version": "2.1.16",
+      "releasedAt": "2026-07-05T19:50:25+08:00",
+      "changeCount": 1,
+      "themes": ["transit"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "常驻显示地铁线路轨迹",
+          "changeId": "55287abc"
+        }
+      ]
+    },
+    {
+      "version": "2.1.15",
+      "releasedAt": "2026-07-05T17:30:58+08:00",
+      "changeCount": 4,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "玩家位置使用符号标记",
+          "changeId": "2ace8f89"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "显示在线玩家分类",
+          "changeId": "d59ecd09"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "补全地图分类兜底名称",
+          "changeId": "cfb5ef0b"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "显示当前地图瓦片来源",
+          "changeId": "bc11eaee"
+        }
+      ]
+    },
+    {
+      "version": "2.1.14",
+      "releasedAt": "2026-07-05T16:25:15+08:00",
+      "changeCount": 4,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "合并静态标记和玩家位置",
+          "changeId": "66e42002"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "支持切换地图瓦片源",
+          "changeId": "aa07440d"
+        },
+        {
+          "category": "perf",
+          "breaking": false,
+          "summary": "并行读取地图标记数据",
+          "changeId": "b5a09778"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "记住地图瓦片源选择",
+          "changeId": "66c7c734"
+        }
+      ]
+    },
+    {
+      "version": "2.1.13",
+      "releasedAt": "2026-07-05T15:23:35+08:00",
+      "changeCount": 1,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增加地图瓦片代理",
+          "changeId": "77f986cc"
+        }
+      ]
+    },
+    {
+      "version": "2.1.12",
+      "releasedAt": "2026-07-04T23:46:39+08:00",
+      "changeCount": 4,
+      "themes": ["map", "offline", "transit"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "按完整地图标签计算碰撞",
+          "changeId": "2b17a23c"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "刷新票务订单徽标状态",
+          "changeId": "454ad506"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "展示PWA安装文案",
+          "changeId": "452ce45b"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "完善离线兜底页",
+          "changeId": "8d480dda"
+        }
+      ]
+    },
+    {
+      "version": "2.1.11",
+      "releasedAt": "2026-07-04T22:28:15+08:00",
+      "changeCount": 5,
+      "themes": ["map", "transit"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增加票务订单详情页",
+          "changeId": "badd0d9f"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "合并票务订单徽标计数",
+          "changeId": "32d5cab0"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "清理过期票务占座",
+          "changeId": "dbb5ff7c"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "在内部任务清理票务占座",
+          "changeId": "2ccc9199"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修正地图标签和单向站方向",
+          "changeId": "43d8d41a"
+        }
+      ]
+    },
+    {
+      "version": "2.1.10",
+      "releasedAt": "2026-07-04T21:16:51+08:00",
+      "changeCount": 3,
+      "themes": ["transit"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "展示票务订单草稿",
+          "changeId": "d3bd829e"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "优化票务草稿标题",
+          "changeId": "9cdd8314"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "在账号页展示票务草稿",
+          "changeId": "60166c33"
+        }
+      ]
+    },
+    {
+      "version": "2.1.9",
+      "releasedAt": "2026-07-04T20:06:05+08:00",
+      "changeCount": 4,
+      "themes": ["map", "transit"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "优化收藏列表空状态",
+          "changeId": "568ec389"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "分组展示区域关联地点",
+          "changeId": "8ff3e1b9"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "启用票务订单草稿入口",
+          "changeId": "078c2baa"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修正班次与路线文本样式",
+          "changeId": "64117f82"
+        }
+      ]
+    },
+    {
+      "version": "2.1.8",
+      "releasedAt": "2026-07-04T18:58:03+08:00",
+      "changeCount": 4,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增加区域地点路线接驳",
+          "changeId": "137a8741"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "接入地图地点收藏分享",
+          "changeId": "1e3d6411"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "在本地历史展示地图收藏",
+          "changeId": "2529cf5f"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "支持筛选地图收藏",
+          "changeId": "11166811"
+        }
+      ]
+    },
+    {
+      "version": "2.1.7",
+      "releasedAt": "2026-07-04T17:11:57+08:00",
+      "changeCount": 3,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增加地图道路步行估算",
+          "changeId": "14be6d98"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "展示关联子地点",
+          "changeId": "957dc0c2"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "提高代表地点显示优先级",
+          "changeId": "4ee322fa"
+        }
+      ]
+    },
+    {
+      "version": "2.1.6",
+      "releasedAt": "2026-07-04T16:05:18+08:00",
+      "changeCount": 2,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "扩展地图路线规划方案",
+          "changeId": "fd79c6f6"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修正地图路线区间展示",
+          "changeId": "4fc4543f"
+        }
+      ]
+    },
+    {
+      "version": "2.1.5",
+      "releasedAt": "2026-07-04T14:57:38+08:00",
+      "changeCount": 3,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "优化路线端点候选显示",
+          "changeId": "ea4aab7c"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "优化地图公交路线候选",
+          "changeId": "3d5b4f41"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "优化地图路线步骤展示",
+          "changeId": "b723db7f"
+        }
+      ]
+    },
+    {
+      "version": "2.1.4",
+      "releasedAt": "2026-07-04T13:51:19+08:00",
+      "changeCount": 5,
+      "themes": ["account", "map"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "扩展移动端地图视口高度",
+          "changeId": "67b69b99"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "提升账号状态点可见性",
+          "changeId": "8b7688e8"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "明确账号通知总开关文案",
+          "changeId": "0e79cc95"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "支持路线方式列表折叠",
+          "changeId": "886b740f"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "标记隐藏路线方式激活态",
+          "changeId": "cf8b5036"
+        }
+      ]
+    },
+    {
+      "version": "2.1.3",
+      "releasedAt": "2026-07-04T11:45:36+08:00",
+      "changeCount": 3,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "优化地图路线卡片和客运站名",
+          "changeId": "a81857a9"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "支持路线端点编辑候选",
+          "changeId": "0e8f0ca1"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "支持路线端点地图点选",
+          "changeId": "a78e54e1"
+        }
+      ]
+    },
+    {
+      "version": "2.1.2",
+      "releasedAt": "2026-07-04T08:58:26+08:00",
+      "changeCount": 3,
+      "themes": ["map", "transit"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "优化地图路线规划卡片",
+          "changeId": "1b9ea674"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "优化统一班次卡片样式",
+          "changeId": "1d962cb4"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "支持POI投稿图片上传",
+          "changeId": "d61aa93a"
+        }
+      ]
+    },
+    {
+      "version": "2.1.1",
+      "releasedAt": "2026-07-03T23:26:53+08:00",
+      "changeCount": 3,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增加地图路线初步方案",
+          "changeId": "507c5ed2"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "高亮地图路线估算方案",
+          "changeId": "1438f78a"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "支持POI投稿图片链接",
+          "changeId": "18e8d8c9"
+        }
+      ]
+    },
+    {
+      "version": "2.1.0",
+      "releasedAt": "2026-07-03T22:01:51+08:00",
+      "changeCount": 1,
+      "themes": ["portal"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "精简出行页服务入口",
+          "changeId": "c2b4aa94"
+        }
+      ]
+    },
+    {
+      "version": "2.0.13",
+      "releasedAt": "2026-07-03T19:32:04+08:00",
+      "changeCount": 1,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "优化地图面板收起与引导标记动画",
+          "changeId": "ba1a1d24"
+        }
+      ]
+    },
+    {
+      "version": "2.0.12",
+      "releasedAt": "2026-07-03T18:01:36+08:00",
+      "changeCount": 1,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "优化地图定位与道路标签",
+          "changeId": "d640c9d4"
+        }
+      ]
+    },
+    {
+      "version": "2.0.11",
+      "releasedAt": "2026-07-03T16:30:24+08:00",
+      "changeCount": 5,
+      "themes": ["map", "transit"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "优化搜索筛选与班次卡片",
+          "changeId": "9b384758"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "保留路网模式非交通地点标签",
+          "changeId": "ddd0a1bd"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "支持地图双指捏合缩放",
+          "changeId": "caf6a1c0"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增加地图周边搜索模式",
+          "changeId": "76703520"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增加地图中心定位点",
+          "changeId": "61bb98d8"
+        }
+      ]
+    },
+    {
+      "version": "2.0.10",
+      "releasedAt": "2026-07-03T14:54:08+08:00",
+      "changeCount": 3,
+      "themes": ["transit"],
+      "changes": [
+        {
+          "category": "perf",
+          "breaking": false,
+          "summary": "缓存统一班次查询结果",
+          "changeId": "88cad9ce"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增加票务订单草稿入口",
+          "changeId": "152fc838"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增加票务订单查询与取消",
+          "changeId": "4d5c4fd0"
+        }
+      ]
+    },
+    {
+      "version": "2.0.9",
+      "releasedAt": "2026-07-03T13:46:21+08:00",
+      "changeCount": 1,
+      "themes": ["transit"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增加票务可售性预检",
+          "changeId": "cb2791ec"
+        }
+      ]
+    },
+    {
+      "version": "2.0.8",
+      "releasedAt": "2026-07-03T12:27:11+08:00",
+      "changeCount": 1,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增加地图路线规划草稿入口",
+          "changeId": "18e6d1b5"
+        }
+      ]
+    },
+    {
+      "version": "2.0.7",
+      "releasedAt": "2026-07-03T11:12:18+08:00",
+      "changeCount": 1,
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "fix",
+          "scope": "map",
+          "summary": "优化地图线路细节",
+          "breaking": false,
+          "changeId": "268dca03"
+        }
+      ]
+    },
+    {
+      "version": "2.0.6",
+      "releasedAt": "2026-07-03T10:00:06+08:00",
+      "changeCount": 1,
+      "themes": ["account"],
+      "changes": [
+        {
+          "category": "feat",
+          "scope": "account",
+          "summary": "接入账号同步",
+          "breaking": false,
+          "changeId": "f2c94ef6"
+        }
+      ]
+    },
+    {
+      "version": "2.0.5",
+      "releasedAt": "2026-07-03T03:10:56+08:00",
+      "changeCount": 3,
+      "themes": ["content"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "支持内容素材上传",
+          "changeId": "a07d9181"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "自动回填内容素材引用",
+          "changeId": "c277ccde"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "预览旧专题正文迁移",
+          "changeId": "a7b9368a"
+        }
+      ]
+    },
+    {
+      "version": "2.0.4",
+      "releasedAt": "2026-07-03T02:09:33+08:00",
+      "changeCount": 3,
+      "themes": ["content"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "在内容后台展示旧资源差异",
+          "changeId": "23cdbcdc"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "生成旧内容素材清单",
+          "changeId": "6bcd1c52"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "接入内容素材审核",
+          "changeId": "5d6a11e5"
+        }
+      ]
+    },
+    {
+      "version": "2.0.3",
+      "releasedAt": "2026-07-03T00:57:24+08:00",
+      "changeCount": 5,
+      "themes": ["account", "content", "offline"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修正旧内容图片重写规则",
+          "changeId": "9c884d09"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "兼容子路径下的离线缓存",
+          "changeId": "7b2352a6"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "合并账号入口计数徽标",
+          "changeId": "d697e90b"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "适配临时子路径公共资源",
+          "changeId": "74261212"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "完善旧内容资源差异报告",
+          "changeId": "7b1ab809"
+        }
+      ]
+    },
+    {
+      "version": "2.0.2",
+      "releasedAt": "2026-07-02T23:48:25+08:00",
+      "changeCount": 3,
+      "themes": ["content", "transit"],
+      "changes": [
+        {
+          "category": "feat",
+          "scope": "transit",
+          "summary": "支持班次起终点筛选",
+          "breaking": false,
+          "changeId": "464e85b6"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "在班次查询展示客运提醒",
+          "changeId": "8642d393"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复旧内容资源回退路径",
+          "changeId": "f93f61b9"
+        }
+      ]
+    },
+    {
+      "version": "2.0.1",
+      "releasedAt": "2026-07-02T22:27:26+08:00",
+      "changeCount": 3,
+      "themes": ["transit"],
+      "changes": [
+        {
+          "category": "feat",
+          "scope": "transit",
+          "summary": "接入统一班次查询与本地记录",
+          "breaking": false,
+          "changeId": "44bc8358"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增加可排班服务配置",
+          "changeId": "9bb63f22"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增加班次日期筛选",
+          "changeId": "b1c0a26e"
+        }
+      ]
+    },
+    {
+      "version": "2.0.0",
+      "releasedAt": "2026-07-02T20:39:58+08:00",
+      "changeCount": 6,
+      "themes": ["account", "admin", "content", "map", "offline", "services", "transit", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "web",
+          "summary": "将旧版分散的首页、线路图、车站大屏和客运页面整合为统一导航",
+          "changeId": "2.0.0:1"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "map",
+          "summary": "重构地图探索，在同一张全屏地图中查看地点、道路和公共交通并规划路线",
+          "changeId": "2.0.0:2"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "transit",
+          "summary": "统一线路、站点、运营提醒和车站大屏，并延续旧版公交、地铁与客运数据",
+          "changeId": "2.0.0:3"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "account",
+          "summary": "接入临东通账号，集中管理主题、通知、行程提醒和本地记录",
+          "changeId": "2.0.0:4"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "admin",
+          "summary": "新增内容、地图、交通和服务入口审核后台，统一已发布信息",
+          "changeId": "2.0.0:5"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "scope": "offline",
+          "summary": "升级可安装和离线使用的响应式体验，适配移动端、桌面端与深浅色主题",
+          "changeId": "2.0.0:6"
+        }
+      ]
+    }
+  ]
+}

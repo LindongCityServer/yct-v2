@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
+  "releases": [
+    {
+      "version": "2.9.0",
+      "releasedAt": "2026-08-08T10:03:19.058Z",
+      "sourceFingerprint": "f782eebfb5f7593d8b2b4a7939a7a9f8201e5724d299259c7964235d86cfb592",
+      "themes": ["map", "admin", "materials", "portal", "api", "web", "changelog", "help"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "为地点和路线生成可恢复现场的短链接，并支持复制、二维码和分享图"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增加步行与打车备选路线和少路段方案，路线规划会避开水域及通行阻断区域"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "将 POI 新建与编辑升级为独立可视化工作台，支持多种几何、Y 高度、通行限制和行政区绑定"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "将运营内容编辑升级为独立页面，支持未保存提醒和快捷保存"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "完善行政区划编辑、标签位置绑定和重复代码提示"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增强地铁导视编辑器，支持组合框子元素、描边样式和 RMP 工程近似导入"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "统一全站操作反馈，并增加地图搜索与重置视图快捷键"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "新增完整版本更新页面，可从页脚和账号设置查看当前版本及历史记录"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "扩充多语言帮助内容，覆盖地图分享、快捷键、POI 投稿、通知、离线、物料和 RMP 导入"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "完善公共只读 API 的 OpenAPI 模型和统一错误响应，方便 AI 与第三方客户端接入"
+        },
+        {
+          "category": "perf",
+          "breaking": false,
+          "summary": "为公开地图标记接口增加后台快照，降低外部数据源冷启动和短时故障影响"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "为门户旧文章链接补充未发布、跨域异常提示和手动打开入口"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "为前台与后台页面补全简体中文、繁体中文和英文页面标题及搜索摘要"
+        }
+      ]
+    }
+  ]
+}

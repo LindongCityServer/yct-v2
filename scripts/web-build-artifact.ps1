@@ -554,10 +554,12 @@ if (-not $SkipBuild) {
   $previousPublicBasePath = $env:NEXT_PUBLIC_YCT_BASE_PATH
   $previousServerBasePath = $env:YCT_BASE_PATH
   $previousBuildId = $env:NEXT_PUBLIC_YCT_BUILD_ID
+  $previousRequirePreparedRelease = $env:YCT_REQUIRE_PREPARED_RELEASE
   try {
     $env:NEXT_PUBLIC_YCT_BASE_PATH = $basePathValue
     $env:YCT_BASE_PATH = $basePathValue
     $env:NEXT_PUBLIC_YCT_BUILD_ID = $buildId
+    $env:YCT_REQUIRE_PREPARED_RELEASE = "true"
     & $pnpm --filter "@yct/web" build
     if ($LASTEXITCODE -ne 0) {
       throw "Next.js build failed with exit code $LASTEXITCODE."
@@ -566,6 +568,7 @@ if (-not $SkipBuild) {
     $env:NEXT_PUBLIC_YCT_BASE_PATH = $previousPublicBasePath
     $env:YCT_BASE_PATH = $previousServerBasePath
     $env:NEXT_PUBLIC_YCT_BUILD_ID = $previousBuildId
+    $env:YCT_REQUIRE_PREPARED_RELEASE = $previousRequirePreparedRelease
   }
 }
 
