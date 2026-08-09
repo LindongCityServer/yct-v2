@@ -459,6 +459,41 @@ export interface MapSpatialProfileUpdatedPayload {
   updatedAt: ISODateTimeString;
 }
 
+export interface RoutingTopologyInvalidatedPayload {
+  sourceEventId: string;
+  sourceKind: 'poi' | 'legacy_map_marker' | 'transit_revision' | 'map_spatial_profile';
+  sourceIds: string[];
+  reason:
+    | 'poi_published'
+    | 'poi_spatial_updated'
+    | 'poi_archived'
+    | 'legacy_map_marker_updated'
+    | 'legacy_map_marker_archived'
+    | 'transit_revision_published'
+    | 'map_spatial_profile_updated';
+  invalidatedAt: ISODateTimeString;
+}
+
+export interface ApplicationReleasePublishedPayload {
+  version: string;
+  buildId: string;
+  headSha: string;
+  releasedAt: ISODateTimeString;
+  changeCount: number;
+}
+
+export interface ReleaseNotesViewedPayload {
+  version: string;
+  buildId: string;
+  viewedAt: ISODateTimeString;
+}
+
+export interface MapShareLinkCreatedPayload {
+  shareId: string;
+  targetKind: 'marker' | 'route';
+  createdAt: ISODateTimeString;
+}
+
 export interface AdministrativeAreaCreatedPayload {
   area: AdministrativeArea;
 }
@@ -1187,6 +1222,8 @@ export interface AdminMembershipUpdatedPayload {
 }
 
 export type YctEventPayloadMap = {
+  ApplicationReleasePublished: ApplicationReleasePublishedPayload;
+  ReleaseNotesViewed: ReleaseNotesViewedPayload;
   ContentDraftUpdated: ContentDraftUpdatedPayload;
   ContentPoiBindingsUpdated: ContentPoiBindingsUpdatedPayload;
   ContentLegacyAdopted: ContentLegacyAdoptedPayload;
@@ -1231,6 +1268,8 @@ export type YctEventPayloadMap = {
   TransitModeProfileUpdated: TransitModeProfileUpdatedPayload;
   TileProviderSelected: TileProviderSelectedPayload;
   MapSpatialProfileUpdated: MapSpatialProfileUpdatedPayload;
+  RoutingTopologyInvalidated: RoutingTopologyInvalidatedPayload;
+  MapShareLinkCreated: MapShareLinkCreatedPayload;
   AdministrativeAreaCreated: AdministrativeAreaCreatedPayload;
   AdministrativeAreaUpdated: AdministrativeAreaUpdatedPayload;
   AdministrativeAreaPublished: AdministrativeAreaPublishedPayload;

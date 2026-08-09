@@ -87,6 +87,8 @@ export interface PlayerLocationPresenceChangedPayload {
 | `MaterialTransitNetworkProjectDeleted`       | 用户显式删除线网项目草稿      | 清理用户级物料线网草稿和相关缓存；仅切回服务器线网不会删除草稿                                                                                                                                                                                  |
 | `TileProviderSelected`                       | 地图瓦片源被选择              | 记录混合内容降级或管理员覆盖                                                                                                                                                                                                                    |
 | `MapSpatialProfileUpdated`                   | 管理员更新地图空间设置        | 地图空间读取缓存、路线速度成本和管理员审计；Payload 携带稳定地图配置及本次变更字段                                                                                                                                                              |
+| `RoutingTopologyInvalidated`                 | 路网、空间阻断或交通拓扑变化  | 由 POI、旧标记、交通版本或地图空间设置事件派生，通知路线读取模型和缓存按业务键失效；Payload 只携带上游事件 ID、来源类型、来源 ID、原因和失效时间                                                                                                |
+| `MapShareLinkCreated`                        | 地图短分享链接首次创建        | 分享审计和后续访问统计；Payload 只携带 `shareId`、目标类型和创建时间，不复制地点 ID、路线坐标或分享正文                                                                                                                                         |
 | `PlayerLocationsObserved`                    | BDSLM 玩家位置源成功返回快照  | 持久化实时玩家位置、刷新地图位置缓存；Payload 仅包含来源、观测时间、在线玩家名列表和数量                                                                                                                                                        |
 | `PlayerLocationPresenceChanged`              | 玩家上线或下线状态变化        | 持久化最后在线坐标、地图当前账号位置展示和审计；Payload 包含玩家名、前后状态、X/Z、观测时间与最后在线时间                                                                                                                                       |
 | `TripReminderScheduled`                      | 行程提醒创建或同步到账号      | 定时任务、Web Push；登录用户同步待提醒记录到服务端时会发布该事件，payload 携带 `reminderId`、`remindAt`、`title`、`source` 和 `userId`                                                                                                          |
@@ -234,6 +236,30 @@ interface LoginRequiredPayload {
 
 用户触发的受保护操作收到 HTTP 401，或进入本身必须登录的页面时，调用方发布 `yct:auth-login-required`。根布局监听器展示提示，并在默认 2,400 ms 的提示周期结束后进入临东通登录流程。公开页面上的登录说明、匿名能力提示和后台静默会话探测不得发布该事件，避免无操作自动跳转。
 
+全站瞬时操作反馈统一发布客户端 `yct:toast-requested`，不进入领域 EventBus 或 Outbox：
+
+```ts
+interface ClientToastRequestedPayload {
+  message: string;
+  tone?: 'info' | 'success' | 'warning' | 'error';
+  durationMs?: number;
+  dedupeKey?: string;
+}
+```
+
+根布局只挂载一个 Toast viewport，负责最多三条提示的队列、按 `dedupeKey` 替换、自动消失、悬停/聚焦暂停和手动关闭。字段校验、导入错误清单及需要用户处理的持久状态仍在原业务组件内展示，不得改成会自动消失的 Toast。
+
+地图键盘桥只发布客户端瞬时命令，不直接操作地图组件：
+
+```ts
+interface MapViewShortcutRequestedPayload {
+  command: 'focus_search' | 'reset_view';
+  source: 'keyboard';
+}
+```
+
+`/` 发布 `focus_search`，`0` 发布 `reset_view`；地图页订阅 `yct:map-view-shortcut-requested` 后分别聚焦搜索框或恢复默认视图。输入控件获得焦点时键盘桥不得发布这些命令。
+
 临东市服务器静态门户使用浏览器 `CustomEvent` 解耦头图和入口交互。这些事件只存在于当前页面，不进入领域 EventBus 或 Outbox：
 
 ```ts
@@ -313,6 +339,7 @@ interface PortalLegacyWordPressNoticeVisibilityPayload {
 | `PoiSubmissionUpdated`                     | `poiId`、`changedFields`（含 `spatial`）     | 失效地图/搜索/路由接入缓存                 |
 | `TransitDataRevisionStationUpdated`        | `nextCoordinate`（含可选 Y）、运营状态前后值 | 刷新站点、线路和路线规划读取模型           |
 | `MapSpatialProfileUpdated`                 | `profile`、`changedFields`                   | 刷新默认高度、道路成本、票价和地图配置缓存 |
+| `RoutingTopologyInvalidated`               | `sourceEventId`、`sourceIds`、`reason`       | 失效路线图、接入点索引和路线结果缓存       |
 | `AdministrativeAreaCreated` / `Updated`    | `area`、更新字段（含标签 POI 绑定）          | 更新独立行政区划草稿和空间索引             |
 | `AdministrativeAreaPublished` / `Archived` | `area`、前一状态（归档时）                   | 更新公开行政区划图层与搜索归属索引         |
 
@@ -324,6 +351,7 @@ interface PortalLegacyWordPressNoticeVisibilityPayload {
 - 当前行程提醒投递已使用应用级共享内存事件总线连接 `TripReminderScheduled` 和通知投递监听器，投递记录持久化到 `.yct-data/push-delivery-store.json`。这解决单进程开发环境的监听器解耦，但不替代正式数据库 Outbox。
 - 当前工程已新增 `.yct-data/event-outbox-store.json` 作为单机开发阶段的本地事件 Outbox；业务 workflow 发布事件时先写 Outbox，再交给共享内存事件总线分发。受 `YCT_INTERNAL_TASK_TOKEN` 保护的 `/api/internal/events/process` 可重放 `queued` / `failed` 事件，用于开发期恢复失败监听器和审计验证；它仍不替代数据库事务内 Outbox。
 - 交通版本、线路、站点和交通方式配置变更后的概览/线路标记缓存失效由 `transit-cache-invalidation-listeners.ts` 订阅领域事件完成，交通 workflow 不直接调用缓存模块；Outbox 重放入口会先注册该监听器。
+- POI 几何、`categoryId = water` 或通用 `spatial.traversalBarrier`、旧地图标记、交通版本及地图空间设置变化后，由 `routing-topology-invalidation-listeners.ts` 派生 `RoutingTopologyInvalidated`；业务 workflow 不直接调用路线缓存。水域分类和通用通行阻断区域默认只阻断非显式直线路径，已发布道路、桥隧和交通线路仍是允许跨越的拓扑边。
 - 线路停靠位置作为线路快照 `stops[].stopLocationRefs` 的一部分保存；位置变化继续发布 `TransitDataRevisionLineUpdated`，并在 `changedFields` 中记录 `stops`，无需新增耦合到地图或物料模块的专用事件。
 - 内部 Push 投递任务处理到期队列前，会按用户和通知类型检查最小投递间隔；触发限频时把投递延后到下一次允许时间，并记录 `push_rate_limited`。
 - 公开数据发布、Push、Webhook、票务同步必须进入 Transactional Outbox。
@@ -337,3 +365,12 @@ interface PortalLegacyWordPressNoticeVisibilityPayload {
 - 内容归档恢复严格按 `archived -> draft -> pending_review` 流转，分别发布 `ContentRestored` 与 `ContentSubmitted`，不得通过导入脚本把历史内容直接改成公开状态。
 - Markdown、素材上传、地图几何、瓦片模板、POI 分类和旧数据导入批次由 `@yct/schemas` 做运行时校验。
 - API 或 Service 在写库前必须先通过 schema 校验；写库成功后再发布领域事件。
+
+## 7. 发布版本事件
+
+历史版本清单已由 Git 提交一次性回填并固化在 `apps/web/release-history.json`；从当前历史截止点开始，发布前必须运行 `pnpm release:prepare`，把用户可感知变更、稳定主题、发布时间和源码指纹写入 `apps/web/release-notes.json`。构建阶段合并两份不可变清单，不重新计算历史，也不让页面直接访问 Git 或调用其他业务 Service。
+
+- `ApplicationReleasePublished`：部署健康检查通过后由发布编排器发出，Payload 包含 `version`、`buildId`、`headSha`、`releasedAt` 和用户可感知变更数量。监听器可用于部署审计、缓存刷新和外部通知。
+- `ReleaseNotesViewed`：用户打开版本更新记录后由客户端事件桥发出，Payload 包含 `version`、`buildId` 和 `viewedAt`。当前不做网络上报，后续统计只能新增监听器。
+
+发布清单从首个用户可感知提交批次的 `2.0.0` 开始。提交归并窗口固定为 60 分钟，以批次首个提交到批次末个提交的总跨度判断，禁止按相邻提交间隔链式吞并。历史 Conventional Commit 按 `type(scope)` 解析；早期无前缀提交只在摘要含明确功能或修复动词时纳入，并从稳定领域关键词推断主题。相邻批次之间连续 12 小时没有提交时，才视为新的发布会话；不以自然日或 0 点切分，因此深夜上线、凌晨补提交仍可保持同一会话。只要某批次包含历史上从未出现过的稳定主题，即使在同一会话内也可升 minor；Asia/Shanghai 同一自然日最多升一次 minor，同一发布会话跨过午夜时也最多升一次 minor。已出现主题的同会话批次升 patch；不同会话、主题不同且包含 `feat` 时升 minor；破坏性变更升 major。仅 `feat`、`fix`、`perf` 和 `style` 进入用户更新记录，且过滤 `deploy`、`contracts`、`core` 等内部 scope。正式部署前如果源码继续变化，必须运行 `pnpm release:prepare --amend` 更新清单指纹后再构建。

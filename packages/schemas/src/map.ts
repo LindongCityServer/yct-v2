@@ -165,6 +165,17 @@ export const mapMarkerSpatialMetadataSchema = z
       .optional(),
     verticalConnectorKind: z.enum(['ramp', 'stairs', 'escalator', 'elevator']).optional(),
     accessible: z.boolean().optional(),
+    traversalBarrier: z
+      .object({
+        kind: z.literal('blocked_area'),
+        blockedModes: z
+          .array(z.enum(['walk', 'taxi', 'bus', 'coach']))
+          .min(1)
+          .max(4)
+          .transform((modes) => Array.from(new Set(modes)))
+          .optional(),
+      })
+      .optional(),
     style: mapStyleBindingSchema.optional(),
     volume: mapVolumeGeometrySchema.optional(),
     dynamicSymbol: z
@@ -385,6 +396,36 @@ function validatePoiAddressRoadBinding(
   }
 }
 
+function validatePoiTraversalBarrierGeometry(
+  value: {
+    categoryId?: string;
+    geometry?: z.infer<typeof mapGeometrySchema>;
+    spatial?: z.infer<typeof mapMarkerSpatialMetadataSchema>;
+  },
+  context: z.RefinementCtx,
+): void {
+  if (!value.geometry) {
+    return;
+  }
+  const regionGeometry = ['Rectangle', 'MultiRectangle', 'Polygon', 'MultiPolygon'].includes(
+    value.geometry.type,
+  );
+  if (value.categoryId?.trim().toLowerCase() === 'water' && !regionGeometry) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: '水域分类只允许使用矩形或多边形区域几何',
+      path: ['geometry'],
+    });
+  }
+  if (value.spatial?.traversalBarrier && !regionGeometry) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: '空间阻断只允许用于矩形或多边形区域 POI',
+      path: ['spatial', 'traversalBarrier'],
+    });
+  }
+}
+
 export const poiSubmissionSchema = z
   .object({
     title: nonEmptyTextSchema,
@@ -404,7 +445,8 @@ export const poiSubmissionSchema = z
     facilities: poiFacilitiesSchema,
     visibility: z.enum(['private', 'public_pending_review']),
   })
-  .superRefine(validatePoiAddressRoadBinding);
+  .superRefine(validatePoiAddressRoadBinding)
+  .superRefine(validatePoiTraversalBarrierGeometry);
 
 export const poiSubmissionReviewDecisionSchema = z.object({
   decision: z.enum(['approved', 'rejected']),
@@ -430,15 +472,16 @@ const poiSubmissionAdminUpdateBaseSchema = z.object({
   facilities: poiFacilitiesSchema,
 });
 
-export const poiSubmissionAdminUpdateSchema = poiSubmissionAdminUpdateBaseSchema.superRefine(
-  validatePoiAddressRoadBinding,
-);
+export const poiSubmissionAdminUpdateSchema = poiSubmissionAdminUpdateBaseSchema
+  .superRefine(validatePoiAddressRoadBinding)
+  .superRefine(validatePoiTraversalBarrierGeometry);
 
 export const poiSubmissionAdminCreateSchema = poiSubmissionAdminUpdateBaseSchema
   .extend({
     geometry: mapGeometrySchema,
   })
-  .superRefine(validatePoiAddressRoadBinding);
+  .superRefine(validatePoiAddressRoadBinding)
+  .superRefine(validatePoiTraversalBarrierGeometry);
 
 export const poiConflictDecisionUpdateSchema = z.object({
   submissionId: idSchema,
@@ -474,7 +517,8 @@ export const legacyMapMarkerAdminUpdateSchema = z
     addressRoadMarkerId: z.union([poiAddressRoadMarkerIdSchema.unwrap(), z.literal('')]).optional(),
     facilities: poiFacilitiesSchema,
   })
-  .superRefine(validatePoiAddressRoadBinding);
+  .superRefine(validatePoiAddressRoadBinding)
+  .superRefine(validatePoiTraversalBarrierGeometry);
 
 export const mapMarkerSourceConfigSchema = z.object({
   id: idSchema,
@@ -486,6 +530,28 @@ export const mapMarkerSourceConfigSchema = z.object({
 export const mapFavoritesSchema = z.object({
   markerIds: z.array(z.string().trim().min(1).max(220)).max(1000),
 });
+
+const compactMapRouteShareStateSchema = z.tuple([
+  z.string().min(1).max(64),
+  z.string().min(1).max(64),
+  z.string().max(200),
+  z.string().max(200),
+  z.string().max(220),
+  z.string().max(220),
+  z.string().max(16),
+  z.string().max(120),
+]);
+
+export const mapShareLinkCreateSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('marker'),
+    markerId: z.string().trim().min(1).max(220),
+  }),
+  z.object({
+    kind: z.literal('route'),
+    state: compactMapRouteShareStateSchema,
+  }),
+]);
 
 export type TileProviderConfigInput = z.infer<typeof tileProviderConfigSchema>;
 export type MapSpatialProfileUpdateInput = z.infer<typeof mapSpatialProfileUpdateSchema>;
@@ -501,3 +567,4 @@ export type PoiSubmissionImageReviewUpdateInput = z.infer<
 >;
 export type MapMarkerSourceConfigInput = z.infer<typeof mapMarkerSourceConfigSchema>;
 export type MapFavoritesInput = z.infer<typeof mapFavoritesSchema>;
+export type MapShareLinkCreateInput = z.infer<typeof mapShareLinkCreateSchema>;

@@ -163,6 +163,13 @@ export type MapNetworkDirection = 'both' | 'forward' | 'reverse';
 export type MapNetworkKind = 'road' | 'pedestrian';
 export type MapVerticalConnectorKind = 'ramp' | 'stairs' | 'escalator' | 'elevator';
 export type MapTravelMode = 'walk' | 'taxi' | 'bus' | 'coach';
+export type MapTraversalBarrierKind = 'blocked_area';
+
+export interface MapTraversalBarrier {
+  kind: MapTraversalBarrierKind;
+  /** 未指定时阻断所有非显式路网/交通线路的直接穿越。 */
+  blockedModes?: MapTravelMode[];
+}
 
 export interface MapStyleBinding {
   fillColor?: string;
@@ -216,6 +223,7 @@ export interface MapMarkerSpatialMetadata {
   allowedModes?: MapTravelMode[];
   verticalConnectorKind?: MapVerticalConnectorKind;
   accessible?: boolean;
+  traversalBarrier?: MapTraversalBarrier;
   style?: MapStyleBinding;
   volume?: MapVolumeGeometry;
   dynamicSymbol?: MapDynamicSymbol;
@@ -1536,6 +1544,33 @@ export interface UserMapFavorites {
   ldpassUserId: string;
   markerIds: string[];
   updatedAt: ISODateTimeString;
+}
+
+export type CompactMapRouteShareState = [
+  origin: string,
+  destination: string,
+  originLabel: string,
+  destinationLabel: string,
+  originId: string,
+  destinationId: string,
+  modes: string,
+  selectedOptionId: string,
+];
+
+export type MapShareLinkTarget =
+  | {
+      kind: 'marker';
+      markerId: string;
+    }
+  | {
+      kind: 'route';
+      state: CompactMapRouteShareState;
+    };
+
+export interface MapShareLink {
+  id: string;
+  target: MapShareLinkTarget;
+  createdAt: ISODateTimeString;
 }
 
 export type PushDeviceSubscriptionStatus = 'active' | 'revoked';
