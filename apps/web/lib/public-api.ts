@@ -2,6 +2,8 @@ import type {
   ApiMeta,
   DataSourceStatus,
   LocaleCode,
+  PublicApiErrorCode,
+  PublicApiErrorResponse,
   PublicApiMeta,
   PublicApiVersion,
 } from '@yct/contracts';
@@ -68,6 +70,28 @@ export function createPublicJsonResponse<T>(
   );
   response.headers.set('Vary', 'Accept, Accept-Language');
   return response;
+}
+
+export function createPublicErrorResponse(input: {
+  code: PublicApiErrorCode;
+  message: string;
+  meta: PublicApiMeta;
+  status: number;
+  cacheSeconds?: number;
+}): NextResponse<PublicApiErrorResponse> {
+  return createPublicJsonResponse<PublicApiErrorResponse>(
+    {
+      error: {
+        code: input.code,
+        message: input.message,
+      },
+      meta: input.meta,
+    },
+    {
+      status: input.status,
+      cacheSeconds: input.cacheSeconds,
+    },
+  );
 }
 
 export function publicSiteUrl(path: string): string {

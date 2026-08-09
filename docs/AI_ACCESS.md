@@ -1,6 +1,6 @@
 # AI 接入基线
 
-更新时间：2026-08-06
+更新时间：2026-08-08
 
 雨城通当前采用“A+B，远期增加 D”的 AI 接入路线：先建设可发现的语义化页面和稳定公共只读 API，再按实际调用场景增加 MCP 工具服务。当前不部署大模型、Embedding、向量数据库或站内 RAG Worker。
 
@@ -35,6 +35,14 @@ interface PublicApiMeta {
   canonicalUrl?: string;
   message?: string;
 }
+
+interface PublicApiErrorResponse {
+  error: {
+    code: 'not_found' | 'source_unavailable';
+    message: string;
+  };
+  meta: PublicApiMeta;
+}
 ```
 
 AI 或第三方客户端处理时间敏感数据时，必须同时检查 `sourceStatus`、`generatedAt`、`asOf` 和 `timezone`，不能只根据正文作出“当前状态”判断。
@@ -56,6 +64,8 @@ AI 或第三方客户端处理时间敏感数据时，必须同时检查 `source
 
 公共接口运行在现有 Next.js standalone 应用内，复用当前已发布读模型。默认响应使用短缓存和 `Access-Control-Allow-Origin: *`，但不会开放写入能力。
 
+地图标记接口优先读取 `.yct-data/map-marker-public-snapshot.json` 中最近一次成功快照；`run-yct-internal-tasks.ps1` 会在后台刷新该快照，公开 AI 请求不会等待外部地图源的冷启动。响应中的 `asOf` 表示快照数据时间，不能把请求时间当成地图数据更新时间。
+
 生产部署需要确认：
 
 1. `YCT_PUBLIC_SITE_URL` 使用真实公网地址，不能是 `localhost` 或 `127.0.0.1`。
@@ -75,9 +85,11 @@ pwsh -NoProfile -ExecutionPolicy Bypass `
 烟雾检查会验证 `robots.txt`、`sitemap.xml`、`llms.txt`、公共 API 目录和 OpenAPI，同时拦截以下配置错误：
 
 - canonical URL 或文档 URL 指向本机、内网端口、错误域名或错误 BasePath。
+- `robots.txt` 的 `Host` 或 `Sitemap` 指向 localhost、错误域名或错误 BasePath。
 - 公共 API 缺少 `Access-Control-Allow-Origin: *`。
 - 反代把公开短缓存覆盖成全局 `no-store`。
 - 公共 JSON 接口缺少 `X-Robots-Tag: noindex`。
+- 地图标记接口不是 HTTP 200，或无法返回 `apiVersion: v1`。
 
 如果反代需要限流，应根据实际流量和服务器容量在 Nginx 或上游网关中配置，并保留查询参数、`data/meta` JSON 结构和应用响应头。没有确认容量前不要在部署模板中猜测固定限额。
 

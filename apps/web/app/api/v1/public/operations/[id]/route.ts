@@ -1,6 +1,7 @@
 import { readOperationDetail } from '../../../../../../lib/operations-content';
 import {
   createPublicApiMeta,
+  createPublicErrorResponse,
   createPublicJsonResponse,
   publicSiteUrl,
 } from '../../../../../../lib/public-api';
@@ -22,16 +23,20 @@ export async function GET(request: Request, { params }: OperationDetailRouteProp
       }
     : undefined;
 
-  return createPublicJsonResponse(
-    {
-      data: item,
-      meta: createPublicApiMeta(request, response.meta, {
-        canonicalPath: `/api/v1/public/operations/${encodeURIComponent(decodedId)}`,
-        asOf: item?.publishedAt,
-      }),
-    },
-    { status: item ? 200 : 404 },
-  );
+  const meta = createPublicApiMeta(request, response.meta, {
+    canonicalPath: `/api/v1/public/operations/${encodeURIComponent(decodedId)}`,
+    asOf: item?.publishedAt,
+  });
+  if (!item) {
+    return createPublicErrorResponse({
+      code: 'not_found',
+      message: response.meta.message ?? '内容不存在或当前未公开。',
+      meta,
+      status: 404,
+    });
+  }
+
+  return createPublicJsonResponse({ data: item, meta });
 }
 
 export function OPTIONS() {
