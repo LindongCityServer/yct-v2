@@ -2,6 +2,9 @@ import type { MetadataRoute } from 'next';
 import { appPath } from '../lib/app-paths';
 import { publicSiteUrl } from '../lib/public-api';
 
+// 站点地址来自部署环境，不能在本地打包阶段固化。
+export const dynamic = 'force-dynamic';
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: {

@@ -6,6 +6,7 @@ import { appPath } from '../lib/app-paths';
 import {
   publishAppNavigationToggleRequested,
   publishMapRouteShortcutRequested,
+  publishMapViewShortcutRequested,
   publishMapZoomRequested,
   subscribeMapShortcutContextChanged,
 } from '../lib/client-map-ui-events';
@@ -126,6 +127,24 @@ export function KeyboardShortcutBridge() {
         !event.ctrlKey &&
         !event.metaKey &&
         !isEditableTarget(event.target) &&
+        !event.shiftKey &&
+        (event.key === '/' || event.key === '0')
+      ) {
+        event.preventDefault();
+        publishMapViewShortcutRequested({
+          command: event.key === '/' ? 'focus_search' : 'reset_view',
+          source: 'keyboard',
+        });
+        return;
+      }
+
+      if (
+        !shortcutDialogOpen &&
+        isMapPage &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !isEditableTarget(event.target) &&
         (event.key === '=' || event.key === '+' || event.key === '-')
       ) {
         event.preventDefault();
@@ -199,6 +218,18 @@ export function KeyboardShortcutBridge() {
           <section className="shortcut-section" aria-labelledby="shortcut-navigation-title">
             <h3 id="shortcut-navigation-title">{t('nav.label')}</h3>
             <dl className="shortcut-list">
+              <div>
+                <dt>{t('shortcut.focusMapSearch')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['/']} />
+                </dd>
+              </div>
+              <div>
+                <dt>{t('shortcut.resetMapView')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['0']} />
+                </dd>
+              </div>
               <div>
                 <dt>{t('shortcut.toggleNavigation')}</dt>
                 <dd>

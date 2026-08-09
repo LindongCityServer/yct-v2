@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { publishLoginRequired, publishLoginRequiredForResponse } from '../lib/client-auth-events';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
@@ -13,6 +13,7 @@ import {
   subscribeMapRoutePanelVisibilityChanged,
 } from '../lib/client-map-ui-events';
 import { ticketOrderStateChangedEventName } from '../lib/client-ticket-orders';
+import { publishToastRequested } from '../lib/client-toast-events';
 import {
   readTripReminderState,
   tripReminderStateChangedEventName,
@@ -70,22 +71,11 @@ export function AppShell({
 }>) {
   const router = useRouter();
   const [navOpen, setNavOpen] = useState(true);
-  const [topbarNotice, setTopbarNotice] = useState<string | null>(null);
   const [accountStatus, setAccountStatus] = useState<AccountStatusResponse | null>(null);
   const [localPendingSyncCount, setLocalPendingSyncCount] = useState(0);
   const [mapRoutePanelVisible, setMapRoutePanelVisible] = useState(false);
   const [rideCodeLoading, setRideCodeLoading] = useState(false);
-  const noticeTimer = useRef<number | null>(null);
   const { locale, t } = useI18n();
-
-  useEffect(
-    () => () => {
-      if (noticeTimer.current) {
-        window.clearTimeout(noticeTimer.current);
-      }
-    },
-    [],
-  );
 
   useEffect(() => {
     return subscribeAppNavigationToggleRequested(() => setNavOpen((current) => !current));
@@ -167,11 +157,11 @@ export function AppShell({
   }, []);
 
   const showTopbarNotice = (message: string) => {
-    if (noticeTimer.current) {
-      window.clearTimeout(noticeTimer.current);
-    }
-    setTopbarNotice(message);
-    noticeTimer.current = window.setTimeout(() => setTopbarNotice(null), 2400);
+    publishToastRequested({
+      dedupeKey: 'topbar-operation',
+      message,
+      tone: 'warning',
+    });
   };
 
   const openGlobalSearch = () => {
@@ -307,11 +297,6 @@ export function AppShell({
             ) : null}
           </Link>
         </div>
-        {topbarNotice ? (
-          <div className="topbar-notice" role="status">
-            {topbarNotice}
-          </div>
-        ) : null}
       </header>
 
       <div className="workspace">
@@ -527,6 +512,7 @@ function TopbarMaterialLayers() {
 
 function SiteLegal({ className = '' }: Readonly<{ className?: string }>) {
   const { t } = useI18n();
+  const releaseVersion = process.env.NEXT_PUBLIC_YCT_RELEASE_VERSION ?? '2.0.0';
 
   return (
     <footer className={['site-legal', className].filter(Boolean).join(' ')}>
@@ -542,6 +528,9 @@ function SiteLegal({ className = '' }: Readonly<{ className?: string }>) {
         >
           {t('siteLegal.police')}
         </a>
+        <Link href={appPath('/services/changelog')} className="site-legal-version">
+          {t('siteLegal.version', { version: releaseVersion })}
+        </Link>
       </p>
     </footer>
   );

@@ -16,6 +16,7 @@ const staticEntries: Array<{
   { path: '/travel/schedules', changeFrequency: 'hourly', priority: 0.9 },
   { path: '/services', changeFrequency: 'weekly', priority: 0.8 },
   { path: '/services/faq', changeFrequency: 'monthly', priority: 0.7 },
+  { path: '/services/changelog', changeFrequency: 'weekly', priority: 0.6 },
   { path: '/services/road-materials', changeFrequency: 'monthly', priority: 0.5 },
   { path: '/services/transit-materials', changeFrequency: 'monthly', priority: 0.5 },
   { path: '/services/transit-network-health', changeFrequency: 'weekly', priority: 0.6 },

@@ -1,10 +1,12 @@
 import { SecondaryShell } from '../../../components/app-shell';
 import { AdminMapSettingsPanel } from '../../../components/admin-map-settings-panel';
 import { AdminSectionNavigation } from '../../../components/admin-section-navigation';
-import { pageMetadata } from '../../../lib/site-metadata';
+import { getPageMetadata } from '../../../lib/site-metadata';
 
 export const dynamic = 'force-dynamic';
-export const metadata = pageMetadata.adminMapSettings;
+export async function generateMetadata() {
+  return getPageMetadata('adminMapSettings');
+}
 
 export default function AdminMapSettingsPage() {
   return (

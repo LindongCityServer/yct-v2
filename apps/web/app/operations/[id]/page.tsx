@@ -13,7 +13,10 @@ import { readOperationDetail } from '../../../lib/operations-content';
 import { publicSiteUrl } from '../../../lib/public-api';
 import {
   createPageMetadata,
+  getSiteName,
   normalizeMetadataDescription,
+  pageMetadata,
+  resolveRequestLocale,
   serializeJsonLd,
 } from '../../../lib/site-metadata';
 
@@ -27,12 +30,14 @@ const readOperationPageDetail = cache(readOperationDetail);
 
 export async function generateMetadata({ params }: OperationDetailPageProps): Promise<Metadata> {
   const { id } = await params;
+  const locale = await resolveRequestLocale();
   const { item } = await readOperationPageDetail(decodeSegment(id));
 
   if (!item) {
     return createPageMetadata({
-      title: '运营信息',
-      description: '查看雨城通发布的交通运营动态、服务公告与服务器资讯。',
+      title: pageMetadata.operations.title[locale],
+      description: pageMetadata.operations.description[locale],
+      locale,
       noIndex: true,
     });
   }
@@ -40,7 +45,11 @@ export async function generateMetadata({ params }: OperationDetailPageProps): Pr
   return {
     ...createPageMetadata({
       title: item.title,
-      description: normalizeMetadataDescription(item.excerpt, '查看雨城通发布的运营信息与详情。'),
+      description: normalizeMetadataDescription(
+        item.excerpt,
+        pageMetadata.operations.description[locale],
+      ),
+      locale,
     }),
     alternates: {
       canonical: appPath(`/operations/${encodeURIComponent(item.id)}`),
@@ -51,6 +60,7 @@ export async function generateMetadata({ params }: OperationDetailPageProps): Pr
 export default async function OperationDetailPage({ params }: OperationDetailPageProps) {
   const { id } = await params;
   const decodedId = decodeSegment(id);
+  const locale = await resolveRequestLocale();
   const { item } = await readOperationPageDetail(decodedId);
 
   if (!item) {
@@ -81,13 +91,16 @@ export default async function OperationDetailPage({ params }: OperationDetailPag
               '@context': 'https://schema.org',
               '@type': 'Article',
               headline: item.title,
-              description: item.excerpt,
+              description: normalizeMetadataDescription(
+                item.excerpt,
+                pageMetadata.operations.description[locale],
+              ),
               datePublished: item.publishedAt,
               dateModified: item.publishedAt,
               mainEntityOfPage: publicSiteUrl(`/operations/${encodeURIComponent(item.id)}`),
               isPartOf: {
                 '@type': 'WebSite',
-                name: '雨城通',
+                name: getSiteName(locale),
                 url: publicSiteUrl('/'),
               },
             }),

@@ -33,7 +33,8 @@ type MapCategoryMessageKey =
   | 'map.categoryName.scenery'
   | 'map.categoryName.sports'
   | 'map.categoryName.tramStation'
-  | 'map.categoryName.transitLine';
+  | 'map.categoryName.transitLine'
+  | 'map.categoryName.water';
 
 export type CommonMessageKey =
   | MapCategoryMessageKey
@@ -70,6 +71,9 @@ export type CommonMessageKey =
   | 'account.offlinePackage.summary.refreshed'
   | 'account.offlinePackage.summary.total'
   | 'account.offlinePackage.title'
+  | 'account.about.currentVersion'
+  | 'account.about.title'
+  | 'account.about.viewChangelog'
   | 'account.auth.adminOperations'
   | 'account.auth.adminPortal'
   | 'account.auth.adminPoi'
@@ -180,6 +184,13 @@ export type CommonMessageKey =
   | 'account.status.readonly'
   | 'account.status.unavailable'
   | 'brand.home'
+  | 'changelog.category.feat'
+  | 'changelog.category.fix'
+  | 'changelog.category.perf'
+  | 'changelog.category.style'
+  | 'changelog.changeCount'
+  | 'changelog.empty'
+  | 'changelog.title'
   | 'inventoryHoldStatus.cancelled'
   | 'inventoryHoldStatus.confirmed'
   | 'inventoryHoldStatus.expired'
@@ -463,6 +474,7 @@ export type CommonMessageKey =
   | 'siteLegal.disclaimer'
   | 'siteLegal.icp'
   | 'siteLegal.police'
+  | 'siteLegal.version'
   | 'map.route.alight'
   | 'map.route.aria'
   | 'map.route.arrive'
@@ -477,6 +489,9 @@ export type CommonMessageKey =
   | 'map.route.depart'
   | 'map.route.destination'
   | 'map.route.taxiDirect'
+  | 'map.route.taxiAlternativeOne'
+  | 'map.route.taxiAlternativeTwo'
+  | 'map.route.taxiFewestSegments'
   | 'map.route.taxiNote'
   | 'map.route.taxiWithDistance'
   | 'map.route.taxiWalkFromDropoff'
@@ -563,7 +578,10 @@ export type CommonMessageKey =
   | 'map.route.transitNote.transfer'
   | 'map.route.useMapCenter'
   | 'map.route.walkDirect'
+  | 'map.route.walkAlternativeOne'
+  | 'map.route.walkAlternativeTwo'
   | 'map.route.walkFewerTurns'
+  | 'map.route.walkFewestSegments'
   | 'map.route.walkFromAccess'
   | 'map.route.walkNote.direct'
   | 'map.route.walkNote.road'
@@ -639,6 +657,7 @@ export type CommonMessageKey =
   | 'page.scheduleSearch'
   | 'page.search'
   | 'page.services'
+  | 'page.changelog'
   | 'page.ticketOrder'
   | 'page.travel'
   | 'page.travelScreen'
@@ -647,10 +666,12 @@ export type CommonMessageKey =
   | 'quickAction.rideCodeUnavailable'
   | 'search.open'
   | 'shortcut.close'
+  | 'shortcut.focusMapSearch'
   | 'shortcut.holdCtrl'
   | 'shortcut.map'
   | 'shortcut.openMenu'
   | 'shortcut.planFocusedMarker'
+  | 'shortcut.resetMapView'
   | 'shortcut.swapRouteEndpoints'
   | 'shortcut.title'
   | 'shortcut.toggleNavigation'
@@ -819,6 +840,7 @@ export type CommonMessageKey =
   | 'tripReminder.activeTitle'
   | 'tripReminder.add'
   | 'tripReminder.close'
+  | 'toast.close'
   | 'tripReminder.error.invalidTime'
   | 'tripReminder.error.missingContent'
   | 'tripReminder.field.arrival'
@@ -1007,6 +1029,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.offlinePackage.strategyNote':
       '自定义范围当前记录边界并刷新公开基础数据，真实瓦片离线包仍等待体积上限和生成策略确认。',
     'account.offlinePackage.title': '新建离线范围',
+    'account.about.currentVersion': '当前版本：{version}',
+    'account.about.title': '关于与更新',
+    'account.about.viewChangelog': '查看版本更新',
     'account.auth.adminOperations': '内容后台',
     'account.auth.adminPortal': '管理后台',
     'account.auth.adminPoi': 'POI 后台',
@@ -1130,6 +1155,13 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.status.notConfigured': '临东通未配置',
     'account.status.readonly': '只读账号',
     'account.status.unavailable': '账号状态暂不可用',
+    'changelog.category.feat': '新增',
+    'changelog.category.fix': '修复',
+    'changelog.category.perf': '优化',
+    'changelog.category.style': '界面',
+    'changelog.changeCount': '{count} 项变更',
+    'changelog.empty': '当前还没有可展示的版本更新。',
+    'changelog.title': '版本更新',
     'brand.home': '雨城通首页',
     'inventoryHoldStatus.cancelled': '已取消',
     'inventoryHoldStatus.confirmed': '已确认',
@@ -1190,6 +1222,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.categoryName.sports': '体育',
     'map.categoryName.tramStation': '有轨电车站',
     'map.categoryName.transitLine': '线路',
+    'map.categoryName.water': '水域',
     'map.empty.favorites': '暂无收藏地点',
     'map.empty.loading': '正在读取地图标记',
     'map.empty.nearby': '周边暂无可显示标记',
@@ -1443,6 +1476,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'siteLegal.disclaimer': '本站部分代码使用人工智能技术生成，上述地名、组织名均为虚构。',
     'siteLegal.icp': '辽ICP备2021004959号-1',
     'siteLegal.police': '辽公网安备21100502000117号',
+    'siteLegal.version': '版本 {version}',
     'map.route.alight': '{name} 出站',
     'map.route.aria': '路线规划',
     'map.route.arrive': '到达 {name}',
@@ -1458,6 +1492,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.destination': '终点',
     'map.route.directTitle': '{mode}直达',
     'map.route.taxiDirect': '打车直达',
+    'map.route.taxiAlternativeOne': '打车备选 1',
+    'map.route.taxiAlternativeTwo': '打车备选 2',
+    'map.route.taxiFewestSegments': '少路段打车',
     'map.route.taxiNote':
       '出租车只沿道路行驶；移动时间按后台默认限速 {speed} km/h 与路口延误估算，计价规则由后台维护。',
     'map.route.taxiWithDistance': '乘出租车沿道路行驶 {distance} {duration}',
@@ -1548,7 +1585,10 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.turn.straight': '直行',
     'map.route.useMapCenter': '使用地图中心',
     'map.route.walkDirect': '步行直达',
+    'map.route.walkAlternativeOne': '步行备选 1',
+    'map.route.walkAlternativeTwo': '步行备选 2',
     'map.route.walkFewerTurns': '少转弯步行',
+    'map.route.walkFewestSegments': '少路段步行',
     'map.route.walkFromAccess': '经 {access} 步行至终点 {distance} {duration}',
     'map.route.walkNote.direct': '当前未找到可连通道路图，步行暂按直线估算。',
     'map.route.walkNote.road':
@@ -1627,6 +1667,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'page.scheduleSearch': '班次查询',
     'page.search': '搜索',
     'page.services': '更多服务',
+    'page.changelog': '版本更新',
     'page.ticketOrder': '票务订单',
     'page.travel': '出行',
     'page.travelScreen': '智运大屏',
@@ -1635,10 +1676,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'quickAction.rideCodeUnavailable': '乘车码暂不可用，请稍后重试',
     'search.open': '搜索',
     'shortcut.close': '关闭快捷键',
+    'shortcut.focusMapSearch': '聚焦地图搜索',
     'shortcut.holdCtrl': '长按 Ctrl',
     'shortcut.map': '地图',
     'shortcut.openMenu': '快捷键提示',
     'shortcut.planFocusedMarker': '查找前往当前标记点的路线',
+    'shortcut.resetMapView': '回到默认地图视图',
     'shortcut.swapRouteEndpoints': '交换路线起终点',
     'shortcut.title': '键盘快捷键',
     'shortcut.toggleNavigation': '展开或收起侧边导航',
@@ -1807,6 +1850,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'tripReminder.activeTitle': '即将进行',
     'tripReminder.add': '添加提醒',
     'tripReminder.close': '关闭',
+    'toast.close': '关闭提示',
     'tripReminder.error.invalidTime': '请选择有效的提醒时间。',
     'tripReminder.error.missingContent': '至少填写标题、线路或起终点之一。',
     'tripReminder.field.arrival': '到达',
@@ -1993,6 +2037,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.offlinePackage.strategyNote':
       '自訂範圍目前記錄邊界並重新整理公開基礎資料，真正的瓦片離線包仍等待體積上限和生成策略確認。',
     'account.offlinePackage.title': '新增離線範圍',
+    'account.about.currentVersion': '目前版本：{version}',
+    'account.about.title': '關於與更新',
+    'account.about.viewChangelog': '查看版本更新',
     'account.auth.adminOperations': '內容後台',
     'account.auth.adminPortal': '管理後台',
     'account.auth.adminPoi': 'POI 後台',
@@ -2116,6 +2163,13 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.status.notConfigured': '臨東通未設定',
     'account.status.readonly': '唯讀帳號',
     'account.status.unavailable': '帳號狀態暫不可用',
+    'changelog.category.feat': '新增',
+    'changelog.category.fix': '修復',
+    'changelog.category.perf': '優化',
+    'changelog.category.style': '介面',
+    'changelog.changeCount': '{count} 項變更',
+    'changelog.empty': '目前還沒有可展示的版本更新。',
+    'changelog.title': '版本更新',
     'brand.home': '雨城通首頁',
     'inventoryHoldStatus.cancelled': '已取消',
     'inventoryHoldStatus.confirmed': '已確認',
@@ -2176,6 +2230,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.categoryName.sports': '體育',
     'map.categoryName.tramStation': '有軌電車站',
     'map.categoryName.transitLine': '線路',
+    'map.categoryName.water': '水域',
     'map.empty.favorites': '暫無收藏地點',
     'map.empty.loading': '正在讀取地圖標記',
     'map.empty.nearby': '周邊暫無可顯示標記',
@@ -2429,6 +2484,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'siteLegal.disclaimer': '本站部分程式碼使用人工智慧技術生成，上述地名、組織名均為虛構。',
     'siteLegal.icp': '遼ICP備2021004959號-1',
     'siteLegal.police': '遼公網安備21100502000117號',
+    'siteLegal.version': '版本 {version}',
     'map.route.alight': '{name} 出站',
     'map.route.aria': '路線規劃',
     'map.route.arrive': '到達 {name}',
@@ -2444,6 +2500,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.destination': '終點',
     'map.route.directTitle': '{mode}直達',
     'map.route.taxiDirect': '乘車直達',
+    'map.route.taxiAlternativeOne': '乘車備選 1',
+    'map.route.taxiAlternativeTwo': '乘車備選 2',
+    'map.route.taxiFewestSegments': '少路段乘車',
     'map.route.taxiNote':
       '計程車只沿道路行駛；移動時間按後台預設限速 {speed} km/h 與路口延誤估算，計價規則由後台維護。',
     'map.route.taxiWithDistance': '乘計程車沿道路行駛 {distance} {duration}',
@@ -2534,7 +2593,10 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.turn.straight': '直行',
     'map.route.useMapCenter': '使用地圖中心',
     'map.route.walkDirect': '步行直達',
+    'map.route.walkAlternativeOne': '步行備選 1',
+    'map.route.walkAlternativeTwo': '步行備選 2',
     'map.route.walkFewerTurns': '少轉彎步行',
+    'map.route.walkFewestSegments': '少路段步行',
     'map.route.walkFromAccess': '經 {access} 步行至終點 {distance} {duration}',
     'map.route.walkNote.direct': '目前未找到可連通道路圖，步行暫按直線估算。',
     'map.route.walkNote.road':
@@ -2613,6 +2675,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'page.scheduleSearch': '班次查詢',
     'page.search': '搜尋',
     'page.services': '更多服務',
+    'page.changelog': '版本更新',
     'page.ticketOrder': '票務訂單',
     'page.travel': '出行',
     'page.travelScreen': '智運大屏',
@@ -2621,10 +2684,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'quickAction.rideCodeUnavailable': '乘車碼暫不可用，請稍後重試',
     'search.open': '搜尋',
     'shortcut.close': '關閉快捷鍵',
+    'shortcut.focusMapSearch': '聚焦地圖搜尋',
     'shortcut.holdCtrl': '長按 Ctrl',
     'shortcut.map': '地圖',
     'shortcut.openMenu': '快捷鍵提示',
     'shortcut.planFocusedMarker': '查找前往目前標記點的路線',
+    'shortcut.resetMapView': '回到預設地圖視圖',
     'shortcut.swapRouteEndpoints': '交換路線起終點',
     'shortcut.title': '鍵盤快捷鍵',
     'shortcut.toggleNavigation': '展開或收合側邊導覽',
@@ -2793,6 +2858,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'tripReminder.activeTitle': '即將進行',
     'tripReminder.add': '新增提醒',
     'tripReminder.close': '關閉',
+    'toast.close': '關閉提示',
     'tripReminder.error.invalidTime': '請選擇有效的提醒時間。',
     'tripReminder.error.missingContent': '至少填寫標題、線路或起終點之一。',
     'tripReminder.field.arrival': '到達',
@@ -2981,6 +3047,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.offlinePackage.strategyNote':
       'Custom areas currently store boundaries and refresh public base data. Real tile offline packs still need size limits and generation rules.',
     'account.offlinePackage.title': 'New Offline Area',
+    'account.about.currentVersion': 'Current version: {version}',
+    'account.about.title': 'About and Updates',
+    'account.about.viewChangelog': 'View version updates',
     'account.auth.adminOperations': 'Content Admin',
     'account.auth.adminPortal': 'Admin Console',
     'account.auth.adminPoi': 'POI Admin',
@@ -3114,6 +3183,13 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.status.notConfigured': 'LDPASS is not configured',
     'account.status.readonly': 'Read-only account',
     'account.status.unavailable': 'Account status unavailable',
+    'changelog.category.feat': 'New',
+    'changelog.category.fix': 'Fix',
+    'changelog.category.perf': 'Improved',
+    'changelog.category.style': 'Interface',
+    'changelog.changeCount': '{count} changes',
+    'changelog.empty': 'There are no user-facing updates to show yet.',
+    'changelog.title': 'Version Updates',
     'brand.home': 'Yuchengtong Home',
     'inventoryHoldStatus.cancelled': 'Cancelled',
     'inventoryHoldStatus.confirmed': 'Confirmed',
@@ -3174,6 +3250,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.categoryName.sports': 'Sports',
     'map.categoryName.tramStation': 'Tram Stop',
     'map.categoryName.transitLine': 'Line',
+    'map.categoryName.water': 'Water',
     'map.empty.favorites': 'No favorite places yet',
     'map.empty.loading': 'Loading map markers',
     'map.empty.nearby': 'No nearby markers to show',
@@ -3430,6 +3507,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       'Parts of this site were generated with AI; places and organizations mentioned are fictional.',
     'siteLegal.icp': '辽ICP备2021004959-1号',
     'siteLegal.police': '辽公网安备21100502000117号',
+    'siteLegal.version': 'Version {version}',
     'map.route.alight': 'Exit at {name}',
     'map.route.aria': 'Route planner',
     'map.route.arrive': 'Arrive at {name}',
@@ -3445,6 +3523,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.destination': 'Destination',
     'map.route.directTitle': 'Direct {mode}',
     'map.route.taxiDirect': 'Taxi directly',
+    'map.route.taxiAlternativeOne': 'Taxi alternative 1',
+    'map.route.taxiAlternativeTwo': 'Taxi alternative 2',
+    'map.route.taxiFewestSegments': 'Taxi with fewer road segments',
     'map.route.taxiNote':
       'Taxis stay on roads. Travel time uses the admin default speed of {speed} km/h plus junction delay, and fare rules are admin-managed.',
     'map.route.taxiWithDistance': 'Take a taxi along roads for {distance}, {duration}',
@@ -3536,7 +3617,10 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.turn.straight': 'Continue straight',
     'map.route.useMapCenter': 'Use map center',
     'map.route.walkDirect': 'Walk directly',
+    'map.route.walkAlternativeOne': 'Walking alternative 1',
+    'map.route.walkAlternativeTwo': 'Walking alternative 2',
     'map.route.walkFewerTurns': 'Fewer-turn walk',
+    'map.route.walkFewestSegments': 'Walk with fewer road segments',
     'map.route.walkFromAccess': 'Walk from {access} to destination {distance} {duration}',
     'map.route.walkNote.direct':
       'No connected road graph was found, so walking is estimated as a straight line for now.',
@@ -3617,6 +3701,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'page.scheduleSearch': 'Schedule Search',
     'page.search': 'Search',
     'page.services': 'More Services',
+    'page.changelog': 'Version Updates',
     'page.ticketOrder': 'Ticket Order',
     'page.travel': 'Travel',
     'page.travelScreen': 'Operations Board',
@@ -3625,10 +3710,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'quickAction.rideCodeUnavailable': 'Ride code is temporarily unavailable',
     'search.open': 'Search',
     'shortcut.close': 'Close shortcuts',
+    'shortcut.focusMapSearch': 'Focus map search',
     'shortcut.holdCtrl': 'Hold Ctrl',
     'shortcut.map': 'Map',
     'shortcut.openMenu': 'Shortcut guide',
     'shortcut.planFocusedMarker': 'Plan a route to this marker',
+    'shortcut.resetMapView': 'Reset the map view',
     'shortcut.swapRouteEndpoints': 'Swap route endpoints',
     'shortcut.title': 'Keyboard Shortcuts',
     'shortcut.toggleNavigation': 'Expand or collapse navigation',
@@ -3798,6 +3885,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'tripReminder.activeTitle': 'Upcoming',
     'tripReminder.add': 'Add reminder',
     'tripReminder.close': 'Close',
+    'toast.close': 'Dismiss notification',
     'tripReminder.error.invalidTime': 'Choose a valid reminder time.',
     'tripReminder.error.missingContent': 'Enter at least a title, line, origin, or destination.',
     'tripReminder.field.arrival': 'Arrival',

@@ -1,10 +1,15 @@
 import type { LocaleCode, LocalePreference, UserLocalePreference } from '@yct/contracts';
 import { appPath } from './app-paths';
+import { siteLocaleCookieName } from './locale';
 
 export const localePreferenceStorageKey = 'yct.localePreference.v1';
 export const localePreferenceChangedEventName = 'yct:locale-preference-changed';
 
-export const supportedLocaleCodes = ['zh-CN', 'zh-Hant', 'en'] as const satisfies readonly LocaleCode[];
+export const supportedLocaleCodes = [
+  'zh-CN',
+  'zh-Hant',
+  'en',
+] as const satisfies readonly LocaleCode[];
 export const supportedLocalePreferences = [
   'system',
   ...supportedLocaleCodes,
@@ -43,11 +48,22 @@ export function writeLocalLocalePreference(locale: LocalePreference): ClientLoca
     updatedAt: new Date().toISOString(),
     source: 'local',
   };
+  writeResolvedLocaleCookie(state.resolvedLocale);
   window.dispatchEvent(new CustomEvent(localePreferenceChangedEventName, { detail: state }));
   return state;
 }
 
-export async function fetchServerLocalePreference(): Promise<ClientLocalePreferenceState | undefined> {
+export function writeResolvedLocaleCookie(resolvedLocale: LocaleCode): void {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  document.cookie = `${siteLocaleCookieName}=${encodeURIComponent(resolvedLocale)}; path=/; max-age=31536000; samesite=lax`;
+}
+
+export async function fetchServerLocalePreference(): Promise<
+  ClientLocalePreferenceState | undefined
+> {
   const response = await fetch(appPath('/api/account/locale-preference'), {
     method: 'GET',
     cache: 'no-store',

@@ -1407,6 +1407,31 @@ export function AccountSettingsPanel({
             )}
           </div>
         </section>
+
+        <section
+          className="settings-row settings-row-block"
+          aria-labelledby="about-settings-title"
+        >
+          <div className="settings-row-title">
+            <span className="material-symbols-outlined" aria-hidden="true">
+              info
+            </span>
+            <span id="about-settings-title">{t('account.about.title')}</span>
+          </div>
+          <p className="settings-row-note">
+            {t('account.about.currentVersion', {
+              version: process.env.NEXT_PUBLIC_YCT_RELEASE_VERSION ?? '2.0.0',
+            })}
+          </p>
+          <div className="settings-action-row">
+            <a className="secondary-action-button" href={appPath('/services/changelog')}>
+              <span className="material-symbols-outlined" aria-hidden="true">
+                history
+              </span>
+              <span>{t('account.about.viewChangelog')}</span>
+            </a>
+          </div>
+        </section>
       </div>
 
       {offlinePackageFormOpen ? (

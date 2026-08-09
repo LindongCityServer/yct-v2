@@ -1,10 +1,12 @@
 import { SecondaryShell } from '../../../components/app-shell';
 import { AdminMembershipPanel } from '../../../components/admin-membership-panel';
 import { AdminSectionNavigation } from '../../../components/admin-section-navigation';
-import { pageMetadata } from '../../../lib/site-metadata';
+import { getPageMetadata } from '../../../lib/site-metadata';
 
 export const dynamic = 'force-dynamic';
-export const metadata = pageMetadata.adminMemberships;
+export async function generateMetadata() {
+  return getPageMetadata('adminMemberships');
+}
 
 export default function AdminMembershipsPage() {
   return (

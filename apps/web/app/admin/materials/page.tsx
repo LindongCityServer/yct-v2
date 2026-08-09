@@ -1,10 +1,12 @@
 import { SecondaryShell } from '../../../components/app-shell';
 import { AdminMaterialsPanel } from '../../../components/admin-materials-panel';
 import { AdminSectionNavigation } from '../../../components/admin-section-navigation';
-import { pageMetadata } from '../../../lib/site-metadata';
+import { getPageMetadata } from '../../../lib/site-metadata';
 
 export const dynamic = 'force-dynamic';
-export const metadata = pageMetadata.adminMaterials;
+export async function generateMetadata() {
+  return getPageMetadata('adminMaterials');
+}
 
 export default function AdminMaterialsPage() {
   return (

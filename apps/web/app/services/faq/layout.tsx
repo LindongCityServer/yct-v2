@@ -1,10 +1,15 @@
 import type { ReactNode } from 'react';
-import { faqGroups } from '../../../lib/faq-content';
-import { pageMetadata, serializeJsonLd } from '../../../lib/site-metadata';
+import type { FaqAnswer } from '../../../lib/faq-content';
+import { getLocalizedFaqContent } from '../../../lib/faq-translations';
+import { getPageMetadata, resolveRequestLocale, serializeJsonLd } from '../../../lib/site-metadata';
 
-export const metadata = pageMetadata.faq;
+export async function generateMetadata() {
+  return getPageMetadata('faq');
+}
 
-export default function FaqLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default async function FaqLayout({ children }: Readonly<{ children: ReactNode }>) {
+  const content = getLocalizedFaqContent(await resolveRequestLocale());
+
   return (
     <>
       <script
@@ -13,7 +18,7 @@ export default function FaqLayout({ children }: Readonly<{ children: ReactNode }
           __html: serializeJsonLd({
             '@context': 'https://schema.org',
             '@type': 'FAQPage',
-            mainEntity: faqGroups.flatMap((group) =>
+            mainEntity: content.groups.flatMap((group) =>
               group.items.map((item) => ({
                 '@type': 'Question',
                 name: item.question,
@@ -31,8 +36,12 @@ export default function FaqLayout({ children }: Readonly<{ children: ReactNode }
   );
 }
 
-function faqAnswerText(answer: (typeof faqGroups)[number]['items'][number]['answer']): string {
+function faqAnswerText(answer: FaqAnswer): string {
   return Array.isArray(answer)
-    ? answer.map((part) => (typeof part === 'string' ? part : part.text)).join('')
+    ? answer
+        .map((part) =>
+          typeof part === 'string' ? part : 'text' in part ? part.text : (part.label ?? ''),
+        )
+        .join('')
     : answer;
 }

@@ -1,10 +1,12 @@
 import { SecondaryShell } from '../../../components/app-shell';
 import { AdminPoiPanel } from '../../../components/admin-poi-panel';
 import { AdminSectionNavigation } from '../../../components/admin-section-navigation';
-import { pageMetadata } from '../../../lib/site-metadata';
+import { getPageMetadata } from '../../../lib/site-metadata';
 
 export const dynamic = 'force-dynamic';
-export const metadata = pageMetadata.adminMapPoi;
+export async function generateMetadata() {
+  return getPageMetadata('adminMapPoi');
+}
 
 export default async function AdminMapPoiPage({
   searchParams,

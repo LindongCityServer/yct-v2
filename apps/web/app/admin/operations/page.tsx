@@ -1,10 +1,12 @@
 import { SecondaryShell } from '../../../components/app-shell';
 import { AdminOperationsPanel } from '../../../components/admin-operations-panel';
 import { AdminSectionNavigation } from '../../../components/admin-section-navigation';
-import { pageMetadata } from '../../../lib/site-metadata';
+import { getPageMetadata } from '../../../lib/site-metadata';
 
 export const dynamic = 'force-dynamic';
-export const metadata = pageMetadata.adminOperations;
+export async function generateMetadata() {
+  return getPageMetadata('adminOperations');
+}
 
 export default async function AdminOperationsPage({
   searchParams,

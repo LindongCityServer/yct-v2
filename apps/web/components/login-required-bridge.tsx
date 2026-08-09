@@ -1,15 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { appPath } from '../lib/app-paths';
 import {
   getDefaultLoginRequiredMessage,
   loginRequiredNoticeDurationMs,
   subscribeLoginRequired,
 } from '../lib/client-auth-events';
+import { publishToastRequested } from '../lib/client-toast-events';
 
 export function LoginRequiredBridge() {
-  const [message, setMessage] = useState('');
   const redirectTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -22,10 +22,14 @@ export function LoginRequiredBridge() {
 
     const unsubscribe = subscribeLoginRequired((payload) => {
       clearRedirectTimer();
-      setMessage(payload.message?.trim() || getDefaultLoginRequiredMessage());
+      publishToastRequested({
+        dedupeKey: 'auth-login-required',
+        durationMs: payload.durationMs ?? loginRequiredNoticeDurationMs,
+        message: payload.message?.trim() || getDefaultLoginRequiredMessage(),
+        tone: 'warning',
+      });
       redirectTimer.current = window.setTimeout(
         () => {
-          setMessage('');
           window.location.assign(appPath('/api/auth/ldpass/start'));
         },
         Math.max(0, payload.durationMs ?? loginRequiredNoticeDurationMs),
@@ -38,9 +42,5 @@ export function LoginRequiredBridge() {
     };
   }, []);
 
-  return message ? (
-    <div className="login-required-notice" role="alert" aria-live="assertive">
-      {message}
-    </div>
-  ) : null;
+  return null;
 }

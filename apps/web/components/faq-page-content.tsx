@@ -95,10 +95,22 @@ function renderAnswer(answer: FaqAnswer) {
       {answer.map((part, index) =>
         typeof part === 'string' ? (
           part
-        ) : (
+        ) : 'href' in part ? (
           <Link href={appPath(part.href)} key={`${part.href}-${index}`}>
-            {part.text}
+            {part.icon ? (
+              <span className="material-symbols-outlined faq-answer-icon" aria-hidden="true">
+                {part.icon}
+              </span>
+            ) : null}
+            <span className="faq-answer-link-label">{part.text}</span>
           </Link>
+        ) : (
+          <span className="faq-answer-control" key={`${part.icon}-${index}`}>
+            <span className="material-symbols-outlined faq-answer-icon" aria-hidden="true">
+              {part.icon}
+            </span>
+            {part.label ? <span>{part.label}</span> : null}
+          </span>
         ),
       )}
     </p>

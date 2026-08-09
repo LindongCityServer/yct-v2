@@ -1,10 +1,12 @@
 import { SecondaryShell } from '../../../components/app-shell';
 import { TransitNetworkHealthPanel } from '../../../components/transit-network-health-panel';
-import { pageMetadata } from '../../../lib/site-metadata';
+import { getPageMetadata } from '../../../lib/site-metadata';
 import { readTransitNetworkHealthReport } from '../../../lib/transit-network-health';
 
 export const dynamic = 'force-dynamic';
-export const metadata = pageMetadata.transitNetworkHealth;
+export async function generateMetadata() {
+  return getPageMetadata('transitNetworkHealth');
+}
 
 export default async function TransitNetworkHealthPage() {
   const report = await readTransitNetworkHealthReport();

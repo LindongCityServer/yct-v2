@@ -5,26 +5,36 @@ import { KeyboardShortcutBridge } from '../components/keyboard-shortcut-bridge';
 import { LoginRequiredBridge } from '../components/login-required-bridge';
 import { PreferenceBridge } from '../components/preference-bridge';
 import { PwaBridge } from '../components/pwa-bridge';
+import { ToastViewport } from '../components/toast-viewport';
 import { appPath } from '../lib/app-paths';
 import { publicSiteUrl } from '../lib/public-api';
-import { createSiteMetadata, serializeJsonLd } from '../lib/site-metadata';
+import {
+  createSiteMetadata,
+  getSiteDescription,
+  getSiteName,
+  resolveRequestLocale,
+  serializeJsonLd,
+} from '../lib/site-metadata';
 import './globals.css';
 
 // 站点地址来自部署环境，确保 JSON-LD 和 metadataBase 不会在构建机上固化为 localhost。
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  ...createSiteMetadata(),
-  metadataBase: new URL(publicSiteUrl('/')),
-  icons: {
-    icon: [
-      { url: appPath('/icons/yct-logo.svg'), type: 'image/svg+xml' },
-      { url: appPath('/icons/yct-logo-192.png'), sizes: '192x192', type: 'image/png' },
-    ],
-    shortcut: [{ url: appPath('/icons/yct-logo.svg'), type: 'image/svg+xml' }],
-    apple: [{ url: appPath('/icons/yct-logo-192.png'), sizes: '192x192', type: 'image/png' }],
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await resolveRequestLocale();
+  return {
+    ...createSiteMetadata(locale),
+    metadataBase: new URL(publicSiteUrl('/')),
+    icons: {
+      icon: [
+        { url: appPath('/icons/yct-logo.svg'), type: 'image/svg+xml' },
+        { url: appPath('/icons/yct-logo-192.png'), sizes: '192x192', type: 'image/png' },
+      ],
+      shortcut: [{ url: appPath('/icons/yct-logo.svg'), type: 'image/svg+xml' }],
+      apple: [{ url: appPath('/icons/yct-logo-192.png'), sizes: '192x192', type: 'image/png' }],
+    },
+  };
+}
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -32,11 +42,13 @@ export const viewport: Viewport = {
   themeColor: '#168F78',
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const shouldExposePwaManifest = process.env.NODE_ENV === 'production';
+  const locale = await resolveRequestLocale();
+  const siteName = getSiteName(locale);
 
   return (
-    <html lang="zh-CN" data-color-scheme="system" data-material-mode="balanced">
+    <html lang={locale} data-color-scheme="system" data-material-mode="balanced">
       <head>
         <script
           type="application/ld+json"
@@ -44,10 +56,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             __html: serializeJsonLd({
               '@context': 'https://schema.org',
               '@type': 'WebSite',
-              name: '雨城通',
+              name: siteName,
               alternateName: 'Yuchengtong',
               url: publicSiteUrl('/'),
-              description: '雨城通整合临东市服务器运营信息、地图探索、公共交通出行与生活服务。',
+              description: getSiteDescription(locale),
               potentialAction: {
                 '@type': 'SearchAction',
                 target: `${publicSiteUrl('/search')}?q={search_term_string}`,
@@ -66,6 +78,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <LoginRequiredBridge />
         <PreferenceBridge />
         <PwaBridge />
+        <ToastViewport />
         {children}
       </body>
     </html>

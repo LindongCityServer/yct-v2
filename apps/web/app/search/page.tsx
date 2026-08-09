@@ -2,10 +2,12 @@ import { SecondaryShell } from '../../components/app-shell';
 import { SearchPageClient } from '../../components/search-page-client';
 import { readOperationsFeed } from '../../lib/operations-content';
 import { readServiceEntryGroups } from '../../lib/service-entries';
-import { pageMetadata } from '../../lib/site-metadata';
+import { getPageMetadata } from '../../lib/site-metadata';
 
 export const dynamic = 'force-dynamic';
-export const metadata = pageMetadata.search;
+export async function generateMetadata() {
+  return getPageMetadata('search');
+}
 
 export default async function SearchPage({
   searchParams,

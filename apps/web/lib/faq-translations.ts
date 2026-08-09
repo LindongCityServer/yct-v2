@@ -68,8 +68,11 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           },
           'global-search': {
             question: '怎樣快速找到地點、線路或服務？',
-            answer:
-              '使用頁面右上角的搜尋按鈕，可以統一檢索地點、線路、班次、營運資訊、服務入口和常見問題。搜尋結果取決於目前已發布的資料。',
+            answer: [
+              '使用頁面右上角的',
+              { icon: 'search', label: '搜尋' },
+              '按鈕，可以統一檢索地點、線路、班次、營運資訊、服務入口和常見問題。搜尋結果取決於目前已發布的資料。',
+            ],
             keywords: ['全域搜尋', '查找', '關鍵字'],
           },
           'data-not-found': {
@@ -104,7 +107,9 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             answer: [
               '瀏覽器或已安裝應用可能仍在使用快取。可前往',
               { text: '帳號設定', href: '/account' },
-              '的「安裝與離線」區域重新整理快取，再重新開啟頁面。重新整理快取不會取代尚未同步的本機提醒同步操作。',
+              '的「安裝與離線」區域使用',
+              { icon: 'refresh', label: '重新整理快取' },
+              '，再重新開啟頁面。重新整理快取不會取代尚未同步的本機提醒同步操作。',
             ],
             keywords: ['快取', '舊版本', '重新整理失敗', 'PWA 更新'],
           },
@@ -153,14 +158,85 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           },
           'map-sharing': {
             question: '怎樣把地點、路線或座標分享給其他人？',
-            answer:
-              '開啟地圖中的地點或路線詳情後使用分享操作。依目前內容和瀏覽器能力，可以複製連結、文字、座標或傳送指令，也可以產生 QR Code 或分享圖。',
+            answer: [
+              '開啟地圖中的地點或路線詳情後使用',
+              { icon: 'share', label: '分享' },
+              '操作。依目前內容和瀏覽器能力，可以複製連結、文字、座標或傳送指令，也可以產生 QR Code 或分享圖。',
+            ],
             keywords: ['QR Code', '複製座標', '傳送指令', '分享圖', '連結'],
+          },
+          'map-toolbar-controls': {
+            question: '地圖工具列裡的加號、減號、定位和圖層圖示分別做什麼？',
+            answer: [
+              '地圖工具列中的',
+              { icon: 'add', label: '加號' },
+              '和 ',
+              { icon: 'remove', label: '減號' },
+              '用於縮放，',
+              { icon: 'my_location', label: '定位' },
+              '用於回到預設地圖視圖，不是讀取手機 GPS；',
+              { icon: 'layers', label: '圖層' },
+              '用於開啟瀏覽模式、投稿和瓦片來源設定。',
+            ],
+            keywords: ['地圖工具列', '加號', '減號', '定位圖示', '圖層圖示', 'GPS'],
+          },
+          'poi-action-icons': {
+            question: '地點詳情下方的圖示按鈕分別有什麼作用？',
+            answer: [
+              '地點詳情下方的',
+              { icon: 'directions', label: '路線' },
+              '用於把地點設為路線規劃端點，',
+              { icon: 'travel_explore', label: '附近' },
+              '用於搜尋周邊內容，',
+              { icon: 'bookmark', label: '收藏' },
+              '用於保存或取消收藏，',
+              { icon: 'share', label: '分享' },
+              '用於開啟地點分享面板。圖示按鈕懸停或聚焦時也會顯示對應的文字提示。',
+            ],
+            keywords: ['地點詳情', '路線按鈕', '附近搜尋', '收藏圖示', '分享按鈕'],
+          },
+          'map-share-link': {
+            question: '分享面板中的複製連結、二維碼和分享圖有什麼不同？',
+            answer: [
+              '地點或路線詳情中的',
+              { icon: 'share', label: '分享' },
+              '面板可以用',
+              { icon: 'link', label: '複製連結' },
+              '產生可重新開啟目前地點或路線的短連結，也可以用',
+              { icon: 'qr_code_2', label: '二維碼' },
+              '讓其他人掃描開啟同一連結。',
+              { icon: 'image', label: '分享圖' },
+              '是目前預覽的靜態圖片，適合轉發或保存，不能取代可互動的地圖連結。分享這些公開地點或路線不要求登入。',
+            ],
+            keywords: ['分享連結', '短連結', '二維碼', '分享圖', '不登入分享'],
+          },
+          'map-share-troubleshooting': {
+            question: '分享操作失敗或提示瀏覽器不支援時怎麼辦？',
+            answer: [
+              '瀏覽器不支援系統分享時，可以改用',
+              { icon: 'content_copy', label: '複製連結' },
+              '或複製文字、座標和傳送指令；如果剪貼簿也不可用，請檢查目前頁面的剪貼簿權限後重試。產生短連結需要站點服務可用，遇到暫時失敗時可使用',
+              { icon: 'refresh', label: '重試' },
+              '，或者直接分享目前網址。',
+            ],
+            keywords: ['分享失敗', '瀏覽器不支援', '剪貼簿', '複製連結', '重試'],
+          },
+          'keyboard-shortcuts': {
+            question: '怎樣查看和使用鍵盤快捷鍵？',
+            answer: [
+              '長按',
+              { icon: 'keyboard', label: 'Ctrl' },
+              '可以開啟目前頁面可用的快捷鍵清單。地圖支援加號和減號縮放、斜線聚焦搜尋、數字 0 回到預設視圖；選取地點或開啟路線規劃後，清單還會顯示規劃路線、交換起終點等目前可執行操作。輸入文字時不會觸發地圖快捷鍵。',
+            ],
+            keywords: ['鍵盤', '快捷鍵', 'Ctrl', '搜尋', '縮放', '預設視圖', '交換起終點'],
           },
           'poi-submission': {
             question: '地圖缺少地點，或地點資訊有誤怎麼辦？',
-            answer:
-              '可以在地圖中使用「投稿公開 POI」，填寫名稱、分類、座標和說明後提交審核。投稿不會立即公開，管理員審核通過後才會進入已發布地圖資料。',
+            answer: [
+              '可以在地圖中使用',
+              { icon: 'add_location_alt', label: '投稿公開 POI' },
+              '，填寫名稱、分類、座標和說明後提交審核。投稿不會立即公開，管理員審核通過後才會進入已發布地圖資料。',
+            ],
             keywords: ['新增地點', '糾錯', 'POI 投稿', '提交審核', '座標錯誤'],
           },
           'player-location-delay': {
@@ -177,14 +253,20 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           },
           'map-tile-provider': {
             question: '衛星地圖看起來不夠新，怎樣切換瓦片來源？',
-            answer:
-              '在衛星模式開啟「圖層與投稿」。當系統提供多個瓦片來源時，可以在「瓦片來源」中切換。不同來源的更新速度和可用性不同，目前選擇會保存在本瀏覽器中。',
+            answer: [
+              '在衛星模式開啟',
+              { icon: 'layers', label: '圖層與投稿' },
+              '。當系統提供多個瓦片來源時，可以在「瓦片來源」中切換。不同來源的更新速度和可用性不同，目前選擇會保存在本瀏覽器中。',
+            ],
             keywords: ['衛星圖', '底圖', '瓦片來源', '地圖更新', '圖層'],
           },
           'map-tiles-unavailable': {
             question: '地圖底圖或瓦片載入失敗怎麼辦？',
-            answer:
-              '先檢查網路連線並重新整理頁面。衛星模式下，若圖層面板提供其他瓦片來源，可以嘗試切換；所有來源都不可用時，通常表示目前地圖資料來源暫時無法存取，請稍後再試。',
+            answer: [
+              '先檢查網路連線並使用',
+              { icon: 'refresh', label: '重新整理' },
+              '頁面。衛星模式下，若圖層面板提供其他瓦片來源，可以嘗試切換；所有來源都不可用時，通常表示目前地圖資料來源暫時無法存取，請稍後再試。',
+            ],
             keywords: ['地圖空白', '瓦片載入失敗', '底圖遺失', '地圖資料暫不可用'],
           },
         },
@@ -203,8 +285,11 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           },
           'schedule-filtering': {
             question: '怎樣縮小班次查詢結果範圍？',
-            answer:
-              '班次查詢可按服務類型、線路或班次關鍵字、停靠站、始發站、終到站、服務日期和過去/即將發車時段篩選。日期為今天時，過去和即將發車會按目前時間區分；其他日期則按日期範圍處理。',
+            answer: [
+              '班次查詢可使用',
+              { icon: 'filter_alt', label: '篩選' },
+              '，按服務類型、線路或班次關鍵字、停靠站、始發站、終到站、服務日期和過去/即將發車時段縮小範圍。日期為今天時，過去和即將發車會按目前時間區分；其他日期則按日期範圍處理。',
+            ],
             keywords: ['篩選班次', '始發站', '終到站', '服務日期', '即將發車', '已過班次'],
           },
           'schedule-pending-fields': {
@@ -239,8 +324,11 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           },
           'ride-code-login': {
             question: '點擊乘車碼後為什麼跳轉到帳號頁？',
-            answer:
-              '乘車碼需要有效的臨東通登入狀態。請先完成登入；如果帳號處於唯讀狀態、登入服務尚未設定或乘車碼服務暫不可用，目前無法開啟乘車碼。',
+            answer: [
+              '開啟',
+              { icon: 'qr_code_2', label: '乘車碼' },
+              '需要有效的臨東通登入狀態。請先完成登入；如果帳號處於唯讀狀態、登入服務尚未設定或乘車碼服務暫不可用，目前無法開啟乘車碼。',
+            ],
             keywords: ['QR Code 乘車', '登入失效', '無法開啟乘車碼'],
           },
           'reminder-missing': {
@@ -248,7 +336,9 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             answer: [
               '請在',
               { text: '帳號設定', href: '/account' },
-              '中確認本裝置推送總開關、對應提醒分類和勿擾時段，並檢查瀏覽器是否允許通知。未登入時建立的本機提醒還需要同步到帳號，才能由伺服器向其他裝置推送。',
+              '中確認',
+              { icon: 'notifications', label: '通知' },
+              '總開關、對應提醒分類和勿擾時段，並檢查瀏覽器是否允許通知。未登入時建立的本機提醒還需要同步到帳號，才能由伺服器向其他裝置推送。',
             ],
             keywords: ['通知', 'Push', '勿擾', '沒有提醒', '瀏覽器權限'],
           },
@@ -277,8 +367,10 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           },
           'account-badge': {
             question: '帳號按鈕上的數字或圓點表示什麼？',
-            answer:
-              '數字通常表示待處理項目數量，例如尚未同步的本機行程提醒或帳號側待處理內容；圓點表示帳號設定、會話或其他狀態需要注意。開啟帳號設定可以查看具體來源。',
+            answer: [
+              { icon: 'account_circle', label: '帳號' },
+              '按鈕上的數字通常表示待處理項目數量，例如尚未同步的本機行程提醒或帳號側待處理內容；圓點表示帳號設定、會話或其他狀態需要注意。開啟帳號設定可以查看具體來源。',
+            ],
             keywords: ['角標', '紅點', '待處理', '數字提醒'],
           },
           'push-device-scope': {
@@ -316,14 +408,29 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             answer: [
               '前往',
               { text: '帳號設定', href: '/account' },
-              '的「安裝與離線」區域使用安裝按鈕。是否能夠安裝取決於瀏覽器和系統支援；如果沒有安裝按鈕，也可以使用瀏覽器內建的「加入主畫面」功能。',
+              '的「安裝與離線」區域使用',
+              { icon: 'install_mobile', label: '安裝' },
+              '按鈕。是否能夠安裝取決於瀏覽器和系統支援；如果沒有安裝按鈕，也可以使用瀏覽器內建的「加入主畫面」功能。',
             ],
             keywords: ['PWA', '加入主畫面', '桌面應用程式', '安裝按鈕'],
           },
+          changelog: {
+            question: '怎樣查看雨城通最近更新了什麼？',
+            answer: [
+              '開啟服務中的',
+              { text: '版本更新', href: '/services/changelog', icon: 'history' },
+              '頁面，可以查看目前版本、建置編號和最近發布的功能、修復、效能及樣式變更。沒有發布清單時，頁面會顯示暫時沒有可展示的記錄。',
+            ],
+            keywords: ['版本更新', '更新記錄', '建置編號', '發布清單', '變更日誌'],
+          },
           'clear-local-data': {
             question: '清理快取會刪除收藏和本機提醒嗎？',
-            answer:
-              '「重新整理快取」或離線快取管理主要處理應用快取；收藏、偏好和本機提醒使用獨立的本機儲存與同步流程。執行帶有「清除本機記錄」或類似確認提示的操作前，請先閱讀確認內容並同步需要保留的資料。',
+            answer: [
+              { icon: 'refresh', label: '重新整理快取' },
+              '或離線快取管理主要處理應用快取；收藏、偏好和本機提醒使用獨立的本機儲存與同步流程。執行帶有',
+              { icon: 'delete_sweep', label: '清除本機記錄' },
+              '或類似確認提示的操作前，請先閱讀確認內容並同步需要保留的資料。',
+            ],
             keywords: ['清除資料', 'localStorage', '收藏刪除', '提醒刪除'],
           },
         },
@@ -346,17 +453,91 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           'material-data-missing': {
             question: '物料產生器裡為什麼找不到某條線路或地點？',
             answer:
-              '新版物料工具優先讀取已經發布的線路、站點和地點資料。內容仍處於草稿、審核中或缺少必要欄位時，不會成為可選資料來源；舊版產生器還可能使用獨立的舊資料。',
-            keywords: ['路牌物料', '大眾運輸導視', '站牌產生器', '線路資料'],
+              '伺服器資料模式只列出已經發布且具備範本所需欄位的線路、站點和地點；草稿、審核中或資料不完整的內容不會出現。大眾運輸導視切換到專案資料後，只會列出 RMP 中可識別、已命名且在所選圖上方向存在有效線路連接的站點和線路。需要自行填寫內容時，可以改用手動輸入。',
+            keywords: ['路牌物料', '大眾運輸導視', '站牌產生器', '線路資料', '專案資料'],
+          },
+          'material-data-modes': {
+            question: '物料工作台的手動輸入、伺服器資料和專案資料有什麼差別？',
+            answer: [
+              '手動輸入用於自行編排範本允許編輯的內容；伺服器資料從目前已發布的線路、站點、地點或地圖座標產生；專案資料則從「線網資料」區域透過',
+              { icon: 'upload_file', label: '匯入 RMP 專案' },
+              '取得站點、線路、圖上方向和配色。伺服器資料與專案資料都屬於關聯資料模式，只允許修改範本明確開放的覆寫欄位，並且不需要提交自訂物料審核。',
+            ],
+            keywords: ['手動輸入', '伺服器資料', '專案資料', '關聯資料', 'RMP 線網'],
+          },
+          'material-workspace-actions': {
+            question: '物料工作台頂端的圖示按鈕分別做什麼？',
+            answer: [
+              '頂端的',
+              { icon: 'visibility', label: '預覽' },
+              '用於產生含浮水印的預覽，產生後會變成',
+              { icon: 'refresh', label: '更新預覽' },
+              '；',
+              { icon: 'publish', label: '提交審核' },
+              '用於提交手動輸入的自訂物料；只有手動編輯地鐵導視牌時才會出現的',
+              { icon: 'save', label: '匯出工程檔案' },
+              '用於儲存可再次匯入的 JSON 工程；',
+              { icon: 'download', label: '下載圖片' },
+              '會依目前資料模式下載圖片。工作台也會在有效輸入變更後自動更新頁面內預覽。',
+            ],
+            keywords: ['預覽按鈕', '更新預覽', '提交審核', '匯出工程', '下載圖片', '頂端按鈕'],
           },
           'material-review-download': {
             question: '為什麼自訂物料可以預覽，卻還不能下載？',
             answer: [
               '在',
               { text: '物料工具', href: '/services' },
-              '中，手動填寫的自訂物料需要先提交審核，審核通過後才能從物料歷史下載；預覽成功不代表已經通過審核。使用伺服器資料或已匯入專案的關聯資料模式，可以按目前所選資料直接匯出，無需提交自訂物料審核。',
+              '中，預覽一律帶有浮水印，未審核的手動輸入也只能下載帶浮水印圖片。登入後可使用',
+              { icon: 'publish', label: '提交審核' },
+              '；審核通過的記錄會保留在「我的物料歷史」，並可使用',
+              { icon: 'download', label: '下載' },
+              '取得無浮水印圖片。伺服器資料或 RMP 專案資料不需要審核；帳號權限不可用時，下載會回退為帶浮水印預覽。',
             ],
-            keywords: ['物料審核', '無法下載', '預覽', '自訂物料', '物料歷史', '關聯資料'],
+            keywords: ['物料審核', '無法下載', '預覽浮水印', '自訂物料', '物料歷史', '關聯資料'],
+          },
+          'metro-wayfinding-editor': {
+            question: '地鐵導視牌現在可以在工作台裡編輯哪些內容？',
+            answer:
+              '選擇「地鐵導視牌」範本並保持手動輸入後，可以使用單行、雙行或直向版式，調整畫布尺寸、底色和預設前景色，並編排設施圖示、箭頭、一般文字、大文字、組合框、固定或彈性空白和分隔線。元素支援拖曳排序、移動、複製、刪除和逐項配色；空白工程還可以從範例工程開始。出現寬度或高度不足提示時，文字可能已經被壓縮，仍溢出的固定尺寸元素需要透過增大畫布或減少元素處理。',
+            keywords: ['地鐵導視牌', '視覺化編輯', '單行', '雙行', '直向', '組合框', '尺寸不足'],
+          },
+          'metro-wayfinding-project-files': {
+            question: '地鐵導視牌可以匯入和匯出哪些工程檔案？',
+            answer: [
+              '編輯器中的',
+              { icon: 'upload_file', label: '匯入工程' },
+              '支援 YCT 地鐵導視工程、',
+              {
+                text: 'NaL 導向標誌設計器',
+                href: 'https://centralgo.site/vitool/vitool.html',
+              },
+              '和「',
+              {
+                text: 'Chitose.City Sign Maker',
+                href: 'https://signmaker.chitose.city/',
+              },
+              '」的 JSON。一次最多選擇 2 個檔案、每個不超過 2 MB，不能混合不同產生器；YCT 與 NaL 工程需要逐個匯入。外部工程會先顯示轉換預覽和警告，可選擇',
+              { icon: 'conversion_path', label: '僅語意（建議）' },
+              '或',
+              { icon: 'palette', label: '保留來源樣式' },
+              '，確認後會取代目前導視牌且最多保留兩行。頁面頂端的',
+              { icon: 'save', label: '匯出工程檔案' },
+              '只在手動編輯地鐵導視牌時出現，匯出的 YCT JSON 可以稍後再次匯入。',
+            ],
+            keywords: ['匯入工程', '匯出工程', 'YCT 工程', 'NaL', 'Chitose', 'JSON', '2 MB'],
+          },
+          'metro-wayfinding-project-vs-rmp': {
+            question: '地鐵導視的「匯入工程」和「匯入 RMP 專案」是一回事嗎？',
+            answer: [
+              '不是。地鐵導視編輯器裡的',
+              { icon: 'upload_file', label: '匯入工程' },
+              '會讀取並取代導視牌的版式和元素；「線網資料」區域的',
+              { icon: 'upload_file', label: '匯入自己的專案' },
+              '讀取的是 ',
+              { text: 'Rail Map Painter', href: 'https://railmapgen.org/?app=rmp' },
+              ' 線網，只為專案資料模式提供站點、線路、方向和顏色，不會取代目前導視牌。',
+            ],
+            keywords: ['匯入工程', 'RMP 專案', '線網資料', '導視牌版式', 'Rail Map Painter'],
           },
           'rmp-import-requirements': {
             question: '匯入 RMP 線網專案失敗時，應檢查哪些內容？',
@@ -368,27 +549,60 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
               },
               '。請在',
               { text: '大眾運輸導視', href: '/services/transit-materials' },
-              '中選擇 JSON 格式的 RMP 專案檔案。目前支援 RMP v77 及以下版本，檔案不能超過 5 MB，最多包含 2,000 個節點和 4,000 條連接；專案還需要至少一個帶名稱的可識別車站，以及一條帶有效線路配色的連接。',
+              '的「線網資料」區域使用',
+              { icon: 'upload_file', label: '匯入自己的專案' },
+              '，不要使用地鐵導視編輯器中的「匯入工程」。請選擇 JSON 格式的 RMP 專案檔案。目前支援 RMP v77 及以下版本，檔案不能超過 5 MB，最多包含 2,000 個節點和 4,000 條連接；專案還需要至少一個帶名稱的可識別車站，以及一條帶有效線路配色的連接。其他缺少名稱的站點可以在匯入後補全。也可以先使用頁面自動載入的 RMP 畫廊範例熟悉專案資料模式。',
             ],
-            keywords: ['RMP', 'JSON', '匯入失敗', '5 MB', 'v77', '線網專案'],
+            keywords: ['RMP', 'JSON', '匯入失敗', '5 MB', 'v77', '線網專案', '畫廊範例'],
           },
           'rmp-import-readonly': {
             question: '匯入 RMP 專案後，可以在物料工作台修改線網嗎？',
-            answer:
-              '不可以。工作台把 RMP 專案作為唯讀的自訂線網資料使用，不支援修改專案檔案固有的站點、站序、站名、連接或拓撲。需要調整這些內容時，請回到地鐵線路圖繪製器修改專案並重新匯入；工作台只允許補充線路主名稱和副名稱，再根據所選站點、方向和線路產生導視物料。',
-            keywords: ['RMP 唯讀', '修改站點', '修改站序', '修改站名', '重新匯入', '自訂線網'],
+            answer: [
+              '不能修改專案固有的站點位置、站序、連接或拓撲；這些內容仍需回到 ',
+              { text: 'Rail Map Painter', href: 'https://railmapgen.org/?app=rmp' },
+              ' 修改並重新匯入。工作台可以使用',
+              { icon: 'edit_location_alt', label: '補站名' },
+              '為未命名站點補充主名稱和副名稱，並使用',
+              { icon: 'edit', label: '設定專案線路名稱' },
+              '為線路補充顯示名稱。這些補充只影響工作台中的專案資料，不會改寫原始 JSON 檔案。',
+            ],
+            keywords: ['RMP 唯讀', '修改站點', '補站名', '線路名稱', '重新匯入', '自訂線網'],
           },
           'rmp-project-storage': {
             question: '匯入的 RMP 專案會保留嗎？切回伺服器線網會刪除它嗎？',
-            answer:
-              '有效專案會立即用於目前頁面。帳號處於可用登入狀態時，系統還會嘗試把它暫存為目前使用者的線網草稿：「已暫存」表示重新開啟頁面後可以恢復，「僅本頁」表示沒有儲存成功。切換到伺服器線網不會刪除草稿，只有使用「移除已匯入專案」才會清除它。',
-            keywords: ['RMP 暫存', '僅本頁', '已暫存', '伺服器線網', '刪除專案', '登入'],
+            answer: [
+              '有效專案會立即用於目前頁面。帳號處於可用登入狀態時，系統還會嘗試把它暫存為目前使用者的線網草稿：「已暫存」表示重新開啟頁面後可以恢復，「僅本頁」表示沒有儲存成功。沒有已暫存專案時，頁面可能載入帶來源和授權資訊的 RMP 畫廊範例，範例上的名稱調整只在本頁有效。切換到伺服器線網不會刪除草稿，只有使用',
+              { icon: 'close', label: '移除已匯入專案' },
+              '才會清除已匯入專案並回到範例或伺服器線網。',
+            ],
+            keywords: [
+              'RMP 暫存',
+              '僅本頁',
+              '已暫存',
+              '伺服器線網',
+              '移除專案',
+              '畫廊範例',
+              '登入',
+            ],
           },
           'rmp-line-names-colors': {
-            question: '為什麼匯入 RMP 後顯示內部線路編號，線路名稱和顏色從哪裡來？',
-            answer:
-              'RMP 專案提供線網拓撲、車站名稱、線路標識和連接配色，但不一定包含適合顯示的業務線路名稱。可以使用「設定專案線路名稱」為每條線路補充主名稱和副名稱；線路顏色仍取自專案中的有效連接配色，修改名稱不會改變線網拓撲。',
-            keywords: ['線路編號', '線路名稱', '副名稱', '線路顏色', 'RMP 配色', '線網拓撲'],
+            question: '為什麼匯入 RMP 後會顯示內部線路編號或未命名站點？',
+            answer: [
+              'RMP 專案提供線網拓撲、部分站名、線路標識和連接配色，但不一定包含適合顯示的完整名稱。使用',
+              { icon: 'edit_location_alt', label: '補站名' },
+              '可補充未命名站點；使用',
+              { icon: 'edit', label: '設定專案線路名稱' },
+              '可為每條線路補充主名稱和副名稱。線路顏色仍取自專案中的有效連接配色，補充名稱不會改變站點位置、連接或線網拓撲。',
+            ],
+            keywords: [
+              '線路編號',
+              '線路名稱',
+              '未命名站點',
+              '副名稱',
+              '線路顏色',
+              'RMP 配色',
+              '線網拓撲',
+            ],
           },
           'network-health-meaning': {
             question: '大眾運輸網路健康度可以直接作為營運結論嗎？',
@@ -426,8 +640,11 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           },
           'global-search': {
             question: 'How can I quickly find a place, line, or service?',
-            answer:
-              'Use the search button in the upper-right corner to search places, lines, trips, updates, service entries, and FAQ answers in one place. Results depend on currently published data.',
+            answer: [
+              'Use the ',
+              { icon: 'search', label: 'Search' },
+              ' button in the upper-right corner to search places, lines, trips, updates, service entries, and FAQ answers in one place. Results depend on currently published data.',
+            ],
             keywords: ['global search', 'find', 'keyword'],
           },
           'data-not-found': {
@@ -462,7 +679,9 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             answer: [
               'Your browser or installed app may still be using cached content. Open ',
               { text: 'Account Settings', href: '/account' },
-              ' and refresh the cache under Install and Offline, then reopen the page. Refreshing the cache does not replace syncing local reminders that are still pending.',
+              ' and use ',
+              { icon: 'refresh', label: 'Refresh cache' },
+              ' under Install and Offline, then reopen the page. Refreshing the cache does not replace syncing local reminders that are still pending.',
             ],
             keywords: ['cache', 'old version', 'refresh failed', 'PWA update'],
           },
@@ -523,14 +742,105 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           },
           'map-sharing': {
             question: 'How do I share a place, route, or coordinate?',
-            answer:
-              'Open a place or route detail on the map and use Share. Depending on the content and browser, you can copy a link, text, coordinates, or a teleport command, or create a QR code or share image.',
+            answer: [
+              'Open a place or route detail on the map and use ',
+              { icon: 'share', label: 'Share' },
+              '. Depending on the content and browser, you can copy a link, text, coordinates, or a teleport command, or create a QR code or share image.',
+            ],
             keywords: ['QR code', 'copy coordinates', 'teleport command', 'share image', 'link'],
+          },
+          'map-toolbar-controls': {
+            question: 'What do the plus, minus, location, and layers icons on the map toolbar do?',
+            answer: [
+              'On the map toolbar, ',
+              { icon: 'add', label: 'plus' },
+              ' and ',
+              { icon: 'remove', label: 'minus' },
+              ' zoom the view, ',
+              { icon: 'my_location', label: 'location' },
+              ' returns to the default map view rather than reading phone GPS, and ',
+              { icon: 'layers', label: 'layers' },
+              ' opens browse modes, submission, and tile-source settings.',
+            ],
+            keywords: ['map toolbar', 'plus', 'minus', 'location icon', 'layers icon', 'GPS'],
+          },
+          'poi-action-icons': {
+            question: 'What do the icon buttons below a place detail do?',
+            answer: [
+              'Below a place detail, ',
+              { icon: 'directions', label: 'Route' },
+              ' uses the place as a route-planning endpoint, ',
+              { icon: 'travel_explore', label: 'Nearby' },
+              ' searches nearby content, ',
+              { icon: 'bookmark', label: 'Bookmark' },
+              ' saves or removes a favorite, and ',
+              { icon: 'share', label: 'Share' },
+              ' opens the place sharing panel. Icon buttons also show their text label on hover or focus.',
+            ],
+            keywords: [
+              'place detail',
+              'route button',
+              'nearby search',
+              'bookmark icon',
+              'share button',
+            ],
+          },
+          'map-share-link': {
+            question: 'How are Copy link, QR code, and Share image different in the sharing panel?',
+            answer: [
+              'The ',
+              { icon: 'share', label: 'Share' },
+              ' panel for a place or route can use ',
+              { icon: 'link', label: 'Copy link' },
+              ' to create a short link that reopens the current place or route, or ',
+              { icon: 'qr_code_2', label: 'QR code' },
+              ' so someone else can scan the same link. ',
+              { icon: 'image', label: 'Share image' },
+              ' is a static snapshot for forwarding or saving and does not replace an interactive map link. Sharing these public places and routes does not require sign-in.',
+            ],
+            keywords: [
+              'share link',
+              'short link',
+              'QR code',
+              'share image',
+              'share without sign-in',
+            ],
+          },
+          'map-share-troubleshooting': {
+            question: 'What should I do when sharing fails or the browser says it is unsupported?',
+            answer: [
+              'When system sharing is unsupported, use ',
+              { icon: 'content_copy', label: 'Copy link' },
+              ' or copy text, coordinates, and teleport commands. If the clipboard is unavailable too, check clipboard permission for this page and try again. Creating a short link needs the site service to be available; after a temporary failure, use ',
+              { icon: 'refresh', label: 'Retry' },
+              ' or share the current address directly.',
+            ],
+            keywords: ['share failed', 'browser unsupported', 'clipboard', 'copy link', 'retry'],
+          },
+          'keyboard-shortcuts': {
+            question: 'How do I view and use keyboard shortcuts?',
+            answer: [
+              'Hold ',
+              { icon: 'keyboard', label: 'Ctrl' },
+              ' to open the shortcuts available on the current page. On the map, plus and minus zoom the view, slash focuses search, and 0 resets the view; after selecting a place or opening route planning, the list also shows actions such as planning a route and swapping endpoints. Map shortcuts do not trigger while you are typing.',
+            ],
+            keywords: [
+              'keyboard',
+              'shortcuts',
+              'Ctrl',
+              'search',
+              'zoom',
+              'reset view',
+              'swap endpoints',
+            ],
           },
           'poi-submission': {
             question: 'What should I do if a place is missing or incorrect on the map?',
-            answer:
-              'Use Submit Public POI on the map to provide a name, category, coordinates, and description for review. A submission is not published immediately; it enters the published map data after administrator approval.',
+            answer: [
+              'Use ',
+              { icon: 'add_location_alt', label: 'Submit Public POI' },
+              ' on the map to provide a name, category, coordinates, and description for review. A submission is not published immediately; it enters the published map data after administrator approval.',
+            ],
             keywords: ['add place', 'correction', 'POI submission', 'review', 'wrong coordinates'],
           },
           'player-location-delay': {
@@ -559,14 +869,20 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           },
           'map-tile-provider': {
             question: 'How do I change the satellite tile source when the map is not current?',
-            answer:
-              'Open Layers and Submissions while in satellite mode. When multiple tile sources are available, choose one under Tile Source. Sources vary in freshness and availability, and the selected source is stored in the current browser.',
+            answer: [
+              'Open ',
+              { icon: 'layers', label: 'Layers and Submissions' },
+              ' while in satellite mode. When multiple tile sources are available, choose one under Tile Source. Sources vary in freshness and availability, and the selected source is stored in the current browser.',
+            ],
             keywords: ['satellite map', 'basemap', 'tile source', 'map update', 'layers'],
           },
           'map-tiles-unavailable': {
             question: 'What should I do when map tiles or the basemap fail to load?',
-            answer:
-              'Check the network connection and refresh the page. In satellite mode, try another tile source if one is available in Layers. If every source is unavailable, the map data source is likely temporarily inaccessible; try again later.',
+            answer: [
+              'Check the network connection and ',
+              { icon: 'refresh', label: 'refresh' },
+              ' the page. In satellite mode, try another tile source if one is available in Layers. If every source is unavailable, the map data source is likely temporarily inaccessible; try again later.',
+            ],
             keywords: ['blank map', 'tile load failed', 'missing basemap', 'map data unavailable'],
           },
         },
@@ -585,8 +901,11 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           },
           'schedule-filtering': {
             question: 'How can I narrow schedule search results?',
-            answer:
-              'Filter by service type, line or trip keywords, stop, origin, destination, service date, and past or upcoming departures. For today, past and upcoming are split by the current time; other dates are handled by their date range.',
+            answer: [
+              'Use the ',
+              { icon: 'filter_alt', label: 'Filters' },
+              ' to narrow by service type, line or trip keywords, stop, origin, destination, service date, and past or upcoming departures. For today, past and upcoming are split by the current time; other dates are handled by their date range.',
+            ],
             keywords: [
               'filter trips',
               'origin',
@@ -647,8 +966,10 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           },
           'ride-code-login': {
             question: 'Why does Ride Code take me to the account page?',
-            answer:
-              'Ride Code requires an active LDPASS sign-in. Sign in first. It cannot open when the account is read-only, the login service is not configured, or the Ride Code service is temporarily unavailable.',
+            answer: [
+              { icon: 'qr_code_2', label: 'Ride Code' },
+              ' requires an active LDPASS sign-in. Sign in first. It cannot open when the account is read-only, the login service is not configured, or the Ride Code service is temporarily unavailable.',
+            ],
             keywords: ['ride QR code', 'sign-in expired', 'cannot open ride code'],
           },
           'reminder-missing': {
@@ -656,7 +977,9 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             answer: [
               'In ',
               { text: 'Account Settings', href: '/account' },
-              ', check the device push switch, the relevant reminder categories, and quiet hours. Also confirm that browser notifications are allowed. Local reminders created without sign-in must be synced before the server can push them to other devices.',
+              ', check the device push switch, the relevant reminder categories, and quiet hours. Also confirm that browser ',
+              { icon: 'notifications', label: 'Notifications' },
+              ' are allowed. Local reminders created without sign-in must be synced before the server can push them to other devices.',
             ],
             keywords: ['notification', 'push', 'quiet hours', 'no reminder', 'browser permission'],
           },
@@ -691,8 +1014,11 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           },
           'account-badge': {
             question: 'What do the number or dot on the account button mean?',
-            answer:
-              'A number usually indicates pending items, such as local trip reminders that have not been synced or account-side work. A dot indicates that account configuration, the session, or another status needs attention. Open Account Settings to see the source.',
+            answer: [
+              'The ',
+              { icon: 'account_circle', label: 'Account' },
+              ' button number usually indicates pending items, such as local trip reminders that have not been synced or account-side work. A dot indicates that account configuration, the session, or another status needs attention. Open Account Settings to see the source.',
+            ],
             keywords: ['badge', 'red dot', 'pending', 'notification count'],
           },
           'push-device-scope': {
@@ -749,14 +1075,33 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             answer: [
               'Open ',
               { text: 'Account Settings', href: '/account' },
-              " and use the installation control under Install and Offline. Availability depends on the browser and system. When no install control is shown, use the browser's Add to Home Screen feature.",
+              ' and use the ',
+              { icon: 'install_mobile', label: 'Install' },
+              " control under Install and Offline. Availability depends on the browser and system. When no install control is shown, use the browser's Add to Home Screen feature.",
             ],
             keywords: ['PWA', 'add to home screen', 'desktop app', 'install button'],
           },
+          changelog: {
+            question: 'Where can I see what changed in the latest release?',
+            answer: [
+              'Open ',
+              {
+                text: 'Changelog',
+                href: '/services/changelog',
+                icon: 'history',
+              },
+              ' from More Services. It lists the available release version, build, and published changes. If no release is listed, there is no public release manifest available yet.',
+            ],
+            keywords: ['changelog', 'release notes', 'version', 'build', 'updates'],
+          },
           'clear-local-data': {
             question: 'Does clearing cache remove favorites and local reminders?',
-            answer:
-              'Refreshing cache or managing offline cache mainly handles application cache. Favorites, preferences, and local reminders use separate local storage and sync flows. Before confirming an action labeled clear local records or similar, read the confirmation text and sync data you need to keep.',
+            answer: [
+              { icon: 'refresh', label: 'Refresh cache' },
+              ' or managing offline cache mainly handles application cache. Favorites, preferences, and local reminders use separate local storage and sync flows. Before confirming an action labeled ',
+              { icon: 'delete_sweep', label: 'Clear local records' },
+              ' or similar, read the confirmation text and sync data you need to keep.',
+            ],
             keywords: ['clear data', 'localStorage', 'delete favorites', 'delete reminders'],
           },
         },
@@ -785,23 +1130,132 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           'material-data-missing': {
             question: 'Why can I not find a line or place in a material generator?',
             answer:
-              'New material tools prefer published line, station, and place data. Drafts, items under review, and content missing required fields are not selectable sources. Legacy generators may also use separate legacy data.',
-            keywords: ['road sign material', 'transit wayfinding', 'stop generator', 'line data'],
+              'Server Data mode lists only published lines, stations, and places that provide the fields required by the template. Drafts, items under review, and incomplete data are not shown. After Transit Wayfinding switches to Project Data, it lists only recognized, named RMP stations and lines with a valid connection in the selected diagram direction. Use Manual Input when you need to enter the editable content yourself.',
+            keywords: [
+              'road sign material',
+              'transit wayfinding',
+              'stop generator',
+              'line data',
+              'project data',
+            ],
+          },
+          'material-data-modes': {
+            question: 'How do Manual Input, Server Data, and Project Data differ?',
+            answer: [
+              'Manual Input lets you compose the content exposed by a template. Server Data generates material from published lines, stations, places, or map coordinates. Project Data reads stations, lines, diagram directions, and colors from the Network Data section after you use ',
+              { icon: 'upload_file', label: 'Import RMP project' },
+              '. Server Data and Project Data are linked-data modes: only override fields explicitly exposed by the template remain editable, and custom-material review is not required.',
+            ],
+            keywords: ['manual input', 'server data', 'project data', 'linked data', 'RMP network'],
+          },
+          'material-workspace-actions': {
+            question: 'What do the icon buttons at the top of the material workspace do?',
+            answer: [
+              'The ',
+              { icon: 'visibility', label: 'Preview' },
+              ' action generates a watermarked preview and changes to ',
+              { icon: 'refresh', label: 'Update preview' },
+              ' afterward. ',
+              { icon: 'publish', label: 'Submit for review' },
+              ' submits manually entered custom material. ',
+              { icon: 'save', label: 'Export project file' },
+              ' appears only while manually editing a metro wayfinding sign and saves JSON that can be imported again. ',
+              { icon: 'download', label: 'Download image' },
+              ' downloads according to the current data mode. The inline preview also refreshes automatically after valid input changes.',
+            ],
+            keywords: [
+              'preview button',
+              'update preview',
+              'submit for review',
+              'export project',
+              'download image',
+              'top buttons',
+            ],
           },
           'material-review-download': {
             question: 'Why can I preview a custom material but not download it yet?',
             answer: [
               'In ',
               { text: 'Material Tools', href: '/services' },
-              ', manually entered custom material must be submitted for review and approved before it can be downloaded from material history. A successful preview is not an approval. Linked-data mode using server data or an imported project can export the current selection directly without custom-material review.',
+              ', previews are always watermarked, and unreviewed Manual Input can download only a watermarked image. After signing in, use ',
+              { icon: 'publish', label: 'Submit for review' },
+              '. Approved records remain in My Material History, where ',
+              { icon: 'download', label: 'Download' },
+              ' provides an image without the watermark. Server Data and RMP Project Data do not require review; when account authorization is unavailable, downloading falls back to the watermarked preview.',
             ],
             keywords: [
               'material review',
               'cannot download',
-              'preview',
+              'preview watermark',
               'custom material',
               'material history',
               'linked data',
+            ],
+          },
+          'metro-wayfinding-editor': {
+            question: 'What can I edit in the metro wayfinding sign workspace?',
+            answer:
+              'Select the Metro Wayfinding Sign template and stay in Manual Input to choose a single-row, double-row, or vertical layout; adjust canvas size, background, and default foreground colors; and compose facility icons, arrows, regular text, large text, combinations, fixed or flexible spaces, and dividers. Elements support drag reordering, moving, duplicating, deleting, and per-element colors. An empty project can start from an example. A width or height warning means text may already be compressed; fixed-size elements that still overflow require a larger canvas or fewer elements.',
+            keywords: [
+              'metro wayfinding',
+              'visual editor',
+              'single row',
+              'double row',
+              'vertical',
+              'combination',
+              'insufficient size',
+            ],
+          },
+          'metro-wayfinding-project-files': {
+            question: 'Which metro wayfinding project files can I import and export?',
+            answer: [
+              "The editor's ",
+              { icon: 'upload_file', label: 'Import project' },
+              ' action supports JSON from YCT Metro Wayfinding, ',
+              {
+                text: 'NaL VI Tool',
+                href: 'https://centralgo.site/vitool/vitool.html',
+              },
+              ', and ',
+              {
+                text: 'Chitose.City Sign Maker',
+                href: 'https://signmaker.chitose.city/',
+              },
+              '. Select at most two files, each no larger than 2 MB, and do not mix generators. YCT and NaL projects must be imported one at a time. External projects first show a conversion preview and warnings; choose ',
+              { icon: 'conversion_path', label: 'Semantics only (recommended)' },
+              ' or ',
+              { icon: 'palette', label: 'Preserve source style' },
+              '. Confirming replaces the current sign and retains at most two rows. The top-bar ',
+              { icon: 'save', label: 'Export project file' },
+              ' action appears only while manually editing a metro wayfinding sign; its YCT JSON can be imported again later.',
+            ],
+            keywords: [
+              'import project',
+              'export project',
+              'YCT project',
+              'NaL',
+              'Chitose',
+              'JSON',
+              '2 MB',
+            ],
+          },
+          'metro-wayfinding-project-vs-rmp': {
+            question: 'Are Import project and Import RMP project the same operation?',
+            answer: [
+              'No. ',
+              { icon: 'upload_file', label: 'Import project' },
+              ' inside the metro wayfinding editor reads and replaces the sign layout and elements. ',
+              { icon: 'upload_file', label: 'Import your own project' },
+              ' in Network Data reads a ',
+              { text: 'Rail Map Painter', href: 'https://railmapgen.org/?app=rmp' },
+              ' network only to supply stations, lines, directions, and colors to Project Data mode; it does not replace the current sign.',
+            ],
+            keywords: [
+              'import project',
+              'RMP project',
+              'network data',
+              'sign layout',
+              'Rail Map Painter',
             ],
           },
           'rmp-import-requirements': {
@@ -812,22 +1266,42 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
                 text: 'Rail Map Painter',
                 href: 'https://railmapgen.org/?app=rmp',
               },
-              '. Select its JSON project file from ',
-              { text: 'Transit Wayfinding', href: '/services/transit-materials' },
-              '. The current importer supports RMP v77 and earlier, files up to 5 MB, 2,000 nodes, and 4,000 edges. The project also needs at least one recognized named station and one edge with valid line colors.',
+              '. In ',
+              {
+                text: 'Transit Wayfinding',
+                href: '/services/transit-materials',
+              },
+              ', use ',
+              { icon: 'upload_file', label: 'Import your own project' },
+              ' in Network Data, not Import project in the metro wayfinding editor. Choose an RMP JSON file. The importer supports RMP v77 and earlier, files up to 5 MB, 2,000 nodes, and 4,000 edges. A project needs at least one recognized named station and one edge with valid line colors; other unnamed stations can be completed after import. You can also start with the RMP Gallery example loaded by the page to learn Project Data mode.',
             ],
-            keywords: ['RMP', 'JSON', 'import failed', '5 MB', 'v77', 'network project'],
+            keywords: [
+              'RMP',
+              'JSON',
+              'import failed',
+              '5 MB',
+              'v77',
+              'network project',
+              'gallery example',
+            ],
           },
           'rmp-import-readonly': {
             question:
               'Can I edit the network in the material workspace after importing an RMP project?',
-            answer:
-              'No. The workspace uses an RMP project as read-only custom network data. It cannot change intrinsic project information such as stations, station order, station names, edges, or topology. Make those changes in Rail Map Painter and import the project again. The workspace only lets you add primary and secondary line names, then create wayfinding material from selected stations, directions, and lines.',
+            answer: [
+              'You cannot change intrinsic station positions, station order, edges, or topology. Make those changes in ',
+              { text: 'Rail Map Painter', href: 'https://railmapgen.org/?app=rmp' },
+              ' and import the project again. The workspace can use ',
+              { icon: 'edit_location_alt', label: 'Complete station names' },
+              ' to add primary and secondary names to unnamed stations, and ',
+              { icon: 'edit', label: 'Configure project line names' },
+              ' to add display names for lines. These additions affect Project Data in the workspace only and do not rewrite the original JSON file.',
+            ],
             keywords: [
               'RMP read-only',
               'edit station',
-              'edit station order',
-              'edit station name',
+              'complete station names',
+              'line names',
               'import again',
               'custom network',
             ],
@@ -835,25 +1309,34 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           'rmp-project-storage': {
             question:
               'Is an imported RMP project kept, and does switching to server data delete it?',
-            answer:
-              'A valid project is available on the current page immediately. With an active signed-in account, the app also tries to store a network draft for that user. "Stored" means it can be restored after reopening the page; "This page only" means it was not saved. Switching to the server network does not delete the draft. Only Remove imported project clears it.',
+            answer: [
+              'A valid project is available on the current page immediately. With an active signed-in account, the app also tries to store a network draft for that user. "Stored" means it can be restored after reopening the page; "This page only" means it was not saved. When no stored project exists, the page may load an RMP Gallery example with source and license details; name changes to that example last only on the current page. Switching to Server Network does not delete the draft. Only ',
+              { icon: 'close', label: 'Remove imported project' },
+              ' clears the imported project and returns to the example or server network.',
+            ],
             keywords: [
               'RMP storage',
               'this page only',
               'stored',
               'server network',
-              'delete project',
+              'remove project',
+              'gallery example',
               'sign in',
             ],
           },
           'rmp-line-names-colors': {
-            question:
-              'Why does an imported RMP show internal line IDs, and where do names and colors come from?',
-            answer:
-              'An RMP project provides network topology, station names, line identifiers, and edge colors, but it may not contain display-ready service names. Use Configure project line names to add a primary and secondary name for each line. Colors still come from valid colored edges in the project, and changing a name does not change the topology.',
+            question: 'Why does an imported RMP show internal line IDs or unnamed stations?',
+            answer: [
+              'An RMP project provides topology, some station names, line identifiers, and edge colors, but it may not include complete display names. Use ',
+              { icon: 'edit_location_alt', label: 'Complete station names' },
+              ' for unnamed stations and ',
+              { icon: 'edit', label: 'Configure project line names' },
+              ' to add a primary and secondary name for each line. Colors still come from valid colored edges in the project. Adding names does not change station positions, edges, or topology.',
+            ],
             keywords: [
               'line ID',
               'line name',
+              'unnamed station',
               'secondary name',
               'line color',
               'RMP palette',

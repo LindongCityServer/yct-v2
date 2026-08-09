@@ -6,6 +6,7 @@ import {
   localePreferenceChangedEventName,
   localePreferenceStorageKey,
   readLocalLocalePreference,
+  writeResolvedLocaleCookie,
   writeLocalLocalePreference,
   type ClientLocalePreferenceState,
 } from '../lib/client-locale-preference';
@@ -122,7 +123,9 @@ function applyStoredPreferences() {
   applyMotionMode(readMotionMode());
   applyFontMode(readFontMode());
   applyMaterialPreference(readMaterialPreference());
-  applyLocalePreferenceState(readLocalLocalePreference());
+  const localePreference = readLocalLocalePreference();
+  applyLocalePreferenceState(localePreference);
+  writeResolvedLocaleCookie(localePreference.resolvedLocale);
 }
 
 export function PreferenceBridge() {
@@ -140,7 +143,9 @@ export function PreferenceBridge() {
       }
 
       if (event.key === localePreferenceStorageKey) {
-        applyLocalePreferenceState(readLocalLocalePreference());
+        const localePreference = readLocalLocalePreference();
+        applyLocalePreferenceState(localePreference);
+        writeResolvedLocaleCookie(localePreference.resolvedLocale);
       }
 
       if (event.key === materialPreferenceStorageKey) {
@@ -176,6 +181,7 @@ export function PreferenceBridge() {
         }
 
         writeLocalLocalePreference(preference.locale);
+        writeResolvedLocaleCookie(preference.resolvedLocale);
         applyLocalePreferenceState(preference);
       })
       .catch(() => undefined);
