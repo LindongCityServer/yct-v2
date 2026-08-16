@@ -5709,6 +5709,16 @@ img.map-player-list-avatar.is-offline {
   gap: var(--yct-space-2);
 }
 
+.account-local-admin-login {
+  display: grid;
+  gap: 4px;
+}
+
+.account-local-admin-login small {
+  max-width: 260px;
+  line-height: 1.45;
+}
+
 .admin-operations-panel {
   display: grid;
   gap: var(--yct-space-4);
@@ -5778,6 +5788,16 @@ img.map-player-list-avatar.is-offline {
   background: var(--yct-color-surface-panel);
 }
 
+.material-sidebar-disclosure,
+.material-sidebar-disclosure-body {
+  display: contents;
+  min-width: 0;
+}
+
+.material-sidebar-disclosure > summary {
+  display: none;
+}
+
 .material-studio-sidebar > label,
 .material-field,
 .material-canvas-editor > label {
@@ -5821,6 +5841,13 @@ img.map-player-list-avatar.is-offline {
   border-top: 1px solid var(--yct-color-border);
 }
 
+.material-template-example-context-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
 .material-template-examples-heading,
 .material-template-example-heading {
   display: flex;
@@ -5859,47 +5886,34 @@ img.map-player-list-avatar.is-offline {
 
 .material-template-example-list {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  grid-auto-rows: 8px;
+  align-items: start;
   gap: var(--yct-space-2);
   max-height: min(620px, 58vh);
   overflow: auto;
   padding-right: 2px;
 }
 
-.metro-wayfinding-editor > .material-template-examples .material-template-example-list {
-  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+.material-template-example-category-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--yct-color-surface-muted);
 }
 
-.material-template-example {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  padding: 9px 10px;
-  border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-md);
-  background: color-mix(in srgb, var(--yct-color-surface-panel) 88%, var(--yct-color-surface));
-}
-
-.material-template-example p {
-  display: -webkit-box;
-  max-height: 3.05em;
-  margin: 0;
-  overflow: hidden;
-  color: var(--yct-color-text-secondary);
-  font-size: 11px;
-  line-height: 1.52;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.material-template-example-load {
+.material-template-example-category-tabs button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 5px;
-  min-height: 32px;
-  padding: 0 9px;
-  border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-sm);
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
   background: transparent;
   color: var(--yct-color-text-secondary);
   font: inherit;
@@ -5907,18 +5921,224 @@ img.map-player-list-avatar.is-offline {
   cursor: pointer;
 }
 
-.material-template-example-load:hover:not(:disabled) {
-  border-color: var(--yct-color-primary);
-  color: var(--yct-color-primary);
+.material-template-example-category-tabs button.is-active {
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+  box-shadow: 0 1px 3px rgb(30 45 42 / 12%);
 }
 
-.material-template-example-load:focus-visible {
+.material-template-example-category-tabs button span {
+  color: var(--yct-color-text-muted);
+  font-size: 10px;
+}
+
+.material-template-example {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  align-self: start;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 88%, var(--yct-color-surface));
+  color: var(--yct-color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    box-shadow var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.material-template-example:hover:not(:disabled) {
+  border-color: var(--yct-color-primary);
+  box-shadow: 0 4px 14px rgb(30 45 42 / 10%);
+}
+
+.material-template-example:focus-visible {
   outline: 0;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--yct-color-primary) 24%, transparent);
 }
 
+.material-template-example:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.material-template-example-load {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  color: var(--yct-color-primary);
+  font-size: 12px;
+}
+
 .material-template-example-load .material-symbols-outlined {
   font-size: 16px;
+}
+
+.metro-wayfinding-example-preview {
+  display: grid;
+  place-items: center;
+  min-height: 92px;
+  overflow: hidden;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--yct-color-surface-muted);
+}
+
+.metro-wayfinding-example-preview-sign {
+  display: grid;
+  max-width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgb(20 24 23 / 18%);
+}
+
+.metro-wayfinding-example-preview.is-vertical .metro-wayfinding-example-preview-sign {
+  max-width: 100%;
+}
+
+.metro-wayfinding-example-preview-row {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 0;
+  padding: 4px;
+  gap: 2px;
+}
+
+.metro-wayfinding-example-preview.is-vertical .metro-wayfinding-example-preview-row {
+  flex-direction: column;
+}
+
+.metro-wayfinding-example-preview-element {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.metro-wayfinding-example-preview-element.is-icon {
+  flex: 0 0 26px;
+}
+
+.metro-wayfinding-example-preview.is-vertical .metro-wayfinding-example-preview-element.is-icon {
+  flex-basis: 25px;
+}
+
+.metro-wayfinding-example-preview-element.is-icon .metro-wayfinding-facility-asset,
+.metro-wayfinding-example-preview-element.is-icon .material-symbols-outlined {
+  width: 22px;
+  height: 22px;
+  font-size: 22px;
+}
+
+.metro-wayfinding-example-preview-element.is-text {
+  display: grid;
+  flex: 0 1 auto;
+  align-content: center;
+  padding: 1px 2px;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+.metro-wayfinding-example-preview-element.is-text strong,
+.metro-wayfinding-example-preview-element.is-text small {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.metro-wayfinding-example-preview-element.is-text strong {
+  font-size: 8px;
+}
+
+.metro-wayfinding-example-preview-element.is-text small {
+  font-size: 5px;
+}
+
+.metro-wayfinding-example-preview-element.is-text.is-center strong,
+.metro-wayfinding-example-preview-element.is-text.is-center small {
+  justify-content: center;
+}
+
+.metro-wayfinding-example-preview-element.is-text.is-right strong,
+.metro-wayfinding-example-preview-element.is-text.is-right small {
+  justify-content: flex-end;
+}
+
+.metro-wayfinding-example-preview-element.is-writing-vertical {
+  justify-self: center;
+  writing-mode: vertical-rl;
+}
+
+.metro-wayfinding-example-preview-element.is-text i {
+  font-style: normal;
+}
+
+.metro-wayfinding-example-preview-element.is-text .is-line {
+  display: inline-grid;
+  min-width: 10px;
+  height: 10px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 6px;
+}
+
+.metro-wayfinding-example-preview-element.is-text .is-boxed,
+.metro-wayfinding-example-preview-element.is-large-text:not(.is-none) {
+  border: 1px solid currentColor;
+}
+
+.metro-wayfinding-example-preview-element.is-large-text {
+  position: relative;
+  flex: 0 0 20px;
+  height: 20px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.metro-wayfinding-example-preview-element.is-large-text.is-circle {
+  border-radius: 50%;
+}
+
+.metro-wayfinding-example-preview-element.is-large-text small {
+  font-size: 6px;
+}
+
+.metro-wayfinding-example-preview-element.is-space {
+  flex: 0 0 8px;
+}
+
+.metro-wayfinding-example-preview-element.is-space.is-flex {
+  flex: 1 1 16px;
+}
+
+.metro-wayfinding-example-preview-element.is-divider {
+  flex: 0 0 1px;
+  align-self: stretch;
+  background: currentColor;
+  opacity: 0.72;
+}
+
+.metro-wayfinding-example-preview.is-vertical .metro-wayfinding-example-preview-element.is-divider {
+  flex-basis: 1px;
+  width: 100%;
+}
+
+.metro-wayfinding-example-preview-element.is-combination {
+  display: inline-flex;
+  flex: 0 1 auto;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid currentColor;
 }
 
 .material-studio-sidebar > p,
@@ -6389,57 +6609,61 @@ img.map-player-list-avatar.is-offline {
   justify-content: flex-end;
 }
 
-.metro-wayfinding-import-button,
-.metro-wayfinding-clear-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 11px;
-  border: 1px solid color-mix(in srgb, var(--yct-color-error) 36%, var(--yct-color-border));
-  border-radius: var(--yct-radius-sm);
-  background: transparent;
-  color: var(--yct-color-error);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.metro-wayfinding-import-button {
-  border-color: var(--yct-color-border);
-  background: var(--yct-color-surface-panel);
-  color: var(--yct-color-text-secondary);
-}
-
-.metro-wayfinding-import-button:hover:not(:disabled) {
-  border-color: var(--yct-color-primary);
-  color: var(--yct-color-primary);
-}
-
-.metro-wayfinding-import-button:focus-visible {
-  outline: 0;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--yct-color-primary) 20%, transparent);
-}
-
-.metro-wayfinding-clear-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--yct-color-error) 10%, transparent);
-}
-
-.metro-wayfinding-clear-button:focus-visible {
-  outline: 0;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--yct-color-error) 20%, transparent);
-}
-
-.metro-wayfinding-import-button:disabled,
-.metro-wayfinding-clear-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.metro-wayfinding-import-button .material-symbols-outlined,
-.metro-wayfinding-clear-button .material-symbols-outlined {
+.metro-wayfinding-toolbar-actions .secondary-action-button .material-symbols-outlined {
   font-size: 18px;
+}
+
+.metro-wayfinding-empty-card {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: center;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-4);
+  border: 1px dashed var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-surface-muted) 62%, var(--yct-color-surface));
+}
+
+.metro-wayfinding-empty-card > div:first-child {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--yct-space-3);
+}
+
+.metro-wayfinding-empty-card > div:first-child > .material-symbols-outlined {
+  flex: 0 0 auto;
+  color: var(--yct-color-primary);
+  font-size: 30px;
+}
+
+.metro-wayfinding-empty-card > div:first-child > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  overflow-wrap: anywhere;
+}
+
+.metro-wayfinding-empty-card strong {
+  color: var(--yct-color-text);
+  font-size: 14px;
+}
+
+.metro-wayfinding-empty-card span:not(.material-symbols-outlined) {
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.metro-wayfinding-empty-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: var(--yct-space-2);
+}
+
+.metro-wayfinding-empty-card-actions > button {
+  white-space: nowrap;
 }
 
 .metro-wayfinding-import-button .material-symbols-outlined {
@@ -6463,6 +6687,204 @@ img.map-player-list-avatar.is-offline {
 
 .metro-wayfinding-import-backdrop {
   z-index: 100;
+}
+
+.metro-wayfinding-project-backdrop {
+  z-index: 99;
+}
+
+.modal-panel.metro-wayfinding-project-dialog {
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: min(980px, 100%);
+  max-height: min(820px, calc(100dvh - 32px));
+  overflow: hidden;
+}
+
+.metro-wayfinding-project-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+}
+
+.metro-wayfinding-project-dialog > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.metro-wayfinding-project-dialog > header span {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+}
+
+.metro-wayfinding-project-dialog h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.metro-wayfinding-project-dialog-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.metro-wayfinding-project-dialog .material-template-examples {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.metro-wayfinding-project-dialog .material-template-example-list {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.metro-wayfinding-project-empty,
+.metro-wayfinding-project-import {
+  display: grid;
+  gap: var(--yct-space-2);
+  min-height: 300px;
+  padding: var(--yct-space-5);
+  border: 1px dashed var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  color: var(--yct-color-text-secondary);
+  text-align: center;
+}
+
+.metro-wayfinding-project-empty {
+  place-items: center;
+}
+
+.metro-wayfinding-project-import {
+  align-content: center;
+  justify-items: stretch;
+  transition:
+    border-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    background-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    box-shadow var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.metro-wayfinding-project-import.is-drag-active {
+  border-color: var(--yct-color-primary);
+  background: color-mix(in srgb, var(--yct-color-primary) 8%, var(--yct-color-surface-panel));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--yct-color-primary) 18%, transparent);
+}
+
+.metro-wayfinding-project-empty .material-symbols-outlined,
+.metro-wayfinding-project-import > .material-symbols-outlined {
+  color: var(--yct-color-primary);
+  font-size: 36px;
+}
+
+.metro-wayfinding-project-import > .material-symbols-outlined,
+.metro-wayfinding-project-import > button {
+  justify-self: center;
+}
+
+.metro-wayfinding-project-import-copy {
+  display: grid;
+  justify-items: center;
+  gap: var(--yct-space-1);
+  text-align: center;
+}
+
+.metro-wayfinding-project-import-copy strong {
+  color: var(--yct-color-text);
+  font-size: 16px;
+}
+
+.metro-wayfinding-project-import-copy p {
+  max-width: 620px;
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.metro-wayfinding-project-import-sources,
+.metro-wayfinding-project-import-limits {
+  display: grid;
+  width: min(620px, 100%);
+  justify-self: center;
+  gap: var(--yct-space-1);
+  text-align: left;
+}
+
+.metro-wayfinding-project-import-sources > span,
+.metro-wayfinding-project-import-limits > span {
+  color: var(--yct-color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.metro-wayfinding-project-import-sources ul {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-block: 1px solid var(--yct-color-border);
+  list-style: none;
+}
+
+.metro-wayfinding-project-import-sources li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+  min-height: 34px;
+  border-bottom: 1px solid var(--yct-color-border);
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+}
+
+.metro-wayfinding-project-import-sources li:last-child {
+  border-bottom: 0;
+}
+
+.metro-wayfinding-project-import-sources a {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  color: var(--yct-color-primary);
+  font-weight: 700;
+  text-underline-offset: 3px;
+}
+
+.metro-wayfinding-project-import-sources a .material-symbols-outlined {
+  flex: 0 0 auto;
+  font-size: 15px;
+}
+
+.metro-wayfinding-project-import-sources small,
+.metro-wayfinding-project-import-limits small {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.metro-wayfinding-project-import-drop-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-self: center;
+  gap: var(--yct-space-1);
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+}
+
+.metro-wayfinding-project-import-drop-hint .material-symbols-outlined {
+  font-size: 17px;
+}
+
+.metro-wayfinding-project-import.is-drag-active .metro-wayfinding-project-import-drop-hint {
+  color: var(--yct-color-primary);
+  font-weight: 700;
+}
+
+.metro-wayfinding-project-import .metro-wayfinding-import-error {
+  width: min(560px, 100%);
+  margin-top: var(--yct-space-2);
 }
 
 .metro-wayfinding-import-dialog {
@@ -6592,6 +7014,18 @@ img.map-player-list-avatar.is-offline {
 }
 
 @media (max-width: 640px) {
+  .metro-wayfinding-empty-card {
+    grid-template-columns: 1fr;
+  }
+
+  .metro-wayfinding-empty-card-actions {
+    justify-content: stretch;
+  }
+
+  .metro-wayfinding-empty-card-actions > button {
+    flex: 1 1 0;
+  }
+
   .metro-wayfinding-import-facts {
     grid-template-columns: 1fr;
   }
@@ -7883,6 +8317,74 @@ img.map-player-list-avatar.is-offline {
 
   .material-field-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .material-sidebar-disclosure {
+    display: grid;
+    gap: var(--yct-space-2);
+    min-width: 0;
+    padding-top: var(--yct-space-3);
+    border-top: 1px solid var(--yct-color-border);
+  }
+
+  .material-sidebar-disclosure > summary {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--yct-space-2);
+    min-height: 38px;
+    color: var(--yct-color-text);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .material-sidebar-disclosure > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .material-sidebar-disclosure > summary strong {
+    font-size: 14px;
+  }
+
+  .material-sidebar-disclosure > summary .material-symbols-outlined {
+    color: var(--yct-color-text-muted);
+    font-size: 20px;
+  }
+
+  .material-sidebar-disclosure-body {
+    display: grid;
+    min-width: 0;
+  }
+
+  .material-sidebar-disclosure:not([open]) > .material-sidebar-disclosure-body {
+    display: none;
+  }
+
+  .material-sidebar-disclosure-body > .transit-network-source {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .material-sidebar-disclosure-body > .transit-network-source > .transit-network-source-heading > div {
+    display: none;
+  }
+
+  .material-sidebar-disclosure-body > .transit-network-source > .transit-network-source-heading {
+    justify-content: flex-end;
+  }
+
+  .material-sidebar-disclosure-body > .material-canvas-editor {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .material-sidebar-disclosure-body > .material-canvas-editor > legend {
+    display: none;
+  }
+
+  .metro-wayfinding-empty-card {
+    order: -1;
   }
 
   .metro-wayfinding-toolbar,
@@ -12030,7 +12532,7 @@ img.map-player-list-avatar.is-offline {
 .transit-visual-map-stage {
   position: absolute;
   z-index: 1;
-  inset: 72px 0 0;
+  inset: var(--yct-topbar-height) 0 0;
   overflow: hidden;
   touch-action: none;
   user-select: none;
@@ -12141,7 +12643,7 @@ img.map-player-list-avatar.is-offline {
 .transit-visual-route-panel {
   position: absolute;
   z-index: 4;
-  top: 88px;
+  top: calc(var(--yct-topbar-height) + 16px);
   left: 16px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -12392,7 +12894,7 @@ img.map-player-list-avatar.is-offline {
 .transit-visual-viewport-controls {
   position: absolute;
   z-index: 5;
-  top: 88px;
+  top: calc(var(--yct-topbar-height) + 16px);
   right: 16px;
   display: flex;
   overflow: hidden;
@@ -12483,18 +12985,18 @@ img.map-player-list-avatar.is-offline {
   }
 
   .transit-visual-map-stage {
-    inset-block-start: 62px;
+    inset-block-start: var(--yct-topbar-height);
   }
 
   .transit-visual-route-panel {
-    top: 70px;
+    top: calc(var(--yct-topbar-height) + 8px);
     left: 8px;
     width: calc(100vw - 16px);
     max-height: min(46dvh, 420px);
   }
 
   .transit-visual-viewport-controls {
-    top: 70px;
+    top: calc(var(--yct-topbar-height) + 8px);
     right: 8px;
   }
 
@@ -12964,6 +13466,7 @@ img.map-player-list-avatar.is-offline {
   background: var(--yct-color-surface);
   color: var(--yct-color-text-secondary);
   font-weight: 600;
+  cursor: pointer;
 }
 
 .secondary-action-button.is-primary {
@@ -12975,6 +13478,16 @@ img.map-player-list-avatar.is-offline {
 .secondary-action-button:disabled {
   cursor: not-allowed;
   opacity: 0.58;
+}
+
+.metro-wayfinding-toolbar-actions .metro-wayfinding-clear-button {
+  border-color: color-mix(in srgb, var(--yct-color-error) 42%, var(--yct-color-border));
+  color: var(--yct-color-error);
+}
+
+.metro-wayfinding-toolbar-actions .metro-wayfinding-clear-button:hover:not(:disabled) {
+  border-color: var(--yct-color-error);
+  background: color-mix(in srgb, var(--yct-color-error) 10%, var(--yct-color-surface));
 }
 
 .visual-editor-page {
@@ -13067,16 +13580,335 @@ img.map-player-list-avatar.is-offline {
   padding: var(--yct-space-4);
 }
 
-.admin-operations-panel.is-content-editor-page {
-  display: block;
-  padding: 0;
+.visual-editor-page.is-workspace {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  min-height: 100dvh;
   border: 0;
-  background: transparent;
-  box-shadow: none;
+  border-radius: 0;
 }
 
-.admin-operations-panel.is-content-editor-page > :not(.visual-editor-page) {
-  display: none;
+.visual-editor-page.is-workspace > .secondary-topbar {
+  z-index: 10;
+}
+
+.visual-editor-page.is-workspace > .visual-editor-page-body {
+  overflow: hidden;
+  padding: 0;
+}
+
+.admin-geometry-launch-card,
+.admin-markdown-launch-card {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: 8px;
+  background: var(--yct-color-surface);
+}
+
+.admin-geometry-launch-card > div,
+.admin-markdown-launch-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+}
+
+.admin-geometry-launch-card p,
+.admin-markdown-launch-card p {
+  margin: 0;
+}
+
+.admin-geometry-launch-card .secondary-action-button,
+.admin-markdown-launch-card .secondary-action-button {
+  justify-self: start;
+}
+
+.poi-visual-workspace,
+.markdown-visual-workspace {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--yct-color-surface-muted);
+}
+
+.poi-visual-map-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+
+.poi-visual-workspace.is-tool-pan .poi-visual-map-stage {
+  cursor: grab;
+}
+
+.poi-visual-workspace.is-tool-pan .poi-visual-map-stage:active {
+  cursor: grabbing;
+}
+
+.poi-visual-workspace.is-tool-draw .poi-visual-map-stage {
+  cursor: crosshair;
+}
+
+.poi-visual-workspace.is-tool-move .poi-visual-map-stage {
+  cursor: default;
+}
+
+.poi-visual-workspace.is-tool-move .admin-poi-geometry-map-node {
+  cursor: grab;
+  pointer-events: all;
+}
+
+.poi-visual-map-stage > svg,
+.poi-visual-map-stage > .admin-poi-audit-map-tiles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.poi-visual-map-stage > svg {
+  z-index: 1;
+}
+
+.poi-visual-coordinate-panel,
+.markdown-source-panel {
+  position: absolute;
+  z-index: 4;
+  top: 16px;
+  bottom: 16px;
+  left: 16px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(430px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--yct-color-border) 78%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 96%, transparent);
+  box-shadow: 0 12px 34px rgb(30 45 42 / 18%);
+}
+
+.poi-visual-coordinate-panel {
+  bottom: 92px;
+}
+
+.poi-visual-coordinate-panel.is-collapsed,
+.markdown-visual-workspace.is-source-collapsed .markdown-source-panel {
+  bottom: auto;
+  grid-template-rows: auto;
+}
+
+.poi-visual-coordinate-panel-heading,
+.markdown-source-panel-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-3);
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+.poi-visual-coordinate-panel-heading > div,
+.markdown-source-panel-heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.poi-visual-coordinate-panel-heading strong,
+.poi-visual-coordinate-panel-heading span,
+.markdown-source-panel-heading strong,
+.markdown-source-panel-heading span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.poi-visual-coordinate-panel-heading span,
+.markdown-source-panel-heading span {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+}
+
+.poi-visual-coordinate-panel-heading button,
+.markdown-source-panel-heading button,
+.poi-visual-toolbox button,
+.poi-visual-viewport-controls button {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  cursor: pointer;
+}
+
+.poi-visual-coordinate-panel-heading button,
+.markdown-source-panel-heading button {
+  background: var(--yct-color-surface-muted);
+}
+
+.poi-visual-coordinate-panel-body {
+  display: grid;
+  align-content: start;
+  gap: var(--yct-space-3);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--yct-space-3);
+}
+
+.poi-visual-coordinate-panel-body > label,
+.poi-visual-coordinate-panel-body label {
+  display: grid;
+  gap: var(--yct-space-1);
+}
+
+.poi-visual-coordinate-panel-body select,
+.poi-visual-coordinate-panel-body input {
+  width: 100%;
+  min-width: 0;
+}
+
+.poi-visual-point-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--yct-space-2);
+}
+
+.poi-visual-coordinate-panel .admin-poi-nonpoint-geometry-editor {
+  min-height: 0;
+}
+
+.poi-visual-coordinate-panel .admin-poi-coordinate-row {
+  grid-template-columns: 28px repeat(3, minmax(0, 1fr));
+}
+
+.poi-visual-toolbox,
+.poi-visual-viewport-controls {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--yct-color-border) 78%, transparent);
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 97%, transparent);
+  box-shadow: 0 10px 28px rgb(30 45 42 / 18%);
+}
+
+.poi-visual-toolbox {
+  bottom: 20px;
+  left: 16px;
+  gap: var(--yct-space-1);
+  padding: 6px;
+}
+
+.poi-visual-toolbox button {
+  width: 46px;
+  height: 46px;
+}
+
+.poi-visual-toolbox button:is(:hover, :focus-visible),
+.poi-visual-viewport-controls button:is(:hover, :focus-visible) {
+  background: var(--yct-color-surface-muted);
+}
+
+.poi-visual-toolbox button.is-active {
+  background: var(--yct-color-primary-soft);
+  color: var(--yct-color-primary-hover);
+}
+
+.poi-visual-toolbox button:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.poi-visual-viewport-controls {
+  top: 16px;
+  right: 16px;
+}
+
+.poi-visual-viewport-controls button {
+  border-radius: 0;
+}
+
+.poi-visual-viewport-controls button + button {
+  border-left: 1px solid var(--yct-color-border);
+}
+
+.markdown-source-panel textarea {
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: var(--yct-space-4);
+  border: 0;
+  border-radius: 0;
+  outline-offset: -2px;
+  background: transparent;
+  color: var(--yct-color-text);
+  font:
+    14px/1.65 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    'Liberation Mono',
+    monospace;
+  resize: none;
+}
+
+.markdown-visual-preview {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  padding: 40px max(48px, calc((100vw - 1280px) / 2)) 96px 494px;
+  scroll-behavior: smooth;
+  background: var(--yct-color-surface-panel);
+}
+
+.markdown-visual-workspace.is-source-collapsed .markdown-visual-preview {
+  padding-left: max(48px, calc((100vw - 920px) / 2));
+}
+
+.markdown-visual-preview > * {
+  width: min(760px, 100%);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.markdown-visual-preview-heading {
+  display: grid;
+  gap: var(--yct-space-2);
+  margin-bottom: var(--yct-space-5);
+}
+
+.markdown-visual-preview-heading span {
+  color: var(--yct-color-primary-hover);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.markdown-visual-preview-heading h2,
+.markdown-visual-preview-heading p {
+  margin: 0;
+}
+
+.markdown-visual-preview-heading h2 {
+  font-size: 40px;
+  letter-spacing: 0;
+}
+
+.markdown-visual-preview-heading p {
+  color: var(--yct-color-text-muted);
+  line-height: 1.7;
 }
 
 .visual-editor-empty-state {
@@ -13096,74 +13928,6 @@ img.map-player-list-avatar.is-offline {
 
 .visual-editor-empty-state p {
   margin: 0;
-}
-
-.visual-editor-page .admin-poi-edit-dialog,
-.visual-editor-page .admin-content-editor-dialog {
-  display: grid;
-  gap: var(--yct-space-3);
-  width: min(1180px, 100%);
-  margin: 0 auto;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.visual-editor-page .admin-content-actions {
-  display: none;
-}
-
-.visual-editor-page .admin-poi-edit-coordinate,
-.visual-editor-page .admin-poi-nonpoint-geometry-editor {
-  min-height: 420px;
-}
-
-.visual-editor-page.is-poi-editor .embedded-map-location-picker-stage,
-.visual-editor-page.is-poi-editor .admin-poi-geometry-map-stage {
-  width: 100%;
-  max-width: none;
-  min-height: min(58dvh, 620px);
-  aspect-ratio: auto;
-}
-
-.admin-poi-focused-geometry-entry,
-.admin-poi-focused-geometry {
-  display: grid;
-  min-width: 0;
-  gap: var(--yct-space-2);
-}
-
-.admin-poi-focused-geometry-entry > button {
-  display: inline-flex;
-  align-items: center;
-  justify-self: start;
-  gap: var(--yct-space-1);
-  min-height: 38px;
-  padding: 0 var(--yct-space-3);
-  border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-pill);
-  background: var(--yct-color-surface);
-  color: var(--yct-color-text-secondary);
-  font-weight: 700;
-}
-
-.admin-poi-focused-geometry {
-  min-height: calc(100dvh - 144px);
-}
-
-.admin-poi-focused-geometry > .admin-poi-focused-geometry-entry {
-  align-content: start;
-}
-
-.visual-editor-page.is-markdown-editor .admin-editor-markdown-grid {
-  min-height: 520px;
-  grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.1fr);
-}
-
-.visual-editor-page.is-markdown-editor .admin-editor-markdown textarea {
-  min-height: 520px;
-  resize: none;
 }
 
 @media (max-width: 720px) {
@@ -13196,22 +13960,76 @@ img.map-player-list-avatar.is-offline {
     padding: var(--yct-space-3);
   }
 
-  .visual-editor-page.is-markdown-editor .admin-editor-markdown-grid {
+  .visual-editor-page.is-workspace > .visual-editor-page-body {
+    padding: 0;
+  }
+
+  .visual-editor-page-status {
+    display: none;
+  }
+
+  .poi-visual-coordinate-panel,
+  .markdown-source-panel {
+    top: 8px;
+    bottom: 74px;
+    left: 8px;
+  }
+
+  .poi-visual-coordinate-panel {
+    right: auto;
+    width: calc(100vw - 72px);
+  }
+
+  .markdown-source-panel {
+    right: 8px;
+    width: auto;
+  }
+
+  .poi-visual-coordinate-panel.is-collapsed,
+  .markdown-visual-workspace.is-source-collapsed .markdown-source-panel {
+    right: auto;
+    bottom: auto;
+    width: min(300px, calc(100vw - 72px));
+  }
+
+  .poi-visual-toolbox {
+    bottom: 8px;
+    left: 8px;
+    gap: 0;
+    padding: 4px;
+  }
+
+  .poi-visual-toolbox button {
+    width: 42px;
+    height: 42px;
+  }
+
+  .poi-visual-viewport-controls {
+    top: 8px;
+    right: 8px;
+  }
+
+  .poi-visual-point-fields,
+  .poi-visual-coordinate-panel .admin-poi-coordinate-row {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .visual-editor-page.is-markdown-editor .admin-editor-markdown textarea {
-    min-height: 320px;
+  .poi-visual-coordinate-panel .admin-poi-coordinate-row > span {
+    text-align: left;
   }
 
-  .visual-editor-page.is-poi-editor .embedded-map-location-picker-stage,
-  .visual-editor-page.is-poi-editor .admin-poi-geometry-map-stage {
-    min-height: 360px;
+  .markdown-visual-preview,
+  .markdown-visual-workspace.is-source-collapsed .markdown-visual-preview {
+    padding: 28px 20px 80px;
+  }
+
+  .markdown-visual-preview-heading h2 {
+    font-size: 30px;
   }
 }
 
 .secondary-action-button[aria-busy='true']:disabled {
-  cursor: wait;
+  cursor: default;
 }
 
 .secondary-action-button[aria-busy='true'] .material-symbols-outlined {
@@ -15953,6 +16771,7 @@ img.map-player-list-avatar.is-offline {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: var(--yct-space-2);
   min-width: 40px;
   min-height: 40px;
 }
