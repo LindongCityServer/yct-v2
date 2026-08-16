@@ -1,4 +1,4 @@
-const YCT_SW_VERSION = '2026-07-03-01';
+const YCT_SW_VERSION = '2026-08-16-01';
 const YCT_SHELL_CACHE = `yct-shell-${YCT_SW_VERSION}`;
 const YCT_RUNTIME_CACHE = `yct-runtime-${YCT_SW_VERSION}`;
 const YCT_DATA_CACHE = `yct-data-${YCT_SW_VERSION}`;
@@ -13,6 +13,9 @@ const YCT_CORE_URLS = [
   '/travel/screen',
   '/services',
   '/services/changelog',
+  '/services/transit-network-health',
+  '/services/road-materials',
+  '/services/transit-materials',
   '/map',
   '/offline',
   '/manifest.webmanifest',
@@ -35,7 +38,13 @@ const YCT_DATA_PATHS = new Set([
   '/api/transit/screen',
   '/api/transit/service-notices',
   '/api/transit/station-details',
+  '/api/transit/network-health',
   '/api/travel/schedules',
+  '/api/materials/templates',
+  '/api/materials/transit-lines',
+  '/api/materials/transit-stations',
+  '/api/materials/locations',
+  '/api/materials/transit-network-projects/sample',
 ]);
 
 self.addEventListener('install', (event) => {
@@ -144,6 +153,28 @@ async function warmAppShell() {
         }
       } catch {
         // 单个预热失败不影响整体安装。
+      }
+    }),
+  );
+
+  const dataCache = await caches.open(YCT_DATA_CACHE);
+  await Promise.all(
+    [
+      '/api/transit/network-health',
+      '/api/materials/templates',
+      '/api/materials/transit-lines',
+      '/api/materials/transit-stations',
+      '/api/materials/locations',
+      '/api/materials/transit-network-projects/sample',
+    ].map(async (url) => {
+      const scopedUrl = fromAppPath(url);
+      try {
+        const response = await fetch(scopedUrl, { cache: 'reload' });
+        if (response.ok) {
+          await dataCache.put(scopedUrl, response);
+        }
+      } catch {
+        // 动态数据预热失败时仍保留已完成的应用壳。
       }
     }),
   );
@@ -272,14 +303,20 @@ function isStaticAsset(url) {
   return (
     appPath.startsWith('/_next/static/') ||
     appPath.startsWith('/icons/') ||
-    appPath === '/manifest.webmanifest'
+    appPath === '/manifest.webmanifest' ||
+    appPath.startsWith('/material-project-examples/')
   );
 }
 
 function isRecentContentPath(url) {
   const appPath = toAppPath(url);
   return (
-    isRecentTravelPath(appPath) || isRecentMapPath(appPath) || appPath.startsWith('/operations/')
+    isRecentTravelPath(appPath) ||
+    isRecentMapPath(appPath) ||
+    appPath.startsWith('/operations/') ||
+    appPath === '/services/transit-network-health' ||
+    appPath === '/services/road-materials' ||
+    appPath === '/services/transit-materials'
   );
 }
 

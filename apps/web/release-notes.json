@@ -3,6 +3,72 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.9.2",
+      "releasedAt": "2026-08-16T08:45:10.612Z",
+      "sourceFingerprint": "262770c611adf072ecc204a76166cee9cac107b78e34c06d7994457ac1598c43",
+      "themes": ["materials", "account", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "升级地铁导视牌工作台：支持模板库、示例车站与线路选择、反转排布、组合框箭头和移动端布局优化"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "完善 RMP 与服务器线网的导视牌数据适配，支持按线路生成模板内容并改进站名、方向和拼音处理"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复服务器线网切换被异步草稿恢复覆盖的问题，并修正导视图标方向与模板默认尺寸"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "限制服务器线网无水印图片下载：仅已验证服务器账号可导出，未验证时自动回退带水印预览"
+        }
+      ]
+    },
+    {
+      "version": "2.9.1",
+      "releasedAt": "2026-08-09T03:55:10.226Z",
+      "sourceFingerprint": "6b1bac67deebd1c7ef925ed1efc1bd9d1172e930890150c35ec8b55137adeec8",
+      "themes": ["map", "admin", "content", "account", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "调整 POI 编辑流程：名称、分类等信息继续在弹窗编辑，几何形状、坐标和控制点改用独立地图工作台"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "调整内容编辑流程：元数据继续在弹窗编辑，Markdown 改用源码与实时预览双栏页面"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "新建内容可先创建空正文草稿并自动进入 Markdown 编辑器，审核和发布仍要求有效正文"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "支持本机开发环境创建真实管理员会话，便于验证后台功能"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "统一 POI、Markdown 与线路可视化编辑页的二级标题栏和忙状态反馈"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复短分享链接在反向代理场景下跳转到错误站点的问题"
+        }
+      ]
+    },
+    {
       "version": "2.9.0",
       "releasedAt": "2026-08-08T10:03:19.058Z",
       "sourceFingerprint": "f782eebfb5f7593d8b2b4a7939a7a9f8201e5724d299259c7964235d86cfb592",
