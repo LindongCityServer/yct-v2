@@ -17,6 +17,7 @@ interface AccountStatusResponse {
   accountStatus: 'not_configured' | 'anonymous' | 'active' | 'readonly' | 'unavailable';
   username?: string;
   avatarUrl?: string | null;
+  serverAccountVerified?: boolean;
   badge: AccountBadgeSummary;
   admin?: {
     role: 'admin' | 'super_admin';
@@ -102,6 +103,7 @@ export async function GET(request: NextRequest) {
           accountStatus: 'active',
           username: identity?.username ?? session.user.username,
           avatarUrl: identity?.avatarUrl,
+          serverAccountVerified: session.user.serverAccountVerified,
           badge:
             totalBadgeCount > 0
               ? {

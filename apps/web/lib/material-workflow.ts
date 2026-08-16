@@ -17,7 +17,12 @@ import type {
   MaterialTemplateDraftInput,
 } from '@yct/schemas';
 import { publishDomainEvent } from './app-event-bus';
-import { findMaterialDraft, listMaterialDrafts, writeMaterialDraft } from './material-draft-store';
+import {
+  findMaterialDraft,
+  findMaterialDraftByClientDraftId,
+  listMaterialDrafts,
+  writeMaterialDraft,
+} from './material-draft-store';
 import {
   appendMaterialExportAuditRecord,
   listMaterialExportAuditRecords,
@@ -51,6 +56,8 @@ export type MaterialWorkflowResult = MaterialWorkflowSuccess | MaterialWorkflowF
 
 interface MaterialWorkflowSuccess {
   ok: true;
+  created?: boolean;
+  updated?: boolean;
 }
 
 interface MaterialWorkflowFailure {
@@ -225,8 +232,43 @@ export async function createManualMaterialDraft(input: {
     return invalidInput(error);
   }
   const now = new Date().toISOString();
+  const existingDraft = input.draft.clientDraftId
+    ? await findMaterialDraftByClientDraftId(input.actorId, input.draft.clientDraftId)
+    : undefined;
+  if (existingDraft) {
+    if (existingDraft.status !== 'draft' && existingDraft.status !== 'rejected') {
+      return invalidState('服务端已有一份待审核或已通过的同一草稿，请先处理它。');
+    }
+    const updatedDraft: MaterialDraft = {
+      ...existingDraft,
+      clientDraftId: input.draft.clientDraftId,
+      templateId: input.draft.templateId,
+      templateVersion: input.draft.templateVersion,
+      input: values,
+      canvas: input.draft.canvas,
+      status: 'draft',
+      submittedAt: undefined,
+      reviewedBy: undefined,
+      reviewedAt: undefined,
+      reviewReason: undefined,
+      updatedAt: now,
+    };
+    await writeMaterialDraft(updatedDraft);
+    await emitEvent('MaterialDraftUpdated', 'user', input.actorId, {
+      draftId: updatedDraft.id,
+      clientDraftId: updatedDraft.clientDraftId,
+      templateId: updatedDraft.templateId,
+      templateVersion: updatedDraft.templateVersion,
+      updatedBy: input.actorId,
+      changedFields: ['templateId', 'templateVersion', 'input', 'canvas'],
+      updatedAt: now,
+    });
+    return { ok: true, draft: updatedDraft, updated: true };
+  }
+
   const draft: MaterialDraft = {
     id: `material_draft_${randomUUID()}`,
+    clientDraftId: input.draft.clientDraftId,
     templateId: input.draft.templateId,
     templateVersion: input.draft.templateVersion,
     input: values,
@@ -237,7 +279,15 @@ export async function createManualMaterialDraft(input: {
     updatedAt: now,
   };
   await writeMaterialDraft(draft);
-  return { ok: true, draft };
+  await emitEvent('MaterialDraftCreated', 'user', input.actorId, {
+    draftId: draft.id,
+    clientDraftId: draft.clientDraftId,
+    templateId: draft.templateId,
+    templateVersion: draft.templateVersion,
+    createdBy: input.actorId,
+    createdAt: now,
+  });
+  return { ok: true, draft, created: true };
 }
 
 export async function submitManualMaterialDraft(input: {
@@ -311,7 +361,16 @@ export async function reviewManualMaterialDraft(input: {
 export async function prepareMaterialExport(input: {
   request: MaterialExportRequestInput;
   actorId: string;
+  serverAccountVerified: boolean;
 }): Promise<MaterialExportResult> {
+  if (requiresVerifiedServerAccount(input.request) && !input.serverAccountVerified) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'server_account_not_verified_for_material_export',
+      message: '使用服务器线网生成无水印图片前，需要先验证服务器账号。',
+    };
+  }
   const source = await resolveMaterialExportSource(input.request, input.actorId);
   if (!source.ok) {
     return source;
@@ -360,6 +419,16 @@ export async function prepareMaterialExport(input: {
   } catch (error) {
     return invalidInput(error);
   }
+}
+
+function requiresVerifiedServerAccount(request: MaterialExportRequestInput): boolean {
+  if (request.mode !== 'server' || !request.source) {
+    return false;
+  }
+  if (request.source.kind === 'transit_line') {
+    return true;
+  }
+  return request.source.kind === 'transit_station' && 'stationMarkerId' in request.source;
 }
 
 export async function prepareMaterialPreview(input: {

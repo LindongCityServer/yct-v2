@@ -22,7 +22,14 @@ export function findTextContinuation(
     const candidate = candidates.find(
       ({ normalized }) => normalized.length > normalizedSuffix.length,
     );
-    if (candidate) return `${value.slice(0, start)}${candidate.suggestion}`;
+    if (candidate) {
+      // 保留用户已经输入的原始空格；补全只追加候选词尚未输入的部分。
+      const rawSuffix = candidate.suggestion.slice(normalizedSuffix.length);
+      const continuation = /\s/uy.test(value.at(-1) ?? '')
+        ? rawSuffix.replace(/^\s+/u, '')
+        : rawSuffix;
+      return `${value}${continuation}`;
+    }
   }
   return undefined;
 }

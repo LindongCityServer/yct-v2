@@ -25,6 +25,7 @@ import {
   parseMetroWayfindingLayout,
   resolveMetroArrowIconAssetName,
   resolveMetroFacilityIconAssetName,
+  resolveMetroWayfindingFacilityDefaultDirection,
   resolveMetroWayfindingLayoutSizing,
   resolveMetroWayfindingCombinationSizing,
   resolveMetroWayfindingElementWidth,
@@ -1076,15 +1077,26 @@ function resolveMetroFacilityAssetDirectionTransform(
   iconId: string,
   direction: 'left' | 'right' | 'up' | 'down' | undefined,
 ): string {
-  if (iconId === 'stairs' || iconId === 'stairs-down' || iconId === 'escalator') {
-    return direction === 'left' ? 'translate(85 0) scale(-1 1)' : '';
+  if (
+    iconId === 'stairs' ||
+    iconId === 'stairs-down' ||
+    iconId === 'escalator' ||
+    iconId === 'wheelchair-lift'
+  ) {
+    const effectiveDirection =
+      direction ?? resolveMetroWayfindingFacilityDefaultDirection(iconId) ?? 'left';
+    const shouldFlip =
+      iconId === 'stairs-down' ? effectiveDirection === 'right' : effectiveDirection === 'left';
+    return shouldFlip ? 'translate(85 0) scale(-1 1)' : '';
   }
   if (iconId !== 'exit') {
     return '';
   }
-  if (direction === 'left') return 'rotate(-90 42.5 64)';
-  if (direction === 'up') return '';
-  if (direction === 'down') return 'rotate(180 42.5 64)';
+  const effectiveDirection =
+    direction ?? resolveMetroWayfindingFacilityDefaultDirection(iconId) ?? 'up';
+  if (effectiveDirection === 'left') return 'rotate(-90 42.5 64)';
+  if (effectiveDirection === 'up') return '';
+  if (effectiveDirection === 'down') return 'rotate(180 42.5 64)';
   return 'rotate(90 42.5 64)';
 }
 
@@ -1101,15 +1113,17 @@ function resolveMetroIconDirectionTransform(
   if (iconId === 'turn-right-up' || iconId === 'turn-right-down') {
     return 'rotate(90 42.5 64)';
   }
-  if (!direction || !['stairs', 'escalator', 'exit'].includes(iconId)) {
+  const fallbackDirection = resolveMetroWayfindingFacilityDefaultDirection(iconId);
+  if (!fallbackDirection) {
     return '';
   }
+  const effectiveDirection = direction ?? fallbackDirection;
   if (iconId !== 'exit') {
-    return direction === 'left' ? 'translate(85 0) scale(-1 1)' : '';
+    return effectiveDirection === 'left' ? 'translate(85 0) scale(-1 1)' : '';
   }
-  if (direction === 'left') return 'translate(85 0) scale(-1 1)';
-  if (direction === 'up') return 'rotate(-90 42.5 64)';
-  if (direction === 'down') return 'rotate(90 42.5 64)';
+  if (effectiveDirection === 'left') return 'translate(85 0) scale(-1 1)';
+  if (effectiveDirection === 'up') return 'rotate(-90 42.5 64)';
+  if (effectiveDirection === 'down') return 'rotate(90 42.5 64)';
   return '';
 }
 

@@ -1,4 +1,5 @@
 import {
+  applyMetroWayfindingRowContextDefaults,
   createMetroWayfindingId,
   METRO_WAYFINDING_COMBINATION_DEFAULT_SCALE,
   METRO_WAYFINDING_BACKGROUND,
@@ -13,8 +14,11 @@ import {
   type MetroWayfindingCombinationElement,
   type MetroWayfindingElement,
   type MetroWayfindingFacilityElement,
+  type MetroWayfindingIconDirection,
   type MetroWayfindingLayout,
   type MetroWayfindingProjectCanvas,
+  type MetroWayfindingTextElement,
+  type MetroWayfindingTextRow,
   type MetroWayfindingTextAlign,
 } from './metro-wayfinding';
 
@@ -367,7 +371,9 @@ export function resolveMetroWayfindingImportPreview(
       backgroundColor: METRO_WAYFINDING_BACKGROUND,
       foregroundColor: METRO_WAYFINDING_FOREGROUND,
       rows: preview.layout.rows.map((row) =>
-        row.flatMap(normalizeImportedElementToSemanticElements),
+        applyMetroWayfindingRowContextDefaults(
+          row.flatMap(normalizeImportedElementToSemanticElements),
+        ),
       ),
     },
     warnings: preview.warnings.filter((warning) => !styleOnlyWarnings.has(warning.code)),
@@ -412,12 +418,7 @@ function normalizeImportedElementToSemanticStyle(
     };
   }
   if (element.type === 'text') {
-    return {
-      ...element,
-      rows: element.rows.map((row) => (row.kind === 'secondary' ? { ...row, bold: true } : row)),
-      backgroundColor: undefined,
-      foregroundColor: undefined,
-    };
+    return normalizeImportedTextElement(element);
   }
   if (element.type === 'combination') {
     return {
@@ -793,7 +794,14 @@ function parseChitoseComponent(
     classNames.includes('facility')
   ) {
     const iconId = mapChitoseFacilityAsset(asset, classNames);
-    const icon = iconId ? createChitoseFacilityElement(iconId, category, colors) : undefined;
+    const icon = iconId
+      ? createChitoseFacilityElement(
+          iconId,
+          category,
+          colors,
+          resolveChitoseFacilityDirection(asset, iconId),
+        )
+      : undefined;
     const text = cn || en ? createTextElement(cn, en, align, colors) : undefined;
     if (!icon) {
       warnings.add('chitose-unknown-facility', `未识别设施图标 ${asset || '（无资源名）'}。`);
@@ -829,7 +837,16 @@ function parseChitoseComponent(
     const arrowId = mapChitoseArrowAsset(asset);
     if (arrowId) return [createArrowElement(arrowId, colors)];
     const iconId = mapChitoseFacilityAsset(asset, classNames);
-    if (iconId) return [createChitoseFacilityElement(iconId, category, colors)];
+    if (iconId) {
+      return [
+        createChitoseFacilityElement(
+          iconId,
+          category,
+          colors,
+          resolveChitoseFacilityDirection(asset, iconId),
+        ),
+      ];
+    }
   }
 
   warnings.add(
@@ -843,6 +860,7 @@ function createChitoseFacilityElement(
   iconId: string,
   category: string,
   colors: ElementColors,
+  direction?: MetroWayfindingIconDirection,
 ): MetroWayfindingFacilityElement {
   if (iconId === 'no-entry') {
     return createFacilityElement(iconId, {
@@ -861,17 +879,35 @@ function createChitoseFacilityElement(
     frameFillMode: 'color',
     frameFillColor,
     foregroundColor,
+    ...(direction ? { direction } : {}),
   });
+}
+
+function resolveChitoseFacilityDirection(
+  asset: string,
+  iconId: string,
+): MetroWayfindingIconDirection | undefined {
+  if (iconId !== 'exit') return undefined;
+  const name = asset.toLowerCase();
+  if (name.includes('left') || name.includes('west')) return 'left';
+  if (name.includes('right') || name.includes('east')) return 'right';
+  if (name.includes('up') || name.includes('north')) return 'up';
+  if (name.includes('down') || name.includes('south')) return 'down';
+  return undefined;
 }
 
 function mapChitoseFacilityAsset(asset: string, classNames: string[]): string | undefined {
   const name = asset.toLowerCase();
-  if (name.includes('no_entry')) return 'no-entry';
+  if (name.includes('no_entry') || name.includes('no-entry')) return 'no-entry';
   if (name.includes('accessible_restroom')) return 'family-restroom';
   if (name.includes('restroom')) return 'restroom';
   if (name.includes('accessible_elevator') || name.includes('elevator')) return 'elevator';
   if (name.includes('accessible_ramp')) return 'wheelchair';
   if (name.includes('accessible_passage') || name.includes('accessible')) return 'wheelchair';
+  if (/(?:stairs?|stair)[-_ ]?(?:down|lower)|downstairs/iu.test(name)) {
+    return 'stairs-down';
+  }
+  if (/(?:stairs?|stair)[-_ ]?(?:up|upper)|upstairs/iu.test(name)) return 'stairs';
   if (name.includes('stairs')) return 'stairs';
   if (name.includes('waiting')) return 'waiting';
   if (name.includes('nursing')) return 'nursing-room';
@@ -887,10 +923,28 @@ function mapChitoseFacilityAsset(asset: string, classNames: string[]): string | 
 function mapChitoseArrowAsset(asset: string): MetroWayfindingArrowElement['iconId'] | undefined {
   const name = asset.toLowerCase();
   if (!name.includes('arrow')) return undefined;
-  if (name.includes('leftdown')) return 'south-west';
-  if (name.includes('rightdown')) return 'south-east';
-  if (name.includes('leftup')) return 'north-west';
-  if (name.includes('rightup')) return 'north-east';
+  if (/(?:u[-_ ]?turn|uturn)/iu.test(name)) {
+    if (name.includes('left') || name.includes('west')) return 'u-turn-left';
+    if (name.includes('right') || name.includes('east')) return 'u-turn-right';
+  }
+  if (/turn/iu.test(name)) {
+    if (name.includes('left') && (name.includes('up') || name.includes('north'))) {
+      return 'turn-left-up';
+    }
+    if (name.includes('left') && (name.includes('down') || name.includes('south'))) {
+      return 'turn-left-down';
+    }
+    if (name.includes('right') && (name.includes('up') || name.includes('north'))) {
+      return 'turn-right-up';
+    }
+    if (name.includes('right') && (name.includes('down') || name.includes('south'))) {
+      return 'turn-right-down';
+    }
+  }
+  if (/left[-_ ]?down/iu.test(name)) return 'south-west';
+  if (/right[-_ ]?down/iu.test(name)) return 'south-east';
+  if (/left[-_ ]?up/iu.test(name)) return 'north-west';
+  if (/right[-_ ]?up/iu.test(name)) return 'north-east';
   if (name.includes('left')) return 'west';
   if (name.includes('right')) return 'east';
   if (name.includes('down')) return 'south';
@@ -1004,15 +1058,18 @@ function createRouteTextElement(
   secondary: string,
   color: string,
 ): Extract<MetroWayfindingElement, { type: 'text' }> {
-  const element = createTextElement('', secondary, 'left');
+  const normalizedLineNumber = normalizeSemanticLineNumber(lineNumber);
+  const element = createTextElement('', `Line ${normalizedLineNumber || lineNumber}`, 'left');
   element.rows[0] = {
     id: createMetroWayfindingId('text-main-import'),
     kind: 'main',
     segments: [
-      { kind: 'line', value: lineNumber.slice(0, 20), color },
+      { kind: 'line', value: (normalizedLineNumber || lineNumber).slice(0, 20), color },
       { kind: 'text', value: suffix.slice(0, 160) },
     ],
   };
+  const secondaryRow = element.rows.find((row) => row.kind === 'secondary');
+  if (secondaryRow) secondaryRow.value = secondary || `Line ${normalizedLineNumber || lineNumber}`;
   return element;
 }
 
@@ -1020,7 +1077,9 @@ function normalizeImportedElementToSemanticElements(
   element: MetroWayfindingElement,
 ): MetroWayfindingElement[] {
   if (element.type === 'combination') {
-    const lineNumber = element.children.find((child) => child.type === 'largeText')?.value.trim();
+    const lineNumber = normalizeSemanticLineNumber(
+      element.children.find((child) => child.type === 'largeText')?.value ?? '',
+    );
     const hasText = element.children.some((child) => child.type === 'text');
     if (lineNumber && hasText) {
       return [
@@ -1028,12 +1087,162 @@ function normalizeImportedElementToSemanticElements(
           lineNumber,
           '号线',
           `Line ${lineNumber}`,
-          element.frameFillColor ?? NAL_LINE_10_COLOR,
+          resolveSemanticLineColor(element.frameFillColor, element.foregroundColor),
         ),
       ];
     }
   }
   return [normalizeImportedElementToSemanticStyle(element)];
+}
+
+function normalizeImportedTextElement(
+  element: MetroWayfindingTextElement,
+): MetroWayfindingTextElement {
+  const rows = element.rows.map(normalizeImportedTextRow);
+  const mainRow = rows.find(
+    (row): row is Extract<MetroWayfindingTextRow, { kind: 'main' }> => row.kind === 'main',
+  );
+  const secondaryRow = rows.find(
+    (row): row is Extract<MetroWayfindingTextRow, { kind: 'secondary' }> =>
+      row.kind === 'secondary',
+  );
+  const mainText =
+    mainRow?.segments
+      .map((segment) => segment.value)
+      .join('')
+      .trim() ?? '';
+  const secondaryText = secondaryRow?.value.trim() ?? '';
+  const hasLineSegments = mainRow?.segments.some((segment) => segment.kind === 'line') ?? false;
+  const lineNumbers = hasLineSegments
+    ? []
+    : resolveSemanticLineNumbersFromText(mainText, secondaryText);
+
+  if (lineNumbers.length && mainRow) {
+    const lineColor = resolveSemanticLineColor(element.foregroundColor, element.backgroundColor);
+    const normalizedRows = rows.map((row) => {
+      if (row.id === mainRow.id) {
+        return {
+          ...row,
+          segments: [
+            ...lineNumbers.map((lineNumber) => ({
+              kind: 'line' as const,
+              value: lineNumber,
+              color: lineColor,
+            })),
+            { kind: 'text' as const, value: '号线' },
+          ],
+        };
+      }
+      if (row.id === secondaryRow?.id) {
+        return {
+          ...row,
+          value: lineNumbers.map((lineNumber) => `Line ${lineNumber}`).join(' / '),
+          bold: true,
+        };
+      }
+      return row;
+    });
+    if (!secondaryRow) {
+      normalizedRows.push({
+        id: createMetroWayfindingId('text-secondary-import'),
+        kind: 'secondary',
+        value: lineNumbers.map((lineNumber) => `Line ${lineNumber}`).join(' / '),
+        bold: true,
+      });
+    }
+    return {
+      ...element,
+      align: 'left',
+      rows: normalizedRows,
+      backgroundColor: undefined,
+      foregroundColor: undefined,
+    };
+  }
+
+  const isDownstairs = /(?:由此)?下楼|downstairs/iu.test(`${mainText} ${secondaryText}`);
+  const isMetroWordmark = /^地\s*铁$/u.test(mainText) && /^metro$/iu.test(secondaryText);
+  return {
+    ...element,
+    align: isDownstairs || isMetroWordmark ? 'center' : element.align,
+    writingMode: isDownstairs ? 'vertical' : element.writingMode,
+    rows: isMetroWordmark ? normalizeMetroWordmarkRows(rows) : rows,
+    backgroundColor: undefined,
+    foregroundColor: undefined,
+  };
+}
+
+function normalizeImportedTextRow(row: MetroWayfindingTextRow): MetroWayfindingTextRow {
+  if (row.kind === 'secondary') return { ...row, bold: true };
+  return {
+    ...row,
+    segments: row.segments.map((segment) =>
+      segment.kind === 'line'
+        ? { ...segment, value: normalizeSemanticLineNumber(segment.value) }
+        : segment,
+    ),
+  };
+}
+
+function normalizeMetroWordmarkRows(rows: MetroWayfindingTextRow[]): MetroWayfindingTextRow[] {
+  return rows.map((row) =>
+    row.kind === 'main'
+      ? {
+          ...row,
+          segments: [{ kind: 'text' as const, value: '地 铁' }],
+        }
+      : { ...row, value: 'METRO', bold: true },
+  );
+}
+
+function resolveSemanticLineNumbersFromText(mainText: string, secondaryText: string): string[] {
+  const mainParts = mainText
+    .split(/\s*(?:\/|、|,|，|·)\s*/u)
+    .map((part) => part.match(/^([^\s]+?)\s*号线$/u)?.[1] ?? '')
+    .map(normalizeSemanticLineNumber)
+    .filter(Boolean);
+  const secondaryParts = secondaryText
+    .split(/\s*\/\s*/u)
+    .map((part) => part.match(/^line\s+(.+)$/iu)?.[1] ?? '')
+    .map(normalizeSemanticLineNumber)
+    .filter(Boolean);
+  const mainPartCount = mainText ? mainText.split(/\s*(?:\/|、|,|，|·)\s*/u).length : 0;
+  const secondaryPartCount = secondaryText ? secondaryText.split(/\s*\/\s*/u).length : 0;
+
+  if (mainParts.length === mainPartCount && secondaryParts.length === secondaryPartCount) {
+    return mainParts.length ? mainParts : secondaryParts;
+  }
+  if (mainParts.length === mainPartCount && mainParts.every(isPlainSemanticLineNumber)) {
+    return mainParts;
+  }
+  if (!mainText && secondaryParts.length === secondaryPartCount) return secondaryParts;
+  return [];
+}
+
+function isPlainSemanticLineNumber(value: string): boolean {
+  return /^(?:[a-z]?\d+[a-z]?|[一二三四五六七八九十]+)$/iu.test(value);
+}
+
+function normalizeSemanticLineNumber(value: string): string {
+  return value
+    .trim()
+    .replace(/^line\s*/iu, '')
+    .replace(/^l\s*/iu, '')
+    .replace(/\s*号线$/u, '')
+    .trim()
+    .slice(0, 20);
+}
+
+function resolveSemanticLineColor(...colors: Array<string | undefined>): string {
+  const neutralColors = new Set([
+    METRO_WAYFINDING_BACKGROUND,
+    METRO_WAYFINDING_FOREGROUND,
+    CHITOSE_BACKGROUND,
+    CHITOSE_FOREGROUND,
+  ]);
+  return (
+    colors.find((color) => color && !neutralColors.has(color.trim().toUpperCase())) ??
+    NAL_LINE_10_COLOR
+  );
 }
 
 function createFacilityElement(

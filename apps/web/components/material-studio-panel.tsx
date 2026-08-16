@@ -1,8 +1,14 @@
 'use client';
 
 import type { MaterialTransitNetworkSnapshot, TileProviderDescriptor } from '@yct/contracts';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { appPath } from '../lib/app-paths';
+import {
+  createMaterialOfflineDraftId,
+  readLatestMaterialOfflineDraft,
+  upsertMaterialOfflineDraft,
+  type MaterialOfflineDraftRecord,
+} from '../lib/client-material-offline-drafts';
 import { selectMapTileTemplates } from '../lib/map-tile-templates';
 import { publishLoginRequiredForResponse } from '../lib/client-auth-events';
 import { findTextContinuation } from '../lib/text-continuation';
@@ -19,17 +25,15 @@ import {
 import {
   buildMetroWayfindingProjectFileName,
   createMetroWayfindingProjectFile,
-  METRO_WAYFINDING_PROJECT_FORMAT,
-  METRO_WAYFINDING_PROJECT_SCHEMA_VERSION,
   METRO_WAYFINDING_TEMPLATE_ID,
   parseMetroWayfindingLayout,
   serializeMetroWayfindingLayout,
   serializeMetroWayfindingProjectFile,
-  summarizeMetroWayfindingLayout,
 } from '../lib/metro-wayfinding';
 import {
-  metroWayfindingExampleSources,
+  buildMetroWayfindingTemplateExamples,
   type MetroWayfindingExample,
+  type MetroWayfindingExampleStation,
 } from '../lib/metro-wayfinding-examples';
 import {
   listMaterialTransitNetworkLines,
@@ -143,6 +147,7 @@ interface MaterialLocationOption {
 
 interface MaterialDraft {
   id: string;
+  clientDraftId?: string;
   templateId: string;
   templateVersion: number;
   input: Record<string, string>;
@@ -162,6 +167,23 @@ const MATERIAL_PREVIEW_DIALOG_MEDIA_QUERY = '(max-width: 959px)';
 
 function arraysEqual(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function listRmpLineTerminalStations(
+  snapshot: MaterialTransitNetworkSnapshot,
+  lineKey: string,
+): Array<{ name: string; secondaryName?: string }> {
+  const degreeByNodeId = new Map<string, number>();
+  for (const edge of snapshot.edges) {
+    if (!edge.lineKeys.includes(lineKey)) continue;
+    degreeByNodeId.set(edge.source, (degreeByNodeId.get(edge.source) ?? 0) + 1);
+    degreeByNodeId.set(edge.target, (degreeByNodeId.get(edge.target) ?? 0) + 1);
+  }
+  return snapshot.nodes.flatMap((node) =>
+    node.kind === 'station' && degreeByNodeId.get(node.id) === 1 && node.names[0]
+      ? [{ name: node.names[0], secondaryName: node.names[1] }]
+      : [],
+  );
 }
 
 export function MaterialStudioPanel({
@@ -214,12 +236,17 @@ export function MaterialStudioPanel({
   const [workspaceBlockMessage, setWorkspaceBlockMessage] = useState('');
   const [isBusy, setIsBusy] = useState(false);
   const [isPreviewRendering, setIsPreviewRendering] = useState(false);
-  const [transitNetworkSource, setTransitNetworkSource] = useState<'server' | 'rmp'>('server');
+  const [transitNetworkSource, setTransitNetworkSource] = useState<'server' | 'rmp'>('rmp');
   const [importedTransitNetwork, setImportedTransitNetwork] =
     useState<MaterialTransitNetworkSnapshot>();
-  const [metroWayfindingExamples, setMetroWayfindingExamples] = useState<MetroWayfindingExample[]>(
-    [],
-  );
+  const [localDraft, setLocalDraft] = useState<MaterialOfflineDraftRecord | null>(null);
+  const [localDraftReady, setLocalDraftReady] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const localDraftRef = useRef<MaterialOfflineDraftRecord | null>(null);
+  const transitNetworkSourceIntentRevisionRef = useRef(0);
+  const [isSyncingLocalDraft, setIsSyncingLocalDraft] = useState(false);
+  const [metroExampleStationName, setMetroExampleStationName] = useState('');
+  const [metroExampleLineId, setMetroExampleLineId] = useState('');
 
   const templates = useMemo(
     () =>
@@ -295,6 +322,124 @@ export function MaterialStudioPanel({
       a.localeCompare(b, 'zh-CN'),
     );
   }, [importedTransitNetwork, locations, transitLines, transitStations]);
+  const metroExampleStationOptions = useMemo(() => {
+    if (transitNetworkSource === 'rmp') {
+      return Array.from(
+        new Set(
+          importedTransitNetwork?.nodes
+            .filter((node) => node.kind === 'station')
+            .map((node) => node.names[0]?.trim() ?? '') ?? [],
+        ),
+      )
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, 'zh-CN'));
+    }
+    return Array.from(
+      new Set(
+        transitLines
+          .filter((line) => line.mode === 'metro')
+          .flatMap((line) => line.stations.map((station) => station.stationName.trim())),
+      ),
+    )
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  }, [importedTransitNetwork, transitLines, transitNetworkSource]);
+
+  const metroExampleStations = useMemo<MetroWayfindingExampleStation[]>(() => {
+    if (transitNetworkSource === 'rmp') {
+      if (!importedTransitNetwork) return [];
+      return importedTransitNetwork.nodes
+        .filter((node) => node.kind === 'station' && node.names[0])
+        .map((node) => ({
+          name: node.names[0]!,
+          secondaryName: node.names[1],
+          lines: listMaterialTransitNetworkNodeLines(importedTransitNetwork, node.id).map(
+            (line) => ({
+              id: line.id,
+              name: line.label,
+              secondaryName: line.secondaryLabel,
+              color: line.color,
+              terminalStations: listRmpLineTerminalStations(importedTransitNetwork, line.lineKey),
+            }),
+          ),
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
+    }
+    return transitLines
+      .filter((line) => line.mode === 'metro')
+      .flatMap((line) =>
+        line.stations.map((station) => ({
+          name: station.stationName,
+          lines: [
+            {
+              id: line.id,
+              name: line.name,
+              color: line.color ?? '#0A124D',
+              terminalStations: [line.stations[0], line.stations.at(-1)].flatMap((terminal) =>
+                terminal?.stationName ? [{ name: terminal.stationName }] : [],
+              ),
+            },
+          ],
+        })),
+      )
+      .reduce<MetroWayfindingExampleStation[]>((result, station) => {
+        const existing = result.find((item) => item.name === station.name);
+        if (existing) {
+          existing.lines = [...existing.lines, ...station.lines];
+          return result;
+        }
+        result.push(station);
+        return result;
+      }, [])
+      .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'));
+  }, [importedTransitNetwork, transitLines, transitNetworkSource]);
+
+  const selectedMetroExampleStation =
+    metroExampleStations.find((station) => station.name === metroExampleStationName) ??
+    metroExampleStations[0];
+  const metroExampleLineOptions = useMemo(
+    () =>
+      [...(selectedMetroExampleStation?.lines ?? [])]
+        .sort((left, right) =>
+          left.name.localeCompare(right.name, 'zh-CN', {
+            numeric: true,
+            sensitivity: 'base',
+          }),
+        )
+        .map((line) => ({
+          value: line.id,
+          label: [line.name, line.secondaryName].filter(Boolean).join(' / '),
+        })),
+    [selectedMetroExampleStation],
+  );
+  const selectedMetroExampleLineId = metroExampleLineOptions.some(
+    (line) => line.value === metroExampleLineId,
+  )
+    ? metroExampleLineId
+    : (metroExampleLineOptions[0]?.value ?? '');
+  const metroWayfindingExamples = useMemo(
+    () =>
+      buildMetroWayfindingTemplateExamples(
+        selectedMetroExampleStation,
+        selectedMetroExampleLineId,
+      ),
+    [selectedMetroExampleLineId, selectedMetroExampleStation],
+  );
+
+  useEffect(() => {
+    setMetroExampleStationName((current) =>
+      metroExampleStationOptions.includes(current)
+        ? current
+        : (metroExampleStationOptions[0] ?? ''),
+    );
+  }, [metroExampleStationOptions]);
+  useEffect(() => {
+    setMetroExampleLineId((current) =>
+      metroExampleLineOptions.some((line) => line.value === current)
+        ? current
+        : (metroExampleLineOptions[0]?.value ?? ''),
+    );
+  }, [metroExampleLineOptions]);
   const serverLocationSuggestions = useMemo(
     () => Array.from(new Set(locations.map((location) => location.label.trim()).filter(Boolean))),
     [locations],
@@ -553,15 +698,61 @@ export function MaterialStudioPanel({
     void loadWorkspace();
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const sourceIntentRevision = transitNetworkSourceIntentRevisionRef.current;
+    void readLatestMaterialOfflineDraft(studioId).then((record) => {
+      if (cancelled) {
+        return;
+      }
+      localDraftRef.current = record ?? null;
+      setLocalDraft(record ?? null);
+      if (record) {
+        setSelectedTemplateId(record.templateId);
+        setMode(record.mode);
+        if (transitNetworkSourceIntentRevisionRef.current === sourceIntentRevision) {
+          setTransitNetworkSource(record.transitNetworkSource);
+          setImportedTransitNetwork(record.importedTransitNetwork);
+        }
+      }
+      setLocalDraftReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [studioId]);
+
+  useEffect(() => {
+    const updateOnlineState = () => setIsOnline(navigator.onLine);
+    updateOnlineState();
+    window.addEventListener('online', updateOnlineState);
+    window.addEventListener('offline', updateOnlineState);
+    return () => {
+      window.removeEventListener('online', updateOnlineState);
+      window.removeEventListener('offline', updateOnlineState);
+    };
+  }, []);
+
   useEffect(
     () =>
-      subscribeTransitNetworkSourceChanged(studioId, ({ source, snapshot, clearSnapshot }) => {
-        setTransitNetworkSource(source);
-        if (snapshot) setImportedTransitNetwork(snapshot);
-        if (clearSnapshot) setImportedTransitNetwork(undefined);
-        setSelectedTransitLineIds([]);
-        clearPreview();
-      }),
+      subscribeTransitNetworkSourceChanged(
+        studioId,
+        ({ source, reason, snapshot, clearSnapshot }) => {
+          if (reason !== 'initialization') {
+            transitNetworkSourceIntentRevisionRef.current += 1;
+          }
+          if (
+            reason !== 'initialization' ||
+            transitNetworkSourceIntentRevisionRef.current === 0
+          ) {
+            setTransitNetworkSource(source);
+          }
+          if (snapshot) setImportedTransitNetwork(snapshot);
+          if (clearSnapshot) setImportedTransitNetwork(undefined);
+          setSelectedTransitLineIds([]);
+          clearPreview();
+        },
+      ),
     [studioId],
   );
 
@@ -576,82 +767,70 @@ export function MaterialStudioPanel({
   );
 
   useEffect(() => {
-    if (!selected) {
+    if (!selected || !localDraftReady) {
       return;
     }
+    const savedDraft =
+      localDraft?.templateId === selected.id &&
+      localDraft.templateVersion === selected.template.version
+        ? localDraft
+        : undefined;
     setInput(
-      Object.fromEntries(
-        selected.template.fields.map((field) => [field.key, field.defaultValue ?? '']),
-      ),
+      savedDraft?.input ??
+        Object.fromEntries(
+          selected.template.fields.map((field) => [field.key, field.defaultValue ?? '']),
+        ),
     );
-    setCanvas({
-      ...selected.template.defaultCanvas,
-      pxPerMeter: selected.template.defaultCanvas.tileSizePx,
-    });
-  }, [selected?.id, selected?.template.version]);
+    setCanvas(
+      savedDraft?.canvas ?? {
+        ...selected.template.defaultCanvas,
+        pxPerMeter: selected.template.defaultCanvas.tileSizePx,
+      },
+    );
+  }, [localDraft?.localDraftId, localDraftReady, selected?.id, selected?.template.version]);
 
   useEffect(() => {
-    if (!isMetroWayfinding) {
-      setMetroWayfindingExamples([]);
+    if (!localDraftReady || !selected || !activeCanvas) {
       return;
     }
-    let cancelled = false;
-    const loadExamples = async () => {
-      const loaded = await Promise.all(
-        metroWayfindingExampleSources.map(async (source) => {
-          try {
-            const response = await fetch(appPath(source.path), { cache: 'force-cache' });
-            if (!response.ok) return null;
-            const candidate = (await response.json()) as Partial<MetroWayfindingExample['project']>;
-            if (
-              candidate.format !== METRO_WAYFINDING_PROJECT_FORMAT ||
-              candidate.schemaVersion !== METRO_WAYFINDING_PROJECT_SCHEMA_VERSION ||
-              candidate.template?.id !== METRO_WAYFINDING_TEMPLATE_ID ||
-              !candidate.layout ||
-              !candidate.canvas
-            ) {
-              return null;
-            }
-            const layout = parseMetroWayfindingLayout(JSON.stringify(candidate.layout));
-            const canvas = {
-              widthM: Number(candidate.canvas.widthM) || 1,
-              heightM: Number(candidate.canvas.heightM) || 1,
-              pxPerMeter: Number(candidate.canvas.pxPerMeter) || 128,
-              alignToTile: candidate.canvas.alignToTile === true,
-              tileSizePx: Number(candidate.canvas.tileSizePx) || 128,
-            };
-            return {
-              source,
-              project: {
-                ...candidate,
-                format: METRO_WAYFINDING_PROJECT_FORMAT,
-                schemaVersion: METRO_WAYFINDING_PROJECT_SCHEMA_VERSION,
-                template: {
-                  id: METRO_WAYFINDING_TEMPLATE_ID,
-                  version: Number(candidate.template.version) || 1,
-                },
-                canvas,
-                layout,
-                exportedAt: candidate.exportedAt ?? '',
-              },
-              summary: summarizeMetroWayfindingLayout(layout, canvas),
-            } satisfies MetroWayfindingExample;
-          } catch {
-            return null;
-          }
-        }),
+    const timeoutId = window.setTimeout(() => {
+      const current = localDraftRef.current;
+      const now = new Date().toISOString();
+      const isDifferentTemplate = Boolean(
+        current &&
+          (current.templateId !== selected.id || current.templateVersion !== selected.template.version),
       );
-      if (!cancelled) {
-        setMetroWayfindingExamples(
-          loaded.filter((example): example is MetroWayfindingExample => example !== null),
-        );
-      }
-    };
-    void loadExamples();
-    return () => {
-      cancelled = true;
-    };
-  }, [isMetroWayfinding]);
+      const nextRecord: MaterialOfflineDraftRecord = {
+        localDraftId:
+          isDifferentTemplate || !current ? createMaterialOfflineDraftId() : current.localDraftId,
+        studioId,
+        templateId: selected.id,
+        templateVersion: selected.template.version,
+        input,
+        canvas: activeCanvas,
+        mode,
+        transitNetworkSource,
+        importedTransitNetwork,
+        createdAt: isDifferentTemplate || !current ? now : current.createdAt,
+        updatedAt: now,
+        syncStatus: 'local',
+        serverDraftId: isDifferentTemplate ? undefined : current?.serverDraftId,
+      };
+      localDraftRef.current = nextRecord;
+      setLocalDraft(nextRecord);
+      void upsertMaterialOfflineDraft(nextRecord);
+    }, 450);
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    activeCanvas,
+    importedTransitNetwork,
+    input,
+    localDraftReady,
+    mode,
+    selected,
+    studioId,
+    transitNetworkSource,
+  ]);
 
   useEffect(() => {
     if (!isMetroWayfinding) {
@@ -923,6 +1102,102 @@ export function MaterialStudioPanel({
     publishMaterialStudioActionBlocked({ studioId, message });
   };
 
+  const requireOnline = (): boolean => {
+    if (navigator.onLine) {
+      return true;
+    }
+    blockAction('当前处于离线状态，该操作需要联网。');
+    return false;
+  };
+
+  const syncLocalDraft = async () => {
+    if (!selected || !activeCanvas) {
+      blockAction(workspaceBlockMessage || '当前没有可同步的模板。');
+      return;
+    }
+    if (!requireOnline()) {
+      return;
+    }
+    if (mode !== 'manual') {
+      blockAction('服务器数据模式的草稿只能在线提交。');
+      return;
+    }
+
+    const current = localDraftRef.current;
+    const now = new Date().toISOString();
+    const record: MaterialOfflineDraftRecord = {
+      localDraftId: current?.localDraftId ?? createMaterialOfflineDraftId(),
+      studioId,
+      templateId: selected.id,
+      templateVersion: selected.template.version,
+      input,
+      canvas: activeCanvas,
+      mode,
+      transitNetworkSource,
+      importedTransitNetwork,
+      createdAt: current?.createdAt ?? now,
+      updatedAt: now,
+      syncStatus: 'syncing',
+      serverDraftId: current?.serverDraftId,
+    };
+    localDraftRef.current = record;
+    setLocalDraft(record);
+    await upsertMaterialOfflineDraft(record);
+    setIsSyncingLocalDraft(true);
+    try {
+      const response = await fetch(appPath('/api/materials/drafts'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateId: record.templateId,
+          templateVersion: record.templateVersion,
+          input: record.input,
+          canvas: record.canvas,
+          clientDraftId: record.localDraftId,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as MaterialDraft & {
+        message?: string;
+      };
+      if (publishLoginRequiredForResponse(response)) {
+        const failed = { ...record, syncStatus: 'failed' as const, errorMessage: '请先登录。' };
+        localDraftRef.current = failed;
+        setLocalDraft(failed);
+        await upsertMaterialOfflineDraft(failed);
+        return;
+      }
+      if (!response.ok || !data.id) {
+        const status = response.status === 409 ? 'conflict' : 'failed';
+        const failed = { ...record, syncStatus: status as 'conflict' | 'failed', errorMessage: data.message };
+        localDraftRef.current = failed;
+        setLocalDraft(failed);
+        await upsertMaterialOfflineDraft(failed);
+        blockAction(data.message ?? '本机草稿同步失败。');
+        return;
+      }
+      const synced: MaterialOfflineDraftRecord = {
+        ...record,
+        syncStatus: 'synced',
+        serverDraftId: data.id,
+        errorMessage: undefined,
+        updatedAt: new Date().toISOString(),
+      };
+      localDraftRef.current = synced;
+      setLocalDraft(synced);
+      await upsertMaterialOfflineDraft(synced);
+      setDrafts((currentDrafts) => [data, ...currentDrafts.filter((item) => item.id !== data.id)]);
+      blockAction('本机草稿已同步，仍需联网提交审核。');
+    } catch {
+      const failed = { ...record, syncStatus: 'failed' as const, errorMessage: '网络错误。' };
+      localDraftRef.current = failed;
+      setLocalDraft(failed);
+      await upsertMaterialOfflineDraft(failed);
+      blockAction('本机草稿同步时发生网络错误。');
+    } finally {
+      setIsSyncingLocalDraft(false);
+    }
+  };
+
   const getServerSelectionBlockMessage = (): string | null => {
     if (
       activeServerSource === 'transit_station' &&
@@ -983,6 +1258,9 @@ export function MaterialStudioPanel({
   };
 
   const fetchWatermarkedPreview = async (signal?: AbortSignal): Promise<Response | undefined> => {
+    if (!requireOnline()) {
+      return undefined;
+    }
     if (!selected || !activeCanvas) {
       blockAction(workspaceBlockMessage || '当前没有可用模板。');
       return undefined;
@@ -1018,7 +1296,7 @@ export function MaterialStudioPanel({
 
   const livePreviewRequestKey = JSON.stringify(buildPreviewRequestBody() ?? null);
   useEffect(() => {
-    if (livePreviewRequestKey === 'null') {
+    if (!isOnline || livePreviewRequestKey === 'null') {
       setIsPreviewRendering(false);
       return;
     }
@@ -1052,7 +1330,7 @@ export function MaterialStudioPanel({
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [livePreviewRequestKey]);
+  }, [isOnline, livePreviewRequestKey]);
 
   const downloadWatermarkedPreview = async () => {
     const response = await fetchWatermarkedPreview();
@@ -1082,25 +1360,50 @@ export function MaterialStudioPanel({
       blockAction(workspaceBlockMessage || '当前没有可提交的模板。');
       return;
     }
+    if (!requireOnline()) {
+      return;
+    }
     setIsBusy(true);
     try {
-      const createResponse = await fetch(appPath('/api/materials/drafts'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          templateId: selected.id,
-          templateVersion: selected.template.version,
-          input,
-          canvas: activeCanvas,
-        }),
-      });
-      const created = (await createResponse.json()) as MaterialDraft & { message?: string };
-      if (publishLoginRequiredForResponse(createResponse)) {
-        return;
-      }
-      if (!createResponse.ok || !created.id) {
-        blockAction(created.message ?? '无法保存自定义物料。');
-        return;
+      const localServerDraftId = localDraftRef.current?.serverDraftId;
+      let created: MaterialDraft & { message?: string };
+      if (localServerDraftId) {
+        created = localDraftRef.current?.serverDraftId
+          ? ({ id: localServerDraftId } as MaterialDraft)
+          : ({} as MaterialDraft);
+      } else {
+        const createResponse = await fetch(appPath('/api/materials/drafts'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            templateId: selected.id,
+            templateVersion: selected.template.version,
+            input,
+            canvas: activeCanvas,
+            clientDraftId: localDraftRef.current?.localDraftId,
+          }),
+        });
+        created = (await createResponse.json()) as MaterialDraft & { message?: string };
+        if (publishLoginRequiredForResponse(createResponse)) {
+          return;
+        }
+        if (!createResponse.ok || !created.id) {
+          blockAction(created.message ?? '无法保存自定义物料。');
+          return;
+        }
+        const synced = localDraftRef.current
+          ? {
+              ...localDraftRef.current,
+              syncStatus: 'synced' as const,
+              serverDraftId: created.id,
+              updatedAt: new Date().toISOString(),
+            }
+          : null;
+        if (synced) {
+          localDraftRef.current = synced;
+          setLocalDraft(synced);
+          await upsertMaterialOfflineDraft(synced);
+        }
       }
       const submitResponse = await fetch(
         appPath(`/api/materials/drafts/${encodeURIComponent(created.id)}/submit`),
@@ -1123,6 +1426,9 @@ export function MaterialStudioPanel({
   };
 
   const exportDraft = async (draft: MaterialDraft) => {
+    if (!requireOnline()) {
+      return;
+    }
     setIsBusy(true);
     try {
       const response = await fetch(appPath('/api/materials/exports'), {
@@ -1163,6 +1469,9 @@ export function MaterialStudioPanel({
   };
 
   const exportFromServer = async () => {
+    if (!requireOnline()) {
+      return;
+    }
     const selectionBlockMessage = getServerSelectionBlockMessage();
     if (selectionBlockMessage) {
       blockAction(selectionBlockMessage);
@@ -1189,6 +1498,17 @@ export function MaterialStudioPanel({
         }),
       });
       if (response.status === 401 || response.status === 403) {
+        if (response.status === 403) {
+          const data = (await response.json().catch(() => ({}))) as {
+            error?: string;
+            message?: string;
+          };
+          if (data.error === 'server_account_not_verified_for_material_export') {
+            blockAction(
+              data.message ?? '验证服务器账号后才能下载无水印图片，已改为下载带水印预览。',
+            );
+          }
+        }
         await downloadWatermarkedPreview();
         return;
       }
@@ -1209,11 +1529,12 @@ export function MaterialStudioPanel({
     publishMaterialStudioState({
       studioId,
       mode,
+      transitNetworkSource,
       hasPreview: Boolean(previewUrl),
       isBusy,
       canExportProject: isMetroWayfinding && mode === 'manual',
     });
-  }, [isBusy, isMetroWayfinding, mode, previewUrl, studioId]);
+  }, [isBusy, isMetroWayfinding, mode, previewUrl, studioId, transitNetworkSource]);
 
   useEffect(() =>
     subscribeMaterialStudioActions(studioId, (action) => {
@@ -1256,6 +1577,24 @@ export function MaterialStudioPanel({
           <span className="eyebrow">物料工作台</span>
           <h1>{title}</h1>
         </div>
+        <div className="settings-action-row" role="status" aria-live="polite">
+          <span className="muted">
+            {isOnline ? '在线' : '离线'}
+            {localDraft ? ` · 本机草稿${materialOfflineDraftStatusLabel(localDraft.syncStatus)}` : ''}
+          </span>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={() => void syncLocalDraft()}
+            disabled={!localDraft || !isOnline || isBusy || isSyncingLocalDraft || mode !== 'manual'}
+            title="同步本机草稿"
+            aria-label="同步本机草稿"
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              cloud_upload
+            </span>
+          </button>
+        </div>
       </div>
 
       <div
@@ -1282,14 +1621,30 @@ export function MaterialStudioPanel({
             </select>
           </label>
           {selected?.template.description ? <p>{selected.template.description}</p> : null}
-          {allowTransitNetworkImport ? <TransitNetworkSourceControl studioId={studioId} /> : null}
-          <CanvasEditor
-            canvas={activeCanvas}
-            onChange={updateCanvas}
-            disabled={isBusy || !selected}
-            isMetroWayfinding={isMetroWayfinding}
-            metroWayfindingLayoutMode={metroWayfindingLayoutMode}
-          />
+          {allowTransitNetworkImport ? (
+            <ResponsiveSidebarDisclosure title="线网数据" isCompact={isSingleColumnViewport}>
+              <TransitNetworkSourceControl
+                studioId={studioId}
+                initialSource={localDraftReady ? localDraft?.transitNetworkSource : undefined}
+                initialSnapshot={
+                  localDraftReady && localDraft?.transitNetworkSource === 'rmp'
+                    ? localDraft.importedTransitNetwork
+                    : undefined
+                }
+              />
+            </ResponsiveSidebarDisclosure>
+          ) : null}
+          {activeCanvas ? (
+            <ResponsiveSidebarDisclosure title="尺寸" isCompact={isSingleColumnViewport}>
+              <CanvasEditor
+                canvas={activeCanvas}
+                onChange={updateCanvas}
+                disabled={isBusy || !selected}
+                isMetroWayfinding={isMetroWayfinding}
+                metroWayfindingLayoutMode={metroWayfindingLayoutMode}
+              />
+            </ResponsiveSidebarDisclosure>
+          ) : null}
         </aside>
 
         <div className="material-studio-editor">
@@ -1680,6 +2035,12 @@ export function MaterialStudioPanel({
                   textSuggestions={metroTextSuggestions}
                   examples={metroWayfindingExamples}
                   onLoadExample={loadMetroWayfindingExample}
+                  stationOptions={metroExampleStationOptions}
+                  selectedStationName={metroExampleStationName}
+                  onStationChange={setMetroExampleStationName}
+                  lineOptions={metroExampleLineOptions}
+                  selectedLineId={selectedMetroExampleLineId}
+                  onLineChange={setMetroExampleLineId}
                   onCanvasHeightChange={(height) => updateCanvas('heightM', height)}
                   onCanvasWidthChange={(width) => updateCanvas('widthM', width)}
                   onChange={(value) => {
@@ -1898,6 +2259,41 @@ function resolveMaterialDownloadFileName(response: Response, fallback: string): 
   return plainFileName || fallback;
 }
 
+function ResponsiveSidebarDisclosure({
+  title,
+  isCompact,
+  children,
+}: Readonly<{
+  title: string;
+  isCompact: boolean;
+  children: ReactNode;
+}>) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const open = !isCompact || isExpanded;
+
+  useEffect(() => {
+    if (isCompact) setIsExpanded(false);
+  }, [isCompact]);
+
+  return (
+    <details
+      className="material-sidebar-disclosure"
+      open={open}
+      onToggle={(event) => {
+        if (isCompact) setIsExpanded(event.currentTarget.open);
+      }}
+    >
+      <summary>
+        <strong>{title}</strong>
+        <span className="material-symbols-outlined" aria-hidden="true">
+          {open ? 'expand_less' : 'expand_more'}
+        </span>
+      </summary>
+      <div className="material-sidebar-disclosure-body">{children}</div>
+    </details>
+  );
+}
+
 function CanvasEditor({
   canvas,
   disabled,
@@ -1924,8 +2320,9 @@ function CanvasEditor({
     if (currentLength !== normalizedLength) {
       onChange(isMetroVertical ? 'heightM' : 'widthM', normalizedLength);
     }
-    if (isMetroVertical && canvas.widthM !== 1) {
-      onChange('widthM', 1);
+    const normalizedVerticalWidth = Math.min(64, Math.max(1, Math.round(canvas.widthM)));
+    if (isMetroVertical && canvas.widthM !== normalizedVerticalWidth) {
+      onChange('widthM', normalizedVerticalWidth);
     }
     if (!isMetroVertical && canvas.heightM !== fixedHeight) {
       onChange('heightM', fixedHeight);
@@ -1954,17 +2351,34 @@ function CanvasEditor({
     <fieldset className="material-canvas-editor" disabled={disabled}>
       <legend>尺寸</legend>
       {isMetroWayfinding ? (
-        <label>
-          <span>导视牌长度（128 像素格数）</span>
-          <input
-            type="number"
-            min="1"
-            max="64"
-            step="1"
-            value={metroLength}
-            onChange={(event) => updateMetroLength(Number(event.currentTarget.value))}
-          />
-        </label>
+        <>
+          <label>
+            <span>{isMetroVertical ? '导视牌高度（128 像素格数）' : '导视牌长度（128 像素格数）'}</span>
+            <input
+              type="number"
+              min="1"
+              max="64"
+              step="1"
+              value={metroLength}
+              onChange={(event) => updateMetroLength(Number(event.currentTarget.value))}
+            />
+          </label>
+          {isMetroVertical ? (
+            <label>
+              <span>导视牌宽度（128 像素格数）</span>
+              <input
+                type="number"
+                min="1"
+                max="64"
+                step="1"
+                value={canvas.widthM}
+                onChange={(event) =>
+                  onChange('widthM', Math.min(64, Math.max(1, Math.round(Number(event.currentTarget.value)))))
+                }
+              />
+            </label>
+          ) : null}
+        </>
       ) : (
         <>
           <label>
@@ -2147,6 +2561,25 @@ function materialDraftStatusLabel(status: MaterialDraft['status']): string {
     approved: '已通过',
     rejected: '已驳回',
   }[status];
+}
+
+function materialOfflineDraftStatusLabel(
+  status: MaterialOfflineDraftRecord['syncStatus'],
+): string {
+  switch (status) {
+    case 'local':
+      return ' · 待同步';
+    case 'syncing':
+      return ' · 同步中';
+    case 'synced':
+      return ' · 已同步';
+    case 'conflict':
+      return ' · 有冲突';
+    case 'failed':
+      return ' · 同步失败';
+    default:
+      return '';
+  }
 }
 
 function formatStudioDraftInput(

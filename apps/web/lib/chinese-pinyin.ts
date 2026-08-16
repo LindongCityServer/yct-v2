@@ -36,6 +36,10 @@ export function toUppercaseRoadPinyin(value: string): string {
     .join(' ');
 }
 
+export function toUppercasePinyin(value: string): string {
+  return toUppercasePinyinWord(value.replace(/[\s\u3000]+/g, '').trim());
+}
+
 function toUppercasePinyinWord(value: string): string {
   return value
     .split(/([\u3400-\u9fff]+)/u)

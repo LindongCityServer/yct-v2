@@ -44,6 +44,7 @@ export function TransitNetworkHealthPanel({
 }: Readonly<{
   report: TransitNetworkHealthReport;
 }>) {
+  const [isOnline, setIsOnline] = useState(true);
   const [activeMode, setActiveMode] = useState<ActiveMode>('all');
   const [considerExistingNetwork, setConsiderExistingNetwork] = useState(true);
   const [sort, setSort] = useState<OperatorSortState>({
@@ -60,6 +61,17 @@ export function TransitNetworkHealthPanel({
     () => sortOperators(scope.operators, sort),
     [scope.operators, sort],
   );
+
+  useEffect(() => {
+    const updateOnlineState = () => setIsOnline(navigator.onLine);
+    updateOnlineState();
+    window.addEventListener('online', updateOnlineState);
+    window.addEventListener('offline', updateOnlineState);
+    return () => {
+      window.removeEventListener('online', updateOnlineState);
+      window.removeEventListener('offline', updateOnlineState);
+    };
+  }, []);
 
   function changeSort(key: OperatorSortKey): void {
     setSort((current) => ({
@@ -86,6 +98,7 @@ export function TransitNetworkHealthPanel({
           </p>
         </div>
         <p className="transit-health-source">
+          <span>{isOnline ? '在线快照' : '离线快照'}</span>
           数据时间 {formatDateTime(report.analyzedAt)}
           {report.sourceMessage ? <span>{report.sourceMessage}</span> : null}
           {report.planningSourceMessage ? <span>{report.planningSourceMessage}</span> : null}

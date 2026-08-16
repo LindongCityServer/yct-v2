@@ -824,6 +824,25 @@ export interface MaterialTemplatePublishedPayload {
   publishedAt: ISODateTimeString;
 }
 
+export interface MaterialDraftCreatedPayload {
+  draftId: string;
+  clientDraftId?: string;
+  templateId: string;
+  templateVersion: number;
+  createdBy: string;
+  createdAt: ISODateTimeString;
+}
+
+export interface MaterialDraftUpdatedPayload {
+  draftId: string;
+  clientDraftId?: string;
+  templateId: string;
+  templateVersion: number;
+  updatedBy: string;
+  changedFields: Array<'templateId' | 'templateVersion' | 'input' | 'canvas'>;
+  updatedAt: ISODateTimeString;
+}
+
 export interface MaterialDraftSubmittedPayload {
   draftId: string;
   templateId: string;
@@ -1305,6 +1324,8 @@ export type YctEventPayloadMap = {
   ServiceEntryArchived: ServiceEntryArchivedPayload;
   ServiceEntryDeleted: ServiceEntryDeletedPayload;
   MaterialTemplatePublished: MaterialTemplatePublishedPayload;
+  MaterialDraftCreated: MaterialDraftCreatedPayload;
+  MaterialDraftUpdated: MaterialDraftUpdatedPayload;
   MaterialDraftSubmitted: MaterialDraftSubmittedPayload;
   MaterialDraftReviewed: MaterialDraftReviewedPayload;
   MaterialTransitNetworkProjectImported: MaterialTransitNetworkProjectImportedPayload;

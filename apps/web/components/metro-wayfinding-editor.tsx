@@ -50,9 +50,14 @@ import {
   parseMetroWayfindingLayout,
   resolveMetroArrowIconAssetName,
   resolveMetroFacilityIconAssetName,
+  resolveMetroWayfindingArrowBoundarySide,
+  resolveMetroWayfindingFacilityDefaultDirection,
+  resolveMetroWayfindingInsertionContextDefaults,
   resolveMetroWayfindingLayoutSizing,
+  resolveMetroWayfindingRowContextDefaults,
   resolveMetroWayfindingTextMetrics,
   resolveMetroWayfindingVerticalLayoutSizing,
+  reverseMetroWayfindingLayout,
   serializeMetroWayfindingLayout,
   type MetroWayfindingElement,
   type MetroWayfindingCombinationChild,
@@ -80,6 +85,12 @@ export function MetroWayfindingEditor({
   textSuggestions,
   examples = [],
   onLoadExample,
+  stationOptions = [],
+  selectedStationName,
+  onStationChange,
+  lineOptions = [],
+  selectedLineId,
+  onLineChange,
   onCanvasHeightChange,
   onCanvasWidthChange,
   onChange,
@@ -91,7 +102,13 @@ export function MetroWayfindingEditor({
   lineColorOptions: Array<{ value: string; label: string; aliases?: string[] }>;
   textSuggestions?: string[];
   examples?: readonly MetroWayfindingExample[];
-  onLoadExample?: (example: MetroWayfindingExample) => void;
+  onLoadExample?: (example: MetroWayfindingExample, stationName?: string) => void;
+  stationOptions?: readonly string[];
+  selectedStationName?: string;
+  onStationChange?: (stationName: string) => void;
+  lineOptions?: ReadonlyArray<{ value: string; label: string }>;
+  selectedLineId?: string;
+  onLineChange?: (lineId: string) => void;
   onCanvasHeightChange: (height: number) => void;
   onCanvasWidthChange: (width: number) => void;
   onChange: (value: string) => void;
@@ -117,6 +134,10 @@ export function MetroWayfindingEditor({
   const [importMode, setImportMode] = useState<MetroWayfindingImportMode>('semantic');
   const [importError, setImportError] = useState('');
   const [isImporting, setIsImporting] = useState(false);
+  const [isImportDragActive, setIsImportDragActive] = useState(false);
+  const importDragDepthRef = useRef(0);
+  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
+  const [projectDialogView, setProjectDialogView] = useState<'examples' | 'import'>('examples');
 
   useEffect(() => {
     const nextLayout = parseMetroWayfindingLayout(value);
@@ -154,11 +175,14 @@ export function MetroWayfindingEditor({
           setImportPreview(event.payload.preview);
           setImportMode(event.payload.preview.source === 'yct' ? 'source-style' : 'semantic');
           setImportError('');
+          setIsProjectDialogOpen(false);
           return;
         }
         if (event.type === 'ExternalWayfindingImportFailed') {
           setImportPreview(undefined);
           setImportError(event.payload.message);
+          setProjectDialogView('import');
+          setIsProjectDialogOpen(true);
           return;
         }
         if (event.type !== 'MetroWayfindingProjectImported') return;
@@ -177,6 +201,7 @@ export function MetroWayfindingEditor({
         });
         setImportPreview(undefined);
         setImportError('');
+        setIsProjectDialogOpen(false);
       }),
     [editorId, onCanvasHeightChange, onCanvasWidthChange],
   );
@@ -194,6 +219,20 @@ export function MetroWayfindingEditor({
       window.removeEventListener('keydown', closeOnEscape);
     };
   }, [importPreview]);
+
+  useEffect(() => {
+    if (!isProjectDialogOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setIsProjectDialogOpen(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isProjectDialogOpen]);
 
   const dispatchComposition = (action: MetroWayfindingCompositionAction) => {
     if (action.type === 'add' || action.type === 'duplicate') {
@@ -223,7 +262,6 @@ export function MetroWayfindingEditor({
     : -1;
   const visibleRows = layout.rows.slice(0, layout.mode === 'double' ? 2 : 1);
   const hasElements = layout.rows.some((elements) => elements.length > 0);
-  const hasVisibleElements = visibleRows.some((elements) => elements.length > 0);
   const rowSizings = visibleRows.map((elements) =>
     resolveMetroWayfindingLayoutSizing(elements, canvasWidth),
   );
@@ -368,9 +406,15 @@ export function MetroWayfindingEditor({
     });
   };
 
-  const handleImportFiles = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.currentTarget.files ?? []);
-    event.currentTarget.value = '';
+  const openProjectDialog = (requestedView: 'examples' | 'import' = 'examples') => {
+    setImportError('');
+    setProjectDialogView(
+      requestedView === 'examples' && examples.length && onLoadExample ? 'examples' : 'import',
+    );
+    setIsProjectDialogOpen(true);
+  };
+
+  const handleImportFiles = async (files: File[]) => {
     if (!files.length) return;
     setIsImporting(true);
     setImportError('');
@@ -416,6 +460,45 @@ export function MetroWayfindingEditor({
     } finally {
       setIsImporting(false);
     }
+  };
+
+  const handleImportInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = '';
+    void handleImportFiles(files);
+  };
+
+  const isFileDrag = (event: ReactDragEvent<HTMLDivElement>) =>
+    event.dataTransfer.types.includes('Files');
+
+  const handleImportDragEnter = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (disabled || isImporting || !isFileDrag(event)) return;
+    event.preventDefault();
+    importDragDepthRef.current += 1;
+    setIsImportDragActive(true);
+  };
+
+  const handleImportDragOver = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (disabled || isImporting || !isFileDrag(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setIsImportDragActive(true);
+  };
+
+  const handleImportDragLeave = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    importDragDepthRef.current = Math.max(0, importDragDepthRef.current - 1);
+    if (importDragDepthRef.current === 0) setIsImportDragActive(false);
+  };
+
+  const handleImportDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    importDragDepthRef.current = 0;
+    setIsImportDragActive(false);
+    if (disabled || isImporting) return;
+    void handleImportFiles(Array.from(event.dataTransfer.files));
   };
 
   const applyImportPreview = () => {
@@ -476,142 +559,189 @@ export function MetroWayfindingEditor({
             <span>添加行间分割线</span>
           </label>
         ) : null}
-        <div className="metro-wayfinding-toolbar-actions">
-          <input
-            ref={importInputRef}
-            type="file"
-            className="sr-only"
-            accept=".json,application/json"
-            multiple
-            disabled={disabled || isImporting}
-            onChange={(event) => void handleImportFiles(event)}
-          />
-          <button
-            type="button"
-            className="metro-wayfinding-import-button"
-            disabled={disabled || isImporting}
-            onClick={() => importInputRef.current?.click()}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              {isImporting ? 'progress_activity' : 'upload_file'}
-            </span>
-            <span>{isImporting ? '正在解析' : '导入工程'}</span>
-          </button>
-          <button
-            type="button"
-            className="metro-wayfinding-clear-button"
-            disabled={disabled || !hasElements}
-            onClick={clearLayoutElements}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              delete_sweep
-            </span>
-            <span>清空导视牌</span>
-          </button>
-        </div>
-        {importError ? (
-          <p className="metro-wayfinding-import-error" role="alert">
-            {importError}
-          </p>
-        ) : null}
-      </div>
-
-      <div className="metro-wayfinding-row-lists">
-        {visibleRows.map((elements, rowIndex) => (
-          <div
-            key={rowIndex}
-            className={`metro-wayfinding-row-list${layout.mode !== 'double' ? ' is-single' : ''}`}
-          >
-            {layout.mode === 'double' ? (
-              <strong>{rowIndex === 0 ? '第一行' : '第二行'}</strong>
-            ) : null}
-            <ol
-              className="metro-wayfinding-element-list"
-              role="tablist"
-              aria-label={`${rowIndex === 0 ? '第一行' : '第二行'}已添加元素`}
-              onKeyDown={(event) => handleElementNavigationKeyDown(event, rowIndex)}
+        {hasElements ? (
+          <div className="metro-wayfinding-toolbar-actions">
+            <button
+              type="button"
+              className="secondary-action-button metro-wayfinding-import-button"
+              disabled={disabled || isImporting}
+              title="版式模板与导入工程"
+              onClick={() => openProjectDialog()}
             >
-              {elements.map((element) => {
-                const isSelected =
-                  rowIndex === selection.rowIndex && element.id === selectedElement?.id;
-                const isIconOnly =
-                  element.type === 'facility' ||
-                  element.type === 'arrow' ||
-                  element.type === 'space' ||
-                  element.type === 'divider';
-                const tabLabel = metroElementTabAriaLabel(element, layout.mode);
-                const canDrag = !disabled && elements.length > 1;
-                return (
-                  <li key={element.id} role="presentation">
-                    <button
-                      id={`${editorId}-${element.id}-tab`}
-                      type="button"
-                      role="tab"
-                      data-element-id={element.id}
-                      aria-selected={isSelected}
-                      aria-controls={`${editorId}-element-panel`}
-                      aria-label={canDrag ? `${tabLabel}，可拖动更改顺序` : tabLabel}
-                      title={canDrag ? '拖动更改顺序' : undefined}
-                      tabIndex={isSelected ? 0 : -1}
-                      draggable={canDrag}
-                      className={[
-                        isSelected ? 'is-active' : '',
-                        isIconOnly ? 'is-icon-only' : '',
-                        canDrag ? 'is-draggable' : '',
-                        draggedElement?.rowIndex === rowIndex &&
-                        draggedElement.elementId === element.id
-                          ? 'is-dragging'
-                          : '',
-                        dropTarget?.rowIndex === rowIndex && dropTarget.elementId === element.id
-                          ? `is-drop-${dropTarget.placement}`
-                          : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                      onClick={() => setSelection({ rowIndex, elementId: element.id })}
-                      onDragStart={(event) => handleElementDragStart(event, rowIndex, element.id)}
-                      onDragOver={(event) => handleElementDragOver(event, rowIndex, element.id)}
-                      onDrop={(event) => handleElementDrop(event, rowIndex, element.id)}
-                      onDragEnd={handleElementDragEnd}
-                    >
-                      <MetroWayfindingElementTabContent
-                        element={element}
-                        layoutMode={layout.mode}
-                      />
-                    </button>
-                  </li>
-                );
-              })}
-              <li className="metro-wayfinding-element-list-add" role="presentation">
-                <button
-                  type="button"
-                  className="is-icon-only"
-                  aria-label={`向${rowIndex === 0 ? '第一行' : '第二行'}添加元素`}
-                  title="添加元素"
-                  onClick={() =>
-                    dispatchElement(rowIndex, {
-                      type: 'add',
-                      element: createMetroWayfindingElement('facility'),
-                    })
-                  }
-                  disabled={disabled}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    add
-                  </span>
-                </button>
-              </li>
-            </ol>
+              <span className="material-symbols-outlined" aria-hidden="true">
+                {isImporting ? 'progress_activity' : 'folder_open'}
+              </span>
+              <span>{isImporting ? '解析中' : '模板库'}</span>
+            </button>
+            <button
+              type="button"
+              className="secondary-action-button"
+              disabled={disabled || layout.mode === 'vertical'}
+              onClick={() => dispatchComposition({ type: 'reverse' })}
+              title={layout.mode === 'vertical' ? '竖向模板不支持反转顺序' : '反转导视牌元素顺序'}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                flip
+              </span>
+              <span>反转</span>
+            </button>
+            <button
+              type="button"
+              className="secondary-action-button metro-wayfinding-clear-button"
+              disabled={disabled}
+              onClick={clearLayoutElements}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                delete_sweep
+              </span>
+              <span>清空</span>
+            </button>
           </div>
-        ))}
+        ) : null}
+        <input
+          ref={importInputRef}
+          type="file"
+          className="sr-only"
+          accept=".json,application/json"
+          multiple
+          disabled={disabled || isImporting}
+          onChange={handleImportInputChange}
+        />
       </div>
 
-      {!hasVisibleElements && examples.length && onLoadExample ? (
-        <MetroWayfindingExampleList
-          examples={examples}
-          disabled={disabled}
-          onLoadExample={onLoadExample}
-        />
+      {hasElements ? (
+        <div className="metro-wayfinding-row-lists">
+          {visibleRows.map((elements, rowIndex) => (
+            <div
+              key={rowIndex}
+              className={`metro-wayfinding-row-list${layout.mode !== 'double' ? ' is-single' : ''}`}
+            >
+              {layout.mode === 'double' ? (
+                <strong>{rowIndex === 0 ? '第一行' : '第二行'}</strong>
+              ) : null}
+              <ol
+                className="metro-wayfinding-element-list"
+                role="tablist"
+                aria-label={`${rowIndex === 0 ? '第一行' : '第二行'}已添加元素`}
+                onKeyDown={(event) => handleElementNavigationKeyDown(event, rowIndex)}
+              >
+                {elements.map((element) => {
+                  const isSelected =
+                    rowIndex === selection.rowIndex && element.id === selectedElement?.id;
+                  const isIconOnly =
+                    element.type === 'facility' ||
+                    element.type === 'arrow' ||
+                    element.type === 'space' ||
+                    element.type === 'divider';
+                  const tabLabel = metroElementTabAriaLabel(element, layout.mode);
+                  const canDrag = !disabled && elements.length > 1;
+                  return (
+                    <li key={element.id} role="presentation">
+                      <button
+                        id={`${editorId}-${element.id}-tab`}
+                        type="button"
+                        role="tab"
+                        data-element-id={element.id}
+                        aria-selected={isSelected}
+                        aria-controls={`${editorId}-element-panel`}
+                        aria-label={canDrag ? `${tabLabel}，可拖动更改顺序` : tabLabel}
+                        title={canDrag ? '拖动更改顺序' : undefined}
+                        tabIndex={isSelected ? 0 : -1}
+                        draggable={canDrag}
+                        className={[
+                          isSelected ? 'is-active' : '',
+                          isIconOnly ? 'is-icon-only' : '',
+                          canDrag ? 'is-draggable' : '',
+                          draggedElement?.rowIndex === rowIndex &&
+                          draggedElement.elementId === element.id
+                            ? 'is-dragging'
+                            : '',
+                          dropTarget?.rowIndex === rowIndex && dropTarget.elementId === element.id
+                            ? `is-drop-${dropTarget.placement}`
+                            : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        onClick={() => setSelection({ rowIndex, elementId: element.id })}
+                        onDragStart={(event) => handleElementDragStart(event, rowIndex, element.id)}
+                        onDragOver={(event) => handleElementDragOver(event, rowIndex, element.id)}
+                        onDrop={(event) => handleElementDrop(event, rowIndex, element.id)}
+                        onDragEnd={handleElementDragEnd}
+                      >
+                        <MetroWayfindingElementTabContent
+                          element={element}
+                          layoutMode={layout.mode}
+                        />
+                      </button>
+                    </li>
+                  );
+                })}
+                <li className="metro-wayfinding-element-list-add" role="presentation">
+                  <button
+                    type="button"
+                    className="is-icon-only"
+                    aria-label={`向${rowIndex === 0 ? '第一行' : '第二行'}添加元素`}
+                    title="添加元素"
+                    onClick={() =>
+                      dispatchElement(rowIndex, {
+                        type: 'add',
+                        element: createMetroWayfindingElement('facility'),
+                      })
+                    }
+                    disabled={disabled}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      add
+                    </span>
+                  </button>
+                </li>
+              </ol>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {!hasElements ? (
+        <section className="metro-wayfinding-empty-card" aria-label="开始创建导视牌">
+          <div>
+            <span className="material-symbols-outlined" aria-hidden="true">
+              signpost
+            </span>
+            <div>
+              <strong>开始创建导视牌</strong>
+              <span>添加第一个元素，或从模板库载入现成版式。</span>
+            </div>
+          </div>
+          <div className="metro-wayfinding-empty-card-actions">
+            <button
+              type="button"
+              className="primary-action-button"
+              disabled={disabled}
+              onClick={() =>
+                dispatchElement(0, {
+                  type: 'add',
+                  element: createMetroWayfindingElement('facility'),
+                })
+              }
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                add
+              </span>
+              添加元素
+            </button>
+            <button
+              type="button"
+              className="secondary-action-button"
+              disabled={disabled || isImporting}
+              onClick={() => openProjectDialog('examples')}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                dashboard_customize
+              </span>
+              打开模板库
+            </button>
+          </div>
+        </section>
       ) : null}
 
       {selectedElement ? (
@@ -675,6 +805,159 @@ export function MetroWayfindingEditor({
             textSuggestions={textSuggestions}
             onAction={(action) => dispatchElement(selection.rowIndex, action)}
           />
+        </div>
+      ) : null}
+      {isProjectDialogOpen ? (
+        <div
+          className="modal-backdrop metro-wayfinding-project-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setIsProjectDialogOpen(false);
+          }}
+        >
+          <section
+            className="modal-panel metro-wayfinding-project-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`${editorId}-project-dialog-heading`}
+          >
+            <header>
+              <div>
+                <span>地铁导视牌</span>
+                <h2 id={`${editorId}-project-dialog-heading`}>模板库与导入</h2>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="关闭模板库与导入"
+                title="关闭"
+                onClick={() => setIsProjectDialogOpen(false)}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  close
+                </span>
+              </button>
+            </header>
+            <SegmentedControl
+              label="工程来源"
+              value={projectDialogView}
+              options={[
+                { value: 'examples', label: '版式模板', icon: 'dashboard_customize' },
+                { value: 'import', label: '导入工程', icon: 'upload_file' },
+              ]}
+              disabled={disabled || isImporting}
+              wide
+              onChange={setProjectDialogView}
+            />
+            <div className="metro-wayfinding-project-dialog-body">
+              {projectDialogView === 'examples' ? (
+                examples.length && onLoadExample ? (
+                  <MetroWayfindingExampleList
+                    examples={examples}
+                    disabled={disabled}
+                    onLoadExample={(example, stationName) => {
+                      onLoadExample(example, stationName);
+                      setIsProjectDialogOpen(false);
+                    }}
+                    stationOptions={stationOptions}
+                    selectedStationName={selectedStationName}
+                    onStationChange={onStationChange}
+                    lineOptions={lineOptions}
+                    selectedLineId={selectedLineId}
+                    onLineChange={onLineChange}
+                  />
+                ) : (
+                  <div className="metro-wayfinding-project-empty">
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      dashboard_customize
+                    </span>
+                    <span>当前线网没有可用示例模板</span>
+                  </div>
+                )
+              ) : (
+                <div
+                  className={`metro-wayfinding-project-import${isImportDragActive ? ' is-drag-active' : ''}`}
+                  onDragEnter={handleImportDragEnter}
+                  onDragOver={handleImportDragOver}
+                  onDragLeave={handleImportDragLeave}
+                  onDrop={handleImportDrop}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    upload_file
+                  </span>
+                  <div className="metro-wayfinding-project-import-copy">
+                    <strong>导入外部导视工程</strong>
+                    <p>选择 JSON 工程文件，系统会先解析并展示转换预览，确认后再替换当前导视牌。</p>
+                  </div>
+                  <div className="metro-wayfinding-project-import-sources">
+                    <span>支持来源</span>
+                    <ul>
+                      <li>
+                        <span>YCT 地铁导视工程</span>
+                        <small>本站工程</small>
+                      </li>
+                      <li>
+                        <a
+                          href="https://centralgo.site/vitool/vitool.html"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          NaL 导向标志设计器
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            open_in_new
+                          </span>
+                        </a>
+                        <small>外部编辑器</small>
+                      </li>
+                      <li>
+                        <a href="https://signmaker.chitose.city/" target="_blank" rel="noreferrer">
+                          Chitose.City Sign Maker
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            open_in_new
+                          </span>
+                        </a>
+                        <small>外部编辑器</small>
+                      </li>
+                    </ul>
+                  </div>
+                  <div className="metro-wayfinding-project-import-limits">
+                    <span>文件限制</span>
+                    <small>
+                      最多选择 {METRO_WAYFINDING_IMPORT_MAX_FILES} 个文件，单个文件不超过{' '}
+                      {METRO_WAYFINDING_IMPORT_MAX_FILE_BYTES / 1024 / 1024}{' '}
+                      MB；不同编辑器的工程不能混合导入。
+                    </small>
+                  </div>
+                  <div className="metro-wayfinding-project-import-drop-hint" aria-live="polite">
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      upload_file
+                    </span>
+                    <span>
+                      {isImportDragActive
+                        ? '松开鼠标即可导入工程文件'
+                        : '也可以将 JSON 工程文件拖放到此处'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="primary-action-button"
+                    disabled={disabled || isImporting}
+                    onClick={() => importInputRef.current?.click()}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      {isImporting ? 'progress_activity' : 'upload_file'}
+                    </span>
+                    {isImporting ? '正在解析' : '选择工程文件'}
+                  </button>
+                  {importError ? (
+                    <p className="metro-wayfinding-import-error" role="alert">
+                      {importError}
+                    </p>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          </section>
         </div>
       ) : null}
       {importPreview ? (
@@ -859,44 +1142,390 @@ function MetroWayfindingExampleList({
   examples,
   disabled,
   onLoadExample,
+  stationOptions,
+  selectedStationName,
+  onStationChange,
+  lineOptions,
+  selectedLineId,
+  onLineChange,
 }: Readonly<{
   examples: readonly MetroWayfindingExample[];
   disabled: boolean;
-  onLoadExample: (example: MetroWayfindingExample) => void;
+  onLoadExample: (example: MetroWayfindingExample, stationName?: string) => void;
+  stationOptions?: readonly string[];
+  selectedStationName?: string;
+  onStationChange?: (stationName: string) => void;
+  lineOptions?: ReadonlyArray<{ value: string; label: string }>;
+  selectedLineId?: string;
+  onLineChange?: (lineId: string) => void;
 }>) {
+  const [category, setCategory] = useState<'all' | 'entry' | 'transfer' | 'exit'>('all');
+  const categoryOptions = [
+    { value: 'all' as const, label: '全部' },
+    { value: 'entry' as const, label: '进站' },
+    { value: 'transfer' as const, label: '换乘' },
+    { value: 'exit' as const, label: '出站' },
+  ].filter(
+    (option) =>
+      option.value === 'all' ||
+      examples.some((example) => example.source.category === option.value),
+  );
+  const activeCategory = categoryOptions.some((option) => option.value === category)
+    ? category
+    : 'all';
+  const visibleExamples =
+    activeCategory === 'all'
+      ? examples
+      : examples.filter((example) => example.source.category === activeCategory);
+
   return (
-    <section className="material-template-examples" aria-label="地铁导视示例工程">
+    <section className="material-template-examples" aria-label="地铁导视版式模板">
       <div className="material-template-examples-heading">
-        <strong>示例工程</strong>
+        <strong>版式模板</strong>
         <span>选择一个版式开始编辑</span>
       </div>
+      {(stationOptions?.length && onStationChange) || (lineOptions?.length && onLineChange) ? (
+        <div className="material-template-example-context-fields">
+          {stationOptions?.length && onStationChange ? (
+            <label className="material-field">
+              <span>套用车站</span>
+              <select
+                value={selectedStationName ?? ''}
+                disabled={disabled}
+                onChange={(event) => onStationChange(event.currentTarget.value)}
+              >
+                {stationOptions.map((stationName) => (
+                  <option key={stationName} value={stationName}>
+                    {stationName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {lineOptions?.length && onLineChange ? (
+            <label className="material-field">
+              <span>套用线路</span>
+              <select
+                value={selectedLineId ?? ''}
+                disabled={disabled || lineOptions.length < 2}
+                onChange={(event) => onLineChange(event.currentTarget.value)}
+              >
+                {lineOptions.map((line) => (
+                  <option key={line.value} value={line.value}>
+                    {line.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="material-template-example-category-tabs" role="group" aria-label="模板分类">
+        {categoryOptions.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={activeCategory === option.value ? 'is-active' : ''}
+            aria-pressed={activeCategory === option.value}
+            onClick={() => setCategory(option.value)}
+          >
+            {option.label}
+            <span>
+              {option.value === 'all'
+                ? examples.length
+                : examples.filter((example) => example.source.category === option.value).length}
+            </span>
+          </button>
+        ))}
+      </div>
       <div className="material-template-example-list">
-        {examples.map((example) => (
-          <article className="material-template-example" key={example.source.id}>
-            <div className="material-template-example-heading">
-              <strong>{example.source.remark}</strong>
-              <span>{example.source.label}</span>
-            </div>
-            <small className="material-template-example-meta">
-              {example.summary.modeLabel} · {example.summary.sizeLabel}
-            </small>
-            <p>{example.summary.rows.map((row) => `${row.label}：${row.content}`).join('；')}</p>
-            <button
-              type="button"
-              className="material-template-example-load"
-              onClick={() => onLoadExample(example)}
-              disabled={disabled}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                file_open
-              </span>
-              载入示例
-            </button>
-          </article>
+        {visibleExamples.map((example) => (
+          <MetroWayfindingExampleCard
+            key={example.source.id}
+            example={example}
+            disabled={disabled}
+            selectedStationName={selectedStationName}
+            onLoadExample={onLoadExample}
+          />
         ))}
       </div>
     </section>
   );
+}
+
+const METRO_TEMPLATE_EXAMPLE_GRID_ROW_HEIGHT = 8;
+const METRO_TEMPLATE_EXAMPLE_GRID_ROW_GAP = 8;
+
+function estimateMetroWayfindingExampleRowSpan(example: MetroWayfindingExample) {
+  const canvasWidth = Math.max(1, example.project.canvas.widthM);
+  const canvasHeight = Math.max(1, example.project.canvas.heightM);
+  const previewSignWidth = Math.min(canvasWidth * 52, 320);
+  const previewHeight = Math.max(92, (previewSignWidth * canvasHeight) / canvasWidth + 16);
+  const estimatedCardHeight = previewHeight + 100;
+  return Math.max(
+    1,
+    Math.ceil(
+      (estimatedCardHeight + METRO_TEMPLATE_EXAMPLE_GRID_ROW_GAP) /
+        (METRO_TEMPLATE_EXAMPLE_GRID_ROW_HEIGHT + METRO_TEMPLATE_EXAMPLE_GRID_ROW_GAP),
+    ),
+  );
+}
+
+function MetroWayfindingExampleCard({
+  example,
+  disabled,
+  selectedStationName,
+  onLoadExample,
+}: Readonly<{
+  example: MetroWayfindingExample;
+  disabled: boolean;
+  selectedStationName?: string;
+  onLoadExample: (example: MetroWayfindingExample, stationName?: string) => void;
+}>) {
+  const cardRef = useRef<HTMLButtonElement>(null);
+  const [rowSpan, setRowSpan] = useState(() => estimateMetroWayfindingExampleRowSpan(example));
+
+  useEffect(() => {
+    const card = cardRef.current;
+    const list = card?.parentElement;
+    if (!card || !list || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const updateRowSpan = () => {
+      const listStyle = getComputedStyle(list);
+      const rowHeight = Number.parseFloat(listStyle.gridAutoRows);
+      const rowGap = Number.parseFloat(listStyle.rowGap) || 0;
+      if (!Number.isFinite(rowHeight) || rowHeight <= 0) {
+        return;
+      }
+
+      const cardHeight = Math.max(card.scrollHeight, card.getBoundingClientRect().height);
+      const nextRowSpan = Math.max(1, Math.ceil((cardHeight + rowGap) / (rowHeight + rowGap)));
+      setRowSpan((currentRowSpan) =>
+        currentRowSpan === nextRowSpan ? currentRowSpan : nextRowSpan,
+      );
+    };
+
+    updateRowSpan();
+    const resizeObserver = new ResizeObserver(updateRowSpan);
+    resizeObserver.observe(card);
+    return () => resizeObserver.disconnect();
+  }, [example.source.id]);
+
+  return (
+    <button
+      ref={cardRef}
+      type="button"
+      className="material-template-example"
+      style={{ gridRowEnd: `span ${rowSpan}` }}
+      onClick={() => onLoadExample(example, selectedStationName)}
+      disabled={disabled}
+      aria-label={`载入${example.source.remark}，${example.summary.modeLabel}，${example.summary.sizeLabel}`}
+    >
+      <MetroWayfindingExamplePreview example={example} />
+      <div className="material-template-example-heading">
+        <strong>{example.source.remark}</strong>
+        <span>
+          {example.source.category === 'entry'
+            ? '进站相关'
+            : example.source.category === 'transfer'
+              ? '换乘相关'
+              : '出站相关'}{' '}
+          · {example.source.label}
+        </span>
+      </div>
+      <small className="material-template-example-meta">
+        {example.summary.modeLabel} · {example.summary.sizeLabel}
+      </small>
+      <span className="material-template-example-load">
+        <span className="material-symbols-outlined" aria-hidden="true">
+          file_open
+        </span>
+        使用此模板
+      </span>
+    </button>
+  );
+}
+
+function MetroWayfindingExamplePreview({ example }: Readonly<{ example: MetroWayfindingExample }>) {
+  const { layout } = example.project;
+  const canvasWidth = Math.max(1, example.project.canvas.widthM);
+  const canvasHeight = Math.max(1, example.project.canvas.heightM);
+  const previewWidth = canvasWidth * 52;
+  const isVertical = layout.mode === 'vertical';
+  const rows = layout.mode === 'double' ? layout.rows.slice(0, 2) : layout.rows.slice(0, 1);
+  return (
+    <div
+      className={`metro-wayfinding-example-preview${isVertical ? ' is-vertical' : ''}`}
+      aria-hidden="true"
+    >
+      <div
+        className="metro-wayfinding-example-preview-sign"
+        style={{
+          width: `min(100%, ${previewWidth}px)`,
+          aspectRatio: `${canvasWidth} / ${canvasHeight}`,
+          backgroundColor: layout.backgroundColor,
+          color: layout.foregroundColor,
+        }}
+      >
+        {rows.map((elements, rowIndex) => (
+          <div className="metro-wayfinding-example-preview-row" key={rowIndex}>
+            {elements.map((element) => (
+              <MetroWayfindingExamplePreviewElement
+                key={element.id}
+                element={element}
+                layoutMode={layout.mode}
+                inheritedBackgroundColor={layout.backgroundColor}
+                inheritedForegroundColor={layout.foregroundColor}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MetroWayfindingExamplePreviewElement({
+  element,
+  layoutMode,
+  inheritedBackgroundColor,
+  inheritedForegroundColor,
+}: Readonly<{
+  element: MetroWayfindingElement | MetroWayfindingCombinationChild;
+  layoutMode: MetroWayfindingLayoutMode;
+  inheritedBackgroundColor: string;
+  inheritedForegroundColor: string;
+}>) {
+  const style = {
+    backgroundColor: element.backgroundColor ?? 'transparent',
+    color: element.foregroundColor ?? inheritedForegroundColor,
+    ...(element.type === 'space' && element.mode === 'fixed'
+      ? { flexBasis: `${Math.max(8, Math.min(element.units, 16) * 3)}px` }
+      : {}),
+  } as CSSProperties;
+
+  if (element.type === 'facility') {
+    const option = metroWayfindingFacilityOptions.find((item) => item.id === element.iconId);
+    const assetName = resolveMetroFacilityIconAssetName(element.iconId, element.direction);
+    return (
+      <span className="metro-wayfinding-example-preview-element is-icon" style={style}>
+        {assetName ? (
+          <MetroFacilityAssetIcon
+            assetName={assetName}
+            style={metroFacilityAssetPreviewStyle(element.iconId, element.direction)}
+          />
+        ) : (
+          <span
+            className="material-symbols-outlined"
+            style={metroIconElementPreviewStyle(element.iconId, element.direction)}
+          >
+            {option?.symbol ?? 'signpost'}
+          </span>
+        )}
+      </span>
+    );
+  }
+  if (element.type === 'arrow') {
+    return (
+      <span className="metro-wayfinding-example-preview-element is-icon" style={style}>
+        <MetroArrowAssetIcon assetName={element.iconId} />
+      </span>
+    );
+  }
+  if (element.type === 'text') {
+    return (
+      <span
+        className={`metro-wayfinding-example-preview-element is-text is-${element.align}${layoutMode === 'vertical' && element.writingMode === 'vertical' ? ' is-writing-vertical' : ''}`}
+        style={style}
+      >
+        {element.rows.map((row) =>
+          row.kind === 'main' ? (
+            <strong key={row.id}>
+              {row.segments.map((segment, index) =>
+                segment.kind === 'line' ? (
+                  <i
+                    className="is-line"
+                    key={`${segment.kind}-${index}`}
+                    style={{ backgroundColor: segment.color }}
+                  >
+                    {segment.value}
+                  </i>
+                ) : segment.kind === 'boxed' ? (
+                  <i className="is-boxed" key={`${segment.kind}-${index}`}>
+                    {segment.value || ' '}
+                  </i>
+                ) : (
+                  <span key={`${segment.kind}-${index}`}>{segment.value}</span>
+                ),
+              )}
+            </strong>
+          ) : (
+            <small key={row.id}>{row.value}</small>
+          ),
+        )}
+      </span>
+    );
+  }
+  if (element.type === 'largeText') {
+    return (
+      <span
+        className={`metro-wayfinding-example-preview-element is-large-text is-${element.frameShape}`}
+        style={{
+          ...style,
+          ...(element.frameFillMode === 'inverse'
+            ? {
+                backgroundColor: element.foregroundColor ?? inheritedForegroundColor,
+                color: element.backgroundColor ?? inheritedBackgroundColor,
+              }
+            : element.frameFillMode === 'color'
+              ? { backgroundColor: element.frameFillColor }
+              : {}),
+        }}
+      >
+        {element.value || ' '}
+        {element.suffix ? <small>{element.suffix}</small> : null}
+      </span>
+    );
+  }
+  if (element.type === 'space') {
+    return (
+      <span
+        className={`metro-wayfinding-example-preview-element is-space${element.mode === 'flex' ? ' is-flex' : ''}`}
+        style={style}
+      />
+    );
+  }
+  if (element.type === 'combination') {
+    const combinationBackground =
+      element.frameFillMode === 'inverse'
+        ? (element.foregroundColor ?? inheritedForegroundColor)
+        : element.frameFillMode === 'color'
+          ? element.frameFillColor
+          : (element.backgroundColor ?? 'transparent');
+    const combinationForeground =
+      element.frameFillMode === 'inverse'
+        ? (element.backgroundColor ?? inheritedBackgroundColor)
+        : (element.foregroundColor ?? inheritedForegroundColor);
+    return (
+      <span
+        className="metro-wayfinding-example-preview-element is-combination"
+        style={{ ...style, backgroundColor: combinationBackground, color: combinationForeground }}
+      >
+        {element.children.map((child) => (
+          <MetroWayfindingExamplePreviewElement
+            key={child.id}
+            element={child}
+            layoutMode={layoutMode}
+            inheritedBackgroundColor={combinationBackground ?? inheritedBackgroundColor}
+            inheritedForegroundColor={combinationForeground}
+          />
+        ))}
+      </span>
+    );
+  }
+  return <span className="metro-wayfinding-example-preview-element is-divider" style={style} />;
 }
 
 function MetroWayfindingElementTabContent({
@@ -995,10 +1624,11 @@ function metroElementTabAriaLabel(
     const label =
       metroWayfindingFacilityOptions.find((option) => option.id === element.iconId)?.label ??
       '设施';
-    const direction =
-      element.direction && ['stairs', 'stairs-down', 'escalator', 'exit'].includes(element.iconId)
-        ? { left: '向左', right: '向右', up: '向上', down: '向下' }[element.direction]
-        : '';
+    const effectiveDirection =
+      element.direction ?? resolveMetroWayfindingFacilityDefaultDirection(element.iconId);
+    const direction = effectiveDirection
+      ? { left: '向左', right: '向右', up: '向上', down: '向下' }[effectiveDirection]
+      : '';
     return `${label}${direction ? `，${direction}` : ''}`;
   }
   if (element.type === 'arrow') {
@@ -1243,10 +1873,17 @@ function FacilityElementFields({
     const nextIcon = metroWayfindingFacilityOptions.find((option) => option.id === iconId);
     const shouldClearPreviousDefault =
       currentIcon.defaultForegroundColor === element.foregroundColor;
+    const fallbackDirection = resolveMetroWayfindingFacilityDefaultDirection(iconId);
+    const supportsCurrentDirection =
+      element.direction === 'left' ||
+      element.direction === 'right' ||
+      (iconId === 'exit' && (element.direction === 'up' || element.direction === 'down'));
     patch({
       iconId,
-      direction: ['stairs', 'stairs-down', 'escalator', 'exit'].includes(iconId)
-        ? (element.direction ?? 'right')
+      direction: fallbackDirection
+        ? supportsCurrentDirection
+          ? element.direction
+          : fallbackDirection
         : undefined,
       foregroundColor:
         nextIcon?.defaultForegroundColor ??
@@ -1266,16 +1903,20 @@ function FacilityElementFields({
             assetName,
             iconStyle: assetName
               ? metroFacilityAssetPreviewStyle(option.id, undefined)
-              : metroIconPreviewStyle(option.id),
+              : metroIconElementPreviewStyle(option.id, undefined),
           };
         })}
         disabled={disabled}
         onChange={selectIcon}
       />
-      {['stairs', 'stairs-down', 'escalator', 'exit'].includes(element.iconId) ? (
+      {resolveMetroWayfindingFacilityDefaultDirection(element.iconId) ? (
         <SegmentedControl
           label={element.iconId === 'exit' ? '出口图标方向' : '图标方向'}
-          value={element.direction ?? 'right'}
+          value={
+            element.direction ??
+            resolveMetroWayfindingFacilityDefaultDirection(element.iconId) ??
+            'up'
+          }
           options={
             (element.iconId === 'exit'
               ? [
@@ -1457,8 +2098,7 @@ function TextElementFields({
             <li key={row.id} className="metro-wayfinding-text-row-item">
               <header>
                 <strong>
-                  第 {index + 1} 行 ·{' '}
-                  {row.kind === 'main' ? '主文本' : '副文本·粗体'}
+                  第 {index + 1} 行 · {row.kind === 'main' ? '主文本' : '副文本·粗体'}
                 </strong>
                 <div className="metro-wayfinding-element-actions">
                   <button
@@ -2103,14 +2743,14 @@ function CombinationElementFields({
           : child,
       ),
     );
-  const addChild = (type: 'facility' | 'text' | 'largeText' | 'space') => {
+  const addChild = (type: 'facility' | 'arrow' | 'text' | 'largeText' | 'space') => {
     const child = createMetroWayfindingElement(type) as MetroWayfindingCombinationChild;
     updateChildren([...element.children, child]);
     setSelectedChildId(child.id);
   };
   const changeChildType = (
     child: MetroWayfindingCombinationChild,
-    type: 'facility' | 'text' | 'largeText' | 'space',
+    type: 'facility' | 'arrow' | 'text' | 'largeText' | 'space',
   ) => {
     const replacement = createMetroWayfindingElement(type) as MetroWayfindingCombinationChild;
     updateChild(child.id, {
@@ -2226,7 +2866,7 @@ function CombinationElementFields({
               </button>
             </header>
             <p className="muted">
-              支持设施图标、文字、大文字和固定或弹性空格，子元素不会超出组合框。
+              支持设施图标、箭头、文字、大文字和固定或弹性空格，子元素不会超出组合框。
             </p>
             {element.children.length ? (
               <ol
@@ -2255,6 +2895,7 @@ function CombinationElementFields({
             <div className="metro-wayfinding-combination-add-actions" aria-label="添加组合框子元素">
               {[
                 ['facility', '设施图标', 'accessible'],
+                ['arrow', '箭头', 'arrow_forward'],
                 ['text', '文字', 'text_fields'],
                 ['largeText', '大文字', 'title'],
                 ['space', '空格', 'space_bar'],
@@ -2264,7 +2905,9 @@ function CombinationElementFields({
                   type="button"
                   className="secondary-action-button"
                   disabled={disabled || element.children.length >= 32}
-                  onClick={() => addChild(type as 'facility' | 'text' | 'largeText' | 'space')}
+                  onClick={() =>
+                    addChild(type as 'facility' | 'arrow' | 'text' | 'largeText' | 'space')
+                  }
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">
                     {icon}
@@ -2345,6 +2988,7 @@ function CombinationElementFields({
                   value={selectedChild.type}
                   options={[
                     { value: 'facility', label: '设施', icon: 'accessible' },
+                    { value: 'arrow', label: '箭头', icon: 'arrow_forward' },
                     { value: 'text', label: '文字', icon: 'text_fields' },
                     { value: 'largeText', label: '大文字', icon: 'title' },
                     { value: 'space', label: '空格', icon: 'space_bar' },
@@ -2363,6 +3007,14 @@ function CombinationElementFields({
                 />
                 {selectedChild.type === 'facility' ? (
                   <FacilityElementFields
+                    element={selectedChild}
+                    disabled={disabled}
+                    lineColorOptions={lineColorOptions}
+                    patch={(nextPatch) => updateChild(selectedChild.id, nextPatch)}
+                  />
+                ) : null}
+                {selectedChild.type === 'arrow' ? (
+                  <ArrowElementFields
                     element={selectedChild}
                     disabled={disabled}
                     lineColorOptions={lineColorOptions}
@@ -2556,8 +3208,9 @@ function metroIconElementPreviewStyle(
   if (arrowStyle) {
     return arrowStyle;
   }
-  return direction && ['stairs', 'stairs-down', 'escalator', 'exit'].includes(iconId)
-    ? metroFacilityDirectionPreviewStyle(iconId, direction)
+  const fallbackDirection = resolveMetroWayfindingFacilityDefaultDirection(iconId);
+  return fallbackDirection
+    ? metroFacilityDirectionPreviewStyle(iconId, direction ?? fallbackDirection)
     : undefined;
 }
 
@@ -2565,15 +3218,26 @@ function metroFacilityAssetPreviewStyle(
   iconId: string,
   direction: 'left' | 'right' | 'up' | 'down' | undefined,
 ): { transform: string } | undefined {
-  if (iconId === 'stairs' || iconId === 'stairs-down' || iconId === 'escalator') {
-    return direction === 'left' ? { transform: 'scaleX(-1)' } : undefined;
+  if (
+    iconId === 'stairs' ||
+    iconId === 'stairs-down' ||
+    iconId === 'escalator' ||
+    iconId === 'wheelchair-lift'
+  ) {
+    const effectiveDirection =
+      direction ?? resolveMetroWayfindingFacilityDefaultDirection(iconId) ?? 'up';
+    const shouldFlip =
+      iconId === 'stairs-down' ? effectiveDirection === 'right' : effectiveDirection === 'left';
+    return shouldFlip ? { transform: 'scaleX(-1)' } : undefined;
   }
   if (iconId !== 'exit') {
     return undefined;
   }
-  if (direction === 'left') return { transform: 'rotate(-90deg)' };
-  if (direction === 'up') return undefined;
-  if (direction === 'down') return { transform: 'rotate(180deg)' };
+  const effectiveDirection =
+    direction ?? resolveMetroWayfindingFacilityDefaultDirection(iconId) ?? 'up';
+  if (effectiveDirection === 'left') return { transform: 'rotate(-90deg)' };
+  if (effectiveDirection === 'up') return undefined;
+  if (effectiveDirection === 'down') return { transform: 'rotate(180deg)' };
   return { transform: 'rotate(90deg)' };
 }
 
@@ -2879,10 +3543,9 @@ const flexSpaceRightTextSuggestion: MetroInsertionSuggestionTemplate = {
 const arrowLeadingTextSuggestion: MetroInsertionSuggestionTemplate = {
   id: 'db21-arrow-leading-text',
   kind: 'text',
-  textAlign: 'left',
-  previewMain: '箭头右侧双语文字',
-  previewSecondary: '按 DB21/T 2573-2023 左对齐',
-  icon: 'format_align_left',
+  previewMain: '箭头一侧双语文字',
+  previewSecondary: '根据箭头与弹性空白自动对齐',
+  icon: 'format_align_center',
   createRows: () => [
     createSuggestedMainTextRow([{ kind: 'text', value: '' }]),
     createSuggestedSecondaryTextRow(''),
@@ -2907,6 +3570,29 @@ function MetroWayfindingInsertionSuggestions({
   const lineColors = lineColorOptions.map((option) => option.value);
   const suggestions = resolveMetroInsertionSuggestionTemplates(element, elements, lineColors);
   if (!suggestions.length) return null;
+  const selectedIndex = elements.findIndex((item) => item.id === element.id);
+  const insertionDefaults =
+    layoutMode === 'vertical'
+      ? ({ textAlign: 'center', facilityDirection: undefined } as const)
+      : resolveMetroWayfindingInsertionContextDefaults(
+          elements,
+          selectedIndex >= 0 ? selectedIndex + 1 : elements.length,
+        );
+  const selectedArrowSide =
+    element.type === 'arrow' ? resolveMetroWayfindingArrowBoundarySide(element.iconId) : undefined;
+  const suggestedTextAlign =
+    layoutMode === 'vertical' || insertionDefaults.textAlign !== 'center'
+      ? insertionDefaults.textAlign
+      : selectedArrowSide === 'left' || selectedArrowSide === 'up'
+        ? 'left'
+        : selectedArrowSide === 'right'
+          ? 'right'
+          : 'center';
+  const suggestedFacilityDirection =
+    layoutMode === 'vertical'
+      ? undefined
+      : (insertionDefaults.facilityDirection ??
+        (element.type === 'text' && element.align !== 'center' ? element.align : undefined));
   const addSuggestion = (suggestion: MetroInsertionSuggestionTemplate) => {
     const usesNoEntryDefaultForeground =
       element.type === 'facility' &&
@@ -2934,10 +3620,16 @@ function MetroWayfindingInsertionSuggestions({
         'facility',
         suggestion.facilityIconId,
       ) as Extract<MetroWayfindingElement, { type: 'facility' }>;
+      const fallbackDirection = resolveMetroWayfindingFacilityDefaultDirection(
+        suggestion.facilityIconId,
+      );
       onAction({
         type: 'add',
         element: {
           ...facilityElement,
+          direction: fallbackDirection
+            ? (suggestedFacilityDirection ?? fallbackDirection)
+            : undefined,
           frameShape: suggestion.facilityFrameShape ?? facilityElement.frameShape,
           backgroundColor: element.backgroundColor,
           foregroundColor: facilityElement.foregroundColor ?? element.foregroundColor,
@@ -2951,8 +3643,10 @@ function MetroWayfindingInsertionSuggestions({
       element: {
         ...textElement,
         align:
-          suggestion.textAlign ??
-          (suggestion.kind === 'right-text' ? 'right' : textElement.align),
+          layoutMode === 'vertical'
+            ? 'center'
+            : (suggestion.textAlign ??
+              (suggestion.kind === 'right-text' ? 'right' : suggestedTextAlign)),
         rows: suggestion.createRows?.(lineColors) ?? textElement.rows,
         backgroundColor: element.backgroundColor,
         foregroundColor: usesNoEntryDefaultForeground ? undefined : element.foregroundColor,
@@ -2971,7 +3665,11 @@ function MetroWayfindingInsertionSuggestions({
             aria-label={`添加${suggestionKindLabel(suggestion)}：${suggestion.previewMain}`}
             onClick={() => addSuggestion(suggestion)}
           >
-            <MetroWayfindingSuggestionIcon suggestion={suggestion} />
+            <MetroWayfindingSuggestionIcon
+              suggestion={suggestion}
+              contextDirection={suggestedFacilityDirection}
+              contextTextAlign={suggestedTextAlign}
+            />
             <span>
               <strong>{suggestion.previewMain}</strong>
               <small>
@@ -3063,11 +3761,25 @@ function createMatchingFacilitySuggestion(
 
 function MetroWayfindingSuggestionIcon({
   suggestion,
-}: Readonly<{ suggestion: MetroInsertionSuggestionTemplate }>) {
+  contextDirection,
+  contextTextAlign,
+}: Readonly<{
+  suggestion: MetroInsertionSuggestionTemplate;
+  contextDirection?: 'left' | 'right' | 'up' | 'down';
+  contextTextAlign: MetroWayfindingTextAlign;
+}>) {
   if (suggestion.kind !== 'facility' || !suggestion.facilityIconId) {
+    const icon =
+      suggestion.id === arrowLeadingTextSuggestion.id
+        ? {
+            left: 'format_align_left',
+            center: 'format_align_center',
+            right: 'format_align_right',
+          }[contextTextAlign]
+        : suggestion.icon;
     return (
       <span className="material-symbols-outlined" aria-hidden="true">
-        {suggestion.icon ?? 'add'}
+        {icon ?? 'add'}
       </span>
     );
   }
@@ -3075,11 +3787,13 @@ function MetroWayfindingSuggestionIcon({
     (item) => item.id === suggestion.facilityIconId,
   );
   if (!option) return null;
-  const assetName = resolveMetroFacilityIconAssetName(option.id);
+  const fallbackDirection = resolveMetroWayfindingFacilityDefaultDirection(option.id);
+  const direction = fallbackDirection ? (contextDirection ?? fallbackDirection) : undefined;
+  const assetName = resolveMetroFacilityIconAssetName(option.id, direction);
   return assetName ? (
     <MetroFacilityAssetIcon
       assetName={assetName}
-      style={metroFacilityAssetPreviewStyle(option.id, undefined)}
+      style={metroFacilityAssetPreviewStyle(option.id, direction)}
     />
   ) : (
     <span
@@ -3275,17 +3989,43 @@ function reduceMetroWayfindingAction(
   layout: ReturnType<typeof parseMetroWayfindingLayout>,
   action: MetroWayfindingCompositionAction,
 ) {
+  if (action.type === 'reverse') return reverseMetroWayfindingLayout(layout);
   if (action.type === 'replace') return action.layout;
   const elements = layout.rows[action.rowIndex];
   if (!elements) return layout;
   if (action.type === 'add') {
+    const defaults =
+      layout.mode === 'vertical'
+        ? ({ textAlign: 'center', facilityDirection: undefined } as const)
+        : resolveMetroWayfindingInsertionContextDefaults(elements, elements.length);
     const previousElement = elements.at(-1);
-    const element =
-      action.element.type === 'facility' &&
+    const adjacentTextDirection =
+      layout.mode !== 'vertical' &&
       previousElement?.type === 'text' &&
-      previousElement.align === 'right'
-        ? { ...action.element, direction: 'right' as const }
-        : action.element;
+      previousElement.align !== 'center'
+        ? previousElement.align
+        : undefined;
+    const element = (() => {
+      if (action.element.type === 'facility') {
+        const fallbackDirection = resolveMetroWayfindingFacilityDefaultDirection(
+          action.element.iconId,
+        );
+        return fallbackDirection
+          ? {
+              ...action.element,
+              direction:
+                action.element.direction ??
+                defaults.facilityDirection ??
+                adjacentTextDirection ??
+                fallbackDirection,
+            }
+          : action.element;
+      }
+      if (action.element.type === 'text' && action.element.align === 'center') {
+        return { ...action.element, align: defaults.textAlign };
+      }
+      return action.element;
+    })();
     return replaceMetroWayfindingRowElements(layout, action.rowIndex, [...elements, element]);
   }
   if (action.type === 'duplicate') {
@@ -3318,21 +4058,34 @@ function reduceMetroWayfindingAction(
       elements.map((element, index) => {
         if (element.id !== action.elementId || element.type === action.elementType) return element;
         const replacement = createMetroWayfindingElement(action.elementType);
-        const direction =
-          replacement.type === 'facility' &&
-          [elements[index - 1], elements[index + 1]].some(
-            (neighbor) => neighbor?.type === 'text' && neighbor.align === 'right',
-          )
-            ? 'right'
-            : replacement.type === 'facility'
-              ? replacement.direction
-              : undefined;
+        const defaults =
+          layout.mode === 'vertical'
+            ? ({ textAlign: 'center', facilityDirection: undefined } as const)
+            : resolveMetroWayfindingRowContextDefaults(elements, index);
+        const fallbackDirection =
+          replacement.type === 'facility'
+            ? resolveMetroWayfindingFacilityDefaultDirection(replacement.iconId)
+            : undefined;
+        const adjacentText = [elements[index - 1], elements[index + 1]].find(
+          (neighbor): neighbor is MetroWayfindingTextElement =>
+            neighbor?.type === 'text' && neighbor.align !== 'center',
+        );
+        const adjacentTextDirection =
+          layout.mode !== 'vertical' &&
+          (adjacentText?.align === 'left' || adjacentText?.align === 'right')
+            ? adjacentText.align
+            : undefined;
         return {
           ...replacement,
           id: element.id,
           backgroundColor: element.backgroundColor,
           foregroundColor: element.foregroundColor ?? replacement.foregroundColor,
-          ...(replacement.type === 'facility' ? { direction } : {}),
+          ...(replacement.type === 'facility' && fallbackDirection
+            ? {
+                direction: defaults.facilityDirection ?? adjacentTextDirection ?? fallbackDirection,
+              }
+            : {}),
+          ...(replacement.type === 'text' ? { align: defaults.textAlign } : {}),
         } as MetroWayfindingElement;
       }),
     );

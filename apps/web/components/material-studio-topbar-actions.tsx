@@ -15,10 +15,12 @@ type AccountStatus = 'not_configured' | 'anonymous' | 'active' | 'readonly' | 'u
 
 interface AccountStatusResponse {
   accountStatus?: AccountStatus;
+  serverAccountVerified?: boolean;
 }
 
 const initialState: Omit<MaterialStudioStateChangedPayload, 'studioId'> = {
   mode: 'manual',
+  transitNetworkSource: 'rmp',
   hasPreview: false,
   isBusy: false,
   canExportProject: false,
@@ -26,7 +28,7 @@ const initialState: Omit<MaterialStudioStateChangedPayload, 'studioId'> = {
 
 export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: string }>) {
   const [studioState, setStudioState] = useState(initialState);
-  const [accountStatus, setAccountStatus] = useState<AccountStatus>();
+  const [accountInfo, setAccountInfo] = useState<AccountStatusResponse>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -36,7 +38,7 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
         return (await response.json()) as AccountStatusResponse;
       })
       .then((payload) => {
-        if (!cancelled) setAccountStatus(payload?.accountStatus);
+        if (!cancelled) setAccountInfo(payload ?? {});
       })
       .catch(() => undefined);
     return () => {
@@ -67,8 +69,13 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
   };
   const previewLabel = studioState.hasPreview ? '更新预览' : '预览';
   const reviewBadgeId = `${studioId}-review-watermark-badge`;
-  const isAnonymous = accountStatus === 'anonymous';
-  const showReviewBadge = isAnonymous || studioState.mode === 'manual';
+  const isAnonymous = accountInfo.accountStatus === 'anonymous';
+  const serverAccountUnverified =
+    studioState.mode === 'server' &&
+    studioState.transitNetworkSource === 'server' &&
+    accountInfo.accountStatus === 'active' &&
+    accountInfo.serverAccountVerified !== true;
+  const showReviewBadge = isAnonymous || studioState.mode === 'manual' || serverAccountUnverified;
 
   const requestLogin = () => {
     publishLoginRequired({ message: '登录后可提交审核并下载无水印图片。', durationMs: 0 });
@@ -89,7 +96,15 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
         </span>
       </button>
       <div className="material-studio-review-action">
-        {showReviewBadge ? (
+        {serverAccountUnverified ? (
+          <span
+            id={reviewBadgeId}
+            className="material-studio-review-badge"
+            title="请在账号设置中验证服务器账号后下载无水印图片"
+          >
+            服务器账号未验证
+          </span>
+        ) : showReviewBadge ? (
           isAnonymous ? (
             <button
               id={reviewBadgeId}

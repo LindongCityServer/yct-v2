@@ -19,7 +19,11 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  const result = await prepareMaterialExport({ request: parsed.data, actorId: user.ldpassUserId });
+  const result = await prepareMaterialExport({
+    request: parsed.data,
+    actorId: user.ldpassUserId,
+    serverAccountVerified: user.serverAccountVerified,
+  });
   if (!result.ok) {
     return NextResponse.json(result, { status: result.status ?? 400 });
   }

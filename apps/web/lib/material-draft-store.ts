@@ -20,6 +20,15 @@ export async function findMaterialDraft(draftId: string): Promise<MaterialDraft 
   return (await readSnapshot()).drafts.find((draft) => draft.id === draftId);
 }
 
+export async function findMaterialDraftByClientDraftId(
+  actorId: string,
+  clientDraftId: string,
+): Promise<MaterialDraft | undefined> {
+  return (await readSnapshot()).drafts.find(
+    (draft) => draft.createdBy === actorId && draft.clientDraftId === clientDraftId,
+  );
+}
+
 export async function writeMaterialDraft(draft: MaterialDraft): Promise<void> {
   const snapshot = await readSnapshot();
   await writeSnapshot({

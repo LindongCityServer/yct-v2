@@ -1,10 +1,16 @@
 import type { MaterialTransitNetworkSnapshot } from '@yct/contracts';
 
 export type TransitNetworkSourceKind = 'server' | 'rmp';
+export type TransitNetworkSourceChangeReason =
+  | 'initialization'
+  | 'selection'
+  | 'project-import'
+  | 'project-removal';
 
 export interface TransitNetworkSourceChangedPayload {
   studioId: string;
   source: TransitNetworkSourceKind;
+  reason: TransitNetworkSourceChangeReason;
   snapshot?: MaterialTransitNetworkSnapshot;
   clearSnapshot?: boolean;
 }

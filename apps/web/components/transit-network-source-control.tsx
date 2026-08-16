@@ -64,10 +64,20 @@ async function fetchDefaultTransitNetworkSample(): Promise<TransitNetworkSampleR
   return data as TransitNetworkSampleResponse;
 }
 
-export function TransitNetworkSourceControl({ studioId }: Readonly<{ studioId: string }>) {
+export function TransitNetworkSourceControl({
+  studioId,
+  initialSource,
+  initialSnapshot,
+}: Readonly<{
+  studioId: string;
+  initialSource?: TransitNetworkSourceKind;
+  initialSnapshot?: MaterialTransitNetworkSnapshot;
+}>) {
   const inputRef = useRef<HTMLInputElement>(null);
   const projectLoadRevisionRef = useRef(0);
-  const [source, setSource] = useState<TransitNetworkSourceKind>('server');
+  const sourceRef = useRef<TransitNetworkSourceKind>(initialSource ?? 'rmp');
+  const hasUserSelectedSourceRef = useRef(false);
+  const [source, setSource] = useState<TransitNetworkSourceKind>(sourceRef.current);
   const [snapshot, setSnapshot] = useState<MaterialTransitNetworkSnapshot>();
   const [projectId, setProjectId] = useState('');
   const [projectOrigin, setProjectOrigin] = useState<TransitNetworkProjectOrigin>('none');
@@ -87,6 +97,10 @@ export function TransitNetworkSourceControl({ studioId }: Readonly<{ studioId: s
   const [stationNameDraft, setStationNameDraft] = useState<
     Record<string, TransitNetworkStationNameDraft>
   >({});
+  const setActiveSource = useCallback((nextSource: TransitNetworkSourceKind): void => {
+    sourceRef.current = nextSource;
+    setSource(nextSource);
+  }, []);
   const palette = snapshot ? listMaterialTransitNetworkPalette(snapshot) : [];
   const projectLines = useMemo(
     () => (snapshot ? listMaterialTransitNetworkLines(snapshot) : []),
@@ -101,10 +115,12 @@ export function TransitNetworkSourceControl({ studioId }: Readonly<{ studioId: s
 
   const selectSource = (nextSource: TransitNetworkSourceKind, nextSnapshot = snapshot): void => {
     if (nextSource === 'rmp' && !nextSnapshot) return;
-    setSource(nextSource);
+    hasUserSelectedSourceRef.current = true;
+    setActiveSource(nextSource);
     publishTransitNetworkSourceChanged({
       studioId,
       source: nextSource,
+      reason: 'selection',
       snapshot: nextSource === 'rmp' ? nextSnapshot : undefined,
     });
   };
@@ -130,13 +146,19 @@ export function TransitNetworkSourceControl({ studioId }: Readonly<{ studioId: s
       setIsProjectLoading(false);
       setIsLineNameEditorOpen(false);
       setIsStationNameEditorOpen(false);
-      setSource('rmp');
+      hasUserSelectedSourceRef.current = true;
+      setActiveSource('rmp');
       publishTransitNetworkImportSucceeded({
         studioId,
         fileName: file.name,
         snapshot: nextSnapshot,
       });
-      publishTransitNetworkSourceChanged({ studioId, source: 'rmp', snapshot: nextSnapshot });
+      publishTransitNetworkSourceChanged({
+        studioId,
+        source: 'rmp',
+        reason: 'project-import',
+        snapshot: nextSnapshot,
+      });
 
       setIsPersisting(true);
       try {
@@ -210,8 +232,14 @@ export function TransitNetworkSourceControl({ studioId }: Readonly<{ studioId: s
     setErrorMessage('');
     setIsLineNameEditorOpen(false);
     setIsStationNameEditorOpen(false);
-    setSource('server');
-    publishTransitNetworkSourceChanged({ studioId, source: 'server', clearSnapshot: true });
+    hasUserSelectedSourceRef.current = true;
+    setActiveSource('rmp');
+    publishTransitNetworkSourceChanged({
+      studioId,
+      source: 'rmp',
+      reason: 'project-removal',
+      clearSnapshot: true,
+    });
     setIsPersisting(false);
     setIsProjectLoading(true);
     try {
@@ -224,9 +252,11 @@ export function TransitNetworkSourceControl({ studioId }: Readonly<{ studioId: s
       setSampleSourceUrl(sample.sourceUrl);
       setSampleLicenseName(sample.licenseName);
       setSampleLicenseUrl(sample.licenseUrl);
+      setActiveSource('rmp');
       publishTransitNetworkSourceChanged({
         studioId,
-        source: 'server',
+        source: 'rmp',
+        reason: 'project-removal',
         snapshot: sample.snapshot,
       });
     } catch (error) {
@@ -379,7 +409,26 @@ export function TransitNetworkSourceControl({ studioId }: Readonly<{ studioId: s
   useEffect(() => {
     let cancelled = false;
     const loadRevision = ++projectLoadRevisionRef.current;
+    if (!hasUserSelectedSourceRef.current) {
+      setActiveSource(initialSource ?? 'rmp');
+    }
     const loadInitialProject = async (): Promise<void> => {
+      if (initialSource === 'rmp' && initialSnapshot) {
+        setSnapshot(initialSnapshot);
+        setProjectOrigin('imported');
+        setProjectId('');
+        setFileName('本机草稿线网');
+        setIsProjectLoading(false);
+        if (sourceRef.current === 'rmp') {
+          publishTransitNetworkSourceChanged({
+            studioId,
+            source: 'rmp',
+            reason: 'initialization',
+            snapshot: initialSnapshot,
+          });
+        }
+        return;
+      }
       let project: MaterialTransitNetworkProject | undefined;
       try {
         const response = await fetch(appPath('/api/materials/transit-network-projects'), {
@@ -399,11 +448,14 @@ export function TransitNetworkSourceControl({ studioId }: Readonly<{ studioId: s
         setSnapshot(project.snapshot);
         setFileName(project.fileName);
         setIsProjectLoading(false);
-        publishTransitNetworkSourceChanged({
-          studioId,
-          source: 'server',
-          snapshot: project.snapshot,
-        });
+        if (sourceRef.current === 'rmp') {
+          publishTransitNetworkSourceChanged({
+            studioId,
+            source: 'rmp',
+            reason: 'initialization',
+            snapshot: project.snapshot,
+          });
+        }
         return;
       }
       try {
@@ -416,11 +468,14 @@ export function TransitNetworkSourceControl({ studioId }: Readonly<{ studioId: s
         setSampleSourceUrl(sample.sourceUrl);
         setSampleLicenseName(sample.licenseName);
         setSampleLicenseUrl(sample.licenseUrl);
-        publishTransitNetworkSourceChanged({
-          studioId,
-          source: 'server',
-          snapshot: sample.snapshot,
-        });
+        if (sourceRef.current === 'rmp') {
+          publishTransitNetworkSourceChanged({
+            studioId,
+            source: 'rmp',
+            reason: 'initialization',
+            snapshot: sample.snapshot,
+          });
+        }
       } catch (error) {
         if (cancelled || projectLoadRevisionRef.current !== loadRevision) return;
         setErrorMessage(
@@ -436,7 +491,7 @@ export function TransitNetworkSourceControl({ studioId }: Readonly<{ studioId: s
     return () => {
       cancelled = true;
     };
-  }, [studioId]);
+  }, [initialSnapshot, initialSource, setActiveSource, studioId]);
 
   useEffect(() => {
     if (!isLineNameEditorOpen && !isStationNameEditorOpen) return;
@@ -473,7 +528,9 @@ export function TransitNetworkSourceControl({ studioId }: Readonly<{ studioId: s
         <button
           type="button"
           className={
-            projectOrigin === 'sample' ? 'transit-network-heading-import-button' : 'icon-button'
+            projectOrigin === 'sample'
+              ? 'secondary-action-button transit-network-heading-import-button'
+              : 'icon-button'
           }
           aria-label={projectOrigin === 'sample' ? '导入自己的 RMP 项目' : '导入 RMP 项目'}
           title={projectOrigin === 'sample' ? '导入自己的 RMP 项目' : '导入 RMP 项目'}
@@ -482,7 +539,7 @@ export function TransitNetworkSourceControl({ studioId }: Readonly<{ studioId: s
           <span className="material-symbols-outlined" aria-hidden="true">
             upload_file
           </span>
-          {projectOrigin === 'sample' ? <span>导入自己的项目</span> : null}
+          {projectOrigin === 'sample' ? <span>导入</span> : null}
         </button>
         <input
           ref={inputRef}
@@ -598,13 +655,13 @@ export function TransitNetworkSourceControl({ studioId }: Readonly<{ studioId: s
       ) : (
         <button
           type="button"
-          className="transit-network-import-button"
+          className="secondary-action-button transit-network-import-button"
           onClick={() => inputRef.current?.click()}
         >
           <span className="material-symbols-outlined" aria-hidden="true">
             upload_file
           </span>
-          导入 RMP 项目
+          导入项目
         </button>
       )}
 

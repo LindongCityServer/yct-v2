@@ -8,6 +8,7 @@ export interface MaterialStudioActionRequestedPayload {
 export interface MaterialStudioStateChangedPayload {
   studioId: string;
   mode: 'manual' | 'server';
+  transitNetworkSource: 'server' | 'rmp';
   hasPreview: boolean;
   isBusy: boolean;
   canExportProject: boolean;

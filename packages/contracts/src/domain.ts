@@ -1393,6 +1393,8 @@ export interface MaterialTemplateRecord {
 
 export interface MaterialDraft {
   id: string;
+  /** 客户端本地草稿的稳定幂等键。 */
+  clientDraftId?: string;
   templateId: string;
   templateVersion: number;
   input: Record<string, string>;

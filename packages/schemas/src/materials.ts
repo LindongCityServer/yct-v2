@@ -321,6 +321,7 @@ export const materialDraftInputSchema = z.object({
   templateVersion: z.number().int().positive(),
   input: materialInputRecordSchema,
   canvas: materialCanvasSchema,
+  clientDraftId: z.string().trim().min(1).max(120).optional(),
 });
 
 export const materialReviewDecisionSchema = z.object({

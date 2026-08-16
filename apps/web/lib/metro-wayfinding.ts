@@ -26,6 +26,7 @@ export const metroWayfindingBackgroundPalette = [
   { value: '#262626', label: '深灰色' },
   { value: '#F2C94C', label: '黄色' },
   { value: '#FFFFFF', label: '白色' },
+  { value: '#E5EDFF', label: '淡蓝色' },
   { value: '#4A4E54', label: '灰色' },
   { value: '#0A124D', label: '深蓝色' },
   { value: '#085E41', label: '深绿色' },
@@ -35,6 +36,7 @@ export const metroWayfindingForegroundPalette = [
   { value: '#FFFFFF', label: '白色' },
   { value: '#F2C94C', label: '黄色' },
   { value: '#111111', label: '黑色' },
+  { value: '#0A124D', label: '深蓝色' },
   { value: '#8ED8FF', label: '浅蓝色' },
   { value: METRO_WAYFINDING_WARNING_FOREGROUND, label: '警告红' },
 ] as const;
@@ -231,7 +233,8 @@ export function resolveMetroFacilityIconAssetName(
   direction?: MetroWayfindingIconDirection,
 ): MetroFacilityIconAssetName | undefined {
   const option = metroWayfindingIconOptions.find((item) => item.id === iconId);
-  return option?.assetNameByDirection?.[direction ?? 'right'] ?? option?.assetName;
+  const defaultDirection = resolveMetroWayfindingFacilityDefaultDirection(iconId) ?? 'up';
+  return option?.assetNameByDirection?.[direction ?? defaultDirection] ?? option?.assetName;
 }
 
 export function resolveMetroArrowIconAssetName(
@@ -360,6 +363,7 @@ export interface MetroWayfindingDividerElement {
 
 export type MetroWayfindingCombinationChild =
   | MetroWayfindingFacilityElement
+  | MetroWayfindingArrowElement
   | MetroWayfindingTextElement
   | MetroWayfindingLargeTextElement
   | MetroWayfindingSpaceElement;
@@ -414,6 +418,161 @@ export interface MetroWayfindingProjectFile {
   canvas: MetroWayfindingProjectCanvas;
   layout: MetroWayfindingLayout;
   exportedAt: string;
+}
+
+export interface MetroWayfindingRowContextDefaults {
+  textAlign: MetroWayfindingTextAlign;
+  facilityDirection?: MetroWayfindingIconDirection;
+}
+
+const metroWayfindingLeftBoundaryArrows = new Set([
+  'west',
+  'north-west',
+  'south-west',
+  'u-turn-left',
+  'turn-left-up',
+  'turn-left-down',
+]);
+const metroWayfindingRightBoundaryArrows = new Set([
+  'east',
+  'north-east',
+  'south-east',
+  'u-turn-right',
+  'turn-right-up',
+  'turn-right-down',
+]);
+
+export function resolveMetroWayfindingFacilityDefaultDirection(
+  iconId: string,
+): MetroWayfindingIconDirection | undefined {
+  if (iconId === 'exit') return 'up';
+  if (['stairs', 'stairs-down', 'escalator', 'wheelchair', 'wheelchair-lift'].includes(iconId)) {
+    return 'left';
+  }
+  return undefined;
+}
+
+export function resolveMetroWayfindingArrowBoundarySide(
+  iconId: string,
+): 'left' | 'right' | 'up' | undefined {
+  if (metroWayfindingLeftBoundaryArrows.has(iconId)) return 'left';
+  if (metroWayfindingRightBoundaryArrows.has(iconId)) return 'right';
+  if (iconId === 'north') return 'up';
+  return undefined;
+}
+
+export function resolveMetroWayfindingRowContextDefaults(
+  row: readonly MetroWayfindingElement[],
+  index: number,
+): MetroWayfindingRowContextDefaults {
+  return resolveMetroWayfindingContextDefaults(row, index - 1, index + 1);
+}
+
+export function resolveMetroWayfindingInsertionContextDefaults(
+  row: readonly MetroWayfindingElement[],
+  insertionIndex: number,
+): MetroWayfindingRowContextDefaults {
+  const normalizedIndex = Math.max(0, Math.min(row.length, insertionIndex));
+  return resolveMetroWayfindingContextDefaults(row, normalizedIndex - 1, normalizedIndex);
+}
+
+function resolveMetroWayfindingContextDefaults(
+  row: readonly MetroWayfindingElement[],
+  previousStartIndex: number,
+  nextStartIndex: number,
+): MetroWayfindingRowContextDefaults {
+  const previousFlexIndex = findPreviousFlexSpaceIndex(row, previousStartIndex);
+  const nextFlexIndex = findNextFlexSpaceIndex(row, nextStartIndex);
+  const previousArrow = findPreviousArrowBeforeFlex(row, previousStartIndex);
+  const nextArrow = findNextArrowBeforeFlex(row, nextStartIndex);
+  const previousArrowSide = previousArrow
+    ? resolveMetroWayfindingArrowBoundarySide(previousArrow.iconId)
+    : undefined;
+  const nextArrowSide = nextArrow
+    ? resolveMetroWayfindingArrowBoundarySide(nextArrow.iconId)
+    : undefined;
+
+  if (nextFlexIndex >= 0 && previousArrowSide === 'left') {
+    return { textAlign: 'left', facilityDirection: 'left' };
+  }
+  if (nextFlexIndex >= 0 && previousArrowSide === 'up') {
+    return { textAlign: 'left' };
+  }
+  if (previousFlexIndex >= 0 && nextArrowSide === 'right') {
+    return { textAlign: 'right', facilityDirection: 'right' };
+  }
+  if (previousFlexIndex >= 0 && nextArrowSide === 'up') {
+    return { textAlign: 'right' };
+  }
+  return { textAlign: 'center' };
+}
+
+export function applyMetroWayfindingRowContextDefaults(
+  row: readonly MetroWayfindingElement[],
+): MetroWayfindingElement[] {
+  return row.map((element, index) => {
+    const defaults = resolveMetroWayfindingRowContextDefaults(row, index);
+    if (element.type === 'text') {
+      return { ...element, align: defaults.textAlign };
+    }
+    if (element.type === 'facility') {
+      const fallbackDirection = resolveMetroWayfindingFacilityDefaultDirection(element.iconId);
+      if (!fallbackDirection) return element;
+      return {
+        ...element,
+        direction: element.direction ?? defaults.facilityDirection ?? fallbackDirection,
+      };
+    }
+    return element;
+  });
+}
+
+function findPreviousFlexSpaceIndex(
+  row: readonly MetroWayfindingElement[],
+  startIndex: number,
+): number {
+  for (let cursor = Math.min(startIndex, row.length - 1); cursor >= 0; cursor -= 1) {
+    const element = row[cursor];
+    if (element?.type === 'space' && element.mode === 'flex') return cursor;
+    if (element?.type === 'arrow') return -1;
+  }
+  return -1;
+}
+
+function findNextFlexSpaceIndex(
+  row: readonly MetroWayfindingElement[],
+  startIndex: number,
+): number {
+  for (let cursor = Math.max(startIndex, 0); cursor < row.length; cursor += 1) {
+    const element = row[cursor];
+    if (element?.type === 'space' && element.mode === 'flex') return cursor;
+    if (element?.type === 'arrow') return -1;
+  }
+  return -1;
+}
+
+function findPreviousArrowBeforeFlex(
+  row: readonly MetroWayfindingElement[],
+  startIndex: number,
+): MetroWayfindingArrowElement | undefined {
+  for (let cursor = Math.min(startIndex, row.length - 1); cursor >= 0; cursor -= 1) {
+    const element = row[cursor];
+    if (element?.type === 'space' && element.mode === 'flex') return undefined;
+    if (element?.type === 'arrow') return element;
+  }
+  return undefined;
+}
+
+function findNextArrowBeforeFlex(
+  row: readonly MetroWayfindingElement[],
+  startIndex: number,
+): MetroWayfindingArrowElement | undefined {
+  for (let cursor = Math.max(startIndex, 0); cursor < row.length; cursor += 1) {
+    const element = row[cursor];
+    if (element?.type === 'space' && element.mode === 'flex') return undefined;
+    if (element?.type === 'arrow') return element;
+  }
+  return undefined;
 }
 
 export interface MetroWayfindingLayoutSummaryRow {
@@ -690,19 +849,7 @@ export function resolveMetroWayfindingElementWidth(element: MetroWayfindingEleme
     if (element.frameShape === 'circle') {
       return 85;
     }
-    const mainFontSize =
-      element.frameShape !== 'none'
-        ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
-        : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE;
-    const suffixGap = element.value && element.suffix ? 3 : 0;
-    const contentWidth =
-      estimateMetroWayfindingLargeTextWidth(element.value, mainFontSize) +
-      suffixGap +
-      estimateMetroWayfindingLargeTextWidth(
-        element.suffix,
-        METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE,
-      );
-    return Math.max(85, contentWidth + 8);
+    return resolveMetroWayfindingLargeTextWidth(element, 85);
   }
   if (element.type === 'combination') {
     return (
@@ -736,7 +883,11 @@ export function resolveMetroWayfindingCombinationSizing(
     (element.frameFillMode === 'stripe' && element.stripePosition === 'right'
       ? METRO_WAYFINDING_COMBINATION_STRIPE_WIDTH
       : 0);
-  const elementWidths = element.children.map(resolveMetroWayfindingElementWidth);
+  const elementWidths = element.children.map((child) =>
+    child.type === 'largeText' && child.frameShape === 'none'
+      ? resolveMetroWayfindingLargeTextWidth(child, 0)
+      : resolveMetroWayfindingElementWidth(child),
+  );
   const gapWidth = Math.max(element.children.length - 1, 0) * METRO_WAYFINDING_GAP;
   let fixedWidth = 0;
   let flexCount = 0;
@@ -780,6 +931,25 @@ export function resolveMetroWayfindingCombinationSizing(
     layoutScale: 1,
     totalDisplayWidth: fixedWidth + gapWidth + flexWidth * flexCount,
   };
+}
+
+function resolveMetroWayfindingLargeTextWidth(
+  element: MetroWayfindingLargeTextElement,
+  minimumWidth: number,
+): number {
+  const mainFontSize =
+    element.frameShape !== 'none'
+      ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
+      : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE;
+  const suffixGap = element.value && element.suffix ? 3 : 0;
+  const contentWidth =
+    estimateMetroWayfindingLargeTextWidth(element.value, mainFontSize) +
+    suffixGap +
+    estimateMetroWayfindingLargeTextWidth(
+      element.suffix,
+      METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE,
+    );
+  return Math.max(minimumWidth, contentWidth > 0 ? contentWidth + 8 : 0);
 }
 
 export function measureMetroWayfindingMainSegments(
@@ -924,6 +1094,61 @@ export function createMetroWayfindingElement(
     return { id, type, mode: 'fixed', units: 1 };
   }
   return { id, type };
+}
+
+const metroWayfindingArrowReverseMap: Record<string, string> = {
+  'south-west': 'south-east',
+  west: 'east',
+  'north-west': 'north-east',
+  'north-east': 'north-west',
+  east: 'west',
+  'south-east': 'south-west',
+  'turn-left-up': 'turn-right-up',
+  'turn-right-up': 'turn-left-up',
+  'turn-left-down': 'turn-right-down',
+  'turn-right-down': 'turn-left-down',
+  'u-turn-left': 'u-turn-right',
+  'u-turn-right': 'u-turn-left',
+};
+
+function reverseMetroWayfindingElement(element: MetroWayfindingElement): MetroWayfindingElement {
+  if (element.type === 'arrow') {
+    return {
+      ...element,
+      iconId: metroWayfindingArrowReverseMap[element.iconId] ?? element.iconId,
+    };
+  }
+  if (element.type === 'facility') {
+    const fallbackDirection = resolveMetroWayfindingFacilityDefaultDirection(element.iconId);
+    if (!fallbackDirection) return element;
+    const effectiveDirection = element.direction ?? fallbackDirection;
+    return {
+      ...element,
+      direction:
+        effectiveDirection === 'left'
+          ? 'right'
+          : effectiveDirection === 'right'
+            ? 'left'
+            : effectiveDirection,
+    };
+  }
+  if (element.type === 'text') {
+    return {
+      ...element,
+      align:
+        element.align === 'left' ? 'right' : element.align === 'right' ? 'left' : element.align,
+    };
+  }
+  // 组合框是一个不可拆分的整体，内部元素不参与反排。
+  return element;
+}
+
+export function reverseMetroWayfindingLayout(layout: MetroWayfindingLayout): MetroWayfindingLayout {
+  if (layout.mode === 'vertical') return layout;
+  return {
+    ...layout,
+    rows: layout.rows.map((row) => [...row].reverse().map(reverseMetroWayfindingElement)),
+  };
 }
 
 export function parseMetroWayfindingLayout(value: string): MetroWayfindingLayout {
@@ -1329,6 +1554,7 @@ function normalizeMetroWayfindingCombinationChildren(
         type === 'icon' ||
         type === 'facility' ||
         type === 'text' ||
+        type === 'arrow' ||
         type === 'largeText' ||
         type === 'space'
       );
@@ -1337,6 +1563,7 @@ function normalizeMetroWayfindingCombinationChildren(
     .filter(
       (element): element is MetroWayfindingCombinationChild =>
         element?.type === 'facility' ||
+        element?.type === 'arrow' ||
         element?.type === 'text' ||
         element?.type === 'largeText' ||
         element?.type === 'space',

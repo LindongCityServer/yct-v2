@@ -32,6 +32,7 @@ export type MetroWayfindingElementAction =
 
 export type MetroWayfindingCompositionAction =
   | (MetroWayfindingElementAction & { rowIndex: number })
+  | { type: 'reverse' }
   | { type: 'replace'; layout: MetroWayfindingLayout };
 
 export interface MetroWayfindingCompositionChangedPayload {
