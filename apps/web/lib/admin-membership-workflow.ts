@@ -1,12 +1,39 @@
 import { randomUUID } from 'node:crypto';
 import type { YctAdminMembership, YctAdminRole, YctUserLink } from '@yct/contracts';
 import { publishDomainEvent } from './app-event-bus';
-import { listAdminMemberships, setAdminMembership } from './admin-membership-store';
+import {
+  listAdminMemberships,
+  setAdminMembership,
+  upsertSuperAdmin,
+} from './admin-membership-store';
 import { listYctUserLinks } from './yct-user-link-store';
 
 export interface AdminMembershipDirectory {
   memberships: YctAdminMembership[];
   users: YctUserLink[];
+}
+
+export async function initializeSuperAdminMembership(input: {
+  ldpassUserId: string;
+  yctUserId?: string;
+}): Promise<YctAdminMembership> {
+  const existing = (await listAdminMemberships()).find(
+    (membership) => membership.ldpassUserId === input.ldpassUserId,
+  );
+  const membership = await upsertSuperAdmin(input);
+  if (!existing || existing.role !== 'super_admin' || existing.status !== 'active') {
+    await publishDomainEvent({
+      eventId: `event_${randomUUID()}`,
+      type: 'AdminInitialized',
+      actor: { type: 'system' },
+      payload: {
+        adminMembershipId: membership.id,
+        ldpassUserId: membership.ldpassUserId,
+        role: 'super_admin',
+      },
+    });
+  }
+  return membership;
 }
 
 export type AdminMembershipUpdateResult =

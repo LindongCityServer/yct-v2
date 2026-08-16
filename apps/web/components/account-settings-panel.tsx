@@ -229,6 +229,7 @@ export function AccountSettingsPanel({
   auth: {
     ldpassConfigured: boolean;
     ldpassBaseUrl?: string;
+    localAdminAuthEnabled?: boolean;
     status?: AuthStatus;
     session?: YctAccountSessionSnapshot;
   };
@@ -1408,10 +1409,7 @@ export function AccountSettingsPanel({
           </div>
         </section>
 
-        <section
-          className="settings-row settings-row-block"
-          aria-labelledby="about-settings-title"
-        >
+        <section className="settings-row settings-row-block" aria-labelledby="about-settings-title">
           <div className="settings-row-title">
             <span className="material-symbols-outlined" aria-hidden="true">
               info
@@ -1526,6 +1524,7 @@ function AccountAuthPanel({
   auth: {
     ldpassConfigured: boolean;
     ldpassBaseUrl?: string;
+    localAdminAuthEnabled?: boolean;
     status?: AuthStatus;
     session?: YctAccountSessionSnapshot;
   };
@@ -1609,20 +1608,37 @@ function AccountAuthPanel({
             </a>
           </>
         ) : (
-          <a
-            className={
-              auth.ldpassConfigured
-                ? 'secondary-action-button is-primary'
-                : 'secondary-action-button'
-            }
-            href={auth.ldpassConfigured ? appPath('/api/auth/ldpass/start') : undefined}
-            aria-disabled={!auth.ldpassConfigured}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              login
-            </span>
-            <span>{t('account.auth.login')}</span>
-          </a>
+          <>
+            <a
+              className={
+                auth.ldpassConfigured
+                  ? 'secondary-action-button is-primary'
+                  : 'secondary-action-button'
+              }
+              href={auth.ldpassConfigured ? appPath('/api/auth/ldpass/start') : undefined}
+              aria-disabled={!auth.ldpassConfigured}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                login
+              </span>
+              <span>{t('account.auth.login')}</span>
+            </a>
+            {auth.localAdminAuthEnabled ? (
+              <form
+                className="account-local-admin-login"
+                method="post"
+                action={appPath('/api/auth/local-admin')}
+              >
+                <button className="secondary-action-button" type="submit">
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    developer_mode
+                  </span>
+                  <span>{t('account.auth.localAdminLogin')}</span>
+                </button>
+                <small className="muted">{t('account.auth.localAdminLoginHint')}</small>
+              </form>
+            ) : null}
+          </>
         )}
       </div>
     </section>
@@ -2037,6 +2053,9 @@ async function warmAppShellCache(): Promise<void> {
       '/travel/schedules',
       '/travel/screen',
       '/services',
+      '/services/transit-network-health',
+      '/services/road-materials',
+      '/services/transit-materials',
       '/map',
       '/offline',
       '/api/transit/overview',
@@ -2044,7 +2063,13 @@ async function warmAppShellCache(): Promise<void> {
       '/api/transit/screen',
       '/api/transit/service-notices',
       '/api/transit/station-details',
+      '/api/transit/network-health',
       '/api/operations/feed',
+      '/api/materials/templates',
+      '/api/materials/transit-lines',
+      '/api/materials/transit-stations',
+      '/api/materials/locations',
+      '/api/materials/transit-network-projects/sample',
     ].map((url) =>
       fetch(appPath(url), {
         cache: 'reload',
@@ -2062,6 +2087,11 @@ async function warmOfflinePackageCache(): Promise<void> {
       '/api/map/poi-categories',
       '/api/map/markers',
       '/api/map/unmined-regions',
+      '/api/transit/network-health',
+      '/api/materials/templates',
+      '/api/materials/transit-lines',
+      '/api/materials/transit-stations',
+      '/api/materials/locations',
     ].map(async (url) => {
       const response = await fetch(appPath(url), {
         cache: 'reload',

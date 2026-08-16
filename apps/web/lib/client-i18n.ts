@@ -83,6 +83,8 @@ export type CommonMessageKey =
   | 'account.auth.introConfigured'
   | 'account.auth.introNotConfigured'
   | 'account.auth.ldpassAccount'
+  | 'account.auth.localAdminLogin'
+  | 'account.auth.localAdminLoginHint'
   | 'account.auth.login'
   | 'account.auth.logout'
   | 'account.auth.readonlyStatus'
@@ -1041,6 +1043,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.auth.introConfigured': '使用临东通账号登录后可同步历史、偏好和后续票券状态。',
     'account.auth.introNotConfigured': '临东通登录尚未配置。',
     'account.auth.ldpassAccount': '临东通账号',
+    'account.auth.localAdminLogin': '本地管理员登录',
+    'account.auth.localAdminLoginHint': '仅用于本机开发，不会绕过后台 API 鉴权。',
     'account.auth.login': '使用临东通登录',
     'account.auth.logout': '退出雨城通',
     'account.auth.readonlyStatus': '账号状态：{status}',
@@ -2049,6 +2053,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.auth.introConfigured': '使用臨東通帳號登入後可同步歷史、偏好和後續票券狀態。',
     'account.auth.introNotConfigured': '臨東通登入尚未設定。',
     'account.auth.ldpassAccount': '臨東通帳號',
+    'account.auth.localAdminLogin': '本機管理員登入',
+    'account.auth.localAdminLoginHint': '僅用於本機開發，不會略過後台 API 驗證。',
     'account.auth.login': '使用臨東通登入',
     'account.auth.logout': '登出雨城通',
     'account.auth.readonlyStatus': '帳號狀態：{status}',
@@ -3060,6 +3066,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       'Sign in with LDPASS to sync history, preferences, and future ticket status.',
     'account.auth.introNotConfigured': 'LDPASS sign-in is not configured.',
     'account.auth.ldpassAccount': 'LDPASS account',
+    'account.auth.localAdminLogin': 'Local admin sign-in',
+    'account.auth.localAdminLoginHint':
+      'Available only for local development and still uses normal API authorization.',
     'account.auth.login': 'Sign in with LDPASS',
     'account.auth.logout': 'Sign out of Yuchengtong',
     'account.auth.readonlyStatus': 'Account status: {status}',

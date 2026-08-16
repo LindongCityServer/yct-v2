@@ -29,6 +29,7 @@ export default async function AccountPage({
         auth={{
           ldpassConfigured: Boolean(config.ldpassBaseUrl && config.ldpassClientId),
           ldpassBaseUrl: config.ldpassBaseUrl,
+          localAdminAuthEnabled: config.localAdminAuthEnabled,
           status: normalizeAuthStatus(authStatus),
           session: serverSession?.snapshot,
         }}

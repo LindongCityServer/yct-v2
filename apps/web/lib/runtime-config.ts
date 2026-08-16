@@ -4,6 +4,9 @@ import { appPath } from './app-paths';
 
 export interface RuntimeConfig {
   siteUrl: string;
+  localAdminAuthEnabled: boolean;
+  localAdminUserId: string;
+  localAdminUsername: string;
   ldpassBaseUrl?: string;
   ldpassClientId?: string;
   ldpassYctProviderApiKey?: string;
@@ -101,6 +104,11 @@ function resolveRuntimePath(value: string | undefined, fallback?: string): strin
 export function readRuntimeConfig(): RuntimeConfig {
   return {
     siteUrl: emptyToUndefined(process.env.YCT_PUBLIC_SITE_URL) ?? 'http://localhost:3000',
+    localAdminAuthEnabled:
+      process.env.NODE_ENV !== 'production' &&
+      parseBoolean(process.env.YCT_LOCAL_ADMIN_AUTH_ENABLED, false),
+    localAdminUserId: emptyToUndefined(process.env.YCT_LOCAL_ADMIN_USER_ID) ?? 'local-admin',
+    localAdminUsername: emptyToUndefined(process.env.YCT_LOCAL_ADMIN_USERNAME) ?? '本地管理员',
     ldpassBaseUrl: emptyToUndefined(process.env.LDPASS_BASE_URL),
     ldpassClientId: emptyToUndefined(process.env.LDPASS_CLIENT_ID),
     ldpassYctProviderApiKey: emptyToUndefined(process.env.LDPASS_YCT_PROVIDER_API_KEY),
@@ -350,6 +358,13 @@ export function readRuntimeConfig(): RuntimeConfig {
 function parseLegacyDataSource(value: string | undefined): RuntimeConfig['legacyDataSource'] {
   const trimmed = value?.trim();
   return trimmed === 'local' || trimmed === 'remote' || trimmed === 'auto' ? trimmed : 'auto';
+}
+
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1' || normalized === 'yes') return true;
+  if (normalized === 'false' || normalized === '0' || normalized === 'no') return false;
+  return fallback;
 }
 
 function parsePositiveInteger(value: string | undefined, fallback: number): number {
