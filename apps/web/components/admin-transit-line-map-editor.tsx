@@ -33,6 +33,7 @@ import {
 } from '../lib/transit-line-visual-routing';
 import { CurrentPlayerLocationButton } from './current-player-location-button';
 import { LayeredMapTile } from './layered-map-tile';
+import { SecondaryPageHeader } from './app-shell';
 
 type TransitLine = TransitDataRevision['lines'][number];
 type TransitStation = TransitDataRevision['stations'][number];
@@ -968,21 +969,23 @@ export function AdminTransitLineMapEditor({
 
   return (
     <main className="transit-visual-editor">
-      <header className="transit-visual-editor-header">
-        <Link className="transit-visual-editor-cancel" href={appPath('/admin/transit')}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            close
-          </span>
-          <span>取消</span>
-        </Link>
-        <h1>{`编辑${data.line.name}`}</h1>
-        <button type="button" disabled={isSaving} onClick={() => void save()}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            save
-          </span>
-          <span>保存</span>
-        </button>
-      </header>
+      <SecondaryPageHeader
+        backHref="/admin/transit"
+        secondaryActions={
+          <button
+            className="secondary-action-button is-primary"
+            type="button"
+            disabled={isSaving}
+            onClick={() => void save()}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              save
+            </span>
+            <span>保存</span>
+          </button>
+        }
+        title={`编辑${data.line.name}`}
+      />
 
       <div
         className={`transit-visual-map-stage is-tool-${effectiveTool}`}

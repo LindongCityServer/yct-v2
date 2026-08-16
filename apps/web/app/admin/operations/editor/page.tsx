@@ -9,18 +9,11 @@ export async function generateMetadata() {
 export default async function AdminMarkdownEditorRoute({
   searchParams,
 }: Readonly<{
-  searchParams?: Promise<{ contentId?: string | string[]; new?: string | string[] }>;
+  searchParams?: Promise<{ contentId?: string | string[] }>;
 }>) {
   const resolved = searchParams ? await searchParams : undefined;
   const contentId = Array.isArray(resolved?.contentId)
     ? resolved.contentId[0]
     : resolved?.contentId;
-  const newValue = Array.isArray(resolved?.new) ? resolved.new[0] : resolved?.new;
-
-  return (
-    <AdminMarkdownEditorPage
-      initialContentId={contentId}
-      startNew={!contentId || newValue === '1' || newValue === 'true'}
-    />
-  );
+  return <AdminMarkdownEditorPage initialContentId={contentId} />;
 }

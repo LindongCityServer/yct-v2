@@ -446,32 +446,15 @@ export function SecondaryShell({
   legalVariant?: 'none' | 'mobile' | 'always';
   children: ReactNode;
 }>) {
-  const { t } = useI18n();
-  const renderedTitle = titleKey ? t(titleKey) : title;
-
   return (
     <main className="secondary-shell">
-      <header className="topbar secondary-topbar">
-        <TopbarMaterialLayers />
-        <Link
-          className={desktopBackHref ? 'icon-button secondary-back-mobile' : 'icon-button'}
-          href={appPath(backHref)}
-          aria-label={t('nav.back')}
-        >
-          <span className="material-symbols-outlined">arrow_back</span>
-        </Link>
-        {desktopBackHref ? (
-          <Link
-            className="icon-button secondary-back-desktop"
-            href={appPath(desktopBackHref)}
-            aria-label={t('nav.back')}
-          >
-            <span className="material-symbols-outlined">arrow_back</span>
-          </Link>
-        ) : null}
-        <h1 className="secondary-title">{renderedTitle}</h1>
-        <div className="secondary-actions">{secondaryActions}</div>
-      </header>
+      <SecondaryPageHeader
+        backHref={backHref}
+        desktopBackHref={desktopBackHref}
+        secondaryActions={secondaryActions}
+        title={title}
+        titleKey={titleKey}
+      />
       <section
         className={
           desktopNavigation ? 'secondary-content has-desktop-navigation' : 'secondary-content'
@@ -533,5 +516,59 @@ function SiteLegal({ className = '' }: Readonly<{ className?: string }>) {
         </Link>
       </p>
     </footer>
+  );
+}
+
+export function SecondaryPageHeader({
+  backHref,
+  backLabel,
+  desktopBackHref,
+  onBack,
+  secondaryActions,
+  title,
+  titleKey,
+}: Readonly<{
+  backHref: string;
+  backLabel?: string;
+  desktopBackHref?: string;
+  onBack?: () => void;
+  secondaryActions?: ReactNode;
+  title: string;
+  titleKey?: CommonMessageKey;
+}>) {
+  const { t } = useI18n();
+  const renderedTitle = titleKey ? t(titleKey) : title;
+  const accessibleBackLabel = backLabel ?? t('nav.back');
+  const backClassName = desktopBackHref ? 'icon-button secondary-back-mobile' : 'icon-button';
+
+  return (
+    <header className="topbar secondary-topbar">
+      <TopbarMaterialLayers />
+      {onBack ? (
+        <button
+          className={backClassName}
+          type="button"
+          aria-label={accessibleBackLabel}
+          onClick={onBack}
+        >
+          <span className="material-symbols-outlined">arrow_back</span>
+        </button>
+      ) : (
+        <Link className={backClassName} href={appPath(backHref)} aria-label={accessibleBackLabel}>
+          <span className="material-symbols-outlined">arrow_back</span>
+        </Link>
+      )}
+      {desktopBackHref ? (
+        <Link
+          className="icon-button secondary-back-desktop"
+          href={appPath(desktopBackHref)}
+          aria-label={accessibleBackLabel}
+        >
+          <span className="material-symbols-outlined">arrow_back</span>
+        </Link>
+      ) : null}
+      <h1 className="secondary-title">{renderedTitle}</h1>
+      <div className="secondary-actions">{secondaryActions}</div>
+    </header>
   );
 }

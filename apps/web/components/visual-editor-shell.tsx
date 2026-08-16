@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { appPath } from '../lib/app-paths';
 import { subscribeEditorDraftChanged, type VisualEditorKind } from '../lib/client-editor-events';
+import { SecondaryPageHeader } from './app-shell';
 
 export function VisualEditorShell({
   actions,
@@ -17,6 +18,7 @@ export function VisualEditorShell({
   sessionId,
   status,
   title,
+  workspace = false,
 }: Readonly<{
   actions?: ReactNode;
   backLabel?: string;
@@ -30,6 +32,7 @@ export function VisualEditorShell({
   sessionId: string;
   status?: string;
   title: string;
+  workspace?: boolean;
 }>) {
   const [eventDirty, setEventDirty] = useState(false);
   const approvedNavigationRef = useRef(false);
@@ -82,25 +85,39 @@ export function VisualEditorShell({
   };
 
   return (
-    <main className={`visual-editor-page is-${editorKind}-editor`} aria-busy={isBusy}>
-      <header className="visual-editor-page-header">
-        <button
-          className="visual-editor-page-back"
-          type="button"
-          disabled={isBusy}
-          onClick={requestBack}
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            arrow_back
-          </span>
-          <span>{backLabel}</span>
-        </button>
-        <div className="visual-editor-page-heading">
-          <h1>{title}</h1>
-          {status ? <span className="visual-editor-page-status">{status}</span> : null}
-        </div>
-        {actions ? <div className="visual-editor-page-actions">{actions}</div> : null}
-      </header>
+    <main
+      className={`visual-editor-page is-${editorKind}-editor${workspace ? ' is-workspace' : ''}`}
+      aria-busy={isBusy}
+    >
+      <SecondaryPageHeader
+        backHref={backHref}
+        backLabel={backLabel}
+        onBack={requestBack}
+        secondaryActions={
+          <>
+            {status ? <span className="visual-editor-page-status">{status}</span> : null}
+            {actions ??
+              (onSave ? (
+                <button
+                  className="secondary-action-button is-primary"
+                  type="button"
+                  aria-busy={isBusy}
+                  disabled={isBusy}
+                  onClick={onSave}
+                >
+                  <span
+                    className={`material-symbols-outlined${isBusy ? ' busy-state-indicator' : ''}`}
+                    aria-hidden="true"
+                  >
+                    {isBusy ? 'progress_activity' : 'save'}
+                  </span>
+                  <span>{isBusy ? '保存中' : '保存'}</span>
+                </button>
+              ) : null)}
+          </>
+        }
+        title={title}
+      />
       <div className="visual-editor-page-body">{children}</div>
     </main>
   );

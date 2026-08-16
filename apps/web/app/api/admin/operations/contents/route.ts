@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireYctAdmin } from '../../../../../lib/admin-auth';
-import { adminContentDraftSchema } from '../../../../../lib/admin-content-draft-schema';
+import { adminContentCreateDraftSchema } from '../../../../../lib/admin-content-draft-schema';
 import { createContentDraft, listAdminContentRecords } from '../../../../../lib/content-workflow';
 
 export async function GET(request: NextRequest) {
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const parsed = adminContentDraftSchema.safeParse(body);
+  const parsed = adminContentCreateDraftSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       {

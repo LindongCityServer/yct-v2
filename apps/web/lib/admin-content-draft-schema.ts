@@ -19,4 +19,8 @@ export const adminContentDraftSchema = contentRevisionDraftSchema.extend({
   relatedPoiMarkerIds: z.array(z.string().trim().min(1).max(220)).max(100).default([]),
 });
 
+export const adminContentCreateDraftSchema = adminContentDraftSchema.extend({
+  markdown: z.string().max(120_000).default(''),
+});
+
 export type AdminContentDraftInput = z.infer<typeof adminContentDraftSchema>;

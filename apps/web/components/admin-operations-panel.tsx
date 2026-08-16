@@ -13,15 +13,11 @@ import type {
   OperationsStrongReminderRule,
   PushDelivery,
 } from '@yct/contracts';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { appBasePath, appPath } from '../lib/app-paths';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
-import { publishEditorDraftChanged } from '../lib/client-editor-events';
-import { MarkdownBlocks } from './markdown-blocks';
-import { TitleWithBreaks } from './title-with-breaks';
 import { AdminRefreshButton } from './admin-refresh-button';
 import { ContentPoiBindingEditor } from './content-poi-binding-editor';
-import { VisualEditorShell } from './visual-editor-shell';
 
 interface AdminContentMetadata {
   excerpt?: string;
@@ -203,15 +199,9 @@ const reminderToneOptions: Array<{
 ];
 
 export function AdminOperationsPanel({
-  editorMode = 'panel',
   initialContentId,
-  onEditorClose,
-  startNew = false,
 }: Readonly<{
-  editorMode?: 'page' | 'panel';
   initialContentId?: string;
-  onEditorClose?: () => void;
-  startNew?: boolean;
 }>) {
   const [records, setRecords] = useState<AdminContentRecord[]>([]);
   const [recordsLoaded, setRecordsLoaded] = useState(false);
@@ -292,8 +282,6 @@ export function AdminOperationsPanel({
   const [reminderSortOrderValue, setReminderSortOrderValue] = useState('0');
   const assetFileInputRef = useRef<HTMLInputElement | null>(null);
   const initialContentHandledRef = useRef(false);
-  const initialNewContentHandledRef = useRef(false);
-  const editorSessionId = `markdown:${initialContentId ?? (startNew ? 'new' : 'panel')}`;
 
   const sortedRecords = useMemo(
     () => [...records].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
@@ -308,15 +296,6 @@ export function AdminOperationsPanel({
     () => new Map(assetRecords.map((record) => [record.asset.id, record] as const)),
     [assetRecords],
   );
-  const assetRecordByUrl = useMemo(
-    () =>
-      new Map(
-        assetRecords.flatMap((record) =>
-          buildContentAssetReferenceKeys(record.asset.url).map((key) => [key, record] as const),
-        ),
-      ),
-    [assetRecords],
-  );
   const contentTitleById = useMemo(
     () => new Map(records.map((record) => [record.contentId, record.revision.title] as const)),
     [records],
@@ -329,17 +308,6 @@ export function AdminOperationsPanel({
     currentEditingContentRecord?.revision.status === 'published' &&
     currentEditingContentRecord.revision.scheduledAt,
   );
-  const draftAssetIds = useMemo(
-    () =>
-      mergeUniqueStringValues([
-        ...parseAssetIds(assetIdsText),
-        ...extractContentAssetReferencePaths(markdown).flatMap((path) => {
-          const assetRecord = assetRecordByUrl.get(normalizeContentAssetReferencePath(path));
-          return assetRecord ? [assetRecord.asset.id] : [];
-        }),
-      ]),
-    [assetIdsText, assetRecordByUrl, markdown],
-  );
   const contentReviewPreviewById = useMemo(
     () =>
       new Map(
@@ -351,61 +319,6 @@ export function AdminOperationsPanel({
         ]),
       ),
     [assetRecordById, records],
-  );
-  const draftContentReviewPreview = useMemo(
-    () =>
-      buildContentPublishPreview(
-        {
-          contentId: editingContentId ?? 'draft_preview',
-          revision: {
-            id: currentEditingContentRecord?.revision.id ?? 'draft_preview',
-            title: title.trim() || '未填写标题',
-            categoryId,
-            markdown,
-            assetIds: draftAssetIds,
-            status: currentEditingContentRecord?.revision.status ?? 'draft',
-            publishedAt: currentEditingContentRecord?.revision.publishedAt,
-            scheduledAt:
-              parseDateTimeLocalInput(scheduledAtValue) ??
-              currentEditingContentRecord?.revision.scheduledAt,
-            reviewReason: currentEditingContentRecord?.revision.reviewReason,
-          },
-          metadata: {
-            excerpt: excerpt.trim() || undefined,
-            showInBanner,
-            bannerSortOrder: parseBannerSortOrderInput(bannerSortOrderValue),
-            customTags: parseCustomTagsInput(customTagsText),
-            coverColor: coverColor.trim() || undefined,
-            coverImageUrl: coverImageUrl.trim() || undefined,
-            expiresAt: parseDateTimeLocalInput(expiresAtValue) ?? undefined,
-            relatedPoiMarkerIds,
-          },
-          publishHistory: currentEditingContentRecord?.publishHistory,
-          updatedAt: currentEditingContentRecord?.updatedAt ?? new Date().toISOString(),
-        },
-        assetRecordById,
-        { includeStatusBlocker: false },
-      ),
-    [
-      assetIdsText,
-      assetRecordById,
-      assetRecordByUrl,
-      bannerSortOrderValue,
-      categoryId,
-      coverColor,
-      coverImageUrl,
-      currentEditingContentRecord,
-      draftAssetIds,
-      editingContentId,
-      excerpt,
-      expiresAtValue,
-      scheduledAtValue,
-      markdown,
-      relatedPoiMarkerIds,
-      showInBanner,
-      title,
-      customTagsText,
-    ],
   );
   const contentStatusCounts = useMemo(
     () =>
@@ -910,20 +823,10 @@ export function AdminOperationsPanel({
 
   const setContentEditorClean = () => {
     setIsContentEditorDirty(false);
-    publishEditorDraftChanged({
-      dirty: false,
-      editorKind: 'markdown',
-      sessionId: editorSessionId,
-    });
   };
 
   const markContentEditorDirty = () => {
     setIsContentEditorDirty(true);
-    publishEditorDraftChanged({
-      dirty: true,
-      editorKind: 'markdown',
-      sessionId: editorSessionId,
-    });
   };
 
   const resetEditor = () => {
@@ -943,9 +846,6 @@ export function AdminOperationsPanel({
     setShowInBanner(false);
     setIsContentEditorOpen(false);
     setContentEditorClean();
-    if (editorMode === 'page') {
-      onEditorClose?.();
-    }
   };
 
   const resetReminderEditor = () => {
@@ -1115,18 +1015,23 @@ export function AdminOperationsPanel({
           relatedPoiMarkerIds,
         }),
       });
-      const data = (await response.json()) as { message?: string };
+      const data = (await response.json()) as { contentId?: string; message?: string };
       if (!response.ok) {
         setStatusText(data.message ?? (editingContentId ? '更新草稿失败' : '创建草稿失败'));
         return;
       }
 
+      const createdContentId = editingContentId ? undefined : data.contentId;
       resetEditor();
       publishAdminDataChanged({
         resource: 'operations',
         reason: editingContentId ? 'record_updated' : 'record_created',
         occurredAt: new Date().toISOString(),
       });
+      if (createdContentId) {
+        openContentEditorPage(createdContentId);
+        return;
+      }
       setStatusText(
         editingContentId
           ? previousEditingStatus === 'published'
@@ -1312,14 +1217,10 @@ export function AdminOperationsPanel({
     setSelectedContentIds(new Set());
   };
 
-  const openContentEditorPage = (contentId?: string) => {
-    const params = new URLSearchParams();
-    if (contentId) {
-      params.set('contentId', contentId);
-    } else {
-      params.set('new', '1');
-    }
-    window.location.assign(appPath(`/admin/operations/editor?${params.toString()}`));
+  const openContentEditorPage = (contentId: string) => {
+    window.location.assign(
+      appPath(`/admin/operations/editor?contentId=${encodeURIComponent(contentId)}`),
+    );
   };
 
   const openCreateContentEditor = () => {
@@ -1339,14 +1240,6 @@ export function AdminOperationsPanel({
     setContentEditorClean();
     setIsContentEditorOpen(true);
   };
-
-  useEffect(() => {
-    if (editorMode !== 'page' || !startNew || initialNewContentHandledRef.current) {
-      return;
-    }
-    initialNewContentHandledRef.current = true;
-    openCreateContentEditor();
-  }, [editorMode, startNew]);
 
   const openCreateReminderEditor = () => {
     setActiveSection('reminders');
@@ -1642,9 +1535,7 @@ export function AdminOperationsPanel({
 
   return (
     <section
-      className={`module-panel admin-operations-panel${
-        editorMode === 'page' ? ' is-content-editor-page' : ''
-      }`}
+      className="module-panel admin-operations-panel"
       aria-labelledby="admin-operations-title"
     >
       <div className="section-heading">
@@ -1690,27 +1581,14 @@ export function AdminOperationsPanel({
       </fieldset>
 
       {isContentEditorOpen ? (
-        <ContentEditorSurface
-          editorMode={editorMode}
-          editorSessionId={editorSessionId}
-          editingContentId={editingContentId}
-          isBusy={isBusy}
-          isDirty={isContentEditorDirty}
-          status={statusText}
-          onClose={resetEditor}
-          onSave={() => void saveDraft()}
-        >
+        <div className="modal-backdrop" role="presentation" onMouseDown={resetEditor}>
           <section
-            className={
-              editorMode === 'page'
-                ? 'admin-content-editor-dialog'
-                : 'modal-panel admin-content-editor-dialog'
-            }
-            role={editorMode === 'page' ? undefined : 'dialog'}
-            aria-modal={editorMode === 'page' ? undefined : true}
+            className="modal-panel admin-content-editor-dialog"
+            role="dialog"
+            aria-modal="true"
             aria-label="创建内容草稿"
             onChangeCapture={markContentEditorDirty}
-            onMouseDown={editorMode === 'page' ? undefined : (event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
           >
             {editingContentId ? (
               <p className="muted">{`当前正在编辑 ${editingContentId.slice(-8).toUpperCase()} 内容`}</p>
@@ -1825,57 +1703,39 @@ export function AdminOperationsPanel({
                 <small className="muted">修改后会同步调整这篇已发布内容的生效时间。</small>
               </label>
             ) : null}
-            <div className="admin-editor-markdown-grid">
-              <label className="admin-editor-markdown">
-                <span>Markdown 正文</span>
-                <textarea
-                  value={markdown}
-                  onChange={(event) => setMarkdown(event.currentTarget.value)}
-                />
-              </label>
-              <article className="admin-editor-preview" aria-label="内容预览">
-                {coverImageUrl.trim() || coverColor.trim() ? (
-                  <div
-                    className="admin-editor-preview-cover"
-                    style={
-                      coverImageUrl.trim()
-                        ? { backgroundImage: `url("${appPath(coverImageUrl.trim())}")` }
-                        : { backgroundColor: coverColor.trim() }
-                    }
-                  />
-                ) : null}
-                <div className="admin-editor-preview-header">
-                  <span className="muted">{categoryId}</span>
-                  <strong>
-                    <TitleWithBreaks
-                      title={title.trim() || '未填写标题'}
-                      segments={getPreviewTitleSegments(title)}
-                    />
-                  </strong>
-                  {excerpt.trim() ? <p>{excerpt.trim()}</p> : null}
-                  {expiresAtValue ? (
-                    <small className="muted">{`有效期至 ${formatDateTimeLocalPreview(
-                      expiresAtValue,
-                    )}`}</small>
-                  ) : null}
-                </div>
-                {parseCustomTagsInput(customTagsText).length > 0 ? (
-                  <div className="operation-tag-list" aria-label="内容标签预览">
-                    {parseCustomTagsInput(customTagsText).map((tag) => (
-                      <span className="operation-tag" key={tag}>
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                <ContentReviewSnapshot preview={draftContentReviewPreview} title="编辑提示" />
-                {markdown.trim() ? (
-                  <MarkdownBlocks markdown={markdown} />
+            <section className="admin-markdown-launch-card" aria-label="Markdown 正文">
+              <div>
+                <strong>Markdown 正文</strong>
+                {editingContentId ? (
+                  <span className="muted">{`${markdown.length} 字符 · ${markdown.split('\n').length} 行`}</span>
                 ) : (
-                  <p className="muted">正文为空时，这里会显示 Markdown 预览。</p>
+                  <span className="muted">创建后编写</span>
                 )}
-              </article>
-            </div>
+              </div>
+              {editingContentId ? (
+                <>
+                  <p>{markdown.trim().split('\n').find(Boolean) ?? '正文为空'}</p>
+                  <button
+                    className="secondary-action-button"
+                    type="button"
+                    disabled={isBusy || isContentEditorDirty}
+                    onClick={() => openContentEditorPage(editingContentId)}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      edit_note
+                    </span>
+                    <span>打开 Markdown 编辑器</span>
+                  </button>
+                  {isContentEditorDirty ? (
+                    <small className="muted">
+                      请先保存当前元数据修改，再进入 Markdown 编辑器。
+                    </small>
+                  ) : null}
+                </>
+              ) : (
+                <p className="muted">创建草稿后将自动进入独立 Markdown 编辑器。</p>
+              )}
+            </section>
             <label>
               <span>素材 ID</span>
               <input
@@ -1933,23 +1793,7 @@ export function AdminOperationsPanel({
               </button>
             </div>
           </section>
-        </ContentEditorSurface>
-      ) : editorMode === 'page' ? (
-        <VisualEditorShell
-          backHref="/admin/operations"
-          editorKind="markdown"
-          isBusy={isBusy}
-          sessionId={editorSessionId}
-          status={statusText}
-          title={startNew ? '新建内容' : '编辑内容'}
-        >
-          <div className="visual-editor-empty-state">
-            <span className="material-symbols-outlined" aria-hidden="true">
-              progress_activity
-            </span>
-            <p>{recordsLoaded ? statusText : '正在读取内容编辑数据。'}</p>
-          </div>
-        </VisualEditorShell>
+        </div>
       ) : null}
 
       {activeSection === 'reminders' ? (
@@ -2708,7 +2552,7 @@ export function AdminOperationsPanel({
               className="secondary-action-button is-primary"
               type="button"
               disabled={isBusy}
-              onClick={() => openContentEditorPage()}
+              onClick={openCreateContentEditor}
             >
               <span className="material-symbols-outlined" aria-hidden="true">
                 add
@@ -2877,7 +2721,13 @@ export function AdminOperationsPanel({
                         record.revision.status === 'archived' ||
                         editingContentId === record.contentId
                       }
-                      onClick={() => openContentEditorPage(record.contentId)}
+                      onClick={() => {
+                        if (record.sourceKind === 'legacy_content_data') {
+                          void adoptLegacyRecordToEditor(record);
+                          return;
+                        }
+                        loadRecordToEditor(record);
+                      }}
                     >
                       {record.sourceKind === 'legacy_content_data' ? '接管编辑' : '编辑'}
                     </button>
@@ -2989,59 +2839,6 @@ export function AdminOperationsPanel({
         />
       ) : null}
     </section>
-  );
-}
-
-function ContentEditorSurface({
-  children,
-  editorMode,
-  editorSessionId,
-  editingContentId,
-  isBusy,
-  isDirty,
-  onClose,
-  onSave,
-  status,
-}: Readonly<{
-  children: ReactNode;
-  editorMode: 'page' | 'panel';
-  editorSessionId: string;
-  editingContentId: string | null;
-  isBusy: boolean;
-  isDirty: boolean;
-  onClose: () => void;
-  onSave: () => void;
-  status: string;
-}>) {
-  if (editorMode === 'page') {
-    return (
-      <VisualEditorShell
-        actions={
-          <button className="is-primary" type="button" disabled={isBusy} onClick={onSave}>
-            <span className="material-symbols-outlined" aria-hidden="true">
-              {editingContentId ? 'save' : 'add'}
-            </span>
-            <span>{editingContentId ? '保存草稿' : '创建草稿'}</span>
-          </button>
-        }
-        backHref="/admin/operations"
-        editorKind="markdown"
-        isBusy={isBusy}
-        isDirty={isDirty}
-        onSave={onSave}
-        sessionId={editorSessionId}
-        status={status}
-        title={editingContentId ? '编辑内容' : '新建内容'}
-      >
-        {children}
-      </VisualEditorShell>
-    );
-  }
-
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      {children}
-    </div>
   );
 }
 
@@ -3878,43 +3675,6 @@ function parseAssetIds(value: string): string[] {
   );
 }
 
-function extractContentAssetReferencePaths(markdown: string): string[] {
-  const matches = markdown.match(/!\[[^\]]*]\(([^)\s]+)(?:\s+"[^"]*")?\)/g) ?? [];
-  return matches
-    .map((entry) => /!\[[^\]]*]\(([^)\s]+)(?:\s+"[^"]*")?\)/.exec(entry)?.[1]?.trim() ?? '')
-    .filter(Boolean);
-}
-
-function mergeUniqueStringValues(values: string[]): string[] {
-  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
-}
-
-function buildContentAssetReferenceKeys(value: string): string[] {
-  const normalized = normalizeContentAssetReferencePath(value);
-  const original = value.trim();
-  return mergeUniqueStringValues([original, normalized]);
-}
-
-function normalizeContentAssetReferencePath(value: string): string {
-  try {
-    const pathname = new URL(value, 'https://yct.local').pathname;
-    for (const prefix of ['/content-assets/', '/legacy-assets/']) {
-      const basePrefix = appBasePath ? `${appBasePath}${prefix}` : '';
-      if (basePrefix && pathname.startsWith(basePrefix)) {
-        return pathname.slice(appBasePath.length);
-      }
-
-      if (pathname.startsWith(prefix)) {
-        return pathname;
-      }
-    }
-
-    return pathname;
-  } catch {
-    return value.trim();
-  }
-}
-
 function mergeAssetIdText(current: string, assetId: string): string {
   return Array.from(new Set([...parseAssetIds(current), assetId])).join('\n');
 }
@@ -4660,14 +4420,6 @@ function parseCustomTagsInput(value: string): string[] {
         .filter(Boolean),
     ),
   ).slice(0, 16);
-}
-
-function getPreviewTitleSegments(title: string): string[] | undefined {
-  const segments = title
-    .split(/\|+/)
-    .map((segment) => segment.trim())
-    .filter(Boolean);
-  return segments.length > 1 ? segments : undefined;
 }
 
 function toDateTimeLocalInput(value: string | undefined): string {

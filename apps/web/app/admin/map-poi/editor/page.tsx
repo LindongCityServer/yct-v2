@@ -11,22 +11,9 @@ export default async function AdminMapPoiEditorRoute({
 }: Readonly<{
   searchParams?: Promise<{
     markerId?: string | string[];
-    new?: string | string[];
-    parentMarkerId?: string | string[];
   }>;
 }>) {
   const resolved = searchParams ? await searchParams : undefined;
   const markerId = Array.isArray(resolved?.markerId) ? resolved.markerId[0] : resolved?.markerId;
-  const newValue = Array.isArray(resolved?.new) ? resolved.new[0] : resolved?.new;
-  const parentMarkerId = Array.isArray(resolved?.parentMarkerId)
-    ? resolved.parentMarkerId[0]
-    : resolved?.parentMarkerId;
-
-  return (
-    <AdminPoiEditorPage
-      initialParentMarkerId={parentMarkerId}
-      initialMarkerId={markerId}
-      startNew={!markerId || newValue === '1' || newValue === 'true'}
-    />
-  );
+  return <AdminPoiEditorPage initialMarkerId={markerId} />;
 }
