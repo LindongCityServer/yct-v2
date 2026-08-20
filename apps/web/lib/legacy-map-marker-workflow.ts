@@ -7,8 +7,10 @@ import {
   type LegacyMapMarkerPatch,
 } from './legacy-map-marker-override-store';
 import { ensureRoutingTopologyInvalidationListenersRegistered } from './routing-topology-invalidation-listeners';
+import { ensureMaterialSymbolAssetListenersRegistered } from './material-symbol-asset-listeners';
 
 ensureRoutingTopologyInvalidationListenersRegistered();
+ensureMaterialSymbolAssetListenersRegistered();
 
 export interface LegacyMapMarkerActionResult {
   ok: boolean;
@@ -53,6 +55,7 @@ export async function updateLegacyMapMarkerByAdmin(input: {
     markerId,
     updatedBy: input.actorId,
     updatedAt: new Date().toISOString(),
+    facilities: normalizedPatch.facilities,
     changedFields,
   });
 

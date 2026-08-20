@@ -67,6 +67,8 @@ export type TransitLineEditableField =
   | 'firstLastBus'
   | 'departureTimes'
   | 'departureRules'
+  | 'departureTimesByDirection'
+  | 'departureRulesByDirection'
   | 'operatingDateRule'
   | 'bookingUrl';
 
@@ -730,7 +732,10 @@ export async function updateTransitStationDetail(input: {
     facilities: input.patch.facilities,
     facilitiesUpwards: input.patch.facilitiesUpwards,
     transfers: input.patch.transfers,
-    exits: input.patch.exits,
+    exits: input.patch.exits.map((exit) => ({
+      ...exit,
+      floor: exit.floor ?? resolveTransitStationExitDefaultFloor(input.patch.layers),
+    })),
     surroundingStationNames: input.patch.surroundingStationNames,
     swapExitLayers: input.patch.swapExitLayers,
     flipTemplateForUpwards: input.patch.flipTemplateForUpwards,
@@ -801,6 +806,16 @@ export async function updateTransitStationDetail(input: {
   return { ok: true, revision: updated };
 }
 
+function resolveTransitStationExitDefaultFloor(
+  layers: TransitStationDetailSnapshot['layers'],
+): string | undefined {
+  return (
+    layers.find((layer) => layer.type === 'concourse')?.floor ??
+    layers.find((layer) => layer.type === 'platform')?.floor ??
+    layers[0]?.floor
+  );
+}
+
 export async function saveTransitLine(input: {
   revisionId: string;
   actorId: string;
@@ -818,6 +833,11 @@ export async function saveTransitLine(input: {
       stationSourceId: string;
       oneWay?: 'up' | 'down' | null;
     }>;
+    stopDirections?: Array<{
+      stationSourceId: string;
+      down: boolean;
+      up: boolean;
+    }>;
     stopLocationRefs?: Array<{
       stationSourceId: string;
       refs: NonNullable<TransitDataRevision['lines'][number]['stops'][number]['stopLocationRefs']>;
@@ -829,6 +849,8 @@ export async function saveTransitLine(input: {
     lastBus?: string;
     departureTimes?: string[];
     departureRules?: TransitDataRevision['lines'][number]['departureRules'];
+    departureTimesByDirection?: TransitDataRevision['lines'][number]['departureTimesByDirection'];
+    departureRulesByDirection?: TransitDataRevision['lines'][number]['departureRulesByDirection'];
     operatingDateRule?: string;
     bookingUrl?: string;
     stationDrafts?: Array<{
@@ -894,6 +916,10 @@ export async function saveTransitLine(input: {
         : node,
     ),
     oneWayStops: input.patch.oneWayStops?.map((stop) => ({
+      ...stop,
+      stationSourceId: resolveStationSourceId(stop.stationSourceId),
+    })),
+    stopDirections: input.patch.stopDirections?.map((stop) => ({
       ...stop,
       stationSourceId: resolveStationSourceId(stop.stationSourceId),
     })),
@@ -1188,6 +1214,11 @@ export async function updateTransitLineStationOrder(input: {
         stationSourceId: stop.stationSourceId,
         oneWay: stop.oneWay,
       })),
+      stopDirections: line.stops.map((stop) => ({
+        stationSourceId: stop.stationSourceId,
+        down: stop.stopDirections?.down ?? true,
+        up: stop.stopDirections?.up ?? true,
+      })),
       segmentPaths: line.segmentPaths,
       operator: line.operator,
       fare: line.fare,
@@ -1195,6 +1226,8 @@ export async function updateTransitLineStationOrder(input: {
       lastBus: line.firstLastBus?.last,
       departureTimes: line.departureTimes,
       departureRules: line.departureRules,
+      departureTimesByDirection: line.departureTimesByDirection,
+      departureRulesByDirection: line.departureRulesByDirection,
       operatingDateRule: line.operatingDateRule,
       bookingUrl: line.bookingUrl,
     },
@@ -1216,6 +1249,11 @@ function buildTransitLineSnapshot(
       stationSourceId: string;
       oneWay?: 'up' | 'down' | null;
     }>;
+    stopDirections?: Array<{
+      stationSourceId: string;
+      down: boolean;
+      up: boolean;
+    }>;
     stopLocationRefs?: Array<{
       stationSourceId: string;
       refs: NonNullable<TransitDataRevision['lines'][number]['stops'][number]['stopLocationRefs']>;
@@ -1227,6 +1265,8 @@ function buildTransitLineSnapshot(
     lastBus?: string;
     departureTimes?: string[];
     departureRules?: TransitDataRevision['lines'][number]['departureRules'];
+    departureTimesByDirection?: TransitDataRevision['lines'][number]['departureTimesByDirection'];
+    departureRulesByDirection?: TransitDataRevision['lines'][number]['departureRulesByDirection'];
     operatingDateRule?: string;
     bookingUrl?: string;
   },
@@ -1240,6 +1280,17 @@ function buildTransitLineSnapshot(
       .map((stop) => [stop.stationSourceId.trim(), stop.oneWay ?? undefined] as const)
       .filter(([stationSourceId]) => Boolean(stationSourceId)),
   );
+  const stopDirectionsByStationId = new Map(
+    (patch.stopDirections ?? [])
+      .map(
+        (stop) =>
+          [
+            stop.stationSourceId.trim(),
+            { down: stop.down !== false, up: stop.up !== false },
+          ] as const,
+      )
+      .filter(([stationSourceId]) => Boolean(stationSourceId)),
+  );
   const stopLocationRefsByStationId =
     patch.stopLocationRefs === undefined
       ? undefined
@@ -1251,6 +1302,9 @@ function buildTransitLineSnapshot(
         );
   const departureTimes = Array.from(
     new Set((patch.departureTimes ?? []).map((item) => item.trim()).filter(Boolean)),
+  );
+  const departureTimesByDirection = normalizeDepartureTimesByDirection(
+    patch.departureTimesByDirection ?? previous?.departureTimesByDirection,
   );
   const segmentPaths = normalizeTransitLineSegmentPaths(patch.segmentPaths, stationSourceIds);
   const routeMode =
@@ -1269,6 +1323,9 @@ function buildTransitLineSnapshot(
       additionalDepartures: rule.additionalDepartures,
     }))
     .filter((rule) => Boolean(rule.sourceText && rule.startTime));
+  const departureRulesByDirection = normalizeDepartureRulesByDirection(
+    patch.departureRulesByDirection ?? previous?.departureRulesByDirection,
+  );
 
   return {
     sourceId: previous?.sourceId ?? `manual_line_${randomUUID()}`,
@@ -1298,6 +1355,8 @@ function buildTransitLineSnapshot(
       oneWay: oneWayByStationId.has(stationSourceId)
         ? oneWayByStationId.get(stationSourceId)
         : previousStopByStationId.get(stationSourceId)?.oneWay,
+      stopDirections: stopDirectionsByStationId.get(stationSourceId) ??
+        previousStopByStationId.get(stationSourceId)?.stopDirections ?? { down: true, up: true },
       stopLocationRefs: stopLocationRefsByStationId
         ? stopLocationRefsByStationId.get(stationSourceId) || undefined
         : previousStopByStationId.get(stationSourceId)?.stopLocationRefs,
@@ -1314,6 +1373,14 @@ function buildTransitLineSnapshot(
         : undefined,
     departureTimes: departureTimes.length > 0 ? departureTimes : undefined,
     departureRules: departureRules.length > 0 ? departureRules : undefined,
+    departureTimesByDirection:
+      departureTimesByDirection.down || departureTimesByDirection.up
+        ? departureTimesByDirection
+        : undefined,
+    departureRulesByDirection:
+      departureRulesByDirection.down || departureRulesByDirection.up
+        ? departureRulesByDirection
+        : undefined,
     operatingDateRule: patch.operatingDateRule?.trim() || undefined,
     bookingUrl: patch.bookingUrl?.trim() || undefined,
     sourcePath: previous?.sourcePath,
@@ -1344,6 +1411,39 @@ function normalizeTransitLineStopLocationRefs(
   });
 }
 
+function normalizeDepartureTimesByDirection(
+  value: TransitDataRevision['lines'][number]['departureTimesByDirection'] | undefined,
+): NonNullable<TransitDataRevision['lines'][number]['departureTimesByDirection']> {
+  const normalize = (items: string[] | undefined) => {
+    const values = Array.from(new Set((items ?? []).map((item) => item.trim()).filter(Boolean)));
+    return values.length > 0 ? values : undefined;
+  };
+  return {
+    down: normalize(value?.down),
+    up: normalize(value?.up),
+  };
+}
+
+function normalizeDepartureRulesByDirection(
+  value: TransitDataRevision['lines'][number]['departureRulesByDirection'] | undefined,
+): NonNullable<TransitDataRevision['lines'][number]['departureRulesByDirection']> {
+  const normalize = (items: TransitDataRevision['lines'][number]['departureRules'] | undefined) => {
+    const rules = (items ?? [])
+      .map((rule) => ({
+        sourceText: rule.sourceText.trim(),
+        startTime: rule.startTime.trim(),
+        intervalMinutes: rule.intervalMinutes,
+        additionalDepartures: rule.additionalDepartures,
+      }))
+      .filter((rule) => Boolean(rule.sourceText && rule.startTime));
+    return rules.length > 0 ? rules : undefined;
+  };
+  return {
+    down: normalize(value?.down),
+    up: normalize(value?.up),
+  };
+}
+
 function getChangedTransitLineFields(
   previous: TransitDataRevision['lines'][number],
   next: TransitDataRevision['lines'][number],
@@ -1364,6 +1464,8 @@ function getChangedTransitLineFields(
     'firstLastBus',
     'departureTimes',
     'departureRules',
+    'departureTimesByDirection',
+    'departureRulesByDirection',
     'operatingDateRule',
     'bookingUrl',
   ];

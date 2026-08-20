@@ -1,4 +1,5 @@
 export type ReleaseChangeCategory = 'feat' | 'fix' | 'perf' | 'style';
+export type ReleaseBump = 'major' | 'minor' | 'patch';
 
 export interface ReleaseChange {
   category: ReleaseChangeCategory;
@@ -10,6 +11,7 @@ export interface ReleaseChange {
 
 export interface ReleaseRecord {
   version: string;
+  bump?: ReleaseBump;
   releasedAt: string;
   changeCount: number;
   themes?: string[];

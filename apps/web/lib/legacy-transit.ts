@@ -66,6 +66,10 @@ export interface TransitLineStopSummary {
   stopLocationRefs?: TransitLineStopLocationRef[];
   sequence: number;
   oneWay?: 'up' | 'down';
+  stopDirections?: {
+    down: boolean;
+    up: boolean;
+  };
   status?: string;
   travelTime?: number;
   platformSide?: string;
@@ -467,6 +471,7 @@ function buildTransitLineStopSummaries(
         stopLocationRefs: stop.stopLocationRefs,
         sequence: stop.sequence,
         oneWay: stop.oneWay,
+        stopDirections: stop.stopDirections,
         status: stop.status,
         travelTime: stop.travelTime,
         platformSide: stop.platformSide,
@@ -523,6 +528,7 @@ function countStopMetadata(lineStops: TransitLineSnapshot['stops']): number {
     lineStops?.filter(
       (stop) =>
         stop.oneWay ||
+        (stop.stopDirections && (!stop.stopDirections.down || !stop.stopDirections.up)) ||
         stop.status ||
         stop.travelTime !== undefined ||
         stop.platformSide ||

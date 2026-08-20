@@ -105,7 +105,11 @@ const transitDepartureScheduleRuleSchema = z.object({
 
 const transitStationFacilitySchema = z.object({
   type: z.string().trim().min(1).max(80),
-  location: z.number().finite().optional(),
+  location: z
+    .number()
+    .finite()
+    .refine((value) => Number.isInteger(value * 4), '设施位置必须精确到四分之一车厢')
+    .optional(),
   floor: z.string().trim().max(40).optional(),
   endFloor: z.string().trim().max(40).optional(),
   direction: z.string().trim().max(80).optional(),
@@ -176,6 +180,16 @@ export const transitLineDraftSchema = z.object({
     )
     .max(256)
     .optional(),
+  stopDirections: z
+    .array(
+      z.object({
+        stationSourceId: stationSourceIdSchema,
+        down: z.boolean().default(true),
+        up: z.boolean().default(true),
+      }),
+    )
+    .max(256)
+    .optional(),
   stopLocationRefs: z
     .array(
       z.object({
@@ -192,6 +206,18 @@ export const transitLineDraftSchema = z.object({
   lastBus: z.string().trim().max(40).optional(),
   departureTimes: z.array(z.string().trim().min(1).max(40)).max(128).optional(),
   departureRules: z.array(transitDepartureScheduleRuleSchema).max(128).optional(),
+  departureTimesByDirection: z
+    .object({
+      down: z.array(z.string().trim().min(1).max(40)).max(128).optional(),
+      up: z.array(z.string().trim().min(1).max(40)).max(128).optional(),
+    })
+    .optional(),
+  departureRulesByDirection: z
+    .object({
+      down: z.array(transitDepartureScheduleRuleSchema).max(128).optional(),
+      up: z.array(transitDepartureScheduleRuleSchema).max(128).optional(),
+    })
+    .optional(),
   operatingDateRule: z.string().trim().max(240).optional(),
   bookingUrl: z.string().trim().max(500).optional(),
   stationDrafts: z.array(transitVisualStationDraftSchema).max(128).optional(),
@@ -206,6 +232,27 @@ export const travelScheduleTripUpdateSchema = z.object({
   lineName: z.string().trim().min(1).max(120).optional(),
   routeNote: z.string().trim().max(200).optional(),
   stationNames: z.array(z.string().trim().min(1).max(80)).min(1).max(80).optional(),
+  stopTimes: z
+    .array(
+      z.object({
+        stationName: z.string().trim().min(1).max(80),
+        isStop: z.boolean(),
+        arrivalTime: z.string().trim().max(40).optional(),
+        departureTime: z.string().trim().max(40).optional(),
+        arrivalDayOffset: z.number().int().min(0).max(7).optional(),
+        departureDayOffset: z.number().int().min(0).max(7).optional(),
+        dwellMinutes: z
+          .number()
+          .int()
+          .min(0)
+          .max(24 * 60)
+          .optional(),
+      }),
+    )
+    .min(1)
+    .max(80)
+    .optional(),
+  timingSource: z.enum(['manual', 'road_segment']).optional(),
   originStationName: z.string().trim().max(80).optional(),
   destinationStationName: z.string().trim().max(80).optional(),
   fareText: z.string().trim().max(80).optional(),
@@ -282,6 +329,8 @@ export const transitStationDetailUpdateSchema = z.object({
         floor: z.string().trim().max(40).optional(),
         direction: z.enum(['upwards', 'downwards']).optional(),
         orientation: z.string().trim().max(80).optional(),
+        placeMarkerId: z.string().trim().min(1).max(220).optional(),
+        roadMarkerIds: z.array(z.string().trim().min(1).max(220)).max(2).optional(),
       }),
     )
     .max(256),

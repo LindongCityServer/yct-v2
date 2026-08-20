@@ -16,6 +16,7 @@ const emptySnapshot: TicketOrderStoreSnapshot = {
   orders: [],
   inventoryHolds: [],
 };
+let storeMutationQueue: Promise<void> = Promise.resolve();
 
 export async function readTicketOrderStore(): Promise<TicketOrderStoreSnapshot> {
   const storePath = resolveStorePath();
@@ -51,6 +52,34 @@ export async function writeTicketOrderStore(
   await mkdir(path.dirname(storePath), { recursive: true });
   await writeFile(storePath, `${JSON.stringify(updated, null, 2)}\n`, 'utf8');
   return updated;
+}
+
+export async function transactTicketOrderStore<TResult>(
+  updater: (snapshot: TicketOrderStoreSnapshot) => {
+    snapshot: TicketOrderStoreSnapshot;
+    result: TResult;
+  },
+): Promise<TResult> {
+  let resolveResult!: (value: TResult) => void;
+  let rejectResult!: (reason?: unknown) => void;
+  const result = new Promise<TResult>((resolve, reject) => {
+    resolveResult = resolve;
+    rejectResult = reject;
+  });
+
+  const mutate = async () => {
+    try {
+      const current = await readTicketOrderStore();
+      const updated = updater(current);
+      await writeTicketOrderStore(updated.snapshot);
+      resolveResult(updated.result);
+    } catch (error) {
+      rejectResult(error);
+    }
+  };
+  storeMutationQueue = storeMutationQueue.then(mutate, mutate);
+  await result;
+  return result;
 }
 
 function resolveStorePath(): string {

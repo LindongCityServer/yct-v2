@@ -629,8 +629,7 @@ function mergeStationTemplate(
       [],
     facilitiesUpwards: station.facilitiesUpwards ?? template?.facilitiesUpwards,
     swapExitLayers: station.swapExitLayers ?? template?.swapExitLayers,
-    flipTemplateForUpwards:
-      station.flipTemplateForUpwards ?? template?.flipTemplateForUpwards,
+    flipTemplateForUpwards: station.flipTemplateForUpwards ?? template?.flipTemplateForUpwards,
   };
 }
 
@@ -656,7 +655,9 @@ function normalizeStationFacilities(facilities: LegacyMetroStationFacilityRecord
     return [
       {
         type,
-        location: Number.isFinite(facility.location) ? facility.location : undefined,
+        location: Number.isFinite(facility.location)
+          ? Math.round((facility.location ?? 0) * 4) / 4
+          : undefined,
         floor: normalizeLegacyString(facility.floor),
         endFloor: normalizeLegacyString(facility.endFloor),
         direction: normalizeLegacyString(facility.direction),

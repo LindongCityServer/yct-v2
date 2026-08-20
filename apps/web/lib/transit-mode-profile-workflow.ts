@@ -3,8 +3,10 @@ import type { TransitModeProfile, YctEventPayloadMap, YctEventType } from '@yct/
 import { publishDomainEvent } from './app-event-bus';
 import { readTransitModeProfiles, writeTransitModeProfiles } from './transit-mode-profile-store';
 import { ensureTransitCacheInvalidationListenersRegistered } from './transit-cache-invalidation-listeners';
+import { ensureMaterialSymbolAssetListenersRegistered } from './material-symbol-asset-listeners';
 
 ensureTransitCacheInvalidationListenersRegistered();
+ensureMaterialSymbolAssetListenersRegistered();
 
 export interface TransitModeProfileActionResult {
   ok: boolean;

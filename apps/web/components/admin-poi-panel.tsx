@@ -29,6 +29,7 @@ import {
 import { CurrentPlayerLocationButton } from './current-player-location-button';
 import { AdminRefreshButton } from './admin-refresh-button';
 import { LayeredMapTile } from './layered-map-tile';
+import { MaterialSymbol } from './material-symbol';
 import { PoiFacilityEditor } from './poi-facility-editor';
 import { VisualEditorShell } from './visual-editor-shell';
 
@@ -3579,9 +3580,7 @@ function PoiSubmissionDetail({
           <strong>设施信息</strong>
           {submission.facilities.map((facility, index) => (
             <div key={`${facility.symbolIcon}-${index}`}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                {facility.symbolIcon}
-              </span>
+              <MaterialSymbol name={facility.symbolIcon} preview aria-hidden="true" />
               <span>{facility.description}</span>
             </div>
           ))}

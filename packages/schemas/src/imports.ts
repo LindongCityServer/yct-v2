@@ -156,7 +156,11 @@ export const legacyMetroStationDetailImportItemSchema = z.object({
     .array(
       z.object({
         type: z.string().trim().min(1).max(80),
-        location: z.number().finite().optional(),
+        location: z
+          .number()
+          .finite()
+          .refine((value) => Number.isInteger(value * 4), '设施位置必须精确到四分之一车厢')
+          .optional(),
         floor: z.string().trim().max(40).optional(),
         endFloor: z.string().trim().max(40).optional(),
         direction: z.string().trim().max(80).optional(),
@@ -184,6 +188,8 @@ export const legacyMetroStationDetailImportItemSchema = z.object({
         floor: z.string().trim().max(40).optional(),
         direction: z.enum(['upwards', 'downwards']).optional(),
         orientation: z.string().trim().max(80).optional(),
+        placeMarkerId: z.string().trim().min(1).max(220).optional(),
+        roadMarkerIds: z.array(z.string().trim().min(1).max(220)).max(2).optional(),
       }),
     )
     .max(256),
@@ -192,7 +198,11 @@ export const legacyMetroStationDetailImportItemSchema = z.object({
     .array(
       z.object({
         type: z.string().trim().min(1).max(80),
-        location: z.number().finite().optional(),
+        location: z
+          .number()
+          .finite()
+          .refine((value) => Number.isInteger(value * 4), '设施位置必须精确到四分之一车厢')
+          .optional(),
         floor: z.string().trim().max(40).optional(),
         endFloor: z.string().trim().max(40).optional(),
         direction: z.string().trim().max(80).optional(),

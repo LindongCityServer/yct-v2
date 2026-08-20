@@ -1,4 +1,4 @@
-const YCT_SW_VERSION = '2026-08-16-01';
+const YCT_SW_VERSION = '2026-08-19-01';
 const YCT_SHELL_CACHE = `yct-shell-${YCT_SW_VERSION}`;
 const YCT_RUNTIME_CACHE = `yct-runtime-${YCT_SW_VERSION}`;
 const YCT_DATA_CACHE = `yct-data-${YCT_SW_VERSION}`;

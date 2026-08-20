@@ -4,6 +4,7 @@ import type { ApiListResponse, ServiceEntry, ServiceEntryGroup } from '@yct/cont
 import { appPath } from '../lib/app-paths';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { getLocalizedFaqContent } from '../lib/faq-translations';
+import { MaterialSymbol } from './material-symbol';
 
 const serviceCategoryLabelKeys: Record<ServiceEntry['categoryId'], CommonMessageKey> = {
   operations: 'services.category.operations',
@@ -60,9 +61,7 @@ export function ServicesPageContent({
                       rel={localizedEntry.openMode === 'new_tab' ? 'noreferrer' : undefined}
                       key={localizedEntry.id}
                     >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        {localizedEntry.icon}
-                      </span>
+                      <MaterialSymbol name={localizedEntry.icon} aria-hidden="true" />
                       <span>
                         <strong>{localizedEntry.title}</strong>
                         {localizedEntry.description ? (

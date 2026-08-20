@@ -18,6 +18,10 @@ import {
 import { publishDomainEvent } from './app-event-bus';
 import { clearTravelScheduleQueryCache, readTravelScheduleQuery } from './travel-schedules';
 import {
+  detectTravelScheduleConflicts,
+  normalizeTravelTripStopTimes,
+} from './travel-schedule-timing';
+import {
   createTravelScheduleRevision,
   findTravelScheduleRevision,
   listTravelScheduleRevisions,
@@ -43,6 +47,8 @@ export type TravelScheduleTripEditableField =
   | 'lineName'
   | 'routeNote'
   | 'stationNames'
+  | 'stopTimes'
+  | 'timingSource'
   | 'originStationName'
   | 'destinationStationName'
   | 'fareText'
@@ -346,6 +352,22 @@ export async function updateTravelScheduleTrip(input: {
       updatedAt: now,
       changedFields,
     });
+    if (changedFields.includes('stopTimes') || changedFields.includes('timingSource')) {
+      const updatedTrip = updated.trips.find(
+        (item) => item.tripInstanceId === input.tripInstanceId,
+      );
+      await emitEvent('TravelScheduleTripTimingUpdated', input.actorId, {
+        scheduleServiceId: updated.scheduleServiceId,
+        revisionId: updated.revisionId,
+        tripInstanceId: input.tripInstanceId,
+        stopTimeCount: updatedTrip?.stopTimes?.length ?? 0,
+        stoppingStationCount: updatedTrip?.stopTimes?.filter((item) => item.isStop).length ?? 0,
+        timingSource: updatedTrip?.timingSource ?? 'manual',
+        updatedBy: input.actorId,
+        updatedAt: now,
+      });
+      await emitTravelScheduleConflictEvent(updated, input.actorId, now);
+    }
   }
 
   return { ok: true, revision: updated };
@@ -523,7 +545,16 @@ function normalizeTravelScheduleTripPatch(
   patch: TravelScheduleTripUpdatePatch,
   services: TravelScheduleRevision['services'],
 ): TravelTripInstance {
-  const nextStationNames = normalizeStringList(patch.stationNames ?? trip.stationNames);
+  const nextStopTimes =
+    patch.stopTimes === undefined ? trip.stopTimes : normalizeTravelTripStopTimes(patch.stopTimes);
+  const nextStationNames = normalizeStringList(
+    nextStopTimes?.map((stopTime) => stopTime.stationName) ??
+      patch.stationNames ??
+      trip.stationNames,
+  );
+  const nextStoppingTimes = nextStopTimes?.filter((stopTime) => stopTime.isStop) ?? [];
+  const firstStoppingTime = nextStoppingTimes[0];
+  const lastStoppingTime = nextStoppingTimes.at(-1);
   const nextServiceKind = patch.serviceKind ?? trip.serviceKind;
   const nextServiceSummary =
     services.find((service) => service.kind === nextServiceKind) ??
@@ -535,24 +566,39 @@ function normalizeTravelScheduleTripPatch(
     serviceKind: nextServiceKind,
     serviceId: nextServiceSummary?.serviceId ?? trip.serviceId,
     serviceLabel: nextServiceSummary?.label ?? trip.serviceLabel,
-    departureTime: patch.departureTime?.trim() || trip.departureTime,
+    departureTime:
+      patch.departureTime?.trim() ||
+      (patch.stopTimes ? firstStoppingTime?.departureTime : undefined) ||
+      trip.departureTime,
     arrivalTime:
-      patch.arrivalTime === undefined ? trip.arrivalTime : optionalTrimmedString(patch.arrivalTime),
-    arrivalDayOffset: patch.arrivalDayOffset ?? trip.arrivalDayOffset,
+      patch.arrivalTime === undefined
+        ? patch.stopTimes
+          ? (lastStoppingTime?.arrivalTime ?? lastStoppingTime?.departureTime ?? trip.arrivalTime)
+          : trip.arrivalTime
+        : optionalTrimmedString(patch.arrivalTime),
+    arrivalDayOffset:
+      patch.arrivalDayOffset ??
+      (patch.stopTimes
+        ? (lastStoppingTime?.arrivalDayOffset ?? lastStoppingTime?.departureDayOffset)
+        : undefined) ??
+      trip.arrivalDayOffset,
     lineName: patch.lineName?.trim() || trip.lineName,
     routeNote:
       patch.routeNote === undefined ? trip.routeNote : optionalTrimmedString(patch.routeNote),
     stationNames: nextStationNames,
+    stopTimes: nextStopTimes,
+    timingSource:
+      patch.timingSource ?? (patch.stopTimes === undefined ? trip.timingSource : 'manual'),
     originStationName:
       patch.originStationName === undefined
-        ? patch.stationNames
-          ? nextStationNames[0]
+        ? patch.stationNames || patch.stopTimes
+          ? (firstStoppingTime?.stationName ?? nextStationNames[0])
           : trip.originStationName
         : optionalTrimmedString(patch.originStationName),
     destinationStationName:
       patch.destinationStationName === undefined
-        ? patch.stationNames
-          ? nextStationNames.at(-1)
+        ? patch.stationNames || patch.stopTimes
+          ? (lastStoppingTime?.stationName ?? nextStationNames.at(-1))
           : trip.destinationStationName
         : optionalTrimmedString(patch.destinationStationName),
     fareText: patch.fareText === undefined ? trip.fareText : optionalTrimmedString(patch.fareText),
@@ -599,6 +645,8 @@ function getChangedTravelScheduleTripFields(
     'lineName',
     'routeNote',
     'stationNames',
+    'stopTimes',
+    'timingSource',
     'originStationName',
     'destinationStationName',
     'fareText',
@@ -631,7 +679,13 @@ function buildCreatedTravelScheduleTrip(
     },
   services: TravelScheduleRevision['services'],
 ): TravelTripInstance {
-  const stationNames = normalizeStringList(patch.stationNames);
+  const stopTimes = normalizeTravelTripStopTimes(patch.stopTimes);
+  const stationNames = normalizeStringList(
+    stopTimes?.map((stopTime) => stopTime.stationName) ?? patch.stationNames,
+  );
+  const stoppingTimes = stopTimes?.filter((stopTime) => stopTime.isStop) ?? [];
+  const firstStoppingTime = stoppingTimes[0];
+  const lastStoppingTime = stoppingTimes.at(-1);
   const service =
     services.find((item) => item.kind === patch.serviceKind) ??
     services.find((item) => item.kind === 'custom') ??
@@ -644,15 +698,28 @@ function buildCreatedTravelScheduleTrip(
     serviceId: service?.serviceId,
     serviceKind: patch.serviceKind,
     serviceLabel: service?.label ?? patch.serviceKind,
-    departureTime: patch.departureTime.trim(),
-    arrivalTime: optionalTrimmedString(patch.arrivalTime),
-    arrivalDayOffset: patch.arrivalDayOffset,
+    departureTime: firstStoppingTime?.departureTime ?? patch.departureTime.trim(),
+    arrivalTime:
+      lastStoppingTime?.arrivalTime ??
+      lastStoppingTime?.departureTime ??
+      optionalTrimmedString(patch.arrivalTime),
+    arrivalDayOffset:
+      lastStoppingTime?.arrivalDayOffset ??
+      lastStoppingTime?.departureDayOffset ??
+      patch.arrivalDayOffset,
     lineName: patch.lineName.trim(),
     routeNote: optionalTrimmedString(patch.routeNote),
     stationNames,
-    originStationName: optionalTrimmedString(patch.originStationName) ?? stationNames[0],
+    stopTimes,
+    timingSource: patch.timingSource ?? (stopTimes ? 'manual' : undefined),
+    originStationName:
+      optionalTrimmedString(patch.originStationName) ??
+      firstStoppingTime?.stationName ??
+      stationNames[0],
     destinationStationName:
-      optionalTrimmedString(patch.destinationStationName) ?? stationNames.at(-1),
+      optionalTrimmedString(patch.destinationStationName) ??
+      lastStoppingTime?.stationName ??
+      stationNames.at(-1),
     fareText: optionalTrimmedString(patch.fareText),
     operator: optionalTrimmedString(patch.operator),
     bookingUrl: optionalTrimmedString(patch.bookingUrl),
@@ -850,9 +917,17 @@ function rebuildTravelScheduleServiceSummaries(
 }
 
 function buildTravelScheduleStationOptions(trips: TravelTripInstance[]): string[] {
-  return Array.from(new Set(trips.flatMap((trip) => trip.stationNames))).sort((left, right) =>
-    left.localeCompare(right, 'zh-Hans-CN'),
-  );
+  return Array.from(
+    new Set(
+      trips.flatMap((trip) =>
+        trip.stopTimes?.length
+          ? trip.stopTimes
+              .filter((stopTime) => stopTime.isStop)
+              .map((stopTime) => stopTime.stationName)
+          : trip.stationNames,
+      ),
+    ),
+  ).sort((left, right) => left.localeCompare(right, 'zh-Hans-CN'));
 }
 
 function optionalTrimmedString(value: string | undefined): string | undefined {
@@ -992,6 +1067,28 @@ function invalidTransition(reason?: string): TravelScheduleRevisionActionResult 
     error: 'invalid_travel_schedule_revision_state',
     message: reason ?? '当前班次数据版本状态不允许执行该操作。',
   };
+}
+
+async function emitTravelScheduleConflictEvent(
+  revision: TravelScheduleRevision,
+  actorId: string,
+  detectedAt: string,
+): Promise<void> {
+  const conflicts = detectTravelScheduleConflicts(revision.trips);
+  if (conflicts.length === 0) {
+    return;
+  }
+
+  await emitEvent('TravelScheduleConflictDetected', actorId, {
+    scheduleServiceId: revision.scheduleServiceId,
+    revisionId: revision.revisionId,
+    conflictCount: conflicts.length,
+    conflictKinds: Array.from(new Set(conflicts.map((conflict) => conflict.kind))),
+    affectedTripInstanceIds: Array.from(
+      new Set(conflicts.flatMap((conflict) => conflict.tripInstanceIds)),
+    ),
+    detectedAt,
+  });
 }
 
 async function emitEvent<TType extends YctEventType>(

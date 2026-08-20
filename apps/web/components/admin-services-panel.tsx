@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { AdminRefreshButton } from './admin-refresh-button';
+import { MaterialSymbol } from './material-symbol';
 
 interface AdminServiceEntry {
   id: string;
@@ -207,6 +208,17 @@ export function AdminServicesPanel() {
 
     setIsBusy(true);
     try {
+      const assetResponse = await fetch(appPath('/api/admin/material-symbols/assets'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ iconName: icon }),
+      });
+      if (!assetResponse.ok) {
+        const assetError = (await assetResponse.json().catch(() => ({}))) as { message?: string };
+        setEditorError(assetError.message ?? '图标预览资源不可用，请检查图标名。');
+        return;
+      }
+
       const endpoint = editingEntry
         ? appPath(`/api/admin/services/entries/${encodeURIComponent(editingEntry.id)}`)
         : appPath('/api/admin/services/entries');
@@ -312,7 +324,7 @@ export function AdminServicesPanel() {
           ? '系统默认入口已删除，并保留本地覆盖记录。'
           : entry.status === 'published'
             ? '服务入口已从公开列表移除。'
-          : '服务入口已删除。',
+            : '服务入口已删除。',
       );
       publishAdminDataChanged({
         resource: 'services',
@@ -587,11 +599,14 @@ export function AdminServicesPanel() {
             </label>
             <label>
               <span>图标</span>
-              <input
-                value={editorState.icon}
-                onChange={(event) => updateEditorField('icon', event.currentTarget.value)}
-                placeholder="apps"
-              />
+              <span className="admin-material-symbol-input">
+                <MaterialSymbol name={editorState.icon} preview aria-hidden="true" />
+                <input
+                  value={editorState.icon}
+                  onChange={(event) => updateEditorField('icon', event.currentTarget.value)}
+                  placeholder="apps"
+                />
+              </span>
             </label>
             <label>
               <span>排序</span>

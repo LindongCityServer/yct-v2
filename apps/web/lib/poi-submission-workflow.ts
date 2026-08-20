@@ -11,6 +11,7 @@ import type {
 } from '@yct/contracts';
 import { transitionPoiSubmissionStatus } from '@yct/domain';
 import { publishDomainEvent } from './app-event-bus';
+import { ensureMaterialSymbolAssetListenersRegistered } from './material-symbol-asset-listeners';
 import {
   createLocalPoiSubmission,
   findLocalPoiSubmission,
@@ -24,6 +25,7 @@ import { listPoiConflictDecisions } from './poi-conflict-decision-store';
 import { ensureRoutingTopologyInvalidationListenersRegistered } from './routing-topology-invalidation-listeners';
 
 ensureRoutingTopologyInvalidationListenersRegistered();
+ensureMaterialSymbolAssetListenersRegistered();
 
 export interface PoiSubmissionActionResult {
   ok: boolean;

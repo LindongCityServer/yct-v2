@@ -130,6 +130,8 @@ export const ticketOrderSchema = z.object({
   refundRequestedAt: isoDateTimeSchema.optional(),
   refundedAt: isoDateTimeSchema.optional(),
   legacyOrderId: z.string().trim().max(160).optional(),
+  journeyOrderId: idSchema.optional(),
+  journeyLegIndex: z.number().int().nonnegative().max(20).optional(),
 });
 
 export const ticketRecordSchema = z.object({
@@ -171,6 +173,19 @@ export const ticketOrderDraftCreateSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
   fareProductId: idSchema.optional(),
+  passengerCount: z.number().int().positive().max(9).default(1),
+});
+
+export const ticketJourneyDraftCreateSchema = z.object({
+  journeyId: idSchema,
+  originStationName: z.string().trim().min(1).max(80),
+  destinationStationName: z.string().trim().min(1).max(80),
+  tripInstanceIds: z.array(idSchema).min(2).max(4),
+  serviceDate: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   passengerCount: z.number().int().positive().max(9).default(1),
 });
 
@@ -217,6 +232,18 @@ export const ticketOrderDraftResultSchema = z.object({
   ticketing: travelTicketingAvailabilitySchema,
 });
 
+export const ticketJourneyDraftResultSchema = z.object({
+  journeyOrderId: idSchema,
+  journeyId: idSchema,
+  serviceDate: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  orders: z.array(ticketOrderDraftResultSchema).min(2).max(4),
+  expiresAt: isoDateTimeSchema,
+});
+
 export const ticketOrderListItemSchema = z.object({
   order: ticketOrderSchema,
   inventoryHold: ticketInventoryHoldSchema.optional(),
@@ -236,8 +263,10 @@ export type TicketOrderInput = z.infer<typeof ticketOrderSchema>;
 export type TicketRecordInput = z.infer<typeof ticketRecordSchema>;
 export type TicketRefundRequestInput = z.infer<typeof ticketRefundRequestSchema>;
 export type TicketOrderDraftCreateInput = z.infer<typeof ticketOrderDraftCreateSchema>;
+export type TicketJourneyDraftCreateInput = z.infer<typeof ticketJourneyDraftCreateSchema>;
 export type TravelTicketingAvailabilityInput = z.infer<typeof travelTicketingAvailabilitySchema>;
 export type TicketingCatalogSnapshotInput = z.infer<typeof ticketingCatalogSnapshotSchema>;
 export type TicketOrderDraftResultInput = z.infer<typeof ticketOrderDraftResultSchema>;
+export type TicketJourneyDraftResultInput = z.infer<typeof ticketJourneyDraftResultSchema>;
 export type TicketOrderListItemInput = z.infer<typeof ticketOrderListItemSchema>;
 export type TicketOrderStoreSnapshotInput = z.infer<typeof ticketOrderStoreSnapshotSchema>;

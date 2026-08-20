@@ -27,11 +27,21 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL(publicSiteUrl('/')),
     icons: {
       icon: [
-        { url: appPath('/icons/yct-logo.svg'), type: 'image/svg+xml' },
-        { url: appPath('/icons/yct-logo-192.png'), sizes: '192x192', type: 'image/png' },
+        { url: appPath('/icons/yct-icon.svg?v=2026-08-19-01'), type: 'image/svg+xml' },
+        {
+          url: appPath('/icons/yct-icon-192.png?v=2026-08-19-01'),
+          sizes: '192x192',
+          type: 'image/png',
+        },
       ],
-      shortcut: [{ url: appPath('/icons/yct-logo.svg'), type: 'image/svg+xml' }],
-      apple: [{ url: appPath('/icons/yct-logo-192.png'), sizes: '192x192', type: 'image/png' }],
+      shortcut: [{ url: appPath('/icons/yct-icon.svg?v=2026-08-19-01'), type: 'image/svg+xml' }],
+      apple: [
+        {
+          url: appPath('/icons/yct-icon-192.png?v=2026-08-19-01'),
+          sizes: '192x192',
+          type: 'image/png',
+        },
+      ],
     },
   };
 }

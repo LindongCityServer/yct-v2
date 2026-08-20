@@ -25,6 +25,8 @@ Nginx/宝塔反向代理 + Node.js standalone。
    调度器或两个位置采集器共同写同一份 `.yct-data`。
 8. 旧 WordPress、旧 `content_data.js` 和旧资源已经迁移过的服务器，禁止再次执行一次性迁移脚本。
    只允许在用户明确授权、完成备份并确认幂等策略后执行迁移。
+9. Material Symbols 的元数据文件和本地 SVG 目录必须成组备份、恢复；不得只复制其中一项，也不得
+   在多实例的独立本地磁盘上分别生成同名图标。
 
 ## 先确认线上实际形态
 
@@ -171,6 +173,32 @@ YCT_MAP_SHARE_LINK_STORE_PATH=.yct-data/map-share-links.json
   目标确实返回当前格式，不得用模拟数据掩盖源站故障。
 - `YCT_MAP_MARKER_PUBLIC_SNAPSHOT_STORE_PATH` 和 `YCT_MAP_SHARE_LINK_STORE_PATH` 属于持久运行数据，必须和 `.yct-data` 一起备份；不要把它们放入部署包。删除短链接仓储会使已分享的 `/s/<token>` 失效。
 
+### Material Symbols 动态图标
+
+后台可输入不在内置字体子集中的 Material Symbols 名称。预览和首次确认由服务端访问 Google Fonts，确认后转换为本地 SVG；公开页面只读取本站资产。生产基线为：
+
+```dotenv
+YCT_MATERIAL_SYMBOL_ASSET_STORE_PATH=.yct-data/material-symbol-asset-store.json
+YCT_MATERIAL_SYMBOL_ASSET_DIR=runtime-assets/material-symbols
+```
+
+上线前必须确认：
+
+- Web 进程身份可写入 `.yct-data` 和 `runtime-assets/material-symbols`。使用包内 `start-yct-web.ps1` 时会设置 `YCT_RUNTIME_ROOT`；若进程管理器直接启动 `apps\web\server.js`，必须显式设置同一个稳定的 `YCT_RUNTIME_ROOT`，或使用绝对路径。
+- 服务器可以出站访问 `fonts.googleapis.com:443` 和 `fonts.gstatic.com:443`。这只影响后台预览和首次固化新图标；公开访客不应访问 Google 域名。
+- 反向代理将当前 BasePath 下的 `/api/material-symbols/*` 和 `/api/admin/material-symbols/*` 转发给同一个 Next standalone 实例，且没有把公开本地 SVG 路由误设为管理员鉴权。
+- `.yct-data/material-symbol-asset-store.json` 与 `runtime-assets/material-symbols` 纳入同一备份和恢复点。备份前停止 Web 和所有可能写入事件的任务，恢复后同时核对文件数量和可读性。
+- 当前 JSON + 文件系统实现只允许单个 Web 写者。需要多实例时，先把元数据迁到带唯一约束的共享数据库，把 SVG 迁到共享对象存储或共享只读卷，并确保只有一个幂等固化消费者；不能依赖各实例本地磁盘自动同步。
+
+可先做不含密钥的连通性检查：
+
+```powershell
+Test-NetConnection 'fonts.googleapis.com' -Port 443
+Test-NetConnection 'fonts.gstatic.com' -Port 443
+```
+
+发布后使用真实管理员会话预览并确认一个新图标，确认 JSON 和 SVG 目录同步新增内容，再从公网页面检查本站 `/api/material-symbols/<iconName>` 返回 `image/svg+xml`。Google Fonts 故障时，既有本地 SVG 与内置字体仍应可用；新图标预览失败时不得手工修改 JSON 冒充确认成功。
+
 ## 配置检查和验收顺序
 
 以下命令只读，不会打印密钥。根路径部署用 `/`；旧 `/v2` 部署必须把所有命令的 BasePath 改为
@@ -247,8 +275,11 @@ pwsh -NoProfile -ExecutionPolicy Bypass `
 2. 停止 Web、内部任务和位置采集器，确认没有进程继续写 `.yct-data`。
 3. 用 `deploy-yct-web.ps1` 替换；根路径参数传 `-BasePath '/'`，不要传空字符串。脚本会保留并校验：
    `.env*`、`.yct-data`、`runtime-assets`、`apps\web\public\content-assets`。
-4. 部署后先启动单个 Web，再跑配置检查、内网健康、公网健康和烟雾检查；通过后再恢复定时任务。
-5. 将本次构建号、备份目录、配置检查摘要、健康接口结果和未完成项写入发布记录，不写密钥。
+4. Material Symbols 已投入使用后，要额外确认 `.yct-data/material-symbol-asset-store.json` 与
+   `runtime-assets/material-symbols` 均出现在同一个备份及恢复结果中。
+5. 部署后先启动单个 Web，再跑配置检查、内网健康、公网健康和烟雾检查；通过后再恢复定时任务。
+   使用真实管理员确认一个新动态图标，并检查公开 SVG 路由仍由当前构建提供。
+6. 将本次构建号、备份目录、配置检查摘要、健康接口结果和未完成项写入发布记录，不写密钥。
 
 禁止以下操作：
 
@@ -269,6 +300,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass `
 - 账号页无法读取公钥，内部任务仍报告 `web_push_not_configured`。
 - 临东通 Webhook 签名失败、设备事件拒绝原因不明或出现重复扣款风险。
 - `.yct-data`、上传素材、旧内容或管理员文件数量/哈希异常。
+- 已登记的 Material Symbols 本地路由返回 404/502，或元数据与 SVG 文件数量明显不一致。
 
 回滚时只恢复已验证的代码包和数据备份，不要用“重新跑迁移”代替回滚。完成后重新执行本手册的
 配置检查和健康验收。

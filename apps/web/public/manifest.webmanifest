@@ -1,25 +1,29 @@
 {
   "name": "雨城通",
-  "short_name": "YCT",
-  "description": "雨城通 Yuchengtong",
+  "short_name": "雨城通",
+  "description": "雨城通是临东市的综合出行与公共服务平台，提供运营资讯、地图探索、公交时刻与服务入口。",
+  "id": ".",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
   "background_color": "#F7F8F8",
   "theme_color": "#168F78",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "categories": ["travel", "transportation", "utilities"],
   "icons": [
     {
-      "src": "icons/yct-icon-192.png",
+      "src": "icons/yct-icon-192.png?v=2026-08-19-01",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "icons/yct-icon-512.png",
+      "src": "icons/yct-icon-512.png?v=2026-08-19-01",
       "sizes": "512x512",
       "type": "image/png"
     },
     {
-      "src": "icons/yct-icon-maskable.png",
+      "src": "icons/yct-icon-maskable.png?v=2026-08-19-01",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

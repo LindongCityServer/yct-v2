@@ -115,7 +115,9 @@ C:\wwwroot\yct-v2\
 ├─ AI_ACCESS.md
 ├─ .env                         # 推荐放这里
 ├─ .env.production              # 如果你习惯拆环境文件，也放这里
-├─ .yct-data\
+├─ .yct-data\                   # 包含动态图标元数据等运行时仓储
+├─ runtime-assets\
+│  └─ material-symbols\         # 管理员确认后固化的单图标 SVG
 ├─ apps\
 │  └─ web\
 │     ├─ server.js
@@ -301,8 +303,8 @@ foreach ($relativePath in @(
 
 可以按下面理解：
 
-- `.yct-data`：账号会话、账号映射、管理员成员、交通数据版本、POI 投稿、POI 投稿图片、提醒、通知、票务草稿、离线范围请求和物料线网项目等本地仓储；账号会话默认写入 `.yct-data/yct-account-sessions.json`，也可通过 `YCT_SESSION_STORE_PATH` 调整，当前 POI 投稿图片默认在 `.yct-data/poi-submission-images`。RMP 线网草稿默认写入 `.yct-data/material-transit-network-project-store.json`，可通过 `YCT_MATERIAL_TRANSIT_NETWORK_PROJECT_STORE_PATH` 调整。
-- `runtime-assets`：部署包根目录下的运行时静态资源；当前 POI 分类图标默认在 `runtime-assets/poi-icons`。
+- `.yct-data`：账号会话、账号映射、管理员成员、交通数据版本、POI 投稿、POI 投稿图片、提醒、通知、票务草稿、离线范围请求和物料线网项目等本地仓储；账号会话默认写入 `.yct-data/yct-account-sessions.json`，也可通过 `YCT_SESSION_STORE_PATH` 调整，当前 POI 投稿图片默认在 `.yct-data/poi-submission-images`。RMP 线网草稿默认写入 `.yct-data/material-transit-network-project-store.json`，可通过 `YCT_MATERIAL_TRANSIT_NETWORK_PROJECT_STORE_PATH` 调整。已确认的 Material Symbols 名称与本地文件映射默认写入 `.yct-data/material-symbol-asset-store.json`。
+- `runtime-assets`：部署包根目录下的运行时静态资源；当前 POI 分类图标默认在 `runtime-assets/poi-icons`，按需固化的 Material Symbols SVG 默认在 `runtime-assets/material-symbols`。
 - `apps\web\public\content-assets`：内容后台上传的真实图片和附件。
 - `apps\web\public\legacy-assets`：如果它来自你本地打包机的 `public` 目录，通常已经包含在部署包里；只有当云端还保留了“没有重新打进包的额外旧资源”时，才需要额外手工保留。
 
@@ -311,6 +313,28 @@ foreach ($relativePath in @(
 - 如果你从一个旧的 YCT v2 目录升级到新的 YCT v2 目录，至少复制 `.yct-data`、`runtime-assets` 和 `apps\web\public\content-assets`。
 - 如果这是第一次把 v2 部署到云端，`.yct-data` 可以先让系统按需创建，但 `.env` 仍然必须手工放好。
 - 如果你确认当前没有任何后台上传素材，理论上只复制 `.yct-data` 也能跑，但我不建议把这个当默认流程。
+
+### Material Symbols 动态图标
+
+本版内置字体只包含源码中实际使用的 Material Symbols 子集。后台仍允许输入任意合法图标名：管理员输入时由受保护的预览接口临时访问 Google Fonts；确认图标或相关业务事件通过后，服务端把单图标转换为带内容哈希的本地 SVG，并由本站 `/api/material-symbols/<iconName>` 提供。公开页面不会直接请求 Google Fonts。
+
+生产环境保留以下默认值即可；使用部署包的 `start-yct-web.ps1` 时，相对路径会解析到稳定部署根目录：
+
+```dotenv
+YCT_MATERIAL_SYMBOL_ASSET_STORE_PATH=.yct-data/material-symbol-asset-store.json
+YCT_MATERIAL_SYMBOL_ASSET_DIR=runtime-assets/material-symbols
+```
+
+部署与运维必须满足：
+
+1. Web 进程身份对这两个路径的父目录具有创建、读取、写入和替换文件的权限。若绕过 `start-yct-web.ps1` 直接运行 `apps\web\server.js`，应设置 `YCT_RUNTIME_ROOT`，或把两个变量都改为部署目录之外的绝对持久化路径。
+2. 服务器仅在后台预览或首次固化新图标时需要出站 HTTPS 访问 `fonts.googleapis.com:443` 和 `fonts.gstatic.com:443`。不要要求访客浏览器直连这两个域名，也不要给这两个域名配置入站反代。
+3. `.yct-data/material-symbol-asset-store.json` 与 `runtime-assets/material-symbols` 是一组数据，必须在停止所有写入进程后一起备份、恢复和迁移。只恢复 JSON 会产生缺失文件，只恢复 SVG 会失去名称映射。包内 `deploy-yct-web.ps1` 默认整体保留 `.yct-data` 和 `runtime-assets`，无需把运行时 SVG 塞回新 zip。
+4. 当前实现使用本地 JSON 元数据和文件系统，是单写者方案。不得让多个 Web 实例在各自本地磁盘上分别固化图标，也不得让多个实例并发写同一 JSON 文件。扩容前应把元数据迁到数据库、把 SVG 迁到共享对象存储，并以唯一键或幂等写入保护 `iconName` 与内容哈希。
+5. Google Fonts 短时不可用时，已经固化的图标和内置字体子集仍可正常显示；新的任意图标会无法预览或确认，此时应保留原配置并重试，不能通过手工伪造 SVG 或直接改 JSON 绕过校验。
+6. 回滚代码时保留上述两个路径。旧版本会忽略新资产，重新升级后仍可继续使用；除非已经验证没有任何记录引用，否则不要在回滚时清空它们。
+
+首次上线后，用真实管理员会话预览一个尚未固化的有效图标并确认保存，再检查元数据文件与 SVG 目录是否同时新增内容。随后从公网打开使用该图标的页面，确认浏览器请求的是本站 `/api/material-symbols/...`，而不是 `fonts.googleapis.com` 或 `fonts.gstatic.com`。
 
 zip 包可以直接右键解压，`tar.gz` 包可以用：
 

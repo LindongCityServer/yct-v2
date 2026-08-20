@@ -429,6 +429,11 @@ export interface TransitLineStopSnapshot {
   stationSourceId: string;
   sequence: number;
   oneWay?: 'up' | 'down';
+  /** 各方向是否停站；旧数据缺省时按两个方向均停站处理。 */
+  stopDirections?: {
+    down: boolean;
+    up: boolean;
+  };
   /** 当前线路在该站按方向使用的具体地图停靠位置。 */
   stopLocationRefs?: TransitLineStopLocationRef[];
   status?: string;
@@ -517,6 +522,15 @@ export interface TransitLineSnapshot {
   };
   departureTimes?: string[];
   departureRules?: TransitDepartureScheduleRule[];
+  /** 分别表示按线路站序、按反向站序从首站发车的时刻。 */
+  departureTimesByDirection?: {
+    down?: string[];
+    up?: string[];
+  };
+  departureRulesByDirection?: {
+    down?: TransitDepartureScheduleRule[];
+    up?: TransitDepartureScheduleRule[];
+  };
   operatingDateRule?: string;
   bookingUrl?: string;
   sourcePath?: string;
@@ -554,6 +568,7 @@ export interface TransitStationLayerSnapshot {
 
 export interface TransitStationFacilitySnapshot {
   type: string;
+  /** 沿站台方向的位置，允许精确到四分之一车厢。 */
   location?: number;
   floor?: string;
   endFloor?: string;
@@ -576,6 +591,10 @@ export interface TransitStationExitSnapshot {
   floor?: string;
   direction?: 'upwards' | 'downwards';
   orientation?: string;
+  /** 地点系统中的出口位置参考；不参与文本格式的主字段。 */
+  placeMarkerId?: string;
+  /** 用于生成出口介绍的附近道路标记，最多保留两条。 */
+  roadMarkerIds?: string[];
 }
 
 export interface TransitStationDetailSnapshot {
@@ -921,6 +940,16 @@ export interface TravelScheduleServiceSummary {
   message?: string;
 }
 
+export interface TravelTripStopTime {
+  stationName: string;
+  isStop: boolean;
+  arrivalTime?: string;
+  departureTime?: string;
+  arrivalDayOffset?: number;
+  departureDayOffset?: number;
+  dwellMinutes?: number;
+}
+
 export interface TravelTripInstance {
   tripInstanceId: string;
   approvalStatus?: TransitItemApprovalStatus;
@@ -941,6 +970,8 @@ export interface TravelTripInstance {
   lineName: string;
   routeNote?: string;
   stationNames: string[];
+  stopTimes?: TravelTripStopTime[];
+  timingSource?: 'manual' | 'road_segment';
   originStationName?: string;
   destinationStationName?: string;
   fareText?: string;
@@ -1000,9 +1031,85 @@ export interface TravelScheduleQueryResult {
   trips: TravelTripInstance[];
   serviceNotices?: TransitServiceNotice[];
   stationOptions: string[];
+  /** 地图路由适配器提供的同城异站换乘候选。 */
+  transferOptions?: TravelJourneyTransferOption[];
   sourceFiles: string[];
   serviceDate?: string;
   notice?: string;
+}
+
+export type TravelJourneyTicketingStatus = 'order_available' | 'partially_available' | 'query_only';
+
+export interface TravelJourneyTransferOption {
+  fromStationName: string;
+  toStationName: string;
+  mode: MapTravelMode;
+  modeLabel: string;
+  routeDistanceBlocks?: number;
+  bufferMinutes: number;
+  totalMinutes: number;
+}
+
+export interface TravelJourneyTransfer {
+  fromStationName: string;
+  toStationName: string;
+  mode: MapTravelMode;
+  modeLabel: string;
+  routeDistanceBlocks?: number;
+  bufferMinutes: number;
+  transferMinutes: number;
+}
+
+export interface TravelJourneyLeg {
+  tripInstanceId: string;
+  tripCode?: string;
+  serviceKind: TicketableServiceKind;
+  serviceLabel: string;
+  lineName: string;
+  fromStationName: string;
+  toStationName: string;
+  departureTime: string;
+  arrivalTime?: string;
+  departureDayOffset: number;
+  arrivalDayOffset?: number;
+  stationCount: number;
+  ticketingStatus: TravelTicketingAvailabilityStatus;
+}
+
+export interface TravelJourneyOption {
+  journeyId: string;
+  serviceDate: string;
+  originStationName: string;
+  destinationStationName: string;
+  departureTime: string;
+  arrivalTime?: string;
+  departureDayOffset: number;
+  arrivalDayOffset?: number;
+  durationMinutes?: number;
+  transferCount: number;
+  ticketingStatus: TravelJourneyTicketingStatus;
+  legs: TravelJourneyLeg[];
+  transfers: TravelJourneyTransfer[];
+}
+
+export interface TravelJourneyPlanResult {
+  serviceDate: string;
+  originStationName: string;
+  destinationStationName: string;
+  journeys: TravelJourneyOption[];
+  searchedTripCount: number;
+}
+
+export type TravelScheduleConflictKind =
+  'time_order' | 'station_headway' | 'trip_overtake' | 'missing_time';
+
+export interface TravelScheduleConflict {
+  conflictId: string;
+  kind: TravelScheduleConflictKind;
+  severity: 'error' | 'warning';
+  message: string;
+  stationName?: string;
+  tripInstanceIds: string[];
 }
 
 export type TravelScheduleRevisionStatus =
@@ -1189,6 +1296,8 @@ export interface TicketOrder {
   refundRequestedAt?: ISODateTimeString;
   refundedAt?: ISODateTimeString;
   legacyOrderId?: string;
+  journeyOrderId?: string;
+  journeyLegIndex?: number;
 }
 
 export interface TicketRecord {
@@ -1546,6 +1655,14 @@ export interface UserMapFavorites {
   ldpassUserId: string;
   markerIds: string[];
   updatedAt: ISODateTimeString;
+}
+
+export interface TicketJourneyDraftResult {
+  journeyOrderId: string;
+  journeyId: string;
+  serviceDate?: string;
+  orders: TicketOrderDraftResult[];
+  expiresAt: ISODateTimeString;
 }
 
 export type CompactMapRouteShareState = [

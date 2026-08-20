@@ -605,7 +605,7 @@ DESIGN.md
 - 已处理补充：旧版首页 `social-links` 中的 QQ 群、Bilibili、微信说明图和 QQ 频道入口已迁移到新版运营首页 `feed-panel` 顶部，并将旧 PNG 图标下载到 `apps/web/public/icons/social/` 随部署包发布。
 - 已处理补充：首页图片加载策略已收敛：运营 hero 图显式高优先级 eager 加载；信息流封面和社交入口图标使用原生 lazy loading 与低优先级请求，减少首页初次进入时的图片并发压力。
 - 已处理补充：分享图生成使用 `html-to-image`，并在导出前通过 `getFontEmbedCSS()` 嵌入本地 `Material Symbols Outlined` 字体，避免生成图中把 `subway`、`flag` 等 ligature 当成普通文本渲染。分享图内的标题图标、起点、终点、上车/下车和步行详情继续使用本地图标字体；起点统一使用 `location_on`，终点统一使用 `flag`。步行详情文案继续只保留左转、右转、左前方、右前方、直行等方向语义。主路线卡片仍保持原有“图标 + 简短文案”结构。
-- 已处理补充：Material Symbols Outlined 已从 Google Fonts 外链改为项目本地嵌入的可变 `woff2` 字体，移除运行时 `fonts.googleapis.com` / `fonts.gstatic.com` 依赖，保留 `FILL` 可变填充态以支持选中图标样式。
+- 已处理补充：Material Symbols Outlined 已从 Google Fonts 外链改为项目本地嵌入的可变 `woff2` 字体，移除公开页面的 `fonts.googleapis.com` / `fonts.gstatic.com` 依赖，保留 `FILL` 可变填充态以支持选中图标样式；固定图标通过 `icon_names` 根据源码生成按需子集。后台动态图标使用受保护的单图标预览接口，确认或业务事件触发后转换为本地哈希 SVG，公开页面优先使用本地资源并回退字体子集。
 - 已处理第一版：新增语言偏好基础能力，`GET/POST /api/account/locale-preference` 读取或更新登录用户的 `system`、`zh-CN`、`zh-Hant`、`en` 偏好；数据暂存到 `.yct-data/locale-preference-store.json`，更新成功发布 `LocalePreferenceUpdated` 事件。前端新增 `client-locale-preference` 工具和账号页语言偏好控件，用于匿名本地偏好和登录同步，并更新页面 `lang`。全局 `PreferenceBridge` 已接入语言偏好初始化：页面进入后会应用本机偏好、拉取账号侧偏好并同步到本地，已接入 `useI18n` 的客户端固定文案会随偏好切换；未接入翻译目录的地图、后台和业务数据名称仍按主语言回退。
 - 管理员侧测试流程需要文档化；已新增 `docs/ADMIN_TESTING.md` 记录当前如何配置 `ldpass`、初始化管理员、进入后台页面和验证 API 边界。
 - 已补充管理后台走查：新增 `docs/ADMIN_BACKOFFICE_REVIEW.md`，重点评估 POI 后台当前“调试列表”形态的缺口，明确先做状态/分类/关键词筛选、分类图标与名称展示、驳回理由弹窗和详情展开，再推进地图审核工作台、几何编辑、重复检测、图片素材审核和正式数据治理。

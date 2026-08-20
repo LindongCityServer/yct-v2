@@ -25,6 +25,7 @@ import type {
   TransitModeProfile,
   TransitModeSnapshotSummary,
   TravelScheduleRevisionStatus,
+  TravelScheduleConflictKind,
   TravelScheduleServiceProfile,
   TripReminderSource,
   TileProviderSourceKind,
@@ -369,6 +370,8 @@ export interface TransitDataRevisionLineUpdatedPayload {
     | 'firstLastBus'
     | 'departureTimes'
     | 'departureRules'
+    | 'departureTimesByDirection'
+    | 'departureRulesByDirection'
     | 'operatingDateRule'
     | 'bookingUrl'
   >;
@@ -777,6 +780,7 @@ export interface ServiceEntrySubmittedPayload {
   title: string;
   categoryId: ServiceEntryCategory;
   href: string;
+  icon: string;
 }
 
 export interface ServiceEntryReviewedPayload {
@@ -790,6 +794,7 @@ export interface ServiceEntryUpdatedPayload {
   serviceEntryId: string;
   updatedBy: string;
   updatedAt: ISODateTimeString;
+  icon?: string;
   changedFields: Array<
     'title' | 'description' | 'categoryId' | 'icon' | 'href' | 'openMode' | 'sortOrder'
   >;
@@ -814,6 +819,25 @@ export interface ServiceEntryDeletedPayload {
   previousStatus: ServiceEntryStatus;
   deletedBy: string;
   deletedAt: ISODateTimeString;
+}
+
+export interface MaterialSymbolAssetPromotedPayload {
+  iconName: string;
+  assetId: string;
+  assetUrl: string;
+  sha256: string;
+  sizeBytes: number;
+  source: 'google-fonts';
+  promotedBy: string;
+  promotedAt: ISODateTimeString;
+  reason:
+    | 'service_entry_submitted'
+    | 'service_entry_updated'
+    | 'transit_mode_profile_updated'
+    | 'travel_service_profile_updated'
+    | 'poi_published'
+    | 'legacy_map_marker_updated'
+    | 'admin_confirmed';
 }
 
 export interface MaterialTemplatePublishedPayload {
@@ -971,6 +995,7 @@ export interface LegacyMapMarkerUpdatedPayload {
   markerId: string;
   updatedBy: string;
   updatedAt: ISODateTimeString;
+  facilities?: PoiFacilitySnapshot[];
   changedFields: Array<
     | 'label'
     | 'categoryId'
@@ -1082,6 +1107,8 @@ export interface TravelScheduleTripEditedPayload {
     | 'lineName'
     | 'routeNote'
     | 'stationNames'
+    | 'stopTimes'
+    | 'timingSource'
     | 'originStationName'
     | 'destinationStationName'
     | 'fareText'
@@ -1095,6 +1122,36 @@ export interface TravelScheduleTripEditedPayload {
     | 'availability'
     | 'sourcePath'
   >;
+}
+
+export interface TravelScheduleTripTimingUpdatedPayload {
+  scheduleServiceId: string;
+  revisionId: string;
+  tripInstanceId: string;
+  stopTimeCount: number;
+  stoppingStationCount: number;
+  timingSource: 'manual' | 'road_segment';
+  updatedBy: string;
+  updatedAt: ISODateTimeString;
+}
+
+export interface TravelScheduleConflictDetectedPayload {
+  scheduleServiceId: string;
+  revisionId: string;
+  conflictCount: number;
+  conflictKinds: TravelScheduleConflictKind[];
+  affectedTripInstanceIds: string[];
+  detectedAt: ISODateTimeString;
+}
+
+export interface TravelJourneyPlannedPayload {
+  journeyPlanId: string;
+  serviceDate: string;
+  originStationName: string;
+  destinationStationName: string;
+  optionCount: number;
+  directOptionCount: number;
+  plannedAt: ISODateTimeString;
 }
 
 export interface TravelScheduleTripCreatedPayload {
@@ -1174,6 +1231,18 @@ export interface TicketOrderCreatedPayload {
   inventoryHoldId?: string;
   passengerCount?: number;
   status?: TicketOrderStatus;
+  journeyOrderId?: string;
+  journeyLegIndex?: number;
+}
+
+export interface TicketJourneyDraftCreatedPayload {
+  journeyOrderId: string;
+  journeyId: string;
+  userId: string;
+  orderIds: string[];
+  tripInstanceIds: string[];
+  passengerCount: number;
+  expiresAt: ISODateTimeString;
 }
 
 export interface TicketIssuedPayload {
@@ -1323,6 +1392,7 @@ export type YctEventPayloadMap = {
   ServiceEntryPublished: ServiceEntryPublishedPayload;
   ServiceEntryArchived: ServiceEntryArchivedPayload;
   ServiceEntryDeleted: ServiceEntryDeletedPayload;
+  MaterialSymbolAssetPromoted: MaterialSymbolAssetPromotedPayload;
   MaterialTemplatePublished: MaterialTemplatePublishedPayload;
   MaterialDraftCreated: MaterialDraftCreatedPayload;
   MaterialDraftUpdated: MaterialDraftUpdatedPayload;
@@ -1340,6 +1410,9 @@ export type YctEventPayloadMap = {
   TravelScheduleRevisionReviewed: TravelScheduleRevisionReviewedPayload;
   TravelScheduleRevisionArchived: TravelScheduleRevisionArchivedPayload;
   TravelScheduleTripEdited: TravelScheduleTripEditedPayload;
+  TravelScheduleTripTimingUpdated: TravelScheduleTripTimingUpdatedPayload;
+  TravelScheduleConflictDetected: TravelScheduleConflictDetectedPayload;
+  TravelJourneyPlanned: TravelJourneyPlannedPayload;
   TravelScheduleTripCreated: TravelScheduleTripCreatedPayload;
   TravelScheduleTripDeleted: TravelScheduleTripDeletedPayload;
   TravelScheduleTripApprovalChanged: TravelScheduleTripApprovalChangedPayload;
@@ -1350,6 +1423,7 @@ export type YctEventPayloadMap = {
   TicketInventoryHeld: TicketInventoryHeldPayload;
   TicketInventoryHoldExpired: TicketInventoryHoldExpiredPayload;
   TicketOrderCreated: TicketOrderCreatedPayload;
+  TicketJourneyDraftCreated: TicketJourneyDraftCreatedPayload;
   TicketOrderCancelled: TicketOrderCancelledPayload;
   TicketIssued: TicketIssuedPayload;
   TicketRedemptionLinked: TicketRedemptionLinkedPayload;

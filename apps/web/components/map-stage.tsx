@@ -84,6 +84,7 @@ import {
 } from '../lib/map-place-relations';
 import { PoiFacilityEditor } from './poi-facility-editor';
 import { AdminEditLink } from './admin-edit-link';
+import { MaterialSymbol } from './material-symbol';
 
 interface MarkerResponse {
   meta: ApiMeta;
@@ -586,11 +587,7 @@ interface RoadRoutingSnapshot {
 type RoadRoutingStatus = 'loading' | 'ready';
 
 type RoadRouteStrategy =
-  | 'shortest'
-  | 'fewer-turns'
-  | 'fewest-segments'
-  | 'alternative-1'
-  | 'alternative-2';
+  'shortest' | 'fewer-turns' | 'fewest-segments' | 'alternative-1' | 'alternative-2';
 
 type MapShareMode = 'link' | 'text' | 'image';
 type MapShareCopyKind = 'link' | 'text' | 'coordinate' | 'teleport';
@@ -4032,9 +4029,7 @@ export function MapStage() {
                               className="map-poi-facility-item"
                               key={`${facility.symbolIcon}-${index}`}
                             >
-                              <span className="material-symbols-outlined" aria-hidden="true">
-                                {facility.symbolIcon}
-                              </span>
+                              <MaterialSymbol name={facility.symbolIcon} aria-hidden="true" />
                               <span>{facility.description}</span>
                             </div>
                           ))}
@@ -4679,12 +4674,11 @@ export function MapStage() {
                       ) : marker.iconUrl ? (
                         <img src={marker.iconUrl} alt="" draggable={false} />
                       ) : marker.symbolIcon ? (
-                        <span
-                          className="material-symbols-outlined map-linear-poi-symbol"
+                        <MaterialSymbol
+                          className="map-linear-poi-symbol"
+                          name={marker.symbolIcon}
                           aria-hidden="true"
-                        >
-                          {marker.symbolIcon}
-                        </span>
+                        />
                       ) : null}
                       {marker.showTextLabel ? (
                         <span className="map-marker-label">{marker.label}</span>
@@ -4741,9 +4735,7 @@ export function MapStage() {
                 ) : marker.iconUrl ? (
                   <img src={marker.iconUrl} alt="" draggable={false} />
                 ) : null}
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  {marker.symbolIcon ?? 'location_on'}
-                </span>
+                <MaterialSymbol name={marker.symbolIcon ?? 'location_on'} aria-hidden="true" />
                 {!marker.isPlayer && (marker.showLabel || marker.id === focusedMarkerId) ? (
                   <span className="map-marker-label">{marker.label}</span>
                 ) : null}
@@ -6576,12 +6568,10 @@ function buildRoutePlanOptions(input: {
       });
     }
 
-    for (const [alternativeIndex, strategy] of (
-      [
-        [1, 'alternative-1'],
-        [2, 'alternative-2'],
-      ] as const
-    )) {
+    for (const [alternativeIndex, strategy] of [
+      [1, 'alternative-1'],
+      [2, 'alternative-2'],
+    ] as const) {
       const alternativeRoute = buildWalkRouteBetweenCoordinates(
         draft.origin,
         draft.destination,
@@ -6591,9 +6581,7 @@ function buildRoutePlanOptions(input: {
         directWalkAccessOptions,
         strategy,
       );
-      if (
-        !shouldAddDiversifiedWalkRoute(directWalkRoute, alternativeRoute, acceptedWalkRoutes)
-      ) {
+      if (!shouldAddDiversifiedWalkRoute(directWalkRoute, alternativeRoute, acceptedWalkRoutes)) {
         continue;
       }
       acceptedWalkRoutes.push(alternativeRoute);
@@ -6606,9 +6594,7 @@ function buildRoutePlanOptions(input: {
       options.push({
         id: `walk-alternative-${alternativeIndex}`,
         title: input.t(
-          alternativeIndex === 1
-            ? 'map.route.walkAlternativeOne'
-            : 'map.route.walkAlternativeTwo',
+          alternativeIndex === 1 ? 'map.route.walkAlternativeOne' : 'map.route.walkAlternativeTwo',
         ),
         summary: `${formatRoutePlanDistance(distance, input.t)} · ${input.t(
           'map.route.summary.roadEstimate',
@@ -8282,9 +8268,8 @@ function findPenalizedRoadRoutePath(
       const exactEdgePenalty = penalizedEdgeKeys.has(getRoadRouteEdgeKey(currentId, edge))
         ? edge.distance * 6 + 240
         : 0;
-      const sameRoadPenalty = edge.roadId && penalizedRoadIds.has(edge.roadId)
-        ? edge.distance * 1.5
-        : 0;
+      const sameRoadPenalty =
+        edge.roadId && penalizedRoadIds.has(edge.roadId) ? edge.distance * 1.5 : 0;
       const nextScore = currentScore + edge.distance + exactEdgePenalty + sameRoadPenalty;
       if (nextScore < (scores.get(edge.to) ?? Number.POSITIVE_INFINITY)) {
         scores.set(edge.to, nextScore);
@@ -12672,8 +12657,14 @@ function StationExitSchematic({
   const rightExits = isTemplateFlipped ? upwardExits : downwardExits;
   return (
     <div className="map-metro-station-exit-track">
-      <span className="is-left">{formatStationExitGroup(leftExits, '←', t)}</span>
-      <span className="is-right">{formatStationExitGroup(rightExits, '→', t)}</span>
+      <span className="is-left">
+        {formatStationExitGroup(leftExits, '←', t)}
+        {formatStationExitDescriptions(leftExits)}
+      </span>
+      <span className="is-right">
+        {formatStationExitGroup(rightExits, '→', t)}
+        {formatStationExitDescriptions(rightExits)}
+      </span>
     </div>
   );
 }
@@ -13116,6 +13107,18 @@ function formatStationExitGroup(
   );
 }
 
+function formatStationExitDescriptions(
+  exits: TransitStationDetailSnapshot['exits'],
+): string | null {
+  const descriptions = exits
+    .filter((exit) => exit.description || exit.orientation)
+    .map((exit) => {
+      const details = [exit.description, exit.orientation].filter(Boolean).join(' · ');
+      return `${exit.code}：${details}`;
+    });
+  return descriptions.length > 0 ? `（${descriptions.join('；')}）` : null;
+}
+
 function resolveStationDetailPosition(
   location: number | undefined,
   maxPosition: number | undefined,
@@ -13425,13 +13428,12 @@ function MarkerListIcon({
   }
 
   return (
-    <span
-      className="material-symbols-outlined map-marker-list-symbol"
+    <MaterialSymbol
+      className="map-marker-list-symbol"
+      name={marker.symbolIcon ?? 'location_on'}
       style={{ color: marker.accentColor }}
       aria-hidden="true"
-    >
-      {marker.symbolIcon ?? 'location_on'}
-    </span>
+    />
   );
 }
 

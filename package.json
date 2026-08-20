@@ -14,6 +14,8 @@
     "release:prepare": "node scripts/prepare-release.mjs",
     "release:freeze-history": "node scripts/freeze-release-history.mjs",
     "brand:icons": "node scripts/generate-icons.mjs",
+    "icons:material-symbols:sync": "node scripts/sync-material-symbols-font.mjs",
+    "icons:material-symbols:check": "node scripts/sync-material-symbols-font.mjs --check",
     "legacy:inspect": "tsx scripts/inspect-legacy-data.ts",
     "legacy:assets:download": "tsx scripts/download-legacy-assets.ts",
     "admin:init": "tsx scripts/init-admin.ts",

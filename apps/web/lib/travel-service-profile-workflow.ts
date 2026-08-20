@@ -9,6 +9,9 @@ import {
   readTravelServiceProfiles,
   writeTravelServiceProfiles,
 } from './travel-service-profile-store';
+import { ensureMaterialSymbolAssetListenersRegistered } from './material-symbol-asset-listeners';
+
+ensureMaterialSymbolAssetListenersRegistered();
 
 export interface TravelServiceProfileActionResult {
   ok: boolean;

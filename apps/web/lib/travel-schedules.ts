@@ -22,6 +22,7 @@ import { attachTicketingAvailability } from './travel-ticketing';
 import { readPublishedTravelScheduleEntitySnapshot } from './published-travel-schedule-read-model';
 import { readTravelServiceProfiles } from './travel-service-profile-store';
 import { createTimedCache } from './server-cache';
+import { readTravelJourneyTransferOptions } from './travel-journey-transfers';
 
 const targetFlightAirport = '临东金桦';
 const targetFlightOperator = '临东航空';
@@ -92,6 +93,9 @@ async function readLiveTravelScheduleQueryUncached(
   const trips = [...coachTrips, ...flight.trips].filter((trip) =>
     enabledKinds.has(trip.serviceKind),
   );
+  const transferOptions = await readTravelJourneyTransferOptions(
+    trips.flatMap((trip) => trip.stationNames),
+  );
   const serviceDate = normalizeServiceDate(query.serviceDate);
   const filteredTrips = await attachTicketingAvailability(
     filterTrips(trips, { ...query, serviceDate }),
@@ -127,6 +131,7 @@ async function readLiveTravelScheduleQueryUncached(
         trips: [],
         serviceNotices: serviceNotices.items,
         stationOptions: [],
+        transferOptions: [],
         sourceFiles,
         serviceDate,
       },
@@ -147,6 +152,7 @@ async function readLiveTravelScheduleQueryUncached(
       trips: filteredTrips,
       serviceNotices: serviceNotices.items,
       stationOptions: uniqueSorted(trips.flatMap((trip) => trip.stationNames)),
+      transferOptions,
       sourceFiles,
       serviceDate,
       notice: screen.item?.notice,
@@ -162,6 +168,9 @@ async function readPublishedTravelScheduleQueryUncached(
   const filteredTrips = await attachTicketingAvailability(
     filterTrips(revision.trips, { ...query, serviceDate }),
   );
+  const transferOptions = await readTravelJourneyTransferOptions(
+    revision.trips.flatMap((trip) => trip.stationNames),
+  );
 
   return {
     meta: createApiMeta(
@@ -175,6 +184,7 @@ async function readPublishedTravelScheduleQueryUncached(
       trips: filteredTrips,
       serviceNotices: revision.serviceNotices,
       stationOptions: revision.stationOptions,
+      transferOptions,
       sourceFiles: revision.sourceFiles,
       serviceDate,
       notice: revision.notice,
@@ -608,7 +618,8 @@ function filterTrips(
     .filter((trip) => filterByStationPair(trip, originStationName, destinationStationName))
     .filter(
       (trip) =>
-        !stationName || trip.stationNames.some((name) => normalizeQueryValue(name) === stationName),
+        !stationName ||
+        getStoppingStationNames(trip).some((name) => normalizeQueryValue(name) === stationName),
     )
     .filter((trip) => filterByTime(trip, timeScope, serviceDateState, currentMinutes))
     .filter((trip) => {
@@ -692,7 +703,7 @@ function filterByStationPair(
     return true;
   }
 
-  const stationNames = trip.stationNames.map(normalizeQueryValue);
+  const stationNames = getStoppingStationNames(trip).map(normalizeQueryValue);
   const originIndex = originStationName ? stationNames.indexOf(originStationName) : -1;
   const destinationIndex = destinationStationName
     ? stationNames.indexOf(destinationStationName)
@@ -707,6 +718,12 @@ function filterByStationPair(
   }
 
   return !originStationName || !destinationStationName || originIndex <= destinationIndex;
+}
+
+function getStoppingStationNames(trip: TravelTripInstance): string[] {
+  return trip.stopTimes?.length
+    ? trip.stopTimes.filter((stopTime) => stopTime.isStop).map((stopTime) => stopTime.stationName)
+    : trip.stationNames;
 }
 
 function getServiceDateState(serviceDate: string | undefined): ServiceDateState {

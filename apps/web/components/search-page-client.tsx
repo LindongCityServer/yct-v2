@@ -11,6 +11,7 @@ import type {
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { MaterialSymbol } from './material-symbol';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { faqAnswerText } from '../lib/faq-content';
 import { getLocalizedFaqContent } from '../lib/faq-translations';
@@ -314,9 +315,10 @@ export function SearchPageClient({
                         href={appPath(`/map?marker=${encodeURIComponent(marker.id)}`)}
                         key={marker.id}
                       >
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          {marker.symbolIcon ?? 'location_on'}
-                        </span>
+                        <MaterialSymbol
+                          name={marker.symbolIcon ?? 'location_on'}
+                          aria-hidden="true"
+                        />
                         <span>
                           <strong>
                             <TitleWithBreaks
@@ -372,9 +374,7 @@ export function SearchPageClient({
                         rel={entry.openMode === 'new_tab' ? 'noreferrer' : undefined}
                         key={entry.id}
                       >
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          {entry.icon}
-                        </span>
+                        <MaterialSymbol name={entry.icon} aria-hidden="true" />
                         <span>
                           <strong>
                             <TitleWithBreaks title={title} />

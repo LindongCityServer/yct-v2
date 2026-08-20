@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type {
   TicketInventoryHold,
+  TicketJourneyDraftResult,
   TicketOrder,
   TicketOrderDraftResult,
   TicketOrderListItem,
@@ -13,6 +14,7 @@ import { readTicketingCatalog } from './ticketing-catalog-store';
 import {
   readTicketOrderStore,
   writeTicketOrderStore,
+  transactTicketOrderStore,
   type TicketOrderStoreSnapshot,
 } from './ticket-order-store';
 import { findTicketingOrderCandidate } from './travel-ticketing';
@@ -190,15 +192,153 @@ export async function createTicketOrderDraft(input: {
   };
 }
 
-export async function expireStaleTicketOrders(
-  now = new Date(),
-): Promise<TicketOrderStoreSnapshot> {
+export async function createTicketJourneyDraft(input: {
+  journeyId: string;
+  serviceDate?: string;
+  trips: TravelTripInstance[];
+  userId: string;
+  ldpassUserId: string;
+  passengerCount: number;
+}): Promise<TicketJourneyDraftResult> {
+  if (input.trips.length < 2 || input.trips.length > 4) {
+    throw new TicketOrderWorkflowError(
+      'ticketing_unavailable',
+      '联合订票需要包含 2 至 4 个连续班次。',
+    );
+  }
+
+  const now = new Date();
+  const heldAt = now.toISOString();
+  const expiresAt = new Date(now.getTime() + defaultHoldDurationMs).toISOString();
+  const journeyOrderId = `ticket_journey_${randomUUID()}`;
+  const catalog = await readTicketingCatalog();
+
+  const draft = await transactTicketOrderStore((current) => {
+    let working = current;
+    const orders: TicketJourneyDraftResult['orders'] = [];
+
+    for (const [journeyLegIndex, trip] of input.trips.entries()) {
+      const candidate = findTicketingOrderCandidate({
+        trip,
+        catalog,
+        orderStore: working,
+        passengerCount: input.passengerCount,
+        now,
+      });
+      if (!candidate.ok) {
+        throw new TicketOrderWorkflowError(
+          toWorkflowErrorCode(candidate.ticketing.status),
+          `${trip.tripCode ?? trip.lineName}：${candidate.ticketing.message}`,
+        );
+      }
+
+      const orderId = `ticket_order_${randomUUID()}`;
+      const inventoryHoldId = `ticket_hold_${randomUUID()}`;
+      const inventoryHold: TicketInventoryHold = {
+        inventoryHoldId,
+        inventoryPoolId: candidate.inventoryPool.inventoryPoolId,
+        tripInstanceId: trip.tripInstanceId,
+        fareProductId: candidate.fareProduct.fareProductId,
+        userId: input.userId,
+        ldpassUserId: input.ldpassUserId,
+        quantity: input.passengerCount,
+        status: 'held',
+        heldAt,
+        expiresAt,
+        orderId,
+      };
+      const order: TicketOrder = {
+        orderId,
+        userId: input.userId,
+        ldpassUserId: input.ldpassUserId,
+        serviceKind: trip.serviceKind,
+        tripInstanceId: trip.tripInstanceId,
+        fareProductId: candidate.fareProduct.fareProductId,
+        inventoryHoldId,
+        passengerCount: input.passengerCount,
+        status: 'draft',
+        createdAt: heldAt,
+        updatedAt: heldAt,
+        journeyOrderId,
+        journeyLegIndex,
+      };
+      orders.push({
+        order,
+        inventoryHold,
+        fareProduct: {
+          fareProductId: candidate.fareProduct.fareProductId,
+          name: candidate.fareProduct.name,
+          priceAmount: candidate.fareProduct.priceAmount,
+          currency: candidate.fareProduct.currency,
+        },
+        ticketing: candidate.ticketing,
+      });
+      working = {
+        ...working,
+        orders: [...working.orders, order],
+        inventoryHolds: [...working.inventoryHolds, inventoryHold],
+      };
+    }
+
+    return {
+      snapshot: { ...working, updatedAt: heldAt },
+      result: {
+        journeyOrderId,
+        journeyId: input.journeyId,
+        serviceDate: input.serviceDate,
+        orders,
+        expiresAt,
+      },
+    };
+  });
+
+  for (const [journeyLegIndex, result] of draft.orders.entries()) {
+    const trip = input.trips[journeyLegIndex]!;
+    await emitEvent('TicketInventoryHeld', input.userId, {
+      inventoryHoldId: result.inventoryHold.inventoryHoldId,
+      tripInstanceId: trip.tripInstanceId,
+      fareProductId: result.fareProduct.fareProductId,
+      userId: input.userId,
+      quantity: input.passengerCount,
+      expiresAt,
+    });
+    await emitEvent('TicketOrderCreated', input.userId, {
+      orderId: result.order.orderId,
+      userId: input.userId,
+      ldpassUserId: input.ldpassUserId,
+      scheduleId: trip.serviceId ?? trip.serviceKind,
+      serviceKind: trip.serviceKind,
+      tripInstanceId: trip.tripInstanceId,
+      fareProductId: result.fareProduct.fareProductId,
+      inventoryHoldId: result.inventoryHold.inventoryHoldId,
+      passengerCount: input.passengerCount,
+      status: 'draft',
+      journeyOrderId,
+      journeyLegIndex,
+    });
+  }
+  await emitEvent('TicketJourneyDraftCreated', input.userId, {
+    journeyOrderId,
+    journeyId: input.journeyId,
+    userId: input.userId,
+    orderIds: draft.orders.map((item) => item.order.orderId),
+    tripInstanceIds: input.trips.map((trip) => trip.tripInstanceId),
+    passengerCount: input.passengerCount,
+    expiresAt,
+  });
+
+  return draft;
+}
+
+export async function expireStaleTicketOrders(now = new Date()): Promise<TicketOrderStoreSnapshot> {
   return (await expireStaleTicketOrdersWithSummary(now)).store;
 }
 
-export async function processExpiredTicketOrders(input: {
-  now?: string;
-} = {}): Promise<TicketOrderExpirationSummary> {
+export async function processExpiredTicketOrders(
+  input: {
+    now?: string;
+  } = {},
+): Promise<TicketOrderExpirationSummary> {
   const now = input.now ? new Date(input.now) : new Date();
   const result = await expireStaleTicketOrdersWithSummary(
     Number.isNaN(now.getTime()) ? new Date() : now,
@@ -241,7 +381,11 @@ async function expireStaleTicketOrdersWithSummary(now = new Date()): Promise<
 
   const expiredOrders: TicketOrder[] = [];
   const nextOrders = orderStore.orders.map((order) => {
-    if (!order.inventoryHoldId || !expiredHoldIds.has(order.inventoryHoldId) || order.status !== 'draft') {
+    if (
+      !order.inventoryHoldId ||
+      !expiredHoldIds.has(order.inventoryHoldId) ||
+      order.status !== 'draft'
+    ) {
       return order;
     }
 

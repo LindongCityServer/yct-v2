@@ -14,6 +14,9 @@ import {
   updateLocalServiceEntry,
   withServiceEntryStatus,
 } from './service-entry-store';
+import { ensureMaterialSymbolAssetListenersRegistered } from './material-symbol-asset-listeners';
+
+ensureMaterialSymbolAssetListenersRegistered();
 
 const serviceEntryTransitions: Record<ServiceEntryStatus, ServiceEntryStatus[]> = {
   draft: ['pending_review', 'archived'],
@@ -97,6 +100,7 @@ export async function updateServiceEntry(input: {
       serviceEntryId: updated.id,
       updatedBy: input.actorId,
       updatedAt: new Date().toISOString(),
+      icon: updated.icon,
       changedFields,
     });
   }
@@ -132,6 +136,7 @@ export async function submitServiceEntry(input: {
       title: updated.title,
       categoryId: updated.categoryId,
       href: updated.href,
+      icon: updated.icon,
     });
   }
 

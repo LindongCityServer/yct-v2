@@ -46,6 +46,8 @@ export interface RuntimeConfig {
   poiConflictDecisionStorePath: string;
   legacyMapMarkerOverrideStorePath: string;
   poiIconUploadDir: string;
+  materialSymbolAssetStorePath: string;
+  materialSymbolAssetDir: string;
   offlinePackageStorePath: string;
   eventOutboxStorePath: string;
   localePreferenceStorePath: string;
@@ -251,6 +253,14 @@ export function readRuntimeConfig(): RuntimeConfig {
     poiIconUploadDir: resolveRuntimePath(
       process.env.YCT_POI_ICON_UPLOAD_DIR,
       'runtime-assets/poi-icons',
+    ),
+    materialSymbolAssetStorePath: resolveRuntimePath(
+      process.env.YCT_MATERIAL_SYMBOL_ASSET_STORE_PATH,
+      '.yct-data/material-symbol-asset-store.json',
+    ),
+    materialSymbolAssetDir: resolveRuntimePath(
+      process.env.YCT_MATERIAL_SYMBOL_ASSET_DIR,
+      'runtime-assets/material-symbols',
     ),
     offlinePackageStorePath: resolveRuntimePath(
       process.env.YCT_OFFLINE_PACKAGE_STORE_PATH,

@@ -37,14 +37,28 @@ try {
     throw new Error('至少填写一项用户可感知变更，例如 --change "feat|支持导出路线"。');
   }
 
+  const bump = options.bump ?? existingRelease?.bump ?? (options.amend ? undefined : 'patch');
+  if (bump === 'major' && !changes.some((change) => change.breaking)) {
+    throw new Error('--bump major 需要至少一项带 ! 的破坏性变更。');
+  }
+  if (bump && changes.some((change) => change.breaking) && bump !== 'major') {
+    throw new Error('包含破坏性变更时必须使用 --bump major。');
+  }
+
   const candidate = {
     version: '0.0.0',
     releasedAt: options.releasedAt ?? existingRelease?.releasedAt ?? new Date().toISOString(),
     sourceFingerprint: getSourceFingerprint(),
     themes,
     changes,
+    ...(bump ? { bump } : {}),
   };
   candidate.version = calculateNextReleaseVersion(previousRelease, candidate, previousReleases);
+  if (existingRelease && candidate.version !== existingRelease.version) {
+    throw new Error(
+      `--amend 不能把已准备版本 ${existingRelease.version} 改为 ${candidate.version}；请新建发布记录或保留原 bump。`,
+    );
+  }
 
   const nextReleaseNotes = {
     schemaVersion: releaseNotes.schemaVersion,
@@ -78,6 +92,7 @@ function parseArgs(argv) {
     changes: [],
     dryRun: false,
     help: false,
+    bump: null,
     releasedAt: null,
     themes: [],
   };
@@ -94,6 +109,14 @@ function parseArgs(argv) {
     }
     if (argument === '--dry-run') {
       options.dryRun = true;
+      continue;
+    }
+    if (argument === '--bump') {
+      const value = readNextValue(argv, ++index, '--bump');
+      if (!new Set(['major', 'minor', 'patch']).has(value)) {
+        throw new Error('--bump 只能是 major、minor 或 patch。');
+      }
+      options.bump = value;
       continue;
     }
     if (argument === '--theme') {
@@ -152,6 +175,7 @@ function printUsage() {
   pnpm release:prepare --theme map,web --change "feat|支持导出路线"
 
 参数：
+  --bump <级别>        可选：major、minor、patch；新发布默认 patch，破坏性变更必须 major
   --theme <主题>       一个或多个稳定主题标识，逗号分隔
   --change <变更>      category[!]|用户可感知摘要，可重复
   --date <时间>        可选，ISO 日期时间；默认使用当前时间

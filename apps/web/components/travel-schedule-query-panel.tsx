@@ -8,14 +8,25 @@ import type {
   TicketableServiceKind,
   TransitServiceNotice,
   TravelScheduleHistoryItem,
+  TicketJourneyDraftResult,
+  TravelJourneyOption,
+  TravelJourneyPlanResult,
   TravelScheduleQueryResult,
   TravelScheduleServiceSummary,
   TravelScheduleTimeScope,
   TravelTicketingAvailability,
   TravelTripInstance,
 } from '@yct/contracts';
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react';
+import {
+  Fragment,
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { appPath } from '../lib/app-paths';
+import { MaterialSymbol } from './material-symbol';
 import { publishLoginRequired, publishLoginRequiredForResponse } from '../lib/client-auth-events';
 import { notifyTicketOrderStateChanged } from '../lib/client-ticket-orders';
 import {
@@ -62,6 +73,10 @@ export function TravelScheduleQueryPanel({
   const [ticketOrders, setTicketOrders] = useState<TicketOrderListItem[] | null>(null);
   const [ticketOrderStatusText, setTicketOrderStatusText] = useState('');
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+  const [journeyPlan, setJourneyPlan] = useState<TravelJourneyPlanResult | null>(null);
+  const [journeyStatusText, setJourneyStatusText] = useState('');
+  const [journeyBusy, setJourneyBusy] = useState(false);
+  const [journeyOrderBusy, setJourneyOrderBusy] = useState(false);
   const currentMinutes = getCurrentAdjustedMinutes();
   const syncScheduleHistory = () => {
     setHistoryState(readTravelScheduleHistoryState());
@@ -162,6 +177,7 @@ export function TravelScheduleQueryPanel({
       timeFilter,
     ],
   );
+  const routeGroups = useMemo(() => groupScheduleTrips(filteredTrips), [filteredTrips]);
   const serviceNotices = useMemo(
     () => filterServiceNoticesByDate(result.serviceNotices ?? [], serviceDate),
     [result.serviceNotices, serviceDate],
@@ -194,6 +210,88 @@ export function TravelScheduleQueryPanel({
 
     clearTravelScheduleHistory();
     syncScheduleHistory();
+  };
+  const planJourneys = async () => {
+    if (
+      !originFilter ||
+      originFilter === 'all' ||
+      !destinationFilter ||
+      destinationFilter === 'all'
+    ) {
+      setJourneyStatusText('请先填写起点和终点。');
+      return;
+    }
+    setJourneyBusy(true);
+    setJourneyStatusText('正在组合班次方案');
+    try {
+      const params = new URLSearchParams({
+        origin: originFilter,
+        destination: destinationFilter,
+        serviceDate,
+      });
+      const response = await fetch(appPath(`/api/travel/journeys?${params.toString()}`), {
+        cache: 'no-store',
+      });
+      const data = (await response.json()) as Partial<ApiItemResponse<TravelJourneyPlanResult>> & {
+        message?: string;
+      };
+      if (!response.ok || !data.item) {
+        throw new Error(data.message ?? '行程方案查询失败。');
+      }
+      setJourneyPlan(data.item);
+      setJourneyStatusText(
+        data.item.journeys.length > 0
+          ? `找到 ${data.item.journeys.length} 个方案`
+          : '没有找到可衔接的班次方案。',
+      );
+    } catch (error) {
+      setJourneyPlan(null);
+      setJourneyStatusText(error instanceof Error ? error.message : '行程方案查询失败。');
+    } finally {
+      setJourneyBusy(false);
+    }
+  };
+  const createJourneyOrder = async (journey: TravelJourneyOption) => {
+    if (journey.ticketingStatus !== 'order_available') {
+      setJourneyStatusText('该方案存在暂不可售的行程段。');
+      return;
+    }
+    setJourneyOrderBusy(true);
+    setJourneyStatusText('正在锁定联合行程的全部座位');
+    try {
+      const response = await fetch(appPath('/api/travel/ticketing/journeys'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          journeyId: journey.journeyId,
+          originStationName: journey.originStationName,
+          destinationStationName: journey.destinationStationName,
+          tripInstanceIds: journey.legs.map((leg) => leg.tripInstanceId),
+          serviceDate,
+          passengerCount: 1,
+        }),
+      });
+      const data = (await response.json()) as Partial<ApiItemResponse<TicketJourneyDraftResult>> & {
+        message?: string;
+      };
+      if (
+        publishLoginRequiredForResponse(response, {
+          message: t('travelSchedule.order.loginRequired'),
+        })
+      ) {
+        return;
+      }
+      if (!response.ok || !data.item) {
+        throw new Error(data.message ?? '联合订票失败。');
+      }
+      setJourneyStatusText(`联合订票成功，已创建 ${data.item.orders.length} 段订单草稿。`);
+      await refreshTicketOrders();
+      notifyTicketOrderStateChanged();
+    } catch (error) {
+      setJourneyStatusText(error instanceof Error ? error.message : '联合订票失败。');
+    } finally {
+      setJourneyOrderBusy(false);
+    }
   };
 
   return (
@@ -278,32 +376,22 @@ export function TravelScheduleQueryPanel({
 
           <label>
             <span>{t('travelSchedule.filter.origin')}</span>
-            <select
-              value={originFilter}
+            <input
+              list="travel-schedule-station-options"
+              value={originFilter === 'all' ? '' : originFilter}
               onChange={(event) => setOriginFilter(event.currentTarget.value)}
-            >
-              <option value="all">{t('travelSchedule.filter.anyOrigin')}</option>
-              {result.stationOptions.map((stationName) => (
-                <option value={stationName} key={stationName}>
-                  {stationName}
-                </option>
-              ))}
-            </select>
+              placeholder={t('travelSchedule.filter.anyOrigin')}
+            />
           </label>
 
           <label>
             <span>{t('travelSchedule.filter.destination')}</span>
-            <select
-              value={destinationFilter}
+            <input
+              list="travel-schedule-station-options"
+              value={destinationFilter === 'all' ? '' : destinationFilter}
               onChange={(event) => setDestinationFilter(event.currentTarget.value)}
-            >
-              <option value="all">{t('travelSchedule.filter.anyDestination')}</option>
-              {result.stationOptions.map((stationName) => (
-                <option value={stationName} key={stationName}>
-                  {stationName}
-                </option>
-              ))}
-            </select>
+              placeholder={t('travelSchedule.filter.anyDestination')}
+            />
           </label>
 
           <label>
@@ -331,8 +419,48 @@ export function TravelScheduleQueryPanel({
               </button>
             ))}
           </div>
+          <datalist id="travel-schedule-station-options">
+            {result.stationOptions.map((stationName) => (
+              <option value={stationName} key={stationName} />
+            ))}
+          </datalist>
+          <div className="schedule-journey-actions">
+            <button
+              type="button"
+              onClick={() => {
+                const current = originFilter;
+                setOriginFilter(destinationFilter);
+                setDestinationFilter(current);
+              }}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                swap_vert
+              </span>
+              <span>交换起终点</span>
+            </button>
+            <button
+              className="secondary-action-button is-primary"
+              type="button"
+              disabled={journeyBusy}
+              onClick={() => void planJourneys()}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                route
+              </span>
+              <span>{journeyBusy ? '组合中…' : '查询行程方案'}</span>
+            </button>
+            {journeyStatusText ? <span className="muted">{journeyStatusText}</span> : null}
+          </div>
         </div>
       </div>
+
+      {journeyPlan ? (
+        <ScheduleJourneyPlanPanel
+          busy={journeyOrderBusy}
+          plan={journeyPlan}
+          onCreateOrder={(journey) => void createJourneyOrder(journey)}
+        />
+      ) : null}
 
       <ScheduleLocalHistoryPanel
         state={historyState}
@@ -361,18 +489,29 @@ export function TravelScheduleQueryPanel({
         onRefresh={() => void refreshTicketOrders(true)}
       />
 
-      {filteredTrips.length > 0 ? (
+      {routeGroups.length > 0 ? (
         <div className="schedule-trip-list" aria-label={t('travelSchedule.tripList.aria')}>
-          {filteredTrips.map((trip) => (
-            <ScheduleTripCard
-              trip={trip}
-              service={serviceByKind.get(trip.serviceKind)}
-              serviceDate={serviceDate}
-              key={trip.tripInstanceId}
-              onHistoryChange={syncScheduleHistory}
-              onTicketOrderChange={() => void refreshTicketOrders()}
-            />
-          ))}
+          {routeGroups.map((group) =>
+            group.trips.length > 1 ? (
+              <ScheduleTripRouteGroup
+                group={group}
+                key={group.groupId}
+                serviceByKind={serviceByKind}
+                serviceDate={serviceDate}
+                onHistoryChange={syncScheduleHistory}
+                onTicketOrderChange={() => void refreshTicketOrders()}
+              />
+            ) : (
+              <ScheduleTripCard
+                trip={group.trips[0]!}
+                service={serviceByKind.get(group.trips[0]!.serviceKind)}
+                serviceDate={serviceDate}
+                key={group.trips[0]!.tripInstanceId}
+                onHistoryChange={syncScheduleHistory}
+                onTicketOrderChange={() => void refreshTicketOrders()}
+              />
+            ),
+          )}
         </div>
       ) : (
         <div className="empty-state schedule-empty-state">
@@ -384,6 +523,202 @@ export function TravelScheduleQueryPanel({
       )}
     </section>
   );
+}
+
+interface ScheduleTripRouteGroupModel {
+  groupId: string;
+  operator: string;
+  originStationName: string;
+  destinationStationName: string;
+  trips: TravelTripInstance[];
+}
+
+function ScheduleTripRouteGroup({
+  group,
+  serviceByKind,
+  serviceDate,
+  onHistoryChange,
+  onTicketOrderChange,
+}: Readonly<{
+  group: ScheduleTripRouteGroupModel;
+  serviceByKind: Map<TicketableServiceKind, TravelScheduleServiceSummary>;
+  serviceDate: string;
+  onHistoryChange: () => void;
+  onTicketOrderChange: () => void;
+}>) {
+  const serviceLabels = Array.from(
+    new Set(
+      group.trips.map(
+        (trip) => serviceByKind.get(trip.serviceKind)?.label ?? trip.serviceLabel,
+      ),
+    ),
+  ).join(' / ');
+  return (
+    <section className="schedule-route-group" aria-label={`${group.operator}线路`}>
+      <header className="schedule-route-group-heading">
+        <div>
+          <strong>
+            {group.originStationName} → {group.destinationStationName}
+          </strong>
+          <span>
+            {group.operator} · {serviceLabels}
+          </span>
+        </div>
+        <span className="muted">{group.trips.length} 个班次</span>
+      </header>
+      <div className="schedule-route-group-trips">
+        {group.trips.map((trip) => (
+          <ScheduleTripCard
+            trip={trip}
+            service={serviceByKind.get(trip.serviceKind)}
+            serviceDate={serviceDate}
+            key={trip.tripInstanceId}
+            onHistoryChange={onHistoryChange}
+            onTicketOrderChange={onTicketOrderChange}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function groupScheduleTrips(trips: TravelTripInstance[]): ScheduleTripRouteGroupModel[] {
+  const groups = new Map<string, ScheduleTripRouteGroupModel>();
+  return trips.reduce<ScheduleTripRouteGroupModel[]>((result, trip) => {
+    const operator = trip.operator?.trim() ?? '';
+    const origin = trip.originStationName ?? trip.stationNames[0] ?? '';
+    const destination = trip.destinationStationName ?? trip.stationNames.at(-1) ?? '';
+    const normalizedKey = `${normalizeScheduleGroupValue(operator)}|${normalizeScheduleGroupValue(origin)}|${normalizeScheduleGroupValue(destination)}`;
+    const groupId = operator ? `route:${normalizedKey}` : `trip:${trip.tripInstanceId}`;
+    let group = groups.get(groupId);
+    if (!group) {
+      group = {
+        groupId,
+        operator,
+        originStationName: origin,
+        destinationStationName: destination,
+        trips: [],
+      };
+      groups.set(groupId, group);
+      result.push(group);
+    }
+    group.trips.push(trip);
+    return result;
+  }, []);
+}
+
+function normalizeScheduleGroupValue(value: string): string {
+  return value.trim().replace(/\s+/g, '').toLocaleLowerCase('zh-Hans-CN');
+}
+
+function ScheduleJourneyPlanPanel({
+  busy,
+  plan,
+  onCreateOrder,
+}: Readonly<{
+  busy: boolean;
+  plan: TravelJourneyPlanResult;
+  onCreateOrder: (journey: TravelJourneyOption) => void;
+}>) {
+  return (
+    <section className="schedule-journey-panel" aria-labelledby="schedule-journey-title">
+      <div className="section-heading">
+        <div>
+          <h3 id="schedule-journey-title">行程方案</h3>
+          <span className="muted">
+            {plan.originStationName} → {plan.destinationStationName} · {plan.serviceDate}
+          </span>
+        </div>
+        <span className="muted">{plan.journeys.length} 个方案</span>
+      </div>
+      <div className="schedule-journey-list">
+        {plan.journeys.map((journey, index) => (
+          <article className="schedule-journey-card" key={journey.journeyId}>
+            <header>
+              <div>
+                <strong>
+                  {journey.departureTime} - {journey.arrivalTime ?? '待定'}
+                </strong>
+                <span>
+                  {journey.transferCount === 0 ? '直达' : `${journey.transferCount} 次换乘`}
+                </span>
+              </div>
+              {journey.durationMinutes !== undefined ? (
+                <span>{formatJourneyDuration(journey.durationMinutes)}</span>
+              ) : null}
+            </header>
+            <ol className="schedule-journey-legs">
+              {journey.legs.map((leg, legIndex) => (
+                <Fragment key={`${leg.tripInstanceId}-${legIndex}`}>
+                  <li>
+                    <span className="schedule-journey-leg-index">{legIndex + 1}</span>
+                    <div>
+                      <strong>{leg.tripCode ?? leg.lineName}</strong>
+                      <span>
+                        {leg.serviceLabel} · {leg.lineName}
+                      </span>
+                      <small>
+                        {leg.departureTime} {leg.fromStationName} → {leg.arrivalTime ?? '待定'}{' '}
+                        {leg.toStationName}
+                      </small>
+                    </div>
+                  </li>
+                  {journey.transfers?.[legIndex] ? (
+                    <li className="schedule-journey-transfer">
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        transfer_within_a_station
+                      </span>
+                      <div>
+                        <strong>{journey.transfers[legIndex].modeLabel}</strong>
+                        <small>
+                          {journey.transfers[legIndex].fromStationName} →{' '}
+                          {journey.transfers[legIndex].toStationName} · 约{' '}
+                          {journey.transfers[legIndex].transferMinutes} 分钟（含{' '}
+                          {journey.transfers[legIndex].bufferMinutes} 分钟缓冲）
+                        </small>
+                      </div>
+                    </li>
+                  ) : null}
+                </Fragment>
+              ))}
+            </ol>
+            <footer>
+              <span className={`schedule-journey-ticketing is-${journey.ticketingStatus}`}>
+                {formatJourneyTicketingStatus(journey.ticketingStatus)}
+              </span>
+              {journey.legs.length > 1 ? (
+                <button
+                  className="secondary-action-button is-primary"
+                  type="button"
+                  disabled={busy || journey.ticketingStatus !== 'order_available'}
+                  onClick={() => onCreateOrder(journey)}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    confirmation_number
+                  </span>
+                  <span>{busy ? '锁定中…' : `联合订票 · ${journey.legs.length} 段`}</span>
+                </button>
+              ) : (
+                <span className="muted">方案 {index + 1}</span>
+              )}
+            </footer>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function formatJourneyDuration(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return hours > 0 ? `${hours} 小时 ${remainder} 分` : `${remainder} 分钟`;
+}
+
+function formatJourneyTicketingStatus(status: TravelJourneyOption['ticketingStatus']): string {
+  if (status === 'order_available') return '全程可订';
+  if (status === 'partially_available') return '部分行程不可售';
+  return '仅供查询';
 }
 
 function ScheduleServiceNoticePanel({
@@ -449,9 +784,7 @@ function ServiceFilterButton({
       style={createServiceToneStyle(service.color)}
       onClick={onClick}
     >
-      <span className="material-symbols-outlined" aria-hidden="true">
-        {service.icon}
-      </span>
+      <MaterialSymbol name={service.icon} aria-hidden="true" />
       <span>{service.label}</span>
       <strong>
         {service.status === 'active' ? service.tripCount : t('travelSchedule.service.unavailable')}
@@ -676,8 +1009,17 @@ function ScheduleTripCard({
       <div className="schedule-trip-main">
         <p>{formatTripEndpoints(trip)}</p>
         <div className="screen-station-flow" aria-label={`${trip.lineName} 停靠站`}>
-          {trip.stationNames.map((stationName) => (
-            <span key={stationName}>{stationName}</span>
+          {(
+            trip.stopTimes ??
+            trip.stationNames.map((stationName) => ({ stationName, isStop: true }))
+          ).map((stopTime) => (
+            <span
+              className={stopTime.isStop ? undefined : 'is-pass-through'}
+              title={stopTime.isStop ? undefined : '通过不停'}
+              key={stopTime.stationName}
+            >
+              {stopTime.stationName}
+            </span>
           ))}
         </div>
       </div>
@@ -882,7 +1224,7 @@ function filterTrips(
     .filter(
       (trip) =>
         !stationFilter ||
-        trip.stationNames.some(
+        getStoppingStationNames(trip).some(
           (stationName) => normalizeSearchValue(stationName) === stationFilter,
         ),
     )
@@ -954,7 +1296,7 @@ function filterByStationPair(
     return true;
   }
 
-  const stationNames = trip.stationNames.map(normalizeSearchValue);
+  const stationNames = getStoppingStationNames(trip).map(normalizeSearchValue);
   const originIndex = originStationName ? stationNames.indexOf(originStationName) : -1;
   const destinationIndex = destinationStationName
     ? stationNames.indexOf(destinationStationName)
@@ -969,6 +1311,12 @@ function filterByStationPair(
   }
 
   return !originStationName || !destinationStationName || originIndex <= destinationIndex;
+}
+
+function getStoppingStationNames(trip: TravelTripInstance): string[] {
+  return trip.stopTimes?.length
+    ? trip.stopTimes.filter((stopTime) => stopTime.isStop).map((stopTime) => stopTime.stationName)
+    : trip.stationNames;
 }
 
 function getServiceDateState(serviceDate: string | undefined): ServiceDateState {
@@ -1185,11 +1533,12 @@ function formatStopSummary(trip: TravelTripInstance, t: Translate): string {
     return trip.routeNote;
   }
 
-  if (trip.stationNames.length <= 2) {
+  const stoppingStationNames = getStoppingStationNames(trip);
+  if (stoppingStationNames.length <= 2) {
     return t('travelSchedule.trip.direct');
   }
 
-  const middleStations = trip.stationNames.slice(1, -1);
+  const middleStations = stoppingStationNames.slice(1, -1);
   return middleStations.length > 2
     ? t('travelSchedule.trip.viaMany', {
         stations: middleStations.slice(0, 2).join('、'),

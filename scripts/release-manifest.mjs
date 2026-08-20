@@ -13,6 +13,7 @@ const RELEASE_NOTES_REPO_PATH = 'apps/web/release-notes.json';
 const RELEASE_WINDOW_MS = 60 * 60 * 1000;
 const RELEASE_SESSION_GAP_MS = 12 * 60 * 60 * 1000;
 const RELEASEABLE_TYPES = new Set(['feat', 'fix', 'perf', 'style']);
+const RELEASE_BUMPS = new Set(['major', 'minor', 'patch']);
 const INTERNAL_SCOPES = new Set([
   'build',
   'ci',
@@ -212,6 +213,11 @@ export function calculateNextReleaseVersion(previousRelease, nextRelease, previo
   }
 
   const current = parseVersion(previousRelease.version);
+  if (nextRelease.bump) {
+    return formatVersion(applyReleaseBump(current, nextRelease.bump, nextRelease.changes));
+  }
+
+  // 没有 bump 字段的旧准备记录继续按旧规则校验，避免历史发布清单失效。
   const sameSession = isSameReleaseSession(previousRelease, nextRelease);
   const similarTheme = isSimilarTheme(
     { tokens: previousRelease.themes ?? [] },
@@ -353,6 +359,7 @@ function createPreparedReleases(preparedReleases, historicalReleases) {
 
     const release = {
       version: prepared.version,
+      ...(prepared.bump ? { bump: prepared.bump } : {}),
       releasedAt: prepared.releasedAt,
       changeCount: prepared.changes.length,
       themes: prepared.themes,
@@ -423,6 +430,7 @@ function normalizePreparedRelease(value, index) {
   const version = String(value.version ?? '').trim();
   const releasedAt = String(value.releasedAt ?? '').trim();
   const sourceFingerprint = String(value.sourceFingerprint ?? '').trim();
+  const bump = value.bump === undefined ? undefined : String(value.bump ?? '').trim();
   const themes = Array.isArray(value.themes)
     ? [...new Set(value.themes.map((theme) => String(theme).trim()).filter(Boolean))]
     : [];
@@ -441,11 +449,14 @@ function normalizePreparedRelease(value, index) {
   if (!/^[0-9a-f]{64}$/u.test(sourceFingerprint)) {
     throw new Error(`Prepared release ${version} has an invalid source fingerprint.`);
   }
+  if (bump !== undefined && !RELEASE_BUMPS.has(bump)) {
+    throw new Error(`Prepared release ${version} has an invalid bump value.`);
+  }
   if (themes.length === 0 || changes.length === 0) {
     throw new Error(`Prepared release ${version} requires at least one theme and one change.`);
   }
 
-  return { version, releasedAt, sourceFingerprint, themes, changes };
+  return { version, releasedAt, sourceFingerprint, themes, changes, ...(bump ? { bump } : {}) };
 }
 
 function normalizePreparedChange(value, releaseIndex, changeIndex) {
@@ -483,6 +494,25 @@ function bumpVersion(current, changes, similarTheme, sameSession, hasNewTheme, m
     hasNewTheme ||
     (changes.some((change) => change.category === 'feat') && !similarTheme && !sameSession);
   if (minorRequested && !minorCapReached) {
+    return { major: current.major, minor: current.minor + 1, patch: 0 };
+  }
+  return { major: current.major, minor: current.minor, patch: current.patch + 1 };
+}
+
+function applyReleaseBump(current, bump, changes) {
+  if (!RELEASE_BUMPS.has(bump)) {
+    throw new Error(`Invalid release bump: ${bump}`);
+  }
+  if (changes.some((change) => change.breaking) && bump !== 'major') {
+    throw new Error('Breaking changes require a major release bump.');
+  }
+  if (!changes.some((change) => change.breaking) && bump === 'major') {
+    throw new Error('A major release bump requires at least one breaking change.');
+  }
+  if (bump === 'major') {
+    return { major: current.major + 1, minor: 0, patch: 0 };
+  }
+  if (bump === 'minor') {
     return { major: current.major, minor: current.minor + 1, patch: 0 };
   }
   return { major: current.major, minor: current.minor, patch: current.patch + 1 };

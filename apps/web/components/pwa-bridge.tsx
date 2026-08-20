@@ -48,6 +48,7 @@ export function PwaBridge() {
     navigator.serviceWorker
       .register(appPath(`/sw.js?v=${encodeURIComponent(serviceWorkerVersion)}`), {
         scope: appPath('/'),
+        updateViaCache: 'none',
       })
       .then((registration) => {
         if (cancelled) {

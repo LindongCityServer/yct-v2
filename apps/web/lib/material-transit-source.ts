@@ -838,6 +838,14 @@ function isMaterialRouteDirectionIncluded(
   return !scope || scope === 'both' || scope === (direction === 'forward' ? 'down' : 'up');
 }
 
+function isMaterialStopDirectionIncluded(
+  stopDirections: { down: boolean; up: boolean } | undefined,
+  direction: MaterialTransitTravelDirection,
+): boolean {
+  if (!stopDirections) return true;
+  return direction === 'forward' ? stopDirections.down : stopDirections.up;
+}
+
 function appendRouteCoordinates(
   target: Array<[number, number]>,
   coordinates: Array<[number, number]>,
@@ -967,7 +975,11 @@ function createTransitStationLineCandidates(
     stationNames.length > 1 ? ['forward', 'reverse'] : ['forward'];
   return directions.flatMap((travelDirection) => {
     const stop = line.stationStops[stationStopIndex];
-    if (stop && !isMaterialRouteDirectionIncluded(stop.oneWay, travelDirection)) {
+    if (
+      stop &&
+      (!isMaterialRouteDirectionIncluded(stop.oneWay, travelDirection) ||
+        !isMaterialStopDirectionIncluded(stop.stopDirections, travelDirection))
+    ) {
       return [];
     }
     const orderedStationNames =

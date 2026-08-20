@@ -12,7 +12,12 @@ export const serviceEntryDraftSchema = z.object({
   title: z.string().trim().min(1).max(80),
   description: z.string().trim().max(240).optional(),
   categoryId: serviceEntryCategorySchema,
-  icon: z.string().trim().min(1).max(80),
+  icon: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .regex(/^[a-z0-9_]+$/),
   href: z.string().trim().min(1).max(1000),
   openMode: serviceEntryOpenModeSchema.default('new_tab'),
   sortOrder: z.number().int().min(0).max(10_000).default(500),
