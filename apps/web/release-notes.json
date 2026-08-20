@@ -3,6 +3,98 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.11.1",
+      "releasedAt": "2026-08-20T02:09:00.634Z",
+      "sourceFingerprint": "bcd75341e6e4cc33116bf7fba174919346e45964fc62b173922ee36b2150cd72",
+      "themes": ["transit", "admin", "map"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "支持按车站剖面图可视化编辑楼层与站内设施，并可在剖面图和楼层列表间切换"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "统一出口编辑模型，按地点和道路信息推断出口侧向与方位并生成出口介绍，默认放置到站厅或站台层"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "规范站内设施位置为四分之一车厢精度，并统一按钮添加与文本编辑使用的出口数据"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
+      "version": "2.11.0",
+      "releasedAt": "2026-08-19T15:53:31.124Z",
+      "sourceFingerprint": "605468d3069153fe747499197459f40c76ee2e282ba8df609ec23e24177d5b95",
+      "themes": ["travel", "ticketing", "transit", "admin", "offline", "web", "icons"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "支持按起终点组合多段班次行程并展示可换乘方案"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "支持多段联合订票，创建关联订单草稿并统一处理占座"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "新增班次运行图与停站时刻编辑，支持按道路区间用时排点和冲突检查"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "完善客运班次后台的批量审核、发布、归档与停靠站维护"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "统一通过不停站在班次筛选、详情和行程规划中的展示逻辑"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "完善 PWA 应用元数据、图标资源和 Service Worker 更新策略"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "补齐源码中多行 JSX 与动态组件使用的 Material Symbols 图标，避免线上显示图标名文本"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
+      "version": "2.10.0",
+      "releasedAt": "2026-08-17T11:14:48.100Z",
+      "sourceFingerprint": "3b636beed7c390e2271ddecddd51b0dd50295fcc256900acc8070c969635fbad",
+      "themes": ["icons", "admin", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "后台支持任意 Material Symbols 图标的受保护预览与管理员确认固化"
+        },
+        {
+          "category": "perf",
+          "breaking": false,
+          "summary": "按源码实际使用情况生成 Material Symbols 字体子集，减少静态字体体积"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "公开页面优先使用本地哈希 SVG，避免已确认图标依赖 Google Fonts 在线加载"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.9.2",
       "releasedAt": "2026-08-16T08:45:10.612Z",
       "sourceFingerprint": "262770c611adf072ecc204a76166cee9cac107b78e34c06d7994457ac1598c43",
