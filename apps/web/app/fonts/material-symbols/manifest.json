@@ -2,7 +2,7 @@
   "family": "Material Symbols Outlined",
   "axes": "opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
   "source": "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
-  "iconCount": 329,
+  "iconCount": 330,
   "icons": [
     "accessible",
     "accessible_forward",
@@ -203,6 +203,7 @@
     "open_with",
     "operations",
     "origin",
+    "outbox",
     "palette",
     "pan_tool",
     "park",
@@ -334,5 +335,5 @@
     "woman",
     "women"
   ],
-  "fontBytes": 232500
+  "fontBytes": 233236
 }

@@ -21,6 +21,12 @@ export interface TelegraphCell {
   code?: string;
   unsupported?: boolean;
   alphanumericRun?: string;
+  /** 仅在收报纸电码栏显示，不在对应的原文栏重复显示。 */
+  codeOnly?: boolean;
+  /** 在电码栏按字面量输出，不适用连续字母数字的括号规则。 */
+  literalCode?: boolean;
+  /** 电码格占用的列数；正文格默认为一列。 */
+  gridSpan?: number;
 }
 
 export interface TelegraphDraftResult {
@@ -63,6 +69,8 @@ export interface TelegraphReceiveDocument {
   protocolLine: string;
   codeText: string;
   codeTokens: TelegraphReceiveCodeToken[];
+  contentCells: TelegraphCell[];
+  destinationCells: TelegraphCell[];
   rows: TelegraphReceiveRow[];
   terminator: string;
 }
@@ -77,8 +85,9 @@ export function evaluateTelegraphDraft(input: TelegraphDraftInput): TelegraphDra
   const bodyCells = splitTelegraphCells(input.body);
   const destinationCells = splitTelegraphCells(destination);
   const allCells = [...destinationCells, ...recipientCells, ...bodyCells];
+  const encodedCells = [...recipientCells, ...bodyCells];
   const unsupportedCharacters = unique(
-    allCells.filter((cell) => cell.unsupported).map((cell) => cell.value),
+    encodedCells.filter((cell) => cell.unsupported).map((cell) => cell.value),
   );
   const billableGrids = allCells.length;
 
@@ -89,7 +98,7 @@ export function evaluateTelegraphDraft(input: TelegraphDraftInput): TelegraphDra
     bodyCells,
     billableGrids,
     amount: Number((billableGrids * TELEGRAPH_RATE).toFixed(2)),
-    codeText: formatCodeText([...destinationCells, ...recipientCells, ...bodyCells]),
+    codeText: formatCodeText(encodedCells),
     unsupportedCharacters,
   };
 }
@@ -158,13 +167,27 @@ export function buildTelegraphReceiveDocument(
   const date = new Date(generatedAt);
   const destination = (input.city || input.county || input.district || input.province).trim();
   const destinationPinyin = toUppercasePinyin(destination) || 'UNKNOWN';
+  const destinationLabel = destination ? `${destinationPinyin} ${destination}` : '';
+  const destinationCells = destination
+    ? [
+        {
+          value: destinationLabel,
+          codeOnly: true,
+          literalCode: true,
+          gridSpan: Math.min(8, Math.max(2, Math.ceil(destinationLabel.length / 3))),
+        },
+      ]
+    : [];
   const relayNumber = formatTelegraphRelayNumber(serialNumber);
-  const recipientRows = chunkCells(result.recipientCells, 8);
-  const bodyRows = chunkCells(result.bodyCells, 8);
+  const recipientRows = packCells([...result.recipientCells, ...destinationCells], 8);
+  const bodyRows = packCells(result.bodyCells, 8);
   const rows = [...recipientRows, [], ...bodyRows].map((cells) => ({
     cells,
     code: formatCodeText(cells),
-    text: cells.map((cell) => cell.value).join(''),
+    text: cells
+      .filter((cell) => !cell.codeOnly && !cell.alphanumericRun)
+      .map((cell) => cell.value)
+      .join(''),
     compressed: cells.length > 0 && cells.some((cell) => cell.alphanumericRun),
   }));
   const day = Number.isNaN(date.getTime()) ? 1 : date.getDate();
@@ -172,13 +195,9 @@ export function buildTelegraphReceiveDocument(
     ? '0000'
     : `${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
   const header = `ZCZC ${relayNumber}`;
-  const protocolLine = `P ${destinationPinyin} ${destination || 'UNKNOWN'} ${relayNumber} ${result.billableGrids} ${day} ${time}`;
-  const codeTokens = buildReceiveCodeTokens(
-    header,
-    protocolLine,
-    [...result.recipientCells, ...result.bodyCells],
-    'NNNN',
-  );
+  const protocolLine = `P DIANBAODALOU 电报大楼 ${relayNumber} ${result.billableGrids} ${day} ${time}`;
+  const contentCells = [...result.recipientCells, ...destinationCells, ...result.bodyCells];
+  const codeTokens = buildReceiveCodeTokens(header, protocolLine, contentCells, 'NNNN');
 
   return {
     relayNumber,
@@ -186,6 +205,8 @@ export function buildTelegraphReceiveDocument(
     protocolLine,
     codeText: codeTokens.map((token) => token.display).join(''),
     codeTokens,
+    contentCells,
+    destinationCells,
     rows,
     terminator: 'NNNN',
   };
@@ -245,11 +266,26 @@ function extractRelaySequence(serialNumber: string): string {
   return (digits.slice(-4) || '0001').padStart(4, '0');
 }
 
-function chunkCells(cells: TelegraphCell[], size: number): TelegraphCell[][] {
+function packCells(cells: TelegraphCell[], size: number): TelegraphCell[][] {
   const rows: TelegraphCell[][] = [];
-  for (let index = 0; index < cells.length; index += size) {
-    rows.push(cells.slice(index, index + size));
+  let row: TelegraphCell[] = [];
+  let used = 0;
+  for (const cell of cells) {
+    const span = Math.min(size, Math.max(1, cell.gridSpan ?? 1));
+    if (row.length && used + span > size) {
+      rows.push(row);
+      row = [];
+      used = 0;
+    }
+    row.push(cell);
+    used += span;
+    if (used === size) {
+      rows.push(row);
+      row = [];
+      used = 0;
+    }
   }
+  if (row.length) rows.push(row);
   return rows;
 }
 
@@ -292,7 +328,7 @@ function appendReceiveTextTokens(
       });
       continue;
     }
-    const code = hanziToCcc[character];
+    const code = line === 'protocol' ? undefined : hanziToCcc[character];
     if (code) {
       for (const [digitIndex, digit] of code.split('').entries()) {
         tokens.push({
@@ -330,9 +366,27 @@ function appendReceiveCellTokens(
       previousRun = undefined;
       return;
     }
-    if (cell.alphanumericRun) {
+    if (cell.literalCode) {
+      previousRun = undefined;
+      for (const character of cell.value) {
+        tokens.push({
+          display: character,
+          kind: 'literal',
+          line: 'content',
+          progressIndex: null,
+          cellIndex,
+          source: cell.value,
+        });
+      }
+    } else if (cell.alphanumericRun) {
       if (cell.alphanumericRun !== previousRun) {
-        tokens.push({ display: '(', kind: 'literal', line: 'content', progressIndex: null });
+        tokens.push({
+          display: '(',
+          kind: 'literal',
+          line: 'content',
+          progressIndex: null,
+          cellIndex,
+        });
       }
       for (const character of cell.value) {
         tokens.push({
@@ -346,7 +400,13 @@ function appendReceiveCellTokens(
       }
       const nextRun = cells[cellIndex + 1]?.alphanumericRun;
       if (nextRun !== cell.alphanumericRun) {
-        tokens.push({ display: ')', kind: 'literal', line: 'content', progressIndex: null });
+        tokens.push({
+          display: ')',
+          kind: 'literal',
+          line: 'content',
+          progressIndex: null,
+          cellIndex,
+        });
       }
       previousRun = cell.alphanumericRun;
     } else {
@@ -384,6 +444,7 @@ function appendReceiveCellTokens(
     if (
       cellIndex < cells.length - 1 &&
       !/^\s$/.test(nextCell?.value) &&
+      !(cell.literalCode && nextCell?.literalCode) &&
       (!cell.alphanumericRun || nextRun !== cell.alphanumericRun)
     ) {
       tokens.push({

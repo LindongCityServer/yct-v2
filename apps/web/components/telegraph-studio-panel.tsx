@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -65,6 +66,17 @@ const TELEGRAPH_ENVELOPE_SIDE_SWAP_MS = 600;
 const TELEGRAPH_FOLDING_MS = 1200;
 const TELEGRAPH_MANUAL_FLIP_MS = 800;
 const TELEGRAPH_MANUAL_FLIP_SWAP_MS = 360;
+const TELEGRAPH_AUTO_FILL_CHARACTER_MS = 84;
+const TELEGRAPH_WRITING_OVERLAP_MS = 150;
+const TELEGRAPH_WRITING_MAX_VOICES = 5;
+const TELEGRAPH_HISTORY_ENVELOPE_EXIT_MS = 620;
+const TELEGRAPH_HISTORY_ENVELOPE_ENTER_MS = 720;
+const telegraphPaperSoundPaths = {
+  page: '/audio/telegraph/paper-page-turn.mp3',
+  friction: '/audio/telegraph/paper-friction.mp3',
+  writing: '/audio/telegraph/paper-writing.mp3',
+} as const;
+type TelegraphPaperSound = keyof typeof telegraphPaperSoundPaths;
 type TelegraphAnimationState =
   | 'welcome'
   | 'editing'
@@ -172,7 +184,13 @@ export function TelegraphStudioPanel() {
   const [envelopeFlipping, setEnvelopeFlipping] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showActions, setShowActions] = useState(false);
+  const [historyEnvelopeTransition, setHistoryEnvelopeTransition] = useState<'out' | 'in' | null>(
+    null,
+  );
+  const [welcomeCodeComplete, setWelcomeCodeComplete] = useState(false);
+  const [welcomeCodeHasPlayed, setWelcomeCodeHasPlayed] = useState(false);
   const [paperEntering, setPaperEntering] = useState(false);
+  const [autoFillCharacterCount, setAutoFillCharacterCount] = useState(0);
   const [error, setError] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saveHistoryOnPrint, setSaveHistoryOnPrint] = useState(true);
@@ -199,18 +217,33 @@ export function TelegraphStudioPanel() {
   const soundStopsRef = useRef<Array<() => void>>([]);
   const paperSwitchTimerRef = useRef<number | null>(null);
   const paperEnterTimerRef = useRef<number | null>(null);
+  const historyTransitionTimerRef = useRef<number | null>(null);
+  const paperSoundTimerRef = useRef<Set<number>>(new Set());
   const firstInputRef = useRef<HTMLInputElement | null>(null);
+  const welcomeReplayRef = useRef<(() => void) | null>(null);
   const outputRef = useRef<HTMLElement | null>(null);
   const result = useMemo(() => evaluateTelegraphDraft(draft), [draft]);
   const date = useMemo(() => formatTelegraphDate(new Date(generatedAt)), [generatedAt]);
+  const automaticFillValues = useMemo(
+    () => [
+      String(result.billableGrids || ''),
+      result.amount ? result.amount.toFixed(2) : '',
+      formatTelegraphRelayNumber(serialNumber),
+      date.date,
+      date.time.replace(':', ''),
+      '电报大楼',
+    ],
+    [date.date, date.time, result.amount, result.billableGrids, serialNumber],
+  );
+  const automaticFillCharacterTotal = useMemo(
+    () => automaticFillValues.reduce((total, value) => total + Array.from(value).length, 0),
+    [automaticFillValues],
+  );
   const receiveDocument = useMemo(
     () => buildTelegraphReceiveDocument(draft, result, serialNumber, generatedAt),
     [draft, generatedAt, result, serialNumber],
   );
-  const receiveCells = useMemo(
-    () => receiveDocument.rows.flatMap((row) => row.cells),
-    [receiveDocument],
-  );
+  const receiveCells = useMemo(() => receiveDocument.contentCells, [receiveDocument]);
   const receiveRecipientRowCount = useMemo(() => {
     const firstBodyRowIndex = receiveDocument.rows.findIndex((row) => row.cells.length === 0);
     return firstBodyRowIndex >= 0 ? firstBodyRowIndex : receiveDocument.rows.length;
@@ -224,6 +257,14 @@ export function TelegraphStudioPanel() {
       })),
     [],
   );
+  const handleWelcomeCodeStart = useCallback(() => {
+    setWelcomeCodeComplete(false);
+  }, []);
+  const handleWelcomeCodeComplete = useCallback((replay: () => void) => {
+    welcomeReplayRef.current = replay;
+    setWelcomeCodeComplete(true);
+    setWelcomeCodeHasPlayed(true);
+  }, []);
   const receiveTimelineCount = useMemo(
     () =>
       receiveDocument.codeTokens.reduce(
@@ -253,14 +294,30 @@ export function TelegraphStudioPanel() {
   ].includes(animationState);
   const outputSkipVisible = busy && ['sending', 'receiving', 'folding'].includes(animationState);
 
+  const getAutomaticFillValue = (index: number): string => {
+    const value = automaticFillValues[index] ?? '';
+    if (animationState === 'editing') return '';
+    if (animationState !== 'filling') return value;
+    const completedBefore = automaticFillValues
+      .slice(0, index)
+      .reduce((total, current) => total + Array.from(current).length, 0);
+    const visibleCount = Math.max(
+      0,
+      Math.min(Array.from(value).length, autoFillCharacterCount - completedBefore),
+    );
+    return Array.from(value).slice(0, visibleCount).join('');
+  };
+
   const beginDraft = (force = false) => {
     if ((busy || paperEntering) && !force) return;
     window.scrollTo({ top: 0, behavior: 'auto' });
     if (paperEnterTimerRef.current !== null) {
       window.clearTimeout(paperEnterTimerRef.current);
     }
+    playPaperSound('page', 760);
     setAnimationState('editing');
     setPaperEntering(true);
+    setAutoFillCharacterCount(0);
     setActiveCell(null);
     setError('');
     window.setTimeout(() => firstInputRef.current?.focus(), 680);
@@ -272,12 +329,31 @@ export function TelegraphStudioPanel() {
   };
 
   useEffect(() => {
-    if (!outputVisible) return;
-    const timerId = window.setTimeout(() => {
-      outputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 80);
-    return () => window.clearTimeout(timerId);
-  }, [outputVisible]);
+    return () => {
+      stopAllSounds();
+      if (historyTransitionTimerRef.current !== null) {
+        window.clearTimeout(historyTransitionTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (animationState !== 'sending' && animationState !== 'receiving') return;
+    const frameId = window.requestAnimationFrame(() => {
+      const output = outputRef.current;
+      if (!output) return;
+      const topbarHeight = document.querySelector<HTMLElement>('.topbar')?.offsetHeight ?? 64;
+      const targetTop = Math.max(
+        0,
+        window.scrollY + output.getBoundingClientRect().top - topbarHeight - 12,
+      );
+      window.scrollTo({
+        top: targetTop,
+        behavior: 'auto',
+      });
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [animationState]);
 
   useEffect(() => {
     const updateScrollHints = () => {
@@ -318,7 +394,6 @@ export function TelegraphStudioPanel() {
         window.clearTimeout(paperEnterTimerRef.current);
         paperEnterTimerRef.current = null;
       }
-      playPaperNoise(480);
       const nextDraft =
         senderLocked && (clientIp || clientIpLocation)
           ? {
@@ -446,8 +521,7 @@ export function TelegraphStudioPanel() {
   };
 
   const loadHistory = (record: TelegraphHistoryRecord) => {
-    stopAllSounds();
-    runIdRef.current += 1;
+    const canAnimateEnvelope = animationState === 'sealed' || animationState === 'opened';
     const nextDraft =
       senderLocked && (clientIp || clientIpLocation)
         ? {
@@ -456,23 +530,63 @@ export function TelegraphStudioPanel() {
             senderAddress: clientIpLocation || clientIp,
           }
         : record.draft;
-    setDraft(nextDraft);
-    setRecipientGridValues(draftGridValues(nextDraft.recipientInfo, TELEGRAPH_MAX_RECIPIENT_GRIDS));
-    setBodyGridValues(draftGridValues(nextDraft.body, TELEGRAPH_MAX_BODY_GRIDS));
-    setActiveCell(null);
-    setSerialNumber(record.serialNumber);
-    setGeneratedAt(record.generatedAt);
+    const applyHistoryRecord = (transitioning: boolean) => {
+      setDraft(nextDraft);
+      setRecipientGridValues(
+        draftGridValues(nextDraft.recipientInfo, TELEGRAPH_MAX_RECIPIENT_GRIDS),
+      );
+      setBodyGridValues(draftGridValues(nextDraft.body, TELEGRAPH_MAX_BODY_GRIDS));
+      setActiveCell(null);
+      setSerialNumber(record.serialNumber);
+      setGeneratedAt(record.generatedAt);
+      setAnimationState('sealed');
+      setReceiveCodeProgress(Number.MAX_SAFE_INTEGER);
+      setReceiveTextProgress(Number.MAX_SAFE_INTEGER);
+      setEnvelopeSide('back');
+      setPaperView('receive');
+      setPaperSwitching(false);
+      setEnvelopeFlipping(false);
+      setPrintStage('envelope');
+      setShowActions(!transitioning);
+      setBusy(transitioning);
+      setHistoryOpen(false);
+    };
+    if (!canAnimateEnvelope || record.serialNumber === serialNumber) {
+      stopAllSounds();
+      runIdRef.current += 1;
+      setHistoryEnvelopeTransition(null);
+      applyHistoryRecord(false);
+      return;
+    }
+    stopAllSounds();
+    runIdRef.current += 1;
+    const transitionId = runIdRef.current;
+    if (historyTransitionTimerRef.current !== null) {
+      window.clearTimeout(historyTransitionTimerRef.current);
+    }
+    setHistoryOpen(false);
+    setBusy(true);
+    setShowActions(false);
     setAnimationState('sealed');
-    setReceiveCodeProgress(Number.MAX_SAFE_INTEGER);
-    setReceiveTextProgress(Number.MAX_SAFE_INTEGER);
     setEnvelopeSide('back');
     setPaperView('receive');
-    setPaperSwitching(false);
-    setEnvelopeFlipping(false);
-    setPrintStage('envelope');
-    setShowActions(true);
-    setBusy(false);
-    setHistoryOpen(false);
+    setHistoryEnvelopeTransition('out');
+    playPaperSound(
+      'friction',
+      TELEGRAPH_HISTORY_ENVELOPE_EXIT_MS + TELEGRAPH_HISTORY_ENVELOPE_ENTER_MS,
+    );
+    historyTransitionTimerRef.current = window.setTimeout(() => {
+      if (runIdRef.current !== transitionId) return;
+      applyHistoryRecord(true);
+      setHistoryEnvelopeTransition('in');
+      historyTransitionTimerRef.current = window.setTimeout(() => {
+        if (runIdRef.current !== transitionId) return;
+        historyTransitionTimerRef.current = null;
+        setHistoryEnvelopeTransition(null);
+        setBusy(false);
+        setShowActions(true);
+      }, TELEGRAPH_HISTORY_ENVELOPE_ENTER_MS);
+    }, TELEGRAPH_HISTORY_ENVELOPE_EXIT_MS);
   };
   const fail = (message: string): boolean => {
     setError(message);
@@ -551,7 +665,7 @@ export function TelegraphStudioPanel() {
       serialNumber: nextSerial,
       generatedAt: nextGeneratedAt,
     });
-    playPaperNoise(160);
+    setAutoFillCharacterCount(0);
     if (saveHistoryOnPrint) {
       await saveTelegraphHistory({
         id: nextSerial,
@@ -563,24 +677,34 @@ export function TelegraphStudioPanel() {
       if (!isCurrent()) return;
       setHistory(await listTelegraphHistory());
     }
+    if (automaticFillCharacterTotal > 0) {
+      playPaperSound(
+        'writing',
+        automaticFillCharacterTotal * TELEGRAPH_AUTO_FILL_CHARACTER_MS + 180,
+      );
+      for (let index = 1; index <= automaticFillCharacterTotal; index += 1) {
+        if (!(await pause(TELEGRAPH_AUTO_FILL_CHARACTER_MS))) return;
+        setAutoFillCharacterCount(index);
+      }
+    }
     for (const [stage, duration] of [
-      ['header', 360],
-      ['recipient', 500],
-      ['code', 540],
-      ['message', 500],
-      ['footer', 360],
-      ['stamp', 540],
+      ['recipient', 180],
+      ['code', 180],
+      ['message', 180],
+      ['footer', 150],
+      ['stamp', 220],
     ] as const) {
       publishStage(stage, nextSerial);
-      playPaperNoise(stage === 'stamp' ? 220 : 100);
       if (!(await pause(duration))) return;
     }
     if (!(await pause(1000))) return;
     setAnimationState('sending');
+    playPaperSound('page', TELEGRAPH_SEND_FLIGHT_MS);
     if (!(await pause(TELEGRAPH_SEND_FLIGHT_MS))) return;
     const receiveAudio = await createMorseWav(nextReceiveDocument.codeTokens);
     if (!isCurrent()) return;
     setAnimationState('receiving');
+    playPaperSound('page', 680);
     publishStage('code', nextSerial);
     const playback = playGeneratedMorseAudio(
       receiveAudio,
@@ -607,7 +731,7 @@ export function TelegraphStudioPanel() {
     if (!(await pause(300))) return;
     setAnimationState('folding');
     setEnvelopeSide('back');
-    playPaperNoise(1000);
+    playPaperSound('page', TELEGRAPH_FOLDING_MS);
     if (!(await pause(TELEGRAPH_FOLDING_MS))) return;
     setAnimationState('sealed');
     publishStage('envelope', nextSerial);
@@ -641,7 +765,10 @@ export function TelegraphStudioPanel() {
     setShowActions(false);
     setBusy(true);
     setAnimationState('opening');
-    playPaperNoise(800);
+    stopAllSounds();
+    const soundPhaseMs = Math.floor(TELEGRAPH_ENVELOPE_TRANSITION_MS / 2);
+    playPaperSound('friction', soundPhaseMs);
+    schedulePaperSound('page', soundPhaseMs, soundPhaseMs + 80, transitionId);
     window.setTimeout(() => {
       if (runIdRef.current !== transitionId) return;
       setEnvelopeSide('front');
@@ -663,7 +790,10 @@ export function TelegraphStudioPanel() {
     setPaperSwitching(false);
     setEnvelopeFlipping(false);
     setAnimationState('packing');
-    playPaperNoise(800);
+    stopAllSounds();
+    const soundPhaseMs = Math.floor(TELEGRAPH_ENVELOPE_TRANSITION_MS / 2);
+    playPaperSound('page', soundPhaseMs);
+    schedulePaperSound('friction', soundPhaseMs, soundPhaseMs + 80, transitionId);
     window.setTimeout(() => {
       if (runIdRef.current !== transitionId) return;
       setEnvelopeSide('back');
@@ -683,6 +813,7 @@ export function TelegraphStudioPanel() {
     }
     setPaperView(view);
     setPaperSwitching(true);
+    playPaperSound('page', 420);
     paperSwitchTimerRef.current = window.setTimeout(() => {
       paperSwitchTimerRef.current = null;
       setPaperSwitching(false);
@@ -696,7 +827,7 @@ export function TelegraphStudioPanel() {
     const nextSide = envelopeSide === 'back' ? 'front' : 'back';
     setEnvelopeFlipping(true);
     setBusy(true);
-    playPaperNoise(500);
+    playPaperSound('page', TELEGRAPH_MANUAL_FLIP_MS);
     window.setTimeout(() => {
       if (runIdRef.current !== transitionId) return;
       setEnvelopeSide(nextSide);
@@ -829,7 +960,6 @@ export function TelegraphStudioPanel() {
     if (!paper) return false;
     return paper.getBoundingClientRect().bottom <= window.innerHeight + 16;
   };
-  const compactTime = animationState === 'editing' ? '' : date.time.replace(':', '');
   const paperClassName = [
     'telegraph-send-stage',
     paperEntering ? 'is-entering' : '',
@@ -859,8 +989,13 @@ export function TelegraphStudioPanel() {
             onPointerUp={handlePointerUp}
           >
             <div className="telegraph-welcome-copy">
-              <TelegraphWelcomeCode groups={welcomeCodeGroups} />
-              <h1 id="telegraph-welcome-title">在“慢电报”还未消失之前，拍发一封电报</h1>
+              <TelegraphWelcomeCode
+                groups={welcomeCodeGroups}
+                autoPlay={!welcomeCodeHasPlayed}
+                onStart={handleWelcomeCodeStart}
+                onComplete={handleWelcomeCodeComplete}
+              />
+              <h1 id="telegraph-welcome-title">趁“慢电报”还未消失，将记忆拍给自己</h1>
               <p>
                 一条视频，让人们发现了电报这个尘封已久的通讯业务。
                 <br />
@@ -868,16 +1003,30 @@ export function TelegraphStudioPanel() {
                 <br />
                 那么现在，就在这里亲手写下你的讯息，让它沿着尘封的路线，延续你的思绪和情感……
               </p>
-              <button
-                className="secondary-action-button is-primary"
-                type="button"
-                onClick={() => beginDraft()}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  edit_note
-                </span>
-                开始填写
-              </button>
+              <div className="telegraph-welcome-actions">
+                <button
+                  className="secondary-action-button is-primary"
+                  type="button"
+                  onClick={() => beginDraft()}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    edit_note
+                  </span>
+                  开始填写
+                </button>
+                {welcomeCodeComplete ? (
+                  <button
+                    className="secondary-action-button telegraph-welcome-replay"
+                    type="button"
+                    onClick={() => welcomeReplayRef.current?.()}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      replay
+                    </span>
+                    重播动画
+                  </button>
+                ) : null}
+              </div>
             </div>
             <div className="telegraph-building-backdrop" aria-hidden="true" />
           </section>
@@ -896,48 +1045,20 @@ export function TelegraphStudioPanel() {
         >
           <div className="telegraph-paper telegraph-send-paper">
             <img src={appPath('/telegraph/send-paper-template.png')} alt="电报发报纸模板" />
-            <div
-              className={`telegraph-paper-value telegraph-stat-count ${animationState === 'filling' ? 'telegraph-auto-field' : ''}`}
-            >
-              {animationState === 'editing' ? (
-                ''
-              ) : (
-                <AutoFieldText value={String(result.billableGrids || '')} />
-              )}
+            <div className="telegraph-paper-value telegraph-stat-count">
+              {getAutomaticFillValue(0)}
             </div>
-            <div
-              className={`telegraph-paper-value telegraph-stat-fare ${animationState === 'filling' ? 'telegraph-auto-field' : ''}`}
-            >
-              {animationState === 'editing' ? (
-                ''
-              ) : (
-                <AutoFieldText value={result.amount ? result.amount.toFixed(2) : ''} />
-              )}
+            <div className="telegraph-paper-value telegraph-stat-fare">
+              {getAutomaticFillValue(1)}
             </div>
-            <div
-              className={`telegraph-paper-value telegraph-flow ${animationState === 'filling' ? 'telegraph-auto-field' : ''}`}
-            >
-              {animationState === 'editing' ? (
-                ''
-              ) : (
-                <AutoFieldText value={formatTelegraphRelayNumber(serialNumber)} />
-              )}
+            <div className="telegraph-paper-value telegraph-flow">{getAutomaticFillValue(2)}</div>
+            <div className="telegraph-paper-value telegraph-out-date">
+              {getAutomaticFillValue(3)}
             </div>
-            <div
-              className={`telegraph-paper-value telegraph-out-date ${animationState === 'filling' ? 'telegraph-auto-field' : ''}`}
-            >
-              {animationState === 'editing' ? '' : <AutoFieldText value={date.date} />}
+            <div className="telegraph-paper-value telegraph-out-time">
+              {getAutomaticFillValue(4)}
             </div>
-            <div
-              className={`telegraph-paper-value telegraph-out-time ${animationState === 'filling' ? 'telegraph-auto-field' : ''}`}
-            >
-              {compactTime ? <AutoFieldText value={compactTime} /> : null}
-            </div>
-            <div
-              className={`telegraph-paper-value telegraph-office ${animationState === 'filling' ? 'telegraph-auto-field' : ''}`}
-            >
-              {animationState === 'editing' ? '' : <AutoFieldText value="电报大楼" />}
-            </div>
+            <div className="telegraph-paper-value telegraph-office">{getAutomaticFillValue(5)}</div>
             <div className="telegraph-paper-value telegraph-destination-province">
               {draft.province}
             </div>
@@ -1025,22 +1146,12 @@ export function TelegraphStudioPanel() {
               disabled={senderLocked}
             />
             <div
-              className={`telegraph-paper-value telegraph-sender-name ${senderLocked ? 'is-locked' : ''} ${animationState === 'filling' ? 'telegraph-auto-field' : ''}`}
+              className={`telegraph-paper-value telegraph-sender-name ${senderLocked ? 'is-locked' : ''}`}
             >
-              {animationState === 'filling' ? (
-                <AutoFieldText value={senderDisplayName} />
-              ) : (
-                senderDisplayName
-              )}
+              {senderDisplayName}
             </div>
-            <div
-              className={`telegraph-paper-value telegraph-sender-address ${animationState === 'filling' ? 'telegraph-auto-field' : ''}`}
-            >
-              {animationState === 'filling' ? (
-                <AutoFieldText value={senderDisplayAddress} />
-              ) : (
-                senderDisplayAddress
-              )}
+            <div className="telegraph-paper-value telegraph-sender-address">
+              {senderDisplayAddress}
             </div>
             {senderLocked ? (
               <span className="telegraph-sender-lock">登录后可修改发报人信息</span>
@@ -1106,7 +1217,7 @@ export function TelegraphStudioPanel() {
           aria-live="polite"
         >
           <div
-            className={`telegraph-output-grid telegraph-output-scene is-${animationState} is-view-${paperView} ${paperSwitching ? 'is-paper-switching' : ''} ${envelopeFlipping ? 'is-envelope-flipping' : ''}`}
+            className={`telegraph-output-grid telegraph-output-scene is-${animationState} is-view-${paperView} ${paperSwitching ? 'is-paper-switching' : ''} ${envelopeFlipping ? 'is-envelope-flipping' : ''} ${historyEnvelopeTransition ? `is-history-envelope-${historyEnvelopeTransition}` : ''}`}
           >
             <div
               className={`telegraph-receive-paper-shell ${animationState === 'folding' || animationState === 'sealed' ? 'is-folded' : ''}`}
@@ -1170,6 +1281,7 @@ export function TelegraphStudioPanel() {
                             cellIndex += 1;
                             const codeValue = getReceiveCellCodeValue(
                               receiveDocument.codeTokens,
+                              receiveCells,
                               currentIndex,
                               receiveCodeProgress,
                             );
@@ -1183,6 +1295,7 @@ export function TelegraphStudioPanel() {
                               <span
                                 className="telegraph-receive-cell"
                                 key={`${currentIndex}-${cell.value}`}
+                                style={{ gridColumn: `span ${cell.gridSpan ?? 1}` }}
                               >
                                 <code
                                   className={`telegraph-receive-cell-code telegraph-print-segment ${codeValue ? 'is-visible' : ''}`}
@@ -1317,7 +1430,7 @@ export function TelegraphStudioPanel() {
                   disabled={busy}
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">
-                    download
+                    outbox
                   </span>
                   发报纸
                 </button>
@@ -1328,7 +1441,7 @@ export function TelegraphStudioPanel() {
                   disabled={busy}
                 >
                   <span className="material-symbols-outlined" aria-hidden="true">
-                    download
+                    inbox
                   </span>
                   收报纸
                 </button>
@@ -1505,14 +1618,29 @@ export function TelegraphStudioPanel() {
     audioStopRef.current?.();
     audioStopRef.current = null;
     for (const stop of soundStopsRef.current.splice(0)) stop();
+    for (const timerId of paperSoundTimerRef.current) window.clearTimeout(timerId);
+    paperSoundTimerRef.current.clear();
   }
-  function playPaperNoise(durationMs: number) {
-    const stop = createPaperNoise(durationMs);
+  function playPaperSound(sound: TelegraphPaperSound, durationMs: number) {
+    const stop = createTelegraphPaperSound(sound, durationMs);
     if (!stop) return;
     soundStopsRef.current.push(stop);
     window.setTimeout(() => {
       soundStopsRef.current = soundStopsRef.current.filter((item) => item !== stop);
     }, durationMs + 80);
+  }
+  function schedulePaperSound(
+    sound: TelegraphPaperSound,
+    delayMs: number,
+    durationMs: number,
+    runId?: number,
+  ) {
+    const timerId = window.setTimeout(() => {
+      paperSoundTimerRef.current.delete(timerId);
+      if (runId !== undefined && runIdRef.current !== runId) return;
+      playPaperSound(sound, durationMs);
+    }, delayMs);
+    paperSoundTimerRef.current.add(timerId);
   }
 }
 
@@ -1546,66 +1674,106 @@ function PaperInput({
   );
 }
 
-function AutoFieldText({ value }: Readonly<{ value: string }>) {
-  return (
-    <>
-      {Array.from(value).map((character, index) => (
-        <span
-          className="telegraph-auto-character"
-          key={`${character}-${index}`}
-          style={{ animationDelay: `${index * 42}ms` }}
-        >
-          {character === ' ' ? '\u00a0' : character}
-        </span>
-      ))}
-    </>
-  );
-}
-
 function TelegraphWelcomeCode({
   groups,
-}: Readonly<{ groups: Array<{ character: string; code: string }> }>) {
-  const [progress, setProgress] = useState(0);
-  const totalSteps = groups.length * 5;
+  autoPlay,
+  onStart,
+  onComplete,
+}: Readonly<{
+  groups: Array<{ character: string; code: string }>;
+  autoPlay: boolean;
+  onStart: () => void;
+  onComplete: (replay: () => void) => void;
+}>) {
+  const totalSteps = groups.length * 4;
+  const [progress, setProgress] = useState(autoPlay ? 0 : totalSteps);
+  const playbackRef = useRef<{ stop: () => void } | null>(null);
+  const runIdRef = useRef(0);
+  const startPlayback = useCallback(() => {
+    const runId = runIdRef.current + 1;
+    runIdRef.current = runId;
+    playbackRef.current?.stop();
+    playbackRef.current = null;
+    setProgress(0);
+    onStart();
+    const tokens = groups.flatMap((group, index) => [
+      ...Array.from(group.code).map((digit) => ({
+        display: digit,
+        kind: 'digit' as const,
+        line: 'content' as const,
+        progressIndex: null,
+      })),
+      ...(index < groups.length - 1
+        ? [
+            {
+              display: ' ',
+              kind: 'space' as const,
+              line: 'content' as const,
+              progressIndex: null,
+              spaceKind: 'character' as const,
+            },
+          ]
+        : []),
+    ]);
+    void createMorseWav(tokens).then((audioBlob) => {
+      if (runIdRef.current !== runId) return;
+      const playback = playGeneratedMorseAudio(
+        audioBlob,
+        tokens.map((token) => token.display).join(''),
+        totalSteps,
+        (nextProgress) => {
+          if (runIdRef.current === runId) setProgress(nextProgress);
+        },
+      );
+      playbackRef.current = playback;
+      void playback.promise.then(() => {
+        if (runIdRef.current !== runId) return;
+        playbackRef.current = null;
+        setProgress(totalSteps);
+        onComplete(startPlayback);
+      });
+    });
+  }, [groups, onComplete, onStart, totalSteps]);
 
   useEffect(() => {
-    let step = 0;
-    let timerId: number | null = null;
-    const tick = () => {
-      step += 1;
-      if (step > totalSteps + 4) step = 0;
-      setProgress(step);
-      timerId = window.setTimeout(tick, step >= totalSteps ? 1100 : 220);
-    };
-    timerId = window.setTimeout(tick, 220);
+    if (autoPlay) {
+      startPlayback();
+    } else {
+      setProgress(totalSteps);
+      onComplete(startPlayback);
+    }
     return () => {
-      if (timerId !== null) window.clearTimeout(timerId);
+      runIdRef.current += 1;
+      playbackRef.current?.stop();
+      playbackRef.current = null;
     };
-  }, [totalSteps]);
+  }, [autoPlay, onComplete, startPlayback, totalSteps]);
 
   return (
-    <div className="telegraph-welcome-code" aria-hidden="true">
-      {groups.map((group, index) => {
-        const groupProgress = progress - index * 5;
-        const visibleDigits = Math.max(0, Math.min(4, groupProgress));
-        const guess =
-          visibleDigits > 0 && visibleDigits < 4
-            ? inferTelegraphCharacter(group.code, visibleDigits)
-            : '';
-        const textValue = visibleDigits >= 4 ? group.character : guess ? `${guess}…` : '';
-        return (
-          <span className="telegraph-welcome-code-group" key={`${group.character}-${group.code}`}>
-            <code className={`telegraph-print-segment ${visibleDigits ? 'is-visible' : ''}`}>
-              {visibleDigits ? group.code.slice(0, visibleDigits) : '\u00a0'}
-            </code>
-            <span
-              className={`telegraph-welcome-code-text telegraph-print-segment ${textValue ? 'is-visible' : ''}`}
-            >
-              {textValue || '\u00a0'}
+    <div className="telegraph-welcome-code-wrap">
+      <div className="telegraph-welcome-code" aria-hidden="true">
+        {groups.map((group, index) => {
+          const groupProgress = progress - index * 4;
+          const visibleDigits = Math.max(0, Math.min(4, groupProgress));
+          const guess =
+            visibleDigits > 0 && visibleDigits < 4
+              ? inferTelegraphCharacter(group.code, visibleDigits)
+              : '';
+          const textValue = visibleDigits >= 4 ? group.character : guess ? `${guess}…` : '';
+          return (
+            <span className="telegraph-welcome-code-group" key={`${group.character}-${group.code}`}>
+              <code className={`telegraph-print-segment ${visibleDigits ? 'is-visible' : ''}`}>
+                {visibleDigits ? group.code.slice(0, visibleDigits) : '\u00a0'}
+              </code>
+              <span
+                className={`telegraph-welcome-code-text telegraph-print-segment ${textValue ? 'is-visible' : ''}`}
+              >
+                {textValue || '\u00a0'}
+              </span>
             </span>
-          </span>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1819,15 +1987,7 @@ function GridTextPreview({
         const cell = cells[index];
         const rowIndex = Math.floor(index / 10);
         const columnIndex = index % 10;
-        const previousIsRun =
-          Boolean(cell?.alphanumericRun) &&
-          cells[index - 1]?.alphanumericRun === cell?.alphanumericRun;
-        const nextIsRun =
-          Boolean(cell?.alphanumericRun) &&
-          cells[index + 1]?.alphanumericRun === cell?.alphanumericRun;
-        const value = cell?.alphanumericRun
-          ? `${previousIsRun ? '' : '('}${cell.value}${nextIsRun ? '' : ')'}`
-          : (cell?.value ?? '');
+        const value = cell?.value ?? '';
         return (
           <span key={index} style={{ gridRow: rowIndex * 2 + 1, gridColumn: columnIndex + 1 }}>
             {value}
@@ -1951,17 +2111,14 @@ function getCellTokens(
 
 function getReceiveCellCodeValue(
   tokens: TelegraphReceiveCodeToken[],
+  cells: TelegraphCell[],
   cellIndex: number,
   progress: number,
 ): string {
+  const cell = cells[cellIndex];
   const cellTokens = getCellTokens(tokens, cellIndex);
-  const digitTokens = cellTokens.filter((token) => token.kind === 'digit');
-  if (!digitTokens.length) return '';
-  const visibleDigits = digitTokens.filter(
-    (token) => token.progressIndex !== null && token.progressIndex < progress,
-  ).length;
-  return digitTokens
-    .slice(0, visibleDigits)
+  return cellTokens
+    .filter((token) => token.progressIndex !== null && token.progressIndex < progress)
     .map((token) => token.display)
     .join('');
 }
@@ -1979,7 +2136,7 @@ function getReceiveCellTextValue(
   const completed = cellTokens.every(
     (token) => token.progressIndex !== null && token.progressIndex < progress,
   );
-  if (cell.alphanumericRun) return completed ? formatReceiveCellValue(cells, cellIndex) : '';
+  if (cell.codeOnly || cell.alphanumericRun) return '';
   const code = (cell.code ?? '').replace(/\D/g, '');
   if (!code) return completed ? cell.value : '';
   const visibleDigits = cellTokens.filter(
@@ -1991,14 +2148,6 @@ function getReceiveCellTextValue(
   return guess ? `${guess}…` : '';
 }
 
-function formatReceiveCellValue(cells: TelegraphCell[], index: number): string {
-  const cell = cells[index];
-  if (!cell) return '';
-  if (!cell.alphanumericRun) return cell.value;
-  const previousIsRun = cells[index - 1]?.alphanumericRun === cell.alphanumericRun;
-  const nextIsRun = cells[index + 1]?.alphanumericRun === cell.alphanumericRun;
-  return `${previousIsRun ? '' : '('}${cell.value}${nextIsRun ? '' : ')'}`;
-}
 function triggerDownload(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -2083,37 +2232,51 @@ function playGeneratedMorseAudio(
   });
   return { promise, stop };
 }
-function createPaperNoise(durationMs: number): (() => void) | undefined {
+function createTelegraphPaperSound(
+  sound: TelegraphPaperSound,
+  durationMs: number,
+): (() => void) | undefined {
   if (typeof window === 'undefined') return undefined;
-  const AudioContextConstructor =
-    window.AudioContext ??
-    (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AudioContextConstructor) return undefined;
-  const context = new AudioContextConstructor();
-  const sampleRate = context.sampleRate;
-  const buffer = context.createBuffer(
-    1,
-    Math.max(1, Math.floor((sampleRate * durationMs) / 1000)),
-    sampleRate,
-  );
-  const data = buffer.getChannelData(0);
-  for (let index = 0; index < data.length; index += 1) data[index] = (Math.random() * 2 - 1) * 0.08;
-  const source = context.createBufferSource();
-  const gain = context.createGain();
-  gain.gain.value = 0.16;
-  source.buffer = buffer;
-  source.connect(gain).connect(context.destination);
-  source.start();
-  source.stop(context.currentTime + durationMs / 1000);
-  const stop = () => {
-    try {
-      source.stop();
-    } catch {
-      /* 音源已经停止时无需处理。 */
+  let stopped = false;
+  let timerId: number | null = null;
+  let intervalId: number | null = null;
+  const activeAudios = new Set<HTMLAudioElement>();
+  const playClip = () => {
+    if (stopped || (sound === 'writing' && activeAudios.size >= TELEGRAPH_WRITING_MAX_VOICES)) {
+      return;
     }
-    void context.close().catch(() => undefined);
+    const audio = new window.Audio(appPath(telegraphPaperSoundPaths[sound]));
+    audio.preload = 'auto';
+    audio.volume = sound === 'writing' ? 0.1 : sound === 'friction' ? 0.2 : 0.3;
+    activeAudios.add(audio);
+    const cleanup = () => {
+      activeAudios.delete(audio);
+      audio.removeEventListener('ended', cleanup);
+    };
+    audio.addEventListener('ended', cleanup);
+    void audio
+      .play()
+      .then(() => {
+        if (stopped) cleanup();
+      })
+      .catch(cleanup);
   };
-  window.setTimeout(stop, durationMs + 60);
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    if (timerId !== null) window.clearTimeout(timerId);
+    if (intervalId !== null) window.clearInterval(intervalId);
+    for (const audio of activeAudios) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+    activeAudios.clear();
+  };
+  playClip();
+  if (sound === 'writing') {
+    intervalId = window.setInterval(playClip, TELEGRAPH_WRITING_OVERLAP_MS);
+  }
+  timerId = window.setTimeout(stop, durationMs);
   return stop;
 }
 async function createMorseWav(tokens: TelegraphReceiveCodeToken[]): Promise<Blob> {

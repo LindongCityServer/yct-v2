@@ -83,12 +83,13 @@ function renderReceivePaper(input: TelegraphRenderInput): string {
     input.serialNumber,
     input.generatedAt,
   );
-  const allCells = document.rows.flatMap((row) => row.cells);
+  const allCells = document.contentCells;
   let cellOffset = 0;
   const codeRows = document.rows
     .map((row, index) => {
+      const y = 134 + index * 42;
       const rendered = row.cells.length
-        ? renderReceiveCells(row.cells, 42, 134 + index * 42, 63.875, allCells, cellOffset)
+        ? renderReceiveCells(row.cells, 42, y, 63.875, allCells, cellOffset)
         : '';
       cellOffset += row.cells.length;
       return rendered;
@@ -99,15 +100,7 @@ function renderReceivePaper(input: TelegraphRenderInput): string {
   const protocolCode = formatReceiveLineCode(document, 'protocol');
   const terminatorCode = formatReceiveLineCode(document, 'terminator');
   const content = [
-    text(
-      42,
-      58,
-      headerCode,
-      14,
-      '#1b1b1b',
-      'start',
-      "'Unifont', 'HarmonyOS Sans SC', sans-serif",
-    ),
+    text(42, 58, headerCode, 14, '#1b1b1b', 'start', "'Unifont', 'HarmonyOS Sans SC', sans-serif"),
     text(
       42,
       90,
@@ -149,9 +142,11 @@ function renderReceiveCells(
   allCells: TelegraphCell[],
   offset: number,
 ): string {
+  let columnOffset = 0;
   return cells
     .map((cell, index) => {
-      const cellX = x + index * cellWidth + 3;
+      const cellX = x + columnOffset * cellWidth + 3;
+      columnOffset += cell.gridSpan ?? 1;
       const globalIndex = offset + index;
       const code = formatReceiveCellCode(allCells, globalIndex);
       const value = formatReceiveCellValue(allCells, globalIndex);
@@ -163,17 +158,18 @@ function renderReceiveCells(
 function formatReceiveCellCode(cells: TelegraphCell[], index: number): string {
   const cell = cells[index];
   if (!cell) return '';
+  if (cell.literalCode) return cell.value;
   if (!cell.alphanumericRun) return cell.code ?? '';
-  return '';
+  const previousIsRun = cells[index - 1]?.alphanumericRun === cell.alphanumericRun;
+  const nextIsRun = cells[index + 1]?.alphanumericRun === cell.alphanumericRun;
+  return `${previousIsRun ? '' : '('}${cell.value}${nextIsRun ? '' : ')'}`;
 }
 
 function formatReceiveCellValue(cells: TelegraphCell[], index: number): string {
   const cell = cells[index];
   if (!cell) return '';
-  if (!cell.alphanumericRun) return cell.value;
-  const previousIsRun = cells[index - 1]?.alphanumericRun === cell.alphanumericRun;
-  const nextIsRun = cells[index + 1]?.alphanumericRun === cell.alphanumericRun;
-  return `${previousIsRun ? '' : '('}${cell.value}${nextIsRun ? '' : ')'}`;
+  if (cell.codeOnly || cell.alphanumericRun) return '';
+  return cell.value;
 }
 
 function resolveTelegraphWatermarkOpacity(svg: string): number {
@@ -229,11 +225,11 @@ function renderCellRows(
       )}${text(
         x + column * cellWidth + cellWidth / 2,
         codeY,
-        cell.code?.startsWith('(') ? '' : (cell.code ?? ''),
+        formatSendCellCode(cells, index),
         rowHeight <= 25 ? 6 : 8,
         cell.unsupported ? '#b3261e' : '#4d4d4d',
         'middle',
-        "'Unifont', 'HarmonyOS Sans SC', sans-serif",
+        "'Telegraph Handwriting', '平方韶华体', 'HarmonyOS Sans SC', sans-serif",
       )}`;
     })
     .join('');
@@ -242,10 +238,15 @@ function renderCellRows(
 function formatCellDisplay(cells: TelegraphCell[], index: number): string {
   const cell = cells[index];
   if (!cell) return '';
-  const isRun = /^[A-Za-z0-9]+$/.test(cell.value);
-  if (!isRun) return cell.value;
-  const previousIsRun = Boolean(cells[index - 1] && /^[A-Za-z0-9]+$/.test(cells[index - 1].value));
-  const nextIsRun = Boolean(cells[index + 1] && /^[A-Za-z0-9]+$/.test(cells[index + 1].value));
+  return cell.value;
+}
+
+function formatSendCellCode(cells: TelegraphCell[], index: number): string {
+  const cell = cells[index];
+  if (!cell) return '';
+  if (!cell.alphanumericRun) return cell.code?.startsWith('(') ? '' : (cell.code ?? '');
+  const previousIsRun = cells[index - 1]?.alphanumericRun === cell.alphanumericRun;
+  const nextIsRun = cells[index + 1]?.alphanumericRun === cell.alphanumericRun;
   return `${previousIsRun ? '' : '('}${cell.value}${nextIsRun ? '' : ')'}`;
 }
 
@@ -260,7 +261,7 @@ function text(
   fontSize: number,
   fill = '#222222',
   anchor: 'start' | 'middle' = 'start',
-  fontFamily = "'平方韶华体', 'HarmonyOS Sans SC', sans-serif",
+  fontFamily = "'Telegraph Handwriting', '平方韶华体', 'HarmonyOS Sans SC', sans-serif",
 ): string {
   return `<text x="${x}" y="${y}" font-family="${fontFamily}" font-size="${fontSize}" fill="${fill}" text-anchor="${anchor}">${escapeXml(value)}</text>`;
 }
