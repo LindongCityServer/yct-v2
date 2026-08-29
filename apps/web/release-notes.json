@@ -3,6 +3,35 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.12.1",
+      "releasedAt": "2026-08-29T09:15:26.430Z",
+      "sourceFingerprint": "abdda6cdd18493fadcbb953a9ded581640df784aad32f4389a8ab220838b6228",
+      "themes": ["telegraph", "portal", "icons"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "增强电报体验的欢迎、拍发、收报、折叠和历史信封转场动画，并加入纸张与书写音效"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "优化收报纸目的地、电码与连续字母数字的排版，避免内容重复显示并支持合并占格"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "在门户补充内容语言提示，并为待确认或不活跃友链提供安全复制链接与失败兜底"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "更新 Material Symbols 字体子集并补充 outbox 图标，同时新增门户复制图标资源"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.12.0",
       "releasedAt": "2026-08-29T03:08:14.007Z",
       "sourceFingerprint": "a635048ea325e8a10bc0efd1867afa0d30b19cef59f722b03dbb27c3afce93e0",
