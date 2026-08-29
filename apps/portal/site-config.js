@@ -30,7 +30,7 @@
       ),
       staticMap: 'https://map.shangxiaoguan.top/',
       freshMap: 'http://ld.cmsy.xyz:19136/',
-      telegramPaperGenerator: fromLegacyRoot('generator/dianbao.html'),
+      telegramPaperGenerator: fromYctRoot('services/telegraph'),
     }),
     heroes: Object.freeze([
       {

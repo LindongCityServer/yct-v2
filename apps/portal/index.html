@@ -220,7 +220,7 @@
               <h2 id="tools-title" data-i18n="tools.title">创作工具</h2>
             </div>
             <p data-i18n="tools.intro">
-              路牌、公共交通导视与动态线路图都可独立使用。选择一个任务，直接开始创作。
+              路牌、公共交通导视、动态线路图与电报纸都可独立使用。选择一个任务，直接开始创作。
             </p>
           </div>
 
@@ -354,7 +354,7 @@
                 </a>
               </div>
             </article>
-            <article class="tool-card tool-card-with-actions">
+            <article class="tool-card">
               <span class="tool-card-media">
                 <img
                   src="./assets/tools/dynamic-route-map.webp"
@@ -392,23 +392,36 @@
                 </a>
               </div>
             </article>
+            <article class="tool-card">
+              <span class="tool-card-media">
+                <img
+                  src="./assets/tools/telegraph-paper.png"
+                  alt="印有临东电报大楼字样的电报纸、信封和电码纸"
+                  data-i18n-alt="tools.telegramAlt"
+                  width="720"
+                  height="480"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </span>
+              <span class="card-index">04</span>
+              <span class="card-title" data-i18n="tools.telegram">电报纸生成器</span>
+              <span class="card-description" data-i18n="tools.telegramDescription"
+                >填写电报纸，生成电码，体验拍发、打印、收报和装入信封的完整流程。</span
+              >
+              <div class="card-actions">
+                <a
+                  data-link-key="telegramPaperGenerator"
+                  data-entry-id="telegram-paper-generator"
+                  data-entry-group="tools"
+                  href="https://yct.shangxiaoguan.top/services/telegraph"
+                >
+                  <span data-i18n="tools.openTelegram">打开电报纸生成器</span>
+                  <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                </a>
+              </div>
+            </article>
           </div>
-
-          <nav
-            class="generator-links"
-            aria-label="尚未迁移的工具"
-            data-i18n-aria-label="tools.legacyLabel"
-          >
-            <span data-i18n="tools.notMigrated">尚未迁移</span>
-            <a
-              data-link-key="telegramPaperGenerator"
-              data-entry-id="telegram-paper-generator"
-              data-entry-group="tools"
-              href="https://yct.shangxiaoguan.top/generator/dianbao.html"
-              ><span data-i18n="tools.telegram">电报纸生成器</span>
-              <span class="material-icon icon-arrow-outward" aria-hidden="true"></span
-            ></a>
-          </nav>
         </div>
       </section>
 

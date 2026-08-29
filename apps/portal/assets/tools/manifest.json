@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-02",
+  "generatedAt": "2026-08-29",
   "items": [
     {
       "id": "road-materials",
@@ -18,6 +18,12 @@
       "file": "dynamic-route-map.webp",
       "source": "用户提供的动态线路图成品封面",
       "processing": "保留透明通道，居中裁切为 1200 × 750"
+    },
+    {
+      "id": "telegraph-paper",
+      "file": "telegraph-paper.png",
+      "source": "用户提供的电报纸生成器封面",
+      "processing": "保留 720 × 480 PNG 原图"
     }
   ]
 }
