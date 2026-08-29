@@ -3,6 +3,40 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.12.0",
+      "releasedAt": "2026-08-29T03:08:14.007Z",
+      "sourceFingerprint": "a635048ea325e8a10bc0efd1867afa0d30b19cef59f722b03dbb27c3afce93e0",
+      "themes": ["telegraph", "web", "materials", "portal"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "新增电报体验工作台，支持填写电报纸、中文电码转换、资费计算和拍发收报完整流程"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "支持下载发报纸、收报纸、电码文本、摩尔斯音频和信封素材，并保留本机历史记录"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "补齐电报纸、信封和电码的专用字体与响应式动画界面"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "扩展 Material Symbols 字体扫描到图标辅助函数并补齐新增图标，避免动态图标显示为名称文本"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "在临东门户新增电报纸工具卡片，并将旧版生成器入口迁移到电报体验工作台"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.11.1",
       "releasedAt": "2026-08-20T02:09:00.634Z",
       "sourceFingerprint": "bcd75341e6e4cc33116bf7fba174919346e45964fc62b173922ee36b2150cd72",
