@@ -12,6 +12,8 @@
     entryActivated: 'portal:entry-activated',
     wechatPosterVisibilityRequested: 'portal:wechat-poster-visibility-requested',
     wechatPosterVisibilityChanged: 'portal:wechat-poster-visibility-changed',
+    friendLinkCopyRequested: 'portal:friend-link-copy-requested',
+    friendLinkCopied: 'portal:friend-link-copied',
     localeChanged: 'portal:locale-changed',
   });
   const heroImage = document.querySelector('#hero-image');
@@ -21,9 +23,11 @@
   const wechatPosterTrigger = document.querySelector('#wechat-poster-trigger');
   const wechatDialog = document.querySelector('#wechat-dialog');
   const wechatDialogClose = document.querySelector('#wechat-dialog-close');
+  const friendCopyStatus = document.querySelector('#friend-copy-status');
   const lastHeroStorageKey = 'lindong-portal:last-hero';
   let activeHeroIndex = -1;
   let fallbackApplied = false;
+  let friendCopyStatusTimer = 0;
 
   function localizeHero(hero) {
     const locale = document.documentElement.lang;
@@ -160,7 +164,70 @@
 
   document.addEventListener(eventNames.localeChanged, applyActiveHeroTranslation);
 
-  for (const entry of document.querySelectorAll('[data-entry-id]')) {
+  for (const button of document.querySelectorAll('[data-copy-url]')) {
+    button.addEventListener('click', () => {
+      let targetUrl;
+      try {
+        targetUrl = new URL(button.dataset.copyUrl, document.baseURI).toString();
+      } catch {
+        targetUrl = button.dataset.copyUrl ?? '';
+      }
+
+      document.dispatchEvent(
+        new CustomEvent(eventNames.friendLinkCopyRequested, {
+          detail: {
+            entryId: button.dataset.entryId,
+            group: button.dataset.entryGroup,
+            targetUrl,
+          },
+        }),
+      );
+    });
+  }
+
+  document.addEventListener(eventNames.friendLinkCopyRequested, async (event) => {
+    const targetUrl = event.detail?.targetUrl;
+    const entryId = event.detail?.entryId;
+    const group = event.detail?.group;
+    let success = false;
+
+    if (typeof targetUrl === 'string' && targetUrl && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(targetUrl);
+        success = true;
+      } catch {
+        success = false;
+      }
+    }
+
+    document.dispatchEvent(
+      new CustomEvent(eventNames.friendLinkCopied, {
+        detail: { entryId, group, targetUrl, success },
+      }),
+    );
+  });
+
+  document.addEventListener(eventNames.friendLinkCopied, (event) => {
+    if (!(friendCopyStatus instanceof HTMLElement)) {
+      return;
+    }
+
+    const locale = document.documentElement.lang;
+    const i18n = window.LINDONG_PORTAL_I18N;
+    const key = event.detail?.success ? 'friends.linkCopied' : 'friends.copyUnavailable';
+    const message =
+      i18n?.translate(locale, key) ?? (event.detail?.success ? '链接已复制' : '当前环境无法复制链接');
+    friendCopyStatus.textContent = event.detail?.success
+      ? message
+      : `${message} ${event.detail?.targetUrl ?? ''}`.trim();
+    friendCopyStatus.hidden = false;
+    window.clearTimeout(friendCopyStatusTimer);
+    friendCopyStatusTimer = window.setTimeout(() => {
+      friendCopyStatus.hidden = true;
+    }, 3000);
+  });
+
+  for (const entry of document.querySelectorAll('[data-entry-id]:not([data-copy-url])')) {
     entry.addEventListener('click', () => {
       const targetUrl =
         entry instanceof HTMLAnchorElement

@@ -18,6 +18,16 @@ export interface PortalEntryActivatedPayload {
   targetUrl: string;
 }
 
+export interface PortalFriendLinkCopyRequestedPayload {
+  entryId: string;
+  group: 'friends';
+  targetUrl: string;
+}
+
+export interface PortalFriendLinkCopiedPayload extends PortalFriendLinkCopyRequestedPayload {
+  success: boolean;
+}
+
 export type PortalLocale = 'zh-CN' | 'zh-Hant' | 'en';
 
 export interface PortalLocaleRequestedPayload {
@@ -71,6 +81,8 @@ export interface LindongPortalEventMap {
   'portal:hero-requested': PortalHeroRequestedPayload;
   'portal:hero-selected': PortalHeroSelectedPayload;
   'portal:entry-activated': PortalEntryActivatedPayload;
+  'portal:friend-link-copy-requested': PortalFriendLinkCopyRequestedPayload;
+  'portal:friend-link-copied': PortalFriendLinkCopiedPayload;
   'portal:locale-requested': PortalLocaleRequestedPayload;
   'portal:locale-changed': PortalLocaleChangedPayload;
   'portal:wechat-poster-visibility-requested': PortalWechatPosterVisibilityRequestedPayload;
