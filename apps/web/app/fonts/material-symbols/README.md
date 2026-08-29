@@ -14,7 +14,7 @@ pnpm icons:material-symbols:sync
 pnpm icons:material-symbols:check
 ```
 
-同步脚本使用 TypeScript AST 提取 JSX 图标正文、`MaterialSymbol` 的 `name` 属性和图标字段，避免把普通业务字符串误收进字体，也避免漏掉多行 JSX 中的图标名。同步脚本只在开发或发布时访问 Google Fonts；公开页面运行时不依赖 `fonts.googleapis.com` 或 `fonts.gstatic.com`，只有受保护的后台预览和资源晋级流程允许回源。
+同步脚本使用 TypeScript AST 提取 JSX 图标正文、`MaterialSymbol` 的 `name` 属性、图标字段和图标辅助函数的静态 `return` 值，避免把普通业务字符串误收进字体，也避免漏掉多行 JSX 或动态分支中的图标名。同步脚本只在开发或发布时访问 Google Fonts；公开页面运行时不依赖 `fonts.googleapis.com` 或 `fonts.gstatic.com`，只有受保护的后台预览和资源晋级流程允许回源。
 
 后台动态填写的图标名不进入构建期字体：管理员输入时由受保护的预览接口按单图标回源；确认保存、服务入口提交、交通配置更新或 POI 发布后，服务端会把字形转换为按内容哈希保存的本地 SVG。公开页面只读取本地 SVG，尚未晋级的旧数据继续回退到本字体子集。
 

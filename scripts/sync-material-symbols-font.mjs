@@ -170,6 +170,9 @@ function collectTypeScriptIconNames(source, filePath, names) {
     if (ts.isVariableDeclaration(node) && isIconVariableName(node.name)) {
       collectStaticIconStrings(node.initializer, names);
     }
+    if (ts.isFunctionDeclaration(node) && isIconFunctionName(node.name)) {
+      collectIconReturnStrings(node.body, names);
+    }
 
     ts.forEachChild(node, visit);
   }
@@ -273,6 +276,20 @@ function collectStaticIconStrings(node, names) {
   ts.forEachChild(node, (child) => collectStaticIconStrings(child, names));
 }
 
+function collectIconReturnStrings(node, names) {
+  if (!node) {
+    return;
+  }
+  function visit(current) {
+    if (ts.isReturnStatement(current)) {
+      collectStaticIconStrings(current.expression, names);
+      return;
+    }
+    ts.forEachChild(current, visit);
+  }
+  visit(node);
+}
+
 function isIconPropertyName(node) {
   return ts.isIdentifier(node) || ts.isStringLiteral(node)
     ? isIconPropertyNameText(node.text)
@@ -288,6 +305,10 @@ function isIconVariableName(node) {
     return false;
   }
   return /(?:icon|symbol)/iu.test(node.text);
+}
+
+function isIconFunctionName(node) {
+  return Boolean(node && /icon$/iu.test(node.text));
 }
 
 function addIconName(value, names) {

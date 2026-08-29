@@ -20,6 +20,7 @@ const staticEntries: Array<{
   { path: '/services/road-materials', changeFrequency: 'monthly', priority: 0.5 },
   { path: '/services/transit-materials', changeFrequency: 'monthly', priority: 0.5 },
   { path: '/services/transit-network-health', changeFrequency: 'weekly', priority: 0.6 },
+  { path: '/services/telegraph', changeFrequency: 'monthly', priority: 0.6 },
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

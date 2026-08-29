@@ -10,3 +10,4 @@ export * from './services';
 export * from './ticketing';
 export * from './transit';
 export * from './trips';
+export * from './telegraph';

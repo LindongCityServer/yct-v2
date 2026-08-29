@@ -208,6 +208,14 @@ export const pageMetadata = {
       'Inspect published transit lines, stations, topology connections, and network health recommendations.',
     ),
   },
+  telegraph: {
+    title: localized('电报体验', '電報體驗', 'Telegraph Experience'),
+    description: localized(
+      '填写电报纸，生成电码，体验拍发、打印、收报和装入信封的完整流程。',
+      '填寫電報紙，生成電碼，體驗拍發、列印、收報和裝入信封的完整流程。',
+      'Fill a telegraph form, generate code, and experience sending, printing, receiving, and enclosing a telegram.',
+    ),
+  },
   travel: {
     title: localized('出行', '出行', 'Travel'),
     description: localized(

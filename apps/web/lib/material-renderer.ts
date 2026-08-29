@@ -27,11 +27,11 @@ export class MaterialInputError extends Error {}
 
 export interface MaterialPreviewWatermark {
   traceLines: [string, string];
+  opacity?: number;
 }
 
 let materialWatermarkWordmarkImageCache:
-  | { dataUri: string; width: number; height: number }
-  | undefined;
+  { dataUri: string; width: number; height: number } | undefined;
 
 export function validateMaterialTemplateSource(
   source: string,
@@ -212,7 +212,7 @@ export function hashMaterialInput(input: Record<string, string>): string {
   return createHash('sha256').update(JSON.stringify(input)).digest('hex');
 }
 
-function appendMaterialPreviewWatermark(
+export function appendMaterialPreviewWatermark(
   svg: string,
   widthPx: number,
   heightPx: number,
@@ -221,7 +221,7 @@ function appendMaterialPreviewWatermark(
   const shorterSide = Math.min(widthPx, heightPx);
   const primaryFontSize = Math.max(10, Math.min(34, Math.round(shorterSide * 0.13)));
   const watermarkColor = '#777777';
-  const watermarkOpacity = 0.62;
+  const watermarkOpacity = clampWatermarkOpacity(watermark.opacity ?? 0.62);
   const layoutReferenceWidth = Math.max(200, Math.min(520, widthPx * 0.92));
   const traceWidthUnits = Math.max(
     ...watermark.traceLines.map((line) => estimateTextWidth(line, 1)),
@@ -240,11 +240,7 @@ function appendMaterialPreviewWatermark(
   const blockGap = Math.max(64, primaryFontSize * 2.75);
   const sidePadding = blockGap / 2;
   const compositionWidth =
-    logoWidth +
-    traceBlockWidth +
-    previewBlockWidth +
-    blockGap * 2 +
-    sidePadding * 2;
+    logoWidth + traceBlockWidth + previewBlockWidth + blockGap * 2 + sidePadding * 2;
   const rowHeight = Math.max(
     48,
     logoHeight + 16,
@@ -258,12 +254,7 @@ function appendMaterialPreviewWatermark(
     const logoCenterX = contentStartX + logoWidth / 2;
     const traceCenterX = contentStartX + logoWidth + blockGap + traceBlockWidth / 2;
     const previewCenterX =
-      contentStartX +
-      logoWidth +
-      blockGap +
-      traceBlockWidth +
-      blockGap +
-      previewBlockWidth / 2;
+      contentStartX + logoWidth + blockGap + traceBlockWidth + blockGap + previewBlockWidth / 2;
     const traceFirstBaseline = centerY - traceLineHeight / 2 + traceFontSize * 0.34;
     return `<g><image x="${formatSvgNumber(logoCenterX - logoWidth / 2)}" y="${formatSvgNumber(centerY - logoHeight / 2)}" width="${formatSvgNumber(logoWidth)}" height="${formatSvgNumber(logoHeight)}" href="${wordmark.dataUri}" opacity="${formatSvgNumber(watermarkOpacity)}" preserveAspectRatio="xMidYMid meet"/>${renderMaterialWatermarkTraceLines(watermark.traceLines, traceCenterX, traceFirstBaseline, traceFontSize, traceLineHeight, watermarkColor, watermarkOpacity)}<text x="${formatSvgNumber(previewCenterX)}" y="${formatSvgNumber(centerY + primaryFontSize * 0.34)}" font-family="'HarmonyOS Sans SC', sans-serif" text-anchor="middle" fill="${watermarkColor}" fill-opacity="${formatSvgNumber(watermarkOpacity)}" font-size="${formatSvgNumber(primaryFontSize)}" font-weight="700">仅供预览</text></g>`;
   };
@@ -272,6 +263,10 @@ function appendMaterialPreviewWatermark(
   const secondRowRight = renderWatermarkRow(compositionWidth, rowHeight * 1.5);
   const overlay = `<defs><pattern id="${patternId}" width="${formatSvgNumber(compositionWidth)}" height="${formatSvgNumber(patternHeight)}" patternUnits="userSpaceOnUse" patternTransform="rotate(-24)">${firstRow}${secondRowLeft}${secondRowRight}</pattern></defs><rect id="yct-material-preview-watermark" x="0" y="0" width="${formatSvgNumber(widthPx)}" height="${formatSvgNumber(heightPx)}" fill="url(#${patternId})" pointer-events="none"/>`;
   return svg.replace(/<\/svg>\s*$/i, `${overlay}</svg>`);
+}
+
+function clampWatermarkOpacity(value: number): number {
+  return Math.max(0.05, Math.min(0.62, Number.isFinite(value) ? value : 0.62));
 }
 
 function renderMaterialWatermarkTraceLines(

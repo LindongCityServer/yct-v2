@@ -932,6 +932,34 @@ export interface MaterialPreviewGeneratedPayload {
   generatedAt: ISODateTimeString;
 }
 
+export interface TelegraphDraftUpdatedPayload {
+  draftId: string;
+  billableGrids: number;
+  amount: number;
+  destination: string;
+  recipient: string;
+  bodyLength: number;
+}
+
+export interface TelegraphPrintStartedPayload {
+  draftId: string;
+  serialNumber: string;
+  generatedAt: ISODateTimeString;
+}
+
+export interface TelegraphPrintProgressPayload {
+  draftId: string;
+  stage: 'header' | 'recipient' | 'code' | 'message' | 'footer' | 'stamp' | 'envelope';
+  progress: number;
+}
+
+export interface TelegraphArtifactDownloadedPayload {
+  draftId: string;
+  artifact:
+    'send-paper' | 'receive-paper' | 'envelope-front' | 'envelope-back' | 'code-text' | 'audio';
+  anonymous: boolean;
+}
+
 export interface PoiCategoryProfileUpdatedPayload {
   categories: Array<{
     id: string;
@@ -1402,6 +1430,10 @@ export type YctEventPayloadMap = {
   MaterialTransitNetworkProjectUpdated: MaterialTransitNetworkProjectUpdatedPayload;
   MaterialTransitNetworkProjectDeleted: MaterialTransitNetworkProjectDeletedPayload;
   MaterialPreviewGenerated: MaterialPreviewGeneratedPayload;
+  TelegraphDraftUpdated: TelegraphDraftUpdatedPayload;
+  TelegraphPrintStarted: TelegraphPrintStartedPayload;
+  TelegraphPrintProgress: TelegraphPrintProgressPayload;
+  TelegraphArtifactDownloaded: TelegraphArtifactDownloadedPayload;
   MaterialExportRequested: MaterialExportRequestedPayload;
   OperationsStrongReminderRulesUpdated: OperationsStrongReminderRulesUpdatedPayload;
   OperationsReminderDeliveryRefreshRequested: OperationsReminderDeliveryRefreshRequestedPayload;
