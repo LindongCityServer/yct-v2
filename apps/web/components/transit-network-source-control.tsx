@@ -11,6 +11,7 @@ import {
   publishTransitNetworkProjectSnapshotChanged,
   publishTransitNetworkSourceChanged,
   subscribeTransitNetworkLineNameEditorRequested,
+  type TransitNetworkProjectOrigin,
   type TransitNetworkSourceKind,
 } from '../lib/client-transit-network-events';
 import {
@@ -21,6 +22,7 @@ import {
   RMP_TRANSIT_NETWORK_MAX_FILE_SIZE,
   resolveMaterialTransitNetworkLineNames,
 } from '../lib/rmp-transit-network';
+import { deriveMetroWayfindingLineIdentity } from '../lib/metro-wayfinding-line-source';
 
 interface TransitNetworkLineNameDraft {
   name: string;
@@ -40,8 +42,6 @@ interface TransitNetworkSampleResponse {
   licenseUrl: string;
   snapshot: MaterialTransitNetworkSnapshot;
 }
-
-type TransitNetworkProjectOrigin = 'none' | 'sample' | 'imported';
 
 async function fetchDefaultTransitNetworkSample(): Promise<TransitNetworkSampleResponse> {
   const response = await fetch(appPath('/api/materials/transit-network-projects/sample'), {
@@ -81,6 +81,11 @@ export function TransitNetworkSourceControl({
   const [snapshot, setSnapshot] = useState<MaterialTransitNetworkSnapshot>();
   const [projectId, setProjectId] = useState('');
   const [projectOrigin, setProjectOrigin] = useState<TransitNetworkProjectOrigin>('none');
+  // 事件回调里要读最新的 origin（避免闭包拿到旧值）。
+  const projectOriginRef = useRef<TransitNetworkProjectOrigin>('none');
+  useEffect(() => {
+    projectOriginRef.current = projectOrigin;
+  }, [projectOrigin]);
   const [fileName, setFileName] = useState('');
   const [sampleName, setSampleName] = useState('');
   const [sampleSourceUrl, setSampleSourceUrl] = useState('');
@@ -122,6 +127,7 @@ export function TransitNetworkSourceControl({
       source: nextSource,
       reason: 'selection',
       snapshot: nextSource === 'rmp' ? nextSnapshot : undefined,
+      projectOrigin: projectOriginRef.current,
     });
   };
 
@@ -158,6 +164,7 @@ export function TransitNetworkSourceControl({
         source: 'rmp',
         reason: 'project-import',
         snapshot: nextSnapshot,
+        projectOrigin: 'imported',
       });
 
       setIsPersisting(true);
@@ -239,6 +246,7 @@ export function TransitNetworkSourceControl({
       source: 'rmp',
       reason: 'project-removal',
       clearSnapshot: true,
+      projectOrigin: 'none',
     });
     setIsPersisting(false);
     setIsProjectLoading(true);
@@ -258,6 +266,7 @@ export function TransitNetworkSourceControl({
         source: 'rmp',
         reason: 'project-removal',
         snapshot: sample.snapshot,
+        projectOrigin: 'sample',
       });
     } catch (error) {
       if (projectLoadRevisionRef.current !== loadRevision) return;
@@ -276,7 +285,23 @@ export function TransitNetworkSourceControl({
           const names = snapshot
             ? resolveMaterialTransitNetworkLineNames(snapshot, line.lineKey)
             : undefined;
-          return [line.id, { name: names?.name ?? '', secondaryName: names?.secondaryName ?? '' }];
+          if (names?.name) {
+            return [
+              line.id,
+              { name: names.name, secondaryName: names.secondaryName ?? '' },
+            ] as const;
+          }
+          // 未配置名称时预填**从线路键推导**的默认名（`sh2` → `2号线`）：
+          // RMP 存档不含线路名，但线路键的字母前缀是城市代号、数字部分就是编号。
+          // 预填只是给出起点，用户仍需确认或改成正式名称。
+          const derived = deriveMetroWayfindingLineIdentity(line.lineKey);
+          return [
+            line.id,
+            {
+              name: derived.suggestedName,
+              secondaryName: derived.lineNumber ? `Line ${derived.lineNumber}` : '',
+            },
+          ] as const;
         }),
       ),
     );
@@ -425,6 +450,7 @@ export function TransitNetworkSourceControl({
             source: 'rmp',
             reason: 'initialization',
             snapshot: initialSnapshot,
+            projectOrigin: 'imported',
           });
         }
         return;
@@ -454,6 +480,7 @@ export function TransitNetworkSourceControl({
             source: 'rmp',
             reason: 'initialization',
             snapshot: project.snapshot,
+            projectOrigin: 'imported',
           });
         }
         return;
@@ -474,6 +501,7 @@ export function TransitNetworkSourceControl({
             source: 'rmp',
             reason: 'initialization',
             snapshot: sample.snapshot,
+            projectOrigin: 'sample',
           });
         }
       } catch (error) {
@@ -702,6 +730,11 @@ export function TransitNetworkSourceControl({
                 </span>
               </button>
             </div>
+            <p className="transit-network-line-name-hint">
+              RMP 存档里的线路键（如 <code>sh2</code>、<code>bj1</code>）只是绘图用的颜色命名，
+              不是线路名。此处已按线路键的编号部分预填（<code>sh2</code> → 2号线），
+              请确认或改为正式名称；导视牌的「线路编号」模板以这里填写的名称为准。
+            </p>
             <div className="transit-network-line-name-list">
               {projectLines.map((line, index) => (
                 <label key={line.id}>

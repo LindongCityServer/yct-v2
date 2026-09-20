@@ -1,5 +1,7 @@
 'use client';
 
+import { requestConfirmation } from '../lib/client-dialog-events';
+
 import type {
   ApiListResponse,
   ApiItemResponse,
@@ -17,14 +19,7 @@ import type {
   TravelTicketingAvailability,
   TravelTripInstance,
 } from '@yct/contracts';
-import {
-  Fragment,
-  type CSSProperties,
-  type ReactNode,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { Fragment, type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { MaterialSymbol } from './material-symbol';
 import { publishLoginRequired, publishLoginRequiredForResponse } from '../lib/client-auth-events';
@@ -111,7 +106,7 @@ export function TravelScheduleQueryPanel({
     }
   };
   const cancelTicketOrder = async (orderId: string) => {
-    if (!window.confirm(t('travelSchedule.order.cancelConfirm'))) {
+    if (!(await requestConfirmation(t('travelSchedule.order.cancelConfirm')))) {
       return;
     }
 
@@ -203,8 +198,8 @@ export function TravelScheduleQueryPanel({
     setTimeFilter('all');
     setQuery(item.tripCode ?? item.lineName);
   };
-  const clearHistory = () => {
-    if (!window.confirm(t('travelSchedule.history.clearConfirm'))) {
+  const clearHistory = async () => {
+    if (!(await requestConfirmation(t('travelSchedule.history.clearConfirm')))) {
       return;
     }
 
@@ -548,9 +543,7 @@ function ScheduleTripRouteGroup({
 }>) {
   const serviceLabels = Array.from(
     new Set(
-      group.trips.map(
-        (trip) => serviceByKind.get(trip.serviceKind)?.label ?? trip.serviceLabel,
-      ),
+      group.trips.map((trip) => serviceByKind.get(trip.serviceKind)?.label ?? trip.serviceLabel),
     ),
   ).join(' / ');
   return (

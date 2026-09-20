@@ -20507,13 +20507,19 @@ div.telegraph-output-scene.is-packing {
   max-width: 980px;
   gap: 24px;
 }
+/*
+ * 电报发送台与输出区一样「设计上完全透明」（纸张本身就是内容，容器不该再垫一层底），
+ * 因此这里必须带 !important：简约材质模式的「面板实色化」规则把 .telegraph-send-stage
+ * 也列进了实色清单，普通声明压不过它，会在发送台背后刷出一块完整面板底。
+ * 同批的 .telegraph-output-section 早已用 !important 自保，发送台这里是漏掉的那一半。
+ */
 .telegraph-send-stage {
   display: grid;
   justify-items: center;
   gap: 14px;
   padding: 14px;
-  border: 0;
-  background: transparent;
+  border: 0 !important;
+  background: transparent !important;
   touch-action: pan-y;
 }
 .telegraph-send-paper {
@@ -22478,14 +22484,15 @@ button.material-studio-review-badge {
 
 /*
  * 简约材质模式下，`.secondary-content` 内的 `.module-panel` 应继续保持透明——
- * 上面基础规则（transparent）已经声明，但 :root[data-material-mode='performance']
- * 在 23467 行给 `.module-panel` 强制覆盖了 surface-panel 实色底，会破坏二级页面
- * 的"轻量卡片"观感（changelog/faq/settings/legal 等页面里模块直接落在 secondary-content
- * 的窄列里，叠一层完整面板底会让卡片看起来发糊、像浮在一个大灰块上）。
+ * 上面基础规则（transparent）已经声明，但 `:root[data-material-mode='performance']`
+ * 的「面板实色化」规则把 `.module-panel` 强制刷成了 surface-panel 实色底，会破坏二级页面
+ * 的"轻量卡片"观感（changelog/faq/settings/account 等页面里模块直接落在 secondary-content
+ * 的窄列里，叠一层完整面板底会让卡片看着发糊、像浮在一个大灰块上）。
  *
  * 这里用更高特异性的选择器把背景重新压回 transparent，仅作用于二级页面。
- * 不加 !important 是为了与 24155 行 @media (prefers-reduced-transparency) 那条
- * !important 退路保持兼容——系统级减少透明时仍然服从强制实色。
+ * 不加 !important：那条 @media (prefers-reduced-transparency) 的无障碍退路用的是
+ * !important（但它只覆盖 .app-toast/.modal-panel/.bottom-nav 等浮层，不含
+ * .module-panel——二级页面容器本来就不是浮层，保持透明是对的）。
  */
 :root[data-material-mode='performance'] .secondary-content .module-panel {
   background: transparent;

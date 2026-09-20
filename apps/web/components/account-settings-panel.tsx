@@ -1,5 +1,9 @@
 'use client';
 
+import { requestConfirmation } from '../lib/client-dialog-events';
+
+import { RangeInput } from './range-input';
+
 import type {
   ApiItemResponse,
   ApiListResponse,
@@ -10,7 +14,7 @@ import type {
   TripReminder,
   YctAccountSessionSnapshot,
 } from '@yct/contracts';
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useEffect, useId, useMemo, useState } from 'react';
 import {
   calculateBoundsArea,
   createOfflinePackage,
@@ -331,6 +335,8 @@ export function AccountSettingsPanel({
   const [offlinePackageState, setOfflinePackageState] = useState<OfflinePackageState | null>(null);
   const [offlinePackageDraft, setOfflinePackageDraft] = useState(emptyOfflinePackageDraft);
   const [offlinePackageFormOpen, setOfflinePackageFormOpen] = useState(false);
+  // 提交按钮位于 form 之外（弹窗直接子级操作栏，保证吸底几何正确），用 form 属性关联。
+  const offlinePackageFormId = useId();
   const [offlinePackageError, setOfflinePackageError] = useState('');
   const [refreshingPackageId, setRefreshingPackageId] = useState<string | null>(null);
   const [ticketOrders, setTicketOrders] = useState<TicketOrderListItem[] | null>(null);
@@ -386,7 +392,7 @@ export function AccountSettingsPanel({
     }
   };
   const cancelTicketOrder = async (orderId: string) => {
-    if (!window.confirm(t('ticketOrderDetail.cancelConfirm'))) {
+    if (!(await requestConfirmation(t('ticketOrderDetail.cancelConfirm')))) {
       return;
     }
 
@@ -805,7 +811,11 @@ export function AccountSettingsPanel({
   };
 
   const removeOfflinePackage = async (offlinePackage: OfflinePackageRecord) => {
-    if (!window.confirm(t('account.offlinePackage.deleteConfirm', { name: offlinePackage.name }))) {
+    if (
+      !(await requestConfirmation(
+        t('account.offlinePackage.deleteConfirm', { name: offlinePackage.name }),
+      ))
+    ) {
       return;
     }
 
@@ -821,8 +831,8 @@ export function AccountSettingsPanel({
     }
   };
 
-  const clearLocalHistory = () => {
-    if (!window.confirm(t('account.history.clearConfirm'))) {
+  const clearLocalHistory = async () => {
+    if (!(await requestConfirmation(t('account.history.clearConfirm')))) {
       return;
     }
 
@@ -836,11 +846,11 @@ export function AccountSettingsPanel({
   const revokeLegacyTripSyncConsent = async () => {
     const canDeleteAccountCopies = Boolean(auth.session?.user);
     if (
-      !window.confirm(
+      !(await requestConfirmation(
         canDeleteAccountCopies
           ? t('account.history.legacyRevokeConfirmWithAccount')
           : t('account.history.legacyRevokeConfirmLocal'),
-      )
+      ))
     ) {
       return;
     }
@@ -891,9 +901,10 @@ export function AccountSettingsPanel({
     let reminders = unsyncedReminders;
 
     if (legacyReminders.length > 0 && !legacyTripSyncConsentGranted) {
-      const accepted = window.confirm(
+      const accepted = await requestConfirmation(
         t('account.history.legacySyncConfirm', { count: legacyReminders.length }),
       );
+      if (accepted === undefined) return;
 
       if (accepted) {
         grantLegacyTripReminderSyncConsent();
@@ -1056,11 +1067,10 @@ export function AccountSettingsPanel({
                 })}
               </output>
             </span>
-            <input
+            <RangeInput
               id="material-thickness"
-              type="range"
-              min="0"
-              max="100"
+              min={0}
+              max={100}
               step="1"
               value={materialPreference.thickness}
               disabled={materialPreference.mode !== 'advanced'}
@@ -1461,7 +1471,11 @@ export function AccountSettingsPanel({
                 </span>
               </button>
             </div>
-            <form className="offline-package-form" onSubmit={submitOfflinePackage}>
+            <form
+              className="offline-package-form"
+              id={offlinePackageFormId}
+              onSubmit={submitOfflinePackage}
+            >
               <label className="offline-package-name-field">
                 <span>{t('account.offlinePackage.name')}</span>
                 <input
@@ -1503,14 +1517,16 @@ export function AccountSettingsPanel({
                   onChange={(event) => updateOfflinePackageDraft('maxZ', event.currentTarget.value)}
                 />
               </label>
-              <button className="primary-action-button" type="submit">
+            </form>
+            {offlinePackageError ? <p className="form-error-text">{offlinePackageError}</p> : null}
+            <div className="admin-content-actions">
+              <button className="primary-action-button" type="submit" form={offlinePackageFormId}>
                 <span className="material-symbols-outlined" aria-hidden="true">
                   add_location_alt
                 </span>
                 <span>{t('account.offlinePackage.save')}</span>
               </button>
-            </form>
-            {offlinePackageError ? <p className="form-error-text">{offlinePackageError}</p> : null}
+            </div>
           </section>
         </div>
       ) : null}
@@ -1706,7 +1722,7 @@ function SegmentedControl<TValue extends string>({
               key={option.value}
               onClick={() => onChange(option.value)}
             >
-              {option.label}
+              <span className="material-interaction-label">{option.label}</span>
             </button>
           );
         })}

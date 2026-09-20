@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { AdminRefreshButton } from './admin-refresh-button';
+import { METRO_WAYFINDING_TEMPLATE_ID, parseMetroWayfindingLayout } from '../lib/metro-wayfinding';
+import { MetroWayfindingExamplePreviewElement } from './metro-wayfinding-editor';
 
 type MaterialFamily = 'road_sign' | 'address_sign' | 'bus_stop' | 'custom';
 type TemplateStatus = 'draft' | 'published' | 'archived';
@@ -413,15 +415,16 @@ export function AdminMaterialsPanel() {
                     ?.title ?? draft.templateId}{' '}
                   · v{draft.templateVersion} · {materialDraftStatusLabel(draft.status)}
                 </strong>
-                <p className="admin-material-draft-content">
+                <div className="admin-material-draft-content">
                   {formatMaterialDraftInput(
                     draft,
                     templateVersionByKey.get(`${draft.templateId}:${draft.templateVersion}`),
                   )}
-                  <br />
-                  画布：{draft.canvas.widthM} × {draft.canvas.heightM} 米，输出基准{' '}
-                  {draft.canvas.tileSizePx} px
-                </p>
+                  <p>
+                    画布：{draft.canvas.widthM} × {draft.canvas.heightM} 米，输出基准{' '}
+                    {draft.canvas.tileSizePx} px
+                  </p>
+                </div>
                 <small>
                   发起者：{formatActor(draft.createdBy, actorById)} · 提交于{' '}
                   {formatTime(draft.submittedAt ?? draft.createdAt)} · 草稿 ID：{draft.id}
@@ -698,7 +701,7 @@ function materialDraftStatusLabel(status: MaterialDraft['status']): string {
 function formatMaterialDraftInput(
   draft: MaterialDraft,
   template: TemplateVersion | undefined,
-): string {
+): ReactNode {
   if (!template) {
     return `字段：${
       Object.entries(draft.input)
@@ -706,6 +709,44 @@ function formatMaterialDraftInput(
         .map(([key, value]) => `${key}：${value}`)
         .join(' · ') || '未填写'
     }`;
+  }
+  // 地铁导视牌模板：用图形化预览替代一坨 JSON 文本，审核者一眼能看到图标与文字布局。
+  // 颜色刻意不复原，只展示「图标 + 文本」一字排开 + 空格 / 分割线 / 组合框边界。
+  if (draft.templateId === METRO_WAYFINDING_TEMPLATE_ID) {
+    const layoutText = draft.input.layout?.trim() ?? '';
+    if (!layoutText) return '导视牌元素编排未填写。';
+    const layout = parseMetroWayfindingLayout(layoutText);
+    const visibleRows = layout.rows.slice(0, layout.mode === 'double' ? 2 : 1);
+    return (
+      <div className="admin-material-draft-metro-preview">
+        {visibleRows.map((elements, index) => (
+          <div key={index}>
+            <span>{layout.mode === 'vertical' ? '竖向内容' : `第 ${index + 1} 行`}</span>
+            <div className="metro-wayfinding-element-strip" aria-hidden="true">
+              {elements.length ? (
+                elements.map((element) => (
+                  <MetroWayfindingExamplePreviewElement
+                    key={element.id}
+                    element={element}
+                    layoutMode={layout.mode}
+                    inheritedBackgroundColor="transparent"
+                    inheritedForegroundColor="inherit"
+                    renderSpaceIcons
+                    neutralizeColors
+                  />
+                ))
+              ) : (
+                <span className="metro-wayfinding-example-preview-element is-space is-flex">
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    arrow_range
+                  </span>
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   }
   const values = template.fields
     .map((field) => {

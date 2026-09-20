@@ -1,5 +1,24 @@
 :root {
   color-scheme: light;
+  --yct-radius-xs: 4px;
+  --yct-radius-sm: 6px;
+  --yct-radius-md: 8px;
+  --yct-radius-lg: 20px;
+  --yct-radius-pill: 999px;
+  --yct-space-1: 4px;
+  --yct-space-2: 8px;
+  --yct-space-3: 12px;
+  --yct-space-4: 16px;
+  --yct-space-5: 20px;
+  --yct-space-6: 24px;
+  --yct-space-8: 32px;
+  --yct-space-10: 40px;
+  --yct-motion-duration-micro: 90ms;
+  --yct-motion-duration-state: 160ms;
+  --yct-motion-duration-reveal: 280ms;
+  --yct-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --yct-motion-easing-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --yct-motion-scale-press: 0.98;
   --ink: #111817;
   --muted: #5c6862;
   --line: #dfe5e4;
@@ -15,7 +34,7 @@
   --purple: #73558f;
   --surface-muted: #eef2f1;
   --surface-green: #e6f2ee;
-  --surface-green-hover: #d8ebe5;
+  --surface-green-hover: color-mix(in srgb, var(--ink) 9%, transparent);
   --body-copy: #36423c;
   --map-primary: #176851;
   --map-primary-hover: #10523f;
@@ -24,14 +43,14 @@
   --community-muted: #52665e;
   --community-kicker: #0f725f;
   --community-card: #ffffff;
-  --community-card-hover: #d8ebe5;
+  --community-card-hover: color-mix(in srgb, var(--ink) 9%, transparent);
   --community-support: #cce5dc;
   --community-symbol-surface: #ffffff;
   --community-symbol-filter: none;
   --footer-surface: #111714;
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 18px;
+  --radius-sm: var(--yct-radius-sm);
+  --radius-md: var(--yct-radius-md);
+  --radius-lg: var(--yct-radius-lg);
   --shadow-card: 0 10px 30px rgba(20, 34, 27, 0.08);
 }
 
@@ -1432,6 +1451,36 @@ body.dialog-open {
   height: 18px;
 }
 
+:where(
+  button,
+  .tool-card,
+  .service-list > a,
+  .social-links a,
+  .friend-links a,
+  .friend-links button,
+  .story-resource-link,
+  .card-actions a,
+  .map-source-list a
+) {
+  transition-property: background-color, border-color, color, box-shadow, transform;
+  transition-duration: var(--yct-motion-duration-state);
+  transition-timing-function: var(--yct-motion-easing-standard);
+}
+
+:where(
+    button,
+    .tool-card,
+    .service-list > a,
+    .social-links a,
+    .friend-links a,
+    .friend-links button,
+    .story-resource-link,
+    .card-actions a,
+    .map-source-list a
+  ):not(:disabled):active {
+  transform: scale(var(--yct-motion-scale-press));
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
@@ -1448,7 +1497,7 @@ body.dialog-open {
     --purple: #c1a2d8;
     --surface-muted: #242d29;
     --surface-green: #183a32;
-    --surface-green-hover: #235044;
+    --surface-green-hover: color-mix(in srgb, var(--ink) 9%, transparent);
     --body-copy: #d2dcd7;
     --map-primary: #176851;
     --map-primary-hover: #1d7c62;
@@ -1457,7 +1506,7 @@ body.dialog-open {
     --community-muted: rgba(255, 255, 255, 0.72);
     --community-kicker: #87cfbd;
     --community-card: rgba(255, 255, 255, 0.08);
-    --community-card-hover: rgba(255, 255, 255, 0.15);
+    --community-card-hover: color-mix(in srgb, var(--ink) 9%, transparent);
     --community-support: rgba(22, 143, 120, 0.32);
     --community-symbol-surface: rgba(255, 255, 255, 0.13);
     --community-symbol-filter: invert(1);

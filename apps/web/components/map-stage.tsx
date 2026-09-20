@@ -28,7 +28,7 @@ import { ADMINISTRATIVE_AREA_DEFAULT_MAX_ZOOM } from '@yct/contracts';
 import { quoteTaxiFare, quoteTransitRouteFare } from '@yct/domain';
 import { useSearchParams } from 'next/navigation';
 import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react';
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { getFontEmbedCSS, toBlob } from 'html-to-image';
 import LZString from 'lz-string';
 import QRCode from 'qrcode';
@@ -85,6 +85,9 @@ import {
 import { PoiFacilityEditor } from './poi-facility-editor';
 import { AdminEditLink } from './admin-edit-link';
 import { MaterialSymbol } from './material-symbol';
+import { MapLayerToggle } from './map-layer-toggle';
+import { SegmentedControl } from './segmented-control';
+import { RouteModeToggleList } from './route-mode-toggle-list';
 
 interface MarkerResponse {
   meta: ApiMeta;
@@ -707,7 +710,7 @@ const mapBrowseModes: Array<{ value: MapBrowseMode; labelKey: CommonMessageKey; 
 
 const defaultRouteTransportModes: EnabledRouteTransportModes = {
   walk: true,
-  taxi: true,
+  taxi: false,
   bus: true,
   metro: true,
   tram: true,
@@ -960,6 +963,8 @@ export function MapStage() {
   const [poiSubmitStatus, setPoiSubmitStatus] = useState('');
   const [poiSubmitBusy, setPoiSubmitBusy] = useState(false);
   const [poiSubmitDialogOpen, setPoiSubmitDialogOpen] = useState(false);
+  // 提交按钮位于 form 之外（弹窗直接子级操作栏，保证吸底几何正确），用 form 属性关联。
+  const poiSubmitFormId = useId();
   const [focusedMarkerId, setFocusedMarkerId] = useState<string | null>(null);
   const [selectedAdministrativeAreaId, setSelectedAdministrativeAreaId] = useState<string | null>(
     null,
@@ -3500,6 +3505,8 @@ export function MapStage() {
             enabledModes={routeTransportModes}
             endpointCandidates={routeEndpointCandidates}
             endpointQuery={routeEndpointQuery}
+            mapCenterCoordinates={[mapView.centerX, mapView.centerZ]}
+            secondaryPoiIndex={secondaryPoiIndex}
             options={currentRoutePlanOptions}
             sortMode={routePlanSortMode}
             status={currentRoutePlanStatus}
@@ -3562,181 +3569,190 @@ export function MapStage() {
               <div
                 className={markerListExpanded ? 'map-marker-list' : 'map-marker-list is-collapsed'}
               >
-                <button
-                  className="map-marker-list-toggle"
-                  type="button"
-                  aria-expanded={markerListExpanded}
-                  onClick={() => setMarkerListExpanded((current) => !current)}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    {markerListExpanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
-                  </span>
-                  <span>
-                    {markerListCategoryId === 'player'
-                      ? t('map.categoryName.player')
-                      : markerQuery.trim()
-                        ? t('map.markerList.results')
-                        : nearbySearchCenter
-                          ? t('map.markerList.nearby', { name: nearbySearchCenter.label })
-                          : t('map.markerList.default')}
-                  </span>
-                  <span className="muted">
-                    {markerListCategoryId === 'player'
-                      ? t('map.markerList.playerCount', playerMarkerCounts)
-                      : t('map.markerList.count', { count: sidebarMarkers.length })}
-                  </span>
-                </button>
-                {markerListExpanded ? (
-                  <>
-                    {nearbySearchCenter ? (
-                      <div className="map-nearby-search-note">
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          travel_explore
-                        </span>
-                        <span>{t('map.nearby.note', { name: nearbySearchCenter.label })}</span>
-                        <button
-                          className="map-nearby-search-exit"
-                          type="button"
-                          onClick={() => setNearbySearchCenter(null)}
-                        >
-                          {t('map.nearby.exit')}
-                        </button>
-                        {nearbySearchRegion ? (
-                          <div
-                            className="map-nearby-scope-switch"
-                            aria-label={t('map.nearby.scopeAria')}
-                          >
-                            {(['outside', 'inside'] as const).map((scope) => (
-                              <button
-                                className={nearbySearchScope === scope ? 'is-active' : ''}
-                                type="button"
-                                aria-pressed={nearbySearchScope === scope}
-                                key={scope}
-                                onClick={() =>
-                                  publishMapNearbySearchScopeChanged({
-                                    markerId: nearbySearchCenter.markerId,
-                                    scope,
-                                  })
-                                }
-                              >
-                                {t(
-                                  scope === 'outside'
-                                    ? 'map.nearby.scopeOutside'
-                                    : 'map.nearby.scopeInside',
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    <div
-                      className={
-                        markerCategoryExpanded
-                          ? 'map-category-filter is-expanded'
-                          : 'map-category-filter'
-                      }
-                    >
-                      <div className="map-category-strip" aria-label={t('map.categoryFilter.aria')}>
-                        {markerListCategoryOptions.map((category) => (
-                          <button
-                            className={
-                              markerListCategoryId === category.id
-                                ? 'map-category-pill is-active'
-                                : 'map-category-pill'
-                            }
-                            type="button"
-                            key={category.id}
-                            onClick={() => setMarkerListCategoryId(category.id)}
-                          >
-                            {category.name}
-                          </button>
-                        ))}
-                      </div>
-                      {markerListCategoryOptions.length > 4 ? (
-                        <button
-                          className="map-category-toggle"
-                          type="button"
-                          aria-expanded={markerCategoryExpanded}
-                          aria-label={
-                            markerCategoryExpanded
-                              ? t('map.categoryFilter.collapse')
-                              : t('map.categoryFilter.expand')
-                          }
-                          onClick={() => setMarkerCategoryExpanded((current) => !current)}
-                        >
+                <div className="map-marker-list-header">
+                  <button
+                    className="map-marker-list-toggle"
+                    type="button"
+                    aria-expanded={markerListExpanded}
+                    onClick={() => setMarkerListExpanded((current) => !current)}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      {markerListExpanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
+                    </span>
+                    <span>
+                      {markerListCategoryId === 'player'
+                        ? t('map.categoryName.player')
+                        : markerQuery.trim()
+                          ? t('map.markerList.results')
+                          : nearbySearchCenter
+                            ? t('map.markerList.nearby', { name: nearbySearchCenter.label })
+                            : t('map.markerList.default')}
+                    </span>
+                    <span className="muted">
+                      {markerListCategoryId === 'player'
+                        ? t('map.markerList.playerCount', playerMarkerCounts)
+                        : t('map.markerList.count', { count: sidebarMarkers.length })}
+                    </span>
+                  </button>
+                  {markerListExpanded ? (
+                    <>
+                      {nearbySearchCenter ? (
+                        <div className="map-nearby-search-note">
                           <span className="material-symbols-outlined" aria-hidden="true">
-                            {markerCategoryExpanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
+                            travel_explore
                           </span>
-                        </button>
-                      ) : null}
-                    </div>
-                    <div className="map-marker-list-items">
-                      {sidebarMarkers.length > 0 ? (
-                        sidebarMarkers.map((marker) => {
-                          const center = getMarkerCenter(marker);
-                          const distanceDetail = formatMarkerListDistanceDetail(marker, {
-                            coordinates: nearbySearchCenter?.coordinates ?? [
-                              mapView.centerX,
-                              mapView.centerZ,
-                            ],
-                            t,
-                            secondaryPoiIndex,
-                          });
-                          const playerPresence = marker.playerLocation?.presence;
-                          const content = (
-                            <>
-                              <MarkerListIcon marker={marker} iconBaseUrl={markerIconBaseUrl} />
-                              <span>{formatMarkerDisplayName(marker.label)}</span>
-                              <span className="map-marker-list-detail">
-                                {playerPresence ? (
-                                  <span className={`map-player-list-presence is-${playerPresence}`}>
-                                    <span className="material-symbols-outlined" aria-hidden="true">
-                                      {playerPresence === 'online' ? 'wifi' : 'wifi_off'}
-                                    </span>
+                          <span>{t('map.nearby.note', { name: nearbySearchCenter.label })}</span>
+                          <button
+                            className="map-nearby-search-exit"
+                            type="button"
+                            onClick={() => setNearbySearchCenter(null)}
+                          >
+                            {t('map.nearby.exit')}
+                          </button>
+                          {nearbySearchRegion ? (
+                            <div
+                              className="map-nearby-scope-switch"
+                              aria-label={t('map.nearby.scopeAria')}
+                            >
+                              {(['outside', 'inside'] as const).map((scope) => (
+                                <button
+                                  className={nearbySearchScope === scope ? 'is-active' : ''}
+                                  type="button"
+                                  aria-pressed={nearbySearchScope === scope}
+                                  key={scope}
+                                  onClick={() =>
+                                    publishMapNearbySearchScopeChanged({
+                                      markerId: nearbySearchCenter.markerId,
+                                      scope,
+                                    })
+                                  }
+                                >
+                                  <span className="material-interaction-label">
                                     {t(
-                                      playerPresence === 'online'
-                                        ? 'map.player.status.online'
-                                        : 'map.player.status.offline',
+                                      scope === 'outside'
+                                        ? 'map.nearby.scopeOutside'
+                                        : 'map.nearby.scopeInside',
                                     )}
                                   </span>
-                                ) : null}
-                                <span className="muted">{distanceDetail}</span>
-                              </span>
-                            </>
-                          );
-
-                          return (
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <div
+                        className={
+                          markerCategoryExpanded
+                            ? 'map-category-filter is-expanded'
+                            : 'map-category-filter'
+                        }
+                      >
+                        <div
+                          className="map-category-strip"
+                          aria-label={t('map.categoryFilter.aria')}
+                        >
+                          {markerListCategoryOptions.map((category) => (
                             <button
-                              className={[
-                                'map-marker-list-item',
-                                marker.id === focusedMarkerId ? 'is-active' : '',
-                                playerPresence ? 'is-player' : '',
-                                playerPresence === 'offline' ? 'is-offline' : '',
-                              ]
-                                .filter(Boolean)
-                                .join(' ')}
+                              className={
+                                markerListCategoryId === category.id
+                                  ? 'map-category-pill is-active'
+                                  : 'map-category-pill'
+                              }
                               type="button"
-                              key={marker.id}
-                              disabled={!center}
-                              onClick={() => handleMapMarkerActivate(marker)}
+                              key={category.id}
+                              onClick={() => setMarkerListCategoryId(category.id)}
                             >
-                              {content}
+                              <span className="material-interaction-label">{category.name}</span>
                             </button>
-                          );
-                        })
-                      ) : (
-                        <p className="map-marker-list-empty">
-                          {getMapMarkerListEmptyText({
-                            loadStatus,
-                            markerListCategoryId,
-                            nearbySearchCenter,
-                            t,
-                          })}
-                        </p>
-                      )}
-                    </div>
-                  </>
+                          ))}
+                        </div>
+                        {markerListCategoryOptions.length > 4 ? (
+                          <button
+                            className="map-category-toggle"
+                            type="button"
+                            aria-expanded={markerCategoryExpanded}
+                            aria-label={
+                              markerCategoryExpanded
+                                ? t('map.categoryFilter.collapse')
+                                : t('map.categoryFilter.expand')
+                            }
+                            onClick={() => setMarkerCategoryExpanded((current) => !current)}
+                          >
+                            <span className="material-symbols-outlined" aria-hidden="true">
+                              {markerCategoryExpanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
+                            </span>
+                          </button>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+                {markerListExpanded ? (
+                  <div className="map-marker-list-items">
+                    {sidebarMarkers.length > 0 ? (
+                      sidebarMarkers.map((marker) => {
+                        const center = getMarkerCenter(marker);
+                        const distanceDetail = formatMarkerListDistanceDetail(marker, {
+                          coordinates: nearbySearchCenter?.coordinates ?? [
+                            mapView.centerX,
+                            mapView.centerZ,
+                          ],
+                          t,
+                          secondaryPoiIndex,
+                        });
+                        const playerPresence = marker.playerLocation?.presence;
+                        const content = (
+                          <>
+                            <MarkerListIcon marker={marker} iconBaseUrl={markerIconBaseUrl} />
+                            <span>{formatMarkerDisplayName(marker.label)}</span>
+                            <span className="map-marker-list-detail">
+                              {playerPresence ? (
+                                <span className={`map-player-list-presence is-${playerPresence}`}>
+                                  <span className="material-symbols-outlined" aria-hidden="true">
+                                    {playerPresence === 'online' ? 'wifi' : 'wifi_off'}
+                                  </span>
+                                  {t(
+                                    playerPresence === 'online'
+                                      ? 'map.player.status.online'
+                                      : 'map.player.status.offline',
+                                  )}
+                                </span>
+                              ) : null}
+                              <span className="muted">{distanceDetail}</span>
+                            </span>
+                          </>
+                        );
+
+                        return (
+                          <button
+                            className={[
+                              'map-marker-list-item',
+                              marker.id === focusedMarkerId ? 'is-active' : '',
+                              playerPresence ? 'is-player' : '',
+                              playerPresence === 'offline' ? 'is-offline' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
+                            type="button"
+                            key={marker.id}
+                            disabled={!center}
+                            onClick={() => handleMapMarkerActivate(marker)}
+                          >
+                            {content}
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <p className="map-marker-list-empty">
+                        {getMapMarkerListEmptyText({
+                          loadStatus,
+                          markerListCategoryId,
+                          nearbySearchCenter,
+                          t,
+                        })}
+                      </p>
+                    )}
+                  </div>
                 ) : null}
               </div>
             )}
@@ -3823,7 +3839,7 @@ export function MapStage() {
                         key={tab}
                         onClick={() => setPoiDetailTab(tab as PoiDetailTab)}
                       >
-                        {label}
+                        <span className="material-interaction-label">{label}</span>
                       </button>
                     ))}
                   </div>
@@ -3986,29 +4002,7 @@ export function MapStage() {
                           <span>{t('map.poi.openDetail')}</span>
                         </a>
                       ) : null}
-                      <PoiActionBar
-                        isFavorite={favoriteMarkerIds.has(focusedMarker.id)}
-                        marker={focusedMarker}
-                        onPlanRoute={() => createRoutePlanDraft(focusedMarker)}
-                        onSearchNearby={() => startNearbySearch(focusedMarker)}
-                        onShare={() => void shareMarker(focusedMarker)}
-                        onToggleFavorite={() => toggleFavoriteMarker(focusedMarker)}
-                        status={poiActionStatus}
-                        t={t}
-                      />
                     </>
-                  ) : null}
-                  {isLinearDetailMarker(focusedMarker) ? (
-                    <PoiActionBar
-                      isFavorite={favoriteMarkerIds.has(focusedMarker.id)}
-                      marker={focusedMarker}
-                      onPlanRoute={() => createRoutePlanDraft(focusedMarker)}
-                      onSearchNearby={() => startNearbySearch(focusedMarker)}
-                      onShare={() => void shareMarker(focusedMarker)}
-                      onToggleFavorite={() => toggleFavoriteMarker(focusedMarker)}
-                      status={poiActionStatus}
-                      t={t}
-                    />
                   ) : null}
                   {!isLinearDetailMarker(focusedMarker) &&
                   !focusedMarkerIsPlayer &&
@@ -4077,10 +4071,12 @@ export function MapStage() {
                                         key={categoryId}
                                         onClick={() => setSecondaryPoiCategoryFilter(categoryId)}
                                       >
-                                        {categoryId === 'all'
-                                          ? t('map.poi.filterAll')
-                                          : (categoryById.get(categoryId) ??
-                                            getMarkerCategoryDisplayName(categoryId, t))}
+                                        <span className="material-interaction-label">
+                                          {categoryId === 'all'
+                                            ? t('map.poi.filterAll')
+                                            : (categoryById.get(categoryId) ??
+                                              getMarkerCategoryDisplayName(categoryId, t))}
+                                        </span>
                                       </button>
                                     ),
                                   )}
@@ -4134,9 +4130,11 @@ export function MapStage() {
                                           key={floorLabel}
                                           onClick={() => setSecondaryPoiFloorFilter(floorLabel)}
                                         >
-                                          {floorLabel === 'all'
-                                            ? t('map.poi.filterAll')
-                                            : floorLabel}
+                                          <span className="material-interaction-label">
+                                            {floorLabel === 'all'
+                                              ? t('map.poi.filterAll')
+                                              : floorLabel}
+                                          </span>
                                         </button>
                                       ),
                                     )}
@@ -4257,6 +4255,19 @@ export function MapStage() {
                     />
                   ) : null}
                 </div>
+                {/* 操作底栏固定在滚动区外：线性要素（公交线路/道路端点组）常显，其余仅摘要标签页显示 */}
+                {isLinearDetailMarker(focusedMarker) || poiDetailTab === 'summary' ? (
+                  <PoiActionBar
+                    isFavorite={favoriteMarkerIds.has(focusedMarker.id)}
+                    marker={focusedMarker}
+                    onPlanRoute={() => createRoutePlanDraft(focusedMarker)}
+                    onSearchNearby={() => startNearbySearch(focusedMarker)}
+                    onShare={() => void shareMarker(focusedMarker)}
+                    onToggleFavorite={() => toggleFavoriteMarker(focusedMarker)}
+                    status={poiActionStatus}
+                    t={t}
+                  />
+                ) : null}
               </>
             ) : null}
           </aside>
@@ -4791,27 +4802,24 @@ export function MapStage() {
 
       {layerPanelOpen ? (
         <aside className="map-layer-panel" id="map-layer-panel" aria-label={t('map.layer.aria')}>
-          <div
+          <SegmentedControl
             className="map-browse-mode-control"
             role="tablist"
-            aria-label={t('map.layer.modeAria')}
-          >
-            {mapBrowseModes.map((mode) => (
-              <button
-                className={browseMode === mode.value ? 'is-active' : ''}
-                type="button"
-                role="tab"
-                aria-selected={browseMode === mode.value}
-                key={mode.value}
-                onClick={() => setBrowseMode(mode.value)}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  {mode.icon}
-                </span>
-                <span>{t(mode.labelKey)}</span>
-              </button>
-            ))}
-          </div>
+            ariaLabel={t('map.layer.modeAria')}
+            value={browseMode}
+            onChange={setBrowseMode}
+            options={mapBrowseModes.map((mode) => ({
+              value: mode.value,
+              label: (
+                <>
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    {mode.icon}
+                  </span>
+                  <span>{t(mode.labelKey)}</span>
+                </>
+              ),
+            }))}
+          />
           {browseMode === 'satellite' && tileProviders.length > 1 ? (
             <label className="map-tile-provider-select">
               <span className="material-symbols-outlined" aria-hidden="true">
@@ -4846,76 +4854,44 @@ export function MapStage() {
                 : t('map.layer.noteTraffic')}
           </p>
           <div className="map-layer-option-list">
-            <label className="map-layer-toggle">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                location_on
-              </span>
-              <span>
-                <strong>{t('map.layer.markers')}</strong>
-                <small>
-                  {markersVisible ? t('map.layer.markersVisible') : t('map.layer.markersHidden')}
-                </small>
-              </span>
-              <input
-                type="checkbox"
-                checked={markersVisible}
-                onChange={(event) => setMarkersVisible(event.currentTarget.checked)}
-              />
-            </label>
+            <MapLayerToggle
+              icon="location_on"
+              title={t('map.layer.markers')}
+              detail={markersVisible ? t('map.layer.markersVisible') : t('map.layer.markersHidden')}
+              checked={markersVisible}
+              onChange={setMarkersVisible}
+            />
             {browseMode !== 'satellite' ? (
-              <label className="map-layer-toggle">
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  view_in_ar
-                </span>
-                <span>
-                  <strong>{t('map.layer.perspective')}</strong>
-                  <small>
-                    {perspective2_5dVisible
-                      ? t('map.layer.perspectiveVisible')
-                      : t('map.layer.perspectiveHidden')}
-                  </small>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={perspective2_5dVisible}
-                  onChange={(event) => setPerspective2_5dVisible(event.currentTarget.checked)}
-                />
-              </label>
+              <MapLayerToggle
+                icon="view_in_ar"
+                title={t('map.layer.perspective')}
+                detail={
+                  perspective2_5dVisible
+                    ? t('map.layer.perspectiveVisible')
+                    : t('map.layer.perspectiveHidden')
+                }
+                checked={perspective2_5dVisible}
+                onChange={setPerspective2_5dVisible}
+              />
             ) : null}
-            <label className="map-layer-toggle">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                person_pin_circle
-              </span>
-              <span>
-                <strong>{t('map.layer.players')}</strong>
-                <small>
-                  {playersVisible ? t('map.layer.playersVisible') : t('map.layer.playersHidden')}
-                </small>
-              </span>
-              <input
-                type="checkbox"
-                checked={playersVisible}
-                onChange={(event) => setPlayersVisible(event.currentTarget.checked)}
-              />
-            </label>
-            <label className="map-layer-toggle">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                route
-              </span>
-              <span>
-                <strong>{t('map.layer.linearFeatures')}</strong>
-                <small>
-                  {linearFeaturesVisible
-                    ? t('map.layer.linearFeaturesVisible')
-                    : t('map.layer.linearFeaturesHidden')}
-                </small>
-              </span>
-              <input
-                type="checkbox"
-                checked={linearFeaturesVisible}
-                onChange={(event) => setLinearFeaturesVisible(event.currentTarget.checked)}
-              />
-            </label>
+            <MapLayerToggle
+              icon="person_pin_circle"
+              title={t('map.layer.players')}
+              detail={playersVisible ? t('map.layer.playersVisible') : t('map.layer.playersHidden')}
+              checked={playersVisible}
+              onChange={setPlayersVisible}
+            />
+            <MapLayerToggle
+              icon="route"
+              title={t('map.layer.linearFeatures')}
+              detail={
+                linearFeaturesVisible
+                  ? t('map.layer.linearFeaturesVisible')
+                  : t('map.layer.linearFeaturesHidden')
+              }
+              checked={linearFeaturesVisible}
+              onChange={setLinearFeaturesVisible}
+            />
           </div>
           <button
             className="secondary-action-button is-primary"
@@ -4957,7 +4933,7 @@ export function MapStage() {
                 </span>
               </button>
             </div>
-            <form className="map-poi-submit-form" onSubmit={submitPoi}>
+            <form className="map-poi-submit-form" id={poiSubmitFormId} onSubmit={submitPoi}>
               <label>
                 <span>{t('map.poiSubmit.name')}</span>
                 <input
@@ -5109,9 +5085,13 @@ export function MapStage() {
                   <span>{t('map.poiSubmit.pickOnMap')}</span>
                 </button>
               </div>
+            </form>
+            {poiSubmitStatus ? <p className="map-source-note">{poiSubmitStatus}</p> : null}
+            <div className="admin-content-actions">
               <button
                 className="secondary-action-button is-primary"
                 type="submit"
+                form={poiSubmitFormId}
                 disabled={poiSubmitBusy || publicPoiCategories.length === 0}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
@@ -5121,8 +5101,7 @@ export function MapStage() {
                   {poiSubmitBusy ? t('map.poiSubmit.submitting') : t('map.poiSubmit.submit')}
                 </span>
               </button>
-            </form>
-            {poiSubmitStatus ? <p className="map-source-note">{poiSubmitStatus}</p> : null}
+            </div>
           </section>
         </div>
       ) : null}
@@ -5721,34 +5700,26 @@ function TransitLineMapDetail({
           </dd>
         </div>
       </dl>
-      <div
+      <SegmentedControl
         className="map-line-direction-switch"
         role="tablist"
-        aria-label={t('lineDetail.directionAria')}
-      >
-        <button
-          className={direction === 'forward' ? 'is-active' : ''}
-          type="button"
-          role="tab"
-          aria-selected={direction === 'forward'}
-          onClick={() => onDirectionChange('forward')}
-        >
-          {t('lineDetail.directionTo', {
-            station: formatMarkerDisplayName(forwardDirectionName),
-          })}
-        </button>
-        <button
-          className={direction === 'reverse' ? 'is-active' : ''}
-          type="button"
-          role="tab"
-          aria-selected={direction === 'reverse'}
-          onClick={() => onDirectionChange('reverse')}
-        >
-          {t('lineDetail.directionTo', {
-            station: formatMarkerDisplayName(reverseDirectionName),
-          })}
-        </button>
-      </div>
+        ariaLabel={t('lineDetail.directionAria')}
+        value={direction}
+        onChange={onDirectionChange}
+        options={(
+          [
+            { value: 'forward', name: forwardDirectionName },
+            { value: 'reverse', name: reverseDirectionName },
+          ] as const
+        ).map((option) => ({
+          value: option.value,
+          label: (
+            <span className="material-interaction-label">
+              {t('lineDetail.directionTo', { station: formatMarkerDisplayName(option.name) })}
+            </span>
+          ),
+        }))}
+      />
       {stationStops.length > 0 ? (
         <ol className="map-line-station-list">
           {stationStops.map((stop, index) => (
@@ -5802,6 +5773,8 @@ function RoutePlanDraftCard({
   enabledModes,
   endpointCandidates,
   endpointQuery,
+  mapCenterCoordinates,
+  secondaryPoiIndex,
   options,
   sortMode,
   status,
@@ -5827,6 +5800,8 @@ function RoutePlanDraftCard({
   enabledModes: EnabledRouteTransportModes;
   endpointCandidates: CenterableMarker[];
   endpointQuery: string;
+  mapCenterCoordinates: [number, number];
+  secondaryPoiIndex: ReadonlyMap<string, SecondaryPoiLink[]>;
   options: RoutePlanOption[];
   sortMode: RoutePlanSortMode;
   status: RoutePlanStatus;
@@ -5856,15 +5831,7 @@ function RoutePlanDraftCard({
   ]
     .filter(Boolean)
     .join(' ');
-  const [modeListExpanded, setModeListExpanded] = useState(false);
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(() => new Set());
-  const visibleRouteTransportModes = modeListExpanded
-    ? routeTransportModeOptions
-    : routeTransportModeOptions.slice(0, 3);
-  const collapsibleModeCount = Math.max(routeTransportModeOptions.length - 3, 0);
-  const collapsedModesHaveEnabled = routeTransportModeOptions
-    .slice(3)
-    .some((mode) => enabledModes[mode.mode]);
 
   useEffect(() => {
     setExpandedStepIds(new Set());
@@ -6010,7 +5977,13 @@ function RoutePlanDraftCard({
                     >
                       <MarkerListIcon marker={marker} iconBaseUrl={iconBaseUrl} />
                       <span>{formatMarkerDisplayName(marker.label)}</span>
-                      <small>{formatMarkerDetail(marker, t)}</small>
+                      <small>
+                        {formatMarkerListDistanceDetail(marker, {
+                          coordinates: mapCenterCoordinates,
+                          secondaryPoiIndex,
+                          t,
+                        })}
+                      </small>
                     </button>
                   ))
                 ) : (
@@ -6022,77 +5995,25 @@ function RoutePlanDraftCard({
           {!editingEndpoint ? (
             <>
               <div className="map-route-preference-toolbar">
-                <div
-                  className={
-                    modeListExpanded
-                      ? 'map-route-mode-toggle-list is-expanded'
-                      : 'map-route-mode-toggle-list is-collapsed'
-                  }
-                  aria-label={t('map.route.modeAria')}
-                >
-                  <button
-                    className={allModesEnabled ? 'is-active' : ''}
-                    type="button"
-                    aria-label={t('map.route.mode.all')}
-                    title={t('map.route.mode.all')}
-                    aria-pressed={allModesEnabled}
-                    onClick={() => onSetAllModes(!allModesEnabled)}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      {allModesEnabled ? 'check_box' : 'select_check_box'}
-                    </span>
-                  </button>
-                  {visibleRouteTransportModes.map((mode) => {
-                    const modeLabel = getRouteTransportModeLabel(mode.mode, t);
-                    return (
-                      <button
-                        className={[
-                          enabledModes[mode.mode] ? 'is-active' : '',
-                          mode.mode === 'taxi' ? 'is-taxi' : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' ')}
-                        type="button"
-                        key={mode.mode}
-                        aria-label={modeLabel}
-                        title={modeLabel}
-                        aria-pressed={enabledModes[mode.mode]}
-                        onClick={() => onToggleMode(mode.mode)}
-                        style={{ '--route-mode-color': mode.color } as CSSProperties}
-                      >
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          {mode.icon}
-                        </span>
-                      </button>
-                    );
-                  })}
-                  {collapsibleModeCount > 0 ? (
-                    <button
-                      className={
-                        collapsedModesHaveEnabled
-                          ? 'map-route-mode-toggle-more is-active'
-                          : 'map-route-mode-toggle-more'
-                      }
-                      type="button"
-                      aria-label={
-                        modeListExpanded
-                          ? t('map.route.mode.collapse')
-                          : t('map.route.mode.more', { count: collapsibleModeCount })
-                      }
-                      title={
-                        modeListExpanded
-                          ? t('map.route.mode.collapse')
-                          : t('map.route.mode.more', { count: collapsibleModeCount })
-                      }
-                      aria-expanded={modeListExpanded}
-                      onClick={() => setModeListExpanded((value) => !value)}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        {modeListExpanded ? 'keyboard_arrow_up' : 'more_horiz'}
-                      </span>
-                    </button>
-                  ) : null}
-                </div>
+                <RouteModeToggleList
+                  options={routeTransportModeOptions.map((mode) => ({
+                    mode: mode.mode,
+                    icon: mode.icon,
+                    color: mode.color,
+                    label: getRouteTransportModeLabel(mode.mode, t),
+                    taxi: mode.mode === 'taxi',
+                  }))}
+                  enabledModes={enabledModes}
+                  allModesEnabled={allModesEnabled}
+                  onToggle={(mode) => onToggleMode(mode as Parameters<typeof onToggleMode>[0])}
+                  onSetAll={onSetAllModes}
+                  labels={{
+                    groupAria: t('map.route.modeAria'),
+                    all: t('map.route.mode.all'),
+                    more: (count) => t('map.route.mode.more', { count }),
+                    collapse: t('map.route.mode.collapse'),
+                  }}
+                />
                 <RoutePlanSortControl mode={sortMode} onChange={onSortModeChange} t={t} />
               </div>
               <div className="map-route-option-list" aria-label={t('map.route.optionsAria')}>
@@ -6109,13 +6030,32 @@ function RoutePlanDraftCard({
                         }
                         key={option.id}
                         style={{ '--route-option-color': option.color } as CSSProperties}
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={isSelected}
+                        aria-label={`${formatRoutePlanMinutes(option.estimatedMinutes, t)} · ${formatRoutePlanDistance(option.walkingDistance, t)} · ${option.title}`}
+                        onClick={(event) => {
+                          // 步骤详情等内部交互控件自行处理点击，不触发整卡选路
+                          const interactiveAncestor =
+                            event.target instanceof Element
+                              ? event.target.closest('button, a, input, [role="button"]')
+                              : null;
+                          if (interactiveAncestor && interactiveAncestor !== event.currentTarget) {
+                            return;
+                          }
+                          onSelectOption(option.id);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.target !== event.currentTarget) {
+                            return;
+                          }
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            onSelectOption(option.id);
+                          }
+                        }}
                       >
-                        <button
-                          className="map-route-option-summary"
-                          type="button"
-                          onClick={() => onSelectOption(option.id)}
-                          aria-expanded={isSelected}
-                        >
+                        <div className="map-route-option-summary">
                           <span
                             className="material-symbols-outlined map-route-option-icon"
                             aria-hidden="true"
@@ -6135,7 +6075,7 @@ function RoutePlanDraftCard({
                           >
                             {isSelected ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
                           </span>
-                        </button>
+                        </div>
                         {option.fare || optionBadges.length > 0 ? (
                           <div className="map-route-option-meta">
                             {option.fare ? (
@@ -12656,15 +12596,57 @@ function StationExitSchematic({
   const leftExits = isTemplateFlipped ? downwardExits : upwardExits;
   const rightExits = isTemplateFlipped ? upwardExits : downwardExits;
   return (
-    <div className="map-metro-station-exit-track">
-      <span className="is-left">
-        {formatStationExitGroup(leftExits, '←', t)}
-        {formatStationExitDescriptions(leftExits)}
+    <details className="map-metro-station-exit-track">
+      <summary className="map-metro-station-exit-summary">
+        <span className="is-left">{formatStationExitGroup(leftExits, '←', t)}</span>
+        <span className="is-right">{formatStationExitGroup(rightExits, '→', t)}</span>
+      </summary>
+      <div className="map-metro-station-exit-details">
+        <StationExitGroupDetails exits={leftExits} arrow="←" />
+        <StationExitGroupDetails exits={rightExits} arrow="→" isRight />
+      </div>
+    </details>
+  );
+}
+
+function StationExitGroupDetails({
+  exits,
+  arrow,
+  isRight = false,
+}: Readonly<{
+  exits: TransitStationDetailSnapshot['exits'];
+  arrow: '←' | '→';
+  isRight?: boolean;
+}>) {
+  return (
+    <div className={`map-metro-station-exit-group${isRight ? ' is-right' : ' is-left'}`}>
+      <span className="map-metro-station-exit-direction" aria-hidden="true">
+        {arrow}
       </span>
-      <span className="is-right">
-        {formatStationExitGroup(rightExits, '→', t)}
-        {formatStationExitDescriptions(rightExits)}
-      </span>
+      <div className="map-metro-station-exit-list">
+        {exits.map((exit, index) => {
+          const description = formatStationExitDescription(exit);
+          return (
+            <div className="map-metro-station-exit-row" key={`${exit.code}-${index}`}>
+              {isRight ? (
+                <>
+                  <span className="map-metro-station-exit-description">{description}</span>
+                  <strong className="map-metro-station-exit-code">
+                    {formatStationExitCode(exit.code)}
+                  </strong>
+                </>
+              ) : (
+                <>
+                  <strong className="map-metro-station-exit-code">
+                    {formatStationExitCode(exit.code)}
+                  </strong>
+                  <span className="map-metro-station-exit-description">{description}</span>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -12900,10 +12882,13 @@ function formatStationFacilityType(value: string, t: Translate): string {
     toilet: 'map.metroInfrastructure.facility.toilet',
     mens_restroom: 'map.metroInfrastructure.facility.mensRestroom',
     womens_restroom: 'map.metroInfrastructure.facility.womensRestroom',
+    family_restroom: 'map.metroInfrastructure.facility.familyRestroom',
+    accessible_restroom: 'map.metroInfrastructure.facility.accessibleRestroom',
     third_restroom: 'map.metroInfrastructure.facility.thirdRestroom',
     elevator: 'map.metroInfrastructure.facility.elevator',
     escalator_and_stairs: 'map.metroInfrastructure.facility.escalatorAndStairs',
     stairs: 'map.metroInfrastructure.facility.stairs',
+    stairs_two_way: 'map.metroInfrastructure.facility.stairsTwoWay',
     escalator: 'map.metroInfrastructure.facility.escalator',
     platform_door: 'map.metroInfrastructure.facility.platformDoor',
     nursing_room: 'map.metroInfrastructure.facility.nursingRoom',
@@ -12925,10 +12910,13 @@ type StationFacilityKind =
   | 'toilet'
   | 'mens_restroom'
   | 'womens_restroom'
+  | 'family_restroom'
+  | 'accessible_restroom'
   | 'third_restroom'
   | 'elevator'
   | 'escalator_and_stairs'
   | 'stairs'
+  | 'stairs_two_way'
   | 'escalator'
   | 'platform_door'
   | 'nursing_room'
@@ -12959,7 +12947,11 @@ function resolveStationFacilityKind(value: string): StationFacilityKind {
   if (/(?:womens|female|women)_?(?:restroom|toilet)/u.test(normalized)) {
     return 'womens_restroom';
   }
-  if (/(?:third|family)_?(?:restroom|toilet)/u.test(normalized)) return 'third_restroom';
+  if (/family_?(?:restroom|toilet)/u.test(normalized)) return 'family_restroom';
+  // “无障碍卫生间（男+女+轮椅）”与“家庭卫生间（男+女+小孩）”是两个不同设施，
+  // 必须在通用 restroom 兜底之前判定。
+  if (/accessible_?(?:restroom|toilet)/u.test(normalized)) return 'accessible_restroom';
+  if (/third_?(?:restroom|toilet)/u.test(normalized)) return 'third_restroom';
   if (normalized.includes('wheelchair_lift')) return 'wheelchair_lift';
   if (normalized.includes('nursing_room')) return 'nursing_room';
   if (normalized.includes('waiting_room')) return 'waiting_room';
@@ -12973,6 +12965,13 @@ function resolveStationFacilityKind(value: string): StationFacilityKind {
     return 'meeting_point';
   }
   if (normalized.includes('platform_door')) return 'platform_door';
+  if (
+    /(?:two_way|bidirectional|both_directions?)_?(?:stairs?)|stairs_?(?:two_way|bidirectional)/u.test(
+      normalized,
+    )
+  ) {
+    return 'stairs_two_way';
+  }
   if (normalized.includes('toilet') || normalized.includes('restroom')) return 'toilet';
   if (normalized.includes('elevator')) return 'elevator';
   if (normalized.includes('stairs')) return 'stairs';
@@ -12997,13 +12996,18 @@ function getStationFacilityIcons(
     toilet: 'restroom',
     mens_restroom: 'mens-restroom',
     womens_restroom: 'womens-restroom',
-    third_restroom: 'third-restroom',
+    family_restroom: 'family-restroom',
+    accessible_restroom: 'accessible-restroom',
+    // 本站点设施类型里的 third_restroom 沿用外部项目语义，落到本项目的“家庭卫生间”图标。
+    third_restroom: 'family-restroom',
     elevator: 'accessible-elevator',
     stairs: stairsAssetName,
+    stairs_two_way: 'stairs-two-way',
     escalator: 'escalator',
     nursing_room: 'nursing-room',
     waiting_room: 'waiting-room',
     wheelchair_lift: 'wheelchair-lift',
+    wheelchair: 'wheelchair',
     subway: 'subway',
     passenger_service_center: 'passenger-service-center',
     ticket_machine: 'ticket-machine',
@@ -13107,16 +13111,13 @@ function formatStationExitGroup(
   );
 }
 
-function formatStationExitDescriptions(
-  exits: TransitStationDetailSnapshot['exits'],
-): string | null {
-  const descriptions = exits
-    .filter((exit) => exit.description || exit.orientation)
-    .map((exit) => {
-      const details = [exit.description, exit.orientation].filter(Boolean).join(' · ');
-      return `${exit.code}：${details}`;
-    });
-  return descriptions.length > 0 ? `（${descriptions.join('；')}）` : null;
+function formatStationExitCode(code: string): string {
+  const normalized = code.trim();
+  return normalized.endsWith('出口') ? normalized : `${normalized}出口`;
+}
+
+function formatStationExitDescription(exit: TransitStationDetailSnapshot['exits'][number]): string {
+  return [exit.description, exit.orientation].filter(Boolean).join(' · ');
 }
 
 function resolveStationDetailPosition(

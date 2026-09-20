@@ -4,6 +4,7 @@ import type {
   MaterialTransitNetworkPathKind,
   MaterialTransitNetworkSnapshot,
 } from '@yct/contracts';
+import { deriveMetroWayfindingLineIdentity } from './metro-wayfinding-line-source';
 
 export const RMP_TRANSIT_NETWORK_CURRENT_VERSION = 77;
 export const RMP_TRANSIT_NETWORK_MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -54,6 +55,13 @@ export interface MaterialTransitNetworkNodeLineOption {
   color: string;
   label: string;
   secondaryLabel?: string;
+  /**
+   * 是否是用户配置的**真实线路名**（即 `snapshot.lineNames` 中命中）。
+   * RMP 原始存档只有 `sh2` / `bj1` / `pjl` / `maglevA` 这类**颜色工程键**，
+   * 它们不是线路名。未配置名称时 `label` 会回落到工程键，
+   * 消费方（如线路编号选择器）必须靠本字段区分，绝不能从工程键里「提取编号」。
+   */
+  hasConfiguredName: boolean;
 }
 
 export type MaterialTransitNetworkDirection = 'east' | 'west' | 'north' | 'south';
@@ -156,6 +164,7 @@ export function listMaterialTransitNetworkNodeLines(
           color,
           label: lineNames?.name ?? formatLineKey(lineKey),
           secondaryLabel: lineNames?.secondaryName,
+          hasConfiguredName: Boolean(lineNames),
         });
       }
     });
@@ -173,13 +182,14 @@ export function listMaterialTransitNetworkLines(
       if (!lineKey) return;
       const id = lineKey;
       if (optionById.has(id)) return;
+      const lineNames = resolveMaterialTransitNetworkLineNames(snapshot, lineKey);
       optionById.set(id, {
         id,
         lineKey,
         color,
-        label:
-          resolveMaterialTransitNetworkLineNames(snapshot, lineKey)?.name ?? formatLineKey(lineKey),
-        secondaryLabel: resolveMaterialTransitNetworkLineNames(snapshot, lineKey)?.secondaryName,
+        label: lineNames?.name ?? formatLineKey(lineKey),
+        secondaryLabel: lineNames?.secondaryName,
+        hasConfiguredName: Boolean(lineNames),
       });
     });
   }
@@ -750,14 +760,20 @@ export function resolveMaterialTransitNetworkLineNames(
 ): NonNullable<MaterialTransitNetworkSnapshot['lineNames']>[number] | undefined {
   const configuredNames = snapshot.lineNames?.find((line) => line.lineKey === lineKey);
   if (configuredNames) return configuredNames;
-  const lineNumber = lineKey.match(/([0-9]+)$/u)?.[1];
-  return lineNumber
-    ? {
-        lineKey,
-        name: `${lineNumber}号线`,
-        secondaryName: `Line ${lineNumber}`,
-      }
-    : undefined;
+  // 未配置线路名的兜底：**必须**走 deriveMetroWayfindingLineIdentity——
+  // 它才是「从颜色工程键剥离城市前缀」的正解（`sy1` → `2` / `1号线`）。
+  //
+  // 这里曾误用通用提取器 extractMetroWayfindingLineNumber：那个函数面向
+  // 已经干净的线路名（`2号线` → `2`），对 `sy1` 这种「字母+数字」会整串返回，
+  // 于是编出「sy1号线」——正是「配置项目线路名称」对话框要消除的东西。
+  // 通用提取器的 `line:S1` 能力已由 derive 自身覆盖，无需再借它。
+  const derived = deriveMetroWayfindingLineIdentity(lineKey);
+  if (!derived.lineNumber) return undefined;
+  return {
+    lineKey,
+    name: derived.suggestedName,
+    secondaryName: `Line ${derived.lineNumber}`,
+  };
 }
 
 interface MaterialTransitNetworkAdjacentEdge {

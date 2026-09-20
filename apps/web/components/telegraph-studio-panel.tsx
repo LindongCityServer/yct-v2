@@ -9,6 +9,7 @@ import {
   type CSSProperties,
   type PointerEvent,
   type ReactNode,
+  type TouchEvent,
   type WheelEvent,
 } from 'react';
 import { appPath } from '../lib/app-paths';
@@ -71,6 +72,8 @@ const TELEGRAPH_WRITING_OVERLAP_MS = 150;
 const TELEGRAPH_WRITING_MAX_VOICES = 5;
 const TELEGRAPH_HISTORY_ENVELOPE_EXIT_MS = 620;
 const TELEGRAPH_HISTORY_ENVELOPE_ENTER_MS = 720;
+const TELEGRAPH_WELCOME_FAST_STEP_MS = 45;
+const TELEGRAPH_WELCOME_NORMAL_STEP_MS = 155;
 const telegraphPaperSoundPaths = {
   page: '/audio/telegraph/paper-page-turn.mp3',
   friction: '/audio/telegraph/paper-friction.mp3',
@@ -222,6 +225,8 @@ export function TelegraphStudioPanel() {
   const firstInputRef = useRef<HTMLInputElement | null>(null);
   const welcomeReplayRef = useRef<(() => void) | null>(null);
   const outputRef = useRef<HTMLElement | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const lastTouchGestureAt = useRef(0);
   const result = useMemo(() => evaluateTelegraphDraft(draft), [draft]);
   const date = useMemo(() => formatTelegraphDate(new Date(generatedAt)), [generatedAt]);
   const automaticFillValues = useMemo(
@@ -905,6 +910,7 @@ export function TelegraphStudioPanel() {
   const returnToWelcome = () => {
     if (busy || animationState !== 'editing') return;
     stopAllSounds();
+    playPaperSound('page', 760);
     runIdRef.current += 1;
     if (paperEnterTimerRef.current !== null) {
       window.clearTimeout(paperEnterTimerRef.current);
@@ -916,42 +922,57 @@ export function TelegraphStudioPanel() {
     setAnimationState('welcome');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+  const isInteractiveGestureTarget = (target: EventTarget | null) =>
+    target instanceof HTMLElement && Boolean(target.closest('input,button,textarea,select,a'));
+  const handleScrollGesture = (deltaY: number, event?: { preventDefault: () => void }) => {
+    if (busy || confirmOpen || paperEntering || Math.abs(deltaY) <= 30) return;
+    if (animationState === 'welcome' && deltaY > 70 && isPageAtBottom()) {
+      event?.preventDefault();
+      beginDraft();
+      return;
+    }
+    if (animationState === 'editing' && deltaY < -70 && isPageAtTop()) {
+      event?.preventDefault();
+      returnToWelcome();
+      return;
+    }
+    if (deltaY > 30 && animationState === 'editing' && isSendPaperAtEnd()) {
+      if (requestPrint()) event?.preventDefault();
+    }
+  };
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (isInteractiveGestureTarget(event.target)) {
+      swipeStartY.current = null;
+      return;
+    }
     swipeStartY.current = event.clientY;
   };
   const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
     const startY = swipeStartY.current;
     swipeStartY.current = null;
-    if (startY === null || busy || confirmOpen || paperEntering) return;
-    const deltaY = startY - event.clientY;
-    if (animationState === 'welcome' && deltaY > 70 && isPageAtBottom()) {
-      event.preventDefault();
-      beginDraft();
+    if (startY === null || isInteractiveGestureTarget(event.target)) return;
+    handleScrollGesture(startY - event.clientY, event);
+  };
+  const handleTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (isInteractiveGestureTarget(event.target)) {
+      touchStartY.current = null;
       return;
     }
-    if (animationState === 'editing' && deltaY < -70 && isPageAtTop()) {
-      event.preventDefault();
-      returnToWelcome();
-      return;
-    }
-    if (deltaY > 70 && animationState === 'editing' && isSendPaperAtEnd()) requestPrint();
+    touchStartY.current = event.touches[0]?.clientY ?? null;
+  };
+  const handleTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
+    const startY = touchStartY.current;
+    touchStartY.current = null;
+    if (startY === null || isInteractiveGestureTarget(event.target)) return;
+    const endY = event.changedTouches[0]?.clientY;
+    if (endY === undefined) return;
+    const now = Date.now();
+    if (now - lastTouchGestureAt.current < 450) return;
+    lastTouchGestureAt.current = now;
+    handleScrollGesture(startY - endY, event);
   };
   const handleWheel = (event: WheelEvent<HTMLElement>) => {
-    if (busy || confirmOpen || paperEntering || Math.abs(event.deltaY) <= 30) return;
-    if (animationState === 'welcome' && event.deltaY > 30 && isPageAtBottom()) {
-      event.preventDefault();
-      beginDraft();
-      return;
-    }
-    if (animationState === 'editing' && event.deltaY < -30 && isPageAtTop()) {
-      event.preventDefault();
-      returnToWelcome();
-      return;
-    }
-    // 鼠标滚轮向下会让页面继续向发报纸末尾移动；到达末尾后再滚一次才进入确认。
-    if (event.deltaY > 30 && animationState === 'editing' && isSendPaperAtEnd()) {
-      if (requestPrint()) event.preventDefault();
-    }
+    handleScrollGesture(event.deltaY, event);
   };
   const isSendPaperAtEnd = () => {
     const paper = document.querySelector<HTMLElement>(
@@ -976,6 +997,11 @@ export function TelegraphStudioPanel() {
     <div
       className={`telegraph-studio ${animationState === 'welcome' ? 'is-welcome' : ''}`}
       onWheel={handleWheel}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={() => {
+        touchStartY.current = null;
+      }}
     >
       {paperEntering ? (
         <div className="telegraph-building-backdrop is-exiting" aria-hidden="true" />
@@ -1383,7 +1409,7 @@ export function TelegraphStudioPanel() {
                 <span className="material-symbols-outlined" aria-hidden="true">
                   fast_forward
                 </span>
-                跳过动画
+                <span className="material-interaction-label">跳过动画</span>
               </button>
             ) : null}
             {animationState === 'opened' ? (
@@ -1394,7 +1420,7 @@ export function TelegraphStudioPanel() {
                   aria-pressed={paperView === 'receive'}
                   onClick={() => switchPaperView('receive')}
                 >
-                  收报纸
+                  <span className="material-interaction-label">收报纸</span>
                 </button>
                 <button
                   className={paperView === 'send' ? 'is-active' : ''}
@@ -1402,7 +1428,7 @@ export function TelegraphStudioPanel() {
                   aria-pressed={paperView === 'send'}
                   onClick={() => switchPaperView('send')}
                 >
-                  发报纸
+                  <span className="material-interaction-label">发报纸</span>
                 </button>
               </div>
             ) : null}
@@ -1418,7 +1444,7 @@ export function TelegraphStudioPanel() {
                 <span className="material-symbols-outlined" aria-hidden="true">
                   flip
                 </span>
-                信封翻面
+                <span className="material-interaction-label">信封翻面</span>
               </button>
             ) : null}
             {showActions ? (
@@ -1432,7 +1458,7 @@ export function TelegraphStudioPanel() {
                   <span className="material-symbols-outlined" aria-hidden="true">
                     outbox
                   </span>
-                  发报纸
+                  <span className="material-interaction-label">发报纸</span>
                 </button>
                 <button
                   className="secondary-action-button"
@@ -1443,7 +1469,7 @@ export function TelegraphStudioPanel() {
                   <span className="material-symbols-outlined" aria-hidden="true">
                     inbox
                   </span>
-                  收报纸
+                  <span className="material-interaction-label">收报纸</span>
                 </button>
                 <button
                   className="secondary-action-button"
@@ -1454,7 +1480,7 @@ export function TelegraphStudioPanel() {
                   <span className="material-symbols-outlined" aria-hidden="true">
                     content_copy
                   </span>
-                  电码
+                  <span className="material-interaction-label">电码</span>
                 </button>
                 <button
                   className="secondary-action-button"
@@ -1465,14 +1491,14 @@ export function TelegraphStudioPanel() {
                   <span className="material-symbols-outlined" aria-hidden="true">
                     audio_file
                   </span>
-                  音频
+                  <span className="material-interaction-label">音频</span>
                 </button>
                 {animationState === 'opened' ? (
                   <button className="secondary-action-button" type="button" onClick={packReceive}>
                     <span className="material-symbols-outlined" aria-hidden="true">
                       inventory_2
                     </span>
-                    装入信封
+                    <span className="material-interaction-label">装入信封</span>
                   </button>
                 ) : null}
                 <button
@@ -1484,7 +1510,7 @@ export function TelegraphStudioPanel() {
                   <span className="material-symbols-outlined" aria-hidden="true">
                     replay
                   </span>
-                  重播动画
+                  <span className="material-interaction-label">重播动画</span>
                 </button>
               </div>
             ) : null}
@@ -1688,62 +1714,104 @@ function TelegraphWelcomeCode({
   const totalSteps = groups.length * 4;
   const [progress, setProgress] = useState(autoPlay ? 0 : totalSteps);
   const playbackRef = useRef<{ stop: () => void } | null>(null);
+  const welcomePauseTimerRef = useRef<number | null>(null);
   const runIdRef = useRef(0);
-  const startPlayback = useCallback(() => {
-    const runId = runIdRef.current + 1;
-    runIdRef.current = runId;
-    playbackRef.current?.stop();
-    playbackRef.current = null;
-    setProgress(0);
-    onStart();
-    const tokens = groups.flatMap((group, index) => [
-      ...Array.from(group.code).map((digit) => ({
-        display: digit,
-        kind: 'digit' as const,
-        line: 'content' as const,
-        progressIndex: null,
-      })),
-      ...(index < groups.length - 1
-        ? [
-            {
-              display: ' ',
-              kind: 'space' as const,
-              line: 'content' as const,
-              progressIndex: null,
-              spaceKind: 'character' as const,
+  const startPlayback = useCallback(
+    (playAudio = true, stepMs = TELEGRAPH_WELCOME_NORMAL_STEP_MS, afterComplete?: () => void) => {
+      const runId = runIdRef.current + 1;
+      runIdRef.current = runId;
+      playbackRef.current?.stop();
+      playbackRef.current = null;
+      setProgress(0);
+      onStart();
+      if (!playAudio) {
+        const timerIds = Array.from({ length: totalSteps }, (_, index) =>
+          window.setTimeout(
+            () => {
+              if (runIdRef.current === runId) setProgress(index + 1);
             },
-          ]
-        : []),
-    ]);
-    void createMorseWav(tokens).then((audioBlob) => {
-      if (runIdRef.current !== runId) return;
-      const playback = playGeneratedMorseAudio(
-        audioBlob,
-        tokens.map((token) => token.display).join(''),
-        totalSteps,
-        (nextProgress) => {
-          if (runIdRef.current === runId) setProgress(nextProgress);
-        },
-      );
-      playbackRef.current = playback;
-      void playback.promise.then(() => {
+            stepMs * (index + 1),
+          ),
+        );
+        const finishTimerId = window.setTimeout(
+          () => {
+            if (runIdRef.current !== runId) return;
+            playbackRef.current = null;
+            setProgress(totalSteps);
+            if (afterComplete) afterComplete();
+            else onComplete(() => startPlayback(true));
+          },
+          stepMs * totalSteps + 80,
+        );
+        playbackRef.current = {
+          stop: () => {
+            for (const timerId of timerIds) window.clearTimeout(timerId);
+            window.clearTimeout(finishTimerId);
+          },
+        };
+        return;
+      }
+      const tokens = groups.flatMap((group, index) => [
+        ...Array.from(group.code).map((digit) => ({
+          display: digit,
+          kind: 'digit' as const,
+          line: 'content' as const,
+          progressIndex: null,
+        })),
+        ...(index < groups.length - 1
+          ? [
+              {
+                display: ' ',
+                kind: 'space' as const,
+                line: 'content' as const,
+                progressIndex: null,
+                spaceKind: 'character' as const,
+              },
+            ]
+          : []),
+      ]);
+      void createMorseWav(tokens).then((audioBlob) => {
         if (runIdRef.current !== runId) return;
-        playbackRef.current = null;
-        setProgress(totalSteps);
-        onComplete(startPlayback);
+        const playback = playGeneratedMorseAudio(
+          audioBlob,
+          tokens.map((token) => token.display).join(''),
+          totalSteps,
+          (nextProgress) => {
+            if (runIdRef.current === runId) setProgress(nextProgress);
+          },
+        );
+        playbackRef.current = playback;
+        void playback.promise.then(() => {
+          if (runIdRef.current !== runId) return;
+          playbackRef.current = null;
+          setProgress(totalSteps);
+          onComplete(() => startPlayback(true));
+        });
       });
-    });
-  }, [groups, onComplete, onStart, totalSteps]);
+    },
+    [groups, onComplete, onStart, totalSteps],
+  );
 
   useEffect(() => {
     if (autoPlay) {
-      startPlayback();
+      const canPlayAudio =
+        typeof navigator !== 'undefined' && navigator.userActivation?.hasBeenActive === true;
+      startPlayback(false, TELEGRAPH_WELCOME_FAST_STEP_MS, () => {
+        welcomePauseTimerRef.current = window.setTimeout(() => {
+          welcomePauseTimerRef.current = null;
+          startPlayback(canPlayAudio, TELEGRAPH_WELCOME_NORMAL_STEP_MS);
+        }, 1000);
+      });
     } else {
       setProgress(totalSteps);
-      onComplete(startPlayback);
+      onComplete(() => startPlayback(true));
     }
     return () => {
       runIdRef.current += 1;
+      if (welcomePauseTimerRef.current !== null) {
+        window.clearTimeout(welcomePauseTimerRef.current);
+        welcomePauseTimerRef.current = null;
+      }
       playbackRef.current?.stop();
       playbackRef.current = null;
     };
@@ -1799,6 +1867,8 @@ function PaperCellInputGrid({
 }>) {
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const composingRef = useRef(false);
+  const compositionValueRef = useRef<{ index: number; value: string } | null>(null);
+  const pendingCompositionChangeRef = useRef<{ index: number; value: string } | null>(null);
   const cellCount = rows * 10;
 
   const focusCell = (index: number) => {
@@ -1859,9 +1929,15 @@ function PaperCellInputGrid({
             onChange={(event) => {
               const nativeIsComposing = (event.nativeEvent as InputEvent).isComposing;
               const isComposing = composingRef.current || nativeIsComposing;
+              const pendingComposition = pendingCompositionChangeRef.current;
+              if (!isComposing && pendingComposition?.index === index) {
+                pendingCompositionChangeRef.current = null;
+                return;
+              }
               const nextValue = isComposing
                 ? event.target.value.slice(0, 20)
                 : normalizeGridCellValue(event.target.value);
+              if (isComposing) compositionValueRef.current = { index, value: nextValue };
               const nextIsAlphaNumeric =
                 nextValue.length > 0 &&
                 Array.from(nextValue).every((character) => /^[A-Za-z0-9]$/.test(character));
@@ -1876,10 +1952,17 @@ function PaperCellInputGrid({
             }}
             onCompositionStart={() => {
               composingRef.current = true;
+              compositionValueRef.current = { index, value: '' };
+              pendingCompositionChangeRef.current = null;
             }}
             onCompositionEnd={(event) => {
               composingRef.current = false;
-              const compositionValue = event.currentTarget.value;
+              const compositionValue =
+                compositionValueRef.current?.index === index
+                  ? compositionValueRef.current.value || event.currentTarget.value
+                  : event.currentTarget.value;
+              compositionValueRef.current = null;
+              pendingCompositionChangeRef.current = { index, value: event.currentTarget.value };
               onCompositionCommit(index, compositionValue);
               if (compositionValue.length > 0) {
                 const sourceInput = event.currentTarget;
@@ -1888,6 +1971,11 @@ function PaperCellInputGrid({
                   0,
                 );
               }
+              window.setTimeout(() => {
+                if (pendingCompositionChangeRef.current?.index === index) {
+                  pendingCompositionChangeRef.current = null;
+                }
+              }, 0);
             }}
             onKeyDown={(event) => {
               const nativeIsComposing = (event.nativeEvent as KeyboardEvent).isComposing;

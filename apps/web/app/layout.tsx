@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from 'next';
 import '@yct/design-tokens/tokens.css';
 import { EmbeddedContextBridge } from '../components/embedded-context-bridge';
+import { ClientDialogBridge } from '../components/client-dialog-bridge';
 import { KeyboardShortcutBridge } from '../components/keyboard-shortcut-bridge';
+import { LiquidMaterialBridge } from '../components/liquid-material-bridge';
 import { LoginRequiredBridge } from '../components/login-required-bridge';
 import { PreferenceBridge } from '../components/preference-bridge';
 import { PwaBridge } from '../components/pwa-bridge';
@@ -84,9 +86,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       </head>
       <body>
         <EmbeddedContextBridge />
+        <ClientDialogBridge />
         <KeyboardShortcutBridge />
         <LoginRequiredBridge />
         <PreferenceBridge />
+        <LiquidMaterialBridge />
         <PwaBridge />
         <ToastViewport />
         {children}

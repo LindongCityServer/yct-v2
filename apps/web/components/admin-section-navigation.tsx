@@ -77,11 +77,18 @@ export function AdminSectionNavigation({
   currentPath?: string;
   includeOverview?: boolean;
 }>) {
+  const isAdminHome = currentPath === '/admin' && !includeOverview;
+
   return (
-    <nav className="service-entry-grid admin-home-grid" aria-label="后台导航">
+    <nav
+      className={`service-entry-grid admin-home-grid${isAdminHome ? ' is-admin-home' : ''}`}
+      aria-label="后台导航"
+    >
       {adminEntries.map((entry) => (
         <Link
-          className="service-entry admin-home-entry"
+          className={`service-entry admin-home-entry${
+            entry.path === '/admin' ? ' is-overview-entry' : ''
+          }`}
           href={appPath(entry.path)}
           aria-current={currentPath === entry.path ? 'page' : undefined}
           key={entry.path}

@@ -498,8 +498,18 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           'metro-wayfinding-editor': {
             question: '地鐵導視牌現在可以在工作台裡編輯哪些內容？',
             answer:
-              '選擇「地鐵導視牌」範本並保持手動輸入後，可以使用單行、雙行或直向版式，調整畫布尺寸、底色和預設前景色，並編排設施圖示、箭頭、一般文字、大文字、組合框、固定或彈性空白和分隔線。元素支援拖曳排序、移動、複製、刪除和逐項配色；空白工程還可以從範例工程開始。出現寬度或高度不足提示時，文字可能已經被壓縮，仍溢出的固定尺寸元素需要透過增大畫布或減少元素處理。',
-            keywords: ['地鐵導視牌', '視覺化編輯', '單行', '雙行', '直向', '組合框', '尺寸不足'],
+              '選擇「地鐵導視牌」範本並保持手動輸入後，可以使用單行、雙行或直向版式，調整畫布尺寸、底色和預設前景色，並編排設施圖示、箭頭、一般文字、大文字、組合框、固定或彈性空白和分隔線。元素支援拖曳排序、移動、複製、刪除和逐項配色；空白工程還可以從範例工程開始。選中組合框後，上方的「插入建議」區域會提供「線路編號」內容範本：選定一條線路，再用「替換為顏色填充」或「替換為色帶樣式」兩個按鈕之一，即可把組合框子元素替換為編號大文字與線路名雙行文字，並把填充色與色帶顏色設為該線路的標識色；若選中的不是組合框，則會新建一個對應樣式的組合框。切換組合框填充模式時，進入「無填充+色帶」會把縮放倍數放大以收納色帶且預設取消前景色描邊，退出時自動還原；進入「顏色填充」會預設勾選前景色描邊。出現寬度或高度不足提示時，文字可能已經被壓縮，仍溢出的固定尺寸元素需要透過增大畫布或減少元素處理。',
+            keywords: [
+              '地鐵導視牌',
+              '視覺化編輯',
+              '單行',
+              '雙行',
+              '直向',
+              '組合框',
+              '線路編號',
+              '無填充+色帶',
+              '尺寸不足',
+            ],
           },
           'metro-wayfinding-project-files': {
             question: '地鐵導視牌可以匯入和匯出哪些工程檔案？',
@@ -1195,7 +1205,7 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
           'metro-wayfinding-editor': {
             question: 'What can I edit in the metro wayfinding sign workspace?',
             answer:
-              'Select the Metro Wayfinding Sign template and stay in Manual Input to choose a single-row, double-row, or vertical layout; adjust canvas size, background, and default foreground colors; and compose facility icons, arrows, regular text, large text, combinations, fixed or flexible spaces, and dividers. Elements support drag reordering, moving, duplicating, deleting, and per-element colors. An empty project can start from an example. A width or height warning means text may already be compressed; fixed-size elements that still overflow require a larger canvas or fewer elements.',
+              'Select the Metro Wayfinding Sign template and stay in Manual Input to choose a single-row, double-row, or vertical layout; adjust canvas size, background, and default foreground colors; and compose facility icons, arrows, regular text, large text, combinations, fixed or flexible spaces, and dividers. Elements support drag reordering, moving, duplicating, deleting, and per-element colors. An empty project can start from an example. With a combination selected, the Insert Suggestions area above offers the Line Number content template: pick a line, then use Replace with Color Fill or Replace with Stripe Style to swap the combination children for a large line-number element and a two-row line-name text element, setting the fill and stripe colors to that line\u2019s identity color; if the selection is not a combination, a new combination with the matching style is created. Switching the combination fill mode enlarges the scale when entering No Fill + Stripe so the stripe fits, clears the foreground stroke by default, restores the scale on exit, and preselects the foreground stroke when entering Color Fill. A width or height warning means text may already be compressed; fixed-size elements that still overflow require a larger canvas or fewer elements.',
             keywords: [
               'metro wayfinding',
               'visual editor',
@@ -1203,6 +1213,8 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
               'double row',
               'vertical',
               'combination',
+              'line number',
+              'no fill + stripe',
               'insufficient size',
             ],
           },

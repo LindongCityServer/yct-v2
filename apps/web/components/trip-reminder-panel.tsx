@@ -1,7 +1,7 @@
 'use client';
 
 import type { TripReminder, TripReminderStatus } from '@yct/contracts';
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useEffect, useId, useMemo, useState } from 'react';
 import {
   createTripReminder,
   deleteTripReminder,
@@ -29,6 +29,8 @@ export function TripReminderPanel() {
   const [draft, setDraft] = useState({ ...emptyDraft, remindAt: '' });
   const [errorText, setErrorText] = useState('');
   const [formOpen, setFormOpen] = useState(false);
+  // 提交按钮位于 form 之外（弹窗直接子级操作栏，保证吸底几何正确），用 form 属性关联。
+  const reminderFormId = useId();
 
   useEffect(() => {
     setDraft((current) => ({
@@ -154,7 +156,7 @@ export function TripReminderPanel() {
                 </span>
               </button>
             </div>
-            <form className="trip-reminder-form" onSubmit={createReminder}>
+            <form className="trip-reminder-form" id={reminderFormId} onSubmit={createReminder}>
               <label>
                 <span>{t('tripReminder.field.title')}</span>
                 <input
@@ -196,14 +198,16 @@ export function TripReminderPanel() {
                   placeholder={t('tripReminder.placeholder.optional')}
                 />
               </label>
-              <button className="primary-action-button" type="submit">
+            </form>
+            {errorText ? <p className="form-error-text">{errorText}</p> : null}
+            <div className="admin-content-actions">
+              <button className="primary-action-button" type="submit" form={reminderFormId}>
                 <span className="material-symbols-outlined" aria-hidden="true">
                   add_alarm
                 </span>
                 <span>{t('tripReminder.add')}</span>
               </button>
-            </form>
-            {errorText ? <p className="form-error-text">{errorText}</p> : null}
+            </div>
           </section>
         </div>
       ) : null}

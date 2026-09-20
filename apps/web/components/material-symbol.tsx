@@ -78,9 +78,11 @@ export function MaterialSymbol({
     <span
       {...props}
       className={['material-symbols-outlined', className].filter(Boolean).join(' ')}
-      style={{ ...style, ...assetStyle }}
+      data-material-symbol-mask={assetReady ? '' : undefined}
+      style={{ ...style, ...(assetReady ? { width: '1em', height: '1em' } : {}) }}
     >
-      {assetReady ? '' : name}
+      {/* 蒙版只裁剪内层图形，让外层的可读性阴影完整显示。 */}
+      {assetReady ? <span aria-hidden="true" style={{ ...assetStyle, display: 'block' }} /> : name}
     </span>
   );
 }

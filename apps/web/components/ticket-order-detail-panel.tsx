@@ -1,5 +1,7 @@
 'use client';
 
+import { requestConfirmation } from '../lib/client-dialog-events';
+
 import type { ApiItemResponse, TicketOrderListItem } from '@yct/contracts';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -56,7 +58,7 @@ export function TicketOrderDetailPanel({
   };
 
   const cancelOrder = async () => {
-    if (!window.confirm(t('ticketOrderDetail.cancelConfirm'))) {
+    if (!(await requestConfirmation(t('ticketOrderDetail.cancelConfirm')))) {
       return;
     }
 

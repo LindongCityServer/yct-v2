@@ -1586,10 +1586,25 @@ export function AdminOperationsPanel({
             className="modal-panel admin-content-editor-dialog"
             role="dialog"
             aria-modal="true"
-            aria-label="创建内容草稿"
+            aria-labelledby="admin-content-editor-title"
             onChangeCapture={markContentEditorDirty}
             onMouseDown={(event) => event.stopPropagation()}
           >
+            <div className="section-heading">
+              <h2 id="admin-content-editor-title">
+                {editingContentId ? '编辑内容草稿' : '创建内容草稿'}
+              </h2>
+              <button
+                className="icon-action-button"
+                type="button"
+                onClick={resetEditor}
+                aria-label="关闭内容编辑器"
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  close
+                </span>
+              </button>
+            </div>
             {editingContentId ? (
               <p className="muted">{`当前正在编辑 ${editingContentId.slice(-8).toUpperCase()} 内容`}</p>
             ) : null}
@@ -2206,9 +2221,24 @@ export function AdminOperationsPanel({
             className="modal-panel admin-reminder-editor-dialog"
             role="dialog"
             aria-modal="true"
-            aria-label="编辑首页强提醒规则"
+            aria-labelledby="admin-reminder-editor-title"
             onMouseDown={(event) => event.stopPropagation()}
           >
+            <div className="section-heading">
+              <h2 id="admin-reminder-editor-title">
+                {editingReminderId ? '编辑首页强提醒规则' : '新增首页强提醒规则'}
+              </h2>
+              <button
+                className="icon-action-button"
+                type="button"
+                onClick={resetReminderEditor}
+                aria-label="关闭强提醒编辑器"
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  close
+                </span>
+              </button>
+            </div>
             {editingReminderId ? (
               <p className="muted">{`当前正在编辑 ${editingReminderId.slice(-8).toUpperCase()} 规则`}</p>
             ) : null}

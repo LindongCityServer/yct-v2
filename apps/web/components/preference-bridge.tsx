@@ -33,6 +33,8 @@ export const preferenceKeys = {
 export function applyThemeMode(mode: ThemeMode) {
   document.documentElement.dataset.colorScheme = mode;
   window.localStorage.setItem(preferenceKeys.theme, mode);
+  // 主题改变后同步刷新高级材质的边缘、内阴影和文字阴影颜色。
+  applyMaterialPreference(readMaterialPreference());
 }
 
 export function applyAccentMode(mode: AccentMode) {
@@ -69,9 +71,18 @@ export function applyLocalePreferenceState(state: ClientLocalePreferenceState) {
 export function applyMaterialPreference(preference: MaterialPreference) {
   const root = document.documentElement;
   const amount = preference.thickness / 100;
-  const blur = 2 + Math.pow(amount, 2) * 30;
+  const blur = 0.5 + Math.pow(amount, 2.6) * 30;
   const saturation = 1.55 - amount * 0.15;
   const reducedTransparency = window.matchMedia('(prefers-reduced-transparency: reduce)').matches;
+  const prefersDark =
+    root.dataset.colorScheme === 'dark' ||
+    (root.dataset.colorScheme !== 'light' &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const opacityFactor = 1 - amount;
+  const innerShadowOpacityFactor = 1 - amount;
+  const edgeTopOpacity = (prefersDark ? 5 : 22) * opacityFactor;
+  const innerShadowOpacity = (prefersDark ? 13 : 38) * innerShadowOpacityFactor;
+  const controlSurfaceOpacity = 32 + amount * 14;
 
   // 系统减少透明度偏好只记录为兼容标记，不能覆盖用户显式选择的高级材质。
   root.dataset.materialMode = preference.mode;
@@ -89,10 +100,19 @@ export function applyMaterialPreference(preference: MaterialPreference) {
   root.style.setProperty('--yct-material-contrast', String(1.24 - amount * 0.2));
   root.style.setProperty('--yct-material-saturation', String(saturation));
   root.style.setProperty('--yct-material-floating-surface', `${36 + amount * 58}%`);
-  root.style.setProperty('--yct-material-action-surface', `${48 + amount * 49}%`);
+  root.style.setProperty('--yct-material-action-surface', 'var(--yct-material-floating-surface)');
   root.style.setProperty('--yct-material-title-surface', `${34 + amount * 62}%`);
   root.style.setProperty('--yct-material-title-mid-surface', `${4 + amount * 58}%`);
-  root.style.setProperty('--yct-material-text-shadow-strength', `${68 - amount * 44}%`);
+  root.style.setProperty('--yct-material-edge-top-opacity', `${edgeTopOpacity}%`);
+  root.style.setProperty('--yct-material-inner-shadow-opacity', `${innerShadowOpacity}%`);
+  root.style.setProperty(
+    '--yct-material-control-surface',
+    `color-mix(in srgb, var(--yct-color-surface-muted) ${controlSurfaceOpacity}%, transparent)`,
+  );
+  const textShadowStrength = 96 * opacityFactor;
+  root.style.setProperty('--yct-material-text-shadow-strength', `${textShadowStrength}%`);
+  root.style.setProperty('--yct-material-content-shadow-core', `${2 + 2 * opacityFactor}px`);
+  root.style.setProperty('--yct-material-content-shadow-halo', `${6 + 6 * opacityFactor}px`);
 }
 
 export function readThemeMode(): ThemeMode {
@@ -172,7 +192,14 @@ export function PreferenceBridge() {
     const reducedTransparencyQuery = window.matchMedia('(prefers-reduced-transparency: reduce)');
     const handleReducedTransparencyChanged = () =>
       applyMaterialPreference(readMaterialPreference());
+    const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleColorSchemeChanged = () => {
+      if (readThemeMode() === 'system') {
+        applyMaterialPreference(readMaterialPreference());
+      }
+    };
     reducedTransparencyQuery.addEventListener('change', handleReducedTransparencyChanged);
+    colorSchemeQuery.addEventListener('change', handleColorSchemeChanged);
 
     void fetchServerLocalePreference()
       .then((preference) => {
@@ -192,6 +219,7 @@ export function PreferenceBridge() {
       window.removeEventListener(localePreferenceChangedEventName, handleLocalePreferenceChanged);
       unsubscribeMaterialPreference();
       reducedTransparencyQuery.removeEventListener('change', handleReducedTransparencyChanged);
+      colorSchemeQuery.removeEventListener('change', handleColorSchemeChanged);
     };
   }, []);
 

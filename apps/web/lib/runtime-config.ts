@@ -107,8 +107,8 @@ export function readRuntimeConfig(): RuntimeConfig {
   return {
     siteUrl: emptyToUndefined(process.env.YCT_PUBLIC_SITE_URL) ?? 'http://localhost:3000',
     localAdminAuthEnabled:
-      process.env.NODE_ENV !== 'production' &&
-      parseBoolean(process.env.YCT_LOCAL_ADMIN_AUTH_ENABLED, false),
+      process.env.NODE_ENV === 'development' &&
+      parseBoolean(process.env.YCT_LOCAL_ADMIN_AUTH_ENABLED, true),
     localAdminUserId: emptyToUndefined(process.env.YCT_LOCAL_ADMIN_USER_ID) ?? 'local-admin',
     localAdminUsername: emptyToUndefined(process.env.YCT_LOCAL_ADMIN_USERNAME) ?? '本地管理员',
     ldpassBaseUrl: emptyToUndefined(process.env.LDPASS_BASE_URL),

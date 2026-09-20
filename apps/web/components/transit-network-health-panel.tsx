@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type {
   TransitNetworkHealthModeStats,
@@ -114,39 +114,44 @@ export function TransitNetworkHealthPanel({
         </div>
       ) : (
         <>
-          <fieldset className="transit-health-mode-filter" aria-label="按交通方式筛选">
+          <fieldset
+            className="segmented-control transit-health-mode-filter"
+            aria-label="按交通方式筛选"
+          >
             <legend className="sr-only">交通方式</legend>
-            <button
-              type="button"
-              className={activeMode === 'all' ? 'is-active' : undefined}
-              aria-pressed={activeMode === 'all'}
-              onClick={() => setActiveMode('all')}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                commute
-              </span>
-              全部
-              <small>{report.lineCount}</small>
-            </button>
-            {report.modes.map((mode) => (
+            <div>
               <button
-                key={mode.mode}
                 type="button"
-                className={activeMode === mode.mode ? 'is-active' : undefined}
-                aria-pressed={activeMode === mode.mode}
-                onClick={() => setActiveMode(mode.mode)}
+                className={activeMode === 'all' ? 'is-active' : undefined}
+                aria-pressed={activeMode === 'all'}
+                onClick={() => setActiveMode('all')}
               >
-                <span
-                  className="material-symbols-outlined"
-                  aria-hidden="true"
-                  style={{ color: mode.color }}
-                >
-                  {mode.icon}
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  commute
                 </span>
-                {mode.label}
-                <small>{mode.lineCount}</small>
+                全部
+                <small>{report.lineCount}</small>
               </button>
-            ))}
+              {report.modes.map((mode) => (
+                <button
+                  key={mode.mode}
+                  type="button"
+                  className={activeMode === mode.mode ? 'is-active' : undefined}
+                  aria-pressed={activeMode === mode.mode}
+                  onClick={() => setActiveMode(mode.mode)}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    aria-hidden="true"
+                    style={{ color: mode.color }}
+                  >
+                    {mode.icon}
+                  </span>
+                  {mode.label}
+                  <small>{mode.lineCount}</small>
+                </button>
+              ))}
+            </div>
           </fieldset>
 
           <div className="transit-health-scope-row">
@@ -156,16 +161,21 @@ export function TransitNetworkHealthPanel({
               </span>
               当前统计范围：<strong>{scopeLabel}</strong>
             </div>
-            <label className="transit-health-demand-toggle">
-              <input
-                type="checkbox"
-                role="switch"
-                checked={considerExistingNetwork}
-                onChange={(event) => setConsiderExistingNetwork(event.target.checked)}
-              />
-              <span aria-hidden="true" />
-              <strong>{considerExistingNetwork ? '需求分析考虑已有线路' : '仅分析地点潜力'}</strong>
-            </label>
+            <div className="transit-health-demand-toggle">
+              <strong id="transit-health-demand-toggle-label">
+                {considerExistingNetwork ? '需求分析考虑已有线路' : '仅分析地点潜力'}
+              </strong>
+              <label className="switch-control">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={considerExistingNetwork}
+                  onChange={(event) => setConsiderExistingNetwork(event.target.checked)}
+                  aria-labelledby="transit-health-demand-toggle-label"
+                />
+                <span aria-hidden="true" />
+              </label>
+            </div>
           </div>
 
           <section className="transit-health-summary" aria-label={`${scopeLabel}摘要`}>
@@ -836,11 +846,11 @@ function SuggestionCard({
               </li>
             ))}
           </ul>
-          <button type="button" onClick={onShowTargets}>
+          <button type="button" className="secondary-action-button" onClick={onShowTargets}>
             <span className="material-symbols-outlined" aria-hidden="true">
               list_alt
             </span>
-            查看全部 {suggestion.targetCount ?? targets.length} 项
+            <span>查看全部 {suggestion.targetCount ?? targets.length} 项</span>
           </button>
         </div>
       ) : null}
@@ -855,6 +865,8 @@ function SuggestionTargetsDialog({
   suggestion: TransitNetworkHealthSuggestion;
   onClose: () => void;
 }>) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const targets = suggestion.targets ?? [];
   const normalizedQuery = query.trim().toLocaleLowerCase('zh-CN');
@@ -867,94 +879,96 @@ function SuggestionTargetsDialog({
     : targets;
 
   useEffect(() => {
+    const dialog = dialogRef.current;
     const previousOverflow = document.body.style.overflow;
+    const previousFocus = document.activeElement;
     document.body.style.overflow = 'hidden';
-    function handleKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') {
-        onClose();
-      }
+    dialog?.showModal();
+    // 命中项较多时直接把焦点送入搜索框；否则由浏览器聚焦首个可聚焦元素（关闭按钮）
+    if (targets.length > 8) {
+      searchInputRef.current?.focus();
     }
-    window.addEventListener('keydown', handleKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
+      dialog?.close();
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
     };
-  }, [onClose]);
+    // 弹窗打开/关闭与焦点交接只在挂载/卸载时执行一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return createPortal(
-    <div
-      className="transit-health-target-dialog-backdrop"
-      role="presentation"
+    <dialog
+      ref={dialogRef}
+      className="modal-panel transit-health-target-dialog"
+      aria-labelledby="transit-health-target-dialog-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
         }
       }}
     >
-      <section
-        className="transit-health-target-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="transit-health-target-dialog-title"
-      >
-        <header>
-          <div>
-            <span>{dimensionLabels[suggestion.dimension]}</span>
-            <h2 id="transit-health-target-dialog-title">{suggestion.title}</h2>
-            <p>
-              {suggestion.targetLabel ?? '命中项目'} · 共 {suggestion.targetCount ?? targets.length}{' '}
-              项
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            title="关闭"
-            aria-label="关闭命中项目列表"
-            autoFocus={targets.length <= 8}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              close
-            </span>
-          </button>
-        </header>
-        {targets.length > 8 ? (
-          <label className="transit-health-target-search">
-            <span className="material-symbols-outlined" aria-hidden="true">
-              search
-            </span>
-            <span className="sr-only">搜索命中项目</span>
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索线路、站点、路段或地点"
-              autoFocus
-            />
-          </label>
-        ) : null}
-        <div className="transit-health-target-dialog-body">
-          {filteredTargets.length > 0 ? (
-            <ol>
-              {filteredTargets.map((target, index) => (
-                <li key={`${target.kind}-${target.label}-${index}`}>
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    {suggestionTargetIcon(target.kind)}
-                  </span>
-                  <div>
-                    <span>{suggestionTargetKindLabel(target.kind)}</span>
-                    <strong>{target.label}</strong>
-                    {target.detail ? <small>{target.detail}</small> : null}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p className="transit-health-target-empty">没有匹配的命中项目。</p>
-          )}
+      <header>
+        <div>
+          <span>{dimensionLabels[suggestion.dimension]}</span>
+          <h2 id="transit-health-target-dialog-title">{suggestion.title}</h2>
+          <p>
+            {suggestion.targetLabel ?? '命中项目'} · 共 {suggestion.targetCount ?? targets.length}{' '}
+            项
+          </p>
         </div>
-      </section>
-    </div>,
+        <button
+          type="button"
+          className="icon-button"
+          onClick={onClose}
+          title="关闭"
+          aria-label="关闭命中项目列表"
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            close
+          </span>
+        </button>
+      </header>
+      {targets.length > 8 ? (
+        <label className="transit-health-target-search">
+          <span className="material-symbols-outlined" aria-hidden="true">
+            search
+          </span>
+          <span className="sr-only">搜索命中项目</span>
+          <input
+            ref={searchInputRef}
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索线路、站点、路段或地点"
+          />
+        </label>
+      ) : null}
+      <div className="transit-health-target-dialog-body">
+        {filteredTargets.length > 0 ? (
+          <ol>
+            {filteredTargets.map((target, index) => (
+              <li key={`${target.kind}-${target.label}-${index}`}>
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  {suggestionTargetIcon(target.kind)}
+                </span>
+                <div>
+                  <span>{suggestionTargetKindLabel(target.kind)}</span>
+                  <strong>{target.label}</strong>
+                  {target.detail ? <small>{target.detail}</small> : null}
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="transit-health-target-empty">没有匹配的命中项目。</p>
+        )}
+      </div>
+    </dialog>,
     document.body,
   );
 }
