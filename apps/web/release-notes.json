@@ -3,6 +3,60 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.12.2",
+      "releasedAt": "2026-09-20T04:45:48.466Z",
+      "sourceFingerprint": "bed2364713ea007ee0ba6ded7fbf1c5013e518b01e8c6ac593db44e8a51e0fa0",
+      "themes": ["materials", "web", "map", "transit", "telegraph", "admin"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "导视牌内联编辑支持用方向键在文本与线路号之间移动光标，点击空白处可直接继续输入"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修正默认线网加载时的线路编号换算，不再直接照搬颜色号作为线路号"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "导视牌「版式与外观」在有内容时默认收起，窄屏改为纵向排列，分段控件换行时不再保持胶囊外形，并统一单选框与勾选框的尺寸"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "简约材质模式下不再给设计上完全透明的面板填充不透明背景，二级页面与电报发送台和普通模式观感一致"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "补充无障碍卫生间、家庭卫生间、无障碍坡道、轮椅、双向楼梯等车站设施图标"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "重排地图地点列表，分类筛选与周边搜索范围切换更清晰"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "线网健康支持按交通方式筛选线路与建议，并可在弹窗中搜索查看全部潜在需求点"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "电报纸支持滑动手势切换收报、发报与信封转场，并可跳过动画直接进入编辑"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "后台删除与提交等确认改用站内确认弹窗，并补齐编辑器标题与导航的无障碍标签"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.12.1",
       "releasedAt": "2026-08-29T09:15:26.430Z",
       "sourceFingerprint": "abdda6cdd18493fadcbb953a9ded581640df784aad32f4389a8ab220838b6228",

@@ -181,7 +181,13 @@ function Write-YctWebDevMeta {
   }
 
   $json = $Meta | ConvertTo-Json -Depth 6
-  [System.IO.File]::WriteAllText($Path, $json + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
+  # 用 `New-Object` 而不是 `[System.Text.UTF8Encoding]::new($false)`：
+  # 后者是 PowerShell 7 才支持的「构造函数语法」，Windows PowerShell 5.1 会报
+  # 「不支持方法调用」并让整个启动脚本解析失败。
+  # 本机已装 Store 版 PowerShell 7.6.6，`web:dev:*` 入口走 `pwsh` 可正常工作；
+  # 但 Meta 文件写入是公共路径，保持 5.1 兼容写法可以避免在只有 5.1 的机器上炸掉。
+  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllText($Path, $json + [Environment]::NewLine, $utf8NoBom)
 }
 
 function Read-YctWebDevMeta {

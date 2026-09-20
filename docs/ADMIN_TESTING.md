@@ -2,16 +2,33 @@
 
 更新时间：2026-07-09
 
-本文档记录当前阶段如何测试雨城通 v2 的后台功能。后台身份来自真实 `ldpass` 会话；YCT 会同时接受本地管理员成员记录，以及 `ldpass` 会话中角色为 `admin` / `super_admin` 的 Active 用户。当前不提供假登录、模拟管理员或绕过 `ldpass` 的测试入口。
+本文档记录当前阶段如何测试雨城通 v2 的后台功能。生产后台身份来自真实 `ldpass` 会话；本地开发环境默认提供仅限回环地址的“本地管理员登录”，用于测试后台页面和写接口。YCT 仍会同时接受本地管理员成员记录，以及 `ldpass` 会话中角色为 `admin` / `super_admin` 的 Active 用户。
 
 ## 1. 前置条件
+
+本地开发默认启用本地管理员登录：
+
+```powershell
+$env:YCT_LOCAL_ADMIN_AUTH_ENABLED = "1"
+pnpm web:dev:restart
+```
+
+打开 `http://127.0.0.1:3300/account`，点击“本地管理员登录”即可建立本地超级管理员会话。该入口只接受 `localhost`、`127.0.0.1`、`0.0.0.0` 和 `::1`，不会在局域网地址或生产环境生效。
+
+部署或生产环境应明确关闭：
+
+```text
+YCT_LOCAL_ADMIN_AUTH_ENABLED=0
+```
+
+即使误配置为 `1`，只有 `NODE_ENV=development` 才会启用本地管理员登录；生产构建和未设置开发环境的启动方式都会拒绝该入口。
 
 - 已配置 `LDPASS_BASE_URL` 与 `LDPASS_CLIENT_ID`。
 - `ldpass` 中已有一个可登录的 Active 用户。
 - 测试用户在 `ldpass` 中完成登录后，YCT 能通过 `client-session` 读取到该用户。
 - 本地或服务器运行目录可写入 `.yct-data/`。
 
-如果没有配置 `ldpass`，后台 API 和票务订单写接口应返回 `ldpass_not_configured`，这属于正确的安全边界。
+如果没有配置 `ldpass`，本地后台仍可通过本地管理员登录测试；生产后台 API 和票务订单写接口应返回 `ldpass_not_configured`，这属于正确的安全边界。
 
 如果账号页回跳后显示 `session_cookie_missing` 或“雨城通没有收到临东通共享登录 Cookie”，优先检查 `ldpass` 生产环境是否配置了 `AUTH_COOKIE_DOMAIN=.shangxiaoguan.top`，并在重启 `ldpass` 后退出再重新登录。只在 `ldpass` 域名下能读到登录态、但 YCT 回调拿不到 `ldpass_session` 时，后台身份也无法建立。
 
@@ -115,9 +132,9 @@ curl.exe -I "https://yct.shangxiaoguan.top/v2/api/auth/ldpass/start?check=$(Get-
 8. 点击“运行统一任务”后，应能在同一区块看到最近一轮任务结果摘要：公告源状态、内容型提醒可见性状态、事件重放数、通知处理数、通知失败数和票务过期清理数；如果当前没有待处理事件或到期通知，事件/通知计数允许为 `0`。
 9. 最近统一任务卡片需要直接给出任务级摘要状态；当公告源不可用/未配置、事件重放失败数大于 0，或通知失败数大于 0 时，应表现为“有告警”，其余情况表现为“正常”。
 10. 连续运行几次统一任务后，后台“最近统一任务”列表应保留最近几次摘要，并区分“管理员触发”还是“系统触发”；历史项只要求展示聚合结果，不需要回放每条通知明细。若存在定时发布内容被首页强提醒规则引用，到点前内容型提醒候选应为 `0`，到点后再次运行统一任务时应能看到“内容型提醒可见性”从无变化或未检查变为已变化，并请求一次运营提醒重算。
-7. 访问 `/admin/services`，创建一个服务入口草稿，提交审核，通过并发布，确认 `/services` 和 `/api/services/entries` 出现已发布入口。
-8. 访问 `/admin/transit`，导入旧站线路数据，查看校验摘要，提交审核，通过并发布，确认 `/api/transit/overview` 优先读取已发布版本。
-9. 使用普通登录用户提交 POI 后，再访问 `/admin/map-poi` 审核并发布，确认 `/api/map/markers` 合并已发布 POI。
+11. 访问 `/admin/services`，创建一个服务入口草稿，提交审核，通过并发布，确认 `/services` 和 `/api/services/entries` 出现已发布入口。
+12. 访问 `/admin/transit`，导入旧站线路数据，查看校验摘要，提交审核，通过并发布，确认 `/api/transit/overview` 优先读取已发布版本。
+13. 使用普通登录用户提交 POI 后，再访问 `/admin/map-poi` 审核并发布，确认 `/api/map/markers` 合并已发布 POI。
 
 ## 6. 需要特别检查的安全边界
 

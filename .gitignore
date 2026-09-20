@@ -5,6 +5,7 @@
 tmp/
 artifacts/
 .turbo/
+.workbuddy-ai/
 node_modules/
 dist/
 coverage/

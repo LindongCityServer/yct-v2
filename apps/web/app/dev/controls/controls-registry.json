@@ -1,0 +1,142 @@
+{
+  "sections": [
+    {
+      "id": "controls-inventory",
+      "text": "全量清单"
+    },
+    {
+      "id": "controls-buttons",
+      "text": "按钮"
+    },
+    {
+      "id": "controls-switch",
+      "text": "开关 switch-control"
+    },
+    {
+      "id": "controls-segmented",
+      "text": "分段选择 segmented-control"
+    },
+    {
+      "id": "controls-route-mode",
+      "text": "地图选路控件"
+    },
+    {
+      "id": "controls-text-field",
+      "text": "表单元素 material-field"
+    },
+    {
+      "id": "controls-titlebar-buttons",
+      "text": "标题栏独立按钮"
+    },
+    {
+      "id": "controls-navigation",
+      "text": "导航框架控件"
+    },
+    {
+      "id": "controls-chips",
+      "text": "芯片与徽章"
+    },
+    {
+      "id": "controls-status-chips",
+      "text": "状态芯片与徽章"
+    },
+    {
+      "id": "controls-checkbox-row",
+      "text": "复选框与选择行"
+    },
+    {
+      "id": "controls-strips",
+      "text": "筛选条与分段控件变体"
+    },
+    {
+      "id": "controls-map-floating",
+      "text": "地图悬浮芯片与图层面板"
+    },
+    {
+      "id": "controls-list",
+      "text": "列表项与卡片"
+    },
+    {
+      "id": "controls-form-extended",
+      "text": "表单扩展控件"
+    },
+    {
+      "id": "controls-search",
+      "text": "搜索框 search-box"
+    },
+    {
+      "id": "controls-toolbar",
+      "text": "工具栏与批量操作条"
+    },
+    {
+      "id": "controls-table",
+      "text": "数据表格"
+    },
+    {
+      "id": "controls-status-text",
+      "text": "状态与文本"
+    },
+    {
+      "id": "controls-toast-dialog",
+      "text": "Toast 与弹窗"
+    },
+    {
+      "id": "controls-business",
+      "text": "真实业务控件"
+    },
+    {
+      "id": "controls-input-states",
+      "text": "输入类型与状态"
+    }
+  ],
+  "sharedPreviews": [
+    {
+      "component": "RouteModeToggleList",
+      "source": "apps/web/components/route-mode-toggle-list.tsx",
+      "section": "controls-route-mode",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "RangeInput",
+      "source": "apps/web/components/range-input.tsx",
+      "section": "controls-form-extended",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "SegmentedControl",
+      "source": "apps/web/components/segmented-control.tsx",
+      "section": "controls-strips",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "MapLayerToggle",
+      "source": "apps/web/components/map-layer-toggle.tsx",
+      "section": "controls-map-floating",
+      "exclusiveClasses": ["map-layer-toggle"]
+    },
+    {
+      "component": "ScheduleStopTimeTable",
+      "source": "apps/web/components/schedule-stop-time-table.tsx",
+      "section": "controls-table",
+      "exclusiveClasses": ["schedule-stop-time-table", "schedule-stop-time-row"]
+    },
+    {
+      "component": "PoiFacilityEditor",
+      "source": "apps/web/components/poi-facility-editor.tsx",
+      "section": "controls-business",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "WorldCoordinatePicker",
+      "source": "apps/web/components/world-coordinate-picker.tsx",
+      "section": "controls-business",
+      "exclusiveClasses": []
+    },
+    {
+      "component": "OperationTableOfContents",
+      "source": "apps/web/components/operation-table-of-contents.tsx",
+      "section": "controls-navigation",
+      "exclusiveClasses": []
+    }
+  ]
+}

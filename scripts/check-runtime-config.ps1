@@ -11,7 +11,7 @@ $ErrorActionPreference = "Stop"
 
 $envFiles = @(".env", ".env.production", ".env.local", ".env.production.local")
 $requiredKeys = @("LDPASS_BASE_URL", "LDPASS_CLIENT_ID", "YCT_PUBLIC_SITE_URL")
-$optionalKeys = @("YCT_BASE_PATH", "NEXT_PUBLIC_YCT_BASE_PATH")
+$optionalKeys = @("YCT_BASE_PATH", "NEXT_PUBLIC_YCT_BASE_PATH", "YCT_LOCAL_ADMIN_AUTH_ENABLED")
 
 if ([string]::IsNullOrWhiteSpace($BasePath) -and $RemainingArgs.Length -gt 0) {
   $normalizedRemainingArgs = $RemainingArgs | Where-Object { $_ -ne "--" }
@@ -206,6 +206,12 @@ if (-not $ldpassClientId) {
 }
 if (-not $siteUrl) {
   $warnings.Add("YCT_PUBLIC_SITE_URL is missing. Callback URL inference will be unreliable.")
+}
+if (
+  $resolvedValues.ContainsKey("YCT_LOCAL_ADMIN_AUTH_ENABLED") -and
+  $resolvedValues["YCT_LOCAL_ADMIN_AUTH_ENABLED"].Value -match '^(1|true|yes|on)$'
+) {
+  $warnings.Add("YCT_LOCAL_ADMIN_AUTH_ENABLED is enabled. Keep it disabled in production; local administrator login is development-only.")
 }
 
 foreach ($key in ($requiredKeys + $optionalKeys)) {

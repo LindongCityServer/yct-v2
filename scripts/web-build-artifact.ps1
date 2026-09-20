@@ -731,6 +731,7 @@ if (`$normalizedBasePath -and -not `$normalizedBasePath.StartsWith("/")) {
 
 `$env:PORT = [string]`$Port
 `$env:HOSTNAME = `$HostName
+`$env:NODE_ENV = "production"
 `$env:YCT_RUNTIME_ROOT = `$PSScriptRoot
 `$env:YCT_BASE_PATH = `$normalizedBasePath
 `$env:NEXT_PUBLIC_YCT_BASE_PATH = `$normalizedBasePath
@@ -801,6 +802,8 @@ Notes:
 - ENVIRONMENT.example is a key inventory, not a production environment file. merge-yct-env.ps1 only appends keys that are missing from the existing production .env; it never replaces existing values or secrets.
 - Keep real environment files (.env, .env.production, .env.local), server-side runtime stores, runtime-assets, uploaded content assets, logs, and backups outside the deployment bundle. In the extracted deployment directory, place those environment files at the same level as start-yct-web.ps1, .yct-data, and runtime-assets. start-yct-web.ps1 will import them before launching the standalone server.
 - start-yct-web.ps1 loads .env -> .env.production -> .env.local -> .env.production.local, and later files override earlier ones. These values also override inherited shell / PM2 environment variables for the same keys so stale localhost settings do not leak into production.
+- start-yct-web.ps1 forces NODE_ENV=production. Keep YCT_LOCAL_ADMIN_AUTH_ENABLED=0 in the deployment environment; the local administrator login is only for loopback development.
+- check-runtime-config.ps1 reports YCT_LOCAL_ADMIN_AUTH_ENABLED=true as a production warning.
 - deploy-yct-web.ps1 will automatically preserve .env, .env.production, .env.local, .env.production.local, .yct-data, runtime-assets, and apps\web\public\content-assets from the old deployment directory before replacing files.
 - Dynamic Material Symbols metadata (.yct-data\material-symbol-asset-store.json) and SVG files (runtime-assets\material-symbols) form one persistent dataset. Stop all writers and back up or restore both paths together.
 - Admin preview and first-time promotion of a new Material Symbol require outbound HTTPS access from the server to fonts.googleapis.com:443 and fonts.gstatic.com:443. Public rendering uses local assets and must not require visitor access to Google Fonts.

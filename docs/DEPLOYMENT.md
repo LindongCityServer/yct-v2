@@ -131,6 +131,14 @@ C:\wwwroot\yct-v2\
 
 `.env`、`.env.production`、`.env.local` 这类真实环境变量文件，推荐都放在部署根目录，也就是和 `start-yct-web.ps1`、`.yct-data` 同级，而不是放到 `apps\web` 里。这样当前备份/替换脚本、手工启动命令和绝大多数进程管理方式都更一致。当前部署包里的 `start-yct-web.ps1` 会在启动前主动读取部署根目录下这些 `.env*` 文件，再启动 Next standalone；这一步是为了绕开 Next standalone 运行时先切到 `apps\web` 工作目录、导致默认读不到部署根目录 `.env` 的问题。
 
+生产部署必须显式关闭仅供本机开发使用的管理员登录入口：
+
+```dotenv
+YCT_LOCAL_ADMIN_AUTH_ENABLED=0
+```
+
+该入口只有在 `NODE_ENV=development` 时才会由应用代码启用；生产启动脚本会强制设置 `NODE_ENV=production`，即使环境变量误配置为 `1` 也不会接受本地管理员登录。部署验收时不要把 `/account` 页面里的“本地管理员登录”当作生产登录方式，生产后台必须使用真实 `ldpass` 会话。
+
 如果后续改用 PM2、Windows 服务或宝塔守护进程，除了保留这些文件在部署根目录，还要确保“工作目录”就是部署根目录，或者把同样的环境变量显式写进进程管理器配置；不要假设进程管理器一定会自动读取某个 `.env` 文件。
 
 如果你怀疑线上虽然有 `.env` 但应用仍提示 `ldpass_not_configured`，可以先在部署目录运行：
@@ -152,6 +160,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -Origin
 ```
 
 这个脚本会按生产环境优先级检查 `.env`、`.env.production`、`.env.local`、`.env.production.local`，只输出配置项是否存在、来源文件、推导出的回调地址和告警，不会打印敏感值。部署包根目录也会附带同名脚本，解压后无需依赖仓库源码或 `tsx`。
+如果检测到 `YCT_LOCAL_ADMIN_AUTH_ENABLED` 为真值，脚本会把它列为生产告警；生产环境应改为 `0` 后再启动。
 
 如果需要在只有 standalone 部署包、没有 pnpm 的服务器上指定首位或追加雨城通管理员，可在部署根目录运行：
 

@@ -73,12 +73,14 @@ NEXT_PUBLIC_YCT_BASE_PATH=
 YCT_BASE_PATH=
 LDPASS_BASE_URL=https://ldpass.shangxiaoguan.top
 LDPASS_CLIENT_ID=yuchengtong
+YCT_LOCAL_ADMIN_AUTH_ENABLED=0
 ```
 
 要求：
 
 - `LDPASS_BASE_URL` 只写临东通站点 Origin，不加 `/api`、`/login`、查询参数或业务路径。
 - `LDPASS_CLIENT_ID` 必须是临东通后台已启用并绑定到 `yct` 发卡方的应用。
+- `YCT_LOCAL_ADMIN_AUTH_ENABLED` 生产环境必须保持为 `0`；本地管理员登录只允许回环地址的开发环境使用。
 - Nginx 必须把 `Host`、`X-Forwarded-Host`、`X-Forwarded-Proto` 和外部端口正确传给 Node。
   内部 `3300` 不能被拼进公网回调地址。
 - `robots.txt`、`sitemap.xml`、`llms.txt`、`/api/v1/public` 和 `/api/v1/public/openapi` 必须由同一个 Next standalone 实例提供，不能回落到旧静态站。公共 API 的 canonical URL 必须使用当前公网 Origin 和 BasePath。
