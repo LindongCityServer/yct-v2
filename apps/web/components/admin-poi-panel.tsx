@@ -1,5 +1,7 @@
 'use client';
 
+import { requestConfirmation, requestPageWindow } from '../lib/client-dialog-events';
+
 import type {
   MapGeometry,
   MapMarkerSpatialMetadata,
@@ -866,7 +868,7 @@ export function AdminPoiPanel({
   };
 
   const deleteSubmission = async (submission: AdminPoiSubmission): Promise<boolean> => {
-    const confirmed = window.confirm(
+    const confirmed = await requestConfirmation(
       submission.status === 'published'
         ? `确认删除已发布 POI“${submission.title}”？删除后会立即从公开地图移除，后台记录会保留为已归档。`
         : `确认删除 POI 投稿“${submission.title}”？删除后记录会保留为已归档。`,
@@ -1062,7 +1064,7 @@ export function AdminPoiPanel({
       return;
     }
 
-    const confirmed = window.confirm(
+    const confirmed = await requestConfirmation(
       `确认归档/删除已选择的 ${selectedSubmissions.length} 条投稿和 ${selectedLegacyMarkers.length} 个旧有标记点？`,
     );
     if (!confirmed) {
@@ -1526,9 +1528,9 @@ export function AdminPoiPanel({
                   key={item.key}
                   marker={item.marker}
                   onAddChild={() => setCreateTarget({ parentMarkerId: item.marker.id })}
-                  onDelete={() => {
+                  onDelete={async () => {
                     if (
-                      window.confirm(
+                      await requestConfirmation(
                         `确认删除旧有标记点“${item.marker.label}”？删除后会从公开地图标记列表移除。`,
                       )
                     ) {
@@ -3429,7 +3431,7 @@ function PoiSubmissionDetailDialog({
           <button
             type="button"
             disabled={isBusy || submission.status !== 'approved'}
-            onClick={() => void window.open(mapHref, '_blank', 'noopener,noreferrer')}
+            onClick={() => requestPageWindow(mapHref, '地图查看')}
           >
             地图查看
           </button>
@@ -6329,7 +6331,11 @@ function PoiCategoryProfileDialog({
       return;
     }
 
-    if (!window.confirm(`确认删除图标 ${uploadedFileName}？这会同步移除分类配置中的引用。`)) {
+    if (
+      !(await requestConfirmation(
+        `确认删除图标 ${uploadedFileName}？这会同步移除分类配置中的引用。`,
+      ))
+    ) {
       return;
     }
 

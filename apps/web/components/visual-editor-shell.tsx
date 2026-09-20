@@ -1,5 +1,7 @@
 'use client';
 
+import { requestConfirmation } from '../lib/client-dialog-events';
+
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { appPath } from '../lib/app-paths';
 import { subscribeEditorDraftChanged, type VisualEditorKind } from '../lib/client-editor-events';
@@ -72,12 +74,12 @@ export function VisualEditorShell({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isBusy, onSave]);
 
-  const requestBack = () => {
+  const requestBack = async () => {
     if (onBack) {
       onBack();
       return;
     }
-    if (dirty && !window.confirm('当前编辑尚未保存，确定离开吗？')) {
+    if (dirty && !(await requestConfirmation('当前编辑尚未保存，确定离开吗？'))) {
       return;
     }
     approvedNavigationRef.current = true;

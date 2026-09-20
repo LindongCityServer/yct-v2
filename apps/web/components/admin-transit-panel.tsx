@@ -1,5 +1,9 @@
 'use client';
 
+import { ScheduleStopTimeTable } from './schedule-stop-time-table';
+
+import { requestConfirmation } from '../lib/client-dialog-events';
+
 import type {
   MapGeometry,
   MapMarkerSnapshot,
@@ -1386,12 +1390,12 @@ export function AdminTransitPanel({
     setProfileStatusText(`已添加 ${nextProfile.label}，保存后生效`);
   };
 
-  const removeModeProfileDraft = (profile: TransitModeProfile) => {
+  const removeModeProfileDraft = async (profile: TransitModeProfile) => {
     if (modeProfiles.length <= 1) {
       setProfileStatusText('至少保留一个交通方式。');
       return;
     }
-    if (!window.confirm(`确认删除交通方式“${profile.label}”？保存后生效。`)) {
+    if (!(await requestConfirmation(`确认删除交通方式“${profile.label}”？保存后生效。`))) {
       return;
     }
 
@@ -1412,12 +1416,12 @@ export function AdminTransitPanel({
     setServiceProfileStatusText(`已添加 ${nextProfile.label}，保存后生效`);
   };
 
-  const removeServiceProfileDraft = (profile: TravelScheduleServiceProfile) => {
+  const removeServiceProfileDraft = async (profile: TravelScheduleServiceProfile) => {
     if (serviceProfiles.length <= 1) {
       setServiceProfileStatusText('至少保留一个可排班服务。');
       return;
     }
-    if (!window.confirm(`确认删除可排班服务“${profile.label}”？保存后生效。`)) {
+    if (!(await requestConfirmation(`确认删除可排班服务“${profile.label}”？保存后生效。`))) {
       return;
     }
 
@@ -1646,8 +1650,8 @@ export function AdminTransitPanel({
             }}
             onBatchAction={(action) => void runSelectedTransitLineAction(action)}
             onClearSelection={() => setSelectedTransitLineKeys(new Set())}
-            onDeleteLine={(revision, line) => {
-              if (window.confirm(`确认删除线路 ${line.name}？已发布线路会转为归档。`)) {
+            onDeleteLine={async (revision, line) => {
+              if (await requestConfirmation(`确认删除线路 ${line.name}？已发布线路会转为归档。`)) {
                 void deleteTransitLineByAdmin(revision.revisionId, line);
               }
             }}
@@ -1801,9 +1805,11 @@ export function AdminTransitPanel({
             }}
             onBatchAction={(action) => void runSelectedScheduleTripAction(action)}
             onClearSelection={() => setSelectedScheduleTripKeys(new Set())}
-            onDeleteTrip={(revision, trip) => {
+            onDeleteTrip={async (revision, trip) => {
               if (
-                window.confirm(`确认删除班次 ${formatTripDiffLabel(trip)}？已发布班次会转为归档。`)
+                await requestConfirmation(
+                  `确认删除班次 ${formatTripDiffLabel(trip)}？已发布班次会转为归档。`,
+                )
               ) {
                 void deleteScheduleTrip(revision.revisionId, trip);
               }
@@ -2825,64 +2831,19 @@ function ScheduleRunChart({
                   ? '道路排点'
                   : '人工时刻'}
               </summary>
-              <div className="schedule-stop-time-table">
-                <div className="schedule-stop-time-row is-header">
-                  <span>停站</span>
-                  <span>站点</span>
-                  <span>到达</span>
-                  <span>出发</span>
-                  <span>停车(分)</span>
-                </div>
-                {draft.map((stopTime, index) => (
-                  <div className="schedule-stop-time-row" key={`${stopTime.stationName}-${index}`}>
-                    <input
-                      type="checkbox"
-                      checked={stopTime.isStop}
-                      aria-label={`${stopTime.stationName} 是否停站`}
-                      onChange={(event) =>
-                        updateDraft(revision, trip, index, {
-                          isStop: event.currentTarget.checked,
-                        })
-                      }
-                    />
-                    <strong>{stopTime.stationName}</strong>
-                    <input
-                      type="time"
-                      value={stopTime.arrivalTime ?? ''}
-                      onChange={(event) =>
-                        updateDraft(revision, trip, index, {
-                          arrivalTime: event.currentTarget.value || undefined,
-                        })
-                      }
-                    />
-                    <input
-                      type="time"
-                      value={stopTime.departureTime ?? ''}
-                      onChange={(event) =>
-                        updateDraft(revision, trip, index, {
-                          departureTime: event.currentTarget.value || undefined,
-                        })
-                      }
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      max={1440}
-                      value={stopTime.dwellMinutes ?? ''}
-                      onChange={(event) =>
-                        updateDraft(revision, trip, index, {
-                          ...applyStopDwellMinutes(
-                            stopTime,
-                            event.currentTarget.value
-                              ? Number(event.currentTarget.value)
-                              : undefined,
-                          ),
-                        })
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
+              <ScheduleStopTimeTable
+                stopTimes={draft}
+                onChange={(index, patch) =>
+                  updateDraft(
+                    revision,
+                    trip,
+                    index,
+                    'dwellMinutes' in patch
+                      ? applyStopDwellMinutes(draft[index], patch.dwellMinutes)
+                      : patch,
+                  )
+                }
+              />
               <div className="schedule-run-editor-actions">
                 <button
                   type="button"
@@ -3578,65 +3539,17 @@ function ScheduleTripEditDialog({
               {timingSource === 'road_segment' ? '当前时刻来自道路区间用时' : '当前时刻为人工维护'}
             </span>
           </div>
-          <div className="schedule-stop-time-table" role="table" aria-label="各站停站时刻">
-            <div className="schedule-stop-time-row is-header" role="row">
-              <span>停站</span>
-              <span>站点</span>
-              <span>到达</span>
-              <span>出发</span>
-              <span>停车(分)</span>
-            </div>
-            {stopTimes.map((stopTime, index) => (
-              <div
-                className="schedule-stop-time-row"
-                role="row"
-                key={`${stopTime.stationName}-${index}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={stopTime.isStop}
-                  aria-label={`${stopTime.stationName} 是否停站`}
-                  onChange={(event) =>
-                    updateDialogStopTime(index, { isStop: event.currentTarget.checked })
-                  }
-                />
-                <strong>{stopTime.stationName}</strong>
-                <input
-                  type="time"
-                  value={stopTime.arrivalTime ?? ''}
-                  onChange={(event) =>
-                    updateDialogStopTime(index, {
-                      arrivalTime: event.currentTarget.value || undefined,
-                    })
-                  }
-                />
-                <input
-                  type="time"
-                  value={stopTime.departureTime ?? ''}
-                  onChange={(event) =>
-                    updateDialogStopTime(index, {
-                      departureTime: event.currentTarget.value || undefined,
-                    })
-                  }
-                />
-                <input
-                  type="number"
-                  min={0}
-                  max={1440}
-                  value={stopTime.dwellMinutes ?? ''}
-                  onChange={(event) =>
-                    updateDialogStopTime(
-                      index,
-                      applyStopDwellMinutes(
-                        stopTime,
-                        event.currentTarget.value ? Number(event.currentTarget.value) : undefined,
-                      ),
-                    )
-                  }
-                />
-              </div>
-            ))}
-          </div>
+          <ScheduleStopTimeTable
+            stopTimes={stopTimes}
+            onChange={(index, patch) =>
+              updateDialogStopTime(
+                index,
+                'dwellMinutes' in patch
+                  ? applyStopDwellMinutes(stopTimes[index], patch.dwellMinutes)
+                  : patch,
+              )
+            }
+          />
         </fieldset>
         <label>
           <span>运营日期规则</span>
@@ -4023,10 +3936,13 @@ const stationFacilityOptions = [
   ['escalator', '扶梯'],
   ['escalator_and_stairs', '扶梯/楼梯'],
   ['stairs', '楼梯'],
+  ['stairs_two_way', '双向楼梯'],
   ['wheelchair_lift', '轮椅升降机'],
   ['toilet', '卫生间'],
   ['mens_restroom', '男卫生间'],
   ['womens_restroom', '女卫生间'],
+  ['family_restroom', '家庭卫生间'],
+  ['accessible_restroom', '无障碍卫生间'],
   ['third_restroom', '第三卫生间'],
   ['passenger_service_center', '乘客服务中心'],
   ['ticket_machine', '自动售票机'],
@@ -7810,11 +7726,15 @@ function getEditorFacilitySymbol(type: string): string {
     escalator: 'escalator',
     escalator_and_stairs: 'escalator',
     stairs: 'stairs',
+    stairs_two_way: 'stairs',
     wheelchair_lift: 'accessible_forward',
     toilet: 'wc',
     mens_restroom: 'man',
     womens_restroom: 'woman',
+    family_restroom: 'family_restroom',
+    // 站点设施里的 third_restroom 沿用外部项目语义，对应“家庭卫生间”。
     third_restroom: 'family_restroom',
+    accessible_restroom: 'accessible_forward',
     passenger_service_center: 'support_agent',
     ticket_machine: 'confirmation_number',
     nursing_room: 'breastfeeding',

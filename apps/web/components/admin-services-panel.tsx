@@ -1,5 +1,7 @@
 'use client';
 
+import { requestConfirmation } from '../lib/client-dialog-events';
+
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
@@ -502,15 +504,15 @@ export function AdminServicesPanel() {
                 <button
                   type="button"
                   disabled={isBusy || entry.status === 'archived'}
-                  onClick={() => {
+                  onClick={async () => {
                     if (
-                      !window.confirm(
+                      !(await requestConfirmation(
                         isDefaultEntry(entry)
                           ? `确认删除系统默认入口“${entry.title}”？删除后会立即从公开服务列表下线。`
                           : entry.status === 'published'
                             ? `确认移除已发布服务入口“${entry.title}”？移除后会立即从公开服务列表下线，并保留后台记录。`
                             : `确认删除服务入口“${entry.title}”？`,
-                      )
+                      ))
                     ) {
                       return;
                     }

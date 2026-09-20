@@ -2,10 +2,13 @@ import type { MaterialTransitNetworkSnapshot } from '@yct/contracts';
 
 export type TransitNetworkSourceKind = 'server' | 'rmp';
 export type TransitNetworkSourceChangeReason =
-  | 'initialization'
-  | 'selection'
-  | 'project-import'
-  | 'project-removal';
+  'initialization' | 'selection' | 'project-import' | 'project-removal';
+
+/**
+ * RMP 项目的来源：`sample` 是画廊示例线网，`imported` 是用户自己导入的 RMP 文件。
+ * 线路选项需要按它区分「示例项目」与「导入项目」，避免两种项目的线路混在一起。
+ */
+export type TransitNetworkProjectOrigin = 'none' | 'sample' | 'imported';
 
 export interface TransitNetworkSourceChangedPayload {
   studioId: string;
@@ -13,6 +16,7 @@ export interface TransitNetworkSourceChangedPayload {
   reason: TransitNetworkSourceChangeReason;
   snapshot?: MaterialTransitNetworkSnapshot;
   clearSnapshot?: boolean;
+  projectOrigin?: TransitNetworkProjectOrigin;
 }
 
 export interface TransitNetworkImportSucceededPayload {

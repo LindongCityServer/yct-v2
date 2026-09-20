@@ -255,7 +255,9 @@ export type CommonMessageKey =
   | 'map.metroInfrastructure.facility.elevator'
   | 'map.metroInfrastructure.facility.escalator'
   | 'map.metroInfrastructure.facility.escalatorAndStairs'
+  | 'map.metroInfrastructure.facility.accessibleRestroom'
   | 'map.metroInfrastructure.facility.exit'
+  | 'map.metroInfrastructure.facility.familyRestroom'
   | 'map.metroInfrastructure.facility.meetingPoint'
   | 'map.metroInfrastructure.facility.mensRestroom'
   | 'map.metroInfrastructure.facility.nursingRoom'
@@ -263,6 +265,7 @@ export type CommonMessageKey =
   | 'map.metroInfrastructure.facility.platformDoor'
   | 'map.metroInfrastructure.facility.police'
   | 'map.metroInfrastructure.facility.stairs'
+  | 'map.metroInfrastructure.facility.stairsTwoWay'
   | 'map.metroInfrastructure.facility.subway'
   | 'map.metroInfrastructure.facility.thirdRestroom'
   | 'map.metroInfrastructure.facility.ticketMachine'
@@ -1261,6 +1264,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.metroInfrastructure.facility.escalator': '扶梯',
     'map.metroInfrastructure.facility.escalatorAndStairs': '扶梯/楼梯',
     'map.metroInfrastructure.facility.exit': '出口',
+    'map.metroInfrastructure.facility.familyRestroom': '家庭卫生间',
+    'map.metroInfrastructure.facility.accessibleRestroom': '无障碍卫生间',
     'map.metroInfrastructure.facility.meetingPoint': '会合点',
     'map.metroInfrastructure.facility.mensRestroom': '男卫生间',
     'map.metroInfrastructure.facility.nursingRoom': '母婴室',
@@ -1268,6 +1273,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.metroInfrastructure.facility.platformDoor': '屏蔽门',
     'map.metroInfrastructure.facility.police': '警务室',
     'map.metroInfrastructure.facility.stairs': '楼梯',
+    'map.metroInfrastructure.facility.stairsTwoWay': '双向楼梯',
     'map.metroInfrastructure.facility.subway': '地铁',
     'map.metroInfrastructure.facility.thirdRestroom': '第三卫生间',
     'map.metroInfrastructure.facility.ticketMachine': '自动售票机',
@@ -1707,12 +1713,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.language.system': '跟随系统',
     'settings.language.zhCN': '简体中文',
     'settings.language.zhHant': '繁體中文',
-    'settings.material.advanced': '高级',
-    'settings.material.balanced': '平衡',
+    'settings.material.advanced': '透光',
+    'settings.material.balanced': '均衡',
     'settings.material.group': '界面材质',
     'settings.material.label': '材质模式',
-    'settings.material.performance': '性能',
-    'settings.material.thickness': '高级材质厚度',
+    'settings.material.performance': '简约',
+    'settings.material.thickness': '透光材质厚度',
     'settings.material.thicknessValue': '{value}%',
     'settings.motion.full': '开启',
     'settings.motion.group': '动态效果',
@@ -2271,6 +2277,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.metroInfrastructure.facility.escalator': '扶梯',
     'map.metroInfrastructure.facility.escalatorAndStairs': '扶梯/樓梯',
     'map.metroInfrastructure.facility.exit': '出口',
+    'map.metroInfrastructure.facility.familyRestroom': '家庭洗手間',
+    'map.metroInfrastructure.facility.accessibleRestroom': '無障礙洗手間',
     'map.metroInfrastructure.facility.meetingPoint': '會合點',
     'map.metroInfrastructure.facility.mensRestroom': '男洗手間',
     'map.metroInfrastructure.facility.nursingRoom': '母嬰室',
@@ -2278,6 +2286,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.metroInfrastructure.facility.platformDoor': '屏蔽門',
     'map.metroInfrastructure.facility.police': '警務室',
     'map.metroInfrastructure.facility.stairs': '樓梯',
+    'map.metroInfrastructure.facility.stairsTwoWay': '雙向樓梯',
     'map.metroInfrastructure.facility.subway': '地鐵',
     'map.metroInfrastructure.facility.thirdRestroom': '第三洗手間',
     'map.metroInfrastructure.facility.ticketMachine': '自動售票機',
@@ -2717,12 +2726,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.language.system': '跟隨系統',
     'settings.language.zhCN': '简体中文',
     'settings.language.zhHant': '繁體中文',
-    'settings.material.advanced': '進階',
-    'settings.material.balanced': '平衡',
+    'settings.material.advanced': '透光',
+    'settings.material.balanced': '均衡',
     'settings.material.group': '介面材質',
     'settings.material.label': '材質模式',
-    'settings.material.performance': '效能',
-    'settings.material.thickness': '進階材質厚度',
+    'settings.material.performance': '簡約',
+    'settings.material.thickness': '透光材質厚度',
     'settings.material.thicknessValue': '{value}%',
     'settings.motion.full': '開啟',
     'settings.motion.group': '動態效果',
@@ -3294,6 +3303,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.metroInfrastructure.facility.escalator': 'Escalator',
     'map.metroInfrastructure.facility.escalatorAndStairs': 'Escalator / stairs',
     'map.metroInfrastructure.facility.exit': 'Exit',
+    'map.metroInfrastructure.facility.familyRestroom': 'Family restroom',
+    'map.metroInfrastructure.facility.accessibleRestroom': 'Accessible restroom',
     'map.metroInfrastructure.facility.meetingPoint': 'Meeting point',
     'map.metroInfrastructure.facility.mensRestroom': "Men's restroom",
     'map.metroInfrastructure.facility.nursingRoom': 'Nursing room',
@@ -3301,6 +3312,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.metroInfrastructure.facility.platformDoor': 'Platform screen door',
     'map.metroInfrastructure.facility.police': 'Police room',
     'map.metroInfrastructure.facility.stairs': 'Stairs',
+    'map.metroInfrastructure.facility.stairsTwoWay': 'Two-way stairs',
     'map.metroInfrastructure.facility.subway': 'Metro',
     'map.metroInfrastructure.facility.thirdRestroom': 'All-gender family restroom',
     'map.metroInfrastructure.facility.ticketMachine': 'Ticket machine',
@@ -3746,12 +3758,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.language.system': 'Follow system',
     'settings.language.zhCN': '简体中文',
     'settings.language.zhHant': '繁體中文',
-    'settings.material.advanced': 'Advanced',
+    'settings.material.advanced': 'Translucent',
     'settings.material.balanced': 'Balanced',
     'settings.material.group': 'Interface Material',
     'settings.material.label': 'Material Mode',
-    'settings.material.performance': 'Performance',
-    'settings.material.thickness': 'Advanced Material Thickness',
+    'settings.material.performance': 'Simple',
+    'settings.material.thickness': 'Translucent Material Thickness',
     'settings.material.thicknessValue': '{value}%',
     'settings.motion.full': 'On',
     'settings.motion.group': 'Motion',

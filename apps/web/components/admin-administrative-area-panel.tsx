@@ -1,5 +1,7 @@
 'use client';
 
+import { RangeInput } from './range-input';
+
 import type {
   AdministrativeArea,
   AdministrativeAreaLevel,
@@ -549,12 +551,11 @@ export function AdminAdministrativeAreaPanel() {
               <div className="admin-map-area-opacity-grid">
                 <label>
                   <span>填充透明度 · {form.fillOpacity}</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
+                  <RangeInput
+                    min={0}
+                    max={1}
                     step="0.05"
-                    value={form.fillOpacity}
+                    value={Number(form.fillOpacity)}
                     onChange={(event) =>
                       setForm({ ...form, fillOpacity: event.currentTarget.value })
                     }
@@ -562,12 +563,11 @@ export function AdminAdministrativeAreaPanel() {
                 </label>
                 <label>
                   <span>描边透明度 · {form.strokeOpacity}</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
+                  <RangeInput
+                    min={0}
+                    max={1}
                     step="0.05"
-                    value={form.strokeOpacity}
+                    value={Number(form.strokeOpacity)}
                     onChange={(event) =>
                       setForm({ ...form, strokeOpacity: event.currentTarget.value })
                     }
