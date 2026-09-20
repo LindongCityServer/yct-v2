@@ -64,7 +64,9 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
     });
   }, [studioId]);
 
-  const requestAction = (action: 'preview' | 'submit' | 'download' | 'export-project') => {
+  const requestAction = (
+    action: 'preview' | 'submit' | 'download' | 'export-project' | 'history',
+  ) => {
     requestMaterialStudioAction({ studioId, action });
   };
   const previewLabel = studioState.hasPreview ? '更新预览' : '预览';
@@ -83,6 +85,17 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
 
   return (
     <div className="topbar-actions material-studio-topbar-actions">
+      <button
+        type="button"
+        className="icon-button"
+        aria-label="物料历史"
+        title="物料历史"
+        onClick={() => requestAction('history')}
+      >
+        <span className="material-symbols-outlined" aria-hidden="true">
+          history
+        </span>
+      </button>
       <button
         type="button"
         className="icon-button"
