@@ -14,8 +14,14 @@ export const METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE = 28;
 export const METRO_WAYFINDING_COMBINATION_MIN_SCALE = 0.25;
 export const METRO_WAYFINDING_COMBINATION_MAX_SCALE = 1;
 export const METRO_WAYFINDING_COMBINATION_DEFAULT_SCALE = 0.65;
+/**
+ * 组合框切入 / 切出「无填充+色带」模式时的缩放补偿系数。
+ * 切入时缩放除以该系数，切出时乘以该系数还原。
+ */
+export const METRO_WAYFINDING_COMBINATION_STRIPE_SCALE_FACTOR = 0.65;
 export const METRO_WAYFINDING_COMBINATION_MIN_WIDTH = 85;
 export const METRO_WAYFINDING_COMBINATION_PADDING = 8;
+export const METRO_WAYFINDING_COMBINATION_GAP = 8;
 export const METRO_WAYFINDING_COMBINATION_STRIPE_WIDTH = 24;
 export const METRO_WAYFINDING_COMBINATION_STRIPE_TOP = 20;
 export const METRO_WAYFINDING_COMBINATION_FLEX_MIN_WIDTH = 16;
@@ -44,18 +50,36 @@ export const metroWayfindingForegroundPalette = [
 export type MetroWayfindingColor = string;
 export type MetroWayfindingIconGroup = 'facility' | 'arrow';
 export type MetroWayfindingIconDirection = 'left' | 'right' | 'up' | 'down';
+// 设施图标的“变种”：同一设施的不同形态（楼梯的上 / 下 / 双向）。
+// 变种与方向是两个正交维度，由面板上的两个独立分段控件分别选择。
+export type MetroWayfindingIconVariant = 'two-way' | 'up' | 'down';
+// 从「原始素材」得到「另一侧朝向素材」的变换方式：
+// - horizontal：水平镜像，素材本身朝右，朝左时左右翻转（默认，适用于绝大多数图标）。
+// - vertical：垂直镜像，素材本身朝上，朝下时上下翻转。
+// 个别图标的原始素材朝向与其他图标不一致（例如下楼图形相对上楼 / 双向整体上下颠倒），
+// 此时需要用垂直镜像而非水平镜像才能得到语义正确的朝向。
+export type MetroWayfindingIconMirrorAxis = 'horizontal' | 'vertical';
 export type MetroFacilityIconAssetName =
+  // 楼梯：3 个变种（双向 / 向上 / 向下）× 2 个方向（左 / 右）。
+  // 后缀 -right 表示“朝右”的原始素材；无后缀者为朝左（水平翻转后的）素材。
+  | 'stairs-two-way'
+  | 'stairs-two-way-right'
   | 'stairs-up'
+  | 'stairs-up-right'
   | 'stairs-down'
+  | 'stairs-down-right'
   | 'escalator'
   | 'escalator-and-stairs'
   | 'accessible-elevator'
   | 'restroom'
   | 'mens-restroom'
   | 'womens-restroom'
-  | 'third-restroom'
+  | 'family-restroom'
+  | 'accessible-restroom'
   | 'nursing-room'
+  | 'wheelchair'
   | 'wheelchair-lift'
+  | 'accessible-ramp'
   | 'waiting-room'
   | 'exit'
   | 'subway'
@@ -85,23 +109,44 @@ export interface MetroWayfindingIconOption {
   group: MetroWayfindingIconGroup;
   assetName?: MetroFacilityIconAssetName;
   assetNameByDirection?: Partial<Record<MetroWayfindingIconDirection, MetroFacilityIconAssetName>>;
+  // 该图标支持的“变种”集合（如楼梯的双向 / 向上 / 向下）。
+  // 声明后，面板会额外渲染一个“图标变种”分段控件；
+  // 通过 assetNameByVariantAndDirection 解析具体素材。
+  variants?: readonly MetroWayfindingIconVariant[];
+  defaultVariant?: MetroWayfindingIconVariant;
+  // variant → direction → 素材名。仅当图标同时有变种与方向时使用。
+  assetNameByVariantAndDirection?: Partial<
+    Record<
+      MetroWayfindingIconVariant,
+      Partial<Record<MetroWayfindingIconDirection, MetroFacilityIconAssetName>>
+    >
+  >;
+  // 指定「朝左素材 → 朝右素材」所用的镜像轴。默认水平镜像；
+  // 原始素材朝向与常规不一致的图标（如楼梯的下楼变种）声明为 vertical。
+  mirrorAxis?: MetroWayfindingIconMirrorAxis;
+  // variant → 该变种单独使用的镜像轴，覆盖上面的全局设置。
+  mirrorAxisByVariant?: Partial<Record<MetroWayfindingIconVariant, MetroWayfindingIconMirrorAxis>>;
   defaultForegroundColor?: string;
 }
 
 export const metroWayfindingIconOptions: MetroWayfindingIconOption[] = [
+  // 楼梯：变种（双向 / 向上 / 向下）与方向（向左 / 向右）拆成两个独立分段控件。
+  // 默认组合为「双向 + 向左」＝ stairs-two-way。
+  // 素材约定：无后缀文件为「朝左」，-right 后缀文件为「朝右」；
+  // 朝右素材是朝左素材的水平镜像，翻转已烘焙进 SVG 自身，渲染管线不再叠加变换。
   {
     id: 'stairs',
-    label: '上楼',
+    label: '楼梯',
     symbol: 'stairs',
     group: 'facility',
-    assetName: 'stairs-up',
-  },
-  {
-    id: 'stairs-down',
-    label: '下楼',
-    symbol: 'stairs',
-    group: 'facility',
-    assetName: 'stairs-down',
+    assetName: 'stairs-two-way',
+    variants: ['two-way', 'up', 'down'],
+    defaultVariant: 'two-way',
+    assetNameByVariantAndDirection: {
+      'two-way': { left: 'stairs-two-way', right: 'stairs-two-way-right' },
+      up: { left: 'stairs-up', right: 'stairs-up-right' },
+      down: { left: 'stairs-down', right: 'stairs-down-right' },
+    },
   },
   {
     id: 'escalator',
@@ -109,6 +154,8 @@ export const metroWayfindingIconOptions: MetroWayfindingIconOption[] = [
     symbol: 'escalator',
     group: 'facility',
     assetName: 'escalator',
+    // 扶梯素材自带“向右上行”朝向，朝左由渲染管线水平镜像。
+    assetNameByDirection: { left: 'escalator', right: 'escalator' },
   },
   {
     id: 'elevator',
@@ -147,10 +194,19 @@ export const metroWayfindingIconOptions: MetroWayfindingIconOption[] = [
   },
   {
     id: 'family-restroom',
-    label: '第三卫生间',
+    label: '家庭卫生间',
     symbol: 'family_restroom',
     group: 'facility',
-    assetName: 'third-restroom',
+    assetName: 'family-restroom',
+  },
+  {
+    // 图形为“男 + 女 + 轮椅”，语义是供轮椅 / 无障碍需求人群使用的卫生间。
+    // 历史版本曾误挂“第三卫生间”名称，并占用 third-restroom 资源名，现已更正。
+    id: 'accessible-restroom',
+    label: '无障碍卫生间',
+    symbol: 'accessible_forward',
+    group: 'facility',
+    assetName: 'accessible-restroom',
   },
   {
     id: 'wheelchair-lift',
@@ -158,6 +214,15 @@ export const metroWayfindingIconOptions: MetroWayfindingIconOption[] = [
     symbol: 'elevator',
     group: 'facility',
     assetName: 'wheelchair-lift',
+    // 轮椅升降机素材自带朝向，朝另一侧由渲染管线水平镜像。
+    assetNameByDirection: { left: 'wheelchair-lift', right: 'wheelchair-lift' },
+  },
+  {
+    id: 'accessible-ramp',
+    label: '无障碍坡道',
+    symbol: 'ramp_right',
+    group: 'facility',
+    assetName: 'accessible-ramp',
   },
   { id: 'police', label: '警务室', symbol: 'local_police', group: 'facility' },
   {
@@ -172,6 +237,7 @@ export const metroWayfindingIconOptions: MetroWayfindingIconOption[] = [
   { id: 'airplane', label: '飞机', symbol: 'flight', group: 'facility' },
   { id: 'boat', label: '轮船', symbol: 'directions_boat', group: 'facility' },
   { id: 'train', label: '火车', symbol: 'train', group: 'facility' },
+  { id: 'taxi', label: '出租车', symbol: 'local_taxi', group: 'facility' },
   {
     id: 'service',
     label: '乘客服务中心',
@@ -200,7 +266,15 @@ export const metroWayfindingIconOptions: MetroWayfindingIconOption[] = [
     group: 'facility',
     defaultForegroundColor: METRO_WAYFINDING_WARNING_FOREGROUND,
   },
-  { id: 'wheelchair', label: '轮椅', symbol: 'accessible', group: 'facility' },
+  {
+    id: 'wheelchair',
+    label: '轮椅',
+    symbol: 'accessible',
+    group: 'facility',
+    assetName: 'wheelchair',
+    // 轮椅侧影自带朝向，朝另一侧由渲染管线水平镜像。
+    assetNameByDirection: { left: 'wheelchair', right: 'wheelchair' },
+  },
   { id: 'south-west', label: '左下', symbol: 'south_west', group: 'arrow' },
   { id: 'west', label: '左', symbol: 'arrow_back', group: 'arrow' },
   { id: 'north-west', label: '左上', symbol: 'arrow_insert', group: 'arrow' },
@@ -231,10 +305,19 @@ export type MetroWayfindingSpaceMode = 'fixed' | 'flex';
 export function resolveMetroFacilityIconAssetName(
   iconId: string,
   direction?: MetroWayfindingIconDirection,
+  variant?: MetroWayfindingIconVariant,
 ): MetroFacilityIconAssetName | undefined {
   const option = metroWayfindingIconOptions.find((item) => item.id === iconId);
   const defaultDirection = resolveMetroWayfindingFacilityDefaultDirection(iconId) ?? 'up';
-  return option?.assetNameByDirection?.[direction ?? defaultDirection] ?? option?.assetName;
+  const effectiveDirection = direction ?? defaultDirection;
+  // 有变种的图标（楼梯）：按「变种 × 方向」取素材，找不到再退回方向表 / 默认素材。
+  const byVariant = option?.assetNameByVariantAndDirection;
+  if (byVariant) {
+    const effectiveVariant = variant ?? option?.defaultVariant ?? option?.variants?.[0];
+    const asset = effectiveVariant ? byVariant[effectiveVariant]?.[effectiveDirection] : undefined;
+    if (asset) return asset;
+  }
+  return option?.assetNameByDirection?.[effectiveDirection] ?? option?.assetName;
 }
 
 export function resolveMetroArrowIconAssetName(
@@ -243,6 +326,136 @@ export function resolveMetroArrowIconAssetName(
   return metroWayfindingArrowOptions.some((option) => option.id === iconId)
     ? (iconId as MetroArrowIconAssetName)
     : undefined;
+}
+
+// 图标变种选项：仅对声明了 variants 的图标（如楼梯）返回非空数组。
+export function resolveMetroFacilityVariantOptions(iconId: string): MetroWayfindingIconVariant[] {
+  const option = metroWayfindingIconOptions.find((item) => item.id === iconId);
+  return option?.variants ? [...option.variants] : [];
+}
+
+export function resolveMetroFacilityDefaultVariant(
+  iconId: string,
+): MetroWayfindingIconVariant | undefined {
+  const option = metroWayfindingIconOptions.find((item) => item.id === iconId);
+  if (!option?.variants?.length) return undefined;
+  return option.defaultVariant ?? option.variants[0];
+}
+
+export function resolveMetroFacilityVariantLabel(variant: MetroWayfindingIconVariant): string {
+  return variant === 'up' ? '向上' : variant === 'down' ? '向下' : '双向';
+}
+
+// 解析「朝左素材 → 朝右素材」所用镜像轴；未声明的图标默认水平镜像。
+// 楼梯是例外：它的翻转已经烘焙进 -right 素材本身（见 public/metro-facilities），
+// 因此渲染时不再叠加变换，也就不会走到这里。
+export function resolveMetroFacilityMirrorAxis(
+  iconId: string,
+  variant?: MetroWayfindingIconVariant,
+): MetroWayfindingIconMirrorAxis {
+  const option = metroWayfindingIconOptions.find((item) => item.id === iconId);
+  if (variant && option?.mirrorAxisByVariant?.[variant]) {
+    return option.mirrorAxisByVariant[variant]!;
+  }
+  return option?.mirrorAxis ?? 'horizontal';
+}
+
+// 把镜像轴转成 SVG 变换串，供渲染管线与面板预览共用。
+export function resolveMetroFacilityMirrorTransform(
+  iconId: string,
+  direction: MetroWayfindingIconDirection | undefined,
+  variant?: MetroWayfindingIconVariant,
+): string {
+  const axis = resolveMetroFacilityMirrorAxis(iconId, variant);
+  return axis === 'vertical' ? 'translate(0 85) scale(1 -1)' : 'translate(85 0) scale(-1 1)';
+}
+
+// 设施图标可选方向：默认四向全集；图标声明了方向表时只暴露显式声明过的方向，
+// 有变种的图标（楼梯）取所有变种方向的并集，避免出现无对应图形的方向。
+export function resolveMetroFacilityDirectionOptions(
+  iconId: string,
+): MetroWayfindingIconDirection[] {
+  const option = metroWayfindingIconOptions.find((item) => item.id === iconId);
+  if (!resolveMetroWayfindingFacilityDefaultDirection(iconId)) {
+    return [];
+  }
+  const byVariant = option?.assetNameByVariantAndDirection;
+  if (byVariant) {
+    return (['left', 'up', 'right', 'down'] as const).filter((direction) =>
+      Object.values(byVariant).some((map) => map?.[direction] !== undefined),
+    );
+  }
+  const byDirection = option?.assetNameByDirection;
+  if (byDirection) {
+    return (['left', 'up', 'right', 'down'] as const).filter(
+      (direction) => byDirection[direction] !== undefined,
+    );
+  }
+  return iconId === 'exit' ? ['left', 'up', 'right', 'down'] : ['left', 'right'];
+}
+
+export function resolveMetroFacilityDirectionLabel(
+  direction: MetroWayfindingIconDirection,
+): string {
+  return direction === 'left'
+    ? '朝左'
+    : direction === 'right'
+      ? '朝右'
+      : direction === 'up'
+        ? '向上'
+        : '向下';
+}
+
+// 旧项目文件兼容：上楼 / 下楼 / 双向楼梯三选项已合并为单一“楼梯”选项。
+export function migrateLegacyMetroFacilityIconId(iconId: string): string {
+  if (iconId === 'stairs-down') return 'stairs';
+  if (iconId === 'stairs-two-way') return 'stairs';
+  // 历史版本把「男+女+轮椅」的图形误命名为“第三卫生间”并占用 third-restroom 资源名，
+  // 现更正为“无障碍卫生间”（accessible-restroom）。旧工程文件按图形语义迁移，避免换图。
+  if (iconId === 'third-restroom') return 'accessible-restroom';
+  return iconId;
+}
+
+export function isLegacyMetroFacilityStairIconId(iconId: string): boolean {
+  return iconId === 'stairs-down' || iconId === 'stairs-two-way';
+}
+
+function migrateLegacyMetroFacilityIconDirection(
+  rawDirection: unknown,
+  resolvedIconId: string,
+): MetroWayfindingIconDirection | undefined {
+  const isExplicitDirection =
+    rawDirection === 'left' ||
+    rawDirection === 'right' ||
+    rawDirection === 'up' ||
+    rawDirection === 'down';
+  const direction = isExplicitDirection ? rawDirection : undefined;
+  // 仅对“楼梯”生效：旧版上/下楼曾用 direction 的 up / down 表达，
+  // 现在 up / down 已移交“图标变种”，方向只允许左 / 右。
+  if (resolvedIconId !== 'stairs') {
+    return direction;
+  }
+  // 旧值里的 up / down 一律作废（变种由 migrateLegacyMetroFacilityIconVariant 接管），
+  // 方向回落到左（水平翻转后的图形）。
+  return direction === 'right' ? 'right' : 'left';
+}
+
+// 旧图标 ID → 新版楼梯变种。
+function migrateLegacyMetroFacilityIconVariant(
+  rawIconId: string,
+  resolvedIconId: string,
+  rawDirection: unknown,
+): MetroWayfindingIconVariant | undefined {
+  if (resolvedIconId !== 'stairs') return undefined;
+  if (rawIconId === 'stairs-down') return 'down';
+  if (rawIconId === 'stairs-up') return 'up';
+  if (rawIconId === 'stairs-two-way') return 'two-way';
+  // 旧版 stairs 用 direction: 'up' / 'down' 表示上/下楼，需转成变种。
+  if (rawIconId === 'stairs') {
+    if (rawDirection === 'up') return 'up';
+    if (rawDirection === 'down') return 'down';
+  }
+  return undefined;
 }
 
 export interface MetroWayfindingTextSegment {
@@ -295,6 +508,8 @@ export interface MetroWayfindingFacilityElement {
   type: 'facility';
   iconId: string;
   direction?: MetroWayfindingIconDirection;
+  // 仅对有变种的图标（如楼梯：双向 / 向上 / 向下）有意义。
+  variant?: MetroWayfindingIconVariant;
   frameShape: MetroWayfindingFrameShape;
   frameFillMode: MetroWayfindingFrameFillMode;
   frameFillColor?: MetroWayfindingColor;
@@ -332,11 +547,33 @@ export interface MetroWayfindingTextMetrics {
   contentHeight: number;
 }
 
+/**
+ * 大文本里**任意位置**的下角标（`oth@two` 这类角标素材、或用户手动插入）。
+ * `at` 以 `value` 的**码点下标**计：0 = 正文开头，码点数 = 正文末尾。
+ */
+export interface MetroWayfindingLargeTextSuffix {
+  at: number;
+  value: string;
+}
+
+/** 大文本切成的片段序列：正文块与下角标交替，供渲染 / 宽度估算 / 编辑 UI 使用。 */
+export interface MetroWayfindingLargeTextRun {
+  kind: 'text' | 'suffix';
+  value: string;
+}
+
 export interface MetroWayfindingLargeTextElement {
   id: string;
   type: 'largeText';
   value: string;
+  /** 仅作**旧存档兜底**：恒等于「末尾」那一个下角标。新数据一律写 `suffixes`。 */
   suffix: string;
+  /**
+   * 任意位置的下角标列表，按 `at` 升序。
+   * 读取**必须**走 `resolveMetroLargeTextSuffixes`——它会把 legacy `suffix`
+   * 兜底成末尾一项，并做排序 / 越界收敛。直接读 `element.suffix` 会丢掉中间角标。
+   */
+  suffixes?: MetroWayfindingLargeTextSuffix[];
   frameShape: MetroWayfindingFrameShape;
   frameFillMode: MetroWayfindingFrameFillMode;
   frameFillColor?: MetroWayfindingColor;
@@ -446,7 +683,8 @@ export function resolveMetroWayfindingFacilityDefaultDirection(
   iconId: string,
 ): MetroWayfindingIconDirection | undefined {
   if (iconId === 'exit') return 'up';
-  if (['stairs', 'stairs-down', 'escalator', 'wheelchair', 'wheelchair-lift'].includes(iconId)) {
+  // 这些图标的素材有明确朝向，默认朝左（水平翻转后的图形）。
+  if (['stairs', 'escalator', 'wheelchair-lift', 'wheelchair'].includes(iconId)) {
     return 'left';
   }
   return undefined;
@@ -636,7 +874,7 @@ export function createMetroWayfindingTextRow(
         kind,
         segments: [{ kind: 'text', value: '' }],
       }
-    : { id: createMetroWayfindingId('text-secondary'), kind, value: '', bold: true };
+    : { id: createMetroWayfindingId('text-secondary'), kind, value: '', bold: false };
 }
 
 export function duplicateMetroWayfindingElement(
@@ -849,7 +1087,7 @@ export function resolveMetroWayfindingElementWidth(element: MetroWayfindingEleme
     if (element.frameShape === 'circle') {
       return 85;
     }
-    return resolveMetroWayfindingLargeTextWidth(element, 85);
+    return resolveMetroWayfindingLargeTextWidth(element, element.frameShape === 'none' ? 0 : 85);
   }
   if (element.type === 'combination') {
     return (
@@ -888,7 +1126,7 @@ export function resolveMetroWayfindingCombinationSizing(
       ? resolveMetroWayfindingLargeTextWidth(child, 0)
       : resolveMetroWayfindingElementWidth(child),
   );
-  const gapWidth = Math.max(element.children.length - 1, 0) * METRO_WAYFINDING_GAP;
+  const gapWidth = Math.max(element.children.length - 1, 0) * METRO_WAYFINDING_COMBINATION_GAP;
   let fixedWidth = 0;
   let flexCount = 0;
 
@@ -933,6 +1171,92 @@ export function resolveMetroWayfindingCombinationSizing(
   };
 }
 
+type MetroWayfindingLargeTextLike = Pick<
+  MetroWayfindingLargeTextElement,
+  'value' | 'suffix' | 'suffixes'
+>;
+
+/**
+ * 大文本的下角标列表——**唯一真源入口**。
+ *
+ * 新数据取 `suffixes`（支持任意位置）；旧存档只有 `suffix`，这里把它兜底成
+ * 「末尾一项」，因此老工程文件读进来照样显示。顺带排序、把 `at` 收敛到
+ * [0, 码点数]、丢弃空值——任何渲染 / 估算 / 编辑都只信这个结果，
+ * **不要**各自去读 `element.suffix`（中间角标会整体丢失）。
+ */
+export function resolveMetroLargeTextSuffixes(
+  element: MetroWayfindingLargeTextLike,
+): MetroWayfindingLargeTextSuffix[] {
+  const length = Array.from(element.value).length;
+  const raw = element.suffixes?.length
+    ? element.suffixes
+    : element.suffix
+      ? [{ at: length, value: element.suffix }]
+      : [];
+  return (
+    raw
+      // 只过滤「根本不是字符串」的脏项；**刻意保留空串**——编辑时刚插入、还没
+      // 输入的角标必须是可见的 chip，否则用户一插入它就被吃掉。
+      .filter((item) => typeof item?.value === 'string')
+      .map((item) => ({
+        at: Math.max(0, Math.min(length, Math.round(Number(item.at) || 0))),
+        value: item.value.slice(0, 24),
+      }))
+      .sort((left, right) => left.at - right.at)
+  );
+}
+
+/**
+ * 把大文本切成「正文块 / 下角标」交替的片段序列。
+ * 渲染（DOM 预览 + SVG 导出）与内联编辑 UI 共用，保证两者排布一致。
+ */
+export function splitMetroLargeTextRuns(
+  element: MetroWayfindingLargeTextLike,
+): MetroWayfindingLargeTextRun[] {
+  const characters = Array.from(element.value);
+  const runs: MetroWayfindingLargeTextRun[] = [];
+  let cursor = 0;
+  for (const suffix of resolveMetroLargeTextSuffixes(element)) {
+    const text = characters.slice(cursor, suffix.at).join('');
+    if (text) runs.push({ kind: 'text', value: text });
+    runs.push({ kind: 'suffix', value: suffix.value });
+    cursor = suffix.at;
+  }
+  const tail = characters.slice(cursor).join('');
+  if (tail) runs.push({ kind: 'text', value: tail });
+  return runs;
+}
+
+/** 大文本的字面内容（正文 + 所有下角标按顺序拼回），供摘要 / 搜索 / 校验用。 */
+export function concatMetroLargeTextValue(element: MetroWayfindingLargeTextLike): string {
+  return splitMetroLargeTextRuns(element)
+    .map((run) => run.value)
+    .join('');
+}
+
+/**
+ * 在**正文末尾**追加一个下角标字符，返回要 patch 的字段。
+ *
+ * 末尾已有角标则拼在它后面（`oth@one` + `oth@two` → 「12」），否则新建一个。
+ * 泛型 + 只依赖 `value/suffix/suffixes`，因此组合框里的 largeText child 也能用。
+ */
+export function appendMetroLargeTextSuffix<T extends MetroWayfindingLargeTextLike>(
+  element: T,
+  addition: string,
+): Pick<MetroWayfindingLargeTextElement, 'suffix' | 'suffixes'> {
+  const length = Array.from(element.value).length;
+  const suffixes = resolveMetroLargeTextSuffixes(element);
+  const last = suffixes.at(-1);
+  const next =
+    last && last.at === length
+      ? [
+          ...suffixes.slice(0, -1),
+          { at: length, value: `${last.value}${addition}`.slice(0, 24) },
+        ]
+      : [...suffixes, { at: length, value: addition.slice(0, 24) }];
+  return { suffixes: next, suffix: next.filter((item) => item.at === length).at(-1)?.value ?? '' };
+}
+
 function resolveMetroWayfindingLargeTextWidth(
   element: MetroWayfindingLargeTextElement,
   minimumWidth: number,
@@ -941,14 +1265,28 @@ function resolveMetroWayfindingLargeTextWidth(
     element.frameShape !== 'none'
       ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
       : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE;
-  const suffixGap = element.value && element.suffix ? 3 : 0;
+  const suffixFontSize = METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE;
+  const runs = splitMetroLargeTextRuns(element);
+  // 每个下角标与**紧邻的正文**之间留 3px：末尾角标只挨一边 → 3px，
+  // 夹在正文中间 → 两侧各 3px。角标彼此相邻时不额外加间距。
+  let gap = 0;
+  runs.forEach((run, index) => {
+    if (run.kind !== 'suffix') return;
+    const previous = runs[index - 1];
+    const next = runs[index + 1];
+    if (previous?.kind === 'text') gap += 3;
+    if (next?.kind === 'text') gap += 3;
+  });
   const contentWidth =
-    estimateMetroWayfindingLargeTextWidth(element.value, mainFontSize) +
-    suffixGap +
-    estimateMetroWayfindingLargeTextWidth(
-      element.suffix,
-      METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE,
-    );
+    runs.reduce(
+      (width, run) =>
+        width +
+        estimateMetroWayfindingLargeTextWidth(
+          run.value,
+          run.kind === 'suffix' ? suffixFontSize : mainFontSize,
+        ),
+      0,
+    ) + gap;
   return Math.max(minimumWidth, contentWidth > 0 ? contentWidth + 8 : 0);
 }
 
@@ -988,9 +1326,9 @@ export function estimateMetroWayfindingTextWidth(value: string, fontSize: number
 export function measureMetroWayfindingSecondaryText(
   value: string,
   fontSize: number,
-  bold: boolean,
+  _bold: boolean,
 ): number {
-  return estimateMetroWayfindingTextWidth(value, fontSize) * (bold ? 1.06 : 1);
+  return estimateMetroWayfindingTextWidth(value, fontSize);
 }
 
 export function estimateMetroWayfindingLargeTextWidth(value: string, fontSize: number): number {
@@ -1031,6 +1369,155 @@ function metroWayfindingCharacterWidthFactor(character: string): number {
   return 0.56;
 }
 
+/**
+ * 线路编号归一化：去掉「号线 / 路 / Line」等前后缀与空白，得到纯编号文本。
+ * 例：「1号线」→「1」、「Line 1」→「1」、「1路」→「1」。
+ */
+export function normalizeMetroWayfindingLineNumber(value: string): string {
+  return value
+    .trim()
+    .toLocaleLowerCase('zh-CN')
+    .replace(/\s+/gu, '')
+    .replace(/^line/iu, '')
+    .replace(/(号线|路|line)$/iu, '');
+}
+
+/**
+ * 线路编号展示文本：仅去掉「号线」后缀，保留名称其余部分。
+ * 例：「1号线」→「1」、「京港地铁1号线」→「京港地铁1」。
+ *
+ * @deprecated 提取线路编号请统一用 {@link extractMetroWayfindingLineNumber}。
+ * 本函数只剥「号线」，`S1线` 会原样返回 `S1线`、`京港地铁1号线` 会返回 `京港地铁1`，
+ * 与色板 / chip 期望的纯编号（`S1`、`1`）不一致。仅在本就期望「完整展示名」时使用。
+ */
+export function formatMetroWayfindingLineNumber(value: string): string {
+  return value.replace(/号线$/u, '').trim();
+}
+
+/**
+ * 从线路名中提取「线路编号」——连续的数字和/或字母组合；若不存在则退化为名称首字。
+ * 例：「2号线」→「2」、「S1线」→「S1」、「环线」→「环」、「京港地铁1号线」→「1」。
+ *
+ * 这是全项目唯一的线路编号提取入口：chip 内、色板、以及各来源的线路选项都应走这里，
+ * 避免各处各写一套正则导致同一线路在不同位置显示成不同编号。
+ */
+export function extractMetroWayfindingLineNumber(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  // 先把「号线 / 路 / Line」这类类型后缀摘掉，避免 "Line 1" 被当成字母数字串 "Line1"。
+  const withoutSuffix = trimmed
+    .replace(/^\s*line\s*/iu, '')
+    .replace(/\s*(号线|路)\s*$/u, '')
+    .trim();
+  // 全角 alphanumeric 先归一化为半角（如「Ｓ１」→「S1」），否则大写字母匹配不上。
+  const normalized = withoutSuffix.normalize('NFKC');
+  // 优先取「字母 + 数字」的组合（S1、T2、A1），其次「数字 + 可选字母」（1、2、4A）。
+  const matches = normalized.match(/[A-Za-z]+[0-9]+[0-9A-Za-z]*|[0-9]+[0-9A-Za-z]*/gu);
+  if (matches?.length) return matches[0]!;
+  const alphanumeric = normalized.match(/[0-9A-Za-z]+/gu);
+  if (alphanumeric?.length) return alphanumeric[0]!;
+  // 没有编号的线路（如「环线」「机场线」）：退化为名称首字。
+  return Array.from(normalized)[0] ?? '';
+}
+
+/**
+ * 归一化「线路编号」用于比较：大小写、全半角、空白都不应影响同一编号的判定。
+ */
+export function normalizeMetroWayfindingLineNumberKey(value: string): string {
+  return extractMetroWayfindingLineNumber(value).toLocaleUpperCase('zh-CN');
+}
+
+/**
+ * 线路名中「线路编号之后的部分」：把归一化编号从名称中剥离后剩下的文字。
+ * 例：「1号线」→「号线」、「京港地铁1号线」→「号线」、「1路」→「路」。
+ */
+export function resolveMetroWayfindingLineNameSuffix(value: string): string {
+  const lineNumber = normalizeMetroWayfindingLineNumber(value);
+  if (!lineNumber) return '';
+  const index = value.toLocaleLowerCase('zh-CN').indexOf(lineNumber);
+  if (index < 0) return '';
+  return value.slice(index + lineNumber.length).trim();
+}
+
+export interface MetroWayfindingLineTemplateInput {
+  /** 线路编号展示文本，通常是线路名去掉「号线」后缀。 */
+  lineNumber: string;
+  /** 线路英文副标题，缺省时回落为「Line <编号>」。 */
+  secondaryName?: string;
+  /** 线路标识色，会同时用于组合框填充色与色带颜色。 */
+  color: MetroWayfindingColor;
+  /** 线路完整名称，用于推导主行「编号之后的部分」；缺省时按「号线」处理。 */
+  lineName?: string;
+}
+
+/**
+ * 构建「线路编号」组合框子元素：一个编号大文本 + 一个「号线 / Line <编号>」主副双行文本。
+ * 编号大文本沿用无外框样式（外框由组合框自身的填充模式承担）；
+ * 双行文本的主行用普通文本书写线路编号「之后」的部分（如「号线」）——编号本身已由大文本承担，
+ * 因此主行不再使用带圈线路段落；副行回落为「Line <编号>」。
+ */
+export function buildMetroWayfindingLineNumberTemplateChildren(
+  input: MetroWayfindingLineTemplateInput,
+): MetroWayfindingCombinationChild[] {
+  const lineNumber = input.lineNumber.trim();
+  const secondaryName = input.secondaryName?.trim() || `Line ${lineNumber}`.trim();
+  const mainValue = resolveMetroWayfindingLineNameSuffix(input.lineName ?? `${lineNumber}号线`);
+
+  const largeText: MetroWayfindingLargeTextElement = {
+    id: createMetroWayfindingId('largeText'),
+    type: 'largeText',
+    value: lineNumber,
+    suffix: '',
+    frameShape: 'none',
+    frameFillMode: 'none',
+    frameStroke: false,
+  };
+
+  const text: MetroWayfindingTextElement = {
+    id: createMetroWayfindingId('text'),
+    type: 'text',
+    align: 'left',
+    writingMode: 'horizontal',
+    rows: [
+      {
+        id: createMetroWayfindingId('text-main'),
+        kind: 'main',
+        segments: [{ kind: 'text', value: mainValue }],
+      },
+      {
+        id: createMetroWayfindingId('text-secondary'),
+        kind: 'secondary',
+        value: secondaryName,
+        bold: false,
+      },
+    ],
+  };
+
+  return [largeText, text];
+}
+
+/**
+ * 组合框填充模式切换时的缩放倍数换算。
+ *
+ * 「无填充+色带」模式需要在组合框内为色带预留宽度，因此图形需要先放大再整体缩小：
+ * 切入时缩放除以色带补偿系数，切出时乘以该系数还原。换算结果会钳制在
+ * METRO_WAYFINDING_COMBINATION_MIN_SCALE / METRO_WAYFINDING_COMBINATION_MAX_SCALE 之间，
+ * 并且只在跨越模式边界时生效，避免同模式内重复点击导致缩放漂移。
+ */
+export function resolveMetroWayfindingCombinationScaleForFillMode(
+  scale: number,
+  previousMode: MetroWayfindingCombinationFillMode,
+  nextMode: MetroWayfindingCombinationFillMode,
+): number {
+  const wasStripe = previousMode === 'stripe';
+  const isStripe = nextMode === 'stripe';
+  if (wasStripe === isStripe) return normalizeMetroWayfindingCombinationScale(scale);
+  const nextScale = isStripe
+    ? scale / METRO_WAYFINDING_COMBINATION_STRIPE_SCALE_FACTOR
+    : scale * METRO_WAYFINDING_COMBINATION_STRIPE_SCALE_FACTOR;
+  return normalizeMetroWayfindingCombinationScale(nextScale);
+}
+
 export function createMetroWayfindingElement(
   type: MetroWayfindingElement['type'],
   iconId = 'stairs',
@@ -1042,6 +1529,9 @@ export function createMetroWayfindingElement(
       id,
       type,
       iconId,
+      // 有变种的图标（楼梯）默认取默认变种 + 默认方向，即「双向 + 向左」组合。
+      direction: resolveMetroWayfindingFacilityDefaultDirection(iconId),
+      variant: resolveMetroFacilityDefaultVariant(iconId),
       frameShape: iconId === 'no-entry' ? 'none' : 'rectangle',
       frameFillMode: 'none',
       frameStroke: false,
@@ -1226,7 +1716,7 @@ export function buildMetroWayfindingProjectFileName(input: {
             )
             .filter((value) => value.trim());
         }
-        if (element.type === 'largeText') return [`${element.value}${element.suffix}`];
+        if (element.type === 'largeText') return [concatMetroLargeTextValue(element)];
         if (element.type === 'combination') {
           return element.children.flatMap(extractMetroWayfindingElementDescriptors);
         }
@@ -1286,7 +1776,7 @@ function summarizeMetroWayfindingElement(element: MetroWayfindingElement): strin
     return `文字（${writingModeLabel}·${alignmentLabel}）：${value || '空白'}`;
   }
   if (element.type === 'largeText') {
-    return `大文字：${`${element.value}${element.suffix}` || '空白'}`;
+    return `大文字：${concatMetroLargeTextValue(element) || '空白'}`;
   }
   if (element.type === 'combination') {
     const content = element.children.map(summarizeMetroWayfindingElement).join(' + ');
@@ -1308,7 +1798,7 @@ function extractMetroWayfindingElementDescriptors(element: MetroWayfindingElemen
       row.kind === 'main' ? row.segments.map((segment) => segment.value) : [row.value],
     );
   }
-  if (element.type === 'largeText') return [`${element.value}${element.suffix}`];
+  if (element.type === 'largeText') return [concatMetroLargeTextValue(element)];
   if (element.type === 'facility' || element.type === 'arrow') {
     return [metroWayfindingIconOptions.find((option) => option.id === element.iconId)?.label ?? ''];
   }
@@ -1363,6 +1853,7 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
     type?: unknown;
     iconId?: unknown;
     direction?: unknown;
+    variant?: unknown;
     framed?: unknown;
     frameShape?: unknown;
     frameFillMode?: unknown;
@@ -1378,7 +1869,10 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
   const backgroundColor = normalizeOptionalColor(candidate.backgroundColor);
   const foregroundColor = normalizeOptionalColor(candidate.foregroundColor);
   if (candidate.type === 'icon' || candidate.type === 'facility' || candidate.type === 'arrow') {
-    const candidateIconId = typeof candidate.iconId === 'string' ? candidate.iconId : '';
+    const candidateIconId =
+      typeof candidate.iconId === 'string'
+        ? migrateLegacyMetroFacilityIconId(candidate.iconId)
+        : '';
     const candidateIcon = metroWayfindingIconOptions.find((item) => item.id === candidateIconId);
     const type =
       candidate.type === 'arrow' || (candidate.type === 'icon' && candidateIcon?.group === 'arrow')
@@ -1403,17 +1897,28 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
         foregroundColor: foregroundColor ?? icon?.defaultForegroundColor,
       };
     }
+    const direction = migrateLegacyMetroFacilityIconDirection(candidate.direction, iconId);
+    const rawVariant = candidate.variant;
+    const variant =
+      rawVariant === 'two-way' || rawVariant === 'up' || rawVariant === 'down'
+        ? rawVariant
+        : migrateLegacyMetroFacilityIconVariant(
+            typeof candidate.iconId === 'string' ? candidate.iconId : '',
+            iconId,
+            candidate.direction,
+          );
+    const variantOptions = resolveMetroFacilityVariantOptions(iconId);
+    const normalizedVariant = variantOptions.length
+      ? variant && variantOptions.includes(variant)
+        ? variant
+        : resolveMetroFacilityDefaultVariant(iconId)
+      : undefined;
     return {
       id,
       type,
       iconId,
-      direction:
-        candidate.direction === 'left' ||
-        candidate.direction === 'right' ||
-        candidate.direction === 'up' ||
-        candidate.direction === 'down'
-          ? candidate.direction
-          : undefined,
+      direction,
+      variant: normalizedVariant,
       frameShape: normalizeMetroWayfindingFrameShape(candidate.frameShape, candidate.framed),
       frameFillMode: normalizeMetroWayfindingFrameFillMode(candidate.frameFillMode),
       frameFillColor: normalizeOptionalColor(candidate.frameFillColor),
@@ -1448,11 +1953,15 @@ function normalizeMetroWayfindingElement(value: unknown): MetroWayfindingElement
   }
   if (candidate.type === 'largeText') {
     const largeText = candidate as Partial<MetroWayfindingLargeTextElement>;
+    const value = normalizeString(largeText.value, 160);
     return {
       id,
       type: 'largeText',
-      value: normalizeString(largeText.value, 160),
+      value,
+      // legacy：旧工程只有「末尾角标」，保留字段以便回退到老版本时不丢内容；
+      // 真正的读取入口是 `suffixes` + `resolveMetroLargeTextSuffixes`。
       suffix: normalizeString(largeText.suffix, 24),
+      suffixes: normalizeMetroLargeTextSuffixes(largeText.suffixes, Array.from(value).length),
       frameShape: normalizeMetroWayfindingFrameShape(
         (largeText as { frameShape?: unknown }).frameShape,
         (largeText as { framed?: unknown }).framed,
@@ -1615,7 +2124,7 @@ function normalizeTextRows(value: unknown[], elementId: string): MetroWayfinding
           id,
           kind: 'secondary',
           value: normalizeString(candidate.value, 160),
-          bold: true,
+          bold: false,
         };
       }
       if (candidate.kind === 'main') {
@@ -1640,7 +2149,7 @@ function normalizeTextRows(value: unknown[], elementId: string): MetroWayfinding
           id: legacyTextRowId(elementId, 'secondary-1'),
           kind: 'secondary',
           value: '',
-          bold: true,
+          bold: false,
         },
       ];
 }
@@ -1667,7 +2176,7 @@ function migrateLegacyTextRows(
         id: legacyTextRowId(elementId, 'secondary-1'),
         kind: 'secondary',
         value: normalizeString(candidate.secondary, 160),
-        bold: true,
+        bold: false,
       },
     ];
   }
@@ -1677,7 +2186,7 @@ function migrateLegacyTextRows(
       id: legacyTextRowId(elementId, 'secondary-1'),
       kind: 'secondary',
       value: normalizeString(candidate.secondSecondary, 160),
-      bold: true,
+      bold: false,
     },
     {
       id: legacyTextRowId(elementId, 'main-2'),
@@ -1688,7 +2197,7 @@ function migrateLegacyTextRows(
       id: legacyTextRowId(elementId, 'secondary-2'),
       kind: 'secondary',
       value: normalizeString(candidate.secondary, 160),
-      bold: true,
+      bold: false,
     },
   ];
 }
@@ -1699,6 +2208,26 @@ function legacyTextRowId(elementId: string, suffix: string): string {
 
 function normalizeString(value: unknown, maxLength: number): string {
   return typeof value === 'string' ? value.slice(0, maxLength) : '';
+}
+
+/**
+ * 归一化大文本的下角标列表：`at` 收敛到 [0, 正文码点数] 并排序，空值丢弃。
+ * 空数组是合法结果（没有下角标），不要退化成 undefined——否则
+ * `resolveMetroLargeTextSuffixes` 会误以为要走 legacy `suffix` 兜底。
+ */
+function normalizeMetroLargeTextSuffixes(
+  value: unknown,
+  length: number,
+): MetroWayfindingLargeTextSuffix[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const raw = item as Partial<MetroWayfindingLargeTextSuffix>;
+      const at = Math.round(Number(raw?.at) || 0);
+      return { at: Math.max(0, Math.min(length, at)), value: normalizeString(raw?.value, 24) };
+    })
+    .filter((item) => item.value.length > 0)
+    .sort((left, right) => left.at - right.at);
 }
 
 function normalizeOptionalColor(value: unknown): string | undefined {

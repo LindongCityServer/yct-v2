@@ -1,22 +1,28 @@
 'use client';
 
+import { requestConfirmation } from '../lib/client-dialog-events';
+
 import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
   type CSSProperties,
   type DragEvent as ReactDragEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from 'react';
 import { appPath } from '../lib/app-paths';
-import { findTextContinuation } from '../lib/text-continuation';
+import { findTextContinuation, matchTextContinuation } from '../lib/text-continuation';
 import type { MetroWayfindingExample } from '../lib/metro-wayfinding-examples';
 import {
   dispatchMetroWayfindingCompositionAction,
   publishMetroWayfindingImportLifecycleEvent,
+  publishMetroWayfindingInspectorSnapshot,
   subscribeMetroWayfindingCompositionActions,
   subscribeMetroWayfindingImportLifecycleEvents,
   type MetroWayfindingCompositionAction,
@@ -32,33 +38,42 @@ import {
   type MetroWayfindingImportMode,
   type MetroWayfindingImportPreview,
 } from '../lib/metro-wayfinding-import';
+import { MetroWayfindingInspector } from './metro-wayfinding-inspector';
 import {
   createMetroWayfindingElement,
   createMetroWayfindingTextRow,
   duplicateMetroWayfindingElement,
+  extractMetroWayfindingLineNumber,
   METRO_WAYFINDING_COMBINATION_DEFAULT_SCALE,
   METRO_WAYFINDING_COMBINATION_MAX_SCALE,
   METRO_WAYFINDING_COMBINATION_MIN_SCALE,
   METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE,
   METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE,
   METRO_WAYFINDING_DIVIDER_WIDTH,
-  METRO_WAYFINDING_WARNING_FOREGROUND,
   metroWayfindingArrowOptions,
   metroWayfindingBackgroundPalette,
   metroWayfindingFacilityOptions,
   metroWayfindingForegroundPalette,
+  normalizeMetroWayfindingLineNumber,
   parseMetroWayfindingLayout,
   resolveMetroArrowIconAssetName,
+  resolveMetroFacilityDefaultVariant,
+  resolveMetroFacilityDirectionLabel,
+  resolveMetroFacilityDirectionOptions,
   resolveMetroFacilityIconAssetName,
+  resolveMetroFacilityMirrorAxis,
+  resolveMetroFacilityVariantLabel,
+  resolveMetroFacilityVariantOptions,
   resolveMetroWayfindingArrowBoundarySide,
+  resolveMetroWayfindingCombinationScaleForFillMode,
   resolveMetroWayfindingFacilityDefaultDirection,
   resolveMetroWayfindingInsertionContextDefaults,
-  resolveMetroWayfindingLayoutSizing,
   resolveMetroWayfindingRowContextDefaults,
   resolveMetroWayfindingTextMetrics,
-  resolveMetroWayfindingVerticalLayoutSizing,
   reverseMetroWayfindingLayout,
   serializeMetroWayfindingLayout,
+  concatMetroLargeTextValue,
+  splitMetroLargeTextRuns,
   type MetroWayfindingElement,
   type MetroWayfindingCombinationChild,
   type MetroWayfindingCombinationElement,
@@ -67,14 +82,24 @@ import {
   type MetroWayfindingFrameFillMode,
   type MetroWayfindingFrameShape,
   type MetroWayfindingIconOption,
+  type MetroWayfindingIconVariant,
   type MetroWayfindingLargeTextElement,
+  type MetroWayfindingLargeTextRun,
+  type MetroWayfindingLargeTextSuffix,
+  type MetroWayfindingLayout,
   type MetroWayfindingLayoutMode,
   type MetroWayfindingLineSegment,
   type MetroWayfindingMainSegment,
+  type MetroWayfindingProjectCanvas,
   type MetroWayfindingTextElement,
   type MetroWayfindingTextAlign,
   type MetroWayfindingTextRow,
 } from '../lib/metro-wayfinding';
+
+/** 导视牌是否已经排了内容——只要任一行有元素就算「有内容」。 */
+function hasMetroWayfindingContent(layout: MetroWayfindingLayout): boolean {
+  return layout.rows.some((elements) => elements.length > 0);
+}
 
 export function MetroWayfindingEditor({
   value,
@@ -94,6 +119,9 @@ export function MetroWayfindingEditor({
   onCanvasHeightChange,
   onCanvasWidthChange,
   onChange,
+  rendersInspector = true,
+  lineKeysByColor,
+  editorId: editorIdProp,
 }: Readonly<{
   value: string;
   canvasWidth: number;
@@ -112,11 +140,42 @@ export function MetroWayfindingEditor({
   onCanvasHeightChange: (height: number) => void;
   onCanvasWidthChange: (width: number) => void;
   onChange: (value: string) => void;
+  /**
+   * 是否由编辑器本体渲染「插入建议」「宽度警告」。
+   * 宽屏下这两个面板由宿主容器渲染到预览面板下方（见 MetroWayfindingInspector），此时传 false。
+   */
+  rendersInspector?: boolean;
+  /**
+   * 颜色（大写十六进制）→ RMP 线路键（如 `#8CC220` → `sh2`）。
+   *
+   * RMP 存档不含线路名，线路键是推导线路编号的唯一原料（`sh2` → 2 号线）。
+   * 窄屏下编辑器本体渲染 Inspector，需要把这份映射传下去。
+   */
+  lineKeysByColor?: ReadonlyMap<string, string>;
+  /**
+   * 由宿主指定的编辑器标识。宿主需要用它订阅同一 editorId 的只读快照。
+   * 不传时回落到 useId()，保证单独使用组件时仍然可用。
+   */
+  editorId?: string;
 }>) {
-  const editorId = useId();
+  const reactId = useId();
+  const editorId = editorIdProp ?? reactId;
   const importInputRef = useRef<HTMLInputElement>(null);
   const [layout, setLayout] = useState(() => parseMetroWayfindingLayout(value));
   const layoutRef = useRef(layout);
+  // 导视牌已排内容时默认收起「版式与外观」，把版面让给内容；空牌才默认展开（此时正需要选版式）。
+  const [isToolbarExpanded, setIsToolbarExpanded] = useState(
+    () => !hasMetroWayfindingContent(parseMetroWayfindingLayout(value)),
+  );
+  // 内容常常是在挂载之后才进来的（套用示例 / 导入 RMP 项目），此时首帧判定已经错过了。
+  // 只在「空 → 非空」这一跳收起一次：排版过程中的每次编辑都会更新 layout，
+  // 若改成「有内容就收起」，用户手动展开后一敲字就会被折叠回去。
+  const hadContentRef = useRef(!isToolbarExpanded);
+  useEffect(() => {
+    const hasContent = hasMetroWayfindingContent(layout);
+    if (hasContent && !hadContentRef.current) setIsToolbarExpanded(false);
+    hadContentRef.current = hasContent;
+  }, [layout]);
   const [selection, setSelection] = useState(() => ({
     rowIndex: 0,
     elementId: parseMetroWayfindingLayout(value).rows[0]?.[0]?.id ?? '',
@@ -149,7 +208,10 @@ export function MetroWayfindingEditor({
       if (row.some((element) => element.id === current.elementId)) {
         return { rowIndex, elementId: current.elementId };
       }
-      return { rowIndex, elementId: row[0]?.id ?? '' };
+      const initialSelection = resolveMetroWayfindingInitialSelection(nextLayout);
+      return initialSelection.elementId
+        ? initialSelection
+        : { rowIndex, elementId: row[0]?.id ?? '' };
     });
   }, [value]);
 
@@ -262,21 +324,22 @@ export function MetroWayfindingEditor({
     : -1;
   const visibleRows = layout.rows.slice(0, layout.mode === 'double' ? 2 : 1);
   const hasElements = layout.rows.some((elements) => elements.length > 0);
-  const rowSizings = visibleRows.map((elements) =>
-    resolveMetroWayfindingLayoutSizing(elements, canvasWidth),
-  );
-  const tightestRowSizing = rowSizings.reduce((current, candidate) =>
-    candidate.textScaleX < current.textScaleX ? candidate : current,
-  );
-  const layoutSizing = {
-    ...tightestRowSizing,
-    isWidthInsufficient: rowSizings.some((sizing) => sizing.isWidthInsufficient),
-    hasUnresolvedOverflow: rowSizings.some((sizing) => sizing.hasUnresolvedOverflow),
-  };
-  const verticalLayoutSizing = resolveMetroWayfindingVerticalLayoutSizing(
-    visibleRows[0] ?? [],
-    canvasHeight * 128,
-  );
+  // 把编辑器状态广播为只读快照，供编辑器外部的宿主容器（宽屏下预览面板下方）渲染辅助面板。
+  // 用 ref 持有 lineColorOptions 可避免宿主传入的新数组字面量导致 effect 反复触发。
+  const lineColorOptionsRef = useRef(lineColorOptions);
+  lineColorOptionsRef.current = lineColorOptions;
+  useEffect(() => {
+    publishMetroWayfindingInspectorSnapshot({
+      editorId,
+      layout: layoutRef.current,
+      rowIndex: selection.rowIndex,
+      selectedElementId: selection.elementId,
+      canvasWidth,
+      canvasHeight,
+      disabled,
+      lineColorOptions: lineColorOptionsRef.current,
+    });
+  }, [editorId, layout, selection, canvasWidth, canvasHeight, disabled]);
   const backgroundColorOptions = mergeMetroColorOptions(
     metroWayfindingBackgroundPalette,
     lineColorOptions,
@@ -285,6 +348,12 @@ export function MetroWayfindingEditor({
     ? resolveMetroWayfindingImportPreview(importPreview, importMode)
     : undefined;
   const activeImportWarnings = activeImportPreview?.warnings ?? [];
+  /**
+   * 当前转换方式下的行元素（语义归一化后的结果）。
+   * 行清单与牌面预览都取它，保证弹窗里看到的**就是**即将导入的内容——
+   * 切换「仅语义 / 保留源样式」时两处同步变化。
+   */
+  const activeImportRows = activeImportPreview?.layout.rows ?? importPreview?.layout.rows ?? [];
 
   useEffect(() => {
     document
@@ -395,8 +464,8 @@ export function MetroWayfindingEditor({
     dispatchComposition({ type: 'replace', layout: { ...layout, mode, rows } });
   };
 
-  const clearLayoutElements = () => {
-    if (!hasElements || !window.confirm('确认清空当前地铁导视牌的全部元素？')) return;
+  const clearLayoutElements = async () => {
+    if (!hasElements || !(await requestConfirmation('确认清空当前地铁导视牌的全部元素？'))) return;
     setSelection({ rowIndex: 0, elementId: '' });
     setDraggedElement(null);
     setDropTarget(null);
@@ -512,102 +581,126 @@ export function MetroWayfindingEditor({
 
   return (
     <section className="metro-wayfinding-editor" aria-label="地铁导视牌编排">
-      <div className="metro-wayfinding-toolbar">
-        <SegmentedControl
-          label="版式"
-          value={layout.mode}
-          options={[
-            { value: 'single', label: '单行', icon: 'view_stream' },
-            { value: 'double', label: '双行', icon: 'table_rows' },
-            { value: 'vertical', label: '竖向', icon: 'view_column' },
-          ]}
-          disabled={disabled}
-          wide
-          onChange={changeLayoutMode}
-        />
-        <ColorControl
-          label="导视牌底色"
-          value={layout.backgroundColor}
-          palette={backgroundColorOptions}
-          disabled={disabled}
-          onChange={(backgroundColor) =>
-            dispatchComposition({ type: 'replace', layout: { ...layout, backgroundColor } })
-          }
-        />
-        <ColorControl
-          label="默认文字与图形颜色"
-          value={layout.foregroundColor}
-          palette={metroWayfindingForegroundPalette}
-          disabled={disabled}
-          onChange={(foregroundColor) =>
-            dispatchComposition({ type: 'replace', layout: { ...layout, foregroundColor } })
-          }
-        />
-        {layout.mode === 'double' ? (
-          <label className="material-checkbox-row metro-wayfinding-toggle">
-            <input
-              type="checkbox"
-              checked={layout.dividerBetweenRows}
-              disabled={disabled}
-              onChange={(event) =>
-                dispatchComposition({
-                  type: 'replace',
-                  layout: { ...layout, dividerBetweenRows: event.currentTarget.checked },
-                })
-              }
-            />
-            <span>添加行间分割线</span>
-          </label>
-        ) : null}
-        {hasElements ? (
-          <div className="metro-wayfinding-toolbar-actions">
-            <button
-              type="button"
-              className="secondary-action-button metro-wayfinding-import-button"
-              disabled={disabled || isImporting}
-              title="版式模板与导入工程"
-              onClick={() => openProjectDialog()}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                {isImporting ? 'progress_activity' : 'folder_open'}
-              </span>
-              <span>{isImporting ? '解析中' : '模板库'}</span>
-            </button>
-            <button
-              type="button"
-              className="secondary-action-button"
-              disabled={disabled || layout.mode === 'vertical'}
-              onClick={() => dispatchComposition({ type: 'reverse' })}
-              title={layout.mode === 'vertical' ? '竖向模板不支持反转顺序' : '反转导视牌元素顺序'}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                flip
-              </span>
-              <span>反转</span>
-            </button>
-            <button
-              type="button"
-              className="secondary-action-button metro-wayfinding-clear-button"
-              disabled={disabled}
-              onClick={clearLayoutElements}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                delete_sweep
-              </span>
-              <span>清空</span>
-            </button>
-          </div>
-        ) : null}
-        <input
-          ref={importInputRef}
-          type="file"
-          className="sr-only"
-          accept=".json,application/json"
-          multiple
-          disabled={disabled || isImporting}
-          onChange={handleImportInputChange}
-        />
-      </div>
+      <details
+        className="metro-wayfinding-toolbar"
+        open={isToolbarExpanded}
+        onToggle={(event) => setIsToolbarExpanded(event.currentTarget.open)}
+      >
+        <summary>
+          <span className="metro-wayfinding-toolbar-title">版式与外观</span>
+          {/*
+            标题栏图标：仅作视觉提示，告诉用户模板库 / 反转 / 清空这几个操作藏在折叠面板里。
+            不响应点按，展开后自动隐藏（见 CSS），避免与面板内真实的操作按钮重复。
+          */}
+          <span className="metro-wayfinding-toolbar-hints" aria-hidden="true">
+            <span className="material-symbols-outlined">folder_open</span>
+            <span className="material-symbols-outlined">flip</span>
+            <span className="material-symbols-outlined">delete_sweep</span>
+          </span>
+          <span
+            className="material-symbols-outlined metro-wayfinding-toolbar-expander"
+            aria-hidden="true"
+          >
+            expand_more
+          </span>
+        </summary>
+        <div className="metro-wayfinding-toolbar-content">
+          <SegmentedControl
+            label="版式"
+            value={layout.mode}
+            options={[
+              { value: 'single', label: '单行', icon: 'view_stream' },
+              { value: 'double', label: '双行', icon: 'table_rows' },
+              { value: 'vertical', label: '竖向', icon: 'view_column' },
+            ]}
+            disabled={disabled}
+            wide
+            onChange={changeLayoutMode}
+          />
+          <ColorControl
+            label="导视牌底色"
+            value={layout.backgroundColor}
+            palette={backgroundColorOptions}
+            disabled={disabled}
+            onChange={(backgroundColor) =>
+              dispatchComposition({ type: 'replace', layout: { ...layout, backgroundColor } })
+            }
+          />
+          <ColorControl
+            label="默认文字与图形颜色"
+            value={layout.foregroundColor}
+            palette={metroWayfindingForegroundPalette}
+            disabled={disabled}
+            onChange={(foregroundColor) =>
+              dispatchComposition({ type: 'replace', layout: { ...layout, foregroundColor } })
+            }
+          />
+          {layout.mode === 'double' ? (
+            <label className="material-checkbox-row metro-wayfinding-toggle">
+              <input
+                type="checkbox"
+                checked={layout.dividerBetweenRows}
+                disabled={disabled}
+                onChange={(event) =>
+                  dispatchComposition({
+                    type: 'replace',
+                    layout: { ...layout, dividerBetweenRows: event.currentTarget.checked },
+                  })
+                }
+              />
+              <span>添加行间分割线</span>
+            </label>
+          ) : null}
+          {hasElements ? (
+            <div className="metro-wayfinding-toolbar-actions">
+              <button
+                type="button"
+                className="secondary-action-button metro-wayfinding-import-button"
+                disabled={disabled || isImporting}
+                title="版式模板与导入工程"
+                onClick={() => openProjectDialog()}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  {isImporting ? 'progress_activity' : 'folder_open'}
+                </span>
+                <span>{isImporting ? '解析中' : '模板库'}</span>
+              </button>
+              <button
+                type="button"
+                className="secondary-action-button"
+                disabled={disabled || layout.mode === 'vertical'}
+                onClick={() => dispatchComposition({ type: 'reverse' })}
+                title={layout.mode === 'vertical' ? '竖向模板不支持反转顺序' : '反转导视牌元素顺序'}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  flip
+                </span>
+                <span>反转</span>
+              </button>
+              <button
+                type="button"
+                className="secondary-action-button metro-wayfinding-clear-button"
+                disabled={disabled}
+                onClick={clearLayoutElements}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  delete_sweep
+                </span>
+                <span>清空</span>
+              </button>
+            </div>
+          ) : null}
+          <input
+            ref={importInputRef}
+            type="file"
+            className="sr-only"
+            accept=".json,application/json"
+            multiple
+            disabled={disabled || isImporting}
+            onChange={handleImportInputChange}
+          />
+        </div>
+      </details>
 
       {hasElements ? (
         <div className="metro-wayfinding-row-lists">
@@ -744,45 +837,16 @@ export function MetroWayfindingEditor({
         </section>
       ) : null}
 
-      {selectedElement ? (
-        <MetroWayfindingInsertionSuggestions
-          element={selectedElement}
-          elements={activeElements}
-          layoutMode={layout.mode}
-          disabled={disabled}
-          lineColorOptions={lineColorOptions}
-          onAction={(action) => dispatchElement(selection.rowIndex, action)}
+      {/*
+        窄屏回落：宽屏下这两个面板由宿主渲染到预览面板下方，此处只在宿主不接管时就地渲染。
+        复用同一个 Inspector 组件，保证两条路径的渲染结果完全一致。
+      */}
+      {rendersInspector ? (
+        <MetroWayfindingInspector
+          editorId={editorId}
+          lineKeysByColor={lineKeysByColor}
+          onAction={dispatchElement}
         />
-      ) : null}
-
-      {layout.mode !== 'vertical' && layoutSizing.isWidthInsufficient ? (
-        <p className="metro-wayfinding-width-warning" role="status">
-          <span className="material-symbols-outlined" aria-hidden="true">
-            warning
-          </span>
-          <span>
-            当前尺寸宽度不足，文字、大文字与组合框已统一横向压缩至
-            {Math.round(layoutSizing.textScaleX * 100)}%，文字行按需适配。
-            {layoutSizing.hasUnresolvedOverflow
-              ? '非文字元素仍超出可用宽度，请增加导视牌宽度。'
-              : ''}
-          </span>
-        </p>
-      ) : null}
-
-      {layout.mode === 'vertical' && verticalLayoutSizing.isHeightInsufficient ? (
-        <p className="metro-wayfinding-width-warning" role="status">
-          <span className="material-symbols-outlined" aria-hidden="true">
-            warning
-          </span>
-          <span>
-            当前高度不足
-            {verticalLayoutSizing.textScaleY < 1
-              ? `，竖向文字已按最长列优先压缩至${Math.round(verticalLayoutSizing.textScaleY * 100)}%`
-              : ''}
-            ，请增加 128 像素格数或减少固定高度元素。
-          </span>
-        </p>
       ) : null}
 
       {selectedElement ? (
@@ -856,6 +920,7 @@ export function MetroWayfindingEditor({
                     examples={examples}
                     disabled={disabled}
                     onLoadExample={(example, stationName) => {
+                      setSelection(resolveMetroWayfindingInitialSelection(example.project.layout));
                       onLoadExample(example, stationName);
                       setIsProjectDialogOpen(false);
                     }}
@@ -992,122 +1057,186 @@ export function MetroWayfindingEditor({
               </button>
             </header>
 
-            {importPreview.source !== 'yct' ? (
-              <SegmentedControl
-                label="转换方式"
-                value={importMode}
-                options={[
-                  { value: 'semantic', label: '仅语义（推荐）', icon: 'conversion_path' },
-                  { value: 'source-style', label: '保留源样式', icon: 'palette' },
-                ]}
-                disabled={disabled}
-                wide
-                onChange={setImportMode}
-              />
-            ) : null}
+            {/*
+              中间滚动区：包住 SegmentedControl / dl / ol / warnings。
+              弹窗改为 grid 三行布局（header / 滚动内容 / footer），
+              footer 不再 sticky，内容滚到底也不会被底栏遮挡。
+            */}
+            <div className="metro-wayfinding-import-scroll">
+              {importPreview.source !== 'yct' ? (
+                <SegmentedControl
+                  label="转换方式"
+                  value={importMode}
+                  options={[
+                    { value: 'semantic', label: '仅语义（推荐）', icon: 'conversion_path' },
+                    { value: 'source-style', label: '保留源样式', icon: 'palette' },
+                  ]}
+                  disabled={disabled}
+                  wide
+                  onChange={setImportMode}
+                />
+              ) : null}
 
-            <dl className="metro-wayfinding-import-facts">
-              <div>
-                <dt>来源</dt>
-                <dd>{importPreview.sourceLabel}</dd>
+              {/*
+                转换后的牌面内容预览：与「版式模板」页签的示例卡片同一套视觉，
+                数据取自 activeImportPreview（已按当前转换方式归一化），
+                因此切换「仅语义 / 保留源样式」时这里会实时变化。
+              */}
+              <div className="metro-wayfinding-import-sign-preview">
+                <MetroWayfindingSignPreview
+                  layout={activeImportPreview?.layout ?? importPreview.layout}
+                  canvas={activeImportPreview?.canvas ?? importPreview.canvas}
+                />
+                <small>按画布比例缩小的牌面示意，仅用于确认转换后的内容与排版</small>
               </div>
-              <div>
-                <dt>来源风格</dt>
-                <dd>{importPreview.styleLabel}</dd>
-              </div>
-              <div>
-                <dt>目标风格</dt>
-                <dd>
-                  {importPreview.source === 'yct'
-                    ? importPreview.styleLabel
-                    : (activeImportPreview?.styleLabel ?? METRO_WAYFINDING_SEMANTIC_TARGET_STYLE)}
-                </dd>
-              </div>
-              <div>
-                <dt>版式</dt>
-                <dd>
-                  {activeImportPreview?.layout.mode === 'double'
-                    ? '双行'
-                    : activeImportPreview?.layout.mode === 'vertical'
-                      ? '竖向'
-                      : '单行'}
-                  {' · '}
-                  {activeImportPreview?.canvas.widthM ?? importPreview.canvas.widthM} ×{' '}
-                  {activeImportPreview?.canvas.heightM ?? importPreview.canvas.heightM}
-                </dd>
-              </div>
-            </dl>
 
-            <ol className="metro-wayfinding-import-rows" aria-label="待导入行顺序">
-              {importPreview.rowSources.map((row, index) => (
-                <li key={`${row.fileName}-${index}`}>
-                  <div>
-                    <span>{index === 0 ? '第一行' : '第二行'}</span>
-                    <strong>{row.summary}</strong>
-                    <small>{row.label}</small>
-                  </div>
-                  {importPreview.rowSources.length > 1 ? (
-                    <div className="metro-wayfinding-import-row-actions">
-                      <button
-                        type="button"
-                        className="icon-button"
-                        aria-label="上移此行"
-                        title="上移"
-                        disabled={index === 0}
-                        onClick={() =>
-                          setImportPreview((current) =>
-                            current
-                              ? reorderMetroWayfindingImportRows(current, index, index - 1)
-                              : current,
-                          )
-                        }
-                      >
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          arrow_upward
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-button"
-                        aria-label="下移此行"
-                        title="下移"
-                        disabled={index === importPreview.rowSources.length - 1}
-                        onClick={() =>
-                          setImportPreview((current) =>
-                            current
-                              ? reorderMetroWayfindingImportRows(current, index, index + 1)
-                              : current,
-                          )
-                        }
-                      >
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          arrow_downward
-                        </span>
-                      </button>
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ol>
+              <dl className="metro-wayfinding-import-facts">
+                <div>
+                  <dt>来源</dt>
+                  <dd>{importPreview.sourceLabel}</dd>
+                </div>
+                <div>
+                  <dt>来源风格</dt>
+                  <dd>{importPreview.styleLabel}</dd>
+                </div>
+                <div>
+                  <dt>目标风格</dt>
+                  <dd>
+                    {importPreview.source === 'yct'
+                      ? importPreview.styleLabel
+                      : (activeImportPreview?.styleLabel ?? METRO_WAYFINDING_SEMANTIC_TARGET_STYLE)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>版式</dt>
+                  <dd>
+                    {activeImportPreview?.layout.mode === 'double'
+                      ? '双行'
+                      : activeImportPreview?.layout.mode === 'vertical'
+                        ? '竖向'
+                        : '单行'}
+                    {' · '}
+                    {activeImportPreview?.canvas.widthM ?? importPreview.canvas.widthM} ×{' '}
+                    {activeImportPreview?.canvas.heightM ?? importPreview.canvas.heightM}
+                  </dd>
+                </div>
+              </dl>
 
-            {activeImportWarnings.length ? (
-              <section className="metro-wayfinding-import-warnings" aria-label="转换提醒">
-                <header>
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    warning
-                  </span>
-                  <strong>转换提醒</strong>
-                </header>
-                <ul>
-                  {activeImportWarnings.map((warning) => (
-                    <li key={`${warning.code}-${warning.message}`}>
-                      {warning.message}
-                      {warning.count > 1 ? `（${warning.count} 处）` : ''}
+              <ol className="metro-wayfinding-import-rows" aria-label="待导入行顺序">
+                {importPreview.rowSources.map((row, index) => {
+                  /*
+                    行内元素取**转换后**的结果（`activeImportRows`），
+                    `row.elements` 只是源工程的原始元素，仅作兜底。
+                    否则切换「转换方式」时上面牌面变了、下面清单没变。
+                  */
+                  const rowElements = activeImportRows[index] ?? row.elements;
+                  return (
+                    <li key={`${row.fileName}-${index}`}>
+                      <div>
+                        <span>{index === 0 ? '第一行' : '第二行'}</span>
+                        {/*
+                          用图形化预览替代纯文本摘要：复用模板库的预览组件，
+                          让审核者一眼看到「出口箭头 + 卫生间图标 + 文字 + …」的实际形态。
+                          `sr-only` 摘要给屏幕阅读器与无图标的场景兜底。
+                        */}
+                        <div
+                          className="metro-wayfinding-import-row-preview metro-wayfinding-element-strip"
+                          aria-hidden="true"
+                        >
+                          {rowElements.length ? (
+                            rowElements.map((element) => (
+                              <MetroWayfindingExamplePreviewElement
+                                key={element.id}
+                                element={element}
+                                layoutMode={
+                                  activeImportPreview?.layout.mode ?? importPreview.layout.mode
+                                }
+                                /*
+                                  刻意不复原整块牌面的底色/文字色：这里只是「图标 + 文字」
+                                  的一字排开清单，颜色交给元素自身（线路色、方框填充等
+                                  语义色），其余一律用弹窗的中性色。
+                                */
+                                inheritedBackgroundColor="transparent"
+                                inheritedForegroundColor="inherit"
+                                renderSpaceIcons
+                                neutralizeColors
+                              />
+                            ))
+                          ) : (
+                            <span className="metro-wayfinding-example-preview-element is-space is-flex">
+                              <span className="material-symbols-outlined" aria-hidden="true">
+                                arrow_range
+                              </span>
+                            </span>
+                          )}
+                        </div>
+                        <small>{row.label}</small>
+                        <span className="sr-only">{row.summary}</span>
+                      </div>
+                      {importPreview.rowSources.length > 1 ? (
+                        <div className="metro-wayfinding-import-row-actions">
+                          <button
+                            type="button"
+                            className="icon-button"
+                            aria-label="上移此行"
+                            title="上移"
+                            disabled={index === 0}
+                            onClick={() =>
+                              setImportPreview((current) =>
+                                current
+                                  ? reorderMetroWayfindingImportRows(current, index, index - 1)
+                                  : current,
+                              )
+                            }
+                          >
+                            <span className="material-symbols-outlined" aria-hidden="true">
+                              arrow_upward
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-button"
+                            aria-label="下移此行"
+                            title="下移"
+                            disabled={index === importPreview.rowSources.length - 1}
+                            onClick={() =>
+                              setImportPreview((current) =>
+                                current
+                                  ? reorderMetroWayfindingImportRows(current, index, index + 1)
+                                  : current,
+                              )
+                            }
+                          >
+                            <span className="material-symbols-outlined" aria-hidden="true">
+                              arrow_downward
+                            </span>
+                          </button>
+                        </div>
+                      ) : null}
                     </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
+                  );
+                })}
+              </ol>
+
+              {activeImportWarnings.length ? (
+                <section className="metro-wayfinding-import-warnings" aria-label="转换提醒">
+                  <header>
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      warning
+                    </span>
+                    <strong>转换提醒</strong>
+                  </header>
+                  <ul>
+                    {activeImportWarnings.map((warning) => (
+                      <li key={`${warning.code}-${warning.message}`}>
+                        {warning.message}
+                        {warning.count > 1 ? `（${warning.count} 处）` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+            </div>
 
             <footer>
               <span>
@@ -1180,63 +1309,65 @@ function MetroWayfindingExampleList({
 
   return (
     <section className="material-template-examples" aria-label="地铁导视版式模板">
-      <div className="material-template-examples-heading">
-        <strong>版式模板</strong>
-        <span>选择一个版式开始编辑</span>
-      </div>
-      {(stationOptions?.length && onStationChange) || (lineOptions?.length && onLineChange) ? (
-        <div className="material-template-example-context-fields">
-          {stationOptions?.length && onStationChange ? (
-            <label className="material-field">
-              <span>套用车站</span>
-              <select
-                value={selectedStationName ?? ''}
-                disabled={disabled}
-                onChange={(event) => onStationChange(event.currentTarget.value)}
-              >
-                {stationOptions.map((stationName) => (
-                  <option key={stationName} value={stationName}>
-                    {stationName}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          {lineOptions?.length && onLineChange ? (
-            <label className="material-field">
-              <span>套用线路</span>
-              <select
-                value={selectedLineId ?? ''}
-                disabled={disabled || lineOptions.length < 2}
-                onChange={(event) => onLineChange(event.currentTarget.value)}
-              >
-                {lineOptions.map((line) => (
-                  <option key={line.value} value={line.value}>
-                    {line.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
+      <div className="material-template-examples-toolbar">
+        <div className="material-template-examples-heading">
+          <strong>版式模板</strong>
+          <span>选择一个版式开始编辑</span>
         </div>
-      ) : null}
-      <div className="material-template-example-category-tabs" role="group" aria-label="模板分类">
-        {categoryOptions.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            className={activeCategory === option.value ? 'is-active' : ''}
-            aria-pressed={activeCategory === option.value}
-            onClick={() => setCategory(option.value)}
-          >
-            {option.label}
-            <span>
-              {option.value === 'all'
-                ? examples.length
-                : examples.filter((example) => example.source.category === option.value).length}
-            </span>
-          </button>
-        ))}
+        {(stationOptions?.length && onStationChange) || (lineOptions?.length && onLineChange) ? (
+          <div className="material-template-example-context-fields">
+            {stationOptions?.length && onStationChange ? (
+              <label className="material-field">
+                <span>套用车站</span>
+                <select
+                  value={selectedStationName ?? ''}
+                  disabled={disabled}
+                  onChange={(event) => onStationChange(event.currentTarget.value)}
+                >
+                  {stationOptions.map((stationName) => (
+                    <option key={stationName} value={stationName}>
+                      {stationName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {lineOptions?.length && onLineChange ? (
+              <label className="material-field">
+                <span>套用线路</span>
+                <select
+                  value={selectedLineId ?? ''}
+                  disabled={disabled || lineOptions.length < 2}
+                  onChange={(event) => onLineChange(event.currentTarget.value)}
+                >
+                  {lineOptions.map((line) => (
+                    <option key={line.value} value={line.value}>
+                      {line.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="material-template-example-category-tabs" role="group" aria-label="模板分类">
+          {categoryOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={activeCategory === option.value ? 'is-active' : ''}
+              aria-pressed={activeCategory === option.value}
+              onClick={() => setCategory(option.value)}
+            >
+              {option.label}
+              <span>
+                {option.value === 'all'
+                  ? examples.length
+                  : examples.filter((example) => example.source.category === option.value).length}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
       <div className="material-template-example-list">
         {visibleExamples.map((example) => (
@@ -1251,6 +1382,18 @@ function MetroWayfindingExampleList({
       </div>
     </section>
   );
+}
+
+function resolveMetroWayfindingInitialSelection(layout: MetroWayfindingLayout) {
+  for (const [rowIndex, row] of layout.rows.entries()) {
+    const firstBlankLargeText = row.find(
+      (element) => element.type === 'largeText' && element.value.trim().length === 0,
+    );
+    if (firstBlankLargeText) {
+      return { rowIndex, elementId: firstBlankLargeText.id };
+    }
+  }
+  return { rowIndex: 0, elementId: layout.rows[0]?.[0]?.id ?? '' };
 }
 
 const METRO_TEMPLATE_EXAMPLE_GRID_ROW_HEIGHT = 8;
@@ -1348,16 +1491,35 @@ function MetroWayfindingExampleCard({
   );
 }
 
-function MetroWayfindingExamplePreview({ example }: Readonly<{ example: MetroWayfindingExample }>) {
-  const { layout } = example.project;
-  const canvasWidth = Math.max(1, example.project.canvas.widthM);
-  const canvasHeight = Math.max(1, example.project.canvas.heightM);
+/**
+ * 牌面内容预览：按画布比例还原「一行 / 两行」的牌面形态。
+ *
+ * 两个使用场景共用这一份实现，保证观感一致：
+ * - 版式模板页签的示例卡片（`MetroWayfindingExamplePreview`）；
+ * - 工程转换预览弹窗里的「转换后牌面」（直接传转换结果的 layout + canvas）。
+ *
+ * 只是**内容预览**——不接任何位图渲染链路，也不参与交互（`aria-hidden`）。
+ */
+function MetroWayfindingSignPreview({
+  layout,
+  canvas,
+  className = '',
+}: Readonly<{
+  layout: MetroWayfindingLayout;
+  canvas: Pick<MetroWayfindingProjectCanvas, 'widthM' | 'heightM'>;
+  /** 追加在外层容器上的类名，供使用方做局部约束。 */
+  className?: string;
+}>) {
+  const canvasWidth = Math.max(1, canvas.widthM);
+  const canvasHeight = Math.max(1, canvas.heightM);
   const previewWidth = canvasWidth * 52;
   const isVertical = layout.mode === 'vertical';
   const rows = layout.mode === 'double' ? layout.rows.slice(0, 2) : layout.rows.slice(0, 1);
   return (
     <div
-      className={`metro-wayfinding-example-preview${isVertical ? ' is-vertical' : ''}`}
+      className={`metro-wayfinding-example-preview${isVertical ? ' is-vertical' : ''}${
+        className ? ` ${className}` : ''
+      }`}
       aria-hidden="true"
     >
       <div
@@ -1387,20 +1549,44 @@ function MetroWayfindingExamplePreview({ example }: Readonly<{ example: MetroWay
   );
 }
 
-function MetroWayfindingExamplePreviewElement({
+function MetroWayfindingExamplePreview({ example }: Readonly<{ example: MetroWayfindingExample }>) {
+  return (
+    <MetroWayfindingSignPreview layout={example.project.layout} canvas={example.project.canvas} />
+  );
+}
+
+export function MetroWayfindingExamplePreviewElement({
   element,
   layoutMode,
   inheritedBackgroundColor,
   inheritedForegroundColor,
+  /**
+   * 是否将固定/弹性空格渲染成可见的 Material 符号
+   * （`space_bar` / `arrow_range`）。用于工程转换预览弹窗与后台审核
+   * 面板里的中性一字排开展示，让结构元素与元素列表里的标识一致；
+   * 模板库示例预览按比例还原牌面，默认关闭以免撑大固定空格。
+   */
+  renderSpaceIcons = false,
+  /**
+   * 是否把元素自身的语义色（线路色 / 方框填充 / 大文字框填充 …）抹掉，
+   * 统一渲染成「透明背景 + 文本色」的朴素形态。用于工程转换预览与后台
+   * 审核面板——那里只是要让人看清「有哪些图标、哪些文本」，不需要还原配色。
+   * 视觉对齐 `metro-wayfinding-element-list` 的按钮（transparent + 文本色）。
+   */
+  neutralizeColors = false,
 }: Readonly<{
   element: MetroWayfindingElement | MetroWayfindingCombinationChild;
   layoutMode: MetroWayfindingLayoutMode;
   inheritedBackgroundColor: string;
   inheritedForegroundColor: string;
+  renderSpaceIcons?: boolean;
+  neutralizeColors?: boolean;
 }>) {
   const style = {
-    backgroundColor: element.backgroundColor ?? 'transparent',
-    color: element.foregroundColor ?? inheritedForegroundColor,
+    backgroundColor: neutralizeColors ? 'transparent' : (element.backgroundColor ?? 'transparent'),
+    color: neutralizeColors
+      ? inheritedForegroundColor
+      : (element.foregroundColor ?? inheritedForegroundColor),
     ...(element.type === 'space' && element.mode === 'fixed'
       ? { flexBasis: `${Math.max(8, Math.min(element.units, 16) * 3)}px` }
       : {}),
@@ -1408,13 +1594,37 @@ function MetroWayfindingExamplePreviewElement({
 
   if (element.type === 'facility') {
     const option = metroWayfindingFacilityOptions.find((item) => item.id === element.iconId);
-    const assetName = resolveMetroFacilityIconAssetName(element.iconId, element.direction);
+    const assetName = resolveMetroFacilityIconAssetName(
+      element.iconId,
+      element.direction,
+      element.variant,
+    );
+    const facilityHasFrame = element.frameShape !== 'none';
+    const facilityBackground = neutralizeColors
+      ? 'transparent'
+      : facilityHasFrame && element.frameFillMode === 'inverse'
+        ? (element.foregroundColor ?? inheritedForegroundColor)
+        : facilityHasFrame && element.frameFillMode === 'color'
+          ? (element.frameFillColor ?? inheritedForegroundColor)
+          : (element.backgroundColor ?? 'transparent');
+    const facilityForeground = neutralizeColors
+      ? inheritedForegroundColor
+      : facilityHasFrame && element.frameFillMode === 'inverse'
+        ? (element.backgroundColor ?? inheritedBackgroundColor)
+        : (element.foregroundColor ?? inheritedForegroundColor);
     return (
-      <span className="metro-wayfinding-example-preview-element is-icon" style={style}>
+      <span
+        className="metro-wayfinding-example-preview-element is-icon"
+        style={{ ...style, backgroundColor: facilityBackground, color: facilityForeground }}
+      >
         {assetName ? (
           <MetroFacilityAssetIcon
             assetName={assetName}
-            style={metroFacilityAssetPreviewStyle(element.iconId, element.direction)}
+            style={metroFacilityAssetPreviewStyle(
+              element.iconId,
+              element.direction,
+              element.variant,
+            )}
           />
         ) : (
           <span
@@ -1448,7 +1658,7 @@ function MetroWayfindingExamplePreviewElement({
                   <i
                     className="is-line"
                     key={`${segment.kind}-${index}`}
-                    style={{ backgroundColor: segment.color }}
+                    style={neutralizeColors ? undefined : { backgroundColor: segment.color }}
                   >
                     {segment.value}
                   </i>
@@ -1474,38 +1684,72 @@ function MetroWayfindingExamplePreviewElement({
         className={`metro-wayfinding-example-preview-element is-large-text is-${element.frameShape}`}
         style={{
           ...style,
-          ...(element.frameFillMode === 'inverse'
-            ? {
-                backgroundColor: element.foregroundColor ?? inheritedForegroundColor,
-                color: element.backgroundColor ?? inheritedBackgroundColor,
-              }
-            : element.frameFillMode === 'color'
-              ? { backgroundColor: element.frameFillColor }
-              : {}),
+          ...(neutralizeColors
+            ? {}
+            : element.frameFillMode === 'inverse'
+              ? {
+                  backgroundColor: element.foregroundColor ?? inheritedForegroundColor,
+                  color: element.backgroundColor ?? inheritedBackgroundColor,
+                }
+              : element.frameFillMode === 'color'
+                ? { backgroundColor: element.frameFillColor }
+                : {}),
         }}
       >
-        {element.value || ' '}
-        {element.suffix ? <small>{element.suffix}</small> : null}
+        {/*
+          下角标可能落在**任意位置**（不只是末尾），所以按 runs 交替渲染：
+          与 SVG 导出、宽度估算共用 `splitMetroLargeTextRuns`，三者排布一致。
+        */}
+        {splitMetroLargeTextRuns(element).length
+          ? splitMetroLargeTextRuns(element).map((run, index) =>
+              run.kind === 'suffix' ? (
+                <small key={`suffix-${index}`}>{run.value}</small>
+              ) : (
+                <span key={`text-${index}`}>{run.value}</span>
+              ),
+            )
+          : ' '}
       </span>
     );
   }
   if (element.type === 'space') {
+    /*
+     * 沿用 `metro-wayfinding-element-list` 的标识方式：固定空格 → space_bar，
+     * 弹性空格 → arrow_range，让工程转换预览与后台 strip 看上去跟编辑器列表
+     * 一致，便于审核者一眼对位。模板库按比例还原牌面时不显示符号，
+     * 由调用方通过 `renderSpaceIcons` 控制。strip 上下文下透明度靠 CSS
+     * 的 `opacity`（约 0.55），让符号比正常文本更克制、不抢戏。
+     */
+    if (!renderSpaceIcons) {
+      return (
+        <span
+          className={`metro-wayfinding-example-preview-element is-space${element.mode === 'flex' ? ' is-flex' : ''}`}
+          style={style}
+        />
+      );
+    }
     return (
       <span
         className={`metro-wayfinding-example-preview-element is-space${element.mode === 'flex' ? ' is-flex' : ''}`}
         style={style}
-      />
+      >
+        <span className="material-symbols-outlined" aria-hidden="true">
+          {element.mode === 'flex' ? 'arrow_range' : 'space_bar'}
+        </span>
+      </span>
     );
   }
   if (element.type === 'combination') {
-    const combinationBackground =
-      element.frameFillMode === 'inverse'
+    const combinationBackground = neutralizeColors
+      ? 'transparent'
+      : element.frameFillMode === 'inverse'
         ? (element.foregroundColor ?? inheritedForegroundColor)
         : element.frameFillMode === 'color'
           ? element.frameFillColor
           : (element.backgroundColor ?? 'transparent');
-    const combinationForeground =
-      element.frameFillMode === 'inverse'
+    const combinationForeground = neutralizeColors
+      ? inheritedForegroundColor
+      : element.frameFillMode === 'inverse'
         ? (element.backgroundColor ?? inheritedBackgroundColor)
         : (element.foregroundColor ?? inheritedForegroundColor);
     return (
@@ -1520,12 +1764,29 @@ function MetroWayfindingExamplePreviewElement({
             layoutMode={layoutMode}
             inheritedBackgroundColor={combinationBackground ?? inheritedBackgroundColor}
             inheritedForegroundColor={combinationForeground}
+            renderSpaceIcons={renderSpaceIcons}
+            neutralizeColors={neutralizeColors}
           />
         ))}
       </span>
     );
   }
-  return <span className="metro-wayfinding-example-preview-element is-divider" style={style} />;
+  /*
+   * divider 刻意只传 `color`、不传 `backgroundColor`：
+   * 行内 `background-color` 优先级高于 CSS 的 `background: currentColor`，
+   * 一旦带上就会把 1px 竖线染成透明、完全看不见。让 currentColor 跟随
+   * 文本色即可画出竖线（`.is-divider { background: currentColor }`）。
+   */
+  return (
+    <span
+      className="metro-wayfinding-example-preview-element is-divider"
+      style={{
+        color: neutralizeColors
+          ? inheritedForegroundColor
+          : (element.foregroundColor ?? inheritedForegroundColor),
+      }}
+    />
+  );
 }
 
 function MetroWayfindingElementTabContent({
@@ -1539,12 +1800,16 @@ function MetroWayfindingElementTabContent({
     const icon =
       metroWayfindingFacilityOptions.find((option) => option.id === element.iconId) ??
       metroWayfindingFacilityOptions[0]!;
-    const assetName = resolveMetroFacilityIconAssetName(icon.id, element.direction);
+    const assetName = resolveMetroFacilityIconAssetName(
+      icon.id,
+      element.direction,
+      element.variant,
+    );
     if (assetName) {
       return (
         <MetroFacilityAssetIcon
           assetName={assetName}
-          style={metroFacilityAssetPreviewStyle(icon.id, element.direction)}
+          style={metroFacilityAssetPreviewStyle(icon.id, element.direction, element.variant)}
         />
       );
     }
@@ -1585,7 +1850,7 @@ function MetroWayfindingElementTabContent({
           title
         </span>
         <span className="metro-wayfinding-element-tab-summary">
-          {[element.value, element.suffix].filter(Boolean).join('') || '大文字'}
+          {concatMetroLargeTextValue(element) || '大文字'}
         </span>
       </>
     );
@@ -1647,7 +1912,7 @@ function metroElementTabAriaLabel(
     return `文字，${element.rows.length} 行，${alignmentLabel}${writingModeLabel ? `，${writingModeLabel}` : ''}${summary ? `，${summary}` : ''}`;
   }
   if (element.type === 'largeText') {
-    const summary = [element.value, element.suffix].filter(Boolean).join('');
+    const summary = concatMetroLargeTextValue(element);
     return summary ? `大文字，${summary}` : '大文字';
   }
   if (element.type === 'combination') {
@@ -1698,7 +1963,7 @@ function MetroWayfindingElementEditor({
   disabled: boolean;
   isFirst: boolean;
   isLast: boolean;
-  lineColorOptions: Array<{ value: string; label: string }>;
+  lineColorOptions: Array<{ value: string; label: string; aliases?: string[] }>;
   backgroundColorOptions: Array<{ value: string; label: string }>;
   inheritedBackgroundColor: string;
   inheritedForegroundColor: string;
@@ -1874,22 +2139,37 @@ function FacilityElementFields({
     const shouldClearPreviousDefault =
       currentIcon.defaultForegroundColor === element.foregroundColor;
     const fallbackDirection = resolveMetroWayfindingFacilityDefaultDirection(iconId);
-    const supportsCurrentDirection =
-      element.direction === 'left' ||
-      element.direction === 'right' ||
-      (iconId === 'exit' && (element.direction === 'up' || element.direction === 'down'));
+    const directionOptions = resolveMetroFacilityDirectionOptions(iconId);
+    const variantOptions = resolveMetroFacilityVariantOptions(iconId);
     patch({
       iconId,
       direction: fallbackDirection
-        ? supportsCurrentDirection
+        ? directionOptions.includes(element.direction as 'left' | 'right' | 'up' | 'down')
           ? element.direction
           : fallbackDirection
+        : undefined,
+      variant: variantOptions.length
+        ? variantOptions.includes(element.variant as MetroWayfindingIconVariant)
+          ? element.variant
+          : resolveMetroFacilityDefaultVariant(iconId)
         : undefined,
       foregroundColor:
         nextIcon?.defaultForegroundColor ??
         (shouldClearPreviousDefault ? undefined : element.foregroundColor),
     });
   };
+  const directionOptions = resolveMetroFacilityDirectionOptions(element.iconId);
+  const variantOptions = resolveMetroFacilityVariantOptions(element.iconId);
+  // 当前生效的方向 / 变种（元素未设或设了非法值时回落到默认值）。
+  const effectiveDirection =
+    element.direction && directionOptions.includes(element.direction)
+      ? element.direction
+      : (resolveMetroWayfindingFacilityDefaultDirection(element.iconId) ?? directionOptions[0]);
+  const effectiveVariant = variantOptions.length
+    ? element.variant && variantOptions.includes(element.variant)
+      ? element.variant
+      : resolveMetroFacilityDefaultVariant(element.iconId)
+    : undefined;
 
   return (
     <div className="metro-wayfinding-field-grid">
@@ -1909,45 +2189,53 @@ function FacilityElementFields({
         disabled={disabled}
         onChange={selectIcon}
       />
-      {resolveMetroWayfindingFacilityDefaultDirection(element.iconId) ? (
+      {variantOptions.length > 0 ? (
+        <SegmentedControl
+          label="图标变种"
+          value={effectiveVariant ?? variantOptions[0]!}
+          options={variantOptions.map((variant) => {
+            const assetName = resolveMetroFacilityIconAssetName(
+              element.iconId,
+              effectiveDirection,
+              variant,
+            );
+            return {
+              value: variant,
+              label: resolveMetroFacilityVariantLabel(variant),
+              icon: assetName ? undefined : currentIcon.symbol,
+              assetName,
+              iconStyle: assetName
+                ? metroFacilityAssetPreviewStyle(element.iconId, effectiveDirection, variant)
+                : effectiveDirection
+                  ? metroFacilityDirectionPreviewStyle(element.iconId, effectiveDirection)
+                  : undefined,
+            };
+          })}
+          disabled={disabled}
+          showLabels={false}
+          onChange={(variant) => patch({ variant })}
+        />
+      ) : null}
+      {directionOptions.length > 0 ? (
         <SegmentedControl
           label={element.iconId === 'exit' ? '出口图标方向' : '图标方向'}
-          value={
-            element.direction ??
-            resolveMetroWayfindingFacilityDefaultDirection(element.iconId) ??
-            'up'
-          }
-          options={
-            (element.iconId === 'exit'
-              ? [
-                  { value: 'left', label: '左' },
-                  { value: 'up', label: '上' },
-                  { value: 'right', label: '右' },
-                  { value: 'down', label: '下' },
-                ]
-              : [
-                  { value: 'left', label: '左' },
-                  { value: 'right', label: '右' },
-                ]
-            ).map((option) => {
-              const direction = option.value as 'left' | 'right' | 'up' | 'down';
-              const assetName = resolveMetroFacilityIconAssetName(element.iconId, direction);
-              return {
-                ...option,
-                icon: assetName ? undefined : currentIcon.symbol,
-                assetName,
-                iconStyle: assetName
-                  ? metroFacilityAssetPreviewStyle(element.iconId, direction)
-                  : metroFacilityDirectionPreviewStyle(element.iconId, direction),
-              };
-            }) as Array<{
-              value: 'left' | 'right' | 'up' | 'down';
-              label: string;
-              icon?: string;
-              assetName?: string;
-              iconStyle?: { transform: string };
-            }>
-          }
+          value={effectiveDirection ?? directionOptions[0]!}
+          options={directionOptions.map((direction) => {
+            const assetName = resolveMetroFacilityIconAssetName(
+              element.iconId,
+              direction,
+              effectiveVariant,
+            );
+            return {
+              value: direction,
+              label: resolveMetroFacilityDirectionLabel(direction),
+              icon: assetName ? undefined : currentIcon.symbol,
+              assetName,
+              iconStyle: assetName
+                ? metroFacilityAssetPreviewStyle(element.iconId, direction, effectiveVariant)
+                : metroFacilityDirectionPreviewStyle(element.iconId, direction),
+            };
+          })}
           disabled={disabled}
           showLabels={false}
           onChange={(direction) => patch({ direction })}
@@ -2098,7 +2386,7 @@ function TextElementFields({
             <li key={row.id} className="metro-wayfinding-text-row-item">
               <header>
                 <strong>
-                  第 {index + 1} 行 · {row.kind === 'main' ? '主文本' : '副文本·粗体'}
+                  第 {index + 1} 行 · {row.kind === 'main' ? '主文本' : '副文本'}
                 </strong>
                 <div className="metro-wayfinding-element-actions">
                   <button
@@ -2142,7 +2430,6 @@ function TextElementFields({
               {row.kind === 'main' ? (
                 <MainSegmentEditor
                   label={`第 ${index + 1} 行主文本内容`}
-                  fontSize={metrics.mainFontSize}
                   segments={row.segments}
                   disabled={disabled}
                   lineColorOptions={lineColorOptions}
@@ -2150,15 +2437,13 @@ function TextElementFields({
                   onChange={(segments) => updateRow(row.id, { ...row, segments })}
                 />
               ) : (
-                <label className="material-field">
-                  <span>副文本内容 · 字高 {formatMetroMetric(metrics.secondaryFontSize)}</span>
-                  <MetroWayfindingTextAutocompleteInput
-                    value={row.value}
-                    disabled={disabled}
-                    suggestions={textSuggestions}
-                    onChange={(value) => updateRow(row.id, { ...row, value })}
-                  />
-                </label>
+                <MetroWayfindingSecondaryField
+                  label={`第 ${index + 1} 行副文本内容`}
+                  value={row.value}
+                  disabled={disabled}
+                  suggestions={textSuggestions}
+                  onChange={(value) => updateRow(row.id, { ...row, value })}
+                />
               )}
             </li>
           ))}
@@ -2194,10 +2479,8 @@ function TextElementFields({
   );
 }
 
-type MetroWayfindingSegmentDialogState =
-  | { mode: 'create'; draft: MetroWayfindingMainSegment }
-  | { mode: 'edit'; index: number; draft: MetroWayfindingMainSegment };
-
+// 主文本内联编辑：文本段是可直接输入的 <input>，线路号 / 方框文本以 chip 形式
+// 整体嵌在文本之间。chip 不承载光标，方向键 / 退格键在段边界处跨段处理。
 function metroMainSegmentKindLabel(kind: MetroWayfindingMainSegment['kind']): string {
   if (kind === 'line') return '线路号';
   if (kind === 'boxed') return '方框文本';
@@ -2210,34 +2493,193 @@ function metroMainSegmentKindIcon(kind: MetroWayfindingMainSegment['kind']): str
   return 'text_fields';
 }
 
+// chip 类段落（线路号 / 方框文本）以整体形式嵌入，不可在其内部落光标。
+function isMetroMainSegmentChip(segment: MetroWayfindingMainSegment): boolean {
+  return segment.kind !== 'text';
+}
+
+// 把各段拼成纯文本，供无障碍朗读与摘要使用；chip 用「值」本身参与拼接。
+function concatMetroMainSegmentValues(segments: MetroWayfindingMainSegment[]): string {
+  return segments.map((segment) => segment.value).join('');
+}
+
+interface MetroLineColorOption {
+  value: string;
+  label: string;
+  aliases?: string[];
+}
+
+// 候选线路名：别名优先（别名通常是纯线路名），其次取 label 中「·」前的部分。
+function candidateMetroLineNames(option: MetroLineColorOption): string[] {
+  const fromLabel = option.label.split('·', 1)[0]?.trim();
+  return Array.from(new Set([...(option.aliases ?? []), fromLabel ?? ''].filter(Boolean)));
+}
+
+/**
+ * 线路选项的「线路编号」：走全项目统一的提取规则
+ * （连续数字/字母组合，否则首字：「2号线」→「2」、「S1线」→「S1」、「环线」→「环」）。
+ * 写入 chip 与色板展示都用它，保证同一线路在各处编号一致。
+ */
+function resolveMetroLineChipValue(option: MetroLineColorOption): string {
+  for (const name of candidateMetroLineNames(option)) {
+    const lineNumber = extractMetroWayfindingLineNumber(name);
+    if (lineNumber) return lineNumber;
+  }
+  return '';
+}
+
+// 线路选项的完整显示名：优先用别名（通常是纯线路名），否则取 label 中「·」前的部分。
+function resolveMetroLineDisplayName(option: MetroLineColorOption): string {
+  return candidateMetroLineNames(option)[0] ?? option.label;
+}
+
 function findUniqueMetroLineColor(
   value: string,
-  options: Array<{ value: string; label: string; aliases?: string[] }>,
+  options: MetroLineColorOption[],
 ): string | undefined {
-  const normalizedValue = normalizeMetroLineNumber(value);
+  const normalizedValue = normalizeMetroWayfindingLineNumber(value);
   if (!normalizedValue) return undefined;
-  const matches = options.filter((option) => {
-    const label = option.label.split('·', 1)[0]?.trim() ?? option.label;
-    return [label, ...(option.aliases ?? [])].some(
-      (candidate) => normalizeMetroLineNumber(candidate) === normalizedValue,
-    );
-  });
+  const matches = options.filter((option) =>
+    candidateMetroLineNames(option).some(
+      (candidate) => normalizeMetroWayfindingLineNumber(candidate) === normalizedValue,
+    ),
+  );
   const colors = Array.from(new Set(matches.map((option) => option.value.toUpperCase())));
   return colors.length === 1 ? colors[0] : undefined;
 }
 
-function normalizeMetroLineNumber(value: string): string {
-  return value
-    .trim()
-    .toLocaleLowerCase('zh-CN')
-    .replace(/\s+/gu, '')
-    .replace(/^line/iu, '')
-    .replace(/(号线|路|line)$/iu, '');
+/**
+ * 模糊匹配最合适的线路色：用于线路号 chip 文本实时联动。
+ * 返回 undefined 表示没有可判定的线路（此时保留用户手选的色）。
+ *
+ * 按「提取出的线路编号」比较，而不是整串名称——这样「2」「2号线」「2号线路」
+ * 都能落到同一条线上，也避免「1」误命中「10号线」。
+ */
+function findBestMetroLineColor(
+  value: string,
+  options: MetroLineColorOption[],
+): string | undefined {
+  const normalized = normalizeMetroWayfindingLineNumber(value);
+  if (!normalized) return undefined;
+
+  // 1) 精确命中（含别名）
+  const exact = findUniqueMetroLineColor(value, options);
+  if (exact) return exact;
+
+  // 2) 只有一个候选时直接采用，避免「1」匹配「1号线」这类前缀误判。
+  if (options.length === 1) return options[0]!.value.toUpperCase();
+
+  // 3) 按线路编号前缀匹配：「2」→「2号线」（编号归一化后前缀命中），取编号最短者。
+  // 注意：数字编号一旦命中就不再退回「包含匹配」——否则「1」会命中「10号线」
+  // （因为「10」包含「1」），把编号当成子串去匹配是错的。
+  const byLineNumber = options
+    .map((option) => ({
+      option,
+      lineNumbers: candidateMetroLineNames(option)
+        .map(normalizeMetroWayfindingLineNumber)
+        .filter(Boolean),
+    }))
+    .filter(({ lineNumbers }) =>
+      lineNumbers.some(
+        (lineNumber) => lineNumber.length > normalized.length && lineNumber.startsWith(normalized),
+      ),
+    );
+  if (byLineNumber.length) {
+    const best = byLineNumber.reduce((left, right) =>
+      Math.min(...left.lineNumbers.map((item) => item.length)) <=
+      Math.min(...right.lineNumbers.map((item) => item.length))
+        ? left
+        : right,
+    );
+    return best.option.value.toUpperCase();
+  }
+
+  // 4) 包含匹配：仅在输入不是「编号形态」时才启用（如「京港」→「京港地铁1号线」）。
+  // 纯数字/字母编号已经在上一步按前缀判定过，若再到名称里做子串匹配，
+  // 「1」会命中「10号线」、「1号线」会命中「11号线」，属于误判。
+  if (/^[0-9a-z]+$/iu.test(normalized)) return undefined;
+  const containsMatches = options.filter((option) =>
+    candidateMetroLineNames(option).some((candidate) =>
+      normalizeMetroWayfindingLineNumber(candidate).includes(normalized),
+    ),
+  );
+  const containsColors = Array.from(
+    new Set(containsMatches.map((option) => option.value.toUpperCase())),
+  );
+  return containsColors.length === 1 ? containsColors[0] : undefined;
+}
+
+/**
+ * 合并相邻的普通文本段：连续两个及以上的文本段之间若只隔着空格，
+ * 或本来就紧邻，则并成一段，避免输入时被切成一个个碎片文本框。
+ */
+function mergeAdjacentMetroTextSegments(
+  segments: MetroWayfindingMainSegment[],
+): MetroWayfindingMainSegment[] {
+  const merged: MetroWayfindingMainSegment[] = [];
+  for (const segment of segments) {
+    const previous = merged[merged.length - 1];
+    if (previous && previous.kind === 'text' && segment.kind === 'text') {
+      merged[merged.length - 1] = { kind: 'text', value: previous.value + segment.value };
+      continue;
+    }
+    merged.push(segment);
+  }
+  return merged;
+}
+
+/**
+ * 主文本 / 副文本编辑控件共用的外壳。
+ *
+ * 两者必须是同一套外观与布局：同样的输入框容器。
+ * 把外壳抽出来，是保证「改一处两边都变」的唯一可靠做法——靠两处 CSS 各自对齐
+ * 迟早会漂移。
+ *
+ * 外壳**不**再渲染自己的标签行：行 `<header>` 已经写了「第 N 行 · 主/副文本」，
+ * 动态字高也在上方的 `.metro-wayfinding-text-metrics` 里给了，重复展示只是噪音。
+ */
+function MetroWayfindingSegmentFieldShell({
+  label,
+  disabled,
+  ariaLabel,
+  onBlankPointerDown,
+  children,
+}: Readonly<{
+  label: string;
+  disabled?: boolean;
+  ariaLabel: string;
+  /** 点击输入容器空白处时调用（用于把焦点落回最后一个可编辑段）。 */
+  onBlankPointerDown?: () => void;
+  children: ReactNode;
+}>) {
+  return (
+    <section
+      className="metro-wayfinding-main-segments"
+      aria-label={label}
+      aria-disabled={disabled || undefined}
+    >
+      <div className="metro-wayfinding-main-segment-control">
+        <div
+          className="metro-wayfinding-main-segments-input"
+          role="group"
+          aria-label={ariaLabel}
+          // 只在「空白处」接管点击：命中输入框 / chip / 按钮时交给它们自己处理。
+          onPointerDown={(event) => {
+            if (!onBlankPointerDown) return;
+            if (event.target !== event.currentTarget) return;
+            event.preventDefault();
+            onBlankPointerDown();
+          }}
+        >
+          {children}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function MainSegmentEditor({
   label,
-  fontSize,
   segments,
   disabled,
   lineColorOptions,
@@ -2245,397 +2687,999 @@ function MainSegmentEditor({
   onChange,
 }: Readonly<{
   label: string;
-  fontSize: number;
   segments: MetroWayfindingMainSegment[];
   disabled: boolean;
-  lineColorOptions: Array<{ value: string; label: string }>;
+  lineColorOptions: MetroLineColorOption[];
   textSuggestions?: string[];
   onChange: (segments: MetroWayfindingMainSegment[]) => void;
 }>) {
-  const editorId = useId();
-  const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(0);
-  const [segmentDialog, setSegmentDialog] = useState<MetroWayfindingSegmentDialogState | null>(
-    null,
-  );
-  const activeSegmentIndex = Math.min(selectedSegmentIndex, Math.max(segments.length - 1, 0));
+  // 正在编辑的文本段索引；null 表示光标停在 chip 上。
+  const [activeTextIndex, setActiveTextIndex] = useState<number | null>(null);
+  // 待恢复的段内字符位置。删除 chip / 插入 chip 后需要还原落点。
+  const pendingCaret = useRef<{ index: number; offset: number } | null>(null);
+  // pendingCaret 的落点是否在 chip 内部（而不是文本段）。
+  const chipCaret = useRef(false);
+  const textInputs = useRef(new Map<number, HTMLInputElement>());
+  const chipInputs = useRef(new Map<number, HTMLInputElement>());
+  // chip 段色板展开状态：存段索引。
+  const [paletteIndex, setPaletteIndex] = useState<number | null>(null);
+  // 光标在当前文本段内的字符偏移；null 表示未聚焦或未记录。
+  const [caretOffset, setCaretOffset] = useState<number | null>(null);
 
-  const focusSegmentControl = (target: number | 'add') => {
-    window.requestAnimationFrame(() => {
-      document
-        .getElementById(
-          target === 'add' ? `${editorId}-add-segment` : `${editorId}-segment-${target}`,
-        )
-        ?.focus();
-    });
+  // 文本段就是「直接输入的文本」，不需要用户手动创建。
+  // 这里保证段列表末尾始终存在一个文本段作为输入落点（空行也留一个），
+  // 并把相邻的普通文本段合并成一段——否则历史数据 / 粘进来的文本会被拆成
+  // 一堆碎片文本框，每个框都窄得看不清内容。
+  const normalizedSegments = useMemo<MetroWayfindingMainSegment[]>(() => {
+    const merged = mergeAdjacentMetroTextSegments(segments);
+    if (!merged.length) return [{ kind: 'text', value: '' }];
+    const last = merged[merged.length - 1]!;
+    // 末尾是 chip 时补一个空文本段；末尾是文本段则原样保留供继续输入。
+    return isMetroMainSegmentChip(last) ? [...merged, { kind: 'text', value: '' }] : merged;
+  }, [segments]);
+
+  const totalText = concatMetroMainSegmentValues(normalizedSegments);
+
+  // ── 光标定位的输入建议 + 内联按钮 ────────────────────────────────
+  // 建议基于「光标之前的整行文本」匹配，渲染在光标之后；两个「添加」按钮
+  // 也贴在光标处（而不是永远漂在行尾），这样插入位置所见即所得。
+  // 光标所在文本段：null 表示焦点在 chip 上或输入框外。
+  const caretIndex =
+    activeTextIndex !== null &&
+    !isMetroMainSegmentChip(
+      normalizedSegments[activeTextIndex] ?? ({} as MetroWayfindingMainSegment),
+    )
+      ? activeTextIndex
+      : null;
+
+  // 光标前文本：chip 贡献它的值，文本段贡献光标之前的片段。
+  const textBeforeCaret = useMemo(() => {
+    if (caretIndex === null) return null;
+    return normalizedSegments
+      .slice(0, caretIndex + 1)
+      .map((segment, index) => {
+        if (index < caretIndex || isMetroMainSegmentChip(segment)) return segment.value;
+        return segment.value.slice(0, caretOffset ?? segment.value.length);
+      })
+      .join('');
+  }, [caretIndex, caretOffset, normalizedSegments]);
+
+  // 建议后缀：只取「待追加」的部分，供光标后的幽灵文本渲染。
+  const caretSuggestion = useMemo(() => {
+    if (textBeforeCaret === null) return undefined;
+    const match = matchTextContinuation(textBeforeCaret, textSuggestions);
+    return match?.suffix || undefined;
+  }, [textBeforeCaret, textSuggestions]);
+
+  // 兼容旧行为：整行补全用于 Tab 接受建议。
+  const continuation = findTextContinuation(totalText, textSuggestions);
+
+  // 记录文本段光标位置，供建议 / 按钮重新贴光标。
+  const syncCaretOffset = (input: HTMLInputElement) => {
+    setCaretOffset(input.selectionStart ?? input.value.length);
   };
-  const dismissSegmentDialog = () => {
-    const focusTarget = segmentDialog?.mode === 'edit' ? segmentDialog.index : 'add';
-    setSegmentDialog(null);
-    focusSegmentControl(focusTarget);
+
+  const focusTextSegment = (index: number, offset: number) => {
+    const target = textInputs.current.get(index);
+    if (!target) return;
+    target.focus();
+    const clamped = Math.max(0, Math.min(target.value.length, offset));
+    target.setSelectionRange(clamped, clamped);
+    setCaretOffset(clamped);
   };
-  const openSegmentDialog = (index: number) => {
-    const segment = segments[index];
-    if (!segment || disabled) return;
-    setSelectedSegmentIndex(index);
-    setSegmentDialog({ mode: 'edit', index, draft: { ...segment } });
+
+  // chip 内部的输入框：把某个 chip 聚焦并把光标放到末尾（chip 为空时即段首）。
+  const focusChipInput = (index: number, offset?: number) => {
+    const target = chipInputs.current.get(index);
+    if (!target) return;
+    target.focus();
+    const end = offset ?? target.value.length;
+    target.setSelectionRange(end, end);
   };
-  const openCreateDialog = () => {
+
+  // 点击容器空白处：聚焦到「最后可编辑的段」——行尾文本段优先，否则最后一个 chip。
+  // 用 DOM 里的实际输入框反查，避免依赖状态同步时序。
+  const focusLastEditableSegment = () => {
     if (disabled) return;
-    setSegmentDialog({ mode: 'create', draft: { kind: 'text', value: '' } });
-  };
-  const changeDraftKind = (kind: MetroWayfindingMainSegment['kind']) => {
-    setSegmentDialog((current) => {
-      if (!current) return current;
-      const draft: MetroWayfindingMainSegment =
-        kind === 'line'
-          ? {
-              kind,
-              value: current.draft.value,
-              color:
-                current.draft.kind === 'line'
-                  ? current.draft.color
-                  : (lineColorOptions[0]?.value ?? '#2F80ED'),
-            }
-          : { kind, value: current.draft.value };
-      return { ...current, draft };
-    });
-  };
-  const updateDraft = (draft: MetroWayfindingMainSegment) => {
-    setSegmentDialog((current) => (current ? { ...current, draft } : current));
-  };
-  const saveSegmentDialog = () => {
-    if (!segmentDialog) return;
-    if (segmentDialog.mode === 'create') {
-      const nextIndex = segments.length;
-      onChange([...segments, segmentDialog.draft]);
-      setSelectedSegmentIndex(nextIndex);
-      setSegmentDialog(null);
-      focusSegmentControl(nextIndex);
+    for (let index = normalizedSegments.length - 1; index >= 0; index -= 1) {
+      const segment = normalizedSegments[index];
+      if (!segment) continue;
+      const target =
+        segment.kind === 'text' ? textInputs.current.get(index) : chipInputs.current.get(index);
+      if (!target || target.disabled) continue;
+      if (segment.kind === 'text') {
+        focusTextSegment(index, target.value.length);
+      } else {
+        focusChipInput(index);
+      }
       return;
     }
-    onChange(
-      segments.map((segment, index) =>
-        index === segmentDialog.index ? segmentDialog.draft : segment,
-      ),
+  };
+
+  // DOM 更新后再把光标落到记录的位置。
+  useEffect(() => {
+    const target = pendingCaret.current;
+    if (!target) return;
+    pendingCaret.current = null;
+    if (chipCaret.current) {
+      chipCaret.current = false;
+      focusChipInput(target.index, target.offset);
+      return;
+    }
+    focusTextSegment(target.index, target.offset);
+  }, [normalizedSegments]);
+
+  const commit = (
+    next: MetroWayfindingMainSegment[],
+    caret: { index: number; offset: number } | null,
+    // chip 内部落点：删除 chip 后把光标还给它自己的输入框（而不是相邻文本段）。
+    caretInChip = false,
+  ) => {
+    pendingCaret.current = caret;
+    chipCaret.current = caretInChip;
+    setActiveTextIndex(caret && !caretInChip ? caret.index : null);
+    setCaretOffset(caret && !caretInChip ? caret.offset : null);
+    onChange(next);
+  };
+
+  // 把某个文本段替换成新值；不改变段结构与 chip 位置。
+  const setTextSegmentValue = (index: number, value: string, offset: number) => {
+    const next = normalizedSegments.map((segment, segmentIndex) =>
+      segmentIndex === index ? ({ kind: 'text', value } as MetroWayfindingMainSegment) : segment,
     );
-    setSelectedSegmentIndex(segmentDialog.index);
-    setSegmentDialog(null);
-    focusSegmentControl(segmentDialog.index);
+    commit(next, { index, offset });
   };
-  const deleteSegmentFromDialog = () => {
-    if (segmentDialog?.mode !== 'edit' || segments.length === 1) return;
-    const next = segments.filter((_segment, index) => index !== segmentDialog.index);
-    const nextIndex = Math.min(segmentDialog.index, next.length - 1);
+
+  // 生成一个空 chip，线路号带默认色。
+  const createChip = (kind: 'line' | 'boxed'): MetroWayfindingMainSegment =>
+    kind === 'line'
+      ? { kind: 'line', value: '', color: lineColorOptions[0]?.value ?? '#2F80ED' }
+      : { kind: 'boxed', value: '' };
+
+  // 在光标处插入 chip，光标移到 chip 右侧文本段的开头。
+  const insertChipAtCaret = (kind: 'line' | 'boxed') => {
+    const chip = createChip(kind);
+    const activeIndex = activeTextIndex;
+    const activeSegment = activeIndex === null ? undefined : normalizedSegments[activeIndex];
+
+    // 光标在某个文本段内：在该段中间切开插入，chip 前保留已输入文本。
+    if (activeIndex !== null && activeSegment && !isMetroMainSegmentChip(activeSegment)) {
+      const input = textInputs.current.get(activeIndex);
+      const at = input?.selectionStart ?? caretOffset ?? activeSegment.value.length;
+      const head = activeSegment.value.slice(0, at);
+      const tail = activeSegment.value.slice(at);
+      const next: MetroWayfindingMainSegment[] = [];
+      normalizedSegments.forEach((segment, index) => {
+        if (index !== activeIndex) {
+          next.push(segment);
+          return;
+        }
+        if (head) next.push({ kind: 'text', value: head });
+        next.push(chip);
+        // chip 后保留文本段，便于继续输入。
+        next.push({ kind: 'text', value: tail });
+      });
+      commit(next, { index: next.indexOf(chip) + 1, offset: 0 });
+      return;
+    }
+
+    // 光标不在文本段上（点过 chip）：插到行尾。
+    const next: MetroWayfindingMainSegment[] = [
+      ...normalizedSegments,
+      chip,
+      { kind: 'text', value: '' },
+    ];
+    commit(next, { index: next.length - 1, offset: 0 });
+  };
+
+  // 采纳光标处的补全建议（点按钮或按 Tab）：把建议后缀拼到光标所在文本段上。
+  const acceptCaretSuggestion = () => {
+    if (caretIndex === null || !caretSuggestion) return;
+    const segment = normalizedSegments[caretIndex];
+    if (!segment || isMetroMainSegmentChip(segment)) return;
+    const at = caretOffset ?? segment.value.length;
+    const value = `${segment.value.slice(0, at)}${caretSuggestion}${segment.value.slice(at)}`;
+    setTextSegmentValue(caretIndex, value, at + caretSuggestion.length);
+  };
+
+  const removeChip = (index: number) => {
+    const prevIndex = index - 1;
+    const prev = normalizedSegments[prevIndex];
+    const next = normalizedSegments.filter((_segment, segmentIndex) => segmentIndex !== index);
+    // 优先回落到前一个文本段的末尾，否则落到后一个文本段开头。
+    if (prev && !isMetroMainSegmentChip(prev)) {
+      commit(next, { index: prevIndex, offset: prev.value.length });
+      return;
+    }
+    const after = next[index];
+    if (after && !isMetroMainSegmentChip(after)) {
+      commit(next, { index, offset: 0 });
+      return;
+    }
+    commit(next, null);
+  };
+
+  // chip 内部退格：文本框已空时再按一次退格，直接把整个 chip 删掉。
+  const handleChipBackspace = (index: number, event: KeyboardEvent<HTMLInputElement>): boolean => {
+    const input = event.currentTarget;
+    const isEmpty = input.value.length === 0;
+    const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
+    if (!isEmpty && !atStart) return false;
+    const prevIndex = index - 1;
+    const prev = normalizedSegments[prevIndex];
+    const next = normalizedSegments.filter((_segment, segmentIndex) => segmentIndex !== index);
+    // 前一段是文本：把光标还到它末尾，衔接更自然。
+    if (prev && !isMetroMainSegmentChip(prev)) {
+      commit(next, { index: prevIndex, offset: prev.value.length });
+      return true;
+    }
+    // 前一段也是 chip（或已在行首）：删掉后把焦点停到前一个 chip 里。
+    if (prev) {
+      commit(next, { index: prevIndex, offset: prev.value.length }, true);
+      return true;
+    }
+    const after = next[0];
+    if (after && !isMetroMainSegmentChip(after)) {
+      commit(next, { index: 0, offset: 0 });
+      return true;
+    }
+    commit(next, null);
+    return true;
+  };
+
+  // 线路号 chip 文本变化时实时联动线路色；匹配不到则保留用户手选的色。
+  const updateChip = (index: number, value: string) => {
+    const next = normalizedSegments.map((segment, segmentIndex) => {
+      if (segmentIndex !== index) return segment;
+      if (segment.kind === 'line') {
+        return {
+          kind: 'line' as const,
+          value,
+          color: findBestMetroLineColor(value, lineColorOptions) ?? segment.color,
+        };
+      }
+      if (segment.kind === 'boxed') return { kind: 'boxed' as const, value };
+      return segment;
+    });
     onChange(next);
-    setSelectedSegmentIndex(nextIndex);
-    setSegmentDialog(null);
-    focusSegmentControl(nextIndex);
-  };
-  const moveSelectedSegment = (direction: 'up' | 'down') => {
-    const target = direction === 'up' ? activeSegmentIndex - 1 : activeSegmentIndex + 1;
-    if (target < 0 || target >= segments.length) return;
-    const next = [...segments];
-    [next[activeSegmentIndex], next[target]] = [next[target]!, next[activeSegmentIndex]!];
-    setSelectedSegmentIndex(target);
-    onChange(next);
-    focusSegmentControl(target);
   };
 
-  useEffect(() => {
-    setSelectedSegmentIndex((current) => Math.min(current, Math.max(segments.length - 1, 0)));
-  }, [segments.length]);
+  // 点色板上的颜色：直接写入该线路的编号（2 / S1 / 环…），并同步色值。
+  const applyChipSwatch = (index: number, option: MetroLineColorOption) => {
+    const lineValue = resolveMetroLineChipValue(option);
+    const next = normalizedSegments.map((segment, segmentIndex) =>
+      segmentIndex === index && segment.kind === 'line'
+        ? ({
+            kind: 'line',
+            value: lineValue || segment.value,
+            color: option.value.toUpperCase(),
+          } as MetroWayfindingMainSegment)
+        : segment,
+    );
+    // 写完编号后把光标落回 chip 输入框末尾，方便继续改。
+    commit(next, { index, offset: lineValue.length }, true);
+    setPaletteIndex(null);
+  };
 
-  useEffect(() => {
-    if (!segmentDialog) return;
-    const previousOverflow = document.body.style.overflow;
-    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') dismissSegmentDialog();
-    };
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [segmentDialog]);
+  // 文本段退格：已到段首且前一段是 chip 时，删除该 chip。
+  const handleTextBackspace = (index: number, event: KeyboardEvent<HTMLInputElement>): boolean => {
+    const input = event.currentTarget;
+    if (input.selectionStart !== 0 || input.selectionEnd !== 0) return false;
+    const prevIndex = index - 1;
+    const prev = normalizedSegments[prevIndex];
+    if (!prev || !isMetroMainSegmentChip(prev)) return false;
+    const inputValue = input.value;
+    const next = normalizedSegments.filter((_segment, segmentIndex) => segmentIndex !== prevIndex);
+    // 删掉 chip 后，本段索引前移一位。
+    commit(next, { index: index - 1, offset: inputValue.length });
+    return true;
+  };
 
-  const handleSegmentNavigationKeyDown = (event: KeyboardEvent<HTMLOListElement>) => {
-    const target = event.target as HTMLElement;
-    if (!target.matches('[data-segment-selector]') || !segments.length) return;
-    let nextIndex = Number(target.dataset.segmentIndex);
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex -= 1;
-    else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex += 1;
-    else if (event.key === 'Home') nextIndex = 0;
-    else if (event.key === 'End') nextIndex = segments.length - 1;
-    else return;
-    event.preventDefault();
-    nextIndex = Math.max(0, Math.min(segments.length - 1, nextIndex));
-    setSelectedSegmentIndex(nextIndex);
-    focusSegmentControl(nextIndex);
+  // 文本段 Delete：已到段尾且后一段是 chip 时，删除该 chip。
+  const handleTextDelete = (index: number, event: KeyboardEvent<HTMLInputElement>): boolean => {
+    const input = event.currentTarget;
+    if (input.selectionStart !== input.value.length || input.selectionEnd !== input.value.length) {
+      return false;
+    }
+    const nextSegment = normalizedSegments[index + 1];
+    if (!nextSegment || !isMetroMainSegmentChip(nextSegment)) return false;
+    const next = normalizedSegments.filter((_segment, segmentIndex) => segmentIndex !== index + 1);
+    commit(next, { index, offset: input.value.length });
+    return true;
+  };
+
+  // 段边界的方向键落点：从右边进来落到末尾、从左边进来落到开头，与视线方向一致。
+  const focusNeighborSegment = (targetIndex: number, direction: 'left' | 'right') => {
+    const target = normalizedSegments[targetIndex];
+    if (!target) return;
+    if (isMetroMainSegmentChip(target)) {
+      focusChipInput(targetIndex, direction === 'left' ? undefined : 0);
+      return;
+    }
+    focusTextSegment(targetIndex, direction === 'left' ? target.value.length : 0);
+  };
+
+  // 左/右方向键在段边界处跨段移动**焦点**，文本段与 chip 输入框共用。
+  //
+  // 只认左/右：这是水平行内的语义，上下方向键留给将来的跨行导航。
+  // 注意不能只清 activeTextIndex——那样 DOM 焦点还在原输入框里，看起来没反应。
+  const handleSegmentArrow = (
+    index: number,
+    direction: 'left' | 'right',
+    event: KeyboardEvent<HTMLInputElement>,
+  ): boolean => {
+    const input = event.currentTarget;
+    const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
+    const atEnd =
+      input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
+    if (direction === 'left' ? !atStart : !atEnd) return false;
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    if (!normalizedSegments[targetIndex]) return false;
+    window.requestAnimationFrame(() => focusNeighborSegment(targetIndex, direction));
+    return true;
   };
 
   return (
-    <section className="metro-wayfinding-main-segments" aria-label={label}>
-      <div>
-        <strong>{label}</strong>
-        <span>字高 {formatMetroMetric(fontSize)}</span>
-      </div>
-      <div className="metro-wayfinding-main-segment-control">
-        <ol
-          className="metro-wayfinding-main-segment-tabs"
-          aria-label={`${label}的文本段`}
-          onKeyDown={handleSegmentNavigationKeyDown}
-        >
-          {segments.map((segment, index) => (
-            <li key={`${segment.kind}-${index}`}>
-              <button
-                id={`${editorId}-segment-${index}`}
-                type="button"
-                data-segment-selector
-                data-segment-index={index}
-                aria-pressed={index === activeSegmentIndex}
-                aria-haspopup="dialog"
-                aria-label={`${metroMainSegmentKindLabel(segment.kind)}，${segment.value.trim() || '未填写'}`}
-                title={`编辑${metroMainSegmentKindLabel(segment.kind)}`}
-                tabIndex={index === activeSegmentIndex ? 0 : -1}
-                className={[`is-${segment.kind}`, index === activeSegmentIndex ? 'is-active' : '']
-                  .filter(Boolean)
-                  .join(' ')}
-                style={
-                  segment.kind === 'line'
-                    ? ({ '--metro-wayfinding-segment-color': segment.color } as CSSProperties)
-                    : undefined
+    <MetroWayfindingSegmentFieldShell
+      label={label}
+      disabled={disabled}
+      ariaLabel={`${label}，可内联编辑`}
+      onBlankPointerDown={focusLastEditableSegment}
+    >
+      {normalizedSegments.map((segment, index) =>
+        segment.kind === 'text' ? (
+          // 文本段 + 贴在光标后的「幽灵建议」和「添加」按钮：
+          // 这三者拼成一个行内整体，光标移动时装饰跟着重排。
+          <span
+            key={`text-${index}`}
+            className={`metro-wayfinding-main-segments-text-flow${
+              caretIndex === index ? ' is-active' : ''
+            }`}
+          >
+            <input
+              ref={(node) => {
+                if (node) textInputs.current.set(index, node);
+                else textInputs.current.delete(index);
+              }}
+              className="metro-wayfinding-main-segments-text"
+              value={segment.value}
+              disabled={disabled}
+              size={Math.max(segment.value.length, 1)}
+              aria-label={`${label}的文本段 ${index + 1}`}
+              onFocus={(event) => {
+                setActiveTextIndex(index);
+                syncCaretOffset(event.currentTarget);
+              }}
+              // 光标移动（点击 / 拖选 / 方向键 / 输入）都要刷新建议与按钮位置。
+              onSelect={(event) => syncCaretOffset(event.currentTarget)}
+              onClick={(event) => syncCaretOffset(event.currentTarget)}
+              onKeyUp={(event) => syncCaretOffset(event.currentTarget)}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                const offset = event.currentTarget.selectionStart ?? value.length;
+                setCaretOffset(offset);
+                setTextSegmentValue(index, value, offset);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Backspace' && handleTextBackspace(index, event)) {
+                  event.preventDefault();
+                  return;
                 }
-                onClick={() => openSegmentDialog(index)}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  {metroMainSegmentKindIcon(segment.kind)}
+                if (event.key === 'Delete' && handleTextDelete(index, event)) {
+                  event.preventDefault();
+                  return;
+                }
+                if (event.key === 'ArrowLeft' && handleSegmentArrow(index, 'left', event)) {
+                  event.preventDefault();
+                  return;
+                }
+                if (event.key === 'ArrowRight' && handleSegmentArrow(index, 'right', event)) {
+                  event.preventDefault();
+                  return;
+                }
+                // Tab：优先采纳光标处的建议（比整行补全更贴合当前落点）。
+                if (event.key === 'Tab') {
+                  if (caretSuggestion) {
+                    event.preventDefault();
+                    acceptCaretSuggestion();
+                    return;
+                  }
+                  if (continuation && continuation !== totalText) {
+                    event.preventDefault();
+                    setTextSegmentValue(index, continuation, continuation.length);
+                  }
+                }
+              }}
+            />
+            {caretIndex === index ? (
+              <>
+                {caretSuggestion ? (
+                  <button
+                    type="button"
+                    className="metro-wayfinding-main-segments-suggestion"
+                    title="采纳建议（Tab）"
+                    aria-label={`采纳建议：${caretSuggestion}`}
+                    disabled={disabled}
+                    // mousedown 抢焦点会让输入框失焦、建议消失，这里改用 click 并阻止默认。
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={acceptCaretSuggestion}
+                  >
+                    {caretSuggestion}
+                  </button>
+                ) : null}
+                <span className="metro-wayfinding-main-segments-caret-actions">
+                  <button
+                    type="button"
+                    className="metro-wayfinding-main-segments-insert-line"
+                    title="在光标处添加线路号"
+                    aria-label="在光标处添加线路号"
+                    disabled={disabled}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => insertChipAtCaret('line')}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      directions_subway
+                    </span>
+                    线路号
+                  </button>
+                  <button
+                    type="button"
+                    className="metro-wayfinding-main-segments-insert-boxed"
+                    title="在光标处添加方框"
+                    aria-label="在光标处添加方框"
+                    disabled={disabled}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => insertChipAtCaret('boxed')}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      select_all
+                    </span>
+                    方框
+                  </button>
                 </span>
-                <span className="metro-wayfinding-main-segment-tab-summary">
-                  {segment.value.trim() || '未填写'}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ol>
-        <div className="metro-wayfinding-main-segment-toolbar" aria-label="文本段操作">
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="当前文本段前移"
-            title="前移"
-            disabled={disabled || activeSegmentIndex === 0}
-            onClick={() => moveSelectedSegment('up')}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              arrow_back
-            </span>
-          </button>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="当前文本段后移"
-            title="后移"
-            disabled={disabled || activeSegmentIndex === segments.length - 1}
-            onClick={() => moveSelectedSegment('down')}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              arrow_forward
-            </span>
-          </button>
-          <button
-            id={`${editorId}-add-segment`}
-            type="button"
-            aria-haspopup="dialog"
-            onClick={openCreateDialog}
-            disabled={disabled}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              add
-            </span>
-            新增
-          </button>
-        </div>
-      </div>
-
-      {segmentDialog ? (
-        <div
-          className="modal-backdrop metro-wayfinding-segment-dialog-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.currentTarget === event.target) dismissSegmentDialog();
-          }}
-        >
-          <form
-            className="modal-panel metro-wayfinding-segment-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={`${editorId}-segment-dialog-title`}
-            onSubmit={(event) => {
-              event.preventDefault();
-              saveSegmentDialog();
+              </>
+            ) : null}
+          </span>
+        ) : (
+          <span
+            key={`chip-${index}`}
+            className={`metro-wayfinding-main-segments-chip is-${segment.kind}`}
+            style={
+              segment.kind === 'line'
+                ? ({ '--metro-wayfinding-segment-color': segment.color } as CSSProperties)
+                : undefined
+            }
+            onBlur={(event) => {
+              // 焦点离开整个 chip（含内部输入框与按钮）时才收起色板。
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                setPaletteIndex((current) => (current === index ? null : current));
+              }
             }}
           >
-            <header>
-              <div>
-                <h2 id={`${editorId}-segment-dialog-title`}>
-                  {segmentDialog.mode === 'create'
-                    ? '新增主文本段'
-                    : `编辑${metroMainSegmentKindLabel(segmentDialog.draft.kind)}`}
-                </h2>
-                <span>字高 {formatMetroMetric(fontSize)}</span>
-              </div>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="关闭文本段编辑"
-                title="关闭"
-                onClick={dismissSegmentDialog}
-              >
-                <span className="material-symbols-outlined" aria-hidden="true">
-                  close
-                </span>
-              </button>
-            </header>
-            <SegmentedControl
-              label="文本段类型"
-              value={segmentDialog.draft.kind}
-              options={[
-                { value: 'text', label: '文本段', icon: 'text_fields' },
-                { value: 'line', label: '线路号', icon: 'subway' },
-                { value: 'boxed', label: '方框文本', icon: 'crop_square' },
-              ]}
+            <button
+              type="button"
+              className="metro-wayfinding-main-segments-chip-icon"
+              aria-label={
+                segment.kind === 'line'
+                  ? '选择线路色（同时填入线路号）'
+                  : metroMainSegmentKindLabel(segment.kind)
+              }
+              title={
+                segment.kind === 'line'
+                  ? '选择线路色（同时填入线路号）'
+                  : metroMainSegmentKindLabel(segment.kind)
+              }
+              disabled={disabled || segment.kind !== 'line'}
+              onClick={() => setPaletteIndex((current) => (current === index ? null : index))}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                {metroMainSegmentKindIcon(segment.kind)}
+              </span>
+            </button>
+            <input
+              ref={(node) => {
+                if (node) chipInputs.current.set(index, node);
+                else chipInputs.current.delete(index);
+              }}
+              className="metro-wayfinding-main-segments-chip-input"
+              value={segment.value}
               disabled={disabled}
-              wide
-              onChange={changeDraftKind}
+              size={Math.max(segment.value.length, 1)}
+              maxLength={segment.kind === 'line' ? 20 : 160}
+              aria-label={`第 ${index + 1} 个${metroMainSegmentKindLabel(segment.kind)}`}
+              placeholder={metroMainSegmentKindLabel(segment.kind)}
+              onFocus={() => setActiveTextIndex(null)}
+              onChange={(event) => updateChip(index, event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Backspace' && handleChipBackspace(index, event)) {
+                  event.preventDefault();
+                  return;
+                }
+                if (event.key === 'ArrowLeft' && handleSegmentArrow(index, 'left', event)) {
+                  event.preventDefault();
+                  return;
+                }
+                if (event.key === 'ArrowRight' && handleSegmentArrow(index, 'right', event)) {
+                  event.preventDefault();
+                }
+              }}
             />
-            {segmentDialog.draft.kind === 'line' ? (
-              <div className="metro-wayfinding-field-grid">
-                <label className="material-field">
-                  <span>线路号</span>
-                  <input
-                    autoFocus
-                    value={segmentDialog.draft.value}
-                    disabled={disabled}
-                    maxLength={20}
-                    onChange={(event) => {
-                      const draft = segmentDialog.draft;
-                      if (draft.kind !== 'line') return;
-                      const value = event.currentTarget.value;
-                      const matchedColor = findUniqueMetroLineColor(value, lineColorOptions);
-                      updateDraft({
-                        kind: 'line',
-                        value,
-                        color: matchedColor ?? draft.color,
-                      });
-                    }}
-                  />
-                </label>
-                <ColorControl
-                  label="线路色"
-                  value={segmentDialog.draft.color}
-                  palette={lineColorOptions}
-                  disabled={disabled}
-                  onChange={(color) =>
-                    updateDraft({
-                      kind: 'line',
-                      value: segmentDialog.draft.value,
-                      color,
-                    })
-                  }
-                />
-              </div>
-            ) : (
-              <label className="material-field">
-                <span>{segmentDialog.draft.kind === 'boxed' ? '方框文本' : '文本内容'}</span>
-                <MetroWayfindingTextAutocompleteInput
-                  autoFocus
-                  value={segmentDialog.draft.value}
-                  disabled={disabled}
-                  suggestions={textSuggestions}
-                  onChange={(value) =>
-                    updateDraft({
-                      ...segmentDialog.draft,
-                      value,
-                    })
-                  }
-                />
-              </label>
-            )}
-            <footer>
-              {segmentDialog.mode === 'edit' ? (
-                <button
-                  type="button"
-                  className="metro-wayfinding-segment-dialog-delete"
-                  onClick={deleteSegmentFromDialog}
-                  disabled={disabled || segments.length === 1}
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    delete
-                  </span>
-                  删除
-                </button>
-              ) : null}
-              <button type="button" onClick={dismissSegmentDialog}>
-                取消
-              </button>
-              <button type="submit" className="is-primary" disabled={disabled}>
-                保存
-              </button>
-            </footer>
-          </form>
-        </div>
-      ) : null}
-    </section>
+            <button
+              type="button"
+              className="metro-wayfinding-main-segments-chip-remove"
+              aria-label={`删除${metroMainSegmentKindLabel(segment.kind)}`}
+              title={`删除${metroMainSegmentKindLabel(segment.kind)}`}
+              disabled={disabled}
+              onClick={() => removeChip(index)}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                close
+              </span>
+            </button>
+            {paletteIndex === index && segment.kind === 'line' ? (
+              <span className="metro-wayfinding-main-segments-chip-palette" role="listbox">
+                {lineColorOptions.map((option) => {
+                  const lineNumber = resolveMetroLineChipValue(option);
+                  const displayName = resolveMetroLineDisplayName(option);
+                  return (
+                    <button
+                      key={`${option.value}-${option.label}`}
+                      type="button"
+                      role="option"
+                      aria-selected={option.value === segment.color}
+                      aria-label={`${displayName} · ${option.value.toUpperCase()}`}
+                      title={`${displayName} · ${option.value.toUpperCase()}`}
+                      className="metro-wayfinding-main-segments-chip-swatch"
+                      style={{ '--metro-wayfinding-swatch-color': option.value } as CSSProperties}
+                      disabled={disabled}
+                      onClick={() => applyChipSwatch(index, option)}
+                    >
+                      <span
+                        className="metro-wayfinding-main-segments-chip-swatch-color"
+                        aria-hidden="true"
+                      />
+                      <span className="metro-wayfinding-main-segments-chip-swatch-label">
+                        {lineNumber}
+                      </span>
+                    </button>
+                  );
+                })}
+              </span>
+            ) : null}
+          </span>
+        ),
+      )}
+    </MetroWayfindingSegmentFieldShell>
   );
 }
 
-function MetroWayfindingTextAutocompleteInput({
+/**
+ * 副文本编辑控件。
+ *
+ * 与主文本控件共用 {@link MetroWayfindingSegmentFieldShell} 外壳和同一套
+ * 「光标后幽灵建议」交互；区别只在数据模型——副文本行是纯字符串，
+ * 不承载 chip 段，因此这里只渲染一个文本段。
+ */
+function MetroWayfindingSecondaryField({
+  label,
   value,
   disabled,
   suggestions,
   autoFocus = false,
   onChange,
 }: Readonly<{
+  label: string;
   value: string;
   disabled: boolean;
   suggestions?: string[];
   autoFocus?: boolean;
   onChange: (value: string) => void;
 }>) {
-  const suggestionsId = useId();
-  const continuation = findTextContinuation(value, suggestions);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [caretOffset, setCaretOffset] = useState<number | null>(null);
+
+  const textBeforeCaret =
+    caretOffset === null ? value : value.slice(0, Math.min(caretOffset, value.length));
+  const suggestion = matchTextContinuation(textBeforeCaret, suggestions)?.suffix || undefined;
+
+  const syncCaretOffset = (input: HTMLInputElement) => {
+    setCaretOffset(input.selectionStart ?? input.value.length);
+  };
+
+  // 采纳建议：在光标处插入后缀，并把光标推到插入内容之后。
+  const acceptSuggestion = () => {
+    if (!suggestion) return;
+    const at = caretOffset ?? value.length;
+    const next = `${value.slice(0, at)}${suggestion}${value.slice(at)}`;
+    onChange(next);
+    setCaretOffset(at + suggestion.length);
+    // 值更新后把 DOM 光标也推到新位置（受控 input 会重置 selection）。
+    window.requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      const position = Math.min(at + suggestion.length, input.value.length);
+      input.focus();
+      input.setSelectionRange(position, position);
+    });
+  };
+
+  // 点击容器空白处：聚焦这个唯一的文本框，光标落到末尾（与主文本行为一致）。
+  const focusLastEditableSegment = () => {
+    if (disabled) return;
+    const input = inputRef.current;
+    if (!input || input.disabled) return;
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+    setCaretOffset(input.value.length);
+  };
+
   return (
-    <>
-      {suggestions?.length ? (
-        <datalist id={suggestionsId}>
-          {suggestions.map((suggestion) => (
-            <option key={suggestion} value={suggestion} />
-          ))}
-        </datalist>
-      ) : null}
-      <div className="metro-wayfinding-text-autocomplete">
-        {continuation ? (
-          <span className="metro-wayfinding-text-autocomplete-ghost" aria-hidden="true">
-            <span>{value}</span>
-            <strong>{continuation.slice(value.length)}</strong>
-          </span>
-        ) : null}
+    <MetroWayfindingSegmentFieldShell
+      label={label}
+      disabled={disabled}
+      ariaLabel={`${label}，可内联编辑`}
+      onBlankPointerDown={focusLastEditableSegment}
+    >
+      <span className="metro-wayfinding-main-segments-text-flow is-active">
         <input
+          ref={inputRef}
           autoFocus={autoFocus}
+          className="metro-wayfinding-main-segments-text"
           value={value}
           disabled={disabled}
+          size={Math.max(value.length, 1)}
           maxLength={160}
-          list={suggestions?.length ? suggestionsId : undefined}
-          onKeyDown={(event) => {
-            if (event.key !== 'Tab' || !continuation) return;
-            event.preventDefault();
-            onChange(continuation);
+          aria-label={label}
+          onFocus={(event) => syncCaretOffset(event.currentTarget)}
+          // 与主文本一致：光标一动，建议就跟着重排。
+          onSelect={(event) => syncCaretOffset(event.currentTarget)}
+          onClick={(event) => syncCaretOffset(event.currentTarget)}
+          onKeyUp={(event) => syncCaretOffset(event.currentTarget)}
+          onChange={(event) => {
+            setCaretOffset(event.currentTarget.selectionStart ?? event.currentTarget.value.length);
+            onChange(event.currentTarget.value);
           }}
-          onChange={(event) => onChange(event.currentTarget.value)}
+          onBlur={() => setCaretOffset(null)}
+          onKeyDown={(event) => {
+            if (event.key === 'Tab' && suggestion) {
+              event.preventDefault();
+              acceptSuggestion();
+            }
+          }}
         />
-      </div>
-    </>
+        {suggestion ? (
+          <button
+            type="button"
+            className="metro-wayfinding-main-segments-suggestion"
+            title="采纳建议（Tab）"
+            aria-label={`采纳建议：${suggestion}`}
+            disabled={disabled}
+            // mousedown 抢焦点会让输入框失焦、建议消失。
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={acceptSuggestion}
+          >
+            {suggestion}
+          </button>
+        ) : null}
+      </span>
+    </MetroWayfindingSegmentFieldShell>
+  );
+}
+
+/**
+ * 大文本的内联编辑器：正文文本段与**下角标 chip** 交替，可在光标处插入下角标。
+ *
+ * 外观与交互刻意对齐主文本的内联段编辑器（同一个外壳、同一套 chip 样式），
+ * 这样「在任意位置插入下角标」跟主文本插入线路号是同一种手感。
+ *
+ * 段序列**派生自** `element.value` + `element.suffixes`（不另存本地状态），
+ * 因此外部批量改动（套模板 / 导入）能直接反映到编辑器里。
+ */
+function LargeTextValueEditor({
+  label,
+  element,
+  disabled,
+  patch,
+}: Readonly<{
+  label: string;
+  element: MetroWayfindingLargeTextElement;
+  disabled: boolean;
+  patch: (patch: Partial<MetroWayfindingElement>) => void;
+}>) {
+  // 正在编辑的文本段索引；null 表示光标停在角标 chip 上。
+  const [activeTextIndex, setActiveTextIndex] = useState<number | null>(null);
+  const [caretOffset, setCaretOffset] = useState<number | null>(null);
+  const textInputs = useRef(new Map<number, HTMLInputElement>());
+  const suffixInputs = useRef(new Map<number, HTMLInputElement>());
+
+  // 末尾恒留一个文本段作落点（空大文本也要能输入、角标后也要能继续打字）。
+  const segments = useMemo<MetroWayfindingLargeTextRun[]>(() => {
+    const runs = splitMetroLargeTextRuns(element);
+    const last = runs[runs.length - 1];
+    return !last || last.kind === 'suffix' ? [...runs, { kind: 'text', value: '' }] : runs;
+  }, [element]);
+
+  /** 段序列 → `value` + `suffixes`（`at` 取当时的码点下标）。 */
+  const commit = (next: MetroWayfindingLargeTextRun[]) => {
+    let value = '';
+    const suffixes: MetroWayfindingLargeTextSuffix[] = [];
+    for (const run of next) {
+      if (run.kind === 'text') {
+        value += run.value;
+        continue;
+      }
+      suffixes.push({ at: Array.from(value).length, value: run.value });
+    }
+    const length = Array.from(value).length;
+    // legacy `suffix` 同步成「末尾那一个」，老版本读到时至少不丢末尾角标。
+    const tail = suffixes.filter((item) => item.at === length).at(-1);
+    patch({ value, suffixes, suffix: tail?.value ?? '' });
+  };
+
+  const syncCaretOffset = (input: HTMLInputElement) => {
+    setCaretOffset(input.selectionStart ?? input.value.length);
+  };
+
+  const focusTextSegment = (index: number, offset: number) => {
+    const target = textInputs.current.get(index);
+    if (!target) return;
+    target.focus();
+    const clamped = Math.max(0, Math.min(target.value.length, offset));
+    target.setSelectionRange(clamped, clamped);
+    setCaretOffset(clamped);
+  };
+
+  const focusSuffixInput = (index: number, offset?: number) => {
+    const target = suffixInputs.current.get(index);
+    if (!target) return;
+    target.focus();
+    const end = offset ?? target.value.length;
+    target.setSelectionRange(end, end);
+  };
+
+  const focusLastEditableSegment = () => {
+    if (disabled) return;
+    for (let index = segments.length - 1; index >= 0; index -= 1) {
+      const segment = segments[index];
+      if (!segment) continue;
+      const target =
+        segment.kind === 'text' ? textInputs.current.get(index) : suffixInputs.current.get(index);
+      if (!target || target.disabled) continue;
+      if (segment.kind === 'text') focusTextSegment(index, segment.value.length);
+      else focusSuffixInput(index);
+      return;
+    }
+  };
+
+  const setTextSegmentValue = (index: number, value: string) => {
+    const next: MetroWayfindingLargeTextRun[] = segments.map((segment, segmentIndex) =>
+      segmentIndex === index ? { kind: 'text', value } : segment,
+    );
+    commit(next);
+  };
+
+  const setSuffixValue = (index: number, value: string) => {
+    const next: MetroWayfindingLargeTextRun[] = segments.map((segment, segmentIndex) =>
+      segmentIndex === index ? { kind: 'suffix', value } : segment,
+    );
+    commit(next);
+  };
+
+  /** 在光标处插入一个下角标：把当前文本段按光标切成两段，中间夹空角标。 */
+  const insertSuffixAtCaret = () => {
+    const index = activeTextIndex;
+    if (index === null) return;
+    const segment = segments[index];
+    if (!segment || segment.kind !== 'text') return;
+    const characters = Array.from(segment.value);
+    const at = Math.max(0, Math.min(characters.length, caretOffset ?? characters.length));
+    const before = characters.slice(0, at).join('');
+    const after = characters.slice(at).join('');
+    const inserted: MetroWayfindingLargeTextRun[] = [];
+    if (before) inserted.push({ kind: 'text', value: before });
+    inserted.push({ kind: 'suffix', value: '' });
+    if (after) inserted.push({ kind: 'text', value: after });
+    const next = [...segments];
+    next.splice(index, 1, ...inserted);
+    commit(next);
+    const suffixIndex = index + (before ? 1 : 0);
+    window.requestAnimationFrame(() => focusSuffixInput(suffixIndex, 0));
+  };
+
+  const removeSuffix = (index: number) => {
+    commit(segments.filter((_segment, segmentIndex) => segmentIndex !== index));
+    window.requestAnimationFrame(() => focusTextSegment(Math.max(0, index - 1), 0));
+  };
+
+  // 文本段 Backspace：已到段首且前一段是角标时，删除该角标。
+  const handleTextBackspace = (index: number, event: KeyboardEvent<HTMLInputElement>): boolean => {
+    const input = event.currentTarget;
+    if (input.selectionStart !== 0 || input.selectionEnd !== 0) return false;
+    const previous = segments[index - 1];
+    if (!previous || previous.kind !== 'suffix') return false;
+    commit(segments.filter((_segment, segmentIndex) => segmentIndex !== index - 1));
+    return true;
+  };
+
+  // 文本段 Delete：已到段尾且后一段是角标时，删除该角标。
+  const handleTextDelete = (index: number, event: KeyboardEvent<HTMLInputElement>): boolean => {
+    const input = event.currentTarget;
+    if (input.selectionStart !== input.value.length || input.selectionEnd !== input.value.length) {
+      return false;
+    }
+    const next = segments[index + 1];
+    if (!next || next.kind !== 'suffix') return false;
+    commit(segments.filter((_segment, segmentIndex) => segmentIndex !== index + 1));
+    return true;
+  };
+
+  // 角标 chip 内 Backspace：内容已空时删掉自己。
+  const handleSuffixBackspace = (
+    index: number,
+    event: KeyboardEvent<HTMLInputElement>,
+  ): boolean => {
+    const input = event.currentTarget;
+    if (input.selectionStart !== 0 || input.selectionEnd !== 0) return false;
+    if (input.value.length > 0) return false;
+    removeSuffix(index);
+    return true;
+  };
+
+  // 左/右方向键在段边界处跨段移动焦点，文本段与角标输入框共用。
+  const handleSegmentArrow = (
+    index: number,
+    direction: 'left' | 'right',
+    event: KeyboardEvent<HTMLInputElement>,
+  ): boolean => {
+    const input = event.currentTarget;
+    const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
+    const atEnd =
+      input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
+    if (direction === 'left' ? !atStart : !atEnd) return false;
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    const target = segments[targetIndex];
+    if (!target) return false;
+    window.requestAnimationFrame(() => {
+      if (target.kind === 'suffix') {
+        focusSuffixInput(targetIndex, direction === 'left' ? undefined : 0);
+        return;
+      }
+      focusTextSegment(targetIndex, direction === 'left' ? target.value.length : 0);
+    });
+    return true;
+  };
+
+  const caretIndex =
+    activeTextIndex !== null && segments[activeTextIndex]?.kind === 'text' ? activeTextIndex : null;
+
+  return (
+    <MetroWayfindingSegmentFieldShell
+      label={label}
+      disabled={disabled}
+      ariaLabel={`${label}，可内联编辑`}
+      onBlankPointerDown={focusLastEditableSegment}
+    >
+      {segments.map((segment, index) =>
+        segment.kind === 'suffix' ? (
+          <span
+            key={`suffix-${index}`}
+            className="metro-wayfinding-main-segments-chip is-suffix"
+            title="下角标"
+          >
+            <input
+              ref={(node) => {
+                if (node) suffixInputs.current.set(index, node);
+                else suffixInputs.current.delete(index);
+              }}
+              className="metro-wayfinding-main-segments-chip-input"
+              value={segment.value}
+              disabled={disabled}
+              size={Math.max(segment.value.length, 1)}
+              maxLength={24}
+              aria-label={`第 ${index + 1} 个下角标`}
+              placeholder="下标"
+              onFocus={() => setActiveTextIndex(null)}
+              onChange={(event) => setSuffixValue(index, event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Backspace' && handleSuffixBackspace(index, event)) {
+                  event.preventDefault();
+                  return;
+                }
+                if (event.key === 'ArrowLeft' && handleSegmentArrow(index, 'left', event)) {
+                  event.preventDefault();
+                  return;
+                }
+                if (event.key === 'ArrowRight' && handleSegmentArrow(index, 'right', event)) {
+                  event.preventDefault();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="metro-wayfinding-main-segments-chip-remove"
+              title="删除此下角标"
+              aria-label="删除此下角标"
+              disabled={disabled}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => removeSuffix(index)}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                close
+              </span>
+            </button>
+          </span>
+        ) : (
+          <span
+            key={`text-${index}`}
+            className={`metro-wayfinding-main-segments-text-flow${
+              caretIndex === index ? ' is-active' : ''
+            }`}
+          >
+            <input
+              ref={(node) => {
+                if (node) textInputs.current.set(index, node);
+                else textInputs.current.delete(index);
+              }}
+              className="metro-wayfinding-main-segments-text"
+              value={segment.value}
+              disabled={disabled}
+              size={Math.max(segment.value.length, 1)}
+              maxLength={160}
+              aria-label={`${label}的文本段 ${index + 1}`}
+              onFocus={(event) => {
+                setActiveTextIndex(index);
+                syncCaretOffset(event.currentTarget);
+              }}
+              onSelect={(event) => syncCaretOffset(event.currentTarget)}
+              onClick={(event) => syncCaretOffset(event.currentTarget)}
+              onKeyUp={(event) => syncCaretOffset(event.currentTarget)}
+              onChange={(event) => {
+                setCaretOffset(
+                  event.currentTarget.selectionStart ?? event.currentTarget.value.length,
+                );
+                setTextSegmentValue(index, event.currentTarget.value);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Backspace' && handleTextBackspace(index, event)) {
+                  event.preventDefault();
+                  return;
+                }
+                if (event.key === 'Delete' && handleTextDelete(index, event)) {
+                  event.preventDefault();
+                  return;
+                }
+                if (event.key === 'ArrowLeft' && handleSegmentArrow(index, 'left', event)) {
+                  event.preventDefault();
+                  return;
+                }
+                if (event.key === 'ArrowRight' && handleSegmentArrow(index, 'right', event)) {
+                  event.preventDefault();
+                }
+              }}
+            />
+            {caretIndex === index ? (
+              // 与主文本一致：插入按钮装在 `caret-actions` 里才有虚线 chip 外观。
+              <span className="metro-wayfinding-main-segments-caret-actions">
+                <button
+                  type="button"
+                  className="metro-wayfinding-main-segments-insert-suffix"
+                  title="在光标处添加下角标"
+                  aria-label="在光标处添加下角标"
+                  disabled={disabled}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={insertSuffixAtCaret}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    subscript
+                  </span>
+                  下标
+                </button>
+              </span>
+            ) : null}
+          </span>
+        ),
+      )}
+    </MetroWayfindingSegmentFieldShell>
   );
 }
 
@@ -2652,24 +3696,15 @@ function LargeTextElementFields({
 }>) {
   return (
     <div className="metro-wayfinding-field-grid">
-      <label className="material-field">
+      {/*
+        刻意**不**放进 .material-field：那里 `.material-field input` 的特异性
+        会盖掉内联输入框的 `border: 0 / padding: 0`，把一行段编辑拆成几个
+        独立输入框。与主文本保持一致——直接作为字段网格的一项，跨满整行。
+      */}
+      <div className="metro-wayfinding-large-text-field">
         <span>大文字（字高 85）</span>
-        <input
-          value={element.value}
-          disabled={disabled}
-          maxLength={160}
-          onChange={(event) => patch({ value: event.currentTarget.value })}
-        />
-      </label>
-      <label className="material-field">
-        <span>下标</span>
-        <input
-          value={element.suffix}
-          disabled={disabled}
-          maxLength={24}
-          onChange={(event) => patch({ suffix: event.currentTarget.value })}
-        />
-      </label>
+        <LargeTextValueEditor label="大文字" element={element} disabled={disabled} patch={patch} />
+      </div>
       <FrameShapeControl
         value={element.frameShape}
         disabled={disabled}
@@ -2702,7 +3737,7 @@ function CombinationElementFields({
 }: Readonly<{
   element: MetroWayfindingCombinationElement;
   disabled: boolean;
-  lineColorOptions: Array<{ value: string; label: string }>;
+  lineColorOptions: Array<{ value: string; label: string; aliases?: string[] }>;
   backgroundColorOptions: Array<{ value: string; label: string }>;
   inheritedBackgroundColor: string;
   inheritedForegroundColor: string;
@@ -2816,6 +3851,7 @@ function CombinationElementFields({
           mode={element.frameFillMode}
           color={element.frameFillColor}
           stroke={element.frameStroke}
+          scale={element.scale}
           stripePosition={element.stripePosition}
           fallbackColor={element.foregroundColor ?? inheritedForegroundColor}
           lineColorOptions={lineColorOptions}
@@ -2916,6 +3952,9 @@ function CombinationElementFields({
                 </button>
               ))}
             </div>
+            <p className="muted metro-wayfinding-combination-template-hint">
+              「线路编号」内容模板已移至编辑器上方的「插入建议」区域：选中线路后可替换本组合框的子元素，并按颜色填充或色带样式套用线路标识色。
+            </p>
             {selectedChild ? (
               <div className="metro-wayfinding-combination-child-editor">
                 <header>
@@ -3067,6 +4106,7 @@ function CombinationFillControl({
   mode,
   color,
   stroke,
+  scale,
   stripePosition,
   fallbackColor,
   lineColorOptions,
@@ -3076,6 +4116,7 @@ function CombinationFillControl({
   mode: MetroWayfindingCombinationFillMode;
   color?: string;
   stroke: boolean;
+  scale: number;
   stripePosition: MetroWayfindingCombinationStripePosition;
   fallbackColor: string;
   lineColorOptions: Array<{ value: string; label: string }>;
@@ -3087,6 +4128,21 @@ function CombinationFillControl({
     lineColorOptions,
     metroWayfindingForegroundPalette,
   );
+  // 组合框填充模式切换除了写入 frameFillMode，还会联动缩放倍数与前景色描边：
+  // - 切入 / 切出「无填充+色带」：缩放倍数分别除以 / 乘以补偿系数，避免重复点击造成缩放漂移。
+  // - 切入「颜色填充」：默认勾选「添加前景色描边」，让色块在浅色底上仍有轮廓。
+  // - 切入「无填充+色带」：默认取消勾选前景色描边，避免描边干扰色带的观感。
+  const handleModeChange = (frameFillMode: MetroWayfindingCombinationFillMode) => {
+    patch({
+      frameFillMode,
+      scale: resolveMetroWayfindingCombinationScaleForFillMode(scale, mode, frameFillMode),
+      ...(frameFillMode === 'color' ? { frameStroke: true } : {}),
+      ...(frameFillMode === 'stripe' ? { frameStroke: false } : {}),
+      ...((frameFillMode === 'color' || frameFillMode === 'stripe') && !color
+        ? { frameFillColor: fillColor }
+        : {}),
+    });
+  };
   return (
     <>
       <SegmentedControl
@@ -3100,14 +4156,7 @@ function CombinationFillControl({
         ]}
         disabled={disabled}
         wide
-        onChange={(frameFillMode) =>
-          patch({
-            frameFillMode,
-            ...((frameFillMode === 'color' || frameFillMode === 'stripe') && !color
-              ? { frameFillColor: fillColor }
-              : {}),
-          })
-        }
+        onChange={handleModeChange}
       />
       {mode === 'color' || mode === 'stripe' ? (
         <ColorControl
@@ -3217,18 +4266,24 @@ function metroIconElementPreviewStyle(
 function metroFacilityAssetPreviewStyle(
   iconId: string,
   direction: 'left' | 'right' | 'up' | 'down' | undefined,
+  variant?: MetroWayfindingIconVariant,
 ): { transform: string } | undefined {
-  if (
-    iconId === 'stairs' ||
-    iconId === 'stairs-down' ||
-    iconId === 'escalator' ||
-    iconId === 'wheelchair-lift'
-  ) {
+  // 楼梯：每个「变种 × 方向」都有独立素材（-right 后缀为朝右版），不再做镜像。
+  if (iconId === 'stairs' || iconId === 'stairs-down') {
+    return undefined;
+  }
+  // 扶梯 / 轮椅升降机 / 轮椅：素材原始朝向为“朝右”，朝左时按图标声明的镜像轴翻转。
+  // 默认水平镜像（scaleX(-1)），个别图标可能是垂直镜像（scaleY(-1)）。
+  if (iconId === 'escalator' || iconId === 'wheelchair-lift' || iconId === 'wheelchair') {
     const effectiveDirection =
       direction ?? resolveMetroWayfindingFacilityDefaultDirection(iconId) ?? 'up';
-    const shouldFlip =
-      iconId === 'stairs-down' ? effectiveDirection === 'right' : effectiveDirection === 'left';
-    return shouldFlip ? { transform: 'scaleX(-1)' } : undefined;
+    if (effectiveDirection !== 'left') return undefined;
+    return {
+      transform:
+        resolveMetroFacilityMirrorAxis(iconId, variant) === 'vertical'
+          ? 'scaleY(-1)'
+          : 'scaleX(-1)',
+    };
   }
   if (iconId !== 'exit') {
     return undefined;
@@ -3280,9 +4335,66 @@ function SegmentedControl<T extends string>({
   wide?: boolean;
   onChange: (value: T) => void;
 }>) {
+  const controlRef = useRef<HTMLFieldSetElement>(null);
+  const [compactLabels, setCompactLabels] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!showLabels) {
+      setCompactLabels(false);
+      return;
+    }
+
+    const control = controlRef.current;
+    const optionsContainer = control?.querySelector<HTMLDivElement>(':scope > div');
+    if (!control || !optionsContainer) return;
+
+    const updateLabelMode = () => {
+      const containerStyle = window.getComputedStyle(optionsContainer);
+      const availableWidth =
+        optionsContainer.clientWidth -
+        Number.parseFloat(containerStyle.paddingLeft) -
+        Number.parseFloat(containerStyle.paddingRight);
+      const measurement = control.cloneNode(true) as HTMLFieldSetElement;
+      measurement.classList.remove('is-compact');
+      measurement.classList.add('is-measuring');
+      Object.assign(measurement.style, {
+        position: 'fixed',
+        top: '-10000px',
+        left: '-10000px',
+        width: 'max-content',
+        maxWidth: 'none',
+        visibility: 'hidden',
+        pointerEvents: 'none',
+      });
+
+      let requiredWidth = 0;
+      document.body.appendChild(measurement);
+      try {
+        const measuredOptionsContainer = measurement.querySelector<HTMLDivElement>(':scope > div');
+        if (measuredOptionsContainer) {
+          const measuredStyle = window.getComputedStyle(measuredOptionsContainer);
+          requiredWidth =
+            measuredOptionsContainer.getBoundingClientRect().width -
+            Number.parseFloat(measuredStyle.paddingLeft) -
+            Number.parseFloat(measuredStyle.paddingRight);
+        }
+      } finally {
+        measurement.remove();
+      }
+      const shouldCompact = requiredWidth > availableWidth + 1;
+      setCompactLabels((previous) => (previous === shouldCompact ? previous : shouldCompact));
+    };
+
+    updateLabelMode();
+    const resizeObserver = new ResizeObserver(updateLabelMode);
+    resizeObserver.observe(optionsContainer);
+    return () => resizeObserver.disconnect();
+  }, [options, showLabels]);
+
   return (
     <fieldset
-      className={`metro-wayfinding-segmented-control${wide ? ' is-wide' : ''}`}
+      ref={controlRef}
+      className={`metro-wayfinding-segmented-control${wide ? ' is-wide' : ''}${compactLabels ? ' is-compact' : ''}`}
       disabled={disabled}
     >
       <legend>{label}</legend>
@@ -3308,7 +4420,9 @@ function SegmentedControl<T extends string>({
                 {option.icon}
               </span>
             ) : null}
-            {showLabels ? <span>{option.label}</span> : null}
+            {showLabels ? (
+              <span className="metro-wayfinding-segmented-control-label">{option.label}</span>
+            ) : null}
           </button>
         ))}
       </div>
@@ -3400,494 +4514,6 @@ function MetroArrowAssetIcon({ assetName }: Readonly<{ assetName: string }>) {
       }
     />
   );
-}
-
-interface MetroInsertionSuggestionTemplate {
-  id: string;
-  previewMain: string;
-  previewSecondary: string;
-  kind?: 'text' | 'flex-space' | 'right-text' | 'facility';
-  facilityIconId?: string;
-  facilityFrameShape?: MetroWayfindingFrameShape;
-  textAlign?: MetroWayfindingTextAlign;
-  icon?: string;
-  createRows?: (lineColors: string[]) => MetroWayfindingTextRow[];
-}
-
-function createSimpleMetroTextSuggestion(
-  id: string,
-  main: string,
-  secondary: string,
-): MetroInsertionSuggestionTemplate {
-  return {
-    id,
-    previewMain: main,
-    previewSecondary: secondary,
-    createRows: () => createSuggestedTextRows([{ kind: 'text', value: main }], secondary),
-  };
-}
-
-const exitTextSuggestion = createSimpleMetroTextSuggestion('exit', '出口', 'EXIT');
-const terminalTextSuggestion = createSimpleMetroTextSuggestion('terminal', '终点', 'Terminal');
-
-const exitBoxedTextSuggestion: MetroInsertionSuggestionTemplate = {
-  id: 'exit-boxed-text-rows',
-  previewMain: '方框主文本 / 方框主文本',
-  previewSecondary: '追加两行空白方框文字',
-  icon: 'crop_square',
-  createRows: () => [
-    createSuggestedMainTextRow([{ kind: 'boxed', value: '' }]),
-    createSuggestedMainTextRow([{ kind: 'boxed', value: '' }]),
-  ],
-};
-
-const metroTextSuggestionsByIconId: Record<string, MetroInsertionSuggestionTemplate[]> = {
-  stairs: [createSimpleMetroTextSuggestion('stairs', '楼梯', 'Stairs')],
-  escalator: [createSimpleMetroTextSuggestion('escalator', '自动扶梯', 'Escalator')],
-  elevator: [
-    createSimpleMetroTextSuggestion('accessible-elevator', '无障碍电梯', 'Accessible Elevator'),
-  ],
-  restroom: [createSimpleMetroTextSuggestion('restroom', '卫生间', 'Restrooms')],
-  'mens-restroom': [createSimpleMetroTextSuggestion('mens-restroom', '男卫生间', 'Men')],
-  'womens-restroom': [createSimpleMetroTextSuggestion('womens-restroom', '女卫生间', 'Women')],
-  'nursing-room': [createSimpleMetroTextSuggestion('nursing-room', '母婴室', 'Baby Care')],
-  'family-restroom': [
-    createSimpleMetroTextSuggestion('family-restroom', '第三卫生间', 'Family Toilet'),
-  ],
-  wheelchair: [
-    createSimpleMetroTextSuggestion('accessible-facilities', '无障碍设施', 'Accessible Facilities'),
-  ],
-  'wheelchair-lift': [
-    createSimpleMetroTextSuggestion(
-      'wheelchair-platform-lift',
-      '轮椅升降平台',
-      'Wheelchair Platform Lift',
-    ),
-  ],
-  waiting: [
-    createSimpleMetroTextSuggestion('waiting-room', '空调候车室', 'Air-conditioned Waiting Room'),
-  ],
-  exit: [exitTextSuggestion, exitBoxedTextSuggestion],
-  subway: [
-    createSimpleMetroTextSuggestion('subway-ride', '乘车', 'To Subway'),
-    createSimpleMetroTextSuggestion('subway-towards', '开往', 'To '),
-    {
-      id: 'subway-transfer-line',
-      previewMain: '换乘[线路]号线',
-      previewSecondary: 'Transfer to Line',
-      createRows: (lineColors) =>
-        createSuggestedTextRows(
-          [
-            { kind: 'text', value: '换乘' },
-            createSuggestedLineSegment(lineColors, 0),
-            { kind: 'text', value: '号线' },
-          ],
-          'Transfer to Line ',
-        ),
-    },
-    {
-      id: 'subway-two-lines',
-      previewMain: '[线路][线路]号线',
-      previewSecondary: 'Line',
-      createRows: (lineColors) =>
-        createSuggestedTextRows(
-          [
-            createSuggestedLineSegment(lineColors, 0),
-            createSuggestedLineSegment(lineColors, 1),
-            { kind: 'text', value: '号线' },
-          ],
-          'Line ',
-        ),
-    },
-  ],
-  service: [
-    createSimpleMetroTextSuggestion(
-      'passenger-service-center',
-      '乘客服务中心',
-      'Customer Service Center',
-    ),
-  ],
-  ticket: [
-    createSimpleMetroTextSuggestion('automatic-ticketing', '自动售票', 'Automatic Ticketing'),
-  ],
-  'meeting-point': [createSimpleMetroTextSuggestion('meeting-point', '会合点', 'Meeting Point')],
-  'no-entry': [createSimpleMetroTextSuggestion('no-entry', '禁止进入', 'No Entry')],
-};
-
-const exitLargeTextSuggestion: MetroInsertionSuggestionTemplate = {
-  id: 'exit-large-text-details',
-  previewMain: '文字 + 副文本 × 2',
-  previewSecondary: '追加四行空白，适合出口大文字组合',
-  createRows: () => [
-    createSuggestedMainTextRow([{ kind: 'text', value: '' }]),
-    createSuggestedSecondaryTextRow(''),
-    createSuggestedMainTextRow([{ kind: 'text', value: '' }]),
-    createSuggestedSecondaryTextRow(''),
-  ],
-};
-
-const leftTextFlexSpaceSuggestion: MetroInsertionSuggestionTemplate = {
-  id: 'left-text-flex-space',
-  kind: 'flex-space',
-  previewMain: '左对齐文字 + 弹性空白',
-  previewSecondary: '追加到当前文字右侧，平分剩余空间',
-};
-
-const flexSpaceRightTextSuggestion: MetroInsertionSuggestionTemplate = {
-  id: 'flex-space-right-text',
-  kind: 'right-text',
-  previewMain: '弹性空白 + 右对齐文字',
-  previewSecondary: '追加右对齐主文本与副文本',
-};
-
-const arrowLeadingTextSuggestion: MetroInsertionSuggestionTemplate = {
-  id: 'db21-arrow-leading-text',
-  kind: 'text',
-  previewMain: '箭头一侧双语文字',
-  previewSecondary: '根据箭头与弹性空白自动对齐',
-  icon: 'format_align_center',
-  createRows: () => [
-    createSuggestedMainTextRow([{ kind: 'text', value: '' }]),
-    createSuggestedSecondaryTextRow(''),
-  ],
-};
-
-function MetroWayfindingInsertionSuggestions({
-  element,
-  elements,
-  layoutMode,
-  disabled,
-  lineColorOptions,
-  onAction,
-}: Readonly<{
-  element: MetroWayfindingElement;
-  elements: MetroWayfindingElement[];
-  layoutMode: MetroWayfindingLayoutMode;
-  disabled: boolean;
-  lineColorOptions: Array<{ value: string; label: string }>;
-  onAction: (action: MetroWayfindingElementAction) => void;
-}>) {
-  const lineColors = lineColorOptions.map((option) => option.value);
-  const suggestions = resolveMetroInsertionSuggestionTemplates(element, elements, lineColors);
-  if (!suggestions.length) return null;
-  const selectedIndex = elements.findIndex((item) => item.id === element.id);
-  const insertionDefaults =
-    layoutMode === 'vertical'
-      ? ({ textAlign: 'center', facilityDirection: undefined } as const)
-      : resolveMetroWayfindingInsertionContextDefaults(
-          elements,
-          selectedIndex >= 0 ? selectedIndex + 1 : elements.length,
-        );
-  const selectedArrowSide =
-    element.type === 'arrow' ? resolveMetroWayfindingArrowBoundarySide(element.iconId) : undefined;
-  const suggestedTextAlign =
-    layoutMode === 'vertical' || insertionDefaults.textAlign !== 'center'
-      ? insertionDefaults.textAlign
-      : selectedArrowSide === 'left' || selectedArrowSide === 'up'
-        ? 'left'
-        : selectedArrowSide === 'right'
-          ? 'right'
-          : 'center';
-  const suggestedFacilityDirection =
-    layoutMode === 'vertical'
-      ? undefined
-      : (insertionDefaults.facilityDirection ??
-        (element.type === 'text' && element.align !== 'center' ? element.align : undefined));
-  const addSuggestion = (suggestion: MetroInsertionSuggestionTemplate) => {
-    const usesNoEntryDefaultForeground =
-      element.type === 'facility' &&
-      element.iconId === 'no-entry' &&
-      (element.foregroundColor ?? METRO_WAYFINDING_WARNING_FOREGROUND).toUpperCase() ===
-        METRO_WAYFINDING_WARNING_FOREGROUND;
-    if (suggestion.kind === 'flex-space') {
-      const spaceElement = createMetroWayfindingElement('space') as Extract<
-        MetroWayfindingElement,
-        { type: 'space' }
-      >;
-      onAction({
-        type: 'add',
-        element: {
-          ...spaceElement,
-          mode: 'flex',
-          backgroundColor: element.backgroundColor,
-          foregroundColor: element.foregroundColor,
-        },
-      });
-      return;
-    }
-    if (suggestion.kind === 'facility' && suggestion.facilityIconId) {
-      const facilityElement = createMetroWayfindingElement(
-        'facility',
-        suggestion.facilityIconId,
-      ) as Extract<MetroWayfindingElement, { type: 'facility' }>;
-      const fallbackDirection = resolveMetroWayfindingFacilityDefaultDirection(
-        suggestion.facilityIconId,
-      );
-      onAction({
-        type: 'add',
-        element: {
-          ...facilityElement,
-          direction: fallbackDirection
-            ? (suggestedFacilityDirection ?? fallbackDirection)
-            : undefined,
-          frameShape: suggestion.facilityFrameShape ?? facilityElement.frameShape,
-          backgroundColor: element.backgroundColor,
-          foregroundColor: facilityElement.foregroundColor ?? element.foregroundColor,
-        },
-      });
-      return;
-    }
-    const textElement = createMetroWayfindingElement('text') as MetroWayfindingTextElement;
-    onAction({
-      type: 'add',
-      element: {
-        ...textElement,
-        align:
-          layoutMode === 'vertical'
-            ? 'center'
-            : (suggestion.textAlign ??
-              (suggestion.kind === 'right-text' ? 'right' : suggestedTextAlign)),
-        rows: suggestion.createRows?.(lineColors) ?? textElement.rows,
-        backgroundColor: element.backgroundColor,
-        foregroundColor: usesNoEntryDefaultForeground ? undefined : element.foregroundColor,
-      },
-    });
-  };
-
-  return (
-    <fieldset className="metro-wayfinding-text-suggestions" disabled={disabled}>
-      <legend>插入建议</legend>
-      <div>
-        {suggestions.map((suggestion) => (
-          <button
-            key={suggestion.id}
-            type="button"
-            aria-label={`添加${suggestionKindLabel(suggestion)}：${suggestion.previewMain}`}
-            onClick={() => addSuggestion(suggestion)}
-          >
-            <MetroWayfindingSuggestionIcon
-              suggestion={suggestion}
-              contextDirection={suggestedFacilityDirection}
-              contextTextAlign={suggestedTextAlign}
-            />
-            <span>
-              <strong>{suggestion.previewMain}</strong>
-              <small>
-                {suggestionKindLabel(suggestion)} · {suggestion.previewSecondary}
-                {suggestion.kind === 'text' || !suggestion.kind
-                  ? ` · ${layoutMode === 'vertical' ? '默认横排，可改为竖排' : '双语文字元素'}`
-                  : ''}
-              </small>
-            </span>
-          </button>
-        ))}
-      </div>
-    </fieldset>
-  );
-}
-
-function suggestionKindLabel(suggestion: MetroInsertionSuggestionTemplate): string {
-  if (suggestion.kind === 'facility') return '图标';
-  if (suggestion.kind === 'flex-space') return '弹性空白';
-  if (suggestion.kind === 'right-text') return '文字组合';
-  return '文字';
-}
-
-function resolveMetroInsertionSuggestionTemplates(
-  element: MetroWayfindingElement,
-  elements: MetroWayfindingElement[],
-  lineColors: string[],
-): MetroInsertionSuggestionTemplate[] {
-  const suggestions =
-    element.type === 'facility'
-      ? element.iconId === 'subway' && element.frameShape === 'circle'
-        ? [terminalTextSuggestion]
-        : [...(metroTextSuggestionsByIconId[element.iconId] ?? [])]
-      : [];
-  if (element.type === 'arrow') {
-    suggestions.push(arrowLeadingTextSuggestion);
-  }
-  if (
-    (element.type === 'largeText' || (element.type === 'facility' && element.iconId === 'exit')) &&
-    hasAdjacentExitAndLargeText(element, elements)
-  ) {
-    if (element.type === 'largeText') suggestions.push(exitTextSuggestion);
-    suggestions.push(exitLargeTextSuggestion);
-  }
-  if (element.type === 'text' && element.align === 'left') {
-    suggestions.push(leftTextFlexSpaceSuggestion);
-  }
-  if (element.type === 'space' && element.mode === 'flex') {
-    suggestions.push(flexSpaceRightTextSuggestion);
-  }
-  if (element.type === 'text' && element.align === 'right') {
-    const mainText = resolveMetroSuggestionMainText(element.rows);
-    const subwayFrameShape = mainText.startsWith('终点')
-      ? 'circle'
-      : mainText.startsWith('开往') || mainText.startsWith('换乘')
-        ? 'rectangle'
-        : null;
-    if (subwayFrameShape) {
-      suggestions.push(createMatchingFacilitySuggestion('subway', subwayFrameShape));
-    }
-    for (const [iconId, iconSuggestions] of Object.entries(metroTextSuggestionsByIconId)) {
-      const matches = iconSuggestions.some((suggestion) =>
-        suggestion.createRows
-          ? metroTextMainRowsMatch(element.rows, suggestion.createRows(lineColors))
-          : false,
-      );
-      if (!matches) continue;
-      if (suggestions.some((suggestion) => suggestion.facilityIconId === iconId)) continue;
-      suggestions.push(createMatchingFacilitySuggestion(iconId, 'rectangle'));
-    }
-  }
-  return suggestions;
-}
-
-function createMatchingFacilitySuggestion(
-  iconId: string,
-  frameShape: MetroWayfindingFrameShape,
-): MetroInsertionSuggestionTemplate {
-  const option = metroWayfindingFacilityOptions.find((item) => item.id === iconId);
-  return {
-    id: `matching-facility-${iconId}-${frameShape}`,
-    kind: 'facility',
-    facilityIconId: iconId,
-    facilityFrameShape: frameShape,
-    previewMain: option?.label ?? '设施图标',
-    previewSecondary: frameShape === 'circle' ? '追加圆形外框设施图标' : '追加对应设施图标',
-  };
-}
-
-function MetroWayfindingSuggestionIcon({
-  suggestion,
-  contextDirection,
-  contextTextAlign,
-}: Readonly<{
-  suggestion: MetroInsertionSuggestionTemplate;
-  contextDirection?: 'left' | 'right' | 'up' | 'down';
-  contextTextAlign: MetroWayfindingTextAlign;
-}>) {
-  if (suggestion.kind !== 'facility' || !suggestion.facilityIconId) {
-    const icon =
-      suggestion.id === arrowLeadingTextSuggestion.id
-        ? {
-            left: 'format_align_left',
-            center: 'format_align_center',
-            right: 'format_align_right',
-          }[contextTextAlign]
-        : suggestion.icon;
-    return (
-      <span className="material-symbols-outlined" aria-hidden="true">
-        {icon ?? 'add'}
-      </span>
-    );
-  }
-  const option = metroWayfindingFacilityOptions.find(
-    (item) => item.id === suggestion.facilityIconId,
-  );
-  if (!option) return null;
-  const fallbackDirection = resolveMetroWayfindingFacilityDefaultDirection(option.id);
-  const direction = fallbackDirection ? (contextDirection ?? fallbackDirection) : undefined;
-  const assetName = resolveMetroFacilityIconAssetName(option.id, direction);
-  return assetName ? (
-    <MetroFacilityAssetIcon
-      assetName={assetName}
-      style={metroFacilityAssetPreviewStyle(option.id, direction)}
-    />
-  ) : (
-    <span
-      className="material-symbols-outlined"
-      aria-hidden="true"
-      style={metroIconPreviewStyle(option.id)}
-    >
-      {option.symbol}
-    </span>
-  );
-}
-
-function metroTextMainRowsMatch(
-  currentRows: MetroWayfindingTextRow[],
-  suggestedRows: MetroWayfindingTextRow[],
-): boolean {
-  return (
-    metroTextMainRowsMatchSignature(currentRows) === metroTextMainRowsMatchSignature(suggestedRows)
-  );
-}
-
-function metroTextMainRowsMatchSignature(rows: MetroWayfindingTextRow[]): string {
-  return JSON.stringify(
-    rows
-      .filter(
-        (row): row is Extract<MetroWayfindingTextRow, { kind: 'main' }> => row.kind === 'main',
-      )
-      .map((row) => ({
-        segments: row.segments.map((segment) =>
-          segment.kind === 'line'
-            ? { kind: segment.kind }
-            : { kind: segment.kind, value: normalizeMetroSuggestionText(segment.value) },
-        ),
-      })),
-  );
-}
-
-function resolveMetroSuggestionMainText(rows: MetroWayfindingTextRow[]): string {
-  return normalizeMetroSuggestionText(
-    rows
-      .filter(
-        (row): row is Extract<MetroWayfindingTextRow, { kind: 'main' }> => row.kind === 'main',
-      )
-      .flatMap((row) => row.segments)
-      .map((segment) => segment.value)
-      .join(''),
-  );
-}
-
-function normalizeMetroSuggestionText(value: string): string {
-  return value.trim().replace(/\s+/gu, ' ').toLocaleLowerCase();
-}
-
-function hasAdjacentExitAndLargeText(
-  element: MetroWayfindingElement,
-  elements: MetroWayfindingElement[],
-): boolean {
-  const index = elements.findIndex((item) => item.id === element.id);
-  if (index < 0) return false;
-  return [elements[index - 1], elements[index + 1]].some((neighbor) =>
-    element.type === 'largeText'
-      ? neighbor?.type === 'facility' && neighbor.iconId === 'exit'
-      : neighbor?.type === 'largeText',
-  );
-}
-
-function createSuggestedTextRows(
-  mainSegments: MetroWayfindingMainSegment[],
-  secondary: string,
-): MetroWayfindingTextRow[] {
-  return [createSuggestedMainTextRow(mainSegments), createSuggestedSecondaryTextRow(secondary)];
-}
-
-function createSuggestedMainTextRow(
-  segments: MetroWayfindingMainSegment[],
-): MetroWayfindingTextRow {
-  const row = createMetroWayfindingTextRow('main');
-  return { id: row.id, kind: 'main', segments };
-}
-
-function createSuggestedSecondaryTextRow(value: string): MetroWayfindingTextRow {
-  const row = createMetroWayfindingTextRow('secondary');
-  return { id: row.id, kind: 'secondary', value, bold: true };
-}
-
-function createSuggestedLineSegment(
-  lineColors: string[],
-  index: number,
-): MetroWayfindingLineSegment {
-  return {
-    kind: 'line',
-    value: '',
-    color: lineColors[index] ?? lineColors[0] ?? '#2F80ED',
-  };
 }
 
 function ElementColorFields({

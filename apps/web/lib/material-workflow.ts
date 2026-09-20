@@ -380,6 +380,10 @@ export async function prepareMaterialExport(input: {
       template: source.template,
       values: source.values,
       canvas: source.canvas,
+      // 值已按数据来源口径校验过一次，渲染前复核必须沿用同一口径，
+      // 否则派生字段（导入项目没有的运营时间）会在这一道被重新判为空而报错。
+      validation:
+        source.sourceKind === 'manual' ? undefined : { allowMissingServerDerivedValues: true },
     });
     const now = new Date().toISOString();
     const audit: MaterialExportAuditRecord = {
@@ -458,6 +462,9 @@ export async function prepareMaterialPreview(input: {
           formatMaterialWatermarkTimestamp(generatedAt),
         ],
       },
+      // 与导出同理：数据来源模式下缺失的派生字段在这里不能再次被判为空。
+      validation:
+        source.sourceKind === 'manual' ? undefined : { allowMissingServerDerivedValues: true },
     });
     await emitEvent(
       'MaterialPreviewGenerated',
@@ -565,6 +572,8 @@ async function resolveMaterialExportSource(
           resolved.values,
           request.input ?? {},
         ),
+        // 导出同样走数据来源：导入项目没有运营时间这类信息时不能卡住整条链路。
+        { allowMissingServerDerivedValues: true },
       ),
       canvas: request.canvas,
       sourceKind: resolved.sourceKind,
@@ -625,6 +634,9 @@ async function resolveMaterialPreviewSource(request: MaterialPreviewRequestInput
           resolved.values,
           request.input ?? {},
         ),
+        // 数据来源模式下，用户填不了的字段（导入项目普遍没有的运营时间等）
+        // 缺失时允许为空，否则预览永远失败且没有任何补救入口。
+        { allowMissingServerDerivedValues: true },
       ),
       canvas: request.canvas,
       sourceKind: resolved.sourceKind,
@@ -770,9 +782,15 @@ function applyMaterialServerOverrides(
     fields.filter((field) => field.serverOverride).map((field) => field.key),
   );
   for (const key of Object.keys(overrides)) {
-    if (!allowedKeys.has(key)) {
-      throw new MaterialInputError(`字段 ${key} 不允许覆盖服务器数据。`);
+    if (allowedKeys.has(key)) {
+      continue;
     }
+    // 数据来源**没有解析出值**的字段（典型是项目线网不带首末班车时间），
+    // 用户补录的是来源缺失的数据，不算覆盖服务器数据 —— 否则这类字段永远填不进去。
+    if (!(resolvedValues[key] ?? '').trim()) {
+      continue;
+    }
+    throw new MaterialInputError(`字段 ${key} 不允许覆盖服务器数据。`);
   }
   return { ...resolvedValues, ...overrides };
 }

@@ -7,6 +7,7 @@ import type {
   MetroWayfindingProjectFile,
 } from './metro-wayfinding';
 import {
+  extractMetroWayfindingLineNumber,
   METRO_WAYFINDING_FOREGROUND,
   METRO_WAYFINDING_PROJECT_FORMAT,
   METRO_WAYFINDING_PROJECT_SCHEMA_VERSION,
@@ -118,7 +119,7 @@ function createMetroExampleBuilder(): MetroExampleBuilder {
       writingMode,
       rows: [
         { id: nextId('main'), kind: 'main' as const, segments: mainSegments },
-        { id: nextId('secondary'), kind: 'secondary' as const, value: secondary, bold: true },
+        { id: nextId('secondary'), kind: 'secondary' as const, value: secondary, bold: false },
       ],
     };
   };
@@ -189,11 +190,14 @@ function buildMetroExampleLineSegments(
   lines: readonly MetroWayfindingExampleLine[],
 ): Array<{ kind: 'text' | 'line'; value: string; color?: string }> {
   if (!lines.length) return [{ kind: 'text', value: '' }];
+  // 线路编号统一走 extractMetroWayfindingLineNumber：
+  // 「2号线」→「2」、「S1线」→「S1」、「环线」→「环」。之前只去掉「号线」后缀，
+  // 会把「S1线」整串当编号，与其他位置显示的编号对不上。
   return [
     ...lines.flatMap((line) => [
       {
         kind: 'line' as const,
-        value: line.name.replace(/号线$/u, '').trim(),
+        value: extractMetroWayfindingLineNumber(line.name),
         color: line.color,
       },
     ]),
@@ -205,7 +209,7 @@ function buildMetroExampleLineSecondary(lines: readonly MetroWayfindingExampleLi
   return lines
     .map(
       (line) =>
-        line.secondaryName?.trim() || `Line ${line.name.replace(/号线$/u, '').trim()}`.trim(),
+        line.secondaryName?.trim() || `Line ${extractMetroWayfindingLineNumber(line.name)}`.trim(),
     )
     .filter(Boolean)
     .join(' / ');
@@ -238,6 +242,8 @@ export function buildMetroWayfindingTemplateExamples(
   const linePair = secondaryLine ? [primaryLine!, secondaryLine] : primaryLine ? [primaryLine] : [];
   const lineSegments = buildMetroExampleLineSegments(linePair);
   const lineSecondary = buildMetroExampleLineSecondary(linePair);
+  const selectedLineSegments = selectedLine ? buildMetroExampleLineSegments([selectedLine]) : [];
+  const selectedLineSecondary = selectedLine ? buildMetroExampleLineSecondary([selectedLine]) : '';
   const b = createMetroExampleBuilder();
   const examples: MetroWayfindingExample[] = [];
   let index = 0;
@@ -297,8 +303,8 @@ export function buildMetroWayfindingTemplateExamples(
       b.arrow('west'),
       b.facility('subway'),
       b.text(
-        lines.length > 1 ? lineSegments : '乘车',
-        lines.length > 1 ? lineSecondary : 'To Subway',
+        selectedLine ? selectedLineSegments : '乘车',
+        selectedLine ? selectedLineSecondary : 'To Subway',
       ),
       b.space(),
     ],
@@ -391,9 +397,7 @@ export function buildMetroWayfindingTemplateExamples(
 
   // 只有换乘站才提供换乘相关模板。
   if (lines.length > 1 && selectedLine) {
-    const selectedLineNumber = selectedLine.name.replace(/号线$/u, '').trim();
-    const selectedLineSegments = buildMetroExampleLineSegments([selectedLine]);
-    const selectedLineSecondary = buildMetroExampleLineSecondary([selectedLine]);
+    const selectedLineNumber = extractMetroWayfindingLineNumber(selectedLine.name);
     add(
       'transfer',
       '换乘线路',
@@ -401,8 +405,8 @@ export function buildMetroWayfindingTemplateExamples(
         b.arrow('west'),
         b.facility('subway'),
         b.text(
-          [{ kind: 'text', value: '换乘' }, ...lineSegments],
-          `Transfer to ${lineSecondary || 'Line '}`,
+          [{ kind: 'text', value: '换乘' }, ...selectedLineSegments],
+          `Transfer to ${selectedLineSecondary || 'Line '}`,
         ),
         b.space(),
       ],
@@ -414,7 +418,7 @@ export function buildMetroWayfindingTemplateExamples(
       [
         b.arrow('north'),
         b.facility('subway'),
-        b.text(lineSegments, lineSecondary),
+        b.text(selectedLineSegments, selectedLineSecondary),
         b.space(),
         b.divider(),
         b.space(),
@@ -453,6 +457,10 @@ export function buildMetroWayfindingTemplateExamples(
       1,
       '#0A124D',
     );
+    const elevator = b.facility('elevator');
+    if (elevator.type === 'facility') {
+      elevator.frameFillMode = 'inverse';
+    }
     add(
       'transfer',
       '组合线路号与无障碍电梯',
@@ -464,7 +472,7 @@ export function buildMetroWayfindingTemplateExamples(
           ],
           { frameFillMode: 'color', frameFillColor: selectedLine.color, frameStroke: true },
         ),
-        b.facility('elevator'),
+        elevator,
         b.text('无障碍电梯', 'Accessible Elevator'),
       ],
       10,

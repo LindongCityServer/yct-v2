@@ -17,10 +17,12 @@ import {
   publishMaterialStudioState,
   subscribeMaterialStudioActions,
 } from '../lib/client-material-studio-events';
+import { dispatchMetroWayfindingCompositionAction } from '../lib/client-metro-wayfinding-events';
 import {
   publishTransitNetworkLineNameEditorRequested,
   subscribeTransitNetworkProjectSnapshotChanged,
   subscribeTransitNetworkSourceChanged,
+  type TransitNetworkProjectOrigin,
 } from '../lib/client-transit-network-events';
 import {
   buildMetroWayfindingProjectFileName,
@@ -35,6 +37,7 @@ import {
   type MetroWayfindingExample,
   type MetroWayfindingExampleStation,
 } from '../lib/metro-wayfinding-examples';
+import { formatServiceTimeRange, parseServiceTimeRange } from '../lib/material-service-time';
 import {
   listMaterialTransitNetworkLines,
   listMaterialTransitNetworkNodeDirections,
@@ -44,10 +47,14 @@ import {
 } from '../lib/rmp-transit-network';
 import { EmbeddedMapLocationPicker } from './embedded-map-location-picker';
 import { MetroWayfindingEditor } from './metro-wayfinding-editor';
+import { MetroWayfindingInspector } from './metro-wayfinding-inspector';
 import { TransitNetworkSourceControl } from './transit-network-source-control';
 
 type MaterialFamily = 'road_sign' | 'address_sign' | 'bus_stop' | 'custom';
 type MaterialServerSource = 'transit_line' | 'transit_station' | 'map_location' | 'road_coordinate';
+
+/** 首末班车时间字段：项目线网来源下需要用户补录（见 `offerProjectServiceTimeInput`）。 */
+const SERVICE_TIME_FIELD_KEY = 'routeServiceTime';
 
 interface MaterialField {
   key: string;
@@ -165,6 +172,13 @@ type StudioMode = 'manual' | 'server';
 
 const MATERIAL_PREVIEW_DIALOG_MEDIA_QUERY = '(max-width: 959px)';
 
+/**
+ * 导视牌编辑器的固定标识。
+ * 编辑器与宿主容器（宽屏下预览面板下方的 Inspector）需要用同一个 editorId 通过事件总线通信，
+ * 因此不能依赖编辑器内部的 useId()，改为在此显式约定。
+ */
+const METRO_WAYFINDING_EDITOR_ID = 'transit-materials-metro-wayfinding';
+
 function arraysEqual(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
@@ -233,10 +247,14 @@ export function MaterialStudioPanel({
   const [isPreviewDialogViewport, setIsPreviewDialogViewport] = useState(false);
   const [isSingleColumnViewport, setIsSingleColumnViewport] = useState(false);
   const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [workspaceBlockMessage, setWorkspaceBlockMessage] = useState('');
   const [isBusy, setIsBusy] = useState(false);
   const [isPreviewRendering, setIsPreviewRendering] = useState(false);
   const [transitNetworkSource, setTransitNetworkSource] = useState<'server' | 'rmp'>('rmp');
+  // RMP 项目来源：示例线网 vs 用户导入，线路选项按它区分。
+  const [transitProjectOrigin, setTransitProjectOrigin] =
+    useState<TransitNetworkProjectOrigin>('none');
   const [importedTransitNetwork, setImportedTransitNetwork] =
     useState<MaterialTransitNetworkSnapshot>();
   const [localDraft, setLocalDraft] = useState<MaterialOfflineDraftRecord | null>(null);
@@ -260,6 +278,9 @@ export function MaterialStudioPanel({
   const selected = templates.find((item) => item.id === selectedTemplateId) ?? templates[0];
   const activeCanvas = canvas ?? selected?.template.defaultCanvas ?? null;
   const isMetroWayfinding = selected?.id === METRO_WAYFINDING_TEMPLATE_ID;
+  // 宽屏（≥960px）时预览区以独立面板常驻页面，此时把插入建议/宽度警告下移到预览下方。
+  // 窄屏时预览退化为弹窗，页面上没有预览面板可依附，改由编辑器本体就地渲染。
+  const isMetroInspectorDetached = isMetroWayfinding && !isPreviewDialogViewport;
   const metroWayfindingLayoutMode = isMetroWayfinding
     ? parseMetroWayfindingLayout(input.layout ?? '').mode
     : undefined;
@@ -267,6 +288,33 @@ export function MaterialStudioPanel({
     selected?.template.fields.filter(
       (field) => field.serverOverride && field.userEditable !== false,
     ) ?? [];
+  const serviceTimeField = selected?.template.fields.find(
+    (field) => field.key === SERVICE_TIME_FIELD_KEY,
+  );
+  /**
+   * 项目线网（示例线网 / 导入项目）里**没有**首末班车时间这一项：
+   * `MaterialTransitNetworkSnapshot` 只保留 nodes / edges / lineNames，
+   * 服务端解析对 `routeServiceTime` 固定写入空串
+   * （`resolveTransitNetworkStationMaterialInput`），即项目来源下必然「没有读取到」。
+   * 这时给一组「首班 / 末班」输入，是它唯一的数据入口；服务器线网自带首末班时间，
+   * 不需要补，沿用通用字段编辑器即可。
+   * 将来项目存档若带上运营时间，这里改成按所选线路判定即可。
+   *
+   * 判定**不看** `serverOverride`：模板存档里这条字段可能还没带上该标记
+   * （历史上就丢过），那样它连通用字段组都进不去，界面上就彻底没有入口了。
+   */
+  const offerProjectServiceTimeInput =
+    mode === 'server' && transitNetworkSource === 'rmp' && Boolean(serviceTimeField);
+  /**
+   * 允许随请求覆盖的字段：`serverOverride` 字段，加上项目来源下补录的首末班车时间。
+   * 后者要**替换**掉通用字段组里的同名项，否则同一字段会出现两个输入框。
+   */
+  const overridableFields = offerProjectServiceTimeInput
+    ? [
+        ...serverOverrideFields.filter((field) => field.key !== SERVICE_TIME_FIELD_KEY),
+        serviceTimeField!,
+      ]
+    : serverOverrideFields;
   const existingDraft = drafts
     .filter(
       (draft) =>
@@ -287,8 +335,26 @@ export function MaterialStudioPanel({
     [drafts],
   );
   const selectedLine = transitLines.find((line) => line.id === selectedLineId);
+  // 线路选项**只**来自当前选定的数据来源：
+  // - 服务器线网 → 服务器线路
+  // - 示例线网 / 导入项目 → RMP 项目线路
+  // 不再把两个来源的线路合并，否则色板里会同时出现服务器线路和项目线路。
   const metroLineColorOptions = useMemo(() => {
-    const serverOptions = transitLines
+    if (transitNetworkSource === 'rmp') {
+      if (!importedTransitNetwork) return [];
+      return listMaterialTransitNetworkLines(importedTransitNetwork).map((line) => ({
+        value: line.color.toUpperCase(),
+        label: `${line.label}${line.secondaryLabel ? ` / ${line.secondaryLabel}` : ''} · ${line.color.toUpperCase()}`,
+        // 已配置正式线路名 → 用它做候选名；未配置 → 留空，
+        // 由「线路编号选择器」从 lineKey 剥离字母前缀推导（`sh2` → 2 号线）。
+        // 这里**不**把 `lineKey` 塞进别名：它整体不是线路名，
+        // 直接参与编号提取会得到 `sh2` 这种伪编号。
+        aliases: line.hasConfiguredName
+          ? [line.label, line.secondaryLabel].filter((value): value is string => Boolean(value))
+          : [],
+      }));
+    }
+    return transitLines
       .filter(
         (line) =>
           line.mode === 'metro' && Boolean(line.color && /^#[0-9A-Fa-f]{6}$/.test(line.color)),
@@ -298,30 +364,42 @@ export function MaterialStudioPanel({
         label: `${line.name}${line.operationStatus === 'planned' ? '（未开通）' : ''} · ${line.color!.toUpperCase()}`,
         aliases: [line.name],
       }));
-    const projectOptions = importedTransitNetwork
-      ? listMaterialTransitNetworkLines(importedTransitNetwork).map((line) => ({
-          value: line.color.toUpperCase(),
-          label: `${line.label}${line.secondaryLabel ? ` / ${line.secondaryLabel}` : ''} · ${line.color.toUpperCase()}`,
-          aliases: [line.label, line.secondaryLabel, line.lineKey].filter(
-            (value): value is string => Boolean(value),
-          ),
-        }))
-      : [];
-    return transitNetworkSource === 'rmp'
-      ? [...projectOptions, ...serverOptions]
-      : [...serverOptions, ...projectOptions];
   }, [importedTransitNetwork, transitLines, transitNetworkSource]);
+  // 颜色 → RMP 线路键（`#8CC220` → `sh2`）。线路键是唯一能推导出线路编号的原料：
+  // RMP 存档不含线路名，但 `sh2` 的字母前缀是城市代号、数字部分就是 2 号线的编号。
+  // 「线路编号选择器」在选项没有正式线路名时，靠它剥离前缀取编号。
+  const metroLineKeysByColor = useMemo(() => {
+    if (transitNetworkSource !== 'rmp' || !importedTransitNetwork) return undefined;
+    return new Map(
+      listMaterialTransitNetworkLines(importedTransitNetwork).map((line) => [
+        line.color.toUpperCase(),
+        line.lineKey,
+      ]),
+    );
+  }, [importedTransitNetwork, transitNetworkSource]);
+  // 地名输入建议**只**来自当前选定的数据来源，切换来源会实时重算：
+  // - 服务器线网 → 服务器 POI + 服务器线网的主站名 / 副站名
+  // - 自定义线网（示例线网 / 导入项目）→ 自定义线网的主站名 / 副站名
+  // 两个来源的候选不再混在一起，否则会出现「切到项目数据却仍建议服务器站名」的错配。
   const metroTextSuggestions = useMemo(() => {
-    const values = [
-      ...transitStations.map((station) => station.stationName),
-      ...transitLines.flatMap((line) => line.stations.map((station) => station.stationName)),
-      ...locations.map((location) => location.label),
-      ...(importedTransitNetwork?.nodes.flatMap((node) => node.names) ?? []),
-    ];
+    const values =
+      transitNetworkSource === 'rmp'
+        ? // 自定义线网：node.names 依次是主站名、副站名、换乘/别名……
+          (importedTransitNetwork?.nodes
+            .filter((node) => node.kind === 'station')
+            .flatMap((node) => node.names) ?? [])
+        : [
+            // 服务器线网：POI 名称
+            ...locations.map((location) => location.label),
+            // 服务器线网：线路站序里的主站名
+            ...transitLines.flatMap((line) => line.stations.map((station) => station.stationName)),
+            // 服务器线网：站点检索接口返回的主站名（含未挂在选定线路上的）
+            ...transitStations.map((station) => station.stationName),
+          ];
     return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort((a, b) =>
       a.localeCompare(b, 'zh-CN'),
     );
-  }, [importedTransitNetwork, locations, transitLines, transitStations]);
+  }, [importedTransitNetwork, locations, transitLines, transitStations, transitNetworkSource]);
   const metroExampleStationOptions = useMemo(() => {
     if (transitNetworkSource === 'rmp') {
       return Array.from(
@@ -419,10 +497,7 @@ export function MaterialStudioPanel({
     : (metroExampleLineOptions[0]?.value ?? '');
   const metroWayfindingExamples = useMemo(
     () =>
-      buildMetroWayfindingTemplateExamples(
-        selectedMetroExampleStation,
-        selectedMetroExampleLineId,
-      ),
+      buildMetroWayfindingTemplateExamples(selectedMetroExampleStation, selectedMetroExampleLineId),
     [selectedMetroExampleLineId, selectedMetroExampleStation],
   );
 
@@ -529,7 +604,13 @@ export function MaterialStudioPanel({
     transitNetworkSource === 'rmp'
       ? primarySelectedImportedLine?.color
       : primaryServerTransitLine?.color?.toUpperCase();
-  const linkedDataModeLabel = transitNetworkSource === 'rmp' ? '项目数据' : '服务器数据';
+  // 数据来源标签：服务器线网 / 示例项目 / 导入项目 三态，与线路选项的过滤口径一致。
+  const linkedDataModeLabel =
+    transitNetworkSource === 'rmp'
+      ? transitProjectOrigin === 'sample'
+        ? '示例项目'
+        : '导入项目'
+      : '服务器线网';
   const activeServerSource = selected
     ? (serverSources?.[selected.template.family] ?? serverSource)
     : serverSource;
@@ -737,18 +818,27 @@ export function MaterialStudioPanel({
     () =>
       subscribeTransitNetworkSourceChanged(
         studioId,
-        ({ source, reason, snapshot, clearSnapshot }) => {
+        ({ source, reason, snapshot, clearSnapshot, projectOrigin }) => {
           if (reason !== 'initialization') {
             transitNetworkSourceIntentRevisionRef.current += 1;
+            // 换数据来源后，为上一个来源补录的首末班车时间就失效了；留着会盖掉
+            // 服务器线网真实解析出来的值（初始化时不能清，草稿里可能就存着它）。
+            setInput((current) => {
+              if (!current[SERVICE_TIME_FIELD_KEY]) return current;
+              const next = { ...current };
+              delete next[SERVICE_TIME_FIELD_KEY];
+              return next;
+            });
           }
-          if (
-            reason !== 'initialization' ||
-            transitNetworkSourceIntentRevisionRef.current === 0
-          ) {
+          if (reason !== 'initialization' || transitNetworkSourceIntentRevisionRef.current === 0) {
             setTransitNetworkSource(source);
           }
+          if (projectOrigin) setTransitProjectOrigin(projectOrigin);
           if (snapshot) setImportedTransitNetwork(snapshot);
-          if (clearSnapshot) setImportedTransitNetwork(undefined);
+          if (clearSnapshot) {
+            setImportedTransitNetwork(undefined);
+            setTransitProjectOrigin('none');
+          }
           setSelectedTransitLineIds([]);
           clearPreview();
         },
@@ -798,7 +888,8 @@ export function MaterialStudioPanel({
       const now = new Date().toISOString();
       const isDifferentTemplate = Boolean(
         current &&
-          (current.templateId !== selected.id || current.templateVersion !== selected.template.version),
+        (current.templateId !== selected.id ||
+          current.templateVersion !== selected.template.version),
       );
       const nextRecord: MaterialOfflineDraftRecord = {
         localDraftId:
@@ -1092,7 +1183,7 @@ export function MaterialStudioPanel({
 
   const buildServerOverrides = () =>
     Object.fromEntries(
-      serverOverrideFields.flatMap((field) => {
+      overridableFields.flatMap((field) => {
         const value = input[field.key] ?? field.defaultValue ?? '';
         return value.trim() ? [[field.key, value]] : [];
       }),
@@ -1168,7 +1259,11 @@ export function MaterialStudioPanel({
       }
       if (!response.ok || !data.id) {
         const status = response.status === 409 ? 'conflict' : 'failed';
-        const failed = { ...record, syncStatus: status as 'conflict' | 'failed', errorMessage: data.message };
+        const failed = {
+          ...record,
+          syncStatus: status as 'conflict' | 'failed',
+          errorMessage: data.message,
+        };
         localDraftRef.current = failed;
         setLocalDraft(failed);
         await upsertMaterialOfflineDraft(failed);
@@ -1538,6 +1633,10 @@ export function MaterialStudioPanel({
 
   useEffect(() =>
     subscribeMaterialStudioActions(studioId, (action) => {
+      if (action === 'history') {
+        setIsHistoryDialogOpen(true);
+        return;
+      }
       if (isBusy) {
         blockAction('当前操作尚未完成，请稍候。');
         return;
@@ -1580,13 +1679,17 @@ export function MaterialStudioPanel({
         <div className="settings-action-row" role="status" aria-live="polite">
           <span className="muted">
             {isOnline ? '在线' : '离线'}
-            {localDraft ? ` · 本机草稿${materialOfflineDraftStatusLabel(localDraft.syncStatus)}` : ''}
+            {localDraft
+              ? ` · 本机草稿${materialOfflineDraftStatusLabel(localDraft.syncStatus)}`
+              : ''}
           </span>
           <button
             type="button"
             className="icon-button"
             onClick={() => void syncLocalDraft()}
-            disabled={!localDraft || !isOnline || isBusy || isSyncingLocalDraft || mode !== 'manual'}
+            disabled={
+              !localDraft || !isOnline || isBusy || isSyncingLocalDraft || mode !== 'manual'
+            }
             title="同步本机草稿"
             aria-label="同步本机草稿"
           >
@@ -1672,21 +1775,36 @@ export function MaterialStudioPanel({
               </button>
             </div>
           ) : null}
-          {mode === 'server' && serverOverrideFields.length ? (
+          {mode === 'server' && overridableFields.length ? (
             <div className="material-field-grid">
-              {serverOverrideFields.map((field) => (
-                <MaterialFieldEditor
-                  key={field.key}
-                  field={field}
-                  value={input[field.key] ?? field.defaultValue ?? ''}
-                  disabled={isBusy}
-                  suggestions={field.key === 'roadName' ? serverLocationSuggestions : undefined}
-                  onChange={(value) => {
-                    setInput((current) => ({ ...current, [field.key]: value }));
-                    clearPreview();
-                  }}
-                />
-              ))}
+              {overridableFields.map((field) =>
+                field.key === SERVICE_TIME_FIELD_KEY && offerProjectServiceTimeInput ? (
+                  // 项目线网不带运营时间，这里换成「首班 / 末班」两个输入补数据，
+                  // 免得用户只能对着一个空文本框猜格式。
+                  <MaterialServiceTimeFields
+                    key={field.key}
+                    label={field.label}
+                    value={input[field.key] ?? ''}
+                    disabled={isBusy}
+                    onChange={(value) => {
+                      setInput((current) => ({ ...current, [field.key]: value }));
+                      clearPreview();
+                    }}
+                  />
+                ) : (
+                  <MaterialFieldEditor
+                    key={field.key}
+                    field={field}
+                    value={input[field.key] ?? field.defaultValue ?? ''}
+                    disabled={isBusy}
+                    suggestions={field.key === 'roadName' ? serverLocationSuggestions : undefined}
+                    onChange={(value) => {
+                      setInput((current) => ({ ...current, [field.key]: value }));
+                      clearPreview();
+                    }}
+                  />
+                ),
+              )}
             </div>
           ) : null}
           {!selected ? (
@@ -1797,7 +1915,14 @@ export function MaterialStudioPanel({
                     .map((line) => {
                       const checked = selectedTransitLineIds.includes(line.id);
                       return (
-                        <label className="material-checkbox-row" key={line.id}>
+                        <label
+                          className={
+                            usesSingleTransitLineSelection
+                              ? 'material-radio-row'
+                              : 'material-checkbox-row'
+                          }
+                          key={line.id}
+                        >
                           <input
                             type={usesSingleTransitLineSelection ? 'radio' : 'checkbox'}
                             name={
@@ -1839,7 +1964,14 @@ export function MaterialStudioPanel({
                   selectableServerTransitLines.map((line) => {
                     const checked = selectedTransitLineIds.includes(line.id);
                     return (
-                      <label className="material-checkbox-row" key={line.id}>
+                      <label
+                        className={
+                          usesSingleTransitLineSelection
+                            ? 'material-radio-row'
+                            : 'material-checkbox-row'
+                        }
+                        key={line.id}
+                      >
                         <input
                           type={usesSingleTransitLineSelection ? 'radio' : 'checkbox'}
                           name={
@@ -2027,11 +2159,13 @@ export function MaterialStudioPanel({
             <>
               {isMetroWayfinding ? (
                 <MetroWayfindingEditor
+                  editorId={METRO_WAYFINDING_EDITOR_ID}
                   value={input.layout ?? ''}
                   canvasWidth={activeCanvas ? activeCanvas.widthM * 128 : 128}
                   canvasHeight={activeCanvas?.heightM ?? 1}
                   disabled={isBusy}
                   lineColorOptions={metroLineColorOptions}
+                  lineKeysByColor={metroLineKeysByColor}
                   textSuggestions={metroTextSuggestions}
                   examples={metroWayfindingExamples}
                   onLoadExample={loadMetroWayfindingExample}
@@ -2047,6 +2181,7 @@ export function MaterialStudioPanel({
                     setInput((current) => ({ ...current, layout: value }));
                     clearPreview();
                   }}
+                  rendersInspector={!isMetroInspectorDetached}
                 />
               ) : (
                 <div className="material-field-grid">
@@ -2073,21 +2208,51 @@ export function MaterialStudioPanel({
           )}
         </div>
 
-        {!isPreviewDialogViewport ? (
-          <section className="material-preview" aria-label="物料预览">
-            <div className="material-preview-heading">
-              <h2>预览</h2>
-              <MaterialPreviewDescription
-                previewSize={previewSize}
-                isRendering={isPreviewRendering}
+        {/*
+          宽屏（≥960px）下预览与导视牌辅助面板共用同一条右侧轨道：预览在上、辅助面板在下。
+          这样整页始终只有三列，辅助面板不会被挤到第二行、把 material-studio-layout 拉高。
+          断点由 `isPreviewDialogViewport`（matchMedia `(max-width: 959px)`）驱动，
+          与预览是否退化为弹窗共用同一个判定，避免 CSS/JS 两套断点出现中间态（如 959.5px）。
+          窄屏下轨道容器整体透明（display: contents），预览与辅助面板都不在轨道内，
+          堆叠顺序与改动前完全一致。
+        */}
+        <div
+          className={`material-studio-preview-track${isPreviewDialogViewport ? ' is-stacked' : ''}`}
+        >
+          {!isPreviewDialogViewport ? (
+            <section className="material-preview" aria-label="物料预览">
+              <div className="material-preview-heading">
+                <h2>预览</h2>
+                <MaterialPreviewDescription
+                  previewSize={previewSize}
+                  isRendering={isPreviewRendering}
+                />
+              </div>
+              <MaterialPreviewStage
+                previewUrl={previewUrl}
+                alt={`${selected?.template.title ?? title}预览`}
               />
-            </div>
-            <MaterialPreviewStage
-              previewUrl={previewUrl}
-              alt={`${selected?.template.title ?? title}预览`}
+            </section>
+          ) : null}
+
+          {/*
+            宽屏下把「插入建议」「宽度警告」放在预览面板正下方：用户在预览里看到结果的同时，
+            相关操作建议就在旁边，不必回到左侧编辑器来回滚动。窄屏时预览会退化成弹窗，
+            此时由编辑器本体渲染这两个面板（rendersInspector 传 true）。
+          */}
+          {isMetroInspectorDetached ? (
+            <MetroWayfindingInspector
+              editorId={METRO_WAYFINDING_EDITOR_ID}
+              lineKeysByColor={metroLineKeysByColor}
+              onAction={(rowIndex, action) =>
+                dispatchMetroWayfindingCompositionAction({
+                  editorId: METRO_WAYFINDING_EDITOR_ID,
+                  action: { ...action, rowIndex },
+                })
+              }
             />
-          </section>
-        ) : null}
+          ) : null}
+        </div>
       </div>
 
       {isPreviewDialogViewport && isPreviewDialogOpen && previewUrl ? (
@@ -2137,56 +2302,85 @@ export function MaterialStudioPanel({
         </div>
       ) : null}
 
-      <section className="material-history" aria-labelledby="material-history-heading">
-        <div className="material-history-heading">
-          <div>
-            <h2 id="material-history-heading">我的物料历史</h2>
-            <p className="muted">已提交的自定义物料会保留在这里，审核通过后可随时下载。</p>
-          </div>
-          <span>{historyDrafts.length} 条</span>
+      {isHistoryDialogOpen ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setIsHistoryDialogOpen(false);
+          }}
+        >
+          <section
+            className="modal-panel material-history-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="material-history-heading"
+          >
+            <div className="material-history-heading">
+              <div>
+                <h2 id="material-history-heading">我的物料历史</h2>
+                <p className="muted">已提交的自定义物料会保留在这里，审核通过后可随时下载。</p>
+              </div>
+              <div className="material-history-heading-actions">
+                <span>{historyDrafts.length} 条</span>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="关闭物料历史"
+                  title="关闭"
+                  autoFocus
+                  onClick={() => setIsHistoryDialogOpen(false)}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    close
+                  </span>
+                </button>
+              </div>
+            </div>
+            {historyDrafts.length ? (
+              <div className="material-history-list">
+                {historyDrafts.map((draft) => {
+                  const template = templateVersionByKey.get(
+                    `${draft.templateId}:${draft.templateVersion}`,
+                  );
+                  return (
+                    <article className="material-history-item" key={draft.id}>
+                      <div>
+                        <strong>
+                          {template?.title ?? draft.templateId} · v{draft.templateVersion} ·{' '}
+                          {materialDraftStatusLabel(draft.status)}
+                        </strong>
+                        <p>{formatStudioDraftInput(draft, template)}</p>
+                        <small>
+                          提交于 {formatTime(draft.submittedAt ?? draft.createdAt)}
+                          {draft.reviewedAt ? ` · 审核于 ${formatTime(draft.reviewedAt)}` : ''}
+                          {draft.reviewReason ? ` · ${draft.reviewReason}` : ''}
+                        </small>
+                      </div>
+                      {draft.status === 'approved' ? (
+                        <button
+                          type="button"
+                          className="is-primary"
+                          onClick={() => void exportDraft(draft)}
+                          disabled={isBusy}
+                          title="下载图片"
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            download
+                          </span>
+                          下载图片
+                        </button>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="material-history-empty">还没有提交过自定义物料。</p>
+            )}
+          </section>
         </div>
-        {historyDrafts.length ? (
-          <div className="material-history-list">
-            {historyDrafts.map((draft) => {
-              const template = templateVersionByKey.get(
-                `${draft.templateId}:${draft.templateVersion}`,
-              );
-              return (
-                <article className="material-history-item" key={draft.id}>
-                  <div>
-                    <strong>
-                      {template?.title ?? draft.templateId} · v{draft.templateVersion} ·{' '}
-                      {materialDraftStatusLabel(draft.status)}
-                    </strong>
-                    <p>{formatStudioDraftInput(draft, template)}</p>
-                    <small>
-                      提交于 {formatTime(draft.submittedAt ?? draft.createdAt)}
-                      {draft.reviewedAt ? ` · 审核于 ${formatTime(draft.reviewedAt)}` : ''}
-                      {draft.reviewReason ? ` · ${draft.reviewReason}` : ''}
-                    </small>
-                  </div>
-                  {draft.status === 'approved' ? (
-                    <button
-                      type="button"
-                      className="is-primary"
-                      onClick={() => void exportDraft(draft)}
-                      disabled={isBusy}
-                      title="下载图片"
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        download
-                      </span>
-                      下载图片
-                    </button>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="material-history-empty">还没有提交过自定义物料。</p>
-        )}
-      </section>
+      ) : null}
     </section>
   );
 }
@@ -2353,7 +2547,9 @@ function CanvasEditor({
       {isMetroWayfinding ? (
         <>
           <label>
-            <span>{isMetroVertical ? '导视牌高度（128 像素格数）' : '导视牌长度（128 像素格数）'}</span>
+            <span>
+              {isMetroVertical ? '导视牌高度（128 像素格数）' : '导视牌长度（128 像素格数）'}
+            </span>
             <input
               type="number"
               min="1"
@@ -2373,7 +2569,10 @@ function CanvasEditor({
                 step="1"
                 value={canvas.widthM}
                 onChange={(event) =>
-                  onChange('widthM', Math.min(64, Math.max(1, Math.round(Number(event.currentTarget.value)))))
+                  onChange(
+                    'widthM',
+                    Math.min(64, Math.max(1, Math.round(Number(event.currentTarget.value)))),
+                  )
                 }
               />
             </label>
@@ -2430,6 +2629,55 @@ function CanvasEditor({
         {outputWidth} × {outputHeight} px
       </output>
     </fieldset>
+  );
+}
+
+/**
+ * 首末班车时间的「首班 / 末班」双输入。
+ *
+ * 只用于项目线网来源：项目存档不带运营时间，服务端解析出来是空串，
+ * 直接给一个文本框用户不知道该填 `06:00-22:30` 还是别的格式，
+ * 所以拆成两个时间输入，再按牌面格式（`formatServiceTimeRange`）合成。
+ */
+function MaterialServiceTimeFields({
+  label,
+  value,
+  disabled,
+  onChange,
+}: Readonly<{
+  label: string;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}>) {
+  const { first, last } = parseServiceTimeRange(value);
+  return (
+    <div className="material-service-time-fields">
+      <span>{label}</span>
+      <label className="material-field">
+        <span>首班车</span>
+        <input
+          type="time"
+          value={first}
+          disabled={disabled}
+          onChange={(event) =>
+            onChange(formatServiceTimeRange(event.currentTarget.value, last || undefined))
+          }
+        />
+      </label>
+      <label className="material-field">
+        <span>末班车</span>
+        <input
+          type="time"
+          value={last}
+          disabled={disabled}
+          onChange={(event) =>
+            onChange(formatServiceTimeRange(first || undefined, event.currentTarget.value))
+          }
+        />
+      </label>
+      <small>项目数据不含运营时间，留空则不显示这一行。</small>
+    </div>
   );
 }
 
@@ -2563,9 +2811,7 @@ function materialDraftStatusLabel(status: MaterialDraft['status']): string {
   }[status];
 }
 
-function materialOfflineDraftStatusLabel(
-  status: MaterialOfflineDraftRecord['syncStatus'],
-): string {
+function materialOfflineDraftStatusLabel(status: MaterialOfflineDraftRecord['syncStatus']): string {
   switch (status) {
     case 'local':
       return ' · 待同步';

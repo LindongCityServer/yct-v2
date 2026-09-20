@@ -54,9 +54,31 @@ export function validateMaterialTemplateSource(
   }
 }
 
+/**
+ * 「数据来源」模式下哪些字段允许用户自行填写：`material-studio-panel` 只为
+ * `serverOverride && userEditable !== false` 的字段渲染输入框（`serverOverrideFields`），
+ * 其余字段的值全部由数据来源派生。
+ */
+export function isMaterialFieldEditableInServerMode(field: MaterialTemplateField): boolean {
+  return field.serverOverride === true && field.userEditable !== false;
+}
+
+export interface MaterialInputValidationOptions {
+  /**
+   * 「数据来源」模式下放宽必填校验：**用户填不了**的字段（见
+   * `isMaterialFieldEditableInServerMode`）在来源数据缺失时允许为空。
+   *
+   * 导入项目几乎不会存储运营时间这类信息，而面板上又没有对应的输入框，
+   * 照常按 `required` 校验的话预览会永远失败、用户也没有任何补救手段。
+   * 用户能自己填的字段（如主题颜色）不受影响，仍按必填校验。
+   */
+  allowMissingServerDerivedValues?: boolean;
+}
+
 export function validateMaterialInput(
   fields: MaterialTemplateField[],
   rawInput: Record<string, string>,
+  options?: MaterialInputValidationOptions,
 ): Record<string, string> {
   const allowedKeys = new Set(fields.map((field) => field.key));
   for (const key of Object.keys(rawInput)) {
@@ -68,7 +90,10 @@ export function validateMaterialInput(
   const input: Record<string, string> = {};
   for (const field of fields) {
     const value = rawInput[field.key]?.trim() || field.defaultValue?.trim() || '';
-    if (field.required && !value) {
+    const allowMissing =
+      options?.allowMissingServerDerivedValues === true &&
+      !isMaterialFieldEditableInServerMode(field);
+    if (field.required && !value && !allowMissing) {
       throw new MaterialInputError(`${field.label}不能为空。`);
     }
     if (field.maxLength && value.length > field.maxLength) {
@@ -118,9 +143,11 @@ export function renderMaterialTemplateToSvg(input: {
   template: MaterialTemplateVersion;
   values: Record<string, string>;
   canvas: MaterialCanvasConfig;
+  /** 渲染前复核字段时使用的校验口径，默认严格（必填空值直接报错）。 */
+  validation?: MaterialInputValidationOptions;
 }): { svg: string; widthPx: number; heightPx: number } {
   validateMaterialTemplateSource(input.template.source, input.template.fields);
-  const values = validateMaterialInput(input.template.fields, input.values);
+  const values = validateMaterialInput(input.template.fields, input.values, input.validation);
   const size = resolveMaterialOutputSize(input.canvas);
   const typography = resolveTypography(
     input.template.typographyProfile,
@@ -184,6 +211,8 @@ export async function renderMaterialTemplateToPng(input: {
   values: Record<string, string>;
   canvas: MaterialCanvasConfig;
   watermark?: MaterialPreviewWatermark;
+  /** 同 `renderMaterialTemplateToSvg`，透传给渲染前的字段复核。 */
+  validation?: MaterialInputValidationOptions;
 }): Promise<{ png: Buffer; widthPx: number; heightPx: number }> {
   const rendered = renderMaterialTemplateToSvg(input);
   const svg = input.watermark

@@ -17,6 +17,7 @@ import {
   METRO_WAYFINDING_PADDING,
   METRO_WAYFINDING_TEXT_HEIGHT,
   METRO_WAYFINDING_COMBINATION_STRIPE_TOP,
+  METRO_WAYFINDING_COMBINATION_GAP,
   METRO_WAYFINDING_COMBINATION_STRIPE_WIDTH,
   METRO_WAYFINDING_FOREGROUND,
   hasMetroWayfindingTextRowContent,
@@ -25,18 +26,21 @@ import {
   parseMetroWayfindingLayout,
   resolveMetroArrowIconAssetName,
   resolveMetroFacilityIconAssetName,
+  resolveMetroFacilityMirrorTransform,
   resolveMetroWayfindingFacilityDefaultDirection,
   resolveMetroWayfindingLayoutSizing,
   resolveMetroWayfindingCombinationSizing,
   resolveMetroWayfindingElementWidth,
   resolveMetroWayfindingTextMetrics,
   resolveMetroWayfindingVerticalLayoutSizing,
+  splitMetroLargeTextRuns,
   type MetroArrowIconAssetName,
   type MetroFacilityIconAssetName,
   type MetroWayfindingElement,
   type MetroWayfindingCombinationElement,
   type MetroWayfindingFrameFillMode,
   type MetroWayfindingFrameShape,
+  type MetroWayfindingLargeTextElement,
   type MetroWayfindingMainSegment,
 } from './metro-wayfinding';
 
@@ -434,6 +438,7 @@ function renderMetroWayfindingElement(
             element.frameFillMode,
             frameFillColor,
             element.frameStroke,
+            element.variant,
           );
     const dataAttribute =
       element.type === 'arrow'
@@ -454,14 +459,7 @@ function renderMetroWayfindingElement(
       element.frameShape !== 'none' && element.frameFillMode === 'inverse'
         ? background
         : foreground;
-    const text = renderMetroLargeText(
-      element.value,
-      element.suffix,
-      width,
-      contentColor,
-      element.frameShape,
-      elementHeight,
-    );
+    const text = renderMetroLargeText(element, width, contentColor, elementHeight);
     const frame = renderMetroLargeTextFrame(
       element.frameShape,
       width,
@@ -563,7 +561,9 @@ function renderMetroWayfindingCombination(
     );
     cursor +=
       displayWidth +
-      (index < element.children.length - 1 ? METRO_WAYFINDING_GAP * sizing.layoutScale : 0);
+      (index < element.children.length - 1
+        ? METRO_WAYFINDING_COMBINATION_GAP * sizing.layoutScale
+        : 0);
     return output;
   });
   const totalScaleX = Math.max(Math.abs(scaleX * combinationScale), Number.EPSILON);
@@ -589,7 +589,10 @@ function renderMetroWayfindingCombination(
   const clipId = `metro-combination-clip-${element.id}`;
   const roundedBackdrop = `<defs><clipPath id="${escapeXml(clipId)}"><rect width="${formatNumber(baseWidth)}" height="${formatNumber(baseHeight)}" rx="${formatNumber(fillRadiusX)}" ry="${formatNumber(fillRadiusY)}"/></clipPath></defs><g clip-path="url(#${escapeXml(clipId)})"><rect width="${formatNumber(baseWidth)}" height="${formatNumber(baseHeight)}" fill="${background}"/>${frame}${stripe}</g>`;
   const squareBackdrop = `<rect width="${formatNumber(baseWidth)}" height="${formatNumber(baseHeight)}" fill="${background}"/>${frame}${stripe}`;
-  const backdrop = element.frameFillMode === 'none' ? squareBackdrop : roundedBackdrop;
+  const backdrop =
+    element.frameFillMode === 'none' || element.frameFillMode === 'stripe'
+      ? squareBackdrop
+      : roundedBackdrop;
   const transform = `translate(${formatNumber(x)} ${formatNumber(combinationY)}) scale(${formatNumber(scaleX * combinationScale)} ${formatNumber(scaleY * combinationScale)})`;
   return `<g transform="${transform}">${backdrop}<g transform="translate(0 ${formatNumber(childY)})">${children.join('')}</g>${outline}</g>`;
 }
@@ -628,7 +631,7 @@ function renderMetroVerticalTextRows(
       const columnMarkup =
         row.kind === 'main'
           ? renderMetroVerticalMainSegments(row.segments, fontSize, color, background, x)
-          : renderMetroVerticalTextRun(row.value, fontSize, color, x, 0, row.bold ? 700 : 400);
+          : renderMetroVerticalTextRun(row.value, fontSize, color, x, 0, 400);
       const columnScaleY = height > maxHeight && height > 0 ? maxHeight / height : 1;
       return `<g transform="scale(1 ${formatNumber(columnScaleY)})">${columnMarkup}</g>`;
     })
@@ -745,7 +748,7 @@ function renderMetroTextRows(
               textX,
               baseline,
               rowScales[index] ?? 1,
-              row.bold ? 700 : 400,
+              400,
             );
       rowTop += fontSize + (index < rows.length - 1 ? metrics.spacing : 0);
       return output;
@@ -847,37 +850,59 @@ function resolveMetroTextRowScales(
   return scales;
 }
 
+/**
+ * 大文本渲染：正文与**任意位置**的下角标交替排版。
+ *
+ * `dy` 是相对位移且会累积，所以进入下角标时 +13 下沉、离开时 -13 回到基线；
+ * 相邻两个角标之间不再重复下沉。`dx` 只在「正文 ↔ 角标」交界处补 3px 间距。
+ */
 function renderMetroLargeText(
-  value: string,
-  suffix: string,
+  element: MetroWayfindingLargeTextElement,
   width: number,
   color: string,
-  frameShape: MetroWayfindingFrameShape,
   height: number,
 ): string {
+  const frameShape = element.frameShape;
   const mainFontSize =
     frameShape !== 'none'
       ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
       : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE;
-  const suffixGap = value && suffix ? 3 : 0;
-  const mainMarkup = renderMetroLargeTextRuns(value, mainFontSize, 400);
-  const suffixMarkup = suffix
-    ? renderMetroLargeTextRuns(
-        suffix,
-        METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE,
-        700,
-        suffixGap,
-        13,
-      )
-    : '';
-  const text = `<text x="${formatNumber(width / 2 - suffixGap / 2)}" y="${formatNumber(height / 2)}" fill="${color}" text-anchor="middle" dominant-baseline="central" letter-spacing="0">${mainMarkup}${suffixMarkup}</text>`;
+  const suffixFontSize = METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE;
+  const runs = splitMetroLargeTextRuns(element);
+  let markup = '';
+  let gapTotal = 0;
+  let lowered = false;
+  runs.forEach((run, index) => {
+    const previous = runs[index - 1];
+    const next = runs[index + 1];
+    if (run.kind === 'suffix') {
+      if (previous?.kind === 'text') gapTotal += 3;
+      if (next?.kind === 'text') gapTotal += 3;
+      const dx = previous?.kind === 'text' ? 3 : 0;
+      const dy = lowered ? 0 : 13;
+      markup += renderMetroLargeTextRuns(run.value, suffixFontSize, 700, dx, dy);
+      lowered = true;
+      return;
+    }
+    const dx = previous?.kind === 'suffix' ? 3 : 0;
+    const dy = lowered ? -13 : 0;
+    markup += renderMetroLargeTextRuns(run.value, mainFontSize, 400, dx, dy);
+    lowered = false;
+  });
+  const text = `<text x="${formatNumber(width / 2 - gapTotal / 2)}" y="${formatNumber(height / 2)}" fill="${color}" text-anchor="middle" dominant-baseline="central" letter-spacing="0">${markup}</text>`;
   if (frameShape !== 'circle') {
     return text;
   }
   const contentWidth =
-    estimateMetroWayfindingLargeTextWidth(value, mainFontSize) +
-    suffixGap +
-    estimateMetroWayfindingLargeTextWidth(suffix, METRO_WAYFINDING_LARGE_TEXT_SUFFIX_FONT_SIZE);
+    runs.reduce(
+      (total, run) =>
+        total +
+        estimateMetroWayfindingLargeTextWidth(
+          run.value,
+          run.kind === 'suffix' ? suffixFontSize : mainFontSize,
+        ),
+      0,
+    ) + gapTotal;
   const scaleX = contentWidth > 72 ? 72 / contentWidth : 1;
   return scaleX < 1
     ? `<g transform="translate(${formatNumber(width / 2)} 0) scale(${formatNumber(scaleX)} 1) translate(${formatNumber(-width / 2)} 0)">${text}</g>`
@@ -953,17 +978,17 @@ function renderMetroIcon(
   frameFillMode: MetroWayfindingFrameFillMode = 'none',
   frameFillColor = color,
   frameStroke = false,
+  variant?: 'two-way' | 'up' | 'down',
 ): string {
-  const assetName = resolveMetroFacilityIconAssetName(iconId, direction);
+  const assetName = resolveMetroFacilityIconAssetName(iconId, direction, variant);
   if (assetName) {
+    const directionTransform = resolveMetroFacilityAssetDirectionTransform(
+      iconId,
+      direction,
+      variant,
+    );
     if (frameShape === 'rectangle' && frameFillMode === 'none') {
-      return renderMetroFacilityAsset(
-        assetName,
-        'framed',
-        color,
-        instanceId,
-        resolveMetroFacilityAssetDirectionTransform(iconId, direction),
-      );
+      return renderMetroFacilityAsset(assetName, 'framed', color, instanceId, directionTransform);
     }
     const frame = renderMetroFacilityFrame(
       frameShape,
@@ -978,7 +1003,7 @@ function renderMetroIcon(
       'plain',
       color,
       instanceId,
-      resolveMetroFacilityAssetDirectionTransform(iconId, direction),
+      directionTransform,
       frameShape === 'circle' ? 0.86 : frameShape === 'rectangle' ? 0.9 : 1.1,
     );
     return `${frame}${icon}`;
@@ -1076,18 +1101,22 @@ function resolveMetroIconScaleTransform(scale: number): string {
 function resolveMetroFacilityAssetDirectionTransform(
   iconId: string,
   direction: 'left' | 'right' | 'up' | 'down' | undefined,
+  variant?: 'two-way' | 'up' | 'down',
 ): string {
-  if (
-    iconId === 'stairs' ||
-    iconId === 'stairs-down' ||
-    iconId === 'escalator' ||
-    iconId === 'wheelchair-lift'
-  ) {
+  // 楼梯：每个「变种 × 方向」都有独立素材（-right 后缀为朝右版），
+  // 翻转已经烘焙在素材自身（双向 / 向上为水平镜像，向下为垂直镜像），因此这里不再叠加变换。
+  // 其余声明了 assetNameByDirection 的图标（扶梯 / 轮椅升降机 / 轮椅）素材只有朝右一份，
+  // 朝左时靠镜像复用，因此这里继续往下走镜像分支。
+  if (iconId === 'stairs' || iconId === 'stairs-down') {
+    return '';
+  }
+  if (iconId === 'escalator' || iconId === 'wheelchair-lift' || iconId === 'wheelchair') {
     const effectiveDirection =
       direction ?? resolveMetroWayfindingFacilityDefaultDirection(iconId) ?? 'left';
-    const shouldFlip =
-      iconId === 'stairs-down' ? effectiveDirection === 'right' : effectiveDirection === 'left';
-    return shouldFlip ? 'translate(85 0) scale(-1 1)' : '';
+    // 素材原始朝向为“朝右”，朝左时按图标声明的镜像轴翻转。
+    return effectiveDirection === 'left'
+      ? resolveMetroFacilityMirrorTransform(iconId, effectiveDirection, variant)
+      : '';
   }
   if (iconId !== 'exit') {
     return '';
@@ -1106,6 +1135,10 @@ function resolveMetroIconDirectionTransform(
 ): string {
   if (iconId === 'no-entry') {
     return 'rotate(-45 42.5 64)';
+  }
+  // 声明了 assetNameByDirection 的图标（如楼梯三向）由图形本身决定朝向，不再做镜像。
+  if (metroWayfindingIconOptions.find((option) => option.id === iconId)?.assetNameByDirection) {
+    return '';
   }
   if (iconId === 'turn-left-up' || iconId === 'turn-left-down') {
     return 'rotate(-90 42.5 64)';

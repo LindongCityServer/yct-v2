@@ -50,6 +50,7 @@
   --yct-font-family-system: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --yct-font-family-harmony: 'HarmonyOS Sans SC', var(--yct-font-family-system);
   --yct-font-family: var(--yct-font-family-harmony);
+  --yct-font-mono: ui-monospace, SFMono-Regular, 'Cascadia Mono', Consolas, monospace;
   --yct-material-blur: 9.5px;
   --yct-material-blur-strong: 12.83px;
   --yct-material-blur-medium: 7.6px;
@@ -60,35 +61,76 @@
   --yct-material-contrast: 1.14;
   --yct-material-saturation: 1.475;
   --yct-material-floating-surface: 65%;
-  --yct-material-action-surface: 72.5%;
+  --yct-material-action-surface: var(--yct-material-floating-surface);
   --yct-material-title-surface: 65%;
   --yct-material-title-mid-surface: 33%;
-  --yct-material-text-shadow-strength: 46%;
+  --yct-material-text-shadow-strength: 48%;
+  --yct-material-content-shadow-core: 3px;
+  --yct-material-content-shadow-halo: 9px;
+  --yct-material-surface-base-background: var(--yct-color-surface-panel);
+  --yct-material-content-shadow-color: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-text-shadow-strength),
+    transparent
+  );
+  --yct-material-text-shadow:
+    0 0 var(--yct-material-content-shadow-core) var(--yct-material-content-shadow-color),
+    0 1px var(--yct-material-content-shadow-halo) var(--yct-material-content-shadow-color);
+  --yct-material-inner-shadow-opacity: 44%;
+  --yct-material-edge-top-opacity: 15%;
+  --yct-material-floating-shadow: 0 18px 48px rgb(0 0 0 / 14%);
+  --yct-material-control-surface: color-mix(
+    in srgb,
+    var(--yct-color-surface-muted) 32%,
+    transparent
+  );
+  --yct-material-neutral-surface: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-floating-surface),
+    transparent
+  );
+  --yct-material-thumb-shadow:
+    inset 0 3px 0
+      color-mix(in srgb, var(--yct-material-ink) var(--yct-material-edge-top-opacity), transparent),
+    0 2px 8px rgb(0 0 0 / 12%);
+  /* 上偏移内描边沿圆角收窄到侧边，不再叠加恒定宽度的整圈描边。 */
+  --yct-material-surface-shadow:
+    inset 0 3px 0
+      color-mix(in srgb, var(--yct-material-ink) var(--yct-material-edge-top-opacity), transparent),
+    inset 0 -12px 24px
+      color-mix(
+        in srgb,
+        var(--yct-material-ink) var(--yct-material-inner-shadow-opacity),
+        transparent
+      ),
+    var(--yct-material-floating-shadow);
+  --yct-material-ink: #ffffff;
+  --yct-material-hover-state: color-mix(in srgb, var(--yct-color-text) 9%, transparent);
   --yct-material-dark-surface: #111817;
   --yct-material-dark-text: #f7f8f8;
   --yct-material-dark-text-muted: #c7d0ce;
-  --yct-material-dark-border: rgb(255 255 255 / 18%);
-  --yct-material-hover-state: color-mix(in srgb, var(--yct-color-surface-muted) 72%, transparent);
-  --yct-material-selected-state: color-mix(
-    in srgb,
-    var(--yct-color-surface-selected) 84%,
-    transparent
-  );
-  --yct-material-selected-panel-state: color-mix(
-    in srgb,
-    var(--yct-color-surface-panel) 84%,
-    transparent
-  );
+  --yct-material-dark-border: rgb(255 255 255 / 9%);
+  --yct-material-hover-state: var(--yct-color-interaction-hover);
+  --yct-material-selected-state: var(--yct-color-surface-selected);
+  --yct-material-selected-panel-state: var(--yct-color-surface-selected);
 }
 
 :root[data-color-scheme='dark'] {
   --yct-material-brightness: var(--yct-material-brightness-dark);
+  --yct-material-ink: #ffffff;
+  --yct-material-edge-top-opacity: 1.5%;
+  --yct-material-inner-shadow-opacity: 32%;
+  --yct-material-floating-shadow: 0 18px 48px rgb(0 0 0 / 18%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root[data-color-scheme='system'],
   :root:not([data-color-scheme]) {
     --yct-material-brightness: var(--yct-material-brightness-dark);
+    --yct-material-ink: #ffffff;
+    --yct-material-edge-top-opacity: 1.5%;
+    --yct-material-inner-shadow-opacity: 32%;
+    --yct-material-floating-shadow: 0 18px 48px rgb(0 0 0 / 18%);
   }
 }
 
@@ -120,6 +162,14 @@ body {
   letter-spacing: 0;
 }
 
+.yct-material-filter-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 *:not(html):not(body) {
   scrollbar-color: color-mix(in srgb, var(--yct-color-text-muted) 42%, transparent) transparent;
 }
@@ -137,6 +187,87 @@ a {
 button,
 input {
   font: inherit;
+}
+
+/* 全局复选框视觉规范（原生控件 + accent-color，Chrome/Firefox/Safari/Edge 一致）：
+ * - 尺寸锁定 18×18（与 checkbox-row 表单基准一致）；
+ * - min/max + !important 双向兜底：容器里常见的
+ *   「不限类型 input { width:100%; min-height:38px }」写法会波及勾选框，
+ *   把它撑成非正方形并挤压同行的标签横向空间。
+ *   这里锁定全部尺寸属性以稳定压过容器规则，勾选框在任何容器中都不被撑大；
+ * - 未选中/选中态由 accent-color 主色接管（替代浏览器默认蓝）；
+ * - 悬停切换到 primary-hover 色相反馈；禁用降不透明度并禁止点击；
+ * - 焦点可见环与强调色一致（outline 方案，不依赖浏览器默认 focus）。 */
+input[type='checkbox'] {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 !important;
+  accent-color: var(--yct-color-primary);
+  cursor: pointer;
+}
+
+input[type='checkbox']:not(:disabled):hover {
+  accent-color: var(--yct-color-primary-hover);
+}
+
+input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: 2px;
+  border-radius: var(--yct-radius-xs);
+}
+
+input[type='checkbox']:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+/*
+  全局单选框视觉规范：与复选框同源（原生控件 + accent-color），之前**完全没定义**。
+  后果很具体：`.material-canvas-editor input` 这类「不限类型」的文本框规则会直接命中
+  radio——width:100% + min-height:44px + 1px 描边 + 12px 内边距，
+  把它撑成一个占满整行的大方块并挤掉同行标签（线路「单选」模式下才出现，多选模式
+  因为 checkbox 有尺寸锁定所以一直正常）。
+
+  因此这里除了锁定尺寸，还要把文本框的**描边/圆角/底色**一并重置掉，
+  否则 radio 会顶着一个方框底（checkbox 走的也是这条路，只是尺寸被 !important 救回来了）。
+  其余（accent-color、悬停、焦点环、禁用）与复选框保持一致。
+*/
+input[type='radio'] {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  accent-color: var(--yct-color-primary);
+  cursor: pointer;
+}
+
+input[type='radio']:not(:disabled):hover {
+  accent-color: var(--yct-color-primary-hover);
+}
+
+input[type='radio']:focus-visible {
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: 2px;
+  border-radius: var(--yct-radius-xs);
+}
+
+input[type='radio']:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .material-symbols-outlined {
@@ -486,7 +617,6 @@ body .material-symbols-outlined {
 
 .app-toast-close:is(:hover, :focus-visible) {
   background: var(--yct-color-surface-muted);
-  color: var(--yct-color-text);
 }
 
 .app-toast-close .material-symbols-outlined {
@@ -586,9 +716,15 @@ body .material-symbols-outlined {
   display: none;
 }
 
+/*
+  顶栏 .topbar 是 sticky + z-index 10，侧栏吸顶偏移必须从它的高度起算，
+  否则会被顶栏压住。这里用 --yct-topbar-height 而不是硬编码像素：顶栏高度在
+  ≤760px 会调整为 56px，硬编码会静默失配。与 .service-entry-grid.admin-home-grid
+  的既有写法一致。
+*/
 .sidebar-stack {
   position: sticky;
-  top: 80px;
+  top: calc(var(--yct-topbar-height) + var(--yct-space-4));
   align-self: start;
   display: grid;
   gap: var(--yct-space-3);
@@ -889,6 +1025,9 @@ body .material-symbols-outlined {
   border: 0;
 }
 
+/* 搜索框统一基线：46px 高 + space-3 内边距 + pill 圆角 + surface 底。
+ * 各页搜索框（search-page-box / screen-search-box / schedule-search-box /
+ * admin-membership-search / transit-health-target-search）均以此为准，只允许覆盖底色。 */
 .search-box {
   display: flex;
   align-items: center;
@@ -934,7 +1073,6 @@ body .material-symbols-outlined {
 
 .search-clear-button:hover {
   background: var(--yct-color-surface-muted);
-  color: var(--yct-color-text-secondary);
 }
 
 .search-clear-button .material-symbols-outlined {
@@ -2551,7 +2689,6 @@ body .material-symbols-outlined {
 .map-stage .icon-action-button:hover,
 .map-stage .icon-action-button:focus-visible {
   background: color-mix(in srgb, var(--yct-color-text) 7%, var(--yct-color-surface-muted));
-  color: var(--yct-color-primary);
 }
 
 .map-route-plan-loading {
@@ -2608,6 +2745,7 @@ body .material-symbols-outlined {
 
 .map-route-preference-toolbar {
   display: flex;
+  /* 方式条 30px、排序控件 32px，统一顶端对齐而非中线对齐 */
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--yct-space-2);
@@ -2618,23 +2756,25 @@ body .material-symbols-outlined {
   display: flex;
   flex: 1 1 auto;
   flex-wrap: wrap;
-  gap: var(--yct-space-1);
+  gap: var(--yct-space-2);
   min-width: 0;
 }
 
+/* 交通方式 chip 与排序按钮视觉对齐：30×30 无边框透明底 + muted 色图标；
+ * 选中时才用语义色描边 + 22% 染色，保证「当前选中的交通方式」识别度。 */
 .map-route-mode-toggle-list button {
   --route-mode-color: var(--yct-color-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 30px;
+  flex: 0 0 auto;
   width: 30px;
   min-height: 30px;
   padding: 0;
   border: 0;
-  border-radius: var(--yct-radius-sm);
-  background: color-mix(in srgb, var(--yct-color-surface-muted) 82%, transparent);
-  color: var(--yct-color-text-secondary);
+  border-radius: var(--yct-radius-pill);
+  background: transparent;
+  color: var(--yct-color-text-muted);
   cursor: pointer;
   font-size: 13px;
   font-weight: 650;
@@ -2645,7 +2785,8 @@ body .material-symbols-outlined {
 }
 
 .map-route-mode-toggle-list button.is-active {
-  background: color-mix(in srgb, var(--route-mode-color) 18%, var(--yct-color-surface-panel));
+  border: 1px solid var(--route-mode-color);
+  background: color-mix(in srgb, var(--route-mode-color) 22%, transparent);
   color: var(--route-mode-color);
   font-weight: 800;
 }
@@ -2654,22 +2795,41 @@ body .material-symbols-outlined {
   --icon-fill: 1;
 }
 
-.map-route-mode-toggle-more {
+/* 展开/折叠钮宽度随 “+X” 计数自适应。
+ * 选择器带两个类以压过上方 “.map-route-mode-toggle-list button” 的 30px 定宽，
+ * 否则 “+N” 计数文字会被定宽裁切溢出。 */
+.map-route-mode-toggle-list .map-route-mode-toggle-more {
   --route-mode-color: var(--yct-color-primary);
+  gap: var(--yct-space-1);
+  width: auto;
+  padding: 0 var(--yct-space-2);
 }
 
-.map-route-mode-toggle-list button.is-taxi.is-active {
-  background: var(--route-mode-color);
-  color: #544600;
+.map-route-mode-toggle-more-count {
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
 }
 
+/* 折叠态固定单行：展开钮与最后一个可见 chip 之间用弹性空格顶到行尾，
+ * 与右侧排序控件保持稳定间距；全部 chip 放得下时展开钮不渲染。 */
+.map-route-mode-toggle-list.is-collapsed {
+  flex-wrap: nowrap;
+}
+
+.map-route-mode-toggle-list.is-collapsed .map-route-mode-toggle-more {
+  margin-left: auto;
+}
+
+/* 排序控件：与 map-poi-detail-tabs 同款紧凑轨道（3px 内边距 + 2px 间隙），
+ * 内嵌 30px 圆形按钮，与左侧多选 chip 组的尺寸（30px 圆钮、18px 图标）保持一致。 */
 .map-route-sort-control {
   display: grid;
   flex: 0 0 auto;
   grid-template-columns: repeat(4, 30px);
-  gap: 1px;
-  padding: 1px;
-  border-radius: var(--yct-radius-sm);
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--yct-radius-pill);
   background: var(--yct-color-surface-muted);
 }
 
@@ -2678,23 +2838,30 @@ body .material-symbols-outlined {
   align-items: center;
   justify-content: center;
   width: 30px;
-  height: 28px;
+  height: 30px;
   padding: 0;
   border: 0;
-  border-radius: calc(var(--yct-radius-sm) - 2px);
+  border-radius: var(--yct-radius-pill);
   background: transparent;
   color: var(--yct-color-text-muted);
   cursor: pointer;
 }
 
 .map-route-sort-control button.is-active {
-  background: var(--yct-color-surface-panel);
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary);
   box-shadow: var(--yct-shadow-soft);
 }
 
 .map-route-sort-control .material-symbols-outlined {
-  font-size: 17px;
+  font-size: 18px;
+}
+
+/* 两个控件的非选中圆钮共用同一套悬停/聚焦反馈。 */
+.map-route-mode-toggle-list
+  button:not(.is-active, [aria-pressed='true']):is(:hover, :focus-visible),
+.map-route-sort-control button:not(.is-active, [aria-pressed='true']):is(:hover, :focus-visible) {
+  background: color-mix(in srgb, var(--yct-color-text-muted) 14%, transparent);
 }
 
 .map-route-endpoint-candidates {
@@ -2789,7 +2956,6 @@ body .material-symbols-outlined {
   gap: var(--yct-space-2);
   min-height: 0;
   overflow: auto;
-  padding-right: 2px;
 }
 
 .map-route-option-card {
@@ -2797,16 +2963,23 @@ body .material-symbols-outlined {
   display: grid;
   gap: var(--yct-space-2);
   min-width: 0;
-  padding: 0;
+  /* 整卡即热区：内边距把悬停底色扩为完整圆角块，2px 列表间隙保持卡片边界清晰 */
+  padding: var(--yct-space-1) var(--yct-space-2);
   border: 0;
-  border-radius: 0;
+  border-radius: var(--yct-radius-md);
   background: transparent;
   color: var(--yct-color-text-secondary);
+  cursor: pointer;
   text-align: left;
 }
 
 .map-route-option-card.is-selected {
   color: var(--yct-color-text);
+}
+
+.map-route-option-card:focus-visible {
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: -2px;
 }
 
 .map-route-option-summary {
@@ -2819,7 +2992,6 @@ body .material-symbols-outlined {
   border: 0;
   background: transparent;
   color: inherit;
-  cursor: pointer;
   text-align: left;
 }
 
@@ -3337,9 +3509,11 @@ body .material-symbols-outlined {
 }
 
 .map-marker-list {
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
   max-height: min(440px, calc(var(--yct-visible-map-height) - 118px));
-  overflow: auto;
-  padding: var(--yct-space-4);
+  overflow: hidden;
+  padding: 0;
   border: 1px solid var(--yct-color-border);
   border-radius: var(--yct-radius-lg);
   background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
@@ -3348,8 +3522,27 @@ body .material-symbols-outlined {
 }
 
 .map-marker-list.is-collapsed {
+  grid-template-rows: auto;
   overflow: visible;
-  padding: var(--yct-space-2) var(--yct-space-3);
+  padding: var(--yct-space-2);
+}
+
+/* 头部直接贴合面板边缘，滚动与内容留白由结果列表承担，避免负边距和滚动条占位。 */
+.map-marker-list-header {
+  display: grid;
+  gap: var(--yct-space-1);
+  position: relative;
+  z-index: 3;
+  padding-top: var(--yct-space-2);
+  border-bottom: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg) var(--yct-radius-lg) 0 0;
+  background: transparent;
+}
+
+.map-marker-list.is-collapsed .map-marker-list-header {
+  padding-top: 0;
+  border-bottom: 0;
+  border-radius: var(--yct-radius-md);
 }
 
 .map-marker-list-toggle {
@@ -3358,15 +3551,26 @@ body .material-symbols-outlined {
   align-items: center;
   gap: var(--yct-space-2);
   width: 100%;
-  min-height: 34px;
-  padding: 0;
+  min-height: 40px;
+  padding: var(--yct-space-2) var(--yct-space-4);
   border: 0;
+  border-radius: var(--yct-radius-lg);
   background: transparent;
   color: var(--yct-color-text-secondary);
   cursor: pointer;
   font-size: 13px;
   font-weight: 700;
   text-align: left;
+}
+
+/* 折叠态仅保留标题按钮，四角统一采用内缩圆角。 */
+.map-marker-list.is-collapsed .map-marker-list-toggle {
+  padding: var(--yct-space-2);
+  border-radius: var(--yct-radius-md);
+}
+
+.map-marker-list-header > .map-nearby-search-note {
+  margin-inline: var(--yct-space-4);
 }
 
 .map-marker-list-toggle .material-symbols-outlined {
@@ -3381,8 +3585,11 @@ body .material-symbols-outlined {
 
 .map-marker-list-items {
   display: grid;
-  gap: var(--yct-space-2);
-  margin-top: var(--yct-space-2);
+  align-content: start;
+  gap: var(--yct-space-1);
+  min-height: 0;
+  overflow: auto;
+  padding: var(--yct-space-2);
 }
 
 .map-marker-list-empty {
@@ -3442,7 +3649,7 @@ body .material-symbols-outlined {
 
 .map-nearby-scope-switch button {
   min-width: 0;
-  min-height: 28px;
+  min-height: 30px;
   padding: 0 var(--yct-space-2);
   border: 0;
   border-radius: var(--yct-radius-pill);
@@ -3450,10 +3657,12 @@ body .material-symbols-outlined {
   color: var(--yct-color-text-secondary);
   cursor: pointer;
   font: inherit;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .map-nearby-scope-switch button.is-active {
-  background: var(--yct-color-surface-panel);
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary);
   box-shadow: var(--yct-shadow-soft);
 }
@@ -3463,6 +3672,12 @@ body .material-symbols-outlined {
   grid-template-columns: minmax(0, 1fr) 28px;
   align-items: start;
   gap: var(--yct-space-2);
+}
+
+/* 仅调整地图标记头部中的分类栏，详情面板复用的分类筛选保持原布局。 */
+.map-marker-list-header > .map-category-filter {
+  padding: 0 var(--yct-space-4) var(--yct-space-2);
+  background: transparent;
 }
 
 .map-category-strip {
@@ -3508,9 +3723,10 @@ body .material-symbols-outlined {
 }
 
 .map-category-pill.is-active {
-  background: color-mix(in srgb, var(--yct-color-primary) 12%, var(--yct-color-surface-panel));
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary);
   font-weight: 800;
+  box-shadow: var(--yct-shadow-soft);
 }
 
 .map-marker-list-item,
@@ -3524,9 +3740,10 @@ body .material-symbols-outlined {
 .map-marker-list-item {
   grid-template-columns: 24px minmax(0, 1fr) auto;
   width: 100%;
-  min-height: 34px;
-  padding: 0;
+  min-height: 44px;
+  padding: var(--yct-space-2);
   border: 0;
+  border-radius: var(--yct-radius-md);
   background: transparent;
   color: var(--yct-color-text-secondary);
   cursor: pointer;
@@ -3535,7 +3752,7 @@ body .material-symbols-outlined {
 }
 
 .map-marker-list-item:hover {
-  color: var(--yct-color-primary);
+  background: var(--yct-material-hover-state);
 }
 
 .map-marker-list-item.is-active {
@@ -4014,7 +4231,7 @@ img.map-player-list-avatar.is-offline {
 }
 
 .map-poi-detail-tabs button.is-active {
-  background: var(--yct-color-surface-panel);
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary);
   box-shadow: var(--yct-shadow-soft);
   font-weight: 800;
@@ -4023,7 +4240,8 @@ img.map-player-list-avatar.is-offline {
 .map-poi-detail-body {
   display: grid;
   gap: var(--yct-space-3);
-  max-height: min(420px, calc(var(--yct-visible-map-height) - 210px));
+  /* 操作底栏已移至滚动区外成为固定 grid 项，高度预算需扣除底栏与反馈状态行，防止被面板 overflow:hidden 裁切 */
+  max-height: min(390px, calc(var(--yct-visible-map-height) - 250px));
   overflow: auto;
   padding-right: 2px;
 }
@@ -4323,8 +4541,9 @@ img.map-player-list-avatar.is-offline {
   min-height: 26px;
   padding: 0 8px;
   border: 1px solid var(--yct-color-border-subtle);
-  border-radius: var(--yct-radius-sm);
-  background: var(--yct-color-surface);
+  border-radius: var(--yct-radius-pill);
+  /* 一般态与标准 chip 未选中底色对齐（surface-muted）。 */
+  background: var(--yct-color-surface-muted);
   color: var(--yct-color-text-muted);
   font: inherit;
   font-size: 12px;
@@ -4333,8 +4552,10 @@ img.map-player-list-avatar.is-offline {
 }
 
 .map-metro-station-line-tabs button.is-active {
+  /* 选中态：线路色半透明版本（16% 与 chip 选中态/换乘线路 chip 同浓度），
+   * 文字保持线路色 + 线路色描边，强化线路辨识度。 */
   border-color: var(--map-metro-station-line-color);
-  background: color-mix(in srgb, var(--map-metro-station-line-color) 13%, var(--yct-color-surface));
+  background: color-mix(in srgb, var(--map-metro-station-line-color) 16%, transparent);
   color: var(--map-metro-station-line-color);
 }
 
@@ -4353,14 +4574,15 @@ img.map-player-list-avatar.is-offline {
   place-items: center;
   border: 1px solid var(--yct-color-border-subtle);
   border-radius: var(--yct-radius-sm);
-  background: var(--yct-color-surface);
+  /* 与线路切换按钮同口径：一般态标准未选中 chip 底色。 */
+  background: var(--yct-color-surface-muted);
   color: var(--yct-color-text-muted);
   cursor: pointer;
 }
 
 .map-metro-station-direction-tabs button.is-active {
   border-color: var(--map-metro-station-line-color);
-  background: color-mix(in srgb, var(--map-metro-station-line-color) 13%, var(--yct-color-surface));
+  background: color-mix(in srgb, var(--map-metro-station-line-color) 16%, transparent);
   color: var(--map-metro-station-line-color);
 }
 
@@ -4410,7 +4632,14 @@ img.map-player-list-avatar.is-offline {
   font-size: 12px;
 }
 
-.map-metro-station-exit-track,
+.map-metro-station-exit-track {
+  display: grid;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .map-metro-station-platform-direction {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -4418,6 +4647,97 @@ img.map-player-list-avatar.is-offline {
   color: var(--yct-color-text-secondary);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.map-metro-station-exit-summary,
+.map-metro-station-exit-details {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--yct-space-2);
+}
+
+.map-metro-station-exit-summary {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+.map-metro-station-exit-summary:focus-visible {
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: 2px;
+}
+
+.map-metro-station-exit-summary::-webkit-details-marker {
+  display: none;
+}
+
+.map-metro-station-exit-summary::after {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--yct-color-text-muted);
+  content: 'expand_more';
+  font-family: 'Material Symbols Outlined';
+  font-size: 18px;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 600,
+    'GRAD' 0,
+    'opsz' 20;
+}
+
+.map-metro-station-exit-track[open] > .map-metro-station-exit-summary::after {
+  content: 'expand_less';
+}
+
+.map-metro-station-exit-summary .is-left {
+  grid-column: 1;
+}
+
+.map-metro-station-exit-summary .is-right {
+  grid-column: 3;
+}
+
+.map-metro-station-exit-details {
+  align-items: start;
+}
+
+.map-metro-station-exit-group {
+  display: grid;
+  min-width: 0;
+  gap: var(--yct-space-1);
+}
+
+.map-metro-station-exit-direction {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.map-metro-station-exit-list {
+  display: grid;
+  min-width: 0;
+  gap: var(--yct-space-1);
+}
+
+.map-metro-station-exit-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
+  gap: var(--yct-space-1);
+}
+
+.map-metro-station-exit-group.is-right .map-metro-station-exit-row {
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+
+.map-metro-station-exit-code {
+  white-space: nowrap;
+}
+
+.map-metro-station-exit-description {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .map-metro-station-exit-track .is-right,
@@ -4595,7 +4915,7 @@ img.map-player-list-avatar.is-offline {
 }
 
 .map-poi-related-item:hover {
-  color: var(--yct-color-primary);
+  background: var(--yct-material-hover-state);
 }
 
 .map-poi-related-item span:nth-child(2) {
@@ -4732,7 +5052,7 @@ img.map-player-list-avatar.is-offline {
 
 .admin-poi-icon-option.is-selected {
   border-color: var(--yct-color-primary);
-  background: color-mix(in srgb, var(--yct-color-primary) 10%, var(--yct-color-surface-panel));
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--yct-color-primary) 12%, transparent);
 }
@@ -4786,7 +5106,7 @@ img.map-player-list-avatar.is-offline {
 }
 
 .map-line-direction-switch button.is-active {
-  background: color-mix(in srgb, var(--map-line-detail-color) 14%, var(--yct-color-surface-panel));
+  background: color-mix(in srgb, var(--map-line-detail-color) 14%, transparent);
   color: var(--map-line-detail-color);
   box-shadow: var(--yct-shadow-soft);
   font-weight: 800;
@@ -4880,7 +5200,7 @@ img.map-player-list-avatar.is-offline {
 
 .map-poi-action-bar .icon-action-button.is-active {
   --icon-fill: 1;
-  background: color-mix(in srgb, var(--yct-color-primary) 16%, var(--yct-color-surface-muted));
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary);
 }
 
@@ -4932,7 +5252,9 @@ img.map-player-list-avatar.is-offline {
   gap: var(--yct-space-3);
 }
 
-.section-heading h2 {
+/* 标题元素归一：section-heading 内 h2/h3 共用同一套标题规格。
+ * 此前仅覆盖 h2，使用 h3 的弹窗/面板标题会保留浏览器默认 margin，形成顶栏空白。 */
+.section-heading :is(h2, h3) {
   margin: 0;
   font-size: 18px;
 }
@@ -5282,20 +5604,23 @@ img.map-player-list-avatar.is-offline {
   gap: var(--yct-space-2);
 }
 
+/* 状态/标签芯片统一基线：28px 高 + space-2 内边距 + 12px/700 + 语义色 14% 染色。
+ * operation-tag / admin-poi-status-chip / trip-status-chip / ticket-order-status-badge
+ * 共用同一套尺寸与染色强度，避免同类控件出现多套变种。 */
 .operation-tag {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
   padding: 0 var(--yct-space-2);
   border-radius: var(--yct-radius-pill);
-  background: color-mix(in srgb, var(--yct-color-primary) 12%, transparent);
+  background: color-mix(in srgb, var(--yct-color-primary) 14%, transparent);
   color: var(--yct-color-primary);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .operation-tag.is-ok {
-  background: color-mix(in srgb, var(--yct-color-success, #067647) 12%, transparent);
+  background: color-mix(in srgb, var(--yct-color-success, #067647) 14%, transparent);
   color: var(--yct-color-success, #067647);
 }
 
@@ -5305,12 +5630,12 @@ img.map-player-list-avatar.is-offline {
 }
 
 .operation-tag.is-accent {
-  background: color-mix(in srgb, var(--yct-color-primary) 12%, transparent);
+  background: color-mix(in srgb, var(--yct-color-primary) 14%, transparent);
   color: var(--yct-color-primary);
 }
 
 .operation-tag.is-danger {
-  background: color-mix(in srgb, var(--yct-color-danger, #b42318) 12%, transparent);
+  background: color-mix(in srgb, var(--yct-color-danger, #b42318) 14%, transparent);
   color: var(--yct-color-danger, #b42318);
 }
 
@@ -5542,7 +5867,8 @@ img.map-player-list-avatar.is-offline {
     visibility 0s linear var(--yct-motion-duration-standard);
 }
 
-.operation-toc.is-expanded .operation-toc-panel {
+.operation-toc.is-expanded .operation-toc-panel,
+.operation-toc-panel.is-expanded {
   max-height: min(60dvh, 520px);
   overflow: auto;
   padding: var(--yct-space-3);
@@ -5600,7 +5926,6 @@ img.map-player-list-avatar.is-offline {
 
 .operation-toc-panel a:is(:hover, :focus-visible) {
   background: var(--yct-material-hover-state);
-  color: var(--yct-color-primary);
 }
 
 .operation-toc-panel a[aria-current='location'] {
@@ -5766,7 +6091,6 @@ img.map-player-list-avatar.is-offline {
 .material-studio-heading {
   align-items: end;
   padding-bottom: var(--yct-space-3);
-  border-bottom: 1px solid var(--yct-color-border);
 }
 
 .material-studio-heading h1 {
@@ -5796,15 +6120,92 @@ img.map-player-list-avatar.is-offline {
   align-items: start;
 }
 
+/*
+  宽屏（≥960px）：预览与导视牌辅助面板（插入建议 / 宽度警告）共用布局的第三列，
+  预览在上、辅助面板在下。整页始终只有三列，辅助面板不会被挤到第二行，
+  material-studio-layout 的总高度因此只取决于三列中最高的那一列。
+  断点由 JS 的 `isPreviewDialogViewport`（matchMedia `(max-width: 959px)`）驱动：
+  窄屏时轨道容器追加 `.is-stacked` 整体透明（display: contents），
+  此时两个面板都不在轨道内，堆叠顺序与改动前完全一致。
+*/
+.material-studio-preview-track {
+  display: grid;
+  align-content: start;
+  gap: var(--yct-space-3);
+  min-width: 0;
+  /*
+    编辑器列往往比预览轨道长得多。轨道吸顶后，向下滚动编辑元素时预览与
+    辅助面板仍留在视野内，不必回到页面顶部才能看到结果。
+    偏移必须让开 sticky 顶栏（.topbar，z-index 10），否则轨道会被顶栏压住；
+    这里沿用 .service-entry-grid.admin-home-grid 的既有写法。
+    max-height + overflow 是保护：轨道比视口还高时退化为轨道内部滚动，
+    避免吸顶后底部内容被永久裁掉。窄屏 .is-stacked 为 display: contents，
+    不生成盒子，以下定位/溢出属性自动失效。
+  */
+  position: sticky;
+  top: calc(var(--yct-topbar-height) + var(--yct-space-4));
+  max-height: calc(100dvh - var(--yct-topbar-height) - var(--yct-space-8));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.material-studio-preview-track.is-stacked {
+  display: contents;
+}
+
+/*
+  编辑器列是**轨道**而不是卡片：它承载整张表单（模式切换 / 字段网格 / 线路画布编辑器 /
+  导视编辑器），本身不该有卡片式的独立面板外观——否则「卡片里套卡片」的层级会让人
+  误以为它是一个可选模块。侧栏与预览才是独立面板，因此只有它俩保留 surface-panel 材质。
+  这与 `.material-studio-preview-track` 的口径一致：轨道只负责排布与间距，不画背景。
+*/
+.material-studio-editor {
+  display: grid;
+  align-content: start;
+  gap: var(--yct-space-3);
+  min-width: 0;
+}
+
+/*
+  轨道本身透明后，真正需要面板外观的是它的直接子块。这里只给「块级子元素」补
+  **无边框面性卡片**材质：靠 surface-panel 底色成面，不描边（<fieldset> 有 UA 默认
+  描边，显式 border: 0 兜底）。纯文本提示（.material-studio-empty）不补，否则空态
+  会变成一个空盒子。
+
+  `> .material-field` 也在列：它是「服务器公交站 / 项目站点」选择器（内含站点线路列表），
+  是编辑器列在 transit_station 模式下的一个完整控件块。列改成轨道后它没有自己的底色，
+  会直接落在页面底色上（surface #f7f8f8 vs 卡面 #ffffff），必须补成卡片才能保持列内节奏。
+
+  两个**刻意不在列**的选择器：
+
+  1. `> section`（即 `.metro-wayfinding-editor`）：它自己就是一套轨道——内部由工具栏、
+     元素行列表、选中元素编辑区等多个并列的面性卡片组成。给它套卡片材质就会变成
+     「卡片里再套一排卡片」，多出一层无意义的盒子边界。它保留 grid + gap 负责排布，
+     让里面的卡片与 .material-field-grid / .material-canvas-editor 视觉上真正同级。
+
+  2. `.material-mode-switch`：它是 pill 分段控件（自带 gap/padding 3px、radius-pill、
+     surface-muted 底与 is-active 高亮），是一套自洽的控件造型。给它套卡片材质会把
+     内部 3px 间距撑成 16px、胶囊压成圆角矩形。它本身已是「面性」的，无需再补。
+
+  `.material-studio-empty` 同样不补：纯文本空态提示，补了会变成一个空盒子。
+*/
+.material-studio-editor > .material-field,
+.material-studio-editor > .material-field-grid,
+.material-studio-editor > .material-canvas-editor {
+  padding: var(--yct-space-4);
+  border: 0;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
 .material-studio-sidebar,
-.material-studio-editor,
 .material-preview {
   display: grid;
   align-content: start;
   gap: var(--yct-space-3);
   min-width: 0;
   padding: var(--yct-space-4);
-  border: 1px solid var(--yct-color-border);
+  border: 0;
   border-radius: var(--yct-radius-md);
   background: var(--yct-color-surface-panel);
 }
@@ -5832,6 +6233,7 @@ img.map-player-list-avatar.is-offline {
 .material-studio-sidebar > label select,
 .material-field input,
 .material-field select,
+.material-field textarea,
 .material-canvas-editor input {
   width: 100%;
   min-width: 0;
@@ -5847,8 +6249,30 @@ img.map-player-list-avatar.is-offline {
     box-shadow var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
 }
 
+/* 多行文本域：与单行输入共用边框/圆角/底色，高度自适应并可垂直拉伸。 */
+.material-field textarea {
+  min-height: 96px;
+  padding: var(--yct-space-3);
+  resize: vertical;
+}
+
+.material-field :is(input, select, textarea):disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.material-field :is(input, textarea)[readonly] {
+  background: var(--yct-color-surface-muted);
+}
+
+.material-field :is(input, select, textarea)[aria-invalid='true'],
+.material-field :is(input, select, textarea)[aria-invalid='true']:focus-visible {
+  border-color: var(--yct-color-error);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--yct-color-error) 16%, transparent);
+}
+
 .material-studio-sidebar > label select:focus-visible,
-.material-field :is(input, select):focus-visible,
+.material-field :is(input, select, textarea):focus-visible,
 .material-canvas-editor input:focus-visible {
   border-color: var(--yct-color-primary);
   outline: 0;
@@ -5859,7 +6283,19 @@ img.map-player-list-avatar.is-offline {
   display: grid;
   gap: var(--yct-space-2);
   padding-top: var(--yct-space-3);
-  border-top: 1px solid var(--yct-color-border);
+}
+
+.material-template-examples-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  gap: var(--yct-space-2);
+  margin-bottom: var(--yct-space-1);
+  padding: var(--yct-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
 }
 
 .material-template-example-context-fields {
@@ -5916,11 +6352,12 @@ img.map-player-list-avatar.is-offline {
   padding-right: 2px;
 }
 
+/* 与 map-poi-detail-tabs / segmented-control 统一：pill 轨道 + pill 按钮 + 主色选中态。 */
 .material-template-example-category-tabs {
   display: flex;
   gap: 2px;
   padding: 3px;
-  border-radius: 8px;
+  border-radius: var(--yct-radius-pill);
   background: var(--yct-color-surface-muted);
 }
 
@@ -5934,18 +6371,20 @@ img.map-player-list-avatar.is-offline {
   min-height: 34px;
   padding: 0 7px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--yct-radius-pill);
   background: transparent;
   color: var(--yct-color-text-secondary);
   font: inherit;
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .material-template-example-category-tabs button.is-active {
-  background: var(--yct-color-surface-panel);
-  color: var(--yct-color-text);
-  box-shadow: 0 1px 3px rgb(30 45 42 / 12%);
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-primary);
+  box-shadow: var(--yct-shadow-soft);
+  font-weight: 700;
 }
 
 .material-template-example-category-tabs button span {
@@ -6157,7 +6596,7 @@ img.map-player-list-avatar.is-offline {
 .metro-wayfinding-example-preview-element.is-combination {
   display: inline-flex;
   flex: 0 1 auto;
-  gap: 1px;
+  gap: 2px;
   padding: 2px;
   border: 1px solid currentColor;
 }
@@ -6174,7 +6613,6 @@ img.map-player-list-avatar.is-offline {
   display: grid;
   gap: var(--yct-space-2);
   padding-top: var(--yct-space-3);
-  border-top: 1px solid var(--yct-color-border);
 }
 
 .transit-network-source-heading,
@@ -6402,6 +6840,21 @@ img.map-player-list-avatar.is-offline {
   max-height: min(720px, calc(100dvh - 32px));
 }
 
+.transit-network-line-name-hint {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.transit-network-line-name-hint code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--yct-color-text) 8%, transparent);
+  color: var(--yct-color-text-secondary);
+  font-size: 11px;
+}
+
 .transit-network-station-name-dialog {
   width: min(680px, calc(100vw - 32px));
   max-height: min(760px, calc(100dvh - 32px));
@@ -6533,7 +6986,7 @@ img.map-player-list-avatar.is-offline {
 }
 
 .material-mode-switch button {
-  min-height: 40px;
+  min-height: 38px;
   border-color: transparent;
   border-radius: var(--yct-radius-pill);
   background: transparent;
@@ -6542,13 +6995,12 @@ img.map-player-list-avatar.is-offline {
 .material-mode-switch button:not(.is-active):not(:disabled):is(:hover, :focus-visible),
 .material-history-item button:not(.is-primary):not(:disabled):is(:hover, :focus-visible) {
   background: var(--yct-material-hover-state);
-  color: var(--yct-color-text);
 }
 
 .material-mode-switch button.is-active {
-  background: var(--yct-color-surface-panel);
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--yct-color-text) 12%, transparent);
+  box-shadow: var(--yct-shadow-soft);
 }
 
 .material-mode-switch button:focus-visible,
@@ -6563,9 +7015,8 @@ img.map-player-list-avatar.is-offline {
   gap: var(--yct-space-2);
   min-width: 0;
   margin: 0;
-  padding: var(--yct-space-3) 0 0;
+  padding: var(--yct-space-2) 0 0;
   border: 0;
-  border-top: 1px solid var(--yct-color-border);
 }
 
 .material-canvas-editor legend {
@@ -6576,20 +7027,38 @@ img.map-player-list-avatar.is-offline {
 }
 
 .material-canvas-editor .material-checkbox-row,
+.material-canvas-editor .material-radio-row,
 .material-canvas-editor output {
   grid-column: 1 / -1;
 }
 
-.material-checkbox-row {
+/* 表单勾选行统一：复选框行与单选框行共用同一套布局与 18px 勾选框，只是语义类名不同。 */
+.material-checkbox-row,
+.material-radio-row,
+.checkbox-row,
+.radio-row {
   display: flex !important;
   align-items: center;
   gap: var(--yct-space-2);
+  min-width: 0;
 }
 
-.material-checkbox-row input {
-  width: 18px;
-  height: 18px;
+/* checkbox-row 常用于 grid 表单内，需要清掉容器残留的列定义。 */
+.checkbox-row {
+  grid-template-columns: none;
 }
+
+/* 标签侧为可收缩的弹性列：勾选框固定 18px 不参与拉伸，
+ * 剩余空间全部归标签，避免长文案把行撑破或在窄容器里被勾选框挤掉。 */
+.material-checkbox-row > span,
+.material-radio-row > span,
+.checkbox-row > span,
+.radio-row > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 勾选框/单选框的尺寸与配色分别由全局 input[type='checkbox'] / input[type='radio'] 规范统一接管。 */
 
 .material-canvas-editor output {
   color: var(--yct-color-text-secondary);
@@ -6603,6 +7072,39 @@ img.map-player-list-avatar.is-offline {
   gap: var(--yct-space-3);
 }
 
+/*
+  首末班车时间的一组输入（首班 / 末班）。只在项目线网来源下出现——项目存档不带运营时间，
+  服务端解析出来是空串，这两个输入框是唯一的数据入口。
+  它在 .material-field-grid 里占满一整行，内部再按两列摆两个时间输入。
+*/
+.material-service-time-fields {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-3);
+  border: 1px dashed var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+}
+
+.material-service-time-fields > span,
+.material-service-time-fields > small {
+  grid-column: 1 / -1;
+}
+
+.material-service-time-fields > span {
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.material-service-time-fields > small {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
 .metro-wayfinding-editor,
 .metro-wayfinding-toolbar,
 .metro-wayfinding-element,
@@ -6614,12 +7116,115 @@ img.map-player-list-avatar.is-offline {
   gap: var(--yct-space-3);
 }
 
+/*
+  导视编辑器是**轨道**：它只负责把「工具栏 / 元素行列表 / 选中元素编辑区」这几张面性
+  卡片竖直排开，自己不画面板。卡片材质由各个子块自己承担，这样它们与编辑器列里的
+  .material-field-grid、.material-canvas-editor 才是同一级，不会多出一层嵌套盒子。
+  min-width: 0 是 grid 子项的必备项，否则内部横向滚动的元素列表会把整列撑破。
+*/
+.metro-wayfinding-editor {
+  min-width: 0;
+}
+
 .metro-wayfinding-toolbar,
 .metro-wayfinding-color-row,
 .metro-wayfinding-field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--yct-space-3);
+}
+
+/*
+ * 大文字的内联段编辑：占满字段网格整行（它是一排「文本段 + 下角标 chip」，
+ * 挤在半列里会不停换行）。不放 `.material-field`——见组件里的注释。
+ */
+.metro-wayfinding-large-text-field {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: var(--yct-space-1);
+  min-width: 0;
+}
+
+.metro-wayfinding-large-text-field > span {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+}
+
+/* 无边框面性卡片：导视编辑器改回轨道后，工具栏就是列内的一级卡片分区，不再描边。 */
+.metro-wayfinding-toolbar {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  padding: var(--yct-space-3);
+  border: 0;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.metro-wayfinding-toolbar > summary {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 750;
+  list-style: none;
+}
+
+.metro-wayfinding-toolbar-title {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/*
+  标题栏图标：纯视觉提示，暗示折叠面板内还有模板库 / 反转 / 清空三个操作。
+  不可点按；展开后由下方规则隐藏，因为此时真实按钮就在面板里可见了。
+*/
+.metro-wayfinding-toolbar-hints {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  color: var(--yct-color-text-muted);
+  opacity: 0.7;
+  transition: opacity var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.metro-wayfinding-toolbar-hints .material-symbols-outlined {
+  font-size: 17px;
+}
+
+.metro-wayfinding-toolbar[open] > summary .metro-wayfinding-toolbar-hints {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.metro-wayfinding-toolbar > summary,
+.metro-wayfinding-toolbar-content {
+  grid-column: 1 / -1;
+}
+
+.metro-wayfinding-toolbar > summary::-webkit-details-marker {
+  display: none;
+}
+
+.metro-wayfinding-toolbar > summary .metro-wayfinding-toolbar-expander {
+  flex: 0 0 auto;
+  color: var(--yct-color-text-muted);
+  font-size: 20px;
+  transition: transform var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.metro-wayfinding-toolbar[open] > summary .metro-wayfinding-toolbar-expander {
+  transform: rotate(180deg);
+}
+
+.metro-wayfinding-toolbar-content {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding-top: var(--yct-space-3);
 }
 
 .metro-wayfinding-toolbar-actions {
@@ -6721,11 +7326,17 @@ img.map-player-list-avatar.is-offline {
   overflow: hidden;
 }
 
+/* 该弹窗为“头部/工具栏/内部滚动区”三行网格，头部不参与面板滚动；
+ * 用与标准固定头部相同的负 margin 吃满面板 padding，标题栏贴齐面板顶端。 */
 .metro-wayfinding-project-dialog > header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--yct-space-3);
+  margin: calc(-1 * var(--yct-space-5)) calc(-1 * var(--yct-space-5)) 0;
+  padding: var(--yct-space-5) var(--yct-space-5) var(--yct-space-4);
+  background: var(--yct-color-surface-panel);
+  border-bottom: 1px solid var(--yct-color-border);
 }
 
 .metro-wayfinding-project-dialog > header > div {
@@ -6910,6 +7521,23 @@ img.map-player-list-avatar.is-offline {
 
 .metro-wayfinding-import-dialog {
   width: min(720px, 100%);
+  /*
+   * 三行 grid：header / 中间滚动区 / footer。
+   * 中间区独自 overflow:auto，footer 不再 sticky——它始终在 panel 底部，
+   * 内容区滚到底时被遮挡的死区被消除（之前 sticky footer 会盖住最后一行）。
+   * max-height 由外层 .modal-panel 的 min(760, 100dvh-32) 提供。
+   */
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.metro-wayfinding-import-dialog > .metro-wayfinding-import-scroll {
+  display: grid;
+  gap: var(--yct-space-4);
+  min-height: 0;
+  overflow: auto;
+  /* 滚动区自身留底部 4px，避免最后一行与 panel padding 视觉粘连 */
+  padding-block-end: var(--yct-space-1);
 }
 
 .metro-wayfinding-import-dialog > header,
@@ -6946,6 +7574,24 @@ img.map-player-list-avatar.is-offline {
   margin: 0;
   font-size: 20px;
   overflow-wrap: anywhere;
+}
+
+/*
+ * 工程转换预览里的「转换后牌面」：直接复用模板库示例卡片的
+ * `.metro-wayfinding-example-preview*` 视觉（等比缩放的牌面 + 灰底衬底），
+ * 这里只补外层间距与一行说明，不另起一套样式——两处观感必须一致。
+ * 牌面本身按 `widthM × heightM` 的 aspectRatio 缩放，内容随「转换方式」实时变化。
+ */
+.metro-wayfinding-import-sign-preview {
+  display: grid;
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+.metro-wayfinding-import-sign-preview small {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  text-align: center;
 }
 
 .metro-wayfinding-import-facts {
@@ -6991,6 +7637,102 @@ img.map-player-list-avatar.is-offline {
   font-size: 14px;
   font-weight: 700;
   overflow-wrap: anywhere;
+}
+
+/*
+ * 工程转换预览行的图形化预览：
+ * 复用 .metro-wayfinding-example-preview-row 的 flex 排版（横向元素 + gap 2px）。
+ * 刻意不渲染整张牌面的底色/前景色——这里只是「图标 + 文本」的一字排开清单，
+ * 颜色由元素自身的语义色（线路色 / 方框填充）承担，其余交给弹窗中性色。
+ * div / combination 的边框与 divider 线靠 currentColor 自动跟随中性文字色，
+ * 因此无需单独配色就能看见结构边界。
+ */
+.metro-wayfinding-import-row-preview {
+  min-height: 32px;
+  padding: 4px 0;
+  overflow: hidden;
+}
+
+.metro-wayfinding-import-row-preview > .metro-wayfinding-example-preview-element {
+  flex-shrink: 0;
+}
+
+/*
+ * 中性一字排开展示容器：用于工程转换预览弹窗与后台待审核物料面板。
+ * 不复原牌面底色/前景色，但要让 space / divider / combination 边界 / 线路徽标
+ * 这些「结构元素」可见。具体规则：
+ * - is-space 固定/弹性空格：沿用 `metro-wayfinding-element-list` 的标识
+ *   （固定→ space_bar，弹性→ arrow_range），并叠加 opacity 让它比正常文本
+ *   更克制，不抢戏。
+ * - divider 仍是 1px 竖线（继承自 `.is-divider { background: currentColor }`），
+ *   组合框边界靠 `.is-combination { border: 1px solid currentColor }` 自动可见。
+ */
+.metro-wayfinding-element-strip {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  min-height: 32px;
+  min-width: 0;
+  padding: 4px 0;
+  overflow: hidden;
+  gap: 2px;
+  /* 中性化的基准色：对齐 `metro-wayfinding-element-list` 按钮的文本色。
+   * 元素一律 `color: inherit` + 透明背景，只有边框/图标自身着色。 */
+  color: var(--yct-color-text-secondary);
+}
+
+.metro-wayfinding-element-strip > .metro-wayfinding-example-preview-element {
+  flex-shrink: 0;
+}
+
+/*
+ * 固定空格的行内 `flexBasis`（`units * 3` px，最小 8px）优先级高于 CSS。
+ * 直接写 `flex: 0 0 22px` 会被它覆盖、`space_bar` 符号会被父级
+ * `overflow: hidden` 裁掉。用 `min-width` 作尺寸下限（flex item 上 min-width
+ * 会把 hypothetical main size 强制抬到 22px），既保留 unit 比例信息、又保证
+ * 符号完整可见。模板库预览不受影响（不渲染符号且无此规则）。
+ */
+.metro-wayfinding-element-strip .metro-wayfinding-example-preview-element.is-space {
+  min-width: 22px;
+}
+
+/* 弹性空格无行内 flexBasis（由 `flex: 1 1 16px` 基线驱动），这里显式抬到 22px
+ * 给 `arrow_range` 留位。
+ */
+.metro-wayfinding-element-strip .metro-wayfinding-example-preview-element.is-space.is-flex {
+  flex: 1 1 22px;
+}
+
+/* strip 内的空格 material 符号：透明度克制，宽度填满父级。 */
+.metro-wayfinding-element-strip
+  .metro-wayfinding-example-preview-element.is-space
+  .material-symbols-outlined {
+  width: 100%;
+  font-size: 16px;
+  opacity: 0.55;
+  font-variation-settings:
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
+}
+
+/*
+ * 线路徽标中性化后背景是透明的，而基础样式写死了 `color: #fff`——
+ * 白字在浅底上完全看不见。这里覆盖为继承的文本色，并补一圈 currentColor
+ * 边框，保留「这是个圆形徽标」的可辨识度。
+ */
+.metro-wayfinding-element-strip .metro-wayfinding-example-preview-element.is-text .is-line {
+  border: 1px solid currentColor;
+  color: inherit;
+}
+
+/*
+ * 分割线：竖线本体靠 `.is-divider { background: currentColor }`，
+ * 组件刻意不传行内 `background-color`（否则会把它染成透明而看不见）。
+ * 中性色下 currentColor 跟随上面的 text-secondary，自然可见。
+ */
+.metro-wayfinding-element-strip .metro-wayfinding-example-preview-element.is-divider {
+  opacity: 0.72;
 }
 
 .metro-wayfinding-import-row-actions,
@@ -7063,7 +7805,6 @@ img.map-player-list-avatar.is-offline {
   }
 }
 
-.metro-wayfinding-text-autocomplete,
 .material-field-text-autocomplete {
   position: relative;
   min-width: 0;
@@ -7071,7 +7812,6 @@ img.map-player-list-avatar.is-offline {
   background: var(--yct-color-surface-panel);
 }
 
-.metro-wayfinding-text-autocomplete-ghost,
 .material-field-text-autocomplete-ghost {
   position: absolute;
   inset: 0;
@@ -7087,23 +7827,15 @@ img.map-player-list-avatar.is-offline {
   white-space: pre;
 }
 
-.metro-wayfinding-text-autocomplete-ghost strong,
 .material-field-text-autocomplete-ghost strong {
   color: var(--yct-color-text-muted);
   font-weight: 500;
 }
 
-.metro-wayfinding-text-autocomplete > input,
 .material-field-text-autocomplete > input {
   position: relative;
   z-index: 1;
   background: transparent;
-}
-
-.metro-wayfinding-main-segments > div:first-child > span {
-  color: var(--yct-color-text-muted);
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .metro-wayfinding-inline-actions {
@@ -7147,13 +7879,22 @@ img.map-player-list-avatar.is-offline {
   font-size: 18px;
 }
 
+/*
+  无边框面性卡片：靠 surface-panel 底色成面，不描边（<fieldset> 的 UA 默认描边在此显式清零）。
+
+  注意下面的 **button 仍保留 1px 边框**：按钮底色与卡片同为 surface-panel，一旦去掉描边
+  按钮就会完全融进背景、丢失可点击性。卡片的「无边框」说的是载体，不是内部控件——
+  建议类按钮需要描边来与卡面分离，不要顺手一起清掉。
+*/
 .metro-wayfinding-text-suggestions {
   display: grid;
   min-width: 0;
   gap: var(--yct-space-2);
   margin: 0;
-  padding: 0;
+  padding: var(--yct-space-3);
   border: 0;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
 }
 
 .metro-wayfinding-text-suggestions legend {
@@ -7229,14 +7970,25 @@ img.map-player-list-avatar.is-offline {
   font-weight: 500;
 }
 
+/*
+  无边框面性卡片。警告语义靠**底色**传达而不是描边：这里沿用 .admin-poi-conflict-list 的
+  口径，用 oklab 把警告色混进 --yct-color-surface-panel（而不是混进 transparent）。
+  混 transparent 得到的是半透明薄雾，叠在预览面板上会透出下层、边缘发脏；
+  混 surface-panel 才是真正的「面」——不透明、自成一块，去掉描边也不会失去边界感。
+*/
 .metro-wayfinding-width-warning {
   display: flex;
   align-items: flex-start;
   gap: var(--yct-space-2);
   margin: 0;
-  padding: var(--yct-space-2) var(--yct-space-3);
-  border-block: 1px solid color-mix(in srgb, var(--yct-color-warning, #b87900) 28%, transparent);
-  background: color-mix(in srgb, var(--yct-color-warning, #b87900) 10%, transparent);
+  padding: var(--yct-space-3);
+  border: 0;
+  border-radius: var(--yct-radius-md);
+  background: color-mix(
+    in oklab,
+    var(--yct-color-warning, #b87900) 10%,
+    var(--yct-color-surface-panel)
+  );
   color: var(--yct-color-warning-strong, #8a5a00);
   font-size: 12px;
   line-height: 1.5;
@@ -7249,6 +8001,21 @@ img.map-player-list-avatar.is-offline {
 
 .metro-wayfinding-text-suggestions .metro-wayfinding-facility-asset {
   font-size: 18px;
+}
+
+/*
+  宽屏下挂载在预览面板下方的辅助面板容器（插入建议 + 宽度警告）。
+  视觉上沿用普通卡片，与上方的 preview 面板保持一致的表面语言。
+*/
+.metro-wayfinding-inspector {
+  display: grid;
+  align-content: start;
+  gap: var(--yct-space-3);
+  min-width: 0;
+}
+
+.metro-wayfinding-inspector:empty {
+  display: none;
 }
 
 .metro-wayfinding-row-lists {
@@ -7364,8 +8131,8 @@ img.map-player-list-avatar.is-offline {
 }
 
 .metro-wayfinding-element-list button.is-active {
-  background: var(--yct-color-surface-panel);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--yct-color-text) 14%, transparent);
+  background: var(--yct-color-surface-selected);
+  box-shadow: var(--yct-shadow-sm);
   color: var(--yct-color-primary);
 }
 
@@ -7403,19 +8170,28 @@ img.map-player-list-avatar.is-offline {
   white-space: nowrap;
 }
 
+/*
+  无边框面性卡片，用**通用卡片底色** surface-panel（与 .material-field-grid、
+  .material-canvas-editor、工具栏同级）。
+
+  这里不需要降档到 surface-muted：它的父级 `.metro-wayfinding-editor` 已经是透明轨道，
+  不存在「两级同色糊在一起」的问题。它内部的字段网格 / 文本行编辑器 / 元素块全是透明的，
+  由这一张卡片统一兜底成面。
+*/
 .metro-wayfinding-element-panel {
   min-width: 0;
-  border-top: 1px solid var(--yct-color-border);
+  padding: var(--yct-space-3);
+  border: 0;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
 }
 
 .metro-wayfinding-element {
-  padding-block: var(--yct-space-3);
-  border-bottom: 1px solid var(--yct-color-border);
+  padding-block: 0;
 }
 
 .metro-wayfinding-element > header,
-.metro-wayfinding-text-row-item > header,
-.metro-wayfinding-main-segments > div:first-child {
+.metro-wayfinding-text-row-item > header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -7423,8 +8199,7 @@ img.map-player-list-avatar.is-offline {
 }
 
 .metro-wayfinding-element > header strong,
-.metro-wayfinding-text-row-item > header > strong,
-.metro-wayfinding-main-segments > div:first-child strong {
+.metro-wayfinding-text-row-item > header > strong {
   color: var(--yct-color-text);
   font-size: 14px;
 }
@@ -7485,8 +8260,6 @@ img.map-player-list-avatar.is-offline {
 
 .metro-wayfinding-main-segments {
   min-width: 0;
-  padding-left: var(--yct-space-3);
-  border-left: 2px solid var(--yct-color-border);
 }
 
 .metro-wayfinding-main-segment-control {
@@ -7497,57 +8270,65 @@ img.map-player-list-avatar.is-offline {
   gap: 3px;
 }
 
-.metro-wayfinding-main-segment-tabs {
+/* ── 主文本内联编辑：文本段 + chip ─────────────────────────────── */
+
+.metro-wayfinding-main-segments-input {
   display: flex;
-  min-width: 0;
-  overflow-x: auto;
-  gap: var(--yct-space-2);
-  margin: 0;
-  padding: 1px;
-  list-style: none;
-  scrollbar-width: thin;
-}
-
-.metro-wayfinding-main-segment-tabs > li {
-  flex: 0 0 auto;
-  min-width: 0;
-}
-
-.metro-wayfinding-main-segment-tabs button {
-  display: inline-grid;
-  grid-template-columns: 18px minmax(0, auto);
+  flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
   min-width: 0;
-  max-width: 176px;
-  min-height: 34px;
-  padding: 0 10px;
+  min-height: 38px;
+  gap: 4px;
+  padding: 3px 8px;
   border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-pill);
+  border-radius: var(--yct-radius-md);
   background: var(--yct-color-surface-panel);
-  color: var(--yct-color-text-secondary);
-  text-align: left;
 }
 
-.metro-wayfinding-main-segment-tabs button:is(:hover, :focus-visible) {
-  border-color: var(--yct-color-border);
-  background: var(--yct-material-hover-state);
+.metro-wayfinding-main-segments-input:focus-within {
+  border-color: var(--yct-color-primary);
+  box-shadow: var(--yct-shadow-soft);
+}
+
+/* 文本段：看起来像普通行内文本，宽度随内容自适应。
+ * 用 input 的 size 属性驱动宽度（`width: auto` + 行内元素的 size 换算），
+ * 不要写死 ch/em——写死会把中文 / 长文本截断。 */
+.metro-wayfinding-main-segments-text {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 1ch;
+  max-width: 100%;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--yct-color-text);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  field-sizing: content;
 }
 
-.metro-wayfinding-main-segment-tabs button.is-active {
-  border-color: var(--yct-color-border);
-  background: var(--yct-color-surface-panel);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--yct-color-text) 12%, transparent);
-  color: var(--yct-color-primary);
+.metro-wayfinding-main-segments-text:focus {
+  outline: none;
 }
 
-.metro-wayfinding-main-segment-tabs button.is-boxed {
-  border-color: var(--yct-color-text-secondary);
-  border-radius: 2px;
+/* chip：线路号 / 方框文本，整体参与光标移动 */
+.metro-wayfinding-main-segments-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 26px;
+  gap: 2px;
+  padding: 0 2px 0 4px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
 }
 
-.metro-wayfinding-main-segment-tabs button.is-line {
+.metro-wayfinding-main-segments-chip.is-line {
   border-color: color-mix(
     in srgb,
     var(--metro-wayfinding-segment-color) 72%,
@@ -7555,160 +8336,269 @@ img.map-player-list-avatar.is-offline {
   );
   background: color-mix(
     in srgb,
-    var(--metro-wayfinding-segment-color) 12%,
+    var(--metro-wayfinding-segment-color) 14%,
     var(--yct-color-surface-panel)
   );
 }
 
-.metro-wayfinding-main-segment-tabs button.is-line.is-active {
-  border-color: var(--metro-wayfinding-segment-color);
+.metro-wayfinding-main-segments-chip.is-boxed {
+  border-color: var(--yct-color-text-secondary);
+  border-radius: 2px;
   background: var(--yct-color-surface-panel);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--yct-color-text) 12%, transparent);
 }
 
-.metro-wayfinding-main-segment-tabs button.is-line .material-symbols-outlined {
+/*
+ * 大文本内联编辑器里的**下角标** chip：沿用主文本 chip 的外壳（同一套手感），
+ * 只靠 `is-suffix` 区分语义——虚线框表示「这是角标不是正文」，`align-self: end`
+ * 让它略微下沉，呼应牌面上角标比正文小的观感。
+ */
+.metro-wayfinding-main-segments-chip.is-suffix {
+  align-self: end;
+  border-style: dashed;
+  background: transparent;
+}
+
+.metro-wayfinding-main-segments-chip.is-suffix .metro-wayfinding-main-segments-chip-input {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metro-wayfinding-main-segments-chip-icon,
+.metro-wayfinding-main-segments-chip-remove {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--yct-radius-sm);
+  background: transparent;
+  color: var(--yct-color-text-muted);
+}
+
+.metro-wayfinding-main-segments-chip.is-line .metro-wayfinding-main-segments-chip-icon {
   color: var(--metro-wayfinding-segment-color);
 }
 
-.metro-wayfinding-main-segment-tabs .material-symbols-outlined {
-  overflow: hidden;
-  font-size: 20px;
+.metro-wayfinding-main-segments-chip-icon:not(:disabled):is(:hover, :focus-visible),
+.metro-wayfinding-main-segments-chip-remove:not(:disabled):is(:hover, :focus-visible) {
+  background: var(--yct-material-hover-state);
+  color: var(--yct-color-text);
 }
 
-.metro-wayfinding-main-segment-tab-summary {
-  min-width: 0;
-  overflow: hidden;
-  font-size: 12px;
+.metro-wayfinding-main-segments-chip-icon:disabled,
+.metro-wayfinding-main-segments-chip-remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.metro-wayfinding-main-segments-chip-icon .material-symbols-outlined,
+.metro-wayfinding-main-segments-chip-remove .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.metro-wayfinding-main-segments-chip-input {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 1ch;
+  max-width: 100%;
+  height: 22px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--yct-color-text);
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0;
-  text-overflow: ellipsis;
+  field-sizing: content;
+}
+
+.metro-wayfinding-main-segments-chip-input:focus {
+  outline: none;
+}
+
+.metro-wayfinding-main-segments-chip-input::placeholder {
+  color: var(--yct-color-text-muted);
+  font-weight: 500;
+}
+
+/* 线路色色板 */
+.metro-wayfinding-main-segments-chip-palette {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  width: max-content;
+  max-width: 260px;
+  gap: 6px;
+  padding: var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  box-shadow: var(--yct-shadow-soft);
+}
+
+/* 色板项：色点 + 线路编号，点一下即把编号写进 chip */
+.metro-wayfinding-main-segments-chip-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 2px 8px 2px 4px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+  font-size: 12px;
+  font-weight: 650;
   white-space: nowrap;
 }
 
-.metro-wayfinding-main-segment-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-pill);
+.metro-wayfinding-main-segments-chip-swatch-color {
+  flex: 0 0 auto;
+  width: 14px;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--metro-wayfinding-swatch-color);
+}
+
+.metro-wayfinding-main-segments-chip-swatch-label {
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.metro-wayfinding-main-segments-chip-swatch[aria-selected='true'] {
+  border-color: var(--yct-color-text);
   background: var(--yct-color-surface-muted);
 }
 
-.metro-wayfinding-main-segment-toolbar > button {
-  min-height: 38px;
-  padding: 0 var(--yct-space-2);
-  border: 0;
-  border-radius: var(--yct-radius-pill);
-  background: transparent;
+.metro-wayfinding-main-segments-chip-swatch:not(:disabled):is(:hover, :focus-visible) {
+  border-color: var(--yct-color-primary);
   color: var(--yct-color-primary);
 }
 
-.metro-wayfinding-main-segment-toolbar > button.icon-button {
-  width: 38px;
-  min-width: 38px;
-  padding: 0;
+.metro-wayfinding-main-segments-chip-swatch:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
-.metro-wayfinding-main-segment-toolbar > button:last-child {
-  display: grid;
-  grid-template-columns: 18px auto;
+/* 文本段 + 光标处装饰（幽灵建议、添加按钮）拼成的行内整体。
+ * 作为一个 flex item 参与外层换行，内部用 inline-flex 让装饰紧跟光标。 */
+.metro-wayfinding-main-segments-text-flow {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  gap: 2px;
+}
+
+/* 幽灵建议：渲染在光标之后，点击或按 Tab 采纳。
+ * 用虚线底边 + 弱化字色区分「未落盘的补全」与真实输入。 */
+.metro-wayfinding-main-segments-suggestion {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  max-width: 40ch;
+  height: 28px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 1px dashed var(--yct-color-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.metro-wayfinding-main-segments-suggestion:not(:disabled):is(:hover, :focus-visible) {
+  border-bottom-color: var(--yct-color-primary);
+  color: var(--yct-color-primary);
+}
+
+.metro-wayfinding-main-segments-suggestion:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* 光标处的「添加线路号 / 添加方框」按钮组：贴在光标之后，随光标移动。 */
+.metro-wayfinding-main-segments-caret-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 4px;
 }
 
-.metro-wayfinding-main-segment-toolbar > button:is(:hover, :focus-visible) {
-  background: var(--yct-material-hover-state);
-}
-
-.metro-wayfinding-main-segment-toolbar > button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.modal-backdrop.metro-wayfinding-segment-dialog-backdrop {
-  z-index: 120;
-}
-
-.modal-panel.metro-wayfinding-segment-dialog {
-  width: min(520px, 100%);
-  gap: var(--yct-space-3);
-}
-
-.metro-wayfinding-segment-dialog > header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--yct-space-3);
-}
-
-.metro-wayfinding-segment-dialog > header > div {
-  display: grid;
-  min-width: 0;
+.metro-wayfinding-main-segments-caret-actions > button {
+  display: inline-flex;
+  align-items: center;
   gap: 2px;
-}
-
-.metro-wayfinding-segment-dialog h2 {
-  margin: 0;
-  color: var(--yct-color-text);
-  font-size: 18px;
-  line-height: 1.3;
-}
-
-.metro-wayfinding-segment-dialog > header span:not(.material-symbols-outlined) {
+  min-height: 26px;
+  padding: 0 6px;
+  border: 1px dashed var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: transparent;
   color: var(--yct-color-text-muted);
   font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.metro-wayfinding-segment-dialog > footer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--yct-space-2);
-  padding-top: var(--yct-space-2);
-  border-top: 1px solid var(--yct-color-border);
-}
-
-.metro-wayfinding-segment-dialog > footer > button {
-  display: inline-flex;
-  min-height: 40px;
-  align-items: center;
-  justify-content: center;
-  gap: var(--yct-space-1);
-  padding: 0 var(--yct-space-3);
-  border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-pill);
-  background: var(--yct-color-surface-panel);
-  color: var(--yct-color-text-secondary);
-  cursor: pointer;
-  font-weight: 700;
-  transition:
-    border-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
-    background-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
-    color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
-}
-
-.metro-wayfinding-segment-dialog > footer > button:not(.is-primary):is(:hover, :focus-visible) {
-  border-color: var(--yct-color-border);
-  background: var(--yct-material-hover-state);
-  color: var(--yct-color-text);
-}
-
-.metro-wayfinding-segment-dialog > footer > button.is-primary {
+.metro-wayfinding-main-segments-caret-actions > button:not(:disabled):is(:hover, :focus-visible) {
   border-color: var(--yct-color-primary);
-  background: var(--yct-color-primary);
-  color: #fff;
+  border-style: solid;
+  background: var(--yct-material-hover-state);
+  color: var(--yct-color-primary);
 }
 
-.metro-wayfinding-segment-dialog > footer > .metro-wayfinding-segment-dialog-delete {
-  margin-right: auto;
-  border-color: color-mix(in srgb, var(--yct-color-error) 36%, var(--yct-color-border));
-  color: var(--yct-color-error);
-}
-
-.metro-wayfinding-segment-dialog > footer > button:disabled {
+.metro-wayfinding-main-segments-caret-actions > button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.metro-wayfinding-main-segments-caret-actions .material-symbols-outlined {
+  font-size: 15px;
+}
+
+/* 两个按钮用不同图标样式区分功能：线路号=彩色线路图标，方框=空心方框图标 */
+.metro-wayfinding-main-segments-insert-line .material-symbols-outlined {
+  color: var(--yct-color-primary);
+  font-variation-settings:
+    'FILL' 1,
+    'wght' 500,
+    'GRAD' 0,
+    'opsz' 20;
+}
+
+.metro-wayfinding-main-segments-insert-boxed .material-symbols-outlined {
+  color: var(--yct-color-text-secondary);
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 20;
+}
+
+/* 大文本「添加下角标」按钮：与方框按钮同一次级色，不抢主色。 */
+.metro-wayfinding-main-segments-insert-suffix .material-symbols-outlined {
+  color: var(--yct-color-text-secondary);
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 20;
 }
 
 .metro-wayfinding-combination-edit-button {
@@ -7839,6 +8729,77 @@ img.map-player-list-avatar.is-offline {
   border-radius: var(--yct-radius-md);
 }
 
+/* 组合框「线路编号」内容模板已移到「插入建议」区，弹窗内只留一行指引文字。 */
+.metro-wayfinding-combination-template-hint {
+  margin: 0;
+}
+
+/* 「插入建议」里的线路编号模板：跨整行展示，内含线路下拉与插入按钮。 */
+.metro-wayfinding-line-template-suggestion {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: var(--yct-space-2);
+  align-items: start;
+  min-height: 50px;
+  padding: var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-secondary);
+  grid-column: 1 / -1;
+}
+
+.metro-wayfinding-line-template-suggestion > .material-symbols-outlined {
+  font-size: 18px;
+  line-height: 50px;
+}
+
+.metro-wayfinding-line-template-suggestion-body {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.metro-wayfinding-line-template-suggestion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+  margin-top: var(--yct-space-1);
+}
+
+.metro-wayfinding-line-template-suggestion-actions > select {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.metro-wayfinding-line-template-suggestion-actions > button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-1);
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-primary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.metro-wayfinding-line-template-suggestion-actions > button:hover:not(:disabled) {
+  background: var(--yct-material-hover-state);
+}
+
+.metro-wayfinding-line-template-suggestion-actions > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.metro-wayfinding-line-template-suggestion-actions .material-symbols-outlined {
+  font-size: 18px;
+}
+
 .metro-wayfinding-combination-child-editor {
   display: grid;
   min-width: 0;
@@ -7896,10 +8857,6 @@ img.map-player-list-avatar.is-offline {
   font-weight: 650;
 }
 
-.metro-wayfinding-toggle input {
-  accent-color: var(--yct-color-primary);
-}
-
 .metro-wayfinding-segmented-control,
 .metro-wayfinding-icon-picker {
   display: grid;
@@ -7924,9 +8881,8 @@ img.map-player-list-avatar.is-offline {
 }
 
 .metro-wayfinding-segmented-control > div {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(40px, 1fr);
+  display: flex;
+  align-items: stretch;
   min-width: 0;
   padding: 3px;
   gap: 2px;
@@ -7964,9 +8920,39 @@ img.map-player-list-avatar.is-offline {
 
 .metro-wayfinding-segmented-control button.is-active,
 .metro-wayfinding-icon-picker button.is-active {
-  background: var(--yct-color-surface-panel);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--yct-color-text) 14%, transparent);
+  background: var(--yct-color-surface-selected);
+  box-shadow: var(--yct-shadow-soft);
   color: var(--yct-color-primary);
+}
+
+.metro-wayfinding-segmented-control button {
+  flex: 1 1 0;
+}
+
+/*
+  紧凑模式下未选中的按钮只剩图标，允许它们被压缩（48px → 图标实际宽度约 36px），
+  仍放不下才换行兜底——宁可多一行，也不要让选项溢出到卡片外面。
+  min-width 用 max-content 而不是 0：标签此时是 display: none，max-content 正好等于
+  「图标 + 内边距」，是这条压缩路径的自然下限；写 0 会让图标溢出按钮。
+*/
+.metro-wayfinding-segmented-control.is-compact > div {
+  flex-wrap: wrap;
+  /*
+    换行后整张容器变成矩形，胶囊形（radius-pill）会被裁成奇怪的椭圆——
+    退回 md 圆角保持正常的"面性容器"观感；按钮本身仍保留 pill 形，
+    不影响单选项内部的视觉识别。
+  */
+  border-radius: var(--yct-radius-md);
+}
+
+.metro-wayfinding-segmented-control.is-compact button:not(.is-active) {
+  flex: 0 1 clamp(48px, 10%, 72px);
+  min-width: max-content;
+}
+
+.metro-wayfinding-segmented-control.is-compact button.is-active {
+  flex: 1 1 auto;
+  min-width: max-content;
 }
 
 .metro-wayfinding-segmented-control button:disabled,
@@ -7981,11 +8967,31 @@ img.map-player-list-avatar.is-offline {
   font-size: 20px;
 }
 
-.metro-wayfinding-segmented-control button > span:last-child:not(.material-symbols-outlined) {
+.metro-wayfinding-segmented-control button > .metro-wayfinding-segmented-control-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.metro-wayfinding-segmented-control.is-compact
+  button:not(.is-active)
+  > .metro-wayfinding-segmented-control-label {
+  display: none !important;
+}
+
+.metro-wayfinding-segmented-control.is-measuring button {
+  flex: 0 0 auto !important;
+  min-width: max-content;
+}
+
+.metro-wayfinding-segmented-control.is-measuring
+  button
+  > .metro-wayfinding-segmented-control-label {
+  display: inline !important;
+  min-width: max-content;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .metro-wayfinding-icon-picker > div {
@@ -8037,7 +9043,7 @@ img.map-player-list-avatar.is-offline {
   color: #fff;
 }
 
-.material-history-item button.is-primary:is(:hover, :focus-visible) {
+.material-history-item button.is-primary:not(:disabled):is(:hover, :focus-visible) {
   border-color: var(--yct-color-primary-hover);
   background: var(--yct-color-primary-hover);
 }
@@ -8133,6 +9139,29 @@ img.map-player-list-avatar.is-offline {
   gap: var(--yct-space-3);
   padding-top: var(--yct-space-4);
   border-top: 1px solid var(--yct-color-border);
+}
+
+.material-history-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(720px, calc(100dvh - 32px));
+  overflow: auto;
+}
+
+.material-history-dialog .material-history-heading {
+  padding-bottom: var(--yct-space-3);
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+.material-history-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.material-history-heading-actions .icon-button {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
 }
 
 .material-history-heading {
@@ -8247,6 +9276,24 @@ img.map-player-list-avatar.is-offline {
   line-height: 1.5;
 }
 
+/* 后台物料审核里地铁导视牌的图形预览容器：每行一个 strip，标题 + 元素一字排开。 */
+.admin-material-draft-metro-preview {
+  display: grid;
+  gap: var(--yct-space-2);
+  margin-block-end: var(--yct-space-2);
+}
+
+.admin-material-draft-metro-preview > div {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-material-draft-metro-preview > div > span {
+  color: var(--yct-color-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .admin-material-template-heading,
 .admin-material-review-heading {
   display: flex;
@@ -8312,7 +9359,67 @@ img.map-player-list-avatar.is-offline {
   padding: 0;
 }
 
-@media (max-width: 720px) {
+/*
+  960–1080px 是编辑器列最窄的一档：960px 起预览列重新回到 `.material-studio-layout`
+  的第三列（240–340px），编辑器列被两侧夹到约 448–568px；而 ≤959px 时预览退化成弹窗、
+  编辑器列反而更宽。这一档里颜色行再排两列会横向溢出，因此整行与控件内部
+  （下拉 + 色块）都改成纵向排列。
+  min-width: 0 是配套项：grid 子项默认 min-width: auto，会被 select 的 min-content
+  （最长 option 文本）撑破，光改列数挡不住。
+*/
+@media (min-width: 960px) and (max-width: 1080px) {
+  .metro-wayfinding-color-row,
+  .metro-wayfinding-color-control > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .metro-wayfinding-color-row,
+  .metro-wayfinding-color-control {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .material-studio-topbar-actions {
+    position: fixed;
+    z-index: 30;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    display: flex;
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    padding: 4px;
+    border: 1px solid var(--yct-color-border);
+    border-radius: var(--yct-radius-pill);
+    background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
+    box-shadow: var(--yct-shadow-floating);
+  }
+
+  .material-studio-topbar-actions .material-studio-review-badge {
+    display: none;
+  }
+
+  .material-studio-topbar-actions .icon-button {
+    flex: 0 0 40px;
+  }
+
+  :root[data-material-mode='advanced'] .material-studio-topbar-actions {
+    border-color: var(--yct-material-floating-border);
+    background: color-mix(
+      in srgb,
+      var(--yct-color-surface-panel) var(--yct-material-action-surface),
+      transparent
+    );
+    -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+      contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+      saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+    backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+      contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+      saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  }
+
   .material-studio {
     width: 100%;
     padding-block: 0 var(--yct-space-4);
@@ -8345,7 +9452,6 @@ img.map-player-list-avatar.is-offline {
     gap: var(--yct-space-2);
     min-width: 0;
     padding-top: var(--yct-space-3);
-    border-top: 1px solid var(--yct-color-border);
   }
 
   .material-sidebar-disclosure > summary {
@@ -8419,10 +9525,6 @@ img.map-player-list-avatar.is-offline {
 
   .metro-wayfinding-main-segment-control {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .metro-wayfinding-main-segment-toolbar {
-    justify-content: flex-end;
   }
 
   .admin-material-template,
@@ -8976,7 +10078,7 @@ div.telegraph-floating-toolbar .telegraph-floating-actions {
 div.telegraph-floating-toolbar .secondary-action-button {
   min-height: 38px;
 }
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   div.telegraph-floating-toolbar {
     width: min(calc(100vw - 20px), 560px);
     justify-content: center;
@@ -9079,7 +10181,7 @@ div.telegraph-floating-toolbar .telegraph-floating-actions {
 div.telegraph-floating-toolbar .secondary-action-button {
   min-height: 38px;
 }
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   div.telegraph-floating-toolbar {
     width: min(calc(100vw - 20px), 560px);
     justify-content: center;
@@ -9643,25 +10745,27 @@ div.telegraph-output-scene.is-packing {
   justify-content: center;
   gap: 6px;
 }
+/* 与分段控件统一：3px 轨道内边距、34px 按钮、12px 字号、主色选中态 + 共享软阴影。 */
 .telegraph-paper-view-toggle {
-  padding: 2px;
+  padding: 3px;
   border-radius: var(--yct-radius-pill);
   background: var(--yct-color-surface-muted);
 }
 .telegraph-paper-view-toggle button {
-  min-height: 32px;
-  padding: 0 10px;
+  min-height: 34px;
+  padding: 0 var(--yct-space-2);
   border: 0;
   border-radius: var(--yct-radius-pill);
   background: transparent;
-  color: var(--yct-color-text-muted);
+  color: var(--yct-color-text-secondary);
   font: inherit;
+  font-size: 12px;
   cursor: pointer;
 }
 .telegraph-paper-view-toggle button.is-active {
-  background: var(--yct-color-surface-panel);
-  color: var(--yct-color-text);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-primary);
+  box-shadow: var(--yct-shadow-soft);
 }
 
 .telegraph-floating-actions .secondary-action-button {
@@ -10569,7 +11673,6 @@ div.telegraph-output-scene.is-packing {
 .telegraph-history-row > button:first-child:hover,
 .telegraph-history-row > button:first-child:focus-visible {
   background: var(--yct-material-hover-state);
-  color: var(--yct-color-primary);
 }
 .telegraph-history-row strong {
   color: inherit;
@@ -11227,7 +12330,7 @@ div.telegraph-output-scene.is-packing {
   gap: var(--yct-space-2);
   padding: 0 var(--yct-space-3);
   border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-md);
+  border-radius: var(--yct-radius-pill);
   background: var(--yct-color-surface);
 }
 
@@ -11289,7 +12392,7 @@ div.telegraph-output-scene.is-packing {
   color: var(--yct-color-danger, #b42318);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .admin-membership-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }
@@ -11355,6 +12458,7 @@ div.telegraph-output-scene.is-packing {
 
   .secondary-desktop-navigation {
     display: block;
+    align-self: stretch;
     min-width: 0;
   }
 
@@ -11380,11 +12484,16 @@ div.telegraph-output-scene.is-packing {
 
   .service-entry-grid.admin-home-grid {
     grid-area: admin-nav;
+    align-self: start;
     position: sticky;
     top: calc(var(--yct-topbar-height) + var(--yct-space-4));
+    max-height: calc(100dvh - var(--yct-topbar-height) - var(--yct-space-8));
     grid-template-columns: minmax(0, 1fr);
     gap: var(--yct-space-1);
     padding: var(--yct-space-3);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
     border: 0;
     background: transparent;
     box-shadow: none;
@@ -11585,7 +12694,7 @@ div.telegraph-output-scene.is-packing {
 
 .admin-editor input,
 .admin-editor select {
-  height: 40px;
+  height: 44px;
   padding: 0 var(--yct-space-3);
 }
 
@@ -11643,18 +12752,6 @@ div.telegraph-output-scene.is-packing {
   color: var(--yct-color-text-secondary);
   font-size: 13px;
   line-height: 1.5;
-}
-
-.checkbox-row {
-  display: flex !important;
-  grid-template-columns: none;
-  align-items: center;
-  gap: var(--yct-space-2);
-}
-
-.checkbox-row input {
-  width: 18px;
-  height: 18px;
 }
 
 .admin-content-list {
@@ -11737,8 +12834,12 @@ div.telegraph-output-scene.is-packing {
 }
 
 .admin-content-select input {
-  width: 18px;
-  height: 18px;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
 }
 
 .admin-audit-event-item {
@@ -11784,7 +12885,7 @@ div.telegraph-output-scene.is-packing {
 }
 
 .admin-content-empty button {
-  min-height: 36px;
+  min-height: 38px;
   padding: 0 var(--yct-space-3);
   border: 1px solid var(--yct-color-border);
   border-radius: var(--yct-radius-pill);
@@ -11864,7 +12965,7 @@ div.telegraph-output-scene.is-packing {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 26px;
+  min-height: 28px;
   padding: 0 var(--yct-space-2);
   border-radius: var(--yct-radius-pill);
   background: var(--yct-color-surface-panel);
@@ -11875,22 +12976,22 @@ div.telegraph-output-scene.is-packing {
 }
 
 .admin-poi-status-chip.is-pending_review {
-  background: color-mix(in oklab, var(--yct-color-warning, #b87900) 18%, transparent);
+  background: color-mix(in srgb, var(--yct-color-warning, #b87900) 14%, transparent);
   color: var(--yct-color-warning-strong, #8a5a00);
 }
 
 .admin-poi-status-chip.is-approved {
-  background: color-mix(in oklab, var(--yct-color-primary) 16%, transparent);
+  background: color-mix(in srgb, var(--yct-color-primary) 14%, transparent);
   color: var(--yct-color-primary);
 }
 
 .admin-poi-status-chip.is-published {
-  background: color-mix(in oklab, var(--yct-color-success, #168a5d) 16%, transparent);
+  background: color-mix(in srgb, var(--yct-color-success, #168a5d) 14%, transparent);
   color: var(--yct-color-success-strong, #0d6b49);
 }
 
 .admin-poi-status-chip.is-legacy {
-  background: color-mix(in oklab, var(--yct-color-text-muted) 14%, transparent);
+  background: color-mix(in srgb, var(--yct-color-text-muted) 14%, transparent);
   color: var(--yct-color-text-secondary);
 }
 
@@ -12259,7 +13360,7 @@ div.telegraph-output-scene.is-packing {
 }
 
 .admin-poi-geometry-map-controls button.is-active {
-  background: var(--yct-color-primary-soft);
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary-hover);
 }
 
@@ -12446,16 +13547,21 @@ div.telegraph-output-scene.is-packing {
   display: flex;
   align-items: flex-start;
   gap: var(--yct-space-2);
+  /* 与 .checkbox-row 同规格：容器允许收缩，勾选框固定 18px 不参与拉伸，
+   * 剩余宽度全部归文案，避免长确认语把行撑破或在窄弹窗里横向溢出。 */
+  min-width: 0;
   color: var(--yct-color-text-secondary);
   font-size: 14px;
   line-height: 1.6;
 }
 
 .admin-poi-publish-confirm input {
-  width: 18px;
-  height: 18px;
   margin-top: 2px;
-  accent-color: var(--yct-color-primary);
+}
+
+.admin-poi-publish-confirm > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .admin-poi-reject-dialog label,
@@ -12701,11 +13807,7 @@ div.telegraph-output-scene.is-packing {
   gap: var(--yct-space-1);
 }
 
-.admin-inline-checkbox input,
-.admin-inline-checkboxes input {
-  width: auto;
-  margin: 0;
-}
+/* 勾选框由全局 input[type='checkbox'] 规范统一（尺寸/配色/状态）。 */
 
 .admin-poi-line-order-card {
   display: grid;
@@ -13669,7 +14771,9 @@ div.telegraph-output-scene.is-packing {
   max-width: 100%;
 }
 
-.admin-content-actions button,
+/* 排除强调按钮：底栏里的主按钮不能被本条覆盖成次级样式
+ * （本条特异性 (0,1,1) 高于 .primary-action-button 的 (0,1,0)，此前会把主色按钮压成普通样式）。 */
+.admin-content-actions button:not(.is-primary, .primary-action-button),
 .admin-action-link {
   display: inline-flex;
   align-items: center;
@@ -15047,7 +16151,7 @@ div.telegraph-output-scene.is-packing {
   min-height: 48px;
   min-width: 680px;
   padding: var(--yct-space-2) var(--yct-space-3);
-  border-top: 1px solid var(--yct-color-border);
+  border-top: 1px solid var(--yct-color-border-subtle);
 }
 
 .schedule-stop-time-row.is-header {
@@ -15058,16 +16162,12 @@ div.telegraph-output-scene.is-packing {
   font-weight: 700;
 }
 
-.schedule-stop-time-row input {
+/* 本行 input 规则只约束文本类输入；勾选框由全局规范锁定 18×18，
+ * 这里显式排除，避免 width:100% / min-height:38px 把它撑成非正方形。 */
+.schedule-stop-time-row input:not([type='checkbox']) {
   width: 100%;
-  min-height: 36px;
+  min-height: 38px;
   padding: 0 var(--yct-space-2);
-}
-
-.schedule-stop-time-row input[type='checkbox'] {
-  width: 20px;
-  min-height: 20px;
-  padding: 0;
 }
 
 .transit-entity-list {
@@ -15114,7 +16214,7 @@ div.telegraph-output-scene.is-packing {
   align-items: center;
   justify-content: center;
   gap: var(--yct-space-1);
-  min-height: 36px;
+  min-height: 38px;
   padding: 0 var(--yct-space-3);
   border: 1px solid var(--yct-color-border);
   border-radius: var(--yct-radius-pill);
@@ -15154,12 +16254,12 @@ div.telegraph-output-scene.is-packing {
 }
 
 .admin-transit-dialog input {
-  min-height: 42px;
+  min-height: 44px;
   resize: none;
 }
 
 .admin-transit-dialog select {
-  min-height: 42px;
+  min-height: 44px;
 }
 
 .transit-line-order-preview {
@@ -15293,13 +16393,15 @@ div.telegraph-output-scene.is-packing {
   display: inline-flex;
   align-items: center;
   gap: var(--yct-space-1);
+  /* 勾选框固定 18px，文案侧可收缩。 */
+  min-width: 0;
   color: var(--yct-color-text-secondary);
   font-size: 12px;
 }
 
-.transit-line-stop-direction-row input[type='checkbox'] {
-  width: 18px;
-  min-height: 18px;
+.transit-line-stop-direction-row label > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .transit-line-segment-time-editor legend {
@@ -15506,6 +16608,39 @@ div.telegraph-output-scene.is-packing {
   border-bottom: 1px solid var(--yct-color-border-subtle);
 }
 
+.transit-station-profile-view {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--yct-color-border-subtle);
+  border-radius: var(--yct-radius-sm);
+  background: var(--yct-color-surface-panel);
+}
+
+.transit-station-profile-view button {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--yct-radius-sm);
+  background: transparent;
+  color: var(--yct-color-text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transit-station-profile-view button.is-active {
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-primary);
+  box-shadow: var(--yct-shadow-sm);
+}
+
+.transit-station-profile-view button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .transit-station-profile-direction {
   padding: 3px;
   border: 1px solid var(--yct-color-border-subtle);
@@ -15527,9 +16662,9 @@ div.telegraph-output-scene.is-packing {
 }
 
 .transit-station-profile-direction button.is-active {
-  background: var(--yct-color-surface);
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+  box-shadow: var(--yct-shadow-sm);
 }
 
 .transit-station-profile-settings {
@@ -15895,7 +17030,7 @@ div.telegraph-output-scene.is-packing {
 
 .transit-station-exit-candidates > button.is-selected {
   border-color: var(--yct-color-primary);
-  background: color-mix(in srgb, var(--yct-color-primary) 12%, var(--yct-color-surface));
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary);
 }
 
@@ -15942,6 +17077,8 @@ div.telegraph-output-scene.is-packing {
   align-items: center;
   gap: var(--yct-space-2);
   min-height: 42px;
+  /* 勾选框固定 18px，文案侧可收缩，避免在双列网格里把标签横向挤掉。 */
+  min-width: 0;
 }
 
 .transit-station-detail-editor-field {
@@ -16506,7 +17643,7 @@ div.telegraph-output-scene.is-packing {
 }
 
 .transit-visual-toolbar button.is-active {
-  background: var(--yct-color-primary-soft);
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary-hover);
 }
 
@@ -16536,7 +17673,7 @@ div.telegraph-output-scene.is-packing {
   box-shadow: 0 8px 22px rgb(20 33 30 / 22%);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .transit-visual-editor-header {
     grid-template-columns: auto minmax(0, 1fr) auto;
     min-height: 62px;
@@ -16746,6 +17883,13 @@ div.telegraph-output-scene.is-packing {
   grid-template-columns: auto minmax(0, 1fr);
 }
 
+/* 开关行内的文案列可收缩（防止长文案在窄容器里被勾选框挤出横向滚动）。 */
+.transit-mode-profile-toggle > strong,
+.transit-mode-profile-toggle > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .settings-row {
   display: flex;
   align-items: center;
@@ -16830,10 +17974,6 @@ div.telegraph-output-scene.is-packing {
   color: var(--yct-color-text-secondary);
 }
 
-.notification-type-toggle input {
-  accent-color: var(--yct-color-primary);
-}
-
 .notification-type-toggle .material-symbols-outlined {
   color: var(--yct-color-primary);
 }
@@ -16901,9 +18041,9 @@ div.telegraph-output-scene.is-packing {
 }
 
 .segmented-control button.is-active {
-  background: var(--yct-color-surface-panel);
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary);
-  box-shadow: 0 2px 8px rgba(17, 24, 23, 0.12);
+  box-shadow: var(--yct-shadow-soft);
   font-weight: 700;
 }
 
@@ -17015,7 +18155,9 @@ div.telegraph-output-scene.is-packing {
   background: var(--yct-color-surface-panel);
   box-shadow: 0 2px 6px rgba(17, 24, 23, 0.18);
   content: '';
-  transition: transform var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+  transition:
+    transform var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    scale var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
 }
 
 .switch-control input:checked + span {
@@ -17024,6 +18166,45 @@ div.telegraph-output-scene.is-packing {
 
 .switch-control input:checked + span::after {
   transform: translateX(18px);
+}
+
+/* 悬停/聚焦反馈：悬停色直接叠加在轨道自身底色上（未选中灰轨、选中主色轨），
+   label 容器不再额外绘制底色或背景滤镜。 */
+.switch-control:not(:has(> input:disabled)):is(:hover, :focus-within) span {
+  background: color-mix(in srgb, var(--yct-color-text) 9%, var(--yct-color-surface-muted));
+}
+
+.switch-control:not(:has(> input:disabled)):is(:hover, :focus-within) input:checked + span {
+  background: color-mix(in srgb, var(--yct-color-text) 9%, var(--yct-color-primary));
+}
+
+/* 滑块悬停/聚焦轻微放大；checked 位移由 transform 承担，独立 scale 属性与之合成。 */
+.switch-control:not(:has(> input:disabled)):is(:hover, :focus-within) span::after {
+  scale: 1.08;
+}
+
+/* 高级材质轨道底色为材质表面，悬停叠加同样基于该表面合成。 */
+:root[data-material-mode]
+  [data-liquid-material]
+  .switch-control:not(:has(> input:disabled)):is(:hover, :focus-within)
+  span {
+  background: color-mix(in srgb, var(--yct-color-text) 9%, var(--yct-material-control-surface));
+}
+
+:root[data-material-mode]
+  [data-liquid-material]
+  .switch-control:not(:has(> input:disabled)):is(:hover, :focus-within)
+  input:checked
+  + span {
+  background: color-mix(in srgb, var(--yct-color-text) 9%, var(--yct-color-primary));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion='full'])
+    .switch-control:not(:has(> input:disabled)):is(:hover, :focus-within)
+    span::after {
+    scale: none;
+  }
 }
 
 .secondary-action-button {
@@ -17397,7 +18578,7 @@ div.telegraph-output-scene.is-packing {
 }
 
 .poi-visual-toolbox button.is-active {
-  background: var(--yct-color-primary-soft);
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary-hover);
 }
 
@@ -17503,7 +18684,7 @@ div.telegraph-output-scene.is-packing {
   margin: 0;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .visual-editor-page {
     min-height: calc(100vh - 16px);
     border-right: 0;
@@ -17642,6 +18823,12 @@ div.telegraph-output-scene.is-packing {
   max-width: calc(100vw - 32px);
   max-height: min(760px, calc(100dvh - 32px));
   overflow: auto;
+  /* 面板滚动条占位（实测 Windows 经典滚动条 15px）会把全宽底栏与面板右缘
+   * 隔出一道不对称空隙：改用细滚动条（实测 thin ≈10px，Chrome 声明
+   * scrollbar-width 后会忽略 ::-webkit-scrollbar，故统一走标准属性），
+   * 空隙压缩并融入右侧 20px 内边距，视觉上与左缘对称。 */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--yct-color-text-muted) 42%, transparent) transparent;
   padding: var(--yct-space-5);
   border-radius: var(--yct-radius-lg);
   background: var(--yct-color-surface-panel);
@@ -17651,6 +18838,133 @@ div.telegraph-output-scene.is-packing {
 .modal-panel > *,
 .modal-panel :is(form, fieldset, label) {
   min-width: 0;
+}
+
+/* ============================================================
+ * 弹窗统一固定头尾（覆盖全部 .modal-panel 弹窗）
+ * 面板自身即滚动容器（padding:20、grid gap:16）。
+ * sticky 头尾用“等量负 margin + 等量 padding”撑入面板内边距与网格 gap：
+ * 1. 网格轨道占位高度与改造前完全一致，吸顶/脱吸时无跳动；
+ * 2. 背景与分隔线铺满面板边缘，滚动内容不会从头尾下方透出；
+ * 3. 头尾文字仍与正文保持 20px 对齐。
+ * 例外：.metro-wayfinding-project-dialog 自带 overflow:hidden 与
+ * “头部/工具栏/内部滚动区”三行网格，头部本就固定，不套用以下规则。
+ * ============================================================ */
+
+/* 标准固定头部（面板 gap 为 space-4） */
+.modal-panel > .section-heading,
+.modal-panel > .shortcut-dialog-header,
+.modal-panel > .material-preview-heading,
+.modal-panel > .material-history-heading,
+.modal-panel > .telegraph-output-heading {
+  position: sticky;
+  /* sticky 的 inset 相对 grid 容器的内容盒计算：面板 padding-top 20px 会先被计入，
+   * 若这里写正值，头部会被再下推 20px（共 40px 空白并压住首屏内容）；
+   * 用 -padding 抵消后才真正贴齐面板顶端。 */
+  top: calc(-1 * var(--yct-space-5));
+  z-index: 3;
+  margin: calc(-1 * var(--yct-space-5)) calc(-1 * var(--yct-space-5)) calc(-1 * var(--yct-space-4));
+  padding: var(--yct-space-5) var(--yct-space-5) var(--yct-space-4);
+  background: var(--yct-color-surface-panel);
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+/* 导视导入弹窗：裸 header，沿用标准 gap(space-4) 计算 */
+.modal-panel.metro-wayfinding-import-dialog > header {
+  position: sticky;
+  top: calc(-1 * var(--yct-space-5));
+  z-index: 3;
+  margin: calc(-1 * var(--yct-space-5)) calc(-1 * var(--yct-space-5)) calc(-1 * var(--yct-space-4));
+  padding: var(--yct-space-5) var(--yct-space-5) var(--yct-space-4);
+  background: var(--yct-color-surface-panel);
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+/* 导视线段/组合弹窗：面板 gap 为 space-3(12px)，底部负边距按 12px 计算 */
+.modal-panel.metro-wayfinding-combination-dialog > header {
+  position: sticky;
+  top: calc(-1 * var(--yct-space-5));
+  z-index: 3;
+  margin: calc(-1 * var(--yct-space-5)) calc(-1 * var(--yct-space-5)) calc(-1 * var(--yct-space-3));
+  padding: var(--yct-space-5) var(--yct-space-5) var(--yct-space-3);
+  background: var(--yct-color-surface-panel);
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+/* ============================================================
+ * 弹窗底栏两种形态
+ * A. 纯按钮组 → 全宽填充底栏：铺满面板左右/底部内边距，仅顶部分隔线，
+ *    几何与固定头部对称（负 margin 吃 gap/padding，轨道高度守恒，
+ *    吸底/脱吸无跳动）。高级材质下容器裸悬浮（无底板/分隔线/阴影），
+ *    按钮逐个注册为独立液态表面（见 liquid-material-bridge 与下方
+ *    advanced 配方）。
+ * B. 复合控件组（map-share、导视导入 footer）→ 保留悬浮胶囊，
+ *    整块作为一块材质。
+ * ============================================================ */
+
+/* A1. 标准 gap(space-4) 纯按钮底栏：全宽填充。
+ * 与固定头部同理，sticky 的 bottom 需用 -padding 抵消内容盒偏移，
+ * 否则底栏停在面板底边上方 20px（按钮下方多出 32px 空白）。 */
+.modal-panel > .admin-content-actions,
+.modal-panel > .telegraph-confirm-actions,
+.modal-panel > .material-action-row {
+  position: sticky;
+  bottom: calc(-1 * var(--yct-space-5));
+  z-index: 3;
+  justify-self: stretch;
+  margin: calc(-1 * var(--yct-space-4)) calc(-1 * var(--yct-space-5)) calc(-1 * var(--yct-space-5));
+  padding: var(--yct-space-3) var(--yct-space-5);
+  border-top: 1px solid var(--yct-color-border);
+  border-radius: 0 0 var(--yct-radius-lg) var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+}
+
+/* 底栏内所有按钮统一高度（38px 主基准）：宽屏状态下「取消/确认」等按钮完全等高。
+ * 覆盖 .primary-action-button 的 42px 与通用 .admin-content-actions button 的 34px。 */
+.modal-panel
+  > :is(.admin-content-actions, .telegraph-confirm-actions, .material-action-row)
+  > :is(button, a),
+.modal-panel.metro-wayfinding-combination-dialog > footer > button {
+  min-height: 38px;
+}
+
+/* B1. map-share 底栏内含复制等复合控件：保留悬浮胶囊 */
+.modal-panel > .map-share-actions {
+  position: sticky;
+  bottom: var(--yct-space-3);
+  z-index: 3;
+  justify-self: stretch;
+  margin: calc(-1 * var(--yct-space-4)) calc(-1 * var(--yct-space-2)) calc(-1 * var(--yct-space-2));
+  padding: var(--yct-space-3) var(--yct-space-4);
+  border: 1px solid var(--yct-material-floating-border, var(--yct-color-border));
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+  box-shadow: var(--yct-shadow-floating);
+}
+
+/* 导视导入弹窗 footer：
+ * 与其它 sticky 底栏不同——弹窗改为 grid 三行布局（见 .metro-wayfinding-import-dialog），
+ * footer 占据最末一行、不参与滚动，永远贴在 panel 底部，不遮挡中间滚动区内容。
+ * 视觉仍是悬浮胶囊（border + 圆角 + 阴影），由 .modal-panel 的 padding 自然留边距。 */
+.modal-panel.metro-wayfinding-import-dialog > footer {
+  margin-block-start: calc(-1 * var(--yct-space-4));
+  padding: var(--yct-space-3) var(--yct-space-4);
+  border: 1px solid var(--yct-material-floating-border, var(--yct-color-border));
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+  box-shadow: var(--yct-shadow-floating);
+}
+
+/* A2. 导视线段/组合弹窗 footer（纯按钮）：全宽填充，面板 gap 为 space-3(12px) */
+.modal-panel.metro-wayfinding-combination-dialog > footer {
+  position: sticky;
+  bottom: calc(-1 * var(--yct-space-5));
+  z-index: 3;
+  margin: calc(-1 * var(--yct-space-3)) calc(-1 * var(--yct-space-5)) calc(-1 * var(--yct-space-5));
+  padding: var(--yct-space-3) var(--yct-space-5);
+  border-top: 1px solid var(--yct-color-border);
+  border-radius: 0 0 var(--yct-radius-lg) var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
 }
 
 .shortcut-backdrop {
@@ -17773,6 +19087,22 @@ div.telegraph-output-scene.is-packing {
   font-weight: 700;
 }
 
+/* 主要按钮禁用态：与正常态（100% 主色填充 + 白字）明显区分。
+ * 采用与状态芯片一致的「语义色 14% 中性 tint」底 + 主色淡化文字，
+ * 不依赖 opacity（避免连带弱化阴影/滤镜），同时去掉外投影并阻止 hover 变化；
+ * 透光模式的液态材质规则已用 :not(:disabled) 排除禁用按钮。 */
+.primary-action-button:disabled,
+.secondary-action-button.is-primary:disabled,
+.material-action-row button.is-primary:disabled,
+.material-history-item button.is-primary:disabled,
+.admin-materials-panel button.is-primary:disabled,
+.metro-wayfinding-combination-dialog > footer > button.is-primary:disabled {
+  cursor: not-allowed;
+  background: color-mix(in srgb, var(--yct-color-primary) 14%, var(--yct-color-surface-muted));
+  color: color-mix(in srgb, var(--yct-color-primary) 68%, var(--yct-color-text-muted));
+  box-shadow: none;
+}
+
 .primary-action-button .material-symbols-outlined,
 .secondary-action-button.is-primary .material-symbols-outlined {
   --icon-fill: 1;
@@ -17790,7 +19120,6 @@ div.telegraph-output-scene.is-packing {
 
 .icon-action-button:hover {
   background: color-mix(in srgb, var(--yct-color-text) 7%, var(--yct-color-surface-muted));
-  color: var(--yct-color-primary);
 }
 
 .settings-history-summary {
@@ -17823,11 +19152,11 @@ div.telegraph-output-scene.is-packing {
   align-items: center;
   width: fit-content;
   min-height: 28px;
-  padding: 0 var(--yct-space-3);
+  padding: 0 var(--yct-space-2);
   border-radius: var(--yct-radius-pill);
   background: var(--yct-color-surface-muted);
   color: var(--yct-color-text-muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -17888,18 +19217,18 @@ div.telegraph-output-scene.is-packing {
 }
 
 .offline-package-status.is-base_cache_refreshed {
-  background: color-mix(in srgb, var(--yct-color-primary) 12%, transparent);
+  background: color-mix(in srgb, var(--yct-color-primary) 14%, transparent);
   color: var(--yct-color-primary);
 }
 
 .offline-package-status.is-server_requested {
-  background: color-mix(in srgb, var(--yct-color-secondary) 12%, transparent);
+  background: color-mix(in srgb, var(--yct-color-secondary) 14%, transparent);
   color: var(--yct-color-secondary);
 }
 
 .offline-package-status.is-request_failed,
 .offline-package-status.is-refresh_failed {
-  background: color-mix(in srgb, var(--yct-color-error) 12%, transparent);
+  background: color-mix(in srgb, var(--yct-color-error) 14%, transparent);
   color: var(--yct-color-error);
 }
 
@@ -17973,15 +19302,23 @@ div.telegraph-output-scene.is-packing {
   align-items: center;
   width: fit-content;
   min-height: 28px;
-  padding: 0 var(--yct-space-3);
+  padding: 0 var(--yct-space-2);
   border-radius: var(--yct-radius-pill);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .trip-local-badge {
   background: var(--yct-color-surface-muted);
   color: var(--yct-color-text-muted);
+}
+
+/* 状态说明文本：与 settings-inline-status 同族的弱化提示（业务侧用于「暂不可用」类说明）。 */
+.status-note {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .trip-import-notice,
@@ -18114,7 +19451,7 @@ div.telegraph-output-scene.is-packing {
 
 .trip-status-chip[data-status='cancelled'],
 .trip-status-chip[data-status='expired'] {
-  background: color-mix(in srgb, var(--yct-color-error) 12%, transparent);
+  background: color-mix(in srgb, var(--yct-color-error) 14%, transparent);
   color: var(--yct-color-error);
 }
 
@@ -18335,11 +19672,6 @@ div.telegraph-output-scene.is-packing {
     transform var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
 }
 
-.travel-task-card:hover {
-  background: color-mix(in srgb, var(--travel-task-tone) 12%, var(--yct-color-surface));
-  transform: translateY(-1px);
-}
-
 .travel-task-card.is-disabled {
   opacity: 0.72;
 }
@@ -18457,11 +19789,12 @@ div.telegraph-output-scene.is-packing {
   font: inherit;
 }
 
+/* 分段控件中档规格：3px 轨道内边距 + 34px 按钮（与导控/模板分类同档）。 */
 .screen-time-filter {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--yct-space-2);
-  padding: 4px;
+  padding: 3px;
   border-radius: var(--yct-radius-pill);
   background: var(--yct-color-surface-muted);
 }
@@ -18472,7 +19805,7 @@ div.telegraph-output-scene.is-packing {
   justify-content: center;
   gap: var(--yct-space-1);
   min-width: 0;
-  min-height: 36px;
+  min-height: 34px;
   border: 0;
   border-radius: var(--yct-radius-pill);
   background: transparent;
@@ -18483,7 +19816,7 @@ div.telegraph-output-scene.is-packing {
 }
 
 .screen-time-filter button.is-active {
-  background: var(--yct-color-surface-panel);
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary);
   font-weight: 800;
   box-shadow: var(--yct-shadow-soft);
@@ -18656,7 +19989,7 @@ div.telegraph-output-scene.is-packing {
 }
 
 .schedule-service-strip button.is-active {
-  background: color-mix(in srgb, var(--schedule-service-tone) 12%, var(--yct-color-surface-panel));
+  background: color-mix(in srgb, var(--schedule-service-tone) 12%, transparent);
   color: var(--schedule-service-tone);
 }
 
@@ -18773,10 +20106,6 @@ div.telegraph-output-scene.is-packing {
   cursor: pointer;
   font: inherit;
   text-align: left;
-}
-
-.schedule-history-item:hover {
-  background: color-mix(in srgb, var(--schedule-service-tone) 10%, var(--yct-color-surface));
 }
 
 .schedule-history-item > .material-symbols-outlined {
@@ -18917,11 +20246,14 @@ div.telegraph-output-scene.is-packing {
 }
 
 .ticket-order-status-badge {
-  padding: var(--yct-space-1) var(--yct-space-3);
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 var(--yct-space-2);
   border-radius: var(--yct-radius-pill);
-  background: color-mix(in srgb, var(--yct-color-accent) 16%, transparent);
+  background: color-mix(in srgb, var(--yct-color-accent) 14%, transparent);
   color: var(--yct-color-accent);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -19015,7 +20347,7 @@ div.telegraph-output-scene.is-packing {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-column: span 2;
   gap: var(--yct-space-2);
-  padding: 4px;
+  padding: 3px;
   border-radius: var(--yct-radius-pill);
   background: var(--yct-color-surface-muted);
 }
@@ -19026,7 +20358,7 @@ div.telegraph-output-scene.is-packing {
   justify-content: center;
   gap: var(--yct-space-1);
   min-width: 0;
-  min-height: 36px;
+  min-height: 34px;
   border: 0;
   border-radius: var(--yct-radius-pill);
   background: transparent;
@@ -19037,7 +20369,7 @@ div.telegraph-output-scene.is-packing {
 }
 
 .schedule-time-filter button.is-active {
-  background: var(--yct-color-surface-panel);
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary);
   font-weight: 800;
   box-shadow: var(--yct-shadow-soft);
@@ -19068,13 +20400,6 @@ div.telegraph-output-scene.is-packing {
   cursor: pointer;
   font: inherit;
   font-weight: 700;
-}
-
-.schedule-journey-actions button:hover:not(:disabled),
-.schedule-journey-actions button:focus-visible {
-  border-color: var(--yct-color-primary);
-  background: color-mix(in srgb, var(--yct-color-primary) 9%, var(--yct-color-surface-panel));
-  color: var(--yct-color-primary);
 }
 
 .schedule-journey-actions button:disabled {
@@ -20023,13 +21348,15 @@ div.telegraph-output-scene.is-packing {
   text-align: right;
 }
 
+/* 与分段控件统一：3px 轨道内边距 + 3px 间隙 + surface-muted 底
+ * （原为 border-subtle 底与 6px 内边距）；48px 大按钮属线路详情的大尺寸档，保留。 */
 .line-direction-switch {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
-  padding: 6px;
+  gap: 3px;
+  padding: 3px;
   border-radius: var(--yct-radius-pill);
-  background: var(--yct-color-border-subtle);
+  background: var(--yct-color-surface-muted);
 }
 
 .line-direction-switch button {
@@ -20050,10 +21377,10 @@ div.telegraph-output-scene.is-packing {
 }
 
 .line-direction-switch button.is-active {
-  background: var(--yct-color-surface-panel);
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary);
   font-weight: 800;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--yct-shadow-soft);
 }
 
 .line-direction-switch button:active {
@@ -20320,11 +21647,6 @@ div.telegraph-output-scene.is-packing {
     color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
 }
 
-.service-entry:hover {
-  background: var(--yct-color-surface-muted);
-  color: var(--yct-color-text);
-}
-
 .service-entry > .material-symbols-outlined {
   display: inline-grid;
   place-items: center;
@@ -20458,11 +21780,19 @@ div.telegraph-output-scene.is-packing {
   gap: var(--yct-space-3);
   min-height: 56px;
   padding: var(--yct-space-3) var(--yct-space-2);
+  border-radius: var(--yct-radius-md);
   cursor: pointer;
   color: var(--yct-color-text);
   font-weight: 700;
   line-height: 1.5;
   list-style: none;
+}
+
+/* 文本 span 被拉伸至整列宽，默认中心缩放会让左缘横向漂移；
+   锚定左缘向右展开，并预留缩放后的宽度补偿，避免长标题挤压展开图标。 */
+.faq-item summary > span:first-child {
+  max-width: calc(100% / var(--yct-motion-scale-hover));
+  transform-origin: left center;
 }
 
 .faq-item summary::-webkit-details-marker {
@@ -20576,7 +21906,7 @@ div.telegraph-output-scene.is-packing {
 }
 
 .map-browse-mode-control button.is-active {
-  background: var(--yct-color-surface-panel);
+  background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary);
   box-shadow: 0 1px 4px rgba(17, 24, 23, 0.14);
   font-weight: 800;
@@ -20668,12 +21998,6 @@ div.telegraph-output-scene.is-packing {
   color: var(--yct-color-text-muted);
   font-size: 12px;
   font-weight: 600;
-}
-
-.map-layer-toggle input {
-  width: 20px;
-  height: 20px;
-  accent-color: var(--yct-color-primary);
 }
 
 .map-poi-submit-modal {
@@ -21020,7 +22344,7 @@ button.material-studio-review-badge {
   .secondary-actions
   .material-studio-topbar-actions
   .icon-button.is-primary:is(:hover, :focus-visible) {
-  background: color-mix(in srgb, var(--yct-color-primary) 88%, #000000);
+  background: var(--yct-color-primary);
   color: #ffffff;
 }
 
@@ -21055,7 +22379,7 @@ button.material-studio-review-badge {
   background: transparent;
   box-shadow: none;
   filter: none;
-  text-shadow: none;
+  text-shadow: inherit;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -21101,7 +22425,7 @@ button.material-studio-review-badge {
   filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--yct-color-text) 28%, transparent));
 }
 
-:root[data-embedded] .topbar-actions {
+:root[data-embedded]:not([data-material-mode='advanced']) .topbar-actions {
   gap: var(--yct-space-1);
   padding: var(--yct-space-1);
   border: 1px solid var(--yct-color-border);
@@ -21112,8 +22436,9 @@ button.material-studio-review-badge {
   backdrop-filter: blur(var(--yct-material-blur-medium));
 }
 
-:root[data-embedded] .topbar:not(.secondary-topbar) > .icon-button,
-:root[data-embedded][data-material-mode='advanced'] .secondary-topbar > .icon-button {
+:root[data-embedded]:not([data-material-mode='advanced'])
+  .topbar:not(.secondary-topbar)
+  > .icon-button {
   border-color: var(--yct-color-border);
   background: color-mix(in srgb, var(--yct-color-surface-panel) 92%, transparent);
   box-shadow: var(--yct-shadow-floating);
@@ -21151,6 +22476,21 @@ button.material-studio-review-badge {
   background: transparent;
 }
 
+/*
+ * 简约材质模式下，`.secondary-content` 内的 `.module-panel` 应继续保持透明——
+ * 上面基础规则（transparent）已经声明，但 :root[data-material-mode='performance']
+ * 在 23467 行给 `.module-panel` 强制覆盖了 surface-panel 实色底，会破坏二级页面
+ * 的"轻量卡片"观感（changelog/faq/settings/legal 等页面里模块直接落在 secondary-content
+ * 的窄列里，叠一层完整面板底会让卡片看起来发糊、像浮在一个大灰块上）。
+ *
+ * 这里用更高特异性的选择器把背景重新压回 transparent，仅作用于二级页面。
+ * 不加 !important 是为了与 24155 行 @media (prefers-reduced-transparency) 那条
+ * !important 退路保持兼容——系统级减少透明时仍然服从强制实色。
+ */
+:root[data-material-mode='performance'] .secondary-content .module-panel {
+  background: transparent;
+}
+
 .secondary-content:has(.material-studio) {
   width: min(1280px, calc(100% - 32px));
 }
@@ -21164,45 +22504,25 @@ button.material-studio-review-badge {
   gap: var(--yct-space-4);
 }
 
-.transit-health-mode-filter {
-  display: flex;
-  gap: var(--yct-space-1);
+/* 方式筛选条复用标准分段控件：仅保留轨道横向滚动、按钮按内容定宽两处差异。 */
+.segmented-control.transit-health-mode-filter {
   min-width: 0;
-  margin: 0;
-  padding: 3px;
+}
+
+.segmented-control.transit-health-mode-filter > div {
+  flex: 1 1 auto;
   overflow-x: auto;
-  border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-md);
-  background: var(--yct-color-surface-muted);
   scrollbar-width: thin;
 }
 
-.transit-health-mode-filter button {
+.segmented-control.transit-health-mode-filter button {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   gap: 7px;
-  min-height: 38px;
   padding: 0 var(--yct-space-3);
-  border: 0;
-  border-radius: calc(var(--yct-radius-md) - 2px);
-  background: transparent;
-  color: var(--yct-color-text-secondary);
-  font: inherit;
-  font-size: 13px;
   font-weight: 600;
-  cursor: pointer;
-}
-
-.transit-health-mode-filter button:hover {
-  background: var(--yct-material-hover-state);
-  color: var(--yct-color-text);
-}
-
-.transit-health-mode-filter button.is-active {
-  background: var(--yct-color-surface-panel);
-  color: var(--yct-color-text);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--yct-color-text) 12%, transparent);
+  white-space: nowrap;
 }
 
 .transit-health-mode-filter .material-symbols-outlined {
@@ -21248,62 +22568,12 @@ button.material-studio-review-badge {
   margin-top: 0;
 }
 
+/* 开关本体使用标准 .switch-control；该容器仅负责文案与开关的排列。 */
 .transit-health-demand-toggle {
   display: inline-flex;
   align-items: center;
   gap: var(--yct-space-2);
   color: var(--yct-color-text-secondary);
-  cursor: pointer;
-}
-
-.transit-health-demand-toggle input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  opacity: 0;
-}
-
-.transit-health-demand-toggle > span {
-  position: relative;
-  flex: 0 0 auto;
-  width: 36px;
-  height: 20px;
-  border: 1px solid var(--yct-color-border-strong, var(--yct-color-border));
-  border-radius: 10px;
-  background: var(--yct-color-surface-muted);
-  transition:
-    border-color 160ms ease,
-    background-color 160ms ease;
-}
-
-.transit-health-demand-toggle > span::after {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--yct-color-text-muted);
-  content: '';
-  transition:
-    transform 160ms ease,
-    background-color 160ms ease;
-}
-
-.transit-health-demand-toggle input:checked + span {
-  border-color: var(--yct-color-primary);
-  background: color-mix(in srgb, var(--yct-color-primary) 18%, var(--yct-color-surface));
-}
-
-.transit-health-demand-toggle input:checked + span::after {
-  background: var(--yct-color-primary);
-  transform: translateX(16px);
-}
-
-.transit-health-demand-toggle input:focus-visible + span {
-  outline: 2px solid var(--yct-color-primary);
-  outline-offset: 2px;
 }
 
 .transit-health-demand-toggle strong {
@@ -21399,7 +22669,7 @@ button.material-studio-review-badge {
 .transit-health-table th,
 .transit-health-table td {
   padding: var(--yct-space-3);
-  border-bottom: 1px solid var(--yct-color-border);
+  border-bottom: 1px solid var(--yct-color-border-subtle);
   text-align: right;
   vertical-align: middle;
   white-space: nowrap;
@@ -21873,56 +23143,34 @@ button.material-studio-review-badge {
   white-space: nowrap;
 }
 
-.transit-health-target-preview button {
-  display: inline-flex;
-  align-items: center;
+.transit-health-target-preview .secondary-action-button {
   justify-self: start;
-  gap: 6px;
-  min-height: 32px;
-  padding: 0 var(--yct-space-2);
-  border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-sm);
-  background: var(--yct-color-surface-panel);
-  color: var(--yct-color-primary);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 650;
-  cursor: pointer;
 }
 
-.transit-health-target-preview button:hover {
-  border-color: color-mix(in srgb, var(--yct-color-primary) 45%, var(--yct-color-border));
-  background: var(--yct-material-hover-state);
+.transit-health-target-preview .secondary-action-button .material-symbols-outlined {
+  font-size: 18px;
 }
 
-.transit-health-target-preview button .material-symbols-outlined {
-  font-size: 16px;
-}
-
-.transit-health-target-dialog-backdrop {
-  position: fixed;
-  z-index: 240;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: var(--yct-space-4);
+dialog.transit-health-target-dialog::backdrop {
   background: color-mix(in srgb, #000 48%, transparent);
   backdrop-filter: blur(4px);
 }
 
-.transit-health-target-dialog {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  width: min(760px, 100%);
+/* 复用标准 modal-panel，覆盖为“固定头尾 + 正文滚动”的全屏列表布局。 */
+dialog.transit-health-target-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: min(760px, calc(100vw - var(--yct-space-6)));
   max-height: min(82dvh, 820px);
+  margin: auto;
+  padding: 0;
   overflow: hidden;
-  border: 1px solid var(--yct-color-border);
   border-radius: var(--yct-radius-md);
-  background: var(--yct-color-surface-panel);
-  box-shadow: var(--yct-shadow-floating);
 }
 
-.transit-health-target-dialog > header {
+dialog.transit-health-target-dialog > header {
+  flex: 0 0 auto;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -21931,49 +23179,31 @@ button.material-studio-review-badge {
   border-bottom: 1px solid var(--yct-color-border);
 }
 
-.transit-health-target-dialog > header > div > span {
+dialog.transit-health-target-dialog > header > div {
+  min-width: 0;
+}
+
+dialog.transit-health-target-dialog > header > div > span {
   color: var(--yct-color-primary);
   font-size: 11px;
   font-weight: 700;
 }
 
-.transit-health-target-dialog h2 {
+dialog.transit-health-target-dialog h2 {
   margin: 4px 0 0;
   color: var(--yct-color-text);
   font-size: 19px;
   line-height: 1.35;
 }
 
-.transit-health-target-dialog > header p {
+dialog.transit-health-target-dialog > header p {
   margin: 5px 0 0;
   color: var(--yct-color-text-muted);
   font-size: 12px;
 }
 
-.transit-health-target-dialog > header > button {
-  display: inline-grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-sm);
-  background: transparent;
-  color: var(--yct-color-text-secondary);
-  cursor: pointer;
-}
-
-.transit-health-target-dialog > header > button:hover {
-  background: var(--yct-color-surface-muted);
-  color: var(--yct-color-text);
-}
-
-.transit-health-target-dialog > header > button .material-symbols-outlined {
-  font-size: 20px;
-}
-
 .transit-health-target-search {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--yct-space-2);
@@ -21981,7 +23211,7 @@ button.material-studio-review-badge {
   margin: var(--yct-space-3) var(--yct-space-4) 0;
   padding: 0 var(--yct-space-3);
   border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-sm);
+  border-radius: var(--yct-radius-pill);
   background: var(--yct-color-surface);
 }
 
@@ -21997,7 +23227,7 @@ button.material-studio-review-badge {
 
 .transit-health-target-search input {
   min-width: 0;
-  height: 40px;
+  height: 44px;
   padding: 0;
   border: 0;
   outline: 0;
@@ -22008,6 +23238,7 @@ button.material-studio-review-badge {
 }
 
 .transit-health-target-dialog-body {
+  flex: 1 1 auto;
   min-height: 0;
   padding: var(--yct-space-3) var(--yct-space-4) var(--yct-space-4);
   overflow-y: auto;
@@ -22146,7 +23377,7 @@ button.material-studio-review-badge {
 }
 
 .map-marker-list.is-collapsed {
-  max-height: 56px;
+  max-height: calc(40px + var(--yct-space-2) * 2 + 2px);
 }
 
 .map-poi-detail-panel {
@@ -22167,8 +23398,9 @@ button.material-studio-review-badge {
   transition: max-height var(--yct-motion-duration-layout) var(--yct-motion-easing-emphasized);
 }
 
+/* 折叠态仅保留一行 chip（30px 高 + 上下 1px 描边）。 */
 .map-route-mode-toggle-list.is-collapsed {
-  max-height: 68px;
+  max-height: 32px;
   overflow: hidden;
 }
 
@@ -22179,7 +23411,8 @@ button.material-studio-review-badge {
 
 :is(
   .map-route-plan-card:not(.is-collapsed) > :not(.map-route-plan-top),
-  .map-marker-list:not(.is-collapsed) > :not(.map-marker-list-toggle),
+  .map-marker-list:not(.is-collapsed) > :not(.map-marker-list-header),
+  .map-marker-list:not(.is-collapsed) > .map-marker-list-header > :not(.map-marker-list-toggle),
   .map-poi-detail-panel:not(.is-collapsed) > :not(.map-poi-detail-header),
   .transit-visual-route-panel:not(.is-collapsed) > :not(.transit-visual-route-panel-heading)
 ) {
@@ -22215,11 +23448,11 @@ button.material-studio-review-badge {
   .transit-visual-node-row
 ) {
   transition:
-    background-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
-    color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
-    border-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    background-color var(--yct-motion-duration-state) var(--yct-motion-easing-standard),
+    color var(--yct-motion-duration-state) var(--yct-motion-easing-standard),
+    border-color var(--yct-motion-duration-state) var(--yct-motion-easing-standard),
     box-shadow var(--yct-motion-duration-standard) var(--yct-motion-easing-standard),
-    transform var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+    transform var(--yct-motion-duration-state) var(--yct-motion-easing-standard);
 }
 
 :is(
@@ -22238,7 +23471,7 @@ button.material-studio-review-badge {
   .schedule-service-strip button,
   .transit-visual-toolbar button
 ):active {
-  transform: scale(0.98);
+  transform: scale(var(--yct-motion-scale-press));
 }
 
 @keyframes yct-panel-content-enter {
@@ -22293,6 +23526,19 @@ button.material-studio-review-badge {
     .map-toolbar,
     .map-poi-detail-panel,
     .map-layer-panel,
+    .hero-panel,
+    .reminder-panel,
+    .server-status-panel,
+    .feed-panel,
+    .module-panel,
+    .offline-page-panel,
+    .account-auth-panel,
+    .material-studio-sidebar,
+    .material-preview,
+    .telegraph-control-panel,
+    .telegraph-send-stage,
+    .telegraph-output-section,
+    .material-template-examples-toolbar,
     .modal-panel,
     .bottom-nav
   ) {
@@ -22323,13 +23569,13 @@ button.material-studio-review-badge {
 }
 
 :root[data-color-scheme='dark'][data-material-mode='advanced'] {
-  --yct-material-floating-border: rgb(255 255 255 / 10%);
+  --yct-material-floating-border: rgb(255 255 255 / 7%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root[data-color-scheme='system'][data-material-mode='advanced'],
   :root:not([data-color-scheme])[data-material-mode='advanced'] {
-    --yct-material-floating-border: rgb(255 255 255 / 10%);
+    --yct-material-floating-border: rgb(255 255 255 / 7%);
   }
 }
 
@@ -22340,25 +23586,21 @@ button.material-studio-review-badge {
     .secondary-topbar > .secondary-actions > .admin-edit-link:only-child,
     .secondary-topbar > .secondary-actions:has(> .admin-edit-link):has(> .operation-toc)
   ) {
-  border: 1px solid var(--yct-material-floating-border);
+  border: 0;
   border-radius: var(--yct-radius-pill);
   background: color-mix(
     in srgb,
     var(--yct-color-surface-panel) var(--yct-material-action-surface),
     transparent
   );
-  -webkit-backdrop-filter: contrast(var(--yct-material-contrast))
-    brightness(var(--yct-material-brightness)) saturate(var(--yct-material-saturation))
-    blur(var(--yct-material-blur));
-  backdrop-filter: contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
     saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
-  box-shadow: var(--yct-shadow-floating);
-  text-shadow: 0 1px 4px
-    color-mix(
-      in srgb,
-      var(--yct-color-surface-panel) var(--yct-material-text-shadow-strength),
-      transparent
-    );
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  box-shadow: var(--yct-material-surface-shadow);
+  text-shadow: var(--yct-material-text-shadow);
 }
 
 :root[data-material-mode='advanced'] .topbar-actions {
@@ -22371,27 +23613,32 @@ button.material-studio-review-badge {
   .secondary-actions
   .material-studio-topbar-actions {
   padding: 2px;
-  border: 1px solid var(--yct-material-floating-border);
+  border: 0;
   border-radius: var(--yct-radius-pill);
   background: color-mix(
     in srgb,
     var(--yct-color-surface-panel) var(--yct-material-action-surface),
     transparent
   );
-  -webkit-backdrop-filter: contrast(var(--yct-material-contrast))
-    brightness(var(--yct-material-brightness)) saturate(var(--yct-material-saturation))
-    blur(var(--yct-material-blur));
-  backdrop-filter: contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
     saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
-  box-shadow: var(--yct-shadow-floating);
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  box-shadow: var(--yct-material-surface-shadow);
 }
 
 :root[data-material-mode='advanced'] :is(.topbar-page-title, .secondary-title) {
-  text-shadow: 0 1px 5px
-    color-mix(
-      in srgb,
-      var(--yct-color-surface-panel) var(--yct-material-text-shadow-strength),
-      transparent
+  text-shadow: var(--yct-material-text-shadow);
+}
+
+:root[data-material-mode='advanced'] .brand-logo {
+  filter: drop-shadow(
+      0 0 var(--yct-material-content-shadow-core) var(--yct-material-content-shadow-color)
+    )
+    drop-shadow(
+      0 1px var(--yct-material-content-shadow-halo) var(--yct-material-content-shadow-color)
     );
 }
 
@@ -22409,26 +23656,31 @@ button.material-studio-review-badge {
     .map-toolbar,
     .map-poi-detail-panel,
     .map-layer-panel,
+    .transit-visual-route-panel,
+    .transit-visual-toolbar,
+    .poi-visual-coordinate-panel,
+    .poi-visual-toolbox,
+    .poi-visual-viewport-controls,
+    .telegraph-history-panel,
+    .telegraph-confirm-dialog,
+    .telegraph-floating-toolbar,
     .modal-panel,
     .bottom-nav
   ) {
-  border-color: var(--yct-material-floating-border);
+  border: 0;
   background: color-mix(
     in srgb,
     var(--yct-color-surface-panel) var(--yct-material-floating-surface),
     transparent
   );
-  -webkit-backdrop-filter: contrast(var(--yct-material-contrast))
-    brightness(var(--yct-material-brightness)) saturate(var(--yct-material-saturation))
-    blur(var(--yct-material-blur));
-  backdrop-filter: contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
     saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
-  text-shadow: 0 1px 4px
-    color-mix(
-      in srgb,
-      var(--yct-color-surface-panel) var(--yct-material-text-shadow-strength),
-      transparent
-    );
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  text-shadow: var(--yct-material-text-shadow);
+  box-shadow: var(--yct-material-surface-shadow);
 }
 
 :root[data-material-mode='advanced'] .modal-backdrop {
@@ -22438,13 +23690,62 @@ button.material-studio-review-badge {
 }
 
 :root[data-material-mode='advanced'] .modal-panel {
-  border: 1px solid var(--yct-material-floating-border);
+  border: 0;
   background: color-mix(in srgb, var(--yct-color-surface-panel) 88%, transparent);
-  -webkit-backdrop-filter: contrast(var(--yct-material-contrast))
-    brightness(var(--yct-material-brightness)) saturate(var(--yct-material-saturation))
-    blur(var(--yct-material-blur));
-  backdrop-filter: contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
     saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+}
+
+/* 高级材质下弹窗标题栏渐变遮罩：由伪元素承担「渐变背景 + 渐变滤镜」。
+ * mask 让 backdrop-filter 强度随遮罩透明度同步衰减（顶部 100% → 60% 处 50% → 底部 0），
+ * 实现滤镜与透明度一致的平滑过渡；z-index:-1 使遮罩位于头部内容之下、面板背景之上
+ * （头部自身为 stacking context：sticky + z-index:3）。 */
+:root[data-material-mode='advanced']
+  :is(
+    .modal-panel > .section-heading,
+    .modal-panel > .shortcut-dialog-header,
+    .modal-panel > .material-preview-heading,
+    .modal-panel > .material-history-heading,
+    .modal-panel > .telegraph-output-heading,
+    .modal-panel.metro-wayfinding-import-dialog > header,
+    .modal-panel.metro-wayfinding-combination-dialog > header,
+    .modal-panel.metro-wayfinding-project-dialog > header
+  ) {
+  border-bottom-color: transparent;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    .modal-panel > .section-heading,
+    .modal-panel > .shortcut-dialog-header,
+    .modal-panel > .material-preview-heading,
+    .modal-panel > .material-history-heading,
+    .modal-panel > .telegraph-output-heading,
+    .modal-panel.metro-wayfinding-import-dialog > header,
+    .modal-panel.metro-wayfinding-combination-dialog > header,
+    .modal-panel.metro-wayfinding-project-dialog > header
+  )::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-title-surface),
+    transparent
+  );
+  -webkit-backdrop-filter: blur(var(--yct-material-blur-soft));
+  backdrop-filter: blur(var(--yct-material-blur-soft));
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgb(0 0 0 / 50%) 60%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, rgb(0 0 0 / 50%) 60%, transparent 100%);
 }
 
 :root .modal-backdrop.shortcut-backdrop {
@@ -22479,12 +23780,155 @@ button.material-studio-review-badge {
     var(--yct-color-surface-panel) var(--yct-material-action-surface),
     transparent
   );
-  -webkit-backdrop-filter: contrast(var(--yct-material-contrast))
-    brightness(var(--yct-material-brightness)) saturate(var(--yct-material-saturation))
-    blur(var(--yct-material-blur));
-  backdrop-filter: contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
     saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
-  box-shadow: var(--yct-shadow-floating);
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  box-shadow: var(--yct-material-surface-shadow);
+}
+
+/* 弹窗标题栏上的独立操作按钮（关闭钮等）：高级材质下作为独立液态表面，
+ * 与 liquid-material-bridge 的 surfaceSelector 一一对应。
+ * 未开启高级材质时这些规则不生效，按钮保持默认样式；hover/按下交互由
+ * [data-liquid-material] 按钮的公共规则自动接管。 */
+:root[data-material-mode='advanced']
+  :is(
+    .modal-panel > .section-heading,
+    .modal-panel > .shortcut-dialog-header,
+    .modal-panel > .material-preview-heading,
+    .modal-panel > .material-history-heading,
+    .modal-panel > .telegraph-output-heading,
+    .modal-panel > header
+  )
+  > :is(.icon-action-button, .icon-button),
+/* 物料历史弹窗的关闭钮多包了一层 .material-history-heading-actions，
+ * 不是头部直接子级，需单独覆盖，否则不会挂上液态材质。 */
+:root[data-material-mode='advanced']
+  .modal-panel
+  > .material-history-heading
+  > .material-history-heading-actions
+  > :is(.icon-action-button, .icon-button) {
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-action-surface),
+    transparent
+  );
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+}
+
+/* 透光模式下弹窗标题栏关闭钮（独立液态表面）的交互规范：
+ * 交互区域沿用 icon-action-button 主基准 38×38（不小于 38px，移动端响应式规则不缩小）；
+ * 悬停提升底色不透明度，按下略增底色并缩放 0.98、阴影收敛为拇指阴影，形成明确点击反馈。 */
+:root[data-material-mode='advanced']
+  :is(
+    .modal-panel > .section-heading,
+    .modal-panel > .shortcut-dialog-header,
+    .modal-panel > .material-preview-heading,
+    .modal-panel > .material-history-heading,
+    .modal-panel > .telegraph-output-heading,
+    .modal-panel > header
+  )
+  > :is(.icon-action-button, .icon-button):is(:hover, :focus-visible),
+:root[data-material-mode='advanced']
+  .modal-panel
+  > .material-history-heading
+  > .material-history-heading-actions
+  > :is(.icon-action-button, .icon-button):is(:hover, :focus-visible) {
+  /* 88% 白底在弹窗白底上仍偏接近，故同时把图标色由 muted 提升到正文色，保证悬停可辨识。 */
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 88%, transparent);
+  color: var(--yct-color-text);
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    .modal-panel > .section-heading,
+    .modal-panel > .shortcut-dialog-header,
+    .modal-panel > .material-preview-heading,
+    .modal-panel > .material-history-heading,
+    .modal-panel > .telegraph-output-heading,
+    .modal-panel > header
+  )
+  > :is(.icon-action-button, .icon-button):active,
+:root[data-material-mode='advanced']
+  .modal-panel
+  > .material-history-heading
+  > .material-history-heading-actions
+  > :is(.icon-action-button, .icon-button):active {
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
+  box-shadow: var(--yct-material-thumb-shadow);
+  transform: scale(var(--yct-motion-scale-press));
+}
+
+/* 弹窗底栏高级材质（两种形态，选择器与 liquid-material-bridge 逐字对应）：
+ * B. 复合胶囊（map-share、导视导入 footer）整块注册为一块液态材质；
+ * A. 纯按钮组容器裸悬浮（无底板/分隔线/阴影/模糊），内部按钮逐个注册。 */
+:root[data-material-mode='advanced']
+  :is(.modal-panel > .map-share-actions, .modal-panel.metro-wayfinding-import-dialog > footer) {
+  border: 0;
+  background: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-action-surface),
+    transparent
+  );
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    .modal-panel > .admin-content-actions,
+    .modal-panel > .telegraph-confirm-actions,
+    .modal-panel > .material-action-row,
+    .modal-panel.metro-wayfinding-combination-dialog > footer
+  ) {
+  /* 底栏容器完全裸露（无渐变背景、无内阴影、无分隔线、无滤镜）：
+   * 悬浮感由按钮自身携带（见下方按钮材质规则）；滚动内容从按钮之间的
+   * 空隙穿过属于透光模式的预期表现。 */
+  border-top: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* 裸悬浮底栏内的成组按钮：非强调按钮是半透明液态胶囊（与标题栏关闭钮同配方）；
+ * 强调按钮由「强调按钮材质化」规则接管（主色半透明 + 背景滤镜 + 扭曲 + 内阴影 + 描边）。 */
+:root[data-material-mode='advanced']
+  :is(
+    .modal-panel > .admin-content-actions,
+    .modal-panel > .telegraph-confirm-actions,
+    .modal-panel > .material-action-row,
+    .modal-panel.metro-wayfinding-combination-dialog > footer
+  )
+  > :is(button, a):not(.is-primary, .primary-action-button) {
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-action-surface),
+    transparent
+  );
+  /* 与强调按钮口径一致：底栏内按钮去掉内阴影（顶部高光/内凹），只保留外投影。 */
+  box-shadow: var(--yct-material-floating-shadow);
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
 }
 
 :root[data-material-mode='advanced'] .operation-toc-panel,
@@ -22493,18 +23937,14 @@ button.material-studio-review-badge {
   .operation-toc-toggle {
   border-color: color-mix(in srgb, var(--yct-color-border) 76%, transparent);
   color: var(--yct-color-text);
-  -webkit-backdrop-filter: contrast(var(--yct-material-contrast))
-    brightness(var(--yct-material-brightness)) saturate(var(--yct-material-saturation))
-    blur(var(--yct-material-blur));
-  backdrop-filter: contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
     saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
-  box-shadow: var(--yct-shadow-floating);
-  text-shadow: 0 1px 4px
-    color-mix(
-      in srgb,
-      var(--yct-color-surface-panel) var(--yct-material-text-shadow-strength),
-      transparent
-    );
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  box-shadow: var(--yct-material-surface-shadow);
+  text-shadow: var(--yct-material-text-shadow);
 }
 
 :root[data-material-mode='advanced']
@@ -22518,7 +23958,7 @@ button.material-studio-review-badge {
 }
 
 :root[data-material-mode='advanced'] .operation-toc-panel {
-  background: color-mix(in srgb, var(--yct-color-surface-panel) 92%, transparent);
+  background: var(--yct-material-neutral-surface);
 }
 
 :root[data-material-mode='advanced']
@@ -22538,6 +23978,8 @@ button.material-studio-review-badge {
 }
 
 :root[data-material-mode='advanced'] :is(.hero-carousel-controls, .app-toast) {
+  --yct-material-content-background: var(--yct-material-dark-surface);
+  --yct-material-surface-base-background: var(--yct-material-dark-surface);
   border-color: var(--yct-material-dark-border);
   background: color-mix(
     in srgb,
@@ -22545,48 +23987,20 @@ button.material-studio-review-badge {
     transparent
   );
   color: var(--yct-material-dark-text);
-  -webkit-backdrop-filter: contrast(var(--yct-material-contrast))
-    brightness(var(--yct-material-brightness-dark)) saturate(var(--yct-material-saturation))
-    blur(var(--yct-material-blur));
-  backdrop-filter: contrast(var(--yct-material-contrast))
-    brightness(var(--yct-material-brightness-dark)) saturate(var(--yct-material-saturation))
-    blur(var(--yct-material-blur));
-  box-shadow: var(--yct-shadow-floating);
-  text-shadow: 0 1px 4px rgb(0 0 0 / 40%);
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness-dark))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness-dark))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  box-shadow: var(--yct-material-surface-shadow);
+  text-shadow: var(--yct-material-text-shadow);
 }
 
 :root[data-material-mode='performance'] {
-  --yct-material-hover-state: var(--yct-color-surface-muted);
+  --yct-material-hover-state: var(--yct-color-interaction-hover);
   --yct-material-selected-state: var(--yct-color-surface-selected);
-  --yct-material-selected-panel-state: var(--yct-color-surface-panel);
-}
-
-:root[data-material-mode]
-  :is(
-    .icon-button,
-    .account-button,
-    .search-clear-button,
-    .rail-item,
-    .bottom-nav-item,
-    .operations-feed-item,
-    .search-result-item,
-    .admin-home-entry,
-    .transit-visual-viewport-controls button,
-    .transit-visual-toolbar button,
-    .transit-visual-node-actions button,
-    .line-list-item,
-    .service-entry
-  ):is(:hover, :focus-visible) {
-  background: var(--yct-material-hover-state);
-}
-
-:root[data-material-mode]
-  :is(
-    .map-route-plan-header-actions button,
-    .map-stage .icon-action-button,
-    .icon-action-button
-  ):is(:hover, :focus-visible) {
-  background: var(--yct-material-hover-state);
+  --yct-material-selected-panel-state: var(--yct-color-surface-selected);
 }
 
 :root[data-material-mode]
@@ -22602,6 +24016,29 @@ button.material-studio-review-badge {
 
 :root[data-material-mode]
   :is(
+    .icon-button,
+    .account-button,
+    .search-clear-button,
+    .rail-item,
+    .bottom-nav-item,
+    .category-chip,
+    .map-route-plan-header-actions button,
+    .map-stage .icon-action-button,
+    .icon-action-button,
+    .material-template-example,
+    .metro-wayfinding-element-list button,
+    .metro-wayfinding-main-segments-caret-actions button,
+    .metro-wayfinding-main-segments-chip button,
+    .metro-wayfinding-segmented-control button,
+    .metro-wayfinding-icon-picker button,
+    .transit-visual-toolbar button,
+    .transit-visual-viewport-controls button
+  ):not(:disabled):active {
+  transform: scale(var(--yct-motion-scale-press));
+}
+
+:root[data-material-mode]
+  :is(
     .map-nearby-scope-switch button.is-active,
     .map-poi-detail-tabs button.is-active,
     .segmented-control button.is-active,
@@ -22611,6 +24048,156 @@ button.material-studio-review-badge {
     .map-browse-mode-control button.is-active
   ) {
   background: var(--yct-material-selected-panel-state);
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] {
+  border: 0;
+  border-color: transparent;
+  text-shadow: var(--yct-material-text-shadow);
+  box-shadow: var(--yct-material-surface-shadow);
+}
+
+/* 弹窗底栏复合胶囊（形态 B：map-share、导视导入 footer）：
+ * 容器整体注册为液态材质，但按底栏规范去掉内阴影（顶部高光/内凹），
+ * 只保留外投影，与底栏裸悬浮按钮口径一致；
+ * 需置于上一条 [data-liquid-material] 兜底之后以同特异性胜出。 */
+:root[data-material-mode='advanced']
+  :is(.modal-panel > .map-share-actions, .modal-panel.metro-wayfinding-import-dialog > footer) {
+  box-shadow: var(--yct-material-floating-shadow);
+}
+
+/* 透光模式下禁用的强调按钮：彻底退出液态材质（无内阴影/外阴影/文字光晕），
+ * 回落到基础禁用配色（语义色 14% 中性 tint），保证禁用态在三种材质模式下观感一致。
+ * 特异性 (0,4,0) 压过上方 [data-liquid-material] 兜底的 (0,3,0)。 */
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(
+    .primary-action-button,
+    .secondary-action-button.is-primary,
+    .visual-editor-page-actions button.is-primary,
+    .material-action-row button.is-primary,
+    .material-history-item button.is-primary
+  ):disabled,
+:root[data-material-mode='advanced']
+  :is(
+    .visual-editor-page-actions > button.is-primary,
+    .transit-entity-heading-actions > button.is-primary,
+    .primary-action-button[data-liquid-material],
+    .secondary-action-button.is-primary[data-liquid-material]
+  ):disabled {
+  box-shadow: none;
+  text-shadow: none;
+}
+
+/* 普通工作区面板不继承高级材质的模糊、扭曲、内阴影和文字阴影。 */
+:root[data-material-mode='advanced']
+  :is(
+    .hero-panel,
+    .reminder-panel,
+    .server-status-panel,
+    .feed-panel,
+    .module-panel,
+    .offline-page-panel,
+    .account-auth-panel,
+    .material-studio-sidebar,
+    .material-preview:not(.modal-panel),
+    .material-template-examples-toolbar,
+    .markdown-source-panel,
+    .markdown-visual-preview,
+    .telegraph-control-panel,
+    .telegraph-send-stage,
+    .telegraph-output-section
+  ) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    .hero-panel,
+    .reminder-panel,
+    .server-status-panel,
+    .feed-panel,
+    .module-panel,
+    .offline-page-panel,
+    .account-auth-panel,
+    .material-studio-sidebar,
+    .material-preview:not(.modal-panel),
+    .material-template-examples-toolbar,
+    .markdown-source-panel,
+    .markdown-visual-preview,
+    .telegraph-control-panel,
+    .telegraph-send-stage,
+    .telegraph-output-section
+  )
+  :where(.material-symbols-outlined, .material-icon, svg, [data-icon]) {
+  filter: none;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+/* 字体图标和文字共用材质底色阴影，SVG 仅对实际图形投影，不给图标添加内阴影。 */
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :where(.material-symbols-outlined, .material-icon, svg, [data-icon]) {
+  filter: none;
+  box-shadow: none;
+  text-shadow: var(--yct-material-text-shadow);
+}
+
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :where(svg, [data-material-symbol-mask]) {
+  text-shadow: none;
+  filter: var(--yct-material-icon-filter);
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] :where(svg *) {
+  text-shadow: none;
+}
+
+/* 每块材质建立底色边界；内部填充色由桥接层写入并自然继承给透明子元素。 */
+:root[data-material-mode='advanced'] :where([data-liquid-material]) {
+  --yct-material-content-background: var(--yct-color-surface-panel);
+  --yct-material-surface-base-background: var(--yct-color-surface-panel);
+}
+
+/* 在内容自身解析阴影，避免悬停祖先预先解析的颜色盖过更近的填充底色。 */
+:root[data-material-mode='advanced'] :where([data-liquid-material], [data-liquid-material] *) {
+  --yct-material-content-shadow-color: color-mix(
+    in srgb,
+    color-mix(
+        in srgb,
+        var(--yct-material-content-background) 60%,
+        var(--yct-material-surface-base-background)
+      )
+      var(--yct-material-text-shadow-strength),
+    transparent
+  );
+  --yct-material-resolved-shadow-core: var(
+    --yct-material-interaction-shadow-core,
+    var(--yct-material-content-shadow-core)
+  );
+  --yct-material-resolved-shadow-halo: var(
+    --yct-material-interaction-shadow-halo,
+    var(--yct-material-content-shadow-halo)
+  );
+  --yct-material-resolved-shadow-offset: var(--yct-material-interaction-shadow-offset, 1px);
+  --yct-material-text-shadow:
+    0 0 var(--yct-material-resolved-shadow-core) var(--yct-material-content-shadow-color),
+    0 var(--yct-material-resolved-shadow-offset) var(--yct-material-resolved-shadow-halo)
+      var(--yct-material-content-shadow-color);
+  --yct-material-icon-filter: drop-shadow(
+      0 0 calc(var(--yct-material-resolved-shadow-core) / 2)
+        var(--yct-material-content-shadow-color)
+    )
+    drop-shadow(
+      0 calc(var(--yct-material-resolved-shadow-offset) / 2)
+        calc(var(--yct-material-resolved-shadow-halo) / 2) var(--yct-material-content-shadow-color)
+    );
+  text-shadow: var(--yct-material-text-shadow);
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -22659,7 +24246,7 @@ button.material-studio-review-badge {
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   body {
     --yct-topbar-height: 56px;
     --yct-bottom-nav-reserved-height: calc(90px + env(safe-area-inset-bottom, 0px));
@@ -23022,7 +24609,8 @@ button.material-studio-review-badge {
   }
 
   .map-poi-detail-body {
-    max-height: min(24dvh, 180px);
+    /* 为固定在滚动区外的操作底栏预留空间，保证 52dvh 侧栏栈内底栏不被裁切 */
+    max-height: min(18dvh, 130px);
   }
 
   .map-source-chip {
@@ -23113,25 +24701,16 @@ button.material-studio-review-badge {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .admin-home-grid.is-admin-home .admin-home-entry.is-overview-entry {
+    display: none;
+  }
+
   .admin-home-overview-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .bottom-nav {
     display: grid;
-  }
-
-  .secondary-content {
-    width: min(100% - 24px, 560px);
-    margin-top: var(--yct-space-3);
-  }
-
-  .secondary-content:has(.material-studio) {
-    width: min(100% - 24px, 560px);
-  }
-
-  .secondary-content:has(.transit-health-panel) {
-    width: min(100% - 24px, 560px);
   }
 
   .transit-health-header {
@@ -23182,13 +24761,14 @@ button.material-studio-review-badge {
     gap: var(--yct-space-3);
   }
 
-  .transit-health-target-dialog-backdrop {
-    align-items: end;
-    padding: var(--yct-space-2);
-  }
-
-  .transit-health-target-dialog {
+  /* 原生弹窗在窄屏退化为底部抽屉：贴底对齐并保留 8px 安全间距。 */
+  dialog.transit-health-target-dialog {
+    width: calc(100vw - var(--yct-space-4));
     max-height: calc(100dvh - var(--yct-space-4));
+    margin-top: auto;
+    margin-right: auto;
+    margin-bottom: var(--yct-space-2);
+    margin-left: auto;
   }
 
   .transit-health-target-dialog > header {
@@ -23206,6 +24786,74 @@ button.material-studio-review-badge {
   .transit-health-bar,
   .transit-health-bars.is-operator-bars .transit-health-bar {
     grid-template-columns: minmax(76px, 108px) minmax(60px, 1fr) minmax(78px, auto);
+  }
+
+  /* ===== 弹窗窄屏适配 ===== */
+  /* 遮罩收窄到 8px，面板用满可用宽度（固定头尾的负边距仍精确铺满） */
+  .modal-backdrop {
+    padding: var(--yct-space-2);
+  }
+
+  .modal-panel {
+    max-width: calc(100vw - var(--yct-space-4));
+  }
+
+  /* 含关闭钮的弹窗头部强制保持“标题 + 关闭钮”同一行：抵消全局 section-heading
+   * 竖排规则；无按钮的标题栏（如“标题 + 副标题”）继续沿用竖排，避免互相挤压 */
+  .modal-panel > .section-heading:has(> :is(.icon-action-button, .icon-button)) {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .modal-panel
+    :is(
+      .section-heading,
+      .shortcut-dialog-header,
+      .material-preview-heading,
+      .material-history-heading,
+      .telegraph-output-heading
+    )
+    :is(h2, h3) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .modal-panel.metro-wayfinding-import-dialog > header :is(h2, h3),
+  .modal-panel.metro-wayfinding-combination-dialog > header :is(h2, h3) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .modal-panel
+    :is(
+      .section-heading,
+      .shortcut-dialog-header,
+      .material-preview-heading,
+      .material-history-heading,
+      .telegraph-output-heading
+    )
+    > :is(.icon-action-button, .icon-button) {
+    flex: 0 0 auto;
+  }
+
+  .modal-panel:is(.metro-wayfinding-import-dialog, .metro-wayfinding-combination-dialog)
+    > header
+    > .icon-button {
+    flex: 0 0 auto;
+  }
+
+  /* 胶囊操作栏按钮：等宽伸缩、40px 触控高度；空间不足时自动整行换行，不溢出。
+   * import 弹窗 footer 内部按钮由其 640px 断点的两列网格规则接管，此处不重复。 */
+  .modal-panel > .admin-content-actions > button,
+  .modal-panel > .material-action-row > button,
+  .modal-panel > .telegraph-confirm-actions > button,
+  .modal-panel.metro-wayfinding-combination-dialog > footer > button {
+    flex: 1 1 auto;
+    min-height: 40px;
   }
 }
 
@@ -23417,7 +25065,7 @@ button.material-studio-review-badge {
 .dynamic-routemap-control-row button.is-active,
 .dynamic-routemap-segmented button.is-active {
   border-color: var(--dynamic-line-color);
-  background: color-mix(in srgb, var(--dynamic-line-color) 12%, #fff);
+  background: color-mix(in srgb, var(--dynamic-line-color) 12%, transparent);
   color: var(--dynamic-line-color);
 }
 
@@ -23741,7 +25389,7 @@ button.material-studio-review-badge {
   color: #83918d;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .dynamic-routemap-info-bar {
     grid-template-columns: 1fr 1fr;
     gap: 4px;
@@ -24049,7 +25697,7 @@ button.material-studio-review-badge {
   gap: 8px;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .transit-line-departure-direction-grid {
     grid-template-columns: 1fr;
   }
@@ -24176,6 +25824,7 @@ button.material-studio-review-badge {
 /* 电报欢迎态：图片置于页面下方，进入发报纸时随背景层淡出。 */
 div.telegraph-studio {
   position: relative;
+  touch-action: pan-y;
 }
 body:has(.telegraph-studio.is-welcome) {
   overflow-x: clip;
@@ -24199,7 +25848,7 @@ div.telegraph-studio > .telegraph-building-backdrop {
   overflow: hidden;
   background-color: #315d6b;
   background-image: url('/telegraph/telegraph-building.webp');
-  background-position: center bottom;
+  background-position: center 28%;
   background-size: cover;
   opacity: 0.28;
   -webkit-mask-image: linear-gradient(
@@ -24261,7 +25910,7 @@ div.telegraph-studio > section.telegraph-welcome {
   align-content: start;
   justify-items: start;
   text-align: left;
-  padding: clamp(72px, 11vh, 124px) 24px 0;
+  padding: clamp(48px, 7vh, 92px) 24px 0;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -24340,7 +25989,7 @@ div.telegraph-studio > section.telegraph-welcome > .telegraph-building-backdrop 
   overflow: hidden;
   background-color: #315d6b;
   background-image: url('/telegraph/telegraph-building.webp');
-  background-position: center bottom;
+  background-position: center 28%;
   background-size: cover;
   opacity: 0.28;
   -webkit-mask-image: linear-gradient(
@@ -24674,6 +26323,7 @@ div.telegraph-output-grid.telegraph-output-scene.is-sealed .telegraph-receive-pa
   font-size: 0.78rem;
   white-space: nowrap;
 }
+/* telegraph-paper-view-toggle 的完整定义统一在上方（10036 处），此处不再重复。 */
 .telegraph-paper-view-toggle,
 .telegraph-floating-actions {
   display: flex;
@@ -24681,26 +26331,6 @@ div.telegraph-output-grid.telegraph-output-scene.is-sealed .telegraph-receive-pa
   align-items: center;
   justify-content: center;
   gap: 6px;
-}
-.telegraph-paper-view-toggle {
-  padding: 2px;
-  border-radius: var(--yct-radius-pill);
-  background: var(--yct-color-surface-muted);
-}
-.telegraph-paper-view-toggle button {
-  min-height: 32px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: var(--yct-radius-pill);
-  background: transparent;
-  color: var(--yct-color-text-muted);
-  font: inherit;
-  cursor: pointer;
-}
-.telegraph-paper-view-toggle button.is-active {
-  background: var(--yct-color-surface-panel);
-  color: var(--yct-color-text);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
 }
 .telegraph-floating-actions .secondary-action-button {
   min-height: 34px;
@@ -24887,4 +26517,1231 @@ div.telegraph-studio
 .telegraph-grid-preview small {
   align-self: center !important;
   text-align: left !important;
+}
+
+/* 分段选中项使用默认面板底色；文字、图标和把手位置继续表达选中状态。
+ * 例外：.map-route-mode-toggle-list 的选中项使用语义色背景（见 2695 行），不在此覆盖。 */
+:root[data-material-mode]
+  :is(
+    .segmented-control,
+    .map-route-sort-control,
+    .map-nearby-scope-switch,
+    .map-poi-detail-tabs,
+    .map-line-direction-switch,
+    .line-direction-switch,
+    .screen-time-filter,
+    .schedule-time-filter,
+    .schedule-service-strip,
+    .material-mode-switch,
+    .metro-wayfinding-segmented-control,
+    .telegraph-paper-view-toggle,
+    .map-browse-mode-control
+  )
+  button:is(.is-active, .is-selected, [aria-selected='true'], [aria-pressed='true']) {
+  background: var(--yct-color-surface-panel);
+}
+
+.switch-control input:checked + span {
+  background: var(--yct-color-primary);
+}
+
+/* 原生滑杆必须关闭原生外观，才能在两个浏览器引擎中统一把手底色。 */
+input[type='range'] {
+  appearance: none;
+  background: transparent;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--yct-radius-pill);
+  background: linear-gradient(
+    to right,
+    var(--yct-color-primary) 0 var(--yct-range-progress, 0%),
+    var(--yct-color-border) var(--yct-range-progress, 0%) 100%
+  );
+}
+
+input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-border);
+}
+
+input[type='range']::-moz-range-progress {
+  height: 4px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-primary);
+}
+
+input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 18%);
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 18%);
+}
+
+input[type='range']:focus-visible {
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: 4px;
+}
+
+/* 内部布局不再叠底色；分段轨道和独立控件各自只混合一次颜色 token。 */
+:root[data-material-mode='advanced'] [data-liquid-material] .map-category-strip {
+  background: transparent;
+}
+
+/* 路线方式切换条仅由按钮自身表达底色与选中态，容器不承载材质表面。 */
+:root[data-material-mode='advanced'] [data-liquid-material] .map-route-mode-toggle-list,
+:root[data-material-mode='performance'] [data-liquid-material] .map-route-mode-toggle-list {
+  background: transparent;
+}
+
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(
+    .segmented-control:not(fieldset):not(:has(> div)),
+    .segmented-control > div,
+    .map-route-mode-toggle-list,
+    .map-route-sort-control,
+    .map-nearby-scope-switch,
+    .map-poi-detail-tabs,
+    .map-line-direction-switch,
+    .line-direction-switch,
+    .screen-time-filter,
+    .schedule-time-filter,
+    .schedule-service-strip,
+    .material-mode-switch,
+    .metro-wayfinding-segmented-control > div,
+    .metro-wayfinding-icon-picker,
+    .telegraph-paper-view-toggle,
+    .map-browse-mode-control
+  ) {
+  background: var(--yct-material-control-surface);
+  border-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+/* 内部按钮不独立叠加玻璃；清除旧样式留下的模糊、内描边和内阴影。 */
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(button, a, summary, [role='button']):not([data-liquid-material]) {
+  --yct-material-resting-shadow: 0 0 0 transparent;
+  border-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: var(--yct-material-resting-shadow);
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] [data-material-nested] {
+  border: 0;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: var(--yct-material-resting-shadow, 0 0 0 transparent);
+}
+
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(
+    .map-poi-related-item,
+    .category-chip,
+    .map-category-pill,
+    .map-category-toggle,
+    .map-nearby-search-exit,
+    .icon-action-button,
+    .map-route-plan-header-actions button,
+    select
+  ):not(.is-active, .is-selected, [aria-selected='true'], [aria-pressed='true'], [aria-current]) {
+  background: var(--yct-material-control-surface);
+}
+
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(
+    .icon-button:not(.is-primary),
+    .account-button,
+    .search-clear-button,
+    .rail-item,
+    .bottom-nav-item,
+    .map-marker-list-item,
+    .map-marker-list-toggle,
+    .map-layer-toggle,
+    .operation-toc-panel a,
+    .operation-toc-toggle,
+    .app-toast-close,
+    .telegraph-history-row > button:first-child,
+    .transit-visual-toolbar button,
+    .poi-visual-viewport-controls button
+  ):not(
+    .is-primary,
+    .is-active,
+    .is-selected,
+    [aria-selected='true'],
+    [aria-pressed='true'],
+    [aria-current],
+    [aria-expanded='true']
+  ) {
+  background: transparent;
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] .map-layer-toggle {
+  border-radius: var(--yct-radius-md);
+}
+
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(.map-marker-list-item, .map-poi-related-item) {
+  border-radius: var(--yct-radius-md);
+}
+
+/* 整个头部共用背景层；遮罩让底色与模糊同时淡出，避免透明底部仍有矩形滤镜边界。
+ * 遮罩仅作用于背景伪元素，不影响标题、分类控件及其悬停反馈。 */
+:root[data-material-mode='advanced'] .map-marker-list-header {
+  border-bottom: 0;
+}
+
+:root[data-material-mode='advanced']
+  .map-marker-list:not(.is-collapsed)
+  > .map-marker-list-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) max(78%, var(--yct-material-title-surface)),
+    transparent
+  );
+  -webkit-backdrop-filter: blur(max(8px, var(--yct-material-blur-soft)));
+  backdrop-filter: blur(max(8px, var(--yct-material-blur-soft)));
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgb(0 0 0 / 50%) 60%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, rgb(0 0 0 / 50%) 60%, transparent 100%);
+}
+
+/* 简约/均衡模式下，地图与页面上的悬浮控件统一加 2px 描边，强化浮起感；
+ * 透光模式沿用液态材质（自身有扭曲与高光），不再叠加描边，避免视觉重复。
+ * 对原本无边框的控件（如 toast/历史面板）补全边框样式与颜色。 */
+:root[data-material-mode='performance']
+  :is(
+    .map-source-chip,
+    .map-coordinate-chip,
+    .map-coordinate-pick-hint,
+    .map-routing-status,
+    .map-marker-list,
+    .map-layer-panel,
+    .map-browse-mode-control,
+    .operation-toc-panel,
+    .app-toast,
+    .telegraph-history-panel,
+    .map-share-actions,
+    .modal-panel .section-heading > .icon-action-button,
+    .modal-panel .section-heading > .icon-button
+  ),
+:root[data-material-mode='balanced']
+  :is(
+    .map-source-chip,
+    .map-coordinate-chip,
+    .map-coordinate-pick-hint,
+    .map-routing-status,
+    .map-marker-list,
+    .map-layer-panel,
+    .map-browse-mode-control,
+    .operation-toc-panel,
+    .app-toast,
+    .telegraph-history-panel,
+    .map-share-actions,
+    .modal-panel .section-heading > .icon-action-button,
+    .modal-panel .section-heading > .icon-button
+  ) {
+  border: 2px solid var(--yct-color-border);
+}
+
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(
+    .segmented-control,
+    .map-route-mode-toggle-list,
+    .map-route-sort-control,
+    .map-nearby-scope-switch,
+    .map-poi-detail-tabs,
+    .map-line-direction-switch,
+    .line-direction-switch,
+    .screen-time-filter,
+    .schedule-time-filter,
+    .schedule-service-strip,
+    .material-mode-switch,
+    .metro-wayfinding-segmented-control,
+    .metro-wayfinding-icon-picker,
+    .telegraph-paper-view-toggle,
+    .map-browse-mode-control
+  )
+  button {
+  background: transparent;
+}
+
+/* 强调按钮叠加液态材质时：保持主色填充观感与 on-primary 文本，
+ * 并按材质表面规范补齐按钮自身的材质属性：半透明主色底、背景滤镜、扭曲、
+ * 内阴影（含顶部边缘高光）与描边。
+ * 分两条覆盖：①按钮在材质内部（弹窗内主按钮）；②按钮自身即材质（标题栏工具栏主操作）。 */
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(
+    .primary-action-button,
+    .secondary-action-button.is-primary,
+    .visual-editor-page-actions button.is-primary,
+    .material-action-row button.is-primary,
+    .material-history-item button.is-primary
+  ):not(:disabled),
+:root[data-material-mode='advanced']
+  :is(
+    .visual-editor-page-actions > button.is-primary,
+    .transit-entity-heading-actions > button.is-primary,
+    .primary-action-button[data-liquid-material],
+    .secondary-action-button.is-primary[data-liquid-material]
+  ):not(:disabled) {
+  /* 按反馈去掉描边与内阴影，仅保留外投影；不透明度 ×1.5（65% → 97.5%），
+   * 强化「主色填充 + on-primary 文本」的实心观感。 */
+  border: 0;
+  background: color-mix(
+    in srgb,
+    var(--yct-color-primary) calc(var(--yct-material-action-surface) * 1.5),
+    transparent
+  );
+  /* 文本/图标混色计算（97.5% 主色底 = 最坏情况底下透出纯黑时约 #158b75，
+   * 亮度 L≈0.208）：
+   * - 文本 96% on-primary + 4% primary → #f2faf7（L≈0.885），对比度约 3.6:1，
+   *   满足 14px/700 大文本 AA（≥3:1），并消除纯白在半透主色上的生硬感；
+   * - 图标（material-symbols）再降 4%，与文字形成墨水层次；
+   * - 白字不需要液态白色光晕，显式关掉继承的 text-shadow 保证清晰度。 */
+  color: color-mix(in srgb, var(--yct-color-on-primary) 96%, var(--yct-color-primary));
+  text-shadow: none;
+  box-shadow: var(--yct-material-floating-shadow);
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+}
+
+/* 透光强调按钮内的图标：比文本多混 4% 主色（92% on-primary），
+ * 图标墨水略沉于文字，在半透明主色底上层次更稳。 */
+:root[data-material-mode='advanced']
+  :is(
+    .primary-action-button,
+    .secondary-action-button.is-primary,
+    .visual-editor-page-actions button.is-primary,
+    .material-action-row button.is-primary,
+    .material-history-item button.is-primary
+  ):not(:disabled)
+  .material-symbols-outlined,
+:root[data-material-mode='advanced']
+  :is(
+    .visual-editor-page-actions > button.is-primary,
+    .transit-entity-heading-actions > button.is-primary,
+    .primary-action-button[data-liquid-material],
+    .secondary-action-button.is-primary[data-liquid-material]
+  ):not(:disabled)
+  .material-symbols-outlined {
+  color: color-mix(in srgb, var(--yct-color-on-primary) 92%, var(--yct-color-primary));
+}
+
+/* 标题栏工具栏中的操作按钮（可视化编辑页的确定/保存/取消、实体标题栏操作等）：
+ * 透光模式下作为独立液态表面，外观与弹窗标题栏关闭钮同款；
+ * 选择器必须与 liquid-material-bridge 的 surfaceSelector 逐字同步。 */
+:root[data-material-mode='advanced']
+  :is(.visual-editor-page-actions, .visual-editor-page-header)
+  > :is(button, a),
+:root[data-material-mode='advanced'] .visual-editor-page-back,
+:root[data-material-mode='advanced'] .transit-entity-heading-actions > :is(button, a) {
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-action-surface),
+    transparent
+  );
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+}
+
+/* 普通选中项只有强调色底色；只有分段控制的选中项允许保留第二层材质。 */
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(button, a):is(
+    .is-active,
+    .is-selected,
+    [aria-selected='true'],
+    [aria-pressed='true'],
+    [aria-current]
+  ),
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  .operation-toc-toggle[aria-expanded='true'] {
+  background: var(--yct-color-surface-selected);
+}
+
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  :is(
+    .segmented-control,
+    .map-route-mode-toggle-list,
+    .map-route-sort-control,
+    .map-nearby-scope-switch,
+    .map-poi-detail-tabs,
+    .map-line-direction-switch,
+    .line-direction-switch,
+    .screen-time-filter,
+    .schedule-time-filter,
+    .schedule-service-strip,
+    .material-mode-switch,
+    .metro-wayfinding-segmented-control,
+    .telegraph-paper-view-toggle,
+    .map-browse-mode-control
+  )
+  button:is(.is-active, .is-selected, [aria-selected='true'], [aria-pressed='true']) {
+  --yct-material-resting-shadow: var(--yct-material-thumb-shadow);
+  background: var(--yct-material-neutral-surface);
+  /* 选中项尺寸与父材质不同，仅保留自身的轻模糊。 */
+  -webkit-backdrop-filter: saturate(var(--yct-material-saturation))
+    blur(var(--yct-material-blur-soft));
+  backdrop-filter: saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur-soft));
+}
+
+/* 方式切换是独立多选 chip 组，定点退出“分段控件轨道/材质表面”体系：
+   容器透明、无填充无模糊、按钮自带语义描边；不改动上方公共选择器列表。
+   注意：不能带 [data-liquid-material] 祖先前缀——该标记仅 advanced 模式挂接，
+   否则 balanced/performance 下 chip 选中态会被公共规则染成实心 surface-panel。 */
+:root[data-material-mode] .map-route-plan-card .map-route-mode-toggle-list {
+  background: transparent;
+  border: 0;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+:root[data-material-mode]
+  .map-route-plan-card
+  .map-route-mode-toggle-list
+  button:not(.is-active, [aria-pressed='true']) {
+  border-color: var(--yct-color-border);
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-material-mode]
+  .map-route-plan-card
+  .map-route-mode-toggle-list
+  button:is(.is-active, [aria-pressed='true']) {
+  border-color: var(--route-mode-color);
+  background: color-mix(in srgb, var(--route-mode-color) 22%, transparent);
+  box-shadow: none;
+  --yct-material-resting-shadow: 0 0 0 transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] .switch-control span {
+  background: var(--yct-material-control-surface);
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] .switch-control input:checked + span {
+  background: var(--yct-color-primary);
+}
+
+/* 轮播选中点始终使用白色，避免随主题或材质厚度改变。 */
+:root[data-material-mode='advanced'] [data-liquid-material] .hero-carousel-pages button.is-active {
+  background: #ffffff;
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] .switch-control span::after {
+  background: var(--yct-material-neutral-surface);
+  -webkit-backdrop-filter: saturate(var(--yct-material-saturation))
+    blur(var(--yct-material-blur-soft));
+  backdrop-filter: saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur-soft));
+  box-shadow: var(--yct-material-thumb-shadow);
+}
+
+/* 浏览器专用伪元素必须分开写，避免其中一个不受支持导致整条规则失效。 */
+:root[data-material-mode='advanced']
+  [data-liquid-material]
+  input[type='range']::-webkit-slider-thumb {
+  background: var(--yct-material-neutral-surface);
+  -webkit-backdrop-filter: saturate(var(--yct-material-saturation))
+    blur(var(--yct-material-blur-soft));
+  backdrop-filter: saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur-soft));
+  box-shadow: var(--yct-material-thumb-shadow);
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material] input[type='range']::-moz-range-thumb {
+  background: var(--yct-material-neutral-surface);
+  backdrop-filter: saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur-soft));
+  box-shadow: var(--yct-material-thumb-shadow);
+}
+
+/* 全站共享悬停背景和内容缩放；材质上的重阴影仍由材质规则提供。 */
+:root :is(button, a[href], summary, [role='button'], .switch-control, .map-layer-toggle) {
+  --yct-material-hover-tint: color-mix(in srgb, currentColor 9%, transparent);
+  --yct-material-interaction-scale: 1;
+  --yct-material-interaction-shadow-core: initial;
+  --yct-material-interaction-shadow-halo: initial;
+  --yct-material-interaction-shadow-offset: initial;
+  transition:
+    background-color var(--yct-motion-duration-state) var(--yct-motion-easing-standard),
+    text-shadow var(--yct-motion-duration-state) var(--yct-motion-easing-standard);
+}
+
+:root
+  :is(
+    button,
+    [role='button'],
+    .primary-action-button,
+    .secondary-action-button,
+    .icon-action-button
+  ):not(.map-viewport *) {
+  border: 0;
+}
+
+:root
+  :is(button, a[href], summary, [role='button'], .switch-control, .map-layer-toggle)
+  :where(input:focus-visible)
+  + span {
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: 2px;
+}
+
+:root
+  :is(button, a[href], summary, [role='button'], .switch-control, .map-layer-toggle)
+  :where(input:disabled)
+  + span {
+  opacity: 0.5;
+}
+
+:root
+  :is(button, a[href], summary, [role='button'], .switch-control, .map-layer-toggle)
+  :where(input:checked)
+  + span {
+  background-color: var(--yct-color-primary);
+}
+
+:root
+  :is(button, a[href], summary, [role='button'], .switch-control, .map-layer-toggle)
+  :where(.material-interaction-label) {
+  min-width: 0;
+}
+
+:root
+  :is(button, a[href], summary, [role='button'], .switch-control, .map-layer-toggle)
+  :where(.material-interaction-label):empty {
+  display: none;
+}
+
+:root
+  :is(button, a[href], summary, [role='button'], .switch-control, .map-layer-toggle):not(
+    :disabled,
+    [aria-disabled='true'],
+    .is-disabled,
+    .map-viewport *
+  ):not(:has(> input:disabled)):not(:active):is(:focus-visible, :has(> input:focus-visible)) {
+  --yct-material-interaction-scale: var(--yct-motion-scale-hover);
+  background-image: linear-gradient(var(--yct-material-hover-tint), var(--yct-material-hover-tint));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root
+    :is(button, a[href], summary, [role='button'], .switch-control, .map-layer-toggle):not(
+      :disabled,
+      [aria-disabled='true'],
+      .is-disabled,
+      .map-viewport *
+    ):not(:has(> input:disabled)):hover:not(:active) {
+    --yct-material-interaction-scale: var(--yct-motion-scale-hover);
+    background-image: linear-gradient(
+      var(--yct-material-hover-tint),
+      var(--yct-material-hover-tint)
+    );
+  }
+}
+
+:root[data-material-mode='advanced'] [data-liquid-material]:is(button, a) {
+  --yct-material-resting-shadow: var(--yct-material-surface-shadow);
+}
+
+:root[data-material-mode='advanced']
+  [data-liquid-material]:is(button, a):is(:hover, :focus-visible) {
+  background-color: color-mix(
+    in srgb,
+    var(--yct-color-surface-panel) var(--yct-material-action-surface),
+    transparent
+  );
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    [data-liquid-material]:is(button, a),
+    [data-liquid-material]
+      :is(button, a, summary, [role='button'], .switch-control, .map-layer-toggle)
+  )
+  :where(input:focus-visible)
+  + span {
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: 2px;
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    [data-liquid-material]:is(button, a),
+    [data-liquid-material]
+      :is(button, a, summary, [role='button'], .switch-control, .map-layer-toggle)
+  )
+  :where(input:disabled)
+  + span {
+  opacity: 0.5;
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    [data-liquid-material]:is(button, a),
+    [data-liquid-material]
+      :is(button, a, summary, [role='button'], .switch-control, .map-layer-toggle)
+  ):not(:disabled, [aria-disabled='true'], .is-disabled):not(:has(> input:disabled)):not(
+    :active
+  ):is(:focus-visible, :has(> input:focus-visible)) {
+  --yct-material-interaction-scale: var(--yct-motion-scale-hover);
+  --yct-material-interaction-shadow-core: 8px;
+  --yct-material-interaction-shadow-halo: 18px;
+  --yct-material-interaction-shadow-offset: 2px;
+  background-image: linear-gradient(var(--yct-material-hover-tint), var(--yct-material-hover-tint));
+  text-shadow: var(--yct-material-text-shadow);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root[data-material-mode='advanced']
+    :is(
+      [data-liquid-material]:is(button, a),
+      [data-liquid-material]
+        :is(button, a, summary, [role='button'], .switch-control, .map-layer-toggle)
+    ):not(:disabled, [aria-disabled='true'], .is-disabled):not(:has(> input:disabled)):hover:not(
+      :active
+    ) {
+    --yct-material-interaction-scale: var(--yct-motion-scale-hover);
+    --yct-material-interaction-shadow-core: 8px;
+    --yct-material-interaction-shadow-halo: 18px;
+    --yct-material-interaction-shadow-offset: 2px;
+    background-image: linear-gradient(
+      var(--yct-material-hover-tint),
+      var(--yct-material-hover-tint)
+    );
+    text-shadow: var(--yct-material-text-shadow);
+  }
+}
+
+/* 只变换第一层内容，避免嵌套的图标和文字重复缩放；开关轨道不属于内容。 */
+:root
+  :is(button, a[href], summary, [role='button'], .map-layer-toggle)
+  > :where(span, strong, small, em, b, i, svg, img, .feed-item-copy):not(.sr-only) {
+  scale: var(--yct-material-interaction-scale);
+  transition:
+    scale var(--yct-motion-duration-state) var(--yct-motion-easing-standard),
+    text-shadow var(--yct-motion-duration-state) var(--yct-motion-easing-standard),
+    filter var(--yct-motion-duration-state) var(--yct-motion-easing-standard);
+}
+
+:root .operations-feed-item .feed-item-cover > .material-symbols-outlined {
+  scale: var(--yct-material-interaction-scale);
+  transition: scale var(--yct-motion-duration-state) var(--yct-motion-easing-standard);
+}
+
+:root :is(.map-marker-list-toggle, .map-marker-list-item) > span:nth-child(2),
+:root .operations-feed-item > .feed-item-copy {
+  max-width: calc(100% / var(--yct-motion-scale-hover));
+  transform-origin: left center;
+}
+
+/* 开关的悬停状态层在轨道（span）上基于其实际底色叠加；
+   label 本身只做定位容器，清空通用 tint，避免在轨道外再绘一层底色。
+   注意特异性必须压过 tint 定义处 :root :is(…, a[href], …) 的 (0,2,1)，
+   否则透明值不生效，悬停渐变会以方角画在 label 上，从胶囊轨道四角溢出。 */
+:root label.switch-control {
+  --yct-material-hover-tint: transparent;
+  border-radius: var(--yct-radius-pill);
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    [data-liquid-material]:is(button, a),
+    [data-liquid-material] :is(button, a, summary, [role='button'], .map-layer-toggle)
+  )
+  :where(img) {
+  filter: var(--yct-material-icon-filter);
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    [data-liquid-material]:is(button, a),
+    [data-liquid-material] :is(button, a, summary, [role='button'], .map-layer-toggle)
+  )
+  :where(span, strong, small, em, b, i) {
+  text-shadow: var(--yct-material-text-shadow);
+}
+
+.material-interaction-label {
+  display: inline-block;
+}
+
+dialog.client-dialog {
+  width: min(440px, calc(100vw - var(--yct-space-6)));
+  max-height: calc(100dvh - var(--yct-space-6));
+  margin: auto;
+  padding: var(--yct-space-5);
+  border: 0;
+  /* 滚动下沉到正文区，标题栏与操作栏在 flex 布局中固定可见 */
+  overflow: hidden;
+  color: var(--yct-color-text);
+  background: var(--yct-color-surface-panel);
+}
+
+dialog.client-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--yct-space-4);
+}
+
+dialog.client-dialog:not([open]) {
+  display: none;
+}
+
+dialog.client-dialog::backdrop {
+  background: rgb(0 0 0 / 38%);
+  backdrop-filter: blur(var(--yct-material-blur-soft));
+}
+
+.client-dialog-heading,
+.client-dialog-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.client-dialog-heading {
+  justify-content: space-between;
+}
+
+.client-dialog-heading > .icon-button {
+  flex: 0 0 auto;
+}
+
+.client-dialog-heading h2 {
+  /* 标题最多两行截断，把空间让给关闭按钮，避免窄屏下按钮被挤到标题下方 */
+  display: -webkit-box;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 18px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.client-dialog p {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.client-dialog-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+dialog.client-dialog.is-page {
+  width: min(1100px, calc(100vw - var(--yct-space-6)));
+  height: calc(100dvh - var(--yct-space-6));
+}
+
+.client-dialog iframe {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: var(--yct-radius-md);
+}
+
+:root[data-material-mode='advanced'] dialog.client-dialog[data-liquid-material] {
+  background: var(--yct-material-neutral-surface);
+}
+
+/* ============================================================
+ * /dev/controls 控件展示板（仅开发环境或 NEXT_PUBLIC_ENABLE_CONTROLS=1 可访问）
+ * 样式全部限定在 .controls-showcase 作用域内，不影响业务页面
+ * ============================================================ */
+.controls-showcase {
+  display: grid;
+  gap: var(--yct-space-4);
+  width: min(960px, 100%);
+  margin: 0 auto;
+  padding: var(--yct-space-5) var(--yct-space-4) var(--yct-space-6);
+}
+
+.controls-showcase-header h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.controls-showcase-header p {
+  margin: var(--yct-space-2) 0 0;
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.controls-card {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-4);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+}
+
+.controls-card > h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.controls-note {
+  margin: calc(var(--yct-space-2) * -1) 0 0;
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: var(--yct-space-3);
+}
+
+.controls-field {
+  display: grid;
+  gap: var(--yct-space-1);
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+}
+
+.controls-field-wide {
+  grid-column: 1 / -1;
+}
+
+.controls-field > input,
+.controls-field > textarea,
+.controls-field > select {
+  width: 100%;
+}
+
+.controls-range {
+  display: grid;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+}
+
+.controls-range input {
+  width: 100%;
+}
+
+.controls-switch-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.controls-switch-item .switch-control {
+  margin-left: 0;
+}
+
+.controls-switch-label {
+  font-size: 13px;
+  color: var(--yct-color-text-secondary);
+}
+
+.controls-topbar-stack {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.controls-topbar-demo {
+  padding: var(--yct-space-2);
+  border: 1px dashed var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+}
+
+.controls-form-dialog form {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.controls-longform {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.controls-longform p {
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+/* ------------------------------------------------------------
+ * 第二轮扩充：导航框架 / 芯片 / 分段变体 / 地图悬浮件 / 列表卡片
+ * 仅做展示板内的布局与「脱离地图/应用壳后的定位复位」，不改业务样式
+ * ------------------------------------------------------------ */
+.controls-stack {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.controls-sub-label {
+  margin: 0 0 var(--yct-space-1);
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 侧栏 rail 与移动端 bottom-nav 同排对照；bottom-nav 业务中 fixed 且桌面隐藏，展示板内复位 */
+.controls-nav-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--yct-space-4);
+}
+
+.controls-showcase .bottom-nav {
+  position: static;
+  inset: auto;
+  display: grid;
+  width: min(420px, 100%);
+  height: auto;
+}
+
+/* operation-toc 面板业务中 absolute 悬浮，展示板内静态展开 */
+.controls-toc-demo {
+  position: relative;
+  display: grid;
+  justify-items: start;
+  gap: var(--yct-space-2);
+}
+
+.controls-showcase .operation-toc-panel {
+  position: static;
+  inset: auto;
+  width: min(320px, 100%);
+  max-height: none;
+}
+
+/* 地图悬浮芯片脱离地图容器后复位为静态排列 */
+.controls-showcase .map-source-chip,
+.controls-showcase .map-routing-status,
+.controls-showcase .map-coordinate-pick-hint {
+  position: static;
+  inset: auto;
+  transform: none;
+}
+
+.controls-map-split {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--yct-space-4);
+}
+
+.controls-map-split > .controls-stack {
+  flex: 1 1 260px;
+}
+
+.controls-layer-list {
+  flex: 0 1 320px;
+  min-width: 260px;
+}
+
+/* 列表项与卡片：两栏对照，窄屏自动堆叠 */
+.controls-card-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: var(--yct-space-4);
+  align-items: start;
+}
+
+.controls-card-split > * {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.controls-panel-demo {
+  width: min(360px, 100%);
+}
+
+.controls-route-stack {
+  display: grid;
+  gap: var(--yct-space-2);
+  max-width: 380px;
+}
+
+.controls-feed-demo {
+  max-width: 420px;
+}
+
+/* fieldset 套 controls-field 时去掉浏览器默认边框 */
+.controls-showcase fieldset.controls-field {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------
+ * 右下角「全局外观」悬浮面板（固定定位 + 可折叠）
+ * ------------------------------------------------------------ */
+.controls-appearance-dock {
+  position: fixed;
+  right: var(--yct-space-4);
+  bottom: var(--yct-space-4);
+  z-index: 40;
+  display: grid;
+  justify-items: end;
+  gap: var(--yct-space-2);
+  width: min(320px, calc(100vw - var(--yct-space-8)));
+  /* 容器本身不拦截点击，仅按钮与面板可交互，避免遮挡右下角内容。 */
+  pointer-events: none;
+}
+
+.controls-appearance-dock > * {
+  pointer-events: auto;
+}
+
+/* 对齐项目悬浮面板规范（.operation-toc-panel）：94% 白底 + radius-md + floating 阴影 +
+ * 13px 文本；透光模式下的液态材质配方见下方 advanced 规则。 */
+.controls-appearance-panel {
+  display: grid;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
+  box-shadow: var(--yct-shadow-floating);
+  color: var(--yct-color-text);
+  font-size: 13px;
+  -webkit-backdrop-filter: blur(var(--yct-material-blur-soft));
+  backdrop-filter: blur(var(--yct-material-blur-soft));
+}
+
+/* 标题栏即折叠开关：整条可点击，左图标 + 标题 + 右侧展开箭头。 */
+.controls-appearance-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-height: 44px;
+  padding: 0 var(--yct-space-3);
+  border: 0;
+  border-radius: calc(var(--yct-radius-md) - 1px) calc(var(--yct-radius-md) - 1px) 0 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.controls-appearance-heading > .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.controls-appearance-title {
+  font-weight: 700;
+}
+
+.controls-appearance-caret {
+  color: var(--yct-color-text-muted);
+}
+
+.controls-appearance-body {
+  display: grid;
+  gap: var(--yct-space-3);
+  max-height: min(56vh, 380px);
+  overflow: auto;
+  padding: var(--yct-space-3);
+  border-top: 1px solid var(--yct-color-border);
+}
+
+/* 简约/均衡模式下按「悬浮控件」规范加 2px 描边，与页面其它悬浮件一致。 */
+:root[data-material-mode='performance'] .controls-appearance-panel,
+:root[data-material-mode='balanced'] .controls-appearance-panel {
+  border: 2px solid var(--yct-color-border);
+}
+
+/* 透光模式：与 .operation-toc-panel 同款液态材质配方（中性半透明底 + 背景滤镜 + 扭曲 +
+ * 内阴影/边缘高光 + 文本阴影）；扭曲滤镜由 liquid-material-bridge 注册提供。 */
+:root[data-material-mode='advanced'] .controls-appearance-panel {
+  border-color: color-mix(in srgb, var(--yct-color-border) 76%, transparent);
+  background: var(--yct-material-neutral-surface);
+  box-shadow: var(--yct-material-surface-shadow);
+  text-shadow: var(--yct-material-text-shadow);
+  -webkit-backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+  backdrop-filter: var(--yct-material-distortion-filter, blur(0px))
+    contrast(var(--yct-material-contrast)) brightness(var(--yct-material-brightness))
+    saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
+}
+
+:root[data-material-mode='advanced'] .controls-appearance-body {
+  border-top-color: transparent;
+}
+
+/* 目录跳转锚点补偿：抵消页面标题栏吸顶高度（与目录 96px 的活跃判定阈值一致）。 */
+.controls-showcase .controls-card {
+  scroll-margin-top: 96px;
+}
+
+.controls-showcase .controls-layer-panel {
+  position: static;
+  inset: auto;
+  width: min(360px, 100%);
+  max-height: none;
+  flex: 0 1 360px;
+  transform: none;
+}
+
+.controls-showcase .controls-layer-list {
+  min-width: 0;
+}
+
+.controls-card,
+.controls-card > *,
+.controls-grid > * {
+  min-width: 0;
+}
+
+.controls-inventory-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: var(--yct-space-3);
+}
+
+.controls-inventory-item {
+  border-bottom: 1px solid var(--yct-color-border-subtle);
+}
+
+.controls-inventory-item > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--yct-space-3);
+  min-height: 48px;
+  padding: var(--yct-space-2) 0;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.controls-inventory-item > summary > span:first-child {
+  display: grid;
+  gap: var(--yct-space-1);
+}
+
+.controls-inventory-item :is(code, strong, a),
+.controls-inventory-detail {
+  overflow-wrap: anywhere;
+}
+
+.controls-inventory-detail {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: 0 0 var(--yct-space-3);
+  font-size: 12px;
+}
+
+.controls-inventory-detail p {
+  margin: 0;
+}
+
+.controls-inventory-links,
+.controls-inventory-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--yct-space-2);
+}
+
+.controls-inventory-pagination > span {
+  margin-right: auto;
+  font-size: 13px;
+}
+
+@media (max-width: 720px) {
+  .controls-inventory-item > summary {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--yct-space-1);
+  }
+}
+
+/*
+  单列布局专用的收窄宽度。**断点刻意用 720px 而不是上面的 760px**：
+
+  760px 是「≤760 收成单列」的布局断点，但 JS 侧的单列判定是
+  `isSingleColumnViewport`（matchMedia `(max-width: 720px)`，见 material-studio-panel）。
+  两者不一致会在 721–760px 之间撕开一道口子：JS 仍按宽屏的两列模式渲染（侧栏折叠器等
+  按 `isSingleColumnViewport` 走宽屏分支），CSS 却已经把容器压到 560px，
+  于是一段区间里出现「双列的排版、单列的容器宽度」——两侧留白异常地宽。
+
+  这个 560px 上限本就是为「真·单列」准备的，因此只在 ≤720px（与 JS 判定对齐）生效。
+*/
+@media (max-width: 720px) {
+  .secondary-content {
+    width: min(100% - 24px, 560px);
+    margin-top: var(--yct-space-3);
+  }
+
+  .secondary-content:has(.material-studio) {
+    width: min(100% - 24px, 560px);
+  }
+
+  .secondary-content:has(.transit-health-panel) {
+    width: min(100% - 24px, 560px);
+  }
 }

@@ -16,6 +16,8 @@ import {
 import { findMaterialTransitLineNumber } from './entity-translation-store';
 import { readMapSpatialProfile } from './map-spatial-profile-store';
 import { readMaterialTransitOverview } from './transit-data';
+// 与物料面板的「首班 / 末班」输入共用同一套格式，避免手填值与服务器线网生成值样式不一致。
+import { formatServiceTimeRange } from './material-service-time';
 import {
   findMaterialTransitNetworkLine,
   findMaterialTransitNetworkNodeByName,
@@ -1100,31 +1102,6 @@ function formatFirstLastBus(line: TransitLineSummary): string {
     return `末 ${last}`;
   }
   return '';
-}
-
-function formatServiceTimeRange(first: string | undefined, last: string | undefined): string {
-  if (!first && !last) {
-    return '';
-  }
-  if (!first) {
-    return `末 ${last}`;
-  }
-  if (!last) {
-    return `首 ${first}`;
-  }
-  const firstMinutes = parseClockMinutes(first);
-  const lastMinutes = parseClockMinutes(last);
-  const nextDay =
-    firstMinutes !== undefined && lastMinutes !== undefined && lastMinutes < firstMinutes;
-  return `${first}-${nextDay ? '次日' : ''}${last}`;
-}
-
-function parseClockMinutes(value: string): number | undefined {
-  const match = value.match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) {
-    return undefined;
-  }
-  return Number(match[1]) * 60 + Number(match[2]);
 }
 
 async function resolveMaterialTransitLineDisplay(
