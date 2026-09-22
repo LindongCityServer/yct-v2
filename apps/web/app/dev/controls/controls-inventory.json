@@ -20761,7 +20761,19 @@
           "types": [],
           "states": [],
           "lines": [
-            18
+            19
+          ]
+        },
+        {
+          "owner": "EmbeddedHostBridges",
+          "element": "KjOsBridge",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            20
           ]
         }
       ]

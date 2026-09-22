@@ -1,6 +1,7 @@
 'use client';
 
 import { FluentOsStorageBridge } from './embedded-hosts/fluentos';
+import { KjOsBridge } from './embedded-hosts/kj-os';
 
 /**
  * 嵌入式宿主桥接的**唯一挂载点**。
@@ -16,6 +17,7 @@ export function EmbeddedHostBridges() {
   return (
     <>
       <FluentOsStorageBridge />
+      <KjOsBridge />
     </>
   );
 }
