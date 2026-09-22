@@ -3,6 +3,20 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.12.6",
+      "releasedAt": "2026-09-22T20:33:27.162Z",
+      "sourceFingerprint": "e68b7a7416414840c94ef774aa1d75455e72e12f2b69dc90673b79d37be895b5",
+      "themes": ["web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "支持在 KJ OS 网页桌面中以应用形式打开雨城通，登录与提示消息由系统层承接"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.12.5",
       "releasedAt": "2026-09-22T18:18:04.183Z",
       "sourceFingerprint": "e040bea62a69246912b7c289ad1d3f62645a8a3c8e6e9699ad32a8ddaf220b33",
