@@ -2,6 +2,8 @@
 
 import { requestConfirmation } from '../lib/client-dialog-events';
 
+import { AccountLoginEntry } from './account-login-entry';
+import { AccountLogoutEntry } from './account-logout-entry';
 import { RangeInput } from './range-input';
 
 import type {
@@ -1616,29 +1618,22 @@ function AccountAuthPanel({
                 <span>{t('account.auth.ldpassAccount')}</span>
               </a>
             ) : null}
-            <a className="secondary-action-button" href={appPath('/api/auth/logout')}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                logout
-              </span>
-              <span>{t('account.auth.logout')}</span>
-            </a>
+            <AccountLogoutEntry
+              className="secondary-action-button"
+              label={t('account.auth.logout')}
+            />
           </>
         ) : (
           <>
-            <a
+            <AccountLoginEntry
+              ldpassConfigured={auth.ldpassConfigured}
               className={
                 auth.ldpassConfigured
                   ? 'secondary-action-button is-primary'
                   : 'secondary-action-button'
               }
-              href={auth.ldpassConfigured ? appPath('/api/auth/ldpass/start') : undefined}
-              aria-disabled={!auth.ldpassConfigured}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                login
-              </span>
-              <span>{t('account.auth.login')}</span>
-            </a>
+              label={t('account.auth.login')}
+            />
             {auth.localAdminAuthEnabled ? (
               <form
                 className="account-local-admin-login"

@@ -2,7 +2,7 @@
   "family": "Material Symbols Outlined",
   "axes": "opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
   "source": "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
-  "iconCount": 348,
+  "iconCount": 349,
   "icons": [
     "accessible",
     "accessible_forward",
@@ -218,6 +218,7 @@
     "park",
     "parking",
     "partial",
+    "passkey",
     "patch",
     "payments",
     "pending",
@@ -353,5 +354,5 @@
     "woman",
     "women"
   ],
-  "fontBytes": 253364
+  "fontBytes": 254196
 }

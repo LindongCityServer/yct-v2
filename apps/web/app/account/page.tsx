@@ -4,7 +4,11 @@ import { AccountSettingsPanel } from '../../components/account-settings-panel';
 import { readRuntimeConfig } from '../../lib/runtime-config';
 import { getPageMetadata } from '../../lib/site-metadata';
 import { readYctServerSession } from '../../lib/yct-server-session-store';
-import { yctSessionCookieName } from '../../lib/yct-session';
+import {
+  resolveYctSessionCookie,
+  yctEmbedSessionCookieName,
+  yctSessionCookieName,
+} from '../../lib/yct-session';
 
 export async function generateMetadata() {
   return getPageMetadata('account');
@@ -17,7 +21,11 @@ export default async function AccountPage({
 }>) {
   const config = readRuntimeConfig();
   const cookieStore = await cookies();
-  const serverSession = await readYctServerSession(cookieStore.get(yctSessionCookieName)?.value);
+  const { sessionId } = resolveYctSessionCookie({
+    standardSessionId: cookieStore.get(yctSessionCookieName)?.value,
+    embeddedSessionId: cookieStore.get(yctEmbedSessionCookieName)?.value,
+  });
+  const serverSession = await readYctServerSession(sessionId);
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const authStatus = Array.isArray(resolvedSearchParams?.auth)
     ? (resolvedSearchParams?.auth[0] ?? '')

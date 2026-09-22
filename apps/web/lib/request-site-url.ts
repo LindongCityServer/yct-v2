@@ -1,10 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { appBasePath } from './app-paths';
 
-export function resolvePublicSiteOrigin(
-  request: NextRequest,
-  configuredSiteUrl?: string,
-): string {
+export function resolvePublicSiteOrigin(request: NextRequest, configuredSiteUrl?: string): string {
   const configuredUrl = tryParseUrl(configuredSiteUrl);
   const forwardedUrl = resolveForwardedUrl(request);
   const sameSiteNavigationUrl = resolveSameSiteNavigationUrl(request);
@@ -41,6 +38,53 @@ export function isSecureNextRequest(request: NextRequest): boolean {
   }
 
   return request.nextUrl.protocol === 'https:';
+}
+
+/**
+ * 判断请求是否由本站自己的页面发起。
+ *
+ * 嵌入专用会话 Cookie 是 `SameSite=None`，会随任何跨站请求发送，
+ * 因此使用它的写接口必须额外确认「发起方文档就是本站」：
+ * iframe 拿到 `allow-same-origin` 后其文档源即本站源，`Origin` / `Referer` 指向本站；
+ * 恶意站点的 iframe 则指向自身。
+ *
+ * 注意这里刻意不复用 `resolvePublicSiteOrigin`：它会用请求自带的 `Origin` 参与推导，
+ * 把攻击者来源误判成站点来源。
+ */
+export function isSameOriginDocumentRequest(
+  request: NextRequest,
+  configuredSiteUrl?: string,
+): boolean {
+  if (request.headers.get('sec-fetch-site')?.trim().toLowerCase() === 'same-origin') {
+    return true;
+  }
+
+  const candidate = request.headers.get('origin') ?? request.headers.get('referer');
+  if (!candidate || candidate === 'null') {
+    // 缺少可用于判定的头时按不可信处理；现代浏览器对本请求都会带上其中之一。
+    return false;
+  }
+
+  const candidateUrl = tryParseUrl(candidate);
+  if (!candidateUrl) {
+    return false;
+  }
+
+  const allowedOrigins = new Set<string>([request.nextUrl.origin]);
+  const configuredUrl = tryParseUrl(configuredSiteUrl);
+  if (configuredUrl) {
+    allowedOrigins.add(configuredUrl.origin);
+  }
+  const forwardedUrl = resolveForwardedUrl(request);
+  if (forwardedUrl) {
+    allowedOrigins.add(forwardedUrl.origin);
+  }
+  const hostHeaderUrl = resolveHostHeaderUrl(request, configuredUrl);
+  if (hostHeaderUrl) {
+    allowedOrigins.add(hostHeaderUrl.origin);
+  }
+
+  return allowedOrigins.has(candidateUrl.origin);
 }
 
 function resolveForwardedUrl(request: NextRequest): URL | undefined {
@@ -174,10 +218,7 @@ function parseForwardedHeader(value: string | null): {
 }
 
 function firstHeaderValue(value: string | null): string | undefined {
-  const first = value
-    ?.split(',')[0]
-    ?.trim()
-    .replace(/^"|"$/g, '');
+  const first = value?.split(',')[0]?.trim().replace(/^"|"$/g, '');
   return first || undefined;
 }
 

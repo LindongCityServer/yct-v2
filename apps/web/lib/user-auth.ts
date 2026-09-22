@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureYctUserLinkForLdpassSession } from './auth-workflow';
+import { isSameOriginDocumentRequest } from './request-site-url';
+import { readRuntimeConfig } from './runtime-config';
 import { readYctServerSession } from './yct-server-session-store';
-import { yctSessionCookieName } from './yct-session';
+import {
+  resolveYctSessionCookie,
+  yctEmbedSessionCookieName,
+  yctSessionCookieName,
+} from './yct-session';
 
 export type WritableUserAuthResult =
   | {
@@ -21,9 +27,25 @@ export async function requireActiveLdpassUser(
   request: NextRequest,
 ): Promise<WritableUserAuthResult> {
   try {
-    const serverSession = await readYctServerSession(
-      request.cookies.get(yctSessionCookieName)?.value,
-    );
+    const { sessionId, fromEmbeddedCookie } = resolveYctSessionCookie({
+      standardSessionId: request.cookies.get(yctSessionCookieName)?.value,
+      embeddedSessionId: request.cookies.get(yctEmbedSessionCookieName)?.value,
+    });
+
+    if (fromEmbeddedCookie && !isSameOriginDocumentRequest(request, readRuntimeConfig().siteUrl)) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: 'cross_site_request_blocked',
+            message: '嵌入会话只能由本站页面发起写操作。',
+          },
+          { status: 403 },
+        ),
+      };
+    }
+
+    const serverSession = await readYctServerSession(sessionId);
     const session = serverSession?.ldpassSession;
 
     if (!session?.authenticated || !session.user) {

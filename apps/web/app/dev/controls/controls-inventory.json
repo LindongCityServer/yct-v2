@@ -9,6 +9,8 @@
         "apps/web/app/page.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/operations-home.tsx",
         "apps/web/components/title-with-breaks.tsx",
@@ -21,9 +23,13 @@
       "files": [
         "apps/web/app/account/page.tsx",
         "apps/web/app/layout.tsx",
+        "apps/web/components/account-login-entry.tsx",
+        "apps/web/components/account-logout-entry.tsx",
         "apps/web/components/account-settings-panel.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/range-input.tsx",
         "apps/web/components/ticket-order-draft-panel.tsx",
@@ -42,6 +48,8 @@
         "apps/web/components/admin-section-navigation.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/toast-viewport.tsx"
       ]
@@ -58,6 +66,8 @@
         "apps/web/components/admin-section-navigation.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/toast-viewport.tsx"
       ]
@@ -76,6 +86,8 @@
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
         "apps/web/components/current-player-location-button.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/layered-map-tile.tsx",
         "apps/web/components/material-symbol.tsx",
@@ -98,6 +110,8 @@
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
         "apps/web/components/current-player-location-button.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/layered-map-tile.tsx",
         "apps/web/components/material-symbol.tsx",
@@ -119,6 +133,8 @@
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
         "apps/web/components/current-player-location-button.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/layered-map-tile.tsx",
         "apps/web/components/material-symbol.tsx",
@@ -139,6 +155,8 @@
         "apps/web/components/admin-section-navigation.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/toast-viewport.tsx"
       ]
@@ -155,6 +173,8 @@
         "apps/web/components/admin-section-navigation.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/metro-wayfinding-editor.tsx",
         "apps/web/components/metro-wayfinding-inspector.tsx",
@@ -173,6 +193,8 @@
         "apps/web/components/admin-section-navigation.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/toast-viewport.tsx"
       ]
@@ -190,6 +212,8 @@
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
         "apps/web/components/content-poi-binding-editor.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/toast-viewport.tsx"
       ]
@@ -204,6 +228,8 @@
         "apps/web/components/admin-markdown-editor-page.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/markdown-blocks.tsx",
         "apps/web/components/toast-viewport.tsx",
@@ -222,6 +248,8 @@
         "apps/web/components/admin-services-panel.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/material-symbol.tsx",
         "apps/web/components/toast-viewport.tsx"
@@ -240,6 +268,8 @@
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
         "apps/web/components/current-player-location-button.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/embedded-map-location-picker.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/layered-map-tile.tsx",
@@ -260,6 +290,8 @@
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
         "apps/web/components/current-player-location-button.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/layered-map-tile.tsx",
         "apps/web/components/toast-viewport.tsx"
@@ -277,6 +309,8 @@
         "apps/web/components/admin-section-navigation.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/toast-viewport.tsx"
       ]
@@ -290,6 +324,8 @@
         "apps/web/components/admin-edit-link.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/map-layer-toggle.tsx",
         "apps/web/components/map-stage-loader.tsx",
@@ -310,6 +346,8 @@
         "apps/web/components/admin-edit-link.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/title-with-breaks.tsx",
         "apps/web/components/toast-viewport.tsx",
@@ -324,6 +362,8 @@
         "apps/web/app/offline/page.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/offline-page-content.tsx",
         "apps/web/components/toast-viewport.tsx"
@@ -338,6 +378,8 @@
         "apps/web/components/admin-edit-link.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/markdown-blocks.tsx",
         "apps/web/components/operation-related-pois.tsx",
@@ -354,6 +396,8 @@
         "apps/web/app/search/page.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/material-symbol.tsx",
         "apps/web/components/search-page-client.tsx",
@@ -369,6 +413,8 @@
         "apps/web/app/services/page.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/material-symbol.tsx",
         "apps/web/components/services-page-content.tsx",
@@ -384,6 +430,8 @@
         "apps/web/components/app-shell.tsx",
         "apps/web/components/changelog-page-content.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/toast-viewport.tsx"
       ]
@@ -396,6 +444,8 @@
         "apps/web/app/services/faq/page.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/faq-page-content.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/operation-table-of-contents.tsx",
@@ -410,6 +460,8 @@
         "apps/web/app/services/road-materials/page.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/embedded-map-location-picker.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/layered-map-tile.tsx",
@@ -429,6 +481,8 @@
         "apps/web/app/services/telegraph/page.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/telegraph-studio-panel.tsx",
         "apps/web/components/toast-viewport.tsx"
@@ -442,6 +496,8 @@
         "apps/web/app/services/transit-materials/page.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/embedded-map-location-picker.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/layered-map-tile.tsx",
@@ -461,6 +517,8 @@
         "apps/web/app/services/transit-network-health/page.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/toast-viewport.tsx",
         "apps/web/components/transit-network-health-panel.tsx"
@@ -474,6 +532,8 @@
         "apps/web/app/travel/page.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/toast-viewport.tsx",
         "apps/web/components/travel-page-content.tsx",
@@ -490,6 +550,8 @@
         "apps/web/components/admin-edit-link.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/material-symbol.tsx",
         "apps/web/components/ticket-order-draft-panel.tsx",
@@ -505,6 +567,8 @@
         "apps/web/app/travel/screen/page.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/toast-viewport.tsx",
         "apps/web/components/transit-screen-detail-panel.tsx"
@@ -518,6 +582,8 @@
         "apps/web/app/travel/ticketing/orders/[orderId]/page.tsx",
         "apps/web/components/app-shell.tsx",
         "apps/web/components/client-dialog-bridge.tsx",
+        "apps/web/components/embedded-auth-bridge.tsx",
+        "apps/web/components/embedded-host-bridges.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/ticket-order-detail-panel.tsx",
         "apps/web/components/ticket-order-draft-panel.tsx",
@@ -541,7 +607,7 @@
           "types": [],
           "states": [],
           "lines": [
-            27
+            35
           ]
         },
         {
@@ -553,7 +619,7 @@
           "types": [],
           "states": [],
           "lines": [
-            28
+            36
           ]
         }
       ]
@@ -1224,36 +1290,12 @@
           "types": [],
           "states": [],
           "lines": [
-            88
-          ]
-        },
-        {
-          "owner": "RootLayout",
-          "element": "ClientDialogBridge",
-          "kind": "component",
-          "classes": [],
-          "roles": [],
-          "types": [],
-          "states": [],
-          "lines": [
-            89
-          ]
-        },
-        {
-          "owner": "RootLayout",
-          "element": "KeyboardShortcutBridge",
-          "kind": "component",
-          "classes": [],
-          "roles": [],
-          "types": [],
-          "states": [],
-          "lines": [
             90
           ]
         },
         {
           "owner": "RootLayout",
-          "element": "LoginRequiredBridge",
+          "element": "EmbeddedAuthBridge",
           "kind": "component",
           "classes": [],
           "roles": [],
@@ -1265,7 +1307,7 @@
         },
         {
           "owner": "RootLayout",
-          "element": "PreferenceBridge",
+          "element": "EmbeddedHostBridges",
           "kind": "component",
           "classes": [],
           "roles": [],
@@ -1277,7 +1319,7 @@
         },
         {
           "owner": "RootLayout",
-          "element": "LiquidMaterialBridge",
+          "element": "ClientDialogBridge",
           "kind": "component",
           "classes": [],
           "roles": [],
@@ -1289,7 +1331,7 @@
         },
         {
           "owner": "RootLayout",
-          "element": "PwaBridge",
+          "element": "KeyboardShortcutBridge",
           "kind": "component",
           "classes": [],
           "roles": [],
@@ -1301,7 +1343,7 @@
         },
         {
           "owner": "RootLayout",
-          "element": "ToastViewport",
+          "element": "LoginRequiredBridge",
           "kind": "component",
           "classes": [],
           "roles": [],
@@ -1309,6 +1351,54 @@
           "states": [],
           "lines": [
             95
+          ]
+        },
+        {
+          "owner": "RootLayout",
+          "element": "PreferenceBridge",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            96
+          ]
+        },
+        {
+          "owner": "RootLayout",
+          "element": "LiquidMaterialBridge",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            97
+          ]
+        },
+        {
+          "owner": "RootLayout",
+          "element": "PwaBridge",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            98
+          ]
+        },
+        {
+          "owner": "RootLayout",
+          "element": "ToastViewport",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            99
           ]
         }
       ]
@@ -2203,6 +2293,106 @@
       ]
     },
     {
+      "source": "apps/web/components/account-login-entry.tsx",
+      "routes": [
+        "/account"
+      ],
+      "controls": [
+        {
+          "owner": "AccountLoginEntry",
+          "element": "button",
+          "kind": "control",
+          "classes": [],
+          "roles": [],
+          "types": [
+            "button"
+          ],
+          "states": [],
+          "lines": [
+            39
+          ]
+        },
+        {
+          "owner": "AccountLoginEntry",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "material-symbols-outlined"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            47,
+            61
+          ]
+        },
+        {
+          "owner": "AccountLoginEntry",
+          "element": "a",
+          "kind": "control",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            56
+          ]
+        }
+      ]
+    },
+    {
+      "source": "apps/web/components/account-logout-entry.tsx",
+      "routes": [
+        "/account"
+      ],
+      "controls": [
+        {
+          "owner": "AccountLogoutEntry",
+          "element": "a",
+          "kind": "control",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            35
+          ]
+        },
+        {
+          "owner": "AccountLogoutEntry",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "material-symbols-outlined"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            36,
+            60
+          ]
+        },
+        {
+          "owner": "AccountLogoutEntry",
+          "element": "button",
+          "kind": "control",
+          "classes": [],
+          "roles": [],
+          "types": [
+            "button"
+          ],
+          "states": [
+            "disabled"
+          ],
+          "lines": [
+            45
+          ]
+        }
+      ]
+    },
+    {
       "source": "apps/web/components/account-settings-panel.tsx",
       "routes": [
         "/account"
@@ -2219,7 +2409,7 @@
           "types": [],
           "states": [],
           "lines": [
-            986
+            988
           ]
         },
         {
@@ -2233,8 +2423,8 @@
           "types": [],
           "states": [],
           "lines": [
-            987,
-            1458
+            989,
+            1460
           ]
         },
         {
@@ -2248,7 +2438,7 @@
           "types": [],
           "states": [],
           "lines": [
-            988
+            990
           ]
         },
         {
@@ -2262,11 +2452,11 @@
           "types": [],
           "states": [],
           "lines": [
-            991,
-            1164,
-            1261,
-            1356,
-            1461
+            993,
+            1166,
+            1263,
+            1358,
+            1463
           ]
         },
         {
@@ -2278,7 +2468,7 @@
           "types": [],
           "states": [],
           "lines": [
-            999
+            1001
           ]
         },
         {
@@ -2292,7 +2482,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1000
+            1002
           ]
         },
         {
@@ -2307,14 +2497,14 @@
           "types": [],
           "states": [],
           "lines": [
-            1001,
-            1039,
-            1082,
-            1100,
-            1170,
-            1264,
-            1288,
-            1422
+            1003,
+            1041,
+            1084,
+            1102,
+            1172,
+            1266,
+            1290,
+            1424
           ]
         },
         {
@@ -2328,14 +2518,14 @@
           "types": [],
           "states": [],
           "lines": [
-            1002,
-            1043,
-            1086,
-            1104,
-            1174,
-            1268,
-            1292,
-            1423
+            1004,
+            1045,
+            1088,
+            1106,
+            1176,
+            1270,
+            1294,
+            1425
           ]
         },
         {
@@ -2349,30 +2539,30 @@
           "types": [],
           "states": [],
           "lines": [
-            1003,
-            1044,
-            1087,
-            1105,
-            1153,
-            1175,
-            1205,
-            1211,
-            1217,
-            1230,
-            1245,
-            1255,
-            1269,
-            1293,
-            1311,
-            1317,
-            1323,
-            1333,
-            1392,
-            1409,
-            1424,
-            1436,
-            1469,
-            1524
+            1005,
+            1046,
+            1089,
+            1107,
+            1155,
+            1177,
+            1207,
+            1213,
+            1219,
+            1232,
+            1247,
+            1257,
+            1271,
+            1295,
+            1313,
+            1319,
+            1325,
+            1335,
+            1394,
+            1411,
+            1426,
+            1438,
+            1471,
+            1526
           ]
         },
         {
@@ -2386,11 +2576,11 @@
           "types": [],
           "states": [],
           "lines": [
-            1008,
-            1109,
-            1179,
-            1273,
-            1297
+            1010,
+            1111,
+            1181,
+            1275,
+            1299
           ]
         },
         {
@@ -2404,7 +2594,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1011
+            1013
           ]
         },
         {
@@ -2416,12 +2606,12 @@
           "types": [],
           "states": [],
           "lines": [
-            1012,
-            1018,
-            1024,
-            1030,
-            1049,
-            1092
+            1014,
+            1020,
+            1026,
+            1032,
+            1051,
+            1094
           ]
         },
         {
@@ -2436,7 +2626,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1055
+            1057
           ]
         },
         {
@@ -2450,7 +2640,7 @@
             "disabled"
           ],
           "lines": [
-            1070
+            1072
           ]
         },
         {
@@ -2465,7 +2655,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1110
+            1112
           ]
         },
         {
@@ -2481,7 +2671,7 @@
             "checked"
           ],
           "lines": [
-            1114
+            1116
           ]
         },
         {
@@ -2495,10 +2685,10 @@
           "types": [],
           "states": [],
           "lines": [
-            1123,
-            1299,
-            1303,
-            1429
+            1125,
+            1301,
+            1305,
+            1431
           ]
         },
         {
@@ -2512,7 +2702,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1124
+            1126
           ]
         },
         {
@@ -2526,8 +2716,8 @@
           ],
           "states": [],
           "lines": [
-            1127,
-            1135
+            1129,
+            1137
           ]
         },
         {
@@ -2541,7 +2731,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1142
+            1144
           ]
         },
         {
@@ -2555,7 +2745,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1144
+            1146
           ]
         },
         {
@@ -2572,7 +2762,7 @@
             "disabled"
           ],
           "lines": [
-            1145
+            1147
           ]
         },
         {
@@ -2586,7 +2776,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1188
+            1190
           ]
         },
         {
@@ -2600,9 +2790,9 @@
           "types": [],
           "states": [],
           "lines": [
-            1203,
-            1304,
-            1434
+            1205,
+            1306,
+            1436
           ]
         },
         {
@@ -2616,10 +2806,10 @@
           "types": [],
           "states": [],
           "lines": [
-            1204,
-            1210,
-            1216,
-            1435
+            1206,
+            1212,
+            1218,
+            1437
           ]
         },
         {
@@ -2637,10 +2827,10 @@
             "disabled"
           ],
           "lines": [
-            1222,
-            1239,
-            1305,
-            1386
+            1224,
+            1241,
+            1307,
+            1388
           ]
         },
         {
@@ -2656,10 +2846,10 @@
           ],
           "states": [],
           "lines": [
-            1254,
-            1316,
-            1322,
-            1328
+            1256,
+            1318,
+            1324,
+            1330
           ]
         },
         {
@@ -2671,7 +2861,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1279
+            1281
           ]
         },
         {
@@ -2685,7 +2875,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1339
+            1341
           ]
         },
         {
@@ -2699,7 +2889,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1361
+            1363
           ]
         },
         {
@@ -2713,7 +2903,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1364
+            1366
           ]
         },
         {
@@ -2727,7 +2917,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1365
+            1367
           ]
         },
         {
@@ -2742,7 +2932,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1368
+            1370
           ]
         },
         {
@@ -2756,7 +2946,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1385
+            1387
           ]
         },
         {
@@ -2772,8 +2962,8 @@
           ],
           "states": [],
           "lines": [
-            1401,
-            1463
+            1403,
+            1465
           ]
         },
         {
@@ -2787,7 +2977,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1417
+            1419
           ]
         },
         {
@@ -2803,7 +2993,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1446
+            1448
           ]
         },
         {
@@ -2820,7 +3010,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1451
+            1453
           ]
         },
         {
@@ -2834,7 +3024,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1474
+            1476
           ]
         },
         {
@@ -2848,7 +3038,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1479
+            1481
           ]
         },
         {
@@ -2860,11 +3050,11 @@
           "types": [],
           "states": [],
           "lines": [
-            1481,
-            1490,
-            1498,
-            1506,
-            1514
+            1483,
+            1492,
+            1500,
+            1508,
+            1516
           ]
         },
         {
@@ -2878,7 +3068,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1521
+            1523
           ]
         },
         {
@@ -2892,7 +3082,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1522
+            1524
           ]
         },
         {
@@ -2908,7 +3098,7 @@
           ],
           "states": [],
           "lines": [
-            1523
+            1525
           ]
         },
         {
@@ -2922,7 +3112,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1554
+            1556
           ]
         },
         {
@@ -2936,7 +3126,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1555
+            1557
           ]
         },
         {
@@ -2950,7 +3140,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1556
+            1558
           ]
         },
         {
@@ -2964,12 +3154,10 @@
           "types": [],
           "states": [],
           "lines": [
-            1560,
-            1601,
-            1613,
-            1620,
-            1637,
-            1649
+            1562,
+            1603,
+            1615,
+            1644
           ]
         },
         {
@@ -2983,9 +3171,9 @@
           "types": [],
           "states": [],
           "lines": [
-            1568,
-            1578,
-            1582
+            1570,
+            1580,
+            1584
           ]
         },
         {
@@ -3000,7 +3188,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1592
+            1594
           ]
         },
         {
@@ -3014,7 +3202,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1597
+            1599
           ]
         },
         {
@@ -3028,15 +3216,28 @@
           "types": [],
           "states": [],
           "lines": [
-            1600,
-            1607,
-            1619
+            1602,
+            1609
           ]
         },
         {
           "owner": "AccountAuthPanel",
-          "element": "a",
-          "kind": "control",
+          "element": "AccountLogoutEntry",
+          "kind": "component",
+          "classes": [
+            "secondary-action-button"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            1621
+          ]
+        },
+        {
+          "owner": "AccountAuthPanel",
+          "element": "AccountLoginEntry",
+          "kind": "component",
           "classes": [
             "is-primary",
             "secondary-action-button"
@@ -3059,7 +3260,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1643
+            1638
           ]
         },
         {
@@ -3075,7 +3276,7 @@
           ],
           "states": [],
           "lines": [
-            1648
+            1643
           ]
         },
         {
@@ -3089,7 +3290,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1654
+            1649
           ]
         },
         {
@@ -3103,7 +3304,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1712
+            1707
           ]
         },
         {
@@ -3121,7 +3322,7 @@
             "aria-pressed"
           ],
           "lines": [
-            1718
+            1713
           ]
         },
         {
@@ -3135,7 +3336,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1725
+            1720
           ]
         }
       ]
@@ -20339,6 +20540,228 @@
           "states": [],
           "lines": [
             63
+          ]
+        }
+      ]
+    },
+    {
+      "source": "apps/web/components/embedded-auth-bridge.tsx",
+      "routes": [
+        "/",
+        "/account",
+        "/admin",
+        "/admin/audit-events",
+        "/admin/map-areas",
+        "/admin/map-poi",
+        "/admin/map-poi/editor",
+        "/admin/map-settings",
+        "/admin/materials",
+        "/admin/memberships",
+        "/admin/operations",
+        "/admin/operations/editor",
+        "/admin/services",
+        "/admin/transit",
+        "/admin/transit/lines/[revisionId]/[lineSourceId]/edit",
+        "/admin/translations",
+        "/map",
+        "/map/lines/[id]",
+        "/offline",
+        "/operations/[id]",
+        "/search",
+        "/services",
+        "/services/changelog",
+        "/services/faq",
+        "/services/road-materials",
+        "/services/telegraph",
+        "/services/transit-materials",
+        "/services/transit-network-health",
+        "/travel",
+        "/travel/schedules",
+        "/travel/screen",
+        "/travel/ticketing/orders/[orderId]"
+      ],
+      "controls": [
+        {
+          "owner": "EmbeddedAuthBridge",
+          "element": "EmbeddedAuthPrompt",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            59
+          ]
+        },
+        {
+          "owner": "EmbeddedAuthPrompt",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "embedded-auth-prompt",
+            "is-error"
+          ],
+          "roles": [
+            "alertdialog"
+          ],
+          "types": [],
+          "states": [],
+          "lines": [
+            126
+          ]
+        },
+        {
+          "owner": "EmbeddedAuthPrompt",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "embedded-auth-prompt-icon",
+            "material-symbols-outlined"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            132
+          ]
+        },
+        {
+          "owner": "EmbeddedAuthPrompt",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "embedded-auth-prompt-body"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            135
+          ]
+        },
+        {
+          "owner": "EmbeddedAuthPrompt",
+          "element": "p",
+          "kind": "surface",
+          "classes": [
+            "embedded-auth-prompt-title"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            136
+          ]
+        },
+        {
+          "owner": "EmbeddedAuthPrompt",
+          "element": "p",
+          "kind": "surface",
+          "classes": [
+            "embedded-auth-prompt-message"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            139
+          ]
+        },
+        {
+          "owner": "EmbeddedAuthPrompt",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "embedded-auth-prompt-actions"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            143
+          ]
+        },
+        {
+          "owner": "EmbeddedAuthPrompt",
+          "element": "button",
+          "kind": "control",
+          "classes": [
+            "secondary-action-button"
+          ],
+          "roles": [],
+          "types": [
+            "button"
+          ],
+          "states": [],
+          "lines": [
+            145
+          ]
+        },
+        {
+          "owner": "EmbeddedAuthPrompt",
+          "element": "button",
+          "kind": "control",
+          "classes": [
+            "primary-action-button"
+          ],
+          "roles": [],
+          "types": [
+            "button"
+          ],
+          "states": [],
+          "lines": [
+            153
+          ]
+        }
+      ]
+    },
+    {
+      "source": "apps/web/components/embedded-host-bridges.tsx",
+      "routes": [
+        "/",
+        "/account",
+        "/admin",
+        "/admin/audit-events",
+        "/admin/map-areas",
+        "/admin/map-poi",
+        "/admin/map-poi/editor",
+        "/admin/map-settings",
+        "/admin/materials",
+        "/admin/memberships",
+        "/admin/operations",
+        "/admin/operations/editor",
+        "/admin/services",
+        "/admin/transit",
+        "/admin/transit/lines/[revisionId]/[lineSourceId]/edit",
+        "/admin/translations",
+        "/map",
+        "/map/lines/[id]",
+        "/offline",
+        "/operations/[id]",
+        "/search",
+        "/services",
+        "/services/changelog",
+        "/services/faq",
+        "/services/road-materials",
+        "/services/telegraph",
+        "/services/transit-materials",
+        "/services/transit-network-health",
+        "/travel",
+        "/travel/schedules",
+        "/travel/screen",
+        "/travel/ticketing/orders/[orderId]"
+      ],
+      "controls": [
+        {
+          "owner": "EmbeddedHostBridges",
+          "element": "FluentOsStorageBridge",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            18
           ]
         }
       ]

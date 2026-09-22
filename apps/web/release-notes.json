@@ -3,10 +3,57 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.12.5",
+      "releasedAt": "2026-09-22T18:18:04.183Z",
+      "sourceFingerprint": "e040bea62a69246912b7c289ad1d3f62645a8a3c8e6e9699ad32a8ddaf220b33",
+      "themes": ["web"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复网页桌面嵌入打开时，顶层弹窗完成登录后嵌入页面仍读不到登录态的问题"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
+      "version": "2.12.4",
+      "releasedAt": "2026-09-22T06:36:22.065Z",
+      "sourceFingerprint": "2ebe92a82d7b93b1013748cdde9de121e2b00719b7da04f54ea6bb5eac22b594",
+      "themes": ["web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "支持在 FluentOS 网页桌面中以独立应用形式打开，并可通过临东通完成登录"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "嵌入模式下二级页面的返回按钮与工具栏补齐背景与投影，工具栏回到页面右上角"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
+      "version": "2.12.3",
+      "releasedAt": "2026-09-21T11:40:48.808Z",
+      "sourceFingerprint": "bd125c5b5fc463f5acf0535c71c2428bef04705877b1ab97fbc5d99265838340",
+      "themes": ["deploy", "build"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复部署包中带哈希后缀的运行时依赖被记录为空目录、导致物料工作台加载模板失败的问题"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.12.2",
       "releasedAt": "2026-09-20T04:45:48.466Z",
-      "sourceFingerprint": "bed2364713ea007ee0ba6ded7fbf1c5013e518b01e8c6ac593db44e8a51e0fa0",
-      "themes": ["materials", "web", "map", "transit", "telegraph", "admin"],
+      "sourceFingerprint": "3b8910aca0bdbcb59b2768244629f73aaf82cb4c301585e686f16af5c8501ba4",
+      "themes": ["materials", "web", "map", "transit", "telegraph", "admin", "deploy"],
       "changes": [
         {
           "category": "feat",
@@ -52,7 +99,13 @@
           "category": "style",
           "breaking": false,
           "summary": "后台删除与提交等确认改用站内确认弹窗，并补齐编辑器标题与导航的无障碍标签"
-        }
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复部署包缺少 Next 运行时依赖导致服务无法启动的问题"
+        },
+        { "category": "fix", "breaking": false, "summary": "优化部署包暂存步骤的文件拷贝性能" }
       ],
       "bump": "patch"
     },

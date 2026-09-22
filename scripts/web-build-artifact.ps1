@@ -9,12 +9,36 @@ param(
   [string]$SevenZipPath = $env:YCT_7Z_PATH,
   [switch]$SkipBuild,
   [switch]$SkipStaging,
+  # Stop after the staging assertions and emit the staging inventory instead of writing
+  # an archive. Used to verify a staging tree without paying for a full ~270 MB archive
+  # (and without leaving a half-good artifact in `artifacts/` for someone to deploy).
+  [switch]$SkipArchive,
   [switch]$ValidateOnly
 )
 
 $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "web-dev-common.ps1")
+
+# Normalise `ComSpec` for this process as well as for every child we spawn.
+#
+# pnpm runs `apps/web`'s build script through a shell, because it is a `&&` chain:
+#
+#   node ../../scripts/ui-controls-inventory.mjs --check && ... && next build
+#
+# When `ComSpec` is unset, pnpm does not find `cmd.exe` and falls back to the first `sh`
+# on PATH — which here is PortableGit's `usr\bin\sh.exe`. That shell cannot run the
+# composite script, and the build dies with the very unhelpful
+# `'sh' is not recognized as an internal or external command`, which this script then
+# reports as `Next.js build failed with exit code 1`.
+#
+# The tooling environment that launches this script leaves `ComSpec` empty, so repair it
+# here. `Invoke-YctCommand` additionally sets it on each child directly, because
+# `Start-Process`-style inheritance rebuilds the environment from the original block and
+# would otherwise drop this assignment.
+if (-not $env:ComSpec -or -not (Test-Path -LiteralPath $env:ComSpec)) {
+  $env:ComSpec = Join-Path $env:SystemRoot "System32\cmd.exe"
+}
 
 function Normalize-YctBasePath {
   param([string]$Value)
@@ -138,7 +162,9 @@ function Remove-YctDirectoryInsideRoot {
 
   Assert-YctPathInsideRoot -Root $Root -Path $Path
   if (Test-Path -LiteralPath $Path) {
-    Remove-Item -LiteralPath $Path -Recurse -Force
+    # `Remove-Item -Recurse` is slow on deep trees (per-item overhead), so route through
+    # the robocopy-backed helper which handles 10k+ files without thrashing.
+    Remove-YctDirectoryTree -Path $Path
   }
 }
 
@@ -153,9 +179,178 @@ function Copy-YctDirectoryChildren {
   }
 
   New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-  Get-ChildItem -LiteralPath $Source -Force | ForEach-Object {
-    Copy-Item -LiteralPath $_.FullName -Destination $Destination -Recurse -Force
+  # Materialise the listing before iterating. `Copy-YctDirectoryTree` shells out to
+  # robocopy, and PowerShell 7.6 rejects running that native command "in the middle of
+  # a pipeline" — which it would be if we piped `Get-ChildItem` straight into this
+  # ForEach-Object. Collecting into an array first keeps each iteration at the top
+  # level of the pipeline.
+  $children = @(Get-ChildItem -LiteralPath $Source -Force)
+  foreach ($child in $children) {
+    Copy-YctDirectoryTree -Source $child.FullName -Destination (Join-Path $Destination $child.Name)
   }
+}
+
+# Run robocopy synchronously and return its exit code.
+#
+# Getting a *synchronous* native invocation out of PowerShell 7.6 is surprisingly
+# awkward, and the obvious forms are all wrong:
+#
+#   `& robocopy ... | Out-Null`  -> PowerShell 7.6 refuses to run a native command
+#                                   "in the middle of a pipeline": the call returns at
+#                                   once and nothing is copied.
+#   `& robocopy ... > $null`     -> accepted, but ALSO does not wait. Measured: it
+#                                   returned in 202 ms with 205 files pending,
+#                                   `$LASTEXITCODE` unset, and 4 robocopy processes
+#                                   still running.
+#
+# Because the redirection form returned before the copy finished, the staging
+# assertions ran against half-populated directories and failed at random (most often
+# on the `@resvg` native package), while orphaned robocopy processes kept rewriting
+# the tree. `Invoke-YctCommand` is the form that actually blocks until completion and
+# exposes a real exit code.
+function Invoke-YctRobocopy {
+  param(
+    [Parameter(Mandatory = $true)][string]$Source,
+    [Parameter(Mandatory = $true)][string]$Destination,
+    [Parameter(Mandatory = $true)][string[]]$Arguments
+  )
+
+  return Invoke-YctCommand `
+    -FilePath "robocopy.exe" `
+    -Arguments (@($Source, $Destination) + $Arguments)
+}
+
+# Run an external command to completion and return its exit code.
+#
+# Three separate Windows/PowerShell hazards are handled here, each of which produces a
+# confusing failure on its own:
+#
+# 1. Waiting. PowerShell 7.6 will not reliably block on a native command when its output
+#    is redirected or piped:
+#      `& tool ... | Out-Null`  -> rejected: "cannot run a document in the middle of a
+#                                  pipeline", and nothing actually runs.
+#      `& tool ... > $null`     -> accepted but returns immediately. Measured on
+#                                  robocopy: back in 202 ms with 205 files still pending
+#                                  and 4 robocopy processes alive, so later assertions
+#                                  ran against half-populated directories.
+#
+# 2. Argument integrity. Never hand a command line to a shell on the caller's behalf:
+#    cmd.exe treats `@` as an echo-suppression sigil, so a workspace filter like
+#    `@yct/web` silently loses its leading `@`, pnpm reports
+#    `No projects matched the filters`, and the build exits 0 having done nothing.
+#
+# 3. Environment inheritance. `Start-Process` builds the child environment from the
+#    process's *original* block, so assigning `$env:ComSpec` in-session never reaches the
+#    child. pnpm needs `ComSpec` to run a `&&`-chained npm script; without it pnpm falls
+#    back to the first `sh` on PATH (PortableGit's) and the build dies with
+#    `'sh' is not recognized as an internal or external command`. `ProcessStartInfo` is
+#    used instead of `Start-Process` precisely because it lets us set that variable on the
+#    child directly.
+function Invoke-YctCommand {
+  param(
+    [Parameter(Mandatory = $true)][string]$FilePath,
+    [Parameter(Mandatory = $true)][string[]]$Arguments,
+    [string]$WorkingDirectory
+  )
+
+  if ($FilePath -match "\.(cmd|bat)$") {
+    # Fallback for genuine batch shims — see hazard 2 above. `cmd /c` takes the command
+    # plus its arguments as one command line, so quoting has to be built by hand:
+    #   - leave the head token unquoted when it has no spaces, otherwise cmd.exe treats it
+    #     as a program *name* and cannot resolve the `.CMD` extension
+    #   - do not escape inner quotes as `\"`; that is a C-runtime convention cmd.exe does
+    #     not understand
+    $commandShell = if ($env:ComSpec) { $env:ComSpec } else { Join-Path $env:SystemRoot "System32\cmd.exe" }
+    $head = if ($FilePath -match '\s') { "`"$FilePath`"" } else { $FilePath }
+    $quoted = ($Arguments | ForEach-Object {
+      if ($_ -match '[\s"]') { '"' + $_ + '"' } else { $_ }
+    }) -join " "
+    $FilePath = $commandShell
+    $Arguments = @("/c", "$head $quoted")
+  } elseif ($FilePath -match "\.ps1$") {
+    $Arguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $FilePath) + $Arguments
+    $FilePath = (Get-Process -Id $PID).Path
+  }
+
+  $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+  $startInfo.FileName = $FilePath
+  $startInfo.UseShellExecute = $false
+  $startInfo.CreateNoWindow = $true
+  $startInfo.RedirectStandardOutput = $true
+  $startInfo.RedirectStandardError = $true
+  if ($WorkingDirectory) {
+    $startInfo.WorkingDirectory = $WorkingDirectory
+  }
+  foreach ($argument in $Arguments) {
+    # `ArgumentList` (rather than the `Arguments` string) keeps each element intact, so
+    # nothing needs shell-style escaping and `@` survives.
+    $startInfo.ArgumentList.Add($argument)
+  }
+
+  # Hazard 3: guarantee the child can find the Windows shell for npm scripts.
+  $commandProcessor = if ($env:ComSpec -and (Test-Path -LiteralPath $env:ComSpec)) {
+    $env:ComSpec
+  } else {
+    Join-Path $env:SystemRoot "System32\cmd.exe"
+  }
+  $startInfo.Environment["ComSpec"] = $commandProcessor
+  # PortableGit's sh must not win the fallback race if pnpm ever looks for a shell.
+  $startInfo.Environment["npm_config_script_shell"] = $commandProcessor
+
+  $process = [System.Diagnostics.Process]::new()
+  $process.StartInfo = $startInfo
+  [void]$process.Start()
+
+  # Drain both pipes concurrently. Reading them one after the other can deadlock once the
+  # unread stream fills its OS buffer, so both reads are started before waiting.
+  #
+  # Note the deliberate absence of BeginOutputReadLine / DataReceived handlers: those fire
+  # on thread-pool threads that have no PowerShell runspace, and any scriptblock they
+  # invoke aborts the whole host with
+  # `PSInvalidOperationException: no runspace available to run scripts in this thread`.
+  $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+  $stderrTask = $process.StandardError.ReadToEndAsync()
+  $process.WaitForExit()
+  $stdout = $stdoutTask.GetAwaiter().GetResult()
+  $stderr = $stderrTask.GetAwaiter().GetResult()
+  $exitCode = $process.ExitCode
+  $process.Dispose()
+
+  # Surface the child's output so a failed step is diagnosable from the build log.
+  if (-not [string]::IsNullOrWhiteSpace($stdout)) {
+    Write-Host $stdout.TrimEnd()
+  }
+  if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+    Write-Host $stderr.TrimEnd()
+  }
+
+  return $exitCode
+}
+
+# Fast recursive copy. PowerShell's Copy-Item -Recurse recreates every directory and file
+# object individually and is roughly an order of magnitude slower than robocopy on Windows;
+# the staging step moves well over 10k files, so the difference is minutes per launch.
+function Copy-YctDirectoryTree {
+  param(
+    [Parameter(Mandatory = $true)][string]$Source,
+    [Parameter(Mandatory = $true)][string]$Destination
+  )
+
+  if (Get-Command robocopy.exe -ErrorAction SilentlyContinue) {
+    $destinationParent = Split-Path -Parent $Destination
+    New-Item -ItemType Directory -Force -Path $destinationParent | Out-Null
+    # /E copies subdirectories including empty ones, /DCOPY:DAT preserves directory
+    # timestamps, and the log switches keep the output silent.
+    $copyExitCode = Invoke-YctRobocopy -Source $Source -Destination $Destination -Arguments @(
+      "/E", "/DCOPY:DAT", "/R:2", "/W:1", "/NFL", "/NDL", "/NJH", "/NJS", "/NP"
+    )
+    if ($copyExitCode -ge 8) {
+      throw "robocopy failed to stage $Source into $Destination with exit code $copyExitCode."
+    }
+    return
+  }
+
+  Copy-Item -LiteralPath $Source -Destination $Destination -Recurse -Force
 }
 
 function Remove-YctRuntimeEnvironmentFiles {
@@ -227,6 +422,58 @@ function Resolve-YctLinkedPath {
   return $Item.FullName
 }
 
+function Clear-YctExistingDestination {
+  param([Parameter(Mandatory = $true)][string]$Destination)
+
+  if (-not (Test-Path -LiteralPath $Destination)) {
+    return
+  }
+
+  # Empty directories (Next's standalone output leaves empty placeholder folders such as
+  # apps/web/node_modules/next) do not need a recursive delete. Removing the directory
+  # entry alone is cheap and avoids a bulk recursive delete of the whole subtree.
+  $item = Get-Item -LiteralPath $Destination -Force
+  if ($item.PSIsContainer -and (@(Get-ChildItem -LiteralPath $Destination -Force).Count -eq 0)) {
+    Remove-Item -LiteralPath $Destination -Force
+    return
+  }
+
+  Remove-YctDirectoryTree -Path $Destination
+}
+
+# Fast recursive delete. `Remove-Item -Recurse` on a deep tree (the staged `next` package is
+# ~8k files) spends minutes of CPU on per-item overhead. robocopy mirrors an empty directory
+# over the target with /MIR, then we drop the emptied shell.
+function Remove-YctDirectoryTree {
+  param([Parameter(Mandatory = $true)][string]$Path)
+
+  if (-not (Test-Path -LiteralPath $Path)) {
+    return
+  }
+
+  if (Get-Command robocopy.exe -ErrorAction SilentlyContinue) {
+    $emptySource = Join-Path ([System.IO.Path]::GetTempPath()) "yct-empty-$PID"
+    New-Item -ItemType Directory -Force -Path $emptySource | Out-Null
+    try {
+      # Must go through `Invoke-YctRobocopy`: a bare `& robocopy ... > $null` returns
+      # before the purge finishes, so the `Remove-Item` right below would race a still
+      # running mirror and the emptied shell would be re-created mid-delete.
+      $purgeExitCode = Invoke-YctRobocopy -Source $emptySource -Destination $Path -Arguments @(
+        "/MIR", "/R:2", "/W:1", "/NFL", "/NDL", "/NJH", "/NJS", "/NP"
+      )
+      if ($purgeExitCode -ge 8) {
+        throw "robocopy failed to clear $Path with exit code $purgeExitCode."
+      }
+    } finally {
+      Remove-Item -LiteralPath $emptySource -Force -ErrorAction SilentlyContinue
+    }
+    Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue
+    return
+  }
+
+  Remove-Item -LiteralPath $Path -Recurse -Force
+}
+
 function Copy-YctNodeModuleEntry {
   param(
     [Parameter(Mandatory = $true)][System.IO.FileSystemInfo]$Source,
@@ -234,12 +481,20 @@ function Copy-YctNodeModuleEntry {
   )
 
   $actualSource = Resolve-YctLinkedPath -Item $Source
-  if (Test-Path -LiteralPath $Destination) {
-    Remove-Item -LiteralPath $Destination -Recurse -Force
-  }
-  $destinationParent = Split-Path -Parent $Destination
-  New-Item -ItemType Directory -Force -Path $destinationParent | Out-Null
-  Copy-Item -LiteralPath $actualSource -Destination $Destination -Recurse -Force
+
+  # Copy straight over the destination instead of deleting it first.
+  #
+  # The old code called `Clear-YctExistingDestination` (a recursive delete) before every
+  # copy. That turned any interruption into data loss: robocopy /E overwrites files one by
+  # one, so if the process is killed mid-copy the destination is left holding a *partial*
+  # tree, with no previous copy intact to fall back on. Building `next` (~8k files) is slow
+  # enough that this happened in practice.
+  #
+  # `robocopy /E` already refreshes changed files and adds new ones without needing the
+  # destination emptied first, so the delete is pure downside. Stale files that no longer
+  # exist in the source are not a concern here: the destination is either brand new or was
+  # itself populated by an earlier run of this same function.
+  Copy-YctDirectoryTree -Source $actualSource -Destination $Destination
 }
 
 function Copy-YctNextRuntimeDependencies {
@@ -262,15 +517,17 @@ function Copy-YctNextRuntimeDependencies {
   }
 
   New-Item -ItemType Directory -Force -Path $DestinationNodeModules | Out-Null
-  Get-ChildItem -LiteralPath $nextNodeModules -Force | Where-Object { $_.Name -ne "next" } | ForEach-Object {
-    if ($_.Name.StartsWith("@")) {
-      $scopeDestination = Join-Path $DestinationNodeModules $_.Name
+  # Same "no native command mid-pipeline" constraint as Copy-YctDirectoryChildren:
+  # Copy-YctNodeModuleEntry runs robocopy, so iterate a materialised array.
+  foreach ($entry in @(Get-ChildItem -LiteralPath $nextNodeModules -Force)) {
+    if ($entry.Name.StartsWith("@")) {
+      $scopeDestination = Join-Path $DestinationNodeModules $entry.Name
       New-Item -ItemType Directory -Force -Path $scopeDestination | Out-Null
-      Get-ChildItem -LiteralPath $_.FullName -Force | ForEach-Object {
-        Copy-YctNodeModuleEntry -Source $_ -Destination (Join-Path $scopeDestination $_.Name)
+      foreach ($scoped in @(Get-ChildItem -LiteralPath $entry.FullName -Force)) {
+        Copy-YctNodeModuleEntry -Source $scoped -Destination (Join-Path $scopeDestination $scoped.Name)
       }
     } else {
-      Copy-YctNodeModuleEntry -Source $_ -Destination (Join-Path $DestinationNodeModules $_.Name)
+      Copy-YctNodeModuleEntry -Source $entry -Destination (Join-Path $DestinationNodeModules $entry.Name)
     }
   }
 }
@@ -288,18 +545,102 @@ function Copy-YctMaterialRendererRuntimeDependencies {
 
   $destinationScope = Join-Path $DestinationNodeModules "@resvg"
   New-Item -ItemType Directory -Force -Path $destinationScope | Out-Null
-  Get-ChildItem -LiteralPath $sourceScope -Force | ForEach-Object {
-    Copy-YctNodeModuleEntry -Source $_ -Destination (Join-Path $destinationScope $_.Name)
+  foreach ($entry in @(Get-ChildItem -LiteralPath $sourceScope -Force)) {
+    Copy-YctNodeModuleEntry -Source $entry -Destination (Join-Path $destinationScope $entry.Name)
   }
 
-  $sourcePackage = Resolve-YctLinkedPath -Item (Get-Item -LiteralPath (Join-Path $sourceScope "resvg-js"))
-  $sourceNativeScope = Split-Path -Parent $sourcePackage
-  $nativePackages = Get-ChildItem -LiteralPath $sourceNativeScope -Directory -Filter "resvg-js-*" -ErrorAction SilentlyContinue
-  if (-not $nativePackages) {
+  # Copy every platform-specific `resvg-js-*` package that backs the native binding.
+  #
+  # Do NOT look for these beside the `resvg-js` package: pnpm gives each optional
+  # dependency its own `.pnpm/<name>@<ver>` entry, so the native package lives in a
+  # *separate* store directory and is linked into `resvg-js`'s scope as a symlink.
+  # Searching `resvg-js`'s parent therefore finds nothing, which used to fail the build
+  # outright (`Cannot find @resvg native runtime dependency`). Scan the pnpm store root
+  # instead, which holds the real directory regardless of how the link is materialised.
+  $pnpmRoot = Join-Path $Root "node_modules\.pnpm"
+  $nativePackages = @()
+  $nativeLinkScope = Split-Path -Parent (Resolve-YctLinkedPath -Item (Get-Item -LiteralPath (Join-Path $sourceScope "resvg-js")))
+  if (Test-Path -LiteralPath $nativeLinkScope) {
+    $nativePackages += Get-ChildItem -LiteralPath $nativeLinkScope -Directory -Filter "resvg-js-*" -ErrorAction SilentlyContinue
+  }
+  if (Test-Path -LiteralPath $pnpmRoot) {
+    $nativePackages += Get-ChildItem -LiteralPath $pnpmRoot -Directory -Filter "@resvg+resvg-js-*" -ErrorAction SilentlyContinue |
+      ForEach-Object { Get-Item -LiteralPath (Join-Path $_.FullName "node_modules\@resvg\resvg-js-*") -ErrorAction SilentlyContinue }
+  }
+  $nativePackages = @($nativePackages | Where-Object { $_ } | Sort-Object FullName -Unique)
+
+  if ($nativePackages.Count -eq 0) {
     throw "Cannot find @resvg native runtime dependency. Run pnpm install before building the artifact."
   }
-  $nativePackages | ForEach-Object {
-    Copy-YctNodeModuleEntry -Source $_ -Destination (Join-Path $destinationScope $_.Name)
+  foreach ($nativePackage in $nativePackages) {
+    Copy-YctNodeModuleEntry -Source $nativePackage -Destination (Join-Path $destinationScope $nativePackage.Name)
+  }
+}
+
+function Assert-YctNextRuntimeDependency {
+  param(
+    [Parameter(Mandatory = $true)][string]$NodeCommand,
+    [Parameter(Mandatory = $true)][string]$NodeModules
+  )
+
+  # `server.js` calls require('next') and require('next/dist/server/lib/start-server')
+  # from apps/web. Next's own standalone output only ships the pnpm store copy of the
+  # package (dist + package.json), so the runtime needs a resolvable `next` entry here.
+  $nextPackageJson = Join-Path $NodeModules "next\package.json"
+  if (-not (Test-Path -LiteralPath $nextPackageJson)) {
+    throw "Staged Next runtime dependency is missing: $nextPackageJson"
+  }
+
+  $nextMain = Join-Path $NodeModules "next\dist\server\next.js"
+  if (-not (Test-Path -LiteralPath $nextMain)) {
+    throw "Staged Next runtime entry is missing: $nextMain"
+  }
+
+  $serverJsPath = Join-Path (Split-Path -Parent $NodeModules) "server.js"
+  $serverJsFull = [System.IO.Path]::GetFullPath($serverJsPath)
+  if (-not (Test-Path -LiteralPath $serverJsFull)) {
+    throw "Staged standalone server entry is missing: $serverJsFull"
+  }
+
+  $validationScriptPath = Join-Path ([System.IO.Path]::GetTempPath()) "yct-next-runtime-probe-$PID.cjs"
+  $validationScript = @'
+const moduleApi = require('node:module');
+const createRequire = moduleApi.createRequire;
+
+const serverPath = process.argv[2];
+if (!serverPath) {
+  console.error('missing server.js path argument');
+  process.exit(1);
+}
+
+let probe;
+try {
+  probe = createRequire(serverPath);
+} catch (error) {
+  console.error('cannot create require from ' + serverPath + ': ' + error.message);
+  process.exit(1);
+}
+
+const ids = ['next', 'next/dist/server/lib/start-server'];
+for (const id of ids) {
+  try {
+    probe.resolve(id);
+  } catch (error) {
+    console.error('cannot resolve ' + id + ' from ' + serverPath + ': ' + error.message);
+    process.exit(1);
+  }
+}
+'@
+  Write-YctUtf8File -Path $validationScriptPath -Content $validationScript
+  try {
+    $validationExitCode = Invoke-YctCommand `
+      -FilePath $NodeCommand `
+      -Arguments @($validationScriptPath, $serverJsFull)
+    if ($validationExitCode -ne 0) {
+      throw "Staged Next runtime validation failed with exit code $validationExitCode."
+    }
+  } finally {
+    Remove-Item -LiteralPath $validationScriptPath -Force -ErrorAction SilentlyContinue
   }
 }
 
@@ -314,8 +655,47 @@ function Assert-YctMaterialRendererRuntimeDependency {
     throw "Staged Resvg entry does not exist: $resvgEntry"
   }
 
+  # `system-material-templates.ts` reads these SVGs from `process.cwd()` at module
+  # load, so a missing bus-stop template makes the whole template list 500 and both
+  # material workbenches lose their template library. Node's standalone runtime sets
+  # cwd to `apps/web`, so verify the copy that will actually be resolved.
+  #
+  # This function is called with two different `$NodeModules` values — `apps\web\node_modules`
+  # and `apps\web\.next\node_modules` — which sit at *different* depths below `apps\web`.
+  # A hardcoded relative hop therefore only ever resolves for one of them (the old
+  # `..\..\public` broke the first call site outright). Walk up from the node_modules
+  # directory until the template is found, so any future layout change keeps working.
+  $busStopTemplate = $null
+  $searchRoot = Get-Item -LiteralPath $NodeModules -ErrorAction SilentlyContinue
+  while ($searchRoot -and -not $busStopTemplate) {
+    $candidate = Join-Path $searchRoot.FullName "public\material-templates\bus-stop\overview.svg"
+    if (Test-Path -LiteralPath $candidate) {
+      $busStopTemplate = $candidate
+      break
+    }
+    $searchRoot = $searchRoot.Parent
+  }
+  if (-not $busStopTemplate) {
+    throw "Staged bus-stop template is missing under any parent of: $NodeModules"
+  }
+
+  # Any directory whose name carries a pnpm 16-hex suffix must contain real files;
+  # an empty one means a symlink was copied without being resolved.
+  $hashedDirs = Get-ChildItem -LiteralPath $NodeModules -Directory -Force -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -match "-[0-9a-f]{16}$" }
+  foreach ($hashedDir in $hashedDirs) {
+    $childCount = @(Get-ChildItem -LiteralPath $hashedDir.FullName -Force -ErrorAction SilentlyContinue).Count
+    if ($childCount -eq 0) {
+      throw "Staged hashed runtime dependency is empty (symlink not resolved): $($hashedDir.FullName)"
+    }
+  }
+
+  $validationScriptPath = Join-Path ([System.IO.Path]::GetTempPath()) "yct-resvg-probe-$PID.cjs"
+  # `import()` on Windows requires a file:// URL; a bare `C:\...` path fails with
+  # ERR_UNSUPPORTED_ESM_URL_SCHEME. Convert inside the probe so no caller has to remember.
   $validationScript = @'
-import(process.argv[1])
+const { pathToFileURL } = require('node:url');
+import(pathToFileURL(process.argv[2]).href)
   .then(({ Resvg }) => {
     const svg = Buffer.from('PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjwvc3ZnPg==', 'base64').toString('utf8');
     const png = new Resvg(svg).render().asPng();
@@ -326,9 +706,16 @@ import(process.argv[1])
     process.exit(1);
   });
 '@
-  & $NodeCommand -e $validationScript ([System.Uri]::new($resvgEntry).AbsoluteUri)
-  if ($LASTEXITCODE -ne 0) {
-    throw "Staged Resvg runtime validation failed with exit code $LASTEXITCODE."
+  Write-YctUtf8File -Path $validationScriptPath -Content $validationScript
+  try {
+    $resvgExitCode = Invoke-YctCommand `
+      -FilePath $NodeCommand `
+      -Arguments @($validationScriptPath, $resvgEntry)
+    if ($resvgExitCode -ne 0) {
+      throw "Staged Resvg runtime validation failed with exit code $resvgExitCode."
+    }
+  } finally {
+    Remove-Item -LiteralPath $validationScriptPath -Force -ErrorAction SilentlyContinue
   }
 }
 
@@ -342,8 +729,15 @@ function Copy-YctTurbopackExternalRuntimeDependencies {
     return
   }
 
-  $externalPackages = Get-ChildItem -LiteralPath $SourceNodeModules -Directory -Filter "sharp-*" -Force |
-    Where-Object { $_.LinkType -and $_.Name -match "^sharp-[0-9a-f]{16}$" }
+  # Turbopack/Next materialise externalised native packages as pnpm symlinks whose
+  # directory name carries a 16-hex suffix (e.g. `sharp-9d8ba623b6c23f88`,
+  # `resvg-js-d068a6f52ea80d5a`). The suffix is a pnpm content key, not a real
+  # directory name, so a plain recursive copy would record an EMPTY directory and
+  # the runtime `require()` would fail after deployment — this happened before, so
+  # every such symlink (not just sharp) must be resolved and its backing package
+  # staged under the hashed name the bundler recorded.
+  $externalPackages = Get-ChildItem -LiteralPath $SourceNodeModules -Directory -Force |
+    Where-Object { $_.LinkType -and $_.Name -match "-[0-9a-f]{16}$" }
 
   foreach ($externalPackage in $externalPackages) {
     $actualPackagePath = Resolve-YctLinkedPath -Item $externalPackage
@@ -352,19 +746,23 @@ function Copy-YctTurbopackExternalRuntimeDependencies {
       continue
     }
 
-    Get-ChildItem -LiteralPath $packageNodeModules -Force |
-      Where-Object { $_.FullName -ne $actualPackagePath } |
-      ForEach-Object {
-        if ($_.Name.StartsWith("@")) {
-          $scopeDestination = Join-Path $DestinationNodeModules $_.Name
-          New-Item -ItemType Directory -Force -Path $scopeDestination | Out-Null
-          Get-ChildItem -LiteralPath $_.FullName -Force | ForEach-Object {
-            Copy-YctNodeModuleEntry -Source $_ -Destination (Join-Path $scopeDestination $_.Name)
-          }
-        } else {
-          Copy-YctNodeModuleEntry -Source $_ -Destination (Join-Path $DestinationNodeModules $_.Name)
+    # Materialise the sibling listing before copying: Copy-YctNodeModuleEntry runs
+    # robocopy, which PowerShell 7.6 refuses to start from inside a pipeline.
+    $siblings = @(
+      Get-ChildItem -LiteralPath $packageNodeModules -Force |
+        Where-Object { $_.FullName -ne $actualPackagePath }
+    )
+    foreach ($sibling in $siblings) {
+      if ($sibling.Name.StartsWith("@")) {
+        $scopeDestination = Join-Path $DestinationNodeModules $sibling.Name
+        New-Item -ItemType Directory -Force -Path $scopeDestination | Out-Null
+        foreach ($scoped in @(Get-ChildItem -LiteralPath $sibling.FullName -Force)) {
+          Copy-YctNodeModuleEntry -Source $scoped -Destination (Join-Path $scopeDestination $scoped.Name)
         }
+      } else {
+        Copy-YctNodeModuleEntry -Source $sibling -Destination (Join-Path $DestinationNodeModules $sibling.Name)
       }
+    }
   }
 }
 
@@ -385,9 +783,27 @@ function Assert-YctTurbopackExternalRuntimeDependencies {
     throw "Staged Turbopack sharp entry does not exist: $sharpEntry"
   }
 
-  & $NodeCommand -e "import(process.argv[1]).then((module) => module.default({ create: { width: 1, height: 1, channels: 4, background: '#00000000' } }).png().toBuffer()).catch((error) => { console.error(error); process.exit(1); })" ([System.Uri]::new($sharpEntry).AbsoluteUri)
-  if ($LASTEXITCODE -ne 0) {
-    throw "Staged Turbopack sharp runtime validation failed with exit code $LASTEXITCODE."
+  $validationScriptPath = Join-Path ([System.IO.Path]::GetTempPath()) "yct-sharp-probe-$PID.cjs"
+  # See the Resvg probe: `import()` needs a file:// URL on Windows.
+  $validationScript = @'
+const { pathToFileURL } = require('node:url');
+import(pathToFileURL(process.argv[2]).href)
+  .then((module) => module.default({ create: { width: 1, height: 1, channels: 4, background: '#00000000' } }).png().toBuffer())
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+'@
+  Write-YctUtf8File -Path $validationScriptPath -Content $validationScript
+  try {
+    $sharpExitCode = Invoke-YctCommand `
+      -FilePath $NodeCommand `
+      -Arguments @($validationScriptPath, $sharpEntry)
+    if ($sharpExitCode -ne 0) {
+      throw "Staged Turbopack sharp runtime validation failed with exit code $sharpExitCode."
+    }
+  } finally {
+    Remove-Item -LiteralPath $validationScriptPath -Force -ErrorAction SilentlyContinue
   }
 }
 
@@ -560,9 +976,15 @@ if (-not $SkipBuild) {
     $env:YCT_BASE_PATH = $basePathValue
     $env:NEXT_PUBLIC_YCT_BUILD_ID = $buildId
     $env:YCT_REQUIRE_PREPARED_RELEASE = "true"
-    & $pnpm --filter "@yct/web" build
-    if ($LASTEXITCODE -ne 0) {
-      throw "Next.js build failed with exit code $LASTEXITCODE."
+    # Run to completion (not `& $pnpm ...`) so the staging step cannot start reading
+    # `.next` while Next.js is still writing it. `Invoke-YctCommand` also handles the
+    # `.CMD` shim pnpm installs on Windows.
+    $buildExitCode = Invoke-YctCommand `
+      -FilePath $pnpm `
+      -Arguments @("--filter", "@yct/web", "build") `
+      -WorkingDirectory $root
+    if ($buildExitCode -ne 0) {
+      throw "Next.js build failed with exit code $buildExitCode."
     }
   } finally {
     $env:NEXT_PUBLIC_YCT_BASE_PATH = $previousPublicBasePath
@@ -583,6 +1005,15 @@ if ($SkipStaging) {
   if (-not (Test-Path -LiteralPath $stagedServerPath)) {
     throw "Staging directory is missing or incomplete: $stageRoot"
   }
+
+  # `Remove-YctRuntimeEnvironmentFiles` runs inside the staging branch below, so a
+  # `-SkipStaging` run reused whatever the previous staging left behind. Next.js copies
+  # `apps/web/.env` into `.next/standalone/apps/web/.env`, that file then rides along
+  # through `Copy-YctDirectoryChildren`, and the hard assertion below aborts the build
+  # with "Deployment staging contains runtime environment files: apps\web\.env" — after
+  # the whole expensive build and staging pass had already succeeded. Re-running the
+  # cleanup here makes the skip path idempotent instead of dependent on branch history.
+  Remove-YctRuntimeEnvironmentFiles -StageRoot $stageRoot
 } else {
   if (-not (Test-Path -LiteralPath $standaloneRoot)) {
     throw "Standalone output is missing. Check apps/web/next.config.mjs output: 'standalone'."
@@ -591,7 +1022,26 @@ if ($SkipStaging) {
     throw "Next static output is missing: $staticRoot"
   }
 
-  Remove-YctDirectoryInsideRoot -Root $root -Path $stageRoot
+  # Clear the previous staging tree. The staging directory is 500 MB+ across ~13k
+  # files, so this must use the robocopy-backed helper: a plain recursive delete is
+  # slow enough to dominate the build.
+  #
+  # An earlier revision snapshotted the old tree into `.deploy/web-prev-*` first, to
+  # make an interrupted build recoverable. That was a net loss: the snapshot itself
+  # costs a full 500 MB copy plus a 500 MB delete on *every* run, and a kill during
+  # the snapshot leaves a partial stash that looks like a corrupt stage. Rebuilding
+  # from `.next/standalone` is cheap compared to that, so just delete and re-stage.
+  if (Test-Path -LiteralPath $stageRoot) {
+    Remove-YctDirectoryTree -Path $stageRoot
+  }
+  $stashRoot = Join-Path $root ".deploy"
+  if (Test-Path -LiteralPath $stashRoot) {
+    foreach ($staleStash in @(
+      Get-ChildItem -LiteralPath $stashRoot -Directory -Filter "web-prev-*" -ErrorAction SilentlyContinue
+    )) {
+      Remove-YctDirectoryTree -Path $staleStash.FullName
+    }
+  }
   New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
 
   Copy-YctDirectoryChildren -Source $standaloneRoot -Destination $stageRoot
@@ -600,7 +1050,7 @@ if ($SkipStaging) {
   $standaloneNextRoot = Join-Path $standaloneWebRoot ".next"
   $standaloneWebNodeModules = Join-Path $standaloneWebRoot "node_modules"
   New-Item -ItemType Directory -Force -Path $standaloneNextRoot | Out-Null
-  Copy-Item -LiteralPath $staticRoot -Destination $standaloneNextRoot -Recurse -Force
+  Copy-YctDirectoryTree -Source $staticRoot -Destination (Join-Path $standaloneNextRoot "static")
   Copy-YctPublicAssets -Source $publicRoot -Destination (Join-Path $standaloneWebRoot "public")
   $harmonyFontSourceRoot = Join-Path $webRoot "app\fonts\harmonyos-sans"
   $harmonyFontDestinationRoot = Join-Path $standaloneWebRoot "public\fonts\harmonyos-sans"
@@ -639,6 +1089,9 @@ if ($SkipStaging) {
   Assert-YctMaterialRendererRuntimeDependency `
     -NodeCommand $nodeCommand `
     -NodeModules $stagedNextNodeModules
+  Assert-YctNextRuntimeDependency `
+    -NodeCommand $nodeCommand `
+    -NodeModules $standaloneWebNodeModules
 
   $startScript = @"
 param(
@@ -870,13 +1323,23 @@ if ($SkipStaging) {
   }
 }
 
-if ($ValidateOnly) {
+if ($ValidateOnly -or $SkipArchive) {
+  # Count the staged tree so a skipped archive still reports something checkable.
+  # `Get-ChildItem -Recurse` over ~13k files is the honest source of truth here; the
+  # numbers are compared against the 0829 baseline (25590 entries / 272.8 MiB) whenever
+  # a release candidate is cut.
+  $stagedFiles = @(Get-ChildItem -LiteralPath $stageRoot -Recurse -Force -File -ErrorAction SilentlyContinue)
+  $stagedBytes = ($stagedFiles | Measure-Object -Property Length -Sum).Sum
   $result = [pscustomobject]@{
-    ValidationOnly = $true
+    ValidationOnly = [bool]$ValidateOnly
+    ArchiveSkipped = [bool]$SkipArchive
     StagingDirectory = $stageRoot
     SkippedStaging = [bool]$SkipStaging
     BasePath = $basePathValue
     BuildId = $reportedBuildId
+    StagedFileCount = $stagedFiles.Count
+    StagedTotalBytes = [long]$stagedBytes
+    StagedTotalMiB = [math]::Round($stagedBytes / 1MB, 2)
     StartScript = "start-yct-web.ps1"
     DeployScript = "deploy-yct-web.ps1"
     ConfigCheckScript = "check-runtime-config.ps1"
@@ -906,6 +1369,34 @@ $checksumPath = "$artifactPath.sha256"
 $temporaryChecksumPath = "$checksumPath.tmp"
 $archiveTool = $null
 
+# Guard against the failure that shipped four broken bundles: a staging tree that looks
+# fine by exit code but is missing its runtime dependency closure. The tell is bulk —
+# `node_modules/.pnpm/**` carries the whole Next/React/sharp/@resvg payload for
+# `server.js`. A healthy bundle is ~25590 entries; the broken ones came in around 1300
+# root-module files against a 11732-file baseline.
+#
+# These floors are deliberately far below the observed values so they only trip on real
+# loss, not on normal dependency churn.
+$stagedPackageRoot = Join-Path $stageRoot "node_modules"
+$minimumStagedNodeModulesFiles = 8000
+$minimumPnpmEntryCount = 12
+
+$stagedNodeModulesFiles = @(
+  Get-ChildItem -LiteralPath $stagedPackageRoot -Recurse -Force -File -ErrorAction SilentlyContinue
+)
+$stagedPnpmEntries = @(
+  Get-ChildItem -LiteralPath (Join-Path $stagedPackageRoot ".pnpm") -Force -Directory -ErrorAction SilentlyContinue
+)
+
+Write-Host "Staged node_modules: $($stagedNodeModulesFiles.Count) files, $($stagedPnpmEntries.Count) .pnpm entries."
+
+if ($stagedNodeModulesFiles.Count -lt $minimumStagedNodeModulesFiles) {
+  throw "Deployment staging looks truncated: node_modules holds $($stagedNodeModulesFiles.Count) files, expected at least $minimumStagedNodeModulesFiles. The runtime dependency closure (next/react/@swc/helpers/sharp/@resvg) is probably missing, which produces 500s and 404s after deployment."
+}
+if ($stagedPnpmEntries.Count -lt $minimumPnpmEntryCount) {
+  throw "Deployment staging looks truncated: node_modules/.pnpm holds $($stagedPnpmEntries.Count) package entries, expected at least $minimumPnpmEntryCount."
+}
+
 if (Test-Path -LiteralPath $artifactPath) {
   Remove-Item -LiteralPath $artifactPath -Force
 }
@@ -925,35 +1416,41 @@ try {
       throw "tar.exe is required to create a tar.gz deployment artifact."
     }
     $archiveTool = $tar.Source
-    & $tar.Source -czf $temporaryArtifactPath -C $stageRoot .
-    if ($LASTEXITCODE -ne 0) {
-      throw "tar.exe failed to create deployment artifact with exit code $LASTEXITCODE."
+    # Blocking invocation (rather than `& tar ...`) so the checksum step below cannot
+    # hash a half-written archive. See `Invoke-YctCommand` for the details.
+    $tarExitCode = Invoke-YctCommand `
+      -FilePath $tar.Source `
+      -Arguments @("-czf", $temporaryArtifactPath, "-C", $stageRoot, ".")
+    if ($tarExitCode -ne 0) {
+      throw "tar.exe failed to create deployment artifact with exit code $tarExitCode."
     }
   } elseif ($ArchiveFormat -eq "tar") {
     if ($null -eq $tar) {
       throw "tar.exe is required to create a tar deployment artifact."
     }
     $archiveTool = $tar.Source
-    & $tar.Source -cf $temporaryArtifactPath -C $stageRoot .
-    if ($LASTEXITCODE -ne 0) {
-      throw "tar.exe failed to create deployment artifact with exit code $LASTEXITCODE."
+    $tarExitCode = Invoke-YctCommand `
+      -FilePath $tar.Source `
+      -Arguments @("-cf", $temporaryArtifactPath, "-C", $stageRoot, ".")
+    if ($tarExitCode -ne 0) {
+      throw "tar.exe failed to create deployment artifact with exit code $tarExitCode."
     }
   } elseif ($null -ne $sevenZip) {
     $archiveTool = $sevenZip
-    Push-Location -LiteralPath $stageRoot
-    try {
-      & $sevenZip a -tzip -mx=5 $temporaryArtifactPath ".\*" | Out-Host
-      if ($LASTEXITCODE -ne 0) {
-        throw "7-Zip failed to create deployment artifact with exit code $LASTEXITCODE."
-      }
-    } finally {
-      Pop-Location
+    $sevenZipExitCode = Invoke-YctCommand `
+      -FilePath $sevenZip `
+      -Arguments @("a", "-tzip", "-mx=5", $temporaryArtifactPath, ".\*") `
+      -WorkingDirectory $stageRoot
+    if ($sevenZipExitCode -ne 0) {
+      throw "7-Zip failed to create deployment artifact with exit code $sevenZipExitCode."
     }
   } elseif ($null -ne $tar) {
     $archiveTool = $tar.Source
-    & $tar.Source -a -cf $temporaryArtifactPath -C $stageRoot .
-    if ($LASTEXITCODE -ne 0) {
-      throw "tar.exe failed to create deployment artifact with exit code $LASTEXITCODE."
+    $tarExitCode = Invoke-YctCommand `
+      -FilePath $tar.Source `
+      -Arguments @("-a", "-cf", $temporaryArtifactPath, "-C", $stageRoot, ".")
+    if ($tarExitCode -ne 0) {
+      throw "tar.exe failed to create deployment artifact with exit code $tarExitCode."
     }
   } else {
     $archiveTool = "Compress-Archive"

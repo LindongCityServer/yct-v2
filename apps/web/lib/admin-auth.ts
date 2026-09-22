@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { YctAdminMembership, YctUserLink } from '@yct/contracts';
 import { resolveYctAdminMembershipForLdpassUser } from './admin-identity';
 import { ensureYctUserLinkForLdpassSession } from './auth-workflow';
+import { isSameOriginDocumentRequest } from './request-site-url';
+import { readRuntimeConfig } from './runtime-config';
 import { createTimedKeyedCache } from './server-cache';
 import { readYctServerSession } from './yct-server-session-store';
-import { yctSessionCookieName } from './yct-session';
+import {
+  resolveYctSessionCookie,
+  yctEmbedSessionCookieName,
+  yctSessionCookieName,
+} from './yct-session';
 
 const adminUserLinkCache = createTimedKeyedCache<YctUserLink | undefined>(60_000, 128);
 
@@ -22,9 +28,25 @@ export type AdminAuthResult =
 
 export async function requireYctAdmin(request: NextRequest): Promise<AdminAuthResult> {
   try {
-    const serverSession = await readYctServerSession(
-      request.cookies.get(yctSessionCookieName)?.value,
-    );
+    const { sessionId, fromEmbeddedCookie } = resolveYctSessionCookie({
+      standardSessionId: request.cookies.get(yctSessionCookieName)?.value,
+      embeddedSessionId: request.cookies.get(yctEmbedSessionCookieName)?.value,
+    });
+
+    if (fromEmbeddedCookie && !isSameOriginDocumentRequest(request, readRuntimeConfig().siteUrl)) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: 'cross_site_request_blocked',
+            message: '嵌入会话只能由本站页面发起后台操作。',
+          },
+          { status: 403 },
+        ),
+      };
+    }
+
+    const serverSession = await readYctServerSession(sessionId);
     const session = serverSession?.ldpassSession;
 
     if (!session?.authenticated || !session.user) {

@@ -5,7 +5,11 @@ import { markResponseNoStore } from '../../../../lib/http-cache';
 import { readRuntimeConfig } from '../../../../lib/runtime-config';
 import { countPendingTicketOrdersForLdpassUser } from '../../../../lib/ticket-order-workflow';
 import { readYctServerSession } from '../../../../lib/yct-server-session-store';
-import { yctSessionCookieName } from '../../../../lib/yct-session';
+import {
+  resolveYctSessionCookie,
+  yctEmbedSessionCookieName,
+  yctSessionCookieName,
+} from '../../../../lib/yct-session';
 
 interface AccountBadgeSummary {
   kind: 'none' | 'count' | 'dot';
@@ -40,9 +44,11 @@ export async function GET(request: NextRequest) {
   const config = readRuntimeConfig();
 
   try {
-    const serverSession = await readYctServerSession(
-      request.cookies.get(yctSessionCookieName)?.value,
-    );
+    const { sessionId } = resolveYctSessionCookie({
+      standardSessionId: request.cookies.get(yctSessionCookieName)?.value,
+      embeddedSessionId: request.cookies.get(yctEmbedSessionCookieName)?.value,
+    });
+    const serverSession = await readYctServerSession(sessionId);
     if (!serverSession) {
       const configured = Boolean(config.ldpassBaseUrl && config.ldpassClientId);
       return markResponseNoStore(

@@ -5,14 +5,77 @@ function Get-YctRepoRoot {
 }
 
 function Get-YctPnpmCommand {
-  $command = Get-Command pnpm.cmd -ErrorAction SilentlyContinue
-  if ($null -eq $command) {
-    $command = Get-Command pnpm -ErrorAction SilentlyContinue
+  # Resolve pnpm to a command that can be launched *directly*, never through a shell.
+  #
+  # pnpm ships as a family of launchers — `pnpm`, `pnpm.CMD`, `pnpm.ps1` — and on
+  # Windows none of them is a real executable: every one is a thin wrapper that ends up
+  # running the bundled `@pnpm/exe/pnpm.exe`. Two traps make the wrappers unusable here:
+  #
+  #   1. `.CMD` has to be launched through cmd.exe, and cmd.exe is destructive to the
+  #      arguments. A workspace filter like `@yct/web` loses its `@` (which cmd treats as
+  #      an echo-suppression sigil), so pnpm reports
+  #      `No projects matched the filters` and exits 0 without doing any work.
+  #   2. `pnpm` (no extension) and `pnpm.ps1` are shell scripts; `Start-Process` cannot
+  #      run them at all.
+  #
+  # So: read whichever wrapper is on PATH, follow its `@pnpm/exe/pnpm.exe` reference, and
+  # return that. Falling back to the wrapper keeps things working on installs that vendor
+  # pnpm differently (e.g. a global npm install).
+  $command = $null
+  foreach ($candidate in @("pnpm.exe", "pnpm.cmd", "pnpm")) {
+    $command = Get-Command $candidate -ErrorAction SilentlyContinue
+    if ($null -ne $command) {
+      break
+    }
   }
   if ($null -eq $command) {
     throw "pnpm was not found. Please ensure Node.js and pnpm are installed and available in PATH."
   }
-  return $command.Source
+
+  $resolved = Resolve-YctPnpmExecutable -Path $command.Source
+  return $resolved
+}
+
+function Resolve-YctPnpmExecutable {
+  param([Parameter(Mandatory = $true)][string]$Path)
+
+  if ($Path -match "pnpm\.exe$") {
+    return $Path
+  }
+
+  if (Test-Path -LiteralPath $Path) {
+    # Every wrapper points at the bundled executable. Two shapes appear in practice:
+    #   - an absolute path:   C:\...\@pnpm\exe\pnpm.exe
+    #   - a relative path:    %~dp0\..\global\v11\<hash>\node_modules\@pnpm\exe\pnpm.exe
+    #                         (%~dp0 is the wrapper's own directory)
+    try {
+      $content = [System.IO.File]::ReadAllText($Path)
+      $candidate = $null
+
+      $absolute = [regex]::Match($content, '[A-Za-z]:\\[^"''\r\n]*@pnpm[\\/]exe[\\/]pnpm\.exe')
+      if ($absolute.Success) {
+        $candidate = $absolute.Value
+      } else {
+        $relative = [regex]::Match($content, '%~dp0([^"''\r\n]*@pnpm[\\/]exe[\\/]pnpm\.exe)')
+        if (-not $relative.Success) {
+          $relative = [regex]::Match($content, '(?<!%~dp0)([^"''\r\n\s]*@pnpm[\\/]exe[\\/]pnpm\.exe)')
+        }
+        if ($relative.Success) {
+          $suffix = $relative.Groups[1].Value
+          $wrapperDir = Split-Path -Parent $Path
+          $candidate = [System.IO.Path]::GetFullPath((Join-Path $wrapperDir $suffix))
+        }
+      }
+
+      if ($candidate -and (Test-Path -LiteralPath $candidate)) {
+        return $candidate
+      }
+    } catch {
+      # Unreadable or binary — fall through to the wrapper path.
+    }
+  }
+
+  return $Path
 }
 
 function Normalize-YctBasePath {

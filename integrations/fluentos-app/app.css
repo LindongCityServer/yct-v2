@@ -1,0 +1,507 @@
+/*
+ * 雨城通 · FluentOS 沙箱 App 样式
+ * 约束：本文件由 Developer Center 注入到 <style> 中，位置在 css/fluent-ui.css 之前，
+ * 因此所有自定义类统一使用 yct- 前缀，避免与 fluent-* 组件同权重冲突。
+ * 只使用主题令牌（--accent / --bg-* / --text-* / --border-color / --radius-*），
+ * 不写死浅色或深色配色，由宿主通过 body.dark-mode 切换。
+ */
+
+html,
+body {
+    height: 100%;
+    margin: 0;
+}
+
+.yct-app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+/* ---------- 顶部工具栏（标题栏由宿主窗口提供，这里只做应用内工具条） ---------- */
+
+.yct-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex: 0 0 auto;
+    padding: 10px 16px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.yct-bar-main {
+    min-width: 0;
+}
+
+.yct-bar-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 500;
+}
+
+.yct-bar-sub {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.yct-bar-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.yct-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.yct-pill::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
+.yct-pill.is-warn::before {
+    background: #b8860b;
+}
+
+.yct-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    padding: 0 !important;
+    border-radius: var(--radius-sm) !important;
+    cursor: pointer;
+}
+
+/* 同上：32px 的图标按钮不适合承载药丸形渐变伪元素 */
+.yct-icon-btn::before,
+.yct-icon-btn::after {
+    display: none !important;
+}
+
+.yct-icon-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* ---------- 主体：左侧导航 + 内容区 ---------- */
+
+.yct-shell {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.yct-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 0 0 168px;
+    padding: 10px;
+    overflow-y: auto;
+    border-right: 1px solid var(--border-color);
+}
+
+.yct-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100% !important;
+    padding: 8px 12px !important;
+    font-size: 14px;
+    color: var(--text-secondary) !important;
+    text-align: left;
+    justify-content: flex-start !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    border-radius: var(--radius-sm) !important;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+/*
+ * 装饰器会给所有 <button> 加 .fluent-btn，而 fluent-v2 模式下
+ * .fluent-btn::before/::after 会叠加药丸形渐变与模糊，并带 translateY 位移，
+ * 这在纵向导航轨道上会破坏观感，因此显式关掉。
+ */
+.yct-nav-item::before,
+.yct-nav-item::after {
+    display: none !important;
+}
+
+.yct-nav-item:hover {
+    color: var(--text-primary) !important;
+    background: var(--bg-secondary) !important;
+    transform: none !important;
+}
+
+.yct-nav-item:active {
+    transform: none !important;
+}
+
+.yct-nav-item[aria-selected='true'] {
+    color: var(--accent) !important;
+    background: var(--bg-secondary) !important;
+    border-color: var(--border-color) !important;
+    font-weight: 500;
+}
+
+.yct-nav-item svg {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+}
+
+.yct-nav-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.yct-view {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.yct-view:focus {
+    outline: none;
+}
+
+.yct-live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ---------- 内容构件 ---------- */
+
+.yct-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.yct-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.yct-heading {
+    margin: 0 0 8px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.yct-muted {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.yct-tiny {
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+.yct-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.yct-between {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.yct-kv {
+    display: flex;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.yct-kv-key {
+    flex: 0 0 72px;
+    color: var(--text-secondary);
+}
+
+.yct-kv-val {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.yct-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.yct-stat-value {
+    font-size: 22px;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.yct-stat-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.yct-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    border: 1px solid var(--border-color);
+}
+
+.yct-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.yct-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+}
+
+.yct-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 12px;
+}
+
+.yct-filter-btn {
+    padding: 4px 12px !important;
+    font-size: 12px !important;
+    border-radius: 999px !important;
+}
+
+.yct-filter-btn[aria-pressed='true'] {
+    color: var(--accent) !important;
+    border-color: var(--accent) !important;
+}
+
+.yct-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    align-items: end;
+}
+
+.yct-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.yct-field-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/*
+ * select 会被装饰器加上 .fluent-runtime-select 获得原生观感；
+ * input 会被自动包进 .fluent-input-wrapper（该容器自带 width:100%），
+ * 所以这里不要给 input 设宽度，否则会与 .fluent-input 的 flex:1 冲突。
+ */
+.yct-field select {
+    width: 100%;
+}
+
+.yct-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+
+/* 站点序列（线路详情） */
+
+.yct-stops {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.yct-stop {
+    display: inline-flex;
+    align-items: center;
+    font-size: 13px;
+}
+
+.yct-stop + .yct-stop::before {
+    content: '';
+    width: 14px;
+    height: 1px;
+    margin: 0 6px;
+    background: var(--border-color);
+}
+
+.yct-stop.is-current {
+    font-weight: 500;
+    color: var(--accent);
+}
+
+/* 楼层 / 设施 */
+
+.yct-floor {
+    padding: 8px 0;
+    border-top: 1px solid var(--border-color);
+}
+
+.yct-floor:first-child {
+    border-top: none;
+}
+
+.yct-floor-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.yct-floor-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    padding: 1px 6px;
+    font-size: 12px;
+    color: var(--accent);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+}
+
+/* 登录（设备授权） */
+
+.yct-code {
+    display: inline-block;
+    padding: 8px 16px;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    color: var(--accent);
+    background: var(--bg-tertiary);
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-sm);
+    user-select: all;
+}
+
+.yct-note {
+    padding: 10px 12px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-sm);
+}
+
+.yct-note.is-warn {
+    border-left-color: #b8860b;
+}
+
+/* 加载 / 错误态 */
+
+.yct-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 40px 0;
+    color: var(--text-secondary);
+}
+
+/* 响应式：窄窗口下导航改为横向滚动 */
+
+@media (max-width: 560px) {
+    .yct-shell {
+        flex-direction: column;
+    }
+
+    .yct-nav {
+        flex: 0 0 auto;
+        flex-direction: row;
+        gap: 4px;
+        padding: 8px;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+    .yct-nav-item {
+        width: auto !important;
+        flex: 0 0 auto;
+        padding: 6px 10px !important;
+    }
+
+    .yct-view {
+        padding: 12px;
+    }
+
+    .yct-bar {
+        padding: 8px 12px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .yct-app * {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+    }
+}

@@ -22431,7 +22431,13 @@ button.material-studio-review-badge {
   filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--yct-color-text) 28%, transparent));
 }
 
-:root[data-embedded]:not([data-material-mode='advanced']) .topbar-actions {
+/* 一级页面的工具栏是 `.topbar-actions`，二级页面的是 `.secondary-actions`——
+   两者类名不同，因此必须并列写进同一组选择器，否则二级页面的工具栏在
+   嵌入模式下会保持全透明（背景本身也是 transparent，等于看不见）。
+   `:has(> *)` 是必要的：`secondaryActions` 是可选 prop，全项目只有 10 处传值，
+   其余二级页面的 `.secondary-actions` 是空 div，加背景后会渲染出一个空药丸。 */
+:root[data-embedded]:not([data-material-mode='advanced'])
+  :is(.topbar-actions, .secondary-actions):has(> *) {
   gap: var(--yct-space-1);
   padding: var(--yct-space-1);
   border: 1px solid var(--yct-color-border);
@@ -22442,9 +22448,10 @@ button.material-studio-review-badge {
   backdrop-filter: blur(var(--yct-material-blur-medium));
 }
 
-:root[data-embedded]:not([data-material-mode='advanced'])
-  .topbar:not(.secondary-topbar)
-  > .icon-button {
+/* 返回按钮同理：二级顶栏的 `<header>` 同时带 `topbar` 与 `secondary-topbar`
+   两个类，原先这里写成 `.topbar:not(.secondary-topbar) > .icon-button`，
+   等于把二级页面的返回按钮排除在外。 */
+:root[data-embedded]:not([data-material-mode='advanced']) .topbar > .icon-button {
   border-color: var(--yct-color-border);
   background: color-mix(in srgb, var(--yct-color-surface-panel) 92%, transparent);
   box-shadow: var(--yct-shadow-floating);
@@ -22452,19 +22459,109 @@ button.material-studio-review-badge {
   backdrop-filter: blur(var(--yct-material-blur-medium));
 }
 
-:root[data-embedded] .topbar:not(.secondary-topbar) > .icon-button:hover,
-:root[data-embedded] .topbar:not(.secondary-topbar) > .icon-button:focus-visible,
-:root[data-embedded][data-material-mode='advanced'] .secondary-topbar > .icon-button:hover,
-:root[data-embedded][data-material-mode='advanced'] .secondary-topbar > .icon-button:focus-visible,
-:root[data-embedded] .topbar-actions > .icon-button:hover,
-:root[data-embedded] .topbar-actions > .icon-button:focus-visible,
-:root[data-embedded] .topbar-actions > .account-button:hover,
-:root[data-embedded] .topbar-actions > .account-button:focus-visible {
+/* 悬停反馈同样要覆盖二级页面：原先二级返回按钮只在 advanced（透光）材质下
+   才有 hover 规则，非透光材质下会变成「有底色但不响应悬停」。 */
+:root[data-embedded] .topbar > .icon-button:hover,
+:root[data-embedded] .topbar > .icon-button:focus-visible,
+:root[data-embedded] :is(.topbar-actions, .secondary-actions) > .icon-button:hover,
+:root[data-embedded] :is(.topbar-actions, .secondary-actions) > .icon-button:focus-visible,
+:root[data-embedded] :is(.topbar-actions, .secondary-actions) > .account-button:hover,
+:root[data-embedded] :is(.topbar-actions, .secondary-actions) > .account-button:focus-visible {
   background: var(--yct-material-hover-state);
 }
 
+/* 嵌入模式下二级顶栏必须保持 grid 的三列结构（返回 / 标题 / 工具栏）。
+   标题列是 `minmax(0, 1fr)`，只有它撑满才能把 `.secondary-actions` 顶到右上角；
+   `.secondary-actions` 本身没有 `margin-left: auto`（它靠的是 grid 第三列），
+   一旦这里改成 flex，工具栏就会紧贴标题右侧。 */
 :root[data-embedded] .secondary-topbar {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+}
+
+/* 嵌入模式下的登录浮层。
+   登录本身必须走顶层弹窗完成，这里只负责给出可点击的入口与进度反馈。 */
+.embedded-auth-prompt {
+  position: fixed;
+  inset-inline: var(--yct-space-4);
+  inset-block-end: var(--yct-space-4);
+  z-index: 80;
   display: flex;
+  align-items: center;
+  gap: var(--yct-space-3);
+  max-width: 520px;
+  margin-inline: auto;
+  padding: var(--yct-space-3) var(--yct-space-4);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-lg);
+  background: var(--yct-color-surface-panel);
+  box-shadow: var(--yct-shadow-floating);
+  animation: embedded-auth-prompt-in 220ms ease-out;
+}
+
+.embedded-auth-prompt.is-error {
+  border-color: color-mix(in srgb, var(--yct-color-danger, #c0392b) 42%, var(--yct-color-border));
+}
+
+.embedded-auth-prompt-icon {
+  flex: none;
+  font-size: 22px;
+  color: var(--yct-color-text);
+}
+
+.embedded-auth-prompt-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.embedded-auth-prompt-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--yct-color-text);
+}
+
+.embedded-auth-prompt-message {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--yct-color-text);
+  opacity: 0.78;
+}
+
+.embedded-auth-prompt-actions {
+  flex: none;
+  display: flex;
+  gap: var(--yct-space-2);
+}
+
+@keyframes embedded-auth-prompt-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .embedded-auth-prompt {
+    flex-wrap: wrap;
+  }
+
+  .embedded-auth-prompt-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .embedded-auth-prompt {
+    animation: none;
+  }
 }
 
 .secondary-content {

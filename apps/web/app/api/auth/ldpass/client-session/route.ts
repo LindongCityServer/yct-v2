@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { LdpassIdentityProvider } from '@yct/adapters';
 import { markResponseNoStore } from '../../../../../lib/http-cache';
 import { readRuntimeConfig } from '../../../../../lib/runtime-config';
-import { yctSessionCookieName } from '../../../../../lib/yct-session';
+import { yctEmbedSessionCookieName, yctSessionCookieName } from '../../../../../lib/yct-session';
 
 const ldpassSessionCookieName = 'ldpass_session';
 
@@ -65,6 +65,7 @@ function buildCookieDiagnostics(cookieHeader: string | undefined): {
   receivedCookieCount: number;
   ldpassSessionCookiePresent: boolean;
   yctSessionCookiePresent: boolean;
+  yctEmbedSessionCookiePresent: boolean;
 } {
   const cookieNames = parseCookieNames(cookieHeader);
   return {
@@ -72,6 +73,7 @@ function buildCookieDiagnostics(cookieHeader: string | undefined): {
     receivedCookieCount: cookieNames.length,
     ldpassSessionCookiePresent: cookieNames.includes(ldpassSessionCookieName),
     yctSessionCookiePresent: cookieNames.includes(yctSessionCookieName),
+    yctEmbedSessionCookiePresent: cookieNames.includes(yctEmbedSessionCookieName),
   };
 }
 

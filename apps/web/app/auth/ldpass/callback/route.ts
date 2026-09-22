@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { LdpassIdentityProvider } from '@yct/adapters';
 import { appPath } from '../../../../lib/app-paths';
 import { startYctSessionFromLdpass } from '../../../../lib/auth-workflow';
+import { renderEmbedAuthCompletePage } from '../../../../lib/embed-auth-complete-page';
 import { markResponseNoStore } from '../../../../lib/http-cache';
 import { isSecureNextRequest, resolvePublicSiteOrigin } from '../../../../lib/request-site-url';
 import { readRuntimeConfig } from '../../../../lib/runtime-config';
@@ -9,10 +10,10 @@ import { createYctServerSession } from '../../../../lib/yct-server-session-store
 import {
   expiredCookieOptions,
   normalizeStoredReturnOrigin,
-  sessionCookieOptions,
+  writeYctSessionCookies,
   yctAuthReturnOriginCookieName,
   yctAuthStateCookieName,
-  yctSessionCookieName,
+  yctEmbedCookieName,
 } from '../../../../lib/yct-session';
 
 const ldpassSessionCookieName = 'ldpass_session';
@@ -29,31 +30,35 @@ export async function GET(request: NextRequest) {
   const returnedState = request.nextUrl.searchParams.get('state');
   const storedState = request.cookies.get(yctAuthStateCookieName)?.value;
   const secure = isSecureNextRequest(request);
+  const embed = request.cookies.get(yctEmbedCookieName)?.value === '1';
+
+  /**
+   * 统一的收尾出口。
+   *
+   * 普通网页端：302 回账号页并带 `?auth=<status>`，行为与改动前逐字段一致。
+   * 嵌入模式：登录是在顶层弹窗里跑的，302 会把用户困在弹窗里，
+   * 因此改为渲染极简完成页，由它 postMessage 回 iframe 后自行关闭。
+   */
+  const finish = (status: string, sessionId?: string): NextResponse => {
+    const response = embed
+      ? new NextResponse(renderEmbedAuthCompletePage({ status }), {
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        })
+      : NextResponse.redirect(withAuthStatus(accountUrl, status));
+
+    clearTransientCookies(response, secure);
+    // 嵌入登录额外写一枚 SameSite=None 的会话 Cookie：
+    // iframe 内的请求是跨站子资源请求，Lax 那枚不会被携带。
+    writeYctSessionCookies(response, { secure, sessionId, embed });
+    return markResponseNoStore(response);
+  };
 
   if (!returnedState || !storedState || returnedState !== storedState) {
-    accountUrl.searchParams.set('auth', 'state_invalid');
-    const invalidStateResponse = NextResponse.redirect(accountUrl);
-    invalidStateResponse.cookies.set(yctAuthStateCookieName, '', expiredCookieOptions(secure));
-    invalidStateResponse.cookies.set(
-      yctAuthReturnOriginCookieName,
-      '',
-      expiredCookieOptions(secure),
-    );
-    invalidStateResponse.cookies.set(yctSessionCookieName, '', expiredCookieOptions(secure));
-    return markResponseNoStore(invalidStateResponse);
+    return finish('state_invalid');
   }
 
   if (!config.ldpassBaseUrl || !config.ldpassClientId) {
-    accountUrl.searchParams.set('auth', 'ldpass_not_configured');
-    const notConfiguredResponse = NextResponse.redirect(accountUrl);
-    notConfiguredResponse.cookies.set(yctAuthStateCookieName, '', expiredCookieOptions(secure));
-    notConfiguredResponse.cookies.set(
-      yctAuthReturnOriginCookieName,
-      '',
-      expiredCookieOptions(secure),
-    );
-    notConfiguredResponse.cookies.set(yctSessionCookieName, '', expiredCookieOptions(secure));
-    return markResponseNoStore(notConfiguredResponse);
+    return finish('ldpass_not_configured');
   }
 
   try {
@@ -69,51 +74,31 @@ export async function GET(request: NextRequest) {
     const { snapshot } = await startYctSessionFromLdpass({ session });
 
     if (!snapshot) {
-      accountUrl.searchParams.set(
-        'auth',
-        resolveUnavailableSessionStatus(publicSiteOrigin, cookieHeader),
-      );
-      const unavailableResponse = NextResponse.redirect(accountUrl);
-      unavailableResponse.cookies.set(yctAuthStateCookieName, '', expiredCookieOptions(secure));
-      unavailableResponse.cookies.set(
-        yctAuthReturnOriginCookieName,
-        '',
-        expiredCookieOptions(secure),
-      );
-      unavailableResponse.cookies.set(yctSessionCookieName, '', expiredCookieOptions(secure));
-      return markResponseNoStore(unavailableResponse);
+      return finish(resolveUnavailableSessionStatus(publicSiteOrigin, cookieHeader));
     }
 
     const yctSession = await createYctServerSession({
       ldpassSession: session,
       snapshot,
     });
-    accountUrl.searchParams.set('auth', snapshot.authenticated ? 'login_success' : 'readonly');
-    const successResponse = NextResponse.redirect(accountUrl);
-    successResponse.cookies.set(yctAuthStateCookieName, '', expiredCookieOptions(secure));
-    successResponse.cookies.set(
-      yctAuthReturnOriginCookieName,
-      '',
-      expiredCookieOptions(secure),
-    );
-    successResponse.cookies.set(
-      yctSessionCookieName,
-      yctSession.id,
-      sessionCookieOptions(secure),
-    );
-    return markResponseNoStore(successResponse);
+    return finish(snapshot.authenticated ? 'login_success' : 'readonly', yctSession.id);
   } catch {
-    accountUrl.searchParams.set('auth', 'session_error');
-    const errorResponse = NextResponse.redirect(accountUrl);
-    errorResponse.cookies.set(yctAuthStateCookieName, '', expiredCookieOptions(secure));
-    errorResponse.cookies.set(
-      yctAuthReturnOriginCookieName,
-      '',
-      expiredCookieOptions(secure),
-    );
-    errorResponse.cookies.set(yctSessionCookieName, '', expiredCookieOptions(secure));
-    return markResponseNoStore(errorResponse);
+    return finish('session_error');
   }
+}
+
+/** 复制一份再挂 `auth` 参数，避免把可变 URL 传出去。 */
+function withAuthStatus(accountUrl: URL, status: string): URL {
+  const next = new URL(accountUrl.toString());
+  next.searchParams.set('auth', status);
+  return next;
+}
+
+/** 清掉只在登录往返期间有效的三枚 Cookie（含嵌入标记）。 */
+function clearTransientCookies(response: NextResponse, secure: boolean): void {
+  response.cookies.set(yctAuthStateCookieName, '', expiredCookieOptions(secure));
+  response.cookies.set(yctAuthReturnOriginCookieName, '', expiredCookieOptions(secure));
+  response.cookies.set(yctEmbedCookieName, '', expiredCookieOptions(secure));
 }
 
 function resolveUnavailableSessionStatus(

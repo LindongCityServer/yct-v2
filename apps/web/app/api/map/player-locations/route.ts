@@ -8,6 +8,8 @@ import { readYctServerSession } from '../../../../lib/yct-server-session-store';
 import {
   buildMinotarAvatarUrl,
   resolveYctAvatarUrl,
+  resolveYctSessionCookie,
+  yctEmbedSessionCookieName,
   yctSessionCookieName,
 } from '../../../../lib/yct-session';
 
@@ -66,9 +68,11 @@ async function resolveCurrentAccount(
   request: NextRequest,
 ): Promise<{ serverAccountName: string; avatarUrl?: string } | undefined> {
   try {
-    const serverSession = await readYctServerSession(
-      request.cookies.get(yctSessionCookieName)?.value,
-    );
+    const { sessionId } = resolveYctSessionCookie({
+      standardSessionId: request.cookies.get(yctSessionCookieName)?.value,
+      embeddedSessionId: request.cookies.get(yctEmbedSessionCookieName)?.value,
+    });
+    const serverSession = await readYctServerSession(sessionId);
     const session = serverSession?.ldpassSession;
     const serverAccountName = session?.user?.serverAccountName?.trim();
     if (!session?.user?.serverAccountVerified || !serverAccountName) {

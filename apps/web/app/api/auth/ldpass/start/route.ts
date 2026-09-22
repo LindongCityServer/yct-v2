@@ -9,6 +9,7 @@ import {
   createLdpassState,
   yctAuthReturnOriginCookieName,
   yctAuthStateCookieName,
+  yctEmbedCookieName,
 } from '../../../../../lib/yct-session';
 
 export async function GET(request: NextRequest) {
@@ -37,16 +38,19 @@ export async function GET(request: NextRequest) {
     redirectUri,
     state,
   });
+
+  const secure = isSecureNextRequest(request);
   const response = markResponseNoStore(NextResponse.redirect(loginUrl));
-  response.cookies.set(
-    yctAuthStateCookieName,
-    state,
-    authStateCookieOptions(isSecureNextRequest(request)),
-  );
+  response.cookies.set(yctAuthStateCookieName, state, authStateCookieOptions(secure));
   response.cookies.set(
     yctAuthReturnOriginCookieName,
     publicSiteOrigin,
-    authStateCookieOptions(isSecureNextRequest(request)),
+    authStateCookieOptions(secure),
   );
+  if (request.nextUrl.searchParams.get('embed') === '1') {
+    // 嵌入模式的顶层弹窗登录：
+    // 回调页看到这枚标记就改走 postMessage 完成页，而不是 302 回账号页。
+    response.cookies.set(yctEmbedCookieName, '1', authStateCookieOptions(secure));
+  }
   return response;
 }
