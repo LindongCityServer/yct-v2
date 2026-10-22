@@ -3,6 +3,45 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.12.7",
+      "releasedAt": "2026-10-22T14:51:12.279Z",
+      "sourceFingerprint": "dabfdd56edd6794deb50879c98fa742ea1d1bbd62077f09327fe83095305c65c",
+      "themes": ["materials", "i18n", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "公共交通导视新增地铁横板线路图模板，支持新版与旧版样式、开门方向和行车方向切换"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "公交站牌的始发终点、线路概览和线路详情合并为同一入口的版式切换，横版线路详情保持独立"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "导视物料按对齐单位整体等比缩放，线路图、地铁导视牌与预览水印在更高密度下保持一致比例"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "按设计稿逐像素校准换乘徽标、站点引线和图例，并修正已过站置灰、文字压缩与换乘标签排版"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "界面多语言覆盖扩展到地图路线、出行班次、线网健康、账号设置、运营详情与物料工作台"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "物料预览更新时显示加载状态，切换模板或版式不再重置对齐单位"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.12.6",
       "releasedAt": "2026-09-22T20:33:27.162Z",
       "sourceFingerprint": "e68b7a7416414840c94ef774aa1d75455e72e12f2b69dc90673b79d37be895b5",
