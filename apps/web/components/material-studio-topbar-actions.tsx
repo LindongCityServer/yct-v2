@@ -10,6 +10,7 @@ import {
   type MaterialStudioStateChangedPayload,
 } from '../lib/client-material-studio-events';
 import { publishToastRequested } from '../lib/client-toast-events';
+import { useI18n } from '../lib/client-i18n';
 
 type AccountStatus = 'not_configured' | 'anonymous' | 'active' | 'readonly' | 'unavailable';
 
@@ -29,6 +30,7 @@ const initialState: Omit<MaterialStudioStateChangedPayload, 'studioId'> = {
 export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: string }>) {
   const [studioState, setStudioState] = useState(initialState);
   const [accountInfo, setAccountInfo] = useState<AccountStatusResponse>({});
+  const { t } = useI18n();
 
   useEffect(() => {
     let cancelled = false;
@@ -69,7 +71,7 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
   ) => {
     requestMaterialStudioAction({ studioId, action });
   };
-  const previewLabel = studioState.hasPreview ? '更新预览' : '预览';
+  const previewLabel = studioState.hasPreview ? t('materialStudio.updatePreview') : t('materialStudio.preview');
   const reviewBadgeId = `${studioId}-review-watermark-badge`;
   const isAnonymous = accountInfo.accountStatus === 'anonymous';
   const serverAccountUnverified =
@@ -80,7 +82,7 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
   const showReviewBadge = isAnonymous || studioState.mode === 'manual' || serverAccountUnverified;
 
   const requestLogin = () => {
-    publishLoginRequired({ message: '登录后可提交审核并下载无水印图片。', durationMs: 0 });
+    publishLoginRequired({ message: t('materialStudio.loginRequired'), durationMs: 0 });
   };
 
   return (
@@ -88,8 +90,8 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
       <button
         type="button"
         className="icon-button"
-        aria-label="物料历史"
-        title="物料历史"
+        aria-label={t('materialStudio.history')}
+        title={t('materialStudio.history')}
         onClick={() => requestAction('history')}
       >
         <span className="material-symbols-outlined" aria-hidden="true">
@@ -113,9 +115,9 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
           <span
             id={reviewBadgeId}
             className="material-studio-review-badge"
-            title="请在账号设置中验证服务器账号后下载无水印图片"
+            title={t('materialStudio.serverUnverifiedHint')}
           >
-            服务器账号未验证
+            {t('materialStudio.serverUnverified')}
           </span>
         ) : showReviewBadge ? (
           isAnonymous ? (
@@ -123,24 +125,26 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
               id={reviewBadgeId}
               type="button"
               className="material-studio-review-badge is-login-action"
-              title="登录后可提交审核并下载无水印图片"
+              title={t('materialStudio.loginRequired')}
               onClick={requestLogin}
             >
-              登录去水印
+              {t('materialStudio.loginRemoveWatermark')}
             </button>
           ) : (
             <span id={reviewBadgeId} className="material-studio-review-badge">
-              去水印需审核
+              {t('materialStudio.reviewRequired')}
             </span>
           )
         ) : null}
         <button
           type="button"
           className="icon-button"
-          aria-label="提交审核"
+          aria-label={t('materialStudio.submitReview')}
           aria-describedby={showReviewBadge ? reviewBadgeId : undefined}
           title={
-            studioState.mode === 'manual' ? '提交审核；审核通过后可下载无水印图片' : '提交审核'
+            studioState.mode === 'manual'
+              ? t('materialStudio.submitReviewManualHint')
+              : t('materialStudio.submitReview')
           }
           disabled={studioState.isBusy}
           onClick={() => requestAction('submit')}
@@ -154,8 +158,8 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
         <button
           type="button"
           className="icon-button"
-          aria-label="导出工程文件"
-          title="导出工程文件"
+          aria-label={t('materialStudio.exportProject')}
+          title={t('materialStudio.exportProject')}
           disabled={studioState.isBusy}
           onClick={() => requestAction('export-project')}
         >
@@ -167,8 +171,8 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
       <button
         type="button"
         className="icon-button is-primary"
-        aria-label="下载图片"
-        title="下载图片"
+        aria-label={t('materialStudio.download')}
+        title={t('materialStudio.download')}
         disabled={studioState.isBusy}
         onClick={() => requestAction('download')}
       >

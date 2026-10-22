@@ -145,10 +145,12 @@ export function renderMaterialTemplateToSvg(input: {
   canvas: MaterialCanvasConfig;
   /** 渲染前复核字段时使用的校验口径，默认严格（必填空值直接报错）。 */
   validation?: MaterialInputValidationOptions;
-}): { svg: string; widthPx: number; heightPx: number } {
+}): { svg: string; widthPx: number; heightPx: number; renderScale: number } {
   validateMaterialTemplateSource(input.template.source, input.template.fields);
   const values = validateMaterialInput(input.template.fields, input.values, input.validation);
   const size = resolveMaterialOutputSize(input.canvas);
+  const logicalWidthPx = Math.max(1, Math.round(input.canvas.widthM * 128));
+  const logicalHeightPx = Math.max(1, Math.round(input.canvas.heightM * 128));
   const typography = resolveTypography(
     input.template.typographyProfile,
     values,
@@ -159,6 +161,9 @@ export function renderMaterialTemplateToSvg(input: {
     ...values,
     'canvas.widthPx': String(size.contentWidthPx),
     'canvas.heightPx': String(size.contentHeightPx),
+    // 设计坐标：与像素密度解耦，对齐单位（PPI）变化时整体等比缩放。
+    'canvas.logicalWidthPx': String(logicalWidthPx),
+    'canvas.logicalHeightPx': String(logicalHeightPx),
     'canvas.innerWidthPx': String(Math.max(size.contentWidthPx - 16, 0)),
     'canvas.innerHeightPx': String(Math.max(size.contentHeightPx - 16, 0)),
     'canvas.primaryFontPx': String(Math.max(Math.round(size.contentHeightPx * 0.2), 14)),
@@ -177,6 +182,8 @@ export function renderMaterialTemplateToSvg(input: {
         ...values,
         'canvas.widthPx': String(size.contentWidthPx),
         'canvas.heightPx': String(size.contentHeightPx),
+        'canvas.logicalWidthPx': String(logicalWidthPx),
+        'canvas.logicalHeightPx': String(logicalHeightPx),
       });
       trustedContext.add(key);
     }
@@ -203,7 +210,12 @@ export function renderMaterialTemplateToSvg(input: {
   }
   const children = resolved.replace(/^<svg\b[^>]*>/i, '').replace(/<\/svg>\s*$/i, '');
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size.widthPx}" height="${size.heightPx}" viewBox="0 0 ${size.widthPx} ${size.heightPx}"><svg x="0" y="0" width="${size.contentWidthPx}" height="${size.contentHeightPx}" viewBox="${sourceViewBox}">${children}</svg></svg>`;
-  return { svg, widthPx: size.widthPx, heightPx: size.heightPx };
+  return {
+    svg,
+    widthPx: size.widthPx,
+    heightPx: size.heightPx,
+    renderScale: size.contentWidthPx / logicalWidthPx,
+  };
 }
 
 export async function renderMaterialTemplateToPng(input: {
@@ -221,6 +233,7 @@ export async function renderMaterialTemplateToPng(input: {
         rendered.widthPx,
         rendered.heightPx,
         input.watermark,
+        rendered.renderScale,
       )
     : rendered.svg;
   const png = new Resvg(svg, {
@@ -246,12 +259,16 @@ export function appendMaterialPreviewWatermark(
   widthPx: number,
   heightPx: number,
   watermark: MaterialPreviewWatermark,
+  renderScale = 1,
 ): string {
-  const shorterSide = Math.min(widthPx, heightPx);
+  const scale = Number.isFinite(renderScale) && renderScale > 0 ? renderScale : 1;
+  const layoutWidthPx = widthPx / scale;
+  const layoutHeightPx = heightPx / scale;
+  const shorterSide = Math.min(layoutWidthPx, layoutHeightPx);
   const primaryFontSize = Math.max(10, Math.min(34, Math.round(shorterSide * 0.13)));
   const watermarkColor = '#777777';
   const watermarkOpacity = clampWatermarkOpacity(watermark.opacity ?? 0.62);
-  const layoutReferenceWidth = Math.max(200, Math.min(520, widthPx * 0.92));
+  const layoutReferenceWidth = Math.max(200, Math.min(520, layoutWidthPx * 0.92));
   const traceWidthUnits = Math.max(
     ...watermark.traceLines.map((line) => estimateTextWidth(line, 1)),
     1,
@@ -290,7 +307,7 @@ export function appendMaterialPreviewWatermark(
   const firstRow = renderWatermarkRow(compositionWidth / 2, rowHeight / 2);
   const secondRowLeft = renderWatermarkRow(0, rowHeight * 1.5);
   const secondRowRight = renderWatermarkRow(compositionWidth, rowHeight * 1.5);
-  const overlay = `<defs><pattern id="${patternId}" width="${formatSvgNumber(compositionWidth)}" height="${formatSvgNumber(patternHeight)}" patternUnits="userSpaceOnUse" patternTransform="rotate(-24)">${firstRow}${secondRowLeft}${secondRowRight}</pattern></defs><rect id="yct-material-preview-watermark" x="0" y="0" width="${formatSvgNumber(widthPx)}" height="${formatSvgNumber(heightPx)}" fill="url(#${patternId})" pointer-events="none"/>`;
+  const overlay = `<g transform="scale(${formatSvgNumber(scale)})"><defs><pattern id="${patternId}" width="${formatSvgNumber(compositionWidth)}" height="${formatSvgNumber(patternHeight)}" patternUnits="userSpaceOnUse" patternTransform="rotate(-24)">${firstRow}${secondRowLeft}${secondRowRight}</pattern></defs><rect id="yct-material-preview-watermark" x="0" y="0" width="${formatSvgNumber(layoutWidthPx)}" height="${formatSvgNumber(layoutHeightPx)}" fill="url(#${patternId})" pointer-events="none"/></g>`;
   return svg.replace(/<\/svg>\s*$/i, `${overlay}</svg>`);
 }
 
@@ -360,7 +377,7 @@ function escapeXml(value: string): string {
 
 function isAllowedTemplateVariable(variable: string, fields: MaterialTemplateField[]): boolean {
   if (
-    /^(?:[a-z][a-zA-Z0-9_]*|canvas\.(?:widthPx|heightPx|innerWidthPx|innerHeightPx|primaryFontPx|secondaryFontPx|captionFontPx|largeFontPx)|typography\.(?:primaryFontPx|secondaryFontPx|captionFontPx))$/.test(
+    /^(?:[a-z][a-zA-Z0-9_]*|canvas\.(?:widthPx|heightPx|logicalWidthPx|logicalHeightPx|innerWidthPx|innerHeightPx|primaryFontPx|secondaryFontPx|captionFontPx|largeFontPx)|typography\.(?:primaryFontPx|secondaryFontPx|captionFontPx))$/.test(
       variable,
     )
   ) {

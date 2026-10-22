@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 import * as opentypeModule from 'opentype.js';
 import type { Font } from 'opentype.js';
 import type { MaterialGlyphConfig } from '@yct/contracts';
+import { toUppercasePinyin } from './chinese-pinyin';
+import { resolveMetroLineEnglishName } from './metro-wayfinding-import';
 import {
   estimateMetroWayfindingLargeTextWidth,
   estimateMetroWayfindingTextWidth,
@@ -176,9 +178,17 @@ export function renderMaterialGlyph(
     return renderTransitRouteMap(value, color, config);
   }
   if (config.renderer === 'metro_wayfinding') {
-    const width = Number(values['canvas.widthPx']) || config.layoutWidth;
-    const height = Number(values['canvas.heightPx']) || METRO_WAYFINDING_HEIGHT;
+    const width = Number(values['canvas.logicalWidthPx']) || config.layoutWidth;
+    const height = Number(values['canvas.logicalHeightPx']) || METRO_WAYFINDING_HEIGHT;
     return renderMetroWayfinding(value, width, height);
+  }
+  if (config.renderer === 'metro_line_map_modern' || config.renderer === 'metro_line_map_classic') {
+    return renderMetroLineMap(
+      value,
+      config,
+      values,
+      config.renderer === 'metro_line_map_classic' ? 'classic' : 'modern',
+    );
   }
   return renderVerticalChillJinshuSong(value, config);
 }
@@ -1595,6 +1605,510 @@ function parseRouteTransfers(
       transfer[3].every((color) => typeof color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(color)),
   );
   return transfers.length === value.length ? transfers : undefined;
+}
+
+interface MetroLineMapTransfer {
+  label: string;
+  color: string;
+}
+
+const metroLineMapDefaultTransferColors: Record<string, string> = {
+  '1': '#C11111',
+  '2': '#EC6941',
+  '3': '#F29DB4',
+  '4': '#8957A1',
+  '5': '#00A0E9',
+  '6': '#E8CE07',
+  '7': '#7CDA11',
+  '8': '#00C1D4',
+  '9': '#00A0E9',
+  '10': '#A0A0A0',
+};
+
+// 以下图形数据直接取自设计导出的单个 SVG，避免用近似几何替代。
+const metroLineMapStationRingPath =
+  'M5.5 11C8.53757 11 11 8.53757 11 5.5C11 2.46243 8.53757 0 5.5 0C2.46243 0 0 2.46243 0 5.5C0 8.53757 2.46243 11 5.5 11ZM5.5 1.5C7.70914 1.5 9.5 3.29086 9.5 5.5C9.5 7.70914 7.70914 9.5 5.5 9.5C3.29086 9.5 1.5 7.70914 1.5 5.5C1.5 3.29086 3.29086 1.5 5.5 1.5Z';
+const metroLineMapCurrentArrowPath =
+  'M5.5 3.5L3.5 5.5L5.5 7.5L5.81579 7.18421L4.34211 5.71053L7.5 5.71053L7.5 5.23684L4.34211 5.23684L5.81579 3.81579L5.5 3.5Z';
+const metroLineMapOldTransferRingPath =
+  'M10 4.5C10 2.01472 7.98528 0 5.5 0C3.01472 0 1 2.01472 1 4.5L1 14.5C1 16.9853 3.01472 19 5.5 19C7.98528 19 10 16.9853 10 14.5L10 4.5ZM2 4.5C2 2.567 3.567 1 5.5 1C7.433 1 9 2.567 9 4.5L9 14.5C9 16.433 7.433 18 5.5 18C3.567 18 2 16.433 2 14.5L2 4.5Z';
+const metroLineMapOldTransferUpStroke = 'M4 10L4 5C4 5 4.00002 3.5 5.5 3.5C6.99998 3.5 7 5 7 5L7 7';
+const metroLineMapOldTransferUpArrow = 'M7 8L8 6L6 6L7 8Z';
+const metroLineMapOldTransferDownStroke =
+  'M7 9L7 14C7 14 6.99998 15.5 5.5 15.5C4.00002 15.5 4 14 4 14L4 12';
+const metroLineMapOldTransferDownArrow = 'M4 11L3 13L5 13L4 11Z';
+const metroLineMapNewTransferPathTop =
+  'M19.25 10.79C16.3333 11.9567 13.9044 12.54 11.96 12.54C10.0156 12.54 7.38557 11.1822 4.08 8.46L2.33 9.92L2.33 4.37L7 4.37L7 3.5L0 3.5L0 14L3.21 11.37C6.12667 13.12 9.04333 14 11.96 14C14.8767 14 17.3056 12.9289 19.25 10.79Z';
+const metroLineMapNewTransferPathBottom =
+  'M0.580017 3.21C3.49668 2.04333 5.92559 1.46 7.87002 1.46C9.81444 1.46 12.4444 2.81778 15.75 5.54L17.5 4.08L17.5 9.62L12.83 9.62L12.83 10.5L19.83 10.5L19.83 0L16.62 2.62C13.7034 0.87 10.7867 0 7.87002 0C4.95335 0 2.52446 1.07111 0.580017 3.21Z';
+const metroLineMapNewTransferPathGlyph =
+  'M8.86002 8.32001C8.6422 8.16292 8.48644 7.97843 8.39002 7.77001L9.66002 7.77001L9.66002 7.38001L9.33002 7.38001L9.33002 6.17001L8.64002 6.17001L9.06002 5.60001L9.06002 5.24001L7.86002 5.24001C7.90348 5.14668 7.94644 5.04891 7.99002 4.94001L7.59002 4.82001C7.4905 5.05333 7.37323 5.27999 7.23002 5.49001C7.08693 5.69998 6.90541 5.90152 6.70002 6.11001L6.70002 5.70001L6.32002 5.70001L6.32002 4.88001L5.90002 4.88001L5.90002 5.70001L5.43002 5.70001L5.43002 6.13001L5.90002 6.13001L5.90002 7.00001C5.61072 7.10582 5.42021 7.17195 5.33002 7.20001L5.43002 7.65001L5.90002 7.46001L5.90002 8.43001C5.90002 8.52334 5.88329 8.58577 5.86002 8.62001C5.83668 8.65425 5.7916 8.67001 5.72002 8.67001C5.62052 8.67001 5.52405 8.65492 5.44002 8.63001L5.52002 9.06001C5.60404 9.07558 5.70868 9.09001 5.83002 9.09001C6.01045 9.09001 6.13844 9.04467 6.21002 8.97001C6.28153 8.89534 6.32002 8.76667 6.32002 8.58001L6.32002 7.30001L6.73002 7.14001L6.64002 6.70001L6.32002 6.83001L6.32002 6.13001L6.69002 6.13001L6.59002 6.23001L6.84002 6.56001L6.96002 6.44001L6.96002 7.38001L6.59002 7.38001L6.59002 7.77001L7.86002 7.77001C7.79153 7.97534 7.65468 8.15225 7.44002 8.30001C7.22535 8.44777 6.91444 8.58558 6.51002 8.71001L6.73002 9.13001C7.11578 8.9931 7.42978 8.85243 7.66002 8.70001C7.89026 8.54758 8.05111 8.36467 8.16002 8.15001C8.42759 8.59801 8.87026 8.91777 9.48002 9.12001L9.67002 8.70001C9.34959 8.60667 9.07778 8.47716 8.86002 8.32001ZM13.88 7.98001C13.5752 7.77158 13.3109 7.50801 13.09 7.20001L13.09 6.14001L14.95 6.14001L14.95 5.77001L13.09 5.77001L13.09 5.40001C13.706 5.372 14.1886 5.34797 14.54 5.32001L14.5 4.95001C14.0551 4.98737 13.5078 5.01891 12.87 5.05001C12.2322 5.0811 11.6905 5.11001 11.23 5.11001L11.25 5.46001C11.5954 5.46001 12.0387 5.44179 12.58 5.42001L12.68 5.42001L12.68 5.77001L10.86 5.77001L10.86 6.14001L12.68 6.14001L12.68 7.21001C12.4684 7.50243 12.22 7.74862 11.94 7.94001C11.66 8.13128 11.2672 8.3391 10.76 8.56001L10.97 8.96001C11.3621 8.77643 11.7009 8.58977 11.97 8.40001C12.2392 8.21025 12.4716 8.00267 12.68 7.76001L12.68 9.10001L13.09 9.10001L13.09 7.75001C13.2984 7.99892 13.5523 8.21401 13.84 8.41001C14.1278 8.60601 14.468 8.78892 14.86 8.96001L15.03 8.54001C14.5697 8.37201 14.185 8.18843 13.88 7.98001ZM7.64002 5.63001L8.54002 5.63001L8.12002 6.17001L7.21002 6.17001C7.38111 5.98019 7.52802 5.80108 7.64002 5.63001ZM11.22 7.28001C10.9991 7.3391 10.8674 7.38001 10.83 7.38001L10.91 7.72001L11.82 7.46001L11.82 7.68001L12.2 7.68001L12.2 6.28001L11.82 6.28001L11.82 6.55001L10.95 6.55001L10.95 6.88001L11.82 6.88001L11.82 7.12001C11.6427 7.16977 11.4409 7.22092 11.22 7.28001ZM13.95 6.28001L13.58 6.28001L13.58 7.26001C13.58 7.41867 13.6084 7.53158 13.68 7.60001C13.7516 7.66843 13.8782 7.71001 14.04 7.71001L14.2 7.72001L14.37 7.71001C14.566 7.71001 14.7006 7.6791 14.78 7.62001C14.8594 7.56092 14.91 7.44873 14.91 7.29001L14.93 6.95001L14.6 6.88001C14.6 6.95777 14.59 7.06177 14.59 7.18001C14.59 7.24534 14.5703 7.29207 14.55 7.32001C14.5298 7.34807 14.4951 7.37001 14.45 7.37001C14.4049 7.37001 14.3334 7.39001 14.24 7.39001L14.14 7.38001C14.0716 7.38001 14.0181 7.36486 13.99 7.34001C13.962 7.3151 13.95 7.2691 13.95 7.21001L13.95 7.02001C14.3482 6.86752 14.6509 6.74262 14.85 6.64001L14.7 6.33001C14.5134 6.44201 14.2612 6.55867 13.95 6.68001L13.95 6.28001ZM7.36002 7.38001L7.36002 6.57001L7.92002 6.57001L7.92002 7.38001L7.36002 7.38001ZM8.93002 7.38001L8.32002 7.38001L8.32002 6.57001L8.93002 6.57001L8.93002 7.38001Z';
+const metroLineMapNewTransferWidth = 19.83331298828125;
+const metroLineMapStemLong = 'M0 0L0 23.2632L1.5 26L3 23.2632L3 0Z';
+const metroLineMapStemShortDown = 'M0 0L0 19.2944L1.5 23L3 19.2944L3 0Z';
+const metroLineMapStemLongUp = 'M0 26L0 2.7368L1.5 0L3 2.7368L3 26Z';
+const metroLineMapFontFamily =
+  "Arial, Helvetica, 'HarmonyOS Sans SC', 'Source Han Sans SC', sans-serif";
+const metroLineMapLegacyTransferFontFamily =
+  "'HarmonyOS Sans SC', 'Source Han Sans SC', Arial, Helvetica, sans-serif";
+
+/**
+ * 地铁横板线路图渲染器。
+ * 旧版 / 新版共用同一套站序排版：站名在站线两侧交替排列，
+ * 开门方向决定终点站在左端还是右端，当前站圆圈内的箭头始终指向终点站。
+ */
+function renderMetroLineMap(
+  value: string,
+  config: MaterialGlyphConfig,
+  values: Record<string, string>,
+  style: 'modern' | 'classic',
+): string {
+  const stations = value
+    .split(/\r?\n|\s*\/\s*/u)
+    .map((station) => station.replace(/[\s\u3000]+/gu, '').trim())
+    .filter(Boolean);
+  if (!stations.length) {
+    return '';
+  }
+  const canvasWidth = Math.max(
+    Number(values['canvas.logicalWidthPx']) || config.layoutWidth || 768,
+    320,
+  );
+  const canvasHeight = Math.max(
+    Number(values['canvas.logicalHeightPx']) || config.layoutHeight || 128,
+    64,
+  );
+  const rawAccent = config.colorFieldKey ? (values[config.colorFieldKey] ?? '') : '';
+  const accentColor = /^#[0-9A-Fa-f]{6}$/u.test(rawAccent) ? rawAccent : '#F29DB4';
+  const rawCurrentIndex = config.currentIndexFieldKey
+    ? Number.parseInt(values[config.currentIndexFieldKey] ?? '', 10)
+    : 0;
+  const currentIndex = Math.min(
+    Math.max(Number.isFinite(rawCurrentIndex) ? rawCurrentIndex : 0, 0),
+    stations.length - 1,
+  );
+  const terminusOnLast = values.travelDirection !== 'first';
+  const doorDirection = values.doorDirection === 'right' ? 'right' : 'left';
+  const terminusSide = doorDirection;
+  const reverseDisplay =
+    (terminusOnLast && terminusSide === 'left') || (!terminusOnLast && terminusSide === 'right');
+  const displayStations = reverseDisplay ? [...stations].reverse() : stations;
+  const displayCurrentIndex = reverseDisplay ? stations.length - 1 - currentIndex : currentIndex;
+  const transfersByStation = parseMetroLineMapTransfers(values.transferLines ?? '');
+
+  const paddingX = Math.min(26, canvasWidth * 0.08);
+  const left = paddingX;
+  const right = canvasWidth - paddingX;
+  const spacing =
+    displayStations.length > 1 ? (right - left) / (displayStations.length - 1) : right - left;
+  const labelFontSize = Math.min(9, Math.max(4.2, spacing * 0.34));
+  const pinyinFontSize = Math.max(2.4, Math.min(4, labelFontSize * 0.44));
+  const maxLabelWidth = Math.max(spacing * 2 - 3, 10);
+  const lineWidth = Math.max(right - left, 1);
+  const yScale = canvasHeight / 128;
+
+  const stationXs = displayStations.map((_, index) =>
+    displayStations.length > 1 ? left + spacing * index : (left + right) / 2,
+  );
+  const currentX = stationXs[displayCurrentIndex] ?? (left + right) / 2;
+  const passedStartX = terminusSide === 'left' ? currentX : left;
+  const passedWidth = terminusSide === 'left' ? right - currentX : currentX - left;
+
+  const labels: string[] = [];
+  const transferStems: string[] = [];
+  const markers: string[] = [];
+  const transfers: string[] = [];
+
+  displayStations.forEach((station, displayIndex) => {
+    const x = stationXs[displayIndex];
+    const isCurrent = displayIndex === displayCurrentIndex;
+    const isPassed =
+      terminusSide === 'left'
+        ? displayIndex > displayCurrentIndex
+        : displayIndex < displayCurrentIndex;
+    const labelColor = isPassed ? '#A5A5A5' : '#000000';
+    const markerColor = isPassed ? '#A5A5A5' : accentColor;
+    const labelAbove = displayIndex % 2 === 0;
+    const pinyin = toUppercasePinyin(station);
+    const transferList = transfersByStation.get(station) ?? [];
+
+    if (isCurrent) {
+      const nameWidth = Math.min(
+        estimateMetroLineMapTextWidth(station, labelFontSize),
+        Math.max(maxLabelWidth, spacing * 1.2),
+      );
+      const pinyinWidth = Math.min(
+        estimateMetroLineMapTextWidth(pinyin, pinyinFontSize),
+        Math.max(maxLabelWidth, spacing * 1.2),
+      );
+      const boxWidth = Math.max(nameWidth, pinyinWidth) + 8;
+      const boxHeight = 19;
+      const boxNameBaseline = labelAbove ? 39 : 79.2;
+      const boxPinyinBaseline = labelAbove ? 44.6 : 84.6;
+      const boxTop = boxNameBaseline - 10.2;
+      const boxX = Math.min(Math.max(x - boxWidth / 2, 2), Math.max(canvasWidth - boxWidth - 2, 2));
+      labels.push(
+        `<rect x="${formatNumber(boxX)}" y="${formatNumber(boxTop)}" width="${formatNumber(boxWidth)}" height="${boxHeight}" rx="2" fill="${accentColor}"/>`,
+      );
+      labels.push(
+        renderMetroLineMapText(
+          station,
+          boxX + boxWidth / 2,
+          boxNameBaseline,
+          boxWidth - 8,
+          labelFontSize,
+          '#FFFFFF',
+          400,
+        ),
+      );
+      if (pinyin) {
+        labels.push(
+          renderMetroLineMapText(
+            pinyin,
+            boxX + boxWidth / 2,
+            boxPinyinBaseline,
+            boxWidth - 8,
+            pinyinFontSize,
+            '#FFFFFF',
+            400,
+          ),
+        );
+      }
+      const tickStart = labelAbove ? boxTop + boxHeight : 64;
+      const tickEnd = labelAbove ? 53 : boxTop;
+      labels.push(
+        `<path d="M${formatNumber(x)} ${formatNumber(Math.min(tickStart, tickEnd))}L${formatNumber(x)} ${formatNumber(Math.max(tickStart, tickEnd))}" stroke="${markerColor}" stroke-width="1.5" fill="none"/>`,
+      );
+    } else {
+      const nameY = labelAbove ? 39 : 79.2;
+      const pinyinY = labelAbove ? 44.6 : 84.6;
+      const barY = labelAbove ? 46.9 : 70.1;
+      const nameWidth = Math.min(
+        estimateMetroLineMapTextWidth(station, labelFontSize),
+        maxLabelWidth,
+      );
+      const pinyinWidth = Math.min(
+        estimateMetroLineMapTextWidth(pinyin, pinyinFontSize),
+        maxLabelWidth,
+      );
+      const barWidth = Math.max(nameWidth, pinyinWidth);
+      labels.push(
+        `<path d="M${formatNumber(x - barWidth / 2)} ${formatNumber(barY)}L${formatNumber(x + barWidth / 2)} ${formatNumber(barY)}" stroke="${labelColor}" stroke-width="0.5" fill="none"/>`,
+      );
+      labels.push(
+        `<path d="M${formatNumber(x)} ${labelAbove ? '47' : '64'}L${formatNumber(x)} ${labelAbove ? '53' : '70'}" stroke="${labelColor}" stroke-width="0.5" fill="none"/>`,
+      );
+      labels.push(
+        renderMetroLineMapText(station, x, nameY, maxLabelWidth, labelFontSize, labelColor, 400),
+      );
+      if (pinyin) {
+        labels.push(
+          renderMetroLineMapText(
+            pinyin,
+            x,
+            pinyinY,
+            maxLabelWidth,
+            pinyinFontSize,
+            labelColor,
+            400,
+          ),
+        );
+      }
+    }
+
+    const isTerminusSide = displayIndex === 0 || displayIndex === displayStations.length - 1;
+    const isTerminusEnd =
+      (terminusSide === 'left' && displayIndex === 0) ||
+      (terminusSide === 'right' && displayIndex === displayStations.length - 1);
+    markers.push(
+      renderMetroLineMapStationMarker({
+        x,
+        kind:
+          style === 'classic'
+            ? isCurrent
+              ? 'current'
+              : isTerminusSide
+                ? 'terminal'
+                : 'normal'
+            : 'normal',
+        ringColor: markerColor,
+        terminalColor: isTerminusEnd ? accentColor : '#A5A5A5',
+        doorDirection,
+      }),
+    );
+
+    if (transferList.length) {
+      const transferPart =
+        style === 'classic'
+          ? renderMetroLineMapOldTransfer({
+              x,
+              labelAbove,
+              transferList,
+              mainColor: accentColor,
+              passed: isPassed,
+            })
+          : renderMetroLineMapNewTransfer({
+              x,
+              labelAbove,
+              transferList,
+              mainColor: accentColor,
+              passed: isPassed,
+            });
+      transferStems.push(transferPart.stem);
+      transfers.push(transferPart.badge);
+    }
+  });
+
+  const legend =
+    style === 'classic' ? renderMetroLineMapClassicLegend(accentColor, doorDirection) : '';
+  const body = [
+    `<rect width="${formatNumber(canvasWidth)}" height="128" fill="#FFFFFF"/>`,
+    `<rect x="${formatNumber(left)}" y="56" width="${formatNumber(lineWidth)}" height="5" fill="${accentColor}"/>`,
+    passedWidth > 0
+      ? `<rect x="${formatNumber(passedStartX)}" y="56" width="${formatNumber(passedWidth)}" height="5" fill="#A5A5A5"/>`
+      : '',
+    `<rect x="0" y="115" width="${formatNumber(canvasWidth)}" height="13" fill="${accentColor}"/>`,
+    labels.join(''),
+    transferStems.join(''),
+    markers.join(''),
+    transfers.join(''),
+    legend,
+  ].join('');
+
+  return yScale === 1
+    ? `<g data-metro-line-map="${style}">${body}</g>`
+    : `<g data-metro-line-map="${style}" transform="scale(1 ${formatNumber(yScale)})">${body}</g>`;
+}
+
+function renderMetroLineMapText(
+  value: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  fontSize: number,
+  color: string,
+  fontWeight: number,
+): string {
+  const naturalWidth = estimateMetroLineMapTextWidth(value, fontSize);
+  // 超宽时等比缩小字号，避免横向压缩字形。
+  const fittedFontSize =
+    naturalWidth > maxWidth ? Math.max(fontSize * (maxWidth / naturalWidth), 2.2) : fontSize;
+  return `<text x="${formatNumber(x)}" y="${formatNumber(y)}" fill="${color}" font-family="${metroLineMapFontFamily}" font-size="${formatNumber(fittedFontSize)}" font-weight="${fontWeight}" text-anchor="middle">${escapeXml(value)}</text>`;
+}
+
+/** 线路图的字体宽度估算：拉丁字母按 Arial/Helvetica 的字宽比例，中文仍按 1em。 */
+function estimateMetroLineMapTextWidth(value: string, fontSize: number): number {
+  return (
+    Array.from(value).reduce((width, character) => {
+      if (isBasicLatinCharacter(character)) {
+        if (/\s/u.test(character)) {
+          return width + 0.28;
+        }
+        return width + (/[A-Z0-9]/u.test(character) ? 0.7 : 0.56);
+      }
+      return width + metroCharacterWidthFactor(character);
+    }, 0) * fontSize
+  );
+}
+
+function parseMetroLineMapTransfers(value: string): Map<string, MetroLineMapTransfer[]> {
+  const result = new Map<string, MetroLineMapTransfer[]>();
+  for (const rawEntry of value.split(/[;\n]/u)) {
+    const entry = rawEntry.trim();
+    if (!entry) {
+      continue;
+    }
+    const separatorIndex = entry.indexOf('=');
+    if (separatorIndex <= 0) {
+      continue;
+    }
+    const stationName = entry
+      .slice(0, separatorIndex)
+      .replace(/[\s\u3000]+/gu, '')
+      .trim();
+    if (!stationName) {
+      continue;
+    }
+    const items = entry
+      .slice(separatorIndex + 1)
+      .split(/[,，、]/u)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 4)
+      .map((item) => {
+        const [rawLabel, rawColor] = item.split(':');
+        const label = (rawLabel ?? '').replace(/号线$/u, '').trim();
+        if (!label) {
+          return undefined;
+        }
+        const color = /^#[0-9A-Fa-f]{6}$/u.test(rawColor ?? '')
+          ? rawColor!.toUpperCase()
+          : (metroLineMapDefaultTransferColors[label] ?? '#666666');
+        return { label, color };
+      })
+      .filter((item): item is MetroLineMapTransfer => Boolean(item));
+    if (items.length) {
+      result.set(stationName, items);
+    }
+  }
+  return result;
+}
+
+function renderMetroLineMapStationMarker(input: {
+  x: number;
+  kind: 'current' | 'terminal' | 'normal';
+  ringColor: string;
+  terminalColor: string;
+  doorDirection: 'left' | 'right';
+}): string {
+  const white = `<circle cx="${formatNumber(input.x)}" cy="58.5" r="4" fill="#FFFFFF"/>`;
+  const ring = `<path transform="translate(${formatNumber(input.x - 5.5)} 53)" fill="${input.ringColor}" fill-rule="evenodd" d="${metroLineMapStationRingPath}"/>`;
+  if (input.kind === 'current') {
+    const arrowTransform =
+      input.doorDirection === 'left'
+        ? `translate(${formatNumber(input.x - 5.5)} 53)`
+        : `translate(${formatNumber(input.x + 5.5)} 53) scale(-1 1)`;
+    return `${white}${ring}<path transform="${arrowTransform}" d="${metroLineMapCurrentArrowPath}" stroke="#000000" stroke-width="0.6" fill="#000000"/>`;
+  }
+  if (input.kind === 'terminal') {
+    return `${white}${ring}<circle cx="${formatNumber(input.x)}" cy="58.5" r="2.5" fill="${input.terminalColor}"/>`;
+  }
+  return `${white}${ring}`;
+}
+
+function renderMetroLineMapOldTransferBadgeMarkup(
+  mainColor: string,
+  transferColor: string,
+): string {
+  return `<rect x="2" y="1" width="7" height="17" rx="3.5" fill="#FFFFFF"/><path fill-rule="evenodd" fill="${mainColor}" d="${metroLineMapOldTransferRingPath}"/><path fill="none" stroke="${mainColor}" stroke-width="1" d="${metroLineMapOldTransferUpStroke}"/><path d="${metroLineMapOldTransferUpArrow}" fill="${mainColor}"/><path fill="none" stroke="${transferColor}" stroke-width="1" d="${metroLineMapOldTransferDownStroke}"/><path d="${metroLineMapOldTransferDownArrow}" fill="${transferColor}"/>`;
+}
+
+function renderMetroLineMapOldTransfer(input: {
+  x: number;
+  labelAbove: boolean;
+  transferList: MetroLineMapTransfer[];
+  mainColor: string;
+  passed: boolean;
+}): { stem: string; badge: string } {
+  const rawTransferColor = input.transferList[0]?.color ?? '#666666';
+  const transferColor = input.passed ? '#A5A5A5' : rawTransferColor;
+  const mainColor = input.passed ? '#A5A5A5' : input.mainColor;
+  const badgeTop = input.labelAbove ? 50 : 48;
+  const badge = `<g transform="translate(${formatNumber(input.x - 5.5)} ${badgeTop})">${renderMetroLineMapOldTransferBadgeMarkup(mainColor, transferColor)}</g>`;
+  const stem = input.labelAbove
+    ? `<path transform="translate(${formatNumber(input.x - 1.5)} 65)" fill="${transferColor}" d="${metroLineMapStemLong}"/>`
+    : `<path transform="translate(${formatNumber(input.x - 1.5)} 22)" fill="${transferColor}" d="${metroLineMapStemLongUp}"/>`;
+  const transferredLines = input.transferList
+    .map((transfer) => (/号线$/u.test(transfer.label) ? transfer.label : `${transfer.label}号线`))
+    .join('、');
+  const chineseY = input.labelAbove ? 97.28 : 15.86;
+  const englishY = input.labelAbove ? 101.14 : 19.72;
+  const textColor = input.passed ? '#A5A5A5' : '#000000';
+  const text = `<text x="${formatNumber(input.x - 14)}" y="${formatNumber(chineseY)}" fill="${textColor}" font-family="${metroLineMapLegacyTransferFontFamily}" font-size="6" font-weight="400">换乘 ${escapeXml(transferredLines)}</text><text x="${formatNumber(input.x - 12)}" y="${formatNumber(englishY)}" fill="${textColor}" font-family="${metroLineMapLegacyTransferFontFamily}" font-size="3" font-weight="400">Transfer to Line ${escapeXml(
+    input.transferList.map((transfer) => transfer.label).join('、'),
+  )}</text>`;
+  return { stem, badge: `<g>${badge}${text}</g>` };
+}
+
+function renderMetroLineMapNewTransferGlyphMarkup(
+  mainColor: string,
+  transferColor: string,
+  glyphColor = '#000000',
+): string {
+  return `<path d="${metroLineMapNewTransferPathTop}" fill="${transferColor}" fill-rule="evenodd"/><path d="${metroLineMapNewTransferPathBottom}" fill="${mainColor}" fill-rule="evenodd"/><path d="${metroLineMapNewTransferPathGlyph}" fill="${glyphColor}" fill-rule="evenodd"/>`;
+}
+
+function isMetroLineMapNumericLine(label: string): boolean {
+  return /^[a-z]?\d+[a-z]?(?:号线|线)?$/iu.test(label.trim());
+}
+
+function getMetroLineMapBadgeWidth(label: string): number {
+  if (isMetroLineMapNumericLine(label)) {
+    const number = label.replace(/(?:号线|线)$/u, '').trim();
+    return 18 + Math.max(Array.from(number).length - 1, 0) * 4;
+  }
+  const english = resolveMetroLineEnglishName(label);
+  const textWidth = Math.max(
+    estimateMetroLineMapTextWidth(label, 5.2),
+    estimateMetroLineMapTextWidth(english, 2.8),
+  );
+  return Math.max(18, Math.ceil(textWidth) + 6);
+}
+
+function renderMetroLineMapLineBadge(input: {
+  label: string;
+  color: string;
+  left: number;
+  top: number;
+}): string {
+  const width = getMetroLineMapBadgeWidth(input.label);
+  if (!isMetroLineMapNumericLine(input.label)) {
+    // 文字线路：没有大数字编号，中文线路名与英文名在胶囊内居中。
+    const english = resolveMetroLineEnglishName(input.label);
+    const chineseRow = english
+      ? `<text x="${formatNumber(width / 2)}" y="5.3" fill="#FFFFFF" font-family="${metroLineMapFontFamily}" font-size="5.2" font-weight="400" text-anchor="middle">${escapeXml(input.label)}</text>`
+      : `<text x="${formatNumber(width / 2)}" y="7.4" fill="#FFFFFF" font-family="${metroLineMapFontFamily}" font-size="5.2" font-weight="400" text-anchor="middle">${escapeXml(input.label)}</text>`;
+    const englishRow = english
+      ? `<text x="${formatNumber(width / 2)}" y="9.4" fill="#FFFFFF" font-family="${metroLineMapFontFamily}" font-size="2.8" font-weight="400" text-anchor="middle">${escapeXml(english)}</text>`
+      : '';
+    return `<g transform="translate(${formatNumber(input.left)} ${formatNumber(input.top)})"><rect x="0" y="0" width="${formatNumber(width)}" height="11" rx="1.5" fill="${input.color}"/>${chineseRow}${englishRow}</g>`;
+  }
+  const number = input.label.replace(/(?:号线|线)$/u, '').trim();
+  const digitCount = Array.from(number).length;
+  const suffixX = digitCount > 1 ? 10.5 : 7;
+  const lineX = digitCount > 1 ? 10 : 7.5;
+  const letterSpacing = digitCount > 1 ? -2 : -1;
+  return `<g transform="translate(${formatNumber(input.left)} ${formatNumber(input.top)})"><rect x="0" y="0" width="${formatNumber(width)}" height="11" rx="1.5" fill="${input.color}"/><text x="1" y="8.9668" fill="#FFFFFF" font-family="${metroLineMapFontFamily}" font-size="10" font-weight="400" letter-spacing="${letterSpacing}">${escapeXml(number)}</text><text x="${formatNumber(suffixX)}" y="5.8" fill="#FFFFFF" font-family="${metroLineMapFontFamily}" font-size="5" font-weight="400">号线</text><text x="${formatNumber(lineX)}" y="8.7158" fill="#FFFFFF" font-family="${metroLineMapFontFamily}" font-size="3" font-weight="400">Line ${escapeXml(number)}</text></g>`;
+}
+
+function renderMetroLineMapNewTransfer(input: {
+  x: number;
+  labelAbove: boolean;
+  transferList: MetroLineMapTransfer[];
+  mainColor: string;
+  passed: boolean;
+}): { stem: string; badge: string } {
+  const rawTransferColor = input.transferList[0]?.color ?? '#666666';
+  const transferColor = input.passed ? '#A5A5A5' : rawTransferColor;
+  const mainColor = input.passed ? '#A5A5A5' : input.mainColor;
+  const glyphColor = input.passed ? '#A5A5A5' : '#000000';
+  const glyphTop = input.labelAbove ? 87 : 16;
+  const badgeTop = input.labelAbove ? 102 : 4;
+  const stem = input.labelAbove
+    ? `<path transform="translate(${formatNumber(input.x - 1.5)} 63)" fill="${transferColor}" d="${metroLineMapStemShortDown}"/>`
+    : `<path transform="translate(${formatNumber(input.x - 1.5)} 32)" fill="${transferColor}" d="${metroLineMapStemLongUp}"/>`;
+  const glyph = `<g transform="translate(${formatNumber(input.x - metroLineMapNewTransferWidth / 2)} ${glyphTop})">${renderMetroLineMapNewTransferGlyphMarkup(mainColor, transferColor, glyphColor)}</g>`;
+  const badges = input.transferList.map((transfer) => ({
+    label: transfer.label,
+    color: input.passed ? '#A5A5A5' : transfer.color,
+  }));
+  const gap = 3;
+  const totalWidth =
+    badges.reduce((sum, badge) => sum + getMetroLineMapBadgeWidth(badge.label), 0) +
+    gap * Math.max(badges.length - 1, 0);
+  let cursor = input.x - totalWidth / 2;
+  const badgeMarkup = badges
+    .map((badge) => {
+      const markup = renderMetroLineMapLineBadge({
+        label: badge.label,
+        color: badge.color,
+        left: cursor,
+        top: badgeTop,
+      });
+      cursor += getMetroLineMapBadgeWidth(badge.label) + gap;
+      return markup;
+    })
+    .join('');
+  return { stem, badge: `<g>${glyph}${badgeMarkup}</g>` };
+}
+
+function renderMetroLineMapClassicLegend(
+  accentColor: string,
+  doorDirection: 'left' | 'right',
+): string {
+  const currentArrowTransform =
+    doorDirection === 'left' ? '' : 'transform="translate(83 0) scale(-1 1)"';
+  return `<g><text transform="translate(17 95)"><tspan x="0" y="7.2421875" fill="#000000" font-family="${metroLineMapFontFamily}" font-size="8" font-weight="400">图例</tspan><tspan x="0" y="13.4638671875" fill="#000000" font-family="${metroLineMapFontFamily}" font-size="5">Legend</tspan></text><circle cx="41.5" cy="102.5" r="3.5" fill="#FFFFFF"/><path fill-rule="evenodd" fill="${accentColor}" d="M41.5 106C43.433 106 45 104.433 45 102.5C45 100.567 43.433 99 41.5 99C39.567 99 38 100.567 38 102.5C38 104.433 39.567 106 41.5 106ZM41.5 100C42.8807 100 44 101.119 44 102.5C44 103.881 42.8807 105 41.5 105C40.1193 105 39 103.881 39 102.5C39 101.119 40.1193 100 41.5 100Z"/><path ${currentArrowTransform} d="M41.5 101.227L40.2273 102.5L41.5 103.773L41.701 103.572L40.7632 102.634L42.7727 102.634L42.7727 102.333L40.7632 102.333L41.701 101.428L41.5 101.227Z" stroke="#000000" stroke-width="0.4" fill="#000000"/><text transform="translate(47 95)"><tspan x="0" y="7.2421875" fill="#000000" font-family="${metroLineMapFontFamily}" font-size="8">本站</tspan><tspan x="0" y="13.4638671875" fill="#000000" font-family="${metroLineMapFontFamily}" font-size="5">This Station</tspan></text><circle cx="79.5" cy="102.5" r="3.5" fill="#FFFFFF"/><path fill-rule="evenodd" fill="${accentColor}" d="M79.5 106C81.433 106 83 104.433 83 102.5C83 100.567 81.433 99 79.5 99C77.567 99 76 100.567 76 102.5C76 104.433 77.567 106 79.5 106ZM79.5 100C80.8807 100 82 101.119 82 102.5C82 103.881 80.8807 105 79.5 105C78.1193 105 77 103.881 77 102.5C77 101.119 78.1193 100 79.5 100Z"/><circle cx="79.5" cy="102.5" r="1.5909090042114258" fill="${accentColor}"/><text transform="translate(85 95)"><tspan x="0" y="7.2421875" fill="#000000" font-family="${metroLineMapFontFamily}" font-size="8">终始站</tspan><tspan x="0" y="13.4638671875" fill="#000000" font-family="${metroLineMapFontFamily}" font-size="5">Terminal Station</tspan></text><rect x="125" y="97" width="5" height="11" rx="2.5" fill="#FFFFFF"/><path fill-rule="evenodd" fill="${accentColor}" d="M130 99.5C130 98.1193 128.881 97 127.5 97C126.119 97 125 98.1193 125 99.5L125 105.5C125 106.881 126.119 108 127.5 108C128.881 108 130 106.881 130 105.5L130 99.5ZM125.7 99.5C125.7 98.5059 126.506 97.7 127.5 97.7C128.494 97.7 129.3 98.5059 129.3 99.5L129.3 105.5C129.3 106.494 128.494 107.3 127.5 107.3C126.506 107.3 125.7 106.494 125.7 105.5L125.7 99.5Z"/><path fill="none" stroke="${accentColor}" stroke-width="0.7" d="M126.667 102.762L126.667 99.619C126.667 99.619 126.667 98.8333 127.5 98.8333C128.333 98.8333 128.333 99.619 128.333 99.619L128.333 101"/><path d="M128.333 101.714L128.889 100.667L127.778 100.667L128.333 101.714Z" fill="${accentColor}"/><path fill="none" stroke="#A5A5A5" stroke-width="0.7" d="M128.333 102.238L128.333 105.381C128.333 105.381 128.333 106.167 127.5 106.167C126.667 106.167 126.667 105.381 126.667 105.381L126.667 104"/><path d="M126.667 103.286L126.111 104.333L127.222 104.333L126.667 103.286Z" fill="#A5A5A5"/><text transform="translate(133 95)"><tspan x="0" y="7.2421875" fill="#000000" font-family="${metroLineMapFontFamily}" font-size="8">换乘站</tspan><tspan x="0" y="13.4638671875" fill="#000000" font-family="${metroLineMapFontFamily}" font-size="5">Transfer Station</tspan></text></g>`;
 }
 
 function renderNostalgicDigits(value: string, config: MaterialGlyphConfig): string {

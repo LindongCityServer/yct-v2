@@ -273,6 +273,11 @@ function isNumericLineName(lineName: string): boolean {
   return /^[a-z]?\d+[a-z]?号线$/iu.test(lineName.trim());
 }
 
+/** 非数字线路名的官方英文名；表外线路返回空字符串，避免臆造翻译。 */
+export function resolveMetroLineEnglishName(lineName: string): string {
+  return nalNamedLineTranslations[lineName.trim()] ?? '';
+}
+
 /**
  * 从线路名里取出编号部分与后缀部分。`10号线` → `{ number: '10', suffix: '号线' }`；
  * `S1号线` → `{ number: 'S1', suffix: '号线' }`；非数字名 → `undefined`。

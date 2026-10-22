@@ -6967,6 +6967,13 @@ img.map-player-list-avatar.is-offline {
   background: var(--yct-color-surface-muted);
 }
 
+/* 版式/样式分段控件：选项数量不固定（2～3 个），横向按数量均分。 */
+.material-mode-switch.material-variant-switch {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+}
+
 .material-mode-switch button,
 .material-action-row button,
 .material-history-item button,
@@ -9091,6 +9098,7 @@ img.map-player-list-avatar.is-offline {
     var(--yct-color-secondary)
   );
   --material-preview-grid-cell: color-mix(in srgb, var(--yct-color-surface-panel) 72%, transparent);
+  position: relative;
   display: grid;
   place-items: center;
   min-height: 260px;
@@ -9118,6 +9126,36 @@ img.map-player-list-avatar.is-offline {
   line-height: 0;
   outline: 1px solid color-mix(in srgb, var(--yct-color-text) 42%, transparent);
   box-shadow: 0 4px 16px color-mix(in srgb, var(--yct-color-text) 18%, transparent);
+}
+
+.material-preview-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 72%, transparent);
+  color: var(--yct-color-text);
+  font-size: 13px;
+  backdrop-filter: blur(2px);
+}
+
+.material-preview-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid color-mix(in srgb, var(--yct-color-text) 18%, transparent);
+  border-top-color: var(--yct-color-secondary, #2563eb);
+  border-radius: 50%;
+  animation: material-preview-spin 0.8s linear infinite;
+}
+
+@keyframes material-preview-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .material-preview-canvas img,
@@ -22431,13 +22469,19 @@ button.material-studio-review-badge {
   filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--yct-color-text) 28%, transparent));
 }
 
-/* 一级页面的工具栏是 `.topbar-actions`，二级页面的是 `.secondary-actions`——
-   两者类名不同，因此必须并列写进同一组选择器，否则二级页面的工具栏在
-   嵌入模式下会保持全透明（背景本身也是 transparent，等于看不见）。
-   `:has(> *)` 是必要的：`secondaryActions` 是可选 prop，全项目只有 10 处传值，
-   其余二级页面的 `.secondary-actions` 是空 div，加背景后会渲染出一个空药丸。 */
+/* 浮动药丸只允许加在「真正的顶栏工具栏」一层，绝不能写成
+   `:is(.topbar-actions, .secondary-actions)`：物料/电报二级页面的 DOM 是
+   `.secondary-actions > .topbar-actions.material-studio-topbar-actions`——
+   内层 div 复用了 `topbar-actions` 类，并列选择器会让内外两层同时命中，
+   宽屏下变成药丸套药丸（工具栏高度从 44px 撑到 60px）；窄屏下外层的
+   `backdrop-filter` 还会成为内层 fixed 元素的包含块，使右下角浮动工具栏
+   错位到顶栏。因此一级页面限定「非二级 header 的直接子级」，二级页面
+   限定「二级 header 的直接子级」，各只匹配一次。
+   `:has(> *)` 是必要的：`secondaryActions` 是可选 prop，其余二级页面的
+   `.secondary-actions` 是空 div，加背景后会渲染出一个空药丸。 */
 :root[data-embedded]:not([data-material-mode='advanced'])
-  :is(.topbar-actions, .secondary-actions):has(> *) {
+  .topbar:not(.secondary-topbar)
+  > .topbar-actions:has(> *) {
   gap: var(--yct-space-1);
   padding: var(--yct-space-1);
   border: 1px solid var(--yct-color-border);
@@ -22446,6 +22490,49 @@ button.material-studio-review-badge {
   box-shadow: var(--yct-shadow-floating);
   -webkit-backdrop-filter: blur(var(--yct-material-blur-medium));
   backdrop-filter: blur(var(--yct-material-blur-medium));
+}
+
+/* 二级页面宽屏：内层工具栏是正常流，药丸加在 header 直接子级
+   `.secondary-actions` 上即可正确包裹。窄屏内层被
+   `.material-studio-topbar-actions { position: fixed }` 规则移出文档流，
+   自身就是右下角浮动药丸（见 9382 行媒体查询），外层 `.secondary-actions`
+   只剩 40px 空占位——这里用 min-width 把外层药丸限定在宽屏，避免窄屏
+   双重叠加与 fixed 包含块错位。 */
+@media (min-width: 761px) {
+  :root[data-embedded]:not([data-material-mode='advanced'])
+    .secondary-topbar
+    > .secondary-actions:has(> *) {
+    gap: var(--yct-space-1);
+    padding: var(--yct-space-1);
+    border: 1px solid var(--yct-color-border);
+    border-radius: var(--yct-radius-pill);
+    background: color-mix(in srgb, var(--yct-color-surface-panel) 92%, transparent);
+    box-shadow: var(--yct-shadow-floating);
+    -webkit-backdrop-filter: blur(var(--yct-material-blur-medium));
+    backdrop-filter: blur(var(--yct-material-blur-medium));
+  }
+}
+
+/* 二级页面窄屏：物料/电报内层工具栏保持自身的 fixed 浮动药丸（9382 行规则
+   已带边框、底色与阴影），这里只补一层与宽屏一致的背景模糊；模糊加在
+   内层自身不改变它的 fixed 包含块（外层此时没有任何 filter）。
+   FAQ 的目录按钮不是 fixed、也没有内层药丸，单独给它一个与返回按钮
+   同款的独立底色，否则嵌入透明背景下只剩一个看不见的透明按钮。 */
+@media (max-width: 760px) {
+  :root[data-embedded]:not([data-material-mode='advanced'])
+    .secondary-topbar
+    .material-studio-topbar-actions {
+    -webkit-backdrop-filter: blur(var(--yct-material-blur-medium));
+    backdrop-filter: blur(var(--yct-material-blur-medium));
+  }
+
+  :root[data-embedded]:not([data-material-mode='advanced'])
+    .secondary-topbar
+    .operation-toc-toggle {
+    border-color: var(--yct-color-border);
+    background: color-mix(in srgb, var(--yct-color-surface-panel) 92%, transparent);
+    box-shadow: var(--yct-shadow-floating);
+  }
 }
 
 /* 返回按钮同理：二级顶栏的 `<header>` 同时带 `topbar` 与 `secondary-topbar`

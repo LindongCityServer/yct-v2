@@ -660,6 +660,8 @@ async function resolveServerMaterialInput(input: {
     const resolved = await resolveTransitLineMaterialInput({
       lineId: input.source.lineId,
       stationSourceId: input.source.stationSourceId,
+      networkLineKey: input.source.networkLineKey,
+      networkNodeId: input.source.networkNodeId,
       fields: input.fields,
       networkGeometry: input.networkGeometry,
     });

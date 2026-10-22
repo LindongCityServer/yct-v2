@@ -17,6 +17,7 @@ import {
   type ReactNode,
 } from 'react';
 import { appPath } from '../lib/app-paths';
+import { useI18n } from '../lib/client-i18n';
 import { findTextContinuation, matchTextContinuation } from '../lib/text-continuation';
 import type { MetroWayfindingExample } from '../lib/metro-wayfinding-examples';
 import {
@@ -96,6 +97,8 @@ import {
   type MetroWayfindingTextRow,
 } from '../lib/metro-wayfinding';
 
+type Translate = ReturnType<typeof useI18n>['t'];
+
 /** 导视牌是否已经排了内容——只要任一行有元素就算「有内容」。 */
 function hasMetroWayfindingContent(layout: MetroWayfindingLayout): boolean {
   return layout.rows.some((elements) => elements.length > 0);
@@ -159,6 +162,7 @@ export function MetroWayfindingEditor({
   editorId?: string;
 }>) {
   const reactId = useId();
+  const { t } = useI18n();
   const editorId = editorIdProp ?? reactId;
   const importInputRef = useRef<HTMLInputElement>(null);
   const [layout, setLayout] = useState(() => parseMetroWayfindingLayout(value));
@@ -465,7 +469,11 @@ export function MetroWayfindingEditor({
   };
 
   const clearLayoutElements = async () => {
-    if (!hasElements || !(await requestConfirmation('确认清空当前地铁导视牌的全部元素？'))) return;
+    if (
+      !hasElements ||
+      !(await requestConfirmation(t('metroWayfindingEditor.confirm.clear')))
+    )
+      return;
     setSelection({ rowIndex: 0, elementId: '' });
     setDraggedElement(null);
     setDropTarget(null);
@@ -496,13 +504,22 @@ export function MetroWayfindingEditor({
     });
     try {
       if (files.length > METRO_WAYFINDING_IMPORT_MAX_FILES) {
-        throw new Error(`一次最多导入 ${METRO_WAYFINDING_IMPORT_MAX_FILES} 个工程文件。`);
+        throw new Error(
+          t('metroWayfindingEditor.error.tooManyFiles', {
+            count: METRO_WAYFINDING_IMPORT_MAX_FILES,
+          }),
+        );
       }
       const oversizedFile = files.find(
         (file) => file.size > METRO_WAYFINDING_IMPORT_MAX_FILE_BYTES,
       );
       if (oversizedFile) {
-        throw new Error(`${oversizedFile.name} 超过 2 MB，已停止读取。`);
+        throw new Error(
+          t('metroWayfindingEditor.error.fileTooLarge', {
+            name: oversizedFile.name,
+            limit: METRO_WAYFINDING_IMPORT_MAX_FILE_BYTES / 1024 / 1024,
+          }),
+        );
       }
       const inputs = await Promise.all(
         files.map(async (file) => ({ name: file.name, size: file.size, text: await file.text() })),
@@ -523,7 +540,8 @@ export function MetroWayfindingEditor({
         type: 'ExternalWayfindingImportFailed',
         payload: {
           editorId,
-          message: error instanceof Error ? error.message : '工程文件解析失败。',
+          message:
+            error instanceof Error ? error.message : t('metroWayfindingEditor.error.parseFailed'),
         },
       });
     } finally {
@@ -580,14 +598,16 @@ export function MetroWayfindingEditor({
   };
 
   return (
-    <section className="metro-wayfinding-editor" aria-label="地铁导视牌编排">
+    <section className="metro-wayfinding-editor" aria-label={t('metroWayfindingEditor.aria.canvas')}>
       <details
         className="metro-wayfinding-toolbar"
         open={isToolbarExpanded}
         onToggle={(event) => setIsToolbarExpanded(event.currentTarget.open)}
       >
         <summary>
-          <span className="metro-wayfinding-toolbar-title">版式与外观</span>
+          <span className="metro-wayfinding-toolbar-title">
+            {t('metroWayfindingEditor.toolbar.title')}
+          </span>
           {/*
             标题栏图标：仅作视觉提示，告诉用户模板库 / 反转 / 清空这几个操作藏在折叠面板里。
             不响应点按，展开后自动隐藏（见 CSS），避免与面板内真实的操作按钮重复。
@@ -606,19 +626,31 @@ export function MetroWayfindingEditor({
         </summary>
         <div className="metro-wayfinding-toolbar-content">
           <SegmentedControl
-            label="版式"
+            label={t('metroWayfindingEditor.field.layout')}
             value={layout.mode}
             options={[
-              { value: 'single', label: '单行', icon: 'view_stream' },
-              { value: 'double', label: '双行', icon: 'table_rows' },
-              { value: 'vertical', label: '竖向', icon: 'view_column' },
+              {
+                value: 'single',
+                label: t('metroWayfindingEditor.option.singleRow'),
+                icon: 'view_stream',
+              },
+              {
+                value: 'double',
+                label: t('metroWayfindingEditor.option.doubleRow'),
+                icon: 'table_rows',
+              },
+              {
+                value: 'vertical',
+                label: t('metroWayfindingEditor.option.vertical'),
+                icon: 'view_column',
+              },
             ]}
             disabled={disabled}
             wide
             onChange={changeLayoutMode}
           />
           <ColorControl
-            label="导视牌底色"
+            label={t('metroWayfindingEditor.field.backgroundColor')}
             value={layout.backgroundColor}
             palette={backgroundColorOptions}
             disabled={disabled}
@@ -627,7 +659,7 @@ export function MetroWayfindingEditor({
             }
           />
           <ColorControl
-            label="默认文字与图形颜色"
+            label={t('metroWayfindingEditor.field.defaultForegroundColor')}
             value={layout.foregroundColor}
             palette={metroWayfindingForegroundPalette}
             disabled={disabled}
@@ -648,7 +680,7 @@ export function MetroWayfindingEditor({
                   })
                 }
               />
-              <span>添加行间分割线</span>
+              <span>{t('metroWayfindingEditor.field.rowDivider')}</span>
             </label>
           ) : null}
           {hasElements ? (
@@ -657,25 +689,33 @@ export function MetroWayfindingEditor({
                 type="button"
                 className="secondary-action-button metro-wayfinding-import-button"
                 disabled={disabled || isImporting}
-                title="版式模板与导入工程"
+                title={t('metroWayfindingEditor.action.openProjectLibraryTitle')}
                 onClick={() => openProjectDialog()}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
                   {isImporting ? 'progress_activity' : 'folder_open'}
                 </span>
-                <span>{isImporting ? '解析中' : '模板库'}</span>
+                <span>
+                  {isImporting
+                    ? t('metroWayfindingEditor.status.parsing')
+                    : t('metroWayfindingEditor.action.templateLibrary')}
+                </span>
               </button>
               <button
                 type="button"
                 className="secondary-action-button"
                 disabled={disabled || layout.mode === 'vertical'}
                 onClick={() => dispatchComposition({ type: 'reverse' })}
-                title={layout.mode === 'vertical' ? '竖向模板不支持反转顺序' : '反转导视牌元素顺序'}
+                title={
+                  layout.mode === 'vertical'
+                    ? t('metroWayfindingEditor.action.reverseDisabledVertical')
+                    : t('metroWayfindingEditor.action.reverseTitle')
+                }
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
                   flip
                 </span>
-                <span>反转</span>
+                <span>{t('metroWayfindingEditor.action.reverse')}</span>
               </button>
               <button
                 type="button"
@@ -686,7 +726,7 @@ export function MetroWayfindingEditor({
                 <span className="material-symbols-outlined" aria-hidden="true">
                   delete_sweep
                 </span>
-                <span>清空</span>
+                <span>{t('metroWayfindingEditor.action.clear')}</span>
               </button>
             </div>
           ) : null}
@@ -710,12 +750,21 @@ export function MetroWayfindingEditor({
               className={`metro-wayfinding-row-list${layout.mode !== 'double' ? ' is-single' : ''}`}
             >
               {layout.mode === 'double' ? (
-                <strong>{rowIndex === 0 ? '第一行' : '第二行'}</strong>
+                <strong>
+                  {rowIndex === 0
+                    ? t('metroWayfindingEditor.row.first')
+                    : t('metroWayfindingEditor.row.second')}
+                </strong>
               ) : null}
               <ol
                 className="metro-wayfinding-element-list"
                 role="tablist"
-                aria-label={`${rowIndex === 0 ? '第一行' : '第二行'}已添加元素`}
+                aria-label={t('metroWayfindingEditor.aria.rowElements', {
+                  row:
+                    rowIndex === 0
+                      ? t('metroWayfindingEditor.row.first')
+                      : t('metroWayfindingEditor.row.second'),
+                })}
                 onKeyDown={(event) => handleElementNavigationKeyDown(event, rowIndex)}
               >
                 {elements.map((element) => {
@@ -726,7 +775,7 @@ export function MetroWayfindingEditor({
                     element.type === 'arrow' ||
                     element.type === 'space' ||
                     element.type === 'divider';
-                  const tabLabel = metroElementTabAriaLabel(element, layout.mode);
+                  const tabLabel = metroElementTabAriaLabel(element, layout.mode, t);
                   const canDrag = !disabled && elements.length > 1;
                   return (
                     <li key={element.id} role="presentation">
@@ -737,8 +786,12 @@ export function MetroWayfindingEditor({
                         data-element-id={element.id}
                         aria-selected={isSelected}
                         aria-controls={`${editorId}-element-panel`}
-                        aria-label={canDrag ? `${tabLabel}，可拖动更改顺序` : tabLabel}
-                        title={canDrag ? '拖动更改顺序' : undefined}
+                        aria-label={
+                          canDrag
+                            ? t('metroWayfindingEditor.aria.draggableTab', { label: tabLabel })
+                            : tabLabel
+                        }
+                        title={canDrag ? t('metroWayfindingEditor.action.dragToReorder') : undefined}
                         tabIndex={isSelected ? 0 : -1}
                         draggable={canDrag}
                         className={[
@@ -773,8 +826,13 @@ export function MetroWayfindingEditor({
                   <button
                     type="button"
                     className="is-icon-only"
-                    aria-label={`向${rowIndex === 0 ? '第一行' : '第二行'}添加元素`}
-                    title="添加元素"
+                    aria-label={t('metroWayfindingEditor.aria.addElementToRow', {
+                      row:
+                        rowIndex === 0
+                          ? t('metroWayfindingEditor.row.first')
+                          : t('metroWayfindingEditor.row.second'),
+                    })}
+                    title={t('metroWayfindingEditor.action.addElement')}
                     onClick={() =>
                       dispatchElement(rowIndex, {
                         type: 'add',
@@ -795,14 +853,17 @@ export function MetroWayfindingEditor({
       ) : null}
 
       {!hasElements ? (
-        <section className="metro-wayfinding-empty-card" aria-label="开始创建导视牌">
+        <section
+          className="metro-wayfinding-empty-card"
+          aria-label={t('metroWayfindingEditor.aria.emptyState')}
+        >
           <div>
             <span className="material-symbols-outlined" aria-hidden="true">
               signpost
             </span>
             <div>
-              <strong>开始创建导视牌</strong>
-              <span>添加第一个元素，或从模板库载入现成版式。</span>
+              <strong>{t('metroWayfindingEditor.empty.title')}</strong>
+              <span>{t('metroWayfindingEditor.empty.description')}</span>
             </div>
           </div>
           <div className="metro-wayfinding-empty-card-actions">
@@ -820,7 +881,7 @@ export function MetroWayfindingEditor({
               <span className="material-symbols-outlined" aria-hidden="true">
                 add
               </span>
-              添加元素
+              {t('metroWayfindingEditor.action.addElement')}
             </button>
             <button
               type="button"
@@ -831,7 +892,7 @@ export function MetroWayfindingEditor({
               <span className="material-symbols-outlined" aria-hidden="true">
                 dashboard_customize
               </span>
-              打开模板库
+              {t('metroWayfindingEditor.action.openTemplateLibrary')}
             </button>
           </div>
         </section>
@@ -887,14 +948,16 @@ export function MetroWayfindingEditor({
           >
             <header>
               <div>
-                <span>地铁导视牌</span>
-                <h2 id={`${editorId}-project-dialog-heading`}>模板库与导入</h2>
+                <span>{t('metroWayfindingEditor.projectDialog.eyebrow')}</span>
+                <h2 id={`${editorId}-project-dialog-heading`}>
+                  {t('metroWayfindingEditor.projectDialog.title')}
+                </h2>
               </div>
               <button
                 type="button"
                 className="icon-button"
-                aria-label="关闭模板库与导入"
-                title="关闭"
+                aria-label={t('metroWayfindingEditor.projectDialog.closeAria')}
+                title={t('metroWayfindingEditor.action.close')}
                 onClick={() => setIsProjectDialogOpen(false)}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
@@ -903,11 +966,19 @@ export function MetroWayfindingEditor({
               </button>
             </header>
             <SegmentedControl
-              label="工程来源"
+              label={t('metroWayfindingEditor.projectDialog.source')}
               value={projectDialogView}
               options={[
-                { value: 'examples', label: '版式模板', icon: 'dashboard_customize' },
-                { value: 'import', label: '导入工程', icon: 'upload_file' },
+                {
+                  value: 'examples',
+                  label: t('metroWayfindingEditor.projectDialog.templates'),
+                  icon: 'dashboard_customize',
+                },
+                {
+                  value: 'import',
+                  label: t('metroWayfindingEditor.projectDialog.import'),
+                  icon: 'upload_file',
+                },
               ]}
               disabled={disabled || isImporting}
               wide
@@ -936,7 +1007,7 @@ export function MetroWayfindingEditor({
                     <span className="material-symbols-outlined" aria-hidden="true">
                       dashboard_customize
                     </span>
-                    <span>当前线网没有可用示例模板</span>
+                    <span>{t('metroWayfindingEditor.examples.empty')}</span>
                   </div>
                 )
               ) : (
@@ -951,15 +1022,15 @@ export function MetroWayfindingEditor({
                     upload_file
                   </span>
                   <div className="metro-wayfinding-project-import-copy">
-                    <strong>导入外部导视工程</strong>
-                    <p>选择 JSON 工程文件，系统会先解析并展示转换预览，确认后再替换当前导视牌。</p>
+                    <strong>{t('metroWayfindingEditor.import.title')}</strong>
+                    <p>{t('metroWayfindingEditor.import.description')}</p>
                   </div>
                   <div className="metro-wayfinding-project-import-sources">
-                    <span>支持来源</span>
+                    <span>{t('metroWayfindingEditor.import.supportedSources')}</span>
                     <ul>
                       <li>
-                        <span>YCT 地铁导视工程</span>
-                        <small>本站工程</small>
+                        <span>{t('metroWayfindingEditor.import.sourceYct')}</span>
+                        <small>{t('metroWayfindingEditor.import.sourceYctHint')}</small>
                       </li>
                       <li>
                         <a
@@ -972,7 +1043,7 @@ export function MetroWayfindingEditor({
                             open_in_new
                           </span>
                         </a>
-                        <small>外部编辑器</small>
+                        <small>{t('metroWayfindingEditor.import.sourceExternalHint')}</small>
                       </li>
                       <li>
                         <a href="https://signmaker.chitose.city/" target="_blank" rel="noreferrer">
@@ -981,16 +1052,17 @@ export function MetroWayfindingEditor({
                             open_in_new
                           </span>
                         </a>
-                        <small>外部编辑器</small>
+                        <small>{t('metroWayfindingEditor.import.sourceExternalHint')}</small>
                       </li>
                     </ul>
                   </div>
                   <div className="metro-wayfinding-project-import-limits">
-                    <span>文件限制</span>
+                    <span>{t('metroWayfindingEditor.import.fileLimits')}</span>
                     <small>
-                      最多选择 {METRO_WAYFINDING_IMPORT_MAX_FILES} 个文件，单个文件不超过{' '}
-                      {METRO_WAYFINDING_IMPORT_MAX_FILE_BYTES / 1024 / 1024}{' '}
-                      MB；不同编辑器的工程不能混合导入。
+                      {t('metroWayfindingEditor.import.fileLimitsDescription', {
+                        count: METRO_WAYFINDING_IMPORT_MAX_FILES,
+                        size: METRO_WAYFINDING_IMPORT_MAX_FILE_BYTES / 1024 / 1024,
+                      })}
                     </small>
                   </div>
                   <div className="metro-wayfinding-project-import-drop-hint" aria-live="polite">
@@ -999,8 +1071,8 @@ export function MetroWayfindingEditor({
                     </span>
                     <span>
                       {isImportDragActive
-                        ? '松开鼠标即可导入工程文件'
-                        : '也可以将 JSON 工程文件拖放到此处'}
+                        ? t('metroWayfindingEditor.import.dropActive')
+                        : t('metroWayfindingEditor.import.dropHint')}
                     </span>
                   </div>
                   <button
@@ -1012,7 +1084,9 @@ export function MetroWayfindingEditor({
                     <span className="material-symbols-outlined" aria-hidden="true">
                       {isImporting ? 'progress_activity' : 'upload_file'}
                     </span>
-                    {isImporting ? '正在解析' : '选择工程文件'}
+                    {isImporting
+                      ? t('metroWayfindingEditor.status.parsingFiles')
+                      : t('metroWayfindingEditor.import.selectFiles')}
                   </button>
                   {importError ? (
                     <p className="metro-wayfinding-import-error" role="alert">
@@ -1041,14 +1115,14 @@ export function MetroWayfindingEditor({
           >
             <header>
               <div>
-                <span>工程转换预览</span>
+                <span>{t('metroWayfindingEditor.importPreview.eyebrow')}</span>
                 <h2 id={`${editorId}-import-heading`}>{importPreview.projectName}</h2>
               </div>
               <button
                 type="button"
                 className="icon-button"
-                aria-label="关闭导入预览"
-                title="关闭"
+                aria-label={t('metroWayfindingEditor.importPreview.closeAria')}
+                title={t('metroWayfindingEditor.action.close')}
                 onClick={() => setImportPreview(undefined)}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
@@ -1065,11 +1139,19 @@ export function MetroWayfindingEditor({
             <div className="metro-wayfinding-import-scroll">
               {importPreview.source !== 'yct' ? (
                 <SegmentedControl
-                  label="转换方式"
+                  label={t('metroWayfindingEditor.importPreview.mode')}
                   value={importMode}
                   options={[
-                    { value: 'semantic', label: '仅语义（推荐）', icon: 'conversion_path' },
-                    { value: 'source-style', label: '保留源样式', icon: 'palette' },
+                    {
+                      value: 'semantic',
+                      label: t('metroWayfindingEditor.importPreview.modeSemantic'),
+                      icon: 'conversion_path',
+                    },
+                    {
+                      value: 'source-style',
+                      label: t('metroWayfindingEditor.importPreview.modeSourceStyle'),
+                      icon: 'palette',
+                    },
                   ]}
                   disabled={disabled}
                   wide
@@ -1087,20 +1169,20 @@ export function MetroWayfindingEditor({
                   layout={activeImportPreview?.layout ?? importPreview.layout}
                   canvas={activeImportPreview?.canvas ?? importPreview.canvas}
                 />
-                <small>按画布比例缩小的牌面示意，仅用于确认转换后的内容与排版</small>
+                <small>{t('metroWayfindingEditor.importPreview.previewNote')}</small>
               </div>
 
               <dl className="metro-wayfinding-import-facts">
                 <div>
-                  <dt>来源</dt>
+                  <dt>{t('metroWayfindingEditor.importPreview.source')}</dt>
                   <dd>{importPreview.sourceLabel}</dd>
                 </div>
                 <div>
-                  <dt>来源风格</dt>
+                  <dt>{t('metroWayfindingEditor.importPreview.sourceStyle')}</dt>
                   <dd>{importPreview.styleLabel}</dd>
                 </div>
                 <div>
-                  <dt>目标风格</dt>
+                  <dt>{t('metroWayfindingEditor.importPreview.targetStyle')}</dt>
                   <dd>
                     {importPreview.source === 'yct'
                       ? importPreview.styleLabel
@@ -1108,13 +1190,13 @@ export function MetroWayfindingEditor({
                   </dd>
                 </div>
                 <div>
-                  <dt>版式</dt>
+                  <dt>{t('metroWayfindingEditor.field.layout')}</dt>
                   <dd>
                     {activeImportPreview?.layout.mode === 'double'
-                      ? '双行'
+                      ? t('metroWayfindingEditor.option.doubleRow')
                       : activeImportPreview?.layout.mode === 'vertical'
-                        ? '竖向'
-                        : '单行'}
+                        ? t('metroWayfindingEditor.option.vertical')
+                        : t('metroWayfindingEditor.option.singleRow')}
                     {' · '}
                     {activeImportPreview?.canvas.widthM ?? importPreview.canvas.widthM} ×{' '}
                     {activeImportPreview?.canvas.heightM ?? importPreview.canvas.heightM}
@@ -1122,7 +1204,10 @@ export function MetroWayfindingEditor({
                 </div>
               </dl>
 
-              <ol className="metro-wayfinding-import-rows" aria-label="待导入行顺序">
+              <ol
+                className="metro-wayfinding-import-rows"
+                aria-label={t('metroWayfindingEditor.importPreview.rowsAria')}
+              >
                 {importPreview.rowSources.map((row, index) => {
                   /*
                     行内元素取**转换后**的结果（`activeImportRows`），
@@ -1133,7 +1218,11 @@ export function MetroWayfindingEditor({
                   return (
                     <li key={`${row.fileName}-${index}`}>
                       <div>
-                        <span>{index === 0 ? '第一行' : '第二行'}</span>
+                        <span>
+                          {index === 0
+                            ? t('metroWayfindingEditor.row.first')
+                            : t('metroWayfindingEditor.row.second')}
+                        </span>
                         {/*
                           用图形化预览替代纯文本摘要：复用模板库的预览组件，
                           让审核者一眼看到「出口箭头 + 卫生间图标 + 文字 + …」的实际形态。
@@ -1178,8 +1267,8 @@ export function MetroWayfindingEditor({
                           <button
                             type="button"
                             className="icon-button"
-                            aria-label="上移此行"
-                            title="上移"
+                            aria-label={t('metroWayfindingEditor.action.moveRowUpAria')}
+                            title={t('metroWayfindingEditor.action.moveUp')}
                             disabled={index === 0}
                             onClick={() =>
                               setImportPreview((current) =>
@@ -1196,8 +1285,8 @@ export function MetroWayfindingEditor({
                           <button
                             type="button"
                             className="icon-button"
-                            aria-label="下移此行"
-                            title="下移"
+                            aria-label={t('metroWayfindingEditor.action.moveRowDownAria')}
+                            title={t('metroWayfindingEditor.action.moveDown')}
                             disabled={index === importPreview.rowSources.length - 1}
                             onClick={() =>
                               setImportPreview((current) =>
@@ -1219,18 +1308,25 @@ export function MetroWayfindingEditor({
               </ol>
 
               {activeImportWarnings.length ? (
-                <section className="metro-wayfinding-import-warnings" aria-label="转换提醒">
+                <section
+                  className="metro-wayfinding-import-warnings"
+                  aria-label={t('metroWayfindingEditor.importPreview.warningsAria')}
+                >
                   <header>
                     <span className="material-symbols-outlined" aria-hidden="true">
                       warning
                     </span>
-                    <strong>转换提醒</strong>
+                    <strong>{t('metroWayfindingEditor.importPreview.warningsTitle')}</strong>
                   </header>
                   <ul>
                     {activeImportWarnings.map((warning) => (
                       <li key={`${warning.code}-${warning.message}`}>
                         {warning.message}
-                        {warning.count > 1 ? `（${warning.count} 处）` : ''}
+                        {warning.count > 1
+                          ? t('metroWayfindingEditor.importPreview.warningCount', {
+                              count: warning.count,
+                            })
+                          : ''}
                       </li>
                     ))}
                   </ul>
@@ -1240,8 +1336,10 @@ export function MetroWayfindingEditor({
 
             <footer>
               <span>
-                {importPreview.files.length} 个 JSON · 单文件上限{' '}
-                {METRO_WAYFINDING_IMPORT_MAX_FILE_BYTES / 1024 / 1024} MB
+                {t('metroWayfindingEditor.importPreview.footerSummary', {
+                  count: importPreview.files.length,
+                  size: METRO_WAYFINDING_IMPORT_MAX_FILE_BYTES / 1024 / 1024,
+                })}
               </span>
               <div>
                 <button
@@ -1249,14 +1347,16 @@ export function MetroWayfindingEditor({
                   className="secondary-action-button"
                   onClick={() => setImportPreview(undefined)}
                 >
-                  取消
+                  {t('metroWayfindingEditor.action.cancel')}
                 </button>
                 <button
                   type="button"
                   className="primary-action-button"
                   onClick={applyImportPreview}
                 >
-                  {hasElements ? '替换现有导视牌' : '导入导视牌'}
+                  {hasElements
+                    ? t('metroWayfindingEditor.action.replaceSign')
+                    : t('metroWayfindingEditor.action.importSign')}
                 </button>
               </div>
             </footer>
@@ -1288,12 +1388,13 @@ function MetroWayfindingExampleList({
   selectedLineId?: string;
   onLineChange?: (lineId: string) => void;
 }>) {
+  const { t } = useI18n();
   const [category, setCategory] = useState<'all' | 'entry' | 'transfer' | 'exit'>('all');
   const categoryOptions = [
-    { value: 'all' as const, label: '全部' },
-    { value: 'entry' as const, label: '进站' },
-    { value: 'transfer' as const, label: '换乘' },
-    { value: 'exit' as const, label: '出站' },
+    { value: 'all' as const, label: t('metroWayfindingEditor.option.all') },
+    { value: 'entry' as const, label: t('metroWayfindingEditor.option.entry') },
+    { value: 'transfer' as const, label: t('metroWayfindingEditor.option.transfer') },
+    { value: 'exit' as const, label: t('metroWayfindingEditor.option.exit') },
   ].filter(
     (option) =>
       option.value === 'all' ||
@@ -1308,17 +1409,17 @@ function MetroWayfindingExampleList({
       : examples.filter((example) => example.source.category === activeCategory);
 
   return (
-    <section className="material-template-examples" aria-label="地铁导视版式模板">
+    <section className="material-template-examples" aria-label={t('metroWayfindingEditor.examples.aria')}>
       <div className="material-template-examples-toolbar">
         <div className="material-template-examples-heading">
-          <strong>版式模板</strong>
-          <span>选择一个版式开始编辑</span>
+          <strong>{t('metroWayfindingEditor.examples.title')}</strong>
+          <span>{t('metroWayfindingEditor.examples.description')}</span>
         </div>
         {(stationOptions?.length && onStationChange) || (lineOptions?.length && onLineChange) ? (
           <div className="material-template-example-context-fields">
             {stationOptions?.length && onStationChange ? (
               <label className="material-field">
-                <span>套用车站</span>
+                <span>{t('metroWayfindingEditor.examples.station')}</span>
                 <select
                   value={selectedStationName ?? ''}
                   disabled={disabled}
@@ -1334,7 +1435,7 @@ function MetroWayfindingExampleList({
             ) : null}
             {lineOptions?.length && onLineChange ? (
               <label className="material-field">
-                <span>套用线路</span>
+                <span>{t('metroWayfindingEditor.examples.line')}</span>
                 <select
                   value={selectedLineId ?? ''}
                   disabled={disabled || lineOptions.length < 2}
@@ -1350,7 +1451,11 @@ function MetroWayfindingExampleList({
             ) : null}
           </div>
         ) : null}
-        <div className="material-template-example-category-tabs" role="group" aria-label="模板分类">
+        <div
+          className="material-template-example-category-tabs"
+          role="group"
+          aria-label={t('metroWayfindingEditor.examples.categoriesAria')}
+        >
           {categoryOptions.map((option) => (
             <button
               key={option.value}
@@ -1425,6 +1530,7 @@ function MetroWayfindingExampleCard({
   selectedStationName?: string;
   onLoadExample: (example: MetroWayfindingExample, stationName?: string) => void;
 }>) {
+  const { t } = useI18n();
   const cardRef = useRef<HTMLButtonElement>(null);
   const [rowSpan, setRowSpan] = useState(() => estimateMetroWayfindingExampleRowSpan(example));
 
@@ -1464,17 +1570,21 @@ function MetroWayfindingExampleCard({
       style={{ gridRowEnd: `span ${rowSpan}` }}
       onClick={() => onLoadExample(example, selectedStationName)}
       disabled={disabled}
-      aria-label={`载入${example.source.remark}，${example.summary.modeLabel}，${example.summary.sizeLabel}`}
+      aria-label={t('metroWayfindingEditor.examples.loadAria', {
+        remark: example.source.remark,
+        mode: example.summary.modeLabel,
+        size: example.summary.sizeLabel,
+      })}
     >
       <MetroWayfindingExamplePreview example={example} />
       <div className="material-template-example-heading">
         <strong>{example.source.remark}</strong>
         <span>
           {example.source.category === 'entry'
-            ? '进站相关'
+            ? t('metroWayfindingEditor.examples.categoryEntry')
             : example.source.category === 'transfer'
-              ? '换乘相关'
-              : '出站相关'}{' '}
+              ? t('metroWayfindingEditor.examples.categoryTransfer')
+              : t('metroWayfindingEditor.examples.categoryExit')}{' '}
           · {example.source.label}
         </span>
       </div>
@@ -1485,7 +1595,7 @@ function MetroWayfindingExampleCard({
         <span className="material-symbols-outlined" aria-hidden="true">
           file_open
         </span>
-        使用此模板
+        {t('metroWayfindingEditor.examples.useTemplate')}
       </span>
     </button>
   );
@@ -1796,6 +1906,7 @@ function MetroWayfindingElementTabContent({
   element: MetroWayfindingElement;
   layoutMode: MetroWayfindingLayoutMode;
 }>) {
+  const { t } = useI18n();
   if (element.type === 'facility') {
     const icon =
       metroWayfindingFacilityOptions.find((option) => option.id === element.iconId) ??
@@ -1838,7 +1949,7 @@ function MetroWayfindingElementTabContent({
           {alignmentIcon}
         </span>
         <span className="metro-wayfinding-element-tab-summary">
-          {summarizeMetroTextRows(element.rows) || '文字'}
+          {summarizeMetroTextRows(element.rows, t) || t('metroWayfindingEditor.elementType.text')}
         </span>
       </>
     );
@@ -1850,7 +1961,8 @@ function MetroWayfindingElementTabContent({
           title
         </span>
         <span className="metro-wayfinding-element-tab-summary">
-          {concatMetroLargeTextValue(element) || '大文字'}
+          {concatMetroLargeTextValue(element) ||
+            t('metroWayfindingEditor.elementType.largeText')}
         </span>
       </>
     );
@@ -1862,7 +1974,9 @@ function MetroWayfindingElementTabContent({
           widgets
         </span>
         <span className="metro-wayfinding-element-tab-summary">
-          {element.children.length ? `${element.children.length} 个子元素` : '组合框'}
+          {element.children.length
+            ? t('metroWayfindingEditor.tab.childCount', { count: element.children.length })
+            : t('metroWayfindingEditor.elementType.combination')}
         </span>
       </>
     );
@@ -1884,57 +1998,96 @@ function MetroWayfindingElementTabContent({
 function metroElementTabAriaLabel(
   element: MetroWayfindingElement,
   layoutMode: MetroWayfindingLayoutMode,
+  t: Translate,
 ): string {
   if (element.type === 'facility') {
     const label =
       metroWayfindingFacilityOptions.find((option) => option.id === element.iconId)?.label ??
-      '设施';
+      t('metroWayfindingEditor.elementType.facility');
     const effectiveDirection =
       element.direction ?? resolveMetroWayfindingFacilityDefaultDirection(element.iconId);
     const direction = effectiveDirection
-      ? { left: '向左', right: '向右', up: '向上', down: '向下' }[effectiveDirection]
+      ? {
+          left: t('metroWayfindingEditor.direction.left'),
+          right: t('metroWayfindingEditor.direction.right'),
+          up: t('metroWayfindingEditor.direction.up'),
+          down: t('metroWayfindingEditor.direction.down'),
+        }[effectiveDirection]
       : '';
-    return `${label}${direction ? `，${direction}` : ''}`;
+    return `${label}${
+      direction ? t('metroWayfindingEditor.aria.partSuffix', { value: direction }) : ''
+    }`;
   }
   if (element.type === 'arrow') {
     return (
-      metroWayfindingArrowOptions.find((option) => option.id === element.iconId)?.label ?? '箭头'
+      metroWayfindingArrowOptions.find((option) => option.id === element.iconId)?.label ??
+      t('metroWayfindingEditor.elementType.arrow')
     );
   }
   if (element.type === 'text') {
     const alignmentLabel =
       layoutMode === 'vertical'
-        ? '居中'
-        : { left: '左对齐', center: '居中', right: '右对齐' }[element.align];
+        ? t('metroWayfindingEditor.align.center')
+        : {
+            left: t('metroWayfindingEditor.align.left'),
+            center: t('metroWayfindingEditor.align.center'),
+            right: t('metroWayfindingEditor.align.right'),
+          }[element.align];
     const writingModeLabel =
-      layoutMode === 'vertical' ? (element.writingMode === 'vertical' ? '竖排' : '横排') : '';
-    const summary = summarizeMetroTextRows(element.rows);
-    return `文字，${element.rows.length} 行，${alignmentLabel}${writingModeLabel ? `，${writingModeLabel}` : ''}${summary ? `，${summary}` : ''}`;
+      layoutMode === 'vertical'
+        ? element.writingMode === 'vertical'
+          ? t('metroWayfindingEditor.writing.verticalText')
+          : t('metroWayfindingEditor.writing.horizontalText')
+        : '';
+    const summary = summarizeMetroTextRows(element.rows, t);
+    let label = t('metroWayfindingEditor.aria.textElement', {
+      rows: element.rows.length,
+      alignment: alignmentLabel,
+    });
+    if (writingModeLabel) {
+      label += t('metroWayfindingEditor.aria.partSuffix', { value: writingModeLabel });
+    }
+    if (summary) label += t('metroWayfindingEditor.aria.partSuffix', { value: summary });
+    return label;
   }
   if (element.type === 'largeText') {
     const summary = concatMetroLargeTextValue(element);
-    return summary ? `大文字，${summary}` : '大文字';
+    return summary
+      ? t('metroWayfindingEditor.aria.largeTextWithSummary', { summary })
+      : t('metroWayfindingEditor.elementType.largeText');
   }
   if (element.type === 'combination') {
-    return `组合框，${element.children.length} 个子元素，缩放 ${Math.round(element.scale * 100)}%`;
+    return t('metroWayfindingEditor.aria.combination', {
+      count: element.children.length,
+      scale: Math.round(element.scale * 100),
+    });
   }
   if (element.type === 'space') {
-    return element.mode === 'flex' ? '弹性空白' : `固定空白，${element.units} 格`;
+    return element.mode === 'flex'
+      ? t('metroWayfindingEditor.aria.flexSpace')
+      : t('metroWayfindingEditor.aria.fixedSpace', { units: element.units });
   }
-  return '分割线';
+  return t('metroWayfindingEditor.elementType.divider');
 }
 
-function summarizeMetroMainSegments(segments: MetroWayfindingMainSegment[]): string {
+function summarizeMetroMainSegments(
+  segments: MetroWayfindingMainSegment[],
+  t: Translate,
+): string {
   return segments
-    .map((segment) => (segment.kind === 'line' ? `[${segment.value || '线路'}]` : segment.value))
+    .map((segment) =>
+      segment.kind === 'line'
+        ? `[${segment.value || t('metroWayfindingEditor.aria.defaultLineName')}]`
+        : segment.value,
+    )
     .join('')
     .trim();
 }
 
-function summarizeMetroTextRows(rows: MetroWayfindingTextRow[]): string {
+function summarizeMetroTextRows(rows: MetroWayfindingTextRow[], t: Translate): string {
   return rows
     .map((row) =>
-      row.kind === 'main' ? summarizeMetroMainSegments(row.segments) : row.value.trim(),
+      row.kind === 'main' ? summarizeMetroMainSegments(row.segments, t) : row.value.trim(),
     )
     .filter(Boolean)
     .join(' / ')
@@ -1970,19 +2123,20 @@ function MetroWayfindingElementEditor({
   textSuggestions?: string[];
   onAction: (action: MetroWayfindingElementAction) => void;
 }>) {
+  const { t } = useI18n();
   const patch = (nextPatch: Partial<MetroWayfindingElement>) =>
     onAction({ type: 'update', elementId: element.id, patch: nextPatch });
 
   return (
     <article className="metro-wayfinding-element">
       <header>
-        <strong>{metroElementLabel(element)}</strong>
+        <strong>{metroElementLabel(element, t)}</strong>
         <div className="metro-wayfinding-element-actions">
           <button
             type="button"
             className="icon-button"
-            aria-label="向左移动"
-            title="向左移动"
+            aria-label={t('metroWayfindingEditor.action.moveLeft')}
+            title={t('metroWayfindingEditor.action.moveLeft')}
             disabled={disabled || isFirst}
             onClick={() => onAction({ type: 'move', elementId: element.id, direction: 'up' })}
           >
@@ -1993,8 +2147,8 @@ function MetroWayfindingElementEditor({
           <button
             type="button"
             className="icon-button"
-            aria-label="向右移动"
-            title="向右移动"
+            aria-label={t('metroWayfindingEditor.action.moveRight')}
+            title={t('metroWayfindingEditor.action.moveRight')}
             disabled={disabled || isLast}
             onClick={() => onAction({ type: 'move', elementId: element.id, direction: 'down' })}
           >
@@ -2005,8 +2159,8 @@ function MetroWayfindingElementEditor({
           <button
             type="button"
             className="icon-button"
-            aria-label="创建元素副本"
-            title="创建元素副本"
+            aria-label={t('metroWayfindingEditor.action.duplicateElement')}
+            title={t('metroWayfindingEditor.action.duplicateElement')}
             disabled={disabled}
             onClick={() =>
               onAction({
@@ -2023,8 +2177,8 @@ function MetroWayfindingElementEditor({
           <button
             type="button"
             className="icon-button"
-            aria-label="移除元素"
-            title="移除元素"
+            aria-label={t('metroWayfindingEditor.action.removeElement')}
+            title={t('metroWayfindingEditor.action.removeElement')}
             disabled={disabled}
             onClick={() => onAction({ type: 'remove', elementId: element.id })}
           >
@@ -2036,16 +2190,44 @@ function MetroWayfindingElementEditor({
       </header>
       <div className="metro-wayfinding-element-body">
         <SegmentedControl
-          label="元素类型"
+          label={t('metroWayfindingEditor.field.elementType')}
           value={element.type}
           options={[
-            { value: 'facility', label: '设施', icon: 'accessible' },
-            { value: 'arrow', label: '箭头', icon: 'arrow_forward' },
-            { value: 'text', label: '文字', icon: 'text_fields' },
-            { value: 'largeText', label: '大文字', icon: 'title' },
-            { value: 'combination', label: '组合框', icon: 'widgets' },
-            { value: 'space', label: '空白', icon: 'space_bar' },
-            { value: 'divider', label: '分割线', icon: 'split_scene' },
+            {
+              value: 'facility',
+              label: t('metroWayfindingEditor.elementType.facility'),
+              icon: 'accessible',
+            },
+            {
+              value: 'arrow',
+              label: t('metroWayfindingEditor.elementType.arrow'),
+              icon: 'arrow_forward',
+            },
+            {
+              value: 'text',
+              label: t('metroWayfindingEditor.elementType.text'),
+              icon: 'text_fields',
+            },
+            {
+              value: 'largeText',
+              label: t('metroWayfindingEditor.elementType.largeText'),
+              icon: 'title',
+            },
+            {
+              value: 'combination',
+              label: t('metroWayfindingEditor.elementType.combination'),
+              icon: 'widgets',
+            },
+            {
+              value: 'space',
+              label: t('metroWayfindingEditor.elementType.space'),
+              icon: 'space_bar',
+            },
+            {
+              value: 'divider',
+              label: t('metroWayfindingEditor.elementType.divider'),
+              icon: 'split_scene',
+            },
           ]}
           disabled={disabled}
           wide
@@ -2112,7 +2294,9 @@ function MetroWayfindingElementEditor({
         ) : null}
         {element.type === 'divider' ? (
           <p className="muted">
-            竖线宽 {METRO_WAYFINDING_DIVIDER_WIDTH}、高 72，随导视牌像素单元等比缩放。
+            {t('metroWayfindingEditor.divider.note', {
+              width: METRO_WAYFINDING_DIVIDER_WIDTH,
+            })}
           </p>
         ) : null}
       </div>
@@ -2131,6 +2315,7 @@ function FacilityElementFields({
   lineColorOptions: Array<{ value: string; label: string }>;
   patch: (patch: Partial<MetroWayfindingElement>) => void;
 }>) {
+  const { t } = useI18n();
   const currentIcon =
     metroWayfindingFacilityOptions.find((option) => option.id === element.iconId) ??
     metroWayfindingFacilityOptions[0]!;
@@ -2174,7 +2359,7 @@ function FacilityElementFields({
   return (
     <div className="metro-wayfinding-field-grid">
       <IconChoiceGrid
-        label="设施图标"
+        label={t('metroWayfindingEditor.field.facilityIcon')}
         value={element.iconId}
         options={metroWayfindingFacilityOptions.map((option) => {
           const assetName = resolveMetroFacilityIconAssetName(option.id);
@@ -2191,7 +2376,7 @@ function FacilityElementFields({
       />
       {variantOptions.length > 0 ? (
         <SegmentedControl
-          label="图标变种"
+          label={t('metroWayfindingEditor.field.iconVariant')}
           value={effectiveVariant ?? variantOptions[0]!}
           options={variantOptions.map((variant) => {
             const assetName = resolveMetroFacilityIconAssetName(
@@ -2218,7 +2403,11 @@ function FacilityElementFields({
       ) : null}
       {directionOptions.length > 0 ? (
         <SegmentedControl
-          label={element.iconId === 'exit' ? '出口图标方向' : '图标方向'}
+          label={
+            element.iconId === 'exit'
+              ? t('metroWayfindingEditor.field.exitIconDirection')
+              : t('metroWayfindingEditor.field.iconDirection')
+          }
           value={effectiveDirection ?? directionOptions[0]!}
           options={directionOptions.map((direction) => {
             const assetName = resolveMetroFacilityIconAssetName(
@@ -2272,10 +2461,11 @@ function ArrowElementFields({
   lineColorOptions: Array<{ value: string; label: string }>;
   patch: (patch: Partial<MetroWayfindingElement>) => void;
 }>) {
+  const { t } = useI18n();
   return (
     <div className="metro-wayfinding-field-grid">
       <IconChoiceGrid
-        label="箭头"
+        label={t('metroWayfindingEditor.field.arrow')}
         value={element.iconId}
         options={metroWayfindingArrowOptions.map((option) => ({
           ...option,
@@ -2291,7 +2481,7 @@ function ArrowElementFields({
           disabled={disabled}
           onChange={(event) => patch({ framed: event.currentTarget.checked })}
         />
-        <span>添加外框</span>
+        <span>{t('metroWayfindingEditor.field.addFrame')}</span>
       </label>
       {element.framed ? (
         <FrameFillControl
@@ -2323,6 +2513,7 @@ function TextElementFields({
   textSuggestions?: string[];
   patch: (patch: Partial<MetroWayfindingElement>) => void;
 }>) {
+  const { t } = useI18n();
   const metrics = resolveMetroWayfindingTextMetrics(element.rows);
   const updateRow = (rowId: string, row: MetroWayfindingTextRow) =>
     patch({ rows: element.rows.map((item) => (item.id === rowId ? row : item)) });
@@ -2345,15 +2536,33 @@ function TextElementFields({
     <>
       <div className="metro-wayfinding-field-grid">
         <SegmentedControl
-          label="对齐"
+          label={t('metroWayfindingEditor.field.alignment')}
           value={layoutMode === 'vertical' ? 'center' : element.align}
           options={
             layoutMode === 'vertical'
-              ? [{ value: 'center' as const, label: '居中', icon: 'format_align_center' }]
+              ? [
+                  {
+                    value: 'center' as const,
+                    label: t('metroWayfindingEditor.align.center'),
+                    icon: 'format_align_center',
+                  },
+                ]
               : [
-                  { value: 'left' as const, label: '左对齐', icon: 'format_align_left' },
-                  { value: 'center' as const, label: '居中', icon: 'format_align_center' },
-                  { value: 'right' as const, label: '右对齐', icon: 'format_align_right' },
+                  {
+                    value: 'left' as const,
+                    label: t('metroWayfindingEditor.align.left'),
+                    icon: 'format_align_left',
+                  },
+                  {
+                    value: 'center' as const,
+                    label: t('metroWayfindingEditor.align.center'),
+                    icon: 'format_align_center',
+                  },
+                  {
+                    value: 'right' as const,
+                    label: t('metroWayfindingEditor.align.right'),
+                    icon: 'format_align_right',
+                  },
                 ]
           }
           disabled={disabled}
@@ -2362,38 +2571,57 @@ function TextElementFields({
         />
         {layoutMode === 'vertical' ? (
           <SegmentedControl
-            label="文字排列"
+            label={t('metroWayfindingEditor.field.writingMode')}
             value={element.writingMode}
             options={[
-              { value: 'horizontal', label: '横向', icon: 'text_rotation_none' },
-              { value: 'vertical', label: '竖向', icon: 'text_rotate_vertical' },
+              {
+                value: 'horizontal',
+                label: t('metroWayfindingEditor.writing.horizontal'),
+                icon: 'text_rotation_none',
+              },
+              {
+                value: 'vertical',
+                label: t('metroWayfindingEditor.writing.vertical'),
+                icon: 'text_rotate_vertical',
+              },
             ]}
             disabled={disabled}
             onChange={(writingMode) => patch({ writingMode })}
           />
         ) : null}
         <output className="metro-wayfinding-text-metrics">
-          <span>动态字高</span>
+          <span>{t('metroWayfindingEditor.text.dynamicFontSize')}</span>
           <strong>
-            主文本 {formatMetroMetric(metrics.mainFontSize)} · 副文本{' '}
-            {formatMetroMetric(metrics.secondaryFontSize)}
+            {t('metroWayfindingEditor.text.metrics', {
+              main: formatMetroMetric(metrics.mainFontSize),
+              secondary: formatMetroMetric(metrics.secondaryFontSize),
+            })}
           </strong>
         </output>
       </div>
-      <section className="metro-wayfinding-text-row-editor" aria-label="文本行">
+      <section
+        className="metro-wayfinding-text-row-editor"
+        aria-label={t('metroWayfindingEditor.text.rowsAria')}
+      >
         <ol className="metro-wayfinding-text-row-list">
           {element.rows.map((row, index) => (
             <li key={row.id} className="metro-wayfinding-text-row-item">
               <header>
                 <strong>
-                  第 {index + 1} 行 · {row.kind === 'main' ? '主文本' : '副文本'}
+                  {t('metroWayfindingEditor.text.rowHeader', {
+                    index: index + 1,
+                    kind:
+                      row.kind === 'main'
+                        ? t('metroWayfindingEditor.text.main')
+                        : t('metroWayfindingEditor.text.secondary'),
+                  })}
                 </strong>
                 <div className="metro-wayfinding-element-actions">
                   <button
                     type="button"
                     className="icon-button"
-                    aria-label={`第 ${index + 1} 行上移`}
-                    title="上移"
+                    aria-label={t('metroWayfindingEditor.text.moveRowUpAria', { index: index + 1 })}
+                    title={t('metroWayfindingEditor.action.moveUp')}
                     disabled={disabled || index === 0}
                     onClick={() => moveRow(index, 'up')}
                   >
@@ -2404,8 +2632,10 @@ function TextElementFields({
                   <button
                     type="button"
                     className="icon-button"
-                    aria-label={`第 ${index + 1} 行下移`}
-                    title="下移"
+                    aria-label={t('metroWayfindingEditor.text.moveRowDownAria', {
+                      index: index + 1,
+                    })}
+                    title={t('metroWayfindingEditor.action.moveDown')}
                     disabled={disabled || index === element.rows.length - 1}
                     onClick={() => moveRow(index, 'down')}
                   >
@@ -2416,8 +2646,8 @@ function TextElementFields({
                   <button
                     type="button"
                     className="icon-button"
-                    aria-label={`删除第 ${index + 1} 行`}
-                    title="删除文本行"
+                    aria-label={t('metroWayfindingEditor.text.deleteRowAria', { index: index + 1 })}
+                    title={t('metroWayfindingEditor.text.deleteRow')}
                     disabled={disabled || element.rows.length === 1}
                     onClick={() => removeRow(row.id)}
                   >
@@ -2429,7 +2659,7 @@ function TextElementFields({
               </header>
               {row.kind === 'main' ? (
                 <MainSegmentEditor
-                  label={`第 ${index + 1} 行主文本内容`}
+                  label={t('metroWayfindingEditor.text.mainRowLabel', { index: index + 1 })}
                   segments={row.segments}
                   disabled={disabled}
                   lineColorOptions={lineColorOptions}
@@ -2438,7 +2668,7 @@ function TextElementFields({
                 />
               ) : (
                 <MetroWayfindingSecondaryField
-                  label={`第 ${index + 1} 行副文本内容`}
+                  label={t('metroWayfindingEditor.text.secondaryRowLabel', { index: index + 1 })}
                   value={row.value}
                   disabled={disabled}
                   suggestions={textSuggestions}
@@ -2448,30 +2678,33 @@ function TextElementFields({
             </li>
           ))}
         </ol>
-        <div className="metro-wayfinding-inline-actions" aria-label="添加文本行">
+        <div
+          className="metro-wayfinding-inline-actions"
+          aria-label={t('metroWayfindingEditor.text.addRowAria')}
+        >
           <button
             type="button"
-            aria-label="添加主文本行"
-            title="添加主文本行"
+            aria-label={t('metroWayfindingEditor.text.addMainRow')}
+            title={t('metroWayfindingEditor.text.addMainRow')}
             onClick={() => addRow('main')}
             disabled={disabled || element.rows.length >= 32}
           >
             <span className="material-symbols-outlined" aria-hidden="true">
               text_fields
             </span>
-            <span>主文本</span>
+            <span>{t('metroWayfindingEditor.text.main')}</span>
           </button>
           <button
             type="button"
-            aria-label="添加副文本行"
-            title="添加副文本行"
+            aria-label={t('metroWayfindingEditor.text.addSecondaryRow')}
+            title={t('metroWayfindingEditor.text.addSecondaryRow')}
             onClick={() => addRow('secondary')}
             disabled={disabled || element.rows.length >= 32}
           >
             <span className="material-symbols-outlined" aria-hidden="true">
               short_text
             </span>
-            <span>副文本</span>
+            <span>{t('metroWayfindingEditor.text.secondary')}</span>
           </button>
         </div>
       </section>
@@ -2481,10 +2714,13 @@ function TextElementFields({
 
 // 主文本内联编辑：文本段是可直接输入的 <input>，线路号 / 方框文本以 chip 形式
 // 整体嵌在文本之间。chip 不承载光标，方向键 / 退格键在段边界处跨段处理。
-function metroMainSegmentKindLabel(kind: MetroWayfindingMainSegment['kind']): string {
-  if (kind === 'line') return '线路号';
-  if (kind === 'boxed') return '方框文本';
-  return '文本段';
+function metroMainSegmentKindLabel(
+  kind: MetroWayfindingMainSegment['kind'],
+  t: Translate,
+): string {
+  if (kind === 'line') return t('metroWayfindingEditor.segment.line');
+  if (kind === 'boxed') return t('metroWayfindingEditor.segment.boxed');
+  return t('metroWayfindingEditor.segment.text');
 }
 
 function metroMainSegmentKindIcon(kind: MetroWayfindingMainSegment['kind']): string {
@@ -2693,6 +2929,7 @@ function MainSegmentEditor({
   textSuggestions?: string[];
   onChange: (segments: MetroWayfindingMainSegment[]) => void;
 }>) {
+  const { t } = useI18n();
   // 正在编辑的文本段索引；null 表示光标停在 chip 上。
   const [activeTextIndex, setActiveTextIndex] = useState<number | null>(null);
   // 待恢复的段内字符位置。删除 chip / 插入 chip 后需要还原落点。
@@ -3023,7 +3260,7 @@ function MainSegmentEditor({
     <MetroWayfindingSegmentFieldShell
       label={label}
       disabled={disabled}
-      ariaLabel={`${label}，可内联编辑`}
+      ariaLabel={t('metroWayfindingEditor.aria.inlineEditable', { label })}
       onBlankPointerDown={focusLastEditableSegment}
     >
       {normalizedSegments.map((segment, index) =>
@@ -3045,7 +3282,10 @@ function MainSegmentEditor({
               value={segment.value}
               disabled={disabled}
               size={Math.max(segment.value.length, 1)}
-              aria-label={`${label}的文本段 ${index + 1}`}
+              aria-label={t('metroWayfindingEditor.aria.textSegment', {
+                label,
+                index: index + 1,
+              })}
               onFocus={(event) => {
                 setActiveTextIndex(index);
                 syncCaretOffset(event.currentTarget);
@@ -3097,8 +3337,10 @@ function MainSegmentEditor({
                   <button
                     type="button"
                     className="metro-wayfinding-main-segments-suggestion"
-                    title="采纳建议（Tab）"
-                    aria-label={`采纳建议：${caretSuggestion}`}
+                    title={t('metroWayfindingEditor.suggestion.acceptTitle')}
+                    aria-label={t('metroWayfindingEditor.suggestion.acceptAria', {
+                      suggestion: caretSuggestion,
+                    })}
                     disabled={disabled}
                     // mousedown 抢焦点会让输入框失焦、建议消失，这里改用 click 并阻止默认。
                     onMouseDown={(event) => event.preventDefault()}
@@ -3111,8 +3353,8 @@ function MainSegmentEditor({
                   <button
                     type="button"
                     className="metro-wayfinding-main-segments-insert-line"
-                    title="在光标处添加线路号"
-                    aria-label="在光标处添加线路号"
+                    title={t('metroWayfindingEditor.segment.insertLine')}
+                    aria-label={t('metroWayfindingEditor.segment.insertLine')}
                     disabled={disabled}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => insertChipAtCaret('line')}
@@ -3120,13 +3362,13 @@ function MainSegmentEditor({
                     <span className="material-symbols-outlined" aria-hidden="true">
                       directions_subway
                     </span>
-                    线路号
+                    {t('metroWayfindingEditor.segment.line')}
                   </button>
                   <button
                     type="button"
                     className="metro-wayfinding-main-segments-insert-boxed"
-                    title="在光标处添加方框"
-                    aria-label="在光标处添加方框"
+                    title={t('metroWayfindingEditor.segment.insertBoxed')}
+                    aria-label={t('metroWayfindingEditor.segment.insertBoxed')}
                     disabled={disabled}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => insertChipAtCaret('boxed')}
@@ -3134,7 +3376,7 @@ function MainSegmentEditor({
                     <span className="material-symbols-outlined" aria-hidden="true">
                       select_all
                     </span>
-                    方框
+                    {t('metroWayfindingEditor.segment.boxedShort')}
                   </button>
                 </span>
               </>
@@ -3161,13 +3403,13 @@ function MainSegmentEditor({
               className="metro-wayfinding-main-segments-chip-icon"
               aria-label={
                 segment.kind === 'line'
-                  ? '选择线路色（同时填入线路号）'
-                  : metroMainSegmentKindLabel(segment.kind)
+                  ? t('metroWayfindingEditor.segment.chooseLineColor')
+                  : metroMainSegmentKindLabel(segment.kind, t)
               }
               title={
                 segment.kind === 'line'
-                  ? '选择线路色（同时填入线路号）'
-                  : metroMainSegmentKindLabel(segment.kind)
+                  ? t('metroWayfindingEditor.segment.chooseLineColor')
+                  : metroMainSegmentKindLabel(segment.kind, t)
               }
               disabled={disabled || segment.kind !== 'line'}
               onClick={() => setPaletteIndex((current) => (current === index ? null : index))}
@@ -3186,8 +3428,11 @@ function MainSegmentEditor({
               disabled={disabled}
               size={Math.max(segment.value.length, 1)}
               maxLength={segment.kind === 'line' ? 20 : 160}
-              aria-label={`第 ${index + 1} 个${metroMainSegmentKindLabel(segment.kind)}`}
-              placeholder={metroMainSegmentKindLabel(segment.kind)}
+              aria-label={t('metroWayfindingEditor.aria.segmentOrdinal', {
+                index: index + 1,
+                kind: metroMainSegmentKindLabel(segment.kind, t),
+              })}
+              placeholder={metroMainSegmentKindLabel(segment.kind, t)}
               onFocus={() => setActiveTextIndex(null)}
               onChange={(event) => updateChip(index, event.currentTarget.value)}
               onKeyDown={(event) => {
@@ -3207,8 +3452,12 @@ function MainSegmentEditor({
             <button
               type="button"
               className="metro-wayfinding-main-segments-chip-remove"
-              aria-label={`删除${metroMainSegmentKindLabel(segment.kind)}`}
-              title={`删除${metroMainSegmentKindLabel(segment.kind)}`}
+              aria-label={t('metroWayfindingEditor.aria.removeSegment', {
+                kind: metroMainSegmentKindLabel(segment.kind, t),
+              })}
+              title={t('metroWayfindingEditor.aria.removeSegment', {
+                kind: metroMainSegmentKindLabel(segment.kind, t),
+              })}
               disabled={disabled}
               onClick={() => removeChip(index)}
             >
@@ -3275,6 +3524,7 @@ function MetroWayfindingSecondaryField({
   autoFocus?: boolean;
   onChange: (value: string) => void;
 }>) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [caretOffset, setCaretOffset] = useState<number | null>(null);
 
@@ -3317,7 +3567,7 @@ function MetroWayfindingSecondaryField({
     <MetroWayfindingSegmentFieldShell
       label={label}
       disabled={disabled}
-      ariaLabel={`${label}，可内联编辑`}
+      ariaLabel={t('metroWayfindingEditor.aria.inlineEditable', { label })}
       onBlankPointerDown={focusLastEditableSegment}
     >
       <span className="metro-wayfinding-main-segments-text-flow is-active">
@@ -3351,8 +3601,8 @@ function MetroWayfindingSecondaryField({
           <button
             type="button"
             className="metro-wayfinding-main-segments-suggestion"
-            title="采纳建议（Tab）"
-            aria-label={`采纳建议：${suggestion}`}
+            title={t('metroWayfindingEditor.suggestion.acceptTitle')}
+            aria-label={t('metroWayfindingEditor.suggestion.acceptAria', { suggestion })}
             disabled={disabled}
             // mousedown 抢焦点会让输入框失焦、建议消失。
             onMouseDown={(event) => event.preventDefault()}
@@ -3386,6 +3636,7 @@ function LargeTextValueEditor({
   disabled: boolean;
   patch: (patch: Partial<MetroWayfindingElement>) => void;
 }>) {
+  const { t } = useI18n();
   // 正在编辑的文本段索引；null 表示光标停在角标 chip 上。
   const [activeTextIndex, setActiveTextIndex] = useState<number | null>(null);
   const [caretOffset, setCaretOffset] = useState<number | null>(null);
@@ -3556,7 +3807,7 @@ function LargeTextValueEditor({
     <MetroWayfindingSegmentFieldShell
       label={label}
       disabled={disabled}
-      ariaLabel={`${label}，可内联编辑`}
+      ariaLabel={t('metroWayfindingEditor.aria.inlineEditable', { label })}
       onBlankPointerDown={focusLastEditableSegment}
     >
       {segments.map((segment, index) =>
@@ -3564,7 +3815,7 @@ function LargeTextValueEditor({
           <span
             key={`suffix-${index}`}
             className="metro-wayfinding-main-segments-chip is-suffix"
-            title="下角标"
+            title={t('metroWayfindingEditor.suffix.label')}
           >
             <input
               ref={(node) => {
@@ -3576,8 +3827,8 @@ function LargeTextValueEditor({
               disabled={disabled}
               size={Math.max(segment.value.length, 1)}
               maxLength={24}
-              aria-label={`第 ${index + 1} 个下角标`}
-              placeholder="下标"
+              aria-label={t('metroWayfindingEditor.aria.suffixOrdinal', { index: index + 1 })}
+              placeholder={t('metroWayfindingEditor.suffix.placeholder')}
               onFocus={() => setActiveTextIndex(null)}
               onChange={(event) => setSuffixValue(index, event.currentTarget.value)}
               onKeyDown={(event) => {
@@ -3597,8 +3848,8 @@ function LargeTextValueEditor({
             <button
               type="button"
               className="metro-wayfinding-main-segments-chip-remove"
-              title="删除此下角标"
-              aria-label="删除此下角标"
+              title={t('metroWayfindingEditor.suffix.remove')}
+              aria-label={t('metroWayfindingEditor.suffix.remove')}
               disabled={disabled}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => removeSuffix(index)}
@@ -3625,7 +3876,10 @@ function LargeTextValueEditor({
               disabled={disabled}
               size={Math.max(segment.value.length, 1)}
               maxLength={160}
-              aria-label={`${label}的文本段 ${index + 1}`}
+              aria-label={t('metroWayfindingEditor.aria.textSegment', {
+                label,
+                index: index + 1,
+              })}
               onFocus={(event) => {
                 setActiveTextIndex(index);
                 syncCaretOffset(event.currentTarget);
@@ -3663,8 +3917,8 @@ function LargeTextValueEditor({
                 <button
                   type="button"
                   className="metro-wayfinding-main-segments-insert-suffix"
-                  title="在光标处添加下角标"
-                  aria-label="在光标处添加下角标"
+                  title={t('metroWayfindingEditor.largeText.insertSuffix')}
+                  aria-label={t('metroWayfindingEditor.largeText.insertSuffix')}
                   disabled={disabled}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={insertSuffixAtCaret}
@@ -3672,7 +3926,7 @@ function LargeTextValueEditor({
                   <span className="material-symbols-outlined" aria-hidden="true">
                     subscript
                   </span>
-                  下标
+                  {t('metroWayfindingEditor.suffix.placeholder')}
                 </button>
               </span>
             ) : null}
@@ -3694,6 +3948,7 @@ function LargeTextElementFields({
   lineColorOptions: Array<{ value: string; label: string }>;
   patch: (patch: Partial<MetroWayfindingElement>) => void;
 }>) {
+  const { t } = useI18n();
   return (
     <div className="metro-wayfinding-field-grid">
       {/*
@@ -3702,8 +3957,17 @@ function LargeTextElementFields({
         独立输入框。与主文本保持一致——直接作为字段网格的一项，跨满整行。
       */}
       <div className="metro-wayfinding-large-text-field">
-        <span>大文字（字高 85）</span>
-        <LargeTextValueEditor label="大文字" element={element} disabled={disabled} patch={patch} />
+        <span>
+          {t('metroWayfindingEditor.largeText.fieldLabel', {
+            size: METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE,
+          })}
+        </span>
+        <LargeTextValueEditor
+          label={t('metroWayfindingEditor.elementType.largeText')}
+          element={element}
+          disabled={disabled}
+          patch={patch}
+        />
       </div>
       <FrameShapeControl
         value={element.frameShape}
@@ -3744,6 +4008,7 @@ function CombinationElementFields({
   textSuggestions?: string[];
   patch: (patch: Partial<MetroWayfindingElement>) => void;
 }>) {
+  const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const [selectedChildId, setSelectedChildId] = useState(element.children[0]?.id ?? '');
   const selectedChild =
@@ -3823,7 +4088,7 @@ function CombinationElementFields({
     <>
       <div className="metro-wayfinding-field-grid">
         <label className="material-field">
-          <span>组合框缩放倍数</span>
+          <span>{t('metroWayfindingEditor.combination.scale')}</span>
           <input
             type="number"
             min={METRO_WAYFINDING_COMBINATION_MIN_SCALE}
@@ -3867,7 +4132,11 @@ function CombinationElementFields({
           <span className="material-symbols-outlined" aria-hidden="true">
             tune
           </span>
-          <span>编辑组合内容（{element.children.length}）</span>
+          <span>
+            {t('metroWayfindingEditor.combination.editWithCount', {
+              count: element.children.length,
+            })}
+          </span>
         </button>
       </div>
       {isOpen ? (
@@ -3886,14 +4155,16 @@ function CombinationElementFields({
           >
             <header>
               <div>
-                <span>组合框子元素</span>
-                <h2 id={`${element.id}-combination-heading`}>编辑组合内容</h2>
+                <span>{t('metroWayfindingEditor.combination.eyebrow')}</span>
+                <h2 id={`${element.id}-combination-heading`}>
+                  {t('metroWayfindingEditor.combination.editTitle')}
+                </h2>
               </div>
               <button
                 type="button"
                 className="icon-button"
-                aria-label="关闭组合框编辑"
-                title="关闭"
+                aria-label={t('metroWayfindingEditor.combination.closeAria')}
+                title={t('metroWayfindingEditor.action.close')}
                 onClick={() => setIsOpen(false)}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
@@ -3901,14 +4172,12 @@ function CombinationElementFields({
                 </span>
               </button>
             </header>
-            <p className="muted">
-              支持设施图标、箭头、文字、大文字和固定或弹性空格，子元素不会超出组合框。
-            </p>
+            <p className="muted">{t('metroWayfindingEditor.combination.description')}</p>
             {element.children.length ? (
               <ol
                 className="metro-wayfinding-combination-child-list"
                 role="tablist"
-                aria-label="组合框子元素列表"
+                aria-label={t('metroWayfindingEditor.combination.listAria')}
               >
                 {element.children.map((child, index) => (
                   <li key={child.id}>
@@ -3926,16 +4195,43 @@ function CombinationElementFields({
                 ))}
               </ol>
             ) : (
-              <p className="muted metro-wayfinding-combination-empty">组合框还没有子元素。</p>
+              <p className="muted metro-wayfinding-combination-empty">
+                {t('metroWayfindingEditor.combination.empty')}
+              </p>
             )}
-            <div className="metro-wayfinding-combination-add-actions" aria-label="添加组合框子元素">
-              {[
-                ['facility', '设施图标', 'accessible'],
-                ['arrow', '箭头', 'arrow_forward'],
-                ['text', '文字', 'text_fields'],
-                ['largeText', '大文字', 'title'],
-                ['space', '空格', 'space_bar'],
-              ].map(([type, label, icon]) => (
+            <div
+              className="metro-wayfinding-combination-add-actions"
+              aria-label={t('metroWayfindingEditor.combination.addAria')}
+            >
+              {(
+                [
+                  {
+                    type: 'facility',
+                    labelKey: 'metroWayfindingEditor.combination.addFacility',
+                    icon: 'accessible',
+                  },
+                  {
+                    type: 'arrow',
+                    labelKey: 'metroWayfindingEditor.elementType.arrow',
+                    icon: 'arrow_forward',
+                  },
+                  {
+                    type: 'text',
+                    labelKey: 'metroWayfindingEditor.elementType.text',
+                    icon: 'text_fields',
+                  },
+                  {
+                    type: 'largeText',
+                    labelKey: 'metroWayfindingEditor.elementType.largeText',
+                    icon: 'title',
+                  },
+                  {
+                    type: 'space',
+                    labelKey: 'metroWayfindingEditor.combination.addSpace',
+                    icon: 'space_bar',
+                  },
+                ] as const
+              ).map(({ type, labelKey, icon }) => (
                 <button
                   key={type}
                   type="button"
@@ -3948,23 +4244,23 @@ function CombinationElementFields({
                   <span className="material-symbols-outlined" aria-hidden="true">
                     {icon}
                   </span>
-                  <span>{label}</span>
+                  <span>{t(labelKey)}</span>
                 </button>
               ))}
             </div>
             <p className="muted metro-wayfinding-combination-template-hint">
-              「线路编号」内容模板已移至编辑器上方的「插入建议」区域：选中线路后可替换本组合框的子元素，并按颜色填充或色带样式套用线路标识色。
+              {t('metroWayfindingEditor.combination.templateHint')}
             </p>
             {selectedChild ? (
               <div className="metro-wayfinding-combination-child-editor">
                 <header>
-                  <strong>{metroElementLabel(selectedChild)}</strong>
+                  <strong>{metroElementLabel(selectedChild, t)}</strong>
                   <div className="metro-wayfinding-element-actions">
                     <button
                       type="button"
                       className="icon-button"
-                      aria-label="子元素上移"
-                      title="上移"
+                      aria-label={t('metroWayfindingEditor.combination.childMoveUpAria')}
+                      title={t('metroWayfindingEditor.action.moveUp')}
                       disabled={disabled || element.children.indexOf(selectedChild) === 0}
                       onClick={() => moveChild(element.children.indexOf(selectedChild), 'up')}
                     >
@@ -3975,8 +4271,8 @@ function CombinationElementFields({
                     <button
                       type="button"
                       className="icon-button"
-                      aria-label="子元素下移"
-                      title="下移"
+                      aria-label={t('metroWayfindingEditor.combination.childMoveDownAria')}
+                      title={t('metroWayfindingEditor.action.moveDown')}
                       disabled={
                         disabled ||
                         element.children.indexOf(selectedChild) === element.children.length - 1
@@ -3990,8 +4286,8 @@ function CombinationElementFields({
                     <button
                       type="button"
                       className="icon-button"
-                      aria-label="复制子元素"
-                      title="复制"
+                      aria-label={t('metroWayfindingEditor.combination.childDuplicateAria')}
+                      title={t('metroWayfindingEditor.action.duplicate')}
                       disabled={disabled || element.children.length >= 32}
                       onClick={() => {
                         const copy = duplicateMetroWayfindingElement(
@@ -4011,8 +4307,8 @@ function CombinationElementFields({
                     <button
                       type="button"
                       className="icon-button"
-                      aria-label="删除子元素"
-                      title="删除"
+                      aria-label={t('metroWayfindingEditor.combination.childRemoveAria')}
+                      title={t('metroWayfindingEditor.action.delete')}
                       disabled={disabled}
                       onClick={() => removeChild(selectedChild.id)}
                     >
@@ -4023,14 +4319,34 @@ function CombinationElementFields({
                   </div>
                 </header>
                 <SegmentedControl
-                  label="子元素类型"
+                  label={t('metroWayfindingEditor.combination.childType')}
                   value={selectedChild.type}
                   options={[
-                    { value: 'facility', label: '设施', icon: 'accessible' },
-                    { value: 'arrow', label: '箭头', icon: 'arrow_forward' },
-                    { value: 'text', label: '文字', icon: 'text_fields' },
-                    { value: 'largeText', label: '大文字', icon: 'title' },
-                    { value: 'space', label: '空格', icon: 'space_bar' },
+                    {
+                      value: 'facility',
+                      label: t('metroWayfindingEditor.elementType.facility'),
+                      icon: 'accessible',
+                    },
+                    {
+                      value: 'arrow',
+                      label: t('metroWayfindingEditor.elementType.arrow'),
+                      icon: 'arrow_forward',
+                    },
+                    {
+                      value: 'text',
+                      label: t('metroWayfindingEditor.elementType.text'),
+                      icon: 'text_fields',
+                    },
+                    {
+                      value: 'largeText',
+                      label: t('metroWayfindingEditor.elementType.largeText'),
+                      icon: 'title',
+                    },
+                    {
+                      value: 'space',
+                      label: t('metroWayfindingEditor.elementType.spaceShort'),
+                      icon: 'space_bar',
+                    },
                   ]}
                   disabled={disabled}
                   wide
@@ -4092,7 +4408,7 @@ function CombinationElementFields({
                 <span className="material-symbols-outlined" aria-hidden="true">
                   check
                 </span>
-                完成
+                {t('metroWayfindingEditor.action.done')}
               </button>
             </footer>
           </section>
@@ -4123,6 +4439,7 @@ function CombinationFillControl({
   disabled: boolean;
   patch: (patch: Partial<MetroWayfindingElement>) => void;
 }>) {
+  const { t } = useI18n();
   const fillColor = color ?? lineColorOptions[0]?.value ?? fallbackColor;
   const fillColorOptions = mergeMetroColorOptions(
     lineColorOptions,
@@ -4146,13 +4463,21 @@ function CombinationFillControl({
   return (
     <>
       <SegmentedControl
-        label="组合框填充"
+        label={t('metroWayfindingEditor.combination.fill')}
         value={mode}
         options={[
-          { value: 'none', label: '无填充', icon: 'border_outer' },
-          { value: 'inverse', label: '反色填充', icon: 'invert_colors' },
-          { value: 'color', label: '颜色填充', icon: 'palette' },
-          { value: 'stripe', label: '无填充+色带', icon: 'view_sidebar' },
+          { value: 'none', label: t('metroWayfindingEditor.fill.none'), icon: 'border_outer' },
+          {
+            value: 'inverse',
+            label: t('metroWayfindingEditor.fill.inverse'),
+            icon: 'invert_colors',
+          },
+          { value: 'color', label: t('metroWayfindingEditor.fill.color'), icon: 'palette' },
+          {
+            value: 'stripe',
+            label: t('metroWayfindingEditor.fill.stripe'),
+            icon: 'view_sidebar',
+          },
         ]}
         disabled={disabled}
         wide
@@ -4160,7 +4485,11 @@ function CombinationFillControl({
       />
       {mode === 'color' || mode === 'stripe' ? (
         <ColorControl
-          label={mode === 'stripe' ? '色带颜色' : '组合框填充色'}
+          label={
+            mode === 'stripe'
+              ? t('metroWayfindingEditor.combination.stripeColor')
+              : t('metroWayfindingEditor.combination.fillColor')
+          }
           value={fillColor}
           palette={fillColorOptions}
           disabled={disabled}
@@ -4169,12 +4498,24 @@ function CombinationFillControl({
       ) : null}
       {mode === 'stripe' ? (
         <SegmentedControl
-          label="色带位置"
+          label={t('metroWayfindingEditor.combination.stripePosition')}
           value={stripePosition}
           options={[
-            { value: 'left', label: '左', icon: 'align_horizontal_left' },
-            { value: 'right', label: '右', icon: 'align_horizontal_right' },
-            { value: 'bottom', label: '下', icon: 'vertical_align_bottom' },
+            {
+              value: 'left',
+              label: t('metroWayfindingEditor.stripePosition.left'),
+              icon: 'align_horizontal_left',
+            },
+            {
+              value: 'right',
+              label: t('metroWayfindingEditor.stripePosition.right'),
+              icon: 'align_horizontal_right',
+            },
+            {
+              value: 'bottom',
+              label: t('metroWayfindingEditor.stripePosition.bottom'),
+              icon: 'vertical_align_bottom',
+            },
           ]}
           disabled={disabled}
           wide
@@ -4188,7 +4529,7 @@ function CombinationFillControl({
           disabled={disabled}
           onChange={(event) => patch({ frameStroke: event.currentTarget.checked })}
         />
-        <span>添加前景色描边</span>
+        <span>{t('metroWayfindingEditor.field.addForegroundStroke')}</span>
       </label>
     </>
   );
@@ -4203,21 +4544,30 @@ function SpaceElementFields({
   disabled: boolean;
   patch: (patch: Partial<MetroWayfindingElement>) => void;
 }>) {
+  const { t } = useI18n();
   return (
     <div className="metro-wayfinding-field-grid">
       <SegmentedControl
-        label="空白方式"
+        label={t('metroWayfindingEditor.space.mode')}
         value={element.mode}
         options={[
-          { value: 'fixed', label: '固定宽度', icon: 'space_bar' },
-          { value: 'flex', label: '平分剩余宽度', icon: 'arrow_range' },
+          {
+            value: 'fixed',
+            label: t('metroWayfindingEditor.space.fixed'),
+            icon: 'space_bar',
+          },
+          {
+            value: 'flex',
+            label: t('metroWayfindingEditor.space.flex'),
+            icon: 'arrow_range',
+          },
         ]}
         disabled={disabled}
         onChange={(mode) => patch({ mode })}
       />
       {element.mode === 'fixed' ? (
         <label className="material-field">
-          <span>宽度（16 像素间距单位）</span>
+          <span>{t('metroWayfindingEditor.space.width')}</span>
           <input
             type="number"
             min="1"
@@ -4236,7 +4586,7 @@ function SpaceElementFields({
           />
         </label>
       ) : (
-        <p className="muted">所有“平分剩余宽度”空白元素会均分可用空间。</p>
+        <p className="muted">{t('metroWayfindingEditor.space.flexNote')}</p>
       )}
     </div>
   );
@@ -4531,28 +4881,29 @@ function ElementColorFields({
   inheritedForegroundColor: string;
   patch: (patch: Partial<MetroWayfindingElement>) => void;
 }>) {
+  const { t } = useI18n();
   return (
     <div className="metro-wayfinding-color-row">
       <ColorControl
-        label="元素背景色"
+        label={t('metroWayfindingEditor.color.background')}
         value={element.backgroundColor ?? inheritedBackgroundColor}
         palette={backgroundColorOptions}
         disabled={disabled}
         inherit={{
           active: element.backgroundColor === undefined,
-          label: '跟随导视牌',
+          label: t('metroWayfindingEditor.color.inherit'),
           onSelect: () => patch({ backgroundColor: undefined }),
         }}
         onChange={(backgroundColor) => patch({ backgroundColor })}
       />
       <ColorControl
-        label="元素文字、线条与图标颜色"
+        label={t('metroWayfindingEditor.color.foreground')}
         value={element.foregroundColor ?? inheritedForegroundColor}
         palette={metroWayfindingForegroundPalette}
         disabled={disabled}
         inherit={{
           active: element.foregroundColor === undefined,
-          label: '跟随导视牌',
+          label: t('metroWayfindingEditor.color.inherit'),
           onSelect: () => patch({ foregroundColor: undefined }),
         }}
         onChange={(foregroundColor) => patch({ foregroundColor })}
@@ -4576,6 +4927,7 @@ function ColorControl({
   inherit?: { active: boolean; label: string; onSelect: () => void };
   onChange: (value: string) => void;
 }>) {
+  const { t } = useI18n();
   const usesPreset = palette.some((item) => item.value.toUpperCase() === value.toUpperCase());
   const selectedValue = inherit?.active ? 'inherit' : usesPreset ? value.toUpperCase() : 'custom';
   return (
@@ -4597,11 +4949,11 @@ function ColorControl({
               {item.label} · {item.value}
             </option>
           ))}
-          <option value="custom">自定义颜色</option>
+          <option value="custom">{t('metroWayfindingEditor.color.custom')}</option>
         </select>
         <input
           type="color"
-          aria-label={`${label}自定义颜色`}
+          aria-label={t('metroWayfindingEditor.color.customAria', { label })}
           value={value}
           disabled={disabled}
           onChange={(event) => onChange(event.currentTarget.value.toUpperCase())}
@@ -4746,22 +5098,30 @@ function replaceMetroWayfindingRowElements(
   };
 }
 
-function metroElementLabel(element: MetroWayfindingElement): string {
-  if (element.type === 'facility') return '设施图标 · 85 × 85';
-  if (element.type === 'arrow') return '箭头 · 85 × 85';
-  if (element.type === 'text') return `文字 · ${element.rows.length} 行`;
+function metroElementLabel(element: MetroWayfindingElement, t: Translate): string {
+  if (element.type === 'facility') return t('metroWayfindingEditor.elementLabel.facility');
+  if (element.type === 'arrow') return t('metroWayfindingEditor.elementLabel.arrow');
+  if (element.type === 'text') {
+    return t('metroWayfindingEditor.elementLabel.text', { rows: element.rows.length });
+  }
   if (element.type === 'largeText') {
-    return `大文字 · 字高 ${
-      element.frameShape !== 'none'
-        ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
-        : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE
-    }`;
+    return t('metroWayfindingEditor.elementLabel.largeText', {
+      size:
+        element.frameShape !== 'none'
+          ? METRO_WAYFINDING_LARGE_TEXT_FRAMED_FONT_SIZE
+          : METRO_WAYFINDING_LARGE_TEXT_UNFRAMED_FONT_SIZE,
+    });
   }
   if (element.type === 'combination') {
-    return `组合框 · ${Math.round(element.scale * 100)}% · ${element.children.length} 个子元素`;
+    return t('metroWayfindingEditor.elementLabel.combination', {
+      scale: Math.round(element.scale * 100),
+      count: element.children.length,
+    });
   }
-  if (element.type === 'space') return '空白元素';
-  return `分割线 · ${METRO_WAYFINDING_DIVIDER_WIDTH} × 72`;
+  if (element.type === 'space') return t('metroWayfindingEditor.elementLabel.space');
+  return t('metroWayfindingEditor.elementLabel.divider', {
+    width: METRO_WAYFINDING_DIVIDER_WIDTH,
+  });
 }
 
 function FrameShapeControl({
@@ -4773,14 +5133,19 @@ function FrameShapeControl({
   disabled: boolean;
   onChange: (value: MetroWayfindingFrameShape) => void;
 }>) {
+  const { t } = useI18n();
   return (
     <SegmentedControl
-      label="外框形状"
+      label={t('metroWayfindingEditor.frame.shape')}
       value={value}
       options={[
-        { value: 'none', label: '无', icon: 'block' },
-        { value: 'rectangle', label: '矩形', icon: 'crop_square' },
-        { value: 'circle', label: '圆形', icon: 'circle' },
+        { value: 'none', label: t('metroWayfindingEditor.frame.none'), icon: 'block' },
+        {
+          value: 'rectangle',
+          label: t('metroWayfindingEditor.frame.rectangle'),
+          icon: 'crop_square',
+        },
+        { value: 'circle', label: t('metroWayfindingEditor.frame.circle'), icon: 'circle' },
       ]}
       disabled={disabled}
       wide
@@ -4806,6 +5171,7 @@ function FrameFillControl({
   disabled: boolean;
   patch: (patch: Partial<MetroWayfindingElement>) => void;
 }>) {
+  const { t } = useI18n();
   const fillColor = color ?? lineColorOptions[0]?.value ?? fallbackColor;
   const fillColorOptions = mergeMetroColorOptions(
     lineColorOptions,
@@ -4814,12 +5180,16 @@ function FrameFillControl({
   return (
     <>
       <SegmentedControl
-        label="外框填充"
+        label={t('metroWayfindingEditor.frame.fill')}
         value={mode}
         options={[
-          { value: 'none', label: '无填充', icon: 'border_outer' },
-          { value: 'inverse', label: '反色填充', icon: 'invert_colors' },
-          { value: 'color', label: '颜色填充', icon: 'palette' },
+          { value: 'none', label: t('metroWayfindingEditor.fill.none'), icon: 'border_outer' },
+          {
+            value: 'inverse',
+            label: t('metroWayfindingEditor.fill.inverse'),
+            icon: 'invert_colors',
+          },
+          { value: 'color', label: t('metroWayfindingEditor.fill.color'), icon: 'palette' },
         ]}
         disabled={disabled}
         wide
@@ -4832,7 +5202,7 @@ function FrameFillControl({
       />
       {mode === 'color' ? (
         <ColorControl
-          label="外框填充色"
+          label={t('metroWayfindingEditor.frame.fillColor')}
           value={fillColor}
           palette={fillColorOptions}
           disabled={disabled}
@@ -4847,7 +5217,7 @@ function FrameFillControl({
             disabled={disabled}
             onChange={(event) => patch({ frameStroke: event.currentTarget.checked })}
           />
-          <span>添加前景色描边</span>
+          <span>{t('metroWayfindingEditor.field.addForegroundStroke')}</span>
         </label>
       ) : null}
     </>

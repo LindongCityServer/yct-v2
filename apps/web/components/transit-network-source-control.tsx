@@ -23,6 +23,9 @@ import {
   resolveMaterialTransitNetworkLineNames,
 } from '../lib/rmp-transit-network';
 import { deriveMetroWayfindingLineIdentity } from '../lib/metro-wayfinding-line-source';
+import { useI18n } from '../lib/client-i18n';
+
+type Translate = ReturnType<typeof useI18n>['t'];
 
 interface TransitNetworkLineNameDraft {
   name: string;
@@ -43,7 +46,9 @@ interface TransitNetworkSampleResponse {
   snapshot: MaterialTransitNetworkSnapshot;
 }
 
-async function fetchDefaultTransitNetworkSample(): Promise<TransitNetworkSampleResponse> {
+async function fetchDefaultTransitNetworkSample(
+  t: Translate,
+): Promise<TransitNetworkSampleResponse> {
   const response = await fetch(appPath('/api/materials/transit-network-projects/sample'), {
     cache: 'no-store',
   });
@@ -59,7 +64,7 @@ async function fetchDefaultTransitNetworkSample(): Promise<TransitNetworkSampleR
     !data.licenseUrl ||
     !data.snapshot
   ) {
-    throw new Error(data.message ?? '默认示例线网暂时无法加载。');
+    throw new Error(data.message ?? t('transitNetworkSource.error.sampleLoadFailed'));
   }
   return data as TransitNetworkSampleResponse;
 }
@@ -73,6 +78,7 @@ export function TransitNetworkSourceControl({
   initialSource?: TransitNetworkSourceKind;
   initialSnapshot?: MaterialTransitNetworkSnapshot;
 }>) {
+  const { locale, t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const projectLoadRevisionRef = useRef(0);
   const sourceRef = useRef<TransitNetworkSourceKind>(initialSource ?? 'rmp');
@@ -137,7 +143,7 @@ export function TransitNetworkSourceControl({
     if (!file) return;
     try {
       if (file.size > RMP_TRANSIT_NETWORK_MAX_FILE_SIZE) {
-        throw new Error('RMP 项目文件不能超过 5 MB。');
+        throw new Error(t('transitNetworkSource.error.fileTooLarge'));
       }
       const nextSnapshot = parseRmpTransitNetworkProject(await file.text());
       projectLoadRevisionRef.current += 1;
@@ -179,26 +185,32 @@ export function TransitNetworkSourceControl({
         };
         if (response.status === 401) {
           setProjectId('');
-          setErrorMessage('未登录，当前导入仅在本页有效。');
+          setErrorMessage(t('transitNetworkSource.error.notSignedIn'));
           return;
         }
         if (publishLoginRequiredForResponse(response)) {
           setProjectId('');
           return;
         }
-        if (!response.ok) throw new Error(data.message ?? '无法暂存 RMP 项目。');
+        if (!response.ok) throw new Error(data.message ?? t('transitNetworkSource.error.persistFailed'));
         setProjectId(data.id);
         setSnapshot(data.snapshot);
       } catch (error) {
         setProjectId('');
         setErrorMessage(
-          `${error instanceof Error ? error.message : '无法暂存 RMP 项目。'} 当前导入仅在本页有效。`,
+          t('transitNetworkSource.error.persistFailedLocalOnly', {
+            message:
+              error instanceof Error
+                ? error.message
+                : t('transitNetworkSource.error.persistFailed'),
+          }),
         );
       } finally {
         setIsPersisting(false);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : '无法读取 RMP 项目文件。';
+      const message =
+        error instanceof Error ? error.message : t('transitNetworkSource.error.readFailed');
       setErrorMessage(message);
       publishTransitNetworkImportFailed({ studioId, fileName: file.name, message });
     }
@@ -219,10 +231,12 @@ export function TransitNetworkSourceControl({
         }
         if (!response.ok) {
           const data = (await response.json()) as { message?: string };
-          throw new Error(data.message ?? '无法删除暂存的线网项目。');
+          throw new Error(data.message ?? t('transitNetworkSource.error.deleteFailed'));
         }
       } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : '无法删除暂存的线网项目。');
+        setErrorMessage(
+          error instanceof Error ? error.message : t('transitNetworkSource.error.deleteFailed'),
+        );
         setIsPersisting(false);
         return;
       }
@@ -251,7 +265,7 @@ export function TransitNetworkSourceControl({
     setIsPersisting(false);
     setIsProjectLoading(true);
     try {
-      const sample = await fetchDefaultTransitNetworkSample();
+      const sample = await fetchDefaultTransitNetworkSample(t);
       if (projectLoadRevisionRef.current !== loadRevision) return;
       setSnapshot(sample.snapshot);
       setProjectOrigin('sample');
@@ -271,7 +285,12 @@ export function TransitNetworkSourceControl({
     } catch (error) {
       if (projectLoadRevisionRef.current !== loadRevision) return;
       setErrorMessage(
-        `${error instanceof Error ? error.message : '默认示例线网暂时无法加载。'} 仍可使用服务器线网或导入本地项目。`,
+        t('transitNetworkSource.error.sampleLoadFailedHint', {
+          message:
+            error instanceof Error
+              ? error.message
+              : t('transitNetworkSource.error.sampleLoadFailed'),
+        }),
       );
     } finally {
       if (projectLoadRevisionRef.current === loadRevision) setIsProjectLoading(false);
@@ -339,7 +358,7 @@ export function TransitNetworkSourceControl({
         if (publishLoginRequiredForResponse(response)) {
           return;
         }
-        if (!response.ok) throw new Error(data.message ?? '无法保存线路名称。');
+        if (!response.ok) throw new Error(data.message ?? t('transitNetworkSource.error.saveLineNamesFailed'));
         savedSnapshot = data.snapshot;
       }
       setSnapshot(savedSnapshot);
@@ -347,13 +366,15 @@ export function TransitNetworkSourceControl({
         projectId
           ? ''
           : projectOrigin === 'sample'
-            ? '示例项目的线路名称调整仅在本页有效。'
-            : '线路名称仅在本页有效；项目尚未成功暂存。',
+            ? t('transitNetworkSource.notice.lineNamesSampleLocalOnly')
+            : t('transitNetworkSource.notice.lineNamesPendingPersist'),
       );
       setIsLineNameEditorOpen(false);
       publishTransitNetworkProjectSnapshotChanged({ studioId, snapshot: savedSnapshot });
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '无法保存线路名称。');
+      setErrorMessage(
+        error instanceof Error ? error.message : t('transitNetworkSource.error.saveLineNamesFailed'),
+      );
     } finally {
       setIsPersisting(false);
     }
@@ -411,7 +432,7 @@ export function TransitNetworkSourceControl({
           message?: string;
         };
         if (publishLoginRequiredForResponse(response)) return;
-        if (!response.ok) throw new Error(data.message ?? '无法保存站点名称。');
+        if (!response.ok) throw new Error(data.message ?? t('transitNetworkSource.error.saveStationNamesFailed'));
         savedSnapshot = data.snapshot;
       }
       setSnapshot(savedSnapshot);
@@ -419,13 +440,17 @@ export function TransitNetworkSourceControl({
         projectId
           ? ''
           : projectOrigin === 'sample'
-            ? '示例项目的站点名称调整仅在本页有效。'
-            : '站点名称仅在本页有效；项目尚未成功暂存。',
+            ? t('transitNetworkSource.notice.stationNamesSampleLocalOnly')
+            : t('transitNetworkSource.notice.stationNamesPendingPersist'),
       );
       setIsStationNameEditorOpen(false);
       publishTransitNetworkProjectSnapshotChanged({ studioId, snapshot: savedSnapshot });
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '无法保存站点名称。');
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : t('transitNetworkSource.error.saveStationNamesFailed'),
+      );
     } finally {
       setIsPersisting(false);
     }
@@ -442,7 +467,7 @@ export function TransitNetworkSourceControl({
         setSnapshot(initialSnapshot);
         setProjectOrigin('imported');
         setProjectId('');
-        setFileName('本机草稿线网');
+        setFileName(t('transitNetworkSource.localDraftName'));
         setIsProjectLoading(false);
         if (sourceRef.current === 'rmp') {
           publishTransitNetworkSourceChanged({
@@ -486,7 +511,7 @@ export function TransitNetworkSourceControl({
         return;
       }
       try {
-        const sample = await fetchDefaultTransitNetworkSample();
+        const sample = await fetchDefaultTransitNetworkSample(t);
         if (cancelled || projectLoadRevisionRef.current !== loadRevision) return;
         setProjectOrigin('sample');
         setSnapshot(sample.snapshot);
@@ -507,7 +532,12 @@ export function TransitNetworkSourceControl({
       } catch (error) {
         if (cancelled || projectLoadRevisionRef.current !== loadRevision) return;
         setErrorMessage(
-          `${error instanceof Error ? error.message : '默认示例线网暂时无法加载。'} 仍可使用服务器线网或导入本地项目。`,
+          t('transitNetworkSource.error.sampleLoadFailedHint', {
+          message:
+            error instanceof Error
+              ? error.message
+              : t('transitNetworkSource.error.sampleLoadFailed'),
+        }),
         );
       } finally {
         if (!cancelled && projectLoadRevisionRef.current === loadRevision) {
@@ -544,13 +574,13 @@ export function TransitNetworkSourceControl({
     >
       <div className="transit-network-source-heading">
         <div>
-          <h2 id={`${studioId}-network-source-title`}>线网数据</h2>
+          <h2 id={`${studioId}-network-source-title`}>{t('transitNetworkSource.title')}</h2>
           <span>
             {source === 'rmp'
               ? projectOrigin === 'sample'
-                ? 'RMP 画廊项目'
-                : 'RMP 项目'
-              : '服务器'}
+                ? t('transitNetworkSource.origin.sample')
+                : t('transitNetworkSource.origin.rmp')
+              : t('transitNetworkSource.origin.server')}
           </span>
         </div>
         <button
@@ -560,14 +590,24 @@ export function TransitNetworkSourceControl({
               ? 'secondary-action-button transit-network-heading-import-button'
               : 'icon-button'
           }
-          aria-label={projectOrigin === 'sample' ? '导入自己的 RMP 项目' : '导入 RMP 项目'}
-          title={projectOrigin === 'sample' ? '导入自己的 RMP 项目' : '导入 RMP 项目'}
+          aria-label={
+            projectOrigin === 'sample'
+              ? t('transitNetworkSource.import.own')
+              : t('transitNetworkSource.import.default')
+          }
+          title={
+            projectOrigin === 'sample'
+              ? t('transitNetworkSource.import.own')
+              : t('transitNetworkSource.import.default')
+          }
           onClick={() => inputRef.current?.click()}
         >
           <span className="material-symbols-outlined" aria-hidden="true">
             upload_file
           </span>
-          {projectOrigin === 'sample' ? <span>导入</span> : null}
+          {projectOrigin === 'sample' ? (
+            <span>{t('transitNetworkSource.import.short')}</span>
+          ) : null}
         </button>
         <input
           ref={inputRef}
@@ -578,13 +618,17 @@ export function TransitNetworkSourceControl({
         />
       </div>
 
-      <div className="material-mode-switch" role="group" aria-label="线网数据来源">
+      <div
+        className="material-mode-switch"
+        role="group"
+        aria-label={t('transitNetworkSource.sourceAria')}
+      >
         <button
           type="button"
           className={source === 'server' ? 'is-active' : ''}
           onClick={() => selectSource('server')}
         >
-          服务器线网
+          {t('transitNetworkSource.source.server')}
         </button>
         <button
           type="button"
@@ -592,7 +636,11 @@ export function TransitNetworkSourceControl({
           disabled={!snapshot}
           onClick={() => selectSource('rmp')}
         >
-          {isProjectLoading ? '正在加载' : projectOrigin === 'sample' ? '示例线网' : '导入项目'}
+          {isProjectLoading
+            ? t('transitNetworkSource.source.loading')
+            : projectOrigin === 'sample'
+              ? t('transitNetworkSource.source.sample')
+              : t('transitNetworkSource.source.imported')}
         </button>
       </div>
 
@@ -607,27 +655,36 @@ export function TransitNetworkSourceControl({
               <strong title={fileName}>{fileName}</strong>
             )}
             <span>
-              RMP v{snapshot.version} · {stationCount} 站 ·{' '}
-              {unnamedStations.length ? `${unnamedStations.length} 站待补名` : '站名完整'} ·{' '}
-              {projectLines.length} 条线路 · {snapshot.edges.length} 条连接 ·{' '}
+              RMP v{snapshot.version} ·{' '}
+              {t('transitNetworkSource.summary.stationCount', { count: stationCount })} ·{' '}
+              {unnamedStations.length
+                ? t('transitNetworkSource.summary.stationsUnnamed', {
+                    count: unnamedStations.length,
+                  })
+                : t('transitNetworkSource.summary.stationsNamed')}{' '}
+              · {t('transitNetworkSource.summary.lineCount', { count: projectLines.length })} ·{' '}
+              {t('transitNetworkSource.summary.edgeCount', { count: snapshot.edges.length })} ·{' '}
               {isPersisting
-                ? '正在暂存'
+                ? t('transitNetworkSource.status.persisting')
                 : projectId
-                  ? '已暂存'
+                  ? t('transitNetworkSource.status.persisted')
                   : projectOrigin === 'sample'
-                    ? '画廊示例'
-                    : '仅本页'}
+                    ? t('transitNetworkSource.status.gallerySample')
+                    : t('transitNetworkSource.status.localOnly')}
             </span>
             {projectOrigin === 'sample' ? (
               <span>
-                来源：RMP 画廊 ·{' '}
+                {t('transitNetworkSource.summary.source')}{' '}
                 <a href={sampleLicenseUrl} target="_blank" rel="noreferrer">
                   {sampleLicenseName}
                 </a>
               </span>
             ) : null}
           </div>
-          <div className="transit-network-palette" aria-label={`${palette.length} 种线路配色`}>
+          <div
+            className="transit-network-palette"
+            aria-label={t('transitNetworkSource.palette.aria', { count: palette.length })}
+          >
             {palette.slice(0, 8).map((option) => (
               <span
                 key={option.value}
@@ -642,22 +699,30 @@ export function TransitNetworkSourceControl({
               <button
                 type="button"
                 className="transit-network-maintenance-button"
-                aria-label={`补全 ${unnamedStations.length} 个未命名站点`}
-                title={`补全 ${unnamedStations.length} 个未命名站点`}
+                aria-label={t('transitNetworkSource.action.fillStationNamesAria', {
+                  count: unnamedStations.length,
+                })}
+                title={t('transitNetworkSource.action.fillStationNamesAria', {
+                  count: unnamedStations.length,
+                })}
                 disabled={isPersisting}
                 onClick={openStationNameEditor}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
                   edit_location_alt
                 </span>
-                <span>补站名 {unnamedStations.length}</span>
+                <span>
+                  {t('transitNetworkSource.action.fillStationNames', {
+                    count: unnamedStations.length,
+                  })}
+                </span>
               </button>
             ) : null}
             <button
               type="button"
               className="icon-button"
-              aria-label="配置项目线路名称"
-              title="配置项目线路名称"
+              aria-label={t('transitNetworkSource.action.configureLineNames')}
+              title={t('transitNetworkSource.action.configureLineNames')}
               onClick={openLineNameEditor}
             >
               <span className="material-symbols-outlined" aria-hidden="true">
@@ -668,8 +733,8 @@ export function TransitNetworkSourceControl({
               <button
                 type="button"
                 className="icon-button"
-                aria-label="移除已导入项目"
-                title="移除已导入项目"
+                aria-label={t('transitNetworkSource.action.removeImported')}
+                title={t('transitNetworkSource.action.removeImported')}
                 disabled={isPersisting}
                 onClick={() => void removeProject()}
               >
@@ -689,7 +754,7 @@ export function TransitNetworkSourceControl({
           <span className="material-symbols-outlined" aria-hidden="true">
             upload_file
           </span>
-          导入项目
+          {t('transitNetworkSource.import.project')}
         </button>
       )}
 
@@ -717,12 +782,14 @@ export function TransitNetworkSourceControl({
             }}
           >
             <div className="section-heading">
-              <h2 id={`${studioId}-line-name-dialog-title`}>配置项目线路名称</h2>
+              <h2 id={`${studioId}-line-name-dialog-title`}>
+                {t('transitNetworkSource.lineName.title')}
+              </h2>
               <button
                 type="button"
                 className="icon-button"
-                aria-label="关闭"
-                title="关闭"
+                aria-label={t('transitNetworkSource.action.close')}
+                title={t('transitNetworkSource.action.close')}
                 onClick={() => setIsLineNameEditorOpen(false)}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
@@ -731,9 +798,13 @@ export function TransitNetworkSourceControl({
               </button>
             </div>
             <p className="transit-network-line-name-hint">
-              RMP 存档里的线路键（如 <code>sh2</code>、<code>bj1</code>）只是绘图用的颜色命名，
-              不是线路名。此处已按线路键的编号部分预填（<code>sh2</code> → 2号线），
-              请确认或改为正式名称；导视牌的「线路编号」模板以这里填写的名称为准。
+              {t('transitNetworkSource.lineName.hintPart1')}
+              <code>sh2</code>
+              {t('transitNetworkSource.lineName.hintPart2')}
+              <code>bj1</code>
+              {t('transitNetworkSource.lineName.hintPart3')}
+              <code>sh2</code>
+              {t('transitNetworkSource.lineName.hintPart4')}
             </p>
             <div className="transit-network-line-name-list">
               {projectLines.map((line, index) => (
@@ -747,8 +818,10 @@ export function TransitNetworkSourceControl({
                     value={lineNameDraft[line.id]?.name ?? ''}
                     maxLength={120}
                     required={Boolean(lineNameDraft[line.id]?.secondaryName.trim())}
-                    aria-label={`${line.lineKey}主名称`}
-                    placeholder="主名称"
+                    aria-label={t('transitNetworkSource.lineName.primaryAria', {
+                      key: line.lineKey,
+                    })}
+                    placeholder={t('transitNetworkSource.lineName.primaryPlaceholder')}
                     onChange={(event) => {
                       const value = event.currentTarget.value;
                       setLineNameDraft((current) => ({
@@ -763,8 +836,10 @@ export function TransitNetworkSourceControl({
                   <input
                     value={lineNameDraft[line.id]?.secondaryName ?? ''}
                     maxLength={120}
-                    aria-label={`${line.lineKey}副名称`}
-                    placeholder="副名称"
+                    aria-label={t('transitNetworkSource.lineName.secondaryAria', {
+                      key: line.lineKey,
+                    })}
+                    placeholder={t('transitNetworkSource.lineName.secondaryPlaceholder')}
                     onChange={(event) => {
                       const value = event.currentTarget.value;
                       setLineNameDraft((current) => ({
@@ -781,10 +856,12 @@ export function TransitNetworkSourceControl({
             </div>
             <div className="material-action-row">
               <button type="button" onClick={() => setIsLineNameEditorOpen(false)}>
-                取消
+                {t('transitNetworkSource.action.cancel')}
               </button>
               <button type="submit" className="primary-action-button">
-                {isPersisting ? '正在保存' : '保存线路名称'}
+                {isPersisting
+                  ? t('transitNetworkSource.action.saving')
+                  : t('transitNetworkSource.lineName.save')}
               </button>
             </div>
           </form>
@@ -809,12 +886,14 @@ export function TransitNetworkSourceControl({
             }}
           >
             <div className="section-heading">
-              <h2 id={`${studioId}-station-name-dialog-title`}>补全未命名站点</h2>
+              <h2 id={`${studioId}-station-name-dialog-title`}>
+                {t('transitNetworkSource.stationName.title')}
+              </h2>
               <button
                 type="button"
                 className="icon-button"
-                aria-label="关闭"
-                title="关闭"
+                aria-label={t('transitNetworkSource.action.close')}
+                title={t('transitNetworkSource.action.close')}
                 onClick={() => setIsStationNameEditorOpen(false)}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
@@ -834,8 +913,10 @@ export function TransitNetworkSourceControl({
                       <strong>{station.id}</strong>
                       <span>
                         {nearbyStationNames.length
-                          ? `相邻：${nearbyStationNames.join('、')}`
-                          : '相邻站名不可用'}
+                          ? t('transitNetworkSource.stationName.nearby', {
+                              names: nearbyStationNames.join(locale === 'en' ? ', ' : '、'),
+                            })
+                          : t('transitNetworkSource.stationName.nearbyUnavailable')}
                       </span>
                     </div>
                     <input
@@ -843,8 +924,10 @@ export function TransitNetworkSourceControl({
                       value={stationNameDraft[station.id]?.name ?? ''}
                       maxLength={160}
                       required={Boolean(stationNameDraft[station.id]?.secondaryName.trim())}
-                      aria-label={`${station.id}主站名`}
-                      placeholder="主站名"
+                      aria-label={t('transitNetworkSource.stationName.primaryAria', {
+                        id: station.id,
+                      })}
+                      placeholder={t('transitNetworkSource.stationName.primaryPlaceholder')}
                       onChange={(event) => {
                         const value = event.currentTarget.value;
                         setStationNameDraft((current) => ({
@@ -859,8 +942,10 @@ export function TransitNetworkSourceControl({
                     <input
                       value={stationNameDraft[station.id]?.secondaryName ?? ''}
                       maxLength={160}
-                      aria-label={`${station.id}副站名`}
-                      placeholder="副站名"
+                      aria-label={t('transitNetworkSource.stationName.secondaryAria', {
+                        id: station.id,
+                      })}
+                      placeholder={t('transitNetworkSource.stationName.secondaryPlaceholder')}
                       onChange={(event) => {
                         const value = event.currentTarget.value;
                         setStationNameDraft((current) => ({
@@ -878,10 +963,12 @@ export function TransitNetworkSourceControl({
             </div>
             <div className="material-action-row">
               <button type="button" onClick={() => setIsStationNameEditorOpen(false)}>
-                取消
+                {t('transitNetworkSource.action.cancel')}
               </button>
               <button type="submit" className="primary-action-button" disabled={isPersisting}>
-                {isPersisting ? '正在保存' : '保存已填写站名'}
+                {isPersisting
+                  ? t('transitNetworkSource.action.saving')
+                  : t('transitNetworkSource.stationName.save')}
               </button>
             </div>
           </form>

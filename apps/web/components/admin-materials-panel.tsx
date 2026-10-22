@@ -7,7 +7,7 @@ import { AdminRefreshButton } from './admin-refresh-button';
 import { METRO_WAYFINDING_TEMPLATE_ID, parseMetroWayfindingLayout } from '../lib/metro-wayfinding';
 import { MetroWayfindingExamplePreviewElement } from './metro-wayfinding-editor';
 
-type MaterialFamily = 'road_sign' | 'address_sign' | 'bus_stop' | 'custom';
+type MaterialFamily = 'road_sign' | 'address_sign' | 'bus_stop' | 'metro_line' | 'custom';
 type TemplateStatus = 'draft' | 'published' | 'archived';
 
 interface MaterialCanvas {
@@ -109,6 +109,7 @@ const familyLabels: Record<MaterialFamily, string> = {
   road_sign: '道路标志',
   address_sign: '地名与楼牌',
   bus_stop: '公交站牌',
+  metro_line: '地铁线路图',
   custom: '其他物料',
 };
 

@@ -269,6 +269,48 @@ export function findMaterialTransitNetworkLineByKey(
 }
 
 /**
+ * 按线路几何顺序列出站点，供横板线路图使用。
+ * 从线路端点沿相邻边一路走到底；分支线只取第一条可行路径。
+ */
+export function listMaterialTransitNetworkLineStations(
+  snapshot: MaterialTransitNetworkSnapshot,
+  lineKey: string,
+): Array<{ id: string; name: string }> {
+  const line = findMaterialTransitNetworkLineByKey(snapshot, lineKey);
+  if (!line) {
+    return [];
+  }
+  const adjacency = createLineAdjacency(snapshot, line.edgeIds);
+  const nodeById = new Map(snapshot.nodes.map((node) => [node.id, node] as const));
+  const stationNodeIds = Array.from(line.nodeIds).filter(
+    (nodeId) => nodeById.get(nodeId)?.kind === 'station',
+  );
+  if (!stationNodeIds.length) {
+    return [];
+  }
+  const start =
+    stationNodeIds.find((nodeId) => (adjacency.get(nodeId)?.length ?? 0) === 1) ??
+    stationNodeIds[0];
+  const ordered: string[] = [];
+  const visited = new Set<string>();
+  let current: string | undefined = start;
+  while (current && !visited.has(current)) {
+    visited.add(current);
+    const node = nodeById.get(current);
+    if (node?.kind === 'station' && node.names[0]) {
+      ordered.push(current);
+    }
+    current = (adjacency.get(current) ?? []).find(
+      (candidate) => !visited.has(candidate.nextNodeId),
+    )?.nextNodeId;
+  }
+  return ordered.map((nodeId) => ({
+    id: nodeId,
+    name: nodeById.get(nodeId)!.names[0]!,
+  }));
+}
+
+/**
  * 从当前站点按图上方向选定一条出边，并分别向线路两端追踪站序。
  * RMP 不保存运营意义上的上下行，因此这里的方向只用于确定“前方”是哪一侧。
  */

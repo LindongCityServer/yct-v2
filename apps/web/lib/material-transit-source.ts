@@ -20,13 +20,17 @@ import { readMaterialTransitOverview } from './transit-data';
 import { formatServiceTimeRange } from './material-service-time';
 import {
   findMaterialTransitNetworkLine,
+  findMaterialTransitNetworkLineByKey,
   findMaterialTransitNetworkNodeByName,
   findMaterialTransitNetworkPath,
   getMaterialTransitNetworkEdgePoints,
+  listMaterialTransitNetworkLines,
+  listMaterialTransitNetworkLineStations,
   resolveMaterialTransitNetworkRoute,
   type MaterialTransitNetworkLineMatch,
   type MaterialTransitNetworkRoute,
 } from './rmp-transit-network';
+import { extractMetroWayfindingLineNumber } from './metro-wayfinding';
 import {
   buildVisualRoadGraph,
   resolveVisualRoute,
@@ -223,9 +227,19 @@ export async function listMaterialTransitStations(): Promise<MaterialTransitStat
 export async function resolveTransitLineMaterialInput(input: {
   lineId: string;
   stationSourceId?: string;
+  networkLineKey?: string;
+  networkNodeId?: string;
   fields: MaterialTemplateField[];
   networkGeometry?: MaterialTransitNetworkSnapshot;
 }): Promise<{ values: Record<string, string>; sourceRef: string }> {
+  if (input.networkLineKey && input.networkGeometry) {
+    return resolveProjectTransitLineMaterialInput({
+      lineKey: input.networkLineKey,
+      nodeId: input.networkNodeId,
+      fields: input.fields,
+      networkGeometry: input.networkGeometry,
+    });
+  }
   const overview = await readMaterialTransitOverview();
   const line = overview.lines.find((item) => item.id === input.lineId);
   if (!line) {
@@ -255,6 +269,16 @@ export async function resolveTransitLineMaterialInput(input: {
       })
     : undefined;
   candidates.accentColor = networkLineMatch?.color ?? line.color ?? '';
+  if (input.fields.some((field) => field.key === 'routeStations')) {
+    // 地铁横板线路图以整条线路为输入，站序、当前站与换乘线路都由所选线路派生。
+    candidates.routeStations = line.stationNames.join('\n');
+    candidates.currentStationIndex = String(
+      Math.max(selectedStop ? line.stationStops.indexOf(selectedStop) : 0, 0),
+    );
+    if (input.fields.some((field) => field.key === 'transferLines')) {
+      candidates.transferLines = buildTransitLineTransferEntries(overview.lines, line);
+    }
+  }
   return {
     values: mapTemplateFields(input.fields, candidates),
     sourceRef: appendTransitNetworkSourceRef(
@@ -263,6 +287,105 @@ export async function resolveTransitLineMaterialInput(input: {
       Boolean(networkLineMatch),
     ),
   };
+}
+
+function resolveProjectTransitLineMaterialInput(input: {
+  lineKey: string;
+  nodeId?: string;
+  fields: MaterialTemplateField[];
+  networkGeometry: MaterialTransitNetworkSnapshot;
+}): { values: Record<string, string>; sourceRef: string } {
+  const line = findMaterialTransitNetworkLineByKey(input.networkGeometry, input.lineKey);
+  if (!line) {
+    throw new Error('所选项目线路不存在。');
+  }
+  const stations = listMaterialTransitNetworkLineStations(input.networkGeometry, input.lineKey);
+  if (!stations.length) {
+    throw new Error('所选项目线路没有可用站点。');
+  }
+  const currentStationIndex = Math.max(
+    stations.findIndex((station) => station.id === input.nodeId),
+    0,
+  );
+  const lineOptions = listMaterialTransitNetworkLines(input.networkGeometry);
+  const optionByKey = new Map(lineOptions.map((option) => [option.lineKey, option] as const));
+  const nodeById = new Map(input.networkGeometry.nodes.map((node) => [node.id, node] as const));
+  const transferLines = stations
+    .flatMap((station) => {
+      const node = nodeById.get(station.id);
+      if (!node) {
+        return [];
+      }
+      const others = node.lineKeys
+        .filter((lineKey) => lineKey !== line.lineKey)
+        .flatMap((lineKey) => {
+          const option = optionByKey.get(lineKey);
+          return option ? [option] : [];
+        })
+        .slice(0, 4);
+      if (!others.length) {
+        return [];
+      }
+      return [
+        `${station.name}=${others
+          .map((option) => {
+            const number =
+              extractMetroWayfindingLineNumber(
+                option.hasConfiguredName ? option.label : option.lineKey,
+              ) || option.label;
+            return `${number}:${option.color.toUpperCase()}`;
+          })
+          .join(',')}`,
+      ];
+    })
+    .join(';');
+  const candidates: Record<string, string> = {
+    lineName: line.lineName ?? line.lineKey,
+    stationName: stations[currentStationIndex]?.name ?? '',
+    destinationName: stations.at(-1)?.name ?? '',
+    accentColor: line.color,
+    routeStations: stations.map((station) => station.name).join('\n'),
+    currentStationIndex: String(currentStationIndex),
+    transferLines,
+  };
+  return {
+    values: mapTemplateFields(input.fields, candidates),
+    sourceRef: `transit_network_project_line:v${input.networkGeometry.version};line=${input.lineKey};station=${input.nodeId ?? ''}`,
+  };
+}
+
+function buildTransitLineTransferEntries(
+  lines: TransitLineSummary[],
+  selectedLine: TransitLineSummary,
+): string {
+  const entries: string[] = [];
+  for (const stationName of selectedLine.stationNames) {
+    const transfers = new Map<string, string>();
+    for (const line of lines) {
+      if (
+        line.id === selectedLine.id ||
+        line.mode !== selectedLine.mode ||
+        !line.stationNames.includes(stationName)
+      ) {
+        continue;
+      }
+      const number = parseMaterialTransitLineDisplay(line.name).number.trim();
+      if (!number) {
+        continue;
+      }
+      const color = /^#[0-9A-Fa-f]{6}$/u.test(line.color ?? '') ? line.color!.toUpperCase() : '';
+      transfers.set(number, color);
+    }
+    if (transfers.size) {
+      entries.push(
+        `${stationName}=${Array.from(transfers.entries())
+          .slice(0, 4)
+          .map(([number, color]) => (color ? `${number}:${color}` : number))
+          .join(',')}`,
+      );
+    }
+  }
+  return entries.join(';');
 }
 
 export async function resolveTransitStationMaterialInput(

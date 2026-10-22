@@ -68,6 +68,8 @@ export const materialTemplateFieldSchema = z
           'transit_horizontal_station_list',
           'transit_route_map',
           'metro_wayfinding',
+          'metro_line_map_modern',
+          'metro_line_map_classic',
         ]),
         layoutWidth: z.number().positive().max(32_768),
         layoutHeight: z.number().positive().max(32_768),
@@ -165,9 +167,12 @@ export const materialTemplateFieldSchema = z
       });
     }
     if (
-      ['transit_station_list', 'transit_horizontal_station_list'].includes(
-        field.glyph?.renderer ?? '',
-      ) &&
+      [
+        'transit_station_list',
+        'transit_horizontal_station_list',
+        'metro_line_map_modern',
+        'metro_line_map_classic',
+      ].includes(field.glyph?.renderer ?? '') &&
       !field.glyph?.currentIndexFieldKey
     ) {
       ctx.addIssue({
@@ -176,7 +181,12 @@ export const materialTemplateFieldSchema = z
         path: ['glyph', 'currentIndexFieldKey'],
       });
     }
-    if (field.glyph?.renderer === 'transit_route_map' && !field.glyph.colorFieldKey) {
+    if (
+      ['transit_route_map', 'metro_line_map_modern', 'metro_line_map_classic'].includes(
+        field.glyph?.renderer ?? '',
+      ) &&
+      !field.glyph?.colorFieldKey
+    ) {
       ctx.addIssue({
         code: 'custom',
         message: '线路地图字形必须指定颜色字段。',
@@ -210,7 +220,7 @@ export const materialTemplateDraftSchema = z
   .object({
     title: z.string().trim().min(1).max(100),
     description: z.string().trim().max(500).optional(),
-    family: z.enum(['road_sign', 'address_sign', 'bus_stop', 'custom']),
+    family: z.enum(['road_sign', 'address_sign', 'bus_stop', 'metro_line', 'custom']),
     // Figma 导出的精确 SVG 路径可能超过 160 KiB，例如复杂公交站牌详情模板。
     source: z.string().trim().min(1).max(384_000),
     fields: z.array(materialTemplateFieldSchema).min(1).max(80),
@@ -357,6 +367,9 @@ export const materialServerSourceSchema = z.union([
     kind: z.literal('transit_line'),
     lineId: idSchema,
     stationSourceId: idSchema.optional(),
+    // 导入项目线路：lineId 仍用于引用线路键，network 字段用于在项目快照内解析站序。
+    networkLineKey: z.string().trim().min(1).max(120).optional(),
+    networkNodeId: z.string().trim().min(1).max(120).optional(),
   }),
   materialTransitStationServerSourceSchema,
   materialTransitStationNetworkSourceSchema,
