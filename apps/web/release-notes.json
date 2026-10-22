@@ -5,7 +5,7 @@
     {
       "version": "2.12.7",
       "releasedAt": "2026-10-22T14:51:12.279Z",
-      "sourceFingerprint": "dabfdd56edd6794deb50879c98fa742ea1d1bbd62077f09327fe83095305c65c",
+      "sourceFingerprint": "884a26e5cb636433e8a01498c5ff08dac101971d3ec50625a489c640cec1196f",
       "themes": ["materials", "i18n", "web"],
       "changes": [
         {
