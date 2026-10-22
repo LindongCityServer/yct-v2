@@ -3798,7 +3798,7 @@ export function MapStage() {
                       ? `/admin/transit?section=lines&lineId=${encodeURIComponent(focusedTransitLine.id)}`
                       : `/admin/map-poi?markerId=${encodeURIComponent(focusedMarker.id)}`
                   }
-                  label={focusedTransitLine ? '编辑线路' : '编辑 POI'}
+                  label={focusedTransitLine ? t('admin.editLine') : t('admin.editPoi')}
                 />
               ) : null}
               <button
@@ -9117,6 +9117,35 @@ function getTransitAccessDetailIcon(mode: RouteTransportMode): string {
   return mode === 'metro' ? 'subway' : 'directions_walk';
 }
 
+// 登乘/离开的导航口令按交通方式区分：地铁为封闭站厅（进站/出站），轮渡为码头（上船/下船），其余为车辆（上车/下车）
+function formatTransitBoardStepLabel(
+  mode: TransitRouteTransportMode,
+  name: string,
+  t: Translate,
+): string {
+  if (mode === 'metro') {
+    return t('map.route.boardMetro', { name });
+  }
+  if (mode === 'ferry') {
+    return t('map.route.boardFerry', { name });
+  }
+  return t('map.route.board', { name });
+}
+
+function formatTransitAlightStepLabel(
+  mode: TransitRouteTransportMode,
+  name: string,
+  t: Translate,
+): string {
+  if (mode === 'metro') {
+    return t('map.route.alightMetro', { name });
+  }
+  if (mode === 'ferry') {
+    return t('map.route.alightFerry', { name });
+  }
+  return t('map.route.alight', { name });
+}
+
 function getCoordinateChainDistance(coordinates: Array<[number, number]>): number {
   return coordinates.slice(1).reduce((total, coordinate, index) => {
     const previous = coordinates[index];
@@ -9590,9 +9619,11 @@ function buildDirectTransitLineOption(
         accessRoute.details,
       ),
       createRoutePlaceStep(
-        t
-          ? t('map.route.board', { name: formatMarkerDisplayName(originStop.marker.label) })
-          : `${formatMarkerDisplayName(originStop.marker.label)} 进站`,
+        formatTransitBoardStepLabel(
+          candidate.mode.mode,
+          formatMarkerDisplayName(originStop.marker.label),
+          t,
+        ),
         'boarding',
         candidate.icon,
         candidate.color,
@@ -9612,9 +9643,11 @@ function buildDirectTransitLineOption(
         buildTransitStopStepDetails(segmentStops),
       ),
       createRoutePlaceStep(
-        t
-          ? t('map.route.alight', { name: formatMarkerDisplayName(destinationStop.marker.label) })
-          : `${formatMarkerDisplayName(destinationStop.marker.label)} 出站`,
+        formatTransitAlightStepLabel(
+          candidate.mode.mode,
+          formatMarkerDisplayName(destinationStop.marker.label),
+          t,
+        ),
         'alighting',
         undefined,
         candidate.color,
@@ -9982,9 +10015,11 @@ function buildTransferTransitLineOptions(
             accessRoute.details,
           ),
           createRoutePlaceStep(
-            t('map.route.board', {
-              name: formatMarkerDisplayName(originCandidate.originStop.marker.label),
-            }),
+            formatTransitBoardStepLabel(
+              originCandidate.candidate.mode.mode,
+              formatMarkerDisplayName(originCandidate.originStop.marker.label),
+              t,
+            ),
             'boarding',
             originCandidate.candidate.icon,
             originCandidate.candidate.color,
@@ -10015,9 +10050,11 @@ function buildTransferTransitLineOptions(
             transferRoute.details,
           ),
           createRoutePlaceStep(
-            t('map.route.transferBoard', {
-              name: formatMarkerDisplayName(transfer.toStop.marker.label),
-            }),
+            formatTransitBoardStepLabel(
+              destinationCandidate.candidate.mode.mode,
+              formatMarkerDisplayName(transfer.toStop.marker.label),
+              t,
+            ),
             'boarding',
             destinationCandidate.candidate.icon,
             destinationCandidate.candidate.color,
@@ -10033,9 +10070,11 @@ function buildTransferTransitLineOptions(
             buildTransitStopStepDetails(secondSegment),
           ),
           createRoutePlaceStep(
-            t('map.route.alight', {
-              name: formatMarkerDisplayName(destinationCandidate.destinationStop.marker.label),
-            }),
+            formatTransitAlightStepLabel(
+              destinationCandidate.candidate.mode.mode,
+              formatMarkerDisplayName(destinationCandidate.destinationStop.marker.label),
+              t,
+            ),
             'alighting',
             undefined,
             destinationCandidate.candidate.color,

@@ -1,12 +1,17 @@
+'use client';
+
 import type { ApiItemResponse, TransitScreenSnapshot, TransitScreenTrip } from '@yct/contracts';
 import Link from 'next/link';
 import { appPath } from '../lib/app-paths';
+import { useI18n } from '../lib/client-i18n';
 
 export function TransitScreenPanel({
   screen,
 }: Readonly<{
   screen: ApiItemResponse<TransitScreenSnapshot>;
 }>) {
+  const { t } = useI18n();
+
   if (!screen.item || screen.meta.sourceStatus !== 'ready') {
     return null;
   }
@@ -18,13 +23,13 @@ export function TransitScreenPanel({
   return (
     <section className="transit-screen-panel" aria-labelledby="transit-screen-title">
       <div className="section-heading">
-        <h2 id="transit-screen-title">智运大屏</h2>
+        <h2 id="transit-screen-title">{t('travel.screen.title')}</h2>
         <div className="screen-panel-actions">
           <Link className="screen-open-link" href={appPath('/travel/screen')}>
             <span className="material-symbols-outlined" aria-hidden="true">
               departure_board
             </span>
-            <span>查看班次</span>
+            <span>{t('transitScreen.viewTrips')}</span>
           </Link>
           <a
             className="screen-open-link"
@@ -35,26 +40,26 @@ export function TransitScreenPanel({
             <span className="material-symbols-outlined" aria-hidden="true">
               open_in_new
             </span>
-            <span>旧版</span>
+            <span>{t('transitScreen.legacy')}</span>
           </a>
         </div>
       </div>
 
-      <div className="screen-summary-grid" aria-label="客运大屏数据摘要">
-        <SummaryItem label="车站" value={snapshot.stations.length} />
-        <SummaryItem label="班次" value={snapshot.trips.length} />
-        <SummaryItem label="线路" value={lineCount} />
-        <SummaryItem label="检票口" value={snapshot.gates.length} />
+      <div className="screen-summary-grid" aria-label={t('transitScreen.summaryAria')}>
+        <SummaryItem label={t('travel.screenDetail.station')} value={snapshot.stations.length} />
+        <SummaryItem label={t('travel.screenDetail.trip')} value={snapshot.trips.length} />
+        <SummaryItem label={t('travel.screenDetail.line')} value={lineCount} />
+        <SummaryItem label={t('travel.screenDetail.gate')} value={snapshot.gates.length} />
       </div>
 
       {upcomingTrips.length > 0 ? (
-        <div className="screen-trip-list" aria-label="近期班次">
+        <div className="screen-trip-list" aria-label={t('transitScreen.upcomingAria')}>
           {upcomingTrips.map((trip) => (
             <article className="screen-trip-item" key={trip.sourceId}>
               <time>{trip.departureTime}</time>
               <div>
                 <strong>{trip.lineName}</strong>
-                <span>{formatTripStations(trip)}</span>
+                <span>{formatTripStations(trip, t)}</span>
               </div>
               <span className="screen-trip-code">{trip.tripId}</span>
             </article>
@@ -108,8 +113,10 @@ function getAdjustedMinutes(hours: number, minutes: number): number {
   return total < 180 ? total + 24 * 60 : total;
 }
 
-function formatTripStations(trip: TransitScreenTrip): string {
+function formatTripStations(trip: TransitScreenTrip, t: ReturnType<typeof useI18n>['t']): string {
   const first = trip.stationNames[0];
   const last = trip.stationNames[trip.stationNames.length - 1];
-  return first && last ? `${first} - ${last}` : `${trip.stationNames.length} 站`;
+  return first && last
+    ? `${first} - ${last}`
+    : t('travel.screenDetail.stationCount', { count: trip.stationNames.length });
 }

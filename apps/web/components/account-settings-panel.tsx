@@ -121,6 +121,7 @@ const localeOptionKeys: Array<{ value: LocalePreference; labelKey: CommonMessage
   { value: 'en', labelKey: 'settings.language.en' },
 ];
 
+type Translate = ReturnType<typeof useI18n>['t'];
 type PwaInstallStatus = 'checking' | 'installed' | 'installable' | 'manual' | 'unsupported';
 type NotificationTypeKey = 'trip_reminder' | 'operations' | 'ticket' | 'checkin';
 type ServerPushNotificationType = 'trip' | 'operations' | 'ticket' | 'check_in';
@@ -480,7 +481,7 @@ export function AccountSettingsPanel({
         })
         .catch(() => undefined);
 
-      void readServerTripReminders()
+      void readServerTripReminders(t)
         .then((reminders) => {
           if (reminders.length === 0) {
             return;
@@ -494,7 +495,7 @@ export function AccountSettingsPanel({
         })
         .catch(() => undefined);
 
-      void readServerPushPreference()
+      void readServerPushPreference(t)
         .then((preference) => {
           const nextTypes = notificationTypeOptions.reduce<NotificationTypePreferences>(
             (current, option) => ({
@@ -522,7 +523,7 @@ export function AccountSettingsPanel({
         })
         .catch(() => undefined);
 
-      void readServerOfflinePackageRequests()
+      void readServerOfflinePackageRequests(t)
         .then((requests) => {
           if (requests.length === 0) {
             return;
@@ -641,12 +642,12 @@ export function AccountSettingsPanel({
     );
     try {
       if (enabled) {
-        const endpoint = await ensureBrowserPushSubscription();
+        const endpoint = await ensureBrowserPushSubscription(t);
         setPushDeviceStatusText(
-          t('account.notification.statusRegistered', { host: readEndpointHost(endpoint) }),
+          t('account.notification.statusRegistered', { host: readEndpointHost(endpoint, t) }),
         );
       } else {
-        const revoked = await revokeBrowserPushSubscription();
+        const revoked = await revokeBrowserPushSubscription(t);
         setPushDeviceStatusText(
           revoked
             ? t('account.notification.statusRevoked')
@@ -760,7 +761,7 @@ export function AccountSettingsPanel({
     setOfflinePackageFormOpen(false);
     syncOfflinePackageState();
     if (auth.session?.user) {
-      void requestServerOfflinePackage(offlinePackage)
+      void requestServerOfflinePackage(offlinePackage, t)
         .then(() => {
           updateOfflinePackageStatus(offlinePackage.packageId, 'server_requested');
           syncOfflinePackageState();
@@ -769,7 +770,9 @@ export function AccountSettingsPanel({
           updateOfflinePackageStatus(
             offlinePackage.packageId,
             'request_failed',
-            error instanceof Error ? error.message : '服务端离线包请求失败',
+            error instanceof Error
+              ? error.message
+              : t('account.error.offlinePackageRequestFailed'),
           );
           syncOfflinePackageState();
         });
@@ -791,21 +794,21 @@ export function AccountSettingsPanel({
 
   const refreshOfflinePackage = async (offlinePackage: OfflinePackageRecord) => {
     setRefreshingPackageId(offlinePackage.packageId);
-    setCacheStatusText('正在刷新离线范围基础数据');
+    setCacheStatusText(t('account.cache.refreshingOfflineBase'));
     try {
       if (auth.session?.user) {
-        await requestServerOfflinePackage(offlinePackage);
+        await requestServerOfflinePackage(offlinePackage, t);
       }
-      await warmOfflinePackageCache();
+      await warmOfflinePackageCache(t);
       updateOfflinePackageStatus(offlinePackage.packageId, 'base_cache_refreshed');
       await refreshPwaCacheStatus(setCacheStatusText, t);
     } catch (error) {
       updateOfflinePackageStatus(
         offlinePackage.packageId,
         'refresh_failed',
-        error instanceof Error ? error.message : '刷新失败',
+        error instanceof Error ? error.message : t('account.cache.refreshFailed'),
       );
-      setCacheStatusText('离线范围基础数据刷新失败');
+      setCacheStatusText(t('account.cache.offlineRefreshFailed'));
     } finally {
       setRefreshingPackageId(null);
       syncOfflinePackageState();
@@ -825,10 +828,10 @@ export function AccountSettingsPanel({
     syncOfflinePackageState();
     if (auth.session?.user) {
       try {
-        await deleteServerOfflinePackageRequest(offlinePackage.packageId);
-        setCacheStatusText('已删除本机与账号中的离线范围请求');
+        await deleteServerOfflinePackageRequest(offlinePackage.packageId, t);
+        setCacheStatusText(t('account.cache.offlineDeletedAll'));
       } catch {
-        setCacheStatusText('已删除本机离线范围，账号侧请求删除失败');
+        setCacheStatusText(t('account.cache.offlineDeletedLocalOnly'));
       }
     }
   };
@@ -867,7 +870,7 @@ export function AccountSettingsPanel({
     setIsRevokingLegacyTripSyncConsent(true);
     setTripSyncStatusText(t('account.history.legacyRevokeDeleting'));
     try {
-      const result = await deleteServerTripReminderCopies({ source: 'legacy_order' });
+      const result = await deleteServerTripReminderCopies({ source: 'legacy_order' }, t);
       markTripRemindersUnsynced({ source: 'legacy_order' });
       syncTripSummary();
       setTripSyncStatusText(
@@ -1800,17 +1803,17 @@ function writeNotificationTypePreferences(preferences: NotificationTypePreferenc
   window.localStorage.setItem(notificationTypePreferenceKey, JSON.stringify(preferences));
 }
 
-async function ensureBrowserPushSubscription(): Promise<string> {
+async function ensureBrowserPushSubscription(t: Translate): Promise<string> {
   if (!webPushPublicKey) {
-    throw new Error('Web Push 公钥尚未配置，本设备暂不能订阅推送');
+    throw new Error(t('account.push.missingPublicKey'));
   }
 
   if (!window.isSecureContext) {
-    throw new Error('当前页面不是安全上下文，浏览器不会开放 Push 订阅');
+    throw new Error(t('account.push.insecureContext'));
   }
 
   if (!('Notification' in window) || !('PushManager' in window)) {
-    throw new Error('当前浏览器不支持 Web Push');
+    throw new Error(t('account.push.unsupported'));
   }
 
   const permission =
@@ -1818,12 +1821,12 @@ async function ensureBrowserPushSubscription(): Promise<string> {
       ? await Notification.requestPermission()
       : Notification.permission;
   if (permission !== 'granted') {
-    throw new Error('浏览器通知权限未开启');
+    throw new Error(t('account.push.permissionDenied'));
   }
 
   const registration = await navigator.serviceWorker.ready.catch(() => undefined);
   if (!registration) {
-    throw new Error('Service Worker 尚未就绪，暂不能订阅 Push');
+    throw new Error(t('account.push.serviceWorkerNotReady'));
   }
 
   const subscription =
@@ -1832,7 +1835,7 @@ async function ensureBrowserPushSubscription(): Promise<string> {
       userVisibleOnly: true,
       applicationServerKey: decodeWebPushPublicKey(webPushPublicKey),
     }));
-  const payload = toPushSubscriptionPayload(subscription);
+  const payload = toPushSubscriptionPayload(subscription, t);
 
   const response = await fetch(appPath('/api/account/push-subscriptions'), {
     method: 'POST',
@@ -1847,16 +1850,16 @@ async function ensureBrowserPushSubscription(): Promise<string> {
   if (!response.ok) {
     const data = (await response.json().catch(() => ({}))) as { message?: string };
     if (publishLoginRequiredForResponse(response)) {
-      throw new Error(data.message ?? '需要先使用临东通登录。');
+      throw new Error(data.message ?? t('account.push.loginRequired'));
     }
-    throw new Error(data.message ?? 'Push 设备订阅登记失败');
+    throw new Error(data.message ?? t('account.push.registerFailed'));
   }
 
   window.localStorage.setItem(pushSubscriptionEndpointKey, payload.endpoint);
   return payload.endpoint;
 }
 
-async function revokeBrowserPushSubscription(): Promise<boolean> {
+async function revokeBrowserPushSubscription(t: Translate): Promise<boolean> {
   const registration = await navigator.serviceWorker.ready.catch(() => undefined);
   const subscription = await registration?.pushManager.getSubscription().catch(() => undefined);
   const endpoint =
@@ -1881,16 +1884,19 @@ async function revokeBrowserPushSubscription(): Promise<boolean> {
   if (!response.ok) {
     const data = (await response.json().catch(() => ({}))) as { message?: string };
     if (publishLoginRequiredForResponse(response)) {
-      throw new Error(data.message ?? '需要先使用临东通登录。');
+      throw new Error(data.message ?? t('account.push.loginRequired'));
     }
-    throw new Error(data.message ?? 'Push 设备订阅撤销失败');
+    throw new Error(data.message ?? t('account.push.revokeFailed'));
   }
 
   window.localStorage.removeItem(pushSubscriptionEndpointKey);
   return true;
 }
 
-function toPushSubscriptionPayload(subscription: PushSubscription): {
+function toPushSubscriptionPayload(
+  subscription: PushSubscription,
+  t: Translate,
+): {
   endpoint: string;
   keys: {
     p256dh: string;
@@ -1906,7 +1912,7 @@ function toPushSubscriptionPayload(subscription: PushSubscription): {
   };
 
   if (!data.endpoint || !data.keys?.p256dh || !data.keys.auth) {
-    throw new Error('浏览器返回的 Push 订阅缺少必要密钥');
+    throw new Error(t('account.push.missingKeys'));
   }
 
   return {
@@ -1930,30 +1936,33 @@ function hasGrantedNotificationPermission(): boolean {
   return 'Notification' in window && Notification.permission === 'granted';
 }
 
-function readEndpointHost(endpoint: string): string {
+function readEndpointHost(endpoint: string, t: Translate): string {
   try {
     return new URL(endpoint).host;
   } catch {
-    return '未知服务';
+    return t('account.push.unknownHost');
   }
 }
 
-async function readServerTripReminders(): Promise<TripReminder[]> {
+async function readServerTripReminders(t: Translate): Promise<TripReminder[]> {
   const response = await fetch(appPath('/api/account/trip-reminders'), {
     cache: 'no-store',
   });
   if (!response.ok) {
     publishLoginRequiredForResponse(response);
-    throw new Error('账号提醒暂不可用');
+    throw new Error(t('account.error.tripRemindersUnavailable'));
   }
 
   const data = (await response.json()) as { items?: TripReminder[] };
   return data.items ?? [];
 }
 
-async function deleteServerTripReminderCopies(input: {
-  source: TripReminder['source'];
-}): Promise<{ deletedCount: number; deletedAt?: string }> {
+async function deleteServerTripReminderCopies(
+  input: {
+    source: TripReminder['source'];
+  },
+  t: Translate,
+): Promise<{ deletedCount: number; deletedAt?: string }> {
   const response = await fetch(appPath('/api/account/trip-reminders'), {
     method: 'DELETE',
     headers: {
@@ -1969,7 +1978,7 @@ async function deleteServerTripReminderCopies(input: {
 
   if (!response.ok) {
     publishLoginRequiredForResponse(response);
-    throw new Error(data.message ?? '账号提醒副本删除失败');
+    throw new Error(data.message ?? t('account.error.tripReminderDeleteFailed'));
   }
 
   return {
@@ -1978,7 +1987,7 @@ async function deleteServerTripReminderCopies(input: {
   };
 }
 
-async function readServerPushPreference(): Promise<{
+async function readServerPushPreference(t: Translate): Promise<{
   enabled: boolean;
   enabledTypes: ServerPushNotificationType[];
   quietHours: {
@@ -1993,7 +2002,7 @@ async function readServerPushPreference(): Promise<{
   });
   if (!response.ok) {
     publishLoginRequiredForResponse(response);
-    throw new Error('通知偏好暂不可用');
+    throw new Error(t('account.error.pushPreferenceUnavailable'));
   }
 
   const data = (await response.json()) as {
@@ -2010,7 +2019,7 @@ async function readServerPushPreference(): Promise<{
   };
 
   if (!data.item) {
-    throw new Error('通知偏好暂不可用');
+    throw new Error(t('account.error.pushPreferenceUnavailable'));
   }
 
   return data.item;
@@ -2089,7 +2098,7 @@ async function warmAppShellCache(): Promise<void> {
   );
 }
 
-async function warmOfflinePackageCache(): Promise<void> {
+async function warmOfflinePackageCache(t: Translate): Promise<void> {
   await warmAppShellCache();
 
   await Promise.all(
@@ -2109,13 +2118,16 @@ async function warmOfflinePackageCache(): Promise<void> {
       });
 
       if (!response.ok) {
-        throw new Error(`${url} 刷新失败`);
+        throw new Error(t('account.error.cacheRefreshFailed', { url }));
       }
     }),
   );
 }
 
-async function requestServerOfflinePackage(offlinePackage: OfflinePackageRecord): Promise<void> {
+async function requestServerOfflinePackage(
+  offlinePackage: OfflinePackageRecord,
+  t: Translate,
+): Promise<void> {
   const response = await fetch(appPath('/api/account/offline-packages'), {
     method: 'POST',
     headers: {
@@ -2131,26 +2143,28 @@ async function requestServerOfflinePackage(offlinePackage: OfflinePackageRecord)
   if (!response.ok) {
     const data = (await response.json().catch(() => ({}))) as { message?: string };
     if (publishLoginRequiredForResponse(response)) {
-      throw new Error(data.message ?? '需要先使用临东通登录。');
+      throw new Error(data.message ?? t('account.push.loginRequired'));
     }
-    throw new Error(data.message ?? '服务端离线包请求失败');
+    throw new Error(data.message ?? t('account.error.offlinePackageRequestFailed'));
   }
 }
 
-async function readServerOfflinePackageRequests(): Promise<AccountOfflinePackageRequest[]> {
+async function readServerOfflinePackageRequests(
+  t: Translate,
+): Promise<AccountOfflinePackageRequest[]> {
   const response = await fetch(appPath('/api/account/offline-packages'), {
     cache: 'no-store',
   });
   if (!response.ok) {
     publishLoginRequiredForResponse(response);
-    throw new Error('账号离线范围暂不可用');
+    throw new Error(t('account.error.offlineScopeUnavailable'));
   }
 
   const data = (await response.json()) as { items?: AccountOfflinePackageRequest[] };
   return data.items ?? [];
 }
 
-async function deleteServerOfflinePackageRequest(packageId: string): Promise<void> {
+async function deleteServerOfflinePackageRequest(packageId: string, t: Translate): Promise<void> {
   const response = await fetch(appPath('/api/account/offline-packages'), {
     method: 'DELETE',
     headers: {
@@ -2160,7 +2174,7 @@ async function deleteServerOfflinePackageRequest(packageId: string): Promise<voi
   });
   if (!response.ok) {
     publishLoginRequiredForResponse(response);
-    throw new Error('账号离线范围请求删除失败');
+    throw new Error(t('account.error.offlineScopeDeleteFailed'));
   }
 }
 

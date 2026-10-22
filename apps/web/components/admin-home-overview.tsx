@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { useI18n } from '../lib/client-i18n';
 import { AdminRefreshButton } from './admin-refresh-button';
 
 interface AdminPendingReviewSummary {
@@ -18,6 +19,17 @@ interface AccountStatusResponse {
     pendingReview: AdminPendingReviewSummary;
   };
   message?: string;
+}
+
+export function AdminHomeHeading() {
+  const { t } = useI18n();
+
+  return (
+    <div className="section-heading">
+      <h1 id="admin-home-title">{t('admin.home.title')}</h1>
+      <span className="muted">{t('admin.home.description')}</span>
+    </div>
+  );
 }
 
 export function AdminHomeOverview() {

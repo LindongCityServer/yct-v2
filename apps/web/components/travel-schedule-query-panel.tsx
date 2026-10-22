@@ -38,6 +38,7 @@ import { AdminEditLink } from './admin-edit-link';
 
 type ServiceFilter = TicketableServiceKind | 'all';
 type Translate = ReturnType<typeof useI18n>['t'];
+type Locale = ReturnType<typeof useI18n>['locale'];
 
 const timeOptions: Array<{
   value: TravelScheduleTimeScope;
@@ -48,6 +49,20 @@ const timeOptions: Array<{
   { value: 'upcoming', labelKey: 'travelSchedule.time.upcoming', icon: 'schedule' },
   { value: 'past', labelKey: 'travelSchedule.time.past', icon: 'history' },
 ];
+
+export function TravelScheduleEmptyState({ message }: Readonly<{ message?: string }>) {
+  const { t } = useI18n();
+
+  return (
+    <section className="module-panel empty-state" aria-labelledby="schedule-empty-title">
+      <span className="material-symbols-outlined" aria-hidden="true">
+        departure_board
+      </span>
+      <h2 id="schedule-empty-title">{t('travelSchedule.empty.unavailable')}</h2>
+      <p>{message ?? t('travelSchedule.empty.noData')}</p>
+    </section>
+  );
+}
 
 export function TravelScheduleQueryPanel({
   initialQuery = '',
@@ -213,11 +228,11 @@ export function TravelScheduleQueryPanel({
       !destinationFilter ||
       destinationFilter === 'all'
     ) {
-      setJourneyStatusText('请先填写起点和终点。');
+      setJourneyStatusText(t('travelSchedule.journey.missingEndpoints'));
       return;
     }
     setJourneyBusy(true);
-    setJourneyStatusText('正在组合班次方案');
+    setJourneyStatusText(t('travelSchedule.journey.planning'));
     try {
       const params = new URLSearchParams({
         origin: originFilter,
@@ -231,28 +246,30 @@ export function TravelScheduleQueryPanel({
         message?: string;
       };
       if (!response.ok || !data.item) {
-        throw new Error(data.message ?? '行程方案查询失败。');
+        throw new Error(data.message ?? t('travelSchedule.journey.planFailed'));
       }
       setJourneyPlan(data.item);
       setJourneyStatusText(
         data.item.journeys.length > 0
-          ? `找到 ${data.item.journeys.length} 个方案`
-          : '没有找到可衔接的班次方案。',
+          ? t('travelSchedule.journey.found', { count: data.item.journeys.length })
+          : t('travelSchedule.journey.noneFound'),
       );
     } catch (error) {
       setJourneyPlan(null);
-      setJourneyStatusText(error instanceof Error ? error.message : '行程方案查询失败。');
+      setJourneyStatusText(
+        error instanceof Error ? error.message : t('travelSchedule.journey.planFailed'),
+      );
     } finally {
       setJourneyBusy(false);
     }
   };
   const createJourneyOrder = async (journey: TravelJourneyOption) => {
     if (journey.ticketingStatus !== 'order_available') {
-      setJourneyStatusText('该方案存在暂不可售的行程段。');
+      setJourneyStatusText(t('travelSchedule.journey.segmentUnavailable'));
       return;
     }
     setJourneyOrderBusy(true);
-    setJourneyStatusText('正在锁定联合行程的全部座位');
+    setJourneyStatusText(t('travelSchedule.journey.holding'));
     try {
       const response = await fetch(appPath('/api/travel/ticketing/journeys'), {
         method: 'POST',
@@ -277,13 +294,17 @@ export function TravelScheduleQueryPanel({
         return;
       }
       if (!response.ok || !data.item) {
-        throw new Error(data.message ?? '联合订票失败。');
+        throw new Error(data.message ?? t('travelSchedule.journey.orderFailed'));
       }
-      setJourneyStatusText(`联合订票成功，已创建 ${data.item.orders.length} 段订单草稿。`);
+      setJourneyStatusText(
+        t('travelSchedule.journey.orderCreated', { count: data.item.orders.length }),
+      );
       await refreshTicketOrders();
       notifyTicketOrderStateChanged();
     } catch (error) {
-      setJourneyStatusText(error instanceof Error ? error.message : '联合订票失败。');
+      setJourneyStatusText(
+        error instanceof Error ? error.message : t('travelSchedule.journey.orderFailed'),
+      );
     } finally {
       setJourneyOrderBusy(false);
     }
@@ -431,7 +452,7 @@ export function TravelScheduleQueryPanel({
               <span className="material-symbols-outlined" aria-hidden="true">
                 swap_vert
               </span>
-              <span>交换起终点</span>
+              <span>{t('travelSchedule.journey.swapEndpoints')}</span>
             </button>
             <button
               className="secondary-action-button is-primary"
@@ -442,7 +463,11 @@ export function TravelScheduleQueryPanel({
               <span className="material-symbols-outlined" aria-hidden="true">
                 route
               </span>
-              <span>{journeyBusy ? '组合中…' : '查询行程方案'}</span>
+              <span>
+                {journeyBusy
+                  ? t('travelSchedule.journey.combining')
+                  : t('travelSchedule.journey.query')}
+              </span>
             </button>
             {journeyStatusText ? <span className="muted">{journeyStatusText}</span> : null}
           </div>
@@ -541,13 +566,17 @@ function ScheduleTripRouteGroup({
   onHistoryChange: () => void;
   onTicketOrderChange: () => void;
 }>) {
+  const { t } = useI18n();
   const serviceLabels = Array.from(
     new Set(
       group.trips.map((trip) => serviceByKind.get(trip.serviceKind)?.label ?? trip.serviceLabel),
     ),
   ).join(' / ');
   return (
-    <section className="schedule-route-group" aria-label={`${group.operator}线路`}>
+    <section
+      className="schedule-route-group"
+      aria-label={t('travelSchedule.journey.lineGroupAria', { operator: group.operator })}
+    >
       <header className="schedule-route-group-heading">
         <div>
           <strong>
@@ -557,7 +586,9 @@ function ScheduleTripRouteGroup({
             {group.operator} · {serviceLabels}
           </span>
         </div>
-        <span className="muted">{group.trips.length} 个班次</span>
+        <span className="muted">
+          {t('travelSchedule.journey.tripCount', { count: group.trips.length })}
+        </span>
       </header>
       <div className="schedule-route-group-trips">
         {group.trips.map((trip) => (
@@ -613,16 +644,19 @@ function ScheduleJourneyPlanPanel({
   plan: TravelJourneyPlanResult;
   onCreateOrder: (journey: TravelJourneyOption) => void;
 }>) {
+  const { t } = useI18n();
   return (
     <section className="schedule-journey-panel" aria-labelledby="schedule-journey-title">
       <div className="section-heading">
         <div>
-          <h3 id="schedule-journey-title">行程方案</h3>
+          <h3 id="schedule-journey-title">{t('travelSchedule.journey.title')}</h3>
           <span className="muted">
             {plan.originStationName} → {plan.destinationStationName} · {plan.serviceDate}
           </span>
         </div>
-        <span className="muted">{plan.journeys.length} 个方案</span>
+        <span className="muted">
+          {t('travelSchedule.journey.planCount', { count: plan.journeys.length })}
+        </span>
       </div>
       <div className="schedule-journey-list">
         {plan.journeys.map((journey, index) => (
@@ -630,14 +664,16 @@ function ScheduleJourneyPlanPanel({
             <header>
               <div>
                 <strong>
-                  {journey.departureTime} - {journey.arrivalTime ?? '待定'}
+                  {journey.departureTime} - {journey.arrivalTime ?? t('travelSchedule.journey.tbd')}
                 </strong>
                 <span>
-                  {journey.transferCount === 0 ? '直达' : `${journey.transferCount} 次换乘`}
+                  {journey.transferCount === 0
+                    ? t('travelSchedule.journey.direct')
+                    : t('travelSchedule.journey.transferCount', { count: journey.transferCount })}
                 </span>
               </div>
               {journey.durationMinutes !== undefined ? (
-                <span>{formatJourneyDuration(journey.durationMinutes)}</span>
+                <span>{formatJourneyDuration(journey.durationMinutes, t)}</span>
               ) : null}
             </header>
             <ol className="schedule-journey-legs">
@@ -651,8 +687,8 @@ function ScheduleJourneyPlanPanel({
                         {leg.serviceLabel} · {leg.lineName}
                       </span>
                       <small>
-                        {leg.departureTime} {leg.fromStationName} → {leg.arrivalTime ?? '待定'}{' '}
-                        {leg.toStationName}
+                        {leg.departureTime} {leg.fromStationName} →{' '}
+                        {leg.arrivalTime ?? t('travelSchedule.journey.tbd')} {leg.toStationName}
                       </small>
                     </div>
                   </li>
@@ -664,10 +700,12 @@ function ScheduleJourneyPlanPanel({
                       <div>
                         <strong>{journey.transfers[legIndex].modeLabel}</strong>
                         <small>
-                          {journey.transfers[legIndex].fromStationName} →{' '}
-                          {journey.transfers[legIndex].toStationName} · 约{' '}
-                          {journey.transfers[legIndex].transferMinutes} 分钟（含{' '}
-                          {journey.transfers[legIndex].bufferMinutes} 分钟缓冲）
+                          {t('travelSchedule.journey.transferDetail', {
+                            from: journey.transfers[legIndex].fromStationName,
+                            to: journey.transfers[legIndex].toStationName,
+                            minutes: journey.transfers[legIndex].transferMinutes,
+                            buffer: journey.transfers[legIndex].bufferMinutes,
+                          })}
                         </small>
                       </div>
                     </li>
@@ -677,7 +715,7 @@ function ScheduleJourneyPlanPanel({
             </ol>
             <footer>
               <span className={`schedule-journey-ticketing is-${journey.ticketingStatus}`}>
-                {formatJourneyTicketingStatus(journey.ticketingStatus)}
+                {formatJourneyTicketingStatus(journey.ticketingStatus, t)}
               </span>
               {journey.legs.length > 1 ? (
                 <button
@@ -689,10 +727,16 @@ function ScheduleJourneyPlanPanel({
                   <span className="material-symbols-outlined" aria-hidden="true">
                     confirmation_number
                   </span>
-                  <span>{busy ? '锁定中…' : `联合订票 · ${journey.legs.length} 段`}</span>
+                  <span>
+                    {busy
+                      ? t('travelSchedule.journey.locking')
+                      : t('travelSchedule.journey.bookJoint', { count: journey.legs.length })}
+                  </span>
                 </button>
               ) : (
-                <span className="muted">方案 {index + 1}</span>
+                <span className="muted">
+                  {t('travelSchedule.journey.planIndex', { index: index + 1 })}
+                </span>
               )}
             </footer>
           </article>
@@ -702,16 +746,21 @@ function ScheduleJourneyPlanPanel({
   );
 }
 
-function formatJourneyDuration(minutes: number): string {
+function formatJourneyDuration(minutes: number, t: Translate): string {
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
-  return hours > 0 ? `${hours} 小时 ${remainder} 分` : `${remainder} 分钟`;
+  return hours > 0
+    ? t('travelSchedule.journey.durationHours', { hours, minutes: remainder })
+    : t('travelSchedule.journey.durationMinutes', { minutes: remainder });
 }
 
-function formatJourneyTicketingStatus(status: TravelJourneyOption['ticketingStatus']): string {
-  if (status === 'order_available') return '全程可订';
-  if (status === 'partially_available') return '部分行程不可售';
-  return '仅供查询';
+function formatJourneyTicketingStatus(
+  status: TravelJourneyOption['ticketingStatus'],
+  t: Translate,
+): string {
+  if (status === 'order_available') return t('travelSchedule.journey.availableAll');
+  if (status === 'partially_available') return t('travelSchedule.journey.partial');
+  return t('travelSchedule.journey.queryOnly');
 }
 
 function ScheduleServiceNoticePanel({
@@ -721,7 +770,7 @@ function ScheduleServiceNoticePanel({
   notices: TransitServiceNotice[];
   serviceDate: string;
 }>) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
 
   if (notices.length === 0) {
     return null;
@@ -733,7 +782,7 @@ function ScheduleServiceNoticePanel({
         <div>
           <h3 id="schedule-notice-title">{t('travelSchedule.notice.title')}</h3>
           <span className="muted">
-            {formatScheduleNoticeDate(serviceDate)} ·{' '}
+            {formatScheduleNoticeDate(serviceDate, locale)} ·{' '}
             {t('travelSchedule.notice.count', { count: notices.length })}
           </span>
         </div>
@@ -747,7 +796,7 @@ function ScheduleServiceNoticePanel({
             <div>
               <h3>{notice.title}</h3>
               <p>{notice.reason}</p>
-              <span className="muted">{formatServiceNoticePeriod(notice)}</span>
+              <span className="muted">{formatServiceNoticePeriod(notice, t, locale)}</span>
             </div>
           </article>
         ))}
@@ -840,7 +889,7 @@ function ScheduleLocalHistoryPanel({
               {serviceByKind.get(item.serviceKind)?.icon ?? getServiceIcon(item.serviceKind)}
             </span>
             <span>
-              <strong>{formatHistoryItemTitle(item)}</strong>
+              <strong>{formatHistoryItemTitle(item, t)}</strong>
               <small>{renderHistoryItemDetail(item, t)}</small>
             </span>
           </button>
@@ -863,14 +912,14 @@ function ScheduleTripCard({
   onHistoryChange: () => void;
   onTicketOrderChange: () => void;
 }>) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [message, setMessage] = useState('');
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
 
   const addReminder = () => {
     const remindAt = getDefaultReminderTime(trip.departureTime);
     createTripReminder({
-      title: formatScheduleReminderTitle(trip),
+      title: formatScheduleReminderTitle(trip, t),
       departure: trip.originStationName,
       arrival: trip.destinationStationName,
       lineName: trip.lineName,
@@ -928,7 +977,7 @@ function ScheduleTripCard({
 
       setMessage(
         t('travelSchedule.order.created', {
-          expiresAt: formatTicketHoldExpiresAt(data.item.inventoryHold.expiresAt),
+          expiresAt: formatTicketHoldExpiresAt(data.item.inventoryHold.expiresAt, locale),
         }),
       );
       onTicketOrderChange();
@@ -953,7 +1002,7 @@ function ScheduleTripCard({
           </span>
         </span>
         <div className="schedule-trip-title">
-          <strong>{formatTripHeading(trip)}</strong>
+          <strong>{formatTripHeading(trip, t)}</strong>
           <span>{trip.serviceLabel}</span>
         </div>
         <div className="schedule-trip-fare">
@@ -1000,15 +1049,18 @@ function ScheduleTripCard({
       </div>
 
       <div className="schedule-trip-main">
-        <p>{formatTripEndpoints(trip)}</p>
-        <div className="screen-station-flow" aria-label={`${trip.lineName} 停靠站`}>
+        <p>{formatTripEndpoints(trip, t)}</p>
+        <div
+          className="screen-station-flow"
+          aria-label={t('travelSchedule.journey.stopsAria', { line: trip.lineName })}
+        >
           {(
             trip.stopTimes ??
             trip.stationNames.map((stationName) => ({ stationName, isStop: true }))
           ).map((stopTime) => (
             <span
               className={stopTime.isStop ? undefined : 'is-pass-through'}
-              title={stopTime.isStop ? undefined : '通过不停'}
+              title={stopTime.isStop ? undefined : t('travelSchedule.journey.passThrough')}
               key={stopTime.stationName}
             >
               {stopTime.stationName}
@@ -1039,7 +1091,7 @@ function ScheduleTripCard({
       <div className="schedule-trip-actions">
         <AdminEditLink
           href={`/admin/transit?section=trips&tripInstanceId=${encodeURIComponent(trip.tripInstanceId)}`}
-          label="编辑班次"
+          labelKey="travelSchedule.journey.editTrip"
         />
         <button className="secondary-action-button is-primary" type="button" onClick={addReminder}>
           <span className="material-symbols-outlined" aria-hidden="true">
@@ -1359,24 +1411,31 @@ function toDateInputValue(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function formatScheduleNoticeDate(serviceDate: string): string {
+function formatScheduleNoticeDate(serviceDate: string, locale: Locale): string {
   const normalizedDate = normalizeServiceDate(serviceDate) ?? toDateInputValue(new Date());
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',
     timeZone: 'Asia/Shanghai',
   }).format(new Date(`${normalizedDate}T00:00:00+08:00`));
 }
 
-function formatServiceNoticePeriod(notice: TransitServiceNotice): string {
+function formatServiceNoticePeriod(
+  notice: TransitServiceNotice,
+  t: Translate,
+  locale: Locale,
+): string {
   if (notice.startsAt && notice.endsAt) {
-    return `${formatDateTime(notice.startsAt)} 至 ${formatDateTime(notice.endsAt)}`;
+    return t('travelSchedule.journey.period', {
+      start: formatDateTime(notice.startsAt, locale),
+      end: formatDateTime(notice.endsAt, locale),
+    });
   }
 
   return notice.periodText;
 }
 
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat('zh-CN', {
+function formatDateTime(value: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',
     timeStyle: 'short',
     timeZone: 'Asia/Shanghai',
@@ -1443,8 +1502,10 @@ function createServiceToneStyle(color: string | undefined): CSSProperties | unde
   return color ? ({ '--schedule-service-tone': color } as CSSProperties) : undefined;
 }
 
-function formatHistoryItemTitle(item: TravelScheduleHistoryItem): string {
-  return item.tripCode ? `${item.lineName} 班次 ${item.tripCode}` : item.lineName;
+function formatHistoryItemTitle(item: TravelScheduleHistoryItem, t: Translate): string {
+  return item.tripCode
+    ? t('travelSchedule.journey.tripLabel', { line: item.lineName, code: item.tripCode })
+    : item.lineName;
 }
 
 function renderHistoryItemDetail(item: TravelScheduleHistoryItem, t: Translate): ReactNode {
@@ -1453,7 +1514,7 @@ function renderHistoryItemDetail(item: TravelScheduleHistoryItem, t: Translate):
     item.departureTime,
     item.arrivalTime ? (
       <span>
-        到达 {item.arrivalTime}
+        {t('travelSchedule.journey.arrival', { time: item.arrivalTime })}
         {item.arrivalDayOffset && item.arrivalDayOffset > 0 ? (
           <ScheduleDayOffset
             className="schedule-history-day-offset"
@@ -1463,7 +1524,7 @@ function renderHistoryItemDetail(item: TravelScheduleHistoryItem, t: Translate):
         ) : null}
       </span>
     ) : undefined,
-    formatHistoryEndpoints(item),
+    formatHistoryEndpoints(item, t),
   ];
   const visibleParts = parts.filter(
     (part) => part !== undefined && part !== null && part !== false,
@@ -1489,19 +1550,21 @@ function ScheduleDayOffset({
   return <sup className={className}>{formatScheduleDayOffset(value, t)}</sup>;
 }
 
-function formatHistoryEndpoints(item: TravelScheduleHistoryItem): string {
+function formatHistoryEndpoints(item: TravelScheduleHistoryItem, t: Translate): string {
   const first = item.originStationName ?? item.stationNames[0];
   const last = item.destinationStationName ?? item.stationNames[item.stationNames.length - 1];
-  return first && last ? `${first} - ${last}` : `${item.stationNames.length} 站`;
+  return first && last
+    ? `${first} - ${last}`
+    : t('travelSchedule.journey.stopCount', { count: item.stationNames.length });
 }
 
-function formatTicketHoldExpiresAt(value: string): string {
+function formatTicketHoldExpiresAt(value: string, locale: Locale): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value;
   }
 
-  return date.toLocaleString('zh-CN', {
+  return date.toLocaleString(locale, {
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
@@ -1509,15 +1572,19 @@ function formatTicketHoldExpiresAt(value: string): string {
   });
 }
 
-function formatTripEndpoints(trip: TravelTripInstance): string {
+function formatTripEndpoints(trip: TravelTripInstance, t: Translate): string {
   const first = trip.originStationName ?? trip.stationNames[0];
   const last = trip.destinationStationName ?? trip.stationNames[trip.stationNames.length - 1];
-  const endpoints = first && last ? `${first} - ${last}` : `${trip.stationNames.length} 站`;
+  const endpoints =
+    first && last
+      ? `${first} - ${last}`
+      : t('travelSchedule.journey.stopCount', { count: trip.stationNames.length });
   return trip.routeNote ? `${endpoints} · ${trip.routeNote}` : endpoints;
 }
 
-function formatTripHeading(trip: TravelTripInstance): string {
-  const prefix = trip.tripCode ?? `${trip.serviceLabel}班次`;
+function formatTripHeading(trip: TravelTripInstance, t: Translate): string {
+  const prefix =
+    trip.tripCode ?? t('travelSchedule.journey.serviceTrip', { service: trip.serviceLabel });
   return trip.lineName ? `${prefix} - ${trip.lineName}` : prefix;
 }
 
@@ -1628,22 +1695,29 @@ function formatOperatingDays(days: string[], t: Translate): string {
   );
 }
 
-function formatScheduleReminderTitle(trip: TravelTripInstance): string {
+function formatScheduleReminderTitle(trip: TravelTripInstance, t: Translate): string {
   return trip.tripCode
-    ? `${trip.lineName} 班次 ${trip.tripCode}`
-    : `${trip.lineName} ${trip.departureTime} 班次`;
+    ? t('travelSchedule.journey.tripLabel', { line: trip.lineName, code: trip.tripCode })
+    : t('travelSchedule.reminder.titleWithTime', {
+        line: trip.lineName,
+        time: trip.departureTime,
+      });
 }
 
-function formatScheduleReminderDetail(trip: TravelTripInstance, t?: Translate): string {
+function formatScheduleReminderDetail(trip: TravelTripInstance, t: Translate): string {
   const fareText = formatFareTextWithoutCurrencyUnit(trip.fareText);
   return [
-    trip.tripCode ? `班次 ${trip.tripCode}` : undefined,
-    `发车 ${trip.departureTime}`,
-    trip.arrivalTime ? `到达 ${formatArrivalTime(trip, t)}` : undefined,
+    trip.tripCode
+      ? t('travelSchedule.reminder.detailTrip', { code: trip.tripCode })
+      : undefined,
+    t('travelSchedule.reminder.detailDeparture', { time: trip.departureTime }),
+    trip.arrivalTime
+      ? t('travelSchedule.journey.arrival', { time: formatArrivalTime(trip, t) })
+      : undefined,
     trip.gateText ? `${getLocationMetaLabel(trip.serviceKind, t)} ${trip.gateText}` : undefined,
-    fareText ? `票价 ${fareText}` : undefined,
+    fareText ? t('travelSchedule.reminder.detailFare', { fare: fareText }) : undefined,
     trip.operator,
-    formatVehicleText(trip, t) !== (t ? t('travelSchedule.trip.toBeAnnounced') : '待公布')
+    formatVehicleText(trip, t) !== t('travelSchedule.trip.toBeAnnounced')
       ? `${getVehicleMetaLabel(trip.serviceKind, t)} ${formatVehicleText(trip, t)}`
       : undefined,
   ]

@@ -3,6 +3,7 @@
 import type { MapMarkerSnapshot } from '@yct/contracts';
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { useI18n } from '../lib/client-i18n';
 
 interface MarkerResponse {
   snapshot?: MapMarkerSnapshot;
@@ -18,7 +19,9 @@ export function ContentPoiBindingEditor({
 }>) {
   const [markers, setMarkers] = useState<MapMarkerSnapshot['markers']>([]);
   const [query, setQuery] = useState('');
-  const [status, setStatus] = useState('正在读取公开 POI');
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [errorMessage, setErrorMessage] = useState('');
+  const { t } = useI18n();
 
   useEffect(() => {
     let cancelled = false;
@@ -26,16 +29,17 @@ export function ContentPoiBindingEditor({
       .then(async (response) => {
         const data = (await response.json()) as MarkerResponse;
         if (!response.ok || !data.snapshot) {
-          throw new Error(data.message ?? '公开 POI 暂不可用');
+          throw new Error(data.message ?? '');
         }
         if (!cancelled) {
           setMarkers(data.snapshot.markers);
-          setStatus('');
+          setLoadState('ready');
         }
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          setStatus(error instanceof Error ? error.message : '公开 POI 暂不可用');
+          setErrorMessage(error instanceof Error ? error.message : '');
+          setLoadState('error');
         }
       });
 
@@ -79,12 +83,22 @@ export function ContentPoiBindingEditor({
     );
   };
 
+  const statusText =
+    loadState === 'loading'
+      ? t('contentPoiBinding.loading')
+      : loadState === 'error'
+        ? errorMessage || t('contentPoiBinding.unavailable')
+        : '';
+
   return (
     <fieldset className="content-poi-binding-editor">
-      <legend>关联 POI</legend>
-      <p className="muted">只展示公开地图中的 POI；消息发布后才会在 POI 详情中生效。</p>
+      <legend>{t('contentPoiBinding.title')}</legend>
+      <p className="muted">{t('contentPoiBinding.hint')}</p>
       {selectedMarkers.length > 0 ? (
-        <div className="content-poi-binding-selected" aria-label="已关联 POI">
+        <div
+          className="content-poi-binding-selected"
+          aria-label={t('contentPoiBinding.selectedAria')}
+        >
           {selectedMarkers.map((marker) => (
             <button type="button" key={marker!.id} onClick={() => toggle(marker!.id)}>
               <span>{marker!.label}</span>
@@ -99,11 +113,15 @@ export function ContentPoiBindingEditor({
         type="search"
         value={query}
         onChange={(event) => setQuery(event.currentTarget.value)}
-        placeholder="搜索 POI 名称、地址或 ID"
-        aria-label="搜索关联 POI"
+        placeholder={t('contentPoiBinding.searchPlaceholder')}
+        aria-label={t('contentPoiBinding.searchAria')}
       />
-      {status ? <small className="muted">{status}</small> : null}
-      <div className="content-poi-binding-options" role="listbox" aria-label="可关联 POI">
+      {statusText ? <small className="muted">{statusText}</small> : null}
+      <div
+        className="content-poi-binding-options"
+        role="listbox"
+        aria-label={t('contentPoiBinding.optionsAria')}
+      >
         {filteredMarkers.map((marker) => {
           const selected = selectedIds.includes(marker.id);
           return (
@@ -120,8 +138,8 @@ export function ContentPoiBindingEditor({
             </button>
           );
         })}
-        {!status && filteredMarkers.length === 0 ? (
-          <p className="muted">没有匹配的公开 POI。</p>
+        {loadState === 'ready' && filteredMarkers.length === 0 ? (
+          <p className="muted">{t('contentPoiBinding.empty')}</p>
         ) : null}
       </div>
     </fieldset>

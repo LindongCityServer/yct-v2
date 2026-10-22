@@ -5,13 +5,17 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { TransitModeProfile } from '@yct/contracts';
 import { appPath } from '../lib/app-paths';
+import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import type { TransitLineSummary, TransitModeSummary } from '../lib/legacy-transit';
 import { TitleWithBreaks } from './title-with-breaks';
 
-const fallbackModeProfiles: TransitModeProfile[] = [
+type FallbackModeProfile = TransitModeProfile & { labelKey: CommonMessageKey };
+
+const fallbackModeProfiles: FallbackModeProfile[] = [
   {
     mode: 'metro',
-    label: '地铁',
+    label: 'Metro',
+    labelKey: 'map.route.mode.metro',
     color: '#2584E8',
     icon: 'subway',
     sortOrder: 0,
@@ -20,7 +24,8 @@ const fallbackModeProfiles: TransitModeProfile[] = [
   },
   {
     mode: 'tram',
-    label: '有轨',
+    label: 'Tram',
+    labelKey: 'map.route.mode.tram',
     color: '#C64255',
     icon: 'tram',
     sortOrder: 1,
@@ -29,7 +34,8 @@ const fallbackModeProfiles: TransitModeProfile[] = [
   },
   {
     mode: 'bus',
-    label: '公交',
+    label: 'Bus',
+    labelKey: 'map.route.mode.bus',
     color: '#F59B22',
     icon: 'directions_bus',
     sortOrder: 2,
@@ -38,7 +44,8 @@ const fallbackModeProfiles: TransitModeProfile[] = [
   },
   {
     mode: 'coach',
-    label: '客运',
+    label: 'Coach',
+    labelKey: 'map.route.mode.coach',
     color: '#8BBF35',
     icon: 'airport_shuttle',
     sortOrder: 3,
@@ -47,7 +54,8 @@ const fallbackModeProfiles: TransitModeProfile[] = [
   },
   {
     mode: 'ferry',
-    label: '轮渡',
+    label: 'Ferry',
+    labelKey: 'map.route.mode.ferry',
     color: '#168AA5',
     icon: 'directions_boat',
     sortOrder: 4,
@@ -56,7 +64,8 @@ const fallbackModeProfiles: TransitModeProfile[] = [
   },
   {
     mode: 'railway',
-    label: '地方铁路',
+    label: 'Regional rail',
+    labelKey: 'transitLineBrowser.modeRailway',
     color: '#8B5E34',
     icon: 'train',
     sortOrder: 5,
@@ -65,7 +74,8 @@ const fallbackModeProfiles: TransitModeProfile[] = [
   },
   {
     mode: 'custom',
-    label: '线路',
+    label: 'Line',
+    labelKey: 'map.categoryName.transitLine',
     color: '#168F78',
     icon: 'route',
     sortOrder: 6,
@@ -87,7 +97,18 @@ export function TransitLineBrowser({
   modeProfiles?: TransitModeProfile[];
 }>) {
   const [activeMode, setActiveMode] = useState<ModeFilter>('all');
+  const { t } = useI18n();
   const modeProfileByMode = useMemo(() => buildModeProfileMap(modeProfiles), [modeProfiles]);
+  const modeLabelByMode = useMemo(() => {
+    const map = new Map<TransitMode, string>();
+    for (const profile of fallbackModeProfiles) {
+      map.set(profile.mode, t(profile.labelKey));
+    }
+    for (const profile of modeProfiles) {
+      map.set(profile.mode, profile.label);
+    }
+    return map;
+  }, [modeProfiles, t]);
   const sortedLines = useMemo(() => {
     return [...lines]
       .filter((line) => activeMode === 'all' || line.mode === activeMode)
@@ -111,17 +132,22 @@ export function TransitLineBrowser({
 
   return (
     <div className="transit-overview">
-      <div className="transit-summary-strip" aria-label="旧线路数据摘要">
+      <div className="transit-summary-strip" aria-label={t('transitLineBrowser.summaryAria')}>
         {availableModes.map((item) => (
           <div className="transit-summary-item" key={item.mode}>
-            <span>{modeProfileByMode.get(item.mode)?.label ?? item.label}</span>
+            <span>{modeLabelByMode.get(item.mode) ?? item.label}</span>
             <strong>{item.lineCount}</strong>
-            <span className="muted">{item.stationCount} 站</span>
+            <span className="muted">
+              {t('lineDetail.extra.stations', { count: item.stationCount })}
+            </span>
           </div>
         ))}
       </div>
 
-      <div className="category-strip transit-filter-strip" aria-label="线路筛选">
+      <div
+        className="category-strip transit-filter-strip"
+        aria-label={t('transitLineBrowser.filterAria')}
+      >
         <button
           className={
             activeMode === 'all'
@@ -134,7 +160,7 @@ export function TransitLineBrowser({
           <span className="material-symbols-outlined" aria-hidden="true">
             route
           </span>
-          <span>全部</span>
+          <span>{t('map.route.mode.all')}</span>
         </button>
         {availableModes.map((item) => (
           <button
@@ -150,12 +176,12 @@ export function TransitLineBrowser({
             <span className="material-symbols-outlined" aria-hidden="true">
               {modeIcon(item.mode, modeProfileByMode)}
             </span>
-            <span>{modeProfileByMode.get(item.mode)?.label ?? item.label}</span>
+            <span>{modeLabelByMode.get(item.mode) ?? item.label}</span>
           </button>
         ))}
       </div>
 
-      <div className="line-list" aria-label="线路列表">
+      <div className="line-list" aria-label={t('transitLineBrowser.listAria')}>
         {sortedLines.map((line) => (
           <Link
             className="line-list-item"
@@ -171,8 +197,10 @@ export function TransitLineBrowser({
             <span className="line-list-detail">
               {line.firstStationName && line.lastStationName
                 ? `${line.firstStationName} - ${line.lastStationName}`
-                : `${line.stationCount} 站`}
-              {line.stopMetadataCount > 0 ? ` · ${line.stopMetadataCount} 项停靠属性` : ''}
+                : t('lineDetail.extra.stations', { count: line.stationCount })}
+              {line.stopMetadataCount > 0
+                ? ` · ${t('lineDetail.extra.stopMetadata', { count: line.stopMetadataCount })}`
+                : ''}
             </span>
           </Link>
         ))}
@@ -188,6 +216,7 @@ function LineBadge({
   line: TransitLineSummary;
   modeProfile?: TransitModeProfile;
 }>) {
+  const { t } = useI18n();
   const tone = line.color ?? modeProfile?.color ?? fallbackModeProfile(line.mode).color;
   const metroMatch = line.mode === 'metro' ? line.name.match(/^(\d+)(.*)$/) : null;
 
@@ -199,7 +228,7 @@ function LineBadge({
       >
         <span className="line-metro-token">{metroMatch[1]}</span>
         <span>
-          <TitleWithBreaks title={metroMatch[2] || '号线'} />
+          <TitleWithBreaks title={metroMatch[2] || t('lineDetail.metroSuffix')} />
         </span>
       </span>
     );

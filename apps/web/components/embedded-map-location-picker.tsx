@@ -1,6 +1,7 @@
 'use client';
 
 import type { MouseEvent, ReactNode } from 'react';
+import { useI18n } from '../lib/client-i18n';
 import { LayeredMapTile } from './layered-map-tile';
 
 export interface EmbeddedMapLocationMarker {
@@ -53,12 +54,13 @@ export function EmbeddedMapLocationPicker({
   tileTemplate?: string | null;
   value: [number, number] | null;
 }>) {
+  const { t } = useI18n();
   const fallbackCoordinate =
     value ?? originalValue ?? referenceValue ?? markers[0]?.coordinate ?? null;
   if (!fallbackCoordinate) {
     return (
       <div className="embedded-map-location-picker is-empty">
-        {emptyContent ?? <span>请先输入坐标或选择一个参考地点。</span>}
+        {emptyContent ?? <span>{t('embeddedMapPicker.empty')}</span>}
       </div>
     );
   }
@@ -266,9 +268,7 @@ function buildVisibleTiles(
     for (let tileZ = minTileZ; tileZ <= maxTileZ; tileZ += 1) {
       tiles.push({
         displaySize,
-        fallbackUrl: tileTemplate
-          ? buildTileUrl(tileTemplate, tileZoom, tileX, tileZ)
-          : undefined,
+        fallbackUrl: tileTemplate ? buildTileUrl(tileTemplate, tileZoom, tileX, tileZ) : undefined,
         freshUrl: freshTileTemplate
           ? buildTileUrl(freshTileTemplate, tileZoom, tileX, tileZ)
           : undefined,

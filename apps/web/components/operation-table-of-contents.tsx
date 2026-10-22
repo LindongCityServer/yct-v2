@@ -2,15 +2,18 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
+import { useI18n } from '../lib/client-i18n';
 import type { MarkdownHeading } from './markdown-blocks';
 
 export function OperationTableOfContents({
   headings,
-  title = '文章目录',
+  title,
 }: Readonly<{
   headings: MarkdownHeading[];
   title?: string;
 }>) {
+  const { t } = useI18n();
+  const resolvedTitle = title ?? t('operationToc.title');
   const [expanded, setExpanded] = useState(false);
   const [activeHeadingId, setActiveHeadingId] = useState(headings[0]?.id ?? null);
   const tocRef = useRef<HTMLElement>(null);
@@ -122,11 +125,11 @@ export function OperationTableOfContents({
               style={panelPosition}
               className="operation-toc-panel is-expanded"
               id="operation-table-of-contents"
-              aria-label={title}
+              aria-label={resolvedTitle}
               aria-hidden={!expanded}
               inert={!expanded}
             >
-              <span className="operation-toc-title">{title}</span>
+              <span className="operation-toc-title">{resolvedTitle}</span>
               <ol>
                 {headings.map((heading) => (
                   <li className={`is-level-${heading.level}`} key={heading.id}>
@@ -163,8 +166,16 @@ export function OperationTableOfContents({
         type="button"
         aria-controls="operation-table-of-contents"
         aria-expanded={expanded}
-        aria-label={expanded ? `收起${title}` : `展开${title}`}
-        title={expanded ? `收起${title}` : `展开${title}`}
+        aria-label={
+          expanded
+            ? t('operationToc.collapse', { title: resolvedTitle })
+            : t('operationToc.expand', { title: resolvedTitle })
+        }
+        title={
+          expanded
+            ? t('operationToc.collapse', { title: resolvedTitle })
+            : t('operationToc.expand', { title: resolvedTitle })
+        }
         onClick={() => setExpanded((current) => !current)}
       >
         <span className="material-symbols-outlined" aria-hidden="true">

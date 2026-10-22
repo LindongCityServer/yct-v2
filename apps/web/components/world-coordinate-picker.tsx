@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useI18n } from '../lib/client-i18n';
 import {
   EmbeddedMapLocationPicker,
   type EmbeddedMapLocationMarker,
@@ -24,7 +25,7 @@ export function WorldCoordinatePicker({
   referenceValue,
   tileTemplate,
   value,
-  yPlaceholder = '留空继承地图默认高度',
+  yPlaceholder,
 }: Readonly<{
   actions?: ReactNode;
   ariaLabel: string;
@@ -39,23 +40,26 @@ export function WorldCoordinatePicker({
   value: WorldCoordinateDraft;
   yPlaceholder?: string;
 }>) {
+  const { t } = useI18n();
   const currentCoordinate = parseCoordinate(value.x, value.z);
   const update = (key: keyof WorldCoordinateDraft, nextValue: string) =>
     onChange({ ...value, [key]: nextValue });
 
   return (
     <fieldset className="world-coordinate-picker" disabled={disabled}>
-      <legend>世界坐标</legend>
+      <legend>{t('worldCoordinate.title')}</legend>
       <div className="world-coordinate-picker-fields">
         {(['x', 'y', 'z'] as const).map((axis) => (
           <label key={axis}>
-            <span>{axis.toUpperCase()} 坐标</span>
+            <span>{t('worldCoordinate.axis', { axis: axis.toUpperCase() })}</span>
             <input
               type="number"
               step="any"
               inputMode="decimal"
               value={value[axis]}
-              placeholder={axis === 'y' ? yPlaceholder : undefined}
+              placeholder={
+                axis === 'y' ? (yPlaceholder ?? t('worldCoordinate.yPlaceholder')) : undefined
+              }
               onChange={(event) => update(axis, event.currentTarget.value)}
             />
           </label>
@@ -66,8 +70,11 @@ export function WorldCoordinatePicker({
         emptyContent={emptyContent}
         footer={
           currentCoordinate
-            ? `点击地图回填 X/Z · 当前 ${formatCoordinate(currentCoordinate)} · Y ${value.y.trim() || '继承默认值'}`
-            : '请先输入 X/Z 或选择参考地点；Y 可在上方独立填写'
+            ? t('worldCoordinate.footerPick', {
+                coordinate: formatCoordinate(currentCoordinate),
+                y: value.y.trim() || t('worldCoordinate.yInherited'),
+              })
+            : t('worldCoordinate.footerEmpty')
         }
         markers={markers}
         onChange={([x, z]) =>

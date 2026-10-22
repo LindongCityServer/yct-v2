@@ -71,6 +71,28 @@ export type CommonMessageKey =
   | 'account.offlinePackage.summary.refreshed'
   | 'account.offlinePackage.summary.total'
   | 'account.offlinePackage.title'
+  | 'account.cache.offlineDeletedAll'
+  | 'account.cache.offlineDeletedLocalOnly'
+  | 'account.cache.offlineRefreshFailed'
+  | 'account.cache.refreshFailed'
+  | 'account.cache.refreshingOfflineBase'
+  | 'account.error.offlinePackageRequestFailed'
+  | 'account.error.offlineScopeDeleteFailed'
+  | 'account.error.offlineScopeUnavailable'
+  | 'account.error.pushPreferenceUnavailable'
+  | 'account.error.tripReminderDeleteFailed'
+  | 'account.error.tripRemindersUnavailable'
+  | 'account.push.insecureContext'
+  | 'account.push.loginRequired'
+  | 'account.push.missingKeys'
+  | 'account.push.missingPublicKey'
+  | 'account.push.permissionDenied'
+  | 'account.push.registerFailed'
+  | 'account.push.revokeFailed'
+  | 'account.push.serviceWorkerNotReady'
+  | 'account.push.unknownHost'
+  | 'account.push.unsupported'
+  | 'account.error.cacheRefreshFailed'
   | 'account.about.currentVersion'
   | 'account.about.title'
   | 'account.about.viewChangelog'
@@ -193,6 +215,16 @@ export type CommonMessageKey =
   | 'changelog.changeCount'
   | 'changelog.empty'
   | 'changelog.title'
+  | 'contentPoiBinding.empty'
+  | 'contentPoiBinding.hint'
+  | 'contentPoiBinding.loading'
+  | 'contentPoiBinding.optionsAria'
+  | 'contentPoiBinding.searchAria'
+  | 'contentPoiBinding.searchPlaceholder'
+  | 'contentPoiBinding.selectedAria'
+  | 'contentPoiBinding.title'
+  | 'contentPoiBinding.unavailable'
+  | 'embeddedMapPicker.empty'
   | 'inventoryHoldStatus.cancelled'
   | 'inventoryHoldStatus.confirmed'
   | 'inventoryHoldStatus.expired'
@@ -475,18 +507,24 @@ export type CommonMessageKey =
   | 'map.toolbar.zoomIn'
   | 'map.toolbar.zoomOut'
   | 'map.title'
+  | 'mapStageLoader.aria'
+  | 'mapStageLoader.loading'
   | 'siteLegal.aria'
   | 'siteLegal.disclaimer'
   | 'siteLegal.icp'
   | 'siteLegal.police'
   | 'siteLegal.version'
   | 'map.route.alight'
+  | 'map.route.alightFerry'
+  | 'map.route.alightMetro'
   | 'map.route.aria'
   | 'map.route.arrive'
   | 'map.route.badge.fastest'
   | 'map.route.badge.fewestTransfers'
   | 'map.route.badge.leastWalking'
   | 'map.route.board'
+  | 'map.route.boardFerry'
+  | 'map.route.boardMetro'
   | 'map.route.close'
   | 'map.route.collapse'
   | 'map.route.currentLocation'
@@ -569,7 +607,6 @@ export type CommonMessageKey =
   | 'map.route.swap'
   | 'map.route.traceTitle'
   | 'map.route.transferAction'
-  | 'map.route.transferBoard'
   | 'map.route.transferTitle'
   | 'map.route.transferWalk'
   | 'map.route.transitNote.default'
@@ -599,6 +636,223 @@ export type CommonMessageKey =
   | 'map.roadDetail.endpointCountValue'
   | 'map.roadDetail.traceHighlighted'
   | 'map.roadDetail.traceStatus'
+  | 'metroWayfindingEditor.action.addElement'
+  | 'metroWayfindingEditor.action.cancel'
+  | 'metroWayfindingEditor.action.clear'
+  | 'metroWayfindingEditor.action.close'
+  | 'metroWayfindingEditor.action.delete'
+  | 'metroWayfindingEditor.action.done'
+  | 'metroWayfindingEditor.action.dragToReorder'
+  | 'metroWayfindingEditor.action.duplicate'
+  | 'metroWayfindingEditor.action.duplicateElement'
+  | 'metroWayfindingEditor.action.importSign'
+  | 'metroWayfindingEditor.action.moveDown'
+  | 'metroWayfindingEditor.action.moveLeft'
+  | 'metroWayfindingEditor.action.moveRight'
+  | 'metroWayfindingEditor.action.moveRowDownAria'
+  | 'metroWayfindingEditor.action.moveRowUpAria'
+  | 'metroWayfindingEditor.action.moveUp'
+  | 'metroWayfindingEditor.action.openProjectLibraryTitle'
+  | 'metroWayfindingEditor.action.openTemplateLibrary'
+  | 'metroWayfindingEditor.action.removeElement'
+  | 'metroWayfindingEditor.action.replaceSign'
+  | 'metroWayfindingEditor.action.reverse'
+  | 'metroWayfindingEditor.action.reverseDisabledVertical'
+  | 'metroWayfindingEditor.action.reverseTitle'
+  | 'metroWayfindingEditor.action.templateLibrary'
+  | 'metroWayfindingEditor.align.center'
+  | 'metroWayfindingEditor.align.left'
+  | 'metroWayfindingEditor.align.right'
+  | 'metroWayfindingEditor.aria.addElementToRow'
+  | 'metroWayfindingEditor.aria.canvas'
+  | 'metroWayfindingEditor.aria.combination'
+  | 'metroWayfindingEditor.aria.defaultLineName'
+  | 'metroWayfindingEditor.aria.draggableTab'
+  | 'metroWayfindingEditor.aria.emptyState'
+  | 'metroWayfindingEditor.aria.fixedSpace'
+  | 'metroWayfindingEditor.aria.flexSpace'
+  | 'metroWayfindingEditor.aria.inlineEditable'
+  | 'metroWayfindingEditor.aria.largeTextWithSummary'
+  | 'metroWayfindingEditor.aria.partSuffix'
+  | 'metroWayfindingEditor.aria.removeSegment'
+  | 'metroWayfindingEditor.aria.rowElements'
+  | 'metroWayfindingEditor.aria.segmentOrdinal'
+  | 'metroWayfindingEditor.aria.suffixOrdinal'
+  | 'metroWayfindingEditor.aria.textElement'
+  | 'metroWayfindingEditor.aria.textSegment'
+  | 'metroWayfindingEditor.color.background'
+  | 'metroWayfindingEditor.color.custom'
+  | 'metroWayfindingEditor.color.customAria'
+  | 'metroWayfindingEditor.color.foreground'
+  | 'metroWayfindingEditor.color.inherit'
+  | 'metroWayfindingEditor.combination.addAria'
+  | 'metroWayfindingEditor.combination.addFacility'
+  | 'metroWayfindingEditor.combination.addSpace'
+  | 'metroWayfindingEditor.combination.childDuplicateAria'
+  | 'metroWayfindingEditor.combination.childMoveDownAria'
+  | 'metroWayfindingEditor.combination.childMoveUpAria'
+  | 'metroWayfindingEditor.combination.childRemoveAria'
+  | 'metroWayfindingEditor.combination.childType'
+  | 'metroWayfindingEditor.combination.closeAria'
+  | 'metroWayfindingEditor.combination.description'
+  | 'metroWayfindingEditor.combination.editTitle'
+  | 'metroWayfindingEditor.combination.editWithCount'
+  | 'metroWayfindingEditor.combination.empty'
+  | 'metroWayfindingEditor.combination.eyebrow'
+  | 'metroWayfindingEditor.combination.fill'
+  | 'metroWayfindingEditor.combination.fillColor'
+  | 'metroWayfindingEditor.combination.listAria'
+  | 'metroWayfindingEditor.combination.scale'
+  | 'metroWayfindingEditor.combination.stripeColor'
+  | 'metroWayfindingEditor.combination.stripePosition'
+  | 'metroWayfindingEditor.combination.templateHint'
+  | 'metroWayfindingEditor.confirm.clear'
+  | 'metroWayfindingEditor.direction.down'
+  | 'metroWayfindingEditor.direction.left'
+  | 'metroWayfindingEditor.direction.right'
+  | 'metroWayfindingEditor.direction.up'
+  | 'metroWayfindingEditor.divider.note'
+  | 'metroWayfindingEditor.elementLabel.arrow'
+  | 'metroWayfindingEditor.elementLabel.combination'
+  | 'metroWayfindingEditor.elementLabel.divider'
+  | 'metroWayfindingEditor.elementLabel.facility'
+  | 'metroWayfindingEditor.elementLabel.largeText'
+  | 'metroWayfindingEditor.elementLabel.space'
+  | 'metroWayfindingEditor.elementLabel.text'
+  | 'metroWayfindingEditor.elementType.arrow'
+  | 'metroWayfindingEditor.elementType.combination'
+  | 'metroWayfindingEditor.elementType.divider'
+  | 'metroWayfindingEditor.elementType.facility'
+  | 'metroWayfindingEditor.elementType.largeText'
+  | 'metroWayfindingEditor.elementType.space'
+  | 'metroWayfindingEditor.elementType.spaceShort'
+  | 'metroWayfindingEditor.elementType.text'
+  | 'metroWayfindingEditor.empty.description'
+  | 'metroWayfindingEditor.empty.title'
+  | 'metroWayfindingEditor.error.fileTooLarge'
+  | 'metroWayfindingEditor.error.parseFailed'
+  | 'metroWayfindingEditor.error.tooManyFiles'
+  | 'metroWayfindingEditor.examples.aria'
+  | 'metroWayfindingEditor.examples.categoriesAria'
+  | 'metroWayfindingEditor.examples.categoryEntry'
+  | 'metroWayfindingEditor.examples.categoryExit'
+  | 'metroWayfindingEditor.examples.categoryTransfer'
+  | 'metroWayfindingEditor.examples.description'
+  | 'metroWayfindingEditor.examples.empty'
+  | 'metroWayfindingEditor.examples.line'
+  | 'metroWayfindingEditor.examples.loadAria'
+  | 'metroWayfindingEditor.examples.station'
+  | 'metroWayfindingEditor.examples.title'
+  | 'metroWayfindingEditor.examples.useTemplate'
+  | 'metroWayfindingEditor.field.addForegroundStroke'
+  | 'metroWayfindingEditor.field.addFrame'
+  | 'metroWayfindingEditor.field.alignment'
+  | 'metroWayfindingEditor.field.arrow'
+  | 'metroWayfindingEditor.field.backgroundColor'
+  | 'metroWayfindingEditor.field.defaultForegroundColor'
+  | 'metroWayfindingEditor.field.elementType'
+  | 'metroWayfindingEditor.field.exitIconDirection'
+  | 'metroWayfindingEditor.field.facilityIcon'
+  | 'metroWayfindingEditor.field.iconDirection'
+  | 'metroWayfindingEditor.field.iconVariant'
+  | 'metroWayfindingEditor.field.layout'
+  | 'metroWayfindingEditor.field.rowDivider'
+  | 'metroWayfindingEditor.field.writingMode'
+  | 'metroWayfindingEditor.fill.color'
+  | 'metroWayfindingEditor.fill.inverse'
+  | 'metroWayfindingEditor.fill.none'
+  | 'metroWayfindingEditor.fill.stripe'
+  | 'metroWayfindingEditor.frame.circle'
+  | 'metroWayfindingEditor.frame.fill'
+  | 'metroWayfindingEditor.frame.fillColor'
+  | 'metroWayfindingEditor.frame.none'
+  | 'metroWayfindingEditor.frame.rectangle'
+  | 'metroWayfindingEditor.frame.shape'
+  | 'metroWayfindingEditor.import.description'
+  | 'metroWayfindingEditor.import.dropActive'
+  | 'metroWayfindingEditor.import.dropHint'
+  | 'metroWayfindingEditor.import.fileLimits'
+  | 'metroWayfindingEditor.import.fileLimitsDescription'
+  | 'metroWayfindingEditor.import.selectFiles'
+  | 'metroWayfindingEditor.import.sourceExternalHint'
+  | 'metroWayfindingEditor.import.sourceYct'
+  | 'metroWayfindingEditor.import.sourceYctHint'
+  | 'metroWayfindingEditor.import.supportedSources'
+  | 'metroWayfindingEditor.import.title'
+  | 'metroWayfindingEditor.importPreview.closeAria'
+  | 'metroWayfindingEditor.importPreview.eyebrow'
+  | 'metroWayfindingEditor.importPreview.footerSummary'
+  | 'metroWayfindingEditor.importPreview.mode'
+  | 'metroWayfindingEditor.importPreview.modeSemantic'
+  | 'metroWayfindingEditor.importPreview.modeSourceStyle'
+  | 'metroWayfindingEditor.importPreview.previewNote'
+  | 'metroWayfindingEditor.importPreview.rowsAria'
+  | 'metroWayfindingEditor.importPreview.source'
+  | 'metroWayfindingEditor.importPreview.sourceStyle'
+  | 'metroWayfindingEditor.importPreview.targetStyle'
+  | 'metroWayfindingEditor.importPreview.warningCount'
+  | 'metroWayfindingEditor.importPreview.warningsAria'
+  | 'metroWayfindingEditor.importPreview.warningsTitle'
+  | 'metroWayfindingEditor.largeText.fieldLabel'
+  | 'metroWayfindingEditor.largeText.insertSuffix'
+  | 'metroWayfindingEditor.option.all'
+  | 'metroWayfindingEditor.option.doubleRow'
+  | 'metroWayfindingEditor.option.entry'
+  | 'metroWayfindingEditor.option.exit'
+  | 'metroWayfindingEditor.option.singleRow'
+  | 'metroWayfindingEditor.option.transfer'
+  | 'metroWayfindingEditor.option.vertical'
+  | 'metroWayfindingEditor.projectDialog.closeAria'
+  | 'metroWayfindingEditor.projectDialog.eyebrow'
+  | 'metroWayfindingEditor.projectDialog.import'
+  | 'metroWayfindingEditor.projectDialog.source'
+  | 'metroWayfindingEditor.projectDialog.templates'
+  | 'metroWayfindingEditor.projectDialog.title'
+  | 'metroWayfindingEditor.row.first'
+  | 'metroWayfindingEditor.row.second'
+  | 'metroWayfindingEditor.segment.boxed'
+  | 'metroWayfindingEditor.segment.boxedShort'
+  | 'metroWayfindingEditor.segment.chooseLineColor'
+  | 'metroWayfindingEditor.segment.insertBoxed'
+  | 'metroWayfindingEditor.segment.insertLine'
+  | 'metroWayfindingEditor.segment.line'
+  | 'metroWayfindingEditor.segment.text'
+  | 'metroWayfindingEditor.space.fixed'
+  | 'metroWayfindingEditor.space.flex'
+  | 'metroWayfindingEditor.space.flexNote'
+  | 'metroWayfindingEditor.space.mode'
+  | 'metroWayfindingEditor.space.width'
+  | 'metroWayfindingEditor.status.parsing'
+  | 'metroWayfindingEditor.status.parsingFiles'
+  | 'metroWayfindingEditor.stripePosition.bottom'
+  | 'metroWayfindingEditor.stripePosition.left'
+  | 'metroWayfindingEditor.stripePosition.right'
+  | 'metroWayfindingEditor.suffix.label'
+  | 'metroWayfindingEditor.suffix.placeholder'
+  | 'metroWayfindingEditor.suffix.remove'
+  | 'metroWayfindingEditor.suggestion.acceptAria'
+  | 'metroWayfindingEditor.suggestion.acceptTitle'
+  | 'metroWayfindingEditor.tab.childCount'
+  | 'metroWayfindingEditor.text.addMainRow'
+  | 'metroWayfindingEditor.text.addRowAria'
+  | 'metroWayfindingEditor.text.addSecondaryRow'
+  | 'metroWayfindingEditor.text.deleteRow'
+  | 'metroWayfindingEditor.text.deleteRowAria'
+  | 'metroWayfindingEditor.text.dynamicFontSize'
+  | 'metroWayfindingEditor.text.main'
+  | 'metroWayfindingEditor.text.mainRowLabel'
+  | 'metroWayfindingEditor.text.metrics'
+  | 'metroWayfindingEditor.text.moveRowDownAria'
+  | 'metroWayfindingEditor.text.moveRowUpAria'
+  | 'metroWayfindingEditor.text.rowHeader'
+  | 'metroWayfindingEditor.text.rowsAria'
+  | 'metroWayfindingEditor.text.secondary'
+  | 'metroWayfindingEditor.text.secondaryRowLabel'
+  | 'metroWayfindingEditor.toolbar.title'
+  | 'metroWayfindingEditor.writing.horizontal'
+  | 'metroWayfindingEditor.writing.horizontalText'
+  | 'metroWayfindingEditor.writing.vertical'
+  | 'metroWayfindingEditor.writing.verticalText'
   | 'nav.collapse'
   | 'nav.back'
   | 'nav.expand'
@@ -655,6 +909,12 @@ export type CommonMessageKey =
   | 'operations.startsAt'
   | 'operations.strongReminder'
   | 'operations.validUntil'
+  | 'operationRelatedPois.count'
+  | 'operationRelatedPois.fallback'
+  | 'operationRelatedPois.title'
+  | 'operationToc.collapse'
+  | 'operationToc.expand'
+  | 'operationToc.title'
   | 'page.account'
   | 'page.map'
   | 'page.offline'
@@ -663,13 +923,52 @@ export type CommonMessageKey =
   | 'page.search'
   | 'page.services'
   | 'page.changelog'
+  | 'page.faq'
+  | 'page.roadMaterials'
+  | 'page.telegraph'
+  | 'page.transitMaterials'
+  | 'page.transitNetworkHealth'
   | 'page.ticketOrder'
   | 'page.travel'
   | 'page.travelScreen'
+  | 'poiFacility.add'
+  | 'poiFacility.descriptionLabel'
+  | 'poiFacility.descriptionPlaceholder'
+  | 'poiFacility.hint'
+  | 'poiFacility.icon.accessible'
+  | 'poiFacility.icon.childCare'
+  | 'poiFacility.icon.elevator'
+  | 'poiFacility.icon.escalator'
+  | 'poiFacility.icon.info'
+  | 'poiFacility.icon.luggage'
+  | 'poiFacility.icon.medical'
+  | 'poiFacility.icon.parking'
+  | 'poiFacility.icon.pets'
+  | 'poiFacility.icon.power'
+  | 'poiFacility.icon.restaurant'
+  | 'poiFacility.icon.shopping'
+  | 'poiFacility.icon.smoking'
+  | 'poiFacility.icon.wc'
+  | 'poiFacility.icon.wifi'
+  | 'poiFacility.iconLabel'
+  | 'poiFacility.removeAria'
+  | 'poiFacility.removeTitle'
+  | 'poiFacility.title'
   | 'quickAction.rideCode'
   | 'quickAction.rideCodeLoginRequired'
   | 'quickAction.rideCodeUnavailable'
   | 'search.open'
+  | 'scheduleStopTable.aria'
+  | 'scheduleStopTable.arrival'
+  | 'scheduleStopTable.arrivalAria'
+  | 'scheduleStopTable.departure'
+  | 'scheduleStopTable.departureAria'
+  | 'scheduleStopTable.dwell'
+  | 'scheduleStopTable.dwellAria'
+  | 'scheduleStopTable.empty'
+  | 'scheduleStopTable.station'
+  | 'scheduleStopTable.stop'
+  | 'scheduleStopTable.stopAria'
   | 'shortcut.close'
   | 'shortcut.focusMapSearch'
   | 'shortcut.holdCtrl'
@@ -744,6 +1043,434 @@ export type CommonMessageKey =
   | 'services.category.toolbox'
   | 'services.empty'
   | 'services.itemCount'
+  | 'materialStudio.history'
+  | 'materialStudio.preview'
+  | 'materialStudio.updatePreview'
+  | 'materialStudio.submitReview'
+  | 'materialStudio.submitReviewManualHint'
+  | 'materialStudio.exportProject'
+  | 'materialStudio.download'
+  | 'materialStudio.loginRequired'
+  | 'materialStudio.serverUnverified'
+  | 'materialStudio.serverUnverifiedHint'
+  | 'materialStudio.loginRemoveWatermark'
+  | 'materialStudio.reviewRequired'
+  | 'materialStudio.templateReadFailed'
+  | 'materialStudio.noTemplates'
+  | 'materialStudio.workspaceUnavailable'
+  | 'materialStudio.exportOnlyManual'
+  | 'materialStudio.offlineBlocked'
+  | 'materialStudio.noSyncTemplate'
+  | 'materialStudio.serverSubmitOnlineOnly'
+  | 'materialStudio.loginFirst'
+  | 'materialStudio.localSyncFailed'
+  | 'materialStudio.localSyncedSubmitHint'
+  | 'materialStudio.networkError'
+  | 'materialStudio.localSyncNetworkError'
+  | 'materialStudio.noProjectStations'
+  | 'materialStudio.selectServerStation'
+  | 'materialStudio.selectProjectLine'
+  | 'materialStudio.selectDirectionLine'
+  | 'materialStudio.selectServerLine'
+  | 'materialStudio.selectServerPlace'
+  | 'materialStudio.selectCoordinate'
+  | 'materialStudio.selectLinkedMode'
+  | 'materialStudio.previewFailed'
+  | 'materialStudio.previewNetworkError'
+  | 'materialStudio.noSubmittableTemplate'
+  | 'materialStudio.saveCustomFailed'
+  | 'materialStudio.savedSubmitFailed'
+  | 'materialStudio.submitNetworkError'
+  | 'materialStudio.downloadFailed'
+  | 'materialStudio.downloadNetworkError'
+  | 'materialStudio.downloadPreviewNetworkError'
+  | 'materialStudio.selectTemplateAndMode'
+  | 'materialStudio.serverVerifiedDownloadHint'
+  | 'materialStudio.operationBusy'
+  | 'materialStudio.modeNoReviewNeeded'
+  | 'materialStudio.localDraft'
+  | 'materialStudio.workspaceEyebrow'
+  | 'materialStudio.syncLocalDraft'
+  | 'materialStudio.templates'
+  | 'materialStudio.networkData'
+  | 'materialStudio.online'
+  | 'materialStudio.offline'
+  | 'materialStudio.dimensions'
+  | 'materialStudio.dataSource'
+  | 'materialStudio.manualInput'
+  | 'materialStudio.roadTitle'
+  | 'materialStudio.transitTitle'
+  | 'materialStudio.serverNetwork'
+  | 'materialStudio.sampleProject'
+  | 'materialStudio.importedProject'
+  | 'materialStudio.projectStation'
+  | 'materialStudio.projectCurrentStation'
+  | 'materialStudio.variant'
+  | 'materialStudio.group.busStop'
+  | 'materialStudio.group.busStopHorizontal'
+  | 'materialStudio.group.metroLineMap'
+  | 'materialStudio.group.layout'
+  | 'materialStudio.group.style'
+  | 'materialStudio.projectLineCount'
+  | 'materialStudio.busLineCount'
+  | 'materialStudio.stationProjectLines'
+  | 'materialStudio.projectLines'
+  | 'materialStudio.mapDrivingDirection'
+  | 'materialStudio.roadDrivingDirection'
+  | 'materialStudio.stationProperties'
+  | 'materialStudio.originStation'
+  | 'materialStudio.terminalStation'
+  | 'materialStudio.sameDirectionLines'
+  | 'materialStudio.singleSelect'
+  | 'materialStudio.maxLines'
+  | 'materialStudio.destinationPending'
+  | 'materialStudio.directionTo'
+  | 'materialStudio.originAtStation'
+  | 'materialStudio.terminalAtStation'
+  | 'materialStudio.noProjectConnection'
+  | 'materialStudio.noDirectionLine'
+  | 'materialStudio.configureLineName'
+  | 'materialStudio.serverLines'
+  | 'materialStudio.stationsCount'
+  | 'materialStudio.notOpened'
+  | 'materialStudio.serverStations'
+  | 'materialStudio.searchServerPlace'
+  | 'materialStudio.serverPlaces'
+  | 'materialStudio.coordinateX'
+  | 'materialStudio.coordinateZ'
+  | 'materialStudio.pickCoordinateHint'
+  | 'materialStudio.clickMapCoordinate'
+  | 'materialStudio.fillCoordinateFirst'
+  | 'materialStudio.previewAria'
+  | 'materialStudio.previewAlt'
+  | 'materialStudio.closePreview'
+  | 'materialStudio.historyTitle'
+  | 'materialStudio.historyHint'
+  | 'materialStudio.closeHistory'
+  | 'materialStudio.submittedAt'
+  | 'materialStudio.reviewedAt'
+  | 'materialStudio.noSubmittedYet'
+  | 'materialStudio.previewWatermark'
+  | 'materialStudio.updating'
+  | 'materialStudio.noPreviewYet'
+  | 'materialStudio.signHeight'
+  | 'materialStudio.signLength'
+  | 'materialStudio.signWidth'
+  | 'materialStudio.widthMeters'
+  | 'materialStudio.heightMeters'
+  | 'materialStudio.alignmentUnit'
+  | 'materialStudio.alignToMapSize'
+  | 'materialStudio.firstBus'
+  | 'materialStudio.lastBus'
+  | 'materialStudio.projectNoTimeHint'
+  | 'materialStudio.pleaseSelect'
+  | 'materialStudio.colorPaletteAria'
+  | 'materialStudio.colorHexAria'
+  | 'materialStudio.orientationRight'
+  | 'materialStudio.orientationLeft'
+  | 'materialStudio.orientationUp'
+  | 'materialStudio.orientationDown'
+  | 'materialStudio.draftStatus.draft'
+  | 'materialStudio.draftStatus.pending_review'
+  | 'materialStudio.draftStatus.approved'
+  | 'materialStudio.draftStatus.rejected'
+  | 'materialStudio.syncStatus.pending'
+  | 'materialStudio.syncStatus.syncing'
+  | 'materialStudio.syncStatus.synced'
+  | 'materialStudio.syncStatus.conflict'
+  | 'materialStudio.syncStatus.failed'
+  | 'materialStudio.emptyFields'
+  | 'materialStudio.watermarkedPreviewSuffix'
+  | 'telegraph.stage.header'
+  | 'telegraph.stage.recipient'
+  | 'telegraph.stage.code'
+  | 'telegraph.stage.message'
+  | 'telegraph.stage.footer'
+  | 'telegraph.stage.stamp'
+  | 'telegraph.stage.envelope'
+  | 'telegraph.newLetter'
+  | 'telegraph.history'
+  | 'telegraph.startWriting'
+  | 'telegraph.replayAnimation'
+  | 'telegraph.continueScroll'
+  | 'telegraph.continueScrollStart'
+  | 'telegraph.simulateSend'
+  | 'telegraph.skipAnimation'
+  | 'telegraph.continueConfirm'
+  | 'telegraph.province'
+  | 'telegraph.city'
+  | 'telegraph.county'
+  | 'telegraph.otherLocation'
+  | 'telegraph.recipientInfo'
+  | 'telegraph.body'
+  | 'telegraph.senderName'
+  | 'telegraph.senderAddress'
+  | 'telegraph.senderLock'
+  | 'telegraph.billableGrids'
+  | 'telegraph.amount'
+  | 'telegraph.billingRule'
+  | 'telegraph.cellRecipient'
+  | 'telegraph.cellBody'
+  | 'telegraph.noCellSelected'
+  | 'telegraph.flipEnvelope'
+  | 'telegraph.flipToFront'
+  | 'telegraph.flipToBack'
+  | 'telegraph.openEnvelope'
+  | 'telegraph.insertEnvelope'
+  | 'telegraph.envelopeFront'
+  | 'telegraph.envelopeBack'
+  | 'telegraph.openEnvelopeView'
+  | 'telegraph.insertReceivePaper'
+  | 'telegraph.receivePaper'
+  | 'telegraph.sendPaper'
+  | 'telegraph.switchPaper'
+  | 'telegraph.switchToSend'
+  | 'telegraph.switchToReceive'
+  | 'telegraph.envelopeFlip'
+  | 'telegraph.code'
+  | 'telegraph.audio'
+  | 'telegraph.sendPaperTemplate'
+  | 'telegraph.sendPaperPreview'
+  | 'telegraph.enterDestination'
+  | 'telegraph.enterRecipient'
+  | 'telegraph.enterBody'
+  | 'telegraph.recipientOverflow'
+  | 'telegraph.bodyOverflow'
+  | 'telegraph.unsupported'
+  | 'telegraph.envelopeDone'
+  | 'telegraph.skippedDone'
+  | 'telegraph.imageFailed'
+  | 'telegraph.sendPaperFile'
+  | 'telegraph.receivePaperFile'
+  | 'telegraph.imageDownloadFailed'
+  | 'telegraph.codeFile'
+  | 'telegraph.filePrefix'
+  | 'telegraph.welcomeTitle'
+  | 'telegraph.welcomeP1'
+  | 'telegraph.welcomeP2'
+  | 'telegraph.welcomeP3'
+  | 'telegraph.confirmTitle'
+  | 'telegraph.closeConfirm'
+  | 'telegraph.destination'
+  | 'telegraph.recipient'
+  | 'telegraph.notFilled'
+  | 'telegraph.confirmBody'
+  | 'telegraph.confirmHint'
+  | 'telegraph.backEdit'
+  | 'telegraph.confirmSend'
+  | 'telegraph.localHistory'
+  | 'telegraph.deleteHistory'
+  | 'telegraph.unnamed'
+  | 'telegraph.noHistory'
+  | 'telegraph.cellAria'
+  | 'telegraph.toolbarAria'
+  | 'transitLineBrowser.filterAria'
+  | 'transitLineBrowser.listAria'
+  | 'transitLineBrowser.modeRailway'
+  | 'transitLineBrowser.summaryAria'
+  | 'transitHealth.dimension.topology'
+  | 'transitHealth.dimension.operations'
+  | 'transitHealth.dimension.scale'
+  | 'transitHealth.dimension.places'
+  | 'transitHealth.dimension.demand'
+  | 'transitHealth.dimension.data_quality'
+  | 'transitHealth.analysisEyebrow'
+  | 'transitHealth.subtitle'
+  | 'transitHealth.onlineSnapshot'
+  | 'transitHealth.offlineSnapshot'
+  | 'transitHealth.dataTime'
+  | 'transitHealth.noLines'
+  | 'transitHealth.filterAria'
+  | 'transitHealth.modeLegend'
+  | 'transitHealth.scopeCurrent'
+  | 'transitHealth.scopeAll'
+  | 'transitHealth.demandWithLines'
+  | 'transitHealth.demandPotentialOnly'
+  | 'transitHealth.mLines'
+  | 'transitHealth.mTopologyNote'
+  | 'transitHealth.mStations'
+  | 'transitHealth.mLocatedNote'
+  | 'transitHealth.mLength'
+  | 'transitHealth.mLocatedSegNote'
+  | 'transitHealth.mCoverage'
+  | 'transitHealth.mScheduledNote'
+  | 'transitHealth.mServiceSpan'
+  | 'transitHealth.mLateNote'
+  | 'transitHealth.mPlaceCoverage'
+  | 'transitHealth.mPlacesNote'
+  | 'transitHealth.mRoadCoverage'
+  | 'transitHealth.mRoadsNote'
+  | 'transitHealth.mDemandAttainment'
+  | 'transitHealth.mPotentialDemand'
+  | 'transitHealth.mAttainedNote'
+  | 'transitHealth.mPotentialHint'
+  | 'transitHealth.chartEyebrow'
+  | 'transitHealth.chartTitle'
+  | 'transitHealth.locatedSampleHint'
+  | 'transitHealth.opEyebrow'
+  | 'transitHealth.opTitle'
+  | 'transitHealth.opCountHint'
+  | 'transitHealth.opTableNote'
+  | 'transitHealth.colOperator'
+  | 'transitHealth.colStations'
+  | 'transitHealth.colStationsTitle'
+  | 'transitHealth.colLines'
+  | 'transitHealth.colAvgConnectivity'
+  | 'transitHealth.colConnectivityTitle'
+  | 'transitHealth.colConnectivityWeight'
+  | 'transitHealth.colWeightTitle'
+  | 'transitHealth.colLinesPerSegment'
+  | 'transitHealth.colSharedSegments'
+  | 'transitHealth.colScheduleCoverage'
+  | 'transitHealth.colServiceSpan'
+  | 'transitHealth.opComponentsNote'
+  | 'transitHealth.rankLabel'
+  | 'transitHealth.methodEyebrow'
+  | 'transitHealth.methodTitle'
+  | 'transitHealth.noMockHint'
+  | 'transitHealth.dmTopology'
+  | 'transitHealth.dmTopologyDetail'
+  | 'transitHealth.dmOperations'
+  | 'transitHealth.dmOperationsDetail'
+  | 'transitHealth.dmScale'
+  | 'transitHealth.dmScaleDetail'
+  | 'transitHealth.dmPlaces'
+  | 'transitHealth.dmPlacesDetail'
+  | 'transitHealth.dmDemand'
+  | 'transitHealth.dmDemandDetail'
+  | 'transitHealth.dmRoads'
+  | 'transitHealth.dmRoadsDetail'
+  | 'transitHealth.sugEyebrow'
+  | 'transitHealth.sugTitle'
+  | 'transitHealth.sugMergedHint'
+  | 'transitHealth.sugEmpty'
+  | 'transitHealth.targetItem'
+  | 'transitHealth.viewAllTargets'
+  | 'transitHealth.dialogTargetLabel'
+  | 'transitHealth.itemCount'
+  | 'transitHealth.dialogClose'
+  | 'transitHealth.dialogCloseAria'
+  | 'transitHealth.searchTargets'
+  | 'transitHealth.searchPlaceholder'
+  | 'transitHealth.noMatchedTargets'
+  | 'transitHealth.kindOperator'
+  | 'transitHealth.kindLine'
+  | 'transitHealth.kindStation'
+  | 'transitHealth.kindSegment'
+  | 'transitHealth.kindPlace'
+  | 'transitHealth.kindCategory'
+  | 'transitHealth.kindRoad'
+  | 'transitHealth.moreOperators'
+  | 'transitHealth.cModeTitle'
+  | 'transitHealth.cModeSubtitle'
+  | 'transitHealth.cTotalLines'
+  | 'transitHealth.cLinesUnit'
+  | 'transitHealth.cHoursTitle'
+  | 'transitHealth.cHoursSubtitle'
+  | 'transitHealth.cNoSchedule'
+  | 'transitHealth.cPlaceTitle'
+  | 'transitHealth.cPlaceSubtitle'
+  | 'transitHealth.cPlaceRate'
+  | 'transitHealth.cPlaceEntered'
+  | 'transitHealth.cHotspotTitle1'
+  | 'transitHealth.cHotspotTitle2'
+  | 'transitHealth.cHotspotSub1'
+  | 'transitHealth.cHotspotSub2'
+  | 'transitHealth.cDemandRate'
+  | 'transitHealth.cAttained'
+  | 'transitHealth.cNearbyCount'
+  | 'transitHealth.cAround'
+  | 'transitHealth.cHotspotEmpty'
+  | 'transitHealth.cOperatorTitle'
+  | 'transitHealth.cOperatorSubtitle'
+  | 'transitHealth.cOperatorBarLabel'
+  | 'transitNetworkSource.title'
+  | 'transitNetworkSource.origin.sample'
+  | 'transitNetworkSource.origin.rmp'
+  | 'transitNetworkSource.origin.server'
+  | 'transitNetworkSource.import.own'
+  | 'transitNetworkSource.import.default'
+  | 'transitNetworkSource.import.short'
+  | 'transitNetworkSource.import.project'
+  | 'transitNetworkSource.sourceAria'
+  | 'transitNetworkSource.source.server'
+  | 'transitNetworkSource.source.loading'
+  | 'transitNetworkSource.source.sample'
+  | 'transitNetworkSource.source.imported'
+  | 'transitNetworkSource.localDraftName'
+  | 'transitNetworkSource.summary.stationCount'
+  | 'transitNetworkSource.summary.stationsUnnamed'
+  | 'transitNetworkSource.summary.stationsNamed'
+  | 'transitNetworkSource.summary.lineCount'
+  | 'transitNetworkSource.summary.edgeCount'
+  | 'transitNetworkSource.summary.source'
+  | 'transitNetworkSource.status.persisting'
+  | 'transitNetworkSource.status.persisted'
+  | 'transitNetworkSource.status.gallerySample'
+  | 'transitNetworkSource.status.localOnly'
+  | 'transitNetworkSource.palette.aria'
+  | 'transitNetworkSource.action.fillStationNamesAria'
+  | 'transitNetworkSource.action.fillStationNames'
+  | 'transitNetworkSource.action.configureLineNames'
+  | 'transitNetworkSource.action.removeImported'
+  | 'transitNetworkSource.action.cancel'
+  | 'transitNetworkSource.action.saving'
+  | 'transitNetworkSource.action.close'
+  | 'transitNetworkSource.error.fileTooLarge'
+  | 'transitNetworkSource.error.notSignedIn'
+  | 'transitNetworkSource.error.persistFailed'
+  | 'transitNetworkSource.error.persistFailedLocalOnly'
+  | 'transitNetworkSource.error.readFailed'
+  | 'transitNetworkSource.error.deleteFailed'
+  | 'transitNetworkSource.error.saveLineNamesFailed'
+  | 'transitNetworkSource.error.saveStationNamesFailed'
+  | 'transitNetworkSource.error.sampleLoadFailed'
+  | 'transitNetworkSource.error.sampleLoadFailedHint'
+  | 'transitNetworkSource.notice.lineNamesSampleLocalOnly'
+  | 'transitNetworkSource.notice.lineNamesPendingPersist'
+  | 'transitNetworkSource.notice.stationNamesSampleLocalOnly'
+  | 'transitNetworkSource.notice.stationNamesPendingPersist'
+  | 'transitNetworkSource.lineName.title'
+  | 'transitNetworkSource.lineName.hintPart1'
+  | 'transitNetworkSource.lineName.hintPart2'
+  | 'transitNetworkSource.lineName.hintPart3'
+  | 'transitNetworkSource.lineName.hintPart4'
+  | 'transitNetworkSource.lineName.primaryAria'
+  | 'transitNetworkSource.lineName.primaryPlaceholder'
+  | 'transitNetworkSource.lineName.secondaryAria'
+  | 'transitNetworkSource.lineName.secondaryPlaceholder'
+  | 'transitNetworkSource.lineName.save'
+  | 'transitNetworkSource.stationName.title'
+  | 'transitNetworkSource.stationName.nearby'
+  | 'transitNetworkSource.stationName.nearbyUnavailable'
+  | 'transitNetworkSource.stationName.primaryAria'
+  | 'transitNetworkSource.stationName.primaryPlaceholder'
+  | 'transitNetworkSource.stationName.secondaryAria'
+  | 'transitNetworkSource.stationName.secondaryPlaceholder'
+  | 'transitNetworkSource.stationName.save'
+  | 'transitScreen.legacy'
+  | 'transitScreen.summaryAria'
+  | 'transitScreen.upcomingAria'
+  | 'transitScreen.viewTrips'
+  | 'transitScreen.empty.unavailable'
+  | 'transitScreen.empty.noData'
+  | 'operation.contentTagsAria'
+  | 'operation.legacyBodyDescription'
+  | 'operation.legacyBodyTitle'
+  | 'operation.legacyImageSource'
+  | 'operation.openOriginal'
+  | 'operation.originalLink'
+  | 'transitServiceNotice.activeCount'
+  | 'transitServiceNotice.history'
+  | 'transitServiceNotice.itemCount'
+  | 'transitServiceNotice.periodRange'
+  | 'transitServiceNotice.title'
+  | 'admin.edit'
+  | 'admin.editLine'
+  | 'admin.editPoi'
+  | 'admin.home.title'
+  | 'admin.home.description'
+  | 'admin.editOperation'
   | 'search.category.all'
   | 'search.category.lines'
   | 'search.category.operations'
@@ -878,6 +1605,8 @@ export type CommonMessageKey =
   | 'travelSchedule.action.legacyReference'
   | 'travelSchedule.action.saveRecord'
   | 'travelSchedule.empty.noMatch'
+  | 'travelSchedule.empty.unavailable'
+  | 'travelSchedule.empty.noData'
   | 'travelSchedule.feedback.historySaved'
   | 'travelSchedule.feedback.reminderAdded'
   | 'travelSchedule.filter.anyDestination'
@@ -907,6 +1636,10 @@ export type CommonMessageKey =
   | 'travelSchedule.order.loginRequired'
   | 'travelSchedule.order.readFailed'
   | 'travelSchedule.order.unavailable'
+  | 'travelSchedule.reminder.detailDeparture'
+  | 'travelSchedule.reminder.detailFare'
+  | 'travelSchedule.reminder.detailTrip'
+  | 'travelSchedule.reminder.titleWithTime'
   | 'travelSchedule.resultCount'
   | 'travelSchedule.search.aria'
   | 'travelSchedule.search.clear'
@@ -948,6 +1681,42 @@ export type CommonMessageKey =
   | 'travelSchedule.trip.via'
   | 'travelSchedule.trip.viaMany'
   | 'travelSchedule.tripList.aria'
+  | 'travelSchedule.journey.missingEndpoints'
+  | 'travelSchedule.journey.planning'
+  | 'travelSchedule.journey.planFailed'
+  | 'travelSchedule.journey.found'
+  | 'travelSchedule.journey.noneFound'
+  | 'travelSchedule.journey.segmentUnavailable'
+  | 'travelSchedule.journey.holding'
+  | 'travelSchedule.journey.orderFailed'
+  | 'travelSchedule.journey.orderCreated'
+  | 'travelSchedule.journey.swapEndpoints'
+  | 'travelSchedule.journey.combining'
+  | 'travelSchedule.journey.query'
+  | 'travelSchedule.journey.title'
+  | 'travelSchedule.journey.planCount'
+  | 'travelSchedule.journey.tbd'
+  | 'travelSchedule.journey.direct'
+  | 'travelSchedule.journey.transferCount'
+  | 'travelSchedule.journey.transferDetail'
+  | 'travelSchedule.journey.locking'
+  | 'travelSchedule.journey.bookJoint'
+  | 'travelSchedule.journey.planIndex'
+  | 'travelSchedule.journey.durationHours'
+  | 'travelSchedule.journey.durationMinutes'
+  | 'travelSchedule.journey.availableAll'
+  | 'travelSchedule.journey.partial'
+  | 'travelSchedule.journey.queryOnly'
+  | 'travelSchedule.journey.lineGroupAria'
+  | 'travelSchedule.journey.tripCount'
+  | 'travelSchedule.journey.stopsAria'
+  | 'travelSchedule.journey.passThrough'
+  | 'travelSchedule.journey.editTrip'
+  | 'travelSchedule.journey.period'
+  | 'travelSchedule.journey.arrival'
+  | 'travelSchedule.journey.stopCount'
+  | 'travelSchedule.journey.serviceTrip'
+  | 'travelSchedule.journey.tripLabel'
   | 'travelSchedule.weekday.everyday'
   | 'travelSchedule.weekday.fri'
   | 'travelSchedule.weekday.mon'
@@ -994,7 +1763,13 @@ export type CommonMessageKey =
   | 'travel.subtitle'
   | 'travel.ticketing.action'
   | 'travel.ticketing.detail'
-  | 'travel.ticketing.title';
+  | 'travel.ticketing.title'
+  | 'worldCoordinate.axis'
+  | 'worldCoordinate.footerEmpty'
+  | 'worldCoordinate.footerPick'
+  | 'worldCoordinate.title'
+  | 'worldCoordinate.yInherited'
+  | 'worldCoordinate.yPlaceholder';
 
 type CommonCatalog = Record<CommonMessageKey, string>;
 
@@ -1034,6 +1809,28 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.offlinePackage.strategyNote':
       '自定义范围当前记录边界并刷新公开基础数据，真实瓦片离线包仍等待体积上限和生成策略确认。',
     'account.offlinePackage.title': '新建离线范围',
+    'account.cache.offlineDeletedAll': '已删除本机与账号中的离线范围请求',
+    'account.cache.offlineDeletedLocalOnly': '已删除本机离线范围，账号侧请求删除失败',
+    'account.cache.offlineRefreshFailed': '离线范围基础数据刷新失败',
+    'account.cache.refreshFailed': '刷新失败',
+    'account.cache.refreshingOfflineBase': '正在刷新离线范围基础数据',
+    'account.error.cacheRefreshFailed': '{url} 刷新失败',
+    'account.error.offlinePackageRequestFailed': '服务端离线包请求失败',
+    'account.error.offlineScopeDeleteFailed': '账号离线范围请求删除失败',
+    'account.error.offlineScopeUnavailable': '账号离线范围暂不可用',
+    'account.error.pushPreferenceUnavailable': '通知偏好暂不可用',
+    'account.error.tripReminderDeleteFailed': '账号提醒副本删除失败',
+    'account.error.tripRemindersUnavailable': '账号提醒暂不可用',
+    'account.push.insecureContext': '当前页面不是安全上下文，浏览器不会开放 Push 订阅',
+    'account.push.loginRequired': '需要先使用临东通登录。',
+    'account.push.missingKeys': '浏览器返回的 Push 订阅缺少必要密钥',
+    'account.push.missingPublicKey': 'Web Push 公钥尚未配置，本设备暂不能订阅推送',
+    'account.push.permissionDenied': '浏览器通知权限未开启',
+    'account.push.registerFailed': 'Push 设备订阅登记失败',
+    'account.push.revokeFailed': 'Push 设备订阅撤销失败',
+    'account.push.serviceWorkerNotReady': 'Service Worker 尚未就绪，暂不能订阅 Push',
+    'account.push.unknownHost': '未知服务',
+    'account.push.unsupported': '当前浏览器不支持 Web Push',
     'account.about.currentVersion': '当前版本：{version}',
     'account.about.title': '关于与更新',
     'account.about.viewChangelog': '查看版本更新',
@@ -1170,6 +1967,16 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'changelog.empty': '当前还没有可展示的版本更新。',
     'changelog.title': '版本更新',
     'brand.home': '雨城通首页',
+    'contentPoiBinding.empty': '没有匹配的公开 POI。',
+    'contentPoiBinding.hint': '只展示公开地图中的 POI；消息发布后才会在 POI 详情中生效。',
+    'contentPoiBinding.loading': '正在读取公开 POI',
+    'contentPoiBinding.optionsAria': '可关联 POI',
+    'contentPoiBinding.searchAria': '搜索关联 POI',
+    'contentPoiBinding.searchPlaceholder': '搜索 POI 名称、地址或 ID',
+    'contentPoiBinding.selectedAria': '已关联 POI',
+    'contentPoiBinding.title': '关联 POI',
+    'contentPoiBinding.unavailable': '公开 POI 暂不可用',
+    'embeddedMapPicker.empty': '请先输入坐标或选择一个参考地点。',
     'inventoryHoldStatus.cancelled': '已取消',
     'inventoryHoldStatus.confirmed': '已确认',
     'inventoryHoldStatus.expired': '已过期',
@@ -1482,18 +2289,24 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.toolbar.zoomIn': '放大地图',
     'map.toolbar.zoomOut': '缩小地图',
     'map.title': '地图探索',
+    'mapStageLoader.aria': '地图加载中',
+    'mapStageLoader.loading': '地图正在加载',
     'siteLegal.aria': '备案信息',
     'siteLegal.disclaimer': '本站部分代码使用人工智能技术生成，上述地名、组织名均为虚构。',
     'siteLegal.icp': '辽ICP备2021004959号-1',
     'siteLegal.police': '辽公网安备21100502000117号',
     'siteLegal.version': '版本 {version}',
-    'map.route.alight': '{name} 出站',
+    'map.route.alight': '{name} 下车',
+    'map.route.alightFerry': '{name} 下船',
+    'map.route.alightMetro': '{name} 出站',
     'map.route.aria': '路线规划',
     'map.route.arrive': '到达 {name}',
     'map.route.badge.fastest': '最快到达',
     'map.route.badge.fewestTransfers': '最少换乘',
     'map.route.badge.leastWalking': '最少步行',
-    'map.route.board': '{name} 进站',
+    'map.route.board': '{name} 上车',
+    'map.route.boardFerry': '{name} 上船',
+    'map.route.boardMetro': '{name} 进站',
     'map.route.close': '关闭路线规划',
     'map.route.collapse': '收起路线规划',
     'map.route.currentLocation': '当前地点',
@@ -1577,7 +2390,6 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.swap': '交换起终点',
     'map.route.traceTitle': '{title} · 初步估算',
     'map.route.transferAction': '{name} 换乘',
-    'map.route.transferBoard': '{name} 上车',
     'map.route.transferTitle': '{firstMode}+{secondMode}换乘',
     'map.route.transferWalk': '换乘 步行 {distance} {duration}',
     'map.route.transitNote.default':
@@ -1612,6 +2424,228 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.roadDetail.endpointCountValue': '{count} 个',
     'map.roadDetail.traceHighlighted': '已在地图上高亮近似轨迹',
     'map.roadDetail.traceStatus': '轨迹状态',
+    'metroWayfindingEditor.action.addElement': '添加元素',
+    'metroWayfindingEditor.action.cancel': '取消',
+    'metroWayfindingEditor.action.clear': '清空',
+    'metroWayfindingEditor.action.close': '关闭',
+    'metroWayfindingEditor.action.delete': '删除',
+    'metroWayfindingEditor.action.done': '完成',
+    'metroWayfindingEditor.action.dragToReorder': '拖动更改顺序',
+    'metroWayfindingEditor.action.duplicate': '复制',
+    'metroWayfindingEditor.action.duplicateElement': '创建元素副本',
+    'metroWayfindingEditor.action.importSign': '导入导视牌',
+    'metroWayfindingEditor.action.moveDown': '下移',
+    'metroWayfindingEditor.action.moveLeft': '向左移动',
+    'metroWayfindingEditor.action.moveRight': '向右移动',
+    'metroWayfindingEditor.action.moveRowDownAria': '下移此行',
+    'metroWayfindingEditor.action.moveRowUpAria': '上移此行',
+    'metroWayfindingEditor.action.moveUp': '上移',
+    'metroWayfindingEditor.action.openProjectLibraryTitle': '版式模板与导入工程',
+    'metroWayfindingEditor.action.openTemplateLibrary': '打开模板库',
+    'metroWayfindingEditor.action.removeElement': '移除元素',
+    'metroWayfindingEditor.action.replaceSign': '替换现有导视牌',
+    'metroWayfindingEditor.action.reverse': '反转',
+    'metroWayfindingEditor.action.reverseDisabledVertical': '竖向模板不支持反转顺序',
+    'metroWayfindingEditor.action.reverseTitle': '反转导视牌元素顺序',
+    'metroWayfindingEditor.action.templateLibrary': '模板库',
+    'metroWayfindingEditor.align.center': '居中',
+    'metroWayfindingEditor.align.left': '左对齐',
+    'metroWayfindingEditor.align.right': '右对齐',
+    'metroWayfindingEditor.aria.addElementToRow': '向{row}添加元素',
+    'metroWayfindingEditor.aria.canvas': '地铁导视牌编排',
+    'metroWayfindingEditor.aria.combination': '组合框，{count} 个子元素，缩放 {scale}%',
+    'metroWayfindingEditor.aria.defaultLineName': '线路',
+    'metroWayfindingEditor.aria.draggableTab': '{label}，可拖动更改顺序',
+    'metroWayfindingEditor.aria.emptyState': '开始创建导视牌',
+    'metroWayfindingEditor.aria.fixedSpace': '固定空白，{units} 格',
+    'metroWayfindingEditor.aria.flexSpace': '弹性空白',
+    'metroWayfindingEditor.aria.inlineEditable': '{label}，可内联编辑',
+    'metroWayfindingEditor.aria.largeTextWithSummary': '大文字，{summary}',
+    'metroWayfindingEditor.aria.partSuffix': '，{value}',
+    'metroWayfindingEditor.aria.removeSegment': '删除{kind}',
+    'metroWayfindingEditor.aria.rowElements': '{row}已添加元素',
+    'metroWayfindingEditor.aria.segmentOrdinal': '第 {index} 个{kind}',
+    'metroWayfindingEditor.aria.suffixOrdinal': '第 {index} 个下角标',
+    'metroWayfindingEditor.aria.textElement': '文字，{rows} 行，{alignment}',
+    'metroWayfindingEditor.aria.textSegment': '{label}的文本段 {index}',
+    'metroWayfindingEditor.color.background': '元素背景色',
+    'metroWayfindingEditor.color.custom': '自定义颜色',
+    'metroWayfindingEditor.color.customAria': '{label}自定义颜色',
+    'metroWayfindingEditor.color.foreground': '元素文字、线条与图标颜色',
+    'metroWayfindingEditor.color.inherit': '跟随导视牌',
+    'metroWayfindingEditor.combination.addAria': '添加组合框子元素',
+    'metroWayfindingEditor.combination.addFacility': '设施图标',
+    'metroWayfindingEditor.combination.addSpace': '空格',
+    'metroWayfindingEditor.combination.childDuplicateAria': '复制子元素',
+    'metroWayfindingEditor.combination.childMoveDownAria': '子元素下移',
+    'metroWayfindingEditor.combination.childMoveUpAria': '子元素上移',
+    'metroWayfindingEditor.combination.childRemoveAria': '删除子元素',
+    'metroWayfindingEditor.combination.childType': '子元素类型',
+    'metroWayfindingEditor.combination.closeAria': '关闭组合框编辑',
+    'metroWayfindingEditor.combination.description':
+      '支持设施图标、箭头、文字、大文字和固定或弹性空格，子元素不会超出组合框。',
+    'metroWayfindingEditor.combination.editTitle': '编辑组合内容',
+    'metroWayfindingEditor.combination.editWithCount': '编辑组合内容（{count}）',
+    'metroWayfindingEditor.combination.empty': '组合框还没有子元素。',
+    'metroWayfindingEditor.combination.eyebrow': '组合框子元素',
+    'metroWayfindingEditor.combination.fill': '组合框填充',
+    'metroWayfindingEditor.combination.fillColor': '组合框填充色',
+    'metroWayfindingEditor.combination.listAria': '组合框子元素列表',
+    'metroWayfindingEditor.combination.scale': '组合框缩放倍数',
+    'metroWayfindingEditor.combination.stripeColor': '色带颜色',
+    'metroWayfindingEditor.combination.stripePosition': '色带位置',
+    'metroWayfindingEditor.combination.templateHint':
+      '「线路编号」内容模板已移至编辑器上方的「插入建议」区域：选中线路后可替换本组合框的子元素，并按颜色填充或色带样式套用线路标识色。',
+    'metroWayfindingEditor.confirm.clear': '确认清空当前地铁导视牌的全部元素？',
+    'metroWayfindingEditor.direction.down': '向下',
+    'metroWayfindingEditor.direction.left': '向左',
+    'metroWayfindingEditor.direction.right': '向右',
+    'metroWayfindingEditor.direction.up': '向上',
+    'metroWayfindingEditor.divider.note': '竖线宽 {width}、高 72，随导视牌像素单元等比缩放。',
+    'metroWayfindingEditor.elementLabel.arrow': '箭头 · 85 × 85',
+    'metroWayfindingEditor.elementLabel.combination': '组合框 · {scale}% · {count} 个子元素',
+    'metroWayfindingEditor.elementLabel.divider': '分割线 · {width} × 72',
+    'metroWayfindingEditor.elementLabel.facility': '设施图标 · 85 × 85',
+    'metroWayfindingEditor.elementLabel.largeText': '大文字 · 字高 {size}',
+    'metroWayfindingEditor.elementLabel.space': '空白元素',
+    'metroWayfindingEditor.elementLabel.text': '文字 · {rows} 行',
+    'metroWayfindingEditor.elementType.arrow': '箭头',
+    'metroWayfindingEditor.elementType.combination': '组合框',
+    'metroWayfindingEditor.elementType.divider': '分割线',
+    'metroWayfindingEditor.elementType.facility': '设施',
+    'metroWayfindingEditor.elementType.largeText': '大文字',
+    'metroWayfindingEditor.elementType.space': '空白',
+    'metroWayfindingEditor.elementType.spaceShort': '空格',
+    'metroWayfindingEditor.elementType.text': '文字',
+    'metroWayfindingEditor.empty.description': '添加第一个元素，或从模板库载入现成版式。',
+    'metroWayfindingEditor.empty.title': '开始创建导视牌',
+    'metroWayfindingEditor.error.fileTooLarge': '{name} 超过 {limit} MB，已停止读取。',
+    'metroWayfindingEditor.error.parseFailed': '工程文件解析失败。',
+    'metroWayfindingEditor.error.tooManyFiles': '一次最多导入 {count} 个工程文件。',
+    'metroWayfindingEditor.examples.aria': '地铁导视版式模板',
+    'metroWayfindingEditor.examples.categoriesAria': '模板分类',
+    'metroWayfindingEditor.examples.categoryEntry': '进站相关',
+    'metroWayfindingEditor.examples.categoryExit': '出站相关',
+    'metroWayfindingEditor.examples.categoryTransfer': '换乘相关',
+    'metroWayfindingEditor.examples.description': '选择一个版式开始编辑',
+    'metroWayfindingEditor.examples.empty': '当前线网没有可用示例模板',
+    'metroWayfindingEditor.examples.line': '套用线路',
+    'metroWayfindingEditor.examples.loadAria': '载入{remark}，{mode}，{size}',
+    'metroWayfindingEditor.examples.station': '套用车站',
+    'metroWayfindingEditor.examples.title': '版式模板',
+    'metroWayfindingEditor.examples.useTemplate': '使用此模板',
+    'metroWayfindingEditor.field.addForegroundStroke': '添加前景色描边',
+    'metroWayfindingEditor.field.addFrame': '添加外框',
+    'metroWayfindingEditor.field.alignment': '对齐',
+    'metroWayfindingEditor.field.arrow': '箭头',
+    'metroWayfindingEditor.field.backgroundColor': '导视牌底色',
+    'metroWayfindingEditor.field.defaultForegroundColor': '默认文字与图形颜色',
+    'metroWayfindingEditor.field.elementType': '元素类型',
+    'metroWayfindingEditor.field.exitIconDirection': '出口图标方向',
+    'metroWayfindingEditor.field.facilityIcon': '设施图标',
+    'metroWayfindingEditor.field.iconDirection': '图标方向',
+    'metroWayfindingEditor.field.iconVariant': '图标变种',
+    'metroWayfindingEditor.field.layout': '版式',
+    'metroWayfindingEditor.field.rowDivider': '添加行间分割线',
+    'metroWayfindingEditor.field.writingMode': '文字排列',
+    'metroWayfindingEditor.fill.color': '颜色填充',
+    'metroWayfindingEditor.fill.inverse': '反色填充',
+    'metroWayfindingEditor.fill.none': '无填充',
+    'metroWayfindingEditor.fill.stripe': '无填充+色带',
+    'metroWayfindingEditor.frame.circle': '圆形',
+    'metroWayfindingEditor.frame.fill': '外框填充',
+    'metroWayfindingEditor.frame.fillColor': '外框填充色',
+    'metroWayfindingEditor.frame.none': '无',
+    'metroWayfindingEditor.frame.rectangle': '矩形',
+    'metroWayfindingEditor.frame.shape': '外框形状',
+    'metroWayfindingEditor.import.description':
+      '选择 JSON 工程文件，系统会先解析并展示转换预览，确认后再替换当前导视牌。',
+    'metroWayfindingEditor.import.dropActive': '松开鼠标即可导入工程文件',
+    'metroWayfindingEditor.import.dropHint': '也可以将 JSON 工程文件拖放到此处',
+    'metroWayfindingEditor.import.fileLimits': '文件限制',
+    'metroWayfindingEditor.import.fileLimitsDescription':
+      '最多选择 {count} 个文件，单个文件不超过 {size} MB；不同编辑器的工程不能混合导入。',
+    'metroWayfindingEditor.import.selectFiles': '选择工程文件',
+    'metroWayfindingEditor.import.sourceExternalHint': '外部编辑器',
+    'metroWayfindingEditor.import.sourceYct': 'YCT 地铁导视工程',
+    'metroWayfindingEditor.import.sourceYctHint': '本站工程',
+    'metroWayfindingEditor.import.supportedSources': '支持来源',
+    'metroWayfindingEditor.import.title': '导入外部导视工程',
+    'metroWayfindingEditor.importPreview.closeAria': '关闭导入预览',
+    'metroWayfindingEditor.importPreview.eyebrow': '工程转换预览',
+    'metroWayfindingEditor.importPreview.footerSummary': '{count} 个 JSON · 单文件上限 {size} MB',
+    'metroWayfindingEditor.importPreview.mode': '转换方式',
+    'metroWayfindingEditor.importPreview.modeSemantic': '仅语义（推荐）',
+    'metroWayfindingEditor.importPreview.modeSourceStyle': '保留源样式',
+    'metroWayfindingEditor.importPreview.previewNote':
+      '按画布比例缩小的牌面示意，仅用于确认转换后的内容与排版',
+    'metroWayfindingEditor.importPreview.rowsAria': '待导入行顺序',
+    'metroWayfindingEditor.importPreview.source': '来源',
+    'metroWayfindingEditor.importPreview.sourceStyle': '来源风格',
+    'metroWayfindingEditor.importPreview.targetStyle': '目标风格',
+    'metroWayfindingEditor.importPreview.warningCount': '（{count} 处）',
+    'metroWayfindingEditor.importPreview.warningsAria': '转换提醒',
+    'metroWayfindingEditor.importPreview.warningsTitle': '转换提醒',
+    'metroWayfindingEditor.largeText.fieldLabel': '大文字（字高 {size}）',
+    'metroWayfindingEditor.largeText.insertSuffix': '在光标处添加下角标',
+    'metroWayfindingEditor.option.all': '全部',
+    'metroWayfindingEditor.option.doubleRow': '双行',
+    'metroWayfindingEditor.option.entry': '进站',
+    'metroWayfindingEditor.option.exit': '出站',
+    'metroWayfindingEditor.option.singleRow': '单行',
+    'metroWayfindingEditor.option.transfer': '换乘',
+    'metroWayfindingEditor.option.vertical': '竖向',
+    'metroWayfindingEditor.projectDialog.closeAria': '关闭模板库与导入',
+    'metroWayfindingEditor.projectDialog.eyebrow': '地铁导视牌',
+    'metroWayfindingEditor.projectDialog.import': '导入工程',
+    'metroWayfindingEditor.projectDialog.source': '工程来源',
+    'metroWayfindingEditor.projectDialog.templates': '版式模板',
+    'metroWayfindingEditor.projectDialog.title': '模板库与导入',
+    'metroWayfindingEditor.row.first': '第一行',
+    'metroWayfindingEditor.row.second': '第二行',
+    'metroWayfindingEditor.segment.boxed': '方框文本',
+    'metroWayfindingEditor.segment.boxedShort': '方框',
+    'metroWayfindingEditor.segment.chooseLineColor': '选择线路色（同时填入线路号）',
+    'metroWayfindingEditor.segment.insertBoxed': '在光标处添加方框',
+    'metroWayfindingEditor.segment.insertLine': '在光标处添加线路号',
+    'metroWayfindingEditor.segment.line': '线路号',
+    'metroWayfindingEditor.segment.text': '文本段',
+    'metroWayfindingEditor.space.fixed': '固定宽度',
+    'metroWayfindingEditor.space.flex': '平分剩余宽度',
+    'metroWayfindingEditor.space.flexNote': '所有“平分剩余宽度”空白元素会均分可用空间。',
+    'metroWayfindingEditor.space.mode': '空白方式',
+    'metroWayfindingEditor.space.width': '宽度（16 像素间距单位）',
+    'metroWayfindingEditor.status.parsing': '解析中',
+    'metroWayfindingEditor.status.parsingFiles': '正在解析',
+    'metroWayfindingEditor.stripePosition.bottom': '下',
+    'metroWayfindingEditor.stripePosition.left': '左',
+    'metroWayfindingEditor.stripePosition.right': '右',
+    'metroWayfindingEditor.suffix.label': '下角标',
+    'metroWayfindingEditor.suffix.placeholder': '下标',
+    'metroWayfindingEditor.suffix.remove': '删除此下角标',
+    'metroWayfindingEditor.suggestion.acceptAria': '采纳建议：{suggestion}',
+    'metroWayfindingEditor.suggestion.acceptTitle': '采纳建议（Tab）',
+    'metroWayfindingEditor.tab.childCount': '{count} 个子元素',
+    'metroWayfindingEditor.text.addMainRow': '添加主文本行',
+    'metroWayfindingEditor.text.addRowAria': '添加文本行',
+    'metroWayfindingEditor.text.addSecondaryRow': '添加副文本行',
+    'metroWayfindingEditor.text.deleteRow': '删除文本行',
+    'metroWayfindingEditor.text.deleteRowAria': '删除第 {index} 行',
+    'metroWayfindingEditor.text.dynamicFontSize': '动态字高',
+    'metroWayfindingEditor.text.main': '主文本',
+    'metroWayfindingEditor.text.mainRowLabel': '第 {index} 行主文本内容',
+    'metroWayfindingEditor.text.metrics': '主文本 {main} · 副文本 {secondary}',
+    'metroWayfindingEditor.text.moveRowDownAria': '第 {index} 行下移',
+    'metroWayfindingEditor.text.moveRowUpAria': '第 {index} 行上移',
+    'metroWayfindingEditor.text.rowHeader': '第 {index} 行 · {kind}',
+    'metroWayfindingEditor.text.rowsAria': '文本行',
+    'metroWayfindingEditor.text.secondary': '副文本',
+    'metroWayfindingEditor.text.secondaryRowLabel': '第 {index} 行副文本内容',
+    'metroWayfindingEditor.toolbar.title': '版式与外观',
+    'metroWayfindingEditor.writing.horizontal': '横向',
+    'metroWayfindingEditor.writing.horizontalText': '横排',
+    'metroWayfindingEditor.writing.vertical': '竖向',
+    'metroWayfindingEditor.writing.verticalText': '竖排',
     'nav.back': '返回',
     'nav.collapse': '收起主导航',
     'nav.expand': '展开主导航',
@@ -1670,6 +2704,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operations.startsAt': '开始于 {date}',
     'operations.strongReminder': '强提醒',
     'operations.validUntil': '有效至 {date}',
+    'operationRelatedPois.count': '{count} 个 POI',
+    'operationRelatedPois.fallback': '地图地点',
+    'operationRelatedPois.title': '相关地点',
+    'operationToc.collapse': '收起{title}',
+    'operationToc.expand': '展开{title}',
+    'operationToc.title': '文章目录',
     'page.account': '账号设置',
     'page.map': '地图探索',
     'page.offline': '离线',
@@ -1678,12 +2718,51 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'page.search': '搜索',
     'page.services': '更多服务',
     'page.changelog': '版本更新',
+    'page.faq': '帮助与常见问题',
+    'page.roadMaterials': '路牌物料',
+    'page.telegraph': '电报体验',
+    'page.transitMaterials': '公共交通导视',
+    'page.transitNetworkHealth': '公共交通网络健康度',
     'page.ticketOrder': '票务订单',
     'page.travel': '出行',
     'page.travelScreen': '智运大屏',
+    'poiFacility.add': '添加设施',
+    'poiFacility.descriptionLabel': '文字描述',
+    'poiFacility.descriptionPlaceholder': '例如：一层东侧设有无障碍电梯',
+    'poiFacility.hint': '图标与文字描述',
+    'poiFacility.icon.accessible': '无障碍',
+    'poiFacility.icon.childCare': '母婴',
+    'poiFacility.icon.elevator': '电梯',
+    'poiFacility.icon.escalator': '自动扶梯',
+    'poiFacility.icon.info': '信息',
+    'poiFacility.icon.luggage': '行李寄存',
+    'poiFacility.icon.medical': '医疗',
+    'poiFacility.icon.parking': '停车',
+    'poiFacility.icon.pets': '宠物',
+    'poiFacility.icon.power': '充电',
+    'poiFacility.icon.restaurant': '餐饮',
+    'poiFacility.icon.shopping': '购物',
+    'poiFacility.icon.smoking': '吸烟区',
+    'poiFacility.icon.wc': '卫生间',
+    'poiFacility.icon.wifi': '无线网络',
+    'poiFacility.iconLabel': '设施图标',
+    'poiFacility.removeAria': '删除第 {index} 条设施信息',
+    'poiFacility.removeTitle': '删除设施',
+    'poiFacility.title': '设施信息',
     'quickAction.rideCode': '乘车码',
     'quickAction.rideCodeLoginRequired': '乘车码需要登录后使用',
     'quickAction.rideCodeUnavailable': '乘车码暂不可用，请稍后重试',
+    'scheduleStopTable.aria': '各站停站时刻',
+    'scheduleStopTable.arrival': '到达',
+    'scheduleStopTable.arrivalAria': '{station} 到达时间',
+    'scheduleStopTable.departure': '出发',
+    'scheduleStopTable.departureAria': '{station} 出发时间',
+    'scheduleStopTable.dwell': '停车(分)',
+    'scheduleStopTable.dwellAria': '{station} 停车分钟',
+    'scheduleStopTable.empty': '暂无停站时刻',
+    'scheduleStopTable.station': '站点',
+    'scheduleStopTable.stop': '停站',
+    'scheduleStopTable.stopAria': '{station} 是否停站',
     'search.open': '搜索',
     'shortcut.close': '关闭快捷键',
     'shortcut.focusMapSearch': '聚焦地图搜索',
@@ -1759,6 +2838,452 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'services.category.toolbox': '工具箱',
     'services.empty': '暂无服务入口',
     'services.itemCount': '{count} 项',
+    'materialStudio.history': '物料历史',
+    'materialStudio.preview': '预览',
+    'materialStudio.updatePreview': '更新预览',
+    'materialStudio.submitReview': '提交审核',
+    'materialStudio.submitReviewManualHint': '提交审核；审核通过后可下载无水印图片',
+    'materialStudio.exportProject': '导出工程文件',
+    'materialStudio.download': '下载图片',
+    'materialStudio.loginRequired': '登录后可提交审核并下载无水印图片。',
+    'materialStudio.serverUnverified': '服务器账号未验证',
+    'materialStudio.serverUnverifiedHint': '请在账号设置中验证服务器账号后下载无水印图片',
+    'materialStudio.loginRemoveWatermark': '登录去水印',
+    'materialStudio.reviewRequired': '去水印需审核',
+    'materialStudio.templateReadFailed': '无法读取物料模板。',
+    'materialStudio.noTemplates': '当前没有可用模板。',
+    'materialStudio.workspaceUnavailable': '物料工作台暂时不可用。',
+    'materialStudio.exportOnlyManual': '只有手动编辑的地铁导视牌可以导出工程文件。',
+    'materialStudio.offlineBlocked': '当前处于离线状态，该操作需要联网。',
+    'materialStudio.noSyncTemplate': '当前没有可同步的模板。',
+    'materialStudio.serverSubmitOnlineOnly': '服务器数据模式的草稿只能在线提交。',
+    'materialStudio.loginFirst': '请先登录。',
+    'materialStudio.localSyncFailed': '本机草稿同步失败。',
+    'materialStudio.localSyncedSubmitHint': '本机草稿已同步，仍需联网提交审核。',
+    'materialStudio.networkError': '网络错误。',
+    'materialStudio.localSyncNetworkError': '本机草稿同步时发生网络错误。',
+    'materialStudio.noProjectStations': '导入项目中没有可选择的站点。',
+    'materialStudio.selectServerStation': '请先选择服务器公交站。',
+    'materialStudio.selectProjectLine': '请先选择至少一条当前图上方向的项目线路。',
+    'materialStudio.selectDirectionLine': '请先选择至少一条同方向线路。',
+    'materialStudio.selectServerLine': '请先选择服务器线路。',
+    'materialStudio.selectServerPlace': '请先选择服务器地点。',
+    'materialStudio.selectCoordinate': '请先选择路牌安装坐标。',
+    'materialStudio.selectLinkedMode': '请先选择{mode}。',
+    'materialStudio.previewFailed': '生成预览失败。',
+    'materialStudio.previewNetworkError': '生成预览时发生网络错误。',
+    'materialStudio.noSubmittableTemplate': '当前没有可提交的模板。',
+    'materialStudio.saveCustomFailed': '无法保存自定义物料。',
+    'materialStudio.savedSubmitFailed': '物料已保存，但提交审核失败。',
+    'materialStudio.submitNetworkError': '提交审核时发生网络错误。',
+    'materialStudio.downloadFailed': '下载物料失败。',
+    'materialStudio.downloadNetworkError': '下载物料时发生网络错误。',
+    'materialStudio.downloadPreviewNetworkError': '下载带水印预览时发生网络错误。',
+    'materialStudio.selectTemplateAndMode': '请先选择模板和{mode}。',
+    'materialStudio.serverVerifiedDownloadHint':
+      '验证服务器账号后才能下载无水印图片，已改为下载带水印预览。',
+    'materialStudio.operationBusy': '当前操作尚未完成，请稍候。',
+    'materialStudio.modeNoReviewNeeded': '{mode}模式无需提交审核。',
+    'materialStudio.localDraft': '本机草稿',
+    'materialStudio.workspaceEyebrow': '物料工作台',
+    'materialStudio.syncLocalDraft': '同步本机草稿',
+    'materialStudio.templates': '模板',
+    'materialStudio.networkData': '线网数据',
+    'materialStudio.online': '在线',
+    'materialStudio.offline': '离线',
+    'materialStudio.dimensions': '尺寸',
+    'materialStudio.dataSource': '数据来源',
+    'materialStudio.manualInput': '手动输入',
+    'materialStudio.roadTitle': '路牌物料生成',
+    'materialStudio.transitTitle': '公共交通导视物料生成',
+    'materialStudio.serverNetwork': '服务器线网',
+    'materialStudio.sampleProject': '示例项目',
+    'materialStudio.importedProject': '导入项目',
+    'materialStudio.projectStation': '项目站点',
+    'materialStudio.projectCurrentStation': '项目当前站',
+    'materialStudio.variant': '版式',
+    'materialStudio.group.busStop': '公交站牌',
+    'materialStudio.group.busStopHorizontal': '公交站牌（横版线路详情）',
+    'materialStudio.group.metroLineMap': '地铁横板线路图',
+    'materialStudio.group.layout': '版式',
+    'materialStudio.group.style': '样式',
+    'materialStudio.projectLineCount': '{count} 条项目线路',
+    'materialStudio.busLineCount': '{count} 条公交线路',
+    'materialStudio.stationProjectLines': '当前站点的项目线路',
+    'materialStudio.projectLines': '项目线路',
+    'materialStudio.mapDrivingDirection': '图上行车方向',
+    'materialStudio.roadDrivingDirection': '道路行车方向',
+    'materialStudio.stationProperties': '站点属性',
+    'materialStudio.originStation': '始发站',
+    'materialStudio.terminalStation': '终点站',
+    'materialStudio.sameDirectionLines': '同方向线路',
+    'materialStudio.singleSelect': '（单选）',
+    'materialStudio.maxLines': '（最多 {count} 条）',
+    'materialStudio.destinationPending': '终点待维护',
+    'materialStudio.directionTo': '往',
+    'materialStudio.originAtStation': '当前站始发',
+    'materialStudio.terminalAtStation': '当前站终到',
+    'materialStudio.noProjectConnection': '当前项目站点在该图上方向没有线路连接。',
+    'materialStudio.noDirectionLine': '当前方向没有可用线路。',
+    'materialStudio.configureLineName': '配置线路名称',
+    'materialStudio.serverLines': '服务器线路',
+    'materialStudio.stationsCount': '{count} 站',
+    'materialStudio.notOpened': '未开通',
+    'materialStudio.serverStations': '服务器站点',
+    'materialStudio.searchServerPlace': '搜索服务器地点',
+    'materialStudio.serverPlaces': '服务器地点',
+    'materialStudio.coordinateX': '安装坐标 X',
+    'materialStudio.coordinateZ': '安装坐标 Z',
+    'materialStudio.pickCoordinateHint': '在服务器地图预览中点选路牌安装坐标',
+    'materialStudio.clickMapCoordinate': '点击地图确定安装坐标 · X {x} / Z {z}',
+    'materialStudio.fillCoordinateFirst': '请填写安装坐标后在地图中微调',
+    'materialStudio.previewAria': '物料预览',
+    'materialStudio.previewAlt': '{title}预览',
+    'materialStudio.closePreview': '关闭预览',
+    'materialStudio.historyTitle': '我的物料历史',
+    'materialStudio.historyHint': '已提交的自定义物料会保留在这里，审核通过后可随时下载。',
+    'materialStudio.closeHistory': '关闭物料历史',
+    'materialStudio.submittedAt': '提交于 {time}',
+    'materialStudio.reviewedAt': '审核于 {time}',
+    'materialStudio.noSubmittedYet': '还没有提交过自定义物料。',
+    'materialStudio.previewWatermark': '预览含水印',
+    'materialStudio.updating': '更新中',
+    'materialStudio.noPreviewYet': '尚未生成预览',
+    'materialStudio.signHeight': '导视牌高度（128 像素格数）',
+    'materialStudio.signLength': '导视牌长度（128 像素格数）',
+    'materialStudio.signWidth': '导视牌宽度（128 像素格数）',
+    'materialStudio.widthMeters': '宽度（米）',
+    'materialStudio.heightMeters': '高度（米）',
+    'materialStudio.alignmentUnit': '对齐单位（像素）',
+    'materialStudio.alignToMapSize': '对齐到整数地图画尺寸',
+    'materialStudio.firstBus': '首班车',
+    'materialStudio.lastBus': '末班车',
+    'materialStudio.projectNoTimeHint': '项目数据不含运营时间，留空则不显示这一行。',
+    'materialStudio.pleaseSelect': '请选择',
+    'materialStudio.colorPaletteAria': '{label}色板',
+    'materialStudio.colorHexAria': '{label}十六进制颜色',
+    'materialStudio.orientationRight': '向图右',
+    'materialStudio.orientationLeft': '向图左',
+    'materialStudio.orientationUp': '向图上',
+    'materialStudio.orientationDown': '向图下',
+    'materialStudio.draftStatus.draft': '草稿',
+    'materialStudio.draftStatus.pending_review': '待审核',
+    'materialStudio.draftStatus.approved': '已通过',
+    'materialStudio.draftStatus.rejected': '已驳回',
+    'materialStudio.syncStatus.pending': '待同步',
+    'materialStudio.syncStatus.syncing': '同步中',
+    'materialStudio.syncStatus.synced': '已同步',
+    'materialStudio.syncStatus.conflict': '有冲突',
+    'materialStudio.syncStatus.failed': '同步失败',
+    'materialStudio.emptyFields': '未填写字段内容',
+    'materialStudio.watermarkedPreviewSuffix': '-带水印预览',
+    'telegraph.stage.header': '填写报头',
+    'telegraph.stage.recipient': '填写收报信息',
+    'telegraph.stage.code': '打印电码',
+    'telegraph.stage.message': '打印电文',
+    'telegraph.stage.footer': '打印报尾',
+    'telegraph.stage.stamp': '盖电报戳',
+    'telegraph.stage.envelope': '装入信封',
+    'telegraph.newLetter': '再写一封',
+    'telegraph.history': '历史记录',
+    'telegraph.startWriting': '开始填写',
+    'telegraph.replayAnimation': '重播动画',
+    'telegraph.continueScroll': '继续滚动',
+    'telegraph.continueScrollStart': '继续滚动，开始填写',
+    'telegraph.simulateSend': '模拟拍发',
+    'telegraph.skipAnimation': '跳过动画',
+    'telegraph.continueConfirm': '继续滚动，进入确认拍发',
+    'telegraph.province': '省',
+    'telegraph.city': '市',
+    'telegraph.county': '县',
+    'telegraph.otherLocation': '其他收报地点',
+    'telegraph.recipientInfo': '收报信息',
+    'telegraph.body': '电报正文',
+    'telegraph.senderName': '发报人姓名或游客 IP',
+    'telegraph.senderAddress': '发报人地址',
+    'telegraph.senderLock': '登录后可修改发报人信息',
+    'telegraph.billableGrids': '计费格数',
+    'telegraph.amount': '报费详情',
+    'telegraph.billingRule': '连续字母/数字每 5 个一格',
+    'telegraph.cellRecipient': '收报信息',
+    'telegraph.cellBody': '电报正文',
+    'telegraph.noCellSelected': '当前格：未选择',
+    'telegraph.flipEnvelope': '翻转信封',
+    'telegraph.flipToFront': '翻到信封正面',
+    'telegraph.flipToBack': '翻到信封背面',
+    'telegraph.openEnvelope': '打开信封',
+    'telegraph.insertEnvelope': '装入信封',
+    'telegraph.envelopeFront': '电报信封正面',
+    'telegraph.envelopeBack': '电报信封背面',
+    'telegraph.openEnvelopeView': '打开信封查看收报纸',
+    'telegraph.insertReceivePaper': '将收报纸装入信封',
+    'telegraph.receivePaper': '收报纸',
+    'telegraph.sendPaper': '发报纸',
+    'telegraph.switchPaper': '切换纸张',
+    'telegraph.switchToSend': '切换到发报纸',
+    'telegraph.switchToReceive': '切换到收报纸',
+    'telegraph.envelopeFlip': '信封翻面',
+    'telegraph.code': '电码',
+    'telegraph.audio': '音频',
+    'telegraph.sendPaperTemplate': '电报发报纸模板',
+    'telegraph.sendPaperPreview': '电报发报纸预览',
+    'telegraph.enterDestination': '请先填写收报地点。',
+    'telegraph.enterRecipient': '请先填写收报人信息。',
+    'telegraph.enterBody': '请先填写电报内容。',
+    'telegraph.recipientOverflow': '收报信息超过模板可容纳的 {count} 格。',
+    'telegraph.bodyOverflow': '电报内容超过模板可容纳的 {count} 格。',
+    'telegraph.unsupported': '暂不支持这些字符：{chars}',
+    'telegraph.envelopeDone': '电报已打印并装入信封。',
+    'telegraph.skippedDone': '已跳过动画，电报已装入信封。',
+    'telegraph.imageFailed': '电报图片生成失败。',
+    'telegraph.sendPaperFile': '发报纸',
+    'telegraph.receivePaperFile': '收报纸',
+    'telegraph.imageDownloadFailed': '电报图片下载失败。',
+    'telegraph.codeFile': '电报电码',
+    'telegraph.filePrefix': '电报',
+    'telegraph.welcomeTitle': '趁“慢电报”还未消失，将记忆拍给自己',
+    'telegraph.welcomeP1': '一条视频，让人们发现了电报这个尘封已久的通讯业务。',
+    'telegraph.welcomeP2':
+      '如今，就算发报窗口全中国仅剩一个，人们仍愿为一封还需编发、盖章、封装的慢电报留出时间。',
+    'telegraph.welcomeP3':
+      '那么现在，就在这里亲手写下你的讯息，让它沿着尘封的路线，延续你的思绪和情感……',
+    'telegraph.confirmTitle': '确认发报内容',
+    'telegraph.closeConfirm': '关闭确认窗口',
+    'telegraph.destination': '收报地点',
+    'telegraph.recipient': '收报人',
+    'telegraph.notFilled': '未填写',
+    'telegraph.confirmBody': '报文内容',
+    'telegraph.confirmHint': '确认后将开始填写、打印、折叠并装入信封的模拟动画。',
+    'telegraph.backEdit': '返回修改',
+    'telegraph.confirmSend': '确认并拍发',
+    'telegraph.localHistory': '本机历史',
+    'telegraph.deleteHistory': '删除历史记录',
+    'telegraph.unnamed': '未命名电报',
+    'telegraph.noHistory': '还没有本机历史记录。',
+    'telegraph.cellAria': '{label} · 第{count}格',
+    'telegraph.toolbarAria': '电报操作',
+    'transitLineBrowser.filterAria': '线路筛选',
+    'transitLineBrowser.listAria': '线路列表',
+    'transitLineBrowser.modeRailway': '地方铁路',
+    'transitLineBrowser.summaryAria': '旧线路数据摘要',
+    'transitHealth.dimension.topology': '拓扑衔接',
+    'transitHealth.dimension.operations': '运营时间',
+    'transitHealth.dimension.scale': '空间规模',
+    'transitHealth.dimension.places': '地点覆盖',
+    'transitHealth.dimension.demand': '需求代理',
+    'transitHealth.dimension.data_quality': '数据质量',
+    'transitHealth.analysisEyebrow': '线网规划分析',
+    'transitHealth.subtitle':
+      '综合已发布线路拓扑、运营时间、道路节点与分类地点密度。潜在需求为规划代理值，不能替代真实客流、班次、运能和成本数据。',
+    'transitHealth.onlineSnapshot': '在线快照',
+    'transitHealth.offlineSnapshot': '离线快照',
+    'transitHealth.dataTime': '数据时间',
+    'transitHealth.noLines': '尚无已发布的公共交通线路，暂时不能生成网络统计。',
+    'transitHealth.filterAria': '按交通方式筛选',
+    'transitHealth.modeLegend': '交通方式',
+    'transitHealth.scopeCurrent': '当前统计范围：',
+    'transitHealth.scopeAll': '全部交通方式',
+    'transitHealth.demandWithLines': '需求分析考虑已有线路',
+    'transitHealth.demandPotentialOnly': '仅分析地点潜力',
+    'transitHealth.mLines': '线路数',
+    'transitHealth.mTopologyNote': '{count} 条形成连续站段',
+    'transitHealth.mStations': '站点数',
+    'transitHealth.mLocatedNote': '{rate} 可定位',
+    'transitHealth.mLength': '线网长度',
+    'transitHealth.mLocatedSegNote': '{count} 个已定位站段估算',
+    'transitHealth.mCoverage': '时刻覆盖',
+    'transitHealth.mScheduledNote': '{scheduled}/{total} 条线路',
+    'transitHealth.mServiceSpan': '平均运营时长',
+    'transitHealth.mLateNote': '{count} 条服务至 22:00 后',
+    'transitHealth.mPlaceCoverage': '规划地点覆盖',
+    'transitHealth.mPlacesNote': '{covered}/{total} 个地点',
+    'transitHealth.mRoadCoverage': '道路节点覆盖',
+    'transitHealth.mRoadsNote': '{count} 条道路样本',
+    'transitHealth.mDemandAttainment': '需求达成率',
+    'transitHealth.mPotentialDemand': '潜在需求总量',
+    'transitHealth.mAttainedNote': '{attained}/{total} 加权需求已触达',
+    'transitHealth.mPotentialHint': '按真实分类地点密度加权，不考虑线路覆盖',
+    'transitHealth.chartEyebrow': '统计图',
+    'transitHealth.chartTitle': '规模、运营与覆盖',
+    'transitHealth.locatedSampleHint': '地点与距离仅使用已定位站点样本',
+    'transitHealth.opEyebrow': '运营方',
+    'transitHealth.opTitle': '指标与排行',
+    'transitHealth.opCountHint': '共 {count} 个运营方 · 点击列名排序',
+    'transitHealth.opTableNote':
+      '公交线路由全网统一分配，运营商的连通片区数仅作归属统计，不作为脱网或强制接驳判断依据。',
+    'transitHealth.colOperator': '运营方',
+    'transitHealth.colStations': '站点',
+    'transitHealth.colStationsTitle': '按该运营方线路覆盖的稳定站点 ID 去重',
+    'transitHealth.colLines': '线路',
+    'transitHealth.colAvgConnectivity': '平均连接度',
+    'transitHealth.colConnectivityTitle': '该运营方站点在全网中直接相邻的不同站点数平均值',
+    'transitHealth.colConnectivityWeight': '连接度权重',
+    'transitHealth.colWeightTitle': '相邻站间路段按承载的不同线路数加权后的平均值',
+    'transitHealth.colLinesPerSegment': '同路段线路数',
+    'transitHealth.colSharedSegments': '共线路段',
+    'transitHealth.colScheduleCoverage': '时刻覆盖',
+    'transitHealth.colServiceSpan': '平均运营时长',
+    'transitHealth.opComponentsNote': '{count} 个片区 · {transfer} 个跨运营方站点',
+    'transitHealth.rankLabel': '第 {rank} 名',
+    'transitHealth.methodEyebrow': '口径',
+    'transitHealth.methodTitle': '统计项目与分析来源',
+    'transitHealth.noMockHint': '不使用模拟客流',
+    'transitHealth.dmTopology': '拓扑连接',
+    'transitHealth.dmTopologyDetail':
+      '按连续站序形成无向边，计算连接度、共线路段、换乘站与连通片区。',
+    'transitHealth.dmOperations': '运营时间',
+    'transitHealth.dmOperationsDetail':
+      '优先读取首末班，缺失时使用发车时刻表边界；跨午夜线路按次日计算。',
+    'transitHealth.dmScale': '线网空间规模',
+    'transitHealth.dmScaleDetail':
+      '以站名和交通方式绑定地图坐标，估算站段直线长度、站间距与覆盖范围。',
+    'transitHealth.dmPlaces': '地点覆盖',
+    'transitHealth.dmPlacesDetail':
+      '统计居住、就业、教育、医疗、生活、文体和对外交通地点进入站点服务圈的比例。',
+    'transitHealth.dmDemand': '潜在需求代理',
+    'transitHealth.dmDemandDetail':
+      '可切换纯地点聚集或已有线路触达口径；需求达成率按分类权重计算，只用于规划复核，不等同于客流预测。',
+    'transitHealth.dmRoads': '道路覆盖',
+    'transitHealth.dmRoadsDetail':
+      '以地图道路节点衡量线网覆盖边界；道路节点不是完整道路几何，不用于精确里程计算。',
+    'transitHealth.sugEyebrow': '多维启发式',
+    'transitHealth.sugTitle': '线网优化建议',
+    'transitHealth.sugMergedHint': '相同建议已跨运营商合并',
+    'transitHealth.sugEmpty': '当前切片没有触发预设启发式阈值；这不代表线路服务质量已经得到验证。',
+    'transitHealth.targetItem': '命中项目',
+    'transitHealth.viewAllTargets': '查看全部 {count} 项',
+    'transitHealth.dialogTargetLabel': '命中项目',
+    'transitHealth.itemCount': '共 {count} 项',
+    'transitHealth.dialogClose': '关闭',
+    'transitHealth.dialogCloseAria': '关闭命中项目列表',
+    'transitHealth.searchTargets': '搜索命中项目',
+    'transitHealth.searchPlaceholder': '搜索线路、站点、路段或地点',
+    'transitHealth.noMatchedTargets': '没有匹配的命中项目。',
+    'transitHealth.kindOperator': '运营方',
+    'transitHealth.kindLine': '线路',
+    'transitHealth.kindStation': '站点',
+    'transitHealth.kindSegment': '站间路段',
+    'transitHealth.kindPlace': '地点',
+    'transitHealth.kindCategory': '地点类别',
+    'transitHealth.kindRoad': '道路',
+    'transitHealth.moreOperators': '等 {count} 家运营方',
+    'transitHealth.cModeTitle': '交通方式构成',
+    'transitHealth.cModeSubtitle': '线路数量及其全网占比',
+    'transitHealth.cTotalLines': '共 {count} 条线路，{details}',
+    'transitHealth.cLinesUnit': '条线路',
+    'transitHealth.cHoursTitle': '平均运营时长',
+    'transitHealth.cHoursSubtitle': '只统计具有可解析首末时刻的线路',
+    'transitHealth.cNoSchedule': '缺少时刻',
+    'transitHealth.cPlaceTitle': '分类地点覆盖',
+    'transitHealth.cPlaceSubtitle': '进入站点服务圈的分类地点比例',
+    'transitHealth.cPlaceRate': '地点覆盖率',
+    'transitHealth.cPlaceEntered': '个规划地点进入当前交通方式的站点服务圈。',
+    'transitHealth.cHotspotTitle1': '沿线需求热点',
+    'transitHealth.cHotspotTitle2': '纯地点潜在需求中心',
+    'transitHealth.cHotspotSub1': '按现有站点触达的分类地点密度加权',
+    'transitHealth.cHotspotSub2': '忽略现有线路，仅按分类地点空间聚集度计算',
+    'transitHealth.cDemandRate': '需求达成率',
+    'transitHealth.cAttained': '已触达 {attained} / {total} 加权需求代理值。',
+    'transitHealth.cNearbyCount': '{value} · {count} 个地点',
+    'transitHealth.cAround': '{place}周边',
+    'transitHealth.cHotspotEmpty': '当前缺少可计算的需求热点样本。',
+    'transitHealth.cOperatorTitle': '运营方覆盖规模',
+    'transitHealth.cOperatorSubtitle': '按稳定站点 ID 去重，展示站点数前八名',
+    'transitHealth.cOperatorBarLabel': '{stations} 站 · {lines} 线',
+    'transitNetworkSource.title': '线网数据',
+    'transitNetworkSource.origin.sample': 'RMP 画廊项目',
+    'transitNetworkSource.origin.rmp': 'RMP 项目',
+    'transitNetworkSource.origin.server': '服务器',
+    'transitNetworkSource.import.own': '导入自己的 RMP 项目',
+    'transitNetworkSource.import.default': '导入 RMP 项目',
+    'transitNetworkSource.import.short': '导入',
+    'transitNetworkSource.import.project': '导入项目',
+    'transitNetworkSource.sourceAria': '线网数据来源',
+    'transitNetworkSource.source.server': '服务器线网',
+    'transitNetworkSource.source.loading': '正在加载',
+    'transitNetworkSource.source.sample': '示例线网',
+    'transitNetworkSource.source.imported': '导入项目',
+    'transitNetworkSource.localDraftName': '本机草稿线网',
+    'transitNetworkSource.summary.stationCount': '{count} 站',
+    'transitNetworkSource.summary.stationsUnnamed': '{count} 站待补名',
+    'transitNetworkSource.summary.stationsNamed': '站名完整',
+    'transitNetworkSource.summary.lineCount': '{count} 条线路',
+    'transitNetworkSource.summary.edgeCount': '{count} 条连接',
+    'transitNetworkSource.summary.source': '来源：RMP 画廊 ·',
+    'transitNetworkSource.status.persisting': '正在暂存',
+    'transitNetworkSource.status.persisted': '已暂存',
+    'transitNetworkSource.status.gallerySample': '画廊示例',
+    'transitNetworkSource.status.localOnly': '仅本页',
+    'transitNetworkSource.palette.aria': '{count} 种线路配色',
+    'transitNetworkSource.action.fillStationNamesAria': '补全 {count} 个未命名站点',
+    'transitNetworkSource.action.fillStationNames': '补站名 {count}',
+    'transitNetworkSource.action.configureLineNames': '配置项目线路名称',
+    'transitNetworkSource.action.removeImported': '移除已导入项目',
+    'transitNetworkSource.action.cancel': '取消',
+    'transitNetworkSource.action.saving': '正在保存',
+    'transitNetworkSource.action.close': '关闭',
+    'transitNetworkSource.error.fileTooLarge': 'RMP 项目文件不能超过 5 MB。',
+    'transitNetworkSource.error.notSignedIn': '未登录，当前导入仅在本页有效。',
+    'transitNetworkSource.error.persistFailed': '无法暂存 RMP 项目。',
+    'transitNetworkSource.error.persistFailedLocalOnly': '{message} 当前导入仅在本页有效。',
+    'transitNetworkSource.error.readFailed': '无法读取 RMP 项目文件。',
+    'transitNetworkSource.error.deleteFailed': '无法删除暂存的线网项目。',
+    'transitNetworkSource.error.saveLineNamesFailed': '无法保存线路名称。',
+    'transitNetworkSource.error.saveStationNamesFailed': '无法保存站点名称。',
+    'transitNetworkSource.error.sampleLoadFailed': '默认示例线网暂时无法加载。',
+    'transitNetworkSource.error.sampleLoadFailedHint':
+      '{message} 仍可使用服务器线网或导入本地项目。',
+    'transitNetworkSource.notice.lineNamesSampleLocalOnly': '示例项目的线路名称调整仅在本页有效。',
+    'transitNetworkSource.notice.lineNamesPendingPersist':
+      '线路名称仅在本页有效；项目尚未成功暂存。',
+    'transitNetworkSource.notice.stationNamesSampleLocalOnly':
+      '示例项目的站点名称调整仅在本页有效。',
+    'transitNetworkSource.notice.stationNamesPendingPersist':
+      '站点名称仅在本页有效；项目尚未成功暂存。',
+    'transitNetworkSource.lineName.title': '配置项目线路名称',
+    'transitNetworkSource.lineName.hintPart1': 'RMP 存档里的线路键（如 ',
+    'transitNetworkSource.lineName.hintPart2': '、',
+    'transitNetworkSource.lineName.hintPart3':
+      '）只是绘图用的颜色命名，不是线路名。此处已按线路键的编号部分预填（',
+    'transitNetworkSource.lineName.hintPart4':
+      ' → 2号线），请确认或改为正式名称；导视牌的「线路编号」模板以这里填写的名称为准。',
+    'transitNetworkSource.lineName.primaryAria': '{key}主名称',
+    'transitNetworkSource.lineName.primaryPlaceholder': '主名称',
+    'transitNetworkSource.lineName.secondaryAria': '{key}副名称',
+    'transitNetworkSource.lineName.secondaryPlaceholder': '副名称',
+    'transitNetworkSource.lineName.save': '保存线路名称',
+    'transitNetworkSource.stationName.title': '补全未命名站点',
+    'transitNetworkSource.stationName.nearby': '相邻：{names}',
+    'transitNetworkSource.stationName.nearbyUnavailable': '相邻站名不可用',
+    'transitNetworkSource.stationName.primaryAria': '{id}主站名',
+    'transitNetworkSource.stationName.primaryPlaceholder': '主站名',
+    'transitNetworkSource.stationName.secondaryAria': '{id}副站名',
+    'transitNetworkSource.stationName.secondaryPlaceholder': '副站名',
+    'transitNetworkSource.stationName.save': '保存已填写站名',
+    'transitScreen.legacy': '旧版',
+    'transitScreen.summaryAria': '客运大屏数据摘要',
+    'transitScreen.upcomingAria': '近期班次',
+    'transitScreen.viewTrips': '查看班次',
+    'transitScreen.empty.unavailable': '大屏数据暂不可用',
+    'transitScreen.empty.noData': '旧客运大屏数据源尚未返回可用数据。',
+    'operation.contentTagsAria': '内容标签',
+    'operation.legacyBodyDescription':
+      '旧系统主要通过外部链接承载详情，新版当前只保留标题、摘要和原始入口。',
+    'operation.legacyBodyTitle': '这条旧运营消息没有独立正文',
+    'operation.legacyImageSource': '旧图片来源：{url}',
+    'operation.openOriginal': '打开原始内容',
+    'operation.originalLink': '原始链接',
+    'transitServiceNotice.activeCount': '{count} 条当前提醒',
+    'transitServiceNotice.history': '历史客运提醒',
+    'transitServiceNotice.itemCount': '{count} 条',
+    'transitServiceNotice.periodRange': '{start} 至 {end}',
+    'transitServiceNotice.title': '客运提醒',
+    'admin.edit': '编辑',
+    'admin.editLine': '编辑线路',
+    'admin.editPoi': '编辑 POI',
+    'admin.home.title': '管理后台',
+    'admin.home.description': '按业务域进入对应后台，账号页只保留这个统一入口。',
+    'admin.editOperation': '编辑运营消息',
     'search.category.all': '全部',
     'search.category.lines': '线路',
     'search.category.operations': '运营',
@@ -1893,6 +3418,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travelSchedule.action.legacyReference': '旧版参考',
     'travelSchedule.action.saveRecord': '保存记录',
     'travelSchedule.empty.noMatch': '没有匹配的班次',
+    'travelSchedule.empty.unavailable': '班次数据暂不可用',
+    'travelSchedule.empty.noData': '当前没有可用的统一班次数据。',
     'travelSchedule.feedback.historySaved': '已保存到本地班次记录',
     'travelSchedule.feedback.reminderAdded': '已添加 {time} 的本地提醒',
     'travelSchedule.filter.anyDestination': '任意终点',
@@ -1908,6 +3435,43 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travelSchedule.history.recentAria': '最近班次记录',
     'travelSchedule.history.summary': '{count} 条，{reminderCount} 条已关联提醒',
     'travelSchedule.history.title': '本地班次记录',
+    'travelSchedule.journey.arrival': '到达 {time}',
+    'travelSchedule.journey.availableAll': '全程可订',
+    'travelSchedule.journey.bookJoint': '联合订票 · {count} 段',
+    'travelSchedule.journey.combining': '组合中…',
+    'travelSchedule.journey.direct': '直达',
+    'travelSchedule.journey.durationHours': '{hours} 小时 {minutes} 分',
+    'travelSchedule.journey.durationMinutes': '{minutes} 分钟',
+    'travelSchedule.journey.editTrip': '编辑班次',
+    'travelSchedule.journey.found': '找到 {count} 个方案',
+    'travelSchedule.journey.holding': '正在锁定联合行程的全部座位',
+    'travelSchedule.journey.lineGroupAria': '{operator}线路',
+    'travelSchedule.journey.locking': '锁定中…',
+    'travelSchedule.journey.missingEndpoints': '请先填写起点和终点。',
+    'travelSchedule.journey.noneFound': '没有找到可衔接的班次方案。',
+    'travelSchedule.journey.orderCreated': '联合订票成功，已创建 {count} 段订单草稿。',
+    'travelSchedule.journey.orderFailed': '联合订票失败。',
+    'travelSchedule.journey.partial': '部分行程不可售',
+    'travelSchedule.journey.passThrough': '通过不停',
+    'travelSchedule.journey.period': '{start} 至 {end}',
+    'travelSchedule.journey.planCount': '{count} 个方案',
+    'travelSchedule.journey.planFailed': '行程方案查询失败。',
+    'travelSchedule.journey.planIndex': '方案 {index}',
+    'travelSchedule.journey.planning': '正在组合班次方案',
+    'travelSchedule.journey.query': '查询行程方案',
+    'travelSchedule.journey.queryOnly': '仅供查询',
+    'travelSchedule.journey.segmentUnavailable': '该方案存在暂不可售的行程段。',
+    'travelSchedule.journey.serviceTrip': '{service}班次',
+    'travelSchedule.journey.stopCount': '{count} 站',
+    'travelSchedule.journey.stopsAria': '{line} 停靠站',
+    'travelSchedule.journey.swapEndpoints': '交换起终点',
+    'travelSchedule.journey.tbd': '待定',
+    'travelSchedule.journey.title': '行程方案',
+    'travelSchedule.journey.transferCount': '{count} 次换乘',
+    'travelSchedule.journey.transferDetail':
+      '{from} → {to} · 约 {minutes} 分钟（含 {buffer} 分钟缓冲）',
+    'travelSchedule.journey.tripCount': '{count} 个班次',
+    'travelSchedule.journey.tripLabel': '{line} 班次 {code}',
     'travelSchedule.notice.aria': '班次公告',
     'travelSchedule.notice.count': '{count} 条',
     'travelSchedule.notice.title': '客运提醒',
@@ -1922,6 +3486,10 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travelSchedule.order.loginRequired': '登录后可查看订单草稿。',
     'travelSchedule.order.readFailed': '订单草稿读取失败',
     'travelSchedule.order.unavailable': '当前班次暂不可创建订单草稿',
+    'travelSchedule.reminder.detailDeparture': '发车 {time}',
+    'travelSchedule.reminder.detailFare': '票价 {fare}',
+    'travelSchedule.reminder.detailTrip': '班次 {code}',
+    'travelSchedule.reminder.titleWithTime': '{line} {time} 班次',
     'travelSchedule.resultCount': '{count} / {total} 个可查询班次',
     'travelSchedule.search.aria': '搜索班次、线路、车站、检票口或运营方',
     'travelSchedule.search.clear': '清空班次搜索',
@@ -2011,6 +3579,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travel.ticketing.action': '待接入',
     'travel.ticketing.detail': '真实电子票、检票、退票和乘车码后续接入临东通',
     'travel.ticketing.title': '票券与订单',
+    'worldCoordinate.axis': '{axis} 坐标',
+    'worldCoordinate.footerEmpty': '请先输入 X/Z 或选择参考地点；Y 可在上方独立填写',
+    'worldCoordinate.footerPick': '点击地图回填 X/Z · 当前 {coordinate} · Y {y}',
+    'worldCoordinate.title': '世界坐标',
+    'worldCoordinate.yInherited': '继承默认值',
+    'worldCoordinate.yPlaceholder': '留空继承地图默认高度',
   },
   'zh-Hant': {
     'account.offlinePackage.area': '面積 {area} 方塊',
@@ -2047,6 +3621,28 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.offlinePackage.strategyNote':
       '自訂範圍目前記錄邊界並重新整理公開基礎資料，真正的瓦片離線包仍等待體積上限和生成策略確認。',
     'account.offlinePackage.title': '新增離線範圍',
+    'account.cache.offlineDeletedAll': '已刪除本機與帳號中的離線範圍請求',
+    'account.cache.offlineDeletedLocalOnly': '已刪除本機離線範圍，帳號側請求刪除失敗',
+    'account.cache.offlineRefreshFailed': '離線範圍基礎資料重新整理失敗',
+    'account.cache.refreshFailed': '重新整理失敗',
+    'account.cache.refreshingOfflineBase': '正在重新整理離線範圍基礎資料',
+    'account.error.cacheRefreshFailed': '{url} 重新整理失敗',
+    'account.error.offlinePackageRequestFailed': '伺服器離線包請求失敗',
+    'account.error.offlineScopeDeleteFailed': '帳號離線範圍請求刪除失敗',
+    'account.error.offlineScopeUnavailable': '帳號離線範圍暫不可用',
+    'account.error.pushPreferenceUnavailable': '通知偏好暫不可用',
+    'account.error.tripReminderDeleteFailed': '帳號提醒副本刪除失敗',
+    'account.error.tripRemindersUnavailable': '帳號提醒暫不可用',
+    'account.push.insecureContext': '目前頁面不是安全上下文，瀏覽器不會開放 Push 訂閱',
+    'account.push.loginRequired': '需要先使用臨東通登入。',
+    'account.push.missingKeys': '瀏覽器回傳的 Push 訂閱缺少必要金鑰',
+    'account.push.missingPublicKey': 'Web Push 公鑰尚未設定，本裝置暫不能訂閱推播',
+    'account.push.permissionDenied': '瀏覽器通知權限未開啟',
+    'account.push.registerFailed': 'Push 裝置訂閱登記失敗',
+    'account.push.revokeFailed': 'Push 裝置訂閱撤銷失敗',
+    'account.push.serviceWorkerNotReady': 'Service Worker 尚未就緒，暫不能訂閱 Push',
+    'account.push.unknownHost': '未知服務',
+    'account.push.unsupported': '目前瀏覽器不支援 Web Push',
     'account.about.currentVersion': '目前版本：{version}',
     'account.about.title': '關於與更新',
     'account.about.viewChangelog': '查看版本更新',
@@ -2183,6 +3779,16 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'changelog.empty': '目前還沒有可展示的版本更新。',
     'changelog.title': '版本更新',
     'brand.home': '雨城通首頁',
+    'contentPoiBinding.empty': '沒有符合的公開 POI。',
+    'contentPoiBinding.hint': '只顯示公開地圖中的 POI；訊息發布後才會在 POI 詳情中生效。',
+    'contentPoiBinding.loading': '正在讀取公開 POI',
+    'contentPoiBinding.optionsAria': '可關聯 POI',
+    'contentPoiBinding.searchAria': '搜尋關聯 POI',
+    'contentPoiBinding.searchPlaceholder': '搜尋 POI 名稱、地址或 ID',
+    'contentPoiBinding.selectedAria': '已關聯 POI',
+    'contentPoiBinding.title': '關聯 POI',
+    'contentPoiBinding.unavailable': '公開 POI 暫時無法使用',
+    'embeddedMapPicker.empty': '請先輸入座標或選擇一個參考地點。',
     'inventoryHoldStatus.cancelled': '已取消',
     'inventoryHoldStatus.confirmed': '已確認',
     'inventoryHoldStatus.expired': '已過期',
@@ -2495,18 +4101,24 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.toolbar.zoomIn': '放大地圖',
     'map.toolbar.zoomOut': '縮小地圖',
     'map.title': '地圖探索',
+    'mapStageLoader.aria': '地圖載入中',
+    'mapStageLoader.loading': '地圖正在載入',
     'siteLegal.aria': '備案資訊',
     'siteLegal.disclaimer': '本站部分程式碼使用人工智慧技術生成，上述地名、組織名均為虛構。',
     'siteLegal.icp': '遼ICP備2021004959號-1',
     'siteLegal.police': '遼公網安備21100502000117號',
     'siteLegal.version': '版本 {version}',
-    'map.route.alight': '{name} 出站',
+    'map.route.alight': '{name} 下車',
+    'map.route.alightFerry': '{name} 下船',
+    'map.route.alightMetro': '{name} 出站',
     'map.route.aria': '路線規劃',
     'map.route.arrive': '到達 {name}',
     'map.route.badge.fastest': '最快到達',
     'map.route.badge.fewestTransfers': '最少換乘',
     'map.route.badge.leastWalking': '最少步行',
-    'map.route.board': '{name} 進站',
+    'map.route.board': '{name} 上車',
+    'map.route.boardFerry': '{name} 上船',
+    'map.route.boardMetro': '{name} 進站',
     'map.route.close': '關閉路線規劃',
     'map.route.collapse': '收合路線規劃',
     'map.route.currentLocation': '目前地點',
@@ -2590,7 +4202,6 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.swap': '交換起終點',
     'map.route.traceTitle': '{title} · 初步估算',
     'map.route.transferAction': '{name} 換乘',
-    'map.route.transferBoard': '{name} 上車',
     'map.route.transferTitle': '{firstMode}+{secondMode}換乘',
     'map.route.transferWalk': '換乘 步行 {distance} {duration}',
     'map.route.transitNote.default':
@@ -2625,6 +4236,228 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.roadDetail.endpointCountValue': '{count} 個',
     'map.roadDetail.traceHighlighted': '已在地圖上高亮近似軌跡',
     'map.roadDetail.traceStatus': '軌跡狀態',
+    'metroWayfindingEditor.action.addElement': '新增元素',
+    'metroWayfindingEditor.action.cancel': '取消',
+    'metroWayfindingEditor.action.clear': '清空',
+    'metroWayfindingEditor.action.close': '關閉',
+    'metroWayfindingEditor.action.delete': '刪除',
+    'metroWayfindingEditor.action.done': '完成',
+    'metroWayfindingEditor.action.dragToReorder': '拖曳變更順序',
+    'metroWayfindingEditor.action.duplicate': '複製',
+    'metroWayfindingEditor.action.duplicateElement': '建立元素副本',
+    'metroWayfindingEditor.action.importSign': '匯入導視牌',
+    'metroWayfindingEditor.action.moveDown': '下移',
+    'metroWayfindingEditor.action.moveLeft': '向左移動',
+    'metroWayfindingEditor.action.moveRight': '向右移動',
+    'metroWayfindingEditor.action.moveRowDownAria': '下移此行',
+    'metroWayfindingEditor.action.moveRowUpAria': '上移此行',
+    'metroWayfindingEditor.action.moveUp': '上移',
+    'metroWayfindingEditor.action.openProjectLibraryTitle': '版型範本與匯入專案',
+    'metroWayfindingEditor.action.openTemplateLibrary': '開啟範本庫',
+    'metroWayfindingEditor.action.removeElement': '移除元素',
+    'metroWayfindingEditor.action.replaceSign': '取代現有導視牌',
+    'metroWayfindingEditor.action.reverse': '反轉',
+    'metroWayfindingEditor.action.reverseDisabledVertical': '直式範本不支援反轉順序',
+    'metroWayfindingEditor.action.reverseTitle': '反轉導視牌元素順序',
+    'metroWayfindingEditor.action.templateLibrary': '範本庫',
+    'metroWayfindingEditor.align.center': '置中',
+    'metroWayfindingEditor.align.left': '靠左對齊',
+    'metroWayfindingEditor.align.right': '靠右對齊',
+    'metroWayfindingEditor.aria.addElementToRow': '在{row}新增元素',
+    'metroWayfindingEditor.aria.canvas': '地鐵導視牌編排',
+    'metroWayfindingEditor.aria.combination': '組合框，{count} 個子元素，縮放 {scale}%',
+    'metroWayfindingEditor.aria.defaultLineName': '路線',
+    'metroWayfindingEditor.aria.draggableTab': '{label}，可拖曳變更順序',
+    'metroWayfindingEditor.aria.emptyState': '開始建立導視牌',
+    'metroWayfindingEditor.aria.fixedSpace': '固定空白，{units} 格',
+    'metroWayfindingEditor.aria.flexSpace': '彈性空白',
+    'metroWayfindingEditor.aria.inlineEditable': '{label}，可內嵌編輯',
+    'metroWayfindingEditor.aria.largeTextWithSummary': '大字，{summary}',
+    'metroWayfindingEditor.aria.partSuffix': '，{value}',
+    'metroWayfindingEditor.aria.removeSegment': '刪除{kind}',
+    'metroWayfindingEditor.aria.rowElements': '{row}已新增元素',
+    'metroWayfindingEditor.aria.segmentOrdinal': '第 {index} 個{kind}',
+    'metroWayfindingEditor.aria.suffixOrdinal': '第 {index} 個下標',
+    'metroWayfindingEditor.aria.textElement': '文字，{rows} 列，{alignment}',
+    'metroWayfindingEditor.aria.textSegment': '{label}的文字段 {index}',
+    'metroWayfindingEditor.color.background': '元素背景色',
+    'metroWayfindingEditor.color.custom': '自訂顏色',
+    'metroWayfindingEditor.color.customAria': '{label}自訂顏色',
+    'metroWayfindingEditor.color.foreground': '元素文字、線條與圖示顏色',
+    'metroWayfindingEditor.color.inherit': '跟隨導視牌',
+    'metroWayfindingEditor.combination.addAria': '新增組合框子元素',
+    'metroWayfindingEditor.combination.addFacility': '設施圖示',
+    'metroWayfindingEditor.combination.addSpace': '空格',
+    'metroWayfindingEditor.combination.childDuplicateAria': '複製子元素',
+    'metroWayfindingEditor.combination.childMoveDownAria': '子元素下移',
+    'metroWayfindingEditor.combination.childMoveUpAria': '子元素上移',
+    'metroWayfindingEditor.combination.childRemoveAria': '刪除子元素',
+    'metroWayfindingEditor.combination.childType': '子元素類型',
+    'metroWayfindingEditor.combination.closeAria': '關閉組合框編輯',
+    'metroWayfindingEditor.combination.description':
+      '支援設施圖示、箭頭、文字、大字和固定或彈性空格，子元素不會超出組合框。',
+    'metroWayfindingEditor.combination.editTitle': '編輯組合內容',
+    'metroWayfindingEditor.combination.editWithCount': '編輯組合內容（{count}）',
+    'metroWayfindingEditor.combination.empty': '組合框尚無子元素。',
+    'metroWayfindingEditor.combination.eyebrow': '組合框子元素',
+    'metroWayfindingEditor.combination.fill': '組合框填色',
+    'metroWayfindingEditor.combination.fillColor': '組合框填色',
+    'metroWayfindingEditor.combination.listAria': '組合框子元素清單',
+    'metroWayfindingEditor.combination.scale': '組合框縮放倍數',
+    'metroWayfindingEditor.combination.stripeColor': '色帶顏色',
+    'metroWayfindingEditor.combination.stripePosition': '色帶位置',
+    'metroWayfindingEditor.combination.templateHint':
+      '「路線編號」內容範本已移至編輯器上方的「插入建議」區域：選取路線後可取代本組合框的子元素，並依顏色填色或色帶樣式套用路線標識色。',
+    'metroWayfindingEditor.confirm.clear': '確認清空目前地鐵導視牌的全部元素？',
+    'metroWayfindingEditor.direction.down': '向下',
+    'metroWayfindingEditor.direction.left': '向左',
+    'metroWayfindingEditor.direction.right': '向右',
+    'metroWayfindingEditor.direction.up': '向上',
+    'metroWayfindingEditor.divider.note': '豎線寬 {width}、高 72，隨導視牌像素單元等比縮放。',
+    'metroWayfindingEditor.elementLabel.arrow': '箭頭 · 85 × 85',
+    'metroWayfindingEditor.elementLabel.combination': '組合框 · {scale}% · {count} 個子元素',
+    'metroWayfindingEditor.elementLabel.divider': '分隔線 · {width} × 72',
+    'metroWayfindingEditor.elementLabel.facility': '設施圖示 · 85 × 85',
+    'metroWayfindingEditor.elementLabel.largeText': '大字 · 字高 {size}',
+    'metroWayfindingEditor.elementLabel.space': '空白元素',
+    'metroWayfindingEditor.elementLabel.text': '文字 · {rows} 列',
+    'metroWayfindingEditor.elementType.arrow': '箭頭',
+    'metroWayfindingEditor.elementType.combination': '組合框',
+    'metroWayfindingEditor.elementType.divider': '分隔線',
+    'metroWayfindingEditor.elementType.facility': '設施',
+    'metroWayfindingEditor.elementType.largeText': '大字',
+    'metroWayfindingEditor.elementType.space': '空白',
+    'metroWayfindingEditor.elementType.spaceShort': '空格',
+    'metroWayfindingEditor.elementType.text': '文字',
+    'metroWayfindingEditor.empty.description': '新增第一個元素，或從範本庫載入現成版型。',
+    'metroWayfindingEditor.empty.title': '開始建立導視牌',
+    'metroWayfindingEditor.error.fileTooLarge': '{name} 超過 {limit} MB，已停止讀取。',
+    'metroWayfindingEditor.error.parseFailed': '專案檔案解析失敗。',
+    'metroWayfindingEditor.error.tooManyFiles': '一次最多匯入 {count} 個專案檔案。',
+    'metroWayfindingEditor.examples.aria': '地鐵導視版型範本',
+    'metroWayfindingEditor.examples.categoriesAria': '範本分類',
+    'metroWayfindingEditor.examples.categoryEntry': '進站相關',
+    'metroWayfindingEditor.examples.categoryExit': '出站相關',
+    'metroWayfindingEditor.examples.categoryTransfer': '轉乘相關',
+    'metroWayfindingEditor.examples.description': '選擇一個版型開始編輯',
+    'metroWayfindingEditor.examples.empty': '目前線網沒有可用的範例範本',
+    'metroWayfindingEditor.examples.line': '套用路線',
+    'metroWayfindingEditor.examples.loadAria': '載入{remark}，{mode}，{size}',
+    'metroWayfindingEditor.examples.station': '套用車站',
+    'metroWayfindingEditor.examples.title': '版型範本',
+    'metroWayfindingEditor.examples.useTemplate': '使用此範本',
+    'metroWayfindingEditor.field.addForegroundStroke': '新增前景色描邊',
+    'metroWayfindingEditor.field.addFrame': '新增外框',
+    'metroWayfindingEditor.field.alignment': '對齊',
+    'metroWayfindingEditor.field.arrow': '箭頭',
+    'metroWayfindingEditor.field.backgroundColor': '導視牌底色',
+    'metroWayfindingEditor.field.defaultForegroundColor': '預設文字與圖形顏色',
+    'metroWayfindingEditor.field.elementType': '元素類型',
+    'metroWayfindingEditor.field.exitIconDirection': '出口圖示方向',
+    'metroWayfindingEditor.field.facilityIcon': '設施圖示',
+    'metroWayfindingEditor.field.iconDirection': '圖示方向',
+    'metroWayfindingEditor.field.iconVariant': '圖示變體',
+    'metroWayfindingEditor.field.layout': '版型',
+    'metroWayfindingEditor.field.rowDivider': '新增列間分隔線',
+    'metroWayfindingEditor.field.writingMode': '文字排列',
+    'metroWayfindingEditor.fill.color': '顏色填色',
+    'metroWayfindingEditor.fill.inverse': '反色填色',
+    'metroWayfindingEditor.fill.none': '無填色',
+    'metroWayfindingEditor.fill.stripe': '無填色+色帶',
+    'metroWayfindingEditor.frame.circle': '圓形',
+    'metroWayfindingEditor.frame.fill': '外框填色',
+    'metroWayfindingEditor.frame.fillColor': '外框填色',
+    'metroWayfindingEditor.frame.none': '無',
+    'metroWayfindingEditor.frame.rectangle': '矩形',
+    'metroWayfindingEditor.frame.shape': '外框形狀',
+    'metroWayfindingEditor.import.description':
+      '選擇 JSON 專案檔案，系統會先解析並顯示轉換預覽，確認後再取代目前導視牌。',
+    'metroWayfindingEditor.import.dropActive': '放開滑鼠即可匯入專案檔案',
+    'metroWayfindingEditor.import.dropHint': '也可以將 JSON 專案檔案拖放到此處',
+    'metroWayfindingEditor.import.fileLimits': '檔案限制',
+    'metroWayfindingEditor.import.fileLimitsDescription':
+      '最多選擇 {count} 個檔案，單一檔案不超過 {size} MB；不同編輯器的專案不能混合匯入。',
+    'metroWayfindingEditor.import.selectFiles': '選擇專案檔案',
+    'metroWayfindingEditor.import.sourceExternalHint': '外部編輯器',
+    'metroWayfindingEditor.import.sourceYct': 'YCT 地鐵導視專案',
+    'metroWayfindingEditor.import.sourceYctHint': '本站專案',
+    'metroWayfindingEditor.import.supportedSources': '支援來源',
+    'metroWayfindingEditor.import.title': '匯入外部導視專案',
+    'metroWayfindingEditor.importPreview.closeAria': '關閉匯入預覽',
+    'metroWayfindingEditor.importPreview.eyebrow': '專案轉換預覽',
+    'metroWayfindingEditor.importPreview.footerSummary': '{count} 個 JSON · 單檔上限 {size} MB',
+    'metroWayfindingEditor.importPreview.mode': '轉換方式',
+    'metroWayfindingEditor.importPreview.modeSemantic': '僅語意（建議）',
+    'metroWayfindingEditor.importPreview.modeSourceStyle': '保留來源樣式',
+    'metroWayfindingEditor.importPreview.previewNote':
+      '依畫布比例縮小的牌面示意，僅用於確認轉換後的內容與排版',
+    'metroWayfindingEditor.importPreview.rowsAria': '待匯入列順序',
+    'metroWayfindingEditor.importPreview.source': '來源',
+    'metroWayfindingEditor.importPreview.sourceStyle': '來源風格',
+    'metroWayfindingEditor.importPreview.targetStyle': '目標風格',
+    'metroWayfindingEditor.importPreview.warningCount': '（{count} 處）',
+    'metroWayfindingEditor.importPreview.warningsAria': '轉換提醒',
+    'metroWayfindingEditor.importPreview.warningsTitle': '轉換提醒',
+    'metroWayfindingEditor.largeText.fieldLabel': '大字（字高 {size}）',
+    'metroWayfindingEditor.largeText.insertSuffix': '在游標處新增下標',
+    'metroWayfindingEditor.option.all': '全部',
+    'metroWayfindingEditor.option.doubleRow': '雙列',
+    'metroWayfindingEditor.option.entry': '進站',
+    'metroWayfindingEditor.option.exit': '出站',
+    'metroWayfindingEditor.option.singleRow': '單列',
+    'metroWayfindingEditor.option.transfer': '轉乘',
+    'metroWayfindingEditor.option.vertical': '直式',
+    'metroWayfindingEditor.projectDialog.closeAria': '關閉範本庫與匯入',
+    'metroWayfindingEditor.projectDialog.eyebrow': '地鐵導視牌',
+    'metroWayfindingEditor.projectDialog.import': '匯入專案',
+    'metroWayfindingEditor.projectDialog.source': '專案來源',
+    'metroWayfindingEditor.projectDialog.templates': '版型範本',
+    'metroWayfindingEditor.projectDialog.title': '範本庫與匯入',
+    'metroWayfindingEditor.row.first': '第一列',
+    'metroWayfindingEditor.row.second': '第二列',
+    'metroWayfindingEditor.segment.boxed': '方框文字',
+    'metroWayfindingEditor.segment.boxedShort': '方框',
+    'metroWayfindingEditor.segment.chooseLineColor': '選擇路線色（同時填入路線編號）',
+    'metroWayfindingEditor.segment.insertBoxed': '在游標處新增方框',
+    'metroWayfindingEditor.segment.insertLine': '在游標處新增路線編號',
+    'metroWayfindingEditor.segment.line': '路線編號',
+    'metroWayfindingEditor.segment.text': '文字段',
+    'metroWayfindingEditor.space.fixed': '固定寬度',
+    'metroWayfindingEditor.space.flex': '均分剩餘寬度',
+    'metroWayfindingEditor.space.flexNote': '所有「均分剩餘寬度」空白元素會均分可用空間。',
+    'metroWayfindingEditor.space.mode': '空白方式',
+    'metroWayfindingEditor.space.width': '寬度（16 像素間距單位）',
+    'metroWayfindingEditor.status.parsing': '解析中',
+    'metroWayfindingEditor.status.parsingFiles': '正在解析',
+    'metroWayfindingEditor.stripePosition.bottom': '下',
+    'metroWayfindingEditor.stripePosition.left': '左',
+    'metroWayfindingEditor.stripePosition.right': '右',
+    'metroWayfindingEditor.suffix.label': '下標',
+    'metroWayfindingEditor.suffix.placeholder': '下標',
+    'metroWayfindingEditor.suffix.remove': '刪除此下標',
+    'metroWayfindingEditor.suggestion.acceptAria': '採用建議：{suggestion}',
+    'metroWayfindingEditor.suggestion.acceptTitle': '採用建議（Tab）',
+    'metroWayfindingEditor.tab.childCount': '{count} 個子元素',
+    'metroWayfindingEditor.text.addMainRow': '新增主文字列',
+    'metroWayfindingEditor.text.addRowAria': '新增文字列',
+    'metroWayfindingEditor.text.addSecondaryRow': '新增副文字列',
+    'metroWayfindingEditor.text.deleteRow': '刪除文字列',
+    'metroWayfindingEditor.text.deleteRowAria': '刪除第 {index} 列',
+    'metroWayfindingEditor.text.dynamicFontSize': '動態字高',
+    'metroWayfindingEditor.text.main': '主文字',
+    'metroWayfindingEditor.text.mainRowLabel': '第 {index} 列主文字內容',
+    'metroWayfindingEditor.text.metrics': '主文字 {main} · 副文字 {secondary}',
+    'metroWayfindingEditor.text.moveRowDownAria': '第 {index} 列下移',
+    'metroWayfindingEditor.text.moveRowUpAria': '第 {index} 列上移',
+    'metroWayfindingEditor.text.rowHeader': '第 {index} 列 · {kind}',
+    'metroWayfindingEditor.text.rowsAria': '文字列',
+    'metroWayfindingEditor.text.secondary': '副文字',
+    'metroWayfindingEditor.text.secondaryRowLabel': '第 {index} 列副文字內容',
+    'metroWayfindingEditor.toolbar.title': '版型與外觀',
+    'metroWayfindingEditor.writing.horizontal': '橫向',
+    'metroWayfindingEditor.writing.horizontalText': '橫排',
+    'metroWayfindingEditor.writing.vertical': '直式',
+    'metroWayfindingEditor.writing.verticalText': '直排',
     'nav.back': '返回',
     'nav.collapse': '收合主導覽',
     'nav.expand': '展開主導覽',
@@ -2683,6 +4516,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operations.startsAt': '開始於 {date}',
     'operations.strongReminder': '強提醒',
     'operations.validUntil': '有效至 {date}',
+    'operationRelatedPois.count': '{count} 個 POI',
+    'operationRelatedPois.fallback': '地圖地點',
+    'operationRelatedPois.title': '相關地點',
+    'operationToc.collapse': '收起{title}',
+    'operationToc.expand': '展開{title}',
+    'operationToc.title': '文章目錄',
     'page.account': '帳號設定',
     'page.map': '地圖探索',
     'page.offline': '離線',
@@ -2691,12 +4530,51 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'page.search': '搜尋',
     'page.services': '更多服務',
     'page.changelog': '版本更新',
+    'page.faq': '幫助與常見問題',
+    'page.roadMaterials': '路牌物料',
+    'page.telegraph': '電報體驗',
+    'page.transitMaterials': '公共交通導視',
+    'page.transitNetworkHealth': '公共交通網絡健康度',
     'page.ticketOrder': '票務訂單',
     'page.travel': '出行',
     'page.travelScreen': '智運大屏',
+    'poiFacility.add': '新增設施',
+    'poiFacility.descriptionLabel': '文字描述',
+    'poiFacility.descriptionPlaceholder': '例如：一樓東側設有無障礙電梯',
+    'poiFacility.hint': '圖示與文字描述',
+    'poiFacility.icon.accessible': '無障礙',
+    'poiFacility.icon.childCare': '母嬰',
+    'poiFacility.icon.elevator': '電梯',
+    'poiFacility.icon.escalator': '自動扶梯',
+    'poiFacility.icon.info': '資訊',
+    'poiFacility.icon.luggage': '行李寄存',
+    'poiFacility.icon.medical': '醫療',
+    'poiFacility.icon.parking': '停車',
+    'poiFacility.icon.pets': '寵物',
+    'poiFacility.icon.power': '充電',
+    'poiFacility.icon.restaurant': '餐飲',
+    'poiFacility.icon.shopping': '購物',
+    'poiFacility.icon.smoking': '吸菸區',
+    'poiFacility.icon.wc': '衛生間',
+    'poiFacility.icon.wifi': '無線網路',
+    'poiFacility.iconLabel': '設施圖示',
+    'poiFacility.removeAria': '刪除第 {index} 項設施資訊',
+    'poiFacility.removeTitle': '刪除設施',
+    'poiFacility.title': '設施資訊',
     'quickAction.rideCode': '乘車碼',
     'quickAction.rideCodeLoginRequired': '乘車碼需要登入後使用',
     'quickAction.rideCodeUnavailable': '乘車碼暫不可用，請稍後重試',
+    'scheduleStopTable.aria': '各站停站時刻',
+    'scheduleStopTable.arrival': '到達',
+    'scheduleStopTable.arrivalAria': '{station} 到達時間',
+    'scheduleStopTable.departure': '出發',
+    'scheduleStopTable.departureAria': '{station} 出發時間',
+    'scheduleStopTable.dwell': '停車(分)',
+    'scheduleStopTable.dwellAria': '{station} 停車分鐘',
+    'scheduleStopTable.empty': '暫無停站時刻',
+    'scheduleStopTable.station': '站點',
+    'scheduleStopTable.stop': '停站',
+    'scheduleStopTable.stopAria': '{station} 是否停站',
     'search.open': '搜尋',
     'shortcut.close': '關閉快捷鍵',
     'shortcut.focusMapSearch': '聚焦地圖搜尋',
@@ -2772,6 +4650,452 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'services.category.toolbox': '工具箱',
     'services.empty': '暫無服務入口',
     'services.itemCount': '{count} 項',
+    'materialStudio.history': '物料歷史',
+    'materialStudio.preview': '預覽',
+    'materialStudio.updatePreview': '更新預覽',
+    'materialStudio.submitReview': '提交審核',
+    'materialStudio.submitReviewManualHint': '提交審核；審核通過後可下載無水印圖片',
+    'materialStudio.exportProject': '匯出工程檔案',
+    'materialStudio.download': '下載圖片',
+    'materialStudio.loginRequired': '登入後可提交審核並下載無水印圖片。',
+    'materialStudio.serverUnverified': '伺服器帳號未驗證',
+    'materialStudio.serverUnverifiedHint': '請在帳號設定中驗證伺服器帳號後下載無水印圖片',
+    'materialStudio.loginRemoveWatermark': '登入去水印',
+    'materialStudio.reviewRequired': '去水印需審核',
+    'materialStudio.templateReadFailed': '無法讀取物料範本。',
+    'materialStudio.noTemplates': '當前沒有可用範本。',
+    'materialStudio.workspaceUnavailable': '物料工作臺暫時不可用。',
+    'materialStudio.exportOnlyManual': '只有手動編輯的地鐵導視牌可以匯出工程檔案。',
+    'materialStudio.offlineBlocked': '當前處於離線狀態，此操作需要連線。',
+    'materialStudio.noSyncTemplate': '當前沒有可同步的範本。',
+    'materialStudio.serverSubmitOnlineOnly': '伺服器資料模式的草稿只能在線提交。',
+    'materialStudio.loginFirst': '請先登入。',
+    'materialStudio.localSyncFailed': '本機草稿同步失敗。',
+    'materialStudio.localSyncedSubmitHint': '本機草稿已同步，仍需連線提交審核。',
+    'materialStudio.networkError': '網路錯誤。',
+    'materialStudio.localSyncNetworkError': '本機草稿同步時發生網路錯誤。',
+    'materialStudio.noProjectStations': '匯入專案中沒有可選擇的站點。',
+    'materialStudio.selectServerStation': '請先選擇伺服器公車站。',
+    'materialStudio.selectProjectLine': '請先選擇至少一條當前圖上方向的專案線路。',
+    'materialStudio.selectDirectionLine': '請先選擇至少一條同方向線路。',
+    'materialStudio.selectServerLine': '請先選擇伺服器線路。',
+    'materialStudio.selectServerPlace': '請先選擇伺服器地點。',
+    'materialStudio.selectCoordinate': '請先選擇路牌安裝座標。',
+    'materialStudio.selectLinkedMode': '請先選擇{mode}。',
+    'materialStudio.previewFailed': '生成預覽失敗。',
+    'materialStudio.previewNetworkError': '生成預覽時發生網路錯誤。',
+    'materialStudio.noSubmittableTemplate': '當前沒有可提交的範本。',
+    'materialStudio.saveCustomFailed': '無法儲存自訂物料。',
+    'materialStudio.savedSubmitFailed': '物料已儲存，但提交審核失敗。',
+    'materialStudio.submitNetworkError': '提交審核時發生網路錯誤。',
+    'materialStudio.downloadFailed': '下載物料失敗。',
+    'materialStudio.downloadNetworkError': '下載物料時發生網路錯誤。',
+    'materialStudio.downloadPreviewNetworkError': '下載帶水印預覽時發生網路錯誤。',
+    'materialStudio.selectTemplateAndMode': '請先選擇範本和{mode}。',
+    'materialStudio.serverVerifiedDownloadHint':
+      '驗證伺服器帳號後才能下載無水印圖片，已改為下載帶水印預覽。',
+    'materialStudio.operationBusy': '當前操作尚未完成，請稍候。',
+    'materialStudio.modeNoReviewNeeded': '{mode}模式無需提交審核。',
+    'materialStudio.localDraft': '本機草稿',
+    'materialStudio.workspaceEyebrow': '物料工作臺',
+    'materialStudio.syncLocalDraft': '同步本機草稿',
+    'materialStudio.templates': '範本',
+    'materialStudio.networkData': '線網資料',
+    'materialStudio.online': '在線',
+    'materialStudio.offline': '離線',
+    'materialStudio.dimensions': '尺寸',
+    'materialStudio.dataSource': '資料來源',
+    'materialStudio.manualInput': '手動輸入',
+    'materialStudio.roadTitle': '路牌物料生成',
+    'materialStudio.transitTitle': '公共交通導視物料生成',
+    'materialStudio.serverNetwork': '伺服器線網',
+    'materialStudio.sampleProject': '示例專案',
+    'materialStudio.importedProject': '匯入專案',
+    'materialStudio.projectStation': '專案站點',
+    'materialStudio.projectCurrentStation': '專案當前站',
+    'materialStudio.variant': '版式',
+    'materialStudio.group.busStop': '公車站牌',
+    'materialStudio.group.busStopHorizontal': '公車站牌（橫版線路詳情）',
+    'materialStudio.group.metroLineMap': '地鐵橫式線路圖',
+    'materialStudio.group.layout': '版式',
+    'materialStudio.group.style': '樣式',
+    'materialStudio.projectLineCount': '{count} 條專案線路',
+    'materialStudio.busLineCount': '{count} 條公車線路',
+    'materialStudio.stationProjectLines': '當前站點的專案線路',
+    'materialStudio.projectLines': '專案線路',
+    'materialStudio.mapDrivingDirection': '圖上行車方向',
+    'materialStudio.roadDrivingDirection': '道路行車方向',
+    'materialStudio.stationProperties': '站點屬性',
+    'materialStudio.originStation': '始發站',
+    'materialStudio.terminalStation': '終點站',
+    'materialStudio.sameDirectionLines': '同方向線路',
+    'materialStudio.singleSelect': '（單選）',
+    'materialStudio.maxLines': '（最多 {count} 條）',
+    'materialStudio.destinationPending': '終點待維護',
+    'materialStudio.directionTo': '往',
+    'materialStudio.originAtStation': '當前站始發',
+    'materialStudio.terminalAtStation': '當前站終到',
+    'materialStudio.noProjectConnection': '當前專案站點在該圖上方向沒有線路連接。',
+    'materialStudio.noDirectionLine': '當前方向沒有可用線路。',
+    'materialStudio.configureLineName': '配置線路名稱',
+    'materialStudio.serverLines': '伺服器線路',
+    'materialStudio.stationsCount': '{count} 站',
+    'materialStudio.notOpened': '未開通',
+    'materialStudio.serverStations': '伺服器站點',
+    'materialStudio.searchServerPlace': '搜尋伺服器地點',
+    'materialStudio.serverPlaces': '伺服器地點',
+    'materialStudio.coordinateX': '安裝座標 X',
+    'materialStudio.coordinateZ': '安裝座標 Z',
+    'materialStudio.pickCoordinateHint': '在伺服器地圖預覽中點選路牌安裝座標',
+    'materialStudio.clickMapCoordinate': '點擊地圖確定安裝座標 · X {x} / Z {z}',
+    'materialStudio.fillCoordinateFirst': '請填寫安裝座標後在地圖中微調',
+    'materialStudio.previewAria': '物料預覽',
+    'materialStudio.previewAlt': '{title}預覽',
+    'materialStudio.closePreview': '關閉預覽',
+    'materialStudio.historyTitle': '我的物料歷史',
+    'materialStudio.historyHint': '已提交的自訂物料會保留在這裡，審核通過後可隨時下載。',
+    'materialStudio.closeHistory': '關閉物料歷史',
+    'materialStudio.submittedAt': '提交於 {time}',
+    'materialStudio.reviewedAt': '審核於 {time}',
+    'materialStudio.noSubmittedYet': '還沒有提交過自訂物料。',
+    'materialStudio.previewWatermark': '預覽含水印',
+    'materialStudio.updating': '更新中',
+    'materialStudio.noPreviewYet': '尚未生成預覽',
+    'materialStudio.signHeight': '導視牌高度（128 像素格數）',
+    'materialStudio.signLength': '導視牌長度（128 像素格數）',
+    'materialStudio.signWidth': '導視牌寬度（128 像素格數）',
+    'materialStudio.widthMeters': '寬度（米）',
+    'materialStudio.heightMeters': '高度（米）',
+    'materialStudio.alignmentUnit': '對齊單位（像素）',
+    'materialStudio.alignToMapSize': '對齊到整數地圖畫尺寸',
+    'materialStudio.firstBus': '首班車',
+    'materialStudio.lastBus': '末班車',
+    'materialStudio.projectNoTimeHint': '專案資料不含營運時間，留空則不顯示這一行。',
+    'materialStudio.pleaseSelect': '請選擇',
+    'materialStudio.colorPaletteAria': '{label}色板',
+    'materialStudio.colorHexAria': '{label}十六進制顏色',
+    'materialStudio.orientationRight': '向圖右',
+    'materialStudio.orientationLeft': '向圖左',
+    'materialStudio.orientationUp': '向圖上',
+    'materialStudio.orientationDown': '向圖下',
+    'materialStudio.draftStatus.draft': '草稿',
+    'materialStudio.draftStatus.pending_review': '待審核',
+    'materialStudio.draftStatus.approved': '已通過',
+    'materialStudio.draftStatus.rejected': '已駁回',
+    'materialStudio.syncStatus.pending': '待同步',
+    'materialStudio.syncStatus.syncing': '同步中',
+    'materialStudio.syncStatus.synced': '已同步',
+    'materialStudio.syncStatus.conflict': '有衝突',
+    'materialStudio.syncStatus.failed': '同步失敗',
+    'materialStudio.emptyFields': '未填寫欄位內容',
+    'materialStudio.watermarkedPreviewSuffix': '-帶水印預覽',
+    'telegraph.stage.header': '填寫報頭',
+    'telegraph.stage.recipient': '填寫收報資訊',
+    'telegraph.stage.code': '列印電碼',
+    'telegraph.stage.message': '列印電文',
+    'telegraph.stage.footer': '列印報尾',
+    'telegraph.stage.stamp': '蓋電報戳',
+    'telegraph.stage.envelope': '裝入信封',
+    'telegraph.newLetter': '再寫一封',
+    'telegraph.history': '歷史記錄',
+    'telegraph.startWriting': '開始填寫',
+    'telegraph.replayAnimation': '重播動畫',
+    'telegraph.continueScroll': '繼續捲動',
+    'telegraph.continueScrollStart': '繼續捲動，開始填寫',
+    'telegraph.simulateSend': '模擬拍發',
+    'telegraph.skipAnimation': '略過動畫',
+    'telegraph.continueConfirm': '繼續捲動，進入確認拍發',
+    'telegraph.province': '省',
+    'telegraph.city': '市',
+    'telegraph.county': '縣',
+    'telegraph.otherLocation': '其他收報地點',
+    'telegraph.recipientInfo': '收報資訊',
+    'telegraph.body': '電報內文',
+    'telegraph.senderName': '發報人姓名或訪客 IP',
+    'telegraph.senderAddress': '發報人地址',
+    'telegraph.senderLock': '登入後可修改發報人資訊',
+    'telegraph.billableGrids': '計費格數',
+    'telegraph.amount': '報費詳情',
+    'telegraph.billingRule': '連續字母/數字每 5 個一格',
+    'telegraph.cellRecipient': '收報資訊',
+    'telegraph.cellBody': '電報內文',
+    'telegraph.noCellSelected': '當前格：未選擇',
+    'telegraph.flipEnvelope': '翻轉信封',
+    'telegraph.flipToFront': '翻到信封正面',
+    'telegraph.flipToBack': '翻到信封背面',
+    'telegraph.openEnvelope': '開啟信封',
+    'telegraph.insertEnvelope': '裝入信封',
+    'telegraph.envelopeFront': '電報信封正面',
+    'telegraph.envelopeBack': '電報信封背面',
+    'telegraph.openEnvelopeView': '開啟信封檢視收報紙',
+    'telegraph.insertReceivePaper': '將收報紙裝入信封',
+    'telegraph.receivePaper': '收報紙',
+    'telegraph.sendPaper': '發報紙',
+    'telegraph.switchPaper': '切換紙張',
+    'telegraph.switchToSend': '切換到發報紙',
+    'telegraph.switchToReceive': '切換到收報紙',
+    'telegraph.envelopeFlip': '信封翻面',
+    'telegraph.code': '電碼',
+    'telegraph.audio': '音訊',
+    'telegraph.sendPaperTemplate': '電報發報紙範本',
+    'telegraph.sendPaperPreview': '電報發報紙預覽',
+    'telegraph.enterDestination': '請先填寫收報地點。',
+    'telegraph.enterRecipient': '請先填寫收報人資訊。',
+    'telegraph.enterBody': '請先填寫電報內容。',
+    'telegraph.recipientOverflow': '收報資訊超過範本可容納的 {count} 格。',
+    'telegraph.bodyOverflow': '電報內容超過範本可容納的 {count} 格。',
+    'telegraph.unsupported': '暫不支援這些字元：{chars}',
+    'telegraph.envelopeDone': '電報已列印並裝入信封。',
+    'telegraph.skippedDone': '已略過動畫，電報已裝入信封。',
+    'telegraph.imageFailed': '電報圖片生成失敗。',
+    'telegraph.sendPaperFile': '發報紙',
+    'telegraph.receivePaperFile': '收報紙',
+    'telegraph.imageDownloadFailed': '電報圖片下載失敗。',
+    'telegraph.codeFile': '電報電碼',
+    'telegraph.filePrefix': '電報',
+    'telegraph.welcomeTitle': '趁「慢電報」還未消失，將記憶拍給自己',
+    'telegraph.welcomeP1': '一支影片，讓人們發現了電報這個塵封已久的通訊業務。',
+    'telegraph.welcomeP2':
+      '如今，就算發報視窗全中國僅剩一個，人們仍願為一封還需編發、蓋章、封裝的慢電報留出時間。',
+    'telegraph.welcomeP3':
+      '那麼現在，就在這裡親手寫下你的訊息，讓它沿著塵封的路線，延續你的思緒和情感……',
+    'telegraph.confirmTitle': '確認發報內容',
+    'telegraph.closeConfirm': '關閉確認視窗',
+    'telegraph.destination': '收報地點',
+    'telegraph.recipient': '收報人',
+    'telegraph.notFilled': '未填寫',
+    'telegraph.confirmBody': '報文內容',
+    'telegraph.confirmHint': '確認後將開始填寫、列印、摺疊並裝入信封的模擬動畫。',
+    'telegraph.backEdit': '返回修改',
+    'telegraph.confirmSend': '確認並拍發',
+    'telegraph.localHistory': '本機歷史',
+    'telegraph.deleteHistory': '刪除歷史記錄',
+    'telegraph.unnamed': '未命名電報',
+    'telegraph.noHistory': '還沒有本機歷史記錄。',
+    'telegraph.cellAria': '{label} · 第{count}格',
+    'telegraph.toolbarAria': '電報操作',
+    'transitLineBrowser.filterAria': '線路篩選',
+    'transitLineBrowser.listAria': '線路列表',
+    'transitLineBrowser.modeRailway': '地方鐵路',
+    'transitLineBrowser.summaryAria': '舊線路資料摘要',
+    'transitHealth.dimension.topology': '拓撲銜接',
+    'transitHealth.dimension.operations': '營運時間',
+    'transitHealth.dimension.scale': '空間規模',
+    'transitHealth.dimension.places': '地點覆蓋',
+    'transitHealth.dimension.demand': '需求代理',
+    'transitHealth.dimension.data_quality': '資料品質',
+    'transitHealth.analysisEyebrow': '線網規劃分析',
+    'transitHealth.subtitle':
+      '綜合已發布線路拓撲、營運時間、道路節點與分類地點密度。潛在需求為規劃代理值，不能替代真實客流、班次、運能和成本資料。',
+    'transitHealth.onlineSnapshot': '在線快照',
+    'transitHealth.offlineSnapshot': '離線快照',
+    'transitHealth.dataTime': '資料時間',
+    'transitHealth.noLines': '尚無已發布的公共交通線路，暫時不能生成網路統計。',
+    'transitHealth.filterAria': '依運輸方式篩選',
+    'transitHealth.modeLegend': '運輸方式',
+    'transitHealth.scopeCurrent': '當前統計範圍：',
+    'transitHealth.scopeAll': '全部運輸方式',
+    'transitHealth.demandWithLines': '需求分析納入已有線路',
+    'transitHealth.demandPotentialOnly': '僅分析地點潛力',
+    'transitHealth.mLines': '線路數',
+    'transitHealth.mTopologyNote': '{count} 條形成連續站段',
+    'transitHealth.mStations': '站點數',
+    'transitHealth.mLocatedNote': '{rate} 可定位',
+    'transitHealth.mLength': '線網長度',
+    'transitHealth.mLocatedSegNote': '{count} 個已定位站段估算',
+    'transitHealth.mCoverage': '時刻覆蓋',
+    'transitHealth.mScheduledNote': '{scheduled}/{total} 條線路',
+    'transitHealth.mServiceSpan': '平均營運時長',
+    'transitHealth.mLateNote': '{count} 條服務至 22:00 後',
+    'transitHealth.mPlaceCoverage': '規劃地點覆蓋',
+    'transitHealth.mPlacesNote': '{covered}/{total} 個地點',
+    'transitHealth.mRoadCoverage': '道路節點覆蓋',
+    'transitHealth.mRoadsNote': '{count} 條道路樣本',
+    'transitHealth.mDemandAttainment': '需求達成率',
+    'transitHealth.mPotentialDemand': '潛在需求總量',
+    'transitHealth.mAttainedNote': '{attained}/{total} 加權需求已觸達',
+    'transitHealth.mPotentialHint': '依真實分類地點密度加權，不考慮線路覆蓋',
+    'transitHealth.chartEyebrow': '統計圖',
+    'transitHealth.chartTitle': '規模、營運與覆蓋',
+    'transitHealth.locatedSampleHint': '地點與距離僅使用已定位站點樣本',
+    'transitHealth.opEyebrow': '營運方',
+    'transitHealth.opTitle': '指標與排行',
+    'transitHealth.opCountHint': '共 {count} 個營運方 · 點擊欄名排序',
+    'transitHealth.opTableNote':
+      '公車線路由全網統一分配，營運商的連通片區數僅作歸屬統計，不作為脫網或強制接駁判斷依據。',
+    'transitHealth.colOperator': '營運方',
+    'transitHealth.colStations': '站點',
+    'transitHealth.colStationsTitle': '依該營運方線路覆蓋的穩定站點 ID 去重',
+    'transitHealth.colLines': '線路',
+    'transitHealth.colAvgConnectivity': '平均連接度',
+    'transitHealth.colConnectivityTitle': '該營運方站點在全網中直接相鄰的不同站點數平均值',
+    'transitHealth.colConnectivityWeight': '連接度權重',
+    'transitHealth.colWeightTitle': '相鄰站間路段依承載的不同線路數加權後的平均值',
+    'transitHealth.colLinesPerSegment': '同路段線路數',
+    'transitHealth.colSharedSegments': '共線路段',
+    'transitHealth.colScheduleCoverage': '時刻覆蓋',
+    'transitHealth.colServiceSpan': '平均營運時長',
+    'transitHealth.opComponentsNote': '{count} 個片區 · {transfer} 個跨營運方站點',
+    'transitHealth.rankLabel': '第 {rank} 名',
+    'transitHealth.methodEyebrow': '口徑',
+    'transitHealth.methodTitle': '統計項目與分析來源',
+    'transitHealth.noMockHint': '不使用模擬客流',
+    'transitHealth.dmTopology': '拓撲連接',
+    'transitHealth.dmTopologyDetail':
+      '依連續站序形成無向邊，計算連接度、共線路段、轉乘站與連通片區。',
+    'transitHealth.dmOperations': '營運時間',
+    'transitHealth.dmOperationsDetail':
+      '優先讀取首末班，缺失時使用發車時刻表邊界；跨午夜線路按次日計算。',
+    'transitHealth.dmScale': '線網空間規模',
+    'transitHealth.dmScaleDetail':
+      '以站名和運輸方式綁定地圖座標，估算站段直線長度、站間距與覆蓋範圍。',
+    'transitHealth.dmPlaces': '地點覆蓋',
+    'transitHealth.dmPlacesDetail':
+      '統計居住、就業、教育、醫療、生活、文體和對外交通地點進入站點服務圈的比例。',
+    'transitHealth.dmDemand': '潛在需求代理',
+    'transitHealth.dmDemandDetail':
+      '可切換純地點聚集或已有線路觸達口徑；需求達成率依分類權重計算，只用於規劃複核，不等同於客流預測。',
+    'transitHealth.dmRoads': '道路覆蓋',
+    'transitHealth.dmRoadsDetail':
+      '以地圖道路節點衡量線網覆蓋邊界；道路節點不是完整道路幾何，不用於精確里程計算。',
+    'transitHealth.sugEyebrow': '多維啟發式',
+    'transitHealth.sugTitle': '線網優化建議',
+    'transitHealth.sugMergedHint': '相同建議已跨營運商合併',
+    'transitHealth.sugEmpty': '當前切片沒有觸發預設啟發式閾值；這不代表線路服務品質已經得到驗證。',
+    'transitHealth.targetItem': '命中項目',
+    'transitHealth.viewAllTargets': '檢視全部 {count} 項',
+    'transitHealth.dialogTargetLabel': '命中項目',
+    'transitHealth.itemCount': '共 {count} 項',
+    'transitHealth.dialogClose': '關閉',
+    'transitHealth.dialogCloseAria': '關閉命中項目列表',
+    'transitHealth.searchTargets': '搜尋命中項目',
+    'transitHealth.searchPlaceholder': '搜尋線路、站點、路段或地點',
+    'transitHealth.noMatchedTargets': '沒有匹配的命中項目。',
+    'transitHealth.kindOperator': '營運方',
+    'transitHealth.kindLine': '線路',
+    'transitHealth.kindStation': '站點',
+    'transitHealth.kindSegment': '站間路段',
+    'transitHealth.kindPlace': '地點',
+    'transitHealth.kindCategory': '地點類別',
+    'transitHealth.kindRoad': '道路',
+    'transitHealth.moreOperators': '等 {count} 家營運方',
+    'transitHealth.cModeTitle': '運輸方式構成',
+    'transitHealth.cModeSubtitle': '線路數量及其全網占比',
+    'transitHealth.cTotalLines': '共 {count} 條線路，{details}',
+    'transitHealth.cLinesUnit': '條線路',
+    'transitHealth.cHoursTitle': '平均營運時長',
+    'transitHealth.cHoursSubtitle': '只統計具有可解析首末時刻的線路',
+    'transitHealth.cNoSchedule': '缺少時刻',
+    'transitHealth.cPlaceTitle': '分類地點覆蓋',
+    'transitHealth.cPlaceSubtitle': '進入站點服務圈的分類地點比例',
+    'transitHealth.cPlaceRate': '地點覆蓋率',
+    'transitHealth.cPlaceEntered': '個規劃地點進入當前運輸方式的站點服務圈。',
+    'transitHealth.cHotspotTitle1': '沿線需求熱點',
+    'transitHealth.cHotspotTitle2': '純地點潛在需求中心',
+    'transitHealth.cHotspotSub1': '依現有站點觸達的分類地點密度加權',
+    'transitHealth.cHotspotSub2': '忽略現有線路，僅依分類地點空間聚集度計算',
+    'transitHealth.cDemandRate': '需求達成率',
+    'transitHealth.cAttained': '已觸達 {attained} / {total} 加權需求代理值。',
+    'transitHealth.cNearbyCount': '{value} · {count} 個地點',
+    'transitHealth.cAround': '{place}周邊',
+    'transitHealth.cHotspotEmpty': '當前缺少可計算的需求熱點樣本。',
+    'transitHealth.cOperatorTitle': '營運方覆蓋規模',
+    'transitHealth.cOperatorSubtitle': '依穩定站點 ID 去重，展示站點數前八名',
+    'transitHealth.cOperatorBarLabel': '{stations} 站 · {lines} 線',
+    'transitNetworkSource.title': '線網資料',
+    'transitNetworkSource.origin.sample': 'RMP 畫廊專案',
+    'transitNetworkSource.origin.rmp': 'RMP 專案',
+    'transitNetworkSource.origin.server': '伺服器',
+    'transitNetworkSource.import.own': '匯入自己的 RMP 專案',
+    'transitNetworkSource.import.default': '匯入 RMP 專案',
+    'transitNetworkSource.import.short': '匯入',
+    'transitNetworkSource.import.project': '匯入專案',
+    'transitNetworkSource.sourceAria': '線網資料來源',
+    'transitNetworkSource.source.server': '伺服器線網',
+    'transitNetworkSource.source.loading': '正在載入',
+    'transitNetworkSource.source.sample': '範例線網',
+    'transitNetworkSource.source.imported': '匯入專案',
+    'transitNetworkSource.localDraftName': '本機草稿線網',
+    'transitNetworkSource.summary.stationCount': '{count} 站',
+    'transitNetworkSource.summary.stationsUnnamed': '{count} 站待補名',
+    'transitNetworkSource.summary.stationsNamed': '站名完整',
+    'transitNetworkSource.summary.lineCount': '{count} 條線路',
+    'transitNetworkSource.summary.edgeCount': '{count} 條連接',
+    'transitNetworkSource.summary.source': '來源：RMP 畫廊 ·',
+    'transitNetworkSource.status.persisting': '正在暫存',
+    'transitNetworkSource.status.persisted': '已暫存',
+    'transitNetworkSource.status.gallerySample': '畫廊範例',
+    'transitNetworkSource.status.localOnly': '僅本頁',
+    'transitNetworkSource.palette.aria': '{count} 種線路配色',
+    'transitNetworkSource.action.fillStationNamesAria': '補全 {count} 個未命名站點',
+    'transitNetworkSource.action.fillStationNames': '補站名 {count}',
+    'transitNetworkSource.action.configureLineNames': '設定專案線路名稱',
+    'transitNetworkSource.action.removeImported': '移除已匯入專案',
+    'transitNetworkSource.action.cancel': '取消',
+    'transitNetworkSource.action.saving': '正在儲存',
+    'transitNetworkSource.action.close': '關閉',
+    'transitNetworkSource.error.fileTooLarge': 'RMP 專案檔案不能超過 5 MB。',
+    'transitNetworkSource.error.notSignedIn': '未登入，目前匯入僅在本頁有效。',
+    'transitNetworkSource.error.persistFailed': '無法暫存 RMP 專案。',
+    'transitNetworkSource.error.persistFailedLocalOnly': '{message} 目前匯入僅在本頁有效。',
+    'transitNetworkSource.error.readFailed': '無法讀取 RMP 專案檔案。',
+    'transitNetworkSource.error.deleteFailed': '無法刪除暫存的線網專案。',
+    'transitNetworkSource.error.saveLineNamesFailed': '無法儲存線路名稱。',
+    'transitNetworkSource.error.saveStationNamesFailed': '無法儲存站點名稱。',
+    'transitNetworkSource.error.sampleLoadFailed': '預設範例線網暫時無法載入。',
+    'transitNetworkSource.error.sampleLoadFailedHint':
+      '{message} 仍可使用伺服器線網或匯入本機專案。',
+    'transitNetworkSource.notice.lineNamesSampleLocalOnly': '範例專案的線路名稱調整僅在本頁有效。',
+    'transitNetworkSource.notice.lineNamesPendingPersist':
+      '線路名稱僅在本頁有效；專案尚未成功暫存。',
+    'transitNetworkSource.notice.stationNamesSampleLocalOnly':
+      '範例專案的站點名稱調整僅在本頁有效。',
+    'transitNetworkSource.notice.stationNamesPendingPersist':
+      '站點名稱僅在本頁有效；專案尚未成功暫存。',
+    'transitNetworkSource.lineName.title': '設定專案線路名稱',
+    'transitNetworkSource.lineName.hintPart1': 'RMP 存檔裡的線路鍵（如 ',
+    'transitNetworkSource.lineName.hintPart2': '、',
+    'transitNetworkSource.lineName.hintPart3':
+      '）只是繪圖用的顏色命名，不是線路名。此處已按線路鍵的編號部分預填（',
+    'transitNetworkSource.lineName.hintPart4':
+      ' → 2號線），請確認或改為正式名稱；導視牌的「線路編號」範本以這裡填寫的名稱為準。',
+    'transitNetworkSource.lineName.primaryAria': '{key}主名稱',
+    'transitNetworkSource.lineName.primaryPlaceholder': '主名稱',
+    'transitNetworkSource.lineName.secondaryAria': '{key}副名稱',
+    'transitNetworkSource.lineName.secondaryPlaceholder': '副名稱',
+    'transitNetworkSource.lineName.save': '儲存線路名稱',
+    'transitNetworkSource.stationName.title': '補全未命名站點',
+    'transitNetworkSource.stationName.nearby': '相鄰：{names}',
+    'transitNetworkSource.stationName.nearbyUnavailable': '相鄰站名不可用',
+    'transitNetworkSource.stationName.primaryAria': '{id}主站名',
+    'transitNetworkSource.stationName.primaryPlaceholder': '主站名',
+    'transitNetworkSource.stationName.secondaryAria': '{id}副站名',
+    'transitNetworkSource.stationName.secondaryPlaceholder': '副站名',
+    'transitNetworkSource.stationName.save': '儲存已填寫站名',
+    'transitScreen.legacy': '舊版',
+    'transitScreen.summaryAria': '客運大屏資料摘要',
+    'transitScreen.upcomingAria': '近期班次',
+    'transitScreen.viewTrips': '檢視班次',
+    'transitScreen.empty.unavailable': '大屏資料暫不可用',
+    'transitScreen.empty.noData': '舊客運大屏資料來源尚未回傳可用資料。',
+    'operation.contentTagsAria': '內容標籤',
+    'operation.legacyBodyDescription':
+      '舊系統主要透過外部連結承載詳情，新版目前只保留標題、摘要和原始入口。',
+    'operation.legacyBodyTitle': '這則舊營運訊息沒有獨立正文',
+    'operation.legacyImageSource': '舊圖片來源：{url}',
+    'operation.openOriginal': '開啟原始內容',
+    'operation.originalLink': '原始連結',
+    'transitServiceNotice.activeCount': '{count} 則目前提醒',
+    'transitServiceNotice.history': '歷史客運提醒',
+    'transitServiceNotice.itemCount': '{count} 則',
+    'transitServiceNotice.periodRange': '{start} 至 {end}',
+    'transitServiceNotice.title': '客運提醒',
+    'admin.edit': '編輯',
+    'admin.editLine': '編輯線路',
+    'admin.editPoi': '編輯 POI',
+    'admin.home.title': '管理後台',
+    'admin.home.description': '依業務域進入對應後台，帳號頁只保留這個統一入口。',
+    'admin.editOperation': '編輯營運訊息',
     'search.category.all': '全部',
     'search.category.lines': '線路',
     'search.category.operations': '營運',
@@ -2906,6 +5230,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travelSchedule.action.legacyReference': '舊版參考',
     'travelSchedule.action.saveRecord': '儲存記錄',
     'travelSchedule.empty.noMatch': '沒有符合的班次',
+    'travelSchedule.empty.unavailable': '班次資料暫不可用',
+    'travelSchedule.empty.noData': '目前沒有可用的統一班次資料。',
     'travelSchedule.feedback.historySaved': '已儲存到本機班次記錄',
     'travelSchedule.feedback.reminderAdded': '已新增 {time} 的本機提醒',
     'travelSchedule.filter.anyDestination': '任意終點',
@@ -2921,6 +5247,43 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travelSchedule.history.recentAria': '最近班次記錄',
     'travelSchedule.history.summary': '{count} 條，{reminderCount} 條已關聯提醒',
     'travelSchedule.history.title': '本機班次記錄',
+    'travelSchedule.journey.arrival': '到達 {time}',
+    'travelSchedule.journey.availableAll': '全程可訂',
+    'travelSchedule.journey.bookJoint': '聯合訂票 · {count} 段',
+    'travelSchedule.journey.combining': '組合中…',
+    'travelSchedule.journey.direct': '直達',
+    'travelSchedule.journey.durationHours': '{hours} 小時 {minutes} 分',
+    'travelSchedule.journey.durationMinutes': '{minutes} 分鐘',
+    'travelSchedule.journey.editTrip': '編輯班次',
+    'travelSchedule.journey.found': '找到 {count} 個方案',
+    'travelSchedule.journey.holding': '正在鎖定聯合行程的全部座位',
+    'travelSchedule.journey.lineGroupAria': '{operator}線路',
+    'travelSchedule.journey.locking': '鎖定中…',
+    'travelSchedule.journey.missingEndpoints': '請先填寫起點和終點。',
+    'travelSchedule.journey.noneFound': '沒有找到可銜接的班次方案。',
+    'travelSchedule.journey.orderCreated': '聯合訂票成功，已建立 {count} 段訂單草稿。',
+    'travelSchedule.journey.orderFailed': '聯合訂票失敗。',
+    'travelSchedule.journey.partial': '部分行程不可售',
+    'travelSchedule.journey.passThrough': '通過不停',
+    'travelSchedule.journey.period': '{start} 至 {end}',
+    'travelSchedule.journey.planCount': '{count} 個方案',
+    'travelSchedule.journey.planFailed': '行程方案查詢失敗。',
+    'travelSchedule.journey.planIndex': '方案 {index}',
+    'travelSchedule.journey.planning': '正在組合班次方案',
+    'travelSchedule.journey.query': '查詢行程方案',
+    'travelSchedule.journey.queryOnly': '僅供查詢',
+    'travelSchedule.journey.segmentUnavailable': '該方案存在暫不可售的行程段。',
+    'travelSchedule.journey.serviceTrip': '{service}班次',
+    'travelSchedule.journey.stopCount': '{count} 站',
+    'travelSchedule.journey.stopsAria': '{line} 停靠站',
+    'travelSchedule.journey.swapEndpoints': '交換起終點',
+    'travelSchedule.journey.tbd': '待定',
+    'travelSchedule.journey.title': '行程方案',
+    'travelSchedule.journey.transferCount': '{count} 次換乘',
+    'travelSchedule.journey.transferDetail':
+      '{from} → {to} · 約 {minutes} 分鐘（含 {buffer} 分鐘緩衝）',
+    'travelSchedule.journey.tripCount': '{count} 個班次',
+    'travelSchedule.journey.tripLabel': '{line} 班次 {code}',
     'travelSchedule.notice.aria': '班次公告',
     'travelSchedule.notice.count': '{count} 條',
     'travelSchedule.notice.title': '客運提醒',
@@ -2935,6 +5298,10 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travelSchedule.order.loginRequired': '登入後可查看訂單草稿。',
     'travelSchedule.order.readFailed': '訂單草稿讀取失敗',
     'travelSchedule.order.unavailable': '目前班次暫不可建立訂單草稿',
+    'travelSchedule.reminder.detailDeparture': '開車 {time}',
+    'travelSchedule.reminder.detailFare': '票價 {fare}',
+    'travelSchedule.reminder.detailTrip': '班次 {code}',
+    'travelSchedule.reminder.titleWithTime': '{line} {time} 班次',
     'travelSchedule.resultCount': '{count} / {total} 個可查詢班次',
     'travelSchedule.search.aria': '搜尋班次、線路、車站、檢票口或營運方',
     'travelSchedule.search.clear': '清空班次搜尋',
@@ -3024,6 +5391,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travel.ticketing.action': '待接入',
     'travel.ticketing.detail': '真實電子票、檢票、退票和乘車碼後續接入臨東通',
     'travel.ticketing.title': '票券與訂單',
+    'worldCoordinate.axis': '{axis} 座標',
+    'worldCoordinate.footerEmpty': '請先輸入 X/Z 或選擇參考地點；Y 可在上方獨立填寫',
+    'worldCoordinate.footerPick': '點擊地圖回填 X/Z · 目前 {coordinate} · Y {y}',
+    'worldCoordinate.title': '世界座標',
+    'worldCoordinate.yInherited': '繼承預設值',
+    'worldCoordinate.yPlaceholder': '留空繼承地圖預設高度',
   },
   en: {
     'account.offlinePackage.area': 'Area {area} blocks',
@@ -3062,6 +5435,32 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.offlinePackage.strategyNote':
       'Custom areas currently store boundaries and refresh public base data. Real tile offline packs still need size limits and generation rules.',
     'account.offlinePackage.title': 'New Offline Area',
+    'account.cache.offlineDeletedAll': 'Deleted the offline area request locally and from your account',
+    'account.cache.offlineDeletedLocalOnly':
+      'Deleted locally, but the account request could not be deleted',
+    'account.cache.offlineRefreshFailed': 'Failed to refresh offline area base data',
+    'account.cache.refreshFailed': 'Refresh failed',
+    'account.cache.refreshingOfflineBase': 'Refreshing offline area base data',
+    'account.error.cacheRefreshFailed': '{url} refresh failed',
+    'account.error.offlinePackageRequestFailed': 'Server offline package request failed',
+    'account.error.offlineScopeDeleteFailed': 'Failed to delete the account offline area request',
+    'account.error.offlineScopeUnavailable': 'Account offline areas are unavailable',
+    'account.error.pushPreferenceUnavailable': 'Notification preferences are unavailable',
+    'account.error.tripReminderDeleteFailed': 'Failed to delete account reminder copies',
+    'account.error.tripRemindersUnavailable': 'Account reminders are unavailable',
+    'account.push.insecureContext':
+      'This page is not a secure context, so the browser will not allow Push subscriptions',
+    'account.push.loginRequired': 'Sign in with Lindongtong first.',
+    'account.push.missingKeys': 'The Push subscription returned by the browser is missing keys',
+    'account.push.missingPublicKey':
+      'Web Push public key is not configured. This device cannot subscribe yet.',
+    'account.push.permissionDenied': 'Browser notification permission is not granted',
+    'account.push.registerFailed': 'Failed to register the Push device subscription',
+    'account.push.revokeFailed': 'Failed to revoke the Push device subscription',
+    'account.push.serviceWorkerNotReady':
+      'Service Worker is not ready yet. Cannot subscribe to Push.',
+    'account.push.unknownHost': 'Unknown service',
+    'account.push.unsupported': 'This browser does not support Web Push',
     'account.about.currentVersion': 'Current version: {version}',
     'account.about.title': 'About and Updates',
     'account.about.viewChangelog': 'View version updates',
@@ -3209,6 +5608,17 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'changelog.empty': 'There are no user-facing updates to show yet.',
     'changelog.title': 'Version Updates',
     'brand.home': 'Yuchengtong Home',
+    'contentPoiBinding.empty': 'No matching public POIs.',
+    'contentPoiBinding.hint':
+      'Only public map POIs are shown; changes take effect on POI details after publishing.',
+    'contentPoiBinding.loading': 'Loading public POIs',
+    'contentPoiBinding.optionsAria': 'Available POIs',
+    'contentPoiBinding.searchAria': 'Search linked POIs',
+    'contentPoiBinding.searchPlaceholder': 'Search POI name, address, or ID',
+    'contentPoiBinding.selectedAria': 'Linked POIs',
+    'contentPoiBinding.title': 'Linked POIs',
+    'contentPoiBinding.unavailable': 'Public POIs are unavailable',
+    'embeddedMapPicker.empty': 'Enter coordinates or pick a reference place first.',
     'inventoryHoldStatus.cancelled': 'Cancelled',
     'inventoryHoldStatus.confirmed': 'Confirmed',
     'inventoryHoldStatus.expired': 'Expired',
@@ -3523,19 +5933,25 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.toolbar.zoomIn': 'Zoom in',
     'map.toolbar.zoomOut': 'Zoom out',
     'map.title': 'Map Explore',
+    'mapStageLoader.aria': 'Map loading',
+    'mapStageLoader.loading': 'Loading map',
     'siteLegal.aria': 'Site filing information',
     'siteLegal.disclaimer':
       'Parts of this site were generated with AI; places and organizations mentioned are fictional.',
     'siteLegal.icp': '辽ICP备2021004959-1号',
     'siteLegal.police': '辽公网安备21100502000117号',
     'siteLegal.version': 'Version {version}',
-    'map.route.alight': 'Exit at {name}',
+    'map.route.alight': 'Alight at {name}',
+    'map.route.alightFerry': 'Disembark at {name}',
+    'map.route.alightMetro': 'Exit at {name}',
     'map.route.aria': 'Route planner',
     'map.route.arrive': 'Arrive at {name}',
     'map.route.badge.fastest': 'Fastest',
     'map.route.badge.fewestTransfers': 'Fewest transfers',
     'map.route.badge.leastWalking': 'Least walking',
     'map.route.board': 'Board at {name}',
+    'map.route.boardFerry': 'Board at {name}',
+    'map.route.boardMetro': 'Board at {name}',
     'map.route.close': 'Close route planner',
     'map.route.collapse': 'Collapse route planner',
     'map.route.currentLocation': 'Current location',
@@ -3620,7 +6036,6 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.swap': 'Swap origin and destination',
     'map.route.traceTitle': '{title} · preliminary estimate',
     'map.route.transferAction': 'Transfer at {name}',
-    'map.route.transferBoard': 'Board at {name}',
     'map.route.transferTitle': '{firstMode} + {secondMode} transfer',
     'map.route.transferWalk': 'Transfer walk {distance} {duration}',
     'map.route.transitNote.default':
@@ -3657,6 +6072,234 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.roadDetail.endpointCountValue': '{count}',
     'map.roadDetail.traceHighlighted': 'Approximate trace highlighted on the map',
     'map.roadDetail.traceStatus': 'Trace status',
+    'metroWayfindingEditor.action.addElement': 'Add element',
+    'metroWayfindingEditor.action.cancel': 'Cancel',
+    'metroWayfindingEditor.action.clear': 'Clear',
+    'metroWayfindingEditor.action.close': 'Close',
+    'metroWayfindingEditor.action.delete': 'Delete',
+    'metroWayfindingEditor.action.done': 'Done',
+    'metroWayfindingEditor.action.dragToReorder': 'Drag to reorder',
+    'metroWayfindingEditor.action.duplicate': 'Duplicate',
+    'metroWayfindingEditor.action.duplicateElement': 'Duplicate element',
+    'metroWayfindingEditor.action.importSign': 'Import sign',
+    'metroWayfindingEditor.action.moveDown': 'Move down',
+    'metroWayfindingEditor.action.moveLeft': 'Move left',
+    'metroWayfindingEditor.action.moveRight': 'Move right',
+    'metroWayfindingEditor.action.moveRowDownAria': 'Move this row down',
+    'metroWayfindingEditor.action.moveRowUpAria': 'Move this row up',
+    'metroWayfindingEditor.action.moveUp': 'Move up',
+    'metroWayfindingEditor.action.openProjectLibraryTitle': 'Layout templates and project import',
+    'metroWayfindingEditor.action.openTemplateLibrary': 'Open template library',
+    'metroWayfindingEditor.action.removeElement': 'Remove element',
+    'metroWayfindingEditor.action.replaceSign': 'Replace current sign',
+    'metroWayfindingEditor.action.reverse': 'Reverse',
+    'metroWayfindingEditor.action.reverseDisabledVertical': 'Vertical layouts cannot be reversed',
+    'metroWayfindingEditor.action.reverseTitle': 'Reverse sign element order',
+    'metroWayfindingEditor.action.templateLibrary': 'Templates',
+    'metroWayfindingEditor.align.center': 'Center',
+    'metroWayfindingEditor.align.left': 'Align left',
+    'metroWayfindingEditor.align.right': 'Align right',
+    'metroWayfindingEditor.aria.addElementToRow': 'Add element to {row}',
+    'metroWayfindingEditor.aria.canvas': 'Metro wayfinding sign editor',
+    'metroWayfindingEditor.aria.combination': 'Combination, {count} children, scale {scale}%',
+    'metroWayfindingEditor.aria.defaultLineName': 'Line',
+    'metroWayfindingEditor.aria.draggableTab': '{label}, drag to reorder',
+    'metroWayfindingEditor.aria.emptyState': 'Start creating a sign',
+    'metroWayfindingEditor.aria.fixedSpace': 'Fixed space, {units} units',
+    'metroWayfindingEditor.aria.flexSpace': 'Flexible space',
+    'metroWayfindingEditor.aria.inlineEditable': '{label}, inline editable',
+    'metroWayfindingEditor.aria.largeTextWithSummary': 'Large text, {summary}',
+    'metroWayfindingEditor.aria.partSuffix': ', {value}',
+    'metroWayfindingEditor.aria.removeSegment': 'Remove {kind}',
+    'metroWayfindingEditor.aria.rowElements': 'Elements in {row}',
+    'metroWayfindingEditor.aria.segmentOrdinal': '{kind} {index}',
+    'metroWayfindingEditor.aria.suffixOrdinal': 'Subscript {index}',
+    'metroWayfindingEditor.aria.textElement': 'Text, {rows} rows, {alignment}',
+    'metroWayfindingEditor.aria.textSegment': '{label} text segment {index}',
+    'metroWayfindingEditor.color.background': 'Element background',
+    'metroWayfindingEditor.color.custom': 'Custom color',
+    'metroWayfindingEditor.color.customAria': '{label} custom color',
+    'metroWayfindingEditor.color.foreground': 'Element text, line, and icon color',
+    'metroWayfindingEditor.color.inherit': 'Follow sign',
+    'metroWayfindingEditor.combination.addAria': 'Add combination element',
+    'metroWayfindingEditor.combination.addFacility': 'Facility icon',
+    'metroWayfindingEditor.combination.addSpace': 'Space',
+    'metroWayfindingEditor.combination.childDuplicateAria': 'Duplicate child element',
+    'metroWayfindingEditor.combination.childMoveDownAria': 'Move child element down',
+    'metroWayfindingEditor.combination.childMoveUpAria': 'Move child element up',
+    'metroWayfindingEditor.combination.childRemoveAria': 'Remove child element',
+    'metroWayfindingEditor.combination.childType': 'Child element type',
+    'metroWayfindingEditor.combination.closeAria': 'Close combination editor',
+    'metroWayfindingEditor.combination.description':
+      'Supports facility icons, arrows, text, large text, and fixed or flexible spaces. Children stay inside the combination box.',
+    'metroWayfindingEditor.combination.editTitle': 'Edit combination',
+    'metroWayfindingEditor.combination.editWithCount': 'Edit combination ({count})',
+    'metroWayfindingEditor.combination.empty': 'This combination has no child elements yet.',
+    'metroWayfindingEditor.combination.eyebrow': 'Combination elements',
+    'metroWayfindingEditor.combination.fill': 'Combination fill',
+    'metroWayfindingEditor.combination.fillColor': 'Combination fill color',
+    'metroWayfindingEditor.combination.listAria': 'Combination element list',
+    'metroWayfindingEditor.combination.scale': 'Combination scale',
+    'metroWayfindingEditor.combination.stripeColor': 'Stripe color',
+    'metroWayfindingEditor.combination.stripePosition': 'Stripe position',
+    'metroWayfindingEditor.combination.templateHint':
+      'The line number content template now lives in the Insert suggestions area above the editor: pick a line to replace the child elements of this combination, and apply the line identity color as a fill or stripe.',
+    'metroWayfindingEditor.confirm.clear':
+      'Clear all elements from the current metro wayfinding sign?',
+    'metroWayfindingEditor.direction.down': 'Down',
+    'metroWayfindingEditor.direction.left': 'Left',
+    'metroWayfindingEditor.direction.right': 'Right',
+    'metroWayfindingEditor.direction.up': 'Up',
+    'metroWayfindingEditor.divider.note':
+      'The divider is {width} wide and 72 tall, scaling with the sign pixel unit.',
+    'metroWayfindingEditor.elementLabel.arrow': 'Arrow · 85 × 85',
+    'metroWayfindingEditor.elementLabel.combination': 'Combination · {scale}% · {count} children',
+    'metroWayfindingEditor.elementLabel.divider': 'Divider · {width} × 72',
+    'metroWayfindingEditor.elementLabel.facility': 'Facility icon · 85 × 85',
+    'metroWayfindingEditor.elementLabel.largeText': 'Large text · {size} height',
+    'metroWayfindingEditor.elementLabel.space': 'Spacer',
+    'metroWayfindingEditor.elementLabel.text': 'Text · {rows} rows',
+    'metroWayfindingEditor.elementType.arrow': 'Arrow',
+    'metroWayfindingEditor.elementType.combination': 'Combination',
+    'metroWayfindingEditor.elementType.divider': 'Divider',
+    'metroWayfindingEditor.elementType.facility': 'Facility',
+    'metroWayfindingEditor.elementType.largeText': 'Large text',
+    'metroWayfindingEditor.elementType.space': 'Space',
+    'metroWayfindingEditor.elementType.spaceShort': 'Space',
+    'metroWayfindingEditor.elementType.text': 'Text',
+    'metroWayfindingEditor.empty.description':
+      'Add your first element, or load a ready-made layout from the template library.',
+    'metroWayfindingEditor.empty.title': 'Start creating a sign',
+    'metroWayfindingEditor.error.fileTooLarge': '{name} exceeds {limit} MB, so reading stopped.',
+    'metroWayfindingEditor.error.parseFailed': 'Failed to parse the project file.',
+    'metroWayfindingEditor.error.tooManyFiles':
+      'You can import up to {count} project files at a time.',
+    'metroWayfindingEditor.examples.aria': 'Metro wayfinding layout templates',
+    'metroWayfindingEditor.examples.categoriesAria': 'Template categories',
+    'metroWayfindingEditor.examples.categoryEntry': 'Entry',
+    'metroWayfindingEditor.examples.categoryExit': 'Exit',
+    'metroWayfindingEditor.examples.categoryTransfer': 'Transfer',
+    'metroWayfindingEditor.examples.description': 'Pick a layout to start editing',
+    'metroWayfindingEditor.examples.empty': 'No example templates are available for this network',
+    'metroWayfindingEditor.examples.line': 'Apply line',
+    'metroWayfindingEditor.examples.loadAria': 'Load {remark}, {mode}, {size}',
+    'metroWayfindingEditor.examples.station': 'Apply station',
+    'metroWayfindingEditor.examples.title': 'Layout templates',
+    'metroWayfindingEditor.examples.useTemplate': 'Use this template',
+    'metroWayfindingEditor.field.addForegroundStroke': 'Add foreground stroke',
+    'metroWayfindingEditor.field.addFrame': 'Add frame',
+    'metroWayfindingEditor.field.alignment': 'Alignment',
+    'metroWayfindingEditor.field.arrow': 'Arrow',
+    'metroWayfindingEditor.field.backgroundColor': 'Sign background color',
+    'metroWayfindingEditor.field.defaultForegroundColor': 'Default text and graphic color',
+    'metroWayfindingEditor.field.elementType': 'Element type',
+    'metroWayfindingEditor.field.exitIconDirection': 'Exit icon direction',
+    'metroWayfindingEditor.field.facilityIcon': 'Facility icon',
+    'metroWayfindingEditor.field.iconDirection': 'Icon direction',
+    'metroWayfindingEditor.field.iconVariant': 'Icon variant',
+    'metroWayfindingEditor.field.layout': 'Layout',
+    'metroWayfindingEditor.field.rowDivider': 'Add divider between rows',
+    'metroWayfindingEditor.field.writingMode': 'Text orientation',
+    'metroWayfindingEditor.fill.color': 'Solid color',
+    'metroWayfindingEditor.fill.inverse': 'Inverted',
+    'metroWayfindingEditor.fill.none': 'None',
+    'metroWayfindingEditor.fill.stripe': 'Stripe only',
+    'metroWayfindingEditor.frame.circle': 'Circle',
+    'metroWayfindingEditor.frame.fill': 'Frame fill',
+    'metroWayfindingEditor.frame.fillColor': 'Frame fill color',
+    'metroWayfindingEditor.frame.none': 'None',
+    'metroWayfindingEditor.frame.rectangle': 'Rectangle',
+    'metroWayfindingEditor.frame.shape': 'Frame shape',
+    'metroWayfindingEditor.import.description':
+      'Choose a JSON project file. The system parses it and shows a conversion preview before replacing the current sign.',
+    'metroWayfindingEditor.import.dropActive': 'Release to import the project file',
+    'metroWayfindingEditor.import.dropHint': 'You can also drag a JSON project file here',
+    'metroWayfindingEditor.import.fileLimits': 'File limits',
+    'metroWayfindingEditor.import.fileLimitsDescription':
+      'Up to {count} files, {size} MB each. Projects from different editors cannot be imported together.',
+    'metroWayfindingEditor.import.selectFiles': 'Choose project files',
+    'metroWayfindingEditor.import.sourceExternalHint': 'External editor',
+    'metroWayfindingEditor.import.sourceYct': 'YCT metro wayfinding project',
+    'metroWayfindingEditor.import.sourceYctHint': 'Local project',
+    'metroWayfindingEditor.import.supportedSources': 'Supported sources',
+    'metroWayfindingEditor.import.title': 'Import an external wayfinding project',
+    'metroWayfindingEditor.importPreview.closeAria': 'Close import preview',
+    'metroWayfindingEditor.importPreview.eyebrow': 'Project conversion preview',
+    'metroWayfindingEditor.importPreview.footerSummary': '{count} JSON files · {size} MB each',
+    'metroWayfindingEditor.importPreview.mode': 'Conversion mode',
+    'metroWayfindingEditor.importPreview.modeSemantic': 'Semantic only (recommended)',
+    'metroWayfindingEditor.importPreview.modeSourceStyle': 'Keep source style',
+    'metroWayfindingEditor.importPreview.previewNote':
+      'Scaled sign preview, only for confirming the converted content and layout',
+    'metroWayfindingEditor.importPreview.rowsAria': 'Rows to import',
+    'metroWayfindingEditor.importPreview.source': 'Source',
+    'metroWayfindingEditor.importPreview.sourceStyle': 'Source style',
+    'metroWayfindingEditor.importPreview.targetStyle': 'Target style',
+    'metroWayfindingEditor.importPreview.warningCount': '({count} occurrences)',
+    'metroWayfindingEditor.importPreview.warningsAria': 'Conversion warnings',
+    'metroWayfindingEditor.importPreview.warningsTitle': 'Conversion warnings',
+    'metroWayfindingEditor.largeText.fieldLabel': 'Large text ({size} height)',
+    'metroWayfindingEditor.largeText.insertSuffix': 'Add subscript at cursor',
+    'metroWayfindingEditor.option.all': 'All',
+    'metroWayfindingEditor.option.doubleRow': 'Two rows',
+    'metroWayfindingEditor.option.entry': 'Entry',
+    'metroWayfindingEditor.option.exit': 'Exit',
+    'metroWayfindingEditor.option.singleRow': 'One row',
+    'metroWayfindingEditor.option.transfer': 'Transfer',
+    'metroWayfindingEditor.option.vertical': 'Vertical',
+    'metroWayfindingEditor.projectDialog.closeAria': 'Close template library and import',
+    'metroWayfindingEditor.projectDialog.eyebrow': 'Metro wayfinding sign',
+    'metroWayfindingEditor.projectDialog.import': 'Import project',
+    'metroWayfindingEditor.projectDialog.source': 'Project source',
+    'metroWayfindingEditor.projectDialog.templates': 'Layout templates',
+    'metroWayfindingEditor.projectDialog.title': 'Template library and import',
+    'metroWayfindingEditor.row.first': 'First row',
+    'metroWayfindingEditor.row.second': 'Second row',
+    'metroWayfindingEditor.segment.boxed': 'Boxed text',
+    'metroWayfindingEditor.segment.boxedShort': 'Box',
+    'metroWayfindingEditor.segment.chooseLineColor':
+      'Choose line color (also fills the line number)',
+    'metroWayfindingEditor.segment.insertBoxed': 'Add box at cursor',
+    'metroWayfindingEditor.segment.insertLine': 'Add line number at cursor',
+    'metroWayfindingEditor.segment.line': 'Line number',
+    'metroWayfindingEditor.segment.text': 'Text segment',
+    'metroWayfindingEditor.space.fixed': 'Fixed width',
+    'metroWayfindingEditor.space.flex': 'Share remaining width',
+    'metroWayfindingEditor.space.flexNote':
+      'All Share remaining width spacers split the available space evenly.',
+    'metroWayfindingEditor.space.mode': 'Space mode',
+    'metroWayfindingEditor.space.width': 'Width (16 px units)',
+    'metroWayfindingEditor.status.parsing': 'Parsing',
+    'metroWayfindingEditor.status.parsingFiles': 'Parsing files',
+    'metroWayfindingEditor.stripePosition.bottom': 'Bottom',
+    'metroWayfindingEditor.stripePosition.left': 'Left',
+    'metroWayfindingEditor.stripePosition.right': 'Right',
+    'metroWayfindingEditor.suffix.label': 'Subscript',
+    'metroWayfindingEditor.suffix.placeholder': 'Sub',
+    'metroWayfindingEditor.suffix.remove': 'Remove this subscript',
+    'metroWayfindingEditor.suggestion.acceptAria': 'Accept suggestion: {suggestion}',
+    'metroWayfindingEditor.suggestion.acceptTitle': 'Accept suggestion (Tab)',
+    'metroWayfindingEditor.tab.childCount': '{count} children',
+    'metroWayfindingEditor.text.addMainRow': 'Add main text row',
+    'metroWayfindingEditor.text.addRowAria': 'Add text row',
+    'metroWayfindingEditor.text.addSecondaryRow': 'Add secondary text row',
+    'metroWayfindingEditor.text.deleteRow': 'Delete text row',
+    'metroWayfindingEditor.text.deleteRowAria': 'Delete row {index}',
+    'metroWayfindingEditor.text.dynamicFontSize': 'Dynamic font size',
+    'metroWayfindingEditor.text.main': 'Main text',
+    'metroWayfindingEditor.text.mainRowLabel': 'Row {index} main text',
+    'metroWayfindingEditor.text.metrics': 'Main {main} · Secondary {secondary}',
+    'metroWayfindingEditor.text.moveRowDownAria': 'Move row {index} down',
+    'metroWayfindingEditor.text.moveRowUpAria': 'Move row {index} up',
+    'metroWayfindingEditor.text.rowHeader': 'Row {index} · {kind}',
+    'metroWayfindingEditor.text.rowsAria': 'Text rows',
+    'metroWayfindingEditor.text.secondary': 'Secondary text',
+    'metroWayfindingEditor.text.secondaryRowLabel': 'Row {index} secondary text',
+    'metroWayfindingEditor.toolbar.title': 'Layout and appearance',
+    'metroWayfindingEditor.writing.horizontal': 'Horizontal',
+    'metroWayfindingEditor.writing.horizontalText': 'Horizontal',
+    'metroWayfindingEditor.writing.vertical': 'Vertical',
+    'metroWayfindingEditor.writing.verticalText': 'Vertical',
     'nav.back': 'Back',
     'nav.collapse': 'Collapse main navigation',
     'nav.expand': 'Expand main navigation',
@@ -3715,6 +6358,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operations.startsAt': 'Starts at {date}',
     'operations.strongReminder': 'Important reminders',
     'operations.validUntil': 'Valid until {date}',
+    'operationRelatedPois.count': '{count} POIs',
+    'operationRelatedPois.fallback': 'Map place',
+    'operationRelatedPois.title': 'Related places',
+    'operationToc.collapse': 'Collapse {title}',
+    'operationToc.expand': 'Expand {title}',
+    'operationToc.title': 'Contents',
     'page.account': 'Account Settings',
     'page.map': 'Map Explore',
     'page.offline': 'Offline',
@@ -3723,12 +6372,51 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'page.search': 'Search',
     'page.services': 'More Services',
     'page.changelog': 'Version Updates',
+    'page.faq': 'Help & FAQ',
+    'page.roadMaterials': 'Road Sign Materials',
+    'page.telegraph': 'Telegraph Experience',
+    'page.transitMaterials': 'Transit Signage',
+    'page.transitNetworkHealth': 'Transit Network Health',
     'page.ticketOrder': 'Ticket Order',
     'page.travel': 'Travel',
     'page.travelScreen': 'Operations Board',
+    'poiFacility.add': 'Add facility',
+    'poiFacility.descriptionLabel': 'Description',
+    'poiFacility.descriptionPlaceholder': 'e.g. Accessible elevator on the east side of level 1',
+    'poiFacility.hint': 'Icon and description',
+    'poiFacility.icon.accessible': 'Accessible',
+    'poiFacility.icon.childCare': 'Baby care',
+    'poiFacility.icon.elevator': 'Elevator',
+    'poiFacility.icon.escalator': 'Escalator',
+    'poiFacility.icon.info': 'Info',
+    'poiFacility.icon.luggage': 'Luggage storage',
+    'poiFacility.icon.medical': 'Medical',
+    'poiFacility.icon.parking': 'Parking',
+    'poiFacility.icon.pets': 'Pets',
+    'poiFacility.icon.power': 'Charging',
+    'poiFacility.icon.restaurant': 'Dining',
+    'poiFacility.icon.shopping': 'Shopping',
+    'poiFacility.icon.smoking': 'Smoking area',
+    'poiFacility.icon.wc': 'Restroom',
+    'poiFacility.icon.wifi': 'Wi-Fi',
+    'poiFacility.iconLabel': 'Facility icon',
+    'poiFacility.removeAria': 'Remove facility {index}',
+    'poiFacility.removeTitle': 'Remove facility',
+    'poiFacility.title': 'Facilities',
     'quickAction.rideCode': 'Ride Code',
     'quickAction.rideCodeLoginRequired': 'Sign in to use the ride code',
     'quickAction.rideCodeUnavailable': 'Ride code is temporarily unavailable',
+    'scheduleStopTable.aria': 'Stop times by station',
+    'scheduleStopTable.arrival': 'Arrival',
+    'scheduleStopTable.arrivalAria': 'Arrival time at {station}',
+    'scheduleStopTable.departure': 'Departure',
+    'scheduleStopTable.departureAria': 'Departure time at {station}',
+    'scheduleStopTable.dwell': 'Dwell (min)',
+    'scheduleStopTable.dwellAria': 'Dwell minutes at {station}',
+    'scheduleStopTable.empty': 'No stop times yet',
+    'scheduleStopTable.station': 'Station',
+    'scheduleStopTable.stop': 'Stop',
+    'scheduleStopTable.stopAria': 'Whether service stops at {station}',
     'search.open': 'Search',
     'shortcut.close': 'Close shortcuts',
     'shortcut.focusMapSearch': 'Focus map search',
@@ -3804,6 +6492,481 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'services.category.toolbox': 'Toolbox',
     'services.empty': 'No service entries yet',
     'services.itemCount': '{count} items',
+    'materialStudio.history': 'Material history',
+    'materialStudio.preview': 'Preview',
+    'materialStudio.updatePreview': 'Update preview',
+    'materialStudio.submitReview': 'Submit for review',
+    'materialStudio.submitReviewManualHint':
+      'Submit for review; download images without watermark once approved',
+    'materialStudio.exportProject': 'Export project files',
+    'materialStudio.download': 'Download image',
+    'materialStudio.loginRequired':
+      'Sign in to submit for review and download images without watermark.',
+    'materialStudio.serverUnverified': 'Server account not verified',
+    'materialStudio.serverUnverifiedHint':
+      'Verify your server account in account settings to download images without watermark',
+    'materialStudio.loginRemoveWatermark': 'Sign in to remove watermark',
+    'materialStudio.reviewRequired': 'Review required to remove watermark',
+    'materialStudio.templateReadFailed': 'Unable to load material templates.',
+    'materialStudio.noTemplates': 'No templates available.',
+    'materialStudio.workspaceUnavailable': 'The material studio is temporarily unavailable.',
+    'materialStudio.exportOnlyManual':
+      'Only manually edited metro wayfinding signs can be exported as project files.',
+    'materialStudio.offlineBlocked':
+      'You are offline. This action requires an internet connection.',
+    'materialStudio.noSyncTemplate': 'No templates available to sync.',
+    'materialStudio.serverSubmitOnlineOnly':
+      'Drafts in server data mode can only be submitted online.',
+    'materialStudio.loginFirst': 'Please sign in first.',
+    'materialStudio.localSyncFailed': 'Failed to sync local draft.',
+    'materialStudio.localSyncedSubmitHint':
+      'Local draft synced. An internet connection is still required to submit for review.',
+    'materialStudio.networkError': 'Network error.',
+    'materialStudio.localSyncNetworkError':
+      'A network error occurred while syncing the local draft.',
+    'materialStudio.noProjectStations': 'No stations available in the imported project.',
+    'materialStudio.selectServerStation': 'Please select a server bus station first.',
+    'materialStudio.selectProjectLine':
+      'Please select at least one project line in the current map direction.',
+    'materialStudio.selectDirectionLine': 'Please select at least one line in the same direction.',
+    'materialStudio.selectServerLine': 'Please select a server line first.',
+    'materialStudio.selectServerPlace': 'Please select a server place first.',
+    'materialStudio.selectCoordinate': 'Please select the sign installation coordinates.',
+    'materialStudio.selectLinkedMode': 'Please select {mode} first.',
+    'materialStudio.previewFailed': 'Failed to generate preview.',
+    'materialStudio.previewNetworkError': 'A network error occurred while generating the preview.',
+    'materialStudio.noSubmittableTemplate': 'No template available to submit.',
+    'materialStudio.saveCustomFailed': 'Unable to save the custom material.',
+    'materialStudio.savedSubmitFailed': 'Material saved, but submitting for review failed.',
+    'materialStudio.submitNetworkError': 'A network error occurred while submitting for review.',
+    'materialStudio.downloadFailed': 'Failed to download material.',
+    'materialStudio.downloadNetworkError':
+      'A network error occurred while downloading the material.',
+    'materialStudio.downloadPreviewNetworkError':
+      'A network error occurred while downloading the watermarked preview.',
+    'materialStudio.selectTemplateAndMode': 'Please select a template and {mode} first.',
+    'materialStudio.serverVerifiedDownloadHint':
+      'Verify your server account to download images without watermark. The watermarked preview has been downloaded instead.',
+    'materialStudio.operationBusy': 'The current operation has not finished yet. Please wait.',
+    'materialStudio.modeNoReviewNeeded': 'No review is required in {mode} mode.',
+    'materialStudio.localDraft': 'Local draft',
+    'materialStudio.workspaceEyebrow': 'Material Studio',
+    'materialStudio.syncLocalDraft': 'Sync local draft',
+    'materialStudio.templates': 'Templates',
+    'materialStudio.networkData': 'Network data',
+    'materialStudio.online': 'Online',
+    'materialStudio.offline': 'Offline',
+    'materialStudio.dimensions': 'Dimensions',
+    'materialStudio.dataSource': 'Data source',
+    'materialStudio.manualInput': 'Manual input',
+    'materialStudio.roadTitle': 'Road sign generation',
+    'materialStudio.transitTitle': 'Transit sign generation',
+    'materialStudio.serverNetwork': 'Server network',
+    'materialStudio.sampleProject': 'Sample project',
+    'materialStudio.importedProject': 'Imported project',
+    'materialStudio.projectStation': 'Project station',
+    'materialStudio.projectCurrentStation': 'Current project station',
+    'materialStudio.variant': 'Variant',
+    'materialStudio.group.busStop': 'Bus stop sign',
+    'materialStudio.group.busStopHorizontal': 'Bus stop sign (horizontal route details)',
+    'materialStudio.group.metroLineMap': 'Metro line map (horizontal)',
+    'materialStudio.group.layout': 'Layout',
+    'materialStudio.group.style': 'Style',
+    'materialStudio.projectLineCount': '{count} project lines',
+    'materialStudio.busLineCount': '{count} bus lines',
+    'materialStudio.stationProjectLines': 'Project lines at current station',
+    'materialStudio.projectLines': 'Project lines',
+    'materialStudio.mapDrivingDirection': 'Map driving direction',
+    'materialStudio.roadDrivingDirection': 'Road driving direction',
+    'materialStudio.stationProperties': 'Station properties',
+    'materialStudio.originStation': 'Origin station',
+    'materialStudio.terminalStation': 'Terminal station',
+    'materialStudio.sameDirectionLines': 'Lines in the same direction',
+    'materialStudio.singleSelect': '(Single select)',
+    'materialStudio.maxLines': '(Up to {count})',
+    'materialStudio.destinationPending': 'Destination to be maintained',
+    'materialStudio.directionTo': 'To',
+    'materialStudio.originAtStation': 'Originates at this station',
+    'materialStudio.terminalAtStation': 'Terminates at this station',
+    'materialStudio.noProjectConnection':
+      'The current project station has no line connection in this map direction.',
+    'materialStudio.noDirectionLine': 'No lines available in the current direction.',
+    'materialStudio.configureLineName': 'Configure line name',
+    'materialStudio.serverLines': 'Server lines',
+    'materialStudio.stationsCount': '{count} stations',
+    'materialStudio.notOpened': 'Not opened',
+    'materialStudio.serverStations': 'Server stations',
+    'materialStudio.searchServerPlace': 'Search server places',
+    'materialStudio.serverPlaces': 'Server places',
+    'materialStudio.coordinateX': 'Installation coordinate X',
+    'materialStudio.coordinateZ': 'Installation coordinate Z',
+    'materialStudio.pickCoordinateHint':
+      'Pick the sign installation coordinates in the server map preview',
+    'materialStudio.clickMapCoordinate':
+      'Click the map to set installation coordinates · X {x} / Z {z}',
+    'materialStudio.fillCoordinateFirst':
+      'Fill in the installation coordinates, then fine-tune on the map',
+    'materialStudio.previewAria': 'Material preview',
+    'materialStudio.previewAlt': '{title} preview',
+    'materialStudio.closePreview': 'Close preview',
+    'materialStudio.historyTitle': 'My Material History',
+    'materialStudio.historyHint':
+      'Submitted custom materials are kept here and available for download once approved.',
+    'materialStudio.closeHistory': 'Close material history',
+    'materialStudio.submittedAt': 'Submitted at {time}',
+    'materialStudio.reviewedAt': 'Reviewed at {time}',
+    'materialStudio.noSubmittedYet': 'You have not submitted any custom material yet.',
+    'materialStudio.previewWatermark': 'Preview contains watermark',
+    'materialStudio.updating': 'Updating',
+    'materialStudio.noPreviewYet': 'No preview generated yet',
+    'materialStudio.signHeight': 'Sign height (in 128-pixel cells)',
+    'materialStudio.signLength': 'Sign length (in 128-pixel cells)',
+    'materialStudio.signWidth': 'Sign width (in 128-pixel cells)',
+    'materialStudio.widthMeters': 'Width (meters)',
+    'materialStudio.heightMeters': 'Height (meters)',
+    'materialStudio.alignmentUnit': 'Alignment unit (pixels)',
+    'materialStudio.alignToMapSize': 'Align to whole map-pixel size',
+    'materialStudio.firstBus': 'First bus',
+    'materialStudio.lastBus': 'Last bus',
+    'materialStudio.projectNoTimeHint':
+      'Project data does not include service hours. Leave blank to hide this row.',
+    'materialStudio.pleaseSelect': 'Please select',
+    'materialStudio.colorPaletteAria': 'Color palette for {label}',
+    'materialStudio.colorHexAria': 'Hex color for {label}',
+    'materialStudio.orientationRight': 'Right on map',
+    'materialStudio.orientationLeft': 'Left on map',
+    'materialStudio.orientationUp': 'Up on map',
+    'materialStudio.orientationDown': 'Down on map',
+    'materialStudio.draftStatus.draft': 'Draft',
+    'materialStudio.draftStatus.pending_review': 'Pending review',
+    'materialStudio.draftStatus.approved': 'Approved',
+    'materialStudio.draftStatus.rejected': 'Rejected',
+    'materialStudio.syncStatus.pending': 'Pending sync',
+    'materialStudio.syncStatus.syncing': 'Syncing',
+    'materialStudio.syncStatus.synced': 'Synced',
+    'materialStudio.syncStatus.conflict': 'Conflict',
+    'materialStudio.syncStatus.failed': 'Sync failed',
+    'materialStudio.emptyFields': 'No field content filled in',
+    'materialStudio.watermarkedPreviewSuffix': '-watermarked preview',
+    'telegraph.stage.header': 'Fill header',
+    'telegraph.stage.recipient': 'Fill recipient info',
+    'telegraph.stage.code': 'Print code',
+    'telegraph.stage.message': 'Print message',
+    'telegraph.stage.footer': 'Print footer',
+    'telegraph.stage.stamp': 'Apply telegraph stamp',
+    'telegraph.stage.envelope': 'Insert into envelope',
+    'telegraph.newLetter': 'Write another',
+    'telegraph.history': 'History',
+    'telegraph.startWriting': 'Start writing',
+    'telegraph.replayAnimation': 'Replay animation',
+    'telegraph.continueScroll': 'Continue scrolling',
+    'telegraph.continueScrollStart': 'Continue scrolling to start writing',
+    'telegraph.simulateSend': 'Simulate sending',
+    'telegraph.skipAnimation': 'Skip animation',
+    'telegraph.continueConfirm': 'Continue scrolling to confirm',
+    'telegraph.province': 'Province',
+    'telegraph.city': 'City',
+    'telegraph.county': 'County',
+    'telegraph.otherLocation': 'Other destination',
+    'telegraph.recipientInfo': 'Recipient info',
+    'telegraph.body': 'Telegraph body',
+    'telegraph.senderName': 'Sender name or visitor IP',
+    'telegraph.senderAddress': 'Sender address',
+    'telegraph.senderLock': 'Sign in to edit sender info',
+    'telegraph.billableGrids': 'Billable grids',
+    'telegraph.amount': 'Amount',
+    'telegraph.billingRule': '5 consecutive letters/numbers per grid',
+    'telegraph.cellRecipient': 'Recipient info',
+    'telegraph.cellBody': 'Telegraph body',
+    'telegraph.noCellSelected': 'Current grid: none selected',
+    'telegraph.flipEnvelope': 'Flip envelope',
+    'telegraph.flipToFront': 'Flip to envelope front',
+    'telegraph.flipToBack': 'Flip to envelope back',
+    'telegraph.openEnvelope': 'Open envelope',
+    'telegraph.insertEnvelope': 'Insert into envelope',
+    'telegraph.envelopeFront': 'Telegraph envelope front',
+    'telegraph.envelopeBack': 'Telegraph envelope back',
+    'telegraph.openEnvelopeView': 'Open envelope to view receive paper',
+    'telegraph.insertReceivePaper': 'Insert receive paper into envelope',
+    'telegraph.receivePaper': 'Receive paper',
+    'telegraph.sendPaper': 'Send paper',
+    'telegraph.switchPaper': 'Switch paper',
+    'telegraph.switchToSend': 'Switch to send paper',
+    'telegraph.switchToReceive': 'Switch to receive paper',
+    'telegraph.envelopeFlip': 'Flip envelope',
+    'telegraph.code': 'Code',
+    'telegraph.audio': 'Audio',
+    'telegraph.sendPaperTemplate': 'Telegraph send paper template',
+    'telegraph.sendPaperPreview': 'Telegraph send paper preview',
+    'telegraph.enterDestination': 'Please fill in the destination first.',
+    'telegraph.enterRecipient': 'Please fill in recipient info first.',
+    'telegraph.enterBody': 'Please fill in the telegraph body first.',
+    'telegraph.recipientOverflow': 'Recipient info exceeds the {count} available grids.',
+    'telegraph.bodyOverflow': 'Telegraph body exceeds the {count} available grids.',
+    'telegraph.unsupported': 'These characters are not supported: {chars}',
+    'telegraph.envelopeDone': 'Telegraph printed and inserted into envelope.',
+    'telegraph.skippedDone': 'Animation skipped. Telegraph inserted into envelope.',
+    'telegraph.imageFailed': 'Failed to generate telegraph image.',
+    'telegraph.sendPaperFile': 'Send paper',
+    'telegraph.receivePaperFile': 'Receive paper',
+    'telegraph.imageDownloadFailed': 'Failed to download telegraph image.',
+    'telegraph.codeFile': 'Telegraph code',
+    'telegraph.filePrefix': 'Telegraph',
+    'telegraph.welcomeTitle': 'While the “slow telegram” is still here, send a memory to yourself',
+    'telegraph.welcomeP1': 'A video made people rediscover the long-forgotten telegram service.',
+    'telegraph.welcomeP2':
+      'Today, even if only one telegram counter remains in all of China, people still make time for a slow telegram that must be encoded, stamped, and sealed.',
+    'telegraph.welcomeP3':
+      'So write your message right here, and let it carry your thoughts and feelings along the long-silent route...',
+    'telegraph.confirmTitle': 'Confirm telegram content',
+    'telegraph.closeConfirm': 'Close confirmation window',
+    'telegraph.destination': 'Destination',
+    'telegraph.recipient': 'Recipient',
+    'telegraph.notFilled': 'Not filled',
+    'telegraph.confirmBody': 'Message',
+    'telegraph.confirmHint':
+      'After confirming, a simulated animation of filling, printing, folding, and inserting into the envelope will begin.',
+    'telegraph.backEdit': 'Back to edit',
+    'telegraph.confirmSend': 'Confirm and send',
+    'telegraph.localHistory': 'Local history',
+    'telegraph.deleteHistory': 'Delete history record',
+    'telegraph.unnamed': 'Untitled telegram',
+    'telegraph.noHistory': 'No local history yet.',
+    'telegraph.cellAria': 'Grid {count} of {label}',
+    'telegraph.toolbarAria': 'Telegraph actions',
+    'transitLineBrowser.filterAria': 'Line filters',
+    'transitLineBrowser.listAria': 'Line list',
+    'transitLineBrowser.modeRailway': 'Regional rail',
+    'transitLineBrowser.summaryAria': 'Legacy line data summary',
+    'transitHealth.dimension.topology': 'Topology',
+    'transitHealth.dimension.operations': 'Operations',
+    'transitHealth.dimension.scale': 'Scale',
+    'transitHealth.dimension.places': 'Place coverage',
+    'transitHealth.dimension.demand': 'Demand proxy',
+    'transitHealth.dimension.data_quality': 'Data quality',
+    'transitHealth.analysisEyebrow': 'Network Planning Analysis',
+    'transitHealth.subtitle':
+      'Combines published line topology, service hours, road nodes, and categorized place density. Planning proxies cannot replace real ridership, headways, capacity, or cost data.',
+    'transitHealth.onlineSnapshot': 'Online snapshot',
+    'transitHealth.offlineSnapshot': 'Offline snapshot',
+    'transitHealth.dataTime': 'Data as of',
+    'transitHealth.noLines':
+      'No published transit lines yet. Network statistics cannot be generated.',
+    'transitHealth.filterAria': 'Filter by transit mode',
+    'transitHealth.modeLegend': 'Transit mode',
+    'transitHealth.scopeCurrent': 'Current scope: ',
+    'transitHealth.scopeAll': 'All transit modes',
+    'transitHealth.demandWithLines': 'Demand analysis includes existing lines',
+    'transitHealth.demandPotentialOnly': 'Analyze place potential only',
+    'transitHealth.mLines': 'Lines',
+    'transitHealth.mTopologyNote': '{count} form continuous segments',
+    'transitHealth.mStations': 'Stations',
+    'transitHealth.mLocatedNote': '{rate} locatable',
+    'transitHealth.mLength': 'Network length',
+    'transitHealth.mLocatedSegNote': 'Estimated from {count} located segments',
+    'transitHealth.mCoverage': 'Schedule coverage',
+    'transitHealth.mScheduledNote': '{scheduled}/{total} lines',
+    'transitHealth.mServiceSpan': 'Average service span',
+    'transitHealth.mLateNote': '{count} lines run after 22:00',
+    'transitHealth.mPlaceCoverage': 'Planning place coverage',
+    'transitHealth.mPlacesNote': '{covered}/{total} places',
+    'transitHealth.mRoadCoverage': 'Road node coverage',
+    'transitHealth.mRoadsNote': '{count} road samples',
+    'transitHealth.mDemandAttainment': 'Demand attainment',
+    'transitHealth.mPotentialDemand': 'Total potential demand',
+    'transitHealth.mAttainedNote': '{attained}/{total} weighted demand reached',
+    'transitHealth.mPotentialHint':
+      'Weighted by real categorized place density; line coverage ignored',
+    'transitHealth.chartEyebrow': 'Charts',
+    'transitHealth.chartTitle': 'Scale, Operations & Coverage',
+    'transitHealth.locatedSampleHint': 'Places and distances use located stations only',
+    'transitHealth.opEyebrow': 'Operators',
+    'transitHealth.opTitle': 'Metrics & Ranking',
+    'transitHealth.opCountHint': '{count} operators · Click a column header to sort',
+    'transitHealth.opTableNote':
+      'Bus lines are assigned network-wide. Component counts by operator are attribution-only and do not indicate disconnection or forced transfers.',
+    'transitHealth.colOperator': 'Operator',
+    'transitHealth.colStations': 'Stations',
+    'transitHealth.colStationsTitle': 'Deduplicated by stable station IDs covered by the operator',
+    'transitHealth.colLines': 'Lines',
+    'transitHealth.colAvgConnectivity': 'Avg connectivity',
+    'transitHealth.colConnectivityTitle':
+      'Average number of distinct directly adjacent stations across the network',
+    'transitHealth.colConnectivityWeight': 'Connectivity weight',
+    'transitHealth.colWeightTitle': 'Average number of distinct lines carried by adjacent segments',
+    'transitHealth.colLinesPerSegment': 'Lines per segment',
+    'transitHealth.colSharedSegments': 'Shared segments',
+    'transitHealth.colScheduleCoverage': 'Schedule coverage',
+    'transitHealth.colServiceSpan': 'Avg service span',
+    'transitHealth.opComponentsNote': '{count} components · {transfer} cross-operator stations',
+    'transitHealth.rankLabel': 'Rank {rank}',
+    'transitHealth.methodEyebrow': 'Methodology',
+    'transitHealth.methodTitle': 'Metrics & Analysis Sources',
+    'transitHealth.noMockHint': 'No simulated ridership',
+    'transitHealth.dmTopology': 'Topology',
+    'transitHealth.dmTopologyDetail':
+      'Continuous station sequences form undirected edges; connectivity, shared segments, transfer stations, and connected components are computed.',
+    'transitHealth.dmOperations': 'Service hours',
+    'transitHealth.dmOperationsDetail':
+      'First/last trips are preferred; schedule boundaries are used as fallback. Overnight lines roll to the next day.',
+    'transitHealth.dmScale': 'Spatial scale',
+    'transitHealth.dmScaleDetail':
+      'Station names and modes are bound to map coordinates; straight segment lengths, spacing, and coverage are estimated.',
+    'transitHealth.dmPlaces': 'Place coverage',
+    'transitHealth.dmPlacesDetail':
+      'Share of residential, employment, education, medical, daily-life, culture/sports, and external-transport places within station catchments.',
+    'transitHealth.dmDemand': 'Demand proxy',
+    'transitHealth.dmDemandDetail':
+      'Toggle between place clustering and existing-line reach. Demand attainment uses category weights for planning review only; it is not a ridership forecast.',
+    'transitHealth.dmRoads': 'Road coverage',
+    'transitHealth.dmRoadsDetail':
+      'Map road nodes define the coverage boundary. Nodes are not full road geometry and are not used for precise mileage.',
+    'transitHealth.sugEyebrow': 'Heuristics',
+    'transitHealth.sugTitle': 'Network Suggestions',
+    'transitHealth.sugMergedHint': 'Identical suggestions are merged across operators',
+    'transitHealth.sugEmpty':
+      'No preset heuristic thresholds were triggered in this slice. This does not verify service quality.',
+    'transitHealth.targetItem': 'Matched items',
+    'transitHealth.viewAllTargets': 'View all {count}',
+    'transitHealth.dialogTargetLabel': 'Matched items',
+    'transitHealth.itemCount': '{count} items',
+    'transitHealth.dialogClose': 'Close',
+    'transitHealth.dialogCloseAria': 'Close matched items list',
+    'transitHealth.searchTargets': 'Search matched items',
+    'transitHealth.searchPlaceholder': 'Search lines, stations, segments, or places',
+    'transitHealth.noMatchedTargets': 'No matched items.',
+    'transitHealth.kindOperator': 'Operator',
+    'transitHealth.kindLine': 'Line',
+    'transitHealth.kindStation': 'Station',
+    'transitHealth.kindSegment': 'Segment',
+    'transitHealth.kindPlace': 'Place',
+    'transitHealth.kindCategory': 'Place category',
+    'transitHealth.kindRoad': 'Road',
+    'transitHealth.moreOperators': 'and {remaining} more',
+    'transitHealth.cModeTitle': 'Mode composition',
+    'transitHealth.cModeSubtitle': 'Line counts and network share',
+    'transitHealth.cTotalLines': '{count} lines total: {details}',
+    'transitHealth.cLinesUnit': 'lines',
+    'transitHealth.cHoursTitle': 'Average service span',
+    'transitHealth.cHoursSubtitle': 'Lines with parsable first/last times only',
+    'transitHealth.cNoSchedule': 'No schedule',
+    'transitHealth.cPlaceTitle': 'Categorized place coverage',
+    'transitHealth.cPlaceSubtitle': 'Share of categorized places within station catchments',
+    'transitHealth.cPlaceRate': 'Place coverage rate',
+    'transitHealth.cPlaceEntered':
+      'planning places are within the current mode’s station catchments.',
+    'transitHealth.cHotspotTitle1': 'Line demand hotspots',
+    'transitHealth.cHotspotTitle2': 'Place potential centers',
+    'transitHealth.cHotspotSub1':
+      'Weighted by categorized place density reached by existing stations',
+    'transitHealth.cHotspotSub2': 'Existing lines ignored; based on categorized place clustering',
+    'transitHealth.cDemandRate': 'Demand attainment',
+    'transitHealth.cAttained': '{attained} / {total} weighted demand proxy reached.',
+    'transitHealth.cNearbyCount': '{value} · {count} places',
+    'transitHealth.cAround': 'Around {place}',
+    'transitHealth.cHotspotEmpty': 'No demand hotspot samples available.',
+    'transitHealth.cOperatorTitle': 'Operator coverage',
+    'transitHealth.cOperatorSubtitle':
+      'Top eight by station count, deduplicated by stable station ID',
+    'transitHealth.cOperatorBarLabel': '{stations} stations · {lines} lines',
+    'transitNetworkSource.title': 'Network data',
+    'transitNetworkSource.origin.sample': 'RMP gallery project',
+    'transitNetworkSource.origin.rmp': 'RMP project',
+    'transitNetworkSource.origin.server': 'Server',
+    'transitNetworkSource.import.own': 'Import your own RMP project',
+    'transitNetworkSource.import.default': 'Import RMP project',
+    'transitNetworkSource.import.short': 'Import',
+    'transitNetworkSource.import.project': 'Import project',
+    'transitNetworkSource.sourceAria': 'Network data source',
+    'transitNetworkSource.source.server': 'Server network',
+    'transitNetworkSource.source.loading': 'Loading',
+    'transitNetworkSource.source.sample': 'Sample network',
+    'transitNetworkSource.source.imported': 'Imported project',
+    'transitNetworkSource.localDraftName': 'Local draft network',
+    'transitNetworkSource.summary.stationCount': '{count} stations',
+    'transitNetworkSource.summary.stationsUnnamed': '{count} stations unnamed',
+    'transitNetworkSource.summary.stationsNamed': 'All stations named',
+    'transitNetworkSource.summary.lineCount': '{count} lines',
+    'transitNetworkSource.summary.edgeCount': '{count} links',
+    'transitNetworkSource.summary.source': 'Source: RMP gallery ·',
+    'transitNetworkSource.status.persisting': 'Saving',
+    'transitNetworkSource.status.persisted': 'Saved',
+    'transitNetworkSource.status.gallerySample': 'Gallery sample',
+    'transitNetworkSource.status.localOnly': 'This page only',
+    'transitNetworkSource.palette.aria': '{count} line colors',
+    'transitNetworkSource.action.fillStationNamesAria': 'Fill in {count} unnamed stations',
+    'transitNetworkSource.action.fillStationNames': 'Name {count} stations',
+    'transitNetworkSource.action.configureLineNames': 'Configure project line names',
+    'transitNetworkSource.action.removeImported': 'Remove imported project',
+    'transitNetworkSource.action.cancel': 'Cancel',
+    'transitNetworkSource.action.saving': 'Saving',
+    'transitNetworkSource.action.close': 'Close',
+    'transitNetworkSource.error.fileTooLarge': 'RMP project files must be 5 MB or smaller.',
+    'transitNetworkSource.error.notSignedIn':
+      'Not signed in. This import only applies to the current page.',
+    'transitNetworkSource.error.persistFailed': 'Failed to save the RMP project.',
+    'transitNetworkSource.error.persistFailedLocalOnly':
+      '{message} This import only applies to the current page.',
+    'transitNetworkSource.error.readFailed': 'Failed to read the RMP project file.',
+    'transitNetworkSource.error.deleteFailed': 'Failed to delete the saved network project.',
+    'transitNetworkSource.error.saveLineNamesFailed': 'Failed to save line names.',
+    'transitNetworkSource.error.saveStationNamesFailed': 'Failed to save station names.',
+    'transitNetworkSource.error.sampleLoadFailed': 'The default sample network is unavailable.',
+    'transitNetworkSource.error.sampleLoadFailedHint':
+      '{message} You can still use the server network or import a local project.',
+    'transitNetworkSource.notice.lineNamesSampleLocalOnly':
+      'Line name changes for the sample project only apply to this page.',
+    'transitNetworkSource.notice.lineNamesPendingPersist':
+      'Line names only apply to this page; the project has not been saved yet.',
+    'transitNetworkSource.notice.stationNamesSampleLocalOnly':
+      'Station name changes for the sample project only apply to this page.',
+    'transitNetworkSource.notice.stationNamesPendingPersist':
+      'Station names only apply to this page; the project has not been saved yet.',
+    'transitNetworkSource.lineName.title': 'Configure project line names',
+    'transitNetworkSource.lineName.hintPart1': 'Line keys in RMP archives (e.g. ',
+    'transitNetworkSource.lineName.hintPart2': ', ',
+    'transitNetworkSource.lineName.hintPart3':
+      ') are color names used for drawing only, not line names. They are prefilled from the numeric part of each key (',
+    'transitNetworkSource.lineName.hintPart4':
+      ' → Line 2). Confirm or replace them with official names; the wayfinding "line number" template uses the names entered here.',
+    'transitNetworkSource.lineName.primaryAria': '{key} primary name',
+    'transitNetworkSource.lineName.primaryPlaceholder': 'Primary name',
+    'transitNetworkSource.lineName.secondaryAria': '{key} secondary name',
+    'transitNetworkSource.lineName.secondaryPlaceholder': 'Secondary name',
+    'transitNetworkSource.lineName.save': 'Save line names',
+    'transitNetworkSource.stationName.title': 'Fill in unnamed stations',
+    'transitNetworkSource.stationName.nearby': 'Nearby: {names}',
+    'transitNetworkSource.stationName.nearbyUnavailable': 'Nearby station names unavailable',
+    'transitNetworkSource.stationName.primaryAria': '{id} primary station name',
+    'transitNetworkSource.stationName.primaryPlaceholder': 'Primary station name',
+    'transitNetworkSource.stationName.secondaryAria': '{id} secondary station name',
+    'transitNetworkSource.stationName.secondaryPlaceholder': 'Secondary station name',
+    'transitNetworkSource.stationName.save': 'Save filled station names',
+    'transitScreen.legacy': 'Legacy',
+    'transitScreen.summaryAria': 'Coach board data summary',
+    'transitScreen.upcomingAria': 'Upcoming trips',
+    'transitScreen.viewTrips': 'View trips',
+    'transitScreen.empty.unavailable': 'Screen data unavailable',
+    'transitScreen.empty.noData': 'The legacy coach screen data source has no usable data yet.',
+    'operation.contentTagsAria': 'Content tags',
+    'operation.legacyBodyDescription':
+      'The legacy system hosted details on external links. The new version keeps only the title, excerpt, and original entry.',
+    'operation.legacyBodyTitle': 'This legacy operation post has no body content',
+    'operation.legacyImageSource': 'Legacy image source: {url}',
+    'operation.openOriginal': 'Open original content',
+    'operation.originalLink': 'Original link',
+    'transitServiceNotice.activeCount': '{count} active alerts',
+    'transitServiceNotice.history': 'Past coach alerts',
+    'transitServiceNotice.itemCount': '{count} alerts',
+    'transitServiceNotice.periodRange': '{start} – {end}',
+    'transitServiceNotice.title': 'Coach service alerts',
+    'admin.edit': 'Edit',
+    'admin.editLine': 'Edit line',
+    'admin.editPoi': 'Edit POI',
+    'admin.home.title': 'Admin console',
+    'admin.home.description':
+      'Enter a console by business domain. The account page only keeps this single entry.',
+    'admin.editOperation': 'Edit operation post',
     'search.category.all': 'All',
     'search.category.lines': 'Lines',
     'search.category.operations': 'Updates',
@@ -3939,6 +7102,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travelSchedule.action.legacyReference': 'Legacy reference',
     'travelSchedule.action.saveRecord': 'Save record',
     'travelSchedule.empty.noMatch': 'No matching trips',
+    'travelSchedule.empty.unavailable': 'Schedule data unavailable',
+    'travelSchedule.empty.noData': 'No unified schedule data is available right now.',
     'travelSchedule.feedback.historySaved': 'Saved to local schedule history',
     'travelSchedule.feedback.reminderAdded': 'Added a local reminder for {time}',
     'travelSchedule.filter.anyDestination': 'Any destination',
@@ -3955,6 +7120,44 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travelSchedule.history.recentAria': 'Recent schedule records',
     'travelSchedule.history.summary': '{count} records, {reminderCount} linked to reminders',
     'travelSchedule.history.title': 'Local Schedule History',
+    'travelSchedule.journey.arrival': 'Arrive {time}',
+    'travelSchedule.journey.availableAll': 'Fully bookable',
+    'travelSchedule.journey.bookJoint': 'Joint booking · {count} legs',
+    'travelSchedule.journey.combining': 'Combining…',
+    'travelSchedule.journey.direct': 'Direct',
+    'travelSchedule.journey.durationHours': '{hours} hr {minutes} min',
+    'travelSchedule.journey.durationMinutes': '{minutes} min',
+    'travelSchedule.journey.editTrip': 'Edit trip',
+    'travelSchedule.journey.found': '{count} options found',
+    'travelSchedule.journey.holding': 'Holding seats for all legs',
+    'travelSchedule.journey.lineGroupAria': '{operator} line',
+    'travelSchedule.journey.locking': 'Locking…',
+    'travelSchedule.journey.missingEndpoints': 'Enter both origin and destination first.',
+    'travelSchedule.journey.noneFound': 'No connectable trip options found.',
+    'travelSchedule.journey.orderCreated': 'Joint booking succeeded. {count} order drafts created.',
+    'travelSchedule.journey.orderFailed': 'Joint booking failed.',
+    'travelSchedule.journey.partial': 'Some legs unavailable',
+    'travelSchedule.journey.passThrough': 'Pass without stopping',
+    'travelSchedule.journey.period': '{start} to {end}',
+    'travelSchedule.journey.planCount': '{count} options',
+    'travelSchedule.journey.planFailed': 'Failed to query journey options.',
+    'travelSchedule.journey.planIndex': 'Option {index}',
+    'travelSchedule.journey.planning': 'Combining trip options',
+    'travelSchedule.journey.query': 'Find journey options',
+    'travelSchedule.journey.queryOnly': 'Query only',
+    'travelSchedule.journey.segmentUnavailable':
+      'This option contains legs that are not currently on sale.',
+    'travelSchedule.journey.serviceTrip': '{service} trip',
+    'travelSchedule.journey.stopCount': '{count} stops',
+    'travelSchedule.journey.stopsAria': '{line} stops',
+    'travelSchedule.journey.swapEndpoints': 'Swap origin and destination',
+    'travelSchedule.journey.tbd': 'TBD',
+    'travelSchedule.journey.title': 'Journey Options',
+    'travelSchedule.journey.transferCount': '{count} transfers',
+    'travelSchedule.journey.transferDetail':
+      '{from} → {to} · about {minutes} min (incl. {buffer} min buffer)',
+    'travelSchedule.journey.tripCount': '{count} trips',
+    'travelSchedule.journey.tripLabel': '{line} trip {code}',
     'travelSchedule.notice.aria': 'Schedule notice',
     'travelSchedule.notice.count': '{count} items',
     'travelSchedule.notice.title': 'Coach Notices',
@@ -3969,6 +7172,10 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travelSchedule.order.loginRequired': 'Sign in to view order drafts.',
     'travelSchedule.order.readFailed': 'Failed to read order drafts',
     'travelSchedule.order.unavailable': 'This trip cannot create an order draft yet',
+    'travelSchedule.reminder.detailDeparture': 'Departs {time}',
+    'travelSchedule.reminder.detailFare': 'Fare {fare}',
+    'travelSchedule.reminder.detailTrip': 'Trip {code}',
+    'travelSchedule.reminder.titleWithTime': '{line} trip at {time}',
     'travelSchedule.resultCount': '{count} / {total} searchable trips',
     'travelSchedule.search.aria': 'Search trips, lines, stations, gates, or operators',
     'travelSchedule.search.clear': 'Clear schedule search',
@@ -4061,6 +7268,13 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'travel.ticketing.detail':
       'Real e-tickets, check-in, refunds, and ride code integration will connect to LDPASS later.',
     'travel.ticketing.title': 'Tickets and Orders',
+    'worldCoordinate.axis': '{axis} coordinate',
+    'worldCoordinate.footerEmpty':
+      'Enter X/Z or pick a reference place first; you can fill in Y above',
+    'worldCoordinate.footerPick': 'Click the map to fill X/Z · Current {coordinate} · Y {y}',
+    'worldCoordinate.title': 'World coordinates',
+    'worldCoordinate.yInherited': 'Inherit default',
+    'worldCoordinate.yPlaceholder': 'Leave blank to inherit the map default height',
   },
 };
 

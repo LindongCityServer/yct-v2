@@ -12,7 +12,10 @@ export default async function TransitNetworkHealthPage() {
   const report = await readTransitNetworkHealthReport();
 
   return (
-    <SecondaryShell title="公共交通网络健康度" backHref="/services" desktopBackHref="/services">
+    <SecondaryShell
+      title="公共交通网络健康度"
+      titleKey="page.transitNetworkHealth"
+      backHref="/services" desktopBackHref="/services">
       <TransitNetworkHealthPanel report={report} />
     </SecondaryShell>
   );

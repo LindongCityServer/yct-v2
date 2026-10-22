@@ -1,10 +1,14 @@
+'use client';
+
 import type { ApiListResponse, TransitServiceNotice } from '@yct/contracts';
+import { useI18n } from '../lib/client-i18n';
 
 export function TransitServiceNoticePanel({
   notices,
 }: Readonly<{
   notices: ApiListResponse<TransitServiceNotice>;
 }>) {
+  const { locale, t } = useI18n();
   const now = Date.now();
   const activeNotices = notices.items.filter((notice) => !isExpiredNotice(notice, now));
   const expiredNotices = notices.items.filter((notice) => isExpiredNotice(notice, now));
@@ -16,24 +20,32 @@ export function TransitServiceNoticePanel({
   return (
     <section className="transit-notice-panel" aria-labelledby="transit-notice-title">
       <div className="section-heading">
-        <h2 id="transit-notice-title">客运提醒</h2>
-        <span className="muted">{activeNotices.length} 条当前提醒</span>
+        <h2 id="transit-notice-title">{t('transitServiceNotice.title')}</h2>
+        <span className="muted">
+          {t('transitServiceNotice.activeCount', { count: activeNotices.length })}
+        </span>
       </div>
-      {activeNotices.length > 0 ? <NoticeList notices={activeNotices} /> : null}
+      {activeNotices.length > 0 ? <NoticeList notices={activeNotices} locale={locale} /> : null}
       {expiredNotices.length > 0 ? (
         <details className="expired-transit-notice-group">
           <summary>
-            <span>历史客运提醒</span>
-            <span className="muted">{expiredNotices.length} 条</span>
+            <span>{t('transitServiceNotice.history')}</span>
+            <span className="muted">
+              {t('transitServiceNotice.itemCount', { count: expiredNotices.length })}
+            </span>
           </summary>
-          <NoticeList notices={expiredNotices} />
+          <NoticeList notices={expiredNotices} locale={locale} />
         </details>
       ) : null}
     </section>
   );
 }
 
-function NoticeList({ notices }: Readonly<{ notices: TransitServiceNotice[] }>) {
+function NoticeList({
+  notices,
+  locale,
+}: Readonly<{ notices: TransitServiceNotice[]; locale: string }>) {
+  const { t } = useI18n();
   return (
     <div className="transit-notice-list">
       {notices.map((notice) => (
@@ -44,7 +56,7 @@ function NoticeList({ notices }: Readonly<{ notices: TransitServiceNotice[] }>) 
           <div>
             <h3>{notice.title}</h3>
             <p>{notice.reason}</p>
-            <span className="muted">{formatNoticePeriod(notice)}</span>
+            <span className="muted">{formatNoticePeriod(notice, locale, t)}</span>
           </div>
         </article>
       ))}
@@ -56,16 +68,23 @@ function isExpiredNotice(notice: TransitServiceNotice, now: number): boolean {
   return notice.endsAt ? new Date(notice.endsAt).getTime() < now : false;
 }
 
-function formatNoticePeriod(notice: TransitServiceNotice): string {
+function formatNoticePeriod(
+  notice: TransitServiceNotice,
+  locale: string,
+  t: ReturnType<typeof useI18n>['t'],
+): string {
   if (notice.startsAt && notice.endsAt) {
-    return `${formatDateTime(notice.startsAt)} 至 ${formatDateTime(notice.endsAt)}`;
+    return t('transitServiceNotice.periodRange', {
+      start: formatDateTime(notice.startsAt, locale),
+      end: formatDateTime(notice.endsAt, locale),
+    });
   }
 
   return notice.periodText;
 }
 
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat('zh-CN', {
+function formatDateTime(value: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',
     timeStyle: 'short',
     timeZone: 'Asia/Shanghai',

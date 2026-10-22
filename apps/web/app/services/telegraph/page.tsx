@@ -15,6 +15,7 @@ export default function TelegraphPage() {
   return (
     <SecondaryShell
       title="电报体验"
+      titleKey="page.telegraph"
       backHref="/services"
       desktopBackHref="/services"
       secondaryActions={<TelegraphToolbarActions />}

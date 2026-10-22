@@ -1,6 +1,15 @@
 'use client';
 
 import type { TravelTripStopTime } from '@yct/contracts';
+import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+
+const columnKeys: CommonMessageKey[] = [
+  'scheduleStopTable.stop',
+  'scheduleStopTable.station',
+  'scheduleStopTable.arrival',
+  'scheduleStopTable.departure',
+  'scheduleStopTable.dwell',
+];
 
 export function ScheduleStopTimeTable({
   stopTimes,
@@ -13,13 +22,14 @@ export function ScheduleStopTimeTable({
   readOnly?: boolean;
   disabled?: boolean;
 }>) {
+  const { t } = useI18n();
   const isReadOnly = readOnly || !onChange;
   return (
-    <div className="schedule-stop-time-table" role="table" aria-label="各站停站时刻">
+    <div className="schedule-stop-time-table" role="table" aria-label={t('scheduleStopTable.aria')}>
       <div className="schedule-stop-time-row is-header" role="row">
-        {['停站', '站点', '到达', '出发', '停车(分)'].map((label) => (
-          <span role="columnheader" key={label}>
-            {label}
+        {columnKeys.map((labelKey) => (
+          <span role="columnheader" key={labelKey}>
+            {t(labelKey)}
           </span>
         ))}
       </div>
@@ -30,7 +40,7 @@ export function ScheduleStopTimeTable({
               type="checkbox"
               checked={stopTime.isStop}
               disabled={disabled || isReadOnly}
-              aria-label={`${stopTime.stationName} 是否停站`}
+              aria-label={t('scheduleStopTable.stopAria', { station: stopTime.stationName })}
               onChange={(event) => onChange?.(index, { isStop: event.currentTarget.checked })}
             />
           </span>
@@ -41,7 +51,7 @@ export function ScheduleStopTimeTable({
               value={stopTime.arrivalTime ?? ''}
               readOnly={isReadOnly}
               disabled={disabled}
-              aria-label={`${stopTime.stationName} 到达时间`}
+              aria-label={t('scheduleStopTable.arrivalAria', { station: stopTime.stationName })}
               onChange={(event) =>
                 onChange?.(index, { arrivalTime: event.currentTarget.value || undefined })
               }
@@ -53,7 +63,7 @@ export function ScheduleStopTimeTable({
               value={stopTime.departureTime ?? ''}
               readOnly={isReadOnly}
               disabled={disabled}
-              aria-label={`${stopTime.stationName} 出发时间`}
+              aria-label={t('scheduleStopTable.departureAria', { station: stopTime.stationName })}
               onChange={(event) =>
                 onChange?.(index, { departureTime: event.currentTarget.value || undefined })
               }
@@ -67,7 +77,7 @@ export function ScheduleStopTimeTable({
               value={stopTime.dwellMinutes ?? ''}
               readOnly={isReadOnly}
               disabled={disabled}
-              aria-label={`${stopTime.stationName} 停车分钟`}
+              aria-label={t('scheduleStopTable.dwellAria', { station: stopTime.stationName })}
               onChange={(event) =>
                 onChange?.(index, {
                   dwellMinutes: event.currentTarget.value
@@ -82,7 +92,7 @@ export function ScheduleStopTimeTable({
       {stopTimes.length === 0 ? (
         <div role="row" className="status-note">
           <span role="cell" aria-colspan={5}>
-            暂无停站时刻
+            {t('scheduleStopTable.empty')}
           </span>
         </div>
       ) : null}

@@ -1,12 +1,16 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
-import type { OperationsContentDetail } from '@yct/contracts';
 import { SecondaryShell } from '../../../components/app-shell';
 import { AdminEditLink } from '../../../components/admin-edit-link';
 import { MarkdownBlocks, extractMarkdownHeadings } from '../../../components/markdown-blocks';
 import { OperationTableOfContents } from '../../../components/operation-table-of-contents';
 import { OperationRelatedPois } from '../../../components/operation-related-pois';
+import {
+  LegacyBodyFallback,
+  OperationSourceNote,
+  OperationTagList,
+} from '../../../components/operation-detail-localized';
 import { TitleWithBreaks } from '../../../components/title-with-breaks';
 import { appPath } from '../../../lib/app-paths';
 import { readOperationDetail } from '../../../lib/operations-content';
@@ -77,7 +81,7 @@ export default async function OperationDetailPage({ params }: OperationDetailPag
         <>
           <AdminEditLink
             href={`/admin/operations?contentId=${encodeURIComponent(item.id)}`}
-            label="编辑运营消息"
+            labelKey="admin.editOperation"
           />
           <OperationTableOfContents headings={headings} />
         </>
@@ -115,15 +119,7 @@ export default async function OperationDetailPage({ params }: OperationDetailPag
             <TitleWithBreaks title={item.title} segments={item.titleSegments} />
           </h1>
           {item.excerpt ? <p>{item.excerpt}</p> : null}
-          {item.customTags?.length ? (
-            <div className="operation-tag-list" aria-label="内容标签">
-              {item.customTags.map((tag) => (
-                <span className="operation-tag" key={tag}>
-                  {tag}
-                </span>
-              ))}
-            </div>
-          ) : null}
+          {item.customTags?.length ? <OperationTagList tags={item.customTags} /> : null}
         </header>
 
         {item.coverColor || item.coverImageUrl || item.legacyImagePath ? (
@@ -151,22 +147,15 @@ export default async function OperationDetailPage({ params }: OperationDetailPag
         {item.markdown.trim() ? (
           <MarkdownBlocks markdown={item.markdown} />
         ) : (
-          <LegacyBodyFallback item={item} />
+          <LegacyBodyFallback legacyLink={item.legacyLink} />
         )}
 
         <OperationRelatedPois markerIds={item.relatedPoiMarkerIds} />
 
-        {item.legacyImageSourceUrl || item.legacyLink ? (
-          <p className="operation-source-note">
-            {item.legacyImageSourceUrl ? `旧图片来源：${item.legacyImageSourceUrl}` : null}
-            {item.legacyImageSourceUrl && item.legacyLink ? ' · ' : null}
-            {item.legacyLink ? (
-              <a href={item.legacyLink} target="_blank" rel="noreferrer">
-                原始链接
-              </a>
-            ) : null}
-          </p>
-        ) : null}
+        <OperationSourceNote
+          legacyImageSourceUrl={item.legacyImageSourceUrl}
+          legacyLink={item.legacyLink}
+        />
       </article>
     </SecondaryShell>
   );
@@ -178,31 +167,4 @@ function decodeSegment(value: string): string {
   } catch {
     return value;
   }
-}
-
-function LegacyBodyFallback({ item }: Readonly<{ item: OperationsContentDetail }>) {
-  return (
-    <div className="operation-empty-body">
-      <span className="material-symbols-outlined" aria-hidden="true">
-        open_in_new
-      </span>
-      <div>
-        <strong>这条旧运营消息没有独立正文</strong>
-        <p>旧系统主要通过外部链接承载详情，新版当前只保留标题、摘要和原始入口。</p>
-      </div>
-      {item.legacyLink ? (
-        <a
-          className="secondary-action-button"
-          href={item.legacyLink}
-          target="_blank"
-          rel="noreferrer"
-        >
-          <span className="material-symbols-outlined" aria-hidden="true">
-            open_in_new
-          </span>
-          <span>打开原始内容</span>
-        </a>
-      ) : null}
-    </div>
-  );
 }

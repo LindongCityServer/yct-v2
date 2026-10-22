@@ -3,12 +3,14 @@
 import type { MapMarkerSnapshot } from '@yct/contracts';
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import { useI18n } from '../lib/client-i18n';
 
 interface MarkerResponse {
   snapshot?: MapMarkerSnapshot;
 }
 
 export function OperationRelatedPois({ markerIds }: Readonly<{ markerIds?: string[] }>) {
+  const { t } = useI18n();
   const ids = useMemo(() => Array.from(new Set(markerIds ?? [])).filter(Boolean), [markerIds]);
   const [markers, setMarkers] = useState<MapMarkerSnapshot['markers']>([]);
 
@@ -41,8 +43,8 @@ export function OperationRelatedPois({ markerIds }: Readonly<{ markerIds?: strin
   return (
     <section className="operation-related-pois" aria-labelledby="operation-related-pois-title">
       <div className="section-heading">
-        <h2 id="operation-related-pois-title">相关地点</h2>
-        <span className="muted">{ids.length} 个 POI</span>
+        <h2 id="operation-related-pois-title">{t('operationRelatedPois.title')}</h2>
+        <span className="muted">{t('operationRelatedPois.count', { count: ids.length })}</span>
       </div>
       <div className="operation-related-poi-list">
         {ids.map((id) => {
@@ -57,7 +59,7 @@ export function OperationRelatedPois({ markerIds }: Readonly<{ markerIds?: strin
                 location_on
               </span>
               <span>
-                <strong>{marker?.label ?? '地图地点'}</strong>
+                <strong>{marker?.label ?? t('operationRelatedPois.fallback')}</strong>
                 <small>{marker?.address ?? id}</small>
               </span>
               <span className="material-symbols-outlined" aria-hidden="true">

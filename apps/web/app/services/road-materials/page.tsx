@@ -12,6 +12,7 @@ export default function RoadMaterialsPage() {
   return (
     <SecondaryShell
       title="路牌物料"
+      titleKey="page.roadMaterials"
       backHref="/services"
       desktopBackHref="/services"
       secondaryActions={<MaterialStudioTopbarActions studioId="road-materials" />}
@@ -19,6 +20,7 @@ export default function RoadMaterialsPage() {
       <MaterialStudioPanel
         studioId="road-materials"
         title="路牌物料生成"
+        titleKey="materialStudio.roadTitle"
         families={['road_sign', 'address_sign']}
         serverSources={{ road_sign: 'road_coordinate', address_sign: 'map_location' }}
       />

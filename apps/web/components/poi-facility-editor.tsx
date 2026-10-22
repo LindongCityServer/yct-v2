@@ -1,24 +1,25 @@
 'use client';
 
 import type { PoiFacilitySnapshot } from '@yct/contracts';
+import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 
-const facilityIconOptions = [
-  ['info', '信息'],
-  ['accessible', '无障碍'],
-  ['elevator', '电梯'],
-  ['escalator', '自动扶梯'],
-  ['wc', '卫生间'],
-  ['local_parking', '停车'],
-  ['wifi', '无线网络'],
-  ['restaurant', '餐饮'],
-  ['shopping_bag', '购物'],
-  ['medical_services', '医疗'],
-  ['child_care', '母婴'],
-  ['luggage', '行李寄存'],
-  ['power', '充电'],
-  ['pets', '宠物'],
-  ['smoking_rooms', '吸烟区'],
-] as const;
+const facilityIconOptions: ReadonlyArray<readonly [string, CommonMessageKey]> = [
+  ['info', 'poiFacility.icon.info'],
+  ['accessible', 'poiFacility.icon.accessible'],
+  ['elevator', 'poiFacility.icon.elevator'],
+  ['escalator', 'poiFacility.icon.escalator'],
+  ['wc', 'poiFacility.icon.wc'],
+  ['local_parking', 'poiFacility.icon.parking'],
+  ['wifi', 'poiFacility.icon.wifi'],
+  ['restaurant', 'poiFacility.icon.restaurant'],
+  ['shopping_bag', 'poiFacility.icon.shopping'],
+  ['medical_services', 'poiFacility.icon.medical'],
+  ['child_care', 'poiFacility.icon.childCare'],
+  ['luggage', 'poiFacility.icon.luggage'],
+  ['power', 'poiFacility.icon.power'],
+  ['pets', 'poiFacility.icon.pets'],
+  ['smoking_rooms', 'poiFacility.icon.smoking'],
+];
 
 export function PoiFacilityEditor({
   disabled = false,
@@ -29,6 +30,7 @@ export function PoiFacilityEditor({
   facilities: PoiFacilitySnapshot[];
   onChange: (facilities: PoiFacilitySnapshot[]) => void;
 }>) {
+  const { t } = useI18n();
   const updateFacility = (index: number, patch: Partial<PoiFacilitySnapshot>) => {
     onChange(
       facilities.map((facility, currentIndex) =>
@@ -39,9 +41,9 @@ export function PoiFacilityEditor({
 
   return (
     <fieldset className="poi-facility-editor">
-      <legend>设施信息</legend>
+      <legend>{t('poiFacility.title')}</legend>
       <div className="poi-facility-editor-heading">
-        <span>图标与文字描述</span>
+        <span>{t('poiFacility.hint')}</span>
         <button
           type="button"
           disabled={disabled || facilities.length >= 64}
@@ -50,7 +52,7 @@ export function PoiFacilityEditor({
           <span className="material-symbols-outlined" aria-hidden="true">
             add
           </span>
-          <span>添加设施</span>
+          <span>{t('poiFacility.add')}</span>
         </button>
       </div>
       {facilities.length > 0 ? (
@@ -61,7 +63,7 @@ export function PoiFacilityEditor({
                 {facility.symbolIcon || 'info'}
               </span>
               <label>
-                <span>设施图标</span>
+                <span>{t('poiFacility.iconLabel')}</span>
                 <select
                   disabled={disabled}
                   value={facility.symbolIcon}
@@ -72,15 +74,15 @@ export function PoiFacilityEditor({
                   {!facilityIconOptions.some(([value]) => value === facility.symbolIcon) ? (
                     <option value={facility.symbolIcon}>{facility.symbolIcon}</option>
                   ) : null}
-                  {facilityIconOptions.map(([value, label]) => (
+                  {facilityIconOptions.map(([value, labelKey]) => (
                     <option value={value} key={value}>
-                      {label}
+                      {t(labelKey)}
                     </option>
                   ))}
                 </select>
               </label>
               <label>
-                <span>文字描述</span>
+                <span>{t('poiFacility.descriptionLabel')}</span>
                 <input
                   disabled={disabled}
                   maxLength={300}
@@ -88,15 +90,15 @@ export function PoiFacilityEditor({
                   onChange={(event) =>
                     updateFacility(index, { description: event.currentTarget.value })
                   }
-                  placeholder="例如：一层东侧设有无障碍电梯"
+                  placeholder={t('poiFacility.descriptionPlaceholder')}
                 />
               </label>
               <button
                 className="poi-facility-editor-remove"
                 type="button"
                 disabled={disabled}
-                aria-label={`删除第 ${index + 1} 条设施信息`}
-                title="删除设施"
+                aria-label={t('poiFacility.removeAria', { index: index + 1 })}
+                title={t('poiFacility.removeTitle')}
                 onClick={() =>
                   onChange(facilities.filter((_, currentIndex) => currentIndex !== index))
                 }

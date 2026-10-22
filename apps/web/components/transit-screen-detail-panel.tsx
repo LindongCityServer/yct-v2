@@ -7,6 +7,20 @@ import { formatFareTextWithoutCurrencyUnit } from '../lib/fare-display';
 
 type TimeFilter = 'all' | 'upcoming' | 'past';
 
+export function TransitScreenEmptyState({ message }: Readonly<{ message?: string }>) {
+  const { t } = useI18n();
+
+  return (
+    <section className="module-panel empty-state" aria-labelledby="screen-empty-title">
+      <span className="material-symbols-outlined" aria-hidden="true">
+        departure_board
+      </span>
+      <h2 id="screen-empty-title">{t('transitScreen.empty.unavailable')}</h2>
+      <p>{message ?? t('transitScreen.empty.noData')}</p>
+    </section>
+  );
+}
+
 export function TransitScreenDetailPanel({
   snapshot,
 }: Readonly<{

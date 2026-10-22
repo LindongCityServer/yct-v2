@@ -41,6 +41,7 @@ import {
   type TelegraphPrintStage,
 } from '../lib/client-telegraph-events';
 import { publishToastRequested } from '../lib/client-toast-events';
+import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 
 const emptyDraft: TelegraphDraftInput = {
   province: '',
@@ -52,14 +53,14 @@ const emptyDraft: TelegraphDraftInput = {
   senderName: '',
   senderAddress: '',
 };
-const printStages: Array<{ id: TelegraphPrintStage; label: string }> = [
-  { id: 'header', label: '填写报头' },
-  { id: 'recipient', label: '填写收报信息' },
-  { id: 'code', label: '打印电码' },
-  { id: 'message', label: '打印电文' },
-  { id: 'footer', label: '打印报尾' },
-  { id: 'stamp', label: '盖电报戳' },
-  { id: 'envelope', label: '装入信封' },
+const printStages: Array<{ id: TelegraphPrintStage; label: CommonMessageKey }> = [
+  { id: 'header', label: 'telegraph.stage.header' },
+  { id: 'recipient', label: 'telegraph.stage.recipient' },
+  { id: 'code', label: 'telegraph.stage.code' },
+  { id: 'message', label: 'telegraph.stage.message' },
+  { id: 'footer', label: 'telegraph.stage.footer' },
+  { id: 'stamp', label: 'telegraph.stage.stamp' },
+  { id: 'envelope', label: 'telegraph.stage.envelope' },
 ];
 const TELEGRAPH_SEND_FLIGHT_MS = 850;
 const TELEGRAPH_ENVELOPE_TRANSITION_MS = 1300;
@@ -143,13 +144,14 @@ function joinGridValues(values: string[]): string {
 }
 
 export function TelegraphToolbarActions() {
+  const { t } = useI18n();
   return (
     <div className="topbar-actions material-studio-topbar-actions telegraph-topbar-actions">
       <button
         className="icon-button"
         type="button"
-        aria-label="再写一封"
-        title="再写一封"
+        aria-label={t('telegraph.newLetter')}
+        title={t('telegraph.newLetter')}
         onClick={() => window.dispatchEvent(new Event(newLetterEvent))}
       >
         <span className="material-symbols-outlined" aria-hidden="true">
@@ -159,8 +161,8 @@ export function TelegraphToolbarActions() {
       <button
         className="icon-button"
         type="button"
-        aria-label="打开历史记录"
-        title="历史记录"
+        aria-label={t('telegraph.history')}
+        title={t('telegraph.history')}
         onClick={() => window.dispatchEvent(new Event(historyToggleEvent))}
       >
         <span className="material-symbols-outlined" aria-hidden="true">
@@ -227,6 +229,7 @@ export function TelegraphStudioPanel() {
   const outputRef = useRef<HTMLElement | null>(null);
   const touchStartY = useRef<number | null>(null);
   const lastTouchGestureAt = useRef(0);
+  const { t, locale } = useI18n();
   const result = useMemo(() => evaluateTelegraphDraft(draft), [draft]);
   const date = useMemo(() => formatTelegraphDate(new Date(generatedAt)), [generatedAt]);
   const automaticFillValues = useMemo(
@@ -599,15 +602,17 @@ export function TelegraphStudioPanel() {
     return false;
   };
   const validateBeforePrint = (): boolean => {
-    if (!result.destination) return fail('请先填写收报地点。');
-    if (!draft.recipientInfo.trim()) return fail('请先填写收报人信息。');
-    if (!draft.body.trim()) return fail('请先填写电报内容。');
+    if (!result.destination) return fail(t('telegraph.enterDestination'));
+    if (!draft.recipientInfo.trim()) return fail(t('telegraph.enterRecipient'));
+    if (!draft.body.trim()) return fail(t('telegraph.enterBody'));
     if (result.recipientCells.length > TELEGRAPH_MAX_RECIPIENT_GRIDS)
-      return fail(`收报信息超过模板可容纳的 ${TELEGRAPH_MAX_RECIPIENT_GRIDS} 格。`);
+      return fail(t('telegraph.recipientOverflow', { count: TELEGRAPH_MAX_RECIPIENT_GRIDS }));
     if (result.bodyCells.length > TELEGRAPH_MAX_BODY_GRIDS)
-      return fail(`电报内容超过模板可容纳的 ${TELEGRAPH_MAX_BODY_GRIDS} 格。`);
+      return fail(t('telegraph.bodyOverflow', { count: TELEGRAPH_MAX_BODY_GRIDS }));
     if (result.unsupportedCharacters.length)
-      return fail(`暂不支持这些字符：${result.unsupportedCharacters.join('、')}`);
+      return fail(
+        t('telegraph.unsupported', { chars: result.unsupportedCharacters.join('、') }),
+      );
     return true;
   };
   const requestPrint = (saveHistory = true): boolean => {
@@ -742,7 +747,7 @@ export function TelegraphStudioPanel() {
     publishStage('envelope', nextSerial);
     setShowActions(true);
     setBusy(false);
-    publishToastRequested({ message: '电报已打印并装入信封。', tone: 'success' });
+    publishToastRequested({ message: t('telegraph.envelopeDone'), tone: 'success' });
   };
   const skipAnimation = () => {
     if (!busy) return;
@@ -758,7 +763,7 @@ export function TelegraphStudioPanel() {
     setPrintStage('envelope');
     setShowActions(true);
     setBusy(false);
-    publishToastRequested({ message: '已跳过动画，电报已装入信封。', tone: 'success' });
+    publishToastRequested({ message: t('telegraph.skippedDone'), tone: 'success' });
   };
   const openReceive = () => {
     if (animationState !== 'sealed' || envelopeFlipping) return;
@@ -855,11 +860,13 @@ export function TelegraphStudioPanel() {
       });
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(payload?.message ?? '电报图片生成失败。');
+        throw new Error(payload?.message ?? t('telegraph.imageFailed'));
       }
       triggerDownload(
         await response.blob(),
-        `电报-${paper === 'send' ? '发报纸' : '收报纸'}-${serialNumber}.png`,
+        `${t('telegraph.filePrefix')}-${
+          paper === 'send' ? t('telegraph.sendPaperFile') : t('telegraph.receivePaperFile')
+        }-${serialNumber}.png`,
       );
       publishTelegraphArtifactDownloaded({
         draftId: serialNumber,
@@ -868,7 +875,7 @@ export function TelegraphStudioPanel() {
       });
     } catch (downloadError) {
       publishToastRequested({
-        message: downloadError instanceof Error ? downloadError.message : '电报图片下载失败。',
+        message: downloadError instanceof Error ? downloadError.message : t('telegraph.imageDownloadFailed'),
         tone: 'error',
       });
     } finally {
@@ -880,7 +887,7 @@ export function TelegraphStudioPanel() {
     const content = `雨城通电报体验\n流水号：${serialNumber}\n生成时间：${generatedAt}\n计费格数：${result.billableGrids}\n报费详情：${result.amount.toFixed(2)}\n\n${receiveDocument.codeText}\n`;
     triggerDownload(
       new Blob([content], { type: 'text/plain;charset=utf-8' }),
-      `电报电码-${serialNumber}.txt`,
+      `${t('telegraph.codeFile')}-${serialNumber}.txt`,
     );
     publishTelegraphArtifactDownloaded({
       draftId: serialNumber,
@@ -892,7 +899,7 @@ export function TelegraphStudioPanel() {
     if (!validateBeforePrint()) return;
     triggerDownload(
       await createMorseWav(receiveDocument.codeTokens),
-      `电报电码-${serialNumber}.wav`,
+      `${t('telegraph.codeFile')}-${serialNumber}.wav`,
     );
     publishTelegraphArtifactDownloaded({
       draftId: serialNumber,
@@ -1021,13 +1028,13 @@ export function TelegraphStudioPanel() {
                 onStart={handleWelcomeCodeStart}
                 onComplete={handleWelcomeCodeComplete}
               />
-              <h1 id="telegraph-welcome-title">趁“慢电报”还未消失，将记忆拍给自己</h1>
+              <h1 id="telegraph-welcome-title">{t('telegraph.welcomeTitle')}</h1>
               <p>
-                一条视频，让人们发现了电报这个尘封已久的通讯业务。
+                {t('telegraph.welcomeP1')}
                 <br />
-                如今，就算发报窗口全中国仅剩一个，人们仍愿为一封还需编发、盖章、封装的慢电报留出时间。
+                {t('telegraph.welcomeP2')}
                 <br />
-                那么现在，就在这里亲手写下你的讯息，让它沿着尘封的路线，延续你的思绪和情感……
+                {t('telegraph.welcomeP3')}
               </p>
               <div className="telegraph-welcome-actions">
                 <button
@@ -1038,7 +1045,7 @@ export function TelegraphStudioPanel() {
                   <span className="material-symbols-outlined" aria-hidden="true">
                     edit_note
                   </span>
-                  开始填写
+                  {t('telegraph.startWriting')}
                 </button>
                 {welcomeCodeComplete ? (
                   <button
@@ -1049,7 +1056,7 @@ export function TelegraphStudioPanel() {
                     <span className="material-symbols-outlined" aria-hidden="true">
                       replay
                     </span>
-                    重播动画
+                    {t('telegraph.replayAnimation')}
                   </button>
                 ) : null}
               </div>
@@ -1060,7 +1067,11 @@ export function TelegraphStudioPanel() {
             <span className="material-symbols-outlined" aria-hidden="true">
               keyboard_double_arrow_down
             </span>
-            <span>{scrollHints.welcomeAtBottom ? '继续滚动，开始填写' : '继续滚动'}</span>
+            <span>
+              {scrollHints.welcomeAtBottom
+                ? t('telegraph.continueScrollStart')
+                : t('telegraph.continueScroll')}
+            </span>
           </div>
         </>
       ) : (
@@ -1070,7 +1081,7 @@ export function TelegraphStudioPanel() {
           onPointerUp={handlePointerUp}
         >
           <div className="telegraph-paper telegraph-send-paper">
-            <img src={appPath('/telegraph/send-paper-template.png')} alt="电报发报纸模板" />
+            <img src={appPath('/telegraph/send-paper-template.png')} alt={t('telegraph.sendPaperTemplate')} />
             <div className="telegraph-paper-value telegraph-stat-count">
               {getAutomaticFillValue(0)}
             </div>
@@ -1094,7 +1105,7 @@ export function TelegraphStudioPanel() {
             </div>
             <PaperInput
               className="telegraph-input-province"
-              aria-label="省"
+              aria-label={t('telegraph.province')}
               value={draft.province}
               onChange={(value) => updateDraft('province', value)}
               maxLength={20}
@@ -1104,21 +1115,21 @@ export function TelegraphStudioPanel() {
             />
             <PaperInput
               className="telegraph-input-city"
-              aria-label="市"
+              aria-label={t('telegraph.city')}
               value={draft.city}
               onChange={(value) => updateDraft('city', value)}
               maxLength={20}
             />
             <PaperInput
               className="telegraph-input-county"
-              aria-label="县"
+              aria-label={t('telegraph.county')}
               value={draft.county}
               onChange={(value) => updateDraft('county', value)}
               maxLength={20}
             />
             <PaperInput
               className="telegraph-input-district"
-              aria-label="其他收报地点"
+              aria-label={t('telegraph.otherLocation')}
               value={draft.district}
               onChange={(value) => updateDraft('district', value)}
               maxLength={20}
@@ -1131,7 +1142,7 @@ export function TelegraphStudioPanel() {
             <GridPreview cells={result.bodyCells} className="telegraph-body-grid" rows={5} />
             <PaperCellInputGrid
               className="telegraph-recipient-input-grid"
-              label="收报信息"
+              label={t('telegraph.recipientInfo')}
               values={recipientGridValues}
               onChange={(index, value, isComposing) =>
                 updateGridValue('recipientInfo', index, value, isComposing)
@@ -1145,7 +1156,7 @@ export function TelegraphStudioPanel() {
             />
             <PaperCellInputGrid
               className="telegraph-body-input-grid"
-              label="电报正文"
+              label={t('telegraph.body')}
               values={bodyGridValues}
               onChange={(index, value, isComposing) =>
                 updateGridValue('body', index, value, isComposing)
@@ -1157,7 +1168,7 @@ export function TelegraphStudioPanel() {
             />
             <PaperInput
               className="telegraph-input-sender-name"
-              aria-label="发报人姓名或游客 IP"
+              aria-label={t('telegraph.senderName')}
               value={senderDisplayName}
               onChange={(value) => updateDraft('senderName', value)}
               maxLength={40}
@@ -1165,7 +1176,7 @@ export function TelegraphStudioPanel() {
             />
             <PaperInput
               className="telegraph-input-sender-address"
-              aria-label="发报人地址"
+              aria-label={t('telegraph.senderAddress')}
               value={senderDisplayAddress}
               onChange={(value) => updateDraft('senderAddress', value)}
               maxLength={60}
@@ -1180,22 +1191,28 @@ export function TelegraphStudioPanel() {
               {senderDisplayAddress}
             </div>
             {senderLocked ? (
-              <span className="telegraph-sender-lock">登录后可修改发报人信息</span>
+              <span className="telegraph-sender-lock">{t('telegraph.senderLock')}</span>
             ) : null}
           </div>
           <div className="telegraph-paper-tools">
             <div className="telegraph-paper-summary" aria-live="polite">
               <span>
-                计费格数 <strong>{result.billableGrids}</strong>
+                {t('telegraph.billableGrids')} <strong>{result.billableGrids}</strong>
               </span>
               <span>
-                报费详情 <strong>{result.amount.toFixed(2)}</strong>
+                {t('telegraph.amount')} <strong>{result.amount.toFixed(2)}</strong>
               </span>
-              <span>连续字母/数字每 5 个一格</span>
+              <span>{t('telegraph.billingRule')}</span>
               <span className="telegraph-grid-cursor" aria-live="polite">
                 {activeCell
-                  ? `${activeCell.field === 'recipientInfo' ? '收报信息' : '电报正文'} · 第 ${activeCell.index + 1} 格`
-                  : '当前格：未选择'}
+                  ? t('telegraph.cellAria', {
+                      label:
+                        activeCell.field === 'recipientInfo'
+                          ? t('telegraph.cellRecipient')
+                          : t('telegraph.cellBody'),
+                      count: activeCell.index + 1,
+                    })
+                  : t('telegraph.noCellSelected')}
               </span>
             </div>
             <div className="telegraph-paper-actions">
@@ -1208,14 +1225,14 @@ export function TelegraphStudioPanel() {
                 <span className="material-symbols-outlined" aria-hidden="true">
                   send
                 </span>
-                模拟拍发
+                {t('telegraph.simulateSend')}
               </button>
               {busy ? (
                 <button className="secondary-action-button" type="button" onClick={skipAnimation}>
                   <span className="material-symbols-outlined" aria-hidden="true">
                     fast_forward
                   </span>
-                  跳过动画
+                  {t('telegraph.skipAnimation')}
                 </button>
               ) : null}
             </div>
@@ -1224,7 +1241,7 @@ export function TelegraphStudioPanel() {
                 <span className="material-symbols-outlined" aria-hidden="true">
                   keyboard_double_arrow_down
                 </span>
-                <span>继续滚动，进入确认拍发</span>
+                <span>{t('telegraph.continueConfirm')}</span>
               </div>
             ) : null}
             {error ? (
@@ -1257,7 +1274,7 @@ export function TelegraphStudioPanel() {
                 className="telegraph-paper telegraph-receive-paper"
                 role={animationState === 'opened' ? 'button' : undefined}
                 tabIndex={animationState === 'opened' ? 0 : undefined}
-                aria-label={animationState === 'opened' ? '切换到发报纸' : undefined}
+                aria-label={animationState === 'opened' ? t('telegraph.switchToSend') : undefined}
                 onClick={() => {
                   switchPaperView('send');
                 }}
@@ -1375,9 +1392,9 @@ export function TelegraphStudioPanel() {
                 }}
                 aria-label={
                   animationState === 'sealed'
-                    ? '打开信封查看收报纸'
+                    ? t('telegraph.openEnvelopeView')
                     : animationState === 'opened'
-                      ? '将收报纸装入信封'
+                      ? t('telegraph.insertReceivePaper')
                       : undefined
                 }
               >
@@ -1388,39 +1405,58 @@ export function TelegraphStudioPanel() {
                         ? '/telegraph/envelope-back-cutout.svg'
                         : '/telegraph/envelope-front.svg',
                     )}
-                    alt={envelopeSide === 'front' ? '电报信封正面' : '电报信封背面'}
+                    alt={
+                      envelopeSide === 'front'
+                        ? t('telegraph.envelopeFront')
+                        : t('telegraph.envelopeBack')
+                    }
                   />
                 </div>
               </button>
             </div>
           </div>
-          <div className="telegraph-floating-toolbar" role="toolbar" aria-label="电报操作">
+          <div
+            className="telegraph-floating-toolbar"
+            role="toolbar"
+            aria-label={t('telegraph.toolbarAria')}
+          >
             <span className="telegraph-floating-status">
               {envelopeFlipping
-                ? '翻转信封'
+                ? t('telegraph.flipEnvelope')
                 : animationState === 'opening'
-                  ? '打开信封'
+                  ? t('telegraph.openEnvelope')
                   : animationState === 'packing'
-                    ? '装入信封'
-                    : (printStages.find((stage) => stage.id === printStage)?.label ?? '收报纸')}
+                    ? t('telegraph.insertEnvelope')
+                    : t(
+                        (printStages.find((stage) => stage.id === printStage)?.label ??
+                          'telegraph.receivePaper') as Parameters<typeof t>[0],
+                      )}
             </span>
             {outputSkipVisible ? (
               <button className="secondary-action-button" type="button" onClick={skipAnimation}>
                 <span className="material-symbols-outlined" aria-hidden="true">
                   fast_forward
                 </span>
-                <span className="material-interaction-label">跳过动画</span>
+                <span className="material-interaction-label">
+                  {t('telegraph.skipAnimation')}
+                </span>
               </button>
             ) : null}
             {animationState === 'opened' ? (
-              <div className="telegraph-paper-view-toggle" role="group" aria-label="切换纸张">
+              <div
+                className="telegraph-paper-view-toggle"
+                role="group"
+                aria-label={t('telegraph.switchPaper')}
+              >
                 <button
                   className={paperView === 'receive' ? 'is-active' : ''}
                   type="button"
                   aria-pressed={paperView === 'receive'}
                   onClick={() => switchPaperView('receive')}
                 >
-                  <span className="material-interaction-label">收报纸</span>
+                  <span className="material-interaction-label">
+                    {t('telegraph.receivePaper')}
+                  </span>
                 </button>
                 <button
                   className={paperView === 'send' ? 'is-active' : ''}
@@ -1428,7 +1464,9 @@ export function TelegraphStudioPanel() {
                   aria-pressed={paperView === 'send'}
                   onClick={() => switchPaperView('send')}
                 >
-                  <span className="material-interaction-label">发报纸</span>
+                  <span className="material-interaction-label">
+                    {t('telegraph.sendPaper')}
+                  </span>
                 </button>
               </div>
             ) : null}
@@ -1438,13 +1476,23 @@ export function TelegraphStudioPanel() {
                 type="button"
                 onClick={flipEnvelope}
                 disabled={envelopeFlipping}
-                aria-label={envelopeSide === 'back' ? '翻到信封正面' : '翻到信封背面'}
-                title={envelopeSide === 'back' ? '翻到信封正面' : '翻到信封背面'}
+                aria-label={
+                  envelopeSide === 'back'
+                    ? t('telegraph.flipToFront')
+                    : t('telegraph.flipToBack')
+                }
+                title={
+                  envelopeSide === 'back'
+                    ? t('telegraph.flipToFront')
+                    : t('telegraph.flipToBack')
+                }
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
                   flip
                 </span>
-                <span className="material-interaction-label">信封翻面</span>
+                <span className="material-interaction-label">
+                  {t('telegraph.envelopeFlip')}
+                </span>
               </button>
             ) : null}
             {showActions ? (
@@ -1458,7 +1506,9 @@ export function TelegraphStudioPanel() {
                   <span className="material-symbols-outlined" aria-hidden="true">
                     outbox
                   </span>
-                  <span className="material-interaction-label">发报纸</span>
+                  <span className="material-interaction-label">
+                    {t('telegraph.sendPaper')}
+                  </span>
                 </button>
                 <button
                   className="secondary-action-button"
@@ -1469,7 +1519,9 @@ export function TelegraphStudioPanel() {
                   <span className="material-symbols-outlined" aria-hidden="true">
                     inbox
                   </span>
-                  <span className="material-interaction-label">收报纸</span>
+                  <span className="material-interaction-label">
+                    {t('telegraph.receivePaper')}
+                  </span>
                 </button>
                 <button
                   className="secondary-action-button"
@@ -1480,7 +1532,9 @@ export function TelegraphStudioPanel() {
                   <span className="material-symbols-outlined" aria-hidden="true">
                     content_copy
                   </span>
-                  <span className="material-interaction-label">电码</span>
+                  <span className="material-interaction-label">
+                    {t('telegraph.code')}
+                  </span>
                 </button>
                 <button
                   className="secondary-action-button"
@@ -1491,14 +1545,22 @@ export function TelegraphStudioPanel() {
                   <span className="material-symbols-outlined" aria-hidden="true">
                     audio_file
                   </span>
-                  <span className="material-interaction-label">音频</span>
+                  <span className="material-interaction-label">
+                    {t('telegraph.audio')}
+                  </span>
                 </button>
                 {animationState === 'opened' ? (
-                  <button className="secondary-action-button" type="button" onClick={packReceive}>
+                  <button
+                    className="secondary-action-button"
+                    type="button"
+                    onClick={packReceive}
+                  >
                     <span className="material-symbols-outlined" aria-hidden="true">
                       inventory_2
                     </span>
-                    <span className="material-interaction-label">装入信封</span>
+                    <span className="material-interaction-label">
+                      {t('telegraph.insertEnvelope')}
+                    </span>
                   </button>
                 ) : null}
                 <button
@@ -1510,7 +1572,9 @@ export function TelegraphStudioPanel() {
                   <span className="material-symbols-outlined" aria-hidden="true">
                     replay
                   </span>
-                  <span className="material-interaction-label">重播动画</span>
+                  <span className="material-interaction-label">
+                    {t('telegraph.replayAnimation')}
+                  </span>
                 </button>
               </div>
             ) : null}
@@ -1529,12 +1593,12 @@ export function TelegraphStudioPanel() {
             <div className="telegraph-output-heading">
               <div>
                 <span className="eyebrow">READY TO SEND</span>
-                <h2 id="telegraph-confirm-title">确认发报内容</h2>
+                <h2 id="telegraph-confirm-title">{t('telegraph.confirmTitle')}</h2>
               </div>
               <button
                 className="icon-button"
                 type="button"
-                aria-label="关闭确认窗口"
+                aria-label={t('telegraph.closeConfirm')}
                 onClick={() => setConfirmOpen(false)}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
@@ -1544,34 +1608,36 @@ export function TelegraphStudioPanel() {
             </div>
             <div className="telegraph-confirm-summary">
               <div>
-                <span>收报地点</span>
-                <strong>{result.destination || '未填写'}</strong>
+                <span>{t('telegraph.destination')}</span>
+                <strong>{result.destination || t('telegraph.notFilled')}</strong>
               </div>
               <div>
-                <span>收报人</span>
-                <strong>{draft.recipientInfo || '未填写'}</strong>
+                <span>{t('telegraph.recipient')}</span>
+                <strong>{draft.recipientInfo || t('telegraph.notFilled')}</strong>
               </div>
               <div>
-                <span>计费格数</span>
+                <span>{t('telegraph.billableGrids')}</span>
                 <strong>{result.billableGrids}</strong>
               </div>
               <div>
-                <span>报费详情</span>
+                <span>{t('telegraph.amount')}</span>
                 <strong>{result.amount.toFixed(2)}</strong>
               </div>
             </div>
             <div>
-              <span className="telegraph-confirm-label">报文内容</span>
-              <pre className="telegraph-confirm-message">{draft.body || '未填写'}</pre>
+              <span className="telegraph-confirm-label">{t('telegraph.confirmBody')}</span>
+              <pre className="telegraph-confirm-message">
+                {draft.body || t('telegraph.notFilled')}
+              </pre>
             </div>
-            <p>确认后将开始填写、打印、折叠并装入信封的模拟动画。</p>
+            <p>{t('telegraph.confirmHint')}</p>
             <div className="telegraph-confirm-actions">
               <button
                 className="secondary-action-button"
                 type="button"
                 onClick={() => setConfirmOpen(false)}
               >
-                返回修改
+                {t('telegraph.backEdit')}
               </button>
               <button
                 className="secondary-action-button is-primary"
@@ -1581,7 +1647,7 @@ export function TelegraphStudioPanel() {
                 <span className="material-symbols-outlined" aria-hidden="true">
                   send
                 </span>
-                确认并拍发
+                {t('telegraph.confirmSend')}
               </button>
             </div>
           </section>
@@ -1603,14 +1669,14 @@ export function TelegraphStudioPanel() {
           >
             <div className="telegraph-output-heading">
               <div>
-                <h2 id="telegraph-history-title">本机历史</h2>
+                <h2 id="telegraph-history-title">{t('telegraph.localHistory')}</h2>
               </div>
             </div>
             {history.length ? (
               history.map((record) => (
                 <div className="telegraph-history-row" key={record.id}>
                   <button type="button" onClick={() => loadHistory(record)}>
-                    <strong>{record.draft.recipientInfo || '未命名电报'}</strong>
+                    <strong>{record.draft.recipientInfo || t('telegraph.unnamed')}</strong>
                     <span>
                       {record.generatedAt.slice(0, 16).replace('T', ' ')} · {record.serialNumber}
                     </span>
@@ -1618,7 +1684,7 @@ export function TelegraphStudioPanel() {
                   <button
                     className="icon-button"
                     type="button"
-                    aria-label="删除历史记录"
+                    aria-label={t('telegraph.deleteHistory')}
                     onClick={() =>
                       void deleteTelegraphHistory(record.id).then(() =>
                         listTelegraphHistory().then(setHistory),
@@ -1632,7 +1698,7 @@ export function TelegraphStudioPanel() {
                 </div>
               ))
             ) : (
-              <p className="muted">还没有本机历史记录。</p>
+              <p className="muted">{t('telegraph.noHistory')}</p>
             )}
           </aside>
         </div>
@@ -1866,6 +1932,7 @@ function PaperCellInputGrid({
   rows: number;
 }>) {
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const { t } = useI18n();
   const composingRef = useRef(false);
   const compositionValueRef = useRef<{ index: number; value: string } | null>(null);
   const pendingCompositionChangeRef = useRef<{ index: number; value: string } | null>(null);
@@ -1920,7 +1987,7 @@ function PaperCellInputGrid({
               inputRefs.current[index] = element;
             }}
             className={`telegraph-cell-input ${activeIndex === index ? 'is-active' : ''}`}
-            aria-label={`${label}第${index + 1}格`}
+            aria-label={t('telegraph.cellAria', { label, count: index + 1 })}
             inputMode="text"
             maxLength={20}
             value={value}
@@ -2011,13 +2078,14 @@ function TelegraphSendPaperPreview({
   serialNumber: string;
   onClick: () => void;
 }>) {
+  const { t } = useI18n();
   const compactTime = date.time.replace(':', '');
   return (
     <div
       className="telegraph-send-paper-preview"
       role="button"
       tabIndex={0}
-      aria-label="切换到收报纸"
+      aria-label={t('telegraph.switchToReceive')}
       onClick={onClick}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -2027,7 +2095,7 @@ function TelegraphSendPaperPreview({
       }}
     >
       <div className="telegraph-paper telegraph-send-paper">
-        <img src={appPath('/telegraph/send-paper-template.png')} alt="电报发报纸预览" />
+        <img src={appPath('/telegraph/send-paper-template.png')} alt={t('telegraph.sendPaperPreview')} />
         <div className="telegraph-paper-value telegraph-stat-count">
           {result.billableGrids || ''}
         </div>
