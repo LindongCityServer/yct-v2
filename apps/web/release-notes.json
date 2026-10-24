@@ -3,6 +3,30 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.12.8",
+      "releasedAt": "2026-10-24T14:35:21.248Z",
+      "sourceFingerprint": "bf54091d3c45c8a512913525f97425e59f52fa5d1716b1db50a208ccdafca5e1",
+      "themes": ["materials"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "公共交通导视新增「站名」「方向」两种地铁版式，与线路图共用同一个模板入口"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "新增站台站名标志模板，数据来源模式只需选择线路、车站与方向"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "方向版式按设计稿校准中英文层级与行距，左右开门时箭头和线路标保持恒定间距"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.12.7",
       "releasedAt": "2026-10-22T14:51:12.279Z",
       "sourceFingerprint": "884a26e5cb636433e8a01498c5ff08dac101971d3ec50625a489c640cec1196f",
