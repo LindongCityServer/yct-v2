@@ -20,9 +20,11 @@ export interface MapRoadConnectionSegment {
   startIsRoadTerminus: boolean;
 }
 
+export type MapRoadConnectionKind = 'intersection' | 'terminus_snap' | 'terminus_continuation';
+
 export interface MapRoadConnectionProjection {
   distance: number;
-  kind: 'intersection' | 'terminus_snap';
+  kind: MapRoadConnectionKind;
   leftCoordinate: [number, number];
   leftSegmentId: string;
   rightCoordinate: [number, number];
@@ -149,6 +151,10 @@ export function collectMapRoadConnectionProjections(
     return [...connections.values()];
   }
 
+  collectRoadTerminusContinuations(segments, tolerance, exactTerminusKeys, connections);
+  // 数据绘制时端点常越过路口中心线 1~2 格，允许这一量级的越线吸附，避免合法 T 型路口被误判
+  const terminusOvershootTolerance = Math.min(tolerance, 2);
+
   const snapCandidatesByTerminus = new Map<string, MapRoadConnectionProjection[]>();
   for (const source of segments) {
     for (const terminus of getRoadSegmentTermini(source)) {
@@ -163,7 +169,7 @@ export function collectMapRoadConnectionProjections(
         if (
           projection.distance <= 0.01 ||
           projection.distance > tolerance ||
-          !isProjectionOutsideTerminus(terminus, projection.coordinate) ||
+          !isProjectionOutsideTerminus(terminus, projection.coordinate, terminusOvershootTolerance) ||
           (projection.ratio <= 0.000001 && target.startIsRoadTerminus) ||
           (projection.ratio >= 0.999999 && target.endIsRoadTerminus)
         ) {
@@ -306,11 +312,18 @@ function addRoadConnection(
   connections.set(key, candidate);
 }
 
-function getRoadSegmentTermini(segment: MapRoadConnectionSegment): Array<{
+interface RoadSegmentTerminus {
   coordinate: [number, number];
   innerCoordinate: [number, number];
   key: string;
-}> {
+}
+
+interface RoadTerminusContinuation {
+  connection: MapRoadConnectionProjection;
+  targetKey: string;
+}
+
+function getRoadSegmentTermini(segment: MapRoadConnectionSegment): RoadSegmentTerminus[] {
   return [
     ...(segment.startIsRoadTerminus
       ? [
@@ -333,19 +346,163 @@ function getRoadSegmentTermini(segment: MapRoadConnectionSegment): Array<{
   ];
 }
 
+/**
+ * 收集“端点—端点”续接。
+ *
+ * 同一条物理道路在路口改名或拆成多个标记时，两侧自由端点之间通常只差 1 格左右：
+ * 平面交点检测（容差 0.01）捕获不到，端点吸附又因为“端点对端点”和“近似平行”被排除，
+ * 导致这类交界处永远不连通。这里单独补充端点续接，但只在两端都是自由端点、
+ * 走向连续（转角不超过 90°）且候选明显唯一时才建立连接。
+ */
+function collectRoadTerminusContinuations(
+  segments: readonly MapRoadConnectionSegment[],
+  tolerance: number,
+  exactTerminusKeys: ReadonlySet<string>,
+  connections: Map<string, MapRoadConnectionProjection>,
+): void {
+  const continuedTerminusKeys = new Set<string>();
+  const connectionKeys = new Set<string>();
+  if (segments.length < 2) {
+    return;
+  }
+  const roadIdBySegmentId = new Map(segments.map((segment) => [segment.id, segment.roadId]));
+
+  for (const source of segments) {
+    for (const sourceTerminus of getRoadSegmentTermini(source)) {
+      if (
+        exactTerminusKeys.has(sourceTerminus.key) ||
+        continuedTerminusKeys.has(sourceTerminus.key)
+      ) {
+        continue;
+      }
+      const candidates: RoadTerminusContinuation[] = [];
+      for (const target of segments) {
+        if (source.roadId === target.roadId) {
+          continue;
+        }
+        for (const targetTerminus of getRoadSegmentTermini(target)) {
+          const distance = Math.sqrt(
+            squaredDistance(sourceTerminus.coordinate, targetTerminus.coordinate),
+          );
+          if (distance <= 0.01 || distance > tolerance) {
+            continue;
+          }
+          if (!isRoadTerminusContinuation(sourceTerminus, targetTerminus)) {
+            continue;
+          }
+          candidates.push({
+            connection: {
+              distance,
+              kind: 'terminus_continuation',
+              leftCoordinate: sourceTerminus.coordinate,
+              leftSegmentId: source.id,
+              rightCoordinate: targetTerminus.coordinate,
+              rightSegmentId: target.id,
+            },
+            targetKey: targetTerminus.key,
+          });
+        }
+      }
+
+      const best = pickUnambiguousRoadTerminusContinuation(
+        candidates,
+        roadIdBySegmentId,
+        tolerance,
+      );
+      if (!best) {
+        continue;
+      }
+      const connectionKey = getUndirectedRoadConnectionKey(best.connection);
+      if (connectionKeys.has(connectionKey)) {
+        continue;
+      }
+      connectionKeys.add(connectionKey);
+      addRoadConnection(connections, best.connection);
+      continuedTerminusKeys.add(sourceTerminus.key);
+      continuedTerminusKeys.add(best.targetKey);
+    }
+  }
+}
+
+function pickUnambiguousRoadTerminusContinuation(
+  candidates: readonly RoadTerminusContinuation[],
+  roadIdBySegmentId: ReadonlyMap<string, string>,
+  tolerance: number,
+): RoadTerminusContinuation | undefined {
+  const nearestByTargetRoad = new Map<string, RoadTerminusContinuation>();
+  for (const candidate of candidates) {
+    const targetRoadId = roadIdBySegmentId.get(candidate.connection.rightSegmentId);
+    if (!targetRoadId) {
+      continue;
+    }
+    const current = nearestByTargetRoad.get(targetRoadId);
+    if (!current || candidate.connection.distance < current.connection.distance) {
+      nearestByTargetRoad.set(targetRoadId, candidate);
+    }
+  }
+  const ranked = [...nearestByTargetRoad.values()].sort(
+    (left, right) => left.connection.distance - right.connection.distance,
+  );
+  const best = ranked[0];
+  const second = ranked[1];
+  if (!best) {
+    return undefined;
+  }
+  const ambiguityMargin = Math.max(2, tolerance * 0.15);
+  if (second && second.connection.distance - best.connection.distance < ambiguityMargin) {
+    return undefined;
+  }
+  return best;
+}
+
+function isRoadTerminusContinuation(
+  source: RoadSegmentTerminus,
+  target: RoadSegmentTerminus,
+): boolean {
+  const sourceOutward: [number, number] = [
+    source.coordinate[0] - source.innerCoordinate[0],
+    source.coordinate[1] - source.innerCoordinate[1],
+  ];
+  const targetInward: [number, number] = [
+    target.innerCoordinate[0] - target.coordinate[0],
+    target.innerCoordinate[1] - target.coordinate[1],
+  ];
+  const sourceLength = Math.hypot(sourceOutward[0], sourceOutward[1]);
+  const targetLength = Math.hypot(targetInward[0], targetInward[1]);
+  if (sourceLength <= 0.000001 || targetLength <= 0.000001) {
+    return false;
+  }
+  const cosine =
+    (sourceOutward[0] * targetInward[0] + sourceOutward[1] * targetInward[1]) /
+    (sourceLength * targetLength);
+  // 只接受转角不超过 90° 的走向延续，拒绝掉头与反向顶住的端点对
+  return cosine >= 0;
+}
+
+function getUndirectedRoadConnectionKey(connection: MapRoadConnectionProjection): string {
+  const leftKey = `${connection.leftSegmentId}@${connection.leftCoordinate[0].toFixed(3)}@${connection.leftCoordinate[1].toFixed(3)}`;
+  const rightKey = `${connection.rightSegmentId}@${connection.rightCoordinate[0].toFixed(3)}@${connection.rightCoordinate[1].toFixed(3)}`;
+  return leftKey < rightKey ? `${leftKey}|${rightKey}` : `${rightKey}|${leftKey}`;
+}
+
 function isProjectionOutsideTerminus(
   terminus: { coordinate: [number, number]; innerCoordinate: [number, number] },
   projection: [number, number],
+  overshootTolerance = 0,
 ): boolean {
   const inwardVector: [number, number] = [
     terminus.innerCoordinate[0] - terminus.coordinate[0],
     terminus.innerCoordinate[1] - terminus.coordinate[1],
   ];
-  const projectionVector: [number, number] = [
-    projection[0] - terminus.coordinate[0],
-    projection[1] - terminus.coordinate[1],
-  ];
-  return inwardVector[0] * projectionVector[0] + inwardVector[1] * projectionVector[1] <= 0;
+  const inwardLength = Math.hypot(inwardVector[0], inwardVector[1]);
+  if (inwardLength <= 0.000001) {
+    return false;
+  }
+  const forwardDistance =
+    ((projection[0] - terminus.coordinate[0]) * inwardVector[0] +
+      (projection[1] - terminus.coordinate[1]) * inwardVector[1]) /
+    inwardLength;
+  return forwardDistance <= Math.max(0, overshootTolerance);
 }
 
 function markConnectedTermini(
