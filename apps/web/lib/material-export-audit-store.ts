@@ -9,6 +9,8 @@ interface MaterialExportAuditStoreSnapshot {
 }
 
 const emptySnapshot: MaterialExportAuditStoreSnapshot = { version: 1, records: [] };
+/** 预览出图很频繁，只保留最近一段记录，避免 JSON 仓储无限增长。 */
+const maximumAuditRecordCount = 1000;
 
 export async function listMaterialExportAuditRecords(): Promise<MaterialExportAuditRecord[]> {
   return (await readSnapshot()).records.sort((left, right) =>
@@ -20,7 +22,10 @@ export async function appendMaterialExportAuditRecord(
   record: MaterialExportAuditRecord,
 ): Promise<void> {
   const snapshot = await readSnapshot();
-  await writeSnapshot({ version: 1, records: [...snapshot.records, record] });
+  await writeSnapshot({
+    version: 1,
+    records: [...snapshot.records, record].slice(-maximumAuditRecordCount),
+  });
 }
 
 async function readSnapshot(): Promise<MaterialExportAuditStoreSnapshot> {

@@ -504,7 +504,7 @@ export const materialTransitNetworkProjectUpdateSchema = z
 
 export const materialExportRequestSchema = z
   .object({
-    mode: z.enum(['server', 'custom']),
+    mode: z.enum(['server', 'custom', 'manual']),
     draftId: idSchema.optional(),
     templateId: idSchema.optional(),
     templateVersion: z.number().int().positive().optional(),
@@ -512,6 +512,17 @@ export const materialExportRequestSchema = z
     source: materialServerSourceSchema.optional(),
     networkGeometry: materialTransitNetworkSnapshotSchema.optional(),
     input: materialInputRecordSchema.optional(),
+    /**
+     * 手动模式下「未修改标签」：套用示例或导入外部模板时的原始内容。
+     * 服务端只比较文本内容（忽略尺寸与箭头/图标等图形），一致时放行免审核无水印导出。
+     */
+    unmodifiedTemplateBaseline: z
+      .object({
+        layout: z.string().max(384_000),
+        widthM: z.number().positive().max(64),
+        heightM: z.number().positive().max(64),
+      })
+      .optional(),
   })
   .superRefine((value, ctx) => {
     if (value.mode === 'custom' && !value.draftId) {
@@ -519,6 +530,18 @@ export const materialExportRequestSchema = z
     }
     if (value.mode === 'server' && (!value.templateId || !value.templateVersion || !value.source)) {
       ctx.addIssue({ code: 'custom', message: '服务器导出必须指定模板和真实数据来源。' });
+    }
+    if (value.mode === 'manual') {
+      if (!value.templateId || !value.templateVersion || !value.canvas || !value.input) {
+        ctx.addIssue({ code: 'custom', message: '手动导出必须指定模板、画布与字段输入。' });
+      }
+      if (!value.unmodifiedTemplateBaseline) {
+        ctx.addIssue({
+          code: 'custom',
+          message: '手动导出必须提供未修改模板基线。',
+          path: ['unmodifiedTemplateBaseline'],
+        });
+      }
     }
     if (
       value.source?.kind === 'transit_station' &&

@@ -51,6 +51,11 @@ import {
   resolveTransitLineMaterialInput,
   resolveTransitStationMaterialInput,
 } from './material-transit-source';
+import {
+  buildMetroWayfindingTextSignature,
+  collectMetroWayfindingTexts,
+  parseMetroWayfindingLayout,
+} from './metro-wayfinding';
 
 export type MaterialWorkflowResult = MaterialWorkflowSuccess | MaterialWorkflowFailure;
 
@@ -78,6 +83,8 @@ export type MaterialPreviewResult = MaterialWorkflowResult & {
   widthPx?: number;
   heightPx?: number;
   previewId?: string;
+  /** 本次出图的内容摘要，供下载文件名与响应头使用。 */
+  contentSummary?: string;
 };
 
 type PublishedMaterialTemplateSummary = Omit<MaterialTemplateVersion, 'source'>;
@@ -361,6 +368,9 @@ export async function reviewManualMaterialDraft(input: {
 export async function prepareMaterialExport(input: {
   request: MaterialExportRequestInput;
   actorId: string;
+  actorName?: string;
+  ipAddress?: string;
+  ipLocation?: string;
   serverAccountVerified: boolean;
 }): Promise<MaterialExportResult> {
   if (requiresVerifiedServerAccount(input.request) && !input.serverAccountVerified) {
@@ -371,7 +381,11 @@ export async function prepareMaterialExport(input: {
       message: '使用服务器线网生成无水印图片前，需要先验证服务器账号。',
     };
   }
-  const source = await resolveMaterialExportSource(input.request, input.actorId);
+  const source = await resolveMaterialExportSource(
+    input.request,
+    input.actorId,
+    input.serverAccountVerified,
+  );
   if (!source.ok) {
     return source;
   }
@@ -386,11 +400,19 @@ export async function prepareMaterialExport(input: {
         source.sourceKind === 'manual' ? undefined : { allowMissingServerDerivedValues: true },
     });
     const now = new Date().toISOString();
+    const contentSummary = buildMaterialContentSummary(source.template, source.values);
     const audit: MaterialExportAuditRecord = {
       id: `material_export_${randomUUID()}`,
+      kind: 'export',
       actorId: input.actorId,
+      actorName: input.actorName,
+      ipAddress: input.ipAddress,
+      ipLocation: input.ipLocation,
       templateId: source.templateId,
       templateVersion: source.template.version,
+      templateTitle: source.template.title,
+      contentSummary,
+      watermark: false,
       sourceKind: source.sourceKind,
       sourceRef: source.sourceRef,
       draftId: source.draftId,
@@ -417,7 +439,7 @@ export async function prepareMaterialExport(input: {
     return {
       ok: true,
       png: rendered.png,
-      fileName: buildMaterialExportFileName(source.template, source.values, audit.id),
+      fileName: buildMaterialExportFileName(source.template, contentSummary, audit.id),
       audit,
     };
   } catch (error) {
@@ -442,6 +464,10 @@ export async function prepareMaterialPreview(input: {
     label: string;
   };
   anonymousLabel: string;
+  ipAddress?: string;
+  ipLocation?: string;
+  /** 客户端已取消（被下一次编辑替换）的预览不写入审计。 */
+  signal?: AbortSignal;
 }): Promise<MaterialPreviewResult> {
   const source = await resolveMaterialPreviewSource(input.request);
   if (!source.ok) {
@@ -485,12 +511,38 @@ export async function prepareMaterialPreview(input: {
         generatedAt,
       },
     );
+    const contentSummary = buildMaterialContentSummary(source.template, source.values);
+    // 预览被下一次编辑取消时，图片不会真正展示，也就不该留下一条可溯源记录。
+    if (!input.signal?.aborted) {
+      await appendMaterialExportAuditRecord({
+        id: previewId,
+        kind: 'preview',
+        actorId: input.actor?.id ?? 'anonymous',
+        actorName: actorLabel,
+        ipAddress: input.ipAddress,
+        ipLocation: input.ipLocation,
+        templateId: source.templateId,
+        templateVersion: source.template.version,
+        templateTitle: source.template.title,
+        contentSummary,
+        watermark: true,
+        sourceKind: source.sourceKind,
+        sourceRef: source.sourceRef,
+        inputHash: hashMaterialInput(source.values),
+        canvas: source.canvas,
+        outputWidthPx: rendered.widthPx,
+        outputHeightPx: rendered.heightPx,
+        outputSha256: createHash('sha256').update(rendered.png).digest('hex'),
+        requestedAt: generatedAt,
+      });
+    }
     return {
       ok: true,
       png: rendered.png,
       widthPx: rendered.widthPx,
       heightPx: rendered.heightPx,
       previewId,
+      contentSummary,
     };
   } catch (error) {
     return invalidInput(error);
@@ -500,6 +552,7 @@ export async function prepareMaterialPreview(input: {
 async function resolveMaterialExportSource(
   request: MaterialExportRequestInput,
   actorId: string,
+  serverAccountVerified: boolean,
 ): Promise<
   | {
       ok: true;
@@ -514,6 +567,60 @@ async function resolveMaterialExportSource(
     }
   | MaterialWorkflowFailure
 > {
+  if (request.mode === 'manual') {
+    const baseline = request.unmodifiedTemplateBaseline;
+    if (
+      !baseline ||
+      !request.templateId ||
+      !request.templateVersion ||
+      !request.canvas ||
+      !request.input
+    ) {
+      return invalidInputMessage('手动物料导出参数不完整。');
+    }
+    const template = await resolveTemplateVersion({
+      templateId: request.templateId,
+      version: request.templateVersion,
+      publishedOnly: true,
+    });
+    if (!template.ok) {
+      return template;
+    }
+    const isWayfindingTemplate = template.template.fields.some(
+      (field) => field.glyph?.renderer === 'metro_wayfinding',
+    );
+    if (!isWayfindingTemplate) {
+      return forbidden('只有地铁导视模板可以在未修改时免审核导出。');
+    }
+    if (!serverAccountVerified) {
+      return {
+        ok: false,
+        status: 403,
+        error: 'server_account_not_verified_for_material_export',
+        message: '免审核下载无水印图片前，需要先验证服务器账号。',
+      };
+    }
+    // 只比较文本内容：画布尺寸、箭头/图标/空白等图形调整都视为未修改。
+    if (
+      buildMetroWayfindingTextSignature(request.input.layout ?? '') !==
+      buildMetroWayfindingTextSignature(baseline.layout)
+    ) {
+      return forbidden('模板文本已修改，未修改标签已失效。');
+    }
+    try {
+      return {
+        ok: true,
+        templateId: request.templateId,
+        template: template.template,
+        values: validateMaterialInput(template.template.fields, request.input),
+        canvas: request.canvas,
+        sourceKind: 'manual',
+      };
+    } catch (error) {
+      return invalidInput(error);
+    }
+  }
+
   if (request.mode === 'custom') {
     const draft = request.draftId ? await findMaterialDraft(request.draftId) : undefined;
     if (!draft) {
@@ -814,26 +921,30 @@ function sanitizeFileNamePart(value: string, maximumLength: number): string {
     .join('');
 }
 
-function buildMaterialExportFileName(
+const materialSummaryIgnoredFieldKeys = new Set([
+  'currentStationIndex',
+  'routeStations',
+  'routeMapData',
+  'roadNamePinyin',
+  'postalCode',
+  'signColor',
+  'directionMode',
+  'arrowMode',
+  'accentColor',
+]);
+
+/** 提取用于文件名与审计的内容摘要（模板名之外还能分辨出具体内容）。 */
+function buildMaterialContentSummary(
   template: MaterialTemplateVersion,
   values: Record<string, string>,
-  exportId: string,
 ): string {
-  const ignoredFieldKeys = new Set([
-    'currentStationIndex',
-    'routeStations',
-    'routeMapData',
-    'roadNamePinyin',
-    'postalCode',
-    'signColor',
-    'directionMode',
-    'arrowMode',
-    'accentColor',
-  ]);
+  if (template.fields.some((field) => field.glyph?.renderer === 'metro_wayfinding')) {
+    return buildMetroWayfindingContentSummary(values.layout ?? '');
+  }
   const contentParts: string[] = [];
   for (const field of template.fields) {
     if (
-      ignoredFieldKeys.has(field.key) ||
+      materialSummaryIgnoredFieldKeys.has(field.key) ||
       (field.kind === 'select' && field.key !== 'terminalRole')
     ) {
       continue;
@@ -847,12 +958,50 @@ function buildMaterialExportFileName(
       break;
     }
   }
+  return contentParts.join('_');
+}
+
+/** 地铁导视的字段值是一大段 layout JSON，改为从文本元素里提取可读内容。 */
+function buildMetroWayfindingContentSummary(layoutValue: string): string {
+  if (!layoutValue.trim()) {
+    return '';
+  }
+  let layout: ReturnType<typeof parseMetroWayfindingLayout>;
+  try {
+    layout = parseMetroWayfindingLayout(layoutValue);
+  } catch {
+    return '';
+  }
+  const texts = collectMetroWayfindingTexts(layout);
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const text of texts) {
+    const value = sanitizeFileNamePart(text.trim(), 20);
+    if (!value || seen.has(value)) {
+      continue;
+    }
+    seen.add(value);
+    parts.push(value);
+    if (parts.length >= 3) {
+      break;
+    }
+  }
+  return parts.join('_');
+}
+
+function buildMaterialExportFileName(
+  template: MaterialTemplateVersion,
+  contentSummary: string,
+  exportId: string,
+): string {
   return (
     [
       sanitizeFileNamePart(template.title, 40) || 'material',
-      ...contentParts,
+      contentSummary,
       exportId.slice(-8),
-    ].join('_') + '.png'
+    ]
+      .filter(Boolean)
+      .join('_') + '.png'
   );
 }
 

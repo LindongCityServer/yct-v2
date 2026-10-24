@@ -1674,6 +1674,41 @@ export function serializeMetroWayfindingLayout(layout: MetroWayfindingLayout): s
   return JSON.stringify(layout);
 }
 
+/** 收集导视牌中需要审核的文本内容（普通文本与大文本）。 */
+export function collectMetroWayfindingTexts(layout: MetroWayfindingLayout): string[] {
+  const texts: string[] = [];
+  for (const row of layout.rows) {
+    for (const element of row) {
+      if (element.type === 'text') {
+        for (const textRow of element.rows) {
+          if (textRow.kind === 'main') {
+            for (const segment of textRow.segments) {
+              if (segment.kind === 'text') {
+                texts.push(segment.value);
+              }
+            }
+          } else {
+            texts.push(textRow.value);
+          }
+        }
+      } else if (element.type === 'largeText') {
+        texts.push(element.value);
+      }
+    }
+  }
+  return texts.map((text) => text.trim()).filter(Boolean);
+}
+
+/**
+ * 文本签名：与元素顺序无关，忽略箭头 / 图标 / 空白 / 分割线等非文本元素。
+ * 用于判断「套用或导入模板后只动图形、没有改任何文本」的免审核导出条件。
+ */
+export function buildMetroWayfindingTextSignature(layoutValue: string): string {
+  return collectMetroWayfindingTexts(parseMetroWayfindingLayout(layoutValue))
+    .sort()
+    .join('\u0001');
+}
+
 export function summarizeMetroWayfindingLayout(
   layout: MetroWayfindingLayout,
   canvas?: Pick<MetroWayfindingProjectCanvas, 'widthM' | 'heightM' | 'pxPerMeter'>,

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { AdminRefreshButton } from './admin-refresh-button';
+import { SegmentedControl } from './segmented-control';
 import { METRO_WAYFINDING_TEMPLATE_ID, parseMetroWayfindingLayout } from '../lib/metro-wayfinding';
 import { MetroWayfindingExamplePreviewElement } from './metro-wayfinding-editor';
 
@@ -60,9 +61,16 @@ interface MaterialDraft {
 
 interface MaterialExportAudit {
   id: string;
+  kind?: 'preview' | 'export';
   actorId: string;
+  actorName?: string;
+  ipAddress?: string;
+  ipLocation?: string;
   templateId: string;
   templateVersion: number;
+  templateTitle?: string;
+  contentSummary?: string;
+  watermark?: boolean;
   sourceKind: 'manual' | 'transit_line' | 'transit_station' | 'map_location' | 'road_coordinate';
   sourceRef?: string;
   draftId?: string;
@@ -119,6 +127,14 @@ export function AdminMaterialsPanel() {
   const [exports, setExports] = useState<MaterialExportAudit[]>([]);
   const [actors, setActors] = useState<MaterialActor[]>([]);
   const [statusText, setStatusText] = useState('正在读取物料后台');
+  /** 三块内容用分段控件切换：模板 / 待审核物料 / 下载预览记录。 */
+  const [activeSection, setActiveSection] = useState<'templates' | 'drafts' | 'audits'>(
+    'templates',
+  );
+  /** 下载预览记录的搜索与筛选。 */
+  const [auditQuery, setAuditQuery] = useState('');
+  const [auditKind, setAuditKind] = useState<'all' | 'preview' | 'export'>('all');
+  const [auditWatermark, setAuditWatermark] = useState<'all' | 'free' | 'watermarked'>('all');
   const [isBusy, setIsBusy] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<TemplateRecord | null>(null);
@@ -316,6 +332,31 @@ export function AdminMaterialsPanel() {
     () => new Map(actors.map((actor) => [actor.ldpassUserId, actor])),
     [actors],
   );
+  const filteredExports = useMemo(() => {
+    const query = auditQuery.trim().toLocaleLowerCase('zh-CN');
+    return [...exports]
+      .filter((item) => {
+        const kind = item.kind ?? 'export';
+        if (auditKind !== 'all' && kind !== auditKind) {
+          return false;
+        }
+        if (auditWatermark === 'free' && item.watermark !== false) {
+          return false;
+        }
+        if (auditWatermark === 'watermarked' && item.watermark !== true) {
+          return false;
+        }
+        if (!query) {
+          return true;
+        }
+        return [item.actorName, item.actorId, item.templateTitle, item.templateId, item.contentSummary, item.ipLocation, item.ipAddress, item.id]
+          .filter(Boolean)
+          .join(' ')
+          .toLocaleLowerCase('zh-CN')
+          .includes(query);
+      })
+      .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt));
+  }, [auditKind, auditQuery, auditWatermark, exports]);
 
   return (
     <section className="admin-materials-panel" aria-label="物料后台">
@@ -360,6 +401,19 @@ export function AdminMaterialsPanel() {
         </span>
       </div>
 
+      <SegmentedControl
+        ariaLabel="物料后台分区"
+        className="material-mode-switch material-variant-switch admin-materials-section-switch"
+        value={activeSection}
+        onChange={setActiveSection}
+        options={[
+          { value: 'templates', label: `模板 ${templates.length}` },
+          { value: 'drafts', label: `待审核物料 ${pendingDrafts.length}` },
+          { value: 'audits', label: `下载预览记录 ${exports.length}` },
+        ]}
+      />
+
+      {activeSection === 'templates' ? (
       <div className="admin-materials-list">
         {templates.length ? (
           templates.map((record) => {
@@ -401,7 +455,9 @@ export function AdminMaterialsPanel() {
           <p className="admin-content-empty">当前还没有模板，可直接新建模板草稿。</p>
         )}
       </div>
+      ) : null}
 
+      {activeSection === 'drafts' ? (
       <section className="admin-material-review-list" aria-labelledby="material-review-heading">
         <div className="admin-material-review-heading">
           <h2 id="material-review-heading">待审核物料</h2>
@@ -454,38 +510,98 @@ export function AdminMaterialsPanel() {
           <p className="admin-content-empty">当前没有待审核物料。</p>
         )}
       </section>
+      ) : null}
 
+      {activeSection === 'audits' ? (
       <section
         className="admin-material-review-list"
         aria-labelledby="material-export-audit-heading"
       >
         <div className="admin-material-review-heading">
-          <h2 id="material-export-audit-heading">最近下载</h2>
-          <span>{exports.length}</span>
+          <h2 id="material-export-audit-heading">下载与预览记录</h2>
+          <span>
+            {filteredExports.length} / {exports.length}
+          </span>
         </div>
-        {exports.length ? (
-          [...exports]
-            .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt))
-            .slice(0, 20)
-            .map((item) => (
+        <div className="admin-material-audit-toolbar">
+          <label className="admin-material-audit-search">
+            <span className="material-symbols-outlined" aria-hidden="true">
+              search
+            </span>
+            <input
+              type="search"
+              value={auditQuery}
+              placeholder="搜索用户、模板、内容、属地或图片 ID"
+              onChange={(event) => setAuditQuery(event.currentTarget.value)}
+            />
+          </label>
+          <label className="admin-material-audit-filter">
+            <span>类型</span>
+            <select
+              value={auditKind}
+              onChange={(event) =>
+                setAuditKind(event.currentTarget.value as 'all' | 'preview' | 'export')
+              }
+            >
+              <option value="all">全部</option>
+              <option value="preview">预览</option>
+              <option value="export">下载</option>
+            </select>
+          </label>
+          <label className="admin-material-audit-filter">
+            <span>水印</span>
+            <select
+              value={auditWatermark}
+              onChange={(event) =>
+                setAuditWatermark(
+                  event.currentTarget.value as 'all' | 'free' | 'watermarked',
+                )
+              }
+            >
+              <option value="all">全部</option>
+              <option value="free">无水印</option>
+              <option value="watermarked">带水印</option>
+            </select>
+          </label>
+        </div>
+        {filteredExports.length ? (
+          filteredExports.slice(0, 20).map((item) => (
               <article className="admin-material-draft" key={item.id}>
                 <div>
                   <strong>
-                    {templateVersionByKey.get(`${item.templateId}:${item.templateVersion}`)
-                      ?.title ?? item.templateId}{' '}
+                    {item.kind === 'preview' ? '预览' : '下载'} ·{' '}
+                    {item.templateTitle ??
+                      templateVersionByKey.get(
+                        `${item.templateId}:${item.templateVersion}`,
+                      )?.title ??
+                      item.templateId}{' '}
                     · v{item.templateVersion} · {item.outputWidthPx} × {item.outputHeightPx} px
+                    {item.contentSummary ? ` · ${item.contentSummary}` : ''}
                   </strong>
                   <small>
-                    下载者：{formatActor(item.actorId, actorById)} · 来源：
-                    {formatMaterialSource(item)} · {formatTime(item.requestedAt)}
+                    用户：{item.actorName || formatActor(item.actorId, actorById)} · IP：
+                    {item.ipLocation ?? '未知属地'}
+                    {item.ipAddress ? `（${item.ipAddress}）` : ''} · 来源：
+                    {formatMaterialSource(item)} · 图片 ID：{item.id.slice(-12)} ·{' '}
+                    {item.watermark === false
+                      ? '无水印'
+                      : item.watermark
+                        ? '带水印'
+                        : '水印未知'}{' '}
+                    · {formatTime(item.requestedAt)}
                   </small>
                 </div>
               </article>
             ))
         ) : (
-          <p className="admin-content-empty">当前没有下载记录。</p>
+          <p className="admin-content-empty">
+            {exports.length
+              ? '没有匹配的记录，试试放宽搜索或筛选条件。'
+              : '当前没有下载或预览记录。'}
+          </p>
         )}
       </section>
+      ) : null}
 
       {isEditorOpen ? (
         <div className="admin-material-editor-backdrop" role="presentation">

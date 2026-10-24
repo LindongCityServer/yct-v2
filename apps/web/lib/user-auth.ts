@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureYctUserLinkForLdpassSession } from './auth-workflow';
+import { resolveServerAccountVerified } from './local-admin';
 import { isSameOriginDocumentRequest } from './request-site-url';
 import { readRuntimeConfig } from './runtime-config';
 import { readYctServerSession } from './yct-server-session-store';
@@ -68,7 +69,8 @@ export async function requireActiveLdpassUser(
       userId: userLink?.id ?? `yct_user_${session.user.id}`,
       ldpassUserId: session.user.id,
       username: session.user.username,
-      serverAccountVerified: session.user.serverAccountVerified,
+      // 本地管理员在开发环境中直接视为已验证服务器账号。
+      serverAccountVerified: resolveServerAccountVerified(session.user),
       serverAccountName: session.user.serverAccountName,
     };
   } catch {

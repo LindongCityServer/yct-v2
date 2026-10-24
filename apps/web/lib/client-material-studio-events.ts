@@ -12,6 +12,8 @@ export interface MaterialStudioStateChangedPayload {
   hasPreview: boolean;
   isBusy: boolean;
   canExportProject: boolean;
+  /** 当前内容满足免审核条件，可直接下载无水印图片。 */
+  canDownloadWatermarkFree: boolean;
 }
 
 export interface MaterialStudioActionBlockedPayload {

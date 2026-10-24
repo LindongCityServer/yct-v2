@@ -25,6 +25,7 @@ const initialState: Omit<MaterialStudioStateChangedPayload, 'studioId'> = {
   hasPreview: false,
   isBusy: false,
   canExportProject: false,
+  canDownloadWatermarkFree: false,
 };
 
 export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: string }>) {
@@ -79,7 +80,12 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
     studioState.transitNetworkSource === 'server' &&
     accountInfo.accountStatus === 'active' &&
     accountInfo.serverAccountVerified !== true;
-  const showReviewBadge = isAnonymous || studioState.mode === 'manual' || serverAccountUnverified;
+  const showReviewBadge =
+    !studioState.canDownloadWatermarkFree &&
+    (isAnonymous || studioState.mode === 'manual' || serverAccountUnverified);
+  const downloadLabel = studioState.canDownloadWatermarkFree
+    ? t('materialStudio.downloadWatermarkFree')
+    : t('materialStudio.download');
 
   const requestLogin = () => {
     publishLoginRequired({ message: t('materialStudio.loginRequired'), durationMs: 0 });
@@ -170,15 +176,22 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
       ) : null}
       <button
         type="button"
-        className="icon-button is-primary"
-        aria-label={t('materialStudio.download')}
-        title={t('materialStudio.download')}
+        className={`icon-button is-primary${
+          studioState.canDownloadWatermarkFree ? ' material-watermark-free-download' : ''
+        }`}
+        aria-label={downloadLabel}
+        title={downloadLabel}
         disabled={studioState.isBusy}
         onClick={() => requestAction('download')}
       >
         <span className="material-symbols-outlined" aria-hidden="true">
           download
         </span>
+        {studioState.canDownloadWatermarkFree ? (
+          <span className="material-watermark-free-download-text">
+            {t('materialStudio.downloadWatermarkFree')}
+          </span>
+        ) : null}
       </button>
     </div>
   );

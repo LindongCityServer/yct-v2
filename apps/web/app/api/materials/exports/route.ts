@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { materialExportRequestSchema } from '@yct/schemas';
 import { requireActiveLdpassUser } from '../../../../lib/user-auth';
 import { prepareMaterialExport } from '../../../../lib/material-workflow';
+import { resolveClientIp } from '../../../../lib/request-client-ip';
+import { resolveClientIpLocation } from '../../../../lib/client-ip-location';
 
 export async function POST(request: NextRequest) {
   const user = await requireActiveLdpassUser(request);
@@ -19,9 +21,14 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+  const ipAddress = resolveClientIp(request.headers);
+  const ipLocation = await resolveClientIpLocation(ipAddress);
   const result = await prepareMaterialExport({
     request: parsed.data,
     actorId: user.ldpassUserId,
+    actorName: user.username,
+    ipAddress,
+    ipLocation,
     serverAccountVerified: user.serverAccountVerified,
   });
   if (!result.ok) {

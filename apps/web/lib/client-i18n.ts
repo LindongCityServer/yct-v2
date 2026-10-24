@@ -1050,6 +1050,7 @@ export type CommonMessageKey =
   | 'materialStudio.submitReviewManualHint'
   | 'materialStudio.exportProject'
   | 'materialStudio.download'
+  | 'materialStudio.downloadWatermarkFree'
   | 'materialStudio.loginRequired'
   | 'materialStudio.serverUnverified'
   | 'materialStudio.serverUnverifiedHint'
@@ -2848,6 +2849,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'materialStudio.submitReviewManualHint': '提交审核；审核通过后可下载无水印图片',
     'materialStudio.exportProject': '导出工程文件',
     'materialStudio.download': '下载图片',
+    'materialStudio.downloadWatermarkFree': '下载无水印图片',
     'materialStudio.loginRequired': '登录后可提交审核并下载无水印图片。',
     'materialStudio.serverUnverified': '服务器账号未验证',
     'materialStudio.serverUnverifiedHint': '请在账号设置中验证服务器账号后下载无水印图片',
@@ -4663,6 +4665,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'materialStudio.submitReviewManualHint': '提交審核；審核通過後可下載無水印圖片',
     'materialStudio.exportProject': '匯出工程檔案',
     'materialStudio.download': '下載圖片',
+    'materialStudio.downloadWatermarkFree': '下載無水印圖片',
     'materialStudio.loginRequired': '登入後可提交審核並下載無水印圖片。',
     'materialStudio.serverUnverified': '伺服器帳號未驗證',
     'materialStudio.serverUnverifiedHint': '請在帳號設定中驗證伺服器帳號後下載無水印圖片',
@@ -6509,6 +6512,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       'Submit for review; download images without watermark once approved',
     'materialStudio.exportProject': 'Export project files',
     'materialStudio.download': 'Download image',
+    'materialStudio.downloadWatermarkFree': 'Download without watermark',
     'materialStudio.loginRequired':
       'Sign in to submit for review and download images without watermark.',
     'materialStudio.serverUnverified': 'Server account not verified',

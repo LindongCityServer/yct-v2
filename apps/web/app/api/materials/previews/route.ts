@@ -3,6 +3,7 @@ import { materialPreviewRequestSchema } from '@yct/schemas';
 import { requireActiveLdpassUser } from '../../../../lib/user-auth';
 import { prepareMaterialPreview } from '../../../../lib/material-workflow';
 import { resolveClientIp } from '../../../../lib/request-client-ip';
+import { resolveClientIpLocation } from '../../../../lib/client-ip-location';
 
 export async function POST(request: NextRequest) {
   const parsed = materialPreviewRequestSchema.safeParse(await request.json());
@@ -17,10 +18,16 @@ export async function POST(request: NextRequest) {
     );
   }
   const user = await requireActiveLdpassUser(request);
+  const ipAddress = resolveClientIp(request.headers);
+  // 自动预览很频繁，属地查询用更短超时；结果会缓存 6 小时。
+  const ipLocation = await resolveClientIpLocation(ipAddress, 800);
   const result = await prepareMaterialPreview({
     request: parsed.data,
     actor: user.ok ? { id: user.ldpassUserId, label: user.username } : undefined,
-    anonymousLabel: resolveClientIp(request.headers),
+    anonymousLabel: ipAddress,
+    ipAddress,
+    ipLocation,
+    signal: request.signal,
   });
   if (!result.ok) {
     return NextResponse.json(result, { status: result.status ?? 400 });
@@ -38,6 +45,7 @@ export async function POST(request: NextRequest) {
       'X-Yct-Material-Preview-Width': String(result.widthPx),
       'X-Yct-Material-Preview-Height': String(result.heightPx),
       'X-Yct-Material-Preview-Id': result.previewId ?? '',
+      'X-Yct-Material-Content-Summary': encodeURIComponent(result.contentSummary ?? ''),
     },
   });
 }

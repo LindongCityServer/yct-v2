@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveYctAdminMembershipForLdpassUser } from '../../../../lib/admin-identity';
 import { readAdminPendingReviewSummary } from '../../../../lib/admin-pending-review-summary';
 import { markResponseNoStore } from '../../../../lib/http-cache';
+import { resolveServerAccountVerified } from '../../../../lib/local-admin';
 import { readRuntimeConfig } from '../../../../lib/runtime-config';
 import { countPendingTicketOrdersForLdpassUser } from '../../../../lib/ticket-order-workflow';
 import { readYctServerSession } from '../../../../lib/yct-server-session-store';
@@ -109,7 +110,7 @@ export async function GET(request: NextRequest) {
           accountStatus: 'active',
           username: identity?.username ?? session.user.username,
           avatarUrl: identity?.avatarUrl,
-          serverAccountVerified: session.user.serverAccountVerified,
+          serverAccountVerified: resolveServerAccountVerified(session.user),
           badge:
             totalBadgeCount > 0
               ? {

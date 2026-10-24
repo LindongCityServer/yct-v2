@@ -17,7 +17,10 @@ import {
   publishMaterialStudioState,
   subscribeMaterialStudioActions,
 } from '../lib/client-material-studio-events';
-import { dispatchMetroWayfindingCompositionAction } from '../lib/client-metro-wayfinding-events';
+import {
+  dispatchMetroWayfindingCompositionAction,
+  subscribeMetroWayfindingImportLifecycleEvents,
+} from '../lib/client-metro-wayfinding-events';
 import {
   publishTransitNetworkLineNameEditorRequested,
   subscribeTransitNetworkProjectSnapshotChanged,
@@ -26,6 +29,7 @@ import {
 } from '../lib/client-transit-network-events';
 import {
   buildMetroWayfindingProjectFileName,
+  buildMetroWayfindingTextSignature,
   createMetroWayfindingProjectFile,
   METRO_WAYFINDING_TEMPLATE_ID,
   parseMetroWayfindingLayout,
@@ -305,6 +309,16 @@ export function MaterialStudioPanel({
   const [metroExampleLineId, setMetroExampleLineId] = useState('');
   const [metroLineMapProjectLineKey, setMetroLineMapProjectLineKey] = useState('');
   const [metroLineMapProjectNodeId, setMetroLineMapProjectNodeId] = useState('');
+  /** 套用示例 / 导入外部模板时的原始内容，用于「未修改」免审核判断。 */
+  const [wayfindingBaseline, setWayfindingBaseline] = useState<{
+    layout: string;
+    widthM: number;
+    heightM: number;
+  } | null>(null);
+  const [accountSession, setAccountSession] = useState<{
+    accountStatus?: 'not_configured' | 'anonymous' | 'active' | 'readonly' | 'unavailable';
+    serverAccountVerified?: boolean;
+  }>({});
 
   const templates = useMemo(
     () =>
@@ -362,6 +376,18 @@ export function MaterialStudioPanel({
       : compactCanvasControls
         ? 'none'
         : 'full';
+  // 地铁导视：套用示例 / 导入外部模板后未改文本；只改尺寸、箭头、图标、空白等都不算修改。
+  const serverAccountReady =
+    accountSession.accountStatus === 'active' &&
+    accountSession.serverAccountVerified === true;
+  const wayfindingTemplateUnmodified =
+    isMetroWayfinding &&
+    wayfindingBaseline !== null &&
+    buildMetroWayfindingTextSignature(input.layout ?? '') ===
+      buildMetroWayfindingTextSignature(wayfindingBaseline.layout);
+  // 服务器线网 / 导入项目模式导出本身就是无水印；地铁导视需额外满足未修改文本。
+  const canDownloadWatermarkFree =
+    serverAccountReady && (mode === 'server' || wayfindingTemplateUnmodified);
   // 宽屏（≥960px）时预览区以独立面板常驻页面，此时把插入建议/宽度警告下移到预览下方。
   // 窄屏时预览退化为弹窗，页面上没有预览面板可依附，改由编辑器本体就地渲染。
   const isMetroInspectorDetached = isMetroWayfinding && !isPreviewDialogViewport;
@@ -1308,14 +1334,59 @@ export function MaterialStudioPanel({
     }
   }, [selected?.id, selectedEntryVariants, stationSupportsTerminalVariant]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(appPath('/api/account/status'), { cache: 'no-store' })
+      .then(async (response) =>
+        response.ok
+          ? ((await response.json()) as {
+              accountStatus?: 'not_configured' | 'anonymous' | 'active' | 'readonly' | 'unavailable';
+              serverAccountVerified?: boolean;
+            })
+          : {},
+      )
+      .then((payload) => {
+        if (!cancelled) {
+          setAccountSession(payload);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 导入外部模板后记录基线；之后任何 layout / 画布尺寸改动都会让「未修改」标签失效。
+  useEffect(
+    () =>
+      subscribeMetroWayfindingImportLifecycleEvents(METRO_WAYFINDING_EDITOR_ID, (event) => {
+        if (event.type !== 'MetroWayfindingProjectImported') {
+          return;
+        }
+        const preview = event.payload.preview;
+        setWayfindingBaseline({
+          layout: serializeMetroWayfindingLayout(preview.layout),
+          widthM: preview.canvas.widthM,
+          heightM: preview.canvas.heightM,
+        });
+      }),
+    [],
+  );
+
   const loadMetroWayfindingExample = (example: MetroWayfindingExample) => {
     if (!isMetroWayfinding) return;
+    const layout = serializeMetroWayfindingLayout(example.project.layout);
     setMode('manual');
     setInput((current) => ({
       ...current,
-      layout: serializeMetroWayfindingLayout(example.project.layout),
+      layout,
     }));
     setCanvas({ ...example.project.canvas });
+    setWayfindingBaseline({
+      layout,
+      widthM: example.project.canvas.widthM,
+      heightM: example.project.canvas.heightM,
+    });
     clearPreview();
   };
 
@@ -1728,10 +1799,19 @@ export function MaterialStudioPanel({
     if (!response) {
       return;
     }
-    await downloadBlob(
-      response,
-      `${selected?.template.title ?? title}${t('materialStudio.watermarkedPreviewSuffix')}.png`,
-    );
+    const rawSummary = response.headers.get('X-Yct-Material-Content-Summary') ?? '';
+    let summary = '';
+    try {
+      summary = decodeURIComponent(rawSummary);
+    } catch {
+      summary = rawSummary;
+    }
+    const previewId = response.headers.get('X-Yct-Material-Preview-Id')?.trim() ?? '';
+    const fallbackFileName =
+      [selected?.template.title ?? title, summary, previewId.slice(-8)]
+        .filter(Boolean)
+        .join('_') + `${t('materialStudio.watermarkedPreviewSuffix')}.png`;
+    await downloadBlob(response, fallbackFileName);
   };
 
   const requestPreview = async () => {
@@ -1864,7 +1944,46 @@ export function MaterialStudioPanel({
     }
   };
 
+  const exportUnmodifiedTemplate = async () => {
+    if (!requireOnline()) {
+      return;
+    }
+    if (!selected || !activeCanvas || !wayfindingBaseline) {
+      blockAction(t('materialStudio.downloadFailed'));
+      return;
+    }
+    setIsBusy(true);
+    try {
+      const response = await fetch(appPath('/api/materials/exports'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'manual',
+          templateId: selected.id,
+          templateVersion: selected.template.version,
+          canvas: activeCanvas,
+          input,
+          unmodifiedTemplateBaseline: wayfindingBaseline,
+        }),
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
+        blockAction(data.message ?? t('materialStudio.downloadFailed'));
+        return;
+      }
+      await downloadBlob(response);
+    } catch {
+      blockAction(t('materialStudio.downloadNetworkError'));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const exportManualDraft = async () => {
+    if (canDownloadWatermarkFree) {
+      await exportUnmodifiedTemplate();
+      return;
+    }
     if (!existingDraft) {
       setIsBusy(true);
       try {
@@ -1942,8 +2061,17 @@ export function MaterialStudioPanel({
       hasPreview: Boolean(previewUrl),
       isBusy,
       canExportProject: isMetroWayfinding && mode === 'manual',
+      canDownloadWatermarkFree,
     });
-  }, [isBusy, isMetroWayfinding, mode, previewUrl, studioId, transitNetworkSource]);
+  }, [
+    canDownloadWatermarkFree,
+    isBusy,
+    isMetroWayfinding,
+    mode,
+    previewUrl,
+    studioId,
+    transitNetworkSource,
+  ]);
 
   useEffect(() =>
     subscribeMaterialStudioActions(studioId, (action) => {
@@ -3088,7 +3216,6 @@ function CanvasEditor({
           max="4096"
           step="1"
           value={canvas.tileSizePx}
-          disabled={isMetroWayfinding}
           onChange={(event) => onChange('tileSizePx', Number(event.currentTarget.value))}
         />
       </label>

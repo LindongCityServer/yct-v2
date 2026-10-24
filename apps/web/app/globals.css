@@ -6974,6 +6974,68 @@ img.map-player-list-avatar.is-offline {
   grid-auto-columns: minmax(0, 1fr);
 }
 
+/* 物料后台：模板 / 待审核物料 / 下载预览记录三块的分段切换。 */
+.admin-materials-section-switch {
+  max-width: 720px;
+  margin-block: var(--yct-space-1) var(--yct-space-3);
+}
+
+/* 下载预览记录的搜索与筛选工具条。 */
+.admin-material-audit-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--yct-space-2);
+  margin-bottom: var(--yct-space-2);
+}
+
+.admin-material-audit-search {
+  display: flex;
+  flex: 1 1 260px;
+  align-items: center;
+  gap: 6px;
+  min-width: 200px;
+  padding-inline: 10px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+}
+
+.admin-material-audit-search .material-symbols-outlined {
+  font-size: 18px;
+  color: var(--yct-color-text-muted);
+}
+
+.admin-material-audit-search input {
+  flex: 1;
+  min-width: 0;
+  padding-block: 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.admin-material-audit-filter {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+}
+
+.admin-material-audit-filter select {
+  min-height: 36px;
+  padding-inline: 10px 26px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+  font: inherit;
+  font-size: 13px;
+}
+
 .material-mode-switch button,
 .material-action-row button,
 .material-history-item button,
@@ -9441,6 +9503,17 @@ img.map-player-list-avatar.is-offline {
 
   .material-studio-topbar-actions .icon-button {
     flex: 0 0 40px;
+  }
+
+  .material-studio-topbar-actions .icon-button.material-watermark-free-download {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    padding-inline: 10px 14px;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 750;
+    white-space: nowrap;
   }
 
   :root[data-material-mode='advanced'] .material-studio-topbar-actions {
@@ -22382,6 +22455,27 @@ button.material-studio-review-badge {
 .secondary-topbar .secondary-actions .material-studio-topbar-actions .icon-button.is-primary {
   background: var(--yct-color-primary);
   color: #ffffff;
+}
+
+/* 免审核无水印下载：按钮直接显示文字提示，而不是只靠 hover title。 */
+.secondary-topbar
+  .secondary-actions
+  .material-studio-topbar-actions
+  .icon-button.material-watermark-free-download {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  min-width: 40px;
+  padding-inline: 10px 14px;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.material-watermark-free-download-text {
+  line-height: 1;
+  letter-spacing: 0.01em;
 }
 
 .secondary-topbar

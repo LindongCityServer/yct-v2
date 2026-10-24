@@ -1528,9 +1528,20 @@ export interface MaterialDraft {
 
 export interface MaterialExportAuditRecord {
   id: string;
+  /** preview = 预览出图，export = 无水印下载；历史记录按 export 处理。 */
+  kind?: 'preview' | 'export';
   actorId: string;
+  actorName?: string;
+  ipAddress?: string;
+  ipLocation?: string;
   templateId: string;
   templateVersion: number;
+  /** 模板 / 版式名称，便于后台直接辨认。 */
+  templateTitle?: string;
+  /** 内容摘要，例如站名、开往方向、下一站等。 */
+  contentSummary?: string;
+  /** 该次输出是否带预览水印。 */
+  watermark?: boolean;
   sourceKind: MaterialSourceKind;
   sourceRef?: string;
   draftId?: string;
