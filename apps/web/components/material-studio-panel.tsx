@@ -32,6 +32,7 @@ import {
   serializeMetroWayfindingLayout,
   serializeMetroWayfindingProjectFile,
 } from '../lib/metro-wayfinding';
+import { METRO_PLATFORM_SIGN_TEMPLATE_ID } from '../lib/material-template-ids';
 import {
   buildMetroWayfindingTemplateExamples,
   type MetroWayfindingExample,
@@ -55,6 +56,14 @@ import { TransitNetworkSourceControl } from './transit-network-source-control';
 
 type MaterialFamily = 'road_sign' | 'address_sign' | 'bus_stop' | 'metro_line' | 'custom';
 
+/** 二级入口：一个「版式」下按「样式」（新版 / 旧版）继续切换。 */
+export interface MaterialTemplateLayoutGroup {
+  id: string;
+  label?: string;
+  labelKey?: CommonMessageKey;
+  templateIds: string[];
+}
+
 /** 把多套版式收进同一个模板入口，入口下方再用「版式 / 样式」切换具体模板。 */
 export interface MaterialTemplateGroup {
   id: string;
@@ -63,6 +72,11 @@ export interface MaterialTemplateGroup {
   templateIds: string[];
   variantLabel?: string;
   variantLabelKey?: CommonMessageKey;
+  /** 第一维标签，例如「版式」；配合 `layoutGroups` 使用。 */
+  layoutLabel?: string;
+  layoutLabelKey?: CommonMessageKey;
+  /** 第一维选项：每个版式下各自包含新版 / 旧版模板。 */
+  layoutGroups?: MaterialTemplateLayoutGroup[];
 }
 type MaterialServerSource = 'transit_line' | 'transit_station' | 'map_location' | 'road_coordinate';
 
@@ -339,8 +353,15 @@ export function MaterialStudioPanel({
   const activeCanvas = canvas ?? selected?.template.defaultCanvas ?? null;
   const isMetroWayfinding = selected?.id === METRO_WAYFINDING_TEMPLATE_ID;
   const isMetroLineMap = selected?.template.family === 'metro_line';
-  const canvasSizeMode: 'full' | 'length' | 'none' =
-    isMetroWayfinding || isMetroLineMap ? 'length' : compactCanvasControls ? 'none' : 'full';
+  // 站台站名标志是固定 512×512 的方形版面，不提供宽高或长度调节。
+  const isMetroPlatformSign = selected?.id === METRO_PLATFORM_SIGN_TEMPLATE_ID;
+  const canvasSizeMode: 'full' | 'length' | 'none' = isMetroPlatformSign
+    ? 'none'
+    : isMetroWayfinding || isMetroLineMap
+      ? 'length'
+      : compactCanvasControls
+        ? 'none'
+        : 'full';
   // 宽屏（≥960px）时预览区以独立面板常驻页面，此时把插入建议/宽度警告下移到预览下方。
   // 窄屏时预览退化为弹窗，页面上没有预览面板可依附，改由编辑器本体就地渲染。
   const isMetroInspectorDetached = isMetroWayfinding && !isPreviewDialogViewport;
@@ -1237,6 +1258,40 @@ export function MaterialStudioPanel({
     clearPreview();
   };
 
+  // 「版式」与「样式」是两个独立维度：切换版式时尽量保留当前样式（新版 / 旧版）。
+  const layoutSwitchLabel = selectedEntry?.layoutLabelKey
+    ? t(selectedEntry.layoutLabelKey)
+    : (selectedEntry?.layoutLabel ?? t('materialStudio.variant'));
+  const availableLayoutGroups = selectedEntry?.layoutGroups?.filter((group) =>
+    group.templateIds.some((templateId) =>
+      availableEntryVariants?.some((item) => item.id === templateId),
+    ),
+  );
+  const activeLayoutGroup = availableLayoutGroups?.find((group) =>
+    group.templateIds.includes(selected?.id ?? ''),
+  );
+  const layoutStyleVariants = activeLayoutGroup
+    ? availableEntryVariants?.filter((item) => activeLayoutGroup.templateIds.includes(item.id))
+    : availableEntryVariants;
+  const selectLayoutGroup = (group: MaterialTemplateLayoutGroup) => {
+    if (!availableEntryVariants?.length) {
+      return;
+    }
+    const styleIndex = activeLayoutGroup
+      ? Math.max(activeLayoutGroup.templateIds.indexOf(selected?.id ?? ''), 0)
+      : 0;
+    const candidates = [group.templateIds[styleIndex], ...group.templateIds];
+    const next = candidates
+      .map(
+        (templateId) =>
+          templateId && availableEntryVariants.find((item) => item.id === templateId),
+      )
+      .find((item): item is PublishedMaterialTemplate => Boolean(item));
+    if (next) {
+      selectTemplate(next.id);
+    }
+  };
+
   useEffect(() => {
     if (
       stationSupportsTerminalVariant ||
@@ -2034,7 +2089,29 @@ export function MaterialStudioPanel({
         </aside>
 
         <div className="material-studio-editor">
-          {availableEntryVariants && availableEntryVariants.length > 1 ? (
+          {availableLayoutGroups && availableLayoutGroups.length > 1 ? (
+            <div className="material-field">
+              <span>{layoutSwitchLabel}</span>
+              <div
+                className="material-mode-switch material-variant-switch"
+                role="group"
+                aria-label={layoutSwitchLabel}
+              >
+                {availableLayoutGroups.map((group) => (
+                  <button
+                    key={group.id}
+                    className={activeLayoutGroup?.id === group.id ? 'is-active' : ''}
+                    type="button"
+                    onClick={() => selectLayoutGroup(group)}
+                    disabled={isBusy}
+                  >
+                    {group.labelKey ? t(group.labelKey) : (group.label ?? group.id)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {layoutStyleVariants && layoutStyleVariants.length > 1 ? (
             <div className="material-field">
               <span>{selectedEntryVariantLabel}</span>
               <div
@@ -2042,7 +2119,7 @@ export function MaterialStudioPanel({
                 role="group"
                 aria-label={selectedEntryVariantLabel}
               >
-                {availableEntryVariants.map((item) => (
+                {layoutStyleVariants.map((item) => (
                   <button
                     key={item.id}
                     className={selected?.id === item.id ? 'is-active' : ''}

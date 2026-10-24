@@ -7,3 +7,12 @@ export const BUS_STOP_HORIZONTAL_DETAIL_TEMPLATE_ID = 'system_material_bus_stop_
 /** 地铁横板线路图：新版 / 旧版共用同一个入口，通过样式切换。 */
 export const METRO_LINE_MAP_NEW_TEMPLATE_ID = 'system_material_metro_line_map_new';
 export const METRO_LINE_MAP_OLD_TEMPLATE_ID = 'system_material_metro_line_map_old';
+
+/** 地铁横板线路图的另外两种版式：站名、方向及下一站，各自都有新版 / 旧版。 */
+export const METRO_STATION_NAME_NEW_TEMPLATE_ID = 'system_material_metro_station_name_new';
+export const METRO_STATION_NAME_OLD_TEMPLATE_ID = 'system_material_metro_station_name_old';
+export const METRO_DIRECTION_NEW_TEMPLATE_ID = 'system_material_metro_direction_new';
+export const METRO_DIRECTION_OLD_TEMPLATE_ID = 'system_material_metro_direction_old';
+
+/** 站台站名标志：512×512 的方形站台站名牌。 */
+export const METRO_PLATFORM_SIGN_TEMPLATE_ID = 'system_material_metro_platform_sign';

@@ -6,7 +6,7 @@ import type {
   TransitLineSegmentPathSnapshot,
   TransitOperationStatus,
 } from '@yct/contracts';
-import { toUppercaseRoadPinyin } from './chinese-pinyin';
+import { toUppercasePinyin, toUppercaseRoadPinyin } from './chinese-pinyin';
 import {
   findMaterialRoadAtCoordinate,
   listMaterialMapMarkers,
@@ -31,6 +31,7 @@ import {
   type MaterialTransitNetworkRoute,
 } from './rmp-transit-network';
 import { extractMetroWayfindingLineNumber } from './metro-wayfinding';
+import { resolveMetroLineEnglishName } from './metro-wayfinding-import';
 import {
   buildVisualRoadGraph,
   resolveVisualRoute,
@@ -224,6 +225,31 @@ export async function listMaterialTransitStations(): Promise<MaterialTransitStat
   );
 }
 
+/** 方向/站名版式的公共派生：按行车方向取终点与下一站。 */
+function resolveMetroSignStations(input: {
+  stationNames: string[];
+  stationPinyin: string[];
+  currentIndex: number;
+  travelDirection: 'first' | 'last';
+}): {
+  terminalName: string;
+  terminalNamePinyin: string;
+  nextStationName: string;
+  nextStationPinyin: string;
+} {
+  const lastIndex = Math.max(input.stationNames.length - 1, 0);
+  const index = Math.min(Math.max(input.currentIndex, 0), lastIndex);
+  const terminalIndex = input.travelDirection === 'first' ? 0 : lastIndex;
+  const nextIndex = input.travelDirection === 'first' ? index - 1 : index + 1;
+  const isTerminal = nextIndex < 0 || nextIndex > lastIndex;
+  return {
+    terminalName: input.stationNames[terminalIndex] ?? '',
+    terminalNamePinyin: input.stationPinyin[terminalIndex] ?? '',
+    nextStationName: isTerminal ? '终点站' : (input.stationNames[nextIndex] ?? ''),
+    nextStationPinyin: isTerminal ? 'Terminal' : (input.stationPinyin[nextIndex] ?? ''),
+  };
+}
+
 export async function resolveTransitLineMaterialInput(input: {
   lineId: string;
   stationSourceId?: string;
@@ -231,6 +257,8 @@ export async function resolveTransitLineMaterialInput(input: {
   networkNodeId?: string;
   fields: MaterialTemplateField[];
   networkGeometry?: MaterialTransitNetworkSnapshot;
+  /** 用户在数据来源模式下显式覆盖的字段（如行车方向），参与下一站与终点派生。 */
+  overrides?: Record<string, string>;
 }): Promise<{ values: Record<string, string>; sourceRef: string }> {
   if (input.networkLineKey && input.networkGeometry) {
     return resolveProjectTransitLineMaterialInput({
@@ -238,6 +266,7 @@ export async function resolveTransitLineMaterialInput(input: {
       nodeId: input.networkNodeId,
       fields: input.fields,
       networkGeometry: input.networkGeometry,
+      overrides: input.overrides,
     });
   }
   const overview = await readMaterialTransitOverview();
@@ -261,6 +290,26 @@ export async function resolveTransitLineMaterialInput(input: {
     roadNameEn: '',
     direction: `${line.firstStationName ?? ''} - ${destination}`.trim(),
   };
+  // 站名 / 方向版式需要的派生值：拼音、下一站、开往终点与线路编号。
+  const travelDirection = input.overrides?.travelDirection === 'first' ? 'first' : 'last';
+  const serviceStationPinyin = line.stationNames.map((name) => toUppercasePinyin(name));
+  const lineDisplay = parseMaterialTransitLineDisplay(line.name);
+  Object.assign(
+    candidates,
+    resolveMetroSignStations({
+      stationNames: line.stationNames,
+      stationPinyin: serviceStationPinyin,
+      currentIndex: Math.max(selectedStop ? line.stationStops.indexOf(selectedStop) : 0, 0),
+      travelDirection,
+    }),
+    {
+      stationNamePinyin: toUppercasePinyin(candidates.stationName ?? ''),
+      lineLabel: lineDisplay.number || line.name,
+      lineEnglishLabel: lineDisplay.number
+        ? `Line ${lineDisplay.number}`
+        : resolveMetroLineEnglishName(line.name) || line.name,
+    },
+  );
   const networkLineMatch = input.networkGeometry
     ? findMaterialTransitNetworkLine(input.networkGeometry, {
         name: line.name,
@@ -294,6 +343,7 @@ function resolveProjectTransitLineMaterialInput(input: {
   nodeId?: string;
   fields: MaterialTemplateField[];
   networkGeometry: MaterialTransitNetworkSnapshot;
+  overrides?: Record<string, string>;
 }): { values: Record<string, string>; sourceRef: string } {
   const line = findMaterialTransitNetworkLineByKey(input.networkGeometry, input.lineKey);
   if (!line) {
@@ -348,6 +398,31 @@ function resolveProjectTransitLineMaterialInput(input: {
     currentStationIndex: String(currentStationIndex),
     transferLines,
   };
+  // 站名 / 方向版式：拼音优先使用 RMP 的第二语言名（意译英文），缺失时才回退拼音。
+  const stationPinyin = stations.map((station) => {
+    const node = nodeById.get(station.id);
+    return node?.names[1] ?? toUppercasePinyin(node?.names[0] ?? station.name);
+  });
+  const lineDisplay = parseMaterialTransitLineDisplay(line.lineName ?? line.lineKey);
+  Object.assign(
+    candidates,
+    resolveMetroSignStations({
+      stationNames: stations.map((station) => station.name),
+      stationPinyin,
+      currentIndex: currentStationIndex,
+      travelDirection: input.overrides?.travelDirection === 'first' ? 'first' : 'last',
+    }),
+    {
+      stationNamePinyin:
+        stationPinyin[currentStationIndex] ?? toUppercasePinyin(candidates.stationName ?? ''),
+      lineLabel: lineDisplay.number || line.lineName || line.lineKey,
+      lineEnglishLabel:
+        line.secondaryLineName ||
+        (lineDisplay.number
+          ? `Line ${lineDisplay.number}`
+          : resolveMetroLineEnglishName(line.lineName ?? '') || line.lineName || line.lineKey),
+    },
+  );
   return {
     values: mapTemplateFields(input.fields, candidates),
     sourceRef: `transit_network_project_line:v${input.networkGeometry.version};line=${input.lineKey};station=${input.nodeId ?? ''}`,

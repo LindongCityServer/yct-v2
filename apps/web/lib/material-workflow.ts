@@ -560,6 +560,7 @@ async function resolveMaterialExportSource(
       source: request.source,
       fields: template.template.fields,
       networkGeometry: request.networkGeometry,
+      overrides: request.input ?? {},
     });
     return {
       ok: true,
@@ -622,6 +623,7 @@ async function resolveMaterialPreviewSource(request: MaterialPreviewRequestInput
       source: request.source,
       fields: template.template.fields,
       networkGeometry: request.networkGeometry,
+      overrides: request.input ?? {},
     });
     return {
       ok: true,
@@ -651,6 +653,8 @@ async function resolveServerMaterialInput(input: {
   source: MaterialServerSourceInput;
   fields: MaterialTemplateVersion['fields'];
   networkGeometry?: MaterialPreviewRequestInput['networkGeometry'];
+  /** 用户覆盖值：派生下一站、终点等依赖行车方向的字段时需要提前读取。 */
+  overrides?: Record<string, string>;
 }): Promise<{
   sourceKind: 'transit_line' | 'transit_station' | 'map_location' | 'road_coordinate';
   values: Record<string, string>;
@@ -664,6 +668,7 @@ async function resolveServerMaterialInput(input: {
       networkNodeId: input.source.networkNodeId,
       fields: input.fields,
       networkGeometry: input.networkGeometry,
+      overrides: input.overrides,
     });
     return { ...resolved, sourceKind: 'transit_line' };
   }

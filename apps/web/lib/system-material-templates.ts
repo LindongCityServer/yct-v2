@@ -2,8 +2,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { MaterialTemplateRecord, MaterialTemplateVersion } from '@yct/contracts';
 import {
+  METRO_DIRECTION_NEW_TEMPLATE_ID,
+  METRO_DIRECTION_OLD_TEMPLATE_ID,
   METRO_LINE_MAP_NEW_TEMPLATE_ID,
   METRO_LINE_MAP_OLD_TEMPLATE_ID,
+  METRO_PLATFORM_SIGN_TEMPLATE_ID,
+  METRO_STATION_NAME_NEW_TEMPLATE_ID,
+  METRO_STATION_NAME_OLD_TEMPLATE_ID,
 } from './material-template-ids';
 
 const systemActorId = 'system';
@@ -153,6 +158,178 @@ function createMetroLineMapFields(
       kind: 'text',
       maxLength: 2000,
       serverOverride: true,
+    },
+  ];
+}
+
+/** 地铁站名版式（新版 / 旧版）：居中站名 + 拼音 + 底部线路色条。 */
+function createMetroStationNameFields(
+  renderer: 'metro_station_name_modern' | 'metro_station_name_classic',
+): MaterialTemplateVersion['fields'] {
+  return [
+    {
+      key: 'accentColor',
+      label: '线路颜色',
+      kind: 'color',
+      required: true,
+      defaultValue: '#57D33E',
+    },
+    {
+      key: 'stationName',
+      label: '站名',
+      kind: 'text',
+      required: true,
+      maxLength: 60,
+      glyph: {
+        renderer,
+        layoutWidth: 576,
+        layoutHeight: 128,
+        colorFieldKey: 'accentColor',
+      },
+    },
+    {
+      key: 'stationNamePinyin',
+      label: '站名拼音 / 英文名（留空则不显示）',
+      kind: 'text',
+      maxLength: 120,
+    },
+  ];
+}
+
+/** 地铁方向及下一站版式（新版 / 旧版）：箭头 + 开往方向 + 线路标识 + 下一站。 */
+function createMetroDirectionFields(
+  renderer: 'metro_direction_modern' | 'metro_direction_classic',
+): MaterialTemplateVersion['fields'] {
+  return [
+    {
+      key: 'accentColor',
+      label: '线路颜色',
+      kind: 'color',
+      required: true,
+      defaultValue: '#57D33E',
+    },
+    {
+      key: 'nextStationName',
+      label: '下一站站名',
+      kind: 'text',
+      maxLength: 60,
+      glyph: {
+        renderer,
+        layoutWidth: 576,
+        layoutHeight: 128,
+        colorFieldKey: 'accentColor',
+      },
+    },
+    {
+      key: 'nextStationPinyin',
+      label: '下一站拼音 / 英文名',
+      kind: 'text',
+      maxLength: 120,
+    },
+    {
+      key: 'terminalName',
+      label: '开往终点（中文）',
+      kind: 'text',
+      maxLength: 60,
+    },
+    {
+      key: 'terminalNamePinyin',
+      label: '开往终点拼音 / 英文名',
+      kind: 'text',
+      maxLength: 120,
+    },
+    {
+      key: 'lineLabel',
+      label: '线路编号',
+      kind: 'text',
+      required: true,
+      maxLength: 16,
+    },
+    {
+      key: 'lineEnglishLabel',
+      label: '线路英文名（如 Line 10）',
+      kind: 'text',
+      maxLength: 60,
+    },
+    {
+      key: 'travelDirection',
+      label: '行车方向（数据来源时决定下一站与开往终点）',
+      kind: 'select',
+      required: true,
+      defaultValue: 'last',
+      serverOverride: true,
+      options: [
+        { value: 'last', label: '开往末站' },
+        { value: 'first', label: '开往首站' },
+      ],
+    },
+    {
+      key: 'doorDirection',
+      label: '开门方向（箭头朝向）',
+      kind: 'select',
+      required: true,
+      defaultValue: 'left',
+      serverOverride: true,
+      options: [
+        { value: 'left', label: '左侧开门' },
+        { value: 'right', label: '右侧开门' },
+      ],
+    },
+  ];
+}
+
+/** 站台站名标志（512×512）：数据来源模式只保留方向可覆盖。 */
+function createMetroPlatformSignFields(): MaterialTemplateVersion['fields'] {
+  return [
+    {
+      key: 'accentColor',
+      label: '线路颜色',
+      kind: 'color',
+      required: true,
+      defaultValue: '#EC6941',
+    },
+    {
+      key: 'stationName',
+      label: '站名',
+      kind: 'text',
+      required: true,
+      maxLength: 60,
+      glyph: {
+        renderer: 'metro_platform_sign',
+        layoutWidth: 512,
+        layoutHeight: 512,
+        colorFieldKey: 'accentColor',
+      },
+    },
+    {
+      key: 'stationNamePinyin',
+      label: '站名拼音 / 英文名',
+      kind: 'text',
+      maxLength: 120,
+    },
+    {
+      key: 'nextStationName',
+      label: '下一站站名',
+      kind: 'text',
+      maxLength: 60,
+    },
+    {
+      key: 'nextStationPinyin',
+      label: '下一站拼音 / 英文名',
+      kind: 'text',
+      maxLength: 120,
+    },
+    {
+      key: 'travelDirection',
+      label: '方向',
+      kind: 'select',
+      required: true,
+      defaultValue: 'last',
+      serverOverride: true,
+      options: [
+        { value: 'last', label: '开往末站' },
+        { value: 'first', label: '开往首站' },
+      ],
     },
   ];
 }
@@ -840,6 +1017,146 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
         defaultCanvas: {
           widthM: 6,
           heightM: 1,
+          pxPerMeter: 128,
+          alignToTile: true,
+          tileSizePx: 128,
+        },
+        createdBy: systemActorId,
+        createdAt: systemPublishedAt,
+        publishedBy: systemActorId,
+        publishedAt: systemPublishedAt,
+      },
+    ],
+  },
+  {
+    id: METRO_STATION_NAME_NEW_TEMPLATE_ID,
+    versions: [
+      {
+        version: 1,
+        status: 'published',
+        title: '地铁站名（新版）',
+        description:
+          '新版地铁站名灯箱：站名与拼音居中排布，使用黑色文字，底部为线路色条，适用于站台站名标识。',
+        family: 'metro_line',
+        source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.logicalWidthPx}} {{canvas.logicalHeightPx}}">
+  <g>{{glyph.stationName}}</g>
+</svg>`,
+        fields: createMetroStationNameFields('metro_station_name_modern'),
+        defaultCanvas: {
+          widthM: 4.5,
+          heightM: 1,
+          pxPerMeter: 128,
+          alignToTile: true,
+          tileSizePx: 128,
+        },
+        createdBy: systemActorId,
+        createdAt: systemPublishedAt,
+        publishedBy: systemActorId,
+        publishedAt: systemPublishedAt,
+      },
+    ],
+  },
+  {
+    id: METRO_STATION_NAME_OLD_TEMPLATE_ID,
+    versions: [
+      {
+        version: 1,
+        status: 'published',
+        title: '地铁站名（旧版）',
+        description:
+          '旧版地铁站名灯箱：站名与拼音使用线路颜色，站名间距更宽；拼音按字分空格尚未实现。',
+        family: 'metro_line',
+        source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.logicalWidthPx}} {{canvas.logicalHeightPx}}">
+  <g>{{glyph.stationName}}</g>
+</svg>`,
+        fields: createMetroStationNameFields('metro_station_name_classic'),
+        defaultCanvas: {
+          widthM: 4.5,
+          heightM: 1,
+          pxPerMeter: 128,
+          alignToTile: true,
+          tileSizePx: 128,
+        },
+        createdBy: systemActorId,
+        createdAt: systemPublishedAt,
+        publishedBy: systemActorId,
+        publishedAt: systemPublishedAt,
+      },
+    ],
+  },
+  {
+    id: METRO_DIRECTION_NEW_TEMPLATE_ID,
+    versions: [
+      {
+        version: 1,
+        status: 'published',
+        title: '地铁方向（新版）',
+        description:
+          '新版地铁方向及下一站：左侧开门箭头与开往方向，右侧线路标识、下一站站名和拼音。',
+        family: 'metro_line',
+        source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.logicalWidthPx}} {{canvas.logicalHeightPx}}">
+  <g>{{glyph.nextStationName}}</g>
+</svg>`,
+        fields: createMetroDirectionFields('metro_direction_modern'),
+        defaultCanvas: {
+          widthM: 6,
+          heightM: 1,
+          pxPerMeter: 128,
+          alignToTile: true,
+          tileSizePx: 128,
+        },
+        createdBy: systemActorId,
+        createdAt: systemPublishedAt,
+        publishedBy: systemActorId,
+        publishedAt: systemPublishedAt,
+      },
+    ],
+  },
+  {
+    id: METRO_DIRECTION_OLD_TEMPLATE_ID,
+    versions: [
+      {
+        version: 1,
+        status: 'published',
+        title: '地铁方向（旧版）',
+        description:
+          '旧版地铁方向及下一站：使用旧版箭头，开往方向以中文显示，右侧为下一站站名与拼音。',
+        family: 'metro_line',
+        source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.logicalWidthPx}} {{canvas.logicalHeightPx}}">
+  <g>{{glyph.nextStationName}}</g>
+</svg>`,
+        fields: createMetroDirectionFields('metro_direction_classic'),
+        defaultCanvas: {
+          widthM: 6,
+          heightM: 1,
+          pxPerMeter: 128,
+          alignToTile: true,
+          tileSizePx: 128,
+        },
+        createdBy: systemActorId,
+        createdAt: systemPublishedAt,
+        publishedBy: systemActorId,
+        publishedAt: systemPublishedAt,
+      },
+    ],
+  },
+  {
+    id: METRO_PLATFORM_SIGN_TEMPLATE_ID,
+    versions: [
+      {
+        version: 1,
+        status: 'published',
+        title: '站台站名标志',
+        description:
+          '方形站台站名牌：站名与拼音居中，线路色条下方显示下一站；数据来源模式只需指定线路、车站与方向。',
+        family: 'metro_line',
+        source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.logicalWidthPx}} {{canvas.logicalHeightPx}}">
+  <g>{{glyph.stationName}}</g>
+</svg>`,
+        fields: createMetroPlatformSignFields(),
+        defaultCanvas: {
+          widthM: 4,
+          heightM: 4,
           pxPerMeter: 128,
           alignToTile: true,
           tileSizePx: 128,

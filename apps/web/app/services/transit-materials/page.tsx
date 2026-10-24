@@ -10,8 +10,12 @@ import {
   BUS_STOP_HORIZONTAL_DETAIL_TEMPLATE_ID,
   BUS_STOP_OVERVIEW_TEMPLATE_ID,
   BUS_STOP_TERMINAL_TEMPLATE_ID,
+  METRO_DIRECTION_NEW_TEMPLATE_ID,
+  METRO_DIRECTION_OLD_TEMPLATE_ID,
   METRO_LINE_MAP_NEW_TEMPLATE_ID,
   METRO_LINE_MAP_OLD_TEMPLATE_ID,
+  METRO_STATION_NAME_NEW_TEMPLATE_ID,
+  METRO_STATION_NAME_OLD_TEMPLATE_ID,
 } from '../../../lib/material-template-ids';
 import { getPageMetadata } from '../../../lib/site-metadata';
 
@@ -39,8 +43,33 @@ const transitMaterialTemplateGroups: MaterialTemplateGroup[] = [
   {
     id: 'metro_line_map_merged',
     titleKey: 'materialStudio.group.metroLineMap',
+    layoutLabelKey: 'materialStudio.group.layout',
     variantLabelKey: 'materialStudio.group.style',
-    templateIds: [METRO_LINE_MAP_NEW_TEMPLATE_ID, METRO_LINE_MAP_OLD_TEMPLATE_ID],
+    templateIds: [
+      METRO_LINE_MAP_NEW_TEMPLATE_ID,
+      METRO_LINE_MAP_OLD_TEMPLATE_ID,
+      METRO_STATION_NAME_NEW_TEMPLATE_ID,
+      METRO_STATION_NAME_OLD_TEMPLATE_ID,
+      METRO_DIRECTION_NEW_TEMPLATE_ID,
+      METRO_DIRECTION_OLD_TEMPLATE_ID,
+    ],
+    layoutGroups: [
+      {
+        id: 'line_map',
+        labelKey: 'materialStudio.layout.lineMap',
+        templateIds: [METRO_LINE_MAP_NEW_TEMPLATE_ID, METRO_LINE_MAP_OLD_TEMPLATE_ID],
+      },
+      {
+        id: 'station_name',
+        labelKey: 'materialStudio.layout.stationName',
+        templateIds: [METRO_STATION_NAME_NEW_TEMPLATE_ID, METRO_STATION_NAME_OLD_TEMPLATE_ID],
+      },
+      {
+        id: 'direction',
+        labelKey: 'materialStudio.layout.direction',
+        templateIds: [METRO_DIRECTION_NEW_TEMPLATE_ID, METRO_DIRECTION_OLD_TEMPLATE_ID],
+      },
+    ],
   },
 ];
 

@@ -1111,6 +1111,9 @@ export type CommonMessageKey =
   | 'materialStudio.group.metroLineMap'
   | 'materialStudio.group.layout'
   | 'materialStudio.group.style'
+  | 'materialStudio.layout.lineMap'
+  | 'materialStudio.layout.stationName'
+  | 'materialStudio.layout.direction'
   | 'materialStudio.projectLineCount'
   | 'materialStudio.busLineCount'
   | 'materialStudio.stationProjectLines'
@@ -2907,6 +2910,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'materialStudio.group.metroLineMap': '地铁横板线路图',
     'materialStudio.group.layout': '版式',
     'materialStudio.group.style': '样式',
+    'materialStudio.layout.lineMap': '线路图',
+    'materialStudio.layout.stationName': '站名',
+    'materialStudio.layout.direction': '方向',
     'materialStudio.projectLineCount': '{count} 条项目线路',
     'materialStudio.busLineCount': '{count} 条公交线路',
     'materialStudio.stationProjectLines': '当前站点的项目线路',
@@ -4719,6 +4725,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'materialStudio.group.metroLineMap': '地鐵橫式線路圖',
     'materialStudio.group.layout': '版式',
     'materialStudio.group.style': '樣式',
+    'materialStudio.layout.lineMap': '線路圖',
+    'materialStudio.layout.stationName': '站名',
+    'materialStudio.layout.direction': '方向',
     'materialStudio.projectLineCount': '{count} 條專案線路',
     'materialStudio.busLineCount': '{count} 條公車線路',
     'materialStudio.stationProjectLines': '當前站點的專案線路',
@@ -6572,6 +6581,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'materialStudio.group.metroLineMap': 'Metro line map (horizontal)',
     'materialStudio.group.layout': 'Layout',
     'materialStudio.group.style': 'Style',
+    'materialStudio.layout.lineMap': 'Line map',
+    'materialStudio.layout.stationName': 'Station name',
+    'materialStudio.layout.direction': 'Direction',
     'materialStudio.projectLineCount': '{count} project lines',
     'materialStudio.busLineCount': '{count} bus lines',
     'materialStudio.stationProjectLines': 'Project lines at current station',

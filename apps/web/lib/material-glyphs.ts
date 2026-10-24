@@ -190,6 +190,20 @@ export function renderMaterialGlyph(
       config.renderer === 'metro_line_map_classic' ? 'classic' : 'modern',
     );
   }
+  if (
+    config.renderer === 'metro_station_name_modern' ||
+    config.renderer === 'metro_station_name_classic' ||
+    config.renderer === 'metro_direction_modern' ||
+    config.renderer === 'metro_direction_classic'
+  ) {
+    const style = config.renderer.endsWith('classic') ? 'classic' : 'modern';
+    return config.renderer.startsWith('metro_station_name')
+      ? renderMetroStationNameSign(value, config, values, style)
+      : renderMetroDirectionSign(value, config, values, style);
+  }
+  if (config.renderer === 'metro_platform_sign') {
+    return renderMetroPlatformSign(value, config, values);
+  }
   return renderVerticalChillJinshuSong(value, config);
 }
 
@@ -1878,6 +1892,423 @@ function renderMetroLineMap(
   return yScale === 1
     ? `<g data-metro-line-map="${style}">${body}</g>`
     : `<g data-metro-line-map="${style}" transform="scale(1 ${formatNumber(yScale)})">${body}</g>`;
+}
+
+// 新版方向箭头：设计稿中位于 50×33 的局部坐标，左开门时指向左侧。
+const metroDirectionModernArrowPath =
+  'M112.114 70.4069L100.668 58.503L134.807 58.503L134.807 48.7762L101.16 48.7762L112.114 37.3845L100.683 37.3845L84.8067 53.8956L95.9001 53.8956L84.8067 53.8956L100.683 70.4069L112.114 70.4069Z';
+// 旧版方向箭头：来自附件「旧版箭头.svg」，带 0.6 描边。
+const metroDirectionClassicArrowPath =
+  'M0.424316 20.8928L20.9401 0.369168L28.7222 0.306091L10.7137 17.6759L41.4243 17.6759L41.4243 23.4632L10.7137 23.4632L28.7222 41.4717L21.0347 41.5032L0.424316 20.8928Z';
+// 右侧开门：新版 / 旧版箭头在设计稿中的绝对坐标（箭头朝右）。
+const metroDirectionModernRightArrowPath =
+  'M463.886 70.4069L475.332 58.503L441.193 58.503L441.193 48.7762L474.84 48.7762L463.886 37.3845L475.317 37.3845L491.193 53.8956L480.1 53.8956L491.193 53.8956L475.317 70.4069L463.886 70.4069Z';
+const metroDirectionClassicRightArrowPath =
+  'M531 55.9882L510.484 35.4645L502.702 35.4014L520.711 52.7713L490 52.7712L490 58.5586L520.711 58.5586L502.702 76.567L510.39 76.5986L531 55.9882Z';
+const metroSignReferenceWidth = 576;
+const metroSignReferenceHeight = 128;
+
+/**
+ * 站台站名标志（512×512）。
+ * 设计稿：站名与拼音居中，线路色条横贯中部，色条下方为「下一站 + 下一站名」。
+ */
+function renderMetroPlatformSign(
+  value: string,
+  config: MaterialGlyphConfig,
+  values: Record<string, string>,
+): string {
+  const canvasWidth = Math.max(
+    Number(values['canvas.logicalWidthPx']) || config.layoutWidth || 512,
+    128,
+  );
+  const canvasHeight = Math.max(
+    Number(values['canvas.logicalHeightPx']) || config.layoutHeight || 512,
+    128,
+  );
+  const scale = Math.min(canvasWidth / 512, canvasHeight / 512);
+  const accentColor = resolveMetroSignAccentColor(config, values);
+  const stationName = value.trim();
+  const stationPinyin = (values.stationNamePinyin ?? '').trim();
+  const nextStationName = (values.nextStationName ?? '').trim();
+  const nextStationPinyin = (values.nextStationPinyin ?? '').trim();
+  const stationCenterX = canvasWidth / 2;
+  const nextGroupCenterX = canvasWidth * (342 / 512);
+
+  const parts = [
+    `<rect x="0" y="${formatNumber(72 * scale)}" width="${formatNumber(canvasWidth)}" height="${formatNumber(369 * scale)}" fill="#FFFFFF"/>`,
+    renderMetroSignText({
+      value: stationName,
+      x: stationCenterX,
+      y: 194 * scale,
+      fontSize: 88 * scale,
+      color: '#000000',
+      weight: 700,
+      anchor: 'middle',
+      maxWidth: canvasWidth - 40 * scale,
+    }),
+    stationPinyin
+      ? renderMetroSignText({
+          value: stationPinyin,
+          x: stationCenterX,
+          y: 246.68 * scale,
+          fontSize: 35 * scale,
+          color: '#000000',
+          weight: 400,
+          anchor: 'middle',
+          maxWidth: canvasWidth - 40 * scale,
+        })
+      : '',
+    `<rect x="0" y="${formatNumber(293 * scale)}" width="${formatNumber(canvasWidth)}" height="${formatNumber(28 * scale)}" fill="${accentColor}"/>`,
+    renderMetroSignText({
+      value: '下一站',
+      x: 43 * scale,
+      y: 400 * scale,
+      fontSize: 26 * scale,
+      color: '#000000',
+      weight: 400,
+      maxWidth: 110 * scale,
+    }),
+    renderMetroSignText({
+      value: 'Next Station',
+      x: 43 * scale,
+      y: 420.48 * scale,
+      fontSize: 16 * scale,
+      color: '#000000',
+      weight: 400,
+      maxWidth: 150 * scale,
+    }),
+    renderMetroSignText({
+      value: nextStationName,
+      x: nextGroupCenterX,
+      y: 392 * scale,
+      fontSize: 36 * scale,
+      color: '#000000',
+      weight: 500,
+      anchor: 'middle',
+      maxWidth: 250 * scale,
+    }),
+    renderMetroSignText({
+      value: nextStationPinyin,
+      x: nextGroupCenterX,
+      y: 418.9 * scale,
+      fontSize: 22 * scale,
+      color: '#000000',
+      weight: 400,
+      anchor: 'middle',
+      maxWidth: 250 * scale,
+    }),
+  ];
+  return `<g data-metro-platform-sign="true">${parts.join('')}</g>`;
+}
+
+/**
+ * 地铁站名版式（新版 / 旧版）。
+ * 设计稿为 576×128 单行版面：居中站名 + 拼音，底部线路色条。
+ * 旧版站名与拼音使用线路色，新版使用黑色；旧版拼音按字分空格暂未实现。
+ */
+function renderMetroStationNameSign(
+  value: string,
+  config: MaterialGlyphConfig,
+  values: Record<string, string>,
+  style: 'modern' | 'classic',
+): string {
+  const canvasWidth = Math.max(
+    Number(values['canvas.logicalWidthPx']) || config.layoutWidth || metroSignReferenceWidth,
+    64,
+  );
+  const canvasHeight = Math.max(
+    Number(values['canvas.logicalHeightPx']) || config.layoutHeight || metroSignReferenceHeight,
+    32,
+  );
+  const yScale = canvasHeight / metroSignReferenceHeight;
+  const accentColor = resolveMetroSignAccentColor(config, values);
+  const centerX = canvasWidth / 2;
+  const color = style === 'classic' ? accentColor : '#000000';
+  const nameLetterSpacing = style === 'classic' ? 8 * yScale : 0;
+  const pinyinFontSize = (style === 'classic' ? 18 : 20) * yScale;
+  const pinyinLetterSpacing = style === 'classic' ? 0 : 1 * yScale;
+  const maxTextWidth = Math.max(canvasWidth - 32, 20);
+  const stationName = value.trim();
+  const pinyin = (values.stationNamePinyin ?? '').trim();
+
+  const parts = [
+    `<rect width="${formatNumber(canvasWidth)}" height="${formatNumber(canvasHeight)}" fill="#FFFFFF"/>`,
+    renderMetroSignText({
+      value: stationName,
+      x: centerX,
+      y: (style === 'classic' ? 62 : 63) * yScale,
+      fontSize: 44 * yScale,
+      color,
+      weight: 700,
+      anchor: 'middle',
+      letterSpacing: nameLetterSpacing,
+      maxWidth: maxTextWidth,
+    }),
+    pinyin
+      ? renderMetroSignText({
+          value: pinyin,
+          x: centerX,
+          y: (style === 'classic' ? 92 : 93) * yScale,
+          fontSize: pinyinFontSize,
+          color,
+          weight: 400,
+          anchor: 'middle',
+          letterSpacing: pinyinLetterSpacing,
+          maxWidth: maxTextWidth,
+        })
+      : '',
+    `<rect x="0" y="${formatNumber(112 * yScale)}" width="${formatNumber(canvasWidth)}" height="${formatNumber(16 * yScale)}" fill="${accentColor}"/>`,
+    `<rect x="0.5" y="0.5" width="${formatNumber(Math.max(canvasWidth - 1, 1))}" height="${formatNumber(Math.max(canvasHeight - 1, 1))}" fill="none" stroke="#CCCCCC" stroke-width="1"/>`,
+  ];
+  return `<g data-metro-station-name="${style}">${parts.join('')}</g>`;
+}
+
+/**
+ * 地铁方向及下一站版式（新版 / 旧版）。
+ * 设计稿为 576×128：左侧开门箭头与开往方向，右侧线路标识和下一站信息。
+ * 画布加长时左侧保持原位、右侧信息簇贴右，字号只随画布高度缩放。
+ */
+function renderMetroDirectionSign(
+  value: string,
+  config: MaterialGlyphConfig,
+  values: Record<string, string>,
+  style: 'modern' | 'classic',
+): string {
+  const canvasWidth = Math.max(
+    Number(values['canvas.logicalWidthPx']) || config.layoutWidth || metroSignReferenceWidth,
+    320,
+  );
+  const canvasHeight = Math.max(
+    Number(values['canvas.logicalHeightPx']) || config.layoutHeight || metroSignReferenceHeight,
+    32,
+  );
+  const yScale = canvasHeight / metroSignReferenceHeight;
+  const accentColor = resolveMetroSignAccentColor(config, values);
+  const rightShift = canvasWidth - metroSignReferenceWidth;
+  const doorRight = values.doorDirection === 'right';
+  /**
+   * 新版整组居中；旧版保持两端布局，让箭头尖端到同侧边缘的距离恒定。
+   * `infoShift` 用于线路标与下一站信息，`destinationShift` 用于箭头与开往文本。
+   */
+  const centerShift = rightShift / 2;
+  const infoShift = style === 'classic' ? (doorRight ? 0 : rightShift) : centerShift;
+  const destinationShift = style === 'classic' ? (doorRight ? rightShift : 0) : centerShift;
+  const nextStationName = value.trim();
+  const nextStationPinyin = (values.nextStationPinyin ?? '').trim();
+  const terminalName = (values.terminalName ?? '').trim();
+  const terminalPinyin = (values.terminalNamePinyin ?? '').trim();
+  const lineLabel = (values.lineLabel ?? '').trim();
+  const lineEnglishLabel = (values.lineEnglishLabel ?? '').trim();
+  const destinationText = `开往${terminalName}`;
+  const destinationEnglishText = `To ${terminalPinyin || terminalName}`;
+  // 保持设计稿中的组内间距；新版整体居中，旧版箭头与开往跟随同侧边缘。
+  const nextLabelX =
+    (style === 'classic' ? (doorRight ? 23.2 : 446) : (doorRight ? 115 : 374)) + infoShift;
+  const stationColumnX =
+    (style === 'classic' ? (doorRight ? 83.1 : 506) : (doorRight ? 163 : 422)) + infoShift;
+  const nextColumnWidth = 44;
+  const stationColumnWidth = doorRight ? 150 : 138;
+  const badgeCy = style === 'classic' ? 56 : 43.5;
+  const badgeRadius = style === 'classic' ? 21 : 18;
+  // 旧版线路标跟随开往文本，保持设计稿中的短间距；新版保持固定列位置后整组居中。
+  const classicDestinationWidth = estimateMetroLineMapTextWidth(destinationText, 32 * yScale);
+  const badgeCx =
+    style === 'classic'
+      ? doorRight
+        ? 463.6 + destinationShift - classicDestinationWidth - 20.9 - badgeRadius
+        : 106 + destinationShift + classicDestinationWidth + 24 + badgeRadius
+      : (doorRight ? 133 : 392) + infoShift;
+
+  const arrow = doorRight
+    ? `<g transform="translate(${formatNumber(destinationShift)} 0) scale(1 ${formatNumber(yScale)})"><path d="${style === 'classic' ? metroDirectionClassicRightArrowPath : metroDirectionModernRightArrowPath}" fill="#000000"${style === 'classic' ? ' stroke="#000000" stroke-width="0.6"' : ''}/></g>`
+    : style === 'classic'
+      ? `<g transform="translate(${formatNumber(45 + destinationShift)} ${formatNumber(35.4 * yScale)}) scale(${formatNumber(yScale)})"><path d="${metroDirectionClassicArrowPath}" fill="#000000" stroke="#000000" stroke-width="0.6"/></g>`
+      : `<g transform="translate(${formatNumber(destinationShift)} 0) scale(1 ${formatNumber(yScale)})"><path d="${metroDirectionModernArrowPath}" fill="#000000"/></g>`;
+
+  const badge = `<circle cx="${formatNumber(badgeCx)}" cy="${formatNumber(badgeCy * yScale)}" r="${formatNumber(badgeRadius * yScale)}" fill="${accentColor}"/>${renderMetroSignText({
+    value: lineLabel,
+    x: badgeCx,
+    y: (style === 'classic' ? 68.7 : 52.85) * yScale,
+    fontSize: 28 * yScale,
+    color: '#FFFFFF',
+    weight: 400,
+    anchor: 'middle',
+    letterSpacing: -3 * yScale,
+    maxWidth: (badgeRadius * 2 - 8) * yScale,
+  })}`;
+
+  // 新版右开门时，线路标与下一站信息作为一组整体右对齐（统一右端），组内仍左对齐避免重叠。
+  const modernRightAligned = style === 'modern' && doorRight;
+  const stationTextWidth = Math.min(
+    Math.max(
+      estimateMetroLineMapTextWidth(nextStationName, 12 * yScale) +
+        Math.max(nextStationName.length - 1, 0) * 1 * yScale,
+      estimateMetroLineMapTextWidth(nextStationPinyin, 7 * yScale),
+      20,
+    ),
+    80,
+  );
+  const stationLabelTextX = modernRightAligned
+    ? 206 + infoShift - stationTextWidth
+    : stationColumnX;
+  const nextLabelTextX = modernRightAligned
+    ? stationLabelTextX - 4 - 44
+    : nextLabelX;
+
+  const nextLabel = renderMetroSignText({
+    value: '下一站',
+    x: nextLabelTextX,
+    y: (style === 'classic' ? 90.06 : 94.36) * yScale,
+    fontSize: 12 * yScale,
+    color: '#000000',
+    weight: 400,
+    letterSpacing: 1 * yScale,
+    maxWidth: nextColumnWidth,
+  });
+  const nextEnglishLabel = renderMetroSignText({
+    value: 'Next Station',
+    x: nextLabelTextX,
+    y: (style === 'classic' ? 101.5 : 105.84) * yScale,
+    fontSize: (style === 'classic' ? 6 : 7) * yScale,
+    color: '#000000',
+    weight: 400,
+    maxWidth: nextColumnWidth,
+  });
+  const stationLabel = renderMetroSignText({
+    value: nextStationName,
+    x: stationLabelTextX,
+    y: (style === 'classic' ? 90.06 : 94.36) * yScale,
+    fontSize: 12 * yScale,
+    color: '#000000',
+    weight: 400,
+    letterSpacing: 1 * yScale,
+    maxWidth: stationColumnWidth,
+  });
+  const stationPinyinLabel = renderMetroSignText({
+    value: nextStationPinyin,
+    x: stationLabelTextX,
+    y: (style === 'classic' ? 101.5 : 105.84) * yScale,
+    fontSize: (style === 'classic' ? 6 : 7) * yScale,
+    color: '#000000',
+    weight: 400,
+    maxWidth: stationColumnWidth,
+  });
+  const destinationAnchor = doorRight ? 'end' : 'start';
+  const destinationX =
+    (style === 'classic' ? (doorRight ? 463.6 : 106) : (doorRight ? 421 : 160.87)) +
+    destinationShift;
+  const destinationChinese = renderMetroSignText({
+    value: destinationText,
+    x: destinationX,
+    y: (style === 'classic' ? 60.84 : 58.34) * yScale,
+    fontSize: (style === 'classic' ? 32 : 35) * yScale,
+    color: '#000000',
+    weight: 500,
+    anchor: destinationAnchor,
+    maxWidth: 200,
+  });
+  const destinationEnglish = renderMetroSignText({
+    value: destinationEnglishText,
+    x:
+      (style === 'classic' ? (doorRight ? 463.6 : 105.19) : (doorRight ? 421 : 159)) +
+      destinationShift,
+    y: (style === 'classic' ? 81.5 : 80.48) * yScale,
+    fontSize: 16 * yScale,
+    color: '#000000',
+    weight: 400,
+    anchor: destinationAnchor,
+    maxWidth: 200,
+  });
+
+  const parts =
+    style === 'classic'
+      ? [
+          `<rect width="${formatNumber(canvasWidth)}" height="${formatNumber(canvasHeight)}" fill="#FFFFFF"/>`,
+          arrow,
+          destinationChinese,
+          destinationEnglish,
+          badge,
+          nextLabel,
+          nextEnglishLabel,
+          stationLabel,
+          stationPinyinLabel,
+        ]
+      : [
+          `<rect width="${formatNumber(canvasWidth)}" height="${formatNumber(canvasHeight)}" fill="#FFFFFF"/>`,
+          arrow,
+          destinationChinese,
+          destinationEnglish,
+          badge,
+          renderMetroSignText({
+            value: '号线',
+            x: doorRight ? 206 + infoShift : 414.94 + infoShift,
+            y: 45.94 * yScale,
+            fontSize: 20 * yScale,
+            color: '#000000',
+            weight: 400,
+            anchor: doorRight ? 'end' : 'start',
+            maxWidth: doorRight ? 160 : 146,
+          }),
+          renderMetroSignText({
+            value: lineEnglishLabel,
+            x: doorRight ? 206 + infoShift : 414 + infoShift,
+            y: 57.86 * yScale,
+            fontSize: 12 * yScale,
+            color: '#000000',
+            weight: 400,
+            anchor: doorRight ? 'end' : 'start',
+            maxWidth: doorRight ? 160 : 146,
+          }),
+          nextLabel,
+          nextEnglishLabel,
+          stationLabel,
+          stationPinyinLabel,
+        ];
+
+  parts.push(
+    `<rect x="0" y="${formatNumber(112 * yScale)}" width="${formatNumber(canvasWidth)}" height="${formatNumber(16 * yScale)}" fill="${accentColor}"/>`,
+    `<rect x="0.5" y="0.5" width="${formatNumber(Math.max(canvasWidth - 1, 1))}" height="${formatNumber(Math.max(canvasHeight - 1, 1))}" fill="none" stroke="#CCCCCC" stroke-width="1"/>`,
+  );
+  return `<g data-metro-direction="${style}">${parts.join('')}</g>`;
+}
+
+function resolveMetroSignAccentColor(
+  config: MaterialGlyphConfig,
+  values: Record<string, string>,
+): string {
+  const rawAccent = config.colorFieldKey ? (values[config.colorFieldKey] ?? '') : '';
+  return /^#[0-9A-Fa-f]{6}$/u.test(rawAccent) ? rawAccent : '#F29DB4';
+}
+
+/** 站名/方向版式的文字渲染：超宽时缩字号，居中时补偿 letter-spacing 的尾部空隙。 */
+function renderMetroSignText(input: {
+  value: string;
+  x: number;
+  y: number;
+  fontSize: number;
+  color: string;
+  weight?: number;
+  anchor?: 'start' | 'middle' | 'end';
+  letterSpacing?: number;
+  maxWidth?: number;
+}): string {
+  const value = input.value.trim();
+  if (!value) {
+    return '';
+  }
+  const letterSpacing = input.letterSpacing ?? 0;
+  const naturalWidth =
+    estimateMetroLineMapTextWidth(value, input.fontSize) +
+    Math.max(value.length - 1, 0) * letterSpacing;
+  const fit =
+    input.maxWidth && naturalWidth > input.maxWidth ? input.maxWidth / naturalWidth : 1;
+  const fontSize = input.fontSize * fit;
+  const spacing = letterSpacing * fit;
+  const anchor = input.anchor ?? 'start';
+  const x = anchor === 'middle' ? input.x + spacing / 2 : input.x;
+  const spacingAttribute =
+    Math.abs(spacing) > 0.01 ? ` letter-spacing="${formatNumber(spacing)}"` : '';
+  return `<text x="${formatNumber(x)}" y="${formatNumber(input.y)}" fill="${input.color}" font-family="${metroLineMapFontFamily}" font-size="${formatNumber(fontSize)}" font-weight="${input.weight ?? 400}" text-anchor="${anchor}"${spacingAttribute}>${escapeXml(value)}</text>`;
 }
 
 function renderMetroLineMapText(

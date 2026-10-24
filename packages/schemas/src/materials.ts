@@ -70,6 +70,11 @@ export const materialTemplateFieldSchema = z
           'metro_wayfinding',
           'metro_line_map_modern',
           'metro_line_map_classic',
+          'metro_station_name_modern',
+          'metro_station_name_classic',
+          'metro_direction_modern',
+          'metro_direction_classic',
+          'metro_platform_sign',
         ]),
         layoutWidth: z.number().positive().max(32_768),
         layoutHeight: z.number().positive().max(32_768),
@@ -182,9 +187,16 @@ export const materialTemplateFieldSchema = z
       });
     }
     if (
-      ['transit_route_map', 'metro_line_map_modern', 'metro_line_map_classic'].includes(
-        field.glyph?.renderer ?? '',
-      ) &&
+      [
+        'transit_route_map',
+        'metro_line_map_modern',
+        'metro_line_map_classic',
+        'metro_station_name_modern',
+        'metro_station_name_classic',
+        'metro_direction_modern',
+        'metro_direction_classic',
+        'metro_platform_sign',
+      ].includes(field.glyph?.renderer ?? '') &&
       !field.glyph?.colorFieldKey
     ) {
       ctx.addIssue({
