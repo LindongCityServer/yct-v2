@@ -12,6 +12,7 @@ import type {
   PoiSubmissionStatus,
   RectangleBounds,
   TileProviderDescriptor,
+  TileZoomRange,
 } from '@yct/contracts';
 import type {
   FormEvent,
@@ -181,6 +182,7 @@ interface PoiTileRegionIndex {
 export interface PoiTilePreviewConfig {
   freshTileTemplate?: string | null;
   tileTemplate?: string | null;
+  tileZoomRange?: TileZoomRange | null;
   regionIndex?: PoiTileRegionIndex;
 }
 
@@ -241,6 +243,7 @@ export function AdminPoiPanel({
   const [categoryIconBaseUrl, setCategoryIconBaseUrl] = useState(defaultMarkerIconBaseUrl);
   const [tilePreviewFreshTemplate, setTilePreviewFreshTemplate] = useState<string | null>(null);
   const [tilePreviewTemplate, setTilePreviewTemplate] = useState<string | null>(null);
+  const [tilePreviewZoomRange, setTilePreviewZoomRange] = useState<TileZoomRange | null>(null);
   const [tilePreviewRegionResponse, setTilePreviewRegionResponse] =
     useState<PoiTileRegionResponse | null>(null);
   const [statusText, setStatusText] = useState('正在读取 POI 投稿');
@@ -535,9 +538,15 @@ export function AdminPoiPanel({
     () => ({
       freshTileTemplate: tilePreviewFreshTemplate,
       tileTemplate: tilePreviewTemplate,
+      tileZoomRange: tilePreviewZoomRange,
       regionIndex: buildPoiTileRegionIndex(tilePreviewRegionResponse),
     }),
-    [tilePreviewFreshTemplate, tilePreviewRegionResponse, tilePreviewTemplate],
+    [
+      tilePreviewFreshTemplate,
+      tilePreviewRegionResponse,
+      tilePreviewTemplate,
+      tilePreviewZoomRange,
+    ],
   );
   const detailTarget = useMemo(
     () => submissions.find((submission) => submission.id === detailTargetId) ?? null,
@@ -633,6 +642,7 @@ export function AdminPoiPanel({
     const tileTemplates = selectMapTileTemplates(data.items ?? []);
     setTilePreviewTemplate(tileTemplates.tileTemplate);
     setTilePreviewFreshTemplate(tileTemplates.freshTileTemplate);
+    setTilePreviewZoomRange(tileTemplates.tileZoomRange ?? null);
 
     const fallbackProvider =
       data.items?.find((provider) => provider.sourceKind === 'safe-https-static') ??
@@ -3712,11 +3722,13 @@ function PoiAuditMapPreview({
 function PoiAuditTileLayer({
   bounds,
   tilePreviewConfig,
+  viewport,
 }: Readonly<{
   bounds: { minX: number; minZ: number; maxX: number; maxZ: number };
   tilePreviewConfig: PoiTilePreviewConfig;
+  viewport?: PoiMapViewport;
 }>) {
-  const tiles = buildPoiAuditPreviewTiles(bounds, tilePreviewConfig);
+  const tiles = buildPoiAuditPreviewTiles(bounds, tilePreviewConfig, viewport);
   if (tiles.length === 0) {
     return null;
   }
@@ -3730,7 +3742,7 @@ function PoiAuditTileLayer({
           freshUrl={tile.freshUrl}
           key={tile.id}
           tileKey={tile.id}
-          style={buildPoiTileStyle(tile)}
+          style={buildPoiTileStyle(tile, viewport)}
         />
       ))}
     </div>
@@ -5372,19 +5384,46 @@ function PoiStandaloneGeometryWorkspace({
 }>) {
   const [tool, setTool] = useState<'pan' | 'move' | 'draw'>('pan');
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [viewportSize, setViewportSize] = useState<PoiMapViewport>(poiAuditPreviewViewport);
   const previewDraft: Exclude<PoiGeometryDraft, { type: 'Point' }> =
     draft.type === 'Point' ? { type: 'MultiPoint', coordinates: [draft.coordinate] } : draft;
   const autoPreview = buildPoiGeometryDraftMapPreview(previewDraft, contextMarkers);
   const [viewBounds, setViewBounds] = useState(autoPreview.bounds);
-  const preview = buildPoiGeometryDraftMapPreview(previewDraft, contextMarkers, viewBounds);
-  const gestureRef = useRef<{
-    pointerId: number;
-    startClientX: number;
-    startClientY: number;
-    startBounds: PoiAuditMapBounds;
-    moved: boolean;
-    nodeIndex?: number;
-  } | null>(null);
+  const preview = buildPoiGeometryDraftMapPreview(
+    previewDraft,
+    contextMarkers,
+    viewBounds,
+    viewportSize,
+  );
+
+  useEffect(() => {
+    const element = stageRef.current;
+    if (!element) return undefined;
+
+    const applySize = (width: number, height: number) => {
+      if (width <= 0 || height <= 0) return;
+      setViewportSize((current) =>
+        Math.abs(current.width - width) < 0.5 && Math.abs(current.height - height) < 0.5
+          ? current
+          : { height, width },
+      );
+    };
+
+    applySize(element.clientWidth, element.clientHeight);
+    if (typeof ResizeObserver === 'undefined') {
+      return undefined;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      applySize(entry.contentRect.width, entry.contentRect.height);
+    });
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, []);
 
   const coordinateAtClientPoint = (
     clientX: number,
@@ -5394,12 +5433,22 @@ function PoiStandaloneGeometryWorkspace({
     const rect = element.getBoundingClientRect();
     return unprojectAuditMapPreviewCoordinate(
       [
-        ((clientX - rect.left) / rect.width) * poiAuditPreviewWidth,
-        ((clientY - rect.top) / rect.height) * poiAuditPreviewHeight,
+        ((clientX - rect.left) / Math.max(1, rect.width)) * viewportSize.width,
+        ((clientY - rect.top) / Math.max(1, rect.height)) * viewportSize.height,
       ],
       preview.bounds,
+      viewportSize,
     );
   };
+  const gestureRef = useRef<{
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    startBounds: PoiAuditMapBounds;
+    moved: boolean;
+    nodeIndex?: number;
+  } | null>(null);
+
   const updateCoordinateAtIndex = (index: number, coordinate: [number, number]) => {
     if (draft.type === 'Point') {
       onChange({ type: 'Point', coordinate: { ...coordinateToDraft(coordinate), y: pointYText } });
@@ -5450,14 +5499,12 @@ function PoiStandaloneGeometryWorkspace({
       return;
     }
     if (tool !== 'pan') return;
-    const rect = event.currentTarget.getBoundingClientRect();
     const deltaX = event.clientX - gesture.startClientX;
     const deltaY = event.clientY - gesture.startClientY;
     if (Math.hypot(deltaX, deltaY) > 5) gesture.moved = true;
-    const width = gesture.startBounds.maxX - gesture.startBounds.minX;
-    const height = gesture.startBounds.maxZ - gesture.startBounds.minZ;
-    const worldDeltaX = (deltaX / Math.max(1, rect.width)) * width;
-    const worldDeltaZ = (deltaY / Math.max(1, rect.height)) * height;
+    const gestureScale = buildPoiAuditMapView(gesture.startBounds, viewportSize).scale;
+    const worldDeltaX = deltaX / gestureScale;
+    const worldDeltaZ = deltaY / gestureScale;
     setViewBounds({
       minX: gesture.startBounds.minX - worldDeltaX,
       maxX: gesture.startBounds.maxX - worldDeltaX,
@@ -5489,6 +5536,7 @@ function PoiStandaloneGeometryWorkspace({
     <div className={`poi-visual-workspace is-tool-${tool}`}>
       <div
         className="poi-visual-map-stage"
+        ref={stageRef}
         role="application"
         aria-label={`${entityLabel}几何地图编辑`}
         onPointerDown={handlePointerDown}
@@ -5497,9 +5545,13 @@ function PoiStandaloneGeometryWorkspace({
         onPointerCancel={handlePointerUp}
         onWheel={handleWheel}
       >
-        <PoiAuditTileLayer bounds={preview.bounds} tilePreviewConfig={tilePreviewConfig} />
+        <PoiAuditTileLayer
+          bounds={preview.bounds}
+          tilePreviewConfig={tilePreviewConfig}
+          viewport={viewportSize}
+        />
         <svg
-          viewBox={`0 0 ${poiAuditPreviewWidth} ${poiAuditPreviewHeight}`}
+          viewBox={`0 0 ${viewportSize.width} ${viewportSize.height}`}
           preserveAspectRatio="none"
           aria-hidden="true"
         >
@@ -5507,8 +5559,8 @@ function PoiStandaloneGeometryWorkspace({
             className="admin-poi-audit-map-grid"
             x="0"
             y="0"
-            width={poiAuditPreviewWidth}
-            height={poiAuditPreviewHeight}
+            width={viewportSize.width}
+            height={viewportSize.height}
           />
           {preview.polygons.map((polygon, index) => (
             <polygon
@@ -5530,7 +5582,7 @@ function PoiStandaloneGeometryWorkspace({
               key={marker.marker.id}
               transform={`translate(${roundPreviewValue(marker.point[0])} ${roundPreviewValue(marker.point[1])})`}
             >
-              <circle r="3.5" />
+              <circle r="7" />
               <title>{marker.marker.label}</title>
             </g>
           ))}
@@ -5541,8 +5593,8 @@ function PoiStandaloneGeometryWorkspace({
               key={`workspace-point-${index}`}
               transform={`translate(${roundPreviewValue(point[0])} ${roundPreviewValue(point[1])})`}
             >
-              <circle r="4.5" />
-              <text x="7" y="3">
+              <circle r="11" />
+              <text x="15" y="5">
                 {index + 1}
               </text>
             </g>
@@ -6899,6 +6951,7 @@ function buildPoiGeometryDraftMapPreview(
   draft: Exclude<PoiGeometryDraft, { type: 'Point' }>,
   contextMarkers: PoiAuditContextMarker[],
   viewBounds?: PoiAuditMapBounds,
+  viewport?: PoiMapViewport,
 ): PoiAuditMapPreviewModel {
   const coordinateSets = getPoiGeometryDraftCoordinateSets(draft);
   const draftCoordinates = coordinateSets.flatMap((set) => set.coordinates);
@@ -6911,7 +6964,7 @@ function buildPoiGeometryDraftMapPreview(
       120,
     );
   const project = (coordinate: [number, number]) =>
-    projectAuditMapPreviewCoordinate(coordinate, bounds);
+    projectAuditMapPreviewCoordinate(coordinate, bounds, viewport);
   const points: Array<[number, number]> = [];
   const lines: string[] = [];
   const polygons: string[] = [];
@@ -6999,6 +7052,24 @@ const poiPreviewTileSize = 256;
 const poiPreviewMinZoom = -7;
 const poiPreviewMaxZoom = 3;
 
+interface PoiMapViewport {
+  height: number;
+  width: number;
+}
+
+const poiAuditPreviewViewport: PoiMapViewport = {
+  height: poiAuditPreviewHeight,
+  width: poiAuditPreviewWidth,
+};
+
+function resolvePoiMapViewport(viewport?: PoiMapViewport): PoiMapViewport {
+  if (!viewport || viewport.width <= 0 || viewport.height <= 0) {
+    return poiAuditPreviewViewport;
+  }
+
+  return viewport;
+}
+
 function buildPoiTileRegionIndex(
   response: PoiTileRegionResponse | null,
 ): PoiTileRegionIndex | undefined {
@@ -7017,19 +7088,21 @@ function buildPoiTileRegionIndex(
 function buildPoiAuditPreviewTiles(
   bounds: { minX: number; minZ: number; maxX: number; maxZ: number },
   config: PoiTilePreviewConfig,
+  viewport?: PoiMapViewport,
 ): PoiVisibleTile[] {
   if (!config.tileTemplate && !config.freshTileTemplate) {
     return [];
   }
 
-  const view = buildPoiAuditMapView(bounds);
-  const tileZoom = clampPoiPreviewTileZoom(Math.round(view.zoom));
+  const { height: viewportHeight, width: viewportWidth } = resolvePoiMapViewport(viewport);
+  const view = buildPoiAuditMapView(bounds, { height: viewportHeight, width: viewportWidth });
+  const tileZoom = clampPoiPreviewTileZoom(Math.round(view.zoom), config.tileZoomRange);
   const tileScale = getPoiPreviewScale(tileZoom);
   const tileDisplaySize = poiPreviewTileSize * (view.scale / tileScale);
-  const worldMinX = view.centerX - poiAuditPreviewWidth / (2 * view.scale);
-  const worldMaxX = view.centerX + poiAuditPreviewWidth / (2 * view.scale);
-  const worldMinZ = view.centerZ - poiAuditPreviewHeight / (2 * view.scale);
-  const worldMaxZ = view.centerZ + poiAuditPreviewHeight / (2 * view.scale);
+  const worldMinX = view.centerX - viewportWidth / (2 * view.scale);
+  const worldMaxX = view.centerX + viewportWidth / (2 * view.scale);
+  const worldMinZ = view.centerZ - viewportHeight / (2 * view.scale);
+  const worldMaxZ = view.centerZ + viewportHeight / (2 * view.scale);
   const minTileX = Math.floor((worldMinX * tileScale) / poiPreviewTileSize) - 1;
   const maxTileX = Math.floor((worldMaxX * tileScale) / poiPreviewTileSize) + 1;
   const minTileZ = Math.floor((worldMinZ * tileScale) / poiPreviewTileSize) - 1;
@@ -7055,11 +7128,11 @@ function buildPoiAuditPreviewTiles(
           : undefined,
         id: `${tileZoom}:${tileX}:${tileZ}`,
         left:
-          poiAuditPreviewWidth / 2 +
+          viewportWidth / 2 +
           (tileX * poiPreviewTileSize * view.scale) / tileScale -
           view.centerX * view.scale,
         top:
-          poiAuditPreviewHeight / 2 +
+          viewportHeight / 2 +
           (tileZ * poiPreviewTileSize * view.scale) / tileScale -
           view.centerZ * view.scale,
       });
@@ -7069,26 +7142,32 @@ function buildPoiAuditPreviewTiles(
   return tiles;
 }
 
-function buildPoiTileStyle(tile: PoiVisibleTile) {
+function buildPoiTileStyle(tile: PoiVisibleTile, viewport?: PoiMapViewport) {
+  const { height: viewportHeight, width: viewportWidth } = resolvePoiMapViewport(viewport);
+
   return {
-    height: `${(tile.displaySize / poiAuditPreviewHeight) * 100}%`,
-    left: `${(tile.left / poiAuditPreviewWidth) * 100}%`,
-    top: `${(tile.top / poiAuditPreviewHeight) * 100}%`,
-    width: `${(tile.displaySize / poiAuditPreviewWidth) * 100}%`,
+    height: `${(tile.displaySize / viewportHeight) * 100}%`,
+    left: `${(tile.left / viewportWidth) * 100}%`,
+    top: `${(tile.top / viewportHeight) * 100}%`,
+    width: `${(tile.displaySize / viewportWidth) * 100}%`,
   };
 }
 
-function buildPoiAuditMapView(bounds: {
-  minX: number;
-  minZ: number;
-  maxX: number;
-  maxZ: number;
-}): PoiAuditMapView {
+function buildPoiAuditMapView(
+  bounds: {
+    minX: number;
+    minZ: number;
+    maxX: number;
+    maxZ: number;
+  },
+  viewport?: PoiMapViewport,
+): PoiAuditMapView {
+  const { height: viewportHeight, width: viewportWidth } = resolvePoiMapViewport(viewport);
   const spanX = Math.max(1, bounds.maxX - bounds.minX);
   const spanZ = Math.max(1, bounds.maxZ - bounds.minZ);
   const scale = Math.min(
-    (poiAuditPreviewWidth - poiAuditPreviewPadding * 2) / spanX,
-    (poiAuditPreviewHeight - poiAuditPreviewPadding * 2) / spanZ,
+    (viewportWidth - poiAuditPreviewPadding * 2) / spanX,
+    (viewportHeight - poiAuditPreviewPadding * 2) / spanZ,
   );
 
   return {
@@ -7178,7 +7257,14 @@ function getPoiPreviewScale(zoom: number): number {
   return 2 ** zoom;
 }
 
-function clampPoiPreviewTileZoom(zoom: number): number {
+function clampPoiPreviewTileZoom(
+  zoom: number,
+  zoomRange?: TileZoomRange | null,
+): number {
+  if (zoomRange) {
+    return clamp(zoom, zoomRange.minZoom, zoomRange.maxZoom);
+  }
+
   return clamp(zoom, poiPreviewMinZoom, poiPreviewMaxZoom);
 }
 
@@ -7379,10 +7465,10 @@ function expandCoordinateBounds(
 function projectAuditMapPreviewCoordinate(
   coordinate: [number, number],
   bounds: { minX: number; minZ: number; maxX: number; maxZ: number },
+  viewport?: PoiMapViewport,
 ): [number, number] {
-  const width = 220;
-  const height = 152;
-  const padding = 16;
+  const { height, width } = resolvePoiMapViewport(viewport);
+  const padding = poiAuditPreviewPadding;
   const spanX = Math.max(1, bounds.maxX - bounds.minX);
   const spanZ = Math.max(1, bounds.maxZ - bounds.minZ);
   const scale = Math.min((width - padding * 2) / spanX, (height - padding * 2) / spanZ);
@@ -7399,10 +7485,10 @@ function projectAuditMapPreviewCoordinate(
 function unprojectAuditMapPreviewCoordinate(
   point: [number, number],
   bounds: { minX: number; minZ: number; maxX: number; maxZ: number },
+  viewport?: PoiMapViewport,
 ): [number, number] {
-  const width = 220;
-  const height = 152;
-  const padding = 16;
+  const { height, width } = resolvePoiMapViewport(viewport);
+  const padding = poiAuditPreviewPadding;
   const spanX = Math.max(1, bounds.maxX - bounds.minX);
   const spanZ = Math.max(1, bounds.maxZ - bounds.minZ);
   const scale = Math.min((width - padding * 2) / spanX, (height - padding * 2) / spanZ);

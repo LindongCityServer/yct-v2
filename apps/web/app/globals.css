@@ -18542,6 +18542,19 @@ div.telegraph-output-scene.is-packing {
   z-index: 1;
 }
 
+.poi-visual-map-stage .admin-poi-geometry-map-node text {
+  font-size: 14px;
+  stroke-width: 3px;
+}
+
+.poi-visual-map-stage .admin-poi-audit-map-submission-shape {
+  stroke-width: 3px;
+}
+
+.poi-visual-map-stage .admin-poi-audit-map-submission-line {
+  stroke-width: 5px;
+}
+
 .poi-visual-coordinate-panel,
 .markdown-source-panel {
   position: absolute;

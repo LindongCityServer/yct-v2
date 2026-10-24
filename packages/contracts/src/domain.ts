@@ -321,6 +321,11 @@ export interface TileFreshness {
   note?: string;
 }
 
+export interface TileZoomRange {
+  maxZoom: number;
+  minZoom: number;
+}
+
 export interface TileProviderDescriptor {
   id: string;
   name: string;
@@ -328,6 +333,7 @@ export interface TileProviderDescriptor {
   tileTemplate: string;
   attribution?: string | null;
   freshness?: TileFreshness;
+  zoomRange?: TileZoomRange;
 }
 
 export interface PoiIconMapping {
