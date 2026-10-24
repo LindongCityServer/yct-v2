@@ -465,6 +465,12 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             ],
             keywords: ['手動輸入', '伺服器資料', '專案資料', '關聯資料', 'RMP 線網'],
           },
+          'material-template-layouts': {
+            question: '大眾運輸導視目前有哪些範本入口？',
+            answer:
+              '公車站牌把始發終點、線路概覽和線路詳情合併在同一個入口，透過「版式」切換；橫版線路詳情仍是獨立入口。地鐵橫式線路圖入口提供線路圖、站名和方向三種版式，每種版式都可以在「樣式」中選擇新版或舊版；月台站名標誌是獨立的方形範本。實際可選內容以目前已發布範本為準。',
+            keywords: ['範本入口', '公車站牌', '始發終點', '線路概覽', '線路詳情', '地鐵站名', '地鐵方向', '月台站名標誌'],
+          },
           'material-workspace-actions': {
             question: '物料工作台頂端的圖示按鈕分別做什麼？',
             answer: [
@@ -478,22 +484,40 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
               { icon: 'save', label: '匯出工程檔案' },
               '用於儲存可再次匯入的 JSON 工程；',
               { icon: 'download', label: '下載圖片' },
-              '會依目前資料模式下載圖片。工作台也會在有效輸入變更後自動更新頁面內預覽。',
+              '會依目前資料模式下載圖片；目前內容可以免審核匯出時，按鈕會顯示',
+              { icon: 'download', label: '下載無浮水印圖片' },
+              '。工作台也會在有效輸入變更後自動更新頁面內預覽。',
             ],
-            keywords: ['預覽按鈕', '更新預覽', '提交審核', '匯出工程', '下載圖片', '頂端按鈕'],
+            keywords: ['預覽按鈕', '更新預覽', '提交審核', '匯出工程', '下載圖片', '下載無浮水印圖片', '頂端按鈕'],
           },
           'material-review-download': {
             question: '為什麼自訂物料可以預覽，卻還不能下載？',
             answer: [
               '在',
               { text: '物料工具', href: '/services' },
-              '中，預覽一律帶有浮水印，未審核的手動輸入也只能下載帶浮水印圖片。登入後可使用',
+              '中，預覽一律帶有浮水印。手動輸入的自訂物料需要登入並',
               { icon: 'publish', label: '提交審核' },
               '；審核通過的記錄會保留在「我的物料歷史」，並可使用',
               { icon: 'download', label: '下載' },
-              '取得無浮水印圖片。伺服器資料或 RMP 專案資料不需要審核；帳號權限不可用時，下載會回退為帶浮水印預覽。',
+              '取得無浮水印圖片。伺服器線網、匯入的 RMP 專案資料和帶站點的公車站牌不需要審核，但需要登入並驗證伺服器帳號；驗證通過後可直接下載無浮水印圖片。地鐵導視牌如果只調整尺寸、箭頭、圖示或空白而沒有修改文字，也可以免審核直接下載；一旦修改站名等文字，就需要重新提交審核。帳號權限不可用或伺服器帳號尚未驗證時，下載會回退為帶浮水印預覽。',
             ],
-            keywords: ['物料審核', '無法下載', '預覽浮水印', '自訂物料', '物料歷史', '關聯資料'],
+            keywords: [
+              '物料審核',
+              '無法下載',
+              '預覽浮水印',
+              '自訂物料',
+              '物料歷史',
+              '關聯資料',
+              '免審核',
+              '未修改文字',
+              '無浮水印下載',
+            ],
+          },
+          'material-export-audit': {
+            question: '預覽和下載物料會記錄哪些資訊？',
+            answer:
+              '每次產生預覽和下載無浮水印圖片都會寫入一筆稽核記錄，包含操作者（未登入預覽記為匿名）、IP 屬地、範本名稱與版本、內容摘要、產生時間、畫布尺寸和圖片 ID。管理員可以在物料後台的「下載預覽記錄」中依使用者、範本、內容、屬地或圖片 ID 搜尋，並依預覽/下載、帶浮水印/無浮水印篩選；被下一次編輯取消的預覽不會留下記錄。',
+            keywords: ['預覽記錄', '下載記錄', '稽核', 'IP 屬地', '內容摘要', '圖片 ID', '後台篩選'],
           },
           'metro-wayfinding-editor': {
             question: '地鐵導視牌現在可以在工作台裡編輯哪些內容？',
@@ -1158,6 +1182,21 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             ],
             keywords: ['manual input', 'server data', 'project data', 'linked data', 'RMP network'],
           },
+          'material-template-layouts': {
+            question: 'Which template entries are available in Transit Wayfinding now?',
+            answer:
+              'Bus Stop Sign combines terminal, route overview, and route details in one entry and switches between them with Layout; horizontal route details remains a separate entry. The Metro Line Map entry offers line map, station name, and direction layouts, and each layout can switch between the new and classic styles with Style. The Platform Station Name Sign is a separate square template. What you can choose depends on the currently published templates.',
+            keywords: [
+              'template entry',
+              'bus stop sign',
+              'terminal',
+              'route overview',
+              'route details',
+              'metro station name',
+              'metro direction',
+              'platform station name sign',
+            ],
+          },
           'material-workspace-actions': {
             question: 'What do the icon buttons at the top of the material workspace do?',
             answer: [
@@ -1171,7 +1210,9 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
               { icon: 'save', label: 'Export project file' },
               ' appears only while manually editing a metro wayfinding sign and saves JSON that can be imported again. ',
               { icon: 'download', label: 'Download image' },
-              ' downloads according to the current data mode. The inline preview also refreshes automatically after valid input changes.',
+              ' downloads according to the current data mode; when the current content is eligible for review-free export, the button shows ',
+              { icon: 'download', label: 'Download without watermark' },
+              '. The inline preview also refreshes automatically after valid input changes.',
             ],
             keywords: [
               'preview button',
@@ -1179,6 +1220,7 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
               'submit for review',
               'export project',
               'download image',
+              'download without watermark',
               'top buttons',
             ],
           },
@@ -1187,11 +1229,11 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             answer: [
               'In ',
               { text: 'Material Tools', href: '/services' },
-              ', previews are always watermarked, and unreviewed Manual Input can download only a watermarked image. After signing in, use ',
+              ', previews are always watermarked. Manually entered custom material requires signing in and ',
               { icon: 'publish', label: 'Submit for review' },
               '. Approved records remain in My Material History, where ',
               { icon: 'download', label: 'Download' },
-              ' provides an image without the watermark. Server Data and RMP Project Data do not require review; when account authorization is unavailable, downloading falls back to the watermarked preview.',
+              ' provides an image without the watermark. Server lines, imported RMP Project Data, and bus stop signs linked to stations do not require review, but you must sign in and verify the server account first; after verification you can download an image without the watermark directly. A metro wayfinding sign can also be exported without review if only its size, arrows, icons, or spaces changed and its text was not modified; changing station names or other text requires submitting it for review again. When account authorization is unavailable or the server account is not verified, downloading falls back to the watermarked preview.',
             ],
             keywords: [
               'material review',
@@ -1200,6 +1242,23 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
               'custom material',
               'material history',
               'linked data',
+              'review-free',
+              'unmodified text',
+              'watermark-free download',
+            ],
+          },
+          'material-export-audit': {
+            question: 'What is recorded when I preview or download a material?',
+            answer:
+              'Every preview and every watermark-free download writes an audit record containing the operator (anonymous for signed-out previews), IP location, template name and version, content summary, generation time, canvas size, and image ID. Administrators can search Download and Preview Records in the material backoffice by user, template, content, location, or image ID, and filter by preview/download and watermarked/watermark-free. A preview replaced by the next edit leaves no record.',
+            keywords: [
+              'preview record',
+              'download record',
+              'audit',
+              'IP location',
+              'content summary',
+              'image ID',
+              'backoffice filter',
             ],
           },
           'metro-wayfinding-editor': {
