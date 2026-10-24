@@ -3,6 +3,35 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.12.9",
+      "releasedAt": "2026-10-24T16:58:09.890Z",
+      "sourceFingerprint": "7ac19195ea4087d71468f77e3ea5a1d90ccec7c21e8ff12c2aaf8b488b610943",
+      "themes": ["materials"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "服务器线网与导入项目模式可直接无水印导出，下载按钮会显示「下载无水印图片」提示"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "物料后台的下载与预览记录支持搜索、类型与水印筛选，并记录用户、IP 属地、内容摘要与图片 ID"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "本地管理员在本地开发环境直接视为已验证服务器账号，便于验证导出流程"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "地铁导视只调整尺寸或箭头、图标等图形时仍可免审核导出，只有修改文本才会失效"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.12.8",
       "releasedAt": "2026-10-24T14:35:21.248Z",
       "sourceFingerprint": "7a5f198c14aa3ebd07121247ce2c7a05f95f9e9fdcce099dfba55c54fac79c46",
