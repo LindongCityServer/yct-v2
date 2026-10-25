@@ -8,7 +8,9 @@ import { METRO_WAYFINDING_TEMPLATE_ID } from '../../../lib/metro-wayfinding';
 import {
   BUS_STOP_DETAIL_TEMPLATE_ID,
   BUS_STOP_HORIZONTAL_DETAIL_TEMPLATE_ID,
+  BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID,
   BUS_STOP_OVERVIEW_TEMPLATE_ID,
+  BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID,
   BUS_STOP_TERMINAL_TEMPLATE_ID,
   METRO_DIRECTION_NEW_TEMPLATE_ID,
   METRO_DIRECTION_OLD_TEMPLATE_ID,
@@ -28,11 +30,31 @@ const transitMaterialTemplateGroups: MaterialTemplateGroup[] = [
   {
     id: 'bus_stop_merged',
     titleKey: 'materialStudio.group.busStop',
-    variantLabelKey: 'materialStudio.group.layout',
+    layoutLabelKey: 'materialStudio.group.layout',
+    variantLabelKey: 'materialStudio.group.style',
     templateIds: [
       BUS_STOP_TERMINAL_TEMPLATE_ID,
+      BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID,
       BUS_STOP_OVERVIEW_TEMPLATE_ID,
+      BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID,
       BUS_STOP_DETAIL_TEMPLATE_ID,
+    ],
+    layoutGroups: [
+      {
+        id: 'terminal',
+        labelKey: 'materialStudio.layout.busTerminal',
+        templateIds: [BUS_STOP_TERMINAL_TEMPLATE_ID, BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID],
+      },
+      {
+        id: 'overview',
+        labelKey: 'materialStudio.layout.busOverview',
+        templateIds: [BUS_STOP_OVERVIEW_TEMPLATE_ID, BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID],
+      },
+      {
+        id: 'detail',
+        labelKey: 'materialStudio.layout.busDetail',
+        templateIds: [BUS_STOP_DETAIL_TEMPLATE_ID],
+      },
     ],
   },
   {

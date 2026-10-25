@@ -3,6 +3,7 @@
 import { requestConfirmation, requestPageWindow } from '../lib/client-dialog-events';
 
 import type {
+  EntityTranslationRecord,
   MapGeometry,
   MapMarkerSpatialMetadata,
   MapMarkerSnapshot,
@@ -16,13 +17,16 @@ import type {
 } from '@yct/contracts';
 import type {
   FormEvent,
+  MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
+  ReactNode,
   WheelEvent as ReactWheelEvent,
 } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { publishEditorDraftChanged } from '../lib/client-editor-events';
+import { roadNameTranslationEntityId } from '../lib/entity-translation-keys';
 import { selectMapTileTemplates } from '../lib/map-tile-templates';
 import {
   findPoiAddressMarkerMatches,
@@ -34,11 +38,21 @@ import { AdminRefreshButton } from './admin-refresh-button';
 import { LayeredMapTile } from './layered-map-tile';
 import { MaterialSymbol } from './material-symbol';
 import { PoiFacilityEditor } from './poi-facility-editor';
+import { SegmentedControl } from './segmented-control';
+import type { SegmentedControlOption } from './segmented-control';
 import { VisualEditorShell } from './visual-editor-shell';
 
 type StatusFilter = PoiSubmissionStatus | 'all' | 'todo' | 'blocked' | 'legacy';
 type PoiAdminSection = 'submissions' | 'categories';
 type PoiCategoryBoardFilter = 'all' | 'public_enabled' | 'public_disabled';
+type PoiEditTab = 'basic' | 'facility' | 'advanced';
+
+const poiEditTabOptions: ReadonlyArray<SegmentedControlOption<PoiEditTab>> = [
+  { value: 'basic', label: '基本信息', panelId: 'poi-edit-panel-basic' },
+  { value: 'facility', label: '设施 / 出入口', panelId: 'poi-edit-panel-facility' },
+  { value: 'advanced', label: '高级', panelId: 'poi-edit-panel-advanced' },
+];
+
 export type AdminMapMarker = MapMarkerSnapshot['markers'][number];
 type MapMarker = AdminMapMarker;
 
@@ -53,6 +67,27 @@ interface PoiSubmissionImageMetadata {
 type AdminPoiSubmission = PoiSubmission & {
   imageMetadataByUrl?: Record<string, PoiSubmissionImageMetadata>;
 };
+
+interface PoiStationBindingSummary {
+  details: Array<{
+    detailSourceId: string;
+    exitCount: number;
+    facilityCount: number;
+    layerCount: number;
+    lineName: string;
+    stationName: string;
+    transferCount: number;
+  }>;
+  lines: Array<{
+    color?: string;
+    id: string;
+    mode: string;
+    name: string;
+    operationStatus: string;
+  }>;
+  stationName: string;
+  stationSourceId: string;
+}
 
 type PoiSubmissionImageReviewDecision = 'approved' | 'rejected';
 type PoiSubmissionImageReviewInput = PoiSubmissionImageReviewDecision | 'unreviewed';
@@ -162,6 +197,8 @@ type PoiGeometryDraft =
 
 interface PoiTileRegionResponse {
   properties?: {
+    centerX?: number;
+    centerZ?: number;
     minRegionX: number;
     minRegionZ: number;
     maxRegionX: number;
@@ -230,16 +267,19 @@ export function AdminPoiPanel({
   editorMode = 'panel',
   initialMarkerId,
   onEditorClose,
+  pageWorkspace = 'geometry',
 }: Readonly<{
   editorMode?: 'page' | 'panel';
   initialMarkerId?: string;
   onEditorClose?: () => void;
+  pageWorkspace?: 'geometry' | 'intro';
 }>) {
   const [submissions, setSubmissions] = useState<AdminPoiSubmission[]>([]);
   const [categories, setCategories] = useState<PoiCategory[]>([]);
   const [mapMarkers, setMapMarkers] = useState<MapMarker[]>([]);
   const [conflictDecisions, setConflictDecisions] = useState<PoiConflictDecision[]>([]);
   const [imageReviews, setImageReviews] = useState<PoiSubmissionImageReview[]>([]);
+  const [entityTranslations, setEntityTranslations] = useState<EntityTranslationRecord[]>([]);
   const [categoryIconBaseUrl, setCategoryIconBaseUrl] = useState(defaultMarkerIconBaseUrl);
   const [tilePreviewFreshTemplate, setTilePreviewFreshTemplate] = useState<string | null>(null);
   const [tilePreviewTemplate, setTilePreviewTemplate] = useState<string | null>(null);
@@ -534,6 +574,31 @@ export function AdminPoiPanel({
     );
     return new Map(entries);
   }, [mapMarkers, submissions]);
+  const translationBySubmissionId = useMemo(() => {
+    const entries = new Map<string, EntityTranslationRecord>();
+    for (const submission of submissions) {
+      const record =
+        entityTranslations.find(
+          (item) =>
+            item.entityKind === 'map_marker' && item.entityId === `poi-${submission.id}`,
+        ) ??
+        entityTranslations.find(
+          (item) =>
+            item.entityKind === 'map_marker' &&
+            item.entityId === roadNameTranslationEntityId(submission.title),
+        );
+      if (record) {
+        entries.set(submission.id, record);
+      }
+    }
+    return entries;
+  }, [entityTranslations, submissions]);
+  const defaultDraftCoordinate = useMemo<[number, number]>(() => {
+    const properties = tilePreviewRegionResponse?.properties;
+    return properties?.centerX !== undefined && properties.centerZ !== undefined
+      ? [properties.centerX, properties.centerZ]
+      : [-1079, -1009];
+  }, [tilePreviewRegionResponse]);
   const tilePreviewConfig = useMemo<PoiTilePreviewConfig>(
     () => ({
       freshTileTemplate: tilePreviewFreshTemplate,
@@ -669,6 +734,15 @@ export function AdminPoiPanel({
     setTilePreviewRegionResponse(regionData);
   };
 
+  const loadEntityTranslations = async () => {
+    const response = await fetch(appPath('/api/admin/entity-translations'), { cache: 'no-store' });
+    if (!response.ok) {
+      return;
+    }
+    const data = (await response.json()) as { items?: EntityTranslationRecord[] };
+    setEntityTranslations(data.items ?? []);
+  };
+
   const reloadPoiData = () =>
     Promise.all([
       loadSubmissions(),
@@ -677,6 +751,7 @@ export function AdminPoiPanel({
       loadConflictDecisions(),
       loadImageReviews(),
       loadTilePreviewConfig(),
+      loadEntityTranslations(),
     ]).then((result) => {
       setPoiDataLoaded(true);
       return result;
@@ -990,23 +1065,57 @@ export function AdminPoiPanel({
     }
   };
 
-  const createSubmission = async (input: PoiSubmissionEditInput): Promise<string | null> => {
+  const createSubmission = async (
+    input: PoiSubmissionEditInput,
+    options?: { asDraft?: boolean },
+  ): Promise<{ error: string | null; submission: AdminPoiSubmission | null }> => {
     setIsBusy(true);
     try {
       const response = await fetch(appPath('/api/admin/map/poi-submissions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
+        body: JSON.stringify({ ...input, asDraft: options?.asDraft === true }),
       });
       const data = (await response.json()) as AdminPoiSubmission & { message?: string };
       if (!response.ok) {
-        return data.message ?? '新增 POI 失败';
+        return { error: data.message ?? '新增 POI 失败', submission: null };
       }
 
       notifyPoiDataChanged('submission_created');
       await reloadPoiData();
+      if (options?.asDraft) {
+        setStatusFilter('draft');
+        setStatusText(`已保存 ${data.title} 草稿，可继续完善几何与简介后再提交审核。`);
+      } else {
+        setStatusFilter('pending_review');
+        setStatusText(`已新增 ${data.title}，当前进入待审核队列。`);
+      }
+      return { error: null, submission: data };
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const submitDraftForReview = async (poiId: string): Promise<string | null> => {
+    setIsBusy(true);
+    try {
+      const response = await fetch(
+        appPath(`/api/admin/map/poi-submissions/${encodeURIComponent(poiId)}/submit`),
+        { method: 'POST' },
+      );
+      const data = (await response.json()) as {
+        message?: string;
+        status?: PoiSubmissionStatus;
+        title?: string;
+      };
+      if (!response.ok) {
+        return data.message ?? '提交审核失败';
+      }
+
+      notifyPoiDataChanged('status_changed');
+      await reloadPoiData();
       setStatusFilter('pending_review');
-      setStatusText(`已新增 ${data.title}，当前进入待审核队列。`);
+      setStatusText(`已将 ${data.title ?? '该 POI'} 提交审核。`);
       return null;
     } finally {
       setIsBusy(false);
@@ -1280,15 +1389,18 @@ export function AdminPoiPanel({
         <EditPoiSubmissionDialog
           categories={categories}
           contextMarkers={auditContextMarkersBySubmissionId.get(editTarget.id) ?? []}
+          defaultCoordinate={defaultDraftCoordinate}
           editorMode="page"
           editorSessionId={editorSessionId}
           iconBaseUrl={categoryIconBaseUrl}
           isBusy={isBusy}
+          pageWorkspace={pageWorkspace}
           parentMarkerOptions={parentMarkerOptions}
           regionMarkerOptions={regionMarkerOptions}
           roadMarkerOptions={roadMarkerOptions}
           submission={editTarget}
           tilePreviewConfig={tilePreviewConfig}
+          translation={translationBySubmissionId.get(editTarget.id)}
           onClose={closeEditor}
           onSubmit={async (input) => {
             const error = await updateSubmission(editTarget.id, input);
@@ -1704,12 +1816,14 @@ export function AdminPoiPanel({
           categories={categories}
           iconBaseUrl={categoryIconBaseUrl}
           contextMarkers={auditContextMarkersBySubmissionId.get(editTarget.id) ?? []}
+          defaultCoordinate={defaultDraftCoordinate}
           isBusy={isBusy}
           parentMarkerOptions={parentMarkerOptions}
           regionMarkerOptions={regionMarkerOptions}
           roadMarkerOptions={roadMarkerOptions}
           submission={editTarget}
           tilePreviewConfig={tilePreviewConfig}
+          translation={translationBySubmissionId.get(editTarget.id)}
           onClose={() => setEditTarget(null)}
           onSubmit={async (input) => {
             const error = await updateSubmission(editTarget.id, input);
@@ -1718,6 +1832,7 @@ export function AdminPoiPanel({
             }
             return error;
           }}
+          onSubmitForReview={async () => submitDraftForReview(editTarget.id)}
         />
       ) : null}
 
@@ -1726,6 +1841,7 @@ export function AdminPoiPanel({
           categories={categories}
           iconBaseUrl={categoryIconBaseUrl}
           contextMarkers={[]}
+          defaultCoordinate={defaultDraftCoordinate}
           initialParentMarkerId={createTarget.parentMarkerId}
           isBusy={isBusy}
           parentMarkerOptions={parentMarkerOptions}
@@ -1734,11 +1850,19 @@ export function AdminPoiPanel({
           tilePreviewConfig={tilePreviewConfig}
           onClose={() => setCreateTarget(null)}
           onSubmit={async (input) => {
-            const error = await createSubmission(input);
-            if (!error) {
+            const result = await createSubmission(input);
+            if (!result.error) {
               setCreateTarget(null);
             }
-            return error;
+            return result.error;
+          }}
+          onSaveDraft={async (input) => {
+            const result = await createSubmission(input, { asDraft: true });
+            if (!result.error && result.submission) {
+              setCreateTarget(null);
+              setEditTarget(result.submission);
+            }
+            return result.error;
           }}
         />
       ) : null}
@@ -1847,6 +1971,32 @@ function LegacyPoiMarkerItem({
   );
 }
 
+/** POI 编辑弹窗统一分区外壳：标题 + 摘要 + 可选操作，正文由调用方决定。 */
+function PoiEditorSection({
+  actions,
+  children,
+  summary,
+  title,
+}: Readonly<{
+  actions?: ReactNode;
+  children: ReactNode;
+  summary?: string;
+  title: string;
+}>) {
+  return (
+    <section className="poi-editor-section">
+      <div className="poi-editor-section-heading">
+        <div>
+          <strong>{title}</strong>
+          {summary ? <span>{summary}</span> : null}
+        </div>
+        {actions}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function AdminPoiBusinessDetailsFields({
   disabled,
   excludedParentMarkerId,
@@ -1854,6 +2004,7 @@ function AdminPoiBusinessDetailsFields({
   onChange,
   parentMarkerOptions,
   roadMarkerOptions,
+  showFacilities = true,
 }: Readonly<{
   disabled: boolean;
   excludedParentMarkerId?: string;
@@ -1881,6 +2032,7 @@ function AdminPoiBusinessDetailsFields({
   ) => void;
   parentMarkerOptions: MapMarker[];
   roadMarkerOptions: MapMarker[];
+  showFacilities?: boolean;
 }>) {
   const matchingRoads = findAddressRoadMarkers(form.address, roadMarkerOptions);
   const matchingRoadIds = new Set(matchingRoads.map((marker) => marker.id));
@@ -1988,11 +2140,13 @@ function AdminPoiBusinessDetailsFields({
           ))}
         </select>
       </label>
-      <PoiFacilityEditor
-        disabled={disabled}
-        facilities={form.facilities}
-        onChange={(facilities) => onChange({ facilities })}
-      />
+      {showFacilities ? (
+        <PoiFacilityEditor
+          disabled={disabled}
+          facilities={form.facilities}
+          onChange={(facilities) => onChange({ facilities })}
+        />
+      ) : null}
     </div>
   );
 }
@@ -2053,6 +2207,7 @@ function compactPoiSpatialMetadata(
       ? Array.from(new Set(spatial.allowedModes))
       : undefined,
     style: style && Object.keys(style).length > 0 ? style : undefined,
+    hideMarkerIcon: spatial.hideMarkerIcon || undefined,
     dynamicSymbol: spatial.dynamicSymbol?.ref.trim()
       ? { ...spatial.dynamicSymbol, ref: spatial.dynamicSymbol.ref.trim() }
       : undefined,
@@ -2210,8 +2365,7 @@ function PoiSpatialMetadataEditor({
 
   return (
     <>
-      <fieldset className="admin-poi-spatial-editor">
-        <legend>路网与通行</legend>
+      <PoiEditorSection summary="道路/通道网络与可达性" title="路网与通行">
         <div className="admin-poi-edit-coordinate-fields">
           <label>
             <span>网络类型</span>
@@ -2257,7 +2411,7 @@ function PoiSpatialMetadataEditor({
             </select>
           </label>
         </div>
-        <fieldset>
+        <fieldset className="poi-editor-subsection">
           <legend>允许通行方式</legend>
           <div className="admin-inline-checkboxes">
             {(
@@ -2308,9 +2462,8 @@ function PoiSpatialMetadataEditor({
             <span>无障碍可通行</span>
           </label>
         </div>
-      </fieldset>
-      <fieldset className="admin-poi-spatial-editor">
-        <legend>通行限制</legend>
+      </PoiEditorSection>
+      <PoiEditorSection summary="阻断区域与禁止穿越方式" title="通行限制">
         <label className="admin-inline-checkbox">
           <input
             type="checkbox"
@@ -2330,7 +2483,7 @@ function PoiSpatialMetadataEditor({
           <span>{waterCategory ? '水域分类默认阻断直接穿越' : '作为通行阻断区域'}</span>
         </label>
         {normalizedValue?.traversalBarrier?.kind === 'blocked_area' ? (
-          <fieldset>
+          <fieldset className="poi-editor-subsection">
             <legend>阻断直接穿越的方式</legend>
             <div className="admin-inline-checkboxes">
               {(
@@ -2354,9 +2507,8 @@ function PoiSpatialMetadataEditor({
             </div>
           </fieldset>
         ) : null}
-      </fieldset>
-      <fieldset className="admin-poi-spatial-editor">
-        <legend>地图展示与立体样式</legend>
+      </PoiEditorSection>
+      <PoiEditorSection summary="区域填充、线路色与 2.5D 体块" title="地图展示与立体样式">
         <div className="admin-poi-edit-coordinate-fields">
           <label>
             <span>填充颜色</span>
@@ -2483,9 +2635,8 @@ function PoiSpatialMetadataEditor({
             </label>
           </div>
         ) : null}
-      </fieldset>
-      <fieldset className="admin-poi-spatial-editor">
-        <legend>标记符号</legend>
+      </PoiEditorSection>
+      <PoiEditorSection summary="地铁出入口、道路与高速编号" title="标记符号">
         <div className="admin-poi-edit-coordinate-fields">
           <label>
             <span>动态编号图标</span>
@@ -2521,7 +2672,7 @@ function PoiSpatialMetadataEditor({
             />
           </label>
         </div>
-      </fieldset>
+      </PoiEditorSection>
     </>
   );
 }
@@ -2539,8 +2690,7 @@ function PoiWorldMetadataEditor({
     onChange(compactPoiSpatialMetadata({ ...value, ...patch }));
 
   return (
-    <fieldset className="admin-poi-spatial-editor">
-      <legend>世界与高度</legend>
+    <PoiEditorSection summary="世界 ID 与默认高度" title="世界与高度">
       <div className="admin-poi-edit-coordinate-fields">
         <label>
           <span>世界 ID</span>
@@ -2564,7 +2714,7 @@ function PoiWorldMetadataEditor({
           </label>
         ) : null}
       </div>
-    </fieldset>
+    </PoiEditorSection>
   );
 }
 
@@ -2830,10 +2980,19 @@ function EditLegacyPoiMarkerDialog({
       <AdminPoiIconPicker
         defaultIconFileName={selectedCategory?.iconMapping.defaultIconFileName}
         disabled={isBusy}
+        hidden={Boolean(form.spatial?.hideMarkerIcon)}
         iconBaseUrl={iconBaseUrl}
         options={iconOptions}
         value={form.iconFileName}
         onChange={(iconFileName) => updateForm({ iconFileName })}
+        onHiddenChange={(hidden) =>
+          updateForm({
+            spatial: compactPoiSpatialMetadata({
+              ...form.spatial,
+              hideMarkerIcon: hidden || undefined,
+            }),
+          })
+        }
       />
       <label>
         <span>简介</span>
@@ -3546,7 +3705,11 @@ function PoiSubmissionDetail({
         </div>
         <div>
           <dt>展示图标</dt>
-          <dd>{submission.iconFileName || '跟随分类默认图标'}</dd>
+          <dd>
+            {submission.spatial?.hideMarkerIcon
+              ? '不使用图标（仅显示名称标签）'
+              : submission.iconFileName || '跟随分类默认图标'}
+          </dd>
         </div>
         <div>
           <dt>几何</dt>
@@ -4223,33 +4386,43 @@ function BulkPublishPoiDialog({
 function EditPoiSubmissionDialog({
   categories,
   contextMarkers,
+  defaultCoordinate = [0, 0],
   editorMode = 'dialog',
   editorSessionId = 'poi-dialog',
   initialParentMarkerId,
   iconBaseUrl,
   isBusy,
   onClose,
+  onSaveDraft,
   onSubmit,
+  onSubmitForReview,
+  pageWorkspace = 'geometry',
   parentMarkerOptions,
   regionMarkerOptions,
   roadMarkerOptions,
   submission,
   tilePreviewConfig,
+  translation,
 }: Readonly<{
   categories: PoiCategory[];
   contextMarkers: PoiAuditContextMarker[];
+  defaultCoordinate?: [number, number];
   editorMode?: 'dialog' | 'page';
   editorSessionId?: string;
   initialParentMarkerId?: string;
   iconBaseUrl: string;
   isBusy: boolean;
   onClose: () => void;
+  onSaveDraft?: (input: PoiSubmissionEditInput) => Promise<string | null>;
   onSubmit: (input: PoiSubmissionEditInput) => Promise<string | null>;
+  onSubmitForReview?: () => Promise<string | null>;
+  pageWorkspace?: 'geometry' | 'intro';
   parentMarkerOptions: MapMarker[];
   regionMarkerOptions: MapMarker[];
   roadMarkerOptions: MapMarker[];
   submission?: PoiSubmission;
   tilePreviewConfig: PoiTilePreviewConfig;
+  translation?: EntityTranslationRecord;
 }>) {
   const [form, setForm] = useState<PoiSubmissionFormInput>(() => ({
     title: submission?.title ?? '',
@@ -4284,6 +4457,38 @@ function EditPoiSubmissionDialog({
     }
   }, [form.spatial?.coordinateY, form.spatial?.defaultY, geometryDraft.type]);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<PoiEditTab>('basic');
+  const [stationBindings, setStationBindings] = useState<PoiStationBindingSummary[] | null>(null);
+  const submissionMarkerId = submission ? `poi-${submission.id}` : null;
+  useEffect(() => {
+    if (!submissionMarkerId) {
+      setStationBindings(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+    void fetch(
+      appPath(
+        `/api/admin/map/poi-station-bindings?markerId=${encodeURIComponent(submissionMarkerId)}`,
+      ),
+      { cache: 'no-store' },
+    )
+      .then((response) => (response.ok ? response.json() : { items: [] }))
+      .then((data: { items?: PoiStationBindingSummary[] }) => {
+        if (!cancelled) {
+          setStationBindings(Array.isArray(data.items) ? data.items : []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStationBindings([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [submissionMarkerId]);
   const selectedCategory = categories.find((category) => category.id === form.categoryId);
   const iconOptions = selectedCategory?.iconMapping.iconFileNames ?? [];
 
@@ -4319,35 +4524,45 @@ function EditPoiSubmissionDialog({
     publishEditorDraftChanged({ dirty: true, editorKind: 'poi', sessionId: editorSessionId });
   };
 
-  const save = async () => {
+  const buildInput = (options?: {
+    allowMissingGeometry?: boolean;
+  }): PoiSubmissionEditInput | null => {
     if (!form.title.trim()) {
+      setActiveTab('basic');
       setError('请填写地点名称。');
-      return;
+      return null;
     }
 
     if (!form.categoryId.trim()) {
+      setActiveTab('basic');
       setError('请选择地点分类。');
-      return;
+      return null;
     }
     if (form.facilities.some((facility) => !facility.description.trim())) {
+      setActiveTab('facility');
       setError('请填写每条设施信息的文字描述。');
-      return;
+      return null;
     }
 
     const geometryResult = buildMapGeometryFromDraft(geometryDraft);
-    if (!geometryResult.geometry) {
-      setError(geometryResult.error ?? '请填写有效的几何坐标。');
-      return;
+    let geometry = geometryResult.geometry;
+    if (!geometry) {
+      if (!options?.allowMissingGeometry) {
+        setActiveTab('basic');
+        setError(geometryResult.error ?? '请填写有效的几何坐标。');
+        return null;
+      }
+      geometry = { coordinates: defaultCoordinate, type: 'Point' };
     }
 
-    const submitError = await onSubmit({
+    return {
       title: form.title.trim(),
       categoryId: form.categoryId.trim(),
       iconFileName: form.iconFileName.trim(),
       description: form.description.trim(),
       href: form.href.trim(),
       imageUrls: normalizePoiImageUrlList(form.imageUrls),
-      geometry: geometryResult.geometry,
+      geometry,
       spatial: normalizePoiSpatialInput(
         {
           ...form.spatial,
@@ -4357,7 +4572,7 @@ function EditPoiSubmissionDialog({
               : extractCoordinateYDraftValues(geometryDraft),
         },
         form.categoryId,
-        geometryResult.geometry.type,
+        geometry.type,
       ),
       parentMarkerId: form.parentMarkerId.trim(),
       floorLabel: form.floorLabel.trim(),
@@ -4366,12 +4581,47 @@ function EditPoiSubmissionDialog({
       address: form.address.trim(),
       addressRoadMarkerId: form.addressRoadMarkerId,
       facilities: form.facilities,
-    });
+    };
+  };
+
+  const persist = async (
+    handler: (input: PoiSubmissionEditInput) => Promise<string | null>,
+    options?: { allowMissingGeometry?: boolean },
+  ): Promise<boolean> => {
+    const input = buildInput(options);
+    if (!input) {
+      return false;
+    }
+
+    const submitError = await handler(input);
     if (submitError) {
       setError(submitError);
-    } else {
-      setIsDirty(false);
-      publishEditorDraftChanged({ dirty: false, editorKind: 'poi', sessionId: editorSessionId });
+      return false;
+    }
+
+    setError('');
+    setIsDirty(false);
+    publishEditorDraftChanged({ dirty: false, editorKind: 'poi', sessionId: editorSessionId });
+    return true;
+  };
+
+  const save = () => persist(onSubmit);
+  const saveDraft = async () => {
+    if (onSaveDraft) {
+      await persist(onSaveDraft, { allowMissingGeometry: true });
+    }
+  };
+  const saveAndSubmitForReview = async () => {
+    if (!onSubmitForReview) {
+      return;
+    }
+    const saved = await persist(onSubmit);
+    if (!saved) {
+      return;
+    }
+    const reviewError = await onSubmitForReview();
+    if (reviewError) {
+      setError(reviewError);
     }
   };
 
@@ -4381,6 +4631,50 @@ function EditPoiSubmissionDialog({
   };
 
   if (editorMode === 'page') {
+    if (pageWorkspace === 'intro') {
+      return (
+        <VisualEditorShell
+          actions={
+            <button
+              className="secondary-action-button is-primary"
+              type="button"
+              aria-busy={isBusy}
+              disabled={isBusy}
+              onClick={() => void save()}
+            >
+              <span
+                className={`material-symbols-outlined${isBusy ? ' busy-state-indicator' : ''}`}
+                aria-hidden="true"
+              >
+                {isBusy ? 'progress_activity' : 'save'}
+              </span>
+              <span>{isBusy ? '保存中' : '保存简介'}</span>
+            </button>
+          }
+          backHref="/admin/map-poi"
+          editorKind="poi"
+          isBusy={isBusy}
+          isDirty={isDirty}
+          onSave={() => void save()}
+          sessionId={editorSessionId}
+          status={error || describePoiIntroSummary(form)}
+          title={`编辑 ${submission?.title ?? 'POI'} 简介`}
+          workspace
+        >
+          <PoiIntroWorkspace
+            disabled={isBusy}
+            excludedParentMarkerId={submission ? `poi-${submission.id}` : undefined}
+            form={form}
+            iconBaseUrl={iconBaseUrl}
+            parentMarkerOptions={parentMarkerOptions}
+            roadMarkerOptions={roadMarkerOptions}
+            selectedCategory={selectedCategory}
+            onChange={updateForm}
+          />
+        </VisualEditorShell>
+      );
+    }
+
     return (
       <VisualEditorShell
         actions={
@@ -4427,78 +4721,140 @@ function EditPoiSubmissionDialog({
     );
   }
 
-  const geometryEditorElement = submission ? (
-    <section className="admin-geometry-launch-card" aria-label="POI 几何">
-      <div>
-        <strong>POI 几何</strong>
-        <span className="muted">{geometryLabelFromDraft(geometryDraft)}</span>
-      </div>
-      <p className="muted">坐标和边界控制点请在独立几何工作台中调整。</p>
-      <a
-        className="secondary-action-button"
-        href={appPath(`/admin/map-poi/editor?markerId=${encodeURIComponent(submission.id)}`)}
-      >
-        <span className="material-symbols-outlined" aria-hidden="true">
-          edit_location_alt
-        </span>
-        <span>打开几何工作台</span>
-      </a>
-    </section>
-  ) : geometryDraft.type === 'Point' ? (
-    <div className="admin-poi-edit-coordinate">
-      <div className="poi-visual-point-fields">
-        <label>
-          <span>X</span>
-          <input
-            inputMode="decimal"
-            value={geometryDraft.coordinate.x}
-            onChange={(event) =>
-              updateGeometryDraft({
-                type: 'Point',
-                coordinate: { ...geometryDraft.coordinate, x: event.currentTarget.value },
-              })
-            }
-          />
-        </label>
-        <label>
-          <span>Y</span>
-          <input
-            inputMode="decimal"
-            value={pointYText}
-            placeholder="继承默认"
-            onChange={(event) => {
-              setPointYText(event.currentTarget.value);
-              const nextSpatial = updatePoiPointCoordinateY(
-                form.spatial,
-                event.currentTarget.value,
-              );
-              if (nextSpatial !== null) updateForm({ spatial: nextSpatial });
-            }}
-          />
-        </label>
-        <label>
-          <span>Z</span>
-          <input
-            inputMode="decimal"
-            value={geometryDraft.coordinate.z}
-            onChange={(event) =>
-              updateGeometryDraft({
-                type: 'Point',
-                coordinate: { ...geometryDraft.coordinate, z: event.currentTarget.value },
-              })
-            }
-          />
-        </label>
-      </div>
-    </div>
-  ) : (
-    <PoiNonPointGeometryEditor
-      contextMarkers={contextMarkers}
-      draft={geometryDraft}
-      showMap={false}
-      tilePreviewConfig={tilePreviewConfig}
-      onChange={updateGeometryDraft}
-    />
+  const geometryMetrics = describePoiGeometry(
+    buildMapGeometryFromDraft(geometryDraft).geometry ?? null,
+  );
+
+  const geometryEditorElement = (
+    <>
+      <PoiEditorSection summary={geometryLabelFromDraft(geometryDraft)} title="几何">
+        <p className="muted">
+          {`中点 ${geometryMetrics.center} · ${geometryMetrics.detail}`}
+        </p>
+        {submission ? (
+          <a
+            className="secondary-action-button"
+            href={appPath(`/admin/map-poi/editor?markerId=${encodeURIComponent(submission.id)}`)}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              edit_location_alt
+            </span>
+            <span>打开几何工作台</span>
+          </a>
+        ) : (
+          <p className="muted">坐标可以留空：先保存草稿，再进入几何工作台选择类型并增删坐标。</p>
+        )}
+      </PoiEditorSection>
+      {!submission ? (
+        <PoiEditorSection summary="未设置坐标时可先保存草稿" title="坐标">
+          <label>
+            <span>几何类型</span>
+            <select
+              value={geometryDraft.type}
+              onChange={(event) =>
+                updateGeometryDraft(
+                  createEmptyPoiGeometryDraft(
+                    event.currentTarget.value as PoiGeometryDraft['type'],
+                    getGeometryDraftRepresentativeCoordinate(geometryDraft),
+                  ),
+                )
+              }
+            >
+              <option value="Point">点状 POI</option>
+              <option value="MultiPoint">多点对象</option>
+              <option value="LineString">道路 / 线性 POI</option>
+              <option value="Rectangle">矩形区域</option>
+              <option value="MultiRectangle">多矩形区域</option>
+              <option value="Polygon">多边形区域</option>
+              <option value="MultiPolygon">多重多边形区域</option>
+            </select>
+          </label>
+          {geometryDraft.type === 'Point' ? (
+            <div className="admin-poi-edit-coordinate">
+              <div className="poi-visual-point-fields">
+                <label>
+                  <span>X</span>
+                  <input
+                    inputMode="decimal"
+                    value={geometryDraft.coordinate.x}
+                    onChange={(event) =>
+                      updateGeometryDraft({
+                        type: 'Point',
+                        coordinate: { ...geometryDraft.coordinate, x: event.currentTarget.value },
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Y</span>
+                  <input
+                    inputMode="decimal"
+                    value={pointYText}
+                    placeholder="继承默认"
+                    onChange={(event) => {
+                      setPointYText(event.currentTarget.value);
+                      const nextSpatial = updatePoiPointCoordinateY(
+                        form.spatial,
+                        event.currentTarget.value,
+                      );
+                      if (nextSpatial !== null) updateForm({ spatial: nextSpatial });
+                    }}
+                  />
+                </label>
+                <label>
+                  <span>Z</span>
+                  <input
+                    inputMode="decimal"
+                    value={geometryDraft.coordinate.z}
+                    onChange={(event) =>
+                      updateGeometryDraft({
+                        type: 'Point',
+                        coordinate: { ...geometryDraft.coordinate, z: event.currentTarget.value },
+                      })
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+          ) : (
+            <PoiNonPointGeometryEditor
+              contextMarkers={contextMarkers}
+              draft={geometryDraft}
+              showMap={false}
+              tilePreviewConfig={tilePreviewConfig}
+              onChange={updateGeometryDraft}
+            />
+          )}
+        </PoiEditorSection>
+      ) : null}
+    </>
+  );
+
+  const introEditorElement = (
+    <PoiEditorSection summary={describePoiIntroSummary(form)} title="简介与图片">
+      <p className="muted">
+        {[
+          form.openingHours.trim() || '未填写营业时间',
+          form.address.trim() || '未填写文字地址',
+          form.floorLabel.trim(),
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+      </p>
+      {submission ? (
+        <a
+          className="secondary-action-button"
+          href={appPath(`/admin/map-poi/intro-editor?markerId=${encodeURIComponent(submission.id)}`)}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            article
+          </span>
+          <span>打开简介工作台</span>
+        </a>
+      ) : (
+        <p className="muted">保存草稿后可进入简介工作台编辑图片、简介、营业时间、地址与链接。</p>
+      )}
+    </PoiEditorSection>
   );
 
   const formElement = (
@@ -4513,123 +4869,224 @@ function EditPoiSubmissionDialog({
       <div className="section-heading">
         <h2 id="admin-poi-edit-title">{submission ? '修正 POI 投稿' : '新增 POI'}</h2>
         <span className="muted">
-          {submission ? getPoiEditDialogHint(submission.status) : '保存后进入待审核队列'}
+          {submission
+            ? getPoiEditDialogHint(submission.status)
+            : '建议先保存草稿，再进入几何/简介工作台完善内容'}
         </span>
       </div>
-      <label>
-        <span>地点名称</span>
-        <input
-          value={form.title}
-          onChange={(event) => updateForm({ title: event.currentTarget.value })}
-          maxLength={200}
-        />
-      </label>
-      <label>
-        <span>分类</span>
-        <select
-          value={form.categoryId}
-          onChange={(event) => updateForm({ categoryId: event.currentTarget.value })}
+      <SegmentedControl
+        ariaLabel="POI 编辑分区"
+        className="material-mode-switch material-variant-switch admin-poi-edit-tabs"
+        disabled={isBusy}
+        options={poiEditTabOptions}
+        role="tablist"
+        value={activeTab}
+        onChange={setActiveTab}
+      />
+      {activeTab === 'basic' ? (
+        <div
+          className="admin-poi-edit-tabpanel"
+          id="poi-edit-panel-basic"
+          role="tabpanel"
+          aria-label="基本信息"
         >
-          {categories.map((category) => (
-            <option value={category.id} key={category.id}>
-              {formatCategoryName(category.id, category)}
-            </option>
-          ))}
-        </select>
-      </label>
-      <AdminPoiIconPicker
-        defaultIconFileName={selectedCategory?.iconMapping.defaultIconFileName}
-        disabled={isBusy}
-        iconBaseUrl={iconBaseUrl}
-        options={iconOptions}
-        value={form.iconFileName}
-        onChange={(iconFileName) => updateForm({ iconFileName })}
-      />
-      <label>
-        <span>简介</span>
-        <textarea
-          value={form.description}
-          onChange={(event) => updateForm({ description: event.currentTarget.value })}
-          maxLength={1000}
-        />
-      </label>
-      <AdminPoiBusinessDetailsFields
-        disabled={isBusy}
-        excludedParentMarkerId={submission ? `poi-${submission.id}` : undefined}
-        form={form}
-        parentMarkerOptions={parentMarkerOptions}
-        roadMarkerOptions={roadMarkerOptions}
-        onChange={updateForm}
-      />
-      <label>
-        <span>链接</span>
-        <input
-          value={form.href}
-          onChange={(event) => updateForm({ href: event.currentTarget.value })}
-          placeholder="https://..."
-        />
-      </label>
-      <AdminPoiImageEditor
-        disabled={isBusy}
-        values={form.imageUrls}
-        onChange={(imageUrls) => updateForm({ imageUrls })}
-      />
-      {!submission ? (
-        <label>
-          <span>几何类型</span>
-          <select
-            value={geometryDraft.type}
-            onChange={(event) =>
-              updateGeometryDraft(
-                createEmptyPoiGeometryDraft(
-                  event.currentTarget.value as PoiGeometryDraft['type'],
-                  getGeometryDraftRepresentativeCoordinate(geometryDraft),
-                ),
-              )
+          <label>
+            <span>地点名称</span>
+            <input
+              value={form.title}
+              onChange={(event) => updateForm({ title: event.currentTarget.value })}
+              maxLength={200}
+            />
+          </label>
+          <label>
+            <span>分类</span>
+            <select
+              value={form.categoryId}
+              onChange={(event) => updateForm({ categoryId: event.currentTarget.value })}
+            >
+              {categories.map((category) => (
+                <option value={category.id} key={category.id}>
+                  {formatCategoryName(category.id, category)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <AdminPoiIconPicker
+            defaultIconFileName={selectedCategory?.iconMapping.defaultIconFileName}
+            disabled={isBusy}
+            hidden={Boolean(form.spatial?.hideMarkerIcon)}
+            iconBaseUrl={iconBaseUrl}
+            options={iconOptions}
+            value={form.iconFileName}
+            onChange={(iconFileName) => updateForm({ iconFileName })}
+            onHiddenChange={(hidden) =>
+              updateForm({
+                spatial: compactPoiSpatialMetadata({
+                  ...form.spatial,
+                  hideMarkerIcon: hidden || undefined,
+                }),
+              })
             }
-          >
-            <option value="Point">点状 POI</option>
-            <option value="MultiPoint">多点对象</option>
-            <option value="LineString">道路 / 线性 POI</option>
-            <option value="Rectangle">矩形区域</option>
-            <option value="MultiRectangle">多矩形区域</option>
-            <option value="Polygon">多边形区域</option>
-            <option value="MultiPolygon">多重多边形区域</option>
-          </select>
-        </label>
+          />
+          {submission ? (
+            <PoiEditorSection
+              summary={translation ? '来自名称翻译后台' : '尚未维护'}
+              title="外语名称"
+            >
+              <p className="muted">
+                {translation
+                  ? `繁體：${translation.localizedLabels['zh-Hant'] || '未填写'} · English：${translation.localizedLabels.en || '未填写'}`
+                  : '译名在名称翻译后台维护，未填写的语种会自动回退到中文名称。'}
+              </p>
+              {translation?.roadSignPinyin ? (
+                <p className="muted">{`路牌拼音：${translation.roadSignPinyin}`}</p>
+              ) : null}
+              <a className="secondary-action-button" href={appPath('/admin/translations')}>
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  translate
+                </span>
+                <span>打开名称翻译后台</span>
+              </a>
+            </PoiEditorSection>
+          ) : null}
+          {geometryEditorElement}
+          {introEditorElement}
+        </div>
       ) : null}
-      <ParentMarkerSelect
-        categories={categories}
-        excludedMarkerId={submission ? `poi-${submission.id}` : undefined}
-        iconBaseUrl={iconBaseUrl}
-        markerOptions={parentMarkerOptions}
-        selectedId={form.parentMarkerId}
-        onChange={(parentMarkerId) => updateForm({ parentMarkerId })}
-      />
-      <PoiRegionBindingsFieldset
-        markerOptions={regionMarkerOptions}
-        selectedIds={form.boundRegionMarkerIds}
-        onChange={(boundRegionMarkerIds) => updateForm({ boundRegionMarkerIds })}
-      />
-      {geometryEditorElement}
-      <PoiWorldMetadataEditor
-        isPoint={geometryDraft.type === 'Point'}
-        value={form.spatial}
-        onChange={(spatial) => updateForm({ spatial })}
-      />
-      <PoiSpatialMetadataEditor
-        categoryId={form.categoryId}
-        geometry={buildMapGeometryFromDraft(geometryDraft).geometry}
-        value={form.spatial}
-        onChange={(spatial) => updateForm({ spatial })}
-      />
+      {activeTab === 'facility' ? (
+        <div
+          className="admin-poi-edit-tabpanel"
+          id="poi-edit-panel-facility"
+          role="tabpanel"
+          aria-label="设施与出入口"
+        >
+          <ParentMarkerSelect
+            categories={categories}
+            excludedMarkerId={submission ? `poi-${submission.id}` : undefined}
+            iconBaseUrl={iconBaseUrl}
+            markerOptions={parentMarkerOptions}
+            selectedId={form.parentMarkerId}
+            onChange={(parentMarkerId) => updateForm({ parentMarkerId })}
+          />
+          <PoiRegionBindingsFieldset
+            markerOptions={regionMarkerOptions}
+            selectedIds={form.boundRegionMarkerIds}
+            onChange={(boundRegionMarkerIds) => updateForm({ boundRegionMarkerIds })}
+          />
+          <PoiFacilityEditor
+            disabled={isBusy}
+            facilities={form.facilities}
+            onChange={(facilities) => updateForm({ facilities })}
+          />
+          <PoiEditorSection
+            summary={
+              stationBindings && stationBindings.length > 0
+                ? `已绑定 ${stationBindings.length} 个车站`
+                : submission
+                  ? '未绑定车站'
+                  : '发布并绑定车站后可查看'
+            }
+            title="站内信息"
+          >
+            {stationBindings === null ? (
+              <p className="muted">正在读取站内信息…</p>
+            ) : stationBindings.length === 0 ? (
+              <p className="muted">
+                楼层、站内设施、换乘与出口属于「线路与班次」后台的车站数据。在车站详情里把该地点绑定为车站后，站内信息会显示在这里。
+              </p>
+            ) : (
+              <div className="poi-station-bindings">
+                {stationBindings.map((binding) => (
+                  <div className="poi-station-binding" key={binding.stationSourceId}>
+                    <div className="poi-station-binding-heading">
+                      <strong>{binding.stationName}</strong>
+                      <span className="muted">
+                        {binding.lines.map((line) => line.name).join(' / ') || '未关联线路'}
+                      </span>
+                    </div>
+                    {binding.details.length > 0 ? (
+                      <ul className="poi-station-binding-details">
+                        {binding.details.map((detail) => (
+                          <li key={detail.detailSourceId}>
+                            <span>{`${detail.lineName} · ${detail.stationName}`}</span>
+                            <small className="muted">
+                              {`${detail.layerCount} 层 · ${detail.facilityCount} 项设施 · ${detail.transferCount} 处换乘 · ${detail.exitCount} 个出口`}
+                            </small>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="muted">该车站尚未维护站内信息。</p>
+                    )}
+                    {binding.lines[0] ? (
+                      <a
+                        className="secondary-action-button"
+                        href={appPath(
+                          `/admin/transit?section=lines&lineId=${encodeURIComponent(binding.lines[0].id)}`,
+                        )}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          directions_transit
+                        </span>
+                        <span>打开线路与班次后台</span>
+                      </a>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+            {!stationBindings?.length ? (
+              <a className="secondary-action-button" href={appPath('/admin/transit')}>
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  directions_transit
+                </span>
+                <span>打开线路与班次后台</span>
+              </a>
+            ) : null}
+          </PoiEditorSection>
+        </div>
+      ) : null}
+      {activeTab === 'advanced' ? (
+        <div
+          className="admin-poi-edit-tabpanel"
+          id="poi-edit-panel-advanced"
+          role="tabpanel"
+          aria-label="高级设置"
+        >
+          <PoiWorldMetadataEditor
+            isPoint={geometryDraft.type === 'Point'}
+            value={form.spatial}
+            onChange={(spatial) => updateForm({ spatial })}
+          />
+          <PoiSpatialMetadataEditor
+            categoryId={form.categoryId}
+            geometry={buildMapGeometryFromDraft(geometryDraft).geometry}
+            value={form.spatial}
+            onChange={(spatial) => updateForm({ spatial })}
+          />
+        </div>
+      ) : null}
       {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
       <div className="admin-content-actions">
         <button type="button" onClick={onClose} disabled={isBusy}>
           取消
         </button>
+        {!submission && onSaveDraft ? (
+          <button type="button" disabled={isBusy} onClick={() => void saveDraft()}>
+            保存草稿
+          </button>
+        ) : null}
+        {submission?.status === 'draft' && onSubmitForReview ? (
+          <button type="button" disabled={isBusy} onClick={() => void saveAndSubmitForReview()}>
+            保存并提交审核
+          </button>
+        ) : null}
         <button type="submit" disabled={isBusy}>
-          {submission ? '保存修正' : '创建 POI'}
+          {submission
+            ? submission.status === 'draft'
+              ? '保存草稿'
+              : '保存修正'
+            : '创建并提交审核'}
         </button>
       </div>
     </form>
@@ -4638,6 +5095,132 @@ function EditPoiSubmissionDialog({
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       {formElement}
+    </div>
+  );
+}
+
+function PoiIntroWorkspace({
+  disabled,
+  excludedParentMarkerId,
+  form,
+  iconBaseUrl,
+  onChange,
+  parentMarkerOptions,
+  roadMarkerOptions,
+  selectedCategory,
+}: Readonly<{
+  disabled: boolean;
+  excludedParentMarkerId?: string;
+  form: PoiSubmissionFormInput;
+  iconBaseUrl: string;
+  onChange: (patch: Partial<PoiSubmissionFormInput>) => void;
+  parentMarkerOptions: MapMarker[];
+  roadMarkerOptions: MapMarker[];
+  selectedCategory?: PoiCategory;
+}>) {
+  const imageUrls = form.imageUrls.map((url) => url.trim()).filter(Boolean);
+  const iconUrl = form.iconFileName
+    ? toMarkerIconUrl(form.iconFileName, iconBaseUrl)
+    : selectedCategory?.iconMapping.defaultIconFileName
+      ? toMarkerIconUrl(selectedCategory.iconMapping.defaultIconFileName, iconBaseUrl)
+      : null;
+
+  return (
+    <div className="poi-intro-workspace">
+      <aside className="poi-intro-form-panel" aria-label="简介字段">
+        <div className="poi-intro-panel-heading">
+          <div>
+            <strong>简介内容</strong>
+            <span className="muted">图片、简介、营业时间、地址与链接</span>
+          </div>
+        </div>
+        <label>
+          <span>简介</span>
+          <textarea
+            disabled={disabled}
+            maxLength={1000}
+            value={form.description}
+            onChange={(event) => onChange({ description: event.currentTarget.value })}
+          />
+        </label>
+        <AdminPoiBusinessDetailsFields
+          disabled={disabled}
+          excludedParentMarkerId={excludedParentMarkerId}
+          form={form}
+          parentMarkerOptions={parentMarkerOptions}
+          roadMarkerOptions={roadMarkerOptions}
+          showFacilities={false}
+          onChange={onChange}
+        />
+        <label>
+          <span>链接</span>
+          <input
+            disabled={disabled}
+            value={form.href}
+            onChange={(event) => onChange({ href: event.currentTarget.value })}
+            placeholder="https://..."
+          />
+        </label>
+        <AdminPoiImageEditor
+          disabled={disabled}
+          values={form.imageUrls}
+          onChange={(imageUrls) => onChange({ imageUrls })}
+        />
+      </aside>
+      <section className="poi-intro-preview" aria-label="简介预览">
+        <article className="map-poi-detail-panel poi-intro-preview-panel">
+          <div className="map-poi-detail-header">
+            {iconUrl ? <img alt="" src={iconUrl} /> : null}
+            <div>
+              <h2>{form.title.trim() || '未命名地点'}</h2>
+              <span>
+                {selectedCategory
+                  ? formatCategoryName(selectedCategory.id, selectedCategory)
+                  : '未选择分类'}
+              </span>
+            </div>
+          </div>
+          <div className="map-poi-detail-body">
+            {imageUrls[0] ? (
+              <>
+                <img
+                  alt="地点主图"
+                  className="map-poi-detail-image"
+                  src={resolvePoiSubmissionImageUrl(imageUrls[0])}
+                />
+                {imageUrls.length > 1 ? (
+                  <p className="muted">{`共 ${imageUrls.length} 张图片，地图按此顺序展示。`}</p>
+                ) : null}
+              </>
+            ) : (
+              <p className="muted">暂无图片。</p>
+            )}
+            {form.description.trim() ? (
+              <p>{form.description.trim()}</p>
+            ) : (
+              <p className="muted">暂无简介。</p>
+            )}
+            <dl>
+              <div>
+                <dt>营业时间</dt>
+                <dd>{form.openingHours.trim() || '未填写'}</dd>
+              </div>
+              <div>
+                <dt>地址</dt>
+                <dd>{form.address.trim() || '未填写'}</dd>
+              </div>
+              <div>
+                <dt>楼层</dt>
+                <dd>{form.floorLabel.trim() || '未填写'}</dd>
+              </div>
+              <div>
+                <dt>链接</dt>
+                <dd>{form.href.trim() || '未填写'}</dd>
+              </div>
+            </dl>
+          </div>
+        </article>
+      </section>
     </div>
   );
 }
@@ -4969,10 +5552,20 @@ function ParentMarkerSelect({
     });
   }, [categoryById, excludedMarkerId, markerOptions, query, selectedId]);
 
+  const selectedMarker = markerOptions.find((marker) => marker.id === selectedId);
+  const visibleOptions = options.slice(0, query.trim() ? 12 : 6);
+
   return (
-    <div className="admin-poi-parent-selector">
-      <label>
-        <span>搜索父地点</span>
+    <PoiEditorSection
+      summary={
+        selectedMarker ? `已绑定：${selectedMarker.label}` : '不建立地点层级关系'
+      }
+      title="父地点"
+    >
+      <label className="poi-editor-search">
+        <span className="material-symbols-outlined" aria-hidden="true">
+          search
+        </span>
         <input
           type="search"
           value={query}
@@ -4980,7 +5573,7 @@ function ParentMarkerSelect({
           placeholder="输入地点名称、译名或 ID"
         />
       </label>
-      <div className="admin-poi-parent-candidates" role="listbox" aria-label="父地点候选">
+      <div className="poi-editor-option-list" role="listbox" aria-label="父地点候选">
         <button
           className={!selectedId ? 'is-selected' : ''}
           type="button"
@@ -4996,7 +5589,7 @@ function ParentMarkerSelect({
             <small>不建立地点层级关系</small>
           </span>
         </button>
-        {options.slice(0, 24).map((marker) => {
+        {visibleOptions.map((marker) => {
           const category = categoryById.get(marker.categoryId ?? '');
           const categoryName = formatCategoryName(marker.categoryId ?? 'uncategorized', category);
           const isSelected = marker.id === selectedId;
@@ -5021,9 +5614,13 @@ function ParentMarkerSelect({
             </button>
           );
         })}
-        {options.length === 0 ? <p className="muted">没有匹配的父地点。</p> : null}
       </div>
-    </div>
+      {visibleOptions.length === 0 ? (
+        <p className="muted">没有匹配的父地点。</p>
+      ) : options.length > visibleOptions.length ? (
+        <p className="muted">{`共 ${options.length} 个候选，继续输入关键词缩小范围。`}</p>
+      ) : null}
+    </PoiEditorSection>
   );
 }
 
@@ -5037,6 +5634,7 @@ function PoiRegionBindingsFieldset({
   selectedIds: string[];
 }>) {
   const [query, setQuery] = useState('');
+  const [expanded, setExpanded] = useState(false);
   const filteredMarkers = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('zh-CN');
     const ordered = [...markerOptions].sort((left, right) => {
@@ -5050,14 +5648,48 @@ function PoiRegionBindingsFieldset({
         )
       : ordered;
   }, [markerOptions, query, selectedIds]);
+  const visibleMarkers = filteredMarkers.slice(0, query.trim() ? 12 : 6);
 
   return (
-    <fieldset className="admin-poi-region-bindings">
-      <legend>绑定区域</legend>
-      <div className="admin-poi-region-binding-scroll">
-        {markerOptions.length > 0 ? (
+    <PoiEditorSection
+      actions={
+        <button
+          className="poi-editor-section-toggle"
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? '收起' : '选择区域'}
+        </button>
+      }
+      summary={selectedIds.length > 0 ? `已绑定 ${selectedIds.length} 个区域` : '未绑定区域'}
+      title="绑定区域"
+    >
+      {selectedIds.length > 0 ? (
+        <div className="poi-editor-chip-row">
+          {selectedIds.map((id) => {
+            const marker = markerOptions.find((item) => item.id === id);
+            return (
+              <span className="poi-editor-chip" key={id}>
+                <span>{marker?.label ?? id}</span>
+                <button
+                  type="button"
+                  aria-label={`移除区域 ${marker?.label ?? id}`}
+                  onClick={() => onChange(selectedIds.filter((item) => item !== id))}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    close
+                  </span>
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+      {expanded ? (
+        markerOptions.length > 0 ? (
           <>
-            <label className="admin-poi-region-search">
+            <label className="poi-editor-search">
               <span className="material-symbols-outlined" aria-hidden="true">
                 search
               </span>
@@ -5068,8 +5700,8 @@ function PoiRegionBindingsFieldset({
                 placeholder="搜索区域名称或 ID"
               />
             </label>
-            <div className="admin-poi-region-binding-options">
-              {filteredMarkers.map((marker) => (
+            <div className="poi-editor-checkbox-list">
+              {visibleMarkers.map((marker) => (
                 <label className="checkbox-row" key={marker.id}>
                   <input
                     type="checkbox"
@@ -5089,13 +5721,18 @@ function PoiRegionBindingsFieldset({
                 </label>
               ))}
             </div>
-            {filteredMarkers.length === 0 ? <p className="muted">没有匹配的区域。</p> : null}
+            {visibleMarkers.length === 0 ? <p className="muted">没有匹配的区域。</p> : null}
+            {filteredMarkers.length > visibleMarkers.length ? (
+              <p className="muted">
+                {`共 ${filteredMarkers.length} 个区域，继续输入关键词缩小范围。`}
+              </p>
+            ) : null}
           </>
         ) : (
           <p className="muted">当前地图数据中没有可绑定的区域 POI。</p>
-        )}
-      </div>
-    </fieldset>
+        )
+      ) : null}
+    </PoiEditorSection>
   );
 }
 
@@ -5386,10 +6023,90 @@ function PoiStandaloneGeometryWorkspace({
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [viewportSize, setViewportSize] = useState<PoiMapViewport>(poiAuditPreviewViewport);
+  const [insertionMode, setInsertionMode] = useState<PoiCoordinateInsertionMode>('append');
+  const insertionSupported = supportsPoiCoordinateInsertion(draft);
+  const [ringTargetValue, setRingTargetValue] = useState('0:0');
+  const [rectangleIndex, setRectangleIndex] = useState(0);
+  const ringOptions = useMemo(() => {
+    if (draft.type === 'Polygon') {
+      return draft.rings.map((_, ringIndex) => ({
+        label: ringIndex === 0 ? '外边界' : `内环 ${ringIndex}`,
+        value: `0:${ringIndex}`,
+      }));
+    }
+    if (draft.type === 'MultiPolygon') {
+      return draft.polygons.flatMap((polygon, polygonIndex) =>
+        polygon.map((_, ringIndex) => ({
+          label: `多边形 ${polygonIndex + 1} · ${ringIndex === 0 ? '外边界' : `内环 ${ringIndex}`}`,
+          value: `${polygonIndex}:${ringIndex}`,
+        })),
+      );
+    }
+    return [];
+  }, [draft]);
+  const effectiveRingTargetValue = ringOptions.some((option) => option.value === ringTargetValue)
+    ? ringTargetValue
+    : (ringOptions[0]?.value ?? '0:0');
+  const editingRing = useMemo(() => {
+    if (draft.type === 'MultiPoint' || draft.type === 'LineString') {
+      return {
+        apply: (ring: CoordinateDraft[]): PoiGeometryDraft => ({
+          type: draft.type,
+          coordinates: ring,
+        }),
+        ring: draft.coordinates,
+      };
+    }
+    if (draft.type === 'Polygon') {
+      const [, rawRingIndex] = effectiveRingTargetValue.split(':').map(Number);
+      const ringIndex = clamp(
+        Number.isFinite(rawRingIndex) ? rawRingIndex : 0,
+        0,
+        Math.max(0, draft.rings.length - 1),
+      );
+      return {
+        apply: (ring: CoordinateDraft[]): PoiGeometryDraft => ({
+          type: 'Polygon',
+          rings: draft.rings.map((item, index) => (index === ringIndex ? ring : item)),
+        }),
+        ring: draft.rings[ringIndex] ?? [],
+      };
+    }
+    if (draft.type === 'MultiPolygon') {
+      const [rawPolygonIndex, rawRingIndex] = effectiveRingTargetValue.split(':').map(Number);
+      const polygonIndex = clamp(
+        Number.isFinite(rawPolygonIndex) ? rawPolygonIndex : 0,
+        0,
+        Math.max(0, draft.polygons.length - 1),
+      );
+      const polygon = draft.polygons[polygonIndex] ?? [];
+      const ringIndex = clamp(
+        Number.isFinite(rawRingIndex) ? rawRingIndex : 0,
+        0,
+        Math.max(0, polygon.length - 1),
+      );
+      return {
+        apply: (ring: CoordinateDraft[]): PoiGeometryDraft => ({
+          type: 'MultiPolygon',
+          polygons: draft.polygons.map((item, index) =>
+            index !== polygonIndex
+              ? item
+              : item.map((ringItem, itemRingIndex) =>
+                  itemRingIndex === ringIndex ? ring : ringItem,
+                ),
+          ),
+        }),
+        ring: polygon[ringIndex] ?? [],
+      };
+    }
+    return null;
+  }, [draft, effectiveRingTargetValue]);
   const previewDraft: Exclude<PoiGeometryDraft, { type: 'Point' }> =
     draft.type === 'Point' ? { type: 'MultiPoint', coordinates: [draft.coordinate] } : draft;
   const autoPreview = buildPoiGeometryDraftMapPreview(previewDraft, contextMarkers);
-  const [viewBounds, setViewBounds] = useState(autoPreview.bounds);
+  const [viewBounds, setViewBounds] = useState(() =>
+    fitPoiAuditBoundsToViewport(autoPreview.bounds, poiAuditPreviewViewport),
+  );
   const preview = buildPoiGeometryDraftMapPreview(
     previewDraft,
     contextMarkers,
@@ -5425,6 +6142,40 @@ function PoiStandaloneGeometryWorkspace({
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    setViewBounds((current) => fitPoiAuditBoundsToViewport(current, viewportSize));
+  }, [viewportSize]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const modeByKey: Partial<Record<string, PoiCoordinateInsertionMode>> = {
+        '[': 'prepend',
+        ']': 'append',
+        '\\': 'nearest',
+      };
+      const mode = modeByKey[event.key];
+      if (mode) {
+        event.preventDefault();
+        setInsertionMode(mode);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const coordinateAtClientPoint = (
     clientX: number,
     clientY: number,
@@ -5441,6 +6192,8 @@ function PoiStandaloneGeometryWorkspace({
     );
   };
   const gestureRef = useRef<{
+    longPressTimer?: number;
+    longPressTriggered?: boolean;
     pointerId: number;
     startClientX: number;
     startClientY: number;
@@ -5461,7 +6214,91 @@ function PoiStandaloneGeometryWorkspace({
       onChange({ type: 'Point', coordinate: { ...coordinateToDraft(coordinate), y: pointYText } });
       return;
     }
-    onChange(appendPoiGeometryDraftCoordinate(draft, coordinate));
+    if (draft.type === 'MultiRectangle') {
+      const rectangles =
+        draft.rectangles.length > 0 ? [...draft.rectangles] : [createEmptyRectangleBoundsDraft()];
+      const index = clamp(rectangleIndex, 0, rectangles.length - 1);
+      rectangles[index] = expandRectangleDraft(rectangles[index], coordinate);
+      onChange({ type: 'MultiRectangle', rectangles });
+      return;
+    }
+
+    if (!editingRing) {
+      onChange(appendPoiGeometryDraftCoordinate(draft, coordinate));
+      return;
+    }
+    onChange(
+      editingRing.apply(
+        insertPoiRingSlot(editingRing.ring, coordinateToDraft(coordinate), insertionMode, coordinate),
+      ),
+    );
+  };
+  const removeCoordinateAtClientPoint = (
+    clientX: number,
+    clientY: number,
+    element: HTMLElement,
+  ) => {
+    if (draft.type === 'Point' || !editingRing) {
+      return;
+    }
+
+    const ring = editingRing.ring;
+    if (ring.length === 0) {
+      return;
+    }
+
+    let localIndex: number;
+    if (insertionMode === 'prepend') {
+      localIndex = 0;
+    } else if (insertionMode === 'append') {
+      localIndex = getPoiRingUniqueCount(ring) - 1;
+    } else {
+      const rect = element.getBoundingClientRect();
+      const localX = clientX - rect.left;
+      const localY = clientY - rect.top;
+      let bestIndex = -1;
+      let bestDistance = 22;
+      // 闭合环末位是首点副本，只匹配真实顶点，避免命中副本后删不掉。
+      ring.slice(0, getPoiRingUniqueCount(ring)).forEach((item, index) => {
+        const coordinate = parseCoordinateDraft(item);
+        if (!coordinate) {
+          return;
+        }
+        const point = projectAuditMapPreviewCoordinate(coordinate, preview.bounds, viewportSize);
+        const distance = Math.hypot(point[0] - localX, point[1] - localY);
+        if (distance <= bestDistance) {
+          bestIndex = index;
+          bestDistance = distance;
+        }
+      });
+      if (bestIndex < 0) {
+        return;
+      }
+      localIndex = bestIndex;
+    }
+
+    const nextRing = removePoiRingSlotAt(ring, localIndex);
+    if (nextRing) {
+      onChange(editingRing.apply(nextRing));
+      navigator.vibrate?.(20);
+    }
+  };
+  const undoCoordinate = () => {
+    if (draft.type === 'Point') {
+      return;
+    }
+    if (!editingRing) {
+      onChange(removeLastPoiGeometryDraftCoordinate(draft));
+      return;
+    }
+
+    const ring = editingRing.ring;
+    const localIndex =
+      insertionMode === 'prepend' ? 0 : getPoiRingUniqueCount(ring) - 1;
+    const nextRing = removePoiRingSlotAt(ring, localIndex);
+    if (nextRing) {
+      onChange(editingRing.apply(nextRing));
+    }
   };
   const zoom = (factor: number, anchor?: [number, number]) =>
     setViewBounds((current) =>
@@ -5478,7 +6315,7 @@ function PoiStandaloneGeometryWorkspace({
         ? event.target.closest<SVGGElement>('[data-poi-node-index]')
         : null;
     const nodeIndex = nodeElement ? Number(nodeElement.dataset.poiNodeIndex) : undefined;
-    gestureRef.current = {
+    const gesture: NonNullable<typeof gestureRef.current> = {
       pointerId: event.pointerId,
       startClientX: event.clientX,
       startClientY: event.clientY,
@@ -5486,12 +6323,30 @@ function PoiStandaloneGeometryWorkspace({
       moved: false,
       nodeIndex: tool === 'move' && Number.isInteger(nodeIndex) ? nodeIndex : undefined,
     };
+    if (tool === 'draw' && insertionSupported) {
+      gesture.longPressTimer = window.setTimeout(() => {
+        const current = gestureRef.current;
+        if (!current || current.pointerId !== event.pointerId || current.moved) {
+          return;
+        }
+        current.longPressTriggered = true;
+        removeCoordinateAtClientPoint(event.clientX, event.clientY, event.currentTarget);
+      }, 500);
+    }
+    gestureRef.current = gesture;
+  };
+  const clearGestureTimer = (gesture: NonNullable<typeof gestureRef.current>) => {
+    if (gesture.longPressTimer) {
+      window.clearTimeout(gesture.longPressTimer);
+      gesture.longPressTimer = undefined;
+    }
   };
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const gesture = gestureRef.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     if (tool === 'move' && gesture.nodeIndex !== undefined) {
       gesture.moved = true;
+      clearGestureTimer(gesture);
       updateCoordinateAtIndex(
         gesture.nodeIndex,
         coordinateAtClientPoint(event.clientX, event.clientY, event.currentTarget),
@@ -5501,7 +6356,10 @@ function PoiStandaloneGeometryWorkspace({
     if (tool !== 'pan') return;
     const deltaX = event.clientX - gesture.startClientX;
     const deltaY = event.clientY - gesture.startClientY;
-    if (Math.hypot(deltaX, deltaY) > 5) gesture.moved = true;
+    if (Math.hypot(deltaX, deltaY) > 5) {
+      gesture.moved = true;
+      clearGestureTimer(gesture);
+    }
     const gestureScale = buildPoiAuditMapView(gesture.startBounds, viewportSize).scale;
     const worldDeltaX = deltaX / gestureScale;
     const worldDeltaZ = deltaY / gestureScale;
@@ -5515,13 +6373,21 @@ function PoiStandaloneGeometryWorkspace({
   const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     const gesture = gestureRef.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
-    if (tool === 'draw' && !gesture.moved) {
+    clearGestureTimer(gesture);
+    if (tool === 'draw' && !gesture.moved && !gesture.longPressTriggered) {
       addCoordinate(coordinateAtClientPoint(event.clientX, event.clientY, event.currentTarget));
     }
     gestureRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+  };
+  const handleContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (tool !== 'draw') {
+      return;
+    }
+    removeCoordinateAtClientPoint(event.clientX, event.clientY, event.currentTarget);
   };
   const handleWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -5539,6 +6405,7 @@ function PoiStandaloneGeometryWorkspace({
         ref={stageRef}
         role="application"
         aria-label={`${entityLabel}几何地图编辑`}
+        onContextMenu={handleContextMenu}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -5647,6 +6514,33 @@ function PoiStandaloneGeometryWorkspace({
                 <option value="MultiPolygon">多重多边形区域</option>
               </select>
             </label>
+            {draft.type === 'MultiRectangle' && draft.rectangles.length > 1 ? (
+              <label>
+                <span>当前矩形</span>
+                <select
+                  value={String(clamp(rectangleIndex, 0, draft.rectangles.length - 1))}
+                  onChange={(event) => setRectangleIndex(Number(event.currentTarget.value))}
+                >
+                  {draft.rectangles.map((_, index) => (
+                    <option value={index} key={index}>{`矩形 ${index + 1}`}</option>
+                  ))}
+                </select>
+              </label>
+            ) : ringOptions.length > 1 ? (
+              <label>
+                <span>{draft.type === 'MultiPolygon' ? '当前多边形 / 环' : '当前边界'}</span>
+                <select
+                  value={effectiveRingTargetValue}
+                  onChange={(event) => setRingTargetValue(event.currentTarget.value)}
+                >
+                  {ringOptions.map((option) => (
+                    <option value={option.value} key={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             {draft.type === 'Point' ? (
               <div className="poi-visual-point-fields">
                 <label>
@@ -5704,7 +6598,15 @@ function PoiStandaloneGeometryWorkspace({
           [
             ['pan', 'pan_tool', '拖移地图'],
             ['move', 'open_with', '拖移控制点'],
-            ['draw', 'add_location_alt', draft.type === 'Point' ? '选择坐标' : '添加控制点'],
+            [
+              'draw',
+              'add_location_alt',
+              draft.type === 'Point'
+                ? '选择坐标'
+                : insertionSupported
+                  ? '增删控制点（左键添加 / 右键或长按删除）'
+                  : '添加控制点',
+            ],
           ] as const
         ).map(([value, icon, label]) => (
           <button
@@ -5720,13 +6622,38 @@ function PoiStandaloneGeometryWorkspace({
             </span>
           </button>
         ))}
+        {insertionSupported ? (
+          <>
+            <span className="poi-visual-toolbox-divider" aria-hidden="true" />
+            {(
+              [
+                ['prepend', 'first_page', '反向追加模式（[）'],
+                ['append', 'last_page', '追加模式（]）'],
+                ['nearest', 'conversion_path', '就近模式（\\）'],
+              ] as const
+            ).map(([mode, icon, label]) => (
+              <button
+                className={insertionMode === mode ? 'is-active' : ''}
+                type="button"
+                aria-pressed={insertionMode === mode}
+                title={label}
+                key={mode}
+                onClick={() => setInsertionMode(mode)}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  {icon}
+                </span>
+              </button>
+            ))}
+          </>
+        ) : null}
         <button
           type="button"
           disabled={!removable}
-          title="撤销末控制点"
-          onClick={() => {
-            if (draft.type !== 'Point') onChange(removeLastPoiGeometryDraftCoordinate(draft));
-          }}
+          title={
+            insertionMode === 'prepend' ? '撤销首个控制点' : '撤销末控制点'
+          }
+          onClick={undoCoordinate}
         >
           <span className="material-symbols-outlined" aria-hidden="true">
             undo
@@ -5752,7 +6679,9 @@ function PoiStandaloneGeometryWorkspace({
         <button
           type="button"
           title="适配全部几何"
-          onClick={() => setViewBounds(autoPreview.bounds)}
+          onClick={() =>
+            setViewBounds(fitPoiAuditBoundsToViewport(autoPreview.bounds, viewportSize))
+          }
         >
           <span className="material-symbols-outlined" aria-hidden="true">
             fit_screen
@@ -6109,15 +7038,20 @@ interface PoiCategoryDraft {
 function AdminPoiIconPicker({
   defaultIconFileName,
   disabled,
+  hidden,
   iconBaseUrl,
   onChange,
+  onHiddenChange,
   options,
   value,
 }: Readonly<{
   defaultIconFileName?: string;
   disabled: boolean;
+  /** 是否「不使用图标」：地图上只显示居中的名称标签。 */
+  hidden: boolean;
   iconBaseUrl: string;
   onChange: (value: string) => void;
+  onHiddenChange: (hidden: boolean) => void;
   options: string[];
   value: string;
 }>) {
@@ -6150,10 +7084,13 @@ function AdminPoiIconPicker({
       <legend>展示图标</legend>
       <div className="admin-poi-icon-picker-grid">
         <button
-          className={!value ? 'admin-poi-icon-option is-selected' : 'admin-poi-icon-option'}
+          className={!value && !hidden ? 'admin-poi-icon-option is-selected' : 'admin-poi-icon-option'}
           type="button"
-          aria-pressed={!value}
-          onClick={() => onChange('')}
+          aria-pressed={!value && !hidden}
+          onClick={() => {
+            onChange('');
+            onHiddenChange(false);
+          }}
         >
           {defaultPreview ? (
             <img src={toMarkerIconUrl(defaultPreview, iconBaseUrl)} alt="" draggable={false} />
@@ -6164,6 +7101,18 @@ function AdminPoiIconPicker({
           )}
           <span>跟随分类默认</span>
         </button>
+        <button
+          className={hidden ? 'admin-poi-icon-option is-selected' : 'admin-poi-icon-option'}
+          type="button"
+          aria-pressed={hidden}
+          title="地图上只显示名称标签"
+          onClick={() => onHiddenChange(true)}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            visibility_off
+          </span>
+          <span>不使用图标</span>
+        </button>
         {normalizedOptions.map((iconValue) => {
           const iconKey = getPoiCategoryIconMetadataKey(iconValue);
           const displayName =
@@ -6172,13 +7121,18 @@ function AdminPoiIconPicker({
           return (
             <button
               className={
-                value === iconValue ? 'admin-poi-icon-option is-selected' : 'admin-poi-icon-option'
+                !hidden && value === iconValue
+                  ? 'admin-poi-icon-option is-selected'
+                  : 'admin-poi-icon-option'
               }
               type="button"
-              aria-pressed={value === iconValue}
+              aria-pressed={!hidden && value === iconValue}
               title={`${displayName} · ${iconValue}`}
               key={iconValue}
-              onClick={() => onChange(iconValue)}
+              onClick={() => {
+                onChange(iconValue);
+                onHiddenChange(false);
+              }}
             >
               <img src={toMarkerIconUrl(iconValue, iconBaseUrl)} alt="" draggable={false} />
               <span>{displayName}</span>
@@ -7153,6 +8107,31 @@ function buildPoiTileStyle(tile: PoiVisibleTile, viewport?: PoiMapViewport) {
   };
 }
 
+/** 把视图 bounds 调整到与视口同宽高比，避免 fit 投影在视口两侧留下无法命中的留白。 */
+function fitPoiAuditBoundsToViewport(
+  bounds: { minX: number; minZ: number; maxX: number; maxZ: number },
+  viewport: PoiMapViewport,
+): { minX: number; minZ: number; maxX: number; maxZ: number } {
+  const spanX = Math.max(1, bounds.maxX - bounds.minX);
+  const spanZ = Math.max(1, bounds.maxZ - bounds.minZ);
+  // 与 project/unproject 保持一致：可用区域要先扣掉四周内边距，否则仍会残留一圈无法命中的留白。
+  const ratio = Math.max(
+    0.2,
+    (viewport.width - poiAuditPreviewPadding * 2) /
+      Math.max(1, viewport.height - poiAuditPreviewPadding * 2),
+  );
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+  const nextSpanX = Math.max(spanX, spanZ * ratio);
+  const nextSpanZ = nextSpanX / ratio;
+  return {
+    maxX: centerX + nextSpanX / 2,
+    maxZ: centerZ + nextSpanZ / 2,
+    minX: centerX - nextSpanX / 2,
+    minZ: centerZ - nextSpanZ / 2,
+  };
+}
+
 function buildPoiAuditMapView(
   bounds: {
     minX: number;
@@ -7347,6 +8326,81 @@ function rectangleBoundsToCoordinates(bounds: {
     [bounds.maxX, bounds.maxZ],
     [bounds.minX, bounds.maxZ],
   ];
+}
+
+/** 几何入口卡片用的摘要：中点坐标 + 长度/面积 + 控制点数量。 */
+function describePoiGeometry(geometry: MapGeometry | null): {
+  center: string;
+  detail: string;
+} {
+  if (!geometry) {
+    return { center: '未设置', detail: '尚未填写坐标' };
+  }
+
+  const sets = getGeometryPreviewCoordinateSets(geometry);
+  const coordinates = sets.flatMap((set) => set.coordinates);
+  if (coordinates.length === 0) {
+    return { center: '未设置', detail: '尚未填写坐标' };
+  }
+
+  const bounds = getCoordinateBounds(coordinates);
+  const center = `${formatPoiGeometryMetric((bounds.minX + bounds.maxX) / 2)}, ${formatPoiGeometryMetric(
+    (bounds.minZ + bounds.maxZ) / 2,
+  )}`;
+  const pointLabel = `${coordinates.length} 个控制点`;
+
+  const polygonArea = sets
+    .filter((set) => set.kind === 'polygon')
+    .reduce((total, set) => total + Math.abs(getPolygonArea(set.coordinates)), 0);
+  if (polygonArea > 0) {
+    return { center, detail: `面积 ${formatPoiGeometryMetric(polygonArea)} 格² · ${pointLabel}` };
+  }
+
+  const lineLength = sets
+    .filter((set) => set.kind === 'line')
+    .reduce((total, set) => total + getPolylineLength(set.coordinates), 0);
+  if (lineLength > 0) {
+    return { center, detail: `长度 ${formatPoiGeometryMetric(lineLength)} 格 · ${pointLabel}` };
+  }
+
+  return { center, detail: pointLabel };
+}
+
+function getPolygonArea(coordinates: Array<[number, number]>): number {
+  if (coordinates.length < 3) {
+    return 0;
+  }
+
+  let sum = 0;
+  for (let index = 0; index < coordinates.length; index += 1) {
+    const [currentX, currentZ] = coordinates[index];
+    const [nextX, nextZ] = coordinates[(index + 1) % coordinates.length];
+    sum += currentX * nextZ - nextX * currentZ;
+  }
+  return sum / 2;
+}
+
+function getPolylineLength(coordinates: Array<[number, number]>): number {
+  let total = 0;
+  for (let index = 1; index < coordinates.length; index += 1) {
+    const [previousX, previousZ] = coordinates[index - 1];
+    const [currentX, currentZ] = coordinates[index];
+    total += Math.hypot(currentX - previousX, currentZ - previousZ);
+  }
+  return total;
+}
+
+function formatPoiGeometryMetric(value: number): string {
+  const rounded = Math.abs(value) >= 100 ? Math.round(value) : Number(value.toFixed(1));
+  return String(rounded);
+}
+
+function describePoiIntroSummary(
+  form: Pick<PoiSubmissionFormInput, 'description' | 'imageUrls'>,
+): string {
+  const descriptionLength = form.description.trim().length;
+  const imageCount = form.imageUrls.filter((url) => url.trim()).length;
+  return `${descriptionLength > 0 ? `${descriptionLength} 字简介` : '未填写简介'} · ${imageCount} 张图片`;
 }
 
 function getGeometryRepresentativeCoordinate(geometry: MapGeometry): [number, number] | null {
@@ -7589,7 +8643,12 @@ function statusLabel(status: PoiSubmissionStatus): string {
 }
 
 function canEditPoiSubmission(status: PoiSubmissionStatus): boolean {
-  return status === 'pending_review' || status === 'approved' || status === 'published';
+  return (
+    status === 'draft' ||
+    status === 'pending_review' ||
+    status === 'approved' ||
+    status === 'published'
+  );
 }
 
 function canDeletePoiSubmission(status: PoiSubmissionStatus): boolean {
@@ -7597,6 +8656,10 @@ function canDeletePoiSubmission(status: PoiSubmissionStatus): boolean {
 }
 
 function getPoiEditDialogHint(status: PoiSubmissionStatus): string {
+  if (status === 'draft') {
+    return '当前为草稿：可继续在几何/简介工作台完善，确认后再提交审核。';
+  }
+
   if (status === 'approved') {
     return '当前为待发布投稿，保存后仍可直接发布，几何修正会保留原类型。';
   }
@@ -8369,6 +9432,117 @@ function fillOrAppendCoordinateDraft(
     : [...coordinates, coordinate];
 }
 
+/** 控制点增删模式：反向追加 / 追加 / 就近插入。 */
+type PoiCoordinateInsertionMode = 'prepend' | 'append' | 'nearest';
+
+function supportsPoiCoordinateInsertion(draft: PoiGeometryDraft): boolean {
+  return (
+    draft.type === 'MultiPoint' ||
+    draft.type === 'LineString' ||
+    draft.type === 'Polygon' ||
+    draft.type === 'MultiPolygon'
+  );
+}
+
+function isPoiRingClosed(ring: CoordinateDraft[]): boolean {
+  if (ring.length < 2) {
+    return false;
+  }
+  const first = parseCoordinateDraft(ring[0]);
+  const last = parseCoordinateDraft(ring[ring.length - 1]);
+  return Boolean(first && last && first[0] === last[0] && first[1] === last[1]);
+}
+
+function getPoiRingUniqueCount(ring: CoordinateDraft[]): number {
+  return isPoiRingClosed(ring) ? Math.max(0, ring.length - 1) : ring.length;
+}
+
+function insertPoiRingSlot(
+  ring: CoordinateDraft[],
+  slot: CoordinateDraft,
+  mode: PoiCoordinateInsertionMode,
+  coordinate: [number, number],
+): CoordinateDraft[] {
+  const closed = isPoiRingClosed(ring);
+  const next = [...ring];
+  const index =
+    mode === 'prepend'
+      ? 0
+      : mode === 'append'
+        ? getPoiRingUniqueCount(ring)
+        : findPoiRingNearestInsertIndex(ring, coordinate);
+  next.splice(clamp(index, 0, getPoiRingUniqueCount(ring)), 0, slot);
+  if (closed && next.length > 1) {
+    // 闭合环的末位是首点副本，首尾插入后需要重新对齐，否则环会被“悄悄打开”。
+    next[next.length - 1] = { ...next[0] };
+  }
+  return next;
+}
+
+function findPoiRingNearestInsertIndex(
+  ring: CoordinateDraft[],
+  target: [number, number],
+): number {
+  const slots = ring
+    .map((item, index) => ({ coordinate: parseCoordinateDraft(item), index }))
+    .filter((entry): entry is { coordinate: [number, number]; index: number } =>
+      Boolean(entry.coordinate),
+    );
+  if (slots.length < 2) {
+    return getPoiRingUniqueCount(ring);
+  }
+
+  let bestIndex = getPoiRingUniqueCount(ring);
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < slots.length - 1; index += 1) {
+    const start = slots[index];
+    const end = slots[index + 1];
+    const distance = getPoiPointSegmentDistance(target, start.coordinate, end.coordinate);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = end.index;
+    }
+  }
+  return bestIndex;
+}
+
+function removePoiRingSlotAt(ring: CoordinateDraft[], localIndex: number): CoordinateDraft[] | null {
+  const closed = isPoiRingClosed(ring);
+  const uniqueCount = getPoiRingUniqueCount(ring);
+  if (localIndex < 0 || localIndex >= uniqueCount || uniqueCount <= 3) {
+    return null;
+  }
+
+  const next = ring.filter((_, index) => index !== localIndex);
+  if (!closed) {
+    return next;
+  }
+  const head = next.slice(0, -1);
+  const first = next[0];
+  return first ? [...head, { ...first }] : null;
+}
+
+function getPoiPointSegmentDistance(
+  point: [number, number],
+  start: [number, number],
+  end: [number, number],
+): number {
+  const segmentX = end[0] - start[0];
+  const segmentZ = end[1] - start[1];
+  const lengthSquared = segmentX * segmentX + segmentZ * segmentZ;
+  if (lengthSquared === 0) {
+    return Math.hypot(point[0] - start[0], point[1] - start[1]);
+  }
+
+  const projection =
+    ((point[0] - start[0]) * segmentX + (point[1] - start[1]) * segmentZ) / lengthSquared;
+  const ratio = clamp(projection, 0, 1);
+  return Math.hypot(
+    point[0] - (start[0] + segmentX * ratio),
+    point[1] - (start[1] + segmentZ * ratio),
+  );
+}
+
 function appendPolygonRingCoordinate(
   ring: CoordinateDraft[],
   coordinate: CoordinateDraft,
@@ -8654,7 +9828,7 @@ function matchesStatusFilter(status: PoiSubmissionStatus, filter: StatusFilter):
   }
 
   if (filter === 'todo') {
-    return status === 'pending_review' || status === 'approved';
+    return status === 'draft' || status === 'pending_review' || status === 'approved';
   }
 
   if (filter === 'blocked') {

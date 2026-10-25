@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { MaterialTemplateRecord, MaterialTemplateVersion } from '@yct/contracts';
 import {
+  BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID,
+  BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID,
   METRO_DIRECTION_NEW_TEMPLATE_ID,
   METRO_DIRECTION_OLD_TEMPLATE_ID,
   METRO_LINE_MAP_NEW_TEMPLATE_ID,
@@ -18,7 +20,8 @@ const busStopOverviewSource = createBusStopTemplateSource(
   'overview.svg',
   `<g id="material-dynamic-fields">
   <rect x="12" y="18" width="104" height="22" fill="#FFFFFF"/>
-  <text x="0" y="32" transform="translate(64 0) scale({{fit.stationName.scaleX}} 1)" fill="#073764" font-family="'HarmonyOS Sans SC', sans-serif" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text>
+  <g transform="translate(64 0) scale(0.92 1)"><text x="0" y="32" transform="scale({{fit.stationName.scaleX}} 1)" fill="#073764" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text></g>
+  <text x="0" y="38" transform="translate(64 0) scale({{fit.stationNamePinyin.scaleX}} 1)" fill="#073764" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="4.5" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationNamePinyin.letterSpacing}}">{{stationNamePinyin}}</text>
   <rect x="17" y="45" width="36" height="22" fill="#000099"/><text x="0" y="61" transform="translate(35 0) scale({{fit.route1Number.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route1Number}}</text>
   <rect x="17" y="72" width="36" height="22" fill="#B5B5BF"/><text x="0" y="88" transform="translate(35 0) scale({{fit.route2Number.scaleX}} 1)" fill="#2059CB" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route2Number}}</text>
   <rect x="17" y="99" width="36" height="22" fill="#108433"/><text x="0" y="115" transform="translate(35 0) scale({{fit.route3Number.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route3Number}}</text>
@@ -36,7 +39,7 @@ const busStopDetailSource = createBusStopTemplateSource(
   <rect x="40" y="6" width="73" height="18" fill="#FFFFFF"/>
   <text x="42" y="12" fill="#C11111" opacity="{{select.routeStationState.nextStationCaptionOpacity}}" font-family="'HarmonyOS Sans SC', sans-serif" font-size="4" font-weight="700">下一站</text>
   <text x="0" y="15" transform="translate(80 0) scale({{fit.nextStation.scaleX}} 1)" fill="#C11111" font-family="'HarmonyOS Sans SC', sans-serif" font-size="7" font-weight="700" text-anchor="middle">{{nextStation}}</text>
-  <text x="0" y="22" transform="translate(77 0) scale({{fit.routeOrigin.scaleX}} 1)" fill="#1D2F78" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle">{{routeOrigin}} - {{routeTerminal}}</text>
+  <text x="0" y="22" transform="translate(77 0) scale({{fit.routeOrigin.scaleX}} 1)" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle"><tspan fill="#1D2F78">{{routeOrigin}}</tspan><tspan fill="#C11111">→</tspan><tspan fill="#1D2F78">{{routeTerminal}}</tspan></text>
   <rect x="15" y="25" width="98" height="13" fill="#377842"/>
   <text x="18" y="31" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700">首末车时间</text>
   <text x="0" y="31" transform="translate(81 0) scale({{fit.routeFirstLast.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="4.5" font-weight="700" text-anchor="middle">{{routeFirstLast}}</text>
@@ -51,11 +54,36 @@ const busStopTerminalSource = createBusStopTemplateSource(
   'terminal.svg',
   `<g id="material-dynamic-fields">
   <rect x="12" y="18" width="104" height="22" fill="#FFFFFF"/>
-  <text x="0" y="32" transform="translate(64 0) scale({{fit.stationName.scaleX}} 1)" fill="#073764" font-family="'HarmonyOS Sans SC', sans-serif" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text>
+  <g transform="translate(64 0) scale(0.92 1)"><text x="0" y="32" transform="scale({{fit.stationName.scaleX}} 1)" fill="#073764" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text></g>
+  <text x="0" y="38.5" transform="translate(64 0) scale({{fit.stationNamePinyin.scaleX}} 1)" fill="#073764" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationNamePinyin.letterSpacing}}">{{stationNamePinyin}}</text>
   <rect x="36.5" y="58" width="55" height="36" fill="#108433"/>
   <text x="0" y="91" transform="translate(64 0) scale({{fit.routeNumber.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="46" font-weight="700" text-anchor="middle">{{routeNumber}}</text>
   <rect x="36.5" y="99" width="55" height="9" fill="#108433"/>
-  <text x="3" y="106" transform="translate(64 0) scale(2 1)" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', sans-serif" font-size="6" font-weight="700" letter-spacing="6" text-anchor="middle">{{terminalRole}}</text>
+  <g transform="translate(64 0) scale(1.8 1)"><text x="0" y="106" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="6" font-weight="700" letter-spacing="3" text-anchor="middle">{{terminalRole}}</text></g>
+</g>`,
+);
+
+const busStopTerminalRealisticSource = createBusStopTemplateSource(
+  'terminal-realistic.svg',
+  `<g id="material-dynamic-fields">
+  <g transform="translate(64 0) scale(0.92 1)"><text x="0" y="63" transform="scale({{fit.stationName.scaleX}} 1)" fill="#073764" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text></g>
+  <text x="0" y="73" transform="translate(64 0) scale({{fit.stationNamePinyin.scaleX}} 1)" fill="#073764" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="6" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationNamePinyin.letterSpacing}}">{{stationNamePinyin}}</text>
+  <text x="0" y="132" transform="translate(64 0) scale({{fit.routeNumber.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="46" font-weight="700" text-anchor="middle">{{routeNumber}}</text>
+  <g transform="translate(64 0) scale(1.8 1)"><text x="0" y="150" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="6" font-weight="700" letter-spacing="3" text-anchor="middle">{{terminalRole}}</text></g>
+</g>`,
+);
+
+const busStopOverviewRealisticSource = createBusStopTemplateSource(
+  'overview-realistic.svg',
+  `<g id="material-dynamic-fields">
+  <g transform="translate(64 0) scale(0.92 1)"><text x="0" y="63" transform="scale({{fit.stationName.scaleX}} 1)" fill="#073764" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text></g>
+  <text x="0" y="73" transform="translate(64 0) scale({{fit.stationNamePinyin.scaleX}} 1)" fill="#073764" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="6" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationNamePinyin.letterSpacing}}">{{stationNamePinyin}}</text>
+  <text x="0" y="102" transform="translate(31.8 0) scale({{fit.route1Number.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route1Number}}</text>
+  <text x="0" y="132" transform="translate(31.8 0) scale({{fit.route2Number.scaleX}} 1)" fill="#2059CB" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route2Number}}</text>
+  <text x="0" y="162" transform="translate(31.8 0) scale({{fit.route3Number.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route3Number}}</text>
+  <text x="0" y="102" transform="translate(96.2 0) scale({{fit.route4Number.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route4Number}}</text>
+  <text x="0" y="132" transform="translate(96.2 0) scale({{fit.route5Number.scaleX}} 1)" fill="#2059CB" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route5Number}}</text>
+  <text x="0" y="162" transform="translate(96.2 0) scale({{fit.route6Number.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route6Number}}</text>
 </g>`,
 );
 
@@ -643,10 +671,10 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
     id: 'system_material_bus_stop_overview',
     versions: [
       {
-        version: 1,
+        version: 2,
         status: 'published',
-        title: '公交站牌（线路概览）',
-        description: '按原始公交站牌模板复现的六线路概览版，仅标注本站站名和停靠线路。',
+        title: '公交站牌（方块）',
+        description: '公交站牌线路概览的方块样式：按原始模板复现的六线路概览版，仅标注本站站名和停靠线路。',
         family: 'bus_stop',
         source: busStopOverviewSource,
         fields: [
@@ -656,7 +684,14 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             kind: 'text',
             required: true,
             maxLength: 24,
-            textFit: { maxWidth: 94, fontSize: 12, maxLetterSpacing: 3 },
+            textFit: { maxWidth: 94, fontSize: 12, maxLetterSpacing: 29 },
+          },
+          {
+            key: 'stationNamePinyin',
+            label: '英文站名（留空则不显示）',
+            kind: 'text',
+            maxLength: 48,
+            textFit: { maxWidth: 94, fontSize: 4.5, maxLetterSpacing: 1 },
           },
           ...[1, 2, 3, 4, 5, 6].map((slot) => ({
             key: `route${slot}Number`,
@@ -671,6 +706,54 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
           heightM: 1,
           pxPerMeter: 128,
           alignToTile: true,
+          tileSizePx: 128,
+        },
+        createdBy: systemActorId,
+        createdAt: systemPublishedAt,
+        publishedBy: systemActorId,
+        publishedAt: systemPublishedAt,
+      },
+    ],
+  },
+  {
+    id: BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID,
+    versions: [
+      {
+        version: 1,
+        status: 'published',
+        title: '公交站牌（拟真）',
+        description: '公交站牌线路概览的拟真样式：顶部改为半圆拱形，画布高度随头部一并扩展。',
+        family: 'bus_stop',
+        source: busStopOverviewRealisticSource,
+        fields: [
+          {
+            key: 'stationName',
+            label: '中文站名',
+            kind: 'text',
+            required: true,
+            maxLength: 24,
+            textFit: { maxWidth: 113, fontSize: 14, maxLetterSpacing: 34 },
+          },
+          {
+            key: 'stationNamePinyin',
+            label: '英文站名（留空则不显示）',
+            kind: 'text',
+            maxLength: 48,
+            textFit: { maxWidth: 104, fontSize: 6, maxLetterSpacing: 1 },
+          },
+          ...[1, 2, 3, 4, 5, 6].map((slot) => ({
+            key: `route${slot}Number`,
+            label: `第 ${slot} 条线路编号`,
+            kind: 'text' as const,
+            maxLength: 16,
+            textFit: { maxWidth: 36, fontSize: 20, maxLetterSpacing: 0 },
+          })),
+        ],
+        defaultCanvas: {
+          widthM: 1,
+          heightM: 1.40625,
+          pxPerMeter: 128,
+          alignToTile: false,
           tileSizePx: 128,
         },
         createdBy: systemActorId,
@@ -924,10 +1007,10 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
     id: 'system_material_bus_stop_terminal',
     versions: [
       {
-        version: 1,
+        version: 2,
         status: 'published',
-        title: '公交站牌（始发终点）',
-        description: '按原始始发终点公交站牌模板复现的单线路版，仅允许标注本站始发或终到的线路。',
+        title: '公交站牌（方块）',
+        description: '公交站牌始发终到的方块样式：按原始模板复现的单线路版，仅允许标注本站始发或终到的线路。',
         family: 'bus_stop',
         source: busStopTerminalSource,
         fields: [
@@ -937,7 +1020,14 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             kind: 'text',
             required: true,
             maxLength: 24,
-            textFit: { maxWidth: 94, fontSize: 12, maxLetterSpacing: 3 },
+            textFit: { maxWidth: 94, fontSize: 12, maxLetterSpacing: 29 },
+          },
+          {
+            key: 'stationNamePinyin',
+            label: '英文站名（留空则不显示）',
+            kind: 'text',
+            maxLength: 48,
+            textFit: { maxWidth: 94, fontSize: 6, maxLetterSpacing: 1 },
           },
           {
             key: 'routeNumber',
@@ -963,6 +1053,65 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
           heightM: 1,
           pxPerMeter: 128,
           alignToTile: true,
+          tileSizePx: 128,
+        },
+        createdBy: systemActorId,
+        createdAt: systemPublishedAt,
+        publishedBy: systemActorId,
+        publishedAt: systemPublishedAt,
+      },
+    ],
+  },
+  {
+    id: BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID,
+    versions: [
+      {
+        version: 1,
+        status: 'published',
+        title: '公交站牌（拟真）',
+        description: '公交站牌始发终到的拟真样式：顶部改为半圆拱形，画布高度随头部一并扩展。',
+        family: 'bus_stop',
+        source: busStopTerminalRealisticSource,
+        fields: [
+          {
+            key: 'stationName',
+            label: '中文站名',
+            kind: 'text',
+            required: true,
+            maxLength: 24,
+            textFit: { maxWidth: 113, fontSize: 14, maxLetterSpacing: 34 },
+          },
+          {
+            key: 'stationNamePinyin',
+            label: '英文站名（留空则不显示）',
+            kind: 'text',
+            maxLength: 48,
+            textFit: { maxWidth: 104, fontSize: 6, maxLetterSpacing: 1 },
+          },
+          {
+            key: 'routeNumber',
+            label: '线路编号',
+            kind: 'text',
+            required: true,
+            maxLength: 16,
+            textFit: { maxWidth: 54, fontSize: 46, maxLetterSpacing: 0 },
+          },
+          {
+            key: 'terminalRole',
+            label: '站点属性',
+            kind: 'select',
+            required: true,
+            options: [
+              { value: '始发站', label: '始发站' },
+              { value: '终点站', label: '终点站' },
+            ],
+          },
+        ],
+        defaultCanvas: {
+          widthM: 1,
+          heightM: 1.40625,
+          pxPerMeter: 128,
+          alignToTile: false,
           tileSizePx: 128,
         },
         createdBy: systemActorId,

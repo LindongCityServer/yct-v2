@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
 
   const result = await createPoiSubmissionByAdmin({
     actorId: admin.ldpassUserId,
+    asDraft: parsed.data.asDraft,
     title: parsed.data.title,
     categoryId: parsed.data.categoryId,
     iconFileName: parsed.data.iconFileName || undefined,

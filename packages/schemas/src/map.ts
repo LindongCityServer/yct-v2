@@ -192,6 +192,7 @@ export const mapMarkerSpatialMetadataSchema = z
         textColor: colorWithAlphaSchema.optional(),
       })
       .optional(),
+    hideMarkerIcon: z.boolean().optional(),
     parentPlaceId: z.string().trim().min(1).max(220).optional(),
     stationId: z.string().trim().min(1).max(160).optional(),
     ref: z.string().trim().min(1).max(40).optional(),
@@ -478,6 +479,8 @@ export const poiSubmissionAdminUpdateSchema = poiSubmissionAdminUpdateBaseSchema
 
 export const poiSubmissionAdminCreateSchema = poiSubmissionAdminUpdateBaseSchema
   .extend({
+    /** true 时只落草稿，不进入待审核队列；草稿可在几何/简介工作台继续完善后再提交。 */
+    asDraft: z.boolean().optional(),
     geometry: mapGeometrySchema,
   })
   .superRefine(validatePoiAddressRoadBinding)

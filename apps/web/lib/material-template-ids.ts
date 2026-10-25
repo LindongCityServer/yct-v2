@@ -4,6 +4,10 @@ export const BUS_STOP_OVERVIEW_TEMPLATE_ID = 'system_material_bus_stop_overview'
 export const BUS_STOP_DETAIL_TEMPLATE_ID = 'system_material_bus_stop_detail';
 export const BUS_STOP_HORIZONTAL_DETAIL_TEMPLATE_ID = 'system_material_bus_stop_horizontal_detail';
 
+/** 公交站牌的拟真样式：始发终到与线路概览各有方块、拟真两种样式。 */
+export const BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID = 'system_material_bus_stop_terminal_realistic';
+export const BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID = 'system_material_bus_stop_overview_realistic';
+
 /** 地铁横板线路图：新版 / 旧版共用同一个入口，通过样式切换。 */
 export const METRO_LINE_MAP_NEW_TEMPLATE_ID = 'system_material_metro_line_map_new';
 export const METRO_LINE_MAP_OLD_TEMPLATE_ID = 'system_material_metro_line_map_old';

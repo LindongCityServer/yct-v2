@@ -1115,6 +1115,9 @@ export type CommonMessageKey =
   | 'materialStudio.layout.lineMap'
   | 'materialStudio.layout.stationName'
   | 'materialStudio.layout.direction'
+  | 'materialStudio.layout.busTerminal'
+  | 'materialStudio.layout.busOverview'
+  | 'materialStudio.layout.busDetail'
   | 'materialStudio.projectLineCount'
   | 'materialStudio.busLineCount'
   | 'materialStudio.stationProjectLines'
@@ -2915,6 +2918,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'materialStudio.layout.lineMap': '线路图',
     'materialStudio.layout.stationName': '站名',
     'materialStudio.layout.direction': '方向',
+    'materialStudio.layout.busTerminal': '始发终到',
+    'materialStudio.layout.busOverview': '线路概览',
+    'materialStudio.layout.busDetail': '线路详情',
     'materialStudio.projectLineCount': '{count} 条项目线路',
     'materialStudio.busLineCount': '{count} 条公交线路',
     'materialStudio.stationProjectLines': '当前站点的项目线路',
@@ -4731,6 +4737,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'materialStudio.layout.lineMap': '線路圖',
     'materialStudio.layout.stationName': '站名',
     'materialStudio.layout.direction': '方向',
+    'materialStudio.layout.busTerminal': '始發終到',
+    'materialStudio.layout.busOverview': '線路概覽',
+    'materialStudio.layout.busDetail': '線路詳情',
     'materialStudio.projectLineCount': '{count} 條專案線路',
     'materialStudio.busLineCount': '{count} 條公車線路',
     'materialStudio.stationProjectLines': '當前站點的專案線路',
@@ -6588,6 +6597,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'materialStudio.layout.lineMap': 'Line map',
     'materialStudio.layout.stationName': 'Station name',
     'materialStudio.layout.direction': 'Direction',
+    'materialStudio.layout.busTerminal': 'Origin & terminal',
+    'materialStudio.layout.busOverview': 'Route overview',
+    'materialStudio.layout.busDetail': 'Route details',
     'materialStudio.projectLineCount': '{count} project lines',
     'materialStudio.busLineCount': '{count} bus lines',
     'materialStudio.stationProjectLines': 'Project lines at current station',

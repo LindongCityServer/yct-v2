@@ -14,9 +14,7 @@ const surfaceSelector = [
   '.app-toast',
   '.map-search-box',
   '.map-route-plan-card',
-  '.map-source-chip',
   '.map-routing-status',
-  '.map-coordinate-chip',
   '.map-marker-list',
   '.map-coordinate-pick-hint',
   '.map-toolbar',
@@ -309,8 +307,8 @@ export function LiquidMaterialBridge() {
       const element = node as HTMLElement;
       return Boolean(
         element.matches(surfaceSelector) ||
-          element.closest(surfaceSelector) ||
-          element.querySelector(surfaceSelector),
+        element.closest(surfaceSelector) ||
+        element.querySelector(surfaceSelector),
       );
     }
 

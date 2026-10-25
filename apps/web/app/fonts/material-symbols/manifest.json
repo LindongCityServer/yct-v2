@@ -2,7 +2,7 @@
   "family": "Material Symbols Outlined",
   "axes": "opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
   "source": "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
-  "iconCount": 349,
+  "iconCount": 352,
   "icons": [
     "accessible",
     "accessible_forward",
@@ -94,6 +94,7 @@
     "directions_boat",
     "directions_bus",
     "directions_subway",
+    "directions_transit",
     "directions_walk",
     "divider",
     "domain",
@@ -141,6 +142,7 @@
     "format_list_bulleted",
     "framed",
     "gov1",
+    "gps_fixed",
     "group",
     "groups",
     "help",
@@ -343,6 +345,7 @@
     "view_sidebar",
     "view_stream",
     "visibility",
+    "visibility_off",
     "waiting",
     "warning",
     "web",
@@ -354,5 +357,5 @@
     "woman",
     "women"
   ],
-  "fontBytes": 254196
+  "fontBytes": 256972
 }

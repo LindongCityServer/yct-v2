@@ -227,6 +227,8 @@ export interface MapMarkerSpatialMetadata {
   style?: MapStyleBinding;
   volume?: MapVolumeGeometry;
   dynamicSymbol?: MapDynamicSymbol;
+  /** 为 true 时地图只渲染居中的名称标签，不绘制图标或标记符号。 */
+  hideMarkerIcon?: boolean;
   parentPlaceId?: string;
   stationId?: string;
   ref?: string;

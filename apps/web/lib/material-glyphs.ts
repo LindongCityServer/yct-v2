@@ -1201,7 +1201,8 @@ function renderTransitStationList(
   const rowHeight = config.layoutHeight / rowCount;
   const fontSize = Math.min(config.fontSize ?? 5, rowHeight * 0.72);
   const columnWidth = config.layoutWidth / 2;
-  const maxTextWidth = columnWidth - 4;
+  // 站名列表按列宽的 90% 撑满字间距，给相邻列留出呼吸空间。
+  const maxTextWidth = (columnWidth - 4) * 0.9;
   const paths = stations.map((station, index) => {
     const isLeft = index < leftCount;
     const row = isLeft ? index : index - leftCount;

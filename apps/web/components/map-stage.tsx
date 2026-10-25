@@ -41,6 +41,7 @@ import {
   publishMapNearbySearchScopeChanged,
   publishMapRoutePanelVisibilityChanged,
   publishMapShortcutContextChanged,
+  publishMapSidebarOverlayChanged,
   publishMapTileProviderSelected,
   subscribeMapNearbySearchScopeChanged,
   subscribeMapNavigationLayoutChanged,
@@ -211,6 +212,8 @@ interface ProjectedMarker {
   dynamicSymbol?: NonNullable<MapMarkerSnapshot['markers'][number]['spatial']>['dynamicSymbol'];
   symbolIcon?: string;
   showLabel: boolean;
+  /** POI 显式选择「不使用图标」时为 true：不绘制图标与符号，名称标签居中。 */
+  hideIcon: boolean;
   priority: number;
   roadKind?: RoadMarkerKind;
   playerPresence?: 'online' | 'offline';
@@ -232,6 +235,8 @@ interface ProjectedLinearPoi {
   showCenter: boolean;
   showTextLabel: boolean;
   isVerticalLabel: boolean;
+  /** POI 显式选择「不使用图标」时为 true：名称标签居中。 */
+  hideIcon: boolean;
   symbolIcon?: string;
   endpoints: Array<{
     id: string;
@@ -889,6 +894,12 @@ const mapDefaults = {
   centerX: -945,
   centerZ: -876,
 };
+// 规划路线取景：留出标记点文字标签的屏幕空间，并使用精确缩放让路线正好填满安全框。
+const routePlanFitPadding = 64;
+// 标记点标签位于图标右侧，按 96px 的保守宽度换算成世界坐标参与取景。
+const routePlanLabelOverhang = 96;
+// 路书折叠后等动画与尺寸观察器稳定，再执行重新取景。
+const routeCollapsedFitDelay = 360;
 
 type PoiDetailTab = 'summary' | 'facilities' | 'operations';
 
@@ -1024,6 +1035,13 @@ export function MapStage() {
   useEffect(() => {
     mapViewRef.current = mapView;
   }, [mapView]);
+
+  // 移动端默认收起结果列表：展开态会切换为覆盖全屏的浮层布局，首屏保持地图与底部导航可见。
+  useEffect(() => {
+    if (window.matchMedia('(max-width: 760px)').matches) {
+      setMarkerListExpanded(false);
+    }
+  }, []);
 
   useEffect(() => {
     publishMapRoutePanelVisibilityChanged({ visible: Boolean(routePlanDraft) });
@@ -1639,6 +1657,22 @@ export function MapStage() {
       canSwapRouteEndpoints: Boolean(routePlanDraft),
     });
   }, [focusedMarker, routePlanDraft]);
+  // 移动端以浮层方式展开侧栏面板：按实际渲染优先级判断（路书 > POI 详情 > 结果列表），
+  // 避免路书折叠时仍被残留的 POI 选中态误判为展开。
+  const sidebarPanelExpanded = routePlanDraft
+    ? !routePlanCollapsed
+    : focusedMarker && isCenterableMarker(focusedMarker)
+      ? !poiDetailCollapsed
+      : markerListExpanded;
+  useEffect(() => {
+    publishMapSidebarOverlayChanged({ visible: sidebarPanelExpanded });
+  }, [sidebarPanelExpanded]);
+  useEffect(
+    () => () => {
+      publishMapSidebarOverlayChanged({ visible: false });
+    },
+    [],
+  );
   const focusedMarkerIsPlayer = Boolean(focusedMarker?.playerLocation);
   const focusedTransitLineMarker = useMemo(
     () => transitLineMarkers.find((marker) => marker.id === focusedMarkerId),
@@ -2097,19 +2131,16 @@ export function MapStage() {
     const roadLabelSource =
       effectiveFocusedMarker || browseMode === 'traffic'
         ? []
-        : endpointGroupMarkers
-            .filter((marker) => {
-              const roadKind = getRoadMarkerKind(marker);
-              return Boolean(roadKind);
-            })
-            .slice(0, browseMode === 'satellite' ? 80 : 80);
+        : endpointGroupMarkers.filter(
+            (marker) =>
+              Boolean(getRoadMarkerKind(marker)) &&
+              linearMarkerIntersectsViewport(marker, mapView, viewportSize),
+          );
     const combined = focusedLinearMarker
       ? [focusedLinearMarker]
       : [...queryMatched, ...roadLabelSource];
 
-    return dedupeMarkersById(combined)
-      .filter((marker) => marker.geometry.coordinates.length > 0)
-      .slice(0, 40);
+    return dedupeMarkersById(combined).filter((marker) => marker.geometry.coordinates.length > 0);
   }, [
     browseMode,
     editingRouteEndpoint,
@@ -2117,9 +2148,11 @@ export function MapStage() {
     focusedMarker,
     focusedMarkerId,
     linearFeaturesVisible,
+    mapView,
     markerQuery,
     routeEndpointQuery,
     transitLineMarkers,
+    viewportSize,
   ]);
   const rawProjectedLinearPois = useMemo(
     () =>
@@ -2636,29 +2669,42 @@ export function MapStage() {
       return;
     }
     routeFitStateRef.current = { rectKey, routeKey };
-    if (!routeChanged && routeManuallyZoomedRef.current) {
-      return;
-    }
-    if (routeChanged) {
-      routeManuallyZoomedRef.current = false;
-    }
 
     const markerIds = new Set(selectedRouteOption.markerIds);
     const semanticCoordinates = pointMarkers
       .filter((marker) => markerIds.has(marker.id))
       .map((marker) => getMarkerCenter(marker))
       .filter((coordinate): coordinate is [number, number] => Boolean(coordinate));
-    setMapView((current) => {
-      const fitted = fitCoordinatesToMapView(
-        [...selectedRouteOption.coordinates, ...semanticCoordinates],
+
+    // 路线本身发生变化（首次规划完成、切换方案）时，采用与折叠态一致的精确取景。
+    if (routeChanged) {
+      routeManuallyZoomedRef.current = false;
+      setMapView((current) =>
+        fitRoutePlanToMapView(
+          selectedRouteOption,
+          semanticCoordinates,
+          current,
+          viewportSize,
+          effectiveMapVisibleRect,
+        ),
+      );
+      return;
+    }
+
+    if (!rectChanged || routeManuallyZoomedRef.current) {
+      return;
+    }
+
+    // 安全框尺寸变化（窗口缩放、面板动画）同样使用新的精确取景，避免仍按旧的固定留白与整数缩放。
+    setMapView((current) =>
+      fitRoutePlanToMapView(
+        selectedRouteOption,
+        semanticCoordinates,
         current,
         viewportSize,
-        160,
         effectiveMapVisibleRect,
-        routeChanged ? undefined : current.zoom,
-      );
-      return fitted;
-    });
+      ),
+    );
   }, [
     effectiveMapVisibleRect,
     pointMarkers,
@@ -2667,6 +2713,33 @@ export function MapStage() {
     selectedRouteOption,
     viewportSize,
   ]);
+
+  // 路书折叠后重新取景：等折叠动画结束、安全框尺寸稳定，再把路线与标记点标签收进可视区。
+  useEffect(() => {
+    if (!routePlanCollapsed || !routeResultActive || !routePlanDraft || !selectedRouteOption) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      const markerIds = new Set(selectedRouteOption.markerIds);
+      const semanticCoordinates = pointMarkers
+        .filter((marker) => markerIds.has(marker.id))
+        .map((marker) => getMarkerCenter(marker))
+        .filter((coordinate): coordinate is [number, number] => Boolean(coordinate));
+      routeManuallyZoomedRef.current = false;
+      setMapView((current) =>
+        fitRoutePlanToMapView(
+          selectedRouteOption,
+          semanticCoordinates,
+          current,
+          viewportSizeRef.current,
+          mapVisibleRectRef.current,
+        ),
+      );
+    }, routeCollapsedFitDelay);
+
+    return () => window.clearTimeout(timer);
+  }, [pointMarkers, routePlanCollapsed, routePlanDraft, routeResultActive, selectedRouteOption]);
 
   useEffect(() => {
     if (!activeTileProvider || !tileTemplate?.includes('tiles/zoom.{z}')) {
@@ -4294,29 +4367,6 @@ export function MapStage() {
           </div>
         ) : null}
 
-        <div className="map-source-chip" title={dataSourceText}>
-          <span className="material-symbols-outlined" aria-hidden="true">
-            {loadStatus === 'loading'
-              ? 'progress_activity'
-              : loadStatus === 'ready'
-                ? 'map'
-                : 'warning'}
-          </span>
-          <span>
-            {loadStatus === 'loading'
-              ? t('map.source.loading')
-              : loadStatus === 'ready'
-                ? t('map.source.objectCount', {
-                    count:
-                      pointMarkers.length +
-                      endpointGroupMarkers.length +
-                      shapeMarkers.length +
-                      transitLineMarkers.length,
-                  })
-                : t('map.source.unavailable')}
-          </span>
-        </div>
-
         {loadStatus === 'ready' && roadRoutingStatus === 'loading' ? (
           <div className="map-routing-status" role="status">
             <span className="material-symbols-outlined" aria-hidden="true">
@@ -4355,15 +4405,41 @@ export function MapStage() {
             />
             <span>{scaleBarInfo.label}</span>
           </div>
-          <div className="map-coordinate-chip">
-            <span className="material-symbols-outlined" aria-hidden="true">
-              near_me
-            </span>
-            <span>
-              {cursorWorld
-                ? `X ${formatMapCoordinate(cursorWorld.x)} / Z ${formatMapCoordinate(cursorWorld.z)}`
-                : t('map.hud.cursor')}
-            </span>
+          <div className="map-hud-chips">
+            <div className="map-source-chip" title={dataSourceText}>
+              <span className="material-symbols-outlined" aria-hidden="true">
+                {loadStatus === 'loading'
+                  ? 'progress_activity'
+                  : loadStatus === 'ready'
+                    ? 'map'
+                    : 'warning'}
+              </span>
+              <span>
+                {loadStatus === 'loading'
+                  ? t('map.source.loading')
+                  : loadStatus === 'ready'
+                    ? t('map.source.objectCount', {
+                        count:
+                          pointMarkers.length +
+                          endpointGroupMarkers.length +
+                          shapeMarkers.length +
+                          transitLineMarkers.length,
+                      })
+                    : t('map.source.unavailable')}
+              </span>
+            </div>
+            <div className="map-coordinate-chip">
+              <span className="material-symbols-outlined" aria-hidden="true">
+                {nearbySearchCenter ? 'gps_fixed' : 'near_me'}
+              </span>
+              <span>
+                {nearbySearchCenter
+                  ? `X ${formatMapCoordinate(nearbySearchCenter.coordinates[0])} / Z ${formatMapCoordinate(nearbySearchCenter.coordinates[1])}`
+                  : cursorWorld
+                    ? `X ${formatMapCoordinate(cursorWorld.x)} / Z ${formatMapCoordinate(cursorWorld.z)}`
+                    : t('map.hud.cursor')}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -4657,6 +4733,7 @@ export function MapStage() {
                           ? 'is-road-label'
                           : '',
                         marker.isVerticalLabel ? 'is-vertical' : '',
+                        marker.hideIcon ? 'is-icon-hidden' : '',
                         marker.iconUrl || marker.dynamicSymbol || marker.symbolIcon
                           ? 'has-icon'
                           : '',
@@ -4706,7 +4783,8 @@ export function MapStage() {
                   !marker.isPlayer && (marker.showLabel || marker.id === focusedMarkerId)
                     ? 'has-label'
                     : '',
-                  !marker.iconUrl ? 'has-fallback-icon' : '',
+                  !marker.iconUrl && !marker.hideIcon ? 'has-fallback-icon' : '',
+                  marker.hideIcon ? 'is-icon-hidden' : '',
                   marker.id === focusedMarkerId ? 'is-selected' : '',
                   marker.roadKind ? `is-${marker.roadKind}` : '',
                   marker.playerPresence === 'offline' ? 'is-offline' : '',
@@ -5821,6 +5899,9 @@ function RoutePlanDraftCard({
   onUseMapCenter: () => void;
 }>) {
   const selectedOption = options.find((option) => option.id === selectedOptionId) ?? options[0];
+  const selectedOptionBadges = selectedOption
+    ? getRouteOptionBadges(selectedOption, options, t)
+    : [];
   const hasEnabledModes = routeTransportModeOptions.some((mode) => enabledModes[mode.mode]);
   const allModesEnabled = routeTransportModeOptions.every((mode) => enabledModes[mode.mode]);
   const isPlanning = status === 'loading' && !editingEndpoint;
@@ -5938,6 +6019,57 @@ function RoutePlanDraftCard({
           </button>
         </div>
       </div>
+      {collapsed && selectedOption ? (
+        <div
+          className="map-route-plan-peek"
+          style={{ '--route-option-color': selectedOption.color } as CSSProperties}
+        >
+          <div className="map-route-option-summary">
+            <span className="material-symbols-outlined map-route-option-icon" aria-hidden="true">
+              schedule
+            </span>
+            <strong>{formatRoutePlanMinutes(selectedOption.estimatedMinutes, t)}</strong>
+            <span className="map-route-option-distance">
+              <span className="material-symbols-outlined" aria-hidden="true">
+                directions_walk
+              </span>
+              {formatRoutePlanDistance(selectedOption.walkingDistance, t)}
+            </span>
+          </div>
+          {selectedOption.fare || selectedOptionBadges.length > 0 ? (
+            <div className="map-route-option-meta">
+              {selectedOption.fare ? (
+                <span className="map-route-option-fare">
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    payments
+                  </span>
+                  {formatRoutePlanFare(selectedOption.fare, t)}
+                </span>
+              ) : null}
+              {selectedOptionBadges.length > 0 ? (
+                <span className="map-route-option-badges" aria-label={t('map.route.featuresAria')}>
+                  {selectedOptionBadges.map((badge) => (
+                    <span className="map-route-option-badge" key={badge}>
+                      {badge}
+                    </span>
+                  ))}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+          <p className="map-route-option-copy">
+            <span
+              className="material-symbols-outlined map-route-option-type-icon"
+              aria-hidden="true"
+            >
+              {selectedOption.icon}
+            </span>
+            <span>
+              {selectedOption.title} · {selectedOption.summary}
+            </span>
+          </p>
+        </div>
+      ) : null}
       {!collapsed ? (
         <>
           {isPlanning ? (
@@ -12295,7 +12427,8 @@ function isPointMarker(marker: MapMarkerSnapshot['markers'][number]): marker is 
 }
 
 function shouldRenderAsPointPoi(marker: PointMarker): boolean {
-  return marker.categoryId !== 'road';
+  // 道路类点位默认由道路标签层展示；显式选择「不使用图标」时仍要渲染其居中名称标签。
+  return marker.categoryId !== 'road' || Boolean(marker.spatial?.hideMarkerIcon);
 }
 
 function isEndpointGroupMarker(
@@ -14060,6 +14193,7 @@ function projectPointMarkers(
       const [x, z] = marker.geometry.coordinates;
       const forceLabel = Boolean(options?.forceLabelMarkerIds?.has(marker.id));
       const suppressLabel = Boolean(options?.suppressLabelMarkerIds?.has(marker.id));
+      const hideIcon = Boolean(marker.spatial?.hideMarkerIcon);
       const priority =
         getMarkerPriorityForBrowseMode(marker, browseMode) +
         (representativePoiIds.has(marker.id) ? representativePoiPriorityBoost : 0) +
@@ -14073,21 +14207,25 @@ function projectPointMarkers(
           z,
           left: size.width / 2 + (x - view.centerX) * scale,
           top: size.height / 2 + (z - view.centerZ) * scale,
-          iconUrl:
-            marker.playerLocation?.avatarUrl ??
-            (marker.iconFileName && !isTransparentRoadIcon(marker.iconFileName)
-              ? toMarkerIconUrl(marker.iconFileName, iconBaseUrl)
-              : undefined),
-          dynamicSymbol: resolveMarkerDynamicSymbol(marker),
-          symbolIcon: marker.symbolIcon,
-          showLabel: marker.playerLocation
-            ? false
-            : forceLabel
-              ? true
-              : suppressLabel
-                ? false
-                : marker.id === focusedMarkerId ||
-                  shouldShowMarkerLabelForBrowseMode(marker, browseMode, priority),
+          iconUrl: hideIcon
+            ? undefined
+            : (marker.playerLocation?.avatarUrl ??
+              (marker.iconFileName && !isTransparentRoadIcon(marker.iconFileName)
+                ? toMarkerIconUrl(marker.iconFileName, iconBaseUrl)
+                : undefined)),
+          dynamicSymbol: hideIcon ? undefined : resolveMarkerDynamicSymbol(marker),
+          symbolIcon: hideIcon ? undefined : marker.symbolIcon,
+          showLabel: hideIcon
+            ? true
+            : marker.playerLocation
+              ? false
+              : forceLabel
+                ? true
+                : suppressLabel
+                  ? false
+                  : marker.id === focusedMarkerId ||
+                    shouldShowMarkerLabelForBrowseMode(marker, browseMode, priority),
+          hideIcon,
           priority,
           roadKind: getRoadMarkerKind(marker),
           playerPresence: marker.playerLocation?.presence,
@@ -14435,6 +14573,7 @@ function projectRouteEndpointMarkers(
         top,
         symbolIcon: endpoint.kind === 'destination' ? 'flag' : 'location_on',
         showLabel: true,
+        hideIcon: false,
         priority: Number.MAX_SAFE_INTEGER,
       },
     ];
@@ -14926,7 +15065,7 @@ function createMarkerCollisionItem(marker: ProjectedMarker): OverlayCollisionIte
     hasIcon: Boolean(marker.iconUrl || marker.dynamicSymbol || marker.symbolIcon),
     isVerticalLabel: false,
     centerIcon: false,
-    centerLabel: false,
+    centerLabel: marker.hideIcon,
     ignoreCollision: marker.isPlayer,
   };
 }
@@ -14951,7 +15090,7 @@ function createLinearPoiCollisionItem(marker: ProjectedLinearPoi): OverlayCollis
       hasIcon: Boolean(marker.iconUrl || marker.dynamicSymbol || marker.symbolIcon),
       isVerticalLabel: marker.isVerticalLabel,
       centerIcon: false,
-      centerLabel: false,
+      centerLabel: marker.hideIcon,
     },
   ];
 }
@@ -15204,7 +15343,7 @@ function projectShapePoiMarkers(
     const labelAnchor = isArea
       ? findAreaLabelAnchor(projectedSets, geometryCenter, label)
       : undefined;
-    const labelMode = labelAnchor ? 'label' : 'representative';
+    const labelMode = labelAnchor || marker.spatial?.hideMarkerIcon ? 'label' : 'representative';
     return [
       {
         id: marker.id,
@@ -15460,6 +15599,32 @@ function getShapeGeometryCoordinateSets(
   );
 }
 
+/** 线状标记只要有一段落在当前视口（含少量余量）就参与道路标签渲染。 */
+function linearMarkerIntersectsViewport(
+  marker: EndpointGroupMarker,
+  view: MapView,
+  size: ViewportSize,
+): boolean {
+  if (size.width <= 0 || size.height <= 0) {
+    return false;
+  }
+  const coordinates = marker.geometry.coordinates;
+  if (coordinates.length === 0) {
+    return false;
+  }
+
+  const scale = getScale(view.zoom);
+  return traceBoundsIntersectsViewport(
+    getTraceBounds(
+      coordinates.map(([x, z]) => ({
+        left: size.width / 2 + (x - view.centerX) * scale,
+        top: size.height / 2 + (z - view.centerZ) * scale,
+      })),
+    ),
+    size,
+  );
+}
+
 function projectLinearPoiMarkers(
   markers: Array<EndpointGroupMarker | TransitLineMarker>,
   view: MapView,
@@ -15502,15 +15667,17 @@ function projectLinearPoiMarkers(
     const [centerX, centerZ] = labelAnchor;
     const roadKind = getRoadMarkerKind(marker);
     const label = formatMarkerDisplayName(marker.label);
-    const dynamicSymbol = resolveMarkerDynamicSymbol(marker);
+    const hideMarkerIcon = Boolean(marker.spatial?.hideMarkerIcon);
+    const dynamicSymbol = hideMarkerIcon ? undefined : resolveMarkerDynamicSymbol(marker);
     const highwayIconUrl =
+      !hideMarkerIcon &&
       !dynamicSymbol &&
       roadKind === 'highway' &&
       marker.iconFileName &&
       isHighwayIconFileName(marker.iconFileName)
         ? toMarkerIconUrl(marker.iconFileName, options.iconBaseUrl)
         : undefined;
-    const symbolIcon = roadKind ? undefined : marker.symbolIcon;
+    const symbolIcon = roadKind || hideMarkerIcon ? undefined : marker.symbolIcon;
     const showTextLabel = Boolean(label) && !highwayIconUrl;
     const projectedMarker: ProjectedLinearPoi = {
       id: marker.id,
@@ -15528,6 +15695,7 @@ function projectLinearPoiMarkers(
         Boolean(roadKind) && showTextLabel
           ? shouldUseVerticalMapRoadLabel(marker.geometry.coordinates, labelAnchor)
           : false,
+      hideIcon: hideMarkerIcon,
       symbolIcon,
       endpoints,
     };
@@ -15647,6 +15815,40 @@ function fitRouteDraftToMapView(
   );
 }
 
+// 规划路线取景：先按路线与 POI 中心点算出精确缩放，再把标签的屏幕宽度换算成
+// 世界坐标追加到标记点右侧，保证文字标签也落在安全框内。
+function fitRoutePlanToMapView(
+  option: RoutePlanOption,
+  semanticCoordinates: Array<[number, number]>,
+  current: MapView,
+  size: ViewportSize,
+  visibleRect: MapVisibleRect,
+): MapView {
+  const coordinates = [...option.coordinates, ...semanticCoordinates];
+  const baseFit = fitCoordinatesToMapView(
+    coordinates,
+    current,
+    size,
+    routePlanFitPadding,
+    visibleRect,
+    undefined,
+    true,
+  );
+  const labelOverhang = routePlanLabelOverhang / getScale(baseFit.zoom);
+  return fitCoordinatesToMapView(
+    [
+      ...coordinates,
+      ...semanticCoordinates.map(([x, z]) => [x + labelOverhang, z] as [number, number]),
+    ],
+    current,
+    size,
+    routePlanFitPadding,
+    visibleRect,
+    undefined,
+    true,
+  );
+}
+
 function fitCoordinatesToMapView(
   coordinates: Array<[number, number]>,
   current: MapView,
@@ -15654,6 +15856,7 @@ function fitCoordinatesToMapView(
   padding: number,
   visibleRect: MapVisibleRect,
   maximumZoom?: number,
+  exactZoom = false,
 ): MapView {
   if (coordinates.length === 0) {
     return current;
@@ -15665,7 +15868,13 @@ function fitCoordinatesToMapView(
     width: effectiveRect.right - effectiveRect.left,
     height: effectiveRect.bottom - effectiveRect.top,
   };
-  const fittedZoom = getZoomToFitCoordinates(coordinates, visibleSize, padding, current.zoom);
+  const fittedZoom = getZoomToFitCoordinates(
+    coordinates,
+    visibleSize,
+    padding,
+    current.zoom,
+    exactZoom,
+  );
   const zoom = maximumZoom === undefined ? fittedZoom : Math.min(fittedZoom, maximumZoom);
   const scale = getScale(zoom);
   const worldCenterX = (bounds.minX + bounds.maxX) / 2;
@@ -15705,6 +15914,7 @@ function getZoomToFitCoordinates(
   size: ViewportSize,
   padding: number,
   fallbackZoom: number,
+  exactZoom = false,
 ): number {
   if (coordinates.length < 2 || size.width <= padding * 2 || size.height <= padding * 2) {
     return Math.max(fallbackZoom, 0);
@@ -15714,8 +15924,9 @@ function getZoomToFitCoordinates(
   const width = Math.max(1, bounds.maxX - bounds.minX);
   const height = Math.max(1, bounds.maxZ - bounds.minZ);
   const scale = Math.min((size.width - padding * 2) / width, (size.height - padding * 2) / height);
-  const zoom = Math.floor(Math.log2(Math.max(scale, 2 ** mapDefaults.minZoom)));
-  return clampZoom(zoom);
+  const rawZoom = Math.log2(Math.max(scale, 2 ** mapDefaults.minZoom));
+  // 普通取景向下取整到 2 的幂；折叠后的精确取景保留小数，避免留白过多导致画面偏小。
+  return exactZoom ? clampZoom(Math.round(rawZoom * 100) / 100) : clampZoom(Math.floor(rawZoom));
 }
 
 function getCoordinateBounds(coordinates: Array<[number, number]>): {

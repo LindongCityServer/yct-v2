@@ -36,7 +36,11 @@ import {
   serializeMetroWayfindingLayout,
   serializeMetroWayfindingProjectFile,
 } from '../lib/metro-wayfinding';
-import { METRO_PLATFORM_SIGN_TEMPLATE_ID } from '../lib/material-template-ids';
+import {
+  BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID,
+  BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID,
+  METRO_PLATFORM_SIGN_TEMPLATE_ID,
+} from '../lib/material-template-ids';
 import {
   buildMetroWayfindingTemplateExamples,
   type MetroWayfindingExample,
@@ -304,6 +308,9 @@ export function MaterialStudioPanel({
   const panelTitle = titleKey ? t(titleKey) : title;
   const localDraftRef = useRef<MaterialOfflineDraftRecord | null>(null);
   const transitNetworkSourceIntentRevisionRef = useRef(0);
+  // 数据源切换时按来源切到公交站牌的默认样式，这里保存最新的版式与模板，避免闭包取到旧值。
+  const activeLayoutGroupRef = useRef<MaterialTemplateLayoutGroup | undefined>(undefined);
+  const selectedTemplateIdRef = useRef<string | null>(null);
   const [isSyncingLocalDraft, setIsSyncingLocalDraft] = useState(false);
   const [metroExampleStationName, setMetroExampleStationName] = useState('');
   const [metroExampleLineId, setMetroExampleLineId] = useState('');
@@ -369,6 +376,10 @@ export function MaterialStudioPanel({
   const isMetroLineMap = selected?.template.family === 'metro_line';
   // 站台站名标志是固定 512×512 的方形版面，不提供宽高或长度调节。
   const isMetroPlatformSign = selected?.id === METRO_PLATFORM_SIGN_TEMPLATE_ID;
+  // 拟真公交站牌画布高 180（128×180），对齐到 128 的整数倍会改变比例，因此禁用该选项。
+  const isRealisticBusStop =
+    selected?.id === BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID ||
+    selected?.id === BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID;
   const canvasSizeMode: 'full' | 'length' | 'none' = isMetroPlatformSign
     ? 'none'
     : isMetroWayfinding || isMetroLineMap
@@ -740,6 +751,50 @@ export function MaterialStudioPanel({
       (line) => line.isOriginAtStation || line.isTerminalAtStation,
     );
   }, [activeTransitStation, importedTransitNetwork, mode, transitNetworkSource]);
+  // 站点属性由「行车方向 + 线路」自动判定：线路在本站是起点即始发，是终点即终到。
+  useEffect(() => {
+    if (mode !== 'server' || !requiresTransitTerminalRole) {
+      return;
+    }
+    const lineId = selectedTransitLineIds[0];
+    if (!lineId) {
+      return;
+    }
+    let nextRole: 'origin' | 'terminal' | undefined;
+    if (transitNetworkSource === 'rmp') {
+      const lineKey = lineId.split('\u0000')[0];
+      if (importedTransitNetwork && selectedImportedTransitStation && lineKey) {
+        const stations = listMaterialTransitNetworkLineStations(importedTransitNetwork, lineKey);
+        const index = stations.findIndex(
+          (station) => station.id === selectedImportedTransitStation.markerId,
+        );
+        if (index === 0) {
+          nextRole = 'origin';
+        } else if (index >= 0 && index === stations.length - 1) {
+          nextRole = 'terminal';
+        }
+      }
+    } else {
+      const line = selectedTransitStation?.lines.find((item) => item.id === lineId);
+      if (line?.isOriginAtStation) {
+        nextRole = 'origin';
+      } else if (line?.isTerminalAtStation) {
+        nextRole = 'terminal';
+      }
+    }
+    if (nextRole && nextRole !== transitTerminalRole) {
+      setTransitTerminalRole(nextRole);
+    }
+  }, [
+    importedTransitNetwork,
+    mode,
+    requiresTransitTerminalRole,
+    selectedImportedTransitStation,
+    selectedTransitLineIds,
+    selectedTransitStation,
+    transitNetworkSource,
+    transitTerminalRole,
+  ]);
   const availableEntryVariants = selectedEntryVariants?.filter(
     (item) =>
       stationSupportsTerminalVariant ||
@@ -776,10 +831,19 @@ export function MaterialStudioPanel({
       : undefined;
   const selectableImportedTransitLines = useMemo<ImportedTransitLineOption[]>(() => {
     if (!importedTransitNetwork || !selectedImportedTransitStation) return [];
-    return (selectedImportedTransitStation.projectLines ?? []).flatMap((line) =>
-      listMaterialTransitNetworkNodeLineDirections(
+    const stationId = selectedImportedTransitStation.markerId;
+    return (selectedImportedTransitStation.projectLines ?? []).flatMap((line) => {
+      // 始发终到版式只能选端点站所在的线路，中途站不进入候选。
+      if (requiresTransitTerminalRole) {
+        const stations = listMaterialTransitNetworkLineStations(importedTransitNetwork, line.lineKey);
+        const index = stations.findIndex((station) => station.id === stationId);
+        if (index !== 0 && index !== stations.length - 1) {
+          return [];
+        }
+      }
+      return listMaterialTransitNetworkNodeLineDirections(
         importedTransitNetwork,
-        selectedImportedTransitStation.markerId,
+        stationId,
         line.lineKey,
       ).map((direction) => ({
         id: `${line.lineKey}\u0000${direction}`,
@@ -788,18 +852,17 @@ export function MaterialStudioPanel({
         name: line.label,
         secondaryName: line.secondaryLabel,
         color: line.color,
-      })),
-    );
-  }, [importedTransitNetwork, selectedImportedTransitStation]);
+      }));
+    });
+  }, [importedTransitNetwork, requiresTransitTerminalRole, selectedImportedTransitStation]);
   const selectableServerTransitLines = useMemo(
     () =>
       (selectedTransitStation?.lines ?? []).filter(
         (line) =>
           line.direction === transitDirection &&
-          (!requiresTransitTerminalRole ||
-            (transitTerminalRole === 'origin' ? line.isOriginAtStation : line.isTerminalAtStation)),
+          (!requiresTransitTerminalRole || line.isOriginAtStation || line.isTerminalAtStation),
       ),
-    [requiresTransitTerminalRole, selectedTransitStation, transitDirection, transitTerminalRole],
+    [requiresTransitTerminalRole, selectedTransitStation, transitDirection],
   );
   const selectableTransitLines = useMemo(
     () =>
@@ -1061,6 +1124,22 @@ export function MaterialStudioPanel({
           if (reason !== 'initialization' || transitNetworkSourceIntentRevisionRef.current === 0) {
             setTransitNetworkSource(source);
           }
+          if (reason !== 'initialization') {
+            // 公交站牌：服务器线网默认方块样式，导入 / 示例项目默认拟真样式。
+            const layoutGroup = activeLayoutGroupRef.current;
+            const isBusStopStyleGroup =
+              layoutGroup &&
+              (layoutGroup.id === 'terminal' || layoutGroup.id === 'overview') &&
+              layoutGroup.templateIds.some((templateId) =>
+                templateId.startsWith('system_material_bus_stop_'),
+              );
+            if (isBusStopStyleGroup) {
+              const targetTemplateId = layoutGroup.templateIds[source === 'rmp' ? 1 : 0];
+              if (targetTemplateId && targetTemplateId !== selectedTemplateIdRef.current) {
+                setSelectedTemplateId(targetTemplateId);
+              }
+            }
+          }
           if (projectOrigin) setTransitProjectOrigin(projectOrigin);
           if (snapshot) setImportedTransitNetwork(snapshot);
           if (clearSnapshot) {
@@ -1296,6 +1375,10 @@ export function MaterialStudioPanel({
   const activeLayoutGroup = availableLayoutGroups?.find((group) =>
     group.templateIds.includes(selected?.id ?? ''),
   );
+  useEffect(() => {
+    activeLayoutGroupRef.current = activeLayoutGroup;
+    selectedTemplateIdRef.current = selected?.id ?? null;
+  });
   const layoutStyleVariants = activeLayoutGroup
     ? availableEntryVariants?.filter((item) => activeLayoutGroup.templateIds.includes(item.id))
     : availableEntryVariants;
@@ -2210,6 +2293,7 @@ export function MaterialStudioPanel({
                 disabled={isBusy || !selected}
                 sizeMode={canvasSizeMode}
                 isMetroWayfinding={isMetroWayfinding}
+                lockAlignToTile={isRealisticBusStop}
                 metroWayfindingLayoutMode={metroWayfindingLayoutMode}
               />
             </ResponsiveSidebarDisclosure>
@@ -2412,23 +2496,6 @@ export function MaterialStudioPanel({
                   ))}
                 </select>
               </label>
-              {requiresTransitTerminalRole ? (
-                <label className="material-field">
-                  <span>{t('materialStudio.stationProperties')}</span>
-                  <select
-                    value={transitTerminalRole}
-                    onChange={(event) => {
-                      setTransitTerminalRole(event.currentTarget.value as 'origin' | 'terminal');
-                      setSelectedTransitLineIds([]);
-                      clearPreview();
-                    }}
-                    disabled={isBusy || !activeTransitStation}
-                  >
-                    <option value="origin">{t('materialStudio.originStation')}</option>
-                    <option value="terminal">{t('materialStudio.terminalStation')}</option>
-                  </select>
-                </label>
-              ) : null}
               <fieldset
                 className="material-canvas-editor"
                 disabled={isBusy || !activeTransitStation}
@@ -3094,6 +3161,7 @@ function CanvasEditor({
   disabled,
   sizeMode,
   isMetroWayfinding,
+  lockAlignToTile = false,
   metroWayfindingLayoutMode,
   onChange,
 }: Readonly<{
@@ -3101,12 +3169,20 @@ function CanvasEditor({
   disabled: boolean;
   sizeMode: 'full' | 'length' | 'none';
   isMetroWayfinding: boolean;
+  lockAlignToTile?: boolean;
   metroWayfindingLayoutMode?: 'single' | 'double' | 'vertical';
   onChange: <TKey extends keyof MaterialCanvas>(key: TKey, value: MaterialCanvas[TKey]) => void;
 }>) {
   const metroLayoutMode = metroWayfindingLayoutMode ?? 'single';
   const isMetroVertical = isMetroWayfinding && metroLayoutMode === 'vertical';
   const { t } = useI18n();
+
+  // 拟真公交站牌必须保持 128×180 的比例，切到该模板时强制关闭对齐。
+  useEffect(() => {
+    if (canvas && lockAlignToTile && canvas.alignToTile) {
+      onChange('alignToTile', false);
+    }
+  }, [canvas, lockAlignToTile, onChange]);
 
   useEffect(() => {
     if (!canvas || sizeMode !== 'length') {
@@ -3223,7 +3299,7 @@ function CanvasEditor({
         <input
           type="checkbox"
           checked={canvas.alignToTile}
-          disabled={isMetroWayfinding}
+          disabled={isMetroWayfinding || lockAlignToTile}
           onChange={(event) => onChange('alignToTile', event.currentTarget.checked)}
         />
         <span>{t('materialStudio.alignToMapSize')}</span>

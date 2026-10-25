@@ -4,6 +4,12 @@ export interface MapRoutePanelVisibilityChangedPayload {
   visible: boolean;
 }
 
+export const mapSidebarOverlayChangedEventName = 'yct:map-sidebar-overlay-changed';
+
+export interface MapSidebarOverlayChangedPayload {
+  visible: boolean;
+}
+
 export const mapNavigationLayoutChangedEventName = 'yct:map-navigation-layout-changed';
 
 export interface MapNavigationLayoutChangedPayload {
@@ -60,6 +66,7 @@ export interface MapShortcutContextChangedPayload {
 }
 
 let currentMapRoutePanelVisibility = false;
+let currentMapSidebarOverlayVisible = false;
 let currentMapNavigationExpanded = true;
 let currentMapNearbySearchScope: MapNearbySearchScopeChangedPayload | null = null;
 let currentMapTileProviderId = '';
@@ -209,6 +216,34 @@ export function subscribeMapRoutePanelVisibilityChanged(
   listener({ visible: currentMapRoutePanelVisibility });
   return () =>
     window.removeEventListener(mapRoutePanelVisibilityChangedEventName, handleVisibilityChanged);
+}
+
+export function publishMapSidebarOverlayChanged(payload: MapSidebarOverlayChangedPayload): void {
+  currentMapSidebarOverlayVisible = payload.visible;
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent<MapSidebarOverlayChangedPayload>(mapSidebarOverlayChangedEventName, {
+      detail: payload,
+    }),
+  );
+}
+
+export function subscribeMapSidebarOverlayChanged(
+  listener: (payload: MapSidebarOverlayChangedPayload) => void,
+): () => void {
+  if (typeof window === 'undefined') {
+    return () => undefined;
+  }
+
+  const handleChanged = (event: Event) => {
+    listener((event as CustomEvent<MapSidebarOverlayChangedPayload>).detail);
+  };
+  window.addEventListener(mapSidebarOverlayChangedEventName, handleChanged);
+  listener({ visible: currentMapSidebarOverlayVisible });
+  return () => window.removeEventListener(mapSidebarOverlayChangedEventName, handleChanged);
 }
 
 export function publishMapNavigationLayoutChanged(

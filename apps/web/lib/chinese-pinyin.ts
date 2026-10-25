@@ -41,7 +41,9 @@ export function toUppercasePinyin(value: string): string {
 }
 
 function toUppercasePinyinWord(value: string): string {
+  // 「〇」(U+3007) 不在汉字区段内，pinyin-pro 不会转换；先按同音字替换再整段转换。
   return value
+    .replaceAll('〇', '灵')
     .split(/([\u3400-\u9fff]+)/u)
     .filter(Boolean)
     .map((part) =>

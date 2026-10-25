@@ -22,11 +22,60 @@ export async function listMaterialTemplateRecords(): Promise<MaterialTemplateRec
   const snapshotById = new Map(snapshot.records.map((record) => [record.id, record]));
   const systemIds = new Set(systemMaterialTemplateRecords.map((record) => record.id));
   return [
-    ...systemMaterialTemplateRecords.map((record) => snapshotById.get(record.id) ?? record),
+    ...systemMaterialTemplateRecords.map((record) =>
+      pickSystemTemplateRecord(record, snapshotById.get(record.id)),
+    ),
     ...snapshot.records.filter((record) => !systemIds.has(record.id)),
   ]
     .filter((record) => !retiredSystemTemplateIds.has(record.id))
     .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+/**
+ * 代码内置模板改版后需要覆盖运行时快照：
+ * 优先比较已发布版本号，版本号相同或更低时再比较内容；内容不同就用代码种子，
+ * 并把版本号接在快照之后，避免历史版本号回退。
+ */
+function pickSystemTemplateRecord(
+  seedRecord: MaterialTemplateRecord,
+  snapshotRecord: MaterialTemplateRecord | undefined,
+): MaterialTemplateRecord {
+  if (!snapshotRecord) {
+    return seedRecord;
+  }
+  const seedVersion = findPublishedMaterialTemplateVersion(seedRecord);
+  const snapshotVersion = findPublishedMaterialTemplateVersion(snapshotRecord);
+  if (!seedVersion || !snapshotVersion) {
+    return snapshotRecord;
+  }
+  if (seedVersion.version > snapshotVersion.version) {
+    return seedRecord;
+  }
+  if (isSameTemplateVersionContent(seedVersion, snapshotVersion)) {
+    return snapshotRecord;
+  }
+  return {
+    ...seedRecord,
+    versions: seedRecord.versions.map((version) =>
+      version.status === 'published'
+        ? { ...version, version: snapshotVersion.version + 1 }
+        : version,
+    ),
+  };
+}
+
+function isSameTemplateVersionContent(
+  left: MaterialTemplateVersion,
+  right: MaterialTemplateVersion,
+): boolean {
+  return (
+    left.title === right.title &&
+    left.description === right.description &&
+    left.family === right.family &&
+    left.source === right.source &&
+    JSON.stringify(left.fields) === JSON.stringify(right.fields) &&
+    JSON.stringify(left.defaultCanvas) === JSON.stringify(right.defaultCanvas)
+  );
 }
 
 export async function findMaterialTemplateRecord(

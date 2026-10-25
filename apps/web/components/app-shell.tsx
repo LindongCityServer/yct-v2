@@ -11,6 +11,7 @@ import {
   publishMapNavigationLayoutChanged,
   subscribeAppNavigationToggleRequested,
   subscribeMapRoutePanelVisibilityChanged,
+  subscribeMapSidebarOverlayChanged,
 } from '../lib/client-map-ui-events';
 import { ticketOrderStateChangedEventName } from '../lib/client-ticket-orders';
 import { publishToastRequested } from '../lib/client-toast-events';
@@ -74,6 +75,7 @@ export function AppShell({
   const [accountStatus, setAccountStatus] = useState<AccountStatusResponse | null>(null);
   const [localPendingSyncCount, setLocalPendingSyncCount] = useState(0);
   const [mapRoutePanelVisible, setMapRoutePanelVisible] = useState(false);
+  const [mapSidebarOverlayVisible, setMapSidebarOverlayVisible] = useState(false);
   const [rideCodeLoading, setRideCodeLoading] = useState(false);
   const { locale, t } = useI18n();
 
@@ -90,6 +92,15 @@ export function AppShell({
     return subscribeMapRoutePanelVisibilityChanged(({ visible }) =>
       setMapRoutePanelVisible(visible),
     );
+  }, [variant]);
+
+  useEffect(() => {
+    if (variant !== 'map') {
+      setMapSidebarOverlayVisible(false);
+      return undefined;
+    }
+
+    return subscribeMapSidebarOverlayChanged(({ visible }) => setMapSidebarOverlayVisible(visible));
   }, [variant]);
 
   useEffect(() => {
@@ -221,6 +232,7 @@ export function AppShell({
         variant === 'map' ? 'is-map-shell' : '',
         navOpen ? '' : 'is-nav-collapsed',
         variant === 'map' && mapRoutePanelVisible ? 'has-map-route-panel' : '',
+        variant === 'map' && mapSidebarOverlayVisible ? 'has-map-sidebar-overlay' : '',
       ]
         .filter(Boolean)
         .join(' ')}

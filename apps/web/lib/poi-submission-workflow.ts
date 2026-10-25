@@ -78,6 +78,7 @@ export async function createPoiSubmissionByAdmin(input: {
   addressRoadMarkerId?: string;
   facilities?: PoiFacilitySnapshot[];
   actorId: string;
+  asDraft?: boolean;
 }): Promise<PoiSubmissionActionResult> {
   return createSubmittedPoi({ ...input, actorType: 'admin' });
 }
@@ -101,6 +102,7 @@ async function createSubmittedPoi(input: {
   facilities?: PoiFacilitySnapshot[];
   actorId: string;
   actorType: 'admin' | 'user';
+  asDraft?: boolean;
 }): Promise<PoiSubmissionActionResult> {
   const draft = await createLocalPoiSubmission({
     title: input.title,
@@ -119,9 +121,13 @@ async function createSubmittedPoi(input: {
     address: normalizeOptionalText(input.address),
     addressRoadMarkerId: normalizeOptionalText(input.addressRoadMarkerId),
     facilities: normalizePoiFacilities(input.facilities),
-    visibility: 'public_pending_review',
+    visibility: input.asDraft ? 'private' : 'public_pending_review',
     actorId: input.actorId,
   });
+
+  if (input.asDraft) {
+    return { ok: true, submission: draft };
+  }
 
   const transition = transitionPoiSubmissionStatus(draft.status, 'pending_review');
   if (!transition.ok) {
@@ -238,6 +244,7 @@ export async function updatePoiSubmissionByAdmin(input: {
   }
 
   if (
+    submission.status !== 'draft' &&
     submission.status !== 'pending_review' &&
     submission.status !== 'approved' &&
     submission.status !== 'published'
@@ -246,7 +253,7 @@ export async function updatePoiSubmissionByAdmin(input: {
       ok: false,
       status: 409,
       error: 'invalid_poi_submission_state',
-      message: '当前仅允许修正待审核、待发布或已发布的 POI 投稿。',
+      message: '当前仅允许修正草稿、待审核、待发布或已发布的 POI 投稿。',
     };
   }
 
@@ -295,6 +302,69 @@ export async function updatePoiSubmissionByAdmin(input: {
         updatedBy: input.actorId,
         updatedAt: new Date().toISOString(),
         changedFields,
+      },
+    );
+  }
+
+  return { ok: true, submission: updated };
+}
+
+export async function submitPoiSubmissionByAdmin(input: {
+  poiId: string;
+  actorId: string;
+}): Promise<PoiSubmissionActionResult> {
+  const submission = await findLocalPoiSubmission(input.poiId);
+  if (!submission) {
+    return notFound();
+  }
+
+  if (submission.status !== 'draft') {
+    return {
+      ok: false,
+      status: 409,
+      error: 'invalid_poi_submission_state',
+      message: '只有草稿可以提交审核。',
+    };
+  }
+
+  const transition = transitionPoiSubmissionStatus(submission.status, 'pending_review');
+  if (!transition.ok) {
+    return invalidTransition(transition.reason);
+  }
+
+  const submittedAt = new Date().toISOString();
+  const updated = await updateLocalPoiSubmission(input.poiId, (current) =>
+    withPoiSubmissionStatus(current, 'pending_review', {
+      submittedBy: input.actorId,
+      submittedAt,
+      visibility: 'public_pending_review',
+    }),
+  );
+
+  if (updated) {
+    await emitEvent(
+      'PoiSubmitted',
+      {
+        type: 'admin',
+        id: input.actorId,
+      },
+      {
+        poiId: updated.id,
+        title: updated.title,
+        categoryId: updated.categoryId,
+        description: updated.description,
+        href: updated.href,
+        imageUrls: updated.imageUrls,
+        imageUrl: updated.imageUrl,
+        geometry: updated.geometry,
+        spatial: updated.spatial,
+        parentMarkerId: updated.parentMarkerId,
+        floorLabel: updated.floorLabel,
+        boundRegionMarkerIds: updated.boundRegionMarkerIds,
+        openingHours: updated.openingHours,
+        address: updated.address,
+        addressRoadMarkerId: updated.addressRoadMarkerId,
+        facilities: updated.facilities,
       },
     );
   }

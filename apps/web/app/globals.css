@@ -2377,6 +2377,18 @@ body .material-symbols-outlined {
   transform: translate(-12px, -50%);
 }
 
+/* 「不使用图标」的标记点只显示名称标签，并让标签以坐标为中心。 */
+.map-marker-dot.has-label.is-icon-hidden {
+  justify-content: center;
+  min-width: 0;
+  transform: translate(-50%, -50%);
+}
+
+.map-marker-dot.has-label.is-icon-hidden .map-marker-label {
+  margin-left: 0;
+  text-align: center;
+}
+
 .map-marker-dot > img,
 .map-marker-dot > .material-symbols-outlined {
   position: relative;
@@ -2482,6 +2494,21 @@ body .material-symbols-outlined {
   text-orientation: mixed;
 }
 
+/* 「不使用图标」的线状 POI：标签以中点为中心。 */
+.map-linear-poi-center.has-label.is-icon-hidden {
+  justify-content: center;
+  transform: translate(-50%, -50%);
+}
+
+.map-linear-poi-center.is-icon-hidden.has-label.is-vertical {
+  align-items: center;
+}
+
+.map-linear-poi-center.is-icon-hidden .map-marker-label {
+  margin-left: 0;
+  text-align: center;
+}
+
 .map-linear-poi-center > img {
   position: relative;
   z-index: 1;
@@ -2581,6 +2608,16 @@ body .material-symbols-outlined {
   align-items: start;
   gap: var(--yct-space-2);
   min-width: 0;
+}
+
+/* 折叠态概要：复用选项卡的时间/里程、票价与徽标、线路描述三段排版。 */
+.map-route-plan-peek {
+  display: grid;
+  gap: 4px;
+  margin-top: var(--yct-space-2);
+  padding-top: var(--yct-space-2);
+  border-top: 1px solid var(--yct-color-border);
+  color: var(--yct-color-text);
 }
 
 .map-route-endpoint-list {
@@ -3389,26 +3426,54 @@ body .material-symbols-outlined {
   font-size: 18px;
 }
 
-.map-source-chip {
-  position: absolute;
-  z-index: 3;
-  border: 1px solid var(--yct-color-border);
-  background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
-  box-shadow: var(--yct-shadow-floating);
-  backdrop-filter: blur(16px);
+/* HUD 内的只读信息完全复用 .map-scale-control 的白字黑描边配方，不使用胶囊底。 */
+.map-source-chip,
+.map-coordinate-chip {
+  border: 0;
+  background: transparent;
+  color: #ffffff;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  font-size: 12px;
+  font-weight: 800;
+  text-shadow:
+    0 1px 3px rgba(17, 24, 23, 0.72),
+    1px 0 0 rgba(17, 24, 23, 0.82),
+    -1px 0 0 rgba(17, 24, 23, 0.82),
+    0 1px 0 rgba(17, 24, 23, 0.82),
+    0 -1px 0 rgba(17, 24, 23, 0.82);
 }
 
 .map-source-chip {
-  left: var(--yct-map-control-inset);
-  bottom: var(--yct-map-bottom-controls-offset);
   display: inline-flex;
   align-items: center;
   gap: var(--yct-space-1);
-  min-height: 38px;
-  padding: 0 var(--yct-space-3);
-  border-radius: var(--yct-radius-pill);
-  color: var(--yct-color-text-secondary);
-  font-weight: 650;
+  min-width: 0;
+}
+
+/* 高级材质规则的选择器里含 `:is(.modal-panel ... .icon-button)` 这类三段类选择器，
+ * 实际特异度会抬到 (0,5,0) 并写入白色光晕；这里用 !important 锁定 HUD 文本样式。 */
+:root[data-material-mode] :is(.map-source-chip, .map-coordinate-chip) {
+  border: 0 !important;
+  background: transparent !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  text-shadow:
+    0 1px 3px rgba(17, 24, 23, 0.72),
+    1px 0 0 rgba(17, 24, 23, 0.82),
+    -1px 0 0 rgba(17, 24, 23, 0.82),
+    0 1px 0 rgba(17, 24, 23, 0.82),
+    0 -1px 0 rgba(17, 24, 23, 0.82) !important;
+}
+
+/* 液态材质规则会对 `[data-liquid-material] *` 直接写入白色光晕，
+ * 芯片内的图标与文字都是直接子 span，这里统一继承父元素的黑描边。 */
+.map-source-chip > span,
+.map-coordinate-chip > span {
+  text-shadow: inherit !important;
 }
 
 .map-routing-status {
@@ -3441,17 +3506,29 @@ body .material-symbols-outlined {
 .map-hud {
   position: absolute;
   left: var(--yct-map-control-inset);
-  bottom: calc(var(--yct-map-bottom-controls-offset) + 48px);
+  /* 底端与 map-legal 对齐 */
+  bottom: var(--yct-map-control-inset);
   z-index: 3;
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: var(--yct-space-2);
-  justify-items: start;
+  max-width: calc(100% - var(--yct-map-control-inset) * 2);
   pointer-events: none;
+  transition: opacity var(--yct-motion-duration-standard) var(--yct-motion-easing-standard);
 }
 
-.map-scale-control,
-.map-coordinate-chip {
-  color: var(--yct-color-text-secondary);
+.map-hud-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.map-hud-chips > * {
+  max-width: 100%;
 }
 
 .map-scale-control {
@@ -3485,19 +3562,14 @@ body .material-symbols-outlined {
   display: inline-flex;
   align-items: center;
   gap: var(--yct-space-1);
-  min-height: 34px;
-  padding: 0 var(--yct-space-3);
-  border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-pill);
-  background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
-  box-shadow: var(--yct-shadow-floating);
-  backdrop-filter: blur(16px);
+  min-width: 0;
   font-size: 12px;
   font-weight: 800;
 }
 
 .map-coordinate-chip .material-symbols-outlined {
   --icon-fill: 1;
+  flex: 0 0 auto;
   font-size: 18px;
 }
 
@@ -4084,15 +4156,18 @@ img.map-player-list-avatar.is-offline {
   bottom: auto;
   z-index: 4;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: var(--yct-space-1);
+  width: fit-content;
   padding: 4px;
   border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-pill);
+  border-radius: var(--yct-radius-lg);
   background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
   box-shadow: var(--yct-shadow-floating);
   backdrop-filter: blur(16px);
+  transition: opacity var(--yct-motion-duration-standard) var(--yct-motion-easing-standard);
 }
 
 .map-poi-detail-panel {
@@ -5219,11 +5294,17 @@ img.map-player-list-avatar.is-offline {
   justify-items: end;
   gap: 2px;
   max-width: min(440px, calc(100% - var(--yct-map-control-inset) * 2));
-  color: color-mix(in srgb, var(--yct-color-text-secondary) 92%, transparent);
+  color: #ffffff;
   font-size: 12px;
   line-height: 1.5;
   text-align: right;
-  -webkit-text-stroke: 0.4px color-mix(in srgb, var(--yct-color-surface) 84%, transparent);
+  /* 与比例尺一致：白字配黑描边，避免在卫星底图上失去对比度。 */
+  text-shadow:
+    0 1px 3px rgba(17, 24, 23, 0.72),
+    1px 0 0 rgba(17, 24, 23, 0.82),
+    -1px 0 0 rgba(17, 24, 23, 0.82),
+    0 1px 0 rgba(17, 24, 23, 0.82),
+    0 -1px 0 rgba(17, 24, 23, 0.82);
   pointer-events: auto;
 }
 
@@ -5237,7 +5318,6 @@ img.map-player-list-avatar.is-offline {
 
 .map-legal a {
   color: inherit;
-  -webkit-text-stroke: inherit;
 }
 
 .map-empty {
@@ -13706,6 +13786,56 @@ div.telegraph-output-scene.is-packing {
   min-height: 42px;
 }
 
+/* POI 编辑弹窗：三分段页签，弹窗加宽以承载入口卡片与高级设置。 */
+.modal-panel.admin-poi-edit-dialog {
+  width: min(720px, 100%);
+}
+
+.admin-poi-edit-tabs {
+  width: 100%;
+}
+
+.admin-poi-edit-tabpanel {
+  display: grid;
+  gap: var(--yct-space-4);
+}
+
+.poi-station-bindings {
+  display: grid;
+  gap: var(--yct-space-2);
+}
+
+.poi-station-binding {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.poi-station-binding-heading {
+  display: grid;
+  gap: 2px;
+}
+
+.poi-station-binding-details {
+  display: grid;
+  gap: var(--yct-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.poi-station-binding-details li {
+  display: grid;
+  gap: 2px;
+}
+
+.poi-station-binding .secondary-action-button {
+  justify-self: start;
+}
+
 .admin-poi-image-edit-block {
   display: grid;
   gap: var(--yct-space-2);
@@ -13794,16 +13924,6 @@ div.telegraph-output-scene.is-packing {
   }
 }
 
-.admin-poi-spatial-editor {
-  display: grid;
-  gap: var(--yct-space-2);
-  margin: 0;
-  padding: var(--yct-space-3);
-  border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-md);
-  background: var(--yct-color-surface);
-}
-
 .admin-map-area-panel,
 .admin-map-area-list,
 .admin-map-area-editor {
@@ -13886,21 +14006,6 @@ div.telegraph-output-scene.is-packing {
   .admin-map-area-opacity-grid {
     grid-template-columns: minmax(0, 1fr);
   }
-}
-
-.admin-poi-spatial-editor > legend,
-.admin-poi-spatial-editor fieldset > legend {
-  padding: 0 var(--yct-space-1);
-  color: var(--yct-color-text-secondary);
-  font-size: 13px;
-  font-weight: 750;
-}
-
-.admin-poi-spatial-editor fieldset {
-  margin: 0;
-  padding: var(--yct-space-2);
-  border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-sm);
 }
 
 .admin-inline-checkboxes {
@@ -14245,73 +14350,31 @@ div.telegraph-output-scene.is-packing {
   font-size: 12px;
 }
 
-.admin-poi-region-bindings {
-  display: grid;
-  gap: var(--yct-space-2);
-  min-width: 0;
-  margin: 0;
-  padding: var(--yct-space-3);
-  overflow: visible;
-  border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-md);
-}
-
-.admin-poi-region-binding-scroll {
-  display: grid;
-  min-width: 0;
-  max-height: min(360px, 48dvh);
-  overflow: auto;
-  gap: var(--yct-space-2);
-  overscroll-behavior: contain;
-}
-
-.admin-poi-region-bindings legend {
-  padding: 0 var(--yct-space-1);
-  color: var(--yct-color-text-secondary);
-  font-weight: 700;
-}
-
-.admin-poi-region-search {
-  position: sticky;
-  z-index: 1;
-  top: 0;
-  display: grid !important;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--yct-space-2);
-  padding: 0 var(--yct-space-2);
-  background: var(--yct-color-surface-panel);
-}
-
-.admin-poi-region-search input {
-  min-width: 0;
-}
-
-.admin-poi-region-binding-options {
+.poi-editor-checkbox-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--yct-space-2);
 }
 
-.admin-poi-region-binding-options .checkbox-row {
+.poi-editor-checkbox-list .checkbox-row {
   align-items: start;
   min-width: 0;
 }
 
-.admin-poi-region-binding-options .checkbox-row > span {
+.poi-editor-checkbox-list .checkbox-row > span {
   display: grid;
   min-width: 0;
   gap: 2px;
 }
 
-.admin-poi-region-binding-options strong,
-.admin-poi-region-binding-options small {
+.poi-editor-checkbox-list strong,
+.poi-editor-checkbox-list small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.admin-poi-region-binding-options small {
+.poi-editor-checkbox-list small {
   color: var(--yct-color-text-muted);
   font-weight: 400;
 }
@@ -14588,23 +14651,96 @@ div.telegraph-output-scene.is-packing {
   gap: var(--yct-space-2);
 }
 
-.admin-poi-parent-selector {
+/* POI 编辑分区：父地点、绑定区域、世界/路网/通行/样式/符号共用同一外壳。 */
+.poi-editor-section {
   display: grid;
-  gap: var(--yct-space-2);
+  gap: var(--yct-space-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface);
 }
 
-.admin-poi-parent-candidates {
+.poi-editor-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--yct-space-3);
+}
+
+.poi-editor-section-heading > div {
   display: grid;
-  gap: var(--yct-space-1);
-  max-height: 288px;
-  overflow-y: auto;
-  padding: var(--yct-space-1);
-  border: 1px solid var(--yct-color-border-subtle);
-  border-radius: var(--yct-radius-lg);
+  gap: 2px;
+  min-width: 0;
+}
+
+.poi-editor-section-heading strong {
+  color: var(--yct-color-text);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.poi-editor-section-heading span {
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+}
+
+.poi-editor-section p {
+  margin: 0;
+}
+
+.poi-editor-section .secondary-action-button {
+  justify-self: start;
+}
+
+.poi-editor-section-toggle {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.poi-editor-search {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--yct-space-2);
+  padding-inline: var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
   background: var(--yct-color-surface-panel);
 }
 
-.admin-poi-parent-candidates > button {
+.poi-editor-search .material-symbols-outlined {
+  color: var(--yct-color-text-muted);
+  font-size: 18px;
+}
+
+.poi-editor-search input {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.poi-editor-option-list {
+  display: grid;
+  gap: var(--yct-space-1);
+  padding: var(--yct-space-1);
+  border: 1px solid var(--yct-color-border-subtle);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.poi-editor-option-list > button {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
   align-items: center;
@@ -14619,45 +14755,95 @@ div.telegraph-output-scene.is-packing {
   text-align: left;
 }
 
-.admin-poi-parent-candidates > button:hover {
+.poi-editor-option-list > button:hover {
   background: var(--yct-material-hover-state);
 }
 
-.admin-poi-parent-candidates > button.is-selected {
+.poi-editor-option-list > button.is-selected {
   background: var(--yct-material-selected-state);
 }
 
-.admin-poi-parent-candidates > button > span:first-child,
-.admin-poi-parent-candidates .admin-poi-category-icon {
+.poi-editor-option-list > button > span:first-child,
+.poi-editor-option-list .admin-poi-category-icon {
   width: 24px;
   height: 24px;
   object-fit: contain;
 }
 
-.admin-poi-parent-candidates > button > span:last-child {
+.poi-editor-option-list > button > span:last-child {
   display: grid;
   min-width: 0;
   gap: 2px;
 }
 
-.admin-poi-parent-candidates strong,
-.admin-poi-parent-candidates small {
+.poi-editor-option-list strong,
+.poi-editor-option-list small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.admin-poi-parent-candidates strong {
+.poi-editor-option-list strong {
   font-size: 13px;
 }
 
-.admin-poi-parent-candidates small {
+.poi-editor-option-list small {
   color: var(--yct-color-text-muted);
   font-size: 12px;
 }
 
-.admin-poi-parent-candidates p {
-  margin: var(--yct-space-2);
+.poi-editor-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2);
+}
+
+.poi-editor-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 10px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.poi-editor-chip button {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.poi-editor-chip button .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.poi-editor-subsection {
+  display: grid;
+  gap: var(--yct-space-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--yct-space-2);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-sm);
+  background: var(--yct-color-surface-muted);
+}
+
+.poi-editor-subsection > legend {
+  padding: 0 var(--yct-space-1);
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .admin-entity-translations,
@@ -18501,6 +18687,113 @@ div.telegraph-output-scene.is-packing {
   background: var(--yct-color-surface-muted);
 }
 
+/* POI 简介工作台：左侧字段面板 + 右侧简介预览。 */
+.poi-intro-workspace {
+  display: grid;
+  grid-template-columns: minmax(360px, 460px) minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--yct-color-surface-muted);
+}
+
+.poi-intro-form-panel {
+  display: grid;
+  align-content: start;
+  gap: var(--yct-space-4);
+  padding: var(--yct-space-4);
+  overflow: auto;
+  border-right: 1px solid var(--yct-color-border);
+  background: var(--yct-color-surface-panel);
+}
+
+.poi-intro-form-panel label {
+  display: grid;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.poi-intro-form-panel textarea,
+.poi-intro-form-panel input,
+.poi-intro-form-panel select {
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text);
+}
+
+.poi-intro-form-panel textarea {
+  min-height: 160px;
+  resize: vertical;
+}
+
+.poi-intro-form-panel input,
+.poi-intro-form-panel select {
+  min-height: 42px;
+}
+
+.poi-intro-panel-heading {
+  display: grid;
+  gap: var(--yct-space-1);
+}
+
+.poi-intro-panel-heading div {
+  display: grid;
+  gap: 2px;
+}
+
+.poi-intro-panel-heading span {
+  font-size: 12px;
+}
+
+.poi-intro-preview {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--yct-space-5);
+  overflow: auto;
+}
+
+/* 简介预览直接复用公众端 POI 详情卡，只去掉多余的操作列与内部滚动。 */
+.poi-intro-preview-panel {
+  width: min(560px, 100%);
+}
+
+.poi-intro-preview-panel .map-poi-detail-header {
+  grid-template-columns: 32px minmax(0, 1fr);
+}
+
+.poi-intro-preview-panel .map-poi-detail-body {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.poi-intro-preview-panel .map-poi-detail-image {
+  border-radius: var(--yct-radius-md);
+}
+
+@media (max-width: 980px) {
+  .poi-intro-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    overflow: auto;
+  }
+
+  .poi-intro-form-panel {
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--yct-color-border);
+  }
+
+  .poi-intro-preview {
+    overflow: visible;
+  }
+}
+
 .poi-visual-map-stage {
   position: absolute;
   inset: 0;
@@ -18709,6 +19002,13 @@ div.telegraph-output-scene.is-packing {
 .poi-visual-toolbox button:disabled {
   cursor: default;
   opacity: 0.3;
+}
+
+.poi-visual-toolbox-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 2px;
+  background: var(--yct-color-border);
 }
 
 .poi-visual-viewport-controls {
@@ -21988,12 +22288,13 @@ div.telegraph-output-scene.is-packing {
 
 .map-layer-panel {
   position: absolute;
-  top: calc(var(--yct-map-top-controls-offset) + 46px);
-  right: var(--yct-map-control-inset);
+  /* 竖向工具条宽约 52px，图层面板停靠在它的左侧 */
+  top: var(--yct-map-top-controls-offset);
+  right: calc(var(--yct-map-control-inset) + 52px);
   z-index: 4;
   display: grid;
   gap: var(--yct-space-2);
-  width: min(260px, calc(100% - var(--yct-map-control-inset) * 2));
+  width: min(260px, calc(100% - var(--yct-map-control-inset) * 2 - 52px));
   padding: var(--yct-space-3);
   border: 1px solid var(--yct-color-border);
   border-radius: var(--yct-radius-lg);
@@ -23671,7 +23972,8 @@ dialog.transit-health-target-dialog > header p {
 }
 
 .map-route-plan-card.is-collapsed {
-  max-height: 132px;
+  /* 折叠态除起终点外还保留一段选中路线概要 */
+  max-height: 208px;
 }
 
 .map-marker-list.is-collapsed {
@@ -23816,9 +24118,7 @@ dialog.transit-health-target-dialog > header p {
     .app-toast,
     .map-search-box,
     .map-route-plan-card,
-    .map-source-chip,
     .map-routing-status,
-    .map-coordinate-chip,
     .map-marker-list,
     .map-coordinate-pick-hint,
     .map-toolbar,
@@ -23946,9 +24246,7 @@ dialog.transit-health-target-dialog > header p {
     .app-toast,
     .map-search-box,
     .map-route-plan-card,
-    .map-source-chip,
     .map-routing-status,
-    .map-coordinate-chip,
     .map-marker-list,
     .map-coordinate-pick-hint,
     .map-toolbar,
@@ -24506,9 +24804,7 @@ dialog.transit-health-target-dialog > header p {
       .app-toast,
       .map-search-box,
       .map-route-plan-card,
-      .map-source-chip,
       .map-routing-status,
-      .map-coordinate-chip,
       .map-marker-list,
       .map-coordinate-pick-hint,
       .map-toolbar,
@@ -24895,6 +25191,13 @@ dialog.transit-health-target-dialog > header p {
     padding: 0;
   }
 
+  /* 仅搜索框 + 结果列表的收起态整体下移，贴近底部导航；展开态由浮层规则接管高度。 */
+  .app-shell:not(.has-map-sidebar-overlay) .map-sidebar-stack:has(> .map-panel-section),
+  .app-shell.is-nav-collapsed:not(.has-map-sidebar-overlay)
+    .map-sidebar-stack:has(> .map-panel-section) {
+    bottom: calc(var(--yct-map-bottom-controls-offset) - 16px);
+  }
+
   .map-route-plan-card {
     max-height: min(
       52dvh,
@@ -24911,12 +25214,6 @@ dialog.transit-health-target-dialog > header p {
     max-height: min(18dvh, 130px);
   }
 
-  .map-source-chip {
-    top: var(--yct-map-top-controls-offset);
-    bottom: auto;
-    max-width: calc(100% - var(--yct-map-control-inset) * 2 - 52px);
-  }
-
   .map-routing-status {
     top: calc(var(--yct-map-top-controls-offset) + 92px);
     bottom: auto;
@@ -24924,12 +25221,78 @@ dialog.transit-health-target-dialog > header p {
   }
 
   .map-hud {
-    top: calc(var(--yct-map-top-controls-offset) + 46px);
+    /* 顶端与 map-toolbar 对齐 */
+    top: var(--yct-map-top-controls-offset);
     bottom: auto;
+    /* 移动端信息胶囊在上、比例尺在下 */
+    flex-direction: column-reverse;
+    /* 右侧预留地图工具条宽度，避免文字与之重叠 */
+    max-width: calc(100% - var(--yct-map-control-inset) * 2 - 52px);
   }
 
   .map-legal {
     display: none;
+  }
+
+  /* 移动端面板自下而上展开，展开/折叠箭头方向与桌面相反 */
+  .map-marker-list-toggle > .material-symbols-outlined,
+  .map-poi-detail-header .icon-action-button[aria-expanded] .material-symbols-outlined,
+  .map-route-plan-header-actions button[aria-expanded] .material-symbols-outlined {
+    transform: rotate(180deg);
+  }
+
+  /* 侧栏面板展开态：底部导航让位，面板接近全屏，底图降亮以突出面板内容。 */
+  .app-shell.is-map-shell.has-map-sidebar-overlay {
+    --yct-bottom-nav-reserved-height: 0px;
+    --yct-visible-map-height: calc(100dvh - var(--yct-topbar-height));
+    --yct-map-bottom-controls-offset: var(--yct-map-control-inset);
+    --yct-map-overlay-panel-max-height: calc(
+      100dvh - var(--yct-topbar-height) - var(--yct-map-control-inset) * 2
+    );
+  }
+
+  .app-shell.is-map-shell.has-map-sidebar-overlay .bottom-nav {
+    display: none;
+  }
+
+  /* 工具条与 HUD 用透明度隐显：动效时长取自 motion token，设置关闭动态效果时自动为 0ms。 */
+  .app-shell.is-map-shell.has-map-sidebar-overlay :is(.map-toolbar, .map-hud) {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity var(--yct-motion-duration-standard) var(--yct-motion-easing-standard),
+      visibility 0s linear var(--yct-motion-duration-standard);
+  }
+
+  .app-shell.is-map-shell.has-map-sidebar-overlay .map-sidebar-stack {
+    max-height: var(--yct-map-overlay-panel-max-height);
+  }
+
+  /* 展开态统一底色：往默认面板透明度（94%~96%）之外再退约 2~3 倍透光量。 */
+  .app-shell.is-map-shell.has-map-sidebar-overlay
+    :is(.map-route-plan-card, .map-marker-list, .map-poi-detail-panel) {
+    max-height: var(--yct-map-overlay-panel-max-height);
+    background: color-mix(in srgb, var(--yct-color-surface-panel) 86%, transparent);
+  }
+
+  .app-shell.is-map-shell.has-map-sidebar-overlay .map-marker-list {
+    /* 扣除同级搜索框与间距，保证结果列表不越出侧栏栈 */
+    max-height: calc(var(--yct-map-overlay-panel-max-height) - 54px);
+  }
+
+  .app-shell.is-map-shell.has-map-sidebar-overlay .map-poi-detail-body {
+    /* 扣除标题、页签、操作底栏与内边距 */
+    max-height: calc(var(--yct-map-overlay-panel-max-height) - 190px);
+  }
+
+  .app-shell.is-map-shell.has-map-sidebar-overlay .map-stage .unmined-tile-stack {
+    opacity: 0.5;
+  }
+
+  .unmined-tile-stack,
+  .map-marker-layer {
+    transition: opacity var(--yct-motion-duration-standard) var(--yct-motion-easing-standard);
   }
 
   .line-detail-card {
@@ -27038,8 +27401,6 @@ input[type='range']:focus-visible {
  * 对原本无边框的控件（如 toast/历史面板）补全边框样式与颜色。 */
 :root[data-material-mode='performance']
   :is(
-    .map-source-chip,
-    .map-coordinate-chip,
     .map-coordinate-pick-hint,
     .map-routing-status,
     .map-marker-list,
@@ -27054,8 +27415,6 @@ input[type='range']:focus-visible {
   ),
 :root[data-material-mode='balanced']
   :is(
-    .map-source-chip,
-    .map-coordinate-chip,
     .map-coordinate-pick-hint,
     .map-routing-status,
     .map-marker-list,
@@ -27780,6 +28139,13 @@ dialog.client-dialog.is-page {
   position: static;
   inset: auto;
   transform: none;
+}
+
+/* 展示板为白底，HUD 芯片在此恢复普通文本色，避免白字不可见 */
+.controls-showcase .map-source-chip,
+.controls-showcase .map-coordinate-chip {
+  color: var(--yct-color-text-secondary) !important;
+  text-shadow: none !important;
 }
 
 .controls-map-split {
