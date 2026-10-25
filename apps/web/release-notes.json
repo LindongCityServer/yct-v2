@@ -3,9 +3,34 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.12.10",
+      "releasedAt": "2026-10-25T17:28:58.764Z",
+      "sourceFingerprint": "8e95418003239d4121f03a5dd51dc5912df19d610c765b9991ff58a9cf924147",
+      "themes": ["map"],
+      "changes": [
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "移动端地图面板展开改为浮层：收起底部导航、工具条与 HUD，面板接近全屏、淡化底图，导航与工具条带淡出动画"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地图 HUD 合并数据源与坐标，周边搜索时显示锚点坐标"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "路线规划完成、路书折叠与窗口变化时按标签宽度自动取景，折叠态展示选中路线概要"
+        },
+        { "category": "fix", "breaking": false, "summary": "修复路书折叠仍被判定为展开的问题" }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.12.9",
       "releasedAt": "2026-10-24T16:58:09.890Z",
-      "sourceFingerprint": "8e95418003239d4121f03a5dd51dc5912df19d610c765b9991ff58a9cf924147",
+      "sourceFingerprint": "9bfc8dd409cc2d813d27a2f0a6fb305db9f598c49545a27c0fc9bee7a5fd5e14",
       "themes": ["materials", "map"],
       "changes": [
         {
@@ -37,26 +62,6 @@
           "category": "feat",
           "breaking": false,
           "summary": "POI 投稿与修正弹窗改为基本信息、设施/出入口、高级三分段，并新增简介工作台与草稿流程"
-        },
-        {
-          "category": "style",
-          "breaking": false,
-          "summary": "地图移动端面板展开改为浮层：收起底部导航、工具条与 HUD，面板接近全屏并淡化底图"
-        },
-        {
-          "category": "feat",
-          "breaking": false,
-          "summary": "地图 HUD 合并数据源与坐标，周边搜索时显示锚点坐标，路线规划、折叠与窗口变化时按标签宽度自动取景"
-        },
-        {
-          "category": "feat",
-          "breaking": false,
-          "summary": "路书折叠态新增选中路线概要，并修正折叠仍被判定为展开的问题"
-        },
-        {
-          "category": "style",
-          "breaking": false,
-          "summary": "底部导航在浮层展开时增加淡出下移动画"
         }
       ],
       "bump": "patch"
