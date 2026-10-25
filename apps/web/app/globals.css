@@ -25190,10 +25190,14 @@ dialog.transit-health-target-dialog > header p {
     padding: 0;
   }
 
-  /* 仅搜索框 + 结果列表的收起态整体下移，贴近底部导航；展开态由浮层规则接管高度。 */
+  /* 收起态贴近底部导航：搜索结果列表与折叠的 POI 详情整体下移；展开态由浮层规则接管高度。 */
   .app-shell:not(.has-map-sidebar-overlay) .map-sidebar-stack:has(> .map-panel-section),
+  .app-shell:not(.has-map-sidebar-overlay)
+    .map-sidebar-stack:has(> .map-poi-detail-panel.is-collapsed),
   .app-shell.is-nav-collapsed:not(.has-map-sidebar-overlay)
-    .map-sidebar-stack:has(> .map-panel-section) {
+    .map-sidebar-stack:has(> .map-panel-section),
+  .app-shell.is-nav-collapsed:not(.has-map-sidebar-overlay)
+    .map-sidebar-stack:has(> .map-poi-detail-panel.is-collapsed) {
     bottom: calc(var(--yct-map-bottom-controls-offset) - 16px);
   }
 
