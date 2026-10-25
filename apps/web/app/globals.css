@@ -23935,6 +23935,9 @@ dialog.transit-health-target-dialog > header p {
   background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
   box-shadow: var(--yct-shadow-floating);
   backdrop-filter: blur(16px);
+  transition:
+    opacity var(--yct-motion-duration-standard) var(--yct-motion-easing-standard),
+    transform var(--yct-motion-duration-layout) var(--yct-motion-easing-emphasized);
 }
 
 .bottom-nav-item {
@@ -24868,10 +24871,6 @@ dialog.transit-health-target-dialog > header p {
     --yct-map-bottom-controls-offset: var(--yct-map-control-inset);
   }
 
-  .app-shell.is-map-shell.has-map-route-panel .bottom-nav {
-    display: none;
-  }
-
   .app-shell.is-map-shell.has-map-route-panel .search-box.map-search-box {
     display: none;
   }
@@ -25251,8 +25250,16 @@ dialog.transit-health-target-dialog > header p {
     );
   }
 
-  .app-shell.is-map-shell.has-map-sidebar-overlay .bottom-nav {
-    display: none;
+  /* 底部导航用透明度 + 下移隐显，动效时长取自 motion token，关闭动态效果时自动为 0ms。 */
+  .app-shell.is-map-shell:is(.has-map-route-panel, .has-map-sidebar-overlay) .bottom-nav {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(calc(var(--yct-motion-distance-md) + 100%));
+    transition:
+      opacity var(--yct-motion-duration-standard) var(--yct-motion-easing-standard),
+      transform var(--yct-motion-duration-layout) var(--yct-motion-easing-emphasized),
+      visibility 0s linear var(--yct-motion-duration-layout);
   }
 
   /* 工具条与 HUD 用透明度隐显：动效时长取自 motion token，设置关闭动态效果时自动为 0ms。 */
