@@ -5,8 +5,8 @@
     {
       "version": "2.12.9",
       "releasedAt": "2026-10-24T16:58:09.890Z",
-      "sourceFingerprint": "65c1e1d2a899120b7ae2b524307930b82f016134a2dfe7f52a079012eacc541a",
-      "themes": ["materials"],
+      "sourceFingerprint": "8124e002ea2a7b973c0775a40c3bfdd640e1484533fbf27173c7aac26e576b2b",
+      "themes": ["materials", "map"],
       "changes": [
         {
           "category": "feat",
@@ -27,6 +27,36 @@
           "category": "fix",
           "breaking": false,
           "summary": "地铁导视只调整尺寸或箭头、图标等图形时仍可免审核导出，只有修改文本才会失效"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复 POI 几何工作台地图被非等比拉伸、两来源瓦片按坐标错位的问题"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "POI 投稿与修正弹窗改为基本信息、设施/出入口、高级三分段，并新增简介工作台与草稿流程"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "地图移动端面板展开改为浮层：收起底部导航、工具条与 HUD，面板接近全屏并淡化底图"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地图 HUD 合并数据源与坐标，周边搜索时显示锚点坐标，路线规划、折叠与窗口变化时按标签宽度自动取景"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "路书折叠态新增选中路线概要，并修正折叠仍被判定为展开的问题"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "底部导航在浮层展开时增加淡出下移动画"
         }
       ],
       "bump": "patch"
