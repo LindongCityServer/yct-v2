@@ -186,7 +186,15 @@ function Copy-YctDirectoryChildren {
   # level of the pipeline.
   $children = @(Get-ChildItem -LiteralPath $Source -Force)
   foreach ($child in $children) {
-    Copy-YctDirectoryTree -Source $child.FullName -Destination (Join-Path $Destination $child.Name)
+    if ($child.PSIsContainer) {
+      Copy-YctDirectoryTree -Source $child.FullName -Destination (Join-Path $Destination $child.Name)
+      continue
+    }
+
+    # robocopy 以目录语义处理单个文件源时会返回 16（文件名语法不正确）；
+    # webpack 的 standalone 根目录会多出 package.json，这里必须按文件复制。
+    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+    Copy-Item -LiteralPath $child.FullName -Destination (Join-Path $Destination $child.Name) -Force
   }
 }
 
