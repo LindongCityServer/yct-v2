@@ -5,7 +5,7 @@
     {
       "version": "2.13.0",
       "releasedAt": "2026-10-26T19:57:27.105Z",
-      "sourceFingerprint": "b86a864bc69484bc51e8d32747f621f78d9006e7f33631dd0ca8f3000a7dc851",
+      "sourceFingerprint": "3bb6deff36f16429374ccdb91c0fc1e5d9333e55e503242193ea98a5401a156e",
       "themes": ["search", "web", "portal"],
       "changes": [
         {
