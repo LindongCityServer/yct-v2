@@ -3,6 +3,50 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.13.0",
+      "releasedAt": "2026-10-26T19:57:27.105Z",
+      "sourceFingerprint": "43352f9318e147bdffbe4b1109dd940a54f3c64e329419d5de3386aec68d719e",
+      "themes": ["search", "web", "portal"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "新增全站搜索与问一问，Ctrl/Cmd+K 打开，输入可在搜索与问一问之间自动切换"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "问一问支持自带模型 Key、流式回答、站内引用、追问与 AI 推荐项"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "接入临东 Wiki 与官方社交入口，结果标注最后编辑或发布时间"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地点搜索补充缩略图、分类名与设施信息，问一问可结合地图选中线路与地点"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "图片统一改为多级 LQIP 渐进加载，回答与引用可显示线路色和语义色"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "移动端侧边操作栏接管页头与后台编辑按钮"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "补充 iOS 16.7 兼容基线、组件规范与局域网 HMR 修复"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.12.10",
       "releasedAt": "2026-10-25T17:28:58.764Z",
       "sourceFingerprint": "8e95418003239d4121f03a5dd51dc5912df19d610c765b9991ff58a9cf924147",
