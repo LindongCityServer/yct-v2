@@ -82,6 +82,7 @@ export default async function OperationDetailPage({ params }: OperationDetailPag
           <AdminEditLink
             href={`/admin/operations?contentId=${encodeURIComponent(item.id)}`}
             labelKey="admin.editOperation"
+            registerInMobileRail
           />
           <OperationTableOfContents headings={headings} />
         </>

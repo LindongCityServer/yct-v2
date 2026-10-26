@@ -12,6 +12,7 @@ import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+import { ProgressiveImage } from './progressive-image';
 import { TitleWithBreaks } from './title-with-breaks';
 
 const categories = [
@@ -192,7 +193,7 @@ export function OperationsHome({
             key={bannerItem.id}
           >
             {bannerItem.coverImageUrl ? (
-              <img
+              <ProgressiveImage
                 className="hero-feature-image"
                 src={appPath(bannerItem.coverImageUrl)}
                 alt=""
@@ -518,7 +519,7 @@ function FeedList({ items, t }: Readonly<{ items: OperationsFeedItem[]; t: Trans
             style={buildFeedCoverStyle(item)}
           >
             {item.coverImageUrl ? (
-              <img
+              <ProgressiveImage
                 src={appPath(item.coverImageUrl)}
                 alt=""
                 loading="lazy"

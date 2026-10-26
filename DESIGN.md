@@ -3,6 +3,24 @@ version: alpha
 name: Yuchengtong
 abbreviation: YCT
 description: 雨城通（Yuchengtong，缩写 YCT）v2 的单文件设计系统，面向编码与设计代理读取，约束前台、后台、地图页和工具页的视觉与交互一致性。
+compatibility:
+  baseline: iOS 16.7（Safari 16.6 / WebKit 616）
+  ios: '16.7'
+  safari: '16.6'
+  required-prefixes:
+    - -webkit-backdrop-filter
+    - -webkit-appearance
+    - -webkit-mask-image
+    - -webkit-text-size-adjust
+  unsupported:
+    - field-sizing
+    - backdrop-filter 中的 SVG url() 引用（Safari 全版本）
+    - scrollbar-width / scrollbar-color / scrollbar-gutter
+    - popover 属性与 showPopover()
+    - text-wrap: balance / pretty
+    - @starting-style
+    - transition-behavior: allow-discrete
+    - 原生 CSS 嵌套之外的新语法（@scope、@container style 查询）
 colors:
   primary: '#168F78'
   primary-hover: '#0F725F'
@@ -168,6 +186,31 @@ components:
     panelRounded: '{rounded.md}'
     controlHeight: 44px
     controlRounded: '{rounded.md}'
+  control:
+    heightSm: 34px
+    heightMd: 40px
+    heightLg: 44px
+    tapTarget: 44px
+    rounded: '{rounded.full}'
+    focusRingWidth: 2px
+    focusRingOffset: 2px
+    disabledOpacity: 0.58
+  field:
+    height: 44px
+    searchHeight: 46px
+    mobileFontSize: 16px
+    rounded: '{rounded.md}'
+  status-chip:
+    height: 28px
+    padding: 8px
+    fontSize: 12px
+    fontWeight: 700
+    rounded: '{rounded.full}'
+  segmented-control-track:
+    height: 40px
+    mobileHeight: 44px
+    padding: 3px
+    gap: 3px
 ---
 
 # Yuchengtong (YCT) Design System
@@ -212,6 +255,28 @@ components:
 
 固定格式组件，例如底部导航、图标按钮、地图控件、线路 chip、行程卡片，需要明确尺寸约束，避免内容加载后抖动。
 
+## Platform Compatibility
+
+兼容基线：**iOS 16.7（Safari 16.6 / WebKit 616）**。所有前台、后台和地图页都必须在该版本上可读、可点、可滚动；更高版本只是增强，不是前提。
+
+### 必须遵守
+
+- **前缀**：`backdrop-filter` 在 Safari 18 前只认 `-webkit-backdrop-filter`，任何模糊/材质表面都要成对书写；`appearance`、`mask-image`、`text-size-adjust` 同理保留 `-webkit-` 前缀。
+- **安全区**：`viewport` 使用 `viewport-fit=cover`；顶栏高度已包含 `env(safe-area-inset-top)`，底部导航、弹窗遮罩和 Toast 必须读取 `--yct-safe-area-*`。
+- **输入字号**：触控设备上，普通文本控件聚焦时不得小于 16px，避免 iOS 整页自动放大；只有参与绝对定位/网格排版的内联编辑器（导视大文本、电报纸、电报网格）允许豁免。
+- **视口高度**：优先 `100dvh` / `100svh`，`100vh` 只作为旧浏览器回退；移动端面板高度不要再写裸 `100vh`。
+- **触控目标**：按钮、图标按钮、字段和开关在 `pointer: coarse` 下点击区域不小于 44px；视觉尺寸可以更小，但不能靠缩小命中区换密度。
+- **滚动条**：iOS 16.7 的 Safari 16.6 不支持 `scrollbar-width`，需要细滚动条时用 `@supports not (scrollbar-width: thin)` 提供 `::-webkit-scrollbar` 回退。
+- **原生控件**：滑杆、搜索框清除按钮必须同时写 `-webkit-appearance: none` 与 `appearance: none`。
+
+### 明确不支持 / 需要降级
+
+- `field-sizing: content`：不可用，依赖它的输入必须同时设置 `size` 属性或固定宽度，保证宽度仍可用。
+- `backdrop-filter: url(#svg-filter)`：Safari 全版本不支持；高级材质的 SVG 扭曲只在支持的无前缀引擎启用，WebKit 自动回退为普通模糊。
+- `popover` / `showPopover()`、`text-wrap: balance`、`@starting-style`、`transition-behavior: allow-discrete`、`@scope`、`@container style()`：不要作为功能前提。
+- `scrollbar-width` / `scrollbar-color`：仅作为增强，缺失时不影响布局。
+- 背景滤镜完全不可用时，浮动面板回退到不透明 `surface-panel`，文字阴影同时关闭。
+
 ## Motion
 
 - **Duration tokens**：普通过渡使用 `duration-fast` / `duration-standard`；持续性加载动画使用 `duration-spinner`，不要在组件里硬写孤立时长。
@@ -251,6 +316,66 @@ components:
 - 地图底部抽屉允许使用较大的顶部圆角，但内部卡片仍遵守 8px 上限。
 - 不混用大量圆角尺度；同一页面里卡片、按钮、输入框应保持一致。
 - 不做卡片套卡片。页面分区用完整布局或浅色背景带区分。
+
+## Component Standards
+
+所有控件按“语义族”归一，不按页面复制。新代码优先使用标准类名；历史类名作为别名保留，但视觉必须服从本节。实现值来自 `packages/design-tokens`，不要在各页面写孤立尺寸。
+
+### 尺寸与状态
+
+- **高度**：`sm` 34px（密集工具条、浮层 chip），`md` 40px（默认按钮/分段轨道），`lg` 44px（移动端主操作、字段）。触控命中区下限 44px。
+- **圆角**：按钮、图标按钮、chip、分段轨道用 `full`；字段用 `md`；弹窗与卡片用 `lg`。
+- **字重**：次要按钮 600；主按钮与选中项 700。
+- **焦点**：统一 `outline: 2px solid primary`，偏移 2px；不要用 `box-shadow` 冒充焦点环。
+- **禁用**：所有按钮只对对应非禁用态做淡化（`--yct-disabled-opacity`），不切换语义色；次要强调按钮本身使用主色 14% tint + 主色 68% 文字，不再使用实心主色。
+- **按下**：`scale(0.98)`，随 `data-motion='reduced'` 归零。
+- **悬停**：中性控件叠加文本色 7% 表面色；主按钮使用 `primary-hover`。
+
+### 组件族与别名
+
+| 语义      | 标准类                                 | 历史别名（必须与标准一致）                                              |
+| --------- | -------------------------------------- | ----------------------------------------------------------------------- |
+| 主按钮    | `.primary-action-button`               | `.pill-button`、`.secondary-action-button.is-primary`（历史实心主按钮） |
+| 次要强调  | `.secondary-action-button.is-emphasis` | —                                                                       |
+| 次按钮    | `.secondary-action-button`             | `.icon-action-button`（图标形态）                                       |
+| 图标按钮  | `.icon-button` / `.icon-action-button` | `.account-button`                                                       |
+| 状态芯片  | `.admin-poi-status-chip` 语义族        | `.trip-status-chip`、`.trip-local-badge`、`.offline-package-status`     |
+| 筛选 chip | `.category-chip`                       | `.chip`                                                                 |
+| 分段控件  | `.segmented-control`                   | `.material-mode-switch`、`.line-direction-switch`（大尺寸档）           |
+| 开关      | `.switch-control`                      | —                                                                       |
+| 字段      | `.material-field`                      | `.search-box`（46px 搜索档）                                            |
+| 弹窗      | `.modal-panel`                         | `dialog.client-dialog`                                                  |
+| Toast     | `.app-toast`                           | —                                                                       |
+
+### 弹窗契约
+
+- 表面：`surface-panel` + `rounded.lg` + `shadow-floating`；遮罩 `rgb(0 0 0 / 36%)` + 8px 模糊，始终带 `-webkit-` 前缀。
+- 结构：头部固定、正文滚动、底部操作固定；按钮高度 40px（移动端 44px）。
+- 安全区：遮罩四边至少 `max(16px, safe-area)`；面板不得超出 `100dvh - 安全区`。
+- 关闭按钮必须是 `.icon-button` 或 `.icon-action-button`，并提供 `aria-label`。
+
+### 字段契约
+
+- 高度 44px（搜索 46px）；圆角 `md`；1px 边框；聚焦主色边框 + 3px 18% 主色光晕。
+- `aria-invalid='true'` 使用 error 边框 + 16% error 光晕。
+- 标签在上方，12–13px、600；必填、错误、帮助文本不得只靠颜色表达。
+- 触控设备普通文本控件字号 16px，避免 iOS 聚焦缩放（可视化内联编辑器除外）。
+
+### 图片加载契约
+
+- 内容图（运营封面、POI 图片、Markdown 插图、头像）统一使用 `ProgressiveImage`。
+- 占位方式是真实多级 LQIP：按 32/64/128/256/512/1024 的 2 倍阶梯，根据渲染尺寸取最后 3 档（第一档为第二档的一半），原图加载完成后覆盖；不要使用“原图加载完成后再降低模糊度”的动画。
+- 低清快照阶段在图片右上角显示 `progress_activity` 状态图标，原图加载完成后自动消失；头像等小图不显示状态图标。
+- 图标、地图瓦片、二维码、电报纸/物料模板保持原图直出，不接入 LQIP。
+- 门户静态图片的 LQIP 位于 `apps/portal/assets/lqip/`，图片变更后运行 `pnpm portal:lqip` 重新生成。
+- 远程图片只有命中 `next.config.mjs` 的 `images.remotePatterns` 才会生成 LQIP；未命中的远程图回退为中性底色。
+
+### 分段控件契约
+
+- 轨道：`surface-muted` + 3px 内边距 + 3px 间隙 + `full` 圆角，高度 40px（移动端 44px）。
+- 选中项：`surface-selected` + primary 文本 + `shadow-soft` + 700 字重。
+- 未选中项悬停：文本色 9% 半透明底；不要给整条轨道加背景滤镜。
+- 选项数量 2–4 个；超过 4 个改用下拉或筛选 chip。
 
 ## Components
 

@@ -34,7 +34,9 @@ import LZString from 'lz-string';
 import QRCode from 'qrcode';
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
+import { publishAssistantPageContext } from '../lib/client-assistant-page-context';
 import { publishLoginRequiredForResponse } from '../lib/client-auth-events';
+import { publishGlobalSearchRequested } from '../lib/client-global-search-events';
 import { publishToastRequested } from '../lib/client-toast-events';
 import { readMapFavoriteMarkerIds, writeMapFavoriteMarkerIds } from '../lib/client-map-favorites';
 import {
@@ -87,7 +89,9 @@ import { PoiFacilityEditor } from './poi-facility-editor';
 import { AdminEditLink } from './admin-edit-link';
 import { MaterialSymbol } from './material-symbol';
 import { MapLayerToggle } from './map-layer-toggle';
+import { ProgressiveImage } from './progressive-image';
 import { SegmentedControl } from './segmented-control';
+import { useMobileActionRail, type MobileActionRailItem } from './mobile-action-rail';
 import { RouteModeToggleList } from './route-mode-toggle-list';
 
 interface MarkerResponse {
@@ -905,6 +909,7 @@ type PoiDetailTab = 'summary' | 'facilities' | 'operations';
 
 export function MapStage() {
   const { locale, t } = useI18n();
+  const mobileActionRail = useMobileActionRail();
   const searchParams = useSearchParams();
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
@@ -1704,6 +1709,51 @@ export function MapStage() {
     () => pointMarkers.find((marker) => marker.id === focusedMarkerId),
     [focusedMarkerId, pointMarkers],
   );
+
+  // 把地图当前查看的线路/地点交给问一问，回答“这条线/这里”时才能用上真实上下文。
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const highlights: Parameters<typeof publishAssistantPageContext>[0]['highlights'] = [];
+    if (focusedTransitLine) {
+      highlights.push({
+        kind: 'line',
+        title: focusedTransitLine.name,
+        detail: [
+          focusedTransitLine.firstStationName && focusedTransitLine.lastStationName
+            ? `${focusedTransitLine.firstStationName} → ${focusedTransitLine.lastStationName}`
+            : undefined,
+          (focusedTransitLine.stationCount ?? 0) > 0
+            ? `共 ${focusedTransitLine.stationCount} 站`
+            : undefined,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        href: `/map?line=${encodeURIComponent(focusedTransitLine.id)}`,
+      });
+    } else if (focusedMarker && isCenterableMarker(focusedMarker)) {
+      const label =
+        locale === 'zh-CN'
+          ? focusedMarker.label
+          : (focusedMarker.localizedLabels?.[locale] ?? focusedMarker.label);
+      highlights.push({
+        kind: 'marker',
+        title: label,
+        detail: [focusedMarker.categoryId, focusedMarker.address].filter(Boolean).join(' · '),
+        href: `/map?marker=${encodeURIComponent(focusedMarker.id)}`,
+      });
+    }
+
+    const trimmedMarkerQuery = markerQuery.trim();
+    if (trimmedMarkerQuery) {
+      highlights.push({ kind: 'search', title: trimmedMarkerQuery });
+    }
+
+    publishAssistantPageContext({ pathname: window.location.pathname, highlights });
+  }, [focusedMarker, focusedTransitLine, locale, markerQuery]);
+
   const centerableMarkerById = useMemo(
     () => new Map(centerableMarkers.map((marker) => [marker.id, marker])),
     [centerableMarkers],
@@ -2801,6 +2851,60 @@ export function MapStage() {
     );
   }, [effectiveMapVisibleRect, preferredCurrentLocation, viewportSize]);
 
+  // 移动端侧边操作栏开启后，地图右侧竖排工具条整体移入侧栏。
+  const mobileActionRailItems = useMemo<MobileActionRailItem[]>(
+    () =>
+      mobileActionRail?.enabled
+        ? [
+            {
+              id: 'rail-map-zoom-out',
+              group: 'page',
+              order: 10,
+              priority: 70,
+              label: t('map.toolbar.zoomOut'),
+              icon: 'remove',
+              onClick: () => zoomBy(-0.5),
+            },
+            {
+              id: 'rail-map-zoom-in',
+              group: 'page',
+              order: 20,
+              priority: 71,
+              label: t('map.toolbar.zoomIn'),
+              icon: 'add',
+              onClick: () => zoomBy(0.5),
+            },
+            {
+              id: 'rail-map-reset',
+              group: 'page',
+              order: 30,
+              priority: 72,
+              label: t('map.toolbar.reset'),
+              icon: 'my_location',
+              onClick: resetView,
+            },
+            {
+              id: 'rail-map-layers',
+              group: 'page',
+              order: 40,
+              priority: 80,
+              label: t('map.layer.open'),
+              icon: 'layers',
+              active: layerPanelOpen,
+              onClick: () => setLayerPanelOpen((current) => !current),
+            },
+          ]
+        : [],
+    [layerPanelOpen, mobileActionRail?.enabled, resetView, t, zoomBy],
+  );
+
+  useEffect(() => {
+    if (!mobileActionRail) {
+      return;
+    }
+    mobileActionRail.registerItems('map-stage', mobileActionRailItems);
+  }, [mobileActionRail, mobileActionRailItems]);
+
   useEffect(
     () =>
       subscribeMapViewShortcutRequested(({ command }) => {
@@ -3816,14 +3920,26 @@ export function MapStage() {
                         );
                       })
                     ) : (
-                      <p className="map-marker-list-empty">
-                        {getMapMarkerListEmptyText({
-                          loadStatus,
-                          markerListCategoryId,
-                          nearbySearchCenter,
-                          t,
-                        })}
-                      </p>
+                      <div className="map-marker-list-empty">
+                        <p>
+                          {getMapMarkerListEmptyText({
+                            loadStatus,
+                            markerListCategoryId,
+                            nearbySearchCenter,
+                            t,
+                          })}
+                        </p>
+                        {markerQuery.trim() ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              publishGlobalSearchRequested({ query: markerQuery.trim() })
+                            }
+                          >
+                            {t('globalSearch.searchAll', { query: markerQuery.trim() })}
+                          </button>
+                        ) : null}
+                      </div>
                     )}
                   </div>
                 ) : null}
@@ -13578,7 +13694,7 @@ function MarkerListIcon({
 }>) {
   if (marker.playerLocation?.avatarUrl) {
     return (
-      <img
+      <ProgressiveImage
         className={
           marker.playerLocation.presence === 'offline'
             ? 'map-player-list-avatar is-offline'
@@ -13587,6 +13703,7 @@ function MarkerListIcon({
         src={marker.playerLocation.avatarUrl}
         alt=""
         draggable={false}
+        showStatus={false}
       />
     );
   }
@@ -13736,10 +13853,11 @@ function MapPoiImageGallery({
         swipeStartXRef.current = null;
       }}
     >
-      <img
+      <ProgressiveImage
         className="map-poi-detail-image"
         src={appPath(imageUrls[activeIndex] ?? imageUrls[0])}
         alt={imageAlt}
+        loading="lazy"
         draggable={false}
       />
       {hasMultipleImages ? (

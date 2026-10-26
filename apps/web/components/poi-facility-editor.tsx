@@ -2,6 +2,7 @@
 
 import type { PoiFacilitySnapshot } from '@yct/contracts';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+import { MaterialSymbol } from './material-symbol';
 
 const facilityIconOptions: ReadonlyArray<readonly [string, CommonMessageKey]> = [
   ['info', 'poiFacility.icon.info'],
@@ -59,9 +60,7 @@ export function PoiFacilityEditor({
         <div className="poi-facility-editor-list">
           {facilities.map((facility, index) => (
             <div className="poi-facility-editor-row" key={`${index}-${facility.symbolIcon}`}>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                {facility.symbolIcon || 'info'}
-              </span>
+              <MaterialSymbol name={facility.symbolIcon || 'info'} aria-hidden="true" />
               <label>
                 <span>{t('poiFacility.iconLabel')}</span>
                 <select

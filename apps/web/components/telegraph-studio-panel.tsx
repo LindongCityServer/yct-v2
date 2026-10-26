@@ -12,7 +12,9 @@ import {
   type TouchEvent,
   type WheelEvent,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { appPath } from '../lib/app-paths';
+import { mobileActionRailMediaQuery } from '../lib/client-mobile-action-rail';
 import {
   buildTelegraphReceiveDocument,
   createTelegraphSerial,
@@ -42,6 +44,7 @@ import {
 } from '../lib/client-telegraph-events';
 import { publishToastRequested } from '../lib/client-toast-events';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+import { useMobileActionRail, type MobileActionRailItem } from './mobile-action-rail';
 
 const emptyDraft: TelegraphDraftInput = {
   province: '',
@@ -145,7 +148,56 @@ function joinGridValues(values: string[]): string {
 
 export function TelegraphToolbarActions() {
   const { t } = useI18n();
-  return (
+  const mobileActionRail = useMobileActionRail();
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(mobileActionRailMediaQuery);
+    setIsMobile(mediaQuery.matches);
+    const handleChange = () => setIsMobile(mediaQuery.matches);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  const railItems = useMemo<MobileActionRailItem[]>(
+    () =>
+      mobileActionRail?.enabled
+        ? [
+            {
+              id: 'rail-telegraph-new-letter',
+              group: 'top',
+              order: 100,
+              priority: 45,
+              label: t('telegraph.newLetter'),
+              icon: 'note_add',
+              onClick: () => window.dispatchEvent(new Event(newLetterEvent)),
+            },
+            {
+              id: 'rail-telegraph-history',
+              group: 'top',
+              order: 110,
+              priority: 46,
+              label: t('telegraph.history'),
+              icon: 'history',
+              onClick: () => window.dispatchEvent(new Event(historyToggleEvent)),
+            },
+          ]
+        : [],
+    [mobileActionRail?.enabled, t],
+  );
+
+  useEffect(() => {
+    if (!mobileActionRail) {
+      return;
+    }
+    mobileActionRail.registerItems('telegraph-toolbar', railItems);
+  }, [mobileActionRail, railItems]);
+
+  if (mobileActionRail?.enabled) {
+    return null;
+  }
+
+  const actions = (
     <div className="topbar-actions material-studio-topbar-actions telegraph-topbar-actions">
       <button
         className="icon-button"
@@ -171,6 +223,12 @@ export function TelegraphToolbarActions() {
       </button>
     </div>
   );
+
+  if (isMobile) {
+    return createPortal(actions, document.body);
+  }
+
+  return actions;
 }
 
 export function TelegraphStudioPanel() {
@@ -610,9 +668,7 @@ export function TelegraphStudioPanel() {
     if (result.bodyCells.length > TELEGRAPH_MAX_BODY_GRIDS)
       return fail(t('telegraph.bodyOverflow', { count: TELEGRAPH_MAX_BODY_GRIDS }));
     if (result.unsupportedCharacters.length)
-      return fail(
-        t('telegraph.unsupported', { chars: result.unsupportedCharacters.join('、') }),
-      );
+      return fail(t('telegraph.unsupported', { chars: result.unsupportedCharacters.join('、') }));
     return true;
   };
   const requestPrint = (saveHistory = true): boolean => {
@@ -875,7 +931,10 @@ export function TelegraphStudioPanel() {
       });
     } catch (downloadError) {
       publishToastRequested({
-        message: downloadError instanceof Error ? downloadError.message : t('telegraph.imageDownloadFailed'),
+        message:
+          downloadError instanceof Error
+            ? downloadError.message
+            : t('telegraph.imageDownloadFailed'),
         tone: 'error',
       });
     } finally {
@@ -1081,7 +1140,10 @@ export function TelegraphStudioPanel() {
           onPointerUp={handlePointerUp}
         >
           <div className="telegraph-paper telegraph-send-paper">
-            <img src={appPath('/telegraph/send-paper-template.png')} alt={t('telegraph.sendPaperTemplate')} />
+            <img
+              src={appPath('/telegraph/send-paper-template.png')}
+              alt={t('telegraph.sendPaperTemplate')}
+            />
             <div className="telegraph-paper-value telegraph-stat-count">
               {getAutomaticFillValue(0)}
             </div>
@@ -1437,9 +1499,7 @@ export function TelegraphStudioPanel() {
                 <span className="material-symbols-outlined" aria-hidden="true">
                   fast_forward
                 </span>
-                <span className="material-interaction-label">
-                  {t('telegraph.skipAnimation')}
-                </span>
+                <span className="material-interaction-label">{t('telegraph.skipAnimation')}</span>
               </button>
             ) : null}
             {animationState === 'opened' ? (
@@ -1454,9 +1514,7 @@ export function TelegraphStudioPanel() {
                   aria-pressed={paperView === 'receive'}
                   onClick={() => switchPaperView('receive')}
                 >
-                  <span className="material-interaction-label">
-                    {t('telegraph.receivePaper')}
-                  </span>
+                  <span className="material-interaction-label">{t('telegraph.receivePaper')}</span>
                 </button>
                 <button
                   className={paperView === 'send' ? 'is-active' : ''}
@@ -1464,9 +1522,7 @@ export function TelegraphStudioPanel() {
                   aria-pressed={paperView === 'send'}
                   onClick={() => switchPaperView('send')}
                 >
-                  <span className="material-interaction-label">
-                    {t('telegraph.sendPaper')}
-                  </span>
+                  <span className="material-interaction-label">{t('telegraph.sendPaper')}</span>
                 </button>
               </div>
             ) : null}
@@ -1477,22 +1533,16 @@ export function TelegraphStudioPanel() {
                 onClick={flipEnvelope}
                 disabled={envelopeFlipping}
                 aria-label={
-                  envelopeSide === 'back'
-                    ? t('telegraph.flipToFront')
-                    : t('telegraph.flipToBack')
+                  envelopeSide === 'back' ? t('telegraph.flipToFront') : t('telegraph.flipToBack')
                 }
                 title={
-                  envelopeSide === 'back'
-                    ? t('telegraph.flipToFront')
-                    : t('telegraph.flipToBack')
+                  envelopeSide === 'back' ? t('telegraph.flipToFront') : t('telegraph.flipToBack')
                 }
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
                   flip
                 </span>
-                <span className="material-interaction-label">
-                  {t('telegraph.envelopeFlip')}
-                </span>
+                <span className="material-interaction-label">{t('telegraph.envelopeFlip')}</span>
               </button>
             ) : null}
             {showActions ? (
@@ -1506,9 +1556,7 @@ export function TelegraphStudioPanel() {
                   <span className="material-symbols-outlined" aria-hidden="true">
                     outbox
                   </span>
-                  <span className="material-interaction-label">
-                    {t('telegraph.sendPaper')}
-                  </span>
+                  <span className="material-interaction-label">{t('telegraph.sendPaper')}</span>
                 </button>
                 <button
                   className="secondary-action-button"
@@ -1519,9 +1567,7 @@ export function TelegraphStudioPanel() {
                   <span className="material-symbols-outlined" aria-hidden="true">
                     inbox
                   </span>
-                  <span className="material-interaction-label">
-                    {t('telegraph.receivePaper')}
-                  </span>
+                  <span className="material-interaction-label">{t('telegraph.receivePaper')}</span>
                 </button>
                 <button
                   className="secondary-action-button"
@@ -1532,9 +1578,7 @@ export function TelegraphStudioPanel() {
                   <span className="material-symbols-outlined" aria-hidden="true">
                     content_copy
                   </span>
-                  <span className="material-interaction-label">
-                    {t('telegraph.code')}
-                  </span>
+                  <span className="material-interaction-label">{t('telegraph.code')}</span>
                 </button>
                 <button
                   className="secondary-action-button"
@@ -1545,16 +1589,10 @@ export function TelegraphStudioPanel() {
                   <span className="material-symbols-outlined" aria-hidden="true">
                     audio_file
                   </span>
-                  <span className="material-interaction-label">
-                    {t('telegraph.audio')}
-                  </span>
+                  <span className="material-interaction-label">{t('telegraph.audio')}</span>
                 </button>
                 {animationState === 'opened' ? (
-                  <button
-                    className="secondary-action-button"
-                    type="button"
-                    onClick={packReceive}
-                  >
+                  <button className="secondary-action-button" type="button" onClick={packReceive}>
                     <span className="material-symbols-outlined" aria-hidden="true">
                       inventory_2
                     </span>
@@ -2095,7 +2133,10 @@ function TelegraphSendPaperPreview({
       }}
     >
       <div className="telegraph-paper telegraph-send-paper">
-        <img src={appPath('/telegraph/send-paper-template.png')} alt={t('telegraph.sendPaperPreview')} />
+        <img
+          src={appPath('/telegraph/send-paper-template.png')}
+          alt={t('telegraph.sendPaperPreview')}
+        />
         <div className="telegraph-paper-value telegraph-stat-count">
           {result.billableGrids || ''}
         </div>

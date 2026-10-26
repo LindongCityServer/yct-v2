@@ -4,7 +4,9 @@ import { requestConfirmation } from '../lib/client-dialog-events';
 
 import { AccountLoginEntry } from './account-login-entry';
 import { AccountLogoutEntry } from './account-logout-entry';
+import { ProgressiveImage } from './progressive-image';
 import { RangeInput } from './range-input';
+import { SmartQaGlyph } from './smart-qa-icon';
 
 import type {
   ApiItemResponse,
@@ -66,6 +68,23 @@ import {
   type MaterialPreference,
 } from '../lib/client-material-preference';
 import { appPath } from '../lib/app-paths';
+import {
+  assistantProviders,
+  getAssistantProvider,
+  type AssistantProviderId,
+} from '../lib/assistant/providers';
+import {
+  clearAssistantConfig,
+  readAssistantConfig,
+  writeAssistantConfig,
+  type AssistantConfig,
+  type AssistantConfigStorageResult,
+} from '../lib/client-assistant-config';
+import {
+  readAssistantEntryPreference,
+  subscribeAssistantEntryPreferenceChanged,
+  writeAssistantEntryPreference,
+} from '../lib/client-assistant-entry-preference';
 import { publishLoginRequired, publishLoginRequiredForResponse } from '../lib/client-auth-events';
 import {
   clearMapFavoriteMarkers,
@@ -81,6 +100,12 @@ import {
   type ClientLocalePreferenceState,
 } from '../lib/client-locale-preference';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+import {
+  readMobileActionRailPreference,
+  writeMobileActionRailPreference,
+  type MobileActionRailPreference,
+  type MobileActionRailSide,
+} from '../lib/client-mobile-action-rail';
 import { notifyTicketOrderStateChanged } from '../lib/client-ticket-orders';
 import { TicketOrderDraftPanel } from './ticket-order-draft-panel';
 
@@ -119,6 +144,14 @@ const localeOptionKeys: Array<{ value: LocalePreference; labelKey: CommonMessage
   { value: 'zh-CN', labelKey: 'settings.language.zhCN' },
   { value: 'zh-Hant', labelKey: 'settings.language.zhHant' },
   { value: 'en', labelKey: 'settings.language.en' },
+];
+
+const mobileActionRailSideOptionKeys: Array<{
+  value: MobileActionRailSide;
+  labelKey: CommonMessageKey;
+}> = [
+  { value: 'left', labelKey: 'settings.mobileActionRail.left' },
+  { value: 'right', labelKey: 'settings.mobileActionRail.right' },
 ];
 
 type Translate = ReturnType<typeof useI18n>['t'];
@@ -293,6 +326,14 @@ export function AccountSettingsPanel({
       })),
     [t],
   );
+  const mobileActionRailSideOptions = useMemo(
+    () =>
+      mobileActionRailSideOptionKeys.map((option) => ({
+        value: option.value,
+        label: t(option.labelKey),
+      })),
+    [t],
+  );
   const [themeMode, setThemeMode] = useState<ThemeMode>('system');
   const [accentMode, setAccentMode] = useState<AccentMode>('ldpass');
   const [motionMode, setMotionMode] = useState<MotionMode>('system');
@@ -301,6 +342,18 @@ export function AccountSettingsPanel({
     mode: 'balanced',
     thickness: 50,
   });
+  const [mobileActionRail, setMobileActionRail] = useState<MobileActionRailPreference>({
+    enabled: false,
+    side: 'right',
+  });
+  const [assistantPreference, setAssistantPreference] = useState(readAssistantEntryPreference);
+  const [assistantConfig, setAssistantConfig] = useState<AssistantConfig | null>(null);
+  const [assistantProviderId, setAssistantProviderId] = useState<AssistantProviderId>('deepseek');
+  const [assistantModel, setAssistantModel] = useState('deepseek-v4-flash');
+  const [assistantKeyInput, setAssistantKeyInput] = useState('');
+  const [assistantStorageResult, setAssistantStorageResult] = useState<
+    AssistantConfigStorageResult | 'idle'
+  >('idle');
   const [localeMode, setLocaleMode] = useState<LocalePreference>('system');
   const [localeStatusState, setLocaleStatusState] = useState<ClientLocalePreferenceState | null>(
     null,
@@ -443,6 +496,7 @@ export function AccountSettingsPanel({
     setMotionMode(readMotionMode());
     setFontMode(readFontMode());
     setMaterialPreference(readMaterialPreference());
+    setMobileActionRail(readMobileActionRailPreference());
     const localLocalePreference = readLocalLocalePreference();
     applyLocalePreferenceState(localLocalePreference);
     setLocaleStatusState(localLocalePreference);
@@ -559,6 +613,29 @@ export function AccountSettingsPanel({
     };
   }, []);
 
+  useEffect(() => {
+    setAssistantPreference(readAssistantEntryPreference());
+    const unsubscribe = subscribeAssistantEntryPreferenceChanged(setAssistantPreference);
+    let cancelled = false;
+    void readAssistantConfig().then((config) => {
+      if (cancelled) {
+        return;
+      }
+
+      setAssistantConfig(config);
+      if (config) {
+        setAssistantProviderId(config.providerId);
+        setAssistantModel(config.model);
+        setAssistantKeyInput(config.apiKey);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
   const updateThemeMode = (mode: ThemeMode) => {
     setThemeMode(mode);
     applyThemeMode(mode);
@@ -588,6 +665,67 @@ export function AccountSettingsPanel({
     setFontMode(mode);
     applyFontMode(mode);
   };
+
+  const updateMobileActionRailEnabled = (enabled: boolean) => {
+    setMobileActionRail(writeMobileActionRailPreference({ enabled }));
+  };
+
+  const updateMobileActionRailSide = (side: MobileActionRailSide) => {
+    setMobileActionRail(writeMobileActionRailPreference({ side }));
+  };
+
+  const updateAssistantPreference = (
+    patch: Partial<ReturnType<typeof readAssistantEntryPreference>>,
+  ) => {
+    const next = { ...assistantPreference, ...patch };
+    writeAssistantEntryPreference(next);
+    setAssistantPreference(next);
+  };
+
+  const updateAssistantProvider = (value: string) => {
+    const provider = getAssistantProvider(value);
+    if (!provider) {
+      return;
+    }
+
+    setAssistantProviderId(provider.id);
+    setAssistantModel(provider.defaultModel);
+  };
+
+  const saveAssistantSettings = async () => {
+    const provider = getAssistantProvider(assistantProviderId);
+    const apiKey = assistantKeyInput.trim();
+    if (!provider || !apiKey) {
+      return;
+    }
+
+    const result = await writeAssistantConfig({
+      providerId: provider.id,
+      model: assistantModel.trim() || provider.defaultModel,
+      apiKey,
+    });
+    const saved = await readAssistantConfig();
+    setAssistantConfig(saved);
+    setAssistantStorageResult(result);
+  };
+
+  const clearAssistantSettings = async () => {
+    await clearAssistantConfig();
+    setAssistantConfig(null);
+    setAssistantKeyInput('');
+    setAssistantStorageResult('idle');
+  };
+
+  const selectedAssistantProvider =
+    getAssistantProvider(assistantProviderId) ?? assistantProviders[0];
+  const assistantStorageText =
+    assistantStorageResult === 'encrypted'
+      ? t('settings.assistant.savedEncrypted')
+      : assistantStorageResult === 'session'
+        ? t('settings.assistant.savedSession')
+        : assistantConfig
+          ? t('settings.assistant.saved')
+          : t('settings.assistant.notConfigured');
 
   const updateLocaleMode = (locale: LocalePreference) => {
     const localPreference = writeLocalLocalePreference(locale);
@@ -770,9 +908,7 @@ export function AccountSettingsPanel({
           updateOfflinePackageStatus(
             offlinePackage.packageId,
             'request_failed',
-            error instanceof Error
-              ? error.message
-              : t('account.error.offlinePackageRequestFailed'),
+            error instanceof Error ? error.message : t('account.error.offlinePackageRequestFailed'),
           );
           syncOfflinePackageState();
         });
@@ -1100,6 +1236,172 @@ export function AccountSettingsPanel({
             value={motionMode}
             onChange={updateMotionMode}
           />
+        </section>
+
+        <section
+          className="settings-row settings-row-block"
+          aria-labelledby="mobile-action-rail-settings-title"
+        >
+          <div className="settings-row-title">
+            <span className="material-symbols-outlined" aria-hidden="true">
+              view_sidebar
+            </span>
+            <span id="mobile-action-rail-settings-title">
+              {t('settings.mobileActionRail.group')}
+            </span>
+            <span className="settings-inline-status">
+              {mobileActionRail.enabled
+                ? t('settings.mobileActionRail.enabled')
+                : t('settings.mobileActionRail.disabled')}
+            </span>
+            <label className="switch-control" title={t('settings.mobileActionRail.label')}>
+              <input
+                type="checkbox"
+                aria-label={t('settings.mobileActionRail.label')}
+                checked={mobileActionRail.enabled}
+                onChange={(event) => updateMobileActionRailEnabled(event.currentTarget.checked)}
+              />
+              <span />
+            </label>
+          </div>
+          <p className="settings-row-note">{t('settings.mobileActionRail.note')}</p>
+          <SegmentedControl
+            disabled={!mobileActionRail.enabled}
+            label={t('settings.mobileActionRail.position')}
+            options={mobileActionRailSideOptions}
+            value={mobileActionRail.side}
+            onChange={updateMobileActionRailSide}
+          />
+        </section>
+
+        <section
+          className="settings-row settings-row-block"
+          aria-labelledby="assistant-settings-title"
+        >
+          <div className="settings-row-title">
+            <span className="settings-assistant-icon">
+              <SmartQaGlyph size={20} />
+            </span>
+            <span id="assistant-settings-title">{t('settings.assistant.group')}</span>
+            <span className="settings-inline-status">{assistantStorageText}</span>
+          </div>
+          <div className="settings-toggle-list">
+            <div className="settings-toggle-row">
+              <div>
+                <strong>{t('settings.assistant.enabled')}</strong>
+                <small>{t('settings.assistant.enabledNote')}</small>
+              </div>
+              <label className="switch-control" title={t('settings.assistant.enabled')}>
+                <input
+                  type="checkbox"
+                  aria-label={t('settings.assistant.enabled')}
+                  checked={assistantPreference.enabled}
+                  onChange={(event) =>
+                    updateAssistantPreference({ enabled: event.currentTarget.checked })
+                  }
+                />
+                <span />
+              </label>
+            </div>
+            <div className="settings-toggle-row">
+              <div>
+                <strong>{t('settings.assistant.allPages')}</strong>
+                <small>{t('settings.assistant.allPagesNote')}</small>
+              </div>
+              <label className="switch-control" title={t('settings.assistant.allPages')}>
+                <input
+                  type="checkbox"
+                  aria-label={t('settings.assistant.allPages')}
+                  checked={assistantPreference.allPages}
+                  disabled={!assistantPreference.enabled}
+                  onChange={(event) =>
+                    updateAssistantPreference({ allPages: event.currentTarget.checked })
+                  }
+                />
+                <span />
+              </label>
+            </div>
+            <div className="settings-toggle-row">
+              <div>
+                <strong>{t('settings.assistant.aiSuggestions')}</strong>
+                <small>{t('settings.assistant.aiSuggestionsNote')}</small>
+              </div>
+              <label className="switch-control" title={t('settings.assistant.aiSuggestions')}>
+                <input
+                  type="checkbox"
+                  aria-label={t('settings.assistant.aiSuggestions')}
+                  checked={assistantPreference.aiSuggestions}
+                  disabled={!assistantPreference.enabled || !assistantConfig}
+                  onChange={(event) =>
+                    updateAssistantPreference({ aiSuggestions: event.currentTarget.checked })
+                  }
+                />
+                <span />
+              </label>
+            </div>
+          </div>
+          <div className="settings-control-grid">
+            <label className="material-field">
+              <span>{t('settings.assistant.provider')}</span>
+              <select
+                value={assistantProviderId}
+                onChange={(event) => updateAssistantProvider(event.currentTarget.value)}
+              >
+                {assistantProviders.map((provider) => (
+                  <option value={provider.id} key={provider.id}>
+                    {provider.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="material-field">
+              <span>{t('settings.assistant.model')}</span>
+              <input
+                value={assistantModel}
+                onChange={(event) => setAssistantModel(event.currentTarget.value)}
+                list="account-assistant-models"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <datalist id="account-assistant-models">
+                {selectedAssistantProvider.models.map((model) => (
+                  <option value={model} key={model} />
+                ))}
+              </datalist>
+            </label>
+            <label className="material-field settings-assistant-key-field">
+              <span>{t('settings.assistant.key')}</span>
+              <input
+                type="password"
+                value={assistantKeyInput}
+                onChange={(event) => setAssistantKeyInput(event.currentTarget.value)}
+                placeholder={t('settings.assistant.keyPlaceholder')}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
+          </div>
+          <p className="settings-row-note">{t('settings.assistant.encryptionNote')}</p>
+          <p className="settings-row-note">{t('settings.assistant.modelNote')}</p>
+          <div className="settings-action-row">
+            <button
+              className="secondary-action-button"
+              type="button"
+              onClick={() => void saveAssistantSettings()}
+              disabled={!assistantKeyInput.trim()}
+            >
+              {t('settings.assistant.save')}
+            </button>
+            {assistantConfig ? (
+              <button
+                className="secondary-action-button"
+                type="button"
+                onClick={() => void clearAssistantSettings()}
+              >
+                {t('settings.assistant.clear')}
+              </button>
+            ) : null}
+          </div>
         </section>
 
         <section
@@ -1560,7 +1862,11 @@ function AccountAuthPanel({
       <div className="account-identity">
         <span className="account-avatar" aria-hidden="true">
           {user?.avatarUrl || readonlyUser?.avatarUrl ? (
-            <img src={user?.avatarUrl ?? readonlyUser?.avatarUrl ?? ''} alt="" />
+            <ProgressiveImage
+              src={user?.avatarUrl ?? readonlyUser?.avatarUrl ?? ''}
+              alt=""
+              showStatus={false}
+            />
           ) : (
             <span className="material-symbols-outlined">account_circle</span>
           )}
@@ -1696,18 +2002,20 @@ function formatLocaleStatus(
 }
 
 function SegmentedControl<TValue extends string>({
+  disabled = false,
   label,
   options,
   value,
   onChange,
 }: Readonly<{
+  disabled?: boolean;
   label: string;
   options: Array<{ value: TValue; label: string }>;
   value: TValue;
   onChange: (value: TValue) => void;
 }>) {
   return (
-    <fieldset className="segmented-control">
+    <fieldset className={disabled ? 'segmented-control is-disabled' : 'segmented-control'}>
       <legend>{label}</legend>
       <div>
         {options.map((option) => {
@@ -1717,6 +2025,7 @@ function SegmentedControl<TValue extends string>({
               className={isActive ? 'is-active' : ''}
               type="button"
               aria-pressed={isActive}
+              disabled={disabled}
               key={option.value}
               onClick={() => onChange(option.value)}
             >

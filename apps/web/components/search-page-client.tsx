@@ -2,8 +2,10 @@
 
 import type {
   ApiListResponse,
+  LocaleCode,
   MapMarkerSnapshot,
   OperationsFeedItem,
+  PoiCategory,
   ServiceEntryGroup,
   TravelScheduleQueryResult,
   TravelTripInstance,
@@ -12,13 +14,21 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { MaterialSymbol } from './material-symbol';
+import {
+  readAssistantEntryPreference,
+  subscribeAssistantEntryPreferenceChanged,
+} from '../lib/client-assistant-entry-preference';
+import { publishGlobalSearchRequested } from '../lib/client-global-search-events';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+import { useWikiSearch } from '../lib/client-wiki-search';
+import { getMarkerCategoryLabel } from '../lib/map-marker-categories';
+import { getSiteSocialLinkLabel, matchSiteSocialLinks } from '../lib/site-social-links';
 import { faqAnswerText } from '../lib/faq-content';
 import { getLocalizedFaqContent } from '../lib/faq-translations';
 import { filterMapMarkers } from '../lib/map-marker-search';
 import { normalizeTitleForSearch, TitleWithBreaks } from './title-with-breaks';
 
-type SearchCategory = 'all' | 'operations' | 'poi' | 'schedules' | 'services';
+type SearchCategory = 'all' | 'operations' | 'poi' | 'schedules' | 'services' | 'wiki';
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'unavailable';
 
 interface MapMarkerResponse {
@@ -39,20 +49,38 @@ export function SearchPageClient({
   const [query, setQuery] = useState(initialQuery);
   const [activeCategory, setActiveCategory] = useState<SearchCategory>('all');
   const [markers, setMarkers] = useState<MapMarkerSnapshot['markers']>([]);
+  const [poiCategoryNames, setPoiCategoryNames] = useState<Map<string, string>>(new Map());
   const [markerStatus, setMarkerStatus] = useState<LoadStatus>('loading');
   const [scheduleResult, setScheduleResult] = useState<TravelScheduleQueryResult | null>(null);
   const [scheduleStatus, setScheduleStatus] = useState<LoadStatus>('idle');
+  const [assistantEnabled, setAssistantEnabled] = useState(
+    () => readAssistantEntryPreference().enabled,
+  );
   const trimmedQuery = query.trim();
+  const wikiSearch = useWikiSearch(trimmedQuery);
+  const socialResults = useMemo(() => matchSiteSocialLinks(trimmedQuery), [trimmedQuery]);
+
+  useEffect(() => {
+    const sync = () => setAssistantEnabled(readAssistantEntryPreference().enabled);
+    sync();
+    return subscribeAssistantEntryPreferenceChanged(sync);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
 
     async function loadMarkers() {
       try {
-        const response = await fetch(appPath('/api/map/markers'), {
-          cache: 'no-store',
-          signal: controller.signal,
-        });
+        const [response, categoriesResponse] = await Promise.all([
+          fetch(appPath('/api/map/markers'), {
+            cache: 'no-store',
+            signal: controller.signal,
+          }),
+          fetch(appPath('/api/map/poi-categories'), {
+            cache: 'no-store',
+            signal: controller.signal,
+          }),
+        ]);
         const data = (await response.json()) as MapMarkerResponse;
         if (!response.ok || !data.snapshot) {
           setMarkerStatus('unavailable');
@@ -60,6 +88,15 @@ export function SearchPageClient({
         }
         setMarkers(data.snapshot.markers.filter((marker) => marker.categoryId !== 'player'));
         setMarkerStatus('ready');
+
+        if (categoriesResponse.ok) {
+          const categoryPayload = (await categoriesResponse.json()) as { items?: PoiCategory[] };
+          if (Array.isArray(categoryPayload.items)) {
+            setPoiCategoryNames(
+              new Map(categoryPayload.items.map((category) => [category.id, category.name])),
+            );
+          }
+        }
       } catch (error) {
         if (!(error instanceof DOMException && error.name === 'AbortError')) {
           setMarkerStatus('unavailable');
@@ -173,25 +210,32 @@ export function SearchPageClient({
     );
   }, [faqContent.groups, normalizedQuery]);
   const scheduleResults = scheduleResult?.trips ?? [];
+  const wikiResults = wikiSearch.results;
   const totalResultCount =
     operationResults.length +
     poiResults.length +
     scheduleResults.length +
     serviceResults.length +
-    faqResults.length;
+    faqResults.length +
+    wikiResults.length +
+    socialResults.length;
   const resultCounts: Record<SearchCategory, number> = {
     all: totalResultCount,
     operations: operationResults.length,
     poi: poiResults.length,
     schedules: scheduleResults.length,
-    services: serviceResults.length + faqResults.length,
+    services: serviceResults.length + faqResults.length + socialResults.length,
+    wiki: wikiResults.length,
   };
-  const isLoading = markerStatus === 'loading' || scheduleStatus === 'loading';
+  const isLoading =
+    markerStatus === 'loading' || scheduleStatus === 'loading' || wikiSearch.status === 'loading';
   const hasQuery = trimmedQuery.length > 0;
   const shouldShowPoi = activeCategory === 'all' || activeCategory === 'poi';
   const shouldShowSchedules = activeCategory === 'all' || activeCategory === 'schedules';
   const shouldShowOperations = activeCategory === 'all' || activeCategory === 'operations';
   const shouldShowServices = activeCategory === 'all' || activeCategory === 'services';
+  const shouldShowWiki = activeCategory === 'all' || activeCategory === 'wiki';
+  const shouldShowSocial = activeCategory === 'all' || activeCategory === 'services';
 
   useEffect(() => {
     if (activeCategory !== 'all' && resultCounts[activeCategory] === 0) {
@@ -203,6 +247,7 @@ export function SearchPageClient({
     resultCounts.poi,
     resultCounts.schedules,
     resultCounts.services,
+    resultCounts.wiki,
   ]);
 
   return (
@@ -232,6 +277,21 @@ export function SearchPageClient({
           </button>
         ) : null}
       </div>
+
+      {trimmedQuery && assistantEnabled ? (
+        <div className="search-ask-row">
+          <button
+            className="search-ask-chip"
+            type="button"
+            onClick={() => publishGlobalSearchRequested({ query: trimmedQuery, ask: true })}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              forum
+            </span>
+            <span>{t('globalSearch.action.askThis')}</span>
+          </button>
+        </div>
+      ) : null}
 
       <section className="module-panel search-results-panel" aria-labelledby="search-title">
         <div className="section-heading">
@@ -309,30 +369,48 @@ export function SearchPageClient({
                 <section className="search-result-group" aria-labelledby="search-poi-title">
                   <h2 id="search-poi-title">{t('search.resultGroup.poi')}</h2>
                   <div className="search-result-list">
-                    {poiResults.map((marker) => (
-                      <Link
-                        className="search-result-item"
-                        href={appPath(`/map?marker=${encodeURIComponent(marker.id)}`)}
-                        key={marker.id}
-                      >
-                        <MaterialSymbol
-                          name={marker.symbolIcon ?? 'location_on'}
-                          aria-hidden="true"
-                        />
-                        <span>
-                          <strong>
-                            <TitleWithBreaks
-                              title={
-                                locale === 'zh-CN'
-                                  ? marker.label
-                                  : (marker.localizedLabels?.[locale] ?? marker.label)
-                              }
+                    {poiResults.map((marker) => {
+                      const thumbnail = marker.imageUrls?.[0] ?? marker.imageUrl;
+                      const categoryName = getMarkerCategoryLabel(
+                        marker.categoryId,
+                        poiCategoryNames,
+                        locale,
+                      );
+                      return (
+                        <Link
+                          className="search-result-item"
+                          href={appPath(`/map?marker=${encodeURIComponent(marker.id)}`)}
+                          key={marker.id}
+                        >
+                          {thumbnail ? (
+                            <img
+                              className="search-result-thumb"
+                              src={resolveSearchImageSrc(thumbnail)}
+                              alt=""
+                              loading="lazy"
+                              decoding="async"
                             />
-                          </strong>
-                          <span className="muted">{formatPoiSummary(marker)}</span>
-                        </span>
-                      </Link>
-                    ))}
+                          ) : (
+                            <MaterialSymbol
+                              name={marker.symbolIcon ?? 'location_on'}
+                              aria-hidden="true"
+                            />
+                          )}
+                          <span>
+                            <strong>
+                              <TitleWithBreaks
+                                title={
+                                  locale === 'zh-CN'
+                                    ? marker.label
+                                    : (marker.localizedLabels?.[locale] ?? marker.label)
+                                }
+                              />
+                            </strong>
+                            <span className="muted">{formatPoiSummary(marker, categoryName)}</span>
+                          </span>
+                        </Link>
+                      );
+                    })}
                   </div>
                 </section>
               ) : null}
@@ -414,6 +492,64 @@ export function SearchPageClient({
                   </div>
                 </section>
               ) : null}
+
+              {shouldShowSocial && socialResults.length > 0 ? (
+                <section className="search-result-group" aria-labelledby="search-social-title">
+                  <h2 id="search-social-title">{t('search.resultGroup.social')}</h2>
+                  <div className="search-result-list">
+                    {socialResults.map((link) => (
+                      <a
+                        className="search-result-item"
+                        href={link.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        key={link.id}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          link
+                        </span>
+                        <span>
+                          <strong>{getSiteSocialLinkLabel(link, locale)}</strong>
+                          <span className="muted">{t('search.social.description')}</span>
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {shouldShowWiki && wikiResults.length > 0 ? (
+                <section className="search-result-group" aria-labelledby="search-wiki-title">
+                  <h2 id="search-wiki-title">{t('search.resultGroup.wiki')}</h2>
+                  <div className="search-result-list">
+                    {wikiResults.map((item) => (
+                      <a
+                        className="search-result-item"
+                        href={item.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        key={item.href}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          menu_book
+                        </span>
+                        <span>
+                          <strong>{item.title}</strong>
+                          <span className="muted">
+                            {item.snippet}
+                            {item.updatedAt
+                              ? ` · ${t('search.wiki.updatedAt')} ${formatWikiTime(
+                                  item.updatedAt,
+                                  locale,
+                                )}`
+                              : ''}
+                          </span>
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
             </div>
           </>
         ) : isLoading ? (
@@ -436,6 +572,7 @@ const searchCategories: Array<{ key: SearchCategory; labelKey: CommonMessageKey;
   { key: 'poi', labelKey: 'search.category.poi', icon: 'location_on' },
   { key: 'schedules', labelKey: 'search.category.schedules', icon: 'departure_board' },
   { key: 'services', labelKey: 'search.category.services', icon: 'apps' },
+  { key: 'wiki', labelKey: 'search.category.wiki', icon: 'menu_book' },
 ];
 
 function SearchEmpty({ icon, message }: Readonly<{ icon: string; message: string }>) {
@@ -449,16 +586,40 @@ function SearchEmpty({ icon, message }: Readonly<{ icon: string; message: string
   );
 }
 
-function formatPoiSummary(marker: MapMarkerSnapshot['markers'][number]): string {
+function formatPoiSummary(
+  marker: MapMarkerSnapshot['markers'][number],
+  categoryName?: string,
+): string {
   return [
-    marker.categoryId,
+    categoryName ?? marker.categoryId,
     marker.address,
+    marker.floorLabel,
     marker.description,
     marker.openingHours,
     marker.facilities?.map((facility) => facility.description).join('、'),
   ]
     .filter(Boolean)
     .join(' · ');
+}
+
+function resolveSearchImageSrc(value: string): string {
+  return /^(?:https?:|data:|blob:)/i.test(value) ? value : appPath(value);
+}
+
+function formatWikiTime(value: string, locale: LocaleCode): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(
+    locale === 'en' ? 'en' : locale === 'zh-Hant' ? 'zh-Hant' : 'zh-CN',
+    {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    },
+  ).format(date);
 }
 
 function formatTripTitle(trip: TravelTripInstance): string {

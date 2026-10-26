@@ -216,7 +216,8 @@
     const i18n = window.LINDONG_PORTAL_I18N;
     const key = event.detail?.success ? 'friends.linkCopied' : 'friends.copyUnavailable';
     const message =
-      i18n?.translate(locale, key) ?? (event.detail?.success ? '链接已复制' : '当前环境无法复制链接');
+      i18n?.translate(locale, key) ??
+      (event.detail?.success ? '链接已复制' : '当前环境无法复制链接');
     friendCopyStatus.textContent = event.detail?.success
       ? message
       : `${message} ${event.detail?.targetUrl ?? ''}`.trim();
@@ -319,6 +320,131 @@
     document.body.classList.remove('dialog-open');
     reportWechatPosterVisibility(false, source);
   });
+
+  // 内容图多级 LQIP：32/64/128/256/512/1024 阶梯（每级是上一级两倍），
+  // 按渲染尺寸取最后 3 档，第一级天然是第二级的一半。
+  // 图标、社交图标、二维码海报不接入。
+  const lqipWidths = [32, 64, 128, 256, 512, 1024];
+
+  function resolveLqipUrl(src, width) {
+    const match = /^\.\/assets\/(?:hero|tools)\/([^/?#]+)\.[a-z0-9]+(?:[?#].*)?$/i.exec(src ?? '');
+    return match ? `./assets/lqip/${width}/${match[1]}.webp` : '';
+  }
+
+  function resolveLqipWidths(image) {
+    const renderedWidth = image.clientWidth || image.getBoundingClientRect().width || 640;
+    const targetWidth = Math.min(
+      Math.max(renderedWidth * (window.devicePixelRatio || 1), 32),
+      2048,
+    );
+    const eligible = lqipWidths.filter((width) => width <= Math.min(targetWidth * 0.9, 1024));
+    return (eligible.length ? eligible : [32]).slice(-3);
+  }
+
+  function initializeProgressiveImages() {
+    const images = document.querySelectorAll('.hero-image, .tool-card-media img');
+
+    images.forEach((image) => {
+      if (!(image instanceof HTMLImageElement)) {
+        return;
+      }
+
+      image.classList.add('progressive-image');
+
+      const status = document.createElement('span');
+      status.className = 'progressive-status';
+      status.setAttribute('aria-hidden', 'true');
+      status.hidden = true;
+      image.insertAdjacentElement('afterend', status);
+
+      let generation = 0;
+      let observer;
+      const setLqip = (width) => {
+        const lqipUrl = resolveLqipUrl(image.getAttribute('src'), width);
+        image.style.backgroundImage = lqipUrl ? `url("${lqipUrl}")` : '';
+      };
+      const markLoaded = () => {
+        generation += 1;
+        observer?.disconnect();
+        observer = undefined;
+        image.classList.add('is-loaded');
+        image.style.backgroundImage = '';
+        status.hidden = true;
+      };
+      const startLadder = () => {
+        const current = ++generation;
+        const widths = resolveLqipWidths(image);
+        setLqip(widths[0] ?? 32);
+        let index = 1;
+        const loadNext = () => {
+          if (current !== generation || index >= widths.length) {
+            return;
+          }
+          const width = widths[index++];
+          const lqipUrl = resolveLqipUrl(image.getAttribute('src'), width);
+          if (!lqipUrl) {
+            return;
+          }
+          const preloader = new Image();
+          preloader.onload = () => {
+            if (current !== generation) {
+              return;
+            }
+            setLqip(width);
+            loadNext();
+          };
+          preloader.onerror = () => {
+            if (current === generation) {
+              loadNext();
+            }
+          };
+          preloader.src = lqipUrl;
+        };
+        loadNext();
+      };
+      const markLoading = () => {
+        image.classList.remove('is-loaded');
+        status.hidden = false;
+        const widths = resolveLqipWidths(image);
+        setLqip(widths[0] ?? 32);
+        if (
+          image.getAttribute('loading') === 'lazy' &&
+          typeof IntersectionObserver !== 'undefined'
+        ) {
+          observer?.disconnect();
+          observer = new IntersectionObserver(
+            (entries) => {
+              if (entries.some((entry) => entry.isIntersecting)) {
+                observer?.disconnect();
+                observer = undefined;
+                startLadder();
+              }
+            },
+            { rootMargin: '200px' },
+          );
+          observer.observe(image);
+          return;
+        }
+        startLadder();
+      };
+
+      image.addEventListener('load', markLoaded);
+      image.addEventListener('error', markLoaded);
+      // 英雄图会通过 JS 切换 src：切图时换用新的 LQIP 阶梯，等新的 load 再清除。
+      new MutationObserver(markLoading).observe(image, {
+        attributes: true,
+        attributeFilter: ['src'],
+      });
+
+      if (image.complete && image.naturalWidth > 0) {
+        markLoaded();
+      } else {
+        markLoading();
+      }
+    });
+  }
+
+  initializeProgressiveImages();
 
   document.dispatchEvent(
     new CustomEvent(eventNames.heroRequested, {

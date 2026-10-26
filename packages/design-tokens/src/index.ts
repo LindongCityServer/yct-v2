@@ -61,6 +61,48 @@ export const yctTokens = {
     scaleHover: 1.06,
     scalePress: 0.98,
   },
+  // 兼容目标：iOS 16.7（Safari 16.6 / WebKit 616）。组件尺寸与触控基线统一从这里取值。
+  compatibility: {
+    ios: '16.7',
+    safari: '16.6',
+    tapTargetMin: '44px',
+    inputFontSizeMobile: '16px',
+  },
+  control: {
+    heightSm: '34px',
+    heightMd: '40px',
+    heightLg: '44px',
+    sizeMd: '40px',
+    radius: 'var(--yct-radius-pill)',
+    paddingX: '12px',
+    fontSize: '14px',
+    fontWeight: 600,
+    fontWeightStrong: 700,
+    disabledOpacity: 0.58,
+    focusRingWidth: '2px',
+    focusRingOffset: '2px',
+  },
+  field: {
+    height: '44px',
+    heightSearch: '46px',
+  },
+  segment: {
+    trackHeight: '40px',
+    trackHeightMobile: '44px',
+    trackPadding: '3px',
+    gap: '3px',
+  },
+  chip: {
+    height: '28px',
+    paddingX: '8px',
+    fontSize: '12px',
+    fontWeight: 700,
+  },
+  dialog: {
+    widthSm: '440px',
+    widthMd: '560px',
+    radius: 'var(--yct-radius-lg)',
+  },
 } as const;
 
 export type YctTokens = typeof yctTokens;

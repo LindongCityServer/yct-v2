@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { appPath } from '../lib/app-paths';
+import { ProgressiveImage } from './progressive-image';
 
 type MarkdownBlock =
   | { type: 'heading'; level: 2 | 3 | 4; text: string }
@@ -122,7 +123,7 @@ function renderMarkdownImage(block: Extract<MarkdownBlock, { type: 'image' }>, i
 
   return (
     <figure className="markdown-image" key={index}>
-      <img src={appPath(block.src)} alt={block.alt} loading="lazy" />
+      <ProgressiveImage src={appPath(block.src)} alt={block.alt} loading="lazy" />
       {block.alt ? <figcaption>{block.alt}</figcaption> : null}
     </figure>
   );

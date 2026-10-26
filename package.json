@@ -14,6 +14,7 @@
     "release:prepare": "node scripts/prepare-release.mjs",
     "release:freeze-history": "node scripts/freeze-release-history.mjs",
     "brand:icons": "node scripts/generate-icons.mjs",
+    "portal:lqip": "node scripts/generate-portal-lqip.mjs",
     "icons:material-symbols:sync": "node scripts/sync-material-symbols-font.mjs",
     "icons:material-symbols:check": "node scripts/sync-material-symbols-font.mjs --check",
     "ui:controls:sync": "node scripts/ui-controls-inventory.mjs",

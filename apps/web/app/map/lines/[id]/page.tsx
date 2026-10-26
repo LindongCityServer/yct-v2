@@ -73,6 +73,7 @@ export default async function MapTransitLineDetailPage({ params }: MapTransitLin
         <AdminEditLink
           href={`/admin/transit?section=lines&lineId=${encodeURIComponent(line.id)}`}
           label="编辑线路"
+          registerInMobileRail
         />
       }
     >

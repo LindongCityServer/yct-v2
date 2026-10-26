@@ -954,6 +954,76 @@ export type CommonMessageKey =
   | 'poiFacility.removeAria'
   | 'poiFacility.removeTitle'
   | 'poiFacility.title'
+  | 'globalSearch.action.ask'
+  | 'globalSearch.action.askThis'
+  | 'globalSearch.action.clearInput'
+  | 'globalSearch.action.close'
+  | 'globalSearch.action.newConversation'
+  | 'globalSearch.actionLabel'
+  | 'globalSearch.action.open'
+  | 'globalSearch.action.revert'
+  | 'globalSearch.action.search'
+  | 'globalSearch.action.send'
+  | 'globalSearch.assistant.answerTitle'
+  | 'globalSearch.assistant.clear'
+  | 'globalSearch.assistant.configure'
+  | 'globalSearch.assistant.disclaimer'
+  | 'globalSearch.assistant.error'
+  | 'globalSearch.assistant.followUps'
+  | 'globalSearch.assistant.followUpsLoading'
+  | 'globalSearch.assistant.key'
+  | 'globalSearch.assistant.keyPlaceholder'
+  | 'globalSearch.assistant.model'
+  | 'globalSearch.assistant.needsKey'
+  | 'globalSearch.assistant.networkError'
+  | 'globalSearch.assistant.provider'
+  | 'globalSearch.assistant.references'
+  | 'globalSearch.assistant.save'
+  | 'globalSearch.assistant.setupDescription'
+  | 'globalSearch.assistant.setupTitle'
+  | 'globalSearch.assistant.stop'
+  | 'globalSearch.assistant.streaming'
+  | 'globalSearch.capability.account'
+  | 'globalSearch.capability.faq'
+  | 'globalSearch.capability.map'
+  | 'globalSearch.capability.operations'
+  | 'globalSearch.capability.rmp'
+  | 'globalSearch.capability.roadMaterials'
+  | 'globalSearch.capability.schedule'
+  | 'globalSearch.capability.transitMaterials'
+  | 'globalSearch.docsFallback'
+  | 'globalSearch.docsFallbackEmpty'
+  | 'globalSearch.easterEgg.close'
+  | 'globalSearch.easterEgg.description'
+  | 'globalSearch.easterEgg.hint'
+  | 'globalSearch.easterEgg.title'
+  | 'globalSearch.emptyHint'
+  | 'globalSearch.liveResults'
+  | 'globalSearch.mode.ask'
+  | 'globalSearch.mode.search'
+  | 'globalSearch.noMatch'
+  | 'globalSearch.placeholder'
+  | 'globalSearch.placeholderAsk'
+  | 'globalSearch.resultCount'
+  | 'globalSearch.searchAll'
+  | 'globalSearch.status.askReady'
+  | 'globalSearch.status.askSoon'
+  | 'globalSearch.status.loadingData'
+  | 'globalSearch.status.searching'
+  | 'globalSearch.suggestion.account'
+  | 'globalSearch.suggestion.aiLoading'
+  | 'globalSearch.suggestion.highlightLine'
+  | 'globalSearch.suggestion.highlightMarker'
+  | 'globalSearch.suggestion.highlightStation'
+  | 'globalSearch.suggestion.operations'
+  | 'globalSearch.suggestion.refresh'
+  | 'globalSearch.suggestion.route'
+  | 'globalSearch.suggestion.schedule'
+  | 'globalSearch.suggestion.thisPage'
+  | 'globalSearch.suggestion.title'
+  | 'globalSearch.title'
+  | 'globalSearch.unavailable'
+  | 'globalSearch.viewAll'
   | 'quickAction.rideCode'
   | 'quickAction.rideCodeLoginRequired'
   | 'quickAction.rideCodeUnavailable'
@@ -985,6 +1055,25 @@ export type CommonMessageKey =
   | 'settings.accent.ldpass'
   | 'settings.accent.red'
   | 'settings.appearanceLanguage'
+  | 'settings.assistant.allPages'
+  | 'settings.assistant.allPagesNote'
+  | 'settings.assistant.aiSuggestions'
+  | 'settings.assistant.aiSuggestionsNote'
+  | 'settings.assistant.clear'
+  | 'settings.assistant.enabled'
+  | 'settings.assistant.enabledNote'
+  | 'settings.assistant.encryptionNote'
+  | 'settings.assistant.group'
+  | 'settings.assistant.key'
+  | 'settings.assistant.keyPlaceholder'
+  | 'settings.assistant.model'
+  | 'settings.assistant.modelNote'
+  | 'settings.assistant.notConfigured'
+  | 'settings.assistant.provider'
+  | 'settings.assistant.save'
+  | 'settings.assistant.saved'
+  | 'settings.assistant.savedEncrypted'
+  | 'settings.assistant.savedSession'
   | 'settings.font.harmony'
   | 'settings.font.label'
   | 'settings.font.system'
@@ -1009,6 +1098,17 @@ export type CommonMessageKey =
   | 'settings.motion.label'
   | 'settings.motion.reduced'
   | 'settings.motion.system'
+  | 'settings.mobileActionRail.disabled'
+  | 'settings.mobileActionRail.enabled'
+  | 'settings.mobileActionRail.group'
+  | 'settings.mobileActionRail.label'
+  | 'settings.mobileActionRail.left'
+  | 'settings.mobileActionRail.note'
+  | 'settings.mobileActionRail.position'
+  | 'settings.mobileActionRail.right'
+  | 'mobileActionRail.aria'
+  | 'mobileActionRail.more'
+  | 'mobileActionRail.overflowAria'
   | 'settings.theme.dark'
   | 'settings.theme.label'
   | 'settings.theme.light'
@@ -1485,6 +1585,7 @@ export type CommonMessageKey =
   | 'search.category.schedules'
   | 'search.category.services'
   | 'search.category.stations'
+  | 'search.category.wiki'
   | 'search.clear'
   | 'search.emptyPrompt'
   | 'search.facilityCount'
@@ -1499,7 +1600,12 @@ export type CommonMessageKey =
   | 'search.resultGroup.poi'
   | 'search.resultGroup.schedules'
   | 'search.resultGroup.services'
+  | 'search.resultGroup.social'
   | 'search.resultGroup.stations'
+  | 'search.resultGroup.wiki'
+  | 'search.social.description'
+  | 'search.wiki.loading'
+  | 'search.wiki.updatedAt'
   | 'search.resultFilters'
   | 'search.stopCount'
   | 'search.stationExitCount'
@@ -2266,9 +2372,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.source.tooltipLoading': '地图数据正在读取。',
     'map.source.unavailable': '地图数据暂不可用',
     'map.location.currentAccount': '当前账号：{name}',
-    'map.search.aria': '筛选地图标记',
+    'map.search.aria': '搜索地图地点',
     'map.search.clear': '清空地图搜索',
-    'map.search.placeholder': '搜索地点或标记',
+    'map.search.placeholder': '搜索地图地点、道路或线路',
     'map.routingStatus.projecting': '正在准备道路接入点',
     'map.share.actions': '分享方式',
     'map.share.close': '关闭分享面板',
@@ -2770,6 +2876,79 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'scheduleStopTable.station': '站点',
     'scheduleStopTable.stop': '停站',
     'scheduleStopTable.stopAria': '{station} 是否停站',
+    'globalSearch.action.ask': '问一问',
+    'globalSearch.action.askThis': '把这个问题交给问一问',
+    'globalSearch.action.clearInput': '清空输入',
+    'globalSearch.action.close': '关闭搜索',
+    'globalSearch.action.newConversation': '新对话',
+    'globalSearch.actionLabel': '可以直接',
+    'globalSearch.action.open': '全站搜索',
+    'globalSearch.action.revert': '改回搜索',
+    'globalSearch.action.search': '搜索',
+    'globalSearch.action.send': '发送',
+    'globalSearch.assistant.answerTitle': '问一问',
+    'globalSearch.assistant.clear': '清除 Key',
+    'globalSearch.assistant.configure': '配置 Key',
+    'globalSearch.assistant.disclaimer': '回答由你配置的模型生成，请以站内引用为准。',
+    'globalSearch.assistant.error': '问一问暂时没有返回结果，先给你站内资料。',
+    'globalSearch.assistant.followUps': '继续追问',
+    'globalSearch.assistant.followUpsLoading': '正在准备追问建议…',
+    'globalSearch.assistant.key': 'API Key',
+    'globalSearch.assistant.keyPlaceholder': '粘贴你的 API Key',
+    'globalSearch.assistant.model': '模型',
+    'globalSearch.assistant.needsKey': '配置模型 Key 后可使用问一问',
+    'globalSearch.assistant.networkError': '网络连接失败，请检查网络后重试。',
+    'globalSearch.assistant.provider': '模型提供商',
+    'globalSearch.assistant.references': '引用与入口',
+    'globalSearch.assistant.save': '保存并提问',
+    'globalSearch.assistant.setupDescription':
+      'Key 只保存在当前浏览器会话，关闭标签页后失效；本站不记录。',
+    'globalSearch.assistant.setupTitle': '配置问一问',
+    'globalSearch.assistant.stop': '停止回答',
+    'globalSearch.assistant.streaming': '正在回答…',
+    'globalSearch.capability.account': '打开账号设置',
+    'globalSearch.capability.faq': '查看帮助与常见问题',
+    'globalSearch.capability.map': '打开地图',
+    'globalSearch.capability.operations': '查看运营信息',
+    'globalSearch.capability.rmp': '打开 RMP 导入入口',
+    'globalSearch.capability.roadMaterials': '打开路牌物料',
+    'globalSearch.capability.schedule': '打开班次查询',
+    'globalSearch.capability.transitMaterials': '打开公共交通导视',
+    'globalSearch.docsFallback': '先按站内资料找到这些',
+    'globalSearch.docsFallbackEmpty':
+      '站内资料暂时没有直接答案，可以换个说法，或查看帮助与常见问题。',
+    'globalSearch.easterEgg.close': '关闭',
+    'globalSearch.easterEgg.description':
+      '图标里的这个小人最早只是随手画在方格纸上的涂鸦：圆脑袋、两个点眼睛、头上顶着一块写着“临”字的小圆牌。后来它被重新画成了线描和填充两版，成了问一问的形象。',
+    'globalSearch.easterEgg.hint': '它最早出现在一些生活记录里，现在只留在站内当彩蛋。',
+    'globalSearch.easterEgg.title': '关于问一问',
+    'globalSearch.emptyHint': '输入地点、班次、公告，或直接说出你的需求',
+    'globalSearch.liveResults': '实时结果',
+    'globalSearch.mode.ask': '问一问',
+    'globalSearch.mode.search': '搜索',
+    'globalSearch.noMatch': '没有找到匹配结果',
+    'globalSearch.placeholder': '搜索地点、班次、资讯，或直接提问…',
+    'globalSearch.placeholderAsk': '描述你的问题，Enter 发送…',
+    'globalSearch.resultCount': '共 {count} 条结果',
+    'globalSearch.searchAll': '在全站搜索“{query}”',
+    'globalSearch.status.askReady': '已切到问一问 · Enter 发送',
+    'globalSearch.status.askSoon': '问一问将在接入模型后支持对话，现在先按站内资料回答',
+    'globalSearch.status.loadingData': '正在加载站内数据…',
+    'globalSearch.status.searching': '正在搜索…',
+    'globalSearch.suggestion.account': '乘车码打不开怎么办',
+    'globalSearch.suggestion.aiLoading': '正在结合当前页面生成推荐项…',
+    'globalSearch.suggestion.highlightLine': '这条线经过哪些地方？',
+    'globalSearch.suggestion.highlightMarker': '{name}怎么走？',
+    'globalSearch.suggestion.highlightStation': '{name}有哪些设施？',
+    'globalSearch.suggestion.operations': '台风期间停运通知',
+    'globalSearch.suggestion.refresh': '换一批',
+    'globalSearch.suggestion.route': '明天去临东港怎么走',
+    'globalSearch.suggestion.schedule': '查明天去临东港的船',
+    'globalSearch.suggestion.thisPage': '这个页面怎么用？',
+    'globalSearch.suggestion.title': '你可以试试',
+    'globalSearch.title': '搜索与问一问',
+    'globalSearch.unavailable': '部分数据暂不可用',
+    'globalSearch.viewAll': '查看全部结果',
     'search.open': '搜索',
     'shortcut.close': '关闭快捷键',
     'shortcut.focusMapSearch': '聚焦地图搜索',
@@ -2787,6 +2966,27 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.accent.ldpass': '跟随临东通',
     'settings.accent.red': '红色',
     'settings.appearanceLanguage': '外观与语言',
+    'settings.assistant.allPages': '在所有页面显示搜索与问一问入口',
+    'settings.assistant.allPagesNote':
+      '打开后，二级页面顶栏也会显示入口按钮，方便触屏用户；一级页面始终保留入口。',
+    'settings.assistant.aiSuggestions': '使用 AI 生成推荐项',
+    'settings.assistant.aiSuggestionsNote':
+      '开启后会结合当前页面内容，用你配置的模型生成推荐项；关闭时只用站内数据生成。',
+    'settings.assistant.clear': '清除 Key',
+    'settings.assistant.enabled': '启用搜索与问一问',
+    'settings.assistant.enabledNote': '关闭后会隐藏所有入口并停用快捷键；已保存的 Key 仍会保留。',
+    'settings.assistant.encryptionNote': 'Key 会加密保存在本机，仍请勿在公共设备保存。',
+    'settings.assistant.group': '搜索与问一问',
+    'settings.assistant.key': 'API Key',
+    'settings.assistant.keyPlaceholder': '粘贴你的 API Key',
+    'settings.assistant.model': '模型',
+    'settings.assistant.modelNote': '模型名可能随服务商更新，可直接输入当前可用的模型名。',
+    'settings.assistant.notConfigured': '未配置',
+    'settings.assistant.provider': '模型提供商',
+    'settings.assistant.save': '保存配置',
+    'settings.assistant.saved': '已配置',
+    'settings.assistant.savedEncrypted': '已加密保存',
+    'settings.assistant.savedSession': '仅本次会话',
     'settings.font.harmony': 'HarmonyOS Sans',
     'settings.font.label': '字体',
     'settings.font.system': '系统',
@@ -2811,6 +3011,18 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.motion.label': '动态',
     'settings.motion.reduced': '关闭',
     'settings.motion.system': '跟随系统',
+    'settings.mobileActionRail.disabled': '已关闭',
+    'settings.mobileActionRail.enabled': '已开启',
+    'settings.mobileActionRail.group': '侧边操作栏',
+    'settings.mobileActionRail.label': '侧边操作栏',
+    'settings.mobileActionRail.left': '左侧',
+    'settings.mobileActionRail.note':
+      '仅在移动端（宽度 ≤ 760px）生效。开启后，顶部操作、标题栏按钮、底部导航与地图工具条会收纳到侧边；空间不足时自动收进“更多”菜单。',
+    'settings.mobileActionRail.position': '操作栏位置',
+    'settings.mobileActionRail.right': '右侧',
+    'mobileActionRail.aria': '侧边操作栏',
+    'mobileActionRail.more': '更多',
+    'mobileActionRail.overflowAria': '更多操作',
     'settings.theme.dark': '深色',
     'settings.theme.label': '主题',
     'settings.theme.light': '浅色',
@@ -3305,6 +3517,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'search.category.schedules': '班次',
     'search.category.services': '服务',
     'search.category.stations': '站点',
+    'search.category.wiki': 'Wiki',
     'search.clear': '清空搜索',
     'search.emptyPrompt': '输入关键词后搜索地图 POI、班次、运营资讯和服务',
     'search.facilityCount': '{count} 项设施',
@@ -3320,7 +3533,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'search.resultGroup.poi': '地图 POI',
     'search.resultGroup.schedules': '班次',
     'search.resultGroup.services': '服务与工具',
+    'search.resultGroup.social': '社交与社区',
     'search.resultGroup.stations': '站点',
+    'search.resultGroup.wiki': '临东 Wiki',
+    'search.social.description': '官方社交与社区入口',
+    'search.wiki.loading': '正在检索临东 Wiki…',
+    'search.wiki.updatedAt': '最后编辑',
     'search.stationExitCount': '{count} 个出入口',
     'search.stopCount': '{count} 站',
     'search.unavailable': '地图与班次数据暂时均不可用',
@@ -4085,9 +4303,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.source.tooltipLoading': '地圖資料正在讀取。',
     'map.source.unavailable': '地圖資料暫不可用',
     'map.location.currentAccount': '目前帳號：{name}',
-    'map.search.aria': '篩選地圖標記',
+    'map.search.aria': '搜尋地圖地點',
     'map.search.clear': '清空地圖搜尋',
-    'map.search.placeholder': '搜尋地點或標記',
+    'map.search.placeholder': '搜尋地圖地點、道路或路線',
     'map.routingStatus.projecting': '正在準備道路接入點',
     'map.share.actions': '分享方式',
     'map.share.close': '關閉分享面板',
@@ -4589,6 +4807,79 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'scheduleStopTable.station': '站點',
     'scheduleStopTable.stop': '停站',
     'scheduleStopTable.stopAria': '{station} 是否停站',
+    'globalSearch.action.ask': '問一問',
+    'globalSearch.action.askThis': '把這個問題交給問一問',
+    'globalSearch.action.clearInput': '清空輸入',
+    'globalSearch.action.close': '關閉搜尋',
+    'globalSearch.action.newConversation': '新對話',
+    'globalSearch.actionLabel': '可以直接',
+    'globalSearch.action.open': '全站搜尋',
+    'globalSearch.action.revert': '改回搜尋',
+    'globalSearch.action.search': '搜尋',
+    'globalSearch.action.send': '傳送',
+    'globalSearch.assistant.answerTitle': '問一問',
+    'globalSearch.assistant.clear': '清除 Key',
+    'globalSearch.assistant.configure': '設定 Key',
+    'globalSearch.assistant.disclaimer': '回答由你設定的模型產生，請以站內引用為準。',
+    'globalSearch.assistant.error': '問一問暫時沒有回傳結果，先給你站內資料。',
+    'globalSearch.assistant.followUps': '繼續追問',
+    'globalSearch.assistant.followUpsLoading': '正在準備追問建議…',
+    'globalSearch.assistant.key': 'API Key',
+    'globalSearch.assistant.keyPlaceholder': '貼上你的 API Key',
+    'globalSearch.assistant.model': '模型',
+    'globalSearch.assistant.needsKey': '設定模型 Key 後可使用問一問',
+    'globalSearch.assistant.networkError': '網路連線失敗，請檢查網路後重試。',
+    'globalSearch.assistant.provider': '模型提供商',
+    'globalSearch.assistant.references': '引用與入口',
+    'globalSearch.assistant.save': '儲存並提問',
+    'globalSearch.assistant.setupDescription':
+      'Key 只儲存在目前瀏覽器工作階段，關閉分頁後失效；本站不記錄。',
+    'globalSearch.assistant.setupTitle': '設定問一問',
+    'globalSearch.assistant.stop': '停止回答',
+    'globalSearch.assistant.streaming': '正在回答…',
+    'globalSearch.capability.account': '開啟帳號設定',
+    'globalSearch.capability.faq': '查看說明與常見問題',
+    'globalSearch.capability.map': '開啟地圖',
+    'globalSearch.capability.operations': '查看營運資訊',
+    'globalSearch.capability.rmp': '開啟 RMP 匯入入口',
+    'globalSearch.capability.roadMaterials': '開啟路牌物料',
+    'globalSearch.capability.schedule': '開啟班次查詢',
+    'globalSearch.capability.transitMaterials': '開啟公共交通導視',
+    'globalSearch.docsFallback': '先依站內資料找到這些',
+    'globalSearch.docsFallbackEmpty':
+      '站內資料暫時沒有直接答案，可以換個說法，或查看說明與常見問題。',
+    'globalSearch.easterEgg.close': '關閉',
+    'globalSearch.easterEgg.description':
+      '圖示裡的這個小人最早只是隨手畫在方格紙上的塗鴉：圓腦袋、兩個點眼睛、頭上頂著一塊寫著「臨」字的小圓牌。後來它被重新畫成線描和填充兩版，成了問一問的形象。',
+    'globalSearch.easterEgg.hint': '它最早出現在一些生活記錄裡，現在只留在站內當彩蛋。',
+    'globalSearch.easterEgg.title': '關於問一問',
+    'globalSearch.emptyHint': '輸入地點、班次、公告，或直接說出你的需求',
+    'globalSearch.liveResults': '即時結果',
+    'globalSearch.mode.ask': '問一問',
+    'globalSearch.mode.search': '搜尋',
+    'globalSearch.noMatch': '沒有找到符合結果',
+    'globalSearch.placeholder': '搜尋地點、班次、資訊，或直接提問…',
+    'globalSearch.placeholderAsk': '描述你的問題，Enter 傳送…',
+    'globalSearch.resultCount': '共 {count} 筆結果',
+    'globalSearch.searchAll': '在全站搜尋「{query}」',
+    'globalSearch.status.askReady': '已切到問一問 · Enter 傳送',
+    'globalSearch.status.askSoon': '問一問將在接入模型後支援對話，現在先依站內資料回答',
+    'globalSearch.status.loadingData': '正在載入站內資料…',
+    'globalSearch.status.searching': '正在搜尋…',
+    'globalSearch.suggestion.account': '乘車碼打不開怎麼辦',
+    'globalSearch.suggestion.aiLoading': '正在結合目前頁面產生推薦項…',
+    'globalSearch.suggestion.highlightLine': '這條線經過哪些地方？',
+    'globalSearch.suggestion.highlightMarker': '{name}怎麼走？',
+    'globalSearch.suggestion.highlightStation': '{name}有哪些設施？',
+    'globalSearch.suggestion.operations': '颱風期間停運通知',
+    'globalSearch.suggestion.refresh': '換一批',
+    'globalSearch.suggestion.route': '明天去臨東港怎麼走',
+    'globalSearch.suggestion.schedule': '查明天去臨東港的船',
+    'globalSearch.suggestion.thisPage': '這個頁面怎麼用？',
+    'globalSearch.suggestion.title': '你可以試試',
+    'globalSearch.title': '搜尋與問一問',
+    'globalSearch.unavailable': '部分資料暫不可用',
+    'globalSearch.viewAll': '查看全部結果',
     'search.open': '搜尋',
     'shortcut.close': '關閉快捷鍵',
     'shortcut.focusMapSearch': '聚焦地圖搜尋',
@@ -4606,6 +4897,27 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.accent.ldpass': '跟隨臨東通',
     'settings.accent.red': '紅色',
     'settings.appearanceLanguage': '外觀與語言',
+    'settings.assistant.allPages': '在所有頁面顯示搜尋與問一問入口',
+    'settings.assistant.allPagesNote':
+      '開啟後，二級頁面頂欄也會顯示入口按鈕，方便觸控使用者；一級頁面始終保留入口。',
+    'settings.assistant.aiSuggestions': '使用 AI 產生推薦項',
+    'settings.assistant.aiSuggestionsNote':
+      '開啟後會結合目前頁面內容，用你設定的模型產生推薦項；關閉時只用站內資料產生。',
+    'settings.assistant.clear': '清除 Key',
+    'settings.assistant.enabled': '啟用搜尋與問一問',
+    'settings.assistant.enabledNote': '關閉後會隱藏所有入口並停用快速鍵；已儲存的 Key 仍會保留。',
+    'settings.assistant.encryptionNote': 'Key 會加密儲存在本機，仍請勿在公共裝置儲存。',
+    'settings.assistant.group': '搜尋與問一問',
+    'settings.assistant.key': 'API Key',
+    'settings.assistant.keyPlaceholder': '貼上你的 API Key',
+    'settings.assistant.model': '模型',
+    'settings.assistant.modelNote': '模型名稱可能隨服務商更新，可直接輸入目前可用的模型名稱。',
+    'settings.assistant.notConfigured': '未設定',
+    'settings.assistant.provider': '模型提供商',
+    'settings.assistant.save': '儲存設定',
+    'settings.assistant.saved': '已設定',
+    'settings.assistant.savedEncrypted': '已加密儲存',
+    'settings.assistant.savedSession': '僅本次工作階段',
     'settings.font.harmony': 'HarmonyOS Sans',
     'settings.font.label': '字體',
     'settings.font.system': '系統',
@@ -4630,6 +4942,18 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.motion.label': '動態',
     'settings.motion.reduced': '關閉',
     'settings.motion.system': '跟隨系統',
+    'settings.mobileActionRail.disabled': '已關閉',
+    'settings.mobileActionRail.enabled': '已開啟',
+    'settings.mobileActionRail.group': '側邊操作欄',
+    'settings.mobileActionRail.label': '側邊操作欄',
+    'settings.mobileActionRail.left': '左側',
+    'settings.mobileActionRail.note':
+      '僅在行動端（寬度 ≤ 760px）生效。開啟後，頂部操作、標題列按鈕、底部導覽與地圖工具列會收納到側邊；空間不足時自動收進「更多」選單。',
+    'settings.mobileActionRail.position': '操作欄位置',
+    'settings.mobileActionRail.right': '右側',
+    'mobileActionRail.aria': '側邊操作欄',
+    'mobileActionRail.more': '更多',
+    'mobileActionRail.overflowAria': '更多操作',
     'settings.theme.dark': '深色',
     'settings.theme.label': '主題',
     'settings.theme.light': '淺色',
@@ -5124,6 +5448,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'search.category.schedules': '班次',
     'search.category.services': '服務',
     'search.category.stations': '站點',
+    'search.category.wiki': 'Wiki',
     'search.clear': '清空搜尋',
     'search.emptyPrompt': '輸入關鍵字後搜尋地圖 POI、班次、營運資訊和服務',
     'search.facilityCount': '{count} 項設施',
@@ -5139,7 +5464,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'search.resultGroup.poi': '地圖 POI',
     'search.resultGroup.schedules': '班次',
     'search.resultGroup.services': '服務與工具',
+    'search.resultGroup.social': '社群與社區',
     'search.resultGroup.stations': '站點',
+    'search.resultGroup.wiki': '臨東 Wiki',
+    'search.social.description': '官方社群與社區入口',
+    'search.wiki.loading': '正在檢索臨東 Wiki…',
+    'search.wiki.updatedAt': '最後編輯',
     'search.stationExitCount': '{count} 個出入口',
     'search.stopCount': '{count} 站',
     'search.unavailable': '地圖與班次資料暫時均不可用',
@@ -5456,7 +5786,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.offlinePackage.strategyNote':
       'Custom areas currently store boundaries and refresh public base data. Real tile offline packs still need size limits and generation rules.',
     'account.offlinePackage.title': 'New Offline Area',
-    'account.cache.offlineDeletedAll': 'Deleted the offline area request locally and from your account',
+    'account.cache.offlineDeletedAll':
+      'Deleted the offline area request locally and from your account',
     'account.cache.offlineDeletedLocalOnly':
       'Deleted locally, but the account request could not be deleted',
     'account.cache.offlineRefreshFailed': 'Failed to refresh offline area base data',
@@ -5924,9 +6255,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.source.tooltipLoading': 'Map data is still loading.',
     'map.source.unavailable': 'Map data is temporarily unavailable',
     'map.location.currentAccount': 'Current account: {name}',
-    'map.search.aria': 'Filter map markers',
+    'map.search.aria': 'Search map places',
     'map.search.clear': 'Clear map search',
-    'map.search.placeholder': 'Search places or markers',
+    'map.search.placeholder': 'Search map places, roads, or lines',
     'map.routingStatus.projecting': 'Preparing road access points',
     'map.share.actions': 'Share format',
     'map.share.close': 'Close share panel',
@@ -6438,6 +6769,83 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'scheduleStopTable.station': 'Station',
     'scheduleStopTable.stop': 'Stop',
     'scheduleStopTable.stopAria': 'Whether service stops at {station}',
+    'globalSearch.action.ask': 'Ask',
+    'globalSearch.action.askThis': 'Hand this to Ask',
+    'globalSearch.action.clearInput': 'Clear input',
+    'globalSearch.action.close': 'Close search',
+    'globalSearch.action.newConversation': 'New conversation',
+    'globalSearch.actionLabel': 'You can go straight to',
+    'globalSearch.action.open': 'Search everything',
+    'globalSearch.action.revert': 'Back to search',
+    'globalSearch.action.search': 'Search',
+    'globalSearch.action.send': 'Send',
+    'globalSearch.assistant.answerTitle': 'Ask',
+    'globalSearch.assistant.clear': 'Clear key',
+    'globalSearch.assistant.configure': 'Configure key',
+    'globalSearch.assistant.disclaimer':
+      'Answers are generated by the model you configured. Check the site references.',
+    'globalSearch.assistant.error': 'Ask returned no result. Showing site documentation instead.',
+    'globalSearch.assistant.followUps': 'Follow-up questions',
+    'globalSearch.assistant.followUpsLoading': 'Preparing follow-up suggestions…',
+    'globalSearch.assistant.key': 'API key',
+    'globalSearch.assistant.keyPlaceholder': 'Paste your API key',
+    'globalSearch.assistant.model': 'Model',
+    'globalSearch.assistant.needsKey': 'Configure a model key to use Ask',
+    'globalSearch.assistant.networkError':
+      'Network request failed. Check your connection and retry.',
+    'globalSearch.assistant.provider': 'Provider',
+    'globalSearch.assistant.references': 'References and links',
+    'globalSearch.assistant.save': 'Save and ask',
+    'globalSearch.assistant.setupDescription':
+      'The key is stored only in this browser session and is cleared when the tab closes. This site does not record it.',
+    'globalSearch.assistant.setupTitle': 'Configure Ask',
+    'globalSearch.assistant.stop': 'Stop answering',
+    'globalSearch.assistant.streaming': 'Answering…',
+    'globalSearch.capability.account': 'Open account settings',
+    'globalSearch.capability.faq': 'View help and FAQ',
+    'globalSearch.capability.map': 'Open map',
+    'globalSearch.capability.operations': 'View updates',
+    'globalSearch.capability.rmp': 'Open RMP import',
+    'globalSearch.capability.roadMaterials': 'Open road sign materials',
+    'globalSearch.capability.schedule': 'Open schedule search',
+    'globalSearch.capability.transitMaterials': 'Open transit signage',
+    'globalSearch.docsFallback': 'Here is what the site documentation found',
+    'globalSearch.docsFallbackEmpty':
+      'The site documentation has no direct answer yet. Try different wording or view the help and FAQ.',
+    'globalSearch.easterEgg.close': 'Close',
+    'globalSearch.easterEgg.description':
+      'The character in the icon started as a doodle on squared paper: round head, two dot eyes, and a small “临” badge on top. It was later redrawn as outline and filled versions and became the face of Ask.',
+    'globalSearch.easterEgg.hint':
+      'It first appeared in some personal posts and now lives here as an easter egg.',
+    'globalSearch.easterEgg.title': 'About Ask',
+    'globalSearch.emptyHint': 'Enter a place, schedule, update, or describe what you need',
+    'globalSearch.liveResults': 'Live results',
+    'globalSearch.mode.ask': 'Ask',
+    'globalSearch.mode.search': 'Search',
+    'globalSearch.noMatch': 'No matching results',
+    'globalSearch.placeholder': 'Search places, schedules, updates, or ask directly…',
+    'globalSearch.placeholderAsk': 'Describe your question, press Enter to send…',
+    'globalSearch.resultCount': '{count} results',
+    'globalSearch.searchAll': 'Search everything for “{query}”',
+    'globalSearch.status.askReady': 'Switched to Ask · press Enter to send',
+    'globalSearch.status.askSoon':
+      'Ask will support conversation after the model is connected. For now it uses site documentation.',
+    'globalSearch.status.loadingData': 'Loading site data…',
+    'globalSearch.status.searching': 'Searching…',
+    'globalSearch.suggestion.account': 'Ride code will not open',
+    'globalSearch.suggestion.aiLoading': 'Generating suggestions from this page…',
+    'globalSearch.suggestion.highlightLine': 'Where does this line stop?',
+    'globalSearch.suggestion.highlightMarker': 'How do I get to {name}?',
+    'globalSearch.suggestion.highlightStation': 'What facilities does {name} have?',
+    'globalSearch.suggestion.operations': 'Typhoon service suspension notice',
+    'globalSearch.suggestion.refresh': 'Refresh',
+    'globalSearch.suggestion.route': 'How do I get to Lindong Port tomorrow?',
+    'globalSearch.suggestion.schedule': 'Ferries to Lindong Port tomorrow',
+    'globalSearch.suggestion.thisPage': 'How do I use this page?',
+    'globalSearch.suggestion.title': 'Try one of these',
+    'globalSearch.title': 'Search and Ask',
+    'globalSearch.unavailable': 'Some data is unavailable',
+    'globalSearch.viewAll': 'View all results',
     'search.open': 'Search',
     'shortcut.close': 'Close shortcuts',
     'shortcut.focusMapSearch': 'Focus map search',
@@ -6455,6 +6863,30 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.accent.ldpass': 'Follow LDPASS',
     'settings.accent.red': 'Red',
     'settings.appearanceLanguage': 'Appearance and Language',
+    'settings.assistant.allPages': 'Show the search and Ask entry on all pages',
+    'settings.assistant.allPagesNote':
+      'When enabled, secondary page headers also show the entry button for touch users. Primary pages always keep the entry.',
+    'settings.assistant.aiSuggestions': 'Generate suggestions with AI',
+    'settings.assistant.aiSuggestionsNote':
+      'Uses your configured model to suggest items from the current page. When off, suggestions come from site data only.',
+    'settings.assistant.clear': 'Clear key',
+    'settings.assistant.enabled': 'Enable search and Ask',
+    'settings.assistant.enabledNote':
+      'Turning this off hides all entries and disables the shortcut. The saved key is kept.',
+    'settings.assistant.encryptionNote':
+      'The key is encrypted and stored on this device. Avoid saving it on shared devices.',
+    'settings.assistant.group': 'Search and Ask',
+    'settings.assistant.key': 'API key',
+    'settings.assistant.keyPlaceholder': 'Paste your API key',
+    'settings.assistant.model': 'Model',
+    'settings.assistant.modelNote':
+      'Model names may change. You can enter the currently available model name directly.',
+    'settings.assistant.notConfigured': 'Not configured',
+    'settings.assistant.provider': 'Provider',
+    'settings.assistant.save': 'Save configuration',
+    'settings.assistant.saved': 'Configured',
+    'settings.assistant.savedEncrypted': 'Saved encrypted',
+    'settings.assistant.savedSession': 'This session only',
     'settings.font.harmony': 'HarmonyOS Sans',
     'settings.font.label': 'Font',
     'settings.font.system': 'System',
@@ -6479,6 +6911,18 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.motion.label': 'Motion',
     'settings.motion.reduced': 'Off',
     'settings.motion.system': 'Follow system',
+    'settings.mobileActionRail.disabled': 'Off',
+    'settings.mobileActionRail.enabled': 'On',
+    'settings.mobileActionRail.group': 'Side Action Bar',
+    'settings.mobileActionRail.label': 'Side action bar',
+    'settings.mobileActionRail.left': 'Left',
+    'settings.mobileActionRail.note':
+      'Mobile only (width ≤ 760px). When enabled, top actions, title-bar buttons, bottom navigation, and the map toolbar move into the side rail; buttons collapse into “More” when space runs out.',
+    'settings.mobileActionRail.position': 'Rail position',
+    'settings.mobileActionRail.right': 'Right',
+    'mobileActionRail.aria': 'Side action bar',
+    'mobileActionRail.more': 'More',
+    'mobileActionRail.overflowAria': 'More actions',
     'settings.theme.dark': 'Dark',
     'settings.theme.label': 'Theme',
     'settings.theme.light': 'Light',
@@ -7002,6 +7446,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'search.category.schedules': 'Schedules',
     'search.category.services': 'Services',
     'search.category.stations': 'Stations',
+    'search.category.wiki': 'Wiki',
     'search.clear': 'Clear search',
     'search.emptyPrompt': 'Enter a keyword to search map POIs, schedules, updates, and services.',
     'search.facilityCount': '{count} facilities',
@@ -7017,7 +7462,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'search.resultGroup.poi': 'Map POI',
     'search.resultGroup.schedules': 'Schedules',
     'search.resultGroup.services': 'Services and Tools',
+    'search.resultGroup.social': 'Community and social',
     'search.resultGroup.stations': 'Stations',
+    'search.resultGroup.wiki': 'Lindong Wiki',
+    'search.social.description': 'Official community and social links',
+    'search.wiki.loading': 'Searching Lindong Wiki…',
+    'search.wiki.updatedAt': 'Last edited',
     'search.stationExitCount': '{count} exits',
     'search.stopCount': '{count} stops',
     'search.unavailable': 'Map and schedule data are both unavailable',

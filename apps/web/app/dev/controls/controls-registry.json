@@ -1,92 +1,307 @@
 {
+  "categories": [
+    {
+      "id": "overview",
+      "label": "总览",
+      "summary": "控件清单与覆盖率"
+    },
+    {
+      "id": "actions",
+      "label": "操作",
+      "summary": "按钮与命令入口"
+    },
+    {
+      "id": "forms",
+      "label": "表单",
+      "summary": "输入、选择与校验"
+    },
+    {
+      "id": "navigation",
+      "label": "导航",
+      "summary": "顶栏、侧栏与目录"
+    },
+    {
+      "id": "feedback",
+      "label": "反馈",
+      "summary": "Toast、弹窗与状态文本"
+    },
+    {
+      "id": "data-display",
+      "label": "数据展示",
+      "summary": "列表、表格、芯片与筛选"
+    },
+    {
+      "id": "map-transit",
+      "label": "地图与出行",
+      "summary": "地图悬浮件与选路控件"
+    },
+    {
+      "id": "admin",
+      "label": "后台与业务",
+      "summary": "真实业务组合控件"
+    }
+  ],
   "sections": [
     {
       "id": "controls-inventory",
-      "text": "全量清单"
+      "text": "全量清单",
+      "name": "控件总览 Inventory",
+      "category": "overview",
+      "status": "stable",
+      "summary": "把业务页面里出现过的交互控件、组件引用与样式容器拍平成可检索清单，用于查漏补缺。",
+      "classes": [],
+      "aliases": []
     },
     {
       "id": "controls-buttons",
-      "text": "按钮"
+      "text": "按钮",
+      "name": "Button 按钮",
+      "category": "actions",
+      "status": "stable",
+      "summary": "三个语义层级：主按钮、次要强调、次按钮；图标形态复用同一形状契约。禁用态只对对应正常态做淡化，不切换语义色。",
+      "classes": [
+        "primary-action-button",
+        "secondary-action-button",
+        "secondary-action-button is-emphasis",
+        "icon-action-button",
+        "icon-button"
+      ],
+      "aliases": [
+        { "name": "pill-button", "note": "历史主按钮别名，视觉与 primary-action-button 一致" },
+        {
+          "name": "secondary-action-button is-primary",
+          "note": "历史实心主按钮，仍按主按钮渲染"
+        },
+        { "name": "account-button", "note": "图标按钮别名，用于账户入口" }
+      ]
     },
     {
       "id": "controls-switch",
-      "text": "开关 switch-control"
+      "text": "开关",
+      "name": "Switch 开关",
+      "category": "forms",
+      "status": "stable",
+      "summary": "二元开关，语义由原生 checkbox 承载，轨道只是视觉层；触控命中区不小于 44px。",
+      "classes": ["switch-control"],
+      "aliases": []
     },
     {
       "id": "controls-segmented",
-      "text": "分段选择 segmented-control"
+      "text": "分段选择",
+      "name": "Segmented 分段选择",
+      "category": "forms",
+      "status": "stable",
+      "summary": "2–4 个互斥选项的紧凑切换器，轨道 surface-muted，选中项 surface-selected 加主色文字。",
+      "classes": ["segmented-control"],
+      "aliases": [
+        { "name": "material-mode-switch", "note": "材质模式专用的分段实例" },
+        { "name": "line-direction-switch", "note": "线路方向切换的大尺寸档" }
+      ]
     },
     {
       "id": "controls-route-mode",
-      "text": "地图选路控件"
+      "text": "地图选路控件",
+      "name": "Route Mode 选路控件",
+      "category": "map-transit",
+      "status": "stable",
+      "summary": "出行方式多选与排序单选的真实业务组合：mode 组使用语义色且无背景填充，sort 组使用灰轨单选。",
+      "classes": ["map-route-preference-toolbar", "map-route-sort-control"],
+      "aliases": []
     },
     {
       "id": "controls-text-field",
-      "text": "表单元素 material-field"
+      "text": "表单元素",
+      "name": "Field 表单元素",
+      "category": "forms",
+      "status": "stable",
+      "summary": "输入框、日期、下拉与多行文本共用同一字段壳：44px 高、radius-md、聚焦主色描边加 3px 光晕。",
+      "classes": ["material-field", "controls-field-wide"],
+      "aliases": [{ "name": "search-box", "note": "46px 高的搜索档字段" }]
     },
     {
       "id": "controls-titlebar-buttons",
-      "text": "标题栏独立按钮"
+      "text": "标题栏按钮",
+      "name": "Titlebar Action 标题栏按钮",
+      "category": "actions",
+      "status": "stable",
+      "summary": "标题栏里的独立图标按钮；透光模式下只有 only-child 的独立按钮挂材质滤镜，成组按钮在容器组统一处理。",
+      "classes": ["icon-button", "icon-action-button", "secondary-topbar"],
+      "aliases": []
     },
     {
       "id": "controls-navigation",
-      "text": "导航框架控件"
+      "text": "导航框架",
+      "name": "Navigation 导航框架",
+      "category": "navigation",
+      "status": "stable",
+      "summary": "顶栏快捷入口、账户入口与徽标、后台编辑入口，以及桌面 rail / 移动 bottom-nav / 长文目录三套导航骨架。",
+      "classes": ["pill-button", "account-button", "account-badge", "rail", "bottom-nav"],
+      "aliases": []
     },
     {
       "id": "controls-chips",
-      "text": "芯片与徽章"
+      "text": "芯片与徽章",
+      "name": "Chip 芯片与徽章",
+      "category": "data-display",
+      "status": "stable",
+      "summary": "分类筛选芯片按交通方式取语义色，另有线路芯片、区域芯片、选路特性徽章与在线状态徽章。",
+      "classes": [
+        "category-chip",
+        "map-transfer-line-chip",
+        "map-route-option-badge",
+        "map-player-list-presence"
+      ],
+      "aliases": [{ "name": "chip", "note": "category-chip 的历史简写" }]
     },
     {
       "id": "controls-status-chips",
-      "text": "状态芯片与徽章"
+      "text": "状态芯片",
+      "name": "Status Chip 状态芯片",
+      "category": "data-display",
+      "status": "stable",
+      "summary": "运营、POI、行程与订单四类状态芯片已收敛到同一语义族，颜色由状态而非页面决定。",
+      "classes": ["admin-poi-status-chip", "operation-tag", "ticket-order-status-badge"],
+      "aliases": [
+        { "name": "trip-status-chip", "note": "行程状态历史类名" },
+        { "name": "trip-local-badge", "note": "本机行程徽标" },
+        { "name": "offline-package-status", "note": "离线包状态历史类名" }
+      ]
     },
     {
       "id": "controls-checkbox-row",
-      "text": "复选框与选择行"
+      "text": "复选框与选择行",
+      "name": "Checkbox 复选框与选择行",
+      "category": "forms",
+      "status": "stable",
+      "summary": "复选框、单选行与整行可点的选择列表；命中区覆盖整行，避免只有小方块可点。",
+      "classes": ["checkbox-control", "selection-row"],
+      "aliases": []
+    },
+    {
+      "id": "controls-radio-in-fieldset",
+      "text": "字段集单选",
+      "name": "Fieldset Radio 字段集单选",
+      "category": "forms",
+      "status": "stable",
+      "summary": "单选框放进 fieldset 后的回归场景，验证原生分组语义与字段壳不互相覆盖。",
+      "classes": ["material-field", "controls-field"],
+      "aliases": []
     },
     {
       "id": "controls-strips",
-      "text": "筛选条与分段控件变体"
+      "text": "筛选条",
+      "name": "Filter Strip 筛选条与分段变体",
+      "category": "data-display",
+      "status": "stable",
+      "summary": "横向滚动筛选条、邮编切换与地铁导控分段；已统一轨道高度、内边距与选中态。",
+      "classes": ["filter-strip", "segmented-control", "metro-wayfinding-segmented-control"],
+      "aliases": []
     },
     {
       "id": "controls-map-floating",
-      "text": "地图悬浮芯片与图层面板"
+      "text": "地图悬浮件",
+      "name": "Map Floating 地图悬浮件",
+      "category": "map-transit",
+      "status": "stable",
+      "summary": "地图上的数据源芯片、坐标芯片、图层面板与选路状态；脱离地图容器后在展示板内复位为静态排列。",
+      "classes": ["map-source-chip", "map-coordinate-chip", "map-layer-toggle"],
+      "aliases": []
     },
     {
       "id": "controls-list",
-      "text": "列表项与卡片"
+      "text": "列表与卡片",
+      "name": "List 列表项与卡片",
+      "category": "data-display",
+      "status": "stable",
+      "summary": "运营信息、行程、公告与附件列表的条目骨架，包含缩略图、摘要、元信息与操作区。",
+      "classes": ["operation-list-item", "trip-card", "attachment-row"],
+      "aliases": []
     },
     {
       "id": "controls-form-extended",
-      "text": "表单扩展控件"
+      "text": "表单扩展",
+      "name": "Form Extended 表单扩展",
+      "category": "forms",
+      "status": "stable",
+      "summary": "滑杆、开关组与带说明的复合字段；滑杆填充进度由组件内部换算，不手写背景渐变。",
+      "classes": ["material-field", "range-input", "switch-control"],
+      "aliases": []
     },
     {
       "id": "controls-search",
-      "text": "搜索框 search-box"
+      "text": "搜索框",
+      "name": "Search 搜索框",
+      "category": "forms",
+      "status": "stable",
+      "summary": "46px 搜索档字段，带前置图标与清除按钮；清除按钮必须同时写 appearance 与 -webkit-appearance。",
+      "classes": ["search-box"],
+      "aliases": []
     },
     {
       "id": "controls-toolbar",
-      "text": "工具栏与批量操作条"
+      "text": "工具栏",
+      "name": "Toolbar 工具栏与批量操作条",
+      "category": "data-display",
+      "status": "stable",
+      "summary": "列表页顶部的筛选、排序与批量操作条，选中数量与主操作保持同一行对齐。",
+      "classes": ["list-toolbar", "batch-action-bar"],
+      "aliases": []
     },
     {
       "id": "controls-table",
-      "text": "数据表格"
+      "text": "数据表格",
+      "name": "Table 数据表格",
+      "category": "data-display",
+      "status": "stable",
+      "summary": "班次停站表等密集数据表格，桌面表格在窄屏收敛为摘要列表而不是横向滚动。",
+      "classes": ["schedule-stop-time-table", "schedule-stop-time-row"],
+      "aliases": []
     },
     {
       "id": "controls-status-text",
-      "text": "状态与文本"
+      "text": "状态与文本",
+      "name": "Status Text 状态与文本",
+      "category": "feedback",
+      "status": "stable",
+      "summary": "加载、错误、无数据、弱化说明与 eyebrow 小标题等文本层级，状态必须可读而不能只靠动画。",
+      "classes": [
+        "map-loading-panel",
+        "form-error-text",
+        "status-note",
+        "empty-state",
+        "eyebrow"
+      ],
+      "aliases": []
     },
     {
       "id": "controls-toast-dialog",
-      "text": "Toast 与弹窗"
+      "text": "Toast 与弹窗",
+      "name": "Toast & Dialog 反馈层",
+      "category": "feedback",
+      "status": "stable",
+      "summary": "四种语气的 Toast、长内容弹窗、短表单弹窗、站内确认与站内页面窗口。",
+      "classes": ["app-toast", "modal-panel", "modal-backdrop"],
+      "aliases": [{ "name": "dialog.client-dialog", "note": "原生 dialog 形态的历史实现" }]
     },
     {
       "id": "controls-business",
-      "text": "真实业务控件"
+      "text": "真实业务控件",
+      "name": "Business 真实业务控件",
+      "category": "admin",
+      "status": "stable",
+      "summary": "设施编辑器与世界坐标选择器等真实业务组件，直接调用生产组件而不是复制一份样式。",
+      "classes": ["poi-facility-editor", "world-coordinate-picker"],
+      "aliases": []
     },
     {
       "id": "controls-input-states",
-      "text": "输入类型与状态"
+      "text": "输入类型与状态",
+      "name": "Input States 输入类型与状态",
+      "category": "forms",
+      "status": "stable",
+      "summary": "文本、数字、日期、搜索与多行输入的默认、聚焦、错误、禁用与只读状态矩阵。",
+      "classes": ["material-field", "form-error-text"],
+      "aliases": []
     }
   ],
   "sharedPreviews": [

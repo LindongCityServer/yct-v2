@@ -1829,3 +1829,45 @@ body.dialog-open {
     transition: none;
   }
 }
+
+/* ============================================================
+ * 内容图多级 LQIP（低清快照 → 原图）
+ * 低清快照是预生成的 32/64/128/256/512/1024 WebP，作为 img 背景层逐级替换；
+ * 原图加载完成后覆盖。图标、社交图标、二维码海报不接入。
+ * ============================================================ */
+.progressive-image {
+  background-color: var(--surface-muted);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.tool-card-media {
+  position: relative;
+}
+
+.progressive-status {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgb(255 255 255 / 42%);
+  border-top-color: var(--white);
+  border-radius: 50%;
+  background: rgb(17 24 23 / 48%);
+  pointer-events: none;
+  animation: portal-progressive-spin 1.1s linear infinite;
+}
+
+@keyframes portal-progressive-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressive-status {
+    animation: none;
+  }
+}

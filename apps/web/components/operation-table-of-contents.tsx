@@ -1,9 +1,18 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '../lib/client-i18n';
 import type { MarkdownHeading } from './markdown-blocks';
+import { useMobileActionRail, type MobileActionRailItem } from './mobile-action-rail';
 
 export function OperationTableOfContents({
   headings,
@@ -13,6 +22,8 @@ export function OperationTableOfContents({
   title?: string;
 }>) {
   const { t } = useI18n();
+  const mobileActionRail = useMobileActionRail();
+  const railItemId = useId();
   const resolvedTitle = title ?? t('operationToc.title');
   const [expanded, setExpanded] = useState(false);
   const [activeHeadingId, setActiveHeadingId] = useState(headings[0]?.id ?? null);
@@ -22,7 +33,7 @@ export function OperationTableOfContents({
   const [panelPosition, setPanelPosition] = useState<CSSProperties>({});
 
   useLayoutEffect(() => {
-    if (!expanded) return;
+    if (!expanded || mobileActionRail?.enabled) return;
     const updatePosition = () => {
       const rect = toggleRef.current?.getBoundingClientRect();
       if (!rect) return;
@@ -44,7 +55,7 @@ export function OperationTableOfContents({
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition, true);
     };
-  }, [expanded]);
+  }, [expanded, mobileActionRail?.enabled]);
 
   useEffect(() => {
     const headingElements = headings
@@ -104,62 +115,109 @@ export function OperationTableOfContents({
       toggleRef.current?.focus();
     };
 
-    document.addEventListener('pointerdown', handlePointerDown);
+    // 侧栏托管时按钮不在组件 DOM 内，交给侧栏项自行切换展开态。
+    if (!mobileActionRail?.enabled) {
+      document.addEventListener('pointerdown', handlePointerDown);
+    }
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [expanded]);
+  }, [expanded, mobileActionRail?.enabled]);
+
+  const railItems = useMemo<MobileActionRailItem[]>(
+    () =>
+      mobileActionRail?.enabled && headings.length > 0
+        ? [
+            {
+              id: `rail-toc-${railItemId}`,
+              group: 'top',
+              order: 90,
+              priority: 47,
+              label: expanded
+                ? t('operationToc.collapse', { title: resolvedTitle })
+                : t('operationToc.expand', { title: resolvedTitle }),
+              icon: expanded ? 'close' : 'toc',
+              active: expanded,
+              onClick: () => setExpanded((current) => !current),
+            },
+          ]
+        : [],
+    [expanded, headings.length, mobileActionRail?.enabled, railItemId, resolvedTitle, t],
+  );
+
+  useEffect(() => {
+    if (!mobileActionRail) {
+      return;
+    }
+    mobileActionRail.registerItems(`operation-toc-${railItemId}`, railItems);
+  }, [mobileActionRail, railItemId, railItems]);
 
   if (headings.length === 0) {
     return null;
   }
 
+  const railPanelPosition: CSSProperties = {
+    position: 'fixed',
+    top: 'calc(var(--yct-topbar-height) + 16px)',
+    width: 'min(320px, calc(100vw - 96px))',
+    maxHeight: 'min(60dvh, 520px)',
+    zIndex: 100,
+    ...(mobileActionRail?.side === 'left' ? { left: 72 } : { right: 72 }),
+  };
+
+  const panel = expanded
+    ? createPortal(
+        <nav
+          ref={panelRef}
+          style={mobileActionRail?.enabled ? railPanelPosition : panelPosition}
+          className="operation-toc-panel is-expanded"
+          id="operation-table-of-contents"
+          aria-label={resolvedTitle}
+          aria-hidden={!expanded}
+          inert={!expanded}
+        >
+          <span className="operation-toc-title">{resolvedTitle}</span>
+          <ol>
+            {headings.map((heading) => (
+              <li className={`is-level-${heading.level}`} key={heading.id}>
+                <a
+                  href={`#${heading.id}`}
+                  aria-current={activeHeadingId === heading.id ? 'location' : undefined}
+                  tabIndex={expanded ? undefined : -1}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setActiveHeadingId(heading.id);
+                    setExpanded(false);
+
+                    window.history.pushState(null, '', `#${heading.id}`);
+                    document.getElementById(heading.id)?.scrollIntoView({
+                      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                        ? 'auto'
+                        : 'smooth',
+                      block: 'start',
+                    });
+                  }}
+                >
+                  <span className="material-interaction-label">{heading.text}</span>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>,
+        document.body,
+      )
+    : null;
+
+  // 侧栏托管时不再渲染标题栏内的目录按钮，只保留浮层。
+  if (mobileActionRail?.enabled) {
+    return <>{panel}</>;
+  }
+
   return (
     <aside ref={tocRef} className={expanded ? 'operation-toc is-expanded' : 'operation-toc'}>
-      {expanded
-        ? createPortal(
-            <nav
-              ref={panelRef}
-              style={panelPosition}
-              className="operation-toc-panel is-expanded"
-              id="operation-table-of-contents"
-              aria-label={resolvedTitle}
-              aria-hidden={!expanded}
-              inert={!expanded}
-            >
-              <span className="operation-toc-title">{resolvedTitle}</span>
-              <ol>
-                {headings.map((heading) => (
-                  <li className={`is-level-${heading.level}`} key={heading.id}>
-                    <a
-                      href={`#${heading.id}`}
-                      aria-current={activeHeadingId === heading.id ? 'location' : undefined}
-                      tabIndex={expanded ? undefined : -1}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        setActiveHeadingId(heading.id);
-                        setExpanded(false);
-
-                        window.history.pushState(null, '', `#${heading.id}`);
-                        document.getElementById(heading.id)?.scrollIntoView({
-                          behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-                            ? 'auto'
-                            : 'smooth',
-                          block: 'start',
-                        });
-                      }}
-                    >
-                      <span className="material-interaction-label">{heading.text}</span>
-                    </a>
-                  </li>
-                ))}
-              </ol>
-            </nav>,
-            document.body,
-          )
-        : null}
+      {panel}
       <button
         ref={toggleRef}
         className="operation-toc-toggle"

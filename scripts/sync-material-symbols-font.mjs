@@ -16,6 +16,8 @@ const browserUserAgent =
 const maximumFontBytes = 512 * 1024;
 const iconNamePattern = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/;
 const shortIconNamePattern = /^[a-z][a-z0-9]{2,}$/;
+// Material Symbols 里少数合法图标只有两个字母（如 wc），单独放行。
+const twoLetterIconNames = new Set(['wc']);
 
 const ignoredDirectoryNames = new Set(['.next', 'node_modules', '.git']);
 const sourceFileExtensions = new Set(['.js', '.jsx', '.ts', '.tsx', '.json']);
@@ -164,8 +166,8 @@ async function scanDirectory(directory, names) {
     }
 
     // 现有 SVG 资产也属于 Material Symbols 的可复用图标来源。
-    if (entry.name.endsWith('.svg') && iconNamePattern.test(basename(entry.name, '.svg'))) {
-      names.add(basename(entry.name, '.svg'));
+    if (entry.name.endsWith('.svg')) {
+      addIconName(basename(entry.name, '.svg'), names);
     }
   }
 }
@@ -343,7 +345,11 @@ function isIconFunctionName(node) {
 
 function addIconName(value, names) {
   const candidate = value.trim().toLowerCase();
-  if (iconNamePattern.test(candidate) || shortIconNamePattern.test(candidate)) {
+  if (
+    iconNamePattern.test(candidate) ||
+    shortIconNamePattern.test(candidate) ||
+    twoLetterIconNames.has(candidate)
+  ) {
     names.add(candidate);
   }
 }

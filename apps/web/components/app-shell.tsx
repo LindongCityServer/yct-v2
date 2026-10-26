@@ -1,11 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { publishLoginRequired, publishLoginRequiredForResponse } from '../lib/client-auth-events';
+import {
+  readAssistantEntryPreference,
+  subscribeAssistantEntryPreferenceChanged,
+} from '../lib/client-assistant-entry-preference';
+import { publishGlobalSearchRequested } from '../lib/client-global-search-events';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import {
   publishMapNavigationLayoutChanged,
@@ -19,6 +23,13 @@ import {
   readTripReminderState,
   tripReminderStateChangedEventName,
 } from '../lib/client-trip-reminders';
+import { ProgressiveImage } from './progressive-image';
+import { SmartQaGlyph } from './smart-qa-icon';
+import {
+  MobileActionRailProvider,
+  useMobileActionRail,
+  type MobileActionRailItem,
+} from './mobile-action-rail';
 
 export type PrimaryNavKey = 'operations' | 'map' | 'travel' | 'services';
 export type AppShellVariant = 'default' | 'map';
@@ -57,30 +68,50 @@ interface RideCodeResponse {
   message?: string;
 }
 
-export function AppShell({
-  active,
-  pageTitle,
-  pageTitleKey,
-  variant = 'default',
-  children,
-}: Readonly<{
+type AppShellProps = Readonly<{
   active?: PrimaryNavKey;
   pageTitle?: string;
   pageTitleKey?: CommonMessageKey;
   variant?: AppShellVariant;
   children: ReactNode;
-}>) {
-  const router = useRouter();
+}>;
+
+export function AppShell(props: AppShellProps) {
+  return (
+    <MobileActionRailProvider>
+      <AppShellFrame {...props} />
+    </MobileActionRailProvider>
+  );
+}
+
+function AppShellFrame({
+  active,
+  pageTitle,
+  pageTitleKey,
+  variant = 'default',
+  children,
+}: AppShellProps) {
+  const mobileActionRail = useMobileActionRail();
   const [navOpen, setNavOpen] = useState(true);
   const [accountStatus, setAccountStatus] = useState<AccountStatusResponse | null>(null);
   const [localPendingSyncCount, setLocalPendingSyncCount] = useState(0);
   const [mapRoutePanelVisible, setMapRoutePanelVisible] = useState(false);
   const [mapSidebarOverlayVisible, setMapSidebarOverlayVisible] = useState(false);
   const [rideCodeLoading, setRideCodeLoading] = useState(false);
+  const [assistantEnabled, setAssistantEnabled] = useState(
+    () => readAssistantEntryPreference().enabled,
+  );
   const { locale, t } = useI18n();
 
   useEffect(() => {
     return subscribeAppNavigationToggleRequested(() => setNavOpen((current) => !current));
+  }, []);
+
+  useEffect(() => {
+    setAssistantEnabled(readAssistantEntryPreference().enabled);
+    return subscribeAssistantEntryPreferenceChanged((preference) =>
+      setAssistantEnabled(preference.enabled),
+    );
   }, []);
 
   useEffect(() => {
@@ -176,7 +207,7 @@ export function AppShell({
   };
 
   const openGlobalSearch = () => {
-    router.push(appPath('/search'));
+    publishGlobalSearchRequested();
   };
   const openRideCode = async () => {
     if (rideCodeLoading) {
@@ -225,6 +256,79 @@ export function AppShell({
       ? 'Yuchengtong'
       : renderedPageTitle;
 
+  // 侧边操作栏条目：顶部工具栏 → 底部主导航，均为纯图标按钮。
+  const railActions = useMemo<MobileActionRailItem[]>(
+    () => [
+      {
+        id: 'rail-top-ride-code',
+        group: 'top',
+        order: 10,
+        priority: 40,
+        label: t('quickAction.rideCode'),
+        icon: rideCodeLoading ? 'progress_activity' : 'qr_code_2',
+        busy: rideCodeLoading,
+        onClick: () => void openRideCode(),
+      },
+      ...(assistantEnabled
+        ? [
+            {
+              id: 'rail-top-search',
+              group: 'top' as const,
+              order: 20,
+              priority: 45,
+              label: t('globalSearch.action.open'),
+              icon: 'search',
+              iconNode: <SmartQaGlyph size={22} />,
+              onClick: openGlobalSearch,
+            },
+          ]
+        : []),
+      {
+        id: 'rail-top-account',
+        group: 'top',
+        order: 30,
+        priority: 50,
+        label: accountButtonAriaLabel(accountStatus, accountBadge, t),
+        icon: accountIcon(accountStatus?.accountStatus),
+        href: appPath('/account'),
+        badge:
+          accountBadge.kind === 'count'
+            ? formatBadgeCount(accountBadge.count)
+            : accountBadge.kind === 'dot'
+              ? '•'
+              : undefined,
+      },
+      ...navItems.map<MobileActionRailItem>((item, index) => ({
+        id: `rail-tab-${item.key}`,
+        group: 'tabs',
+        order: index,
+        priority: 100,
+        label: t(item.labelKey),
+        icon: item.icon,
+        href: appPath(item.href),
+        active: active === item.key,
+      })),
+    ],
+    [
+      accountBadge,
+      accountStatus,
+      active,
+      assistantEnabled,
+      locale,
+      openGlobalSearch,
+      openRideCode,
+      rideCodeLoading,
+      t,
+    ],
+  );
+
+  useEffect(() => {
+    if (!mobileActionRail) {
+      return;
+    }
+    mobileActionRail.registerItems('app-shell', mobileActionRail.enabled ? railActions : []);
+  }, [mobileActionRail, railActions]);
+
   return (
     <main
       className={[
@@ -233,9 +337,11 @@ export function AppShell({
         navOpen ? '' : 'is-nav-collapsed',
         variant === 'map' && mapRoutePanelVisible ? 'has-map-route-panel' : '',
         variant === 'map' && mapSidebarOverlayVisible ? 'has-map-sidebar-overlay' : '',
+        mobileActionRail?.enabled ? 'has-mobile-action-rail' : '',
       ]
         .filter(Boolean)
         .join(' ')}
+      data-mobile-action-rail-side={mobileActionRail?.enabled ? mobileActionRail.side : undefined}
     >
       <header className="topbar">
         <TopbarMaterialLayers />
@@ -278,14 +384,16 @@ export function AppShell({
             </span>
             <span>{t('quickAction.rideCode')}</span>
           </button>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label={t('search.open')}
-            onClick={openGlobalSearch}
-          >
-            <span className="material-symbols-outlined">search</span>
-          </button>
+          {!mobileActionRail?.enabled && assistantEnabled ? (
+            <button
+              className="icon-button"
+              type="button"
+              aria-label={t('globalSearch.action.open')}
+              onClick={openGlobalSearch}
+            >
+              <SmartQaGlyph size={22} />
+            </button>
+          ) : null}
           <Link
             className={accountButtonClassName(accountStatus, accountBadge)}
             href={appPath('/account')}
@@ -293,7 +401,12 @@ export function AppShell({
             title={accountButtonAriaLabel(accountStatus, accountBadge, t)}
           >
             {accountStatus?.avatarUrl ? (
-              <img className="topbar-account-avatar" src={accountStatus.avatarUrl} alt="" />
+              <ProgressiveImage
+                className="topbar-account-avatar"
+                src={accountStatus.avatarUrl}
+                alt=""
+                showStatus={false}
+              />
             ) : (
               <span className="material-symbols-outlined">
                 {accountIcon(accountStatus?.accountStatus)}
@@ -439,16 +552,7 @@ function formatBadgeCount(count: number): string {
   return count > 99 ? '99+' : String(count);
 }
 
-export function SecondaryShell({
-  title,
-  titleKey,
-  backHref = '/',
-  desktopBackHref,
-  desktopNavigation,
-  secondaryActions,
-  legalVariant = 'none',
-  children,
-}: Readonly<{
+type SecondaryShellProps = Readonly<{
   title: string;
   titleKey?: CommonMessageKey;
   backHref?: string;
@@ -457,13 +561,107 @@ export function SecondaryShell({
   secondaryActions?: ReactNode;
   legalVariant?: 'none' | 'mobile' | 'always';
   children: ReactNode;
-}>) {
+}>;
+
+export function SecondaryShell(props: SecondaryShellProps) {
   return (
-    <main className="secondary-shell">
+    <MobileActionRailProvider>
+      <SecondaryShellFrame {...props} />
+    </MobileActionRailProvider>
+  );
+}
+
+function SecondaryShellFrame({
+  title,
+  titleKey,
+  backHref = '/',
+  desktopBackHref,
+  desktopNavigation,
+  secondaryActions,
+  legalVariant = 'none',
+  children,
+}: SecondaryShellProps) {
+  const { t } = useI18n();
+  const mobileActionRail = useMobileActionRail();
+  const [assistantPreference, setAssistantPreference] = useState(readAssistantEntryPreference);
+
+  useEffect(() => {
+    const sync = () => setAssistantPreference(readAssistantEntryPreference());
+    sync();
+    return subscribeAssistantEntryPreferenceChanged(setAssistantPreference);
+  }, []);
+
+  const showAssistantEntry = assistantPreference.enabled && assistantPreference.allPages;
+  const assistantInRail = showAssistantEntry && Boolean(mobileActionRail?.enabled);
+
+  const railActions = useMemo<MobileActionRailItem[]>(
+    () =>
+      mobileActionRail?.enabled
+        ? [
+            {
+              id: 'rail-back',
+              group: 'back',
+              order: 0,
+              priority: 100,
+              label: t('nav.back'),
+              icon: 'arrow_back',
+              href: appPath(backHref),
+            },
+            ...(assistantInRail
+              ? [
+                  {
+                    id: 'rail-assistant',
+                    group: 'page' as const,
+                    order: 10,
+                    priority: 45,
+                    label: t('globalSearch.action.open'),
+                    icon: 'search',
+                    iconNode: <SmartQaGlyph size={22} />,
+                    onClick: () => publishGlobalSearchRequested(),
+                  },
+                ]
+              : []),
+          ]
+        : [],
+    [assistantInRail, backHref, mobileActionRail?.enabled, t],
+  );
+
+  useEffect(() => {
+    if (!mobileActionRail) {
+      return;
+    }
+    mobileActionRail.registerItems('secondary-shell', railActions);
+  }, [mobileActionRail, railActions]);
+
+  const showAssistantInHeader = showAssistantEntry && !assistantInRail;
+  const mergedSecondaryActions =
+    showAssistantInHeader || secondaryActions ? (
+      <>
+        {showAssistantInHeader ? (
+          <button
+            className="icon-button"
+            type="button"
+            aria-label={t('globalSearch.action.open')}
+            onClick={() => publishGlobalSearchRequested()}
+          >
+            <SmartQaGlyph size={22} />
+          </button>
+        ) : null}
+        {secondaryActions}
+      </>
+    ) : undefined;
+
+  return (
+    <main
+      className={['secondary-shell', mobileActionRail?.enabled ? 'has-mobile-action-rail' : '']
+        .filter(Boolean)
+        .join(' ')}
+      data-mobile-action-rail-side={mobileActionRail?.enabled ? mobileActionRail.side : undefined}
+    >
       <SecondaryPageHeader
         backHref={backHref}
         desktopBackHref={desktopBackHref}
-        secondaryActions={secondaryActions}
+        secondaryActions={mergedSecondaryActions}
         title={title}
         titleKey={titleKey}
       />

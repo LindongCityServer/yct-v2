@@ -17,6 +17,10 @@ interface MaterialSymbolProps extends ComponentPropsWithoutRef<'span'> {
 const readyAssetPaths = new Set<string>();
 const pendingAssetLoads = new Map<string, Promise<boolean>>();
 
+// 本地字体子集未收录、但 public/material-symbols/outlined 里有静态 SVG 的图标。
+// 优先用静态 SVG 兜底，避免 ligature 退化成普通文字。
+const staticAssetFallbackNames = new Set(['wc']);
+
 export function MaterialSymbol({
   name,
   preview = false,
@@ -25,7 +29,7 @@ export function MaterialSymbol({
   ...props
 }: MaterialSymbolProps) {
   const normalizedName = useMemo(() => normalizeName(name), [name]);
-  const assetPath = useMemo(() => {
+  const primaryAssetPath = useMemo(() => {
     if (!normalizedName) {
       return '';
     }
@@ -33,20 +37,41 @@ export function MaterialSymbol({
       ? appPath(`/api/admin/material-symbols/preview?name=${encodeURIComponent(normalizedName)}`)
       : appPath(`/api/material-symbols/${encodeURIComponent(normalizedName)}`);
   }, [normalizedName, preview]);
-  const [assetReady, setAssetReady] = useState(() => readyAssetPaths.has(assetPath));
+  const staticFallbackPath = useMemo(() => {
+    if (!normalizedName || !staticAssetFallbackNames.has(normalizedName)) {
+      return '';
+    }
+    return appPath(`/material-symbols/outlined/${encodeURIComponent(normalizedName)}.svg`);
+  }, [normalizedName]);
+  const assetCandidates = useMemo(
+    () =>
+      (staticFallbackPath ? [staticFallbackPath, primaryAssetPath] : [primaryAssetPath]).filter(
+        Boolean,
+      ),
+    [primaryAssetPath, staticFallbackPath],
+  );
+  const [resolvedAssetPath, setResolvedAssetPath] = useState(
+    () => assetCandidates.find((path) => readyAssetPaths.has(path)) ?? '',
+  );
+  // wc 等静态兜底图标直接在 SSR/首屏用蒙版渲染，不依赖 effect 加载结果。
+  const effectiveAssetPath = staticFallbackPath || resolvedAssetPath;
 
   useEffect(() => {
-    setAssetReady(readyAssetPaths.has(assetPath));
-    if (!assetPath) {
+    if (staticFallbackPath) {
+      return undefined;
+    }
+    const cachedPath = assetCandidates.find((path) => readyAssetPaths.has(path));
+    setResolvedAssetPath(cachedPath ?? '');
+    if (cachedPath || assetCandidates.length === 0) {
       return undefined;
     }
 
     let active = true;
     const timer = window.setTimeout(
       () => {
-        void loadAsset(assetPath).then((ready) => {
+        void loadFirstAvailableAsset(assetCandidates).then((path) => {
           if (active) {
-            setAssetReady(ready);
+            setResolvedAssetPath(path ?? '');
           }
         });
       },
@@ -56,17 +81,17 @@ export function MaterialSymbol({
       active = false;
       window.clearTimeout(timer);
     };
-  }, [assetPath, preview]);
+  }, [assetCandidates, preview, staticFallbackPath]);
 
-  const assetStyle: CSSProperties = assetReady
+  const assetStyle: CSSProperties = effectiveAssetPath
     ? {
         backgroundColor: 'currentColor',
         height: '1em',
-        WebkitMaskImage: `url(${assetPath})`,
+        WebkitMaskImage: `url(${effectiveAssetPath})`,
         WebkitMaskPosition: 'center',
         WebkitMaskRepeat: 'no-repeat',
         WebkitMaskSize: 'contain',
-        maskImage: `url(${assetPath})`,
+        maskImage: `url(${effectiveAssetPath})`,
         maskPosition: 'center',
         maskRepeat: 'no-repeat',
         maskSize: 'contain',
@@ -78,13 +103,26 @@ export function MaterialSymbol({
     <span
       {...props}
       className={['material-symbols-outlined', className].filter(Boolean).join(' ')}
-      data-material-symbol-mask={assetReady ? '' : undefined}
-      style={{ ...style, ...(assetReady ? { width: '1em', height: '1em' } : {}) }}
+      data-material-symbol-mask={effectiveAssetPath ? '' : undefined}
+      style={{ ...style, ...(effectiveAssetPath ? { width: '1em', height: '1em' } : {}) }}
     >
       {/* 蒙版只裁剪内层图形，让外层的可读性阴影完整显示。 */}
-      {assetReady ? <span aria-hidden="true" style={{ ...assetStyle, display: 'block' }} /> : name}
+      {effectiveAssetPath ? (
+        <span aria-hidden="true" style={{ ...assetStyle, display: 'block' }} />
+      ) : (
+        name
+      )}
     </span>
   );
+}
+
+async function loadFirstAvailableAsset(paths: string[]): Promise<string | undefined> {
+  for (const path of paths) {
+    if (await loadAsset(path)) {
+      return path;
+    }
+  }
+  return undefined;
 }
 
 function normalizeName(value: string): string | undefined {

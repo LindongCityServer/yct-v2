@@ -37,7 +37,7 @@ import { SecondaryPageHeader } from './app-shell';
 
 type TransitLine = TransitDataRevision['lines'][number];
 type TransitStation = TransitDataRevision['stations'][number];
-type EditorTool = 'pan' | 'station' | 'waypoint';
+type EditorTool = 'pan' | 'move' | 'station' | 'waypoint';
 type Direction = 'both' | 'up' | 'down';
 type InsertionMode = 'append' | 'nearest' | 'prepend';
 
@@ -95,6 +95,10 @@ interface PointerGesture {
   pointerId: number;
   pointerType: string;
   nodeId?: string;
+  /** 拖动开始时该节点是否已绑定 POI，用于结束时区分「改绑」与「解绑」。 */
+  hadPoiBinding?: boolean;
+  /** 拖动过程中最近吸附到的 POI 名称；null 表示当前没有吸附。 */
+  snapMarkerLabel?: string | null;
   startClientX: number;
   startClientY: number;
   startX: number;
@@ -287,6 +291,7 @@ export function AdminTransitLineMapEditor({
       const key = event.key.toLowerCase();
       const toolByKey: Partial<Record<string, EditorTool>> = {
         v: 'pan',
+        m: 'move',
         s: 'station',
         r: 'waypoint',
       };
@@ -326,6 +331,15 @@ export function AdminTransitLineMapEditor({
   const pointMarkers = useMemo(
     () => data?.markers.filter(hasPointGeometry).slice(0, 800) ?? [],
     [data],
+  );
+  const stationSnapCandidates = useMemo(
+    () =>
+      data
+        ? pointMarkers.filter((marker) =>
+            isTransitPoiMarkerCompatibleWithStation(marker, [data.line.mode]),
+          )
+        : [],
+    [data, pointMarkers],
   );
   const roadGraph = useMemo(
     () =>
@@ -434,11 +448,7 @@ export function AdminTransitLineMapEditor({
       const rect = stage.getBoundingClientRect();
       const coordinate = unprojectClientPoint(clientX, clientY, rect, mapView);
       const snapCandidates =
-        effectiveTool === 'station'
-          ? pointMarkers.filter((marker) =>
-              isTransitPoiMarkerCompatibleWithStation(marker, [data.line.mode]),
-            )
-          : pointMarkers;
+        effectiveTool === 'station' ? stationSnapCandidates : pointMarkers;
       const snapMarker = effectiveSnapEnabled
         ? findNearestSnapMarker(coordinate, snapCandidates, mapView.zoom, 48)
         : undefined;
@@ -457,7 +467,14 @@ export function AdminTransitLineMapEditor({
                   boundPoiMarkerId: snapMarker?.id,
                   boundPoiLabel: snapMarker?.label,
                   ...(node.kind === 'station'
-                    ? { boundPoiCategoryId: snapMarker?.categoryId }
+                    ? {
+                        boundPoiCategoryId: snapMarker?.categoryId,
+                        // 尚未命名的站点在绑定 POI 后直接套用 POI 名称。
+                        name:
+                          node.draftClientId && !node.name.trim() && snapMarker
+                            ? snapMarker.label
+                            : node.name,
+                      }
                     : {}),
                 }
               : node,
@@ -514,7 +531,8 @@ export function AdminTransitLineMapEditor({
             kind: 'station',
             stationSourceId: `draft:${clientId}`,
             draftClientId: clientId,
-            name: '',
+            // 直接绑定现有 POI 时沿用该 POI 的名称，避免再手动填一次站名。
+            name: snapMarker?.label ?? '',
             coordinate: roundCoordinate(resolvedCoordinate),
             direction: 'both',
             boundPoiMarkerId: snapMarker?.id,
@@ -528,7 +546,7 @@ export function AdminTransitLineMapEditor({
       );
       setStatus(
         snapMarker
-          ? `已添加吸附到“${snapMarker.label}”的新站点，请在列表填写站名。`
+          ? `已添加站点“${snapMarker.label}”（绑定该 POI），可在列表中改名。`
           : '已添加新站点，请在列表填写站名。',
       );
     },
@@ -543,6 +561,7 @@ export function AdminTransitLineMapEditor({
       roadGraph,
       routeMode,
       selectedNodeId,
+      stationSnapCandidates,
     ],
   );
 
@@ -594,7 +613,16 @@ export function AdminTransitLineMapEditor({
           event.pointerType === 'touch' ? 24 : 16,
         );
     const hitNode = hitNodeIndex >= 0 ? nodes[hitNodeIndex] : undefined;
-    const canMoveNode = Boolean(hitNode && hitNode.kind === effectiveTool);
+    const canMoveNode = Boolean(
+      hitNode && (effectiveTool === 'move' || hitNode.kind === effectiveTool),
+    );
+    if (effectiveTool === 'move' && !canMoveNode) {
+      // 拖移端点工具下点击空白既不新增节点，也不接管指针。
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      return;
+    }
     const gesture: PointerGesture = {
       centerX: mapView.centerX,
       centerZ: mapView.centerZ,
@@ -604,6 +632,7 @@ export function AdminTransitLineMapEditor({
       pointerId: event.pointerId,
       pointerType: event.pointerType,
       nodeId: canMoveNode ? hitNode?.id : undefined,
+      hadPoiBinding: canMoveNode ? Boolean(hitNode?.boundPoiMarkerId) : undefined,
       startClientX: event.clientX,
       startClientY: event.clientY,
       startX: event.clientX,
@@ -668,7 +697,8 @@ export function AdminTransitLineMapEditor({
     }
     if (gesture.kind === 'move-node' && gesture.nodeId && gesture.moved) {
       const stage = stageRef.current;
-      if (stage) {
+      const movingNode = nodes.find((node) => node.id === gesture.nodeId);
+      if (stage && movingNode) {
         const coordinate = roundCoordinate(
           unprojectClientPoint(
             event.clientX,
@@ -677,8 +707,44 @@ export function AdminTransitLineMapEditor({
             mapView,
           ),
         );
+        // 吸附开启时：拖到 POI 上就改绑，拖离后解绑；关闭吸附则只改坐标。
+        const snapMarker = effectiveSnapEnabled
+          ? findNearestSnapMarker(
+              coordinate,
+              movingNode.kind === 'station' ? stationSnapCandidates : pointMarkers,
+              mapView.zoom,
+              48,
+            )
+          : undefined;
+        gesture.snapMarkerLabel = effectiveSnapEnabled ? (snapMarker?.label ?? null) : undefined;
+        const nextCoordinate = snapMarker?.geometry.coordinates ?? coordinate;
         setNodes((current) =>
-          current.map((node) => (node.id === gesture.nodeId ? { ...node, coordinate } : node)),
+          current.map((node) => {
+            if (node.id !== gesture.nodeId) {
+              return node;
+            }
+            if (snapMarker) {
+              return {
+                ...node,
+                coordinate: nextCoordinate,
+                boundPoiMarkerId: snapMarker.id,
+                boundPoiLabel: snapMarker.label,
+                ...(node.kind === 'station'
+                  ? { boundPoiCategoryId: snapMarker.categoryId }
+                  : {}),
+              };
+            }
+            if (!effectiveSnapEnabled) {
+              return { ...node, coordinate: nextCoordinate };
+            }
+            return {
+              ...node,
+              coordinate: nextCoordinate,
+              boundPoiMarkerId: undefined,
+              boundPoiLabel: undefined,
+              ...(node.kind === 'station' ? { boundPoiCategoryId: undefined } : {}),
+            };
+          }),
         );
         setSelectedNodeId(gesture.nodeId);
       }
@@ -718,7 +784,13 @@ export function AdminTransitLineMapEditor({
       addNodeAtClientPoint(event.clientX, event.clientY);
     } else if (gesture.kind === 'move-node' && gesture.moved) {
       setSelectedNodeId(null);
-      setStatus('已移动节点；保存线路后写入坐标。');
+      setStatus(
+        gesture.snapMarkerLabel
+          ? `已移动到“${gesture.snapMarkerLabel}”并绑定该 POI；保存线路后写入坐标。`
+          : gesture.snapMarkerLabel === null && gesture.hadPoiBinding
+            ? '已拖离原 POI，绑定已解除；保存线路后写入坐标。'
+            : '已移动节点；保存线路后写入坐标。',
+      );
     }
     gestureRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -1290,7 +1362,8 @@ export function AdminTransitLineMapEditor({
       <nav className="transit-visual-toolbar" aria-label="地图编辑工具">
         {(
           [
-            ['pan', 'pan_tool', '拖移工具（V）'],
+            ['pan', 'pan_tool', '拖移地图（V）'],
+            ['move', 'open_with', '拖移端点（M）'],
             ['station', 'add_location_alt', '站点工具（S）'],
             ['waypoint', 'add_road', '途径点工具（R）'],
           ] as const

@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
+import { useMobileActionRail, type MobileActionRailItem } from './mobile-action-rail';
 
 interface AccountStatusResponse {
   admin?: { role: 'admin' | 'super_admin' };
@@ -17,13 +18,17 @@ export function AdminEditLink({
   label,
   labelKey = 'admin.edit',
   compact = false,
+  registerInMobileRail = false,
 }: Readonly<{
   href: string;
   label?: string;
   labelKey?: CommonMessageKey;
   compact?: boolean;
+  /** 作为二级页标题栏按钮时，开启侧边操作栏后改由侧栏注册。 */
+  registerInMobileRail?: boolean;
 }>) {
   const { t } = useI18n();
+  const mobileActionRail = useMobileActionRail();
   const [visible, setVisible] = useState(cachedAdminAccess === true);
   const renderedLabel = label ?? t(labelKey);
 
@@ -37,7 +42,36 @@ export function AdminEditLink({
     };
   }, []);
 
+  const railItems = useMemo<MobileActionRailItem[]>(
+    () =>
+      visible && registerInMobileRail && mobileActionRail?.enabled
+        ? [
+            {
+              id: `rail-admin-edit-${href}`,
+              group: 'top',
+              order: 80,
+              priority: 46,
+              label: renderedLabel,
+              icon: 'edit',
+              href: appPath(href),
+            },
+          ]
+        : [],
+    [href, mobileActionRail?.enabled, registerInMobileRail, renderedLabel, visible],
+  );
+
+  useEffect(() => {
+    if (!mobileActionRail || !registerInMobileRail) {
+      return;
+    }
+    mobileActionRail.registerItems(`admin-edit-${href}`, railItems);
+  }, [href, mobileActionRail, railItems, registerInMobileRail]);
+
   if (!visible) return null;
+
+  if (registerInMobileRail && mobileActionRail?.enabled) {
+    return null;
+  }
 
   return (
     <a

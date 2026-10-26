@@ -20,10 +20,18 @@ import { SecondaryShell } from '../../../components/app-shell';
 import { OperationTableOfContents } from '../../../components/operation-table-of-contents';
 import { SegmentedControl } from '../../../components/segmented-control';
 import { MapLayerToggle } from '../../../components/map-layer-toggle';
+import { MaterialSymbol } from '../../../components/material-symbol';
 import { ScheduleStopTimeTable } from '../../../components/schedule-stop-time-table';
 import { requestConfirmation, requestPageWindow } from '../../../lib/client-dialog-events';
 import { appPath } from '../../../lib/app-paths';
 import registry from './controls-registry.json';
+import {
+  ControlsCatalogNav,
+  ControlsDocBlock,
+  ControlsDocDos,
+  ControlsDocHeader,
+  ControlsDocTable,
+} from './controls-doc';
 import { ControlsInventory } from './controls-inventory';
 import { ControlsBusinessSamples } from './controls-business-samples';
 import { ControlsInputStates } from './controls-input-states';
@@ -167,10 +175,17 @@ export function ControlsShowcase() {
       title="控件展示板"
       backHref="/"
       desktopBackHref="/"
+      desktopNavigation={<ControlsCatalogNav />}
       secondaryActions={<OperationTableOfContents headings={showcaseHeadings} title="分区目录" />}
     >
       <div className="controls-showcase">
         <header className="controls-showcase-header">
+          <p className="eyebrow">Design System</p>
+          <h1>组件与控件规范</h1>
+          <p>
+            所有控件按语义族归一，视觉取值来自 packages/design-tokens。左侧按分类组织，
+            每个组件页给出状态、标准类名、历史别名与真实示例；完整覆盖情况见「控件总览」。
+          </p>
           <div className="controls-row">
             <button
               className="secondary-action-button"
@@ -261,82 +276,246 @@ export function ControlsShowcase() {
         </aside>
 
         <section className="controls-card" id="controls-buttons">
-          <h2>按钮</h2>
-          <div className="controls-row">
-            <button className="primary-action-button" type="button">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                check
-              </span>
-              <span>主要按钮</span>
-            </button>
-            <button className="primary-action-button" type="button" disabled>
-              <span className="material-symbols-outlined" aria-hidden="true">
-                block
-              </span>
-              <span>主要禁用</span>
-            </button>
-            <button className="secondary-action-button" type="button">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                edit
-              </span>
-              <span>次要按钮</span>
-            </button>
-            <button className="secondary-action-button is-primary" type="button">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                directions
-              </span>
-              <span>次要强调</span>
-            </button>
-            <button className="secondary-action-button" type="button" disabled>
-              <span>次要禁用</span>
-            </button>
-            <button
-              className="icon-action-button"
-              type="button"
-              aria-label="图标操作按钮"
-              title="图标操作按钮"
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                settings
-              </span>
-            </button>
-            <button
-              className="icon-action-button is-active"
-              type="button"
-              aria-label="选中态图标按钮"
-              aria-pressed
-              title="选中态图标按钮"
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                bookmark
-              </span>
-            </button>
-            <button
-              className="icon-action-button"
-              type="button"
-              aria-label="禁用图标按钮"
-              title="禁用图标按钮"
-              disabled
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                download
-              </span>
-            </button>
-            <button
-              className="icon-button"
-              type="button"
-              aria-label="朴素图标按钮"
-              title="朴素图标按钮"
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                more_vert
-              </span>
-            </button>
-          </div>
+          <ControlsDocHeader sectionId="controls-buttons" />
+          <ControlsDocBlock title="示例" hint="按语义层级分行；禁用态只做淡化，不切换语义色">
+            <p className="controls-sub-label">文本按钮</p>
+            <div className="controls-row">
+              <button className="primary-action-button" type="button">
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  check
+                </span>
+                <span>主要按钮</span>
+              </button>
+              <button className="primary-action-button" type="button" disabled>
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  block
+                </span>
+                <span>主要禁用</span>
+              </button>
+              <button className="secondary-action-button" type="button">
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  edit
+                </span>
+                <span>次要按钮</span>
+              </button>
+              <button className="secondary-action-button is-emphasis" type="button">
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  directions
+                </span>
+                <span>次要强调</span>
+              </button>
+              <button className="secondary-action-button is-emphasis" type="button" disabled>
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  block
+                </span>
+                <span>次要强调禁用</span>
+              </button>
+              <button className="secondary-action-button" type="button" disabled>
+                <span>次要禁用</span>
+              </button>
+            </div>
+            <p className="controls-sub-label">图标按钮</p>
+            <div className="controls-row">
+              <button
+                className="icon-action-button"
+                type="button"
+                aria-label="图标操作按钮"
+                title="图标操作按钮"
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  settings
+                </span>
+              </button>
+              <button
+                className="icon-action-button is-active"
+                type="button"
+                aria-label="选中态图标按钮"
+                aria-pressed
+                title="选中态图标按钮"
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  bookmark
+                </span>
+              </button>
+              <button
+                className="icon-action-button"
+                type="button"
+                aria-label="禁用图标按钮"
+                title="禁用图标按钮"
+                disabled
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  download
+                </span>
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="朴素图标按钮"
+                title="朴素图标按钮"
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  more_vert
+                </span>
+              </button>
+            </div>
+          </ControlsDocBlock>
+
+          <ControlsDocBlock
+            title="状态矩阵"
+            hint="悬停 / 按下 / 焦点由真实指针与键盘触发，展示板不伪造伪态"
+          >
+            <ControlsDocTable
+              columns={['变体', '默认', '悬停', '按下', '焦点', '禁用']}
+              rows={[
+                [
+                  '主要',
+                  '主色实心 + 白字 700',
+                  'primary-hover 加深',
+                  'scale(0.98)',
+                  '2px 主色 outline',
+                  '整体 58% 不透明',
+                ],
+                [
+                  '次要强调',
+                  '主色 14% tint + 主色 68% 文字',
+                  'tint 加深到 22%',
+                  'scale(0.98)',
+                  '同上',
+                  '整体 58% 不透明',
+                ],
+                [
+                  '次按钮',
+                  '面板底 + 1px 边框',
+                  '文本色半透明悬停',
+                  'scale(0.98)',
+                  '同上',
+                  '整体 58% 不透明',
+                ],
+                [
+                  '图标按钮',
+                  '40×40 命中区 + pill 圆角',
+                  '同次按钮',
+                  'scale(0.98)',
+                  '同上',
+                  '保留 aria-label，视觉淡化',
+                ],
+              ]}
+            />
+          </ControlsDocBlock>
+
+          <ControlsDocBlock title="Anatomy" hint="三种文本按钮共用同一骨架">
+            <ol className="controls-doc-anatomy">
+              <li>
+                <strong>容器</strong>：button 或 a，圆角 pill，高度 40px，移动端主操作 44px
+              </li>
+              <li>
+                <strong>前置图标</strong>：Material Symbols 18px，纯装饰时写 aria-hidden
+              </li>
+              <li>
+                <strong>标签</strong>：14px；次按钮 600，主按钮与选中项 700
+              </li>
+              <li>
+                <strong>状态层</strong>：悬停叠色、按下缩放、焦点 outline、禁用淡化互不叠加
+              </li>
+            </ol>
+          </ControlsDocBlock>
+
+          <ControlsDocBlock title="Design Token" hint="取值来自 packages/design-tokens">
+            <ControlsDocTable
+              columns={['用途', 'Token', '当前值', '说明']}
+              rows={[
+                ['高度', '--yct-control-height-md', '40px', '移动端主操作改用 lg 44px'],
+                ['圆角', '--yct-control-radius', '--yct-radius-pill', '按钮与图标按钮统一 full'],
+                ['主色', '--yct-color-primary', '#168f78', '悬停用 --yct-color-primary-hover'],
+                ['次要强调底', 'color-mix(primary 14%, surface-muted)', '14%', '不再使用实心主色'],
+                ['次要强调文字', 'color-mix(primary 68%, text-muted)', '68%', '保证正文对比度'],
+                ['禁用透明度', '--yct-disabled-opacity', '0.58', '只淡化，不换语义色'],
+                [
+                  '焦点环',
+                  '--yct-focus-ring-width / offset',
+                  '2px / 2px',
+                  'outline，不用 box-shadow',
+                ],
+                ['按下缩放', '—', 'scale(0.98)', 'data-motion="reduced" 时归零'],
+              ]}
+            />
+          </ControlsDocBlock>
+
+          <ControlsDocBlock title="API" hint="类名与修饰类">
+            <ControlsDocTable
+              columns={['类名', '形态', '使用场景', '备注']}
+              rows={[
+                [
+                  <code key="primary">.primary-action-button</code>,
+                  '文本 / 图标 + 文本',
+                  '页面唯一主命令',
+                  '历史别名 pill-button、is-primary',
+                ],
+                [
+                  <code key="emphasis">.secondary-action-button.is-emphasis</code>,
+                  '文本 / 图标 + 文本',
+                  '次级强调，如「查看详情」',
+                  '主色 tint，不是实心主色',
+                ],
+                [
+                  <code key="secondary">.secondary-action-button</code>,
+                  '文本 / 图标 + 文本',
+                  '中性次操作',
+                  '取消、返回等',
+                ],
+                [
+                  <code key="icon-action">.icon-action-button</code>,
+                  '纯图标',
+                  '工具类操作',
+                  '必须 aria-label；选中态加 aria-pressed',
+                ],
+                [<code key="icon">.icon-button</code>, '纯图标', '顶栏 / 标题栏', '视觉权重更轻'],
+                [<code key="active">.is-active</code>, '修饰类', '选中态', '与 aria-pressed 同步'],
+                [<code key="disabled">disabled</code>, '原生属性', '不可用', '不要只用样式模拟'],
+              ]}
+            />
+          </ControlsDocBlock>
+
+          <ControlsDocBlock title="可访问性">
+            <ul className="controls-doc-list">
+              <li>纯图标按钮必须提供 aria-label，并补 title 作为指针提示</li>
+              <li>选中或切换态使用 aria-pressed，不能只靠颜色表达</li>
+              <li>禁用使用原生 disabled，键盘不可聚焦但读屏仍可感知</li>
+              <li>焦点环统一 outline: 2px 主色、偏移 2px，不用 box-shadow 冒充</li>
+              <li>触控设备命中区不小于 44px，视觉尺寸可以更小</li>
+              <li>加载中使用 aria-busy，并保留可读的文字状态</li>
+            </ul>
+          </ControlsDocBlock>
+
+          <ControlsDocBlock title="Do / Don't">
+            <ControlsDocDos
+              dos={[
+                '一个视觉区域只保留一个主按钮',
+                '工具类操作用图标按钮并提供可访问名称',
+                '移动端主操作使用 44px 高度',
+                '破坏性命令在文案里写清后果',
+              ]}
+              donts={[
+                '同一行并排多个 primary-action-button',
+                '用禁用态伪装权限不足却不给原因',
+                '只靠颜色区分按钮层级而不调整文案',
+                '给纯图标按钮省略 aria-label',
+              ]}
+            />
+          </ControlsDocBlock>
+
+          <ControlsDocBlock title="相关">
+            <div className="controls-doc-links">
+              <a href="#controls-navigation">Navigation 导航框架</a>
+              <a href="#controls-titlebar-buttons">Titlebar Action 标题栏按钮</a>
+              <a href="#controls-toast-dialog">Toast &amp; Dialog 反馈层</a>
+            </div>
+          </ControlsDocBlock>
         </section>
 
         <section className="controls-card" id="controls-switch">
-          <h2>开关 switch-control</h2>
+          <ControlsDocHeader sectionId="controls-switch" />
           <div className="controls-row">
             {switchDemos.map((demo, index) => (
               <span className="controls-switch-item" key={demo.label}>
@@ -363,7 +542,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-segmented">
-          <h2>分段选择 segmented-control</h2>
+          <ControlsDocHeader sectionId="controls-segmented" />
           <ShowcaseSegmented
             legend="出行偏好"
             options={preferenceSegmentOptions}
@@ -373,7 +552,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-route-mode">
-          <h2>地图选路控件（真实业务类名）</h2>
+          <ControlsDocHeader sectionId="controls-route-mode" />
           <p className="controls-note">
             mode 组为语义色多选且无背景填充；sort 为灰轨单选；展开钮在折叠项有选中时显示 +N。
           </p>
@@ -418,7 +597,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-text-field">
-          <h2>表单元素 material-field（真实业务类名）</h2>
+          <ControlsDocHeader sectionId="controls-text-field" />
           <p className="controls-note">
             输入框统一 44px 高、radius-md、surface-panel 底；聚焦时主色描边 + 3px
             光晕；多行文本域可垂直拉伸。
@@ -427,6 +606,10 @@ export function ControlsShowcase() {
             <label className="material-field">
               <span>文本输入</span>
               <input type="text" placeholder="请输入文本" />
+            </label>
+            <label className="material-field">
+              <span>密钥输入</span>
+              <input type="password" placeholder="请输入密钥" autoComplete="off" />
             </label>
             <label className="material-field">
               <span>日期时间</span>
@@ -448,7 +631,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-titlebar-buttons">
-          <h2>标题栏独立按钮（仅透光模式挂独立滤镜）</h2>
+          <ControlsDocHeader sectionId="controls-titlebar-buttons" />
           <p className="controls-note">
             only-child 独立按钮应用透光材质；成组按钮只在容器组上处理，不逐个挂滤镜。
           </p>
@@ -497,7 +680,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-navigation">
-          <h2>导航框架控件</h2>
+          <ControlsDocHeader sectionId="controls-navigation" />
           <p className="controls-note">
             顶栏 pill-button 快捷入口、account-button 账户入口与数字/圆点徽标、admin-edit-link
             编辑入口。
@@ -626,7 +809,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-chips">
-          <h2>芯片与徽章</h2>
+          <ControlsDocHeader sectionId="controls-chips" />
           <p className="controls-note">
             category-chip 语义色调（tone-*
             与交通方式同名）、线路/区域芯片、选路特性徽章、在线状态与本机提醒徽章。
@@ -683,7 +866,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-status-chips">
-          <h2>状态芯片与徽章（已归一）</h2>
+          <ControlsDocHeader sectionId="controls-status-chips" />
           <p className="controls-note">
             operation-tag / admin-poi-status-chip / trip-status-chip / ticket-order-status-badge /
             offline-package-status 共用同一套基线：28px 高、space-2 内边距、12px 字重 700、语义色
@@ -743,7 +926,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-checkbox-row">
-          <h2>复选框 / 单选框与选择行</h2>
+          <ControlsDocHeader sectionId="controls-checkbox-row" />
           <p className="controls-note">
             material-checkbox-row 与 checkbox-row 已合并为同一套布局（18px
             勾选框）；admin-inline-checkbox 用于行内紧凑多选。 单选框行用 material-radio-row（别名
@@ -777,7 +960,7 @@ export function ControlsShowcase() {
           </div>
         </section>
         <section className="controls-card" id="controls-radio-in-fieldset">
-          <h2>单选框在字段集内（回归场景）</h2>
+          <ControlsDocHeader sectionId="controls-radio-in-fieldset" />
           <p className="controls-note">
             单选框此前没有任何全局样式，会被 `.material-canvas-editor input`
             这类「不限类型」的文本框规则命中：撑成 width:100% + 44px 高 +
@@ -800,7 +983,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-strips">
-          <h2>筛选条与分段控件变体（已归一）</h2>
+          <ControlsDocHeader sectionId="controls-strips" />
           <p className="controls-note">
             按三档归一：紧凑 30px（地图面板）、中档 34px（页面筛选与编辑器）、常规
             38px（设置表单）； 轨道统一 3px 内边距 + pill 圆角 + surface-muted 底，选中态统一
@@ -980,7 +1163,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-map-floating">
-          <h2>地图悬浮芯片与图层面板</h2>
+          <ControlsDocHeader sectionId="controls-map-floating" />
           <p className="controls-note">
             这些芯片在地图内为绝对定位悬浮，展示板内已作用域复位为静态排列；右侧为图层开关列表。
           </p>
@@ -1040,7 +1223,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-list">
-          <h2>列表项与卡片</h2>
+          <ControlsDocHeader sectionId="controls-list" />
           <div className="controls-card-split">
             <div>
               <p className="controls-sub-label">
@@ -1113,9 +1296,7 @@ export function ControlsShowcase() {
                       </span>
                     </button>
                     <button className="map-poi-related-item" type="button">
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        wc
-                      </span>
+                      <MaterialSymbol name="wc" aria-hidden="true" />
                       <span>
                         <strong>公共卫生间</strong>
                         <small>基础设施 · B1</small>
@@ -1312,7 +1493,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-form-extended">
-          <h2>表单扩展控件</h2>
+          <ControlsDocHeader sectionId="controls-form-extended" />
           <div className="controls-grid">
             <label className="controls-range">
               <span>RangeInput 滑杆（真实组件，当前 {rangeValue}）</span>
@@ -1347,7 +1528,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-search">
-          <h2>搜索框 search-box（已归一）</h2>
+          <ControlsDocHeader sectionId="controls-search" />
           <p className="controls-note">
             基准为 46px 高 + space-3 内边距 + pill 圆角；页面变体（search-page-box /
             screen-search-box / schedule-search-box）只覆盖底色，admin-membership-search /
@@ -1379,7 +1560,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-toolbar">
-          <h2>工具栏与批量操作条</h2>
+          <ControlsDocHeader sectionId="controls-toolbar" />
           <p className="controls-note">
             admin-toolbar 是工具栏基准，admin-poi-toolbar / admin-content-toolbar
             只做修饰；批量条内复选框行与按钮同为 38px 基准。
@@ -1415,7 +1596,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-table">
-          <h2>数据表格 schedule-stop-time-table</h2>
+          <ControlsDocHeader sectionId="controls-table" />
           <p className="controls-note">
             表头行 surface-muted 底，数据行 48px 高、subtle 分隔线；行内输入框统一 38px
             紧凑档、勾选框 18px。
@@ -1441,7 +1622,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-status-text">
-          <h2>状态与文本</h2>
+          <ControlsDocHeader sectionId="controls-status-text" />
           <div className="controls-row">
             <div className="map-loading-panel" role="status">
               地图正在加载
@@ -1481,7 +1662,7 @@ export function ControlsShowcase() {
         </section>
 
         <section className="controls-card" id="controls-toast-dialog">
-          <h2>Toast 与弹窗</h2>
+          <ControlsDocHeader sectionId="controls-toast-dialog" />
           <div className="controls-row">
             {toastTones.map((tone) => (
               <button

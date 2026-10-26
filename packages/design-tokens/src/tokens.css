@@ -1,4 +1,6 @@
 :root {
+  /* 让原生日期/时间选择器、滚动条跟随站点主题（iOS 16.7 支持）。 */
+  color-scheme: light;
   --yct-color-primary: #168f78;
   --yct-color-primary-hover: #0f725f;
   --yct-color-primary-soft: #e9fbf6;
@@ -72,6 +74,45 @@
   --yct-motion-scale-press: 0.98;
   --yct-motion-distance-sm: 8px;
   --yct-motion-distance-md: 16px;
+
+  /* ============================================================
+   * 平台兼容与控件尺寸基线
+   * 兼容目标：iOS 16.7（Safari 16.6 / WebKit 616）
+   * 约束：新组件必须复用以下 token，不要再写 38 / 42 / 46 等孤立尺寸。
+   * ============================================================ */
+  --yct-tap-target-min: 44px;
+  --yct-control-height-sm: 34px;
+  --yct-control-height-md: 40px;
+  --yct-control-height-lg: 44px;
+  --yct-control-size-md: 40px;
+  --yct-control-radius: var(--yct-radius-pill);
+  --yct-button-padding-x: 12px;
+  --yct-button-font-size: 14px;
+  --yct-button-font-weight: 600;
+  --yct-button-font-weight-strong: 700;
+  --yct-field-height: 44px;
+  --yct-field-height-search: 46px;
+  --yct-segment-track-height: 40px;
+  --yct-segment-track-height-mobile: 44px;
+  --yct-segment-track-padding: 3px;
+  --yct-segment-gap: 3px;
+  --yct-chip-height: 28px;
+  --yct-chip-padding-x: 8px;
+  --yct-chip-font-size: 12px;
+  --yct-chip-font-weight: 700;
+  --yct-focus-ring-width: 2px;
+  --yct-focus-ring-offset: 2px;
+  --yct-focus-ring-color: var(--yct-color-primary);
+  --yct-disabled-opacity: 0.58;
+  /* iOS 聚焦文本控件时，font-size < 16px 会触发页面自动放大。 */
+  --yct-input-font-size-mobile: 16px;
+  --yct-safe-area-top: env(safe-area-inset-top, 0px);
+  --yct-safe-area-right: env(safe-area-inset-right, 0px);
+  --yct-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --yct-safe-area-left: env(safe-area-inset-left, 0px);
+  --yct-dialog-width-sm: 440px;
+  --yct-dialog-width-md: 560px;
+  --yct-dialog-radius: var(--yct-radius-lg);
 }
 
 :root[data-accent='red'] {
@@ -119,6 +160,7 @@
 }
 
 :root[data-color-scheme='dark'] {
+  color-scheme: dark;
   --yct-color-surface: #121416;
   --yct-color-surface-panel: #1a1d20;
   --yct-color-surface-muted: #24282c;
@@ -134,6 +176,7 @@
 @media (prefers-color-scheme: dark) {
   :root[data-color-scheme='system'],
   :root:not([data-color-scheme]) {
+    color-scheme: dark;
     --yct-color-surface: #121416;
     --yct-color-surface-panel: #1a1d20;
     --yct-color-surface-muted: #24282c;

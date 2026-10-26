@@ -4,6 +4,7 @@ import { EmbeddedContextBridge } from '../components/embedded-context-bridge';
 import { EmbeddedAuthBridge } from '../components/embedded-auth-bridge';
 import { EmbeddedHostBridges } from '../components/embedded-host-bridges';
 import { ClientDialogBridge } from '../components/client-dialog-bridge';
+import { GlobalSearchPanel } from '../components/global-search-panel';
 import { KeyboardShortcutBridge } from '../components/keyboard-shortcut-bridge';
 import { LiquidMaterialBridge } from '../components/liquid-material-bridge';
 import { LoginRequiredBridge } from '../components/login-required-bridge';
@@ -53,6 +54,8 @@ export async function generateMetadata(): Promise<Metadata> {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // 让 iOS 16.7 的 env(safe-area-inset-*) 生效，顶栏/底栏才能避开刘海与 Home 指示条。
+  viewportFit: 'cover',
   themeColor: '#168F78',
 };
 
@@ -91,6 +94,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <EmbeddedAuthBridge />
         <EmbeddedHostBridges />
         <ClientDialogBridge />
+        <GlobalSearchPanel />
         <KeyboardShortcutBridge />
         <LoginRequiredBridge />
         <PreferenceBridge />

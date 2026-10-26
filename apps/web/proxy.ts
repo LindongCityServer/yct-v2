@@ -64,5 +64,9 @@ function createRewriteUrl(request: NextRequest, rewrittenPathname: string): URL 
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|icons|legacy-assets|content-assets).*)'],
+  // 除静态资源外，必须排除 /_next/webpack-hmr：middleware 会打断 HMR 的
+  // WebSocket Upgrade，导致客户端停在未 hydrate 状态。
+  matcher: [
+    '/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|icons|legacy-assets|content-assets).*)',
+  ],
 };

@@ -20,6 +20,10 @@ if (@($existing).Count -gt 0) {
   throw "Port $Port is already used by another process. Stop that process before starting the YCT web dev server."
 }
 
+# 端口空闲时也可能残留“只持有日志句柄、没有监听端口”的旧启动链。
+# 复用 stop 的整树清理逻辑，避免 start 在清空日志处被锁住。
+& (Join-Path $PSScriptRoot "web-dev-stop.ps1") -Port $Port -HostName $HostName -TimeoutSeconds 5 | Out-Null
+
 New-Item -ItemType Directory -Force -Path $logs.Directory | Out-Null
 Clear-YctLogFile -Path $logs.Output
 Clear-YctLogFile -Path $logs.Error

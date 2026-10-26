@@ -83,6 +83,19 @@ const standaloneFloatingSurfaceSelector =
 const svgNamespace = 'http://www.w3.org/2000/svg';
 let nextFilterId = 0;
 
+/**
+ * 判断浏览器是否真的能用 SVG 引用做 backdrop-filter。
+ * Safari / iOS 全版本都不支持，但 CSS.supports 的语法检测会把它误判为支持；
+ * 一旦写入 url(...)，Safari 会丢掉整条滤镜（连普通模糊一起失效），
+ * 因此这里对 WebKit（非 Chromium）直接降级为普通模糊。
+ */
+function supportsDistortionFilter() {
+  if (typeof CSS === 'undefined' || typeof CSS.supports !== 'function') return false;
+  if (!CSS.supports('backdrop-filter', 'url("#yct-liquid-probe")')) return false;
+  const userAgent = navigator.userAgent;
+  return !/AppleWebKit/i.test(userAgent) || /Chrome|Chromium|Edg|OPR/i.test(userAgent);
+}
+
 function resolveRadiusPart(value: string, size: number) {
   const trimmed = value.trim();
   if (trimmed.endsWith('%')) return (Number.parseFloat(trimmed) / 100) * size;
@@ -130,7 +143,7 @@ export function LiquidMaterialBridge() {
   // 内容阴影独立于 SVG 扭曲能力，普通模糊降级时也要正确处理有底色的子元素。
   useMaterialContentShadows('[data-liquid-material]');
   useEffect(() => {
-    const supportsDistortion = CSS.supports('backdrop-filter', 'url("#yct-liquid-probe")');
+    const supportsDistortion = supportsDistortionFilter();
 
     const host = svgElement('svg', {
       class: 'yct-material-filter-defs',

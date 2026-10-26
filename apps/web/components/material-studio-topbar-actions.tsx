@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { appPath } from '../lib/app-paths';
+import { mobileActionRailMediaQuery } from '../lib/client-mobile-action-rail';
 import { publishLoginRequired } from '../lib/client-auth-events';
 import {
   requestMaterialStudioAction,
@@ -11,6 +13,7 @@ import {
 } from '../lib/client-material-studio-events';
 import { publishToastRequested } from '../lib/client-toast-events';
 import { useI18n } from '../lib/client-i18n';
+import { useMobileActionRail, type MobileActionRailItem } from './mobile-action-rail';
 
 type AccountStatus = 'not_configured' | 'anonymous' | 'active' | 'readonly' | 'unavailable';
 
@@ -31,7 +34,17 @@ const initialState: Omit<MaterialStudioStateChangedPayload, 'studioId'> = {
 export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: string }>) {
   const [studioState, setStudioState] = useState(initialState);
   const [accountInfo, setAccountInfo] = useState<AccountStatusResponse>({});
+  const [isMobile, setIsMobile] = useState(false);
   const { t } = useI18n();
+  const mobileActionRail = useMobileActionRail();
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(mobileActionRailMediaQuery);
+    setIsMobile(mediaQuery.matches);
+    const handleChange = () => setIsMobile(mediaQuery.matches);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,7 +85,9 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
   ) => {
     requestMaterialStudioAction({ studioId, action });
   };
-  const previewLabel = studioState.hasPreview ? t('materialStudio.updatePreview') : t('materialStudio.preview');
+  const previewLabel = studioState.hasPreview
+    ? t('materialStudio.updatePreview')
+    : t('materialStudio.preview');
   const reviewBadgeId = `${studioId}-review-watermark-badge`;
   const isAnonymous = accountInfo.accountStatus === 'anonymous';
   const serverAccountUnverified =
@@ -87,11 +102,88 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
     ? t('materialStudio.downloadWatermarkFree')
     : t('materialStudio.download');
 
+  const railItems = useMemo<MobileActionRailItem[]>(() => {
+    if (!mobileActionRail?.enabled) {
+      return [];
+    }
+
+    const items: MobileActionRailItem[] = [
+      {
+        id: `rail-${studioId}-history`,
+        group: 'top',
+        order: 100,
+        priority: 40,
+        label: t('materialStudio.history'),
+        icon: 'history',
+        busy: studioState.isBusy,
+        onClick: () => requestMaterialStudioAction({ studioId, action: 'history' }),
+      },
+      {
+        id: `rail-${studioId}-preview`,
+        group: 'top',
+        order: 110,
+        priority: 41,
+        label: previewLabel,
+        icon: studioState.hasPreview ? 'refresh' : 'visibility',
+        busy: studioState.isBusy,
+        onClick: () => requestMaterialStudioAction({ studioId, action: 'preview' }),
+      },
+      {
+        id: `rail-${studioId}-submit`,
+        group: 'top',
+        order: 120,
+        priority: 42,
+        label: t('materialStudio.submitReview'),
+        icon: 'publish',
+        busy: studioState.isBusy,
+        onClick: () => requestMaterialStudioAction({ studioId, action: 'submit' }),
+      },
+    ];
+
+    if (studioState.canExportProject) {
+      items.push({
+        id: `rail-${studioId}-export`,
+        group: 'top',
+        order: 130,
+        priority: 43,
+        label: t('materialStudio.exportProject'),
+        icon: 'save',
+        busy: studioState.isBusy,
+        onClick: () => requestMaterialStudioAction({ studioId, action: 'export-project' }),
+      });
+    }
+
+    items.push({
+      id: `rail-${studioId}-download`,
+      group: 'top',
+      order: 140,
+      priority: 44,
+      label: downloadLabel,
+      icon: 'download',
+      busy: studioState.isBusy,
+      emphasis: true,
+      onClick: () => requestMaterialStudioAction({ studioId, action: 'download' }),
+    });
+
+    return items;
+  }, [downloadLabel, mobileActionRail?.enabled, previewLabel, studioId, studioState, t]);
+
+  useEffect(() => {
+    if (!mobileActionRail) {
+      return;
+    }
+    mobileActionRail.registerItems(`material-studio-${studioId}`, railItems);
+  }, [mobileActionRail, railItems, studioId]);
+
+  if (mobileActionRail?.enabled) {
+    return null;
+  }
+
   const requestLogin = () => {
     publishLoginRequired({ message: t('materialStudio.loginRequired'), durationMs: 0 });
   };
 
-  return (
+  const actions = (
     <div className="topbar-actions material-studio-topbar-actions">
       <button
         type="button"
@@ -195,4 +287,12 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
       </button>
     </div>
   );
+
+  // 移动端未启用侧边栏时，工具栏是右下角浮动药丸；顶栏的 backdrop-filter 会
+  // 成为 fixed 子元素的包含块，必须把它挂到 body 上才能相对视口定位。
+  if (isMobile && !mobileActionRail?.enabled) {
+    return createPortal(actions, document.body);
+  }
+
+  return actions;
 }

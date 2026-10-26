@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { appPath } from '../../../lib/app-paths';
 import inventory from './controls-inventory.json';
 import registry from './controls-registry.json';
+import { ControlsDocHeader } from './controls-doc';
 
 const pageSize = 30;
 const kinds = { control: '交互控件', component: '组件引用', surface: '样式容器' };
@@ -55,13 +56,11 @@ export function ControlsInventory() {
 
   return (
     <section className="controls-card" id="controls-inventory">
-      <div className="section-heading">
-        <h2>全量清单</h2>
-        <span className="muted">
-          {inventory.routes.length} 个页面 · {inventory.files.length} 个源码文件 ·{' '}
-          {registry.sharedPreviews.length} 个共享预览组件
-        </span>
-      </div>
+      <ControlsDocHeader sectionId="controls-inventory" />
+      <span className="muted">
+        {inventory.routes.length} 个页面 · {inventory.files.length} 个源码文件 ·{' '}
+        {registry.sharedPreviews.length} 个共享预览组件
+      </span>
       <div className="controls-inventory-filters">
         <label className="material-field">
           <span>页面</span>
