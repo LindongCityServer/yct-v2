@@ -1385,15 +1385,28 @@ $archiveTool = $null
 #
 # These floors are deliberately far below the observed values so they only trip on real
 # loss, not on normal dependency churn.
-$stagedPackageRoot = Join-Path $stageRoot "node_modules"
+# webpack 与 Turbopack 的 standalone 依赖布局不同：Turbopack 把整棵依赖树放在
+# 根 node_modules，webpack 则把 Next/React 等放在 apps/web/node_modules，只在根
+# node_modules 保留少量外部包。校验时必须把两层一起统计，否则 webpack 产物会被
+# 误判为「缺失运行时依赖」。
+$stagedPackageRoots = @(
+  (Join-Path $stageRoot "node_modules"),
+  (Join-Path $stageRoot "apps\web\node_modules"),
+  (Join-Path $stageRoot "apps\web\.next\node_modules")
+) | Where-Object { Test-Path -LiteralPath $_ }
+
 $minimumStagedNodeModulesFiles = 8000
 $minimumPnpmEntryCount = 12
 
 $stagedNodeModulesFiles = @(
-  Get-ChildItem -LiteralPath $stagedPackageRoot -Recurse -Force -File -ErrorAction SilentlyContinue
+  $stagedPackageRoots | ForEach-Object {
+    Get-ChildItem -LiteralPath $_ -Recurse -Force -File -ErrorAction SilentlyContinue
+  }
 )
 $stagedPnpmEntries = @(
-  Get-ChildItem -LiteralPath (Join-Path $stagedPackageRoot ".pnpm") -Force -Directory -ErrorAction SilentlyContinue
+  $stagedPackageRoots | ForEach-Object {
+    Get-ChildItem -LiteralPath (Join-Path $_ ".pnpm") -Force -Directory -ErrorAction SilentlyContinue
+  }
 )
 
 Write-Host "Staged node_modules: $($stagedNodeModulesFiles.Count) files, $($stagedPnpmEntries.Count) .pnpm entries."
