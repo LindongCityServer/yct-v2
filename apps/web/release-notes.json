@@ -3,6 +3,65 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.15.0",
+      "releasedAt": "2026-10-27T22:39:47.221Z",
+      "sourceFingerprint": "53c7a767090d003d2174776132f48c2300c50c6f54f5140aaac1e481e95e6ff5",
+      "themes": ["search", "web", "map", "transit", "api"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "新增问一问独立页面，可收藏，也可以直接用链接带上问题"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "问一问对话、引用与追问保存在本地，刷新或误关后可继续，新对话可重置"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "新增只读 MCP 接口，向外部 AI 客户端开放站内查询工具"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "新增地图周边与沿线公开查询接口，并补充接口文档"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "问一问可检索玩家位置与 Wiki 别名、运营长公告正文、道路沿线地点和界面图例"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "首页精选轮播加入过渡动画，纯文字卡片居中放大并显示摘要"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "问一问图标加入角色动画：待机眨眼、思考低头扫视、完成点头与失败摇头"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "首次问及问一问小人来历时讲出来历，并播放彩蛋动画"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "后台新增班次行程标签池，可批量维护线路班次标签"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "清理残留的 /v2 硬编码链接，适配根路径部署"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.14.0",
       "releasedAt": "2026-10-27T08:21:26.760Z",
       "sourceFingerprint": "b34bb4c7c9e7faafc6d1fd0518ef1ba198123db8c4ff5306034235e2d84e1c71",
