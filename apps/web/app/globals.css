@@ -2158,7 +2158,8 @@ body .material-symbols-outlined {
 
 .map-road-trace-layer,
 .map-route-trace-layer,
-.map-transit-trace-layer {
+.map-transit-trace-layer,
+.map-nearby-range-trace-layer {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -2251,6 +2252,53 @@ body .material-symbols-outlined {
 .map-stage.has-context-overlay .map-transit-trace.is-selected {
   stroke-width: 5;
   opacity: 0.78;
+}
+
+.map-nearby-range-trace {
+  overflow: visible;
+}
+
+.map-nearby-range-trace-halo {
+  fill: none;
+  stroke: var(--yct-color-primary);
+  stroke-width: 18;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.26;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--yct-color-primary) 52%, transparent));
+  vector-effect: non-scaling-stroke;
+}
+
+.map-nearby-range-trace-core {
+  fill: none;
+  stroke: var(--yct-color-primary);
+  stroke-width: 6;
+  stroke-dasharray: 12 8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.95;
+  vector-effect: non-scaling-stroke;
+}
+
+.map-nearby-range-trace-endpoint {
+  fill: var(--yct-color-surface-panel);
+  stroke: var(--yct-color-primary);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.map-nearby-range-label {
+  position: absolute;
+  padding: 2px 6px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-primary);
+  box-shadow: var(--yct-shadow-soft);
+  color: var(--yct-color-on-primary);
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform: translate(-50%, -150%);
 }
 
 .map-route-trace {
@@ -3791,6 +3839,78 @@ body .material-symbols-outlined {
   box-shadow: var(--yct-shadow-soft);
 }
 
+.map-nearby-linear-range {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 2px;
+}
+
+.map-nearby-linear-range-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+}
+
+.map-nearby-linear-range-head strong {
+  color: var(--yct-color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.dual-range-input {
+  position: relative;
+  display: block;
+  height: 28px;
+}
+
+.dual-range-input-track {
+  position: absolute;
+  top: 12px;
+  right: 0;
+  left: 0;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-border);
+}
+
+.dual-range-input-track > span {
+  position: absolute;
+  top: 0;
+  right: calc(100% - var(--dual-range-end, 100%));
+  bottom: 0;
+  left: var(--dual-range-start, 0%);
+  background: var(--yct-color-primary);
+}
+
+.dual-range-input input[type='range'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.dual-range-input input[type='range']::-webkit-slider-runnable-track {
+  background: transparent;
+}
+
+.dual-range-input input[type='range']::-moz-range-track,
+.dual-range-input input[type='range']::-moz-range-progress {
+  background: transparent;
+}
+
+.dual-range-input input[type='range']::-webkit-slider-thumb {
+  pointer-events: auto;
+}
+
+.dual-range-input input[type='range']::-moz-range-thumb {
+  pointer-events: auto;
+}
+
 .map-category-filter {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 28px;
@@ -4248,8 +4368,15 @@ img.map-player-list-avatar.is-offline {
   gap: var(--yct-space-2);
 }
 
-.map-poi-detail-header:has(> .admin-edit-link) {
+/* 顶栏列数必须跟随实际渲染出的按钮数量：AdminEditLink 对非管理员返回 null，
+ * 线路信息按钮也只在公交线路详情出现，用 :has 逐个补齐，避免按钮换行到第二行。 */
+.map-poi-detail-header:has(> .admin-edit-link),
+.map-poi-detail-header:has(> .map-line-info-button) {
   grid-template-columns: 32px minmax(0, 1fr) repeat(3, 38px);
+}
+
+.map-poi-detail-header:has(> .admin-edit-link):has(> .map-line-info-button) {
+  grid-template-columns: 32px minmax(0, 1fr) repeat(4, 38px);
 }
 
 .map-poi-detail-header > div {
@@ -5246,7 +5373,7 @@ img.map-player-list-avatar.is-offline {
   display: grid;
   gap: 0;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 20px;
   list-style: none;
 }
 
@@ -5254,29 +5381,35 @@ img.map-player-list-avatar.is-offline {
   position: relative;
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
   gap: var(--yct-space-2);
   min-height: 30px;
   color: var(--yct-color-text);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .map-line-station-button {
+  flex: 1;
   min-width: 0;
-  padding: 0 0 var(--yct-space-2);
+  min-height: 30px;
+  padding: 5px 10px;
   border: 0;
+  border-radius: var(--yct-radius-pill);
   background: transparent;
   color: inherit;
   cursor: pointer;
   font: inherit;
   text-align: left;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .map-line-station-button:hover,
 .map-line-station-button:focus-visible {
-  color: var(--map-line-detail-color);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text);
 }
 
 .map-line-station-button small {
@@ -5301,9 +5434,9 @@ img.map-player-list-avatar.is-offline {
 .map-line-station-node {
   position: relative;
   z-index: 1;
+  align-self: center;
   width: 14px;
   height: 14px;
-  margin-top: 2px;
   border: 3px solid var(--map-line-detail-color);
   border-radius: var(--yct-radius-pill);
   background: var(--yct-color-surface-panel);
@@ -5315,6 +5448,360 @@ img.map-player-list-avatar.is-offline {
   color: var(--yct-color-text-muted);
   font-size: 11px;
   font-weight: 700;
+}
+
+.map-line-detail-summary {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: grid;
+  gap: var(--yct-space-3);
+  padding-bottom: var(--yct-space-2);
+}
+
+.map-line-station-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.map-line-station-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.map-line-station-poi-button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--map-line-detail-color) 32%, transparent);
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--map-line-detail-color) 10%, var(--yct-color-surface-panel));
+  color: var(--map-line-detail-color);
+  cursor: pointer;
+  font: inherit;
+}
+
+.map-line-station-poi-button .material-symbols-outlined {
+  font-size: 15px;
+}
+
+/* 选中态必须与面板底色做不透明混合：面板是 96% 半透明 + backdrop-filter，
+ * 若用带 alpha 的 color-mix，线路色会被透光材质和背景地图冲淡到几乎看不出来。 */
+.map-line-station-list li.is-selected .map-line-station-button {
+  background: color-mix(in srgb, var(--map-line-detail-color) 26%, var(--yct-color-surface-panel));
+  color: var(--map-line-detail-color);
+  font-weight: 800;
+}
+
+/* 透光材质下，后面「液态材质通用选中项」的
+ * `[data-liquid-material] :is(button, a):is(…, [aria-pressed='true'])` 规则会把本站点按钮
+ * 刷成 --yct-color-surface-selected（主色 16% 透明），其特异性高于上面的线路色规则，
+ * 导致透光模式下选中态变回带 alpha 的绿色。这里用更高特异性把线路色取回来。 */
+:root[data-material-mode] .map-line-station-list li.is-selected .map-line-station-button {
+  background: color-mix(in srgb, var(--map-line-detail-color) 26%, var(--yct-color-surface-panel));
+}
+
+.map-line-station-list li.is-selected .map-line-station-node {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--map-line-detail-color) 24%, transparent);
+}
+
+.map-line-vehicle-badge {
+  position: absolute;
+  left: -18px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--map-line-detail-color);
+  box-shadow: var(--yct-shadow-soft);
+  color: var(--yct-color-on-primary);
+}
+
+.map-line-vehicle-badge.is-station {
+  top: 7px;
+}
+
+.map-line-vehicle-badge.is-segment {
+  transform: translateY(-50%);
+}
+
+.map-line-vehicle-badge .material-symbols-outlined {
+  font-size: 11px;
+}
+
+.map-line-vehicle-badge small {
+  position: absolute;
+  top: -6px;
+  right: -7px;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 2px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--map-line-detail-color);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 12px;
+  text-align: center;
+}
+
+.map-line-realtime-selected {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--map-line-detail-color) 12%, var(--yct-color-surface-panel));
+}
+
+.map-line-realtime-selected-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.map-line-realtime-selected-head .material-symbols-outlined {
+  color: var(--map-line-detail-color);
+  font-size: 16px;
+}
+
+.map-line-realtime-selected-head strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--yct-color-text);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-line-realtime-station-link {
+  min-height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-panel);
+  color: var(--map-line-detail-color);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.map-line-realtime-selected small {
+  color: var(--yct-color-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.map-line-realtime-list .map-line-realtime-eta {
+  color: var(--map-line-detail-color);
+  font-weight: 700;
+}
+
+.map-line-info-modal {
+  width: min(440px, 100%);
+}
+
+.map-line-realtime {
+  display: grid;
+  container-type: inline-size;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-3);
+  border: 1px solid color-mix(in srgb, var(--map-line-detail-color) 22%, transparent);
+  border-radius: var(--yct-radius-md);
+  background: color-mix(in srgb, var(--map-line-detail-color) 6%, var(--yct-color-surface));
+}
+
+.map-line-realtime-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+}
+
+.map-line-realtime-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--yct-color-text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.map-line-realtime-head h3 .material-symbols-outlined {
+  color: var(--map-line-detail-color);
+  font-size: 18px;
+}
+
+.map-line-realtime-head > span {
+  color: var(--yct-color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-line-realtime-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--map-line-detail-color) 16%, transparent);
+  color: var(--map-line-detail-color);
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-line-realtime-meta {
+  white-space: nowrap;
+}
+
+.map-line-realtime-summary,
+.map-line-realtime-empty {
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.map-line-realtime-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.map-line-realtime-list.is-board {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.map-line-realtime-list.is-board li {
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+@container (max-width: 240px) {
+  .map-line-realtime-list.is-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .map-line-realtime-list.is-board li:nth-child(3) {
+    display: none;
+  }
+}
+
+.map-line-realtime-board-item {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--map-line-detail-color) 18%, transparent);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  box-shadow: var(--yct-shadow-soft);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.map-line-realtime-board-item:hover,
+.map-line-realtime-board-item:focus-visible {
+  background: color-mix(in srgb, var(--map-line-detail-color) 8%, var(--yct-color-surface-panel));
+}
+
+.map-line-realtime-board-item strong {
+  color: var(--map-line-detail-color);
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.map-line-realtime-board-item strong.is-waiting {
+  color: var(--yct-color-text-muted);
+}
+
+.map-line-realtime-board-item strong.is-arriving_now,
+.map-line-realtime-board-item strong.is-leaving {
+  color: var(--yct-color-warning);
+}
+
+.map-line-realtime-board-item small {
+  color: var(--yct-color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+
+.map-line-trip-modal {
+  width: min(420px, 100%);
+}
+
+.map-line-realtime-list li {
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+  box-shadow: var(--yct-shadow-soft);
+}
+
+.map-line-realtime-trip {
+  color: var(--map-line-detail-color);
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-line-realtime-list strong {
+  color: var(--yct-color-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.map-line-realtime-track {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-border);
+}
+
+.map-line-realtime-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--map-line-detail-color);
+}
+
+.map-line-realtime-list small {
+  color: var(--yct-color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.map-line-realtime-note {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: 10.5px;
+  line-height: 1.5;
 }
 
 .map-poi-action-bar {
@@ -29951,6 +30438,11 @@ dialog.client-dialog.is-page {
   cursor: pointer;
   font: inherit;
   font-size: 12px;
+}
+
+.global-search-suggestions-refresh:disabled {
+  opacity: var(--yct-disabled-opacity, 0.58);
+  cursor: default;
 }
 
 .global-search-action-row {

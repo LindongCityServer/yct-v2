@@ -29,6 +29,7 @@ import { quoteTaxiFare, quoteTransitRouteFare } from '@yct/domain';
 import { useSearchParams } from 'next/navigation';
 import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { startTransition, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getFontEmbedCSS, toBlob } from 'html-to-image';
 import LZString from 'lz-string';
 import QRCode from 'qrcode';
@@ -70,6 +71,15 @@ import {
   isTransitLineDirectionIncluded,
   type TransitLineTravelDirection,
 } from '../lib/transit-line-direction';
+import {
+  buildTransitRealtimeSnapshot,
+  buildTransitStationBoard,
+  formatTransitClockMinutes,
+  getBeijingClockMinutes,
+  type TransitRealtimeSnapshot,
+  type TransitRealtimeVehicle,
+  type TransitStationBoardEntry,
+} from '../lib/transit-realtime';
 import { getTransitStopLocationMarkerIdsForDirection } from '../lib/transit-stop-location';
 import {
   buildMapMarkerSearchText,
@@ -90,6 +100,7 @@ import { AdminEditLink } from './admin-edit-link';
 import { MaterialSymbol } from './material-symbol';
 import { MapLayerToggle } from './map-layer-toggle';
 import { ProgressiveImage } from './progressive-image';
+import { DualRangeInput } from './range-input';
 import { SegmentedControl } from './segmented-control';
 import { useMobileActionRail, type MobileActionRailItem } from './mobile-action-rail';
 import { RouteModeToggleList } from './route-mode-toggle-list';
@@ -303,6 +314,19 @@ interface ProjectedRouteTraceSegment {
   path: string;
 }
 
+interface ProjectedNearbyRangeTrace {
+  endLeft: number;
+  endTop: number;
+  height: number;
+  left: number;
+  path: string;
+  startLeft: number;
+  startTop: number;
+  top: number;
+  viewBox: string;
+  width: number;
+}
+
 interface ProjectedTransitTraceSegment {
   operationStatus: 'operating' | 'planned';
   path: string;
@@ -371,6 +395,10 @@ interface TransitOverviewLine {
     last?: string;
   };
   departureTimes?: string[];
+  departureTimesByDirection?: {
+    down?: string[];
+    up?: string[];
+  };
   routeMode?: TransitLineRouteMode;
   routeNodes?: TransitLineRouteNodeSnapshot[];
   segmentPaths?: TransitLineSegmentPathSnapshot[];
@@ -683,6 +711,10 @@ interface NearbySearchCenter {
   markerId: string;
   label: string;
   coordinates: [number, number];
+  /** 线性 POI 周边搜索时保存有序折线，用于计算沿线里程。 */
+  chain?: Array<[number, number]>;
+  kind: 'point' | 'linear';
+  length?: number;
 }
 
 interface SharedRoutePlanState {
@@ -835,6 +867,9 @@ const routeTransportModeOptions: RouteTransportModeOption[] = [
 const routeWalkTraceColor = 'var(--yct-color-primary)';
 const routeTaxiTraceColor = '#FFD400';
 const routePlanRecalculateDelayMs = 260;
+/** 线性 POI 沿线搜索时，标记到线路中心线的最大垂距（地图格）。 */
+const nearbyLinearCorridorDistance = 300;
+const nearbyLinearResultLimit = 80;
 
 const tileProviderNameKeys: Partial<Record<TileProviderDescriptor['id'], CommonMessageKey>> = {
   'lindong-fresh-http': 'map.source.provider.lindongFreshHttp',
@@ -898,6 +933,8 @@ const mapDefaults = {
   centerX: -945,
   centerZ: -876,
 };
+/** 在线路详情中选中站点时，地图至少放大到该层级。 */
+const transitStationFocusZoom = 3;
 // 规划路线取景：留出标记点文字标签的屏幕空间，并使用精确缩放让路线正好填满安全框。
 const routePlanFitPadding = 64;
 // 标记点标签位于图标右侧，按 96px 的保守宽度换算成世界坐标参与取景。
@@ -1026,7 +1063,9 @@ export function MapStage() {
   const [poiCoordinatePickMode, setPoiCoordinatePickMode] = useState(false);
   const [nearbySearchCenter, setNearbySearchCenter] = useState<NearbySearchCenter | null>(null);
   const [nearbySearchScope, setNearbySearchScope] = useState<MapNearbySearchScope>('outside');
+  const [nearbyLinearRange, setNearbyLinearRange] = useState<[number, number]>([0, 0]);
   const [poiDetailCollapsed, setPoiDetailCollapsed] = useState(false);
+  const [lineInfoDialogOpen, setLineInfoDialogOpen] = useState(false);
   const [favoriteMarkerIds, setFavoriteMarkerIds] = useState<Set<string>>(() => new Set());
   const [poiActionStatus, setPoiActionStatus] = useState('');
   const [appliedSharedMarkerFocusKey, setAppliedSharedMarkerFocusKey] = useState<string | null>(
@@ -1037,6 +1076,9 @@ export function MapStage() {
     string | null
   >(null);
 
+  useEffect(() => {
+    setLineInfoDialogOpen(false);
+  }, [focusedMarkerId]);
   useEffect(() => {
     mapViewRef.current = mapView;
   }, [mapView]);
@@ -1950,9 +1992,75 @@ export function MapStage() {
       ),
     [pointMarkers],
   );
+  const nearbyLinearProjectionIndex = useMemo(() => {
+    const index = new Map<string, CoordinateChainProjection>();
+    if (nearbySearchCenter?.kind !== 'linear' || !nearbySearchCenter.chain) {
+      return index;
+    }
+
+    for (const marker of [...shapeMarkers, ...pointMarkers]) {
+      if (marker.id === nearbySearchCenter.markerId) {
+        continue;
+      }
+      const center = getMarkerCenter(marker);
+      if (!center) {
+        continue;
+      }
+      const projection = findCoordinateChainProjection(center, nearbySearchCenter.chain);
+      if (projection) {
+        index.set(marker.id, projection);
+      }
+    }
+
+    return index;
+  }, [nearbySearchCenter, pointMarkers, shapeMarkers]);
+  const nearbyLinearRangeTrace = useMemo<ProjectedNearbyRangeTrace | undefined>(() => {
+    const chain = nearbySearchCenter?.chain;
+    if (
+      nearbySearchCenter?.kind !== 'linear' ||
+      !chain ||
+      chain.length < 2 ||
+      viewportSize.width <= 0 ||
+      viewportSize.height <= 0
+    ) {
+      return undefined;
+    }
+
+    const rangeStart = Math.min(nearbyLinearRange[0], nearbyLinearRange[1]);
+    const rangeEnd = Math.max(nearbyLinearRange[0], nearbyLinearRange[1]);
+    if (rangeEnd - rangeStart < 0.01) {
+      return undefined;
+    }
+
+    const coordinates = sliceCoordinateChainByMileage(chain, rangeStart, rangeEnd);
+    if (coordinates.length < 2) {
+      return undefined;
+    }
+    const projection = buildTraceProjection(coordinates, mapView, viewportSize);
+    if (!projection) {
+      return undefined;
+    }
+
+    const scale = getScale(mapView.zoom);
+    const projectPoint = ([x, z]: [number, number]) => ({
+      left: viewportSize.width / 2 + (x - mapView.centerX) * scale - projection.left,
+      top: viewportSize.height / 2 + (z - mapView.centerZ) * scale - projection.top,
+    });
+    const startPoint = projectPoint(coordinates[0]!);
+    const endPoint = projectPoint(coordinates[coordinates.length - 1]!);
+
+    return {
+      ...projection,
+      startLeft: startPoint.left,
+      startTop: startPoint.top,
+      endLeft: endPoint.left,
+      endTop: endPoint.top,
+    };
+  }, [mapView, nearbyLinearRange, nearbySearchCenter, viewportSize]);
   const sidebarMarkers = useMemo(() => {
     const queryMode = Boolean(markerQuery.trim());
     const nearbyMode = !queryMode && nearbySearchCenter;
+    const nearbyLinearMode = Boolean(nearbyMode && nearbySearchCenter?.kind === 'linear');
     const source = queryMode
       ? [
           ...filteredTransitLineMarkers,
@@ -1961,9 +2069,10 @@ export function MapStage() {
           ...filteredPointMarkers,
         ]
       : nearbyMode
-        ? [...endpointGroupMarkers, ...shapeMarkers, ...pointMarkers].filter(
-            (marker) => marker.id !== nearbySearchCenter.markerId,
-          )
+        ? (nearbyLinearMode
+            ? [...shapeMarkers, ...pointMarkers]
+            : [...endpointGroupMarkers, ...shapeMarkers, ...pointMarkers]
+          ).filter((marker) => marker.id !== nearbySearchCenter.markerId)
         : [...endpointGroupMarkers, ...shapeMarkers, ...pointMarkers];
     const dedupedSource = dedupeEquivalentMapPlaceMarkers(source, mapPlaceRelationIndex);
     const categoryFiltered =
@@ -1997,6 +2106,28 @@ export function MapStage() {
     }
 
     if (nearbyMode) {
+      if (nearbyLinearMode && nearbySearchCenter.chain) {
+        const rangeStart = Math.min(nearbyLinearRange[0], nearbyLinearRange[1]);
+        const rangeEnd = Math.max(nearbyLinearRange[0], nearbyLinearRange[1]);
+        return nearbyScopeFiltered
+          .map((marker) => ({
+            marker,
+            projection: nearbyLinearProjectionIndex.get(marker.id),
+          }))
+          .filter(
+            (entry): entry is { marker: CenterableMarker; projection: CoordinateChainProjection } =>
+              Boolean(
+                entry.projection &&
+                entry.projection.distance <= nearbyLinearCorridorDistance &&
+                entry.projection.mileage >= rangeStart &&
+                entry.projection.mileage <= rangeEnd,
+              ),
+          )
+          .sort((left, right) => left.projection.mileage - right.projection.mileage)
+          .map(({ marker }) => marker)
+          .slice(0, nearbyLinearResultLimit);
+      }
+
       return nearbyScopeFiltered
         .map((marker) => ({
           marker,
@@ -2026,6 +2157,8 @@ export function MapStage() {
     markerListCategoryId,
     markerQuery,
     mapPlaceRelationIndex,
+    nearbyLinearProjectionIndex,
+    nearbyLinearRange,
     nearbySearchCenter,
     nearbySearchRegion,
     nearbySearchScope,
@@ -2059,6 +2192,10 @@ export function MapStage() {
   const routePlanCalculationKey = routePlanDraft
     ? buildRoutePlanCalculationKey(routePlanDraft, routeTransportModes)
     : null;
+  const routePlanHasTwoLinearEndpoints =
+    Boolean(routePlanDraft?.originId && routePlanDraft?.destinationId) &&
+    isLinearDetailMarkerId(routePlanDraft?.originId, centerableMarkerById) &&
+    isLinearDetailMarkerId(routePlanDraft?.destinationId, centerableMarkerById);
   const currentRoutePlanOptions = useMemo(
     () =>
       routePlanCalculationKey && routePlanOptionsKey === routePlanCalculationKey
@@ -2369,25 +2506,31 @@ export function MapStage() {
   ]);
   const roadRoutingGraph = roadRoutingSnapshot.graph;
   const markerRoadAccessIndex = roadRoutingSnapshot.markerRoadAccessIndex;
-  const focusedDirectionalTransitLineMarker = useMemo(
+  const focusedDirectionalTransitLineRoute = useMemo(
     () =>
       focusedTransitLineMarker && focusedTransitLine
-        ? buildDirectionalTransitLineMarker(
+        ? buildDirectionalTransitLineRoute(
             focusedTransitLineMarker,
             focusedTransitLine,
             focusedTransitLineDirection,
             pointMarkers,
             roadRoutingGraph,
+            mapSpatialProfile?.roadTiming,
           )
         : undefined,
     [
       focusedTransitLine,
       focusedTransitLineDirection,
       focusedTransitLineMarker,
+      mapSpatialProfile?.roadTiming,
       pointMarkers,
       roadRoutingGraph,
     ],
   );
+  const focusedDirectionalTransitLineMarker =
+    focusedTransitLineMarker && focusedTransitLine
+      ? (focusedDirectionalTransitLineRoute?.marker ?? focusedTransitLineMarker)
+      : undefined;
   const routeMarkerRoadAccessIndex = useMemo(() => {
     if (!routePlanDraft || !roadRoutingGraph) {
       return markerRoadAccessIndex;
@@ -2552,6 +2695,14 @@ export function MapStage() {
       return;
     }
 
+    if (routePlanHasTwoLinearEndpoints) {
+      // 起点和终点均为线性 POI 时不生成任何规划结果。
+      setRoutePlanOptions([]);
+      setRoutePlanOptionsKey(routePlanCalculationKey);
+      setRoutePlanStatus('ready');
+      return;
+    }
+
     let cancelled = false;
     setRoutePlanStatus('loading');
     setRoutePlanOptions([]);
@@ -2592,6 +2743,7 @@ export function MapStage() {
     roadRoutingStatus,
     routePlanCalculationKey,
     routePlanDraft,
+    routePlanHasTwoLinearEndpoints,
     routePlanRequest,
     t,
   ]);
@@ -2979,6 +3131,27 @@ export function MapStage() {
       return;
     }
 
+    const sharedDraftOriginMarker = sharedRoutePlan.draft.originId
+      ? centerableMarkerById.get(sharedRoutePlan.draft.originId)
+      : undefined;
+    const sharedDraftDestinationMarker = sharedRoutePlan.draft.destinationId
+      ? centerableMarkerById.get(sharedRoutePlan.draft.destinationId)
+      : undefined;
+    if (
+      sharedDraftOriginMarker &&
+      sharedDraftDestinationMarker &&
+      isLinearDetailMarker(sharedDraftOriginMarker) &&
+      isLinearDetailMarker(sharedDraftDestinationMarker)
+    ) {
+      publishToastRequested({
+        dedupeKey: 'map-route-linear-endpoint',
+        message: t('map.route.linearEndpointBlocked'),
+        tone: 'error',
+      });
+      setAppliedSharedRoutePlanKey(sharedRoutePlan.key);
+      return;
+    }
+
     setRoutePlanDraft(sharedRoutePlan.draft);
     setRouteTransportModes(sharedRoutePlan.enabledModes);
     setSelectedRouteOptionId(sharedRoutePlan.selectedOptionId ?? null);
@@ -2991,7 +3164,14 @@ export function MapStage() {
       fitRouteDraftToMapView(sharedRoutePlan.draft, current, viewportSize, effectiveMapVisibleRect),
     );
     setAppliedSharedRoutePlanKey(sharedRoutePlan.key);
-  }, [appliedSharedRoutePlanKey, effectiveMapVisibleRect, sharedRoutePlan, viewportSize]);
+  }, [
+    appliedSharedRoutePlanKey,
+    centerableMarkerById,
+    effectiveMapVisibleRect,
+    sharedRoutePlan,
+    t,
+    viewportSize,
+  ]);
 
   useEffect(() => {
     if (!sharedCoordinateFocus) {
@@ -3085,6 +3265,33 @@ export function MapStage() {
     if (stationMarker) {
       focusMapMarker(stationMarker);
     }
+  };
+
+  const focusTransitStationView = (line: TransitOverviewLine, stationName: string) => {
+    const stationMarker = findTransitStationMarkerForLine(
+      pointMarkers,
+      stationName,
+      line,
+      stationConnectionIndex,
+    );
+    const center = stationMarker ? getMarkerCenter(stationMarker) : undefined;
+    if (!center) {
+      return;
+    }
+
+    setMapView((current) => {
+      const targetZoom = clampZoom(Math.max(current.zoom, transitStationFocusZoom));
+      const scale = getScale(targetZoom);
+      const visibleRect = normalizeMapVisibleRect(effectiveMapVisibleRect, viewportSize);
+      const visibleCenterX = (visibleRect.left + visibleRect.right) / 2;
+      const visibleCenterY = (visibleRect.top + visibleRect.bottom) / 2;
+      return {
+        ...current,
+        zoom: targetZoom,
+        centerX: center[0] - (visibleCenterX - viewportSize.width / 2) / scale,
+        centerZ: center[1] - (visibleCenterY - viewportSize.height / 2) / scale,
+      };
+    });
   };
 
   const startDragGesture = (pointerId: number, clientX: number, clientY: number, view: MapView) => {
@@ -3394,12 +3601,152 @@ export function MapStage() {
     }
   };
 
+  interface ResolvedLinearRouteEndpoint {
+    coordinate: [number, number];
+    label: string;
+  }
+
+  const isLinearRouteEndpointId = (markerId: string | undefined): boolean => {
+    const marker = markerId ? centerableMarkerById.get(markerId) : undefined;
+    return marker ? isLinearDetailMarker(marker) : false;
+  };
+
+  const resolveLinearRouteEndpoint = (
+    marker: CenterableMarker,
+    endpoint: RouteEndpointKind,
+    reference: [number, number],
+  ): ResolvedLinearRouteEndpoint | undefined => {
+    if (isTransitLineMarker(marker)) {
+      const line = findTransitLineByMarker(marker, transitLineLookup);
+      if (line) {
+        const mode = isRouteTransportMode(line.mode) ? line.mode : 'walk';
+        const stationMarkerIndex = buildTransitStationMarkerIndex(pointMarkers);
+        const stops = (
+          line.stationStops && line.stationStops.length > 0
+            ? line.stationStops
+            : line.stationNames.map((stationName, sequence) => ({
+                stationName,
+                displayStationName: line.displayStationNames?.[sequence],
+                operationStatus: 'operating' as const,
+                sequence,
+              }))
+        )
+          .map((stop) => {
+            const stationMarker = findTransitStationMarker(
+              stop,
+              stationMarkerIndex,
+              pointMarkers,
+              mode,
+            );
+            const center = stationMarker ? getMarkerCenter(stationMarker) : undefined;
+            return center
+              ? {
+                  center,
+                  name: stop.displayStationName ?? stop.stationName,
+                }
+              : undefined;
+          })
+          .filter((stop): stop is { center: [number, number]; name: string } => Boolean(stop));
+        if (stops.length > 0) {
+          const candidates =
+            endpoint === 'origin' && stops.length > 1
+              ? [stops[0]!, stops[stops.length - 1]!]
+              : stops;
+          const nearest = candidates.reduce((best, stop) =>
+            getCoordinateDistance(stop.center, reference) <
+            getCoordinateDistance(best.center, reference)
+              ? stop
+              : best,
+          );
+          return {
+            coordinate: nearest.center,
+            label: `${formatMarkerDisplayName(marker.label)}（${formatMarkerDisplayName(nearest.name)}）`,
+          };
+        }
+      }
+    }
+
+    if (isRoadEndpointGroupMarker(marker)) {
+      const chain = getLinearMarkerChain(marker);
+      const coordinate =
+        endpoint === 'origin'
+          ? findNearestChainEndpoint(reference, chain)
+          : findCoordinateChainProjection(reference, chain)?.coordinate;
+      if (coordinate) {
+        return { coordinate, label: formatMarkerDisplayName(marker.label) };
+      }
+    }
+
+    return undefined;
+  };
+
+  const normalizeLinearRoutePlanDraft = (draft: RoutePlanDraft): RoutePlanDraft => {
+    const originMarker = draft.originId ? centerableMarkerById.get(draft.originId) : undefined;
+    const destinationMarker = draft.destinationId
+      ? centerableMarkerById.get(draft.destinationId)
+      : undefined;
+    const originIsLinear = Boolean(originMarker && isLinearDetailMarker(originMarker));
+    const destinationIsLinear = Boolean(
+      destinationMarker && isLinearDetailMarker(destinationMarker),
+    );
+
+    // 起点和终点不能同时为线性 POI；入口处已拦截，这里只做防御。
+    if (!originIsLinear && !destinationIsLinear) {
+      return draft;
+    }
+    if (originIsLinear && destinationIsLinear) {
+      return draft;
+    }
+
+    let next = draft;
+    if (destinationIsLinear && destinationMarker) {
+      const resolved = resolveLinearRouteEndpoint(
+        destinationMarker,
+        'destination',
+        draft.originRaw ?? draft.origin,
+      );
+      if (resolved) {
+        next = {
+          ...next,
+          destination: resolved.coordinate,
+          destinationLabel: resolved.label,
+          destinationAccessId: undefined,
+          destinationAccessLabel: undefined,
+          destinationRaw: undefined,
+        };
+      }
+    }
+
+    if (originIsLinear && originMarker) {
+      const resolved = resolveLinearRouteEndpoint(
+        originMarker,
+        'origin',
+        next.destinationRaw ?? next.destination,
+      );
+      if (resolved) {
+        next = {
+          ...next,
+          origin: resolved.coordinate,
+          originLabel: resolved.label,
+          originAccessId: undefined,
+          originAccessLabel: undefined,
+          originRaw: undefined,
+        };
+      }
+    }
+
+    return next;
+  };
+
   const createRoutePlanDraft = (marker: CenterableMarker) => {
-    const destination = getMarkerCenter(marker);
+    const origin = preferredCurrentLocation;
+    const resolvedDestination = isLinearDetailMarker(marker)
+      ? resolveLinearRouteEndpoint(marker, 'destination', origin)
+      : undefined;
+    const destination = resolvedDestination?.coordinate ?? getMarkerCenter(marker);
     if (!destination) {
       return;
     }
-    const origin = preferredCurrentLocation;
 
     setRoutePlanDraft({
       destinationId: marker.id,
@@ -3411,7 +3758,7 @@ export function MapStage() {
               currentAccountLocationMarker.label,
           })
         : t('map.route.currentLocation'),
-      destinationLabel: formatMarkerDisplayName(marker.label),
+      destinationLabel: resolvedDestination?.label ?? formatMarkerDisplayName(marker.label),
       destination,
       origin,
     });
@@ -3424,12 +3771,12 @@ export function MapStage() {
   const updateRoutePlanOriginToMapCenter = () => {
     setRoutePlanDraft((current) =>
       current
-        ? {
+        ? normalizeLinearRoutePlanDraft({
             ...current,
             originId: undefined,
             origin: [mapView.centerX, mapView.centerZ],
             originLabel: formatPoint([mapView.centerX, mapView.centerZ]),
-          }
+          })
         : current,
     );
     setEditingRouteEndpoint(null);
@@ -3438,9 +3785,21 @@ export function MapStage() {
   };
 
   const swapRoutePlanEndpoints = () => {
+    if (
+      isLinearRouteEndpointId(routePlanDraft?.originId) &&
+      isLinearRouteEndpointId(routePlanDraft?.destinationId)
+    ) {
+      publishToastRequested({
+        dedupeKey: 'map-route-linear-endpoint',
+        message: t('map.route.linearEndpointBlocked'),
+        tone: 'error',
+      });
+      return;
+    }
+
     setRoutePlanDraft((current) =>
       current
-        ? {
+        ? normalizeLinearRoutePlanDraft({
             ...current,
             destinationId: current.originId,
             originId: current.destinationId,
@@ -3448,7 +3807,13 @@ export function MapStage() {
             originLabel: current.destinationLabel,
             destination: current.origin,
             destinationLabel: current.originLabel,
-          }
+            destinationAccessId: current.originAccessId,
+            originAccessId: current.destinationAccessId,
+            destinationAccessLabel: current.originAccessLabel,
+            originAccessLabel: current.destinationAccessLabel,
+            destinationRaw: current.originRaw,
+            originRaw: current.destinationRaw,
+          })
         : current,
     );
     setSelectedRouteOptionId(null);
@@ -3488,25 +3853,46 @@ export function MapStage() {
       return;
     }
 
+    const otherIsLinear =
+      endpoint === 'origin'
+        ? isLinearRouteEndpointId(routePlanDraft?.destinationId)
+        : isLinearRouteEndpointId(routePlanDraft?.originId);
+    if (isLinearDetailMarker(marker) && otherIsLinear) {
+      publishToastRequested({
+        dedupeKey: 'map-route-linear-endpoint',
+        message: t('map.route.linearEndpointBlocked'),
+        tone: 'error',
+      });
+      return;
+    }
+
     const label = formatMarkerDisplayName(marker.label);
     setRoutePlanDraft((current) => {
       if (!current) {
         return current;
       }
 
-      return endpoint === 'origin'
-        ? {
-            ...current,
-            originId: marker.id,
-            origin: center,
-            originLabel: label,
-          }
-        : {
-            ...current,
-            destinationId: marker.id,
-            destination: center,
-            destinationLabel: label,
-          };
+      const next =
+        endpoint === 'origin'
+          ? {
+              ...current,
+              originId: marker.id,
+              origin: center,
+              originLabel: label,
+              originAccessId: undefined,
+              originAccessLabel: undefined,
+              originRaw: undefined,
+            }
+          : {
+              ...current,
+              destinationId: marker.id,
+              destination: center,
+              destinationLabel: label,
+              destinationAccessId: undefined,
+              destinationAccessLabel: undefined,
+              destinationRaw: undefined,
+            };
+      return normalizeLinearRoutePlanDraft(next);
     });
     setFocusedMarkerId(marker.id);
     setPoiDetailCollapsed(true);
@@ -3525,19 +3911,27 @@ export function MapStage() {
         return current;
       }
 
-      return endpoint === 'origin'
-        ? {
-            ...current,
-            originId: undefined,
-            origin: coordinates,
-            originLabel: label,
-          }
-        : {
-            ...current,
-            destinationId: undefined,
-            destination: coordinates,
-            destinationLabel: label,
-          };
+      const next =
+        endpoint === 'origin'
+          ? {
+              ...current,
+              originId: undefined,
+              origin: coordinates,
+              originLabel: label,
+              originAccessId: undefined,
+              originAccessLabel: undefined,
+              originRaw: undefined,
+            }
+          : {
+              ...current,
+              destinationId: undefined,
+              destination: coordinates,
+              destinationLabel: label,
+              destinationAccessId: undefined,
+              destinationAccessLabel: undefined,
+              destinationRaw: undefined,
+            };
+      return normalizeLinearRoutePlanDraft(next);
     });
     setEditingRouteEndpoint(null);
     setRouteEndpointQuery('');
@@ -3587,11 +3981,23 @@ export function MapStage() {
       return;
     }
 
+    const isLinear = isLinearDetailMarker(marker);
+    const chain = isLinear
+      ? isTransitLineMarker(marker) && focusedDirectionalTransitLineRoute?.marker.id === marker.id
+        ? focusedDirectionalTransitLineRoute.marker.geometry.coordinates
+        : getLinearMarkerChain(marker)
+      : undefined;
+    const length = chain && chain.length > 1 ? getCoordinateChainDistance(chain) : 0;
+
     setNearbySearchCenter({
       markerId: marker.id,
       label: formatMarkerDisplayName(marker.label),
       coordinates: center,
+      chain,
+      kind: isLinear ? 'linear' : 'point',
+      length,
     });
+    setNearbyLinearRange([0, length]);
     publishMapNearbySearchScopeChanged({ markerId: marker.id, scope: 'outside' });
     setMarkerQuery('');
     setFocusedMarkerId(null);
@@ -3677,6 +4083,7 @@ export function MapStage() {
           <RoutePlanDraftCard
             draft={routePlanDraft}
             t={t}
+            blockedByLinearEndpoints={routePlanHasTwoLinearEndpoints}
             collapsed={routePlanCollapsed}
             editingEndpoint={editingRouteEndpoint}
             enabledModes={routeTransportModes}
@@ -3762,7 +4169,12 @@ export function MapStage() {
                         : markerQuery.trim()
                           ? t('map.markerList.results')
                           : nearbySearchCenter
-                            ? t('map.markerList.nearby', { name: nearbySearchCenter.label })
+                            ? t(
+                                nearbySearchCenter.kind === 'linear'
+                                  ? 'map.markerList.nearbyLinear'
+                                  : 'map.markerList.nearby',
+                                { name: nearbySearchCenter.label },
+                              )
                             : t('map.markerList.default')}
                     </span>
                     <span className="muted">
@@ -3778,7 +4190,14 @@ export function MapStage() {
                           <span className="material-symbols-outlined" aria-hidden="true">
                             travel_explore
                           </span>
-                          <span>{t('map.nearby.note', { name: nearbySearchCenter.label })}</span>
+                          <span>
+                            {t(
+                              nearbySearchCenter.kind === 'linear'
+                                ? 'map.nearby.noteLinear'
+                                : 'map.nearby.note',
+                              { name: nearbySearchCenter.label },
+                            )}
+                          </span>
                           <button
                             className="map-nearby-search-exit"
                             type="button"
@@ -3786,6 +4205,33 @@ export function MapStage() {
                           >
                             {t('map.nearby.exit')}
                           </button>
+                          {nearbySearchCenter.kind === 'linear' &&
+                          (nearbySearchCenter.length ?? 0) > 0 ? (
+                            <div className="map-nearby-linear-range">
+                              <div className="map-nearby-linear-range-head">
+                                <span>{t('map.nearby.rangeLabel')}</span>
+                                <strong>
+                                  {t('map.nearby.rangeValue', {
+                                    from: formatRoutePlanDistance(nearbyLinearRange[0], t),
+                                    to: formatRoutePlanDistance(nearbyLinearRange[1], t),
+                                  })}
+                                </strong>
+                              </div>
+                              <DualRangeInput
+                                aria-label={t('map.nearby.rangeAria')}
+                                min={0}
+                                max={Math.ceil(nearbySearchCenter.length ?? 0)}
+                                step={1}
+                                value={nearbyLinearRange}
+                                onChange={(value) =>
+                                  setNearbyLinearRange([
+                                    Math.min(value[0], value[1]),
+                                    Math.max(value[0], value[1]),
+                                  ])
+                                }
+                              />
+                            </div>
+                          ) : null}
                           {nearbySearchRegion ? (
                             <div
                               className="map-nearby-scope-switch"
@@ -3869,14 +4315,22 @@ export function MapStage() {
                     {sidebarMarkers.length > 0 ? (
                       sidebarMarkers.map((marker) => {
                         const center = getMarkerCenter(marker);
-                        const distanceDetail = formatMarkerListDistanceDetail(marker, {
-                          coordinates: nearbySearchCenter?.coordinates ?? [
-                            mapView.centerX,
-                            mapView.centerZ,
-                          ],
-                          t,
-                          secondaryPoiIndex,
-                        });
+                        const linearProjection =
+                          nearbySearchCenter?.kind === 'linear'
+                            ? nearbyLinearProjectionIndex.get(marker.id)
+                            : undefined;
+                        const distanceDetail = linearProjection
+                          ? t('map.nearby.mileage', {
+                              distance: formatRoutePlanDistance(linearProjection.mileage, t),
+                            })
+                          : formatMarkerListDistanceDetail(marker, {
+                              coordinates: nearbySearchCenter?.coordinates ?? [
+                                mapView.centerX,
+                                mapView.centerZ,
+                              ],
+                              t,
+                              secondaryPoiIndex,
+                            });
                         const playerPresence = marker.playerLocation?.presence;
                         const content = (
                           <>
@@ -3990,6 +4444,18 @@ export function MapStage() {
                   label={focusedTransitLine ? t('admin.editLine') : t('admin.editPoi')}
                 />
               ) : null}
+              {focusedTransitLine ? (
+                <button
+                  className="icon-action-button map-line-info-button"
+                  type="button"
+                  aria-label={t('map.lineInfo.openAria', { name: focusedTransitLine.name })}
+                  onClick={() => setLineInfoDialogOpen(true)}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    info
+                  </span>
+                </button>
+              ) : null}
               <button
                 className="icon-action-button"
                 type="button"
@@ -4039,6 +4505,9 @@ export function MapStage() {
                       direction={focusedTransitLineDirection}
                       line={focusedTransitLine}
                       lineColor={focusedMarker.accentColor}
+                      referenceCoordinate={preferredCurrentLocation}
+                      segmentMinutes={focusedDirectionalTransitLineRoute?.segmentMinutes}
+                      stops={focusedDirectionalTransitLineRoute?.stops}
                       onDirectionChange={(direction) =>
                         setTransitLineDirectionSelection({
                           direction,
@@ -4047,6 +4516,9 @@ export function MapStage() {
                       }
                       onFocusStation={(stationName) =>
                         focusTransitStationStop(focusedTransitLine, stationName)
+                      }
+                      onSelectStation={(stationName) =>
+                        focusTransitStationView(focusedTransitLine, stationName)
                       }
                       t={t}
                     />
@@ -4646,6 +5118,56 @@ export function MapStage() {
                 ))}
               </div>
             ) : null}
+            {nearbyLinearRangeTrace ? (
+              <div className="map-nearby-range-trace-layer" aria-hidden="true">
+                <svg
+                  className="map-trace-block map-nearby-range-trace"
+                  viewBox={nearbyLinearRangeTrace.viewBox}
+                  preserveAspectRatio="none"
+                  style={
+                    {
+                      '--trace-left': `${nearbyLinearRangeTrace.left}px`,
+                      '--trace-top': `${nearbyLinearRangeTrace.top}px`,
+                      '--trace-width': `${nearbyLinearRangeTrace.width}px`,
+                      '--trace-height': `${nearbyLinearRangeTrace.height}px`,
+                    } as CSSProperties
+                  }
+                >
+                  <path className="map-nearby-range-trace-halo" d={nearbyLinearRangeTrace.path} />
+                  <path className="map-nearby-range-trace-core" d={nearbyLinearRangeTrace.path} />
+                  <circle
+                    className="map-nearby-range-trace-endpoint"
+                    cx={nearbyLinearRangeTrace.startLeft}
+                    cy={nearbyLinearRangeTrace.startTop}
+                    r={5}
+                  />
+                  <circle
+                    className="map-nearby-range-trace-endpoint"
+                    cx={nearbyLinearRangeTrace.endLeft}
+                    cy={nearbyLinearRangeTrace.endTop}
+                    r={5}
+                  />
+                </svg>
+                <span
+                  className="map-nearby-range-label is-start"
+                  style={{
+                    left: `${nearbyLinearRangeTrace.left + nearbyLinearRangeTrace.startLeft}px`,
+                    top: `${nearbyLinearRangeTrace.top + nearbyLinearRangeTrace.startTop}px`,
+                  }}
+                >
+                  {formatRoutePlanDistance(Math.min(nearbyLinearRange[0], nearbyLinearRange[1]), t)}
+                </span>
+                <span
+                  className="map-nearby-range-label is-end"
+                  style={{
+                    left: `${nearbyLinearRangeTrace.left + nearbyLinearRangeTrace.endLeft}px`,
+                    top: `${nearbyLinearRangeTrace.top + nearbyLinearRangeTrace.endTop}px`,
+                  }}
+                >
+                  {formatRoutePlanDistance(Math.max(nearbyLinearRange[0], nearbyLinearRange[1]), t)}
+                </span>
+              </div>
+            ) : null}
             {visibleSelectedRouteTrace ? (
               <div className="map-route-trace-layer" aria-hidden="true">
                 <TraceLayerView
@@ -5100,6 +5622,69 @@ export function MapStage() {
           </button>
           {poiSubmitStatus ? <p className="map-source-note">{poiSubmitStatus}</p> : null}
         </aside>
+      ) : null}
+      {lineInfoDialogOpen && focusedTransitLine ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={() => setLineInfoDialogOpen(false)}
+        >
+          <section
+            className="modal-panel map-line-info-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="map-line-info-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="section-heading">
+              <h2 id="map-line-info-title">
+                {t('map.lineInfo.title', { name: focusedTransitLine.name })}
+              </h2>
+              <button
+                className="icon-action-button"
+                type="button"
+                aria-label={t('map.poi.close')}
+                onClick={() => setLineInfoDialogOpen(false)}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  close
+                </span>
+              </button>
+            </div>
+            <dl className="line-attribute-list">
+              <div>
+                <dt>{t('lineDetail.firstLast')}</dt>
+                <dd>{formatTransitLineTime(focusedTransitLine, t)}</dd>
+              </div>
+              <div>
+                <dt>{t('lineDetail.operator')}</dt>
+                <dd>{focusedTransitLine.operator ?? t('lineDetail.toBeAdded')}</dd>
+              </div>
+              <div>
+                <dt>{t('map.lineDetail.fare')}</dt>
+                <dd>
+                  {formatFareTextWithoutCurrencyUnit(focusedTransitLine.fare) ??
+                    t('lineDetail.toBeAdded')}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('map.lineDetail.stations')}</dt>
+                <dd>
+                  {focusedTransitLine.displayFirstStationName &&
+                  focusedTransitLine.displayLastStationName
+                    ? `${focusedTransitLine.displayFirstStationName} → ${focusedTransitLine.displayLastStationName}`
+                    : focusedTransitLine.firstStationName && focusedTransitLine.lastStationName
+                      ? `${focusedTransitLine.firstStationName} → ${focusedTransitLine.lastStationName}`
+                      : t('lineDetail.extra.stations', {
+                          count:
+                            focusedTransitLine.stationStops?.length ??
+                            focusedTransitLine.stationNames.length,
+                        })}
+                </dd>
+              </div>
+            </dl>
+          </section>
+        </div>
       ) : null}
       {poiSubmitDialogOpen ? (
         <div
@@ -5834,6 +6419,10 @@ function TransitLineMapDetail({
   lineColor,
   onDirectionChange,
   onFocusStation,
+  onSelectStation,
+  referenceCoordinate,
+  segmentMinutes,
+  stops,
   t,
 }: Readonly<{
   direction: TransitLineTravelDirection;
@@ -5841,15 +6430,113 @@ function TransitLineMapDetail({
   lineColor?: string;
   onDirectionChange: (direction: TransitLineTravelDirection) => void;
   onFocusStation: (stationName: string) => void;
+  onSelectStation: (stationName: string) => void;
+  referenceCoordinate: [number, number];
+  segmentMinutes?: number[];
+  stops?: TransitRouteStop[];
   t: Translate;
 }>) {
   const stationStops = getDirectionalLineStops(line, direction);
-  const firstStationName =
-    stationStops[0]?.displayStationName ?? line.displayFirstStationName ?? line.firstStationName;
-  const lastStationName =
-    stationStops[stationStops.length - 1]?.displayStationName ??
-    line.displayLastStationName ??
-    line.lastStationName;
+  const [now, setNow] = useState(() => new Date());
+  const [selectedStationName, setSelectedStationName] = useState<string | undefined>();
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const realtimeDepartureTimes = getDirectionalDepartureTimes(line, direction);
+  const realtimeStops = stops ?? [];
+  const realtimeStopNames = useMemo(
+    () => realtimeStops.map((stop) => stop.stop.displayStationName ?? stop.stop.stationName),
+    [realtimeStops],
+  );
+  const realtimeStopIndexByName = useMemo(() => {
+    const index = new Map<string, number>();
+    realtimeStops.forEach((stop, stopIndex) => index.set(stop.stop.stationName, stopIndex));
+    return index;
+  }, [realtimeStops]);
+  const nowMinutes = getBeijingClockMinutes(now);
+  const realtimeSnapshot = useMemo(
+    () =>
+      buildTransitRealtimeSnapshot({
+        departureTimes: realtimeDepartureTimes,
+        stopNames: realtimeStopNames,
+        segmentMinutes: segmentMinutes ?? [],
+        nowMinutes,
+      }),
+    [nowMinutes, realtimeDepartureTimes, realtimeStopNames, segmentMinutes],
+  );
+  const vehiclesAtStation = useMemo(() => {
+    const groups = new Map<number, TransitRealtimeVehicle[]>();
+    for (const vehicle of realtimeSnapshot.vehicles) {
+      if (vehicle.status !== 'at_station' || vehicle.stationIndex === undefined) {
+        continue;
+      }
+      const group = groups.get(vehicle.stationIndex) ?? [];
+      group.push(vehicle);
+      groups.set(vehicle.stationIndex, group);
+    }
+    return groups;
+  }, [realtimeSnapshot.vehicles]);
+  const vehiclesInSegment = useMemo(() => {
+    const groups = new Map<number, TransitRealtimeVehicle[]>();
+    for (const vehicle of realtimeSnapshot.vehicles) {
+      if (vehicle.status !== 'in_segment' || vehicle.segmentIndex === undefined) {
+        continue;
+      }
+      const group = groups.get(vehicle.segmentIndex) ?? [];
+      group.push(vehicle);
+      groups.set(vehicle.segmentIndex, group);
+    }
+    return groups;
+  }, [realtimeSnapshot.vehicles]);
+  const selectedStationIndex = selectedStationName
+    ? realtimeStopIndexByName.get(selectedStationName)
+    : undefined;
+  const selectedStationLabel = selectedStationName
+    ? (stationStops.find((stop) => stop.stationName === selectedStationName)?.displayStationName ??
+      selectedStationName)
+    : undefined;
+  const defaultSelectedStationName = useMemo(() => {
+    if (realtimeStops.length === 0) {
+      return undefined;
+    }
+    let nearest = realtimeStops[0]!;
+    for (const stop of realtimeStops) {
+      if (
+        getCoordinateDistance(stop.center, referenceCoordinate) <
+        getCoordinateDistance(nearest.center, referenceCoordinate)
+      ) {
+        nearest = stop;
+      }
+    }
+    return nearest.stop.stationName;
+  }, [referenceCoordinate, realtimeStops]);
+  const defaultSelectionKey = `${line.id}:${direction}`;
+  const appliedDefaultSelectionKeyRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!defaultSelectedStationName) {
+      return;
+    }
+    if (appliedDefaultSelectionKeyRef.current === defaultSelectionKey) {
+      return;
+    }
+    appliedDefaultSelectionKeyRef.current = defaultSelectionKey;
+    setSelectedStationName(defaultSelectedStationName);
+    onSelectStation(defaultSelectedStationName);
+  }, [defaultSelectedStationName, defaultSelectionKey, onSelectStation]);
+  const stationBoard = useMemo(
+    () =>
+      selectedStationIndex === undefined
+        ? []
+        : buildTransitStationBoard({
+            departureTimes: realtimeDepartureTimes,
+            stopNames: realtimeStopNames,
+            segmentMinutes: segmentMinutes ?? [],
+            stationIndex: selectedStationIndex,
+            nowMinutes,
+          }),
+    [nowMinutes, realtimeDepartureTimes, realtimeStopNames, segmentMinutes, selectedStationIndex],
+  );
   const forwardDirectionName =
     line.displayLastStationName ??
     line.lastStationName ??
@@ -5872,69 +6559,351 @@ function TransitLineMapDetail({
         } as CSSProperties
       }
     >
-      <dl>
-        <div>
-          <dt>{t('lineDetail.firstLast')}</dt>
-          <dd>{formatTransitLineTime(line, t)}</dd>
-        </div>
-        <div>
-          <dt>{t('lineDetail.operator')}</dt>
-          <dd>{line.operator ?? t('lineDetail.toBeAdded')}</dd>
-        </div>
-        <div>
-          <dt>{t('map.lineDetail.fare')}</dt>
-          <dd>{formatFareTextWithoutCurrencyUnit(line.fare) ?? t('lineDetail.toBeAdded')}</dd>
-        </div>
-        <div>
-          <dt>{t('map.lineDetail.stations')}</dt>
-          <dd>
-            {firstStationName && lastStationName
-              ? `${firstStationName} → ${lastStationName}`
-              : t('lineDetail.extra.stations', { count: stationStops.length })}
-          </dd>
-        </div>
-      </dl>
-      <SegmentedControl
-        className="map-line-direction-switch"
-        role="tablist"
-        ariaLabel={t('lineDetail.directionAria')}
-        value={direction}
-        onChange={onDirectionChange}
-        options={(
-          [
-            { value: 'forward', name: forwardDirectionName },
-            { value: 'reverse', name: reverseDirectionName },
-          ] as const
-        ).map((option) => ({
-          value: option.value,
-          label: (
-            <span className="material-interaction-label">
-              {t('lineDetail.directionTo', { station: formatMarkerDisplayName(option.name) })}
-            </span>
-          ),
-        }))}
-      />
+      <div className="map-line-detail-summary">
+        <SegmentedControl
+          className="map-line-direction-switch"
+          role="tablist"
+          ariaLabel={t('lineDetail.directionAria')}
+          value={direction}
+          onChange={onDirectionChange}
+          options={(
+            [
+              { value: 'forward', name: forwardDirectionName },
+              { value: 'reverse', name: reverseDirectionName },
+            ] as const
+          ).map((option) => ({
+            value: option.value,
+            label: (
+              <span className="material-interaction-label">
+                {t('lineDetail.directionTo', { station: formatMarkerDisplayName(option.name) })}
+              </span>
+            ),
+          }))}
+        />
+        <TransitLineRealtimeSection
+          departureTimes={realtimeDepartureTimes}
+          now={now}
+          selectedStationIndex={selectedStationIndex}
+          selectedStationLabel={selectedStationLabel}
+          snapshot={realtimeSnapshot}
+          stationBoard={stationBoard}
+          t={t}
+        />
+      </div>
       {stationStops.length > 0 ? (
         <ol className="map-line-station-list">
-          {stationStops.map((stop, index) => (
-            <li key={`${stop.stationName}-${stop.sequence}-${index}`}>
-              <span className="map-line-station-node" aria-hidden="true" />
-              <button
-                className="map-line-station-button"
-                type="button"
-                onClick={() => onFocusStation(stop.stationName)}
+          {stationStops.map((stop, index) => {
+            const realtimeIndex = realtimeStopIndexByName.get(stop.stationName);
+            const atStationVehicles =
+              realtimeIndex !== undefined ? vehiclesAtStation.get(realtimeIndex) : undefined;
+            const segmentVehicles =
+              realtimeIndex !== undefined ? vehiclesInSegment.get(realtimeIndex) : undefined;
+            const isSelected = selectedStationName === stop.stationName;
+            const segmentProgress =
+              segmentVehicles && segmentVehicles.length > 0
+                ? segmentVehicles.reduce((total, vehicle) => total + vehicle.progress, 0) /
+                  segmentVehicles.length
+                : undefined;
+
+            return (
+              <li
+                className={isSelected ? 'is-selected' : ''}
+                key={`${stop.stationName}-${stop.sequence}-${index}`}
               >
-                {formatMarkerDisplayName(stop.displayStationName ?? stop.stationName)}
-                {stop.oneWay ? <small>{formatTransitStopOneWayLabel(stop.oneWay, t)}</small> : null}
-              </button>
-            </li>
-          ))}
+                <span className="map-line-station-node" aria-hidden="true" />
+                {atStationVehicles?.length ? (
+                  <TransitLineVehicleBadge t={t} vehicles={atStationVehicles} />
+                ) : null}
+                {segmentVehicles?.length && segmentProgress !== undefined ? (
+                  <TransitLineVehicleBadge
+                    segmentProgress={segmentProgress}
+                    t={t}
+                    vehicles={segmentVehicles}
+                  />
+                ) : null}
+                <span className="map-line-station-copy">
+                  <span className="map-line-station-main">
+                    <button
+                      className="map-line-station-button"
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => {
+                        setSelectedStationName(stop.stationName);
+                        onSelectStation(stop.stationName);
+                      }}
+                    >
+                      {formatMarkerDisplayName(stop.displayStationName ?? stop.stationName)}
+                      {stop.oneWay ? (
+                        <small>{formatTransitStopOneWayLabel(stop.oneWay, t)}</small>
+                      ) : null}
+                    </button>
+                    {isSelected ? (
+                      <button
+                        className="map-line-station-poi-button"
+                        type="button"
+                        aria-label={t('map.lineStation.showPoi')}
+                        title={t('map.lineStation.showPoi')}
+                        onClick={() => onFocusStation(stop.stationName)}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          location_on
+                        </span>
+                      </button>
+                    ) : null}
+                  </span>
+                </span>
+              </li>
+            );
+          })}
         </ol>
       ) : (
         <p>{t('lineDetail.stationListEmpty')}</p>
       )}
     </div>
   );
+}
+
+function TransitLineVehicleBadge({
+  segmentProgress,
+  t,
+  vehicles,
+}: Readonly<{
+  segmentProgress?: number;
+  t: Translate;
+  vehicles: TransitRealtimeVehicle[];
+}>) {
+  const label = vehicles
+    .map((vehicle) =>
+      t('map.lineRealtime.vehicleBadge', {
+        count: vehicle.ordinal,
+        time: vehicle.departureTime,
+      }),
+    )
+    .join('；');
+
+  return (
+    <span
+      className={
+        segmentProgress === undefined
+          ? 'map-line-vehicle-badge is-station'
+          : 'map-line-vehicle-badge is-segment'
+      }
+      role="img"
+      aria-label={label}
+      title={label}
+      style={
+        segmentProgress === undefined
+          ? undefined
+          : {
+              top: `calc(14px + (100% - 14px) * ${Math.max(0, Math.min(1, segmentProgress))})`,
+            }
+      }
+    >
+      <span className="material-symbols-outlined" aria-hidden="true">
+        directions_bus
+      </span>
+      {vehicles.length > 1 ? <small>{vehicles.length}</small> : null}
+    </span>
+  );
+}
+
+function TransitLineRealtimeSection({
+  departureTimes,
+  now,
+  selectedStationIndex,
+  selectedStationLabel,
+  snapshot,
+  stationBoard,
+  t,
+}: Readonly<{
+  departureTimes: string[];
+  now: Date;
+  selectedStationIndex?: number;
+  selectedStationLabel?: string;
+  snapshot: TransitRealtimeSnapshot;
+  stationBoard: TransitStationBoardEntry[];
+  t: Translate;
+}>) {
+  const [detailEntry, setDetailEntry] = useState<TransitStationBoardEntry | null>(null);
+  const vehicles = snapshot.vehicles;
+  const nowMinutes = getBeijingClockMinutes(now);
+  const clock = formatTransitClockMinutes(nowMinutes);
+  const visibleBoard = stationBoard.slice(0, 3);
+  const activeAtSelectedStationCount =
+    selectedStationIndex === undefined
+      ? vehicles.length
+      : vehicles.filter((vehicle) => {
+          const departure = vehicle.stationDepartureMinutes?.[selectedStationIndex];
+          return departure !== undefined && nowMinutes < departure;
+        }).length;
+  const activeVehicle = detailEntry
+    ? vehicles.find(
+        (vehicle) =>
+          vehicle.ordinal === detailEntry.ordinal &&
+          vehicle.departureTime === detailEntry.departureTime,
+      )
+    : undefined;
+
+  return (
+    <section className="map-line-realtime" aria-labelledby="map-line-realtime-title">
+      <div className="map-line-realtime-head">
+        <h3 id="map-line-realtime-title">
+          <span className="material-symbols-outlined" aria-hidden="true">
+            directions_bus
+          </span>
+          {t('map.lineRealtime.title')}
+          {selectedStationIndex !== undefined ? (
+            <span
+              className="map-line-realtime-count"
+              title={t('map.lineRealtime.countBadgeAria', {
+                active: activeAtSelectedStationCount,
+                total: stationBoard.length,
+              })}
+            >
+              {t('map.lineRealtime.countBadge', {
+                active: activeAtSelectedStationCount,
+                total: stationBoard.length,
+              })}
+            </span>
+          ) : null}
+        </h3>
+        <span className="map-line-realtime-meta">
+          {t('map.lineRealtime.updatedAt', { time: clock })}
+        </span>
+      </div>
+      {departureTimes.length === 0 ? (
+        <p className="map-line-realtime-empty">{t('map.lineRealtime.emptySchedule')}</p>
+      ) : selectedStationLabel === undefined ? (
+        <p className="map-line-realtime-empty">{t('map.lineRealtime.selectStationHint')}</p>
+      ) : selectedStationIndex === undefined ? (
+        <p className="map-line-realtime-empty">{t('map.lineRealtime.stationNoData')}</p>
+      ) : visibleBoard.length === 0 ? (
+        <p className="map-line-realtime-empty">{t('map.lineRealtime.noMoreTrips')}</p>
+      ) : (
+        <ol className="map-line-realtime-list is-board">
+          {visibleBoard.map((entry) => (
+            <li key={entry.id}>
+              <button
+                className="map-line-realtime-board-item"
+                type="button"
+                onClick={() => setDetailEntry(entry)}
+              >
+                <strong className={`is-${entry.status}`}>
+                  {getStationBoardStatusText(entry, t)}
+                </strong>
+                <small>{getStationBoardTimeText(entry, t)}</small>
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+      {detailEntry && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="modal-backdrop"
+              role="presentation"
+              onMouseDown={() => setDetailEntry(null)}
+            >
+              <section
+                className="modal-panel map-line-trip-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="map-line-trip-title"
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <div className="section-heading">
+                  <h2 id="map-line-trip-title">
+                    {t('map.lineRealtime.tripTitle', { count: detailEntry.ordinal })}
+                  </h2>
+                  <button
+                    className="icon-action-button"
+                    type="button"
+                    aria-label={t('map.poi.close')}
+                    onClick={() => setDetailEntry(null)}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      close
+                    </span>
+                  </button>
+                </div>
+                <dl className="line-attribute-list">
+                  <div>
+                    <dt>{t('map.lineRealtime.detailDeparture')}</dt>
+                    <dd>{detailEntry.departureTime}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('map.lineRealtime.detailPosition')}</dt>
+                    <dd>
+                      {activeVehicle
+                        ? activeVehicle.status === 'at_station'
+                          ? t('map.lineRealtime.atStation', {
+                              station: activeVehicle.stationName ?? '',
+                            })
+                          : t('map.lineRealtime.inSegment', {
+                              from: activeVehicle.fromStationName ?? '',
+                              to: activeVehicle.toStationName ?? '',
+                            })
+                        : t('map.lineRealtime.detailWaiting')}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>{t('map.lineRealtime.detailSelectedStation')}</dt>
+                    <dd>{selectedStationLabel ?? ''}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('map.lineRealtime.detailArrival')}</dt>
+                    <dd>{formatTransitClockMinutes(detailEntry.arrivalMinutes)}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('map.lineRealtime.detailDepartureAtStation')}</dt>
+                    <dd>{formatTransitClockMinutes(detailEntry.departureMinutes)}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('map.lineRealtime.detailStatus')}</dt>
+                    <dd>{getStationBoardStatusText(detailEntry, t)}</dd>
+                  </div>
+                </dl>
+              </section>
+            </div>,
+            document.body,
+          )
+        : null}
+    </section>
+  );
+}
+
+function getStationBoardStatusText(entry: TransitStationBoardEntry, t: Translate): string {
+  switch (entry.status) {
+    case 'waiting':
+      return t('map.lineRealtime.boardWaiting');
+    case 'arriving':
+      return t('map.lineRealtime.boardMinutes', { minutes: entry.minutesToStation ?? 1 });
+    case 'arriving_now':
+      return t('map.lineRealtime.boardArriving');
+    case 'leaving':
+      return t('map.lineRealtime.boardLeaving');
+    default:
+      return t('map.lineRealtime.boardWaiting');
+  }
+}
+
+function getStationBoardTimeText(entry: TransitStationBoardEntry, t: Translate): string {
+  return entry.status === 'leaving'
+    ? t('map.lineRealtime.boardDepartureAt', {
+        time: formatTransitClockMinutes(entry.departureMinutes),
+      })
+    : t('map.lineRealtime.boardArrivalAt', {
+        time: formatTransitClockMinutes(entry.arrivalMinutes),
+      });
+}
+
+function getDirectionalDepartureTimes(
+  line: TransitOverviewLine,
+  direction: TransitLineTravelDirection,
+): string[] {
+  const down = line.departureTimesByDirection?.down ?? line.departureTimes;
+  const up = line.departureTimesByDirection?.up;
+  return direction === 'forward' ? (down ?? []) : (up ?? []);
 }
 
 function RoadMapDetail({ marker, t }: Readonly<{ marker: EndpointGroupMarker; t: Translate }>) {
@@ -5962,6 +6931,7 @@ function RoadMapDetail({ marker, t }: Readonly<{ marker: EndpointGroupMarker; t:
 function RoutePlanDraftCard({
   draft,
   t,
+  blockedByLinearEndpoints,
   collapsed,
   editingEndpoint,
   enabledModes,
@@ -5989,6 +6959,7 @@ function RoutePlanDraftCard({
 }: Readonly<{
   draft: RoutePlanDraft;
   t: Translate;
+  blockedByLinearEndpoints: boolean;
   collapsed: boolean;
   editingEndpoint: RouteEndpointKind | null;
   enabledModes: EnabledRouteTransportModes;
@@ -6265,7 +7236,9 @@ function RoutePlanDraftCard({
                 <RoutePlanSortControl mode={sortMode} onChange={onSortModeChange} t={t} />
               </div>
               <div className="map-route-option-list" aria-label={t('map.route.optionsAria')}>
-                {status === 'loading' ? (
+                {blockedByLinearEndpoints ? (
+                  <p className="map-route-plan-note">{t('map.route.linearEndpointBlocked')}</p>
+                ) : status === 'loading' ? (
                   <p className="map-route-plan-note">{t('map.route.planning')}</p>
                 ) : options.length > 0 ? (
                   options.map((option) => {
@@ -12409,7 +13382,10 @@ function PoiActionBar({
         <button
           className="icon-action-button"
           type="button"
-          aria-label={t('map.poi.nearbyAria', { name: marker.label })}
+          aria-label={t(
+            isLinearDetailMarker(marker) ? 'map.poi.nearbyAlongAria' : 'map.poi.nearbyAria',
+            { name: marker.label },
+          )}
           onClick={onSearchNearby}
         >
           <span className="material-symbols-outlined" aria-hidden="true">
@@ -12445,13 +13421,21 @@ function PoiActionBar({
   );
 }
 
-function buildDirectionalTransitLineMarker(
+interface DirectionalTransitLineRoute {
+  marker: TransitLineMarker;
+  route: TransitSegmentRouteResolution;
+  segmentMinutes: number[];
+  stops: TransitRouteStop[];
+}
+
+function buildDirectionalTransitLineRoute(
   marker: TransitLineMarker,
   line: TransitOverviewLine,
   direction: TransitLineTravelDirection,
   pointMarkers: PointMarker[],
   roadGraph?: RoadRouteGraph,
-): TransitLineMarker {
+  roadTiming?: MapSpatialProfile['roadTiming'],
+): DirectionalTransitLineRoute | undefined {
   const mode = isRouteTransportMode(line.mode) ? line.mode : undefined;
   const fallbackMarkerById = new Map(
     pointMarkers.map((pointMarker) => [pointMarker.id, pointMarker]),
@@ -12471,21 +13455,105 @@ function buildDirectionalTransitLineMarker(
     .filter((stop): stop is Omit<TransitRouteStop, 'index'> => Boolean(stop))
     .map((stop, index): TransitRouteStop => ({ ...stop, index }));
   if (stops.length < 2) {
-    return marker;
+    return undefined;
   }
 
   const route = buildTransitSegmentRoute(stops, mode ?? 'walk', line, direction, roadGraph);
-  if (route.coordinates.length < 2) {
-    return marker;
-  }
+  const hasResolvedRoute = route.resolved && route.coordinates.length >= 2;
+  const realtimeRoute = hasResolvedRoute
+    ? route
+    : buildStraightTransitRealtimeRoute(stops, line, direction);
 
   return {
-    ...marker,
-    geometry: {
-      type: 'MultiPoint',
-      coordinates: route.coordinates,
-    },
+    marker: hasResolvedRoute
+      ? {
+          ...marker,
+          geometry: {
+            type: 'MultiPoint',
+            coordinates: route.coordinates,
+          },
+        }
+      : marker,
+    route: realtimeRoute,
+    segmentMinutes: resolveTransitRealtimeSegmentMinutes(
+      stops,
+      realtimeRoute,
+      mode ?? 'walk',
+      roadTiming,
+    ),
+    stops,
   };
+}
+
+function buildStraightTransitRealtimeRoute(
+  stops: TransitRouteStop[],
+  line: TransitOverviewLine,
+  direction: TransitLineTravelDirection,
+): TransitSegmentRouteResolution {
+  const measurements = stops.slice(1).map((current, index) => {
+    const previous = stops[index]!;
+    return {
+      distance: getCoordinateDistance(previous.center, current.center),
+      junctionCount: 0,
+      travelMinutes: getConfiguredTransitSegment(line, previous, current, direction)?.travelMinutes,
+    };
+  });
+  return {
+    coordinates: stops.map((stop) => stop.center),
+    distance: measurements.reduce((total, measurement) => total + measurement.distance, 0),
+    measurements,
+    resolved: true,
+    usesRoadGraph: false,
+  };
+}
+
+function resolveTransitRealtimeSegmentMinutes(
+  stops: TransitRouteStop[],
+  route: TransitSegmentRouteResolution,
+  mode: RouteTransportMode,
+  roadTiming?: MapSpatialProfile['roadTiming'],
+): number[] {
+  const defaultBusSpeedKmh = roadTiming?.defaultBusSpeedKmh ?? 30;
+  const busJunctionDelaySeconds = roadTiming?.busJunctionDelaySeconds ?? 12;
+  const segmentCount = Math.max(0, stops.length - 1);
+
+  return Array.from({ length: segmentCount }, (_, index) => {
+    const measurement = route.measurements[index];
+    if (
+      measurement?.travelMinutes !== undefined &&
+      Number.isFinite(measurement.travelMinutes) &&
+      measurement.travelMinutes > 0
+    ) {
+      return Math.max(1, measurement.travelMinutes);
+    }
+
+    const previousTravelTime = stops[index]?.stop.travelTime;
+    const currentTravelTime = stops[index + 1]?.stop.travelTime;
+    if (
+      previousTravelTime !== undefined &&
+      currentTravelTime !== undefined &&
+      Number.isFinite(previousTravelTime) &&
+      Number.isFinite(currentTravelTime) &&
+      currentTravelTime > previousTravelTime
+    ) {
+      // 旧数据里相邻站的 travelTime 多为累计分钟，差值即为区间用时。
+      return Math.max(1, currentTravelTime - previousTravelTime);
+    }
+
+    if (!measurement) {
+      return 1;
+    }
+
+    const minutes = shouldUseRoadGraphForTransitMode(mode)
+      ? estimateVehicleRouteMinutes(
+          measurement.distance,
+          defaultBusSpeedKmh,
+          measurement.junctionCount,
+          busJunctionDelaySeconds,
+        )
+      : estimateRouteMinutes(measurement.distance, getTransitSpeedFactor(mode));
+    return Math.max(1, Math.round(minutes));
+  });
 }
 
 function getDirectionalLineStops(
@@ -12609,6 +13677,14 @@ function isRoutableLineGeometryMarker(marker: MapMarkerSnapshot['markers'][numbe
 
 function isLinearDetailMarker(marker: MapMarkerSnapshot['markers'][number]): boolean {
   return isTransitLineMarker(marker) || isRoadEndpointGroupMarker(marker);
+}
+
+function isLinearDetailMarkerId(
+  markerId: string | undefined,
+  markerIndex: ReadonlyMap<string, CenterableMarker>,
+): boolean {
+  const marker = markerId ? markerIndex.get(markerId) : undefined;
+  return marker ? isLinearDetailMarker(marker) : false;
 }
 
 function isTransitStationPoi(marker: MapMarkerSnapshot['markers'][number]): boolean {
@@ -16252,6 +17328,128 @@ function getMarkerCenter(marker: CenterableMarker): [number, number] | undefined
   }
   const bounds = getCoordinateBounds(coordinates);
   return [(bounds.minX + bounds.maxX) / 2, (bounds.minZ + bounds.maxZ) / 2];
+}
+
+interface CoordinateChainProjection {
+  coordinate: [number, number];
+  distance: number;
+  mileage: number;
+}
+
+/**
+ * 线性 POI 使用有序折线：道路端点组按道路走向排序，线路直接使用站点顺序。
+ */
+function getLinearMarkerChain(marker: CenterableMarker): Array<[number, number]> {
+  const coordinates = getMapGeometryCoordinates(marker.geometry);
+  if (coordinates.length < 2) {
+    return coordinates;
+  }
+
+  return isRoadEndpointGroupMarker(marker) ? orderRoadTracePoints(coordinates) : coordinates;
+}
+
+function findCoordinateChainProjection(
+  point: [number, number],
+  chain: Array<[number, number]>,
+): CoordinateChainProjection | undefined {
+  if (chain.length === 0) {
+    return undefined;
+  }
+  if (chain.length === 1) {
+    const coordinate = chain[0]!;
+    return { coordinate, distance: getCoordinateDistance(point, coordinate), mileage: 0 };
+  }
+
+  let best: CoordinateChainProjection | undefined;
+  let traveled = 0;
+  for (let index = 1; index < chain.length; index += 1) {
+    const from = chain[index - 1]!;
+    const to = chain[index]!;
+    const deltaX = to[0] - from[0];
+    const deltaZ = to[1] - from[1];
+    const segmentLength = Math.hypot(deltaX, deltaZ);
+    const squareLength = deltaX * deltaX + deltaZ * deltaZ;
+    const ratio =
+      squareLength === 0
+        ? 0
+        : Math.max(
+            0,
+            Math.min(
+              1,
+              ((point[0] - from[0]) * deltaX + (point[1] - from[1]) * deltaZ) / squareLength,
+            ),
+          );
+    const coordinate: [number, number] = [from[0] + deltaX * ratio, from[1] + deltaZ * ratio];
+    const distance = getCoordinateDistance(point, coordinate);
+    if (!best || distance < best.distance) {
+      best = { coordinate, distance, mileage: traveled + segmentLength * ratio };
+    }
+    traveled += segmentLength;
+  }
+
+  return best;
+}
+
+function findNearestChainEndpoint(
+  point: [number, number],
+  chain: Array<[number, number]>,
+): [number, number] | undefined {
+  if (chain.length === 0) {
+    return undefined;
+  }
+  const start = chain[0]!;
+  const end = chain[chain.length - 1]!;
+  return getCoordinateDistance(point, start) <= getCoordinateDistance(point, end) ? start : end;
+}
+
+function sliceCoordinateChainByMileage(
+  chain: Array<[number, number]>,
+  startMileage: number,
+  endMileage: number,
+): Array<[number, number]> {
+  if (chain.length < 2) {
+    return [];
+  }
+
+  const total = getCoordinateChainDistance(chain);
+  const start = Math.max(0, Math.min(startMileage, total));
+  const end = Math.max(0, Math.min(endMileage, total));
+  if (end - start < 0.01) {
+    return [];
+  }
+
+  const result: Array<[number, number]> = [];
+  let traveled = 0;
+  for (let index = 1; index < chain.length; index += 1) {
+    const from = chain[index - 1]!;
+    const to = chain[index]!;
+    const segmentLength = getCoordinateDistance(from, to);
+    const segmentStart = traveled;
+    const segmentEnd = traveled + segmentLength;
+    traveled = segmentEnd;
+
+    if (segmentEnd < start) {
+      continue;
+    }
+    if (segmentStart > end) {
+      break;
+    }
+
+    if (result.length === 0) {
+      const ratio = segmentLength === 0 ? 0 : Math.max(0, (start - segmentStart) / segmentLength);
+      result.push([from[0] + (to[0] - from[0]) * ratio, from[1] + (to[1] - from[1]) * ratio]);
+    }
+
+    if (segmentEnd <= end) {
+      result.push(to);
+    } else {
+      const ratio = segmentLength === 0 ? 0 : (end - segmentStart) / segmentLength;
+      result.push([from[0] + (to[0] - from[0]) * ratio, from[1] + (to[1] - from[1]) * ratio]);
+      break;
+    }
+  }
+
+  return dedupeConsecutiveCoordinates(result);
 }
 
 function getMapGeometryCoordinates(geometry: MapGeometry): Array<[number, number]> {

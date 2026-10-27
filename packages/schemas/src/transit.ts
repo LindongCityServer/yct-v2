@@ -204,18 +204,18 @@ export const transitLineDraftSchema = z.object({
   fare: z.string().trim().max(80).optional(),
   firstBus: z.string().trim().max(40).optional(),
   lastBus: z.string().trim().max(40).optional(),
-  departureTimes: z.array(z.string().trim().min(1).max(40)).max(128).optional(),
-  departureRules: z.array(transitDepartureScheduleRuleSchema).max(128).optional(),
+  departureTimes: z.array(z.string().trim().min(1).max(40)).optional(),
+  departureRules: z.array(transitDepartureScheduleRuleSchema).optional(),
   departureTimesByDirection: z
     .object({
-      down: z.array(z.string().trim().min(1).max(40)).max(128).optional(),
-      up: z.array(z.string().trim().min(1).max(40)).max(128).optional(),
+      down: z.array(z.string().trim().min(1).max(40)).optional(),
+      up: z.array(z.string().trim().min(1).max(40)).optional(),
     })
     .optional(),
   departureRulesByDirection: z
     .object({
-      down: z.array(transitDepartureScheduleRuleSchema).max(128).optional(),
-      up: z.array(transitDepartureScheduleRuleSchema).max(128).optional(),
+      down: z.array(transitDepartureScheduleRuleSchema).optional(),
+      up: z.array(transitDepartureScheduleRuleSchema).optional(),
     })
     .optional(),
   operatingDateRule: z.string().trim().max(240).optional(),

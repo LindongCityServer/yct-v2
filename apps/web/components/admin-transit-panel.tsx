@@ -7668,9 +7668,6 @@ function parseTransitDepartureScheduleText(value: string): {
   }
 
   const uniqueDepartureTimes = Array.from(new Set(departureTimes));
-  if (uniqueDepartureTimes.length > 128) {
-    return { rules: [], departureTimes: [], error: '展开后的发车时刻不能超过 128 个。' };
-  }
   return { rules, departureTimes: uniqueDepartureTimes };
 }
 

@@ -44,6 +44,11 @@ export interface TransitLineSummary {
     last?: string;
   };
   departureTimes?: string[];
+  /** 按线路站序（down）与反向站序（up）分别记录的首站发车时刻。 */
+  departureTimesByDirection?: {
+    down?: string[];
+    up?: string[];
+  };
   bookingUrl?: string;
   routeMode?: TransitLineRouteMode;
   routeNodes?: TransitLineRouteNodeSnapshot[];
@@ -415,6 +420,7 @@ export function buildTransitOverview(
       fare: line.fare,
       firstLastBus: line.firstLastBus,
       departureTimes: line.departureTimes,
+      departureTimesByDirection: resolveTransitDepartureTimesByDirection(line),
       bookingUrl: line.bookingUrl,
       routeMode: line.routeMode,
       routeNodes: line.routeNodes,
@@ -435,6 +441,19 @@ export function buildTransitOverview(
     lines,
     stationDetails: snapshot.stationDetails,
   };
+}
+
+function resolveTransitDepartureTimesByDirection(
+  line: TransitLineSnapshot,
+): TransitLineSummary['departureTimesByDirection'] {
+  const down = normalizeDepartureTimes(line.departureTimesByDirection?.down ?? line.departureTimes);
+  const up = normalizeDepartureTimes(line.departureTimesByDirection?.up);
+  return down || up ? { ...(down ? { down } : {}), ...(up ? { up } : {}) } : undefined;
+}
+
+function normalizeDepartureTimes(values: string[] | undefined): string[] | undefined {
+  const normalized = (values ?? []).map((value) => value.trim()).filter(Boolean);
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 function buildTransitLineStopSummaries(
@@ -462,8 +481,7 @@ function buildTransitLineStopSummaries(
       return {
         stationSourceId: stop.stationSourceId,
         stationName,
-        operationStatus:
-          stationById.get(stop.stationSourceId)?.operationStatus ?? 'operating',
+        operationStatus: stationById.get(stop.stationSourceId)?.operationStatus ?? 'operating',
         stationMarkerIds: getTransitStationMarkerIds(
           stationById.get(stop.stationSourceId),
           stop.stopLocationRefs,

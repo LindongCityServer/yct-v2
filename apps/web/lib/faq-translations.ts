@@ -283,6 +283,12 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             ],
             keywords: ['時刻表', '車次', '停運', '發車時間'],
           },
+          'realtime-bus-estimation': {
+            question: '線路詳情裡的「即時公車」是怎麼算出來的？',
+            answer:
+              '即時公車依後台錄入的首站發車時刻表推算，並不會讀取車輛 GPS。站間用時優先使用後台設定的區間用時；沒有設定時，按站點間線路長度與平均運行速度估算。因此它適合判斷車輛大致在站點還是區間，精確到分鐘的時間僅供參考；沒有錄入時刻表的方向不會顯示車輛。',
+            keywords: ['即時公車', '車輛位置', '預計到站', '發車時刻', '區間用時'],
+          },
           'schedule-filtering': {
             question: '怎樣縮小班次查詢結果範圍？',
             answer: [
@@ -957,6 +963,18 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
               ' for temporary adjustments, suspensions, and other notices.',
             ],
             keywords: ['timetable', 'trip', 'suspension', 'departure time'],
+          },
+          'realtime-bus-estimation': {
+            question: 'How is “Live buses” in the line details calculated?',
+            answer:
+              'Live buses are estimated from the terminal departure timetable recorded in the admin panel; vehicle GPS is not used. Segment times use the configured segment duration first. When it is missing, the route length between stops and average operating speed are used. Treat the result as an indication of whether a vehicle is at a stop or between stops; minute-level times are estimates. Directions without a recorded timetable show no vehicles.',
+            keywords: [
+              'live bus',
+              'vehicle position',
+              'ETA',
+              'departure timetable',
+              'segment time',
+            ],
           },
           'schedule-filtering': {
             question: 'How can I narrow schedule search results?',

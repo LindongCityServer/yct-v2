@@ -275,6 +275,7 @@ export type CommonMessageKey =
   | 'map.markerList.default'
   | 'map.markerList.fullLength'
   | 'map.markerList.nearby'
+  | 'map.markerList.nearbyLinear'
   | 'map.markerList.playerCount'
   | 'map.markerList.results'
   | 'map.metroInfrastructure.direction.down'
@@ -359,8 +360,55 @@ export type CommonMessageKey =
   | 'map.layer.tileProviderAria'
   | 'map.lineDetail.fare'
   | 'map.lineDetail.stations'
+  | 'map.lineInfo.openAria'
+  | 'map.lineInfo.timezoneNote'
+  | 'map.lineInfo.title'
+  | 'map.lineRealtime.atStation'
+  | 'map.lineRealtime.beijingTime'
+  | 'map.lineRealtime.boardArrivalAt'
+  | 'map.lineRealtime.boardArriving'
+  | 'map.lineRealtime.boardDepartureAt'
+  | 'map.lineRealtime.boardLeaving'
+  | 'map.lineRealtime.boardMinutes'
+  | 'map.lineRealtime.boardWaiting'
+  | 'map.lineRealtime.countBadge'
+  | 'map.lineRealtime.countBadgeAria'
+  | 'map.lineRealtime.detailArrival'
+  | 'map.lineRealtime.detailDeparture'
+  | 'map.lineRealtime.detailDepartureAtStation'
+  | 'map.lineRealtime.detailPosition'
+  | 'map.lineRealtime.detailSelectedStation'
+  | 'map.lineRealtime.detailStatus'
+  | 'map.lineRealtime.detailWaiting'
+  | 'map.lineRealtime.emptyActive'
+  | 'map.lineRealtime.emptySchedule'
+  | 'map.lineRealtime.inSegment'
+  | 'map.lineRealtime.minutesToNext'
+  | 'map.lineRealtime.nextDeparture'
+  | 'map.lineRealtime.nextDepartureNextDay'
+  | 'map.lineRealtime.noMoreTrips'
+  | 'map.lineRealtime.note'
+  | 'map.lineRealtime.selectStationHint'
+  | 'map.lineRealtime.stationAt'
+  | 'map.lineRealtime.stationEta'
+  | 'map.lineRealtime.stationNextArrival'
+  | 'map.lineRealtime.stationNoData'
+  | 'map.lineRealtime.stationNoVehicle'
+  | 'map.lineRealtime.stationPassed'
+  | 'map.lineRealtime.summary'
+  | 'map.lineRealtime.title'
+  | 'map.lineRealtime.trip'
+  | 'map.lineRealtime.tripTitle'
+  | 'map.lineRealtime.updatedAt'
+  | 'map.lineRealtime.vehicleBadge'
+  | 'map.lineStation.showPoi'
   | 'map.nearby.exit'
+  | 'map.nearby.mileage'
   | 'map.nearby.note'
+  | 'map.nearby.noteLinear'
+  | 'map.nearby.rangeAria'
+  | 'map.nearby.rangeLabel'
+  | 'map.nearby.rangeValue'
   | 'map.nearby.scopeAria'
   | 'map.nearby.scopeInside'
   | 'map.nearby.scopeOutside'
@@ -403,6 +451,7 @@ export type CommonMessageKey =
   | 'map.poi.imageCounter'
   | 'map.poi.imageNext'
   | 'map.poi.imagePrevious'
+  | 'map.poi.nearbyAlongAria'
   | 'map.poi.nearbyAria'
   | 'map.poi.noConnections'
   | 'map.poi.noFacilities'
@@ -544,6 +593,7 @@ export type CommonMessageKey =
   | 'map.route.duration.short'
   | 'map.route.duration.step'
   | 'map.route.edit'
+  | 'map.route.linearEndpointBlocked'
   | 'map.route.endpointCandidatesAria'
   | 'map.route.expand'
   | 'map.route.featuresAria'
@@ -971,6 +1021,7 @@ export type CommonMessageKey =
   | 'globalSearch.assistant.error'
   | 'globalSearch.assistant.followUps'
   | 'globalSearch.assistant.followUpsLoading'
+  | 'globalSearch.assistant.followUpsUnavailable'
   | 'globalSearch.assistant.key'
   | 'globalSearch.assistant.keyPlaceholder'
   | 'globalSearch.assistant.model'
@@ -1012,6 +1063,9 @@ export type CommonMessageKey =
   | 'globalSearch.status.searching'
   | 'globalSearch.suggestion.account'
   | 'globalSearch.suggestion.aiLoading'
+  | 'globalSearch.suggestion.aiOff'
+  | 'globalSearch.suggestion.aiSettings'
+  | 'globalSearch.suggestion.aiUnavailable'
   | 'globalSearch.suggestion.highlightLine'
   | 'globalSearch.suggestion.highlightMarker'
   | 'globalSearch.suggestion.highlightStation'
@@ -2171,6 +2225,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.markerList.default': '地图标记',
     'map.markerList.fullLength': '全长 {distance}',
     'map.markerList.nearby': '{name}周边',
+    'map.markerList.nearbyLinear': '{name}沿线',
     'map.markerList.playerCount': '{online}/{total} 个',
     'map.markerList.results': '搜索结果',
     'map.metroInfrastructure.direction.down': '向下',
@@ -2251,8 +2306,56 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.layer.tileProviderAria': '瓦片源',
     'map.lineDetail.fare': '票价',
     'map.lineDetail.stations': '站点',
+    'map.lineInfo.openAria': '查看 {name} 线路信息',
+    'map.lineInfo.timezoneNote': '首末车、发车时刻与预计到站时间均为北京时间（UTC+8）。',
+    'map.lineInfo.title': '{name} · 线路信息',
+    'map.lineRealtime.atStation': '停靠 {station}',
+    'map.lineRealtime.beijingTime': '北京时间',
+    'map.lineRealtime.boardArrivalAt': '{time} 到达',
+    'map.lineRealtime.boardArriving': '即将到站',
+    'map.lineRealtime.boardDepartureAt': '{time} 离开',
+    'map.lineRealtime.boardLeaving': '即将离开',
+    'map.lineRealtime.boardMinutes': '{minutes} 分钟',
+    'map.lineRealtime.boardWaiting': '等待发车',
+    'map.lineRealtime.countBadge': '{active}/{total}',
+    'map.lineRealtime.countBadgeAria': '在途 {active} 辆，未离开选中车站 {total} 班',
+    'map.lineRealtime.detailArrival': '预计到达',
+    'map.lineRealtime.detailDeparture': '首站发车',
+    'map.lineRealtime.detailDepartureAtStation': '预计离开',
+    'map.lineRealtime.detailPosition': '当前位置',
+    'map.lineRealtime.detailSelectedStation': '选中车站',
+    'map.lineRealtime.detailStatus': '到站状态',
+    'map.lineRealtime.detailWaiting': '尚未发车',
+    'map.lineRealtime.emptyActive': '当前时段暂无在途车辆',
+    'map.lineRealtime.emptySchedule': '该方向尚未录入发车时刻表',
+    'map.lineRealtime.inSegment': '行驶于 {from} → {to} 区间',
+    'map.lineRealtime.minutesToNext': '距下一站约 {count} 分钟',
+    'map.lineRealtime.nextDeparture': '下一班 {time}',
+    'map.lineRealtime.nextDepartureNextDay': '下一班 {time}（次日）',
+    'map.lineRealtime.noMoreTrips': '今日已无后续班次',
+    'map.lineRealtime.note':
+      '按已录入的首站发车时刻推算；区间用时优先使用后台设置，缺失时按线路长度与平均速度估算。',
+    'map.lineRealtime.selectStationHint': '点击站点查看该站实时信息',
+    'map.lineRealtime.stationAt': '当前有车停靠',
+    'map.lineRealtime.stationEta': '预计 {time} 到达 · 约 {minutes} 分钟',
+    'map.lineRealtime.stationNextArrival': '最近一班约 {minutes} 分钟后到达（预计 {time}）',
+    'map.lineRealtime.stationNoData': '该站暂无实时站点数据',
+    'map.lineRealtime.stationNoVehicle': '当前没有前往该站的车辆',
+    'map.lineRealtime.stationPassed': '已通过该站',
+    'map.lineRealtime.summary': '共 {count} 辆在途',
+    'map.lineRealtime.title': '实时公交',
+    'map.lineRealtime.trip': '第 {count} 班 · {time} 发车',
+    'map.lineRealtime.tripTitle': '第 {count} 班',
+    'map.lineRealtime.updatedAt': '更新于 {time}',
+    'map.lineRealtime.vehicleBadge': '第 {count} 班 · {time} 发车',
+    'map.lineStation.showPoi': '查看站点',
     'map.nearby.exit': '退出',
+    'map.nearby.mileage': '沿线 {distance}',
     'map.nearby.note': '按距离显示 {name} 周边标记',
+    'map.nearby.noteLinear': '按沿线里程显示 {name} 沿线标记',
+    'map.nearby.rangeAria': '沿线里程范围',
+    'map.nearby.rangeLabel': '沿线范围',
+    'map.nearby.rangeValue': '{from} - {to}',
     'map.nearby.scopeAria': '区域周边范围',
     'map.nearby.scopeInside': '区域内',
     'map.nearby.scopeOutside': '区域外附近',
@@ -2295,6 +2398,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.imageCounter': '{current} / {total}',
     'map.poi.imageNext': '下一张图片',
     'map.poi.imagePrevious': '上一张图片',
+    'map.poi.nearbyAlongAria': '搜索 {name} 沿线标记',
     'map.poi.nearbyAria': '搜索 {name} 周边',
     'map.poi.noConnections': '暂无已知接驳线路',
     'map.poi.noFacilities': '暂无设施数据',
@@ -2412,6 +2516,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.alight': '{name} 下车',
     'map.route.alightFerry': '{name} 下船',
     'map.route.alightMetro': '{name} 出站',
+    'map.route.linearEndpointBlocked': '起点和终点不能同时为线路或道路等线性要素',
     'map.route.aria': '路线规划',
     'map.route.arrive': '到达 {name}',
     'map.route.badge.fastest': '最快到达',
@@ -2893,6 +2998,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'globalSearch.assistant.error': '问一问暂时没有返回结果，先给你站内资料。',
     'globalSearch.assistant.followUps': '继续追问',
     'globalSearch.assistant.followUpsLoading': '正在准备追问建议…',
+    'globalSearch.assistant.followUpsUnavailable': 'AI 追问建议暂时不可用。',
     'globalSearch.assistant.key': 'API Key',
     'globalSearch.assistant.keyPlaceholder': '粘贴你的 API Key',
     'globalSearch.assistant.model': '模型',
@@ -2937,8 +3043,11 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'globalSearch.status.searching': '正在搜索…',
     'globalSearch.suggestion.account': '乘车码打不开怎么办',
     'globalSearch.suggestion.aiLoading': '正在结合当前页面生成推荐项…',
-    'globalSearch.suggestion.highlightLine': '这条线经过哪些地方？',
-    'globalSearch.suggestion.highlightMarker': '{name}怎么走？',
+    'globalSearch.suggestion.aiOff': '当前使用站内数据生成推荐项。',
+    'globalSearch.suggestion.aiSettings': '开启 AI 推荐',
+    'globalSearch.suggestion.aiUnavailable': 'AI 推荐项暂时不可用，已改用站内数据。',
+    'globalSearch.suggestion.highlightLine': '这条线附近的换乘站有哪些？',
+    'globalSearch.suggestion.highlightMarker': '{name}附近有什么？',
     'globalSearch.suggestion.highlightStation': '{name}有哪些设施？',
     'globalSearch.suggestion.operations': '台风期间停运通知',
     'globalSearch.suggestion.refresh': '换一批',
@@ -4102,6 +4211,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.markerList.default': '地圖標記',
     'map.markerList.fullLength': '全長 {distance}',
     'map.markerList.nearby': '{name}周邊',
+    'map.markerList.nearbyLinear': '{name}沿線',
     'map.markerList.playerCount': '{online}/{total} 個',
     'map.markerList.results': '搜尋結果',
     'map.metroInfrastructure.direction.down': '向下',
@@ -4182,8 +4292,56 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.layer.tileProviderAria': '瓦片源',
     'map.lineDetail.fare': '票價',
     'map.lineDetail.stations': '站點',
+    'map.lineInfo.openAria': '查看 {name} 線路資訊',
+    'map.lineInfo.timezoneNote': '首末車、發車時刻與預計到站時間均為北京時間（UTC+8）。',
+    'map.lineInfo.title': '{name} · 線路資訊',
+    'map.lineRealtime.atStation': '停靠 {station}',
+    'map.lineRealtime.beijingTime': '北京時間',
+    'map.lineRealtime.boardArrivalAt': '{time} 抵達',
+    'map.lineRealtime.boardArriving': '即將到站',
+    'map.lineRealtime.boardDepartureAt': '{time} 離開',
+    'map.lineRealtime.boardLeaving': '即將離開',
+    'map.lineRealtime.boardMinutes': '{minutes} 分鐘',
+    'map.lineRealtime.boardWaiting': '等待發車',
+    'map.lineRealtime.countBadge': '{active}/{total}',
+    'map.lineRealtime.countBadgeAria': '在途 {active} 輛，未離開選中車站 {total} 班',
+    'map.lineRealtime.detailArrival': '預計抵達',
+    'map.lineRealtime.detailDeparture': '首站發車',
+    'map.lineRealtime.detailDepartureAtStation': '預計離開',
+    'map.lineRealtime.detailPosition': '目前位置',
+    'map.lineRealtime.detailSelectedStation': '選中車站',
+    'map.lineRealtime.detailStatus': '到站狀態',
+    'map.lineRealtime.detailWaiting': '尚未發車',
+    'map.lineRealtime.emptyActive': '目前時段暫無在途車輛',
+    'map.lineRealtime.emptySchedule': '該方向尚未錄入發車時刻表',
+    'map.lineRealtime.inSegment': '行駛於 {from} → {to} 區間',
+    'map.lineRealtime.minutesToNext': '距下一站約 {count} 分鐘',
+    'map.lineRealtime.nextDeparture': '下一班 {time}',
+    'map.lineRealtime.nextDepartureNextDay': '下一班 {time}（次日）',
+    'map.lineRealtime.noMoreTrips': '今日已無後續班次',
+    'map.lineRealtime.note':
+      '依已錄入的首站發車時刻推算；區間用時優先使用後台設定，缺失時依線路長度與平均速度估算。',
+    'map.lineRealtime.selectStationHint': '點擊站點查看該站即時資訊',
+    'map.lineRealtime.stationAt': '目前有車停靠',
+    'map.lineRealtime.stationEta': '預計 {time} 抵達 · 約 {minutes} 分鐘',
+    'map.lineRealtime.stationNextArrival': '最近一班約 {minutes} 分鐘後抵達（預計 {time}）',
+    'map.lineRealtime.stationNoData': '該站暫無即時站點資料',
+    'map.lineRealtime.stationNoVehicle': '目前沒有前往該站的車輛',
+    'map.lineRealtime.stationPassed': '已通過該站',
+    'map.lineRealtime.summary': '共 {count} 輛在途',
+    'map.lineRealtime.title': '即時公車',
+    'map.lineRealtime.trip': '第 {count} 班 · {time} 發車',
+    'map.lineRealtime.tripTitle': '第 {count} 班',
+    'map.lineRealtime.updatedAt': '更新於 {time}',
+    'map.lineRealtime.vehicleBadge': '第 {count} 班 · {time} 發車',
+    'map.lineStation.showPoi': '查看站點',
     'map.nearby.exit': '退出',
+    'map.nearby.mileage': '沿線 {distance}',
     'map.nearby.note': '按距離顯示 {name} 周邊標記',
+    'map.nearby.noteLinear': '按沿線里程顯示 {name} 沿線標記',
+    'map.nearby.rangeAria': '沿線里程範圍',
+    'map.nearby.rangeLabel': '沿線範圍',
+    'map.nearby.rangeValue': '{from} - {to}',
     'map.nearby.scopeAria': '區域周邊範圍',
     'map.nearby.scopeInside': '區域內',
     'map.nearby.scopeOutside': '區域外附近',
@@ -4226,6 +4384,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.imageCounter': '{current} / {total}',
     'map.poi.imageNext': '下一張圖片',
     'map.poi.imagePrevious': '上一張圖片',
+    'map.poi.nearbyAlongAria': '搜尋 {name} 沿線標記',
     'map.poi.nearbyAria': '搜尋 {name} 周邊',
     'map.poi.noConnections': '暫無已知接駁線路',
     'map.poi.noFacilities': '暫無設施資料',
@@ -4343,6 +4502,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.alight': '{name} 下車',
     'map.route.alightFerry': '{name} 下船',
     'map.route.alightMetro': '{name} 出站',
+    'map.route.linearEndpointBlocked': '起點和終點不能同時為線路或道路等線性要素',
     'map.route.aria': '路線規劃',
     'map.route.arrive': '到達 {name}',
     'map.route.badge.fastest': '最快到達',
@@ -4824,6 +4984,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'globalSearch.assistant.error': '問一問暫時沒有回傳結果，先給你站內資料。',
     'globalSearch.assistant.followUps': '繼續追問',
     'globalSearch.assistant.followUpsLoading': '正在準備追問建議…',
+    'globalSearch.assistant.followUpsUnavailable': 'AI 追問建議暫時不可用。',
     'globalSearch.assistant.key': 'API Key',
     'globalSearch.assistant.keyPlaceholder': '貼上你的 API Key',
     'globalSearch.assistant.model': '模型',
@@ -4868,8 +5029,11 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'globalSearch.status.searching': '正在搜尋…',
     'globalSearch.suggestion.account': '乘車碼打不開怎麼辦',
     'globalSearch.suggestion.aiLoading': '正在結合目前頁面產生推薦項…',
-    'globalSearch.suggestion.highlightLine': '這條線經過哪些地方？',
-    'globalSearch.suggestion.highlightMarker': '{name}怎麼走？',
+    'globalSearch.suggestion.aiOff': '目前使用站內資料產生推薦項。',
+    'globalSearch.suggestion.aiSettings': '開啟 AI 推薦',
+    'globalSearch.suggestion.aiUnavailable': 'AI 推薦項暫時不可用，已改用站內資料。',
+    'globalSearch.suggestion.highlightLine': '這條線附近的轉乘站有哪些？',
+    'globalSearch.suggestion.highlightMarker': '{name}附近有什麼？',
     'globalSearch.suggestion.highlightStation': '{name}有哪些設施？',
     'globalSearch.suggestion.operations': '颱風期間停運通知',
     'globalSearch.suggestion.refresh': '換一批',
@@ -6052,6 +6216,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.markerList.default': 'Map Markers',
     'map.markerList.fullLength': 'Total length {distance}',
     'map.markerList.nearby': 'Near {name}',
+    'map.markerList.nearbyLinear': 'Along {name}',
     'map.markerList.playerCount': '{online}/{total} online',
     'map.markerList.results': 'Search Results',
     'map.metroInfrastructure.direction.down': 'Downward',
@@ -6132,8 +6297,58 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.layer.tileProviderAria': 'Tile source',
     'map.lineDetail.fare': 'Fare',
     'map.lineDetail.stations': 'Stops',
+    'map.lineInfo.openAria': 'View {name} line information',
+    'map.lineInfo.timezoneNote':
+      'First/last bus, departure, and estimated arrival times are all Beijing time (UTC+8).',
+    'map.lineInfo.title': '{name} · Line information',
+    'map.lineRealtime.atStation': 'At {station}',
+    'map.lineRealtime.beijingTime': 'Beijing time',
+    'map.lineRealtime.boardArrivalAt': 'Arrives {time}',
+    'map.lineRealtime.boardArriving': 'Arriving soon',
+    'map.lineRealtime.boardDepartureAt': 'Departs {time}',
+    'map.lineRealtime.boardLeaving': 'Departing soon',
+    'map.lineRealtime.boardMinutes': '{minutes} min',
+    'map.lineRealtime.boardWaiting': 'Waiting to depart',
+    'map.lineRealtime.countBadge': '{active}/{total}',
+    'map.lineRealtime.countBadgeAria':
+      '{active} vehicles in service, {total} trips not yet left the selected stop',
+    'map.lineRealtime.detailArrival': 'Estimated arrival',
+    'map.lineRealtime.detailDeparture': 'Terminal departure',
+    'map.lineRealtime.detailDepartureAtStation': 'Estimated departure',
+    'map.lineRealtime.detailPosition': 'Current position',
+    'map.lineRealtime.detailSelectedStation': 'Selected stop',
+    'map.lineRealtime.detailStatus': 'Status',
+    'map.lineRealtime.detailWaiting': 'Not departed yet',
+    'map.lineRealtime.emptyActive': 'No vehicles in service right now',
+    'map.lineRealtime.emptySchedule': 'No departure timetable recorded for this direction',
+    'map.lineRealtime.inSegment': 'Between {from} and {to}',
+    'map.lineRealtime.minutesToNext': 'About {count} min to the next stop',
+    'map.lineRealtime.nextDeparture': 'Next departure {time}',
+    'map.lineRealtime.nextDepartureNextDay': 'Next departure {time} (next day)',
+    'map.lineRealtime.noMoreTrips': 'No further trips today',
+    'map.lineRealtime.note':
+      'Estimated from the recorded terminal timetable. Segment times use admin settings first, then route length and average speed.',
+    'map.lineRealtime.selectStationHint': 'Select a stop to view its live information',
+    'map.lineRealtime.stationAt': 'A vehicle is at this stop',
+    'map.lineRealtime.stationEta': 'Arrives {time} · about {minutes} min',
+    'map.lineRealtime.stationNextArrival': 'Next arrival in about {minutes} min ({time})',
+    'map.lineRealtime.stationNoData': 'No live data for this stop',
+    'map.lineRealtime.stationNoVehicle': 'No vehicle is heading to this stop',
+    'map.lineRealtime.stationPassed': 'Already passed this stop',
+    'map.lineRealtime.summary': '{count} vehicles in service',
+    'map.lineRealtime.title': 'Live buses',
+    'map.lineRealtime.trip': 'Trip {count} · departs {time}',
+    'map.lineRealtime.tripTitle': 'Trip {count}',
+    'map.lineRealtime.updatedAt': 'Updated {time}',
+    'map.lineRealtime.vehicleBadge': 'Trip {count} · departs {time}',
+    'map.lineStation.showPoi': 'Show stop',
     'map.nearby.exit': 'Exit',
+    'map.nearby.mileage': '{distance} along the line',
     'map.nearby.note': 'Showing markers near {name} by distance',
+    'map.nearby.noteLinear': 'Showing markers along {name} by route mileage',
+    'map.nearby.rangeAria': 'Route mileage range',
+    'map.nearby.rangeLabel': 'Along-line range',
+    'map.nearby.rangeValue': '{from} - {to}',
     'map.nearby.scopeAria': 'Area search scope',
     'map.nearby.scopeInside': 'Inside area',
     'map.nearby.scopeOutside': 'Nearby outside',
@@ -6176,6 +6391,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.poi.imageCounter': '{current} / {total}',
     'map.poi.imageNext': 'Next image',
     'map.poi.imagePrevious': 'Previous image',
+    'map.poi.nearbyAlongAria': 'Search markers along {name}',
     'map.poi.nearbyAria': 'Search near {name}',
     'map.poi.noConnections': 'No known connecting lines',
     'map.poi.noFacilities': 'No facility data',
@@ -6296,6 +6512,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.route.alight': 'Alight at {name}',
     'map.route.alightFerry': 'Disembark at {name}',
     'map.route.alightMetro': 'Exit at {name}',
+    'map.route.linearEndpointBlocked':
+      'Origin and destination cannot both be a line or road feature',
     'map.route.aria': 'Route planner',
     'map.route.arrive': 'Arrive at {name}',
     'map.route.badge.fastest': 'Fastest',
@@ -6787,6 +7005,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'globalSearch.assistant.error': 'Ask returned no result. Showing site documentation instead.',
     'globalSearch.assistant.followUps': 'Follow-up questions',
     'globalSearch.assistant.followUpsLoading': 'Preparing follow-up suggestions…',
+    'globalSearch.assistant.followUpsUnavailable': 'AI follow-up suggestions are unavailable.',
     'globalSearch.assistant.key': 'API key',
     'globalSearch.assistant.keyPlaceholder': 'Paste your API key',
     'globalSearch.assistant.model': 'Model',
@@ -6834,8 +7053,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'globalSearch.status.searching': 'Searching…',
     'globalSearch.suggestion.account': 'Ride code will not open',
     'globalSearch.suggestion.aiLoading': 'Generating suggestions from this page…',
-    'globalSearch.suggestion.highlightLine': 'Where does this line stop?',
-    'globalSearch.suggestion.highlightMarker': 'How do I get to {name}?',
+    'globalSearch.suggestion.aiOff': 'Suggestions currently come from site data.',
+    'globalSearch.suggestion.aiSettings': 'Enable AI suggestions',
+    'globalSearch.suggestion.aiUnavailable':
+      'AI suggestions are unavailable; using site data instead.',
+    'globalSearch.suggestion.highlightLine': 'Which interchanges are near this line?',
+    'globalSearch.suggestion.highlightMarker': 'What is near {name}?',
     'globalSearch.suggestion.highlightStation': 'What facilities does {name} have?',
     'globalSearch.suggestion.operations': 'Typhoon service suspension notice',
     'globalSearch.suggestion.refresh': 'Refresh',
