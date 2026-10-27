@@ -168,6 +168,38 @@ function Remove-YctDirectoryInsideRoot {
   }
 }
 
+# Next 的 standalone 输出会把部分依赖写成 junction，目标路径来自构建进程看到的
+# node_modules 位置。在沙箱/映射盘里构建时，这些目标会带 sandbox 前缀并在构建结束后
+# 失效，robocopy 因此返回 9。这里把断链重新指回仓库内真实的 pnpm store，再交给 staging。
+function Repair-YctStandaloneJunctions {
+  param(
+    [Parameter(Mandatory = $true)][string]$Root
+  )
+
+  $links = @(
+    Get-ChildItem -LiteralPath $Root -Directory -Recurse -Force -ErrorAction SilentlyContinue |
+      Where-Object { $_.LinkType }
+  )
+  foreach ($link in $links) {
+    if (Test-Path -LiteralPath (Join-Path $link.FullName 'package.json')) {
+      continue
+    }
+
+    $match = [regex]::Match([string]$link.Target, 'drive\\C\\(.+)$', 'IgnoreCase')
+    if (-not $match.Success) {
+      continue
+    }
+
+    $realTarget = Join-Path 'C:\' $match.Groups[1].Value
+    if (-not (Test-Path -LiteralPath $realTarget)) {
+      continue
+    }
+
+    [System.IO.Directory]::Delete($link.FullName, $false)
+    New-Item -ItemType Junction -Path $link.FullName -Target $realTarget | Out-Null
+  }
+}
+
 function Copy-YctDirectoryChildren {
   param(
     [Parameter(Mandatory = $true)][string]$Source,
@@ -1066,6 +1098,7 @@ if ($SkipStaging) {
   }
   New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
 
+  Repair-YctStandaloneJunctions -Root $standaloneRoot
   Copy-YctDirectoryChildren -Source $standaloneRoot -Destination $stageRoot -ExcludeJunctionChildren @('apps')
 
   $standaloneWebRoot = Join-Path $stageRoot "apps\web"

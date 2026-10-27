@@ -5,7 +5,7 @@
     {
       "version": "2.15.0",
       "releasedAt": "2026-10-27T22:39:47.221Z",
-      "sourceFingerprint": "100b3de4149ba7a636b7c3954e8a33b046046e585a679d7a8ea406ba187faf99",
+      "sourceFingerprint": "02908a727311164d68244d36882dd5c1ad496363ebd8368b0c26a13adf2aadfa",
       "themes": ["search", "web", "map", "transit", "api"],
       "changes": [
         {
