@@ -171,7 +171,9 @@ function Remove-YctDirectoryInsideRoot {
 function Copy-YctDirectoryChildren {
   param(
     [Parameter(Mandatory = $true)][string]$Source,
-    [Parameter(Mandatory = $true)][string]$Destination
+    [Parameter(Mandatory = $true)][string]$Destination,
+    # 这些子目录按 /XJ 复制，跳过 pnpm 生成的 junction，再由依赖补齐步骤补回。
+    [string[]]$ExcludeJunctionChildren = @()
   )
 
   if (-not (Test-Path -LiteralPath $Source)) {
@@ -187,7 +189,11 @@ function Copy-YctDirectoryChildren {
   $children = @(Get-ChildItem -LiteralPath $Source -Force)
   foreach ($child in $children) {
     if ($child.PSIsContainer) {
-      Copy-YctDirectoryTree -Source $child.FullName -Destination (Join-Path $Destination $child.Name)
+      if ($ExcludeJunctionChildren -contains $child.Name) {
+        Copy-YctDirectoryTree -Source $child.FullName -Destination (Join-Path $Destination $child.Name) -ExcludeJunctions
+      } else {
+        Copy-YctDirectoryTree -Source $child.FullName -Destination (Join-Path $Destination $child.Name)
+      }
       continue
     }
 
@@ -341,7 +347,11 @@ function Invoke-YctCommand {
 function Copy-YctDirectoryTree {
   param(
     [Parameter(Mandatory = $true)][string]$Source,
-    [Parameter(Mandatory = $true)][string]$Destination
+    [Parameter(Mandatory = $true)][string]$Destination,
+    # standalone/apps 下的 node_modules 里有指向 pnpm store 的 junction；
+    # 目标在离线/沙箱构建时可能已经断链，robocopy 会因此返回 9。
+    # 这类链接由 Copy-YctNextRuntimeDependencies 等函数另行补齐。
+    [switch]$ExcludeJunctions
   )
 
   if (Get-Command robocopy.exe -ErrorAction SilentlyContinue) {
@@ -349,9 +359,13 @@ function Copy-YctDirectoryTree {
     New-Item -ItemType Directory -Force -Path $destinationParent | Out-Null
     # /E copies subdirectories including empty ones, /DCOPY:DAT preserves directory
     # timestamps, and the log switches keep the output silent.
-    $copyExitCode = Invoke-YctRobocopy -Source $Source -Destination $Destination -Arguments @(
+    $robocopyArguments = @(
       "/E", "/DCOPY:DAT", "/R:2", "/W:1", "/NFL", "/NDL", "/NJH", "/NJS", "/NP"
     )
+    if ($ExcludeJunctions) {
+      $robocopyArguments += "/XJ"
+    }
+    $copyExitCode = Invoke-YctRobocopy -Source $Source -Destination $Destination -Arguments $robocopyArguments
     if ($copyExitCode -ge 8) {
       throw "robocopy failed to stage $Source into $Destination with exit code $copyExitCode."
     }
@@ -1052,7 +1066,7 @@ if ($SkipStaging) {
   }
   New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
 
-  Copy-YctDirectoryChildren -Source $standaloneRoot -Destination $stageRoot
+  Copy-YctDirectoryChildren -Source $standaloneRoot -Destination $stageRoot -ExcludeJunctionChildren @('apps')
 
   $standaloneWebRoot = Join-Path $stageRoot "apps\web"
   $standaloneNextRoot = Join-Path $standaloneWebRoot ".next"
