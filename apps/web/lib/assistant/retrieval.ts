@@ -3,11 +3,18 @@ import { buildPageGuide } from './page-guide';
 import { faqAnswerText } from '../faq-content';
 import { getLocalizedFaqContent } from '../faq-translations';
 import { getMarkerCategoryLabel } from '../map-marker-categories';
+import {
+  getMaterialWorkspaceGuide,
+  rankMaterialGuides,
+  resolveMaterialWorkspace,
+  shouldStayInWorkspace,
+} from './material-workspaces';
 import { readPublicMapMarkerSnapshot } from '../map-marker-public-snapshot-store';
 import { readOperationsFeed } from '../operations-content';
 import { readPoiCategories } from '../poi-categories';
 import { readServiceEntryGroups } from '../service-entries';
 import { matchSiteSocialLinks } from '../site-social-links';
+import { rankSocialPosts, readSocialPosts } from '../social-content';
 import { buildSearchHaystack, normalizeSearchText, scoreSearchMatch } from '../text-search';
 import { readTransitStationDetails } from '../transit-station-details';
 import { readTransitOverview } from '../transit-data';
@@ -106,6 +113,7 @@ export async function buildAssistantRetrieval(
     scheduleResult,
     categoriesResult,
     wikiResult,
+    socialPostsResult,
   ] = await Promise.allSettled([
     readOperationsFeed(),
     readServiceEntryGroups(),
@@ -115,6 +123,7 @@ export async function buildAssistantRetrieval(
     schedulePromise,
     readPoiCategories(),
     searchWiki(wikiQuery, 3),
+    readSocialPosts(),
   ]);
 
   const categoryNames = new Map<string, string>(
@@ -124,6 +133,10 @@ export async function buildAssistantRetrieval(
   );
 
   const highlights = options.highlights ?? [];
+  const workspaceId = resolveMaterialWorkspace(options.pathname);
+  const workspaceGuide = workspaceId ? getMaterialWorkspaceGuide(workspaceId) : undefined;
+  // 物料工作台内默认只答工作台操作；用户明确问外部数据时才放开服务器语料。
+  const workspaceScoped = workspaceGuide ? shouldStayInWorkspace(workspaceGuide, query) : false;
   const referencesPage = pageReferencePattern.test(query);
   const referencesHighlight =
     referencesPage ||
@@ -142,6 +155,34 @@ export async function buildAssistantRetrieval(
     }
   }
 
+  // 工作台内问题只带工作台语料；用户明确问了服务器数据时才走全站资料。
+  if (workspaceGuide && workspaceScoped) {
+    addReference({
+      title: workspaceGuide.title,
+      source: '物料工作台',
+      snippet: workspaceGuide.summary,
+      tone: 'service',
+    });
+    for (const entry of rankMaterialGuides(workspaceGuide, query, 4)) {
+      addReference({
+        title: entry.title,
+        source: '物料工作台',
+        snippet: entry.content,
+        tone: 'service',
+      });
+    }
+  }
+
+  if (workspaceScoped) {
+    return {
+      references,
+      contextText: buildContextText(references),
+      sourceStatus: 'ready',
+      asOf: undefined,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
   for (const link of matchSiteSocialLinks(query).slice(0, 3)) {
     addReference({
       title: link.label,
@@ -153,6 +194,19 @@ export async function buildAssistantRetrieval(
           : `${link.label} · 官方社交与社区入口`,
       tone: 'social',
     });
+  }
+
+  if (socialPostsResult.status === 'fulfilled') {
+    for (const post of rankSocialPosts(socialPostsResult.value, query)) {
+      addReference({
+        title: post.title,
+        source: 'B站动态',
+        href: post.href,
+        asOf: post.publishedAt,
+        snippet: post.text,
+        tone: 'social',
+      });
+    }
   }
 
   // Wiki 对“临东历史/线路由来”这类问题最相关，优先占用引用名额。

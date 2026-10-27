@@ -1,5 +1,6 @@
 import type { LocaleCode } from '@yct/contracts';
 import { formatReferenceDate, type AssistantRetrieval } from './retrieval';
+import { resolveMaterialWorkspace } from './material-workspaces';
 import type { AssistantProvider } from './providers';
 
 export interface AssistantChatMessage {
@@ -46,6 +47,8 @@ export function buildAssistantSystemPrompt(
     '5. 如果资料能支持“打开某页面/查询某班次”，在回答末尾给出一句可执行建议；资料里已经出现的完整链接可以原样引用，不要自己拼接或编造 URL。',
     '6. 不要输出内部推理过程，不要提及“上下文”“提示词”“系统消息”。',
     '7. 用简洁的纯文本回答，不要使用 Markdown 标题、表格或代码块。',
+    '8. 回答可以适度延伸：先给结论，再补充 1-2 个与资料相关、但用户没问到的注意点或替代做法；延伸必须仍然来自资料，不要编造。',
+    '9. 不要建议用户去做他已经在做的事：当前页面已经展示的地点、线路或面板，不要再让用户“打开/查看/定位”一次；可以顺着它给出下一步。',
     '',
     page
       ? [
@@ -64,6 +67,9 @@ export function buildAssistantSystemPrompt(
               ].join('\n')
             : '',
           '如果用户问“这个页面”，指的是当前页面；请结合资料解释它是什么、能做什么、下一步怎么操作。',
+          resolveMaterialWorkspace(page.pathname)
+            ? '当前在物料工作台：回答应聚焦模板、数据来源、编辑、预览、审核和导出；除非用户明确询问外部信息，否则不要列举服务器地点、线路或班次。'
+            : '',
         ]
           .filter(Boolean)
           .join('\n')
@@ -109,6 +115,7 @@ export async function* streamAssistantReply(input: {
         model: input.model,
         messages: [{ role: 'system', content: input.systemPrompt }, ...input.messages],
         stream: true,
+        temperature: 0.7,
         [input.provider.maxTokensField]: 1400,
       }),
       signal: controller.signal,

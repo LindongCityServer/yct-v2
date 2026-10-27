@@ -20,6 +20,10 @@ import {
   type AssistantProviderId,
 } from '../lib/assistant/providers';
 import { detectAskMode } from '../lib/assistant/query-intent';
+import {
+  getMaterialWorkspaceGuide,
+  resolveMaterialWorkspace,
+} from '../lib/assistant/material-workspaces';
 import type { AssistantReference } from '../lib/assistant/retrieval';
 import {
   clearAssistantConfig,
@@ -39,6 +43,7 @@ import {
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { getMarkerCategoryLabel } from '../lib/map-marker-categories';
 import { getSiteSocialLinkLabel } from '../lib/site-social-links';
+import { pickSuggestionIcon } from '../lib/suggestion-icons';
 import type { WikiSearchResult } from '../lib/wiki-search';
 import {
   detectEmbeddedContext,
@@ -101,6 +106,8 @@ interface SearchSuggestion {
   label: string;
   query: string;
   icon: string;
+  /** AI 生成的推荐项点击后直接发送；站内推荐项只填入输入框。 */
+  origin?: 'ai' | 'local';
 }
 
 export function GlobalSearchPanel() {
@@ -140,6 +147,7 @@ export function GlobalSearchPanel() {
   const [assistantHistory, setAssistantHistory] = useState<ChatHistoryMessage[]>([]);
   const [followUps, setFollowUps] = useState<string[]>([]);
   const [followUpStatus, setFollowUpStatus] = useState<LoadStatus>('idle');
+  const [followUpError, setFollowUpError] = useState('');
   const assistantAbortRef = useRef<AbortController | null>(null);
   const followUpAbortRef = useRef<AbortController | null>(null);
   const [easterEggOpen, setEasterEggOpen] = useState(false);
@@ -154,6 +162,8 @@ export function GlobalSearchPanel() {
   const [entryPreference, setEntryPreference] = useState(readAssistantEntryPreference);
   const [aiSuggestions, setAiSuggestions] = useState<SearchSuggestion[]>([]);
   const [aiSuggestionsStatus, setAiSuggestionsStatus] = useState<LoadStatus>('idle');
+  const [aiSuggestionsError, setAiSuggestionsError] = useState('');
+  const [aiSuggestionRefreshToken, setAiSuggestionRefreshToken] = useState(0);
   const enabledRef = useRef(entryPreference.enabled);
   const aiSuggestionCacheRef = useRef(new Map<string, SearchSuggestion[]>());
   const dataLoadedRef = useRef(false);
@@ -184,6 +194,7 @@ export function GlobalSearchPanel() {
       setAssistantReferences([]);
       setAssistantHistory([]);
       setFollowUps([]);
+      setFollowUpError('');
       setFollowUpStatus('idle');
       setEasterEggOpen(false);
       void readAssistantConfig().then((config) => {
@@ -479,6 +490,7 @@ export function GlobalSearchPanel() {
     setAssistantReferences([]);
     followUpAbortRef.current?.abort();
     setFollowUps([]);
+    setFollowUpError('');
     setFollowUpStatus('idle');
   }, [trimmedQuery]);
 
@@ -535,7 +547,14 @@ export function GlobalSearchPanel() {
         : askRequested || askMode
           ? 'ask'
           : 'search';
-  const capabilityMatches = useMemo(() => resolveCapabilities(trimmedQuery), [trimmedQuery]);
+  const capabilityMatches = useMemo(
+    () =>
+      // 已经站在目标页面上时，不再提供“去这个页面”的重复动作。
+      resolveCapabilities(trimmedQuery).filter(
+        ({ capability }) => capability.buildHref(trimmedQuery).split('?')[0] !== pathname,
+      ),
+    [pathname, trimmedQuery],
+  );
   const suggestionPool = useMemo(() => {
     const items: SearchSuggestion[] = [];
     const seen = new Set<string>();
@@ -554,6 +573,13 @@ export function GlobalSearchPanel() {
       seen.add(key);
       items.push({ label: trimmedLabel, query: trimmedQuery, icon });
     };
+
+    // 页面已经在展示的对象不再推荐成“去看它”的入口，避免骑驴找驴。
+    const viewedTitles = new Set(
+      pageHighlights.map((highlight) => highlight.title.trim().toLocaleLowerCase()),
+    );
+    const isViewed = (title: string) => viewedTitles.has(title.trim().toLocaleLowerCase());
+    const currentPageTitle = pageContext.title.split(/[｜|]/)[0]?.trim() ?? '';
 
     const addOperations = (limit: number) => {
       for (const item of operations.slice(0, limit)) {
@@ -575,6 +601,9 @@ export function GlobalSearchPanel() {
 
         const label =
           locale === 'zh-CN' ? marker.label : (marker.localizedLabels?.[locale] ?? marker.label);
+        if (isViewed(label)) {
+          continue;
+        }
         const before = items.length;
         add(label, label, 'location_on');
         if (items.length > before) {
@@ -596,6 +625,9 @@ export function GlobalSearchPanel() {
 
         const label =
           locale === 'zh-CN' ? marker.label : (marker.localizedLabels?.[locale] ?? marker.label);
+        if (isViewed(label)) {
+          continue;
+        }
         const before = items.length;
         add(label, label, 'location_on');
         if (items.length > before) {
@@ -617,6 +649,10 @@ export function GlobalSearchPanel() {
           break;
         }
         if (predicate && !predicate(entry)) {
+          continue;
+        }
+        // 当前页面自身的入口不必再推荐一次。
+        if (isViewed(entry.title) || (currentPageTitle && entry.title === currentPageTitle)) {
           continue;
         }
 
@@ -657,89 +693,97 @@ export function GlobalSearchPanel() {
     const isTravel = pathname.startsWith(appPath('/travel'));
     const isServices = pathname.startsWith(appPath('/services'));
     const isAccount = pathname.startsWith(appPath('/account'));
+    const workspaceId = resolveMaterialWorkspace(pathname);
+    const workspaceGuide = workspaceId ? getMaterialWorkspaceGuide(workspaceId) : undefined;
 
     add(t('globalSearch.suggestion.thisPage'), t('globalSearch.suggestion.thisPage'), 'help');
 
-    // 页面当前选中的线路/站点/地点优先成为推荐项。
-    for (const highlight of pageHighlights) {
-      if (highlight.kind === 'line') {
-        const label = t('globalSearch.suggestion.highlightLine');
-        add(label, label, 'route');
-      } else if (highlight.kind === 'marker') {
-        const label = t('globalSearch.suggestion.highlightMarker', { name: highlight.title });
-        add(label, label, 'directions');
-      } else if (highlight.kind === 'station') {
-        const label = t('globalSearch.suggestion.highlightStation', { name: highlight.title });
-        add(label, label, 'train');
-      } else if (highlight.kind === 'search' && highlight.title) {
-        const label = t('globalSearch.suggestion.highlightMarker', { name: highlight.title });
-        add(label, label, 'search');
+    if (workspaceGuide) {
+      // 物料工作台只推荐工作台内的操作，避免把用户带回服务器线路或地点。
+      for (const entry of workspaceGuide.entries) {
+        for (const question of entry.questions) {
+          add(question, question, pickSuggestionIcon(question));
+        }
       }
-    }
-
-    const pageTitle = pageContext.title.split(/[｜|]/)[0]?.trim();
-    if (pageTitle && pageTitle !== '雨城通' && pageTitle !== 'Yuchengtong') {
-      add(pageTitle, pageTitle, 'article');
-    }
-
-    const pageParams = new URLSearchParams(pageContext.search);
-    const pageQuery = pageParams.get('q');
-    if (pageQuery) {
-      add(pageQuery, pageQuery, 'search');
-    }
-
-    const pageMarkerId = pageParams.get('marker') ?? pageParams.get('m');
-    if (pageMarkerId) {
-      const marker = markers.find((entry) => entry.id === pageMarkerId);
-      if (marker) {
-        const label =
-          locale === 'zh-CN' ? marker.label : (marker.localizedLabels?.[locale] ?? marker.label);
-        add(label, label, 'location_on');
-      }
-    }
-
-    const pageLabel = pageParams.get('label') ?? pageParams.get('name');
-    if (pageLabel) {
-      add(pageLabel, pageLabel, 'location_on');
-    }
-
-    if (isMap) {
-      addMarkers(3);
-      addOperations(1);
-      addServices(1);
-      addFaq(['地图', '路线', '标记', '分享', '地点', '收藏'], 2);
-    } else if (isTravel) {
-      addServices(2, (entry) => /班次|出行|票|travel/i.test(`${entry.title} ${entry.href}`));
-      addMarkers(2);
-      addOperations(1);
-      addFaq(['班次', '票', '乘车', '提醒', '出行'], 2);
-    } else if (isServices) {
-      addServices(
-        3,
-        (entry) =>
-          entry.href.includes('/services') || /物料|导视|路牌|工具|地图/i.test(entry.title),
-      );
-      addFaq(['物料', '导视', '路牌', 'RMP', '工具', '地图'], 2);
-      addOperations(1);
-      addMarkers(1);
-    } else if (isAccount) {
-      addFaq(['登录', '账号', '离线', '推送', '通知', '缓存'], 3);
-      addServices(1);
-      addOperations(1);
-      addMarkers(1);
     } else {
-      addOperations(2);
-      addMarkers(2);
-      addServices(1);
-      addFaq(['使用', '常见', '登录', '搜索'], 2);
-    }
+      // 页面当前选中的线路/站点/地点优先成为推荐项。
+      for (const highlight of pageHighlights) {
+        if (highlight.kind === 'line') {
+          const label = t('globalSearch.suggestion.highlightLine');
+          add(label, label, 'route');
+        } else if (highlight.kind === 'marker') {
+          const label = t('globalSearch.suggestion.highlightMarker', { name: highlight.title });
+          add(label, label, 'directions');
+        } else if (highlight.kind === 'station') {
+          const label = t('globalSearch.suggestion.highlightStation', { name: highlight.title });
+          add(label, label, 'train');
+        } else if (highlight.kind === 'search' && highlight.title) {
+          const label = t('globalSearch.suggestion.highlightMarker', { name: highlight.title });
+          add(label, label, 'search');
+        }
+      }
 
-    // 保证“换一批”有可轮换的内容；实际数据不足时才补通用项。
-    if (items.length < 5) {
-      addOperations(2);
-      addMarkers(3);
-      addServices(2);
-      addFaq([], 3);
+      const pageParams = new URLSearchParams(pageContext.search);
+      const pageQuery = pageParams.get('q');
+      if (pageQuery && !isViewed(pageQuery)) {
+        add(pageQuery, pageQuery, 'search');
+      }
+
+      const pageMarkerId = pageParams.get('marker') ?? pageParams.get('m');
+      if (pageMarkerId) {
+        const marker = markers.find((entry) => entry.id === pageMarkerId);
+        if (marker) {
+          const label =
+            locale === 'zh-CN' ? marker.label : (marker.localizedLabels?.[locale] ?? marker.label);
+          if (!isViewed(label)) {
+            add(label, label, 'location_on');
+          }
+        }
+      }
+
+      const pageLabel = pageParams.get('label') ?? pageParams.get('name');
+      if (pageLabel && !isViewed(pageLabel)) {
+        add(pageLabel, pageLabel, 'location_on');
+      }
+
+      if (isMap) {
+        addMarkers(3);
+        addOperations(1);
+        addServices(1);
+        addFaq(['地图', '路线', '标记', '分享', '地点', '收藏'], 2);
+      } else if (isTravel) {
+        addServices(2, (entry) => /班次|出行|票|travel/i.test(`${entry.title} ${entry.href}`));
+        addMarkers(2);
+        addOperations(1);
+        addFaq(['班次', '票', '乘车', '提醒', '出行'], 2);
+      } else if (isServices) {
+        addServices(
+          3,
+          (entry) =>
+            entry.href.includes('/services') || /物料|导视|路牌|工具|地图/i.test(entry.title),
+        );
+        addFaq(['物料', '导视', '路牌', 'RMP', '工具', '地图'], 2);
+        addOperations(1);
+        addMarkers(1);
+      } else if (isAccount) {
+        addFaq(['登录', '账号', '离线', '推送', '通知', '缓存'], 3);
+        addServices(1);
+        addOperations(1);
+        addMarkers(1);
+      } else {
+        addOperations(2);
+        addMarkers(2);
+        addServices(1);
+        addFaq(['使用', '常见', '登录', '搜索'], 2);
+      }
+
+      // 保证“换一批”有可轮换的内容；实际数据不足时才补通用项。
+      if (items.length < 5) {
+        addOperations(2);
+        addMarkers(3);
+        addServices(2);
+        addFaq([], 3);
+      }
     }
 
     if (items.length === 0) {
@@ -772,18 +816,20 @@ export function GlobalSearchPanel() {
   }, [suggestionOffset, suggestionPool]);
 
   useEffect(() => {
-    if (!open || trimmedQuery) {
+    if (!open || trimmedQuery || activeAskQuery) {
       return undefined;
     }
     if (!entryPreference.aiSuggestions || !assistantConfig || !pageContext.pathname) {
       setAiSuggestions([]);
+      setAiSuggestionsError('');
       return undefined;
     }
 
     const cacheKey = `${pageContext.pathname}${pageContext.search}`;
     const cached = aiSuggestionCacheRef.current.get(cacheKey);
-    if (cached && cached.length > 0) {
+    if (aiSuggestionRefreshToken === 0 && cached && cached.length > 0) {
       setAiSuggestions(cached);
+      setAiSuggestionsError('');
       setAiSuggestionsStatus('ready');
       return undefined;
     }
@@ -791,6 +837,7 @@ export function GlobalSearchPanel() {
     let cancelled = false;
     const controller = new AbortController();
     setAiSuggestions([]);
+    setAiSuggestionsError('');
     setAiSuggestionsStatus('loading');
     const timer = window.setTimeout(async () => {
       try {
@@ -804,24 +851,36 @@ export function GlobalSearchPanel() {
             providerId: assistantConfig.providerId,
             model: assistantConfig.model,
             locale,
+            variation: aiSuggestionRefreshToken,
             page: { ...pageContext, highlights: pageHighlights },
           }),
           signal: controller.signal,
         });
-        if (!response.ok) {
-          throw new Error('unavailable');
+        const payload = (await response.json()) as {
+          suggestions?: unknown;
+          error?: { message?: unknown };
+        };
+        if (cancelled) {
+          return;
         }
 
-        const payload = (await response.json()) as { suggestions?: unknown };
+        if (!response.ok) {
+          setAiSuggestionsError(
+            typeof payload?.error?.message === 'string' ? payload.error.message : '',
+          );
+          setAiSuggestionsStatus('unavailable');
+          return;
+        }
+
         const suggestions = Array.isArray(payload.suggestions)
           ? payload.suggestions.filter(
               (item): item is string => typeof item === 'string' && Boolean(item.trim()),
             )
           : [];
-        if (cancelled) {
-          return;
-        }
         if (suggestions.length === 0) {
+          setAiSuggestionsError(
+            typeof payload?.error?.message === 'string' ? payload.error.message : '',
+          );
           setAiSuggestionsStatus('unavailable');
           return;
         }
@@ -829,10 +888,12 @@ export function GlobalSearchPanel() {
         const mapped = suggestions.slice(0, 4).map((item) => ({
           label: item,
           query: item,
-          icon: 'auto_awesome',
+          icon: pickSuggestionIcon(item),
+          origin: 'ai' as const,
         }));
         aiSuggestionCacheRef.current.set(cacheKey, mapped);
         setAiSuggestions(mapped);
+        setAiSuggestionsError('');
         setAiSuggestionsStatus('ready');
       } catch (error) {
         if (!cancelled && !(error instanceof DOMException && error.name === 'AbortError')) {
@@ -847,6 +908,8 @@ export function GlobalSearchPanel() {
       controller.abort();
     };
   }, [
+    activeAskQuery,
+    aiSuggestionRefreshToken,
     assistantConfig,
     entryPreference.aiSuggestions,
     locale,
@@ -856,7 +919,8 @@ export function GlobalSearchPanel() {
     trimmedQuery,
   ]);
 
-  const displayedSuggestions = aiSuggestions.length > 0 ? aiSuggestions : visibleSuggestions;
+  const displayedSuggestions: SearchSuggestion[] =
+    aiSuggestions.length > 0 ? aiSuggestions : visibleSuggestions;
   const isLoading =
     dataStatus === 'loading' || scheduleStatus === 'loading' || wikiStatus === 'loading';
   const showFallback = activeAskQuery !== '';
@@ -893,7 +957,9 @@ export function GlobalSearchPanel() {
     setAssistantHistory([]);
     followUpAbortRef.current?.abort();
     setFollowUps([]);
+    setFollowUpError('');
     setFollowUpStatus('idle');
+    setAiSuggestionRefreshToken(0);
     setEasterEggOpen(false);
   }
 
@@ -973,6 +1039,7 @@ export function GlobalSearchPanel() {
     followUpAbortRef.current?.abort();
     const controller = new AbortController();
     followUpAbortRef.current = controller;
+    setFollowUpError('');
     setFollowUpStatus('loading');
 
     try {
@@ -993,20 +1060,31 @@ export function GlobalSearchPanel() {
         }),
         signal: controller.signal,
       });
+      const payload = (await response.json()) as {
+        suggestions?: unknown;
+        error?: { message?: unknown };
+      };
       if (!response.ok) {
-        throw new Error('unavailable');
+        setFollowUpError(typeof payload?.error?.message === 'string' ? payload.error.message : '');
+        setFollowUpStatus('unavailable');
+        return;
       }
 
-      const payload = (await response.json()) as { suggestions?: unknown };
       const suggestions = Array.isArray(payload.suggestions)
         ? payload.suggestions
             .filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
             .slice(0, 3)
         : [];
       setFollowUps(suggestions);
+      setFollowUpError(
+        suggestions.length === 0 && typeof payload?.error?.message === 'string'
+          ? payload.error.message
+          : '',
+      );
       setFollowUpStatus(suggestions.length > 0 ? 'ready' : 'unavailable');
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) {
+        setFollowUpError('');
         setFollowUpStatus('unavailable');
       }
     } finally {
@@ -1035,6 +1113,7 @@ export function GlobalSearchPanel() {
     assistantAbortRef.current?.abort();
     followUpAbortRef.current?.abort();
     setFollowUps([]);
+    setFollowUpError('');
     setFollowUpStatus('idle');
     const abortController = new AbortController();
     assistantAbortRef.current = abortController;
@@ -1146,6 +1225,7 @@ export function GlobalSearchPanel() {
     setAssistantReferences([]);
     setAssistantHistory([]);
     setFollowUps([]);
+    setFollowUpError('');
     setFollowUpStatus('idle');
     followUpAbortRef.current?.abort();
     setAssistantSetupOpen(false);
@@ -1192,6 +1272,37 @@ export function GlobalSearchPanel() {
     }
 
     router.push(appPath(target.href));
+  }
+
+  function sendSuggestion(text: string) {
+    const clean = text.trim();
+    if (!clean) {
+      return;
+    }
+
+    setShowAll(true);
+    setActiveAskQuery(clean);
+    if (!assistantConfig) {
+      setQuery('');
+      setSubmittedAskQuery(clean);
+      setAssistantSetupOpen(true);
+      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    setQuery('');
+    void runAssistant(clean);
+  }
+
+  function refreshSuggestions() {
+    setSuggestionOffset((current) => current + 4);
+    if (!entryPreference.aiSuggestions || !assistantConfig) {
+      return;
+    }
+
+    setAiSuggestions([]);
+    setAiSuggestionsError('');
+    setAiSuggestionRefreshToken((current) => current + 1);
   }
 
   function askFromResults() {
@@ -1301,14 +1412,23 @@ export function GlobalSearchPanel() {
                 </button>
               </section>
             ) : null}
-            {!trimmedQuery ? (
+            {!trimmedQuery && !hasConversation ? (
               <section className="global-search-body">
                 <p className="global-search-empty-hint">{t('globalSearch.emptyHint')}</p>
                 <div className="global-search-suggestions-heading">
                   <p className="global-search-section-label">
                     {t('globalSearch.suggestion.title')}
                   </p>
-                  {aiSuggestions.length === 0 && suggestionPool.length > 4 ? (
+                  {entryPreference.aiSuggestions && assistantConfig ? (
+                    <button
+                      className="global-search-suggestions-refresh"
+                      type="button"
+                      disabled={aiSuggestionsStatus === 'loading'}
+                      onClick={refreshSuggestions}
+                    >
+                      {t('globalSearch.suggestion.refresh')}
+                    </button>
+                  ) : suggestionPool.length > 4 ? (
                     <button
                       className="global-search-suggestions-refresh"
                       type="button"
@@ -1321,6 +1441,23 @@ export function GlobalSearchPanel() {
                 {entryPreference.aiSuggestions && aiSuggestionsStatus === 'loading' ? (
                   <p className="status-note">{t('globalSearch.suggestion.aiLoading')}</p>
                 ) : null}
+                {entryPreference.aiSuggestions && aiSuggestionsStatus === 'unavailable' ? (
+                  <p className="status-note">
+                    {aiSuggestionsError || t('globalSearch.suggestion.aiUnavailable')}
+                  </p>
+                ) : null}
+                {!entryPreference.aiSuggestions ? (
+                  <p className="status-note">
+                    {t('globalSearch.suggestion.aiOff')}{' '}
+                    <Link
+                      className="global-search-answer-link"
+                      href={appPath('/account')}
+                      onClick={close}
+                    >
+                      {t('globalSearch.suggestion.aiSettings')}
+                    </Link>
+                  </p>
+                ) : null}
                 <div className="global-search-suggestions">
                   {displayedSuggestions.map((suggestion) => (
                     <button
@@ -1328,6 +1465,10 @@ export function GlobalSearchPanel() {
                       type="button"
                       key={`${suggestion.icon}-${suggestion.query}`}
                       onClick={() => {
+                        if (suggestion.origin === 'ai') {
+                          sendSuggestion(suggestion.query);
+                          return;
+                        }
                         setQuery(suggestion.query);
                         inputRef.current?.focus();
                       }}
@@ -1447,13 +1588,9 @@ export function GlobalSearchPanel() {
                               className="global-search-suggestion is-follow-up"
                               type="button"
                               key={item}
-                              onClick={() => {
-                                setShowAll(true);
-                                setQuery('');
-                                void runAssistant(item);
-                              }}
+                              onClick={() => sendSuggestion(item)}
                             >
-                              <MaterialSymbol name="forum" aria-hidden="true" />
+                              <MaterialSymbol name={pickSuggestionIcon(item)} aria-hidden="true" />
                               <span>{item}</span>
                             </button>
                           ))}
@@ -1463,6 +1600,11 @@ export function GlobalSearchPanel() {
                     {followUpStatus === 'loading' ? (
                       <p className="global-search-answer-status">
                         {t('globalSearch.assistant.followUpsLoading')}
+                      </p>
+                    ) : null}
+                    {followUpStatus === 'unavailable' && entryPreference.aiSuggestions ? (
+                      <p className="global-search-answer-status">
+                        {followUpError || t('globalSearch.assistant.followUpsUnavailable')}
                       </p>
                     ) : null}
                     {assistantStatus !== 'streaming' ? (

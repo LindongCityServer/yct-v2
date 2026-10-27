@@ -30,6 +30,16 @@ const zhCnGuides: GuideTable = {
     title: '帮助与常见问题',
     summary: '帮助页按主题整理了使用说明和常见问题，可以直接在页面内查找关键词。',
   },
+  '/services/transit-materials': {
+    title: '公共交通导视',
+    summary:
+      '用于生成公交站牌和地铁导视物料（线路图、站名、方向），可选择服务器线网、示例项目、导入项目或手动输入，编辑后预览、提交审核并下载。',
+  },
+  '/services/road-materials': {
+    title: '路牌物料',
+    summary:
+      '用于生成路牌和地址牌，按道路坐标或地图地点设置安装位置、朝向和尺寸，预览后提交审核或下载。',
+  },
   '/services': {
     title: '服务',
     summary: '服务页提供导视物料、路牌、RMP 导入等站内工具入口。',
@@ -73,6 +83,16 @@ const zhHantGuides: GuideTable = {
     title: '說明與常見問題',
     summary: '說明頁依主題整理了使用說明和常見問題，可以直接在頁面內查找關鍵字。',
   },
+  '/services/transit-materials': {
+    title: '公共運輸導視',
+    summary:
+      '用於產生公車站牌和捷運導視物料（路線圖、站名、方向），可選擇伺服器路網、範例專案、匯入專案或手動輸入，編輯後預覽、提交審核並下載。',
+  },
+  '/services/road-materials': {
+    title: '路牌物料',
+    summary:
+      '用於產生路牌和地址牌，依道路座標或地圖地點設定安裝位置、朝向和尺寸，預覽後提交審核或下載。',
+  },
   '/services': { title: '服務', summary: '服務頁提供導視物料、路牌、RMP 匯入等站內工具入口。' },
   '/account': {
     title: '帳號設定',
@@ -113,6 +133,16 @@ const enGuides: GuideTable = {
   '/services/faq': {
     title: 'Help and FAQ',
     summary: 'The help page groups usage guides and frequently asked questions by topic.',
+  },
+  '/services/transit-materials': {
+    title: 'Transit wayfinding materials',
+    summary:
+      'Generates bus stop and metro wayfinding materials (line maps, station names, directions) from server data, sample or imported projects, or manual input, then previews, reviews and downloads them.',
+  },
+  '/services/road-materials': {
+    title: 'Road sign materials',
+    summary:
+      'Generates road and address signs from road coordinates or map places, including installation position, orientation and size, then previews, reviews and downloads them.',
   },
   '/services': {
     title: 'Services',

@@ -1,4 +1,8 @@
 import type { LocaleCode } from '@yct/contracts';
+import {
+  getMaterialWorkspaceGuide,
+  resolveMaterialWorkspace,
+} from '../../../../lib/assistant/material-workspaces';
 import { getAssistantProvider } from '../../../../lib/assistant/providers';
 import { readPublicMapMarkerSnapshot } from '../../../../lib/map-marker-public-snapshot-store';
 import { readOperationsFeed } from '../../../../lib/operations-content';
@@ -18,6 +22,7 @@ interface SuggestionRequestBody {
   mode?: unknown;
   query?: unknown;
   answer?: unknown;
+  variation?: unknown;
 }
 
 interface PageSnapshot {
@@ -53,9 +58,10 @@ export async function POST(request: Request) {
   const page = normalizePage(body.page);
   const followUpMode = body.mode === 'followup';
 
+  const variation = normalizeVariation(body.variation);
   const prompt = followUpMode
     ? buildFollowUpPrompt(page, body.query, body.answer)
-    : buildPagePrompt(page, await readCandidates(page, locale));
+    : buildPagePrompt(page, await readCandidates(page, locale), variation);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
@@ -77,15 +83,19 @@ export async function POST(request: Request) {
         model,
         messages: [{ role: 'user', content: prompt }],
         stream: false,
-        temperature: 0.7,
-        [provider.maxTokensField]: 240,
+        temperature: 0.8,
+        // 推理模型会先消耗一部分 token 再输出正文，预算太小会拿到空 content。
+        [provider.maxTokensField]: 800,
       }),
       signal: controller.signal,
     });
 
     if (!response.ok) {
       return jsonResponse(502, {
-        error: { code: 'provider_unavailable', message: '推荐项暂时不可用。' },
+        error: {
+          code: 'provider_unavailable',
+          message: describeProviderFailure(response.status),
+        },
       });
     }
 
@@ -93,25 +103,61 @@ export async function POST(request: Request) {
       choices?: Array<{ message?: { content?: unknown } }>;
     };
     const content = payload.choices?.[0]?.message?.content;
-    return jsonResponse(200, { suggestions: parseSuggestions(content) });
-  } catch {
+    const suggestions = parseSuggestions(content);
+    if (suggestions.length === 0) {
+      return jsonResponse(200, {
+        suggestions,
+        error: { code: 'empty_suggestions', message: '模型没有返回可用的推荐项。' },
+      });
+    }
+    return jsonResponse(200, { suggestions });
+  } catch (error) {
     return jsonResponse(502, {
-      error: { code: 'provider_unavailable', message: '推荐项暂时不可用。' },
+      error: {
+        code: 'provider_unavailable',
+        message:
+          error instanceof DOMException && error.name === 'AbortError'
+            ? '模型响应超时，请稍后重试。'
+            : '无法连接模型服务，请检查网络或 Base URL。',
+      },
     });
   } finally {
     clearTimeout(timeout);
   }
 }
 
-function buildPagePrompt(page: PageSnapshot, candidates: string[]): string {
+function describeProviderFailure(status: number): string {
+  if (status === 400) {
+    return '模型拒绝了这次请求，请检查模型名是否可用。';
+  }
+  if (status === 401 || status === 403) {
+    return '模型 Key 无效或没有访问权限。';
+  }
+  if (status === 404) {
+    return '模型接口地址不可用。';
+  }
+  if (status === 429) {
+    return '模型请求过于频繁，请稍后再试。';
+  }
+  if (status >= 500) {
+    return '模型服务暂时不可用。';
+  }
+  return `模型服务返回 ${status}。`;
+}
+
+function buildPagePrompt(page: PageSnapshot, candidates: string[], variation: number): string {
   return [
     '你在为雨城通（Yuchengtong）生成搜索框下方的推荐项。',
+    '直接给出最终结果，不要展示推理过程。',
     '只输出一个 JSON 字符串数组，不要输出解释、代码块或多余文字。',
     `生成 ${maximumSuggestions} 条用户可能直接输入的中文短句，每条 5-18 个字。`,
     '要求：',
     '1. 必须和当前页面能做的事直接相关，优先使用候选条目里的真实名称。',
     '2. 不要把页面标题原样当成推荐项。',
     '3. 不要编造候选条目之外的线路、站点、班次或公告。',
+    '4. 尽量覆盖不同角度：具体操作、概念解释、常见问题、下一步建议，不要四条都在问同一类事情。',
+    '5. 用户已经在看的内容不要推荐“打开/查看/定位它”，那是重复操作；可以在它基础上继续追问或做下一步。',
+    variation > 0 ? `6. 这是第 ${variation + 1} 次生成，请换一个角度，避免和常见推荐重复。` : '',
     '',
     `当前页面：${page.title || '未知'}（${page.pathname || '未知路径'}）`,
     page.highlights.length > 0
@@ -120,7 +166,17 @@ function buildPagePrompt(page: PageSnapshot, candidates: string[]): string {
     '',
     '候选条目：',
     candidates.length > 0 ? candidates.join('\n') : '（暂无）',
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function normalizeVariation(value: unknown): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return 0;
+  }
+  return Math.min(Math.floor(numeric), 20);
 }
 
 function buildFollowUpPrompt(page: PageSnapshot, query: unknown, answer: unknown): string {
@@ -129,14 +185,19 @@ function buildFollowUpPrompt(page: PageSnapshot, query: unknown, answer: unknown
 
   return [
     '你在为雨城通（Yuchengtong）的问一问生成回答下方的追问推荐。',
+    '直接给出最终结果，不要展示推理过程。',
     '只输出一个 JSON 字符串数组，不要输出解释、代码块或多余文字。',
     '生成 3 条用户看完这段回答后可能继续追问的短问题，每条 8-20 个字。',
     '要求：',
     '1. 必须围绕原问题、回答内容和当前页面，不要发散到无关话题。',
     '2. 不要重复原问题，也不要只换个说法。',
     '3. 不要编造回答里没有出现的线路、站点、班次、时间或链接。',
+    '4. 三条追问尽量落在不同角度：原因、替代方案、注意事项或下一步操作。',
     '',
     `当前页面：${page.title || '未知'}（${page.pathname || '未知路径'}）`,
+    resolveMaterialWorkspace(page.pathname)
+      ? '当前在物料工作台，追问应围绕模板、数据来源、编辑、预览、审核和导出，不要转到服务器地点或线路。'
+      : '',
     page.highlights.length > 0 ? `用户正在查看：${page.highlights.join('；')}` : '',
     `原问题：${cleanQuery || '（未知）'}`,
     '回答：',
@@ -147,15 +208,32 @@ function buildFollowUpPrompt(page: PageSnapshot, query: unknown, answer: unknown
 }
 
 async function readCandidates(page: PageSnapshot, locale: LocaleCode): Promise<string[]> {
+  const candidates: string[] = [];
+  const isMap = /(^|\/)map(\/|$)/.test(page.pathname);
+  const isTravel = /(^|\/)travel(\/|$)/.test(page.pathname);
+  const workspaceId = resolveMaterialWorkspace(page.pathname);
+
+  // 物料工作台只给工作台内部的操作和数据来源，避免把模型引到服务器线路上。
+  if (workspaceId) {
+    const guide = getMaterialWorkspaceGuide(workspaceId);
+    candidates.push(`工作台：${guide.title}`, `说明：${guide.summary}`);
+    for (const entry of guide.entries) {
+      candidates.push(
+        `操作：${entry.title}`,
+        ...entry.questions.map((question) => `可问：${question}`),
+      );
+    }
+    if (page.highlights.length > 0) {
+      candidates.unshift(`正在查看：${page.highlights.join('；')}`);
+    }
+    return candidates.slice(0, 60);
+  }
+
   const [operations, services, markers] = await Promise.allSettled([
     readOperationsFeed(),
     readServiceEntryGroups(),
     readPublicMapMarkerSnapshot(),
   ]);
-
-  const candidates: string[] = [];
-  const isMap = /(^|\/)map(\/|$)/.test(page.pathname);
-  const isTravel = /(^|\/)travel(\/|$)/.test(page.pathname);
 
   if (markers.status === 'fulfilled' && markers.value) {
     const limit = isMap ? 24 : 10;
@@ -196,38 +274,65 @@ function parseSuggestions(value: unknown): string[] {
     return [];
   }
 
-  const start = value.indexOf('[');
-  const end = value.lastIndexOf(']');
-  if (start < 0 || end <= start) {
-    return [];
+  const text = value.trim();
+  const rawItems: string[] = [];
+
+  // 1. 标准 JSON 数组（可能被 ```json 代码块包裹）。
+  const start = text.indexOf('[');
+  const end = text.lastIndexOf(']');
+  if (start >= 0 && end > start) {
+    try {
+      const parsed = JSON.parse(text.slice(start, end + 1)) as unknown;
+      if (Array.isArray(parsed)) {
+        rawItems.push(...parsed.filter((item): item is string => typeof item === 'string'));
+      }
+    } catch {
+      // 继续尝试其他格式。
+    }
   }
 
-  try {
-    const parsed = JSON.parse(value.slice(start, end + 1)) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
+  // 2. {"suggestions": [...]} 形式的 JSON 对象。
+  if (rawItems.length === 0) {
+    try {
+      const parsed = JSON.parse(text) as { suggestions?: unknown };
+      if (Array.isArray(parsed?.suggestions)) {
+        rawItems.push(
+          ...parsed.suggestions.filter((item): item is string => typeof item === 'string'),
+        );
+      }
+    } catch {
+      // 继续尝试逐行解析。
     }
-
-    const seen = new Set<string>();
-    const suggestions: string[] = [];
-    for (const item of parsed) {
-      if (typeof item !== 'string') {
-        continue;
-      }
-      const text = item.replace(/\s+/g, ' ').trim().slice(0, 24);
-      if (!text || seen.has(text)) {
-        continue;
-      }
-      seen.add(text);
-      suggestions.push(text);
-      if (suggestions.length >= maximumSuggestions) {
-        break;
-      }
-    }
-    return suggestions;
-  } catch {
-    return [];
   }
+
+  // 3. 模型没有按 JSON 输出时，退化为逐行读取，去掉序号和项目符号。
+  if (rawItems.length === 0) {
+    for (const line of text.split(/\r?\n/u)) {
+      const cleaned = line
+        .replace(/^\s*(?:[-*•·]|\d+[.)、])\s*/u, '')
+        .replace(/^["'“”]+|["'“”]+$/gu, '')
+        .trim();
+      if (cleaned) {
+        rawItems.push(cleaned);
+      }
+    }
+  }
+
+  const seen = new Set<string>();
+  const suggestions: string[] = [];
+  for (const item of rawItems) {
+    const cleaned = item.replace(/\s+/g, ' ').trim().slice(0, 30);
+    if (cleaned.length < 2 || seen.has(cleaned)) {
+      continue;
+    }
+    seen.add(cleaned);
+    suggestions.push(cleaned);
+    if (suggestions.length >= maximumSuggestions) {
+      break;
+    }
+  }
+
+  return suggestions;
 }
 
 function normalizePage(value: unknown): PageSnapshot {
