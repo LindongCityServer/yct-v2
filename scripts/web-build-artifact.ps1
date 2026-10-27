@@ -181,10 +181,6 @@ function Repair-YctStandaloneJunctions {
       Where-Object { $_.LinkType }
   )
   foreach ($link in $links) {
-    if (Test-Path -LiteralPath (Join-Path $link.FullName 'package.json')) {
-      continue
-    }
-
     $match = [regex]::Match([string]$link.Target, 'drive\\C\\(.+)$', 'IgnoreCase')
     if (-not $match.Success) {
       continue
@@ -192,6 +188,9 @@ function Repair-YctStandaloneJunctions {
 
     $realTarget = Join-Path 'C:\' $match.Groups[1].Value
     if (-not (Test-Path -LiteralPath $realTarget)) {
+      continue
+    }
+    if ([string]$link.Target -eq $realTarget) {
       continue
     }
 
