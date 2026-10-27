@@ -3,6 +3,40 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.14.0",
+      "releasedAt": "2026-10-27T08:21:26.760Z",
+      "sourceFingerprint": "b34bb4c7c9e7faafc6d1fd0518ef1ba198123db8c4ff5306034235e2d84e1c71",
+      "themes": ["map", "transit", "search"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "线路详情新增实时公交，按已录入时刻表显示车辆位置、到站与离站时间"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地图路线规划支持把线路或道路等线性要素作为起点或终点"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "线性要素的周边搜索改为沿线搜索，可按沿线里程范围筛选并在地图上高亮该范围"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "问一问推荐项支持换一批与失败提示，并补充物料工作台与 B 站动态内容"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "线路详情面板调整站点选中样式、顶栏按钮布局与到站时间展示"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.13.0",
       "releasedAt": "2026-10-26T19:57:27.105Z",
       "sourceFingerprint": "7c4f193a49b33fb0c2002504548385e91d72eca8ecb5da730c16d59c9322db02",
