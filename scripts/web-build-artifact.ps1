@@ -190,12 +190,11 @@ function Repair-YctStandaloneJunctions {
     if (-not (Test-Path -LiteralPath $realTarget)) {
       continue
     }
-    if ([string]$link.Target -eq $realTarget) {
-      continue
-    }
 
+    # robocopy 复制 junction 时会把目录本身记为失败（即使文件都复制成功），
+    # 导致 staging 以退出码 9 中止。这里直接把链接替换成实体目录副本。
     [System.IO.Directory]::Delete($link.FullName, $false)
-    New-Item -ItemType Junction -Path $link.FullName -Target $realTarget | Out-Null
+    Copy-YctDirectoryTree -Source $realTarget -Destination $link.FullName
   }
 }
 
