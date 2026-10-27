@@ -24,7 +24,7 @@
     // 设备授权（RFC 8628）—— 需雨城通后端实现，契约见 BACKEND_DEVICE_AUTH.md
     var DEVICE_AUTHORIZE_URL = API_ORIGIN + '/api/auth/device/authorize';
     var DEVICE_TOKEN_URL = API_ORIGIN + '/api/auth/device/token';
-    var DEVICE_VERIFY_URL = API_ORIGIN + '/v2/auth/device';
+    var DEVICE_VERIFY_URL = API_ORIGIN + '/auth/device';
 
     var STORAGE_KEY = 'yct.device.session';
     var REQUEST_TIMEOUT_NOTE = 15000;

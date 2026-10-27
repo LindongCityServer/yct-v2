@@ -539,6 +539,16 @@ export interface TransitLineSnapshot {
     down?: TransitDepartureScheduleRule[];
     up?: TransitDepartureScheduleRule[];
   };
+  /** 班次标签：每方向引用的标签池与抽取方式；多个池合并后统一抽取。 */
+  tripLabelConfigByDirection?: {
+    down?: TransitTripLabelSelection;
+    up?: TransitTripLabelSelection;
+  };
+  /** 手动指定的班次标签，键为首站发车时刻（HH:mm），手动值优先且不参与自动抽取。 */
+  tripLabelsByDirection?: {
+    down?: Record<string, string>;
+    up?: Record<string, string>;
+  };
   operatingDateRule?: string;
   bookingUrl?: string;
   sourcePath?: string;
@@ -812,6 +822,23 @@ export interface TransitModeProfile {
   sortOrder: number;
   enabled: boolean;
   showPlannedSegments: boolean;
+  updatedAt?: ISODateTimeString;
+  updatedBy?: string;
+}
+
+export type TransitTripLabelMode = 'sequential' | 'random';
+
+export interface TransitTripLabelSelection {
+  /** 参与抽取的标签池；多个池合并后统一抽取。 */
+  poolIds: string[];
+  mode: TransitTripLabelMode;
+}
+
+/** 车队/机队标签池，可被任意多条线路、多个方向复用。 */
+export interface TransitTripLabelPool {
+  id: string;
+  name: string;
+  labels: string[];
   updatedAt?: ISODateTimeString;
   updatedBy?: string;
 }

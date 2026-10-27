@@ -94,6 +94,11 @@ export type CommonMessageKey =
   | 'account.push.unsupported'
   | 'account.error.cacheRefreshFailed'
   | 'account.about.currentVersion'
+  | 'account.about.github'
+  | 'account.about.mcpCopied'
+  | 'account.about.mcpCopy'
+  | 'account.about.mcpDescription'
+  | 'account.about.mcpTitle'
   | 'account.about.title'
   | 'account.about.viewChangelog'
   | 'account.auth.adminOperations'
@@ -363,6 +368,7 @@ export type CommonMessageKey =
   | 'map.lineInfo.openAria'
   | 'map.lineInfo.timezoneNote'
   | 'map.lineInfo.title'
+  | 'map.lineRealtime.allTrips'
   | 'map.lineRealtime.atStation'
   | 'map.lineRealtime.beijingTime'
   | 'map.lineRealtime.boardArrivalAt'
@@ -383,6 +389,8 @@ export type CommonMessageKey =
   | 'map.lineRealtime.emptyActive'
   | 'map.lineRealtime.emptySchedule'
   | 'map.lineRealtime.inSegment'
+  | 'map.lineRealtime.lastTripPassed'
+  | 'map.lineRealtime.lastTripPassedNextDay'
   | 'map.lineRealtime.minutesToNext'
   | 'map.lineRealtime.nextDeparture'
   | 'map.lineRealtime.nextDepartureNextDay'
@@ -398,7 +406,7 @@ export type CommonMessageKey =
   | 'map.lineRealtime.summary'
   | 'map.lineRealtime.title'
   | 'map.lineRealtime.trip'
-  | 'map.lineRealtime.tripTitle'
+  | 'map.lineRealtime.tripTitlePosition'
   | 'map.lineRealtime.updatedAt'
   | 'map.lineRealtime.vehicleBadge'
   | 'map.lineStation.showPoi'
@@ -966,6 +974,7 @@ export type CommonMessageKey =
   | 'operationToc.expand'
   | 'operationToc.title'
   | 'page.account'
+  | 'page.ask'
   | 'page.map'
   | 'page.offline'
   | 'page.operations'
@@ -1017,6 +1026,8 @@ export type CommonMessageKey =
   | 'globalSearch.assistant.answerTitle'
   | 'globalSearch.assistant.clear'
   | 'globalSearch.assistant.configure'
+  | 'globalSearch.assistant.copy'
+  | 'globalSearch.assistant.copied'
   | 'globalSearch.assistant.disclaimer'
   | 'globalSearch.assistant.error'
   | 'globalSearch.assistant.followUps'
@@ -1029,6 +1040,7 @@ export type CommonMessageKey =
   | 'globalSearch.assistant.networkError'
   | 'globalSearch.assistant.provider'
   | 'globalSearch.assistant.references'
+  | 'globalSearch.assistant.retry'
   | 'globalSearch.assistant.save'
   | 'globalSearch.assistant.setupDescription'
   | 'globalSearch.assistant.setupTitle'
@@ -1053,6 +1065,7 @@ export type CommonMessageKey =
   | 'globalSearch.mode.ask'
   | 'globalSearch.mode.search'
   | 'globalSearch.noMatch'
+  | 'globalSearch.pageDisabled'
   | 'globalSearch.placeholder'
   | 'globalSearch.placeholderAsk'
   | 'globalSearch.resultCount'
@@ -1093,16 +1106,60 @@ export type CommonMessageKey =
   | 'scheduleStopTable.station'
   | 'scheduleStopTable.stop'
   | 'scheduleStopTable.stopAria'
+  | 'shortcut.acceptSuggestion'
+  | 'shortcut.adminReview'
   | 'shortcut.close'
+  | 'shortcut.deleteSelected'
+  | 'shortcut.dismissLayers'
+  | 'shortcut.documentToc'
+  | 'shortcut.duplicateElement'
+  | 'shortcut.editor'
+  | 'shortcut.exportProject'
+  | 'shortcut.firstLastSection'
   | 'shortcut.focusMapSearch'
+  | 'shortcut.focusScheduleSearch'
+  | 'shortcut.global'
+  | 'shortcut.globalSearch'
   | 'shortcut.holdCtrl'
+  | 'shortcut.insertAppend'
+  | 'shortcut.insertNearest'
+  | 'shortcut.insertPrepend'
+  | 'shortcut.lineEditor'
+  | 'shortcut.lineEditor.toolMove'
+  | 'shortcut.lineEditor.toolPan'
+  | 'shortcut.lineEditor.toolStation'
+  | 'shortcut.lineEditor.toolWaypoint'
+  | 'shortcut.listBulk'
+  | 'shortcut.listNavigate'
+  | 'shortcut.listOpen'
+  | 'shortcut.listSelect'
   | 'shortcut.map'
+  | 'shortcut.moveElement'
   | 'shortcut.openMenu'
+  | 'shortcut.openTemplateLibrary'
   | 'shortcut.planFocusedMarker'
+  | 'shortcut.planJourney'
+  | 'shortcut.previewMaterial'
+  | 'shortcut.redo'
+  | 'shortcut.resetFilters'
   | 'shortcut.resetMapView'
+  | 'shortcut.reverseElements'
+  | 'shortcut.save'
+  | 'shortcut.saveAndBack'
+  | 'shortcut.searchNearby'
+  | 'shortcut.searchResults'
+  | 'shortcut.sections'
   | 'shortcut.swapRouteEndpoints'
+  | 'shortcut.switchDataSource'
+  | 'shortcut.switchRow'
+  | 'shortcut.switchTemplate'
   | 'shortcut.title'
+  | 'shortcut.toggleFavorite'
+  | 'shortcut.toggleLayers'
   | 'shortcut.toggleNavigation'
+  | 'shortcut.travel'
+  | 'shortcut.undo'
+  | 'shortcut.wayfinding'
   | 'settings.accent.gray'
   | 'settings.accent.green'
   | 'settings.accent.label'
@@ -1118,6 +1175,9 @@ export type CommonMessageKey =
   | 'settings.assistant.enabledNote'
   | 'settings.assistant.encryptionNote'
   | 'settings.assistant.group'
+  | 'settings.assistant.configure'
+  | 'settings.assistant.configTitle'
+  | 'settings.assistant.configDescription'
   | 'settings.assistant.key'
   | 'settings.assistant.keyPlaceholder'
   | 'settings.assistant.model'
@@ -1160,6 +1220,8 @@ export type CommonMessageKey =
   | 'settings.mobileActionRail.note'
   | 'settings.mobileActionRail.position'
   | 'settings.mobileActionRail.right'
+  | 'settings.mobileActionRail.topOffset'
+  | 'settings.mobileActionRail.topOffsetValue'
   | 'mobileActionRail.aria'
   | 'mobileActionRail.more'
   | 'mobileActionRail.overflowAria'
@@ -1652,6 +1714,7 @@ export type CommonMessageKey =
   | 'search.resultGroup.lines'
   | 'search.resultGroup.operations'
   | 'search.resultGroup.poi'
+  | 'search.resultGroup.player'
   | 'search.resultGroup.schedules'
   | 'search.resultGroup.services'
   | 'search.resultGroup.social'
@@ -1999,6 +2062,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.push.unknownHost': '未知服务',
     'account.push.unsupported': '当前浏览器不支持 Web Push',
     'account.about.currentVersion': '当前版本：{version}',
+    'account.about.github': 'GitHub 仓库',
+    'account.about.mcpCopied': '已复制 MCP 地址',
+    'account.about.mcpCopy': '复制 MCP 地址',
+    'account.about.mcpDescription':
+      '问一问的站内数据能力已封装成只读 MCP Server，可在支持 Streamable HTTP 的 MCP 客户端里直接添加这个地址；接口匿名只读，不包含你的模型 Key。',
+    'account.about.mcpTitle': 'MCP 开放接口',
     'account.about.title': '关于与更新',
     'account.about.viewChangelog': '查看版本更新',
     'account.auth.adminOperations': '内容后台',
@@ -2309,6 +2378,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.lineInfo.openAria': '查看 {name} 线路信息',
     'map.lineInfo.timezoneNote': '首末车、发车时刻与预计到站时间均为北京时间（UTC+8）。',
     'map.lineInfo.title': '{name} · 线路信息',
+    'map.lineRealtime.allTrips': '全部班次',
     'map.lineRealtime.atStation': '停靠 {station}',
     'map.lineRealtime.beijingTime': '北京时间',
     'map.lineRealtime.boardArrivalAt': '{time} 到达',
@@ -2329,6 +2399,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.lineRealtime.emptyActive': '当前时段暂无在途车辆',
     'map.lineRealtime.emptySchedule': '该方向尚未录入发车时刻表',
     'map.lineRealtime.inSegment': '行驶于 {from} → {to} 区间',
+    'map.lineRealtime.lastTripPassed': '末班车已过，下一班 {time}',
+    'map.lineRealtime.lastTripPassedNextDay': '末班车已过，下一班 {time}（次日）',
     'map.lineRealtime.minutesToNext': '距下一站约 {count} 分钟',
     'map.lineRealtime.nextDeparture': '下一班 {time}',
     'map.lineRealtime.nextDepartureNextDay': '下一班 {time}（次日）',
@@ -2345,7 +2417,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.lineRealtime.summary': '共 {count} 辆在途',
     'map.lineRealtime.title': '实时公交',
     'map.lineRealtime.trip': '第 {count} 班 · {time} 发车',
-    'map.lineRealtime.tripTitle': '第 {count} 班',
+    'map.lineRealtime.tripTitlePosition': '第 {current}/{total} 班',
     'map.lineRealtime.updatedAt': '更新于 {time}',
     'map.lineRealtime.vehicleBadge': '第 {count} 班 · {time} 发车',
     'map.lineStation.showPoi': '查看站点',
@@ -2929,6 +3001,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operationToc.expand': '展开{title}',
     'operationToc.title': '文章目录',
     'page.account': '账号设置',
+    'page.ask': '问一问',
     'page.map': '地图探索',
     'page.offline': '离线',
     'page.operations': '运营信息',
@@ -2994,6 +3067,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'globalSearch.assistant.answerTitle': '问一问',
     'globalSearch.assistant.clear': '清除 Key',
     'globalSearch.assistant.configure': '配置 Key',
+    'globalSearch.assistant.copy': '复制回答',
+    'globalSearch.assistant.copied': '已复制',
     'globalSearch.assistant.disclaimer': '回答由你配置的模型生成，请以站内引用为准。',
     'globalSearch.assistant.error': '问一问暂时没有返回结果，先给你站内资料。',
     'globalSearch.assistant.followUps': '继续追问',
@@ -3006,6 +3081,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'globalSearch.assistant.networkError': '网络连接失败，请检查网络后重试。',
     'globalSearch.assistant.provider': '模型提供商',
     'globalSearch.assistant.references': '引用与入口',
+    'globalSearch.assistant.retry': '重新回答',
     'globalSearch.assistant.save': '保存并提问',
     'globalSearch.assistant.setupDescription':
       'Key 只保存在当前浏览器会话，关闭标签页后失效；本站不记录。',
@@ -3025,14 +3101,15 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       '站内资料暂时没有直接答案，可以换个说法，或查看帮助与常见问题。',
     'globalSearch.easterEgg.close': '关闭',
     'globalSearch.easterEgg.description':
-      '图标里的这个小人最早只是随手画在方格纸上的涂鸦：圆脑袋、两个点眼睛、头上顶着一块写着“临”字的小圆牌。后来它被重新画成了线描和填充两版，成了问一问的形象。',
-    'globalSearch.easterEgg.hint': '它最早出现在一些生活记录里，现在只留在站内当彩蛋。',
+      '图标里的小人是新光 2019 年 12 月手绘的，后来被照着画成表情包，又被重画成问一问的线描和填充两版。',
+    'globalSearch.easterEgg.hint': '想找原帖，可以在 B 站和酷安搜新光和题海散人。',
     'globalSearch.easterEgg.title': '关于问一问',
     'globalSearch.emptyHint': '输入地点、班次、公告，或直接说出你的需求',
     'globalSearch.liveResults': '实时结果',
     'globalSearch.mode.ask': '问一问',
     'globalSearch.mode.search': '搜索',
     'globalSearch.noMatch': '没有找到匹配结果',
+    'globalSearch.pageDisabled': '问一问入口已在设置中关闭，可在账号设置里重新开启。',
     'globalSearch.placeholder': '搜索地点、班次、资讯，或直接提问…',
     'globalSearch.placeholderAsk': '描述你的问题，Enter 发送…',
     'globalSearch.resultCount': '共 {count} 条结果',
@@ -3059,16 +3136,60 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'globalSearch.unavailable': '部分数据暂不可用',
     'globalSearch.viewAll': '查看全部结果',
     'search.open': '搜索',
+    'shortcut.acceptSuggestion': '采纳补全建议',
+    'shortcut.adminReview': '后台审核列表',
     'shortcut.close': '关闭快捷键',
+    'shortcut.deleteSelected': '删除当前选中的节点或元素',
+    'shortcut.dismissLayers': '逐层关闭地图浮层',
+    'shortcut.duplicateElement': '复制选中元素',
+    'shortcut.editor': '编辑器',
+    'shortcut.exportProject': '导出工程文件',
+    'shortcut.firstLastSection': '跳到首章节或末章节',
     'shortcut.focusMapSearch': '聚焦地图搜索',
+    'shortcut.focusScheduleSearch': '聚焦时刻表搜索',
+    'shortcut.global': '全局',
+    'shortcut.globalSearch': '打开全局搜索',
     'shortcut.holdCtrl': '长按 Ctrl',
+    'shortcut.insertAppend': '追加插入',
+    'shortcut.insertNearest': '就近插入',
+    'shortcut.insertPrepend': '反向追加插入',
+    'shortcut.lineEditor': '线路地图编辑器',
+    'shortcut.lineEditor.toolMove': '移动工具',
+    'shortcut.lineEditor.toolPan': '拖移工具',
+    'shortcut.lineEditor.toolStation': '站点工具',
+    'shortcut.lineEditor.toolWaypoint': '途经点工具',
+    'shortcut.listBulk': '对所选条目执行批量操作',
+    'shortcut.listNavigate': '上下移动列表项',
+    'shortcut.listOpen': '打开当前项详情',
+    'shortcut.listSelect': '选中或取消当前项',
     'shortcut.map': '地图',
+    'shortcut.moveElement': '调整选中元素的行内顺序',
     'shortcut.openMenu': '快捷键提示',
+    'shortcut.openTemplateLibrary': '打开模板库或导入工程',
+    'shortcut.documentToc': '长文目录',
     'shortcut.planFocusedMarker': '查找前往当前标记点的路线',
+    'shortcut.planJourney': '规划行程',
+    'shortcut.previewMaterial': '生成或更新预览',
+    'shortcut.redo': '重做',
+    'shortcut.resetFilters': '清空筛选条件',
     'shortcut.resetMapView': '回到默认地图视图',
+    'shortcut.reverseElements': '反转元素顺序',
+    'shortcut.save': '保存',
+    'shortcut.saveAndBack': '保存并返回',
+    'shortcut.searchNearby': '搜索当前地点附近',
+    'shortcut.searchResults': '在搜索结果间移动',
+    'shortcut.sections': '在章节间跳转',
     'shortcut.swapRouteEndpoints': '交换路线起终点',
+    'shortcut.switchDataSource': '切换手输/线路数据源',
+    'shortcut.switchRow': '切换选中行（双行版式）',
+    'shortcut.switchTemplate': '切换样式模板',
     'shortcut.title': '键盘快捷键',
+    'shortcut.toggleFavorite': '收藏或取消收藏当前地点',
+    'shortcut.toggleLayers': '打开或关闭图层面板',
     'shortcut.toggleNavigation': '展开或收起侧边导航',
+    'shortcut.travel': '旅行与时刻表',
+    'shortcut.undo': '撤销',
+    'shortcut.wayfinding': '导视与材料工作台',
     'settings.accent.gray': '灰色',
     'settings.accent.green': '青绿',
     'settings.accent.label': '强调色',
@@ -3086,6 +3207,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.assistant.enabledNote': '关闭后会隐藏所有入口并停用快捷键；已保存的 Key 仍会保留。',
     'settings.assistant.encryptionNote': 'Key 会加密保存在本机，仍请勿在公共设备保存。',
     'settings.assistant.group': '搜索与问一问',
+    'settings.assistant.configure': '配置模型与 MCP',
+    'settings.assistant.configTitle': '搜索与问一问配置',
+    'settings.assistant.configDescription': '配置模型 Key 与 MCP 入口。',
     'settings.assistant.key': 'API Key',
     'settings.assistant.keyPlaceholder': '粘贴你的 API Key',
     'settings.assistant.model': '模型',
@@ -3129,6 +3253,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       '仅在移动端（宽度 ≤ 760px）生效。开启后，顶部操作、标题栏按钮、底部导航与地图工具条会收纳到侧边；空间不足时自动收进“更多”菜单。',
     'settings.mobileActionRail.position': '操作栏位置',
     'settings.mobileActionRail.right': '右侧',
+    'settings.mobileActionRail.topOffset': '顶端边距',
+    'settings.mobileActionRail.topOffsetValue': '{value}px',
     'mobileActionRail.aria': '侧边操作栏',
     'mobileActionRail.more': '更多',
     'mobileActionRail.overflowAria': '更多操作',
@@ -3640,6 +3766,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'search.resultGroup.lines': '线路',
     'search.resultGroup.operations': '运营信息',
     'search.resultGroup.poi': '地图 POI',
+    'search.resultGroup.player': '玩家位置',
     'search.resultGroup.schedules': '班次',
     'search.resultGroup.services': '服务与工具',
     'search.resultGroup.social': '社交与社区',
@@ -3985,6 +4112,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.push.unknownHost': '未知服務',
     'account.push.unsupported': '目前瀏覽器不支援 Web Push',
     'account.about.currentVersion': '目前版本：{version}',
+    'account.about.github': 'GitHub 儲存庫',
+    'account.about.mcpCopied': '已複製 MCP 位址',
+    'account.about.mcpCopy': '複製 MCP 位址',
+    'account.about.mcpDescription':
+      '問一問的站內資料能力已封裝成唯讀 MCP Server，可在支援 Streamable HTTP 的 MCP 用戶端直接加入這個位址；介面匿名唯讀，不包含你的模型 Key。',
+    'account.about.mcpTitle': 'MCP 開放介面',
     'account.about.title': '關於與更新',
     'account.about.viewChangelog': '查看版本更新',
     'account.auth.adminOperations': '內容後台',
@@ -4295,6 +4428,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.lineInfo.openAria': '查看 {name} 線路資訊',
     'map.lineInfo.timezoneNote': '首末車、發車時刻與預計到站時間均為北京時間（UTC+8）。',
     'map.lineInfo.title': '{name} · 線路資訊',
+    'map.lineRealtime.allTrips': '全部班次',
     'map.lineRealtime.atStation': '停靠 {station}',
     'map.lineRealtime.beijingTime': '北京時間',
     'map.lineRealtime.boardArrivalAt': '{time} 抵達',
@@ -4315,6 +4449,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.lineRealtime.emptyActive': '目前時段暫無在途車輛',
     'map.lineRealtime.emptySchedule': '該方向尚未錄入發車時刻表',
     'map.lineRealtime.inSegment': '行駛於 {from} → {to} 區間',
+    'map.lineRealtime.lastTripPassed': '末班車已過，下一班 {time}',
+    'map.lineRealtime.lastTripPassedNextDay': '末班車已過，下一班 {time}（次日）',
     'map.lineRealtime.minutesToNext': '距下一站約 {count} 分鐘',
     'map.lineRealtime.nextDeparture': '下一班 {time}',
     'map.lineRealtime.nextDepartureNextDay': '下一班 {time}（次日）',
@@ -4331,7 +4467,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.lineRealtime.summary': '共 {count} 輛在途',
     'map.lineRealtime.title': '即時公車',
     'map.lineRealtime.trip': '第 {count} 班 · {time} 發車',
-    'map.lineRealtime.tripTitle': '第 {count} 班',
+    'map.lineRealtime.tripTitlePosition': '第 {current}/{total} 班',
     'map.lineRealtime.updatedAt': '更新於 {time}',
     'map.lineRealtime.vehicleBadge': '第 {count} 班 · {time} 發車',
     'map.lineStation.showPoi': '查看站點',
@@ -4915,6 +5051,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operationToc.expand': '展開{title}',
     'operationToc.title': '文章目錄',
     'page.account': '帳號設定',
+    'page.ask': '問一問',
     'page.map': '地圖探索',
     'page.offline': '離線',
     'page.operations': '營運資訊',
@@ -4980,6 +5117,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'globalSearch.assistant.answerTitle': '問一問',
     'globalSearch.assistant.clear': '清除 Key',
     'globalSearch.assistant.configure': '設定 Key',
+    'globalSearch.assistant.copy': '複製回答',
+    'globalSearch.assistant.copied': '已複製',
     'globalSearch.assistant.disclaimer': '回答由你設定的模型產生，請以站內引用為準。',
     'globalSearch.assistant.error': '問一問暫時沒有回傳結果，先給你站內資料。',
     'globalSearch.assistant.followUps': '繼續追問',
@@ -4992,6 +5131,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'globalSearch.assistant.networkError': '網路連線失敗，請檢查網路後重試。',
     'globalSearch.assistant.provider': '模型提供商',
     'globalSearch.assistant.references': '引用與入口',
+    'globalSearch.assistant.retry': '重新回答',
     'globalSearch.assistant.save': '儲存並提問',
     'globalSearch.assistant.setupDescription':
       'Key 只儲存在目前瀏覽器工作階段，關閉分頁後失效；本站不記錄。',
@@ -5011,14 +5151,15 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       '站內資料暫時沒有直接答案，可以換個說法，或查看說明與常見問題。',
     'globalSearch.easterEgg.close': '關閉',
     'globalSearch.easterEgg.description':
-      '圖示裡的這個小人最早只是隨手畫在方格紙上的塗鴉：圓腦袋、兩個點眼睛、頭上頂著一塊寫著「臨」字的小圓牌。後來它被重新畫成線描和填充兩版，成了問一問的形象。',
-    'globalSearch.easterEgg.hint': '它最早出現在一些生活記錄裡，現在只留在站內當彩蛋。',
+      '圖示裡的小人是新光 2019 年 12 月手繪的，後來被照著畫成表情包，又被重畫成問一問的線描和填充兩版。',
+    'globalSearch.easterEgg.hint': '想找原帖，可以在 B 站和酷安搜新光和題海散人。',
     'globalSearch.easterEgg.title': '關於問一問',
     'globalSearch.emptyHint': '輸入地點、班次、公告，或直接說出你的需求',
     'globalSearch.liveResults': '即時結果',
     'globalSearch.mode.ask': '問一問',
     'globalSearch.mode.search': '搜尋',
     'globalSearch.noMatch': '沒有找到符合結果',
+    'globalSearch.pageDisabled': '問一問入口已在設定中關閉，可在帳號設定裡重新開啟。',
     'globalSearch.placeholder': '搜尋地點、班次、資訊，或直接提問…',
     'globalSearch.placeholderAsk': '描述你的問題，Enter 傳送…',
     'globalSearch.resultCount': '共 {count} 筆結果',
@@ -5045,16 +5186,60 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'globalSearch.unavailable': '部分資料暫不可用',
     'globalSearch.viewAll': '查看全部結果',
     'search.open': '搜尋',
+    'shortcut.acceptSuggestion': '採納補全建議',
+    'shortcut.adminReview': '後台審核清單',
     'shortcut.close': '關閉快捷鍵',
+    'shortcut.deleteSelected': '刪除目前選取的節點或元素',
+    'shortcut.dismissLayers': '逐層關閉地圖浮層',
+    'shortcut.duplicateElement': '複製選取元素',
+    'shortcut.editor': '編輯器',
+    'shortcut.exportProject': '匯出工程檔案',
+    'shortcut.firstLastSection': '跳到首章節或末章節',
     'shortcut.focusMapSearch': '聚焦地圖搜尋',
+    'shortcut.focusScheduleSearch': '聚焦時刻表搜尋',
+    'shortcut.global': '全域',
+    'shortcut.globalSearch': '開啟全域搜尋',
     'shortcut.holdCtrl': '長按 Ctrl',
+    'shortcut.insertAppend': '追加插入',
+    'shortcut.insertNearest': '就近插入',
+    'shortcut.insertPrepend': '反向追加插入',
+    'shortcut.lineEditor': '線路地圖編輯器',
+    'shortcut.lineEditor.toolMove': '移動工具',
+    'shortcut.lineEditor.toolPan': '拖移工具',
+    'shortcut.lineEditor.toolStation': '站點工具',
+    'shortcut.lineEditor.toolWaypoint': '途經點工具',
+    'shortcut.listBulk': '對所選項目執行批次操作',
+    'shortcut.listNavigate': '上下移動清單項目',
+    'shortcut.listOpen': '開啟目前項目詳情',
+    'shortcut.listSelect': '選取或取消目前項目',
     'shortcut.map': '地圖',
+    'shortcut.moveElement': '調整選取元素的列內順序',
     'shortcut.openMenu': '快捷鍵提示',
+    'shortcut.openTemplateLibrary': '開啟範本庫或匯入專案',
+    'shortcut.documentToc': '長文目錄',
     'shortcut.planFocusedMarker': '查找前往目前標記點的路線',
+    'shortcut.planJourney': '規劃行程',
+    'shortcut.previewMaterial': '產生或更新預覽',
+    'shortcut.redo': '重做',
+    'shortcut.resetFilters': '清空篩選條件',
     'shortcut.resetMapView': '回到預設地圖視圖',
+    'shortcut.reverseElements': '反轉元素順序',
+    'shortcut.save': '儲存',
+    'shortcut.saveAndBack': '儲存並返回',
+    'shortcut.searchNearby': '搜尋目前地點附近',
+    'shortcut.searchResults': '在搜尋結果間移動',
+    'shortcut.sections': '在章節間跳轉',
     'shortcut.swapRouteEndpoints': '交換路線起終點',
+    'shortcut.switchDataSource': '切換手動/線路資料來源',
+    'shortcut.switchRow': '切換選取列（雙列版式）',
+    'shortcut.switchTemplate': '切換樣式範本',
     'shortcut.title': '鍵盤快捷鍵',
+    'shortcut.toggleFavorite': '收藏或取消收藏目前地點',
+    'shortcut.toggleLayers': '開啟或關閉圖層面板',
     'shortcut.toggleNavigation': '展開或收合側邊導覽',
+    'shortcut.travel': '旅行與時刻表',
+    'shortcut.undo': '復原',
+    'shortcut.wayfinding': '導視與材料工作台',
     'settings.accent.gray': '灰色',
     'settings.accent.green': '青綠',
     'settings.accent.label': '強調色',
@@ -5072,6 +5257,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.assistant.enabledNote': '關閉後會隱藏所有入口並停用快速鍵；已儲存的 Key 仍會保留。',
     'settings.assistant.encryptionNote': 'Key 會加密儲存在本機，仍請勿在公共裝置儲存。',
     'settings.assistant.group': '搜尋與問一問',
+    'settings.assistant.configure': '設定模型與 MCP',
+    'settings.assistant.configTitle': '搜尋與問一問設定',
+    'settings.assistant.configDescription': '設定模型 Key 與 MCP 入口。',
     'settings.assistant.key': 'API Key',
     'settings.assistant.keyPlaceholder': '貼上你的 API Key',
     'settings.assistant.model': '模型',
@@ -5115,6 +5303,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       '僅在行動端（寬度 ≤ 760px）生效。開啟後，頂部操作、標題列按鈕、底部導覽與地圖工具列會收納到側邊；空間不足時自動收進「更多」選單。',
     'settings.mobileActionRail.position': '操作欄位置',
     'settings.mobileActionRail.right': '右側',
+    'settings.mobileActionRail.topOffset': '頂端邊距',
+    'settings.mobileActionRail.topOffsetValue': '{value}px',
     'mobileActionRail.aria': '側邊操作欄',
     'mobileActionRail.more': '更多',
     'mobileActionRail.overflowAria': '更多操作',
@@ -5626,6 +5816,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'search.resultGroup.lines': '線路',
     'search.resultGroup.operations': '營運資訊',
     'search.resultGroup.poi': '地圖 POI',
+    'search.resultGroup.player': '玩家位置',
     'search.resultGroup.schedules': '班次',
     'search.resultGroup.services': '服務與工具',
     'search.resultGroup.social': '社群與社區',
@@ -5978,6 +6169,12 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'account.push.unknownHost': 'Unknown service',
     'account.push.unsupported': 'This browser does not support Web Push',
     'account.about.currentVersion': 'Current version: {version}',
+    'account.about.github': 'GitHub repository',
+    'account.about.mcpCopied': 'MCP endpoint copied',
+    'account.about.mcpCopy': 'Copy MCP endpoint',
+    'account.about.mcpDescription':
+      'The site data behind Ask is also exposed as a read-only MCP server. Add this endpoint in any MCP client that supports Streamable HTTP. The endpoint is anonymous, read-only and never sees your model key.',
+    'account.about.mcpTitle': 'MCP endpoint',
     'account.about.title': 'About and Updates',
     'account.about.viewChangelog': 'View version updates',
     'account.auth.adminOperations': 'Content Admin',
@@ -6301,6 +6498,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.lineInfo.timezoneNote':
       'First/last bus, departure, and estimated arrival times are all Beijing time (UTC+8).',
     'map.lineInfo.title': '{name} · Line information',
+    'map.lineRealtime.allTrips': 'All trips',
     'map.lineRealtime.atStation': 'At {station}',
     'map.lineRealtime.beijingTime': 'Beijing time',
     'map.lineRealtime.boardArrivalAt': 'Arrives {time}',
@@ -6322,6 +6520,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.lineRealtime.emptyActive': 'No vehicles in service right now',
     'map.lineRealtime.emptySchedule': 'No departure timetable recorded for this direction',
     'map.lineRealtime.inSegment': 'Between {from} and {to}',
+    'map.lineRealtime.lastTripPassed': 'The last trip has already departed. Next trip at {time}',
+    'map.lineRealtime.lastTripPassedNextDay':
+      'The last trip has already departed. Next trip at {time} (next day)',
     'map.lineRealtime.minutesToNext': 'About {count} min to the next stop',
     'map.lineRealtime.nextDeparture': 'Next departure {time}',
     'map.lineRealtime.nextDepartureNextDay': 'Next departure {time} (next day)',
@@ -6338,7 +6539,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'map.lineRealtime.summary': '{count} vehicles in service',
     'map.lineRealtime.title': 'Live buses',
     'map.lineRealtime.trip': 'Trip {count} · departs {time}',
-    'map.lineRealtime.tripTitle': 'Trip {count}',
+    'map.lineRealtime.tripTitlePosition': 'Trip {current} of {total}',
     'map.lineRealtime.updatedAt': 'Updated {time}',
     'map.lineRealtime.vehicleBadge': 'Trip {count} · departs {time}',
     'map.lineStation.showPoi': 'Show stop',
@@ -6935,6 +7136,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'operationToc.expand': 'Expand {title}',
     'operationToc.title': 'Contents',
     'page.account': 'Account Settings',
+    'page.ask': 'Ask',
     'page.map': 'Map Explore',
     'page.offline': 'Offline',
     'page.operations': 'Updates',
@@ -7000,6 +7202,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'globalSearch.assistant.answerTitle': 'Ask',
     'globalSearch.assistant.clear': 'Clear key',
     'globalSearch.assistant.configure': 'Configure key',
+    'globalSearch.assistant.copy': 'Copy answer',
+    'globalSearch.assistant.copied': 'Copied',
     'globalSearch.assistant.disclaimer':
       'Answers are generated by the model you configured. Check the site references.',
     'globalSearch.assistant.error': 'Ask returned no result. Showing site documentation instead.',
@@ -7014,6 +7218,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       'Network request failed. Check your connection and retry.',
     'globalSearch.assistant.provider': 'Provider',
     'globalSearch.assistant.references': 'References and links',
+    'globalSearch.assistant.retry': 'Regenerate answer',
     'globalSearch.assistant.save': 'Save and ask',
     'globalSearch.assistant.setupDescription':
       'The key is stored only in this browser session and is cleared when the tab closes. This site does not record it.',
@@ -7033,15 +7238,17 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       'The site documentation has no direct answer yet. Try different wording or view the help and FAQ.',
     'globalSearch.easterEgg.close': 'Close',
     'globalSearch.easterEgg.description':
-      'The character in the icon started as a doodle on squared paper: round head, two dot eyes, and a small “临” badge on top. It was later redrawn as outline and filled versions and became the face of Ask.',
+      'The little figure in the icon was hand-drawn by Xinguang in December 2019, later redrawn as stickers, and then redrawn again as the outline and filled versions used by Ask.',
     'globalSearch.easterEgg.hint':
-      'It first appeared in some personal posts and now lives here as an easter egg.',
+      'The original posts are still on Bilibili and Coolapk if you search for Xinguang and Tihai Sanren.',
     'globalSearch.easterEgg.title': 'About Ask',
     'globalSearch.emptyHint': 'Enter a place, schedule, update, or describe what you need',
     'globalSearch.liveResults': 'Live results',
     'globalSearch.mode.ask': 'Ask',
     'globalSearch.mode.search': 'Search',
     'globalSearch.noMatch': 'No matching results',
+    'globalSearch.pageDisabled':
+      'Ask is turned off in settings. You can re-enable it in account settings.',
     'globalSearch.placeholder': 'Search places, schedules, updates, or ask directly…',
     'globalSearch.placeholderAsk': 'Describe your question, press Enter to send…',
     'globalSearch.resultCount': '{count} results',
@@ -7070,16 +7277,60 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'globalSearch.unavailable': 'Some data is unavailable',
     'globalSearch.viewAll': 'View all results',
     'search.open': 'Search',
+    'shortcut.acceptSuggestion': 'Accept the completion suggestion',
+    'shortcut.adminReview': 'Admin review list',
     'shortcut.close': 'Close shortcuts',
+    'shortcut.deleteSelected': 'Delete the selected node or element',
+    'shortcut.dismissLayers': 'Dismiss map overlays one layer at a time',
+    'shortcut.duplicateElement': 'Duplicate the selected element',
+    'shortcut.editor': 'Editor',
+    'shortcut.exportProject': 'Export project files',
+    'shortcut.firstLastSection': 'Jump to the first or last section',
     'shortcut.focusMapSearch': 'Focus map search',
+    'shortcut.focusScheduleSearch': 'Focus timetable search',
+    'shortcut.global': 'Global',
+    'shortcut.globalSearch': 'Open global search',
     'shortcut.holdCtrl': 'Hold Ctrl',
+    'shortcut.insertAppend': 'Append insertion',
+    'shortcut.insertNearest': 'Insert at the nearest point',
+    'shortcut.insertPrepend': 'Prepend insertion',
+    'shortcut.lineEditor': 'Line map editor',
+    'shortcut.lineEditor.toolMove': 'Move tool',
+    'shortcut.lineEditor.toolPan': 'Pan tool',
+    'shortcut.lineEditor.toolStation': 'Station tool',
+    'shortcut.lineEditor.toolWaypoint': 'Waypoint tool',
+    'shortcut.listBulk': 'Run the bulk action on selected items',
+    'shortcut.listNavigate': 'Move between list items',
+    'shortcut.listOpen': 'Open the current item',
+    'shortcut.listSelect': 'Select or deselect the current item',
     'shortcut.map': 'Map',
+    'shortcut.moveElement': 'Reorder the selected element',
     'shortcut.openMenu': 'Shortcut guide',
+    'shortcut.openTemplateLibrary': 'Open the template library or import',
+    'shortcut.documentToc': 'Document outline',
     'shortcut.planFocusedMarker': 'Plan a route to this marker',
+    'shortcut.planJourney': 'Plan a journey',
+    'shortcut.previewMaterial': 'Generate or refresh the preview',
+    'shortcut.redo': 'Redo',
+    'shortcut.resetFilters': 'Clear all filters',
     'shortcut.resetMapView': 'Reset the map view',
+    'shortcut.reverseElements': 'Reverse element order',
+    'shortcut.save': 'Save',
+    'shortcut.saveAndBack': 'Save and go back',
+    'shortcut.searchNearby': 'Search near the current place',
+    'shortcut.searchResults': 'Move between search results',
+    'shortcut.sections': 'Jump between sections',
     'shortcut.swapRouteEndpoints': 'Swap route endpoints',
+    'shortcut.switchDataSource': 'Switch between manual and line data',
+    'shortcut.switchRow': 'Switch the active row (two-row layout)',
+    'shortcut.switchTemplate': 'Switch style template',
     'shortcut.title': 'Keyboard Shortcuts',
+    'shortcut.toggleFavorite': 'Favorite or unfavorite the current place',
+    'shortcut.toggleLayers': 'Open or close the layer panel',
     'shortcut.toggleNavigation': 'Expand or collapse navigation',
+    'shortcut.travel': 'Travel and timetables',
+    'shortcut.undo': 'Undo',
+    'shortcut.wayfinding': 'Wayfinding and material studio',
     'settings.accent.gray': 'Gray',
     'settings.accent.green': 'Teal',
     'settings.accent.label': 'Accent',
@@ -7099,6 +7350,9 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'settings.assistant.encryptionNote':
       'The key is encrypted and stored on this device. Avoid saving it on shared devices.',
     'settings.assistant.group': 'Search and Ask',
+    'settings.assistant.configure': 'Configure model & MCP',
+    'settings.assistant.configTitle': 'Search and Ask settings',
+    'settings.assistant.configDescription': 'Configure the model key and MCP endpoint.',
     'settings.assistant.key': 'API key',
     'settings.assistant.keyPlaceholder': 'Paste your API key',
     'settings.assistant.model': 'Model',
@@ -7143,6 +7397,8 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
       'Mobile only (width ≤ 760px). When enabled, top actions, title-bar buttons, bottom navigation, and the map toolbar move into the side rail; buttons collapse into “More” when space runs out.',
     'settings.mobileActionRail.position': 'Rail position',
     'settings.mobileActionRail.right': 'Right',
+    'settings.mobileActionRail.topOffset': 'Top margin',
+    'settings.mobileActionRail.topOffsetValue': '{value}px',
     'mobileActionRail.aria': 'Side action bar',
     'mobileActionRail.more': 'More',
     'mobileActionRail.overflowAria': 'More actions',
@@ -7683,6 +7939,7 @@ const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'search.resultGroup.lines': 'Lines',
     'search.resultGroup.operations': 'Updates',
     'search.resultGroup.poi': 'Map POI',
+    'search.resultGroup.player': 'Player location',
     'search.resultGroup.schedules': 'Schedules',
     'search.resultGroup.services': 'Services and Tools',
     'search.resultGroup.social': 'Community and social',

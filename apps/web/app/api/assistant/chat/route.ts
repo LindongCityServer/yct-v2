@@ -5,9 +5,21 @@ import {
   streamAssistantReply,
   type AssistantChatMessage,
   type AssistantPageContext,
+  type AssistantProviderMessage,
+  type AssistantToolCall,
 } from '../../../../lib/assistant/chat';
 import { getAssistantProvider } from '../../../../lib/assistant/providers';
-import { buildAssistantRetrieval } from '../../../../lib/assistant/retrieval';
+import {
+  buildAssistantRetrieval,
+  type AssistantReference,
+} from '../../../../lib/assistant/retrieval';
+import { createAssistantTextFilter } from '../../../../lib/assistant/tool-syntax-filter';
+import {
+  buildAssistantToolPrompt,
+  buildOpenAiToolDefinitions,
+  runAssistantTool,
+  type AssistantToolReference,
+} from '../../../../lib/assistant/tools';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -16,6 +28,10 @@ const maximumMessages = 8;
 const maximumMessageLength = 2000;
 const maximumTotalLength = 8000;
 const maximumKeyLength = 512;
+const maximumToolRounds = 2;
+// 引用 chip 过多会挤占回答区域，也会放大模型引用编号出错的概率。
+// 预检索最多 10 条，这里留 2 条给工具补充结果。
+const maximumReferences = 12;
 
 interface ChatRequestBody {
   providerId?: unknown;
@@ -67,7 +83,16 @@ export async function POST(request: Request) {
     pathname: page?.pathname,
     highlights: page?.highlights,
   });
-  const systemPrompt = buildAssistantSystemPrompt(retrieval, locale, page);
+  const baseSystemPrompt = buildAssistantSystemPrompt(retrieval, locale, page);
+  const systemPromptWithTools = [
+    baseSystemPrompt,
+    '',
+    '工具使用规则：',
+    '1. 站内资料不足以回答，或需要精确的距离、时刻、班次、公告原文时，调用工具获取，不要猜测。',
+    '2. 资料已经能回答时不要调用工具；每轮最多调用 3 个工具。',
+    '3. 工具结果会附带引用编号，回答时继续用 [编号] 引用；不要编造编号。',
+    buildAssistantToolPrompt(),
+  ].join('\n');
   const encoder = new TextEncoder();
   const abortController = new AbortController();
   const abortFromClient = () => abortController.abort();
@@ -83,8 +108,39 @@ export async function POST(request: Request) {
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       };
 
+      // 引用在工具调用过程中会继续增加，前端按事件里的完整列表替换即可。
+      const mergedReferences: AssistantReference[] = [];
+      const seenReferences = new Set<string>();
+      const rememberReference = (reference: AssistantReference | AssistantToolReference) => {
+        const key = `${reference.source}:${reference.href ?? reference.title}`;
+        if (seenReferences.has(key) || mergedReferences.length >= maximumReferences) {
+          return false;
+        }
+        seenReferences.add(key);
+        mergedReferences.push({ ...reference, id: mergedReferences.length + 1 });
+        return true;
+      };
+      for (const reference of retrieval.references) {
+        rememberReference(reference);
+      }
+      const addToolReferences = (references: AssistantToolReference[]): string => {
+        const start = mergedReferences.length;
+        for (const reference of references) {
+          rememberReference(reference);
+        }
+        return mergedReferences
+          .slice(start)
+          .map(
+            (reference) =>
+              `[${reference.id}] ${reference.source}：${reference.title}${
+                reference.snippet ? ` · ${reference.snippet}` : ''
+              }`,
+          )
+          .join('\n');
+      };
+
       send('meta', {
-        references: retrieval.references,
+        references: mergedReferences,
         sourceStatus: retrieval.sourceStatus,
         asOf: retrieval.asOf,
         generatedAt: retrieval.generatedAt,
@@ -92,16 +148,103 @@ export async function POST(request: Request) {
         model,
       });
 
+      const providerMessages: AssistantProviderMessage[] = messages.map((message) => ({
+        role: message.role,
+        content: message.content,
+      }));
+      const toolDefinitions = buildOpenAiToolDefinitions();
+      let toolsEnabled = true;
+      let round = 0;
+
       try {
-        for await (const delta of streamAssistantReply({
-          provider,
-          model,
-          apiKey,
-          messages,
-          systemPrompt,
-          signal: abortController.signal,
-        })) {
-          send('delta', { text: delta });
+        while (true) {
+          let roundText = '';
+          let visibleText = '';
+          let toolCalls: AssistantToolCall[] = [];
+          const useTools = toolsEnabled && round < maximumToolRounds;
+          const textFilter = createAssistantTextFilter();
+          try {
+            for await (const event of streamAssistantReply({
+              provider,
+              model,
+              apiKey,
+              messages: providerMessages,
+              // 关闭工具时同时去掉工具清单，避免模型继续输出工具调用语法。
+              systemPrompt: useTools ? systemPromptWithTools : baseSystemPrompt,
+              tools: useTools ? toolDefinitions : undefined,
+              signal: abortController.signal,
+            })) {
+              if (event.type === 'text') {
+                roundText += event.text;
+                const visible = textFilter.push(event.text);
+                if (visible) {
+                  visibleText += visible;
+                  send('delta', { text: visible });
+                }
+              } else {
+                toolCalls = event.calls;
+              }
+            }
+          } catch (error) {
+            // 部分模型服务不认 tools 字段，退回纯资料回答。
+            if (toolsEnabled && round === 0 && isToolsUnsupported(error)) {
+              toolsEnabled = false;
+              send('reset', { reason: 'tools_unsupported' });
+              continue;
+            }
+            throw error;
+          }
+
+          const tail = textFilter.flush();
+          if (tail) {
+            visibleText += tail;
+            send('delta', { text: tail });
+          }
+
+          // 模型把工具调用语法当成文本吐出来：关掉工具重答一次，并清掉已显示的残片。
+          if (toolsEnabled && round === 0 && textFilter.sawToolSyntax) {
+            toolsEnabled = false;
+            send('reset', { reason: 'tool_syntax' });
+            continue;
+          }
+
+          if (toolCalls.length === 0 || round >= maximumToolRounds) {
+            break;
+          }
+
+          // 模型决定先调工具，丢掉这一轮已经吐出的半句话，避免和最终回答叠在一起。
+          if (visibleText) {
+            send('reset', { reason: 'tool_call' });
+          }
+          providerMessages.push({
+            role: 'assistant',
+            content: roundText || null,
+            tool_calls: toolCalls,
+          });
+
+          for (const call of toolCalls.slice(0, 3)) {
+            const outcome = await runAssistantTool(
+              call.function.name,
+              parseToolArguments(call.function.arguments),
+              { locale, pathname: page?.pathname },
+            );
+            const addedReferences = addToolReferences(outcome.result.references);
+            providerMessages.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              content: [
+                outcome.result.summary,
+                addedReferences ? `可直接引用的条目：\n${addedReferences}` : '',
+              ]
+                .filter(Boolean)
+                .join('\n'),
+            });
+          }
+          if (mergedReferences.length > 0) {
+            send('references', { references: mergedReferences });
+          }
+
+          round += 1;
         }
         send('done', { ok: true });
       } catch (error) {
@@ -111,7 +254,7 @@ export async function POST(request: Request) {
             : '问一问暂时不可用，请稍后再试。';
         send('error', {
           message,
-          references: retrieval.references,
+          references: mergedReferences,
         });
       } finally {
         streamClosed = true;
@@ -245,6 +388,22 @@ function normalizeMessages(value: unknown): AssistantChatMessage[] {
   }
 
   return messages;
+}
+
+function parseToolArguments(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
+
+/** 部分服务商不接受 tools 字段，用 4xx 区分“参数不支持”和额度/鉴权问题。 */
+function isToolsUnsupported(error: unknown): boolean {
+  return (
+    error instanceof AssistantProviderError &&
+    (error.status === 400 || error.status === 404 || error.status === 422)
+  );
 }
 
 function errorResponse(status: number, code: string, message: string) {

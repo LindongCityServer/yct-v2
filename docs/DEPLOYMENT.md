@@ -33,41 +33,41 @@ apps/web/.next/standalone
 在本地开发机或 CI 上构建部署包：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1
 ```
 
 生成 `zip` 时脚本会优先使用 7-Zip，其次回退到 `tar.exe -a`，最后才使用 PowerShell `Compress-Archive`。如果 7-Zip 不在 PATH 或常见安装目录，可以显式指定：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -SevenZipPath "C:\Program Files\7-Zip\7z.exe"
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -SevenZipPath "C:\Program Files\7-Zip\7z.exe"
 ```
 
 也可以通过环境变量复用同一路径：
 
 ```powershell
 $env:YCT_7Z_PATH = "C:\Program Files\7-Zip\7z.exe"
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1
 ```
 
 如果没有可用的 7-Zip，且 zip 压缩在 Windows 上耗时过长或留下 0 字节临时文件，可以改用 `tar.gz`：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -ArchiveFormat tar.gz
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -ArchiveFormat tar.gz
 ```
 
 如果压缩本身仍然很慢，可以生成不压缩的 `tar` 包：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -ArchiveFormat tar
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -ArchiveFormat tar
 ```
 
 如果上一次命令已经完成 staging，只是在归档阶段中断，可以复用 `.deploy/web` 直接重试归档：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -ArchiveFormat zip -SkipBuild -SkipStaging
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -ArchiveFormat zip -SkipBuild -SkipStaging
 ```
 
-如果未来从 `/v2` 切回站点根路径，改为：
+当前已部署在站点根路径，直接使用默认命令：
 
 ```powershell
 pnpm web:artifact
@@ -97,7 +97,7 @@ pnpm web:artifact
 如果只想验证当前 staging 目录里的 standalone 产物是否完整，而不重新压缩大包，可以使用：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -BasePath v2 -SkipBuild -SkipStaging -ValidateOnly
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -SkipBuild -SkipStaging -ValidateOnly
 ```
 
 该校验会检查 staged HTML/RSC 引用的 `_next/static`、图标、manifest 和 service worker 是否存在；当脚本本次重新生成 staging 时，还会检查 `apps/web/public/sw.js` 的 `YCT_SW_VERSION` 是否已经被改写为本次构建号。当 `BasePath` 为 `/v2` 时，也会拦截没有 `/v2` 前缀的同源静态资源链接。
@@ -150,13 +150,13 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1
 如果当前实例通过启动参数挂载在 `/v2`，建议显式带上：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -BasePath v2
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1
 ```
 
 如果你只是想在本地临时验证某个访问入口会生成什么回调地址，也可以额外传入实际访问的 Origin：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -Origin http://localhost:3300 -BasePath v2
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -Origin http://localhost:3300
 ```
 
 这个脚本会按生产环境优先级检查 `.env`、`.env.production`、`.env.local`、`.env.production.local`，只输出配置项是否存在、来源文件、推导出的回调地址和告警，不会打印敏感值。部署包根目录也会附带同名脚本，解压后无需依赖仓库源码或 `tsx`。
@@ -174,17 +174,17 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\init-yct-admin.ps1 -LdpassUserId
 
 如果当前重点是在排查 `ldpass` 登录回跳是否仍落到 `localhost:3300`，建议在启动前后都做这两个最小检查：
 
-1. 运行 `check-runtime-config.ps1`，确认推导出的 `redirect_uri` 是 `https://yct.shangxiaoguan.top/v2/auth/ldpass/callback` 而不是 `localhost:3300`。
-2. 启动后直接访问 `https://yct.shangxiaoguan.top/v2/auth/ldpass/callback?state=test`：
+1. 运行 `check-runtime-config.ps1`，确认推导出的 `redirect_uri` 是 `https://yct.shangxiaoguan.top/auth/ldpass/callback` 而不是 `localhost:3300`。
+2. 启动后直接访问 `https://yct.shangxiaoguan.top/auth/ldpass/callback?state=test`：
    - 如果能被 302 回账号页，说明应用路由和反代都接通了。
-   - 如果这里是 404，说明 `/v2/auth/ldpass/callback` 没有正确转发到 Next standalone，和 `ldpass` 本身是否登录无关。
+   - 如果这里是 404，说明 `/auth/ldpass/callback` 没有正确转发到 Next standalone，和 `ldpass` 本身是否登录无关。
 
 如果你准备把“旧客运公告变更后自动重算运营提醒”挂到计划任务，现在可以直接调用内部同步入口：
 
 ```powershell
 Invoke-RestMethod `
   -Method Post `
-  -Uri "https://yct.shangxiaoguan.top/v2/api/internal/operations/reminders/sync" `
+  -Uri "https://yct.shangxiaoguan.top/api/internal/operations/reminders/sync" `
   -Headers @{ Authorization = "Bearer <YCT_INTERNAL_TASK_TOKEN>" } `
   -ContentType "application/json" `
   -Body '{"force":"false"}'
@@ -201,7 +201,7 @@ Invoke-RestMethod `
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\run-yct-internal-tasks.ps1 `
   -Origin http://127.0.0.1:3300 `
-  -BasePath v2
+ 
 ```
 
 常用参数：
@@ -233,7 +233,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot C
 如果希望部署完成后直接启动：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot C:\wwwroot\yct-v2 -StartAfterDeploy -Port 3300 -HostName 127.0.0.1 -BasePath v2 -NodePath "C:\node-v22\node.exe"
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot C:\wwwroot\yct-v2 -StartAfterDeploy -Port 3300 -HostName 127.0.0.1 -NodePath "C:\node-v22\node.exe"
 ```
 
 这个脚本默认会保留：
@@ -360,7 +360,7 @@ tar -xf .\yct-web-20260704-xxxxxx.tar -C C:\wwwroot\yct-v2
 如果你没有使用 `deploy-yct-web.ps1` 自动启动，也可以在部署目录中手工运行：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -BasePath v2 -NodePath "C:\node-v22\node.exe"
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -HostName 127.0.0.1 -NodePath "C:\node-v22\node.exe"
 ```
 
 如果未来站点不再挂载 `/v2`，需要重新用空 BasePath 构建，并以空 BasePath 启动。
@@ -373,25 +373,25 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3300 -Ho
 
 因此反代规则必须对页面、API、认证回调和静态资源都一致生效，而不是只代理首页。最容易漏掉的路径包括：
 
-- `/v2/auth/ldpass/callback`
-- `/v2/api/...`
-- `/v2/_next/static/...`
-- `/v2/sw.js`
+- `/auth/ldpass/callback`
+- `/api/...`
+- `/_next/static/...`
+- `/sw.js`
 
 反代挂载在 `/v2` 时，部署后至少检查以下地址：
 
 ```text
-https://yct.shangxiaoguan.top/v2/api/health
-https://yct.shangxiaoguan.top/v2/map
-https://yct.shangxiaoguan.top/v2/api/map/markers
-https://yct.shangxiaoguan.top/v2/sw.js
-https://yct.shangxiaoguan.top/v2/_next/static/...
+https://yct.shangxiaoguan.top/api/health
+https://yct.shangxiaoguan.top/map
+https://yct.shangxiaoguan.top/api/map/markers
+https://yct.shangxiaoguan.top/sw.js
+https://yct.shangxiaoguan.top/_next/static/...
 ```
 
 可以先用 `health` 接口确认当前正在运行的构建号和挂载路径：
 
 ```powershell
-Invoke-WebRequest -Uri "https://yct.shangxiaoguan.top/v2/api/health?check=$(Get-Date -Format yyyyMMddHHmmss)" -UseBasicParsing -Headers @{ "Cache-Control" = "no-cache"; "Pragma" = "no-cache" } |
+Invoke-WebRequest -Uri "https://yct.shangxiaoguan.top/api/health?check=$(Get-Date -Format yyyyMMddHHmmss)" -UseBasicParsing -Headers @{ "Cache-Control" = "no-cache"; "Pragma" = "no-cache" } |
   Select-Object -ExpandProperty Content
 ```
 
@@ -403,7 +403,7 @@ Invoke-WebRequest -Uri "https://yct.shangxiaoguan.top/v2/api/health?check=$(Get-
   "name": "Yuchengtong",
   "abbreviation": "YCT",
   "buildId": "20260707-123202",
-  "basePath": "/v2"
+  "basePath": ""
 }
 ```
 
@@ -417,11 +417,11 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-yct-web-smoke.ps1 -Origin 
 
 它会依次检查：
 
-- `/v2/api/health` 的 `buildId` 与 `basePath`
-- `/v2/map`
-- `/v2/api/map/markers`
-- `/v2/sw.js` 的首行构建号
-- `/v2/api/auth/ldpass/start` 的 `location` 与 `yct.ldpass_return_origin` cookie（可用 `-SkipLdpass` 跳过）
+- `/api/health` 的 `buildId` 与 `basePath`
+- `/map`
+- `/api/map/markers`
+- `/sw.js` 的首行构建号
+- `/api/auth/ldpass/start` 的 `location` 与 `yct.ldpass_return_origin` cookie（可用 `-SkipLdpass` 跳过）
 
 ### A+B 公共 AI 入口验收
 
@@ -455,20 +455,20 @@ YCT_PUBLIC_SITE_URL=https://yct.shangxiaoguan.top
 
 ```powershell
 Get-Content .\apps\web\public\sw.js -TotalCount 1
-(Invoke-WebRequest -Uri "https://yct.shangxiaoguan.top/v2/sw.js?check=$(Get-Date -Format yyyyMMddHHmmss)" -UseBasicParsing -Headers @{ "Cache-Control" = "no-cache"; "Pragma" = "no-cache" }).Content.Split("`n")[0]
+(Invoke-WebRequest -Uri "https://yct.shangxiaoguan.top/sw.js?check=$(Get-Date -Format yyyyMMddHHmmss)" -UseBasicParsing -Headers @{ "Cache-Control" = "no-cache"; "Pragma" = "no-cache" }).Content.Split("`n")[0]
 ```
 
-两行都应是形如 `const YCT_SW_VERSION = '20260706-xxxxxx';` 的同一个构建号。如果线上仍是旧版本号，优先检查部署目录是否被完整清空后解压、反代是否指向本次目录，以及宝塔/Nginx 是否对 `/v2/sw.js` 施加了额外缓存。
+两行都应是形如 `const YCT_SW_VERSION = '20260706-xxxxxx';` 的同一个构建号。如果线上仍是旧版本号，优先检查部署目录是否被完整清空后解压、反代是否指向本次目录，以及宝塔/Nginx 是否对 `/sw.js` 施加了额外缓存。
 
 如果登录 `ldpass` 后仍回跳到 `localhost`、`127.0.0.1` 或其他内网地址，再加一条针对登录入口的直接验收：
 
 ```powershell
-curl.exe -I "https://yct.shangxiaoguan.top/v2/api/auth/ldpass/start?check=$(Get-Date -Format yyyyMMddHHmmss)"
+curl.exe -I "https://yct.shangxiaoguan.top/api/auth/ldpass/start?check=$(Get-Date -Format yyyyMMddHHmmss)"
 ```
 
 理想结果应同时满足：
 
-1. `location` 里的 `redirect_uri=` 指向 `https://yct.shangxiaoguan.top/v2/auth/ldpass/callback`
+1. `location` 里的 `redirect_uri=` 指向 `https://yct.shangxiaoguan.top/auth/ldpass/callback`
 2. `set-cookie` 同时包含 `yct.ldpass_state` 和 `yct.ldpass_return_origin`
 
 如果这里只有 `yct.ldpass_state`，通常说明当前运行的仍是旧部署包；源码即使已经修复，旧 bundle 里的 `.next/standalone` 也不会自动跟着变。
@@ -483,7 +483,7 @@ curl.exe -I "https://yct.shangxiaoguan.top/v2/api/auth/ldpass/start?check=$(Get-
 2. 部署目录是否混有旧 `.next/static`。如果 `.next/server` 与 `.next/static` 来自不同构建，客户端 chunk 会随机新旧混用。
 3. 反向代理或 CDN 是否缓存了 HTML/RSC。临时测试阶段建议不要缓存 `/v2` 下的 HTML、RSC 和 API，只允许 `_next/static` 长缓存。
 4. 应用会对 HTML、RSC 和 API 设置 `Cache-Control: no-store, max-age=0, must-revalidate`，但如果宝塔/Nginx 仍额外拼接 `max-age=43200` 一类规则，建议在反代层单独关闭 `/v2` 页面缓存，避免旧 HTML 引用已不存在的旧 chunk。
-5. 浏览器是否保留旧 Service Worker 或旧 `yct-*` Cache。生产包会继续注册 PWA；打包脚本会用构建号改写 `sw.js` 缓存版本，并让客户端以 `sw.js?v=构建号` 注册，应用侧会通过 `proxy.ts` 和 `next.config.mjs` 的 headers 对 `/sw.js`、`/v2/sw.js` 等 Service Worker 路径设置 `no-store`，正常部署后旧 `yct-shell-*` 会在新 SW 激活时删除。如果仍看到旧 chunk 404，可以在浏览器开发者工具里 unregister 当前站点 Service Worker 并清理 Cache Storage 后重试。
+5. 浏览器是否保留旧 Service Worker 或旧 `yct-*` Cache。生产包会继续注册 PWA；打包脚本会用构建号改写 `sw.js` 缓存版本，并让客户端以 `sw.js?v=构建号` 注册，应用侧会通过 `proxy.ts` 和 `next.config.mjs` 的 headers 对 `/sw.js`、`/sw.js` 等 Service Worker 路径设置 `no-store`，正常部署后旧 `yct-shell-*` 会在新 SW 激活时删除。如果仍看到旧 chunk 404，可以在浏览器开发者工具里 unregister 当前站点 Service Worker 并清理 Cache Storage 后重试。
 6. 是否按 `/v2` 构建但以根路径启动，或反过来。构建参数 `-BasePath v2`、启动参数 `-BasePath v2` 和宝塔反代路径必须一致。
 7. 如果登录 `ldpass` 后回跳地址仍落到 `localhost:3300`、`127.0.0.1:3300` 或其他内网地址，先检查反代是否保留 `Host`、`X-Forwarded-Host`、`X-Forwarded-Proto`；当前应用会优先用这些头推断对外站点，其次回退到部署根目录 `.env` 的 `YCT_PUBLIC_SITE_URL`。如果公网域名后面被拼出 `:3300`，通常是反代把上游端口写进了 `X-Forwarded-Port`；新版应用会在公网域名场景下忽略这个内部端口，但反代层仍建议只把外部端口写进 `X-Forwarded-Host`。如果两者都不对，`redirect_uri` 和登录后的账号页回跳都可能落回内网地址。当前部署脚本会在发布后打印一次 `Site URL` 和 `Callback URL` 摘要；只要这里仍是 localhost/127.0.0.1，就先不要继续点登录，优先排查目标目录内的 `.env`、`.env.local`、`.env.production.local` 以及 PM2 / shell 里残留的旧环境变量。另一个常见原因是你部署的仍是旧构建包：源码即使已经修了公开地址推断，旧包内的 `.next/standalone` 也不会自动跟着变，必须重新构建并部署新版包后才会生效。
 8. 如果“发起登录”已经跳到了正确的公网 `redirect_uri`，但登录成功后账号页仍提示“当前回跳地址是 localhost/127.0.0.1”，说明回调请求阶段的反代头仍不完整。当前新版已经在 `start` 阶段把推导出的公网 origin 写入短期 HttpOnly Cookie，`callback` 会优先复用该值，因此这类问题一般只会出现在旧部署包或被旧进程环境污染的情况下；重新部署新版包后再测一次即可确认。
@@ -512,7 +512,7 @@ netsh interface ipv4 show excludedportrange protocol=tcp
 如果 `3300` 落在排除范围内，直接换一个内部端口，例如：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3400 -HostName 127.0.0.1 -BasePath v2 -NodePath "C:\node-v22\node.exe"
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\start-yct-web.ps1 -Port 3400 -HostName 127.0.0.1 -NodePath "C:\node-v22\node.exe"
 ```
 
 然后把宝塔反向代理目标同步改为：

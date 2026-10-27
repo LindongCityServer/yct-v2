@@ -82,22 +82,22 @@ Invoke-WebRequest -Uri "http://127.0.0.1:3300/api/health?check=$(Get-Date -Forma
   Select-Object -ExpandProperty Content
 ```
 
-返回 JSON 中应能看到当前 `buildId` 与 `basePath`。如果服务器是挂在 `/v2` 反代下，线上验收时可改为：
+返回 JSON 中应能看到当前 `buildId` 与 `basePath`（根路径部署时为空）。线上验收使用：
 
 ```powershell
-Invoke-WebRequest -Uri "https://yct.shangxiaoguan.top/v2/api/health?check=$(Get-Date -Format yyyyMMddHHmmss)" -UseBasicParsing -Headers @{ "Cache-Control" = "no-cache"; "Pragma" = "no-cache" } |
+Invoke-WebRequest -Uri "https://yct.shangxiaoguan.top/api/health?check=$(Get-Date -Format yyyyMMddHHmmss)" -UseBasicParsing -Headers @{ "Cache-Control" = "no-cache"; "Pragma" = "no-cache" } |
   Select-Object -ExpandProperty Content
 ```
 
 若怀疑 `ldpass` 登录仍落到旧实例或错误域名，再补一条直接检查登录入口：
 
 ```powershell
-curl.exe -I "https://yct.shangxiaoguan.top/v2/api/auth/ldpass/start?check=$(Get-Date -Format yyyyMMddHHmmss)"
+curl.exe -I "https://yct.shangxiaoguan.top/api/auth/ldpass/start?check=$(Get-Date -Format yyyyMMddHHmmss)"
 ```
 
 期望结果：
 
-- `location` 里的 `redirect_uri=` 指向 `https://yct.shangxiaoguan.top/v2/auth/ldpass/callback`
+- `location` 里的 `redirect_uri=` 指向 `https://yct.shangxiaoguan.top/auth/ldpass/callback`
 - `set-cookie` 同时包含 `yct.ldpass_state` 与 `yct.ldpass_return_origin`
 
 登录回跳后如果账号页仍显示会话不可用：

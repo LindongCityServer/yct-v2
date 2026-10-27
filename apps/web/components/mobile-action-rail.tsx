@@ -75,6 +75,7 @@ export function MobileActionRailProvider({ children }: Readonly<{ children: Reac
   const [preference, setPreference] = useState<MobileActionRailPreference>({
     enabled: false,
     side: 'right',
+    topOffset: 0,
   });
   const [isMobile, setIsMobile] = useState(false);
   const [itemsByOwner, setItemsByOwner] = useState<Record<string, MobileActionRailItem[]>>({});
@@ -222,8 +223,9 @@ function MobileActionRail({
     }
 
     if (overflowIds.length === 0) {
-      // 只溢出不到一个按钮时，用“更多”替换它反而更占空间，直接允许滚动。
-      if (overage < approximateRailItemHeight || collapsibleItems.length < 2) {
+      // 只溢出 1 个按钮时也至少收 2 个：菜单里只有一个按钮没有意义，
+      // 就近再带一个同伴一起进“更多”，避免按钮被裁掉。
+      if (collapsibleItems.length < 2) {
         setRailScrollable(true);
         return;
       }

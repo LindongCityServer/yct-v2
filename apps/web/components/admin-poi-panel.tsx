@@ -42,6 +42,7 @@ import { ProgressiveImage } from './progressive-image';
 import { SegmentedControl } from './segmented-control';
 import type { SegmentedControlOption } from './segmented-control';
 import { VisualEditorShell } from './visual-editor-shell';
+import { useListKeyboardNavigation } from './use-list-keyboard-navigation';
 
 type StatusFilter = PoiSubmissionStatus | 'all' | 'todo' | 'blocked' | 'legacy';
 type PoiAdminSection = 'submissions' | 'categories';
@@ -1444,6 +1445,27 @@ export function AdminPoiPanel({
     [categories, filteredCategoryProfiles.length],
   );
 
+  const poiListRef = useRef<HTMLDivElement | null>(null);
+  const runBulkApproveShortcut = () => {
+    if (selectedPendingReviewSubmissions.length === 0) {
+      return;
+    }
+    void (async () => {
+      const confirmed = await requestConfirmation(
+        `确认批量通过 ${selectedPendingReviewSubmissions.length} 条 POI 投稿吗？`,
+      );
+      if (!confirmed) {
+        return;
+      }
+      await runBatchAction(selectedPendingReviewSubmissions, 'approve');
+    })();
+  };
+  useListKeyboardNavigation({
+    containerRef: poiListRef,
+    enabled: editorMode === 'page' && activeSection === 'submissions',
+    onBulkAction: runBulkApproveShortcut,
+  });
+
   if (editorMode === 'page') {
     if (editTarget) {
       return (
@@ -1678,7 +1700,7 @@ export function AdminPoiPanel({
             </button>
           </div>
 
-          <div className="admin-content-list" aria-label="POI 主列表">
+          <div className="admin-content-list" aria-label="POI 主列表" ref={poiListRef}>
             {filteredPoiListItems.map((item) =>
               item.kind === 'submission' ? (
                 <PoiSubmissionReviewItem
@@ -3019,20 +3041,20 @@ function EditLegacyPoiMarkerDialog({
     updateForm(title === undefined ? rest : { ...rest, label: title });
   };
 
-  const save = async () => {
+  const save = async (): Promise<boolean> => {
     if (!form.label.trim()) {
       setError('请填写标记点名称。');
-      return;
+      return false;
     }
     if (form.facilities.some((facility) => !facility.description.trim())) {
       setError('请填写每条设施信息的文字描述。');
-      return;
+      return false;
     }
 
     const geometryResult = buildMapGeometryFromDraft(geometryDraft);
     if (!geometryResult.geometry) {
       setError(geometryResult.error ?? '请填写有效的几何坐标。');
-      return;
+      return false;
     }
 
     const submitError = await onSubmit({
@@ -3065,14 +3087,15 @@ function EditLegacyPoiMarkerDialog({
     });
     if (submitError) {
       setError(submitError);
-    } else {
-      setIsDirty(false);
-      publishEditorDraftChanged({
-        dirty: false,
-        editorKind: 'poi',
-        sessionId: editorSessionId,
-      });
+      return false;
     }
+    setIsDirty(false);
+    publishEditorDraftChanged({
+      dirty: false,
+      editorKind: 'poi',
+      sessionId: editorSessionId,
+    });
+    return true;
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -3105,7 +3128,7 @@ function EditLegacyPoiMarkerDialog({
           editorKind="poi"
           isBusy={isBusy}
           isDirty={isDirty}
-          onSave={() => void save()}
+          onSave={() => save()}
           sessionId={editorSessionId}
           status={error || describePoiIntroSummary(introForm)}
           title={`编辑 ${marker.label} 简介`}
@@ -3148,7 +3171,7 @@ function EditLegacyPoiMarkerDialog({
         editorKind="poi"
         isBusy={isBusy}
         isDirty={isDirty}
-        onSave={() => void save()}
+        onSave={() => save()}
         sessionId={editorSessionId}
         status={error || geometryLabelFromDraft(geometryDraft)}
         title={`调整 ${marker.label} 几何`}
@@ -3573,6 +3596,8 @@ function PoiSubmissionReviewItem({
           ? 'admin-content-item admin-poi-item is-deep-linked'
           : 'admin-content-item admin-poi-item'
       }
+      data-keyboard-list-item
+      tabIndex={-1}
     >
       <label className="admin-content-select">
         <input
@@ -3580,6 +3605,7 @@ function PoiSubmissionReviewItem({
           checked={isSelected}
           onChange={onToggleSelected}
           aria-label={`选择 POI 投稿 ${submission.title}`}
+          data-keyboard-select
         />
       </label>
       <div className="admin-poi-main">
@@ -3632,7 +3658,7 @@ function PoiSubmissionReviewItem({
         </p>
       </div>
       <div className="admin-content-actions">
-        <button type="button" onClick={onDetail}>
+        <button type="button" onClick={onDetail} data-keyboard-open>
           查看详情
         </button>
         <a className="admin-action-link" href={mapHref} target="_blank" rel="noreferrer">
@@ -5046,7 +5072,7 @@ function EditPoiSubmissionDialog({
           editorKind="poi"
           isBusy={isBusy}
           isDirty={isDirty}
-          onSave={() => void save()}
+          onSave={() => save()}
           sessionId={editorSessionId}
           status={error || describePoiIntroSummary(form)}
           title={`编辑 ${submission?.title ?? 'POI'} 简介`}
@@ -5089,7 +5115,7 @@ function EditPoiSubmissionDialog({
         editorKind="poi"
         isBusy={isBusy}
         isDirty={isDirty}
-        onSave={() => void save()}
+        onSave={() => save()}
         sessionId={editorSessionId}
         status={error || geometryLabelFromDraft(geometryDraft)}
         title={`调整 ${submission?.title ?? 'POI'} 几何`}

@@ -150,10 +150,11 @@ export function resolveTransitStationExitRoadSide(
   if (!marker || !exitCoordinate || !isMapRoadGeometryMarker(marker)) {
     return undefined;
   }
-  const projection = projectPointOntoMapRoad(
-    exitCoordinate,
-    orderMapRoadCoordinates(getGeometryCoordinates(marker.geometry)),
-  );
+  const roadCoordinates =
+    marker.geometry.type === 'LineString'
+      ? marker.geometry.coordinates
+      : orderMapRoadCoordinates(getGeometryCoordinates(marker.geometry));
+  const projection = projectPointOntoMapRoad(exitCoordinate, roadCoordinates);
   return projection ? resolveRoadSideLabel(exitCoordinate, projection) : undefined;
 }
 
@@ -162,9 +163,11 @@ function getExitMarkerCandidate(
   stationCoordinate: [number, number],
 ): TransitStationExitLocationCandidate | undefined {
   if (isMapRoadGeometryMarker(marker)) {
-    const coordinates = getGeometryCoordinates(marker.geometry);
-    const orderedCoordinates = orderMapRoadCoordinates(coordinates);
-    const projection = projectPointOntoMapRoad(stationCoordinate, orderedCoordinates);
+    const coordinates =
+      marker.geometry.type === 'LineString'
+        ? marker.geometry.coordinates
+        : orderMapRoadCoordinates(getGeometryCoordinates(marker.geometry));
+    const projection = projectPointOntoMapRoad(stationCoordinate, coordinates);
     if (!projection) {
       return undefined;
     }

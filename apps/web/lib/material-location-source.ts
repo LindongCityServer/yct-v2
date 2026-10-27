@@ -254,7 +254,11 @@ function getRoadCoordinates(entry: MaterialLocationEntry): Array<[number, number
   ) {
     return undefined;
   }
-  const coordinates = orderMapRoadCoordinates(entry.geometry.coordinates);
+  // 新建道路按录入顺序保存为 LineString，不能再做最近邻重排，否则走向会被打乱。
+  const coordinates =
+    entry.geometry.type === 'LineString'
+      ? entry.geometry.coordinates
+      : orderMapRoadCoordinates(entry.geometry.coordinates);
   return coordinates.length >= 2 ? coordinates : undefined;
 }
 

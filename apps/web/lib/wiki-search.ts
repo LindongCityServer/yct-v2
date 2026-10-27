@@ -1,6 +1,9 @@
-const wikiBaseUrl = 'https://wiki.shangxiaoguan.top';
+export const wikiBaseUrl = 'https://wiki.shangxiaoguan.top';
 const defaultLimit = 5;
-const requestTimeoutMs = 2500;
+// Wiki 偶发慢响应，单次 2.5 秒会误伤正常查询；重试一次并放宽超时。
+const requestTimeoutMs = 4000;
+const thumbnailTimeoutMs = 2500;
+const requestAttempts = 2;
 const cacheTtlMs = 5 * 60 * 1000;
 const maximumCacheEntries = 100;
 
@@ -9,6 +12,8 @@ export interface WikiSearchResult {
   href: string;
   snippet: string;
   updatedAt: string;
+  /** 条目首图，用于搜索结果缩略图；没有首图时为 undefined。 */
+  thumbnailUrl?: string;
 }
 
 interface WikiSearchResponse {
@@ -18,6 +23,15 @@ interface WikiSearchResponse {
       snippet?: string;
       timestamp?: string;
     }>;
+  };
+}
+
+interface WikiThumbnailResponse {
+  query?: {
+    pages?: Record<
+      string,
+      { title?: string; thumbnail?: { source?: string; width?: number; height?: number } }
+    >;
   };
 }
 
@@ -46,6 +60,34 @@ export async function searchWiki(query: string, limit = defaultLimit): Promise<W
     format: 'json',
   });
 
+  for (let attempt = 0; attempt < requestAttempts; attempt += 1) {
+    const results = await requestWikiResults(params);
+    if (results) {
+      // 首图单独查询，失败时保留纯文本结果，不阻塞搜索。
+      const thumbnails = await requestWikiThumbnails(results.map((item) => item.title));
+      const enriched = results.map((item) => ({
+        ...item,
+        thumbnailUrl: thumbnails.get(normalizeWikiTitle(item.title)),
+      }));
+
+      cache.set(cacheKey, { expiresAt: Date.now() + cacheTtlMs, results: enriched });
+      if (cache.size > maximumCacheEntries) {
+        const oldestKey = cache.keys().next().value;
+        if (oldestKey) {
+          cache.delete(oldestKey);
+        }
+      }
+      return enriched;
+    }
+  }
+
+  return [];
+}
+
+/** 单次请求；失败返回 undefined，由外层决定是否重试。 */
+async function requestWikiResults(
+  params: URLSearchParams,
+): Promise<WikiSearchResult[] | undefined> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
 
@@ -59,11 +101,11 @@ export async function searchWiki(query: string, limit = defaultLimit): Promise<W
       cache: 'no-store',
     });
     if (!response.ok) {
-      return [];
+      return undefined;
     }
 
     const payload = (await response.json()) as WikiSearchResponse;
-    const results = (payload.query?.search ?? [])
+    return (payload.query?.search ?? [])
       .map((item) => {
         const title = typeof item.title === 'string' ? item.title.trim() : '';
         if (!title) {
@@ -78,20 +120,63 @@ export async function searchWiki(query: string, limit = defaultLimit): Promise<W
         } satisfies WikiSearchResult;
       })
       .filter((item): item is WikiSearchResult => item !== null);
-
-    cache.set(cacheKey, { expiresAt: Date.now() + cacheTtlMs, results });
-    if (cache.size > maximumCacheEntries) {
-      const oldestKey = cache.keys().next().value;
-      if (oldestKey) {
-        cache.delete(oldestKey);
-      }
-    }
-    return results;
   } catch {
-    return [];
+    return undefined;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/** 批量查条目首图；失败返回空表，不影响搜索结果本身。 */
+async function requestWikiThumbnails(titles: string[]): Promise<Map<string, string>> {
+  const thumbnails = new Map<string, string>();
+  if (titles.length === 0) {
+    return thumbnails;
+  }
+
+  const params = new URLSearchParams({
+    action: 'query',
+    format: 'json',
+    prop: 'pageimages',
+    piprop: 'thumbnail',
+    pithumbsize: '480',
+    titles: titles.join('|'),
+  });
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), thumbnailTimeoutMs);
+
+  try {
+    const response = await fetch(`${wikiBaseUrl}/api.php?${params.toString()}`, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'YuchengtongSearch/1.0 (+https://yct.local)',
+      },
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      return thumbnails;
+    }
+
+    const payload = (await response.json()) as WikiThumbnailResponse;
+    for (const page of Object.values(payload.query?.pages ?? {})) {
+      const title = typeof page.title === 'string' ? page.title : '';
+      const source = page.thumbnail?.source;
+      if (title && typeof source === 'string' && source) {
+        thumbnails.set(normalizeWikiTitle(title), source);
+      }
+    }
+    return thumbnails;
+  } catch {
+    return thumbnails;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function normalizeWikiTitle(value: string): string {
+  return value.replace(/_/g, ' ').trim();
 }
 
 function cleanWikiSnippet(value: string): string {

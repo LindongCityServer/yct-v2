@@ -73,6 +73,8 @@ type AppShellProps = Readonly<{
   pageTitle?: string;
   pageTitleKey?: CommonMessageKey;
   variant?: AppShellVariant;
+  /** 独立问一问页面自身就是入口，不再显示问一问按钮。 */
+  hideAssistantEntry?: boolean;
   children: ReactNode;
 }>;
 
@@ -89,6 +91,7 @@ function AppShellFrame({
   pageTitle,
   pageTitleKey,
   variant = 'default',
+  hideAssistantEntry = false,
   children,
 }: AppShellProps) {
   const mobileActionRail = useMobileActionRail();
@@ -269,7 +272,7 @@ function AppShellFrame({
         busy: rideCodeLoading,
         onClick: () => void openRideCode(),
       },
-      ...(assistantEnabled
+      ...(assistantEnabled && !hideAssistantEntry
         ? [
             {
               id: 'rail-top-search',
@@ -314,6 +317,7 @@ function AppShellFrame({
       accountStatus,
       active,
       assistantEnabled,
+      hideAssistantEntry,
       locale,
       openGlobalSearch,
       openRideCode,
@@ -384,7 +388,7 @@ function AppShellFrame({
             </span>
             <span>{t('quickAction.rideCode')}</span>
           </button>
-          {!mobileActionRail?.enabled && assistantEnabled ? (
+          {!mobileActionRail?.enabled && assistantEnabled && !hideAssistantEntry ? (
             <button
               className="icon-button"
               type="button"
@@ -639,7 +643,7 @@ function SecondaryShellFrame({
       <>
         {showAssistantInHeader ? (
           <button
-            className="icon-button"
+            className="icon-button secondary-assistant-entry"
             type="button"
             aria-label={t('globalSearch.action.open')}
             onClick={() => publishGlobalSearchRequested()}

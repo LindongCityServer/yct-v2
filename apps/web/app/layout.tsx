@@ -4,7 +4,7 @@ import { EmbeddedContextBridge } from '../components/embedded-context-bridge';
 import { EmbeddedAuthBridge } from '../components/embedded-auth-bridge';
 import { EmbeddedHostBridges } from '../components/embedded-host-bridges';
 import { ClientDialogBridge } from '../components/client-dialog-bridge';
-import { GlobalSearchPanel } from '../components/global-search-panel';
+import { GlobalSearchHost } from '../components/global-search-host';
 import { KeyboardShortcutBridge } from '../components/keyboard-shortcut-bridge';
 import { LiquidMaterialBridge } from '../components/liquid-material-bridge';
 import { LoginRequiredBridge } from '../components/login-required-bridge';
@@ -94,7 +94,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <EmbeddedAuthBridge />
         <EmbeddedHostBridges />
         <ClientDialogBridge />
-        <GlobalSearchPanel />
+        <GlobalSearchHost />
         <KeyboardShortcutBridge />
         <LoginRequiredBridge />
         <PreferenceBridge />

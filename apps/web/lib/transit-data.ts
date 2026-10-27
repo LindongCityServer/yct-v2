@@ -10,6 +10,8 @@ import {
   readPublishedTransitEntitySnapshot,
 } from './published-transit-read-model';
 import { readTransitModeProfiles } from './transit-mode-profile-store';
+import { readTransitTripLabelPools } from './transit-trip-label-pool-store';
+import { getTransitTripLabelServiceDateKey, resolveTransitTripLabels } from './transit-trip-labels';
 
 const transitOverviewCache = createTimedCache<TransitOverview>(30 * 1000);
 
@@ -44,7 +46,7 @@ async function readTransitOverviewUncached(): Promise<TransitOverview> {
   const publishedSnapshot = await readPublishedTransitEntitySnapshot();
   if (publishedSnapshot) {
     const publicSnapshot = filterPublicOperatingTransitSnapshot(publishedSnapshot);
-    return {
+    return attachTransitTripLabels({
       ...buildTransitOverview(
         {
           summary: publicSnapshot.summary,
@@ -58,11 +60,40 @@ async function readTransitOverviewUncached(): Promise<TransitOverview> {
         ),
       ),
       modeProfiles,
-    };
+    });
+  }
+
+  return attachTransitTripLabels({
+    ...(await readLegacyTransitOverview()),
+    modeProfiles,
+  });
+}
+
+/**
+ * 依据全局标签池与当天日期补齐班次标签；手动标签在算法里优先且占用时间窗。
+ */
+async function attachTransitTripLabels(overview: TransitOverview): Promise<TransitOverview> {
+  if (overview.lines.length === 0) {
+    return overview;
+  }
+  const pools = await readTransitTripLabelPools();
+  if (pools.length === 0) {
+    return overview;
+  }
+  const labels = resolveTransitTripLabels({
+    dateKey: getTransitTripLabelServiceDateKey(),
+    lines: overview.lines,
+    pools,
+  });
+  if (labels.size === 0) {
+    return overview;
   }
 
   return {
-    ...(await readLegacyTransitOverview()),
-    modeProfiles,
+    ...overview,
+    lines: overview.lines.map((line) => {
+      const tripLabels = labels.get(line.id);
+      return tripLabels ? { ...line, tripLabelsByDirection: tripLabels } : line;
+    }),
   };
 }

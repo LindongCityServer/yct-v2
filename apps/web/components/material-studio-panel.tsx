@@ -15,6 +15,7 @@ import { findTextContinuation } from '../lib/text-continuation';
 import {
   publishMaterialStudioActionBlocked,
   publishMaterialStudioState,
+  requestMaterialStudioAction,
   subscribeMaterialStudioActions,
 } from '../lib/client-material-studio-events';
 import {
@@ -389,8 +390,7 @@ export function MaterialStudioPanel({
         : 'full';
   // 地铁导视：套用示例 / 导入外部模板后未改文本；只改尺寸、箭头、图标、空白等都不算修改。
   const serverAccountReady =
-    accountSession.accountStatus === 'active' &&
-    accountSession.serverAccountVerified === true;
+    accountSession.accountStatus === 'active' && accountSession.serverAccountVerified === true;
   const wayfindingTemplateUnmodified =
     isMetroWayfinding &&
     wayfindingBaseline !== null &&
@@ -835,7 +835,10 @@ export function MaterialStudioPanel({
     return (selectedImportedTransitStation.projectLines ?? []).flatMap((line) => {
       // 始发终到版式只能选端点站所在的线路，中途站不进入候选。
       if (requiresTransitTerminalRole) {
-        const stations = listMaterialTransitNetworkLineStations(importedTransitNetwork, line.lineKey);
+        const stations = listMaterialTransitNetworkLineStations(
+          importedTransitNetwork,
+          line.lineKey,
+        );
         const index = stations.findIndex((station) => station.id === stationId);
         if (index !== 0 && index !== stations.length - 1) {
           return [];
@@ -1392,8 +1395,7 @@ export function MaterialStudioPanel({
     const candidates = [group.templateIds[styleIndex], ...group.templateIds];
     const next = candidates
       .map(
-        (templateId) =>
-          templateId && availableEntryVariants.find((item) => item.id === templateId),
+        (templateId) => templateId && availableEntryVariants.find((item) => item.id === templateId),
       )
       .find((item): item is PublishedMaterialTemplate => Boolean(item));
     if (next) {
@@ -1423,7 +1425,8 @@ export function MaterialStudioPanel({
       .then(async (response) =>
         response.ok
           ? ((await response.json()) as {
-              accountStatus?: 'not_configured' | 'anonymous' | 'active' | 'readonly' | 'unavailable';
+              accountStatus?:
+                'not_configured' | 'anonymous' | 'active' | 'readonly' | 'unavailable';
               serverAccountVerified?: boolean;
             })
           : {},
@@ -1891,9 +1894,8 @@ export function MaterialStudioPanel({
     }
     const previewId = response.headers.get('X-Yct-Material-Preview-Id')?.trim() ?? '';
     const fallbackFileName =
-      [selected?.template.title ?? title, summary, previewId.slice(-8)]
-        .filter(Boolean)
-        .join('_') + `${t('materialStudio.watermarkedPreviewSuffix')}.png`;
+      [selected?.template.title ?? title, summary, previewId.slice(-8)].filter(Boolean).join('_') +
+      `${t('materialStudio.watermarkedPreviewSuffix')}.png`;
     await downloadBlob(response, fallbackFileName);
   };
 
@@ -2135,6 +2137,53 @@ export function MaterialStudioPanel({
       setIsBusy(false);
     }
   };
+
+  // 材料工作室快捷动作：预览、导出工程、切换样式模板、切换数据源。
+  const studioKeyboardHandlerRef = useRef<(event: KeyboardEvent) => void>(() => undefined);
+  studioKeyboardHandlerRef.current = (event) => {
+    if (isEditableKeyboardTarget(event.target)) {
+      return;
+    }
+    const modifier = event.ctrlKey || event.metaKey;
+    if (modifier && event.key === 'Enter') {
+      event.preventDefault();
+      requestMaterialStudioAction({ studioId, action: 'preview' });
+      return;
+    }
+    if (modifier && event.shiftKey && event.key.toLowerCase() === 'e') {
+      event.preventDefault();
+      requestMaterialStudioAction({ studioId, action: 'export-project' });
+      return;
+    }
+    if (event.altKey && !modifier && !event.shiftKey && event.key.toLowerCase() === 'm') {
+      if (!canUseServerSource) {
+        return;
+      }
+      event.preventDefault();
+      setMode(mode === 'manual' ? 'server' : 'manual');
+      clearPreview();
+      return;
+    }
+    if (!modifier && !event.altKey && !event.shiftKey && (event.key === '[' || event.key === ']')) {
+      if (!layoutStyleVariants || layoutStyleVariants.length < 2) {
+        return;
+      }
+      event.preventDefault();
+      const currentIndex = layoutStyleVariants.findIndex((item) => item.id === selected?.id);
+      const offset = event.key === ']' ? 1 : -1;
+      const nextIndex =
+        currentIndex < 0
+          ? 0
+          : (currentIndex + offset + layoutStyleVariants.length) % layoutStyleVariants.length;
+      selectTemplate(layoutStyleVariants[nextIndex].id);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => studioKeyboardHandlerRef.current(event);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     publishMaterialStudioState({
@@ -3561,5 +3610,12 @@ function formatStudioDraftInput(
 function formatTime(value: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }).format(
     new Date(value),
+  );
+}
+
+function isEditableKeyboardTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName))
   );
 }

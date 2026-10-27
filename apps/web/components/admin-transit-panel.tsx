@@ -17,6 +17,7 @@ import type {
   TransitLineStopLocationRef,
   TransitModeProfile,
   TransitStationDetailSnapshot,
+  TransitTripLabelPool,
   TravelScheduleQueryResult,
   TravelScheduleRevision,
   TravelScheduleRevisionStatus,
@@ -40,6 +41,11 @@ import { AdminRefreshButton } from './admin-refresh-button';
 import { LayeredMapTile } from './layered-map-tile';
 import { WorldCoordinatePicker } from './world-coordinate-picker';
 import { MaterialSymbol } from './material-symbol';
+import { TransitTripLabelPoolPanel } from './transit-trip-label-pool-panel';
+import {
+  TransitLineTripLabelFields,
+  type TransitTripLabelDraftConfig,
+} from './transit-line-trip-label-fields';
 import type { TransitStationDetailUpdateInput } from '@yct/schemas';
 import {
   detectTravelScheduleConflicts,
@@ -66,7 +72,7 @@ type TransitStatusFilter = TransitItemApprovalStatus | 'all' | 'todo' | 'legacy'
 type ScheduleStatusFilter = TransitItemApprovalStatus | 'all' | 'todo' | 'legacy';
 type TransitModeFilter = TransitDataRevision['lines'][number]['mode'] | 'all';
 type ScheduleServiceFilter = TravelScheduleServiceProfile['kind'] | 'all';
-type TransitAdminSection = 'lines' | 'trips' | 'profiles';
+type TransitAdminSection = 'lines' | 'trips' | 'profiles' | 'pools';
 type ScheduleViewMode = 'diagram' | 'list';
 type TransitLineEditorTab = 'basic' | 'route' | 'schedule';
 type TransitRevisionStation = TransitDataRevision['stations'][number];
@@ -104,6 +110,8 @@ interface TransitLineEditorSubmitPayload {
   departureRules?: TransitDepartureScheduleRule[];
   departureTimesByDirection?: TransitRevisionLine['departureTimesByDirection'];
   departureRulesByDirection?: TransitRevisionLine['departureRulesByDirection'];
+  tripLabelConfigByDirection?: TransitRevisionLine['tripLabelConfigByDirection'];
+  tripLabelsByDirection?: TransitRevisionLine['tripLabelsByDirection'];
   operatingDateRule?: string;
   bookingUrl?: string;
 }
@@ -298,6 +306,8 @@ export function AdminTransitPanel({
 }>) {
   const [revisions, setRevisions] = useState<TransitDataRevision[]>([]);
   const [modeProfiles, setModeProfiles] = useState<TransitModeProfile[]>([]);
+  const [tripLabelPools, setTripLabelPools] = useState<TransitTripLabelPool[]>([]);
+  const [tripLabelPoolStatusText, setTripLabelPoolStatusText] = useState('正在读取班次标签池');
   const [serviceProfiles, setServiceProfiles] = useState<TravelScheduleServiceProfile[]>([]);
   const [scheduleSummary, setScheduleSummary] = useState<TravelScheduleQueryResult | null>(null);
   const [scheduleRevisions, setScheduleRevisions] = useState<TravelScheduleRevision[]>([]);
@@ -530,6 +540,9 @@ export function AdminTransitPanel({
     if (activeSection === 'trips') {
       return scheduleRevisionStatusText;
     }
+    if (activeSection === 'pools') {
+      return tripLabelPoolStatusText;
+    }
     return `${profileStatusText} · ${serviceProfileStatusText}`;
   }, [
     activeSection,
@@ -537,6 +550,7 @@ export function AdminTransitPanel({
     scheduleRevisionStatusText,
     serviceProfileStatusText,
     statusText,
+    tripLabelPoolStatusText,
   ]);
   const preferredTransitDraftRevision = useMemo(
     () => sortedRevisions.find(canEditTransitRevisionLines) ?? null,
@@ -706,6 +720,7 @@ export function AdminTransitPanel({
     void Promise.all([
       loadRevisions(),
       loadModeProfiles(),
+      loadTripLabelPools(),
       loadServiceProfiles(),
       loadScheduleSummary(),
       loadScheduleRevisions(),
@@ -760,6 +775,25 @@ export function AdminTransitPanel({
     setModeProfiles(data.items ?? []);
     setProfileStatusText(
       data.items?.length ? `已读取 ${data.items.length} 个交通方式` : '暂无交通方式配置',
+    );
+  };
+
+  const loadTripLabelPools = async () => {
+    const response = await fetch(appPath('/api/admin/transit/trip-label-pools'), {
+      cache: 'no-store',
+    });
+    const data = (await response.json().catch(() => ({}))) as {
+      items?: TransitTripLabelPool[];
+      message?: string;
+    };
+    if (!response.ok) {
+      setTripLabelPoolStatusText(data.message ?? '班次标签池暂不可用');
+      return;
+    }
+
+    setTripLabelPools(data.items ?? []);
+    setTripLabelPoolStatusText(
+      data.items?.length ? `已读取 ${data.items.length} 个标签池` : '暂无班次标签池',
     );
   };
 
@@ -831,6 +865,7 @@ export function AdminTransitPanel({
     Promise.all([
       loadRevisions(),
       loadModeProfiles(),
+      loadTripLabelPools(),
       loadServiceProfiles(),
       loadScheduleSummary(),
       loadScheduleRevisions(),
@@ -1554,6 +1589,14 @@ export function AdminTransitPanel({
           >
             服务配置
           </button>
+          <button
+            className={activeSection === 'pools' ? 'is-active' : ''}
+            type="button"
+            aria-pressed={activeSection === 'pools'}
+            onClick={() => setActiveSection('pools')}
+          >
+            车队标签池
+          </button>
         </div>
       </fieldset>
 
@@ -1956,6 +1999,18 @@ export function AdminTransitPanel({
         </section>
       ) : null}
 
+      {activeSection === 'pools' ? (
+        <TransitTripLabelPoolPanel
+          onSaved={(pools) => {
+            setTripLabelPools(pools);
+            setTripLabelPoolStatusText(
+              pools.length ? `已读取 ${pools.length} 个标签池` : '暂无班次标签池',
+            );
+          }}
+          pools={tripLabelPools}
+        />
+      ) : null}
+
       {activeSection === 'profiles' ? (
         <section
           className="transit-mode-profile-editor"
@@ -2132,6 +2187,7 @@ export function AdminTransitPanel({
           transitRevisions={sortedRevisions}
           tilePreviewFreshTemplate={tilePreviewFreshTemplate}
           tilePreviewTemplate={tilePreviewTemplate}
+          tripLabelPools={tripLabelPools}
           onClose={() => setLineEditTarget(null)}
           onEditStation={(station) =>
             setStationEditTarget({ revision: lineEditTarget.revision, station })
@@ -2171,6 +2227,7 @@ export function AdminTransitPanel({
           transitRevisions={sortedRevisions}
           tilePreviewFreshTemplate={tilePreviewFreshTemplate}
           tilePreviewTemplate={tilePreviewTemplate}
+          tripLabelPools={tripLabelPools}
           onClose={() => setLineCreateTarget(null)}
           onEditStation={(station) => setStationEditTarget({ revision: lineCreateTarget, station })}
           onEditStationDetail={() => undefined}
@@ -5312,6 +5369,7 @@ function TransitLineEditorDialog({
   tilePreviewFreshTemplate,
   tilePreviewTemplate,
   transitRevisions,
+  tripLabelPools,
 }: Readonly<{
   coachRoadTimingContext: CoachRoadTimingContext;
   isBusy: boolean;
@@ -5338,6 +5396,7 @@ function TransitLineEditorDialog({
   tilePreviewFreshTemplate: string | null;
   tilePreviewTemplate: string | null;
   transitRevisions: TransitDataRevision[];
+  tripLabelPools: TransitTripLabelPool[];
 }>) {
   const router = useRouter();
   const initialMode = line?.mode ?? modeProfiles.find((profile) => profile.enabled)?.mode ?? 'bus';
@@ -5374,6 +5433,18 @@ function TransitLineEditorDialog({
   );
   const [departureTimesUpText, setDepartureTimesUpText] = useState(
     formatTransitDepartureRulesForEditor(line, 'up'),
+  );
+  const [tripLabelConfig, setTripLabelConfig] = useState<
+    Record<'down' | 'up', TransitTripLabelDraftConfig>
+  >(() => ({
+    down: buildTripLabelConfigDraft(line?.tripLabelConfigByDirection?.down),
+    up: buildTripLabelConfigDraft(line?.tripLabelConfigByDirection?.up),
+  }));
+  const [tripLabels, setTripLabels] = useState<Record<'down' | 'up', Record<string, string>>>(
+    () => ({
+      down: { ...(line?.tripLabelsByDirection?.down ?? {}) },
+      up: { ...(line?.tripLabelsByDirection?.up ?? {}) },
+    }),
   );
   const [activeTab, setActiveTab] = useState<TransitLineEditorTab>('basic');
   const [showScheduleRunChart, setShowScheduleRunChart] = useState(false);
@@ -5518,6 +5589,17 @@ function TransitLineEditorDialog({
       departureRulesByDirection: {
         down: parsedDepartureSchedules.down.rules,
         up: parsedDepartureSchedules.up.rules,
+      },
+      tripLabelConfigByDirection: {
+        down: buildTripLabelConfigPayload(tripLabelConfig.down),
+        up: buildTripLabelConfigPayload(tripLabelConfig.up),
+      },
+      tripLabelsByDirection: {
+        down: filterTripLabelsForSchedule(
+          tripLabels.down,
+          parsedDepartureSchedules.down.departureTimes,
+        ),
+        up: filterTripLabelsForSchedule(tripLabels.up, parsedDepartureSchedules.up.departureTimes),
       },
       operatingDateRule: operatingDateRule.trim() || undefined,
       bookingUrl: bookingUrl.trim() || undefined,
@@ -6155,6 +6237,30 @@ function TransitLineEditorDialog({
                 ) : null}
               </label>
             </div>
+            <TransitLineTripLabelFields
+              config={tripLabelConfig.down}
+              departureTimes={parsedDepartureSchedules.down.departureTimes}
+              labels={tripLabels.down}
+              onConfigChange={(config) =>
+                setTripLabelConfig((current) => ({ ...current, down: config }))
+              }
+              onLabelsChange={(labels) =>
+                setTripLabels((current) => ({ ...current, down: labels }))
+              }
+              pools={tripLabelPools}
+              title="正向"
+            />
+            <TransitLineTripLabelFields
+              config={tripLabelConfig.up}
+              departureTimes={parsedDepartureSchedules.up.departureTimes}
+              labels={tripLabels.up}
+              onConfigChange={(config) =>
+                setTripLabelConfig((current) => ({ ...current, up: config }))
+              }
+              onLabelsChange={(labels) => setTripLabels((current) => ({ ...current, up: labels }))}
+              pools={tripLabelPools}
+              title="反向"
+            />
             <fieldset className="transit-line-stop-direction-editor">
               <legend>逐站停站方向</legend>
               <p className="muted">默认每一站两个方向都停靠；取消勾选后，该方向班次将通过本站。</p>
@@ -7537,6 +7643,38 @@ function formatTransitDepartureRulesForEditor(
   const fallbackTimes =
     direction === 'down' ? line?.departureTimes : line?.departureTimesByDirection?.down;
   return (fallbackTimes ?? []).join('\n');
+}
+
+function buildTripLabelConfigDraft(
+  selection: { poolIds: string[]; mode: 'sequential' | 'random' } | undefined,
+): TransitTripLabelDraftConfig {
+  if (!selection || selection.poolIds.length === 0) {
+    return { mode: 'off', poolIds: [] };
+  }
+  return {
+    mode: selection.mode === 'random' ? 'random' : 'sequential',
+    poolIds: [...selection.poolIds],
+  };
+}
+
+function buildTripLabelConfigPayload(
+  config: TransitTripLabelDraftConfig,
+): { poolIds: string[]; mode: 'sequential' | 'random' } | undefined {
+  return config.mode === 'off' || config.poolIds.length === 0
+    ? undefined
+    : { poolIds: config.poolIds, mode: config.mode };
+}
+
+/** 只保留仍在当前发车时刻表内的手动标签，避免改表后残留旧班次标签。 */
+function filterTripLabelsForSchedule(
+  labels: Record<string, string>,
+  departureTimes: readonly string[],
+): Record<string, string> | undefined {
+  const activeTimes = new Set(departureTimes);
+  const entries = Object.entries(labels)
+    .map(([time, label]) => [time, label.trim()] as const)
+    .filter(([time, label]) => activeTimes.has(time) && Boolean(label));
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
 function buildTransitStopDirectionsDraft(

@@ -219,15 +219,57 @@ export function MetroWayfindingEditor({
     });
   }, [value]);
 
-  const applyAction = useCallback(
-    (action: MetroWayfindingCompositionAction) => {
-      const next = reduceMetroWayfindingAction(layoutRef.current, action);
+  // 撤销/重做只保存序列化后的版式快照，避免与 layoutRef 的引用比较耦合。
+  const undoStackRef = useRef<string[]>([]);
+  const redoStackRef = useRef<string[]>([]);
+
+  const applyLayoutSnapshot = useCallback(
+    (serialized: string) => {
+      const next = parseMetroWayfindingLayout(serialized);
       layoutRef.current = next;
       setLayout(next);
-      onChange(serializeMetroWayfindingLayout(next));
+      onChange(serialized);
     },
     [onChange],
   );
+
+  const applyAction = useCallback(
+    (action: MetroWayfindingCompositionAction) => {
+      const currentSerialized = serializeMetroWayfindingLayout(layoutRef.current);
+      const next = reduceMetroWayfindingAction(layoutRef.current, action);
+      const nextSerialized = serializeMetroWayfindingLayout(next);
+      if (nextSerialized === currentSerialized) {
+        return;
+      }
+      undoStackRef.current.push(currentSerialized);
+      if (undoStackRef.current.length > 100) {
+        undoStackRef.current.shift();
+      }
+      redoStackRef.current = [];
+      layoutRef.current = next;
+      setLayout(next);
+      onChange(nextSerialized);
+    },
+    [onChange],
+  );
+
+  const undo = useCallback(() => {
+    const previous = undoStackRef.current.pop();
+    if (!previous) {
+      return;
+    }
+    redoStackRef.current.push(serializeMetroWayfindingLayout(layoutRef.current));
+    applyLayoutSnapshot(previous);
+  }, [applyLayoutSnapshot]);
+
+  const redo = useCallback(() => {
+    const next = redoStackRef.current.pop();
+    if (!next) {
+      return;
+    }
+    undoStackRef.current.push(serializeMetroWayfindingLayout(layoutRef.current));
+    applyLayoutSnapshot(next);
+  }, [applyLayoutSnapshot]);
 
   useEffect(
     () => subscribeMetroWayfindingCompositionActions(editorId, applyAction),
@@ -320,6 +362,111 @@ export function MetroWayfindingEditor({
   };
   const dispatchElement = (rowIndex: number, action: MetroWayfindingElementAction) =>
     dispatchComposition({ ...action, rowIndex });
+
+  // 键盘处理随渲染更新，订阅只建立一次，避免编辑时高频重渲染反复解绑监听。
+  const elementKeyboardHandlerRef = useRef<(event: globalThis.KeyboardEvent) => void>(
+    () => undefined,
+  );
+  elementKeyboardHandlerRef.current = (event) => {
+    if (isEditableKeyboardTarget(event.target) || importPreview || isProjectDialogOpen) {
+      return;
+    }
+    const modifier = event.ctrlKey || event.metaKey;
+    // 只有 selection.elementId 真正指向当前行元素时才执行元素操作，避免误操作第一个元素。
+    const rowElements = layout.rows[selection.rowIndex] ?? [];
+    const shortcutSelected = rowElements.find((element) => element.id === selection.elementId);
+    if (modifier && event.key.toLowerCase() === 'z') {
+      event.preventDefault();
+      if (event.shiftKey) {
+        redo();
+      } else {
+        undo();
+      }
+      return;
+    }
+    if (modifier && event.key.toLowerCase() === 'y') {
+      event.preventDefault();
+      redo();
+      return;
+    }
+    // Ctrl+D / Ctrl+Shift+D / Ctrl+Shift+R 会被浏览器占用，统一放到 Alt 组合。
+    if (event.altKey && !modifier && !event.shiftKey && event.key.toLowerCase() === 'c') {
+      if (!shortcutSelected) {
+        return;
+      }
+      event.preventDefault();
+      dispatchElement(selection.rowIndex, {
+        type: 'duplicate',
+        elementId: shortcutSelected.id,
+        element: duplicateMetroWayfindingElement(shortcutSelected),
+      });
+      return;
+    }
+    // 反转元素顺序。
+    if (event.altKey && !modifier && !event.shiftKey && event.key.toLowerCase() === 'r') {
+      event.preventDefault();
+      dispatchComposition({ type: 'reverse' });
+      return;
+    }
+    // 打开模板库 / 导入工程。
+    if (event.altKey && !modifier && !event.shiftKey && event.key.toLowerCase() === 'o') {
+      event.preventDefault();
+      setProjectDialogView('examples');
+      setIsProjectDialogOpen(true);
+      return;
+    }
+    // Alt + 方向键移动选中元素（元素在行内横向排列，左右对应上移/下移）。
+    if (event.altKey && !modifier && !event.shiftKey && shortcutSelected) {
+      if (
+        event.key === 'ArrowUp' ||
+        event.key === 'ArrowDown' ||
+        event.key === 'ArrowLeft' ||
+        event.key === 'ArrowRight'
+      ) {
+        event.preventDefault();
+        dispatchElement(selection.rowIndex, {
+          type: 'move',
+          elementId: shortcutSelected.id,
+          direction: event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? 'up' : 'down',
+        });
+        return;
+      }
+    }
+    // 双行版式下切换选中行。
+    if (modifier && !event.shiftKey && layout.mode === 'double') {
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        const nextRow = selection.rowIndex === 0 ? 1 : 0;
+        const nextRowElements = layout.rows[nextRow] ?? [];
+        setSelection({ rowIndex: nextRow, elementId: nextRowElements[0]?.id ?? '' });
+        return;
+      }
+    }
+    if (modifier || event.altKey || event.shiftKey) {
+      return;
+    }
+    if (event.key !== 'Delete' && event.key !== 'Backspace') {
+      return;
+    }
+    if (!selection.elementId) {
+      return;
+    }
+    const exists = (layout.rows[selection.rowIndex] ?? []).some(
+      (element) => element.id === selection.elementId,
+    );
+    if (!exists) {
+      return;
+    }
+    event.preventDefault();
+    dispatchElement(selection.rowIndex, { type: 'remove', elementId: selection.elementId });
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) =>
+      elementKeyboardHandlerRef.current(event);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
   const activeElements = layout.rows[selection.rowIndex] ?? [];
   const selectedElement =
     activeElements.find((element) => element.id === selection.elementId) ?? activeElements[0];
@@ -372,6 +519,8 @@ export function MetroWayfindingEditor({
     const target = event.target as HTMLElement;
     const elements = layout.rows[rowIndex] ?? [];
     if (!target.matches('[role="tab"]') || !elements.length) return;
+    // 带修饰键的方向键留给元素移动/切换行，不参与 tab 巡检。
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
     let nextIndex = elements.findIndex((element) => element.id === target.dataset.elementId);
     if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex -= 1;
     else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex += 1;
@@ -469,10 +618,7 @@ export function MetroWayfindingEditor({
   };
 
   const clearLayoutElements = async () => {
-    if (
-      !hasElements ||
-      !(await requestConfirmation(t('metroWayfindingEditor.confirm.clear')))
-    )
+    if (!hasElements || !(await requestConfirmation(t('metroWayfindingEditor.confirm.clear'))))
       return;
     setSelection({ rowIndex: 0, elementId: '' });
     setDraggedElement(null);
@@ -598,7 +744,10 @@ export function MetroWayfindingEditor({
   };
 
   return (
-    <section className="metro-wayfinding-editor" aria-label={t('metroWayfindingEditor.aria.canvas')}>
+    <section
+      className="metro-wayfinding-editor"
+      aria-label={t('metroWayfindingEditor.aria.canvas')}
+    >
       <details
         className="metro-wayfinding-toolbar"
         open={isToolbarExpanded}
@@ -791,7 +940,9 @@ export function MetroWayfindingEditor({
                             ? t('metroWayfindingEditor.aria.draggableTab', { label: tabLabel })
                             : tabLabel
                         }
-                        title={canDrag ? t('metroWayfindingEditor.action.dragToReorder') : undefined}
+                        title={
+                          canDrag ? t('metroWayfindingEditor.action.dragToReorder') : undefined
+                        }
                         tabIndex={isSelected ? 0 : -1}
                         draggable={canDrag}
                         className={[
@@ -1409,7 +1560,10 @@ function MetroWayfindingExampleList({
       : examples.filter((example) => example.source.category === activeCategory);
 
   return (
-    <section className="material-template-examples" aria-label={t('metroWayfindingEditor.examples.aria')}>
+    <section
+      className="material-template-examples"
+      aria-label={t('metroWayfindingEditor.examples.aria')}
+    >
       <div className="material-template-examples-toolbar">
         <div className="material-template-examples-heading">
           <strong>{t('metroWayfindingEditor.examples.title')}</strong>
@@ -1961,8 +2115,7 @@ function MetroWayfindingElementTabContent({
           title
         </span>
         <span className="metro-wayfinding-element-tab-summary">
-          {concatMetroLargeTextValue(element) ||
-            t('metroWayfindingEditor.elementType.largeText')}
+          {concatMetroLargeTextValue(element) || t('metroWayfindingEditor.elementType.largeText')}
         </span>
       </>
     );
@@ -2070,10 +2223,7 @@ function metroElementTabAriaLabel(
   return t('metroWayfindingEditor.elementType.divider');
 }
 
-function summarizeMetroMainSegments(
-  segments: MetroWayfindingMainSegment[],
-  t: Translate,
-): string {
+function summarizeMetroMainSegments(segments: MetroWayfindingMainSegment[], t: Translate): string {
   return segments
     .map((segment) =>
       segment.kind === 'line'
@@ -2714,10 +2864,7 @@ function TextElementFields({
 
 // 主文本内联编辑：文本段是可直接输入的 <input>，线路号 / 方框文本以 chip 形式
 // 整体嵌在文本之间。chip 不承载光标，方向键 / 退格键在段边界处跨段处理。
-function metroMainSegmentKindLabel(
-  kind: MetroWayfindingMainSegment['kind'],
-  t: Translate,
-): string {
+function metroMainSegmentKindLabel(kind: MetroWayfindingMainSegment['kind'], t: Translate): string {
   if (kind === 'line') return t('metroWayfindingEditor.segment.line');
   if (kind === 'boxed') return t('metroWayfindingEditor.segment.boxed');
   return t('metroWayfindingEditor.segment.text');
@@ -5221,6 +5368,13 @@ function FrameFillControl({
         </label>
       ) : null}
     </>
+  );
+}
+
+function isEditableKeyboardTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName))
   );
 }
 

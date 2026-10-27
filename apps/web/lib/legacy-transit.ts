@@ -49,6 +49,16 @@ export interface TransitLineSummary {
     down?: string[];
     up?: string[];
   };
+  /** 班次标签池引用与抽取方式；供服务端计算当日班次标签使用。 */
+  tripLabelConfigByDirection?: {
+    down?: { poolIds: string[]; mode: 'sequential' | 'random' };
+    up?: { poolIds: string[]; mode: 'sequential' | 'random' };
+  };
+  /** 当日已解析的班次标签：键为首站发车时刻（HH:mm）。 */
+  tripLabelsByDirection?: {
+    down?: Record<string, string>;
+    up?: Record<string, string>;
+  };
   bookingUrl?: string;
   routeMode?: TransitLineRouteMode;
   routeNodes?: TransitLineRouteNodeSnapshot[];
@@ -421,6 +431,8 @@ export function buildTransitOverview(
       firstLastBus: line.firstLastBus,
       departureTimes: line.departureTimes,
       departureTimesByDirection: resolveTransitDepartureTimesByDirection(line),
+      tripLabelConfigByDirection: line.tripLabelConfigByDirection,
+      tripLabelsByDirection: line.tripLabelsByDirection,
       bookingUrl: line.bookingUrl,
       routeMode: line.routeMode,
       routeNodes: line.routeNodes,

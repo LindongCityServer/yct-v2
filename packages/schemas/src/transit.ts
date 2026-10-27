@@ -145,6 +145,21 @@ export const transitModeProfileUpdateSchema = z.object({
   modes: z.array(transitModeProfileSchema).min(1).max(16),
 });
 
+export const transitTripLabelPoolSchema = z.object({
+  id: idSchema,
+  name: z.string().trim().min(1).max(40),
+  labels: z.array(z.string().trim().min(1).max(40)).max(2000),
+});
+
+export const transitTripLabelPoolsUpdateSchema = z.object({
+  pools: z.array(transitTripLabelPoolSchema).max(64),
+});
+
+const transitTripLabelSelectionSchema = z.object({
+  poolIds: z.array(idSchema).max(16),
+  mode: z.enum(['sequential', 'random']),
+});
+
 export const travelScheduleServiceProfileSchema = z.object({
   kind: ticketableServiceKindSchema,
   label: z.string().trim().min(1).max(40),
@@ -216,6 +231,22 @@ export const transitLineDraftSchema = z.object({
     .object({
       down: z.array(transitDepartureScheduleRuleSchema).optional(),
       up: z.array(transitDepartureScheduleRuleSchema).optional(),
+    })
+    .optional(),
+  tripLabelConfigByDirection: z
+    .object({
+      down: transitTripLabelSelectionSchema.optional(),
+      up: transitTripLabelSelectionSchema.optional(),
+    })
+    .optional(),
+  tripLabelsByDirection: z
+    .object({
+      down: z
+        .record(z.string().regex(/^\d{1,2}:\d{2}$/u), z.string().trim().min(1).max(40))
+        .optional(),
+      up: z
+        .record(z.string().regex(/^\d{1,2}:\d{2}$/u), z.string().trim().min(1).max(40))
+        .optional(),
     })
     .optional(),
   operatingDateRule: z.string().trim().max(240).optional(),

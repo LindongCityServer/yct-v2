@@ -34,8 +34,14 @@ export interface MapRoadConnectionProjection {
 export type MapRoadSignDirectionMode = 'west_east' | 'east_west' | 'south_north' | 'north_south';
 
 export function getMapRoadMarkerKind(
-  marker: Pick<MapMarker, 'categoryId' | 'iconFileName' | 'label'>,
+  marker: Pick<MapMarker, 'categoryId' | 'iconFileName' | 'label'> & {
+    spatial?: MapMarker['spatial'];
+  },
 ): MapRoadMarkerKind | undefined {
+  // 名称带「高速/快速」的公交线路、站点并非道路，只有道路类对象才参与路网构建。
+  if (marker.categoryId !== 'road' && marker.spatial?.networkKind !== 'road') {
+    return undefined;
+  }
   const label = normalizeRoadSearchText(marker.label);
   const iconFileName = marker.iconFileName?.toLowerCase() ?? '';
   if (
@@ -47,7 +53,7 @@ export function getMapRoadMarkerKind(
     return 'highway';
   }
 
-  return marker.categoryId === 'road' ? 'road' : undefined;
+  return 'road';
 }
 
 export function isMapRoadGeometryMarker(marker: MapMarker): boolean {

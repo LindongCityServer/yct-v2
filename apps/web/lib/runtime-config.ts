@@ -33,6 +33,7 @@ export interface RuntimeConfig {
   materialExportAuditStorePath: string;
   transitDataStorePath: string;
   transitModeProfileStorePath: string;
+  transitTripLabelPoolStorePath: string;
   travelScheduleRevisionStorePath: string;
   travelServiceProfileStorePath: string;
   ticketingCatalogStorePath: string;
@@ -201,6 +202,10 @@ export function readRuntimeConfig(): RuntimeConfig {
     transitModeProfileStorePath: resolveRuntimePath(
       process.env.YCT_TRANSIT_MODE_PROFILE_STORE_PATH,
       '.yct-data/transit-mode-profile-store.json',
+    ),
+    transitTripLabelPoolStorePath: resolveRuntimePath(
+      process.env.YCT_TRANSIT_TRIP_LABEL_POOL_STORE_PATH,
+      '.yct-data/transit-trip-label-pool-store.json',
     ),
     travelScheduleRevisionStorePath: resolveRuntimePath(
       process.env.YCT_TRAVEL_SCHEDULE_REVISION_STORE_PATH,

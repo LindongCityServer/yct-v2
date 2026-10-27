@@ -11,7 +11,12 @@ import type {
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+} from 'react';
 import { appPath } from '../lib/app-paths';
 import { resolveCapabilities } from '../lib/assistant/capabilities';
 import {
@@ -20,6 +25,7 @@ import {
   type AssistantProviderId,
 } from '../lib/assistant/providers';
 import { detectAskMode } from '../lib/assistant/query-intent';
+import { isEasterEggQuery } from '../lib/assistant/easter-egg';
 import {
   getMaterialWorkspaceGuide,
   resolveMaterialWorkspace,
@@ -32,6 +38,11 @@ import {
   type AssistantConfig,
 } from '../lib/client-assistant-config';
 import {
+  clearAssistantConversation,
+  readAssistantConversation,
+  writeAssistantConversation,
+} from '../lib/client-assistant-conversation';
+import {
   readAssistantEntryPreference,
   subscribeAssistantEntryPreferenceChanged,
 } from '../lib/client-assistant-entry-preference';
@@ -42,6 +53,9 @@ import {
 } from '../lib/client-assistant-page-context';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { getMarkerCategoryLabel } from '../lib/map-marker-categories';
+import { resolveMapMarkerIconUrl } from '../lib/map-marker-icon-url';
+import { buildMapMarkerHref } from '../lib/map-marker-link';
+import { resolveSearchImageSrc } from '../lib/search-image-src';
 import { getSiteSocialLinkLabel } from '../lib/site-social-links';
 import { pickSuggestionIcon } from '../lib/suggestion-icons';
 import type { WikiSearchResult } from '../lib/wiki-search';
@@ -59,6 +73,7 @@ import {
 } from '../lib/client-search';
 import { faqAnswerText } from '../lib/faq-content';
 import { getLocalizedFaqContent } from '../lib/faq-translations';
+import { MarkdownBlocks } from './markdown-blocks';
 import { MaterialSymbol } from './material-symbol';
 import { SmartQaGlyph } from './smart-qa-icon';
 import { TitleWithBreaks } from './title-with-breaks';
@@ -110,13 +125,17 @@ interface SearchSuggestion {
   origin?: 'ai' | 'local';
 }
 
-export function GlobalSearchPanel() {
+export function GlobalSearchPanel({
+  variant = 'overlay',
+  initialQuery = '',
+}: Readonly<{ variant?: 'overlay' | 'page'; initialQuery?: string }> = {}) {
   const router = useRouter();
   const pathname = usePathname();
   const { locale, t } = useI18n();
   const faqContent = useMemo(() => getLocalizedFaqContent(locale), [locale]);
+  const isPage = variant === 'page';
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [activeCategory, setActiveCategory] = useState<SearchCategory>('all');
   const [showAll, setShowAll] = useState(false);
   const [askPinned, setAskPinned] = useState(false);
@@ -127,6 +146,8 @@ export function GlobalSearchPanel() {
   const [operations, setOperations] = useState<OperationsFeedItem[]>([]);
   const [serviceGroups, setServiceGroups] = useState<ServiceEntryGroup[]>([]);
   const [markers, setMarkers] = useState<MapMarkerSnapshot['markers']>([]);
+  const [playerMarkers, setPlayerMarkers] = useState<MapMarkerSnapshot['markers']>([]);
+  const [markerIconBaseUrl, setMarkerIconBaseUrl] = useState<string | undefined>();
   const [poiCategoryNames, setPoiCategoryNames] = useState<Map<string, string>>(new Map());
   const [dataStatus, setDataStatus] = useState<DataStatus>('idle');
   const [markersStatus, setMarkersStatus] = useState<LoadStatus>('idle');
@@ -136,23 +157,30 @@ export function GlobalSearchPanel() {
   const [wikiStatus, setWikiStatus] = useState<LoadStatus>('idle');
   const [embedded, setEmbedded] = useState(false);
   const [assistantConfig, setAssistantConfig] = useState<AssistantConfig | null>(null);
+  const [assistantConfigReady, setAssistantConfigReady] = useState(false);
   const [assistantSetupOpen, setAssistantSetupOpen] = useState(false);
   const [assistantProviderId, setAssistantProviderId] = useState<AssistantProviderId>('deepseek');
   const [assistantModel, setAssistantModel] = useState('deepseek-v4-flash');
   const [assistantKeyInput, setAssistantKeyInput] = useState('');
   const [assistantStatus, setAssistantStatus] = useState<AssistantStatus>('idle');
+  const [brandState, setBrandState] = useState<'idle' | 'done' | 'error' | 'easter'>('idle');
   const [assistantAnswer, setAssistantAnswer] = useState('');
   const [assistantError, setAssistantError] = useState('');
   const [assistantReferences, setAssistantReferences] = useState<AssistantReference[]>([]);
   const [assistantHistory, setAssistantHistory] = useState<ChatHistoryMessage[]>([]);
+  const [copiedAnswerKey, setCopiedAnswerKey] = useState('');
   const [followUps, setFollowUps] = useState<string[]>([]);
   const [followUpStatus, setFollowUpStatus] = useState<LoadStatus>('idle');
   const [followUpError, setFollowUpError] = useState('');
+  const [followUpRefreshToken, setFollowUpRefreshToken] = useState(0);
   const assistantAbortRef = useRef<AbortController | null>(null);
   const followUpAbortRef = useRef<AbortController | null>(null);
   const [easterEggOpen, setEasterEggOpen] = useState(false);
+  const [easterEggSeen, setEasterEggSeen] = useState(false);
   const brandClickCountRef = useRef(0);
   const brandClickTimerRef = useRef<number | null>(null);
+  const brandStateTimerRef = useRef<number | null>(null);
+  const easterEggSeenRef = useRef(false);
   const [pageContext, setPageContext] = useState({
     pathname: '',
     title: '',
@@ -170,7 +198,50 @@ export function GlobalSearchPanel() {
   const dataLoadingRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pendingInitialQuestionRef = useRef(isPage ? initialQuery.trim() : '');
   const trimmedQuery = query.trim();
+  // 浮层用 open 控制；独立页面始终处于“已打开”状态。
+  const active = isPage || open;
+  const [conversationHydrated, setConversationHydrated] = useState(false);
+
+  // 关闭面板或刷新页面后恢复上一次问一问问答，避免误退出后丢失上下文。
+  useEffect(() => {
+    const stored = readAssistantConversation();
+    if (stored.history.length > 0) {
+      setAssistantHistory(stored.history);
+      setAssistantStatus(
+        stored.history[stored.history.length - 1]?.role === 'assistant' ? 'done' : 'idle',
+      );
+      if (stored.followUps.length > 0) {
+        setFollowUps(stored.followUps);
+        setFollowUpStatus('ready');
+      }
+    }
+    easterEggSeenRef.current = stored.easterEggSeen;
+    setEasterEggSeen(stored.easterEggSeen);
+    setConversationHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!conversationHydrated) {
+      return;
+    }
+    writeAssistantConversation({ history: assistantHistory, followUps, easterEggSeen });
+  }, [conversationHydrated, easterEggSeen, assistantHistory, followUps]);
+
+  // 独立页面支持 /ask?q=…：带上问题打开时直接开始回答，方便收藏和分享。
+  useEffect(() => {
+    if (!isPage || !assistantConfigReady) {
+      return;
+    }
+    const question = pendingInitialQuestionRef.current;
+    if (!question) {
+      return;
+    }
+    pendingInitialQuestionRef.current = '';
+    setQuery('');
+    void runAssistant(question);
+  }, [assistantConfigReady, isPage]);
 
   useEffect(() => {
     return subscribeGlobalSearchRequested((payload) => {
@@ -192,7 +263,6 @@ export function GlobalSearchPanel() {
       setAssistantAnswer('');
       setAssistantError('');
       setAssistantReferences([]);
-      setAssistantHistory([]);
       setFollowUps([]);
       setFollowUpError('');
       setFollowUpStatus('idle');
@@ -251,7 +321,12 @@ export function GlobalSearchPanel() {
   useEffect(() => {
     let cancelled = false;
     void readAssistantConfig().then((config) => {
-      if (cancelled || !config) {
+      if (cancelled) {
+        return;
+      }
+
+      setAssistantConfigReady(true);
+      if (!config) {
         return;
       }
 
@@ -272,6 +347,9 @@ export function GlobalSearchPanel() {
       followUpAbortRef.current?.abort();
       if (brandClickTimerRef.current !== null) {
         window.clearTimeout(brandClickTimerRef.current);
+      }
+      if (brandStateTimerRef.current !== null) {
+        window.clearTimeout(brandStateTimerRef.current);
       }
     };
   }, []);
@@ -299,7 +377,7 @@ export function GlobalSearchPanel() {
         return;
       }
 
-      if (event.key === 'Escape' && open) {
+      if (event.key === 'Escape' && active) {
         event.preventDefault();
         close();
       }
@@ -309,14 +387,18 @@ export function GlobalSearchPanel() {
     return () => window.removeEventListener('keydown', handleKeyDown);
     // close 是稳定的语义操作，不参与依赖即可。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, pathname]);
+  }, [active, pathname]);
 
   useEffect(() => {
-    if (!open) {
+    if (!active) {
       return undefined;
     }
 
     const frame = window.requestAnimationFrame(() => inputRef.current?.focus());
+    if (isPage) {
+      return () => window.cancelAnimationFrame(frame);
+    }
+
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
@@ -324,10 +406,10 @@ export function GlobalSearchPanel() {
       window.cancelAnimationFrame(frame);
       document.body.style.overflow = previousOverflow;
     };
-  }, [open]);
+  }, [active, isPage]);
 
   useEffect(() => {
-    if (!open || dataLoadedRef.current || dataLoadingRef.current) {
+    if (!active || dataLoadedRef.current || dataLoadingRef.current) {
       return;
     }
 
@@ -336,13 +418,19 @@ export function GlobalSearchPanel() {
     setMarkersStatus('loading');
 
     async function loadData() {
-      const [operationsResponse, servicesResponse, markersResponse, categoriesResponse] =
-        await Promise.allSettled([
-          fetch(appPath('/api/v1/public/operations'), { cache: 'no-store' }),
-          fetch(appPath('/api/v1/public/services'), { cache: 'no-store' }),
-          fetch(appPath('/api/v1/public/map/markers'), { cache: 'no-store' }),
-          fetch(appPath('/api/map/poi-categories'), { cache: 'no-store' }),
-        ]);
+      const [
+        operationsResponse,
+        servicesResponse,
+        markersResponse,
+        categoriesResponse,
+        playersResponse,
+      ] = await Promise.allSettled([
+        fetch(appPath('/api/v1/public/operations'), { cache: 'no-store' }),
+        fetch(appPath('/api/v1/public/services'), { cache: 'no-store' }),
+        fetch(appPath('/api/v1/public/map/markers'), { cache: 'no-store' }),
+        fetch(appPath('/api/map/poi-categories'), { cache: 'no-store' }),
+        fetch(appPath('/api/map/player-locations'), { cache: 'no-store' }),
+      ]);
 
       try {
         let loaded = 0;
@@ -363,9 +451,12 @@ export function GlobalSearchPanel() {
         }
 
         if (markersResponse.status === 'fulfilled' && markersResponse.value.ok) {
-          const payload = await readJson<{ data?: MapMarkerSnapshot }>(markersResponse.value);
+          const payload = await readJson<{
+            data?: MapMarkerSnapshot & { iconBaseUrl?: string };
+          }>(markersResponse.value);
           if (payload?.data?.markers) {
             setMarkers(payload.data.markers.filter((marker) => marker.categoryId !== 'player'));
+            setMarkerIconBaseUrl(payload.data.iconBaseUrl);
             setMarkersStatus('ready');
             loaded += 1;
           } else {
@@ -373,6 +464,14 @@ export function GlobalSearchPanel() {
           }
         } else {
           setMarkersStatus('unavailable');
+        }
+
+        // 玩家位置来自独立的实时接口，地图上已公开展示，搜索同样允许按玩家名查找。
+        if (playersResponse.status === 'fulfilled' && playersResponse.value.ok) {
+          const payload = await readJson<{ snapshot?: MapMarkerSnapshot }>(playersResponse.value);
+          if (payload?.snapshot?.markers) {
+            setPlayerMarkers(payload.snapshot.markers);
+          }
         }
 
         if (categoriesResponse.status === 'fulfilled' && categoriesResponse.value.ok) {
@@ -392,10 +491,10 @@ export function GlobalSearchPanel() {
     }
 
     void loadData();
-  }, [open]);
+  }, [active]);
 
   useEffect(() => {
-    if (!open || trimmedQuery.length < 2) {
+    if (!active || trimmedQuery.length < 2) {
       setScheduleResult(null);
       setScheduleStatus('idle');
       return undefined;
@@ -431,10 +530,10 @@ export function GlobalSearchPanel() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [open, trimmedQuery]);
+  }, [active, trimmedQuery]);
 
   useEffect(() => {
-    if (!open || trimmedQuery.length < 2) {
+    if (!active || trimmedQuery.length < 2) {
       setWikiResults([]);
       setWikiStatus('idle');
       return undefined;
@@ -470,7 +569,7 @@ export function GlobalSearchPanel() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [open, trimmedQuery]);
+  }, [active, trimmedQuery]);
 
   useEffect(() => {
     setShowAll(false);
@@ -520,13 +619,23 @@ export function GlobalSearchPanel() {
       buildSearchResults({
         operations,
         serviceGroups,
-        markers,
+        // 玩家位置与普通地点一起参与匹配，地图上本来就公开展示。
+        markers: [...markers, ...playerMarkers],
         faqContent,
         query: trimmedQuery,
         schedules: scheduleResult?.trips ?? [],
         wiki: wikiResults,
       }),
-    [operations, serviceGroups, markers, faqContent, trimmedQuery, scheduleResult, wikiResults],
+    [
+      operations,
+      serviceGroups,
+      markers,
+      playerMarkers,
+      faqContent,
+      trimmedQuery,
+      scheduleResult,
+      wikiResults,
+    ],
   );
   const askMode = useMemo(
     () =>
@@ -588,26 +697,35 @@ export function GlobalSearchPanel() {
     };
 
     const addMarkers = (limit: number) => {
+      const placeMarkers = markers.filter((marker) => marker.categoryId !== 'player');
+      const taken = new Set<string>();
       let added = 0;
-      for (const category of suggestionMarkerCategories) {
-        if (added >= limit) {
-          break;
-        }
 
-        const marker = markers.find((entry) => entry.categoryId === category);
-        if (!marker) {
-          continue;
+      const tryAdd = (marker: (typeof placeMarkers)[number]) => {
+        if (added >= limit || taken.has(marker.id)) {
+          return;
         }
-
         const label =
           locale === 'zh-CN' ? marker.label : (marker.localizedLabels?.[locale] ?? marker.label);
         if (isViewed(label)) {
-          continue;
+          return;
         }
         const before = items.length;
         add(label, label, 'location_on');
         if (items.length > before) {
+          taken.add(marker.id);
           added += 1;
+        }
+      };
+
+      // 交通设施分类各取一个；同类有多个地点时跟着“换一批”轮换。
+      for (const category of suggestionMarkerCategories) {
+        if (added >= limit) {
+          break;
+        }
+        const group = placeMarkers.filter((marker) => marker.categoryId === category);
+        if (group.length > 0) {
+          tryAdd(group[suggestionOffset % group.length]);
         }
       }
 
@@ -615,24 +733,14 @@ export function GlobalSearchPanel() {
         return;
       }
 
-      for (const marker of markers) {
+      // 剩余名额从全量地点里按偏移轮换，避免每次都推荐快照最前面的几个地点。
+      const remaining = placeMarkers.filter((marker) => !taken.has(marker.id));
+      const start = remaining.length > 0 ? suggestionOffset % remaining.length : 0;
+      for (const marker of [...remaining.slice(start), ...remaining.slice(0, start)]) {
         if (added >= limit) {
           break;
         }
-        if (marker.categoryId === 'player') {
-          continue;
-        }
-
-        const label =
-          locale === 'zh-CN' ? marker.label : (marker.localizedLabels?.[locale] ?? marker.label);
-        if (isViewed(label)) {
-          continue;
-        }
-        const before = items.length;
-        add(label, label, 'location_on');
-        if (items.length > before) {
-          added += 1;
-        }
+        tryAdd(marker);
       }
     };
 
@@ -803,6 +911,7 @@ export function GlobalSearchPanel() {
     pageHighlights,
     pathname,
     serviceGroups,
+    suggestionOffset,
     t,
   ]);
 
@@ -816,7 +925,7 @@ export function GlobalSearchPanel() {
   }, [suggestionOffset, suggestionPool]);
 
   useEffect(() => {
-    if (!open || trimmedQuery || activeAskQuery) {
+    if (!active || trimmedQuery || activeAskQuery) {
       return undefined;
     }
     if (!entryPreference.aiSuggestions || !assistantConfig || !pageContext.pathname) {
@@ -878,10 +987,9 @@ export function GlobalSearchPanel() {
             )
           : [];
         if (suggestions.length === 0) {
-          setAiSuggestionsError(
-            typeof payload?.error?.message === 'string' ? payload.error.message : '',
-          );
-          setAiSuggestionsStatus('unavailable');
+          // 空结果回退到站内推荐项，不再显示“模型没有返回可用推荐项”。
+          setAiSuggestionsError('');
+          setAiSuggestionsStatus('ready');
           return;
         }
 
@@ -908,12 +1016,12 @@ export function GlobalSearchPanel() {
       controller.abort();
     };
   }, [
+    active,
     activeAskQuery,
     aiSuggestionRefreshToken,
     assistantConfig,
     entryPreference.aiSuggestions,
     locale,
-    open,
     pageContext,
     pageHighlights,
     trimmedQuery,
@@ -930,6 +1038,8 @@ export function GlobalSearchPanel() {
     assistantHistory.length > 0 ||
     assistantStatus === 'streaming' ||
     (assistantStatus === 'error' && Boolean(assistantError));
+  // 用户在搜索模式下改词时先看实时结果，避免旧回答和新的搜索结果同屏打架。
+  const showConversation = hasConversation && (mode === 'ask' || !trimmedQuery);
   const showClearButton = Boolean(trimmedQuery) || hasConversation;
 
   useEffect(() => {
@@ -950,15 +1060,16 @@ export function GlobalSearchPanel() {
     setSuggestionOffset(0);
     assistantAbortRef.current?.abort();
     setAssistantSetupOpen(false);
-    setAssistantStatus('idle');
+    setAssistantStatus(
+      assistantHistory[assistantHistory.length - 1]?.role === 'assistant' ? 'done' : 'idle',
+    );
     setAssistantAnswer('');
     setAssistantError('');
     setAssistantReferences([]);
-    setAssistantHistory([]);
+    // 问答内容与追问保留在本地，重新打开面板时可以继续上次的对话。
     followUpAbortRef.current?.abort();
-    setFollowUps([]);
     setFollowUpError('');
-    setFollowUpStatus('idle');
+    setFollowUpStatus((current) => (current === 'loading' ? 'idle' : current));
     setAiSuggestionRefreshToken(0);
     setEasterEggOpen(false);
   }
@@ -975,6 +1086,18 @@ export function GlobalSearchPanel() {
     setAssistantModel(provider.defaultModel);
   }
 
+  /** 品牌图标的一次性反馈：完成 / 失败 / 彩蛋，播完回到待机。 */
+  function flashBrandState(state: 'done' | 'error' | 'easter', duration: number) {
+    if (brandStateTimerRef.current !== null) {
+      window.clearTimeout(brandStateTimerRef.current);
+    }
+    setBrandState(state);
+    brandStateTimerRef.current = window.setTimeout(() => {
+      brandStateTimerRef.current = null;
+      setBrandState('idle');
+    }, duration);
+  }
+
   function handleBrandClick() {
     brandClickCountRef.current += 1;
     if (brandClickTimerRef.current !== null) {
@@ -988,6 +1111,7 @@ export function GlobalSearchPanel() {
     if (brandClickCountRef.current >= 5) {
       brandClickCountRef.current = 0;
       setEasterEggOpen(true);
+      flashBrandState('easter', 1100);
     }
   }
 
@@ -1031,7 +1155,12 @@ export function GlobalSearchPanel() {
     return message.length > 160 ? t('globalSearch.assistant.error') : message;
   }
 
-  async function requestFollowUps(query: string, answer: string, config: AssistantConfig) {
+  async function requestFollowUps(
+    query: string,
+    answer: string,
+    config: AssistantConfig,
+    options: { variation?: number; previous?: string[] } = {},
+  ) {
     if (!entryPreference.aiSuggestions || !answer.trim()) {
       return;
     }
@@ -1056,6 +1185,8 @@ export function GlobalSearchPanel() {
           mode: 'followup',
           query,
           answer: answer.slice(0, 1600),
+          variation: options.variation ?? 0,
+          previous: options.previous ?? [],
           page: { ...pageContext, highlights: pageHighlights },
         }),
         signal: controller.signal,
@@ -1076,12 +1207,9 @@ export function GlobalSearchPanel() {
             .slice(0, 3)
         : [];
       setFollowUps(suggestions);
-      setFollowUpError(
-        suggestions.length === 0 && typeof payload?.error?.message === 'string'
-          ? payload.error.message
-          : '',
-      );
-      setFollowUpStatus(suggestions.length > 0 ? 'ready' : 'unavailable');
+      setFollowUpError('');
+      // 模型没给出追问时安静隐藏，不把“没有推荐”当成错误提示。
+      setFollowUpStatus(suggestions.length > 0 ? 'ready' : 'idle');
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) {
         setFollowUpError('');
@@ -1094,7 +1222,69 @@ export function GlobalSearchPanel() {
     }
   }
 
-  async function runAssistant(query: string, configOverride?: AssistantConfig) {
+  /** 针对上一条回答换一批追问，沿用同一轮问答上下文。 */
+  function refreshFollowUps() {
+    const config = assistantConfig;
+    if (!config || followUpStatus === 'loading') {
+      return;
+    }
+
+    const assistantIndex = assistantHistory.map((message) => message.role).lastIndexOf('assistant');
+    const answerMessage = assistantIndex >= 0 ? assistantHistory[assistantIndex] : undefined;
+    const questionMessage = assistantHistory
+      .slice(0, Math.max(assistantIndex, 0))
+      .reverse()
+      .find((message) => message.role === 'user');
+    if (!answerMessage || !questionMessage) {
+      return;
+    }
+
+    const nextToken = followUpRefreshToken + 1;
+    setFollowUpRefreshToken(nextToken);
+    setFollowUps([]);
+    void requestFollowUps(questionMessage.content, answerMessage.content, config, {
+      variation: nextToken,
+      previous: followUps,
+    });
+  }
+
+  /** 重新生成最后一条回答：沿用原提问，先摘掉上一轮问答再请求。 */
+  function retryAssistantAnswer() {
+    const roles = assistantHistory.map((message) => message.role);
+    const lastUserIndex = roles.lastIndexOf('user');
+    const lastAssistantIndex = roles.lastIndexOf('assistant');
+    if (lastUserIndex < 0 || (lastAssistantIndex >= 0 && lastAssistantIndex < lastUserIndex)) {
+      return;
+    }
+
+    const question = assistantHistory[lastUserIndex]?.content ?? '';
+    const base = assistantHistory.slice(0, lastUserIndex);
+    setAssistantHistory(base);
+    void runAssistant(question, undefined, base);
+  }
+
+  async function copyAssistantAnswer(text: string, key: string) {
+    const content = text.trim();
+    if (!content) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedAnswerKey(key);
+      window.setTimeout(() => {
+        setCopiedAnswerKey((current) => (current === key ? '' : current));
+      }, 1600);
+    } catch {
+      setCopiedAnswerKey('');
+    }
+  }
+
+  async function runAssistant(
+    query: string,
+    configOverride?: AssistantConfig,
+    historyOverride?: ChatHistoryMessage[],
+  ) {
     const config = configOverride ?? assistantConfig;
     const cleanQuery = query.trim();
     if (!cleanQuery) {
@@ -1115,10 +1305,12 @@ export function GlobalSearchPanel() {
     setFollowUps([]);
     setFollowUpError('');
     setFollowUpStatus('idle');
+    setFollowUpRefreshToken(0);
+    setCopiedAnswerKey('');
     const abortController = new AbortController();
     assistantAbortRef.current = abortController;
     const nextHistory: ChatHistoryMessage[] = [
-      ...assistantHistory,
+      ...(historyOverride ?? assistantHistory),
       { role: 'user', content: cleanQuery },
     ];
     let accumulated = '';
@@ -1165,6 +1357,23 @@ export function GlobalSearchPanel() {
           return;
         }
 
+        if (event === 'references') {
+          // 工具调用会追加引用，服务端发来的是合并后的完整列表。
+          const payload = data as { references?: AssistantReference[] };
+          if (Array.isArray(payload.references)) {
+            receivedReferences = payload.references;
+            setAssistantReferences(receivedReferences);
+          }
+          return;
+        }
+
+        if (event === 'reset') {
+          // 模型决定先调用工具时，丢弃这一轮已经显示的半句话。
+          accumulated = '';
+          setAssistantAnswer('');
+          return;
+        }
+
         if (event === 'delta') {
           const text = (data as { text?: unknown }).text;
           if (typeof text === 'string' && text) {
@@ -1185,6 +1394,7 @@ export function GlobalSearchPanel() {
       if (!accumulated.trim()) {
         setAssistantStatus('error');
         setAssistantError(t('globalSearch.assistant.error'));
+        flashBrandState('error', 700);
         return;
       }
 
@@ -1194,6 +1404,9 @@ export function GlobalSearchPanel() {
       ]);
       setAssistantAnswer('');
       setAssistantStatus('done');
+      if (!isEasterEggQuery(cleanQuery) || !revealEasterEggAfterAnswer()) {
+        flashBrandState('done', 600);
+      }
       void requestFollowUps(cleanQuery, accumulated.trim(), config);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -1202,6 +1415,7 @@ export function GlobalSearchPanel() {
 
       setAssistantStatus('error');
       setAssistantError(resolveAssistantError(error));
+      flashBrandState('error', 700);
     } finally {
       if (assistantAbortRef.current === abortController) {
         assistantAbortRef.current = null;
@@ -1225,11 +1439,28 @@ export function GlobalSearchPanel() {
     setAssistantReferences([]);
     setAssistantHistory([]);
     setFollowUps([]);
+    setEasterEggSeen(false);
+    easterEggSeenRef.current = false;
+    setEasterEggOpen(false);
+    clearAssistantConversation();
     setFollowUpError('');
     setFollowUpStatus('idle');
     followUpAbortRef.current?.abort();
     setAssistantSetupOpen(false);
     inputRef.current?.focus();
+  }
+
+  /** 本对话第一次问到彩蛋时，等这条回答生成结束再播卡片和图标动画；返回是否播放。 */
+  function revealEasterEggAfterAnswer(): boolean {
+    if (easterEggSeenRef.current) {
+      return false;
+    }
+
+    easterEggSeenRef.current = true;
+    setEasterEggSeen(true);
+    setEasterEggOpen(true);
+    flashBrandState('easter', 1100);
+    return true;
   }
 
   function submit() {
@@ -1238,9 +1469,18 @@ export function GlobalSearchPanel() {
     }
 
     if (isEasterEggQuery(trimmedQuery)) {
+      // 彩蛋同样交给问一问回答，动画等这条回答生成结束后再播。
       setSubmittedAskQuery(trimmedQuery);
       setShowAll(true);
-      setEasterEggOpen(true);
+      setActiveAskQuery(trimmedQuery);
+      if (!assistantConfig) {
+        setAssistantSetupOpen(true);
+        scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      setQuery('');
+      void runAssistant(trimmedQuery);
       return;
     }
 
@@ -1325,7 +1565,37 @@ export function GlobalSearchPanel() {
     void runAssistant(trimmedQuery);
   }
 
+  // 让输入框与结果项之间可以连续用方向键巡检，Enter 仍交给结果项自身的链接行为。
+  function moveResultFocus(direction: 1 | -1): boolean {
+    const items = Array.from(
+      scrollRef.current?.querySelectorAll<HTMLElement>('.search-result-item') ?? [],
+    );
+    if (items.length === 0) {
+      return false;
+    }
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+    const nextIndex =
+      currentIndex < 0
+        ? direction > 0
+          ? 0
+          : items.length - 1
+        : Math.min(items.length - 1, Math.max(0, currentIndex + direction));
+    items[nextIndex]?.focus();
+    items[nextIndex]?.scrollIntoView({ block: 'nearest' });
+    return true;
+  }
+
   function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (
+      (event.key === 'ArrowDown' || event.key === 'ArrowUp') &&
+      !event.shiftKey &&
+      !query.includes('\n') &&
+      moveResultFocus(event.key === 'ArrowDown' ? 1 : -1)
+    ) {
+      event.preventDefault();
+      return;
+    }
+
     if (
       event.key === 'Enter' &&
       !event.shiftKey &&
@@ -1339,41 +1609,57 @@ export function GlobalSearchPanel() {
     }
   }
 
-  if (!open || !entryPreference.enabled) {
+  /** 点击浮层空白处收起面板；独立页面没有遮罩，不需要这个行为。 */
+  function handlePanelPointerDown(event: ReactMouseEvent<HTMLDivElement>) {
+    event.stopPropagation();
+    const target = event.target as HTMLElement | null;
+    if (
+      !target?.closest(
+        'a,button,input,textarea,select,[role="button"],.global-search-input-row,.global-search-mode-chip,.global-search-assistant-setup,.global-search-answer,.global-search-fallback,.global-search-easter-egg',
+      )
+    ) {
+      close();
+    }
+  }
+
+  if (!entryPreference.enabled) {
+    return isPage ? (
+      <div className="global-search-page">
+        <p className="status-note">{t('globalSearch.pageDisabled')}</p>
+      </div>
+    ) : null;
+  }
+
+  if (!isPage && !open) {
     return null;
   }
 
   const visibleLimit = showAll ? undefined : 3;
 
   return (
-    <div className="modal-backdrop global-search-backdrop" role="presentation" onMouseDown={close}>
+    <div
+      className={isPage ? 'global-search-page' : 'modal-backdrop global-search-backdrop'}
+      role={isPage ? undefined : 'presentation'}
+      onMouseDown={isPage ? undefined : close}
+    >
       <div
-        className="global-search-panel"
-        role="dialog"
-        aria-modal="true"
+        className={isPage ? 'global-search-panel is-page' : 'global-search-panel'}
+        role={isPage ? 'region' : 'dialog'}
+        aria-modal={isPage ? undefined : 'true'}
         aria-label={t('globalSearch.title')}
-        onMouseDown={(event) => {
-          event.stopPropagation();
-          const target = event.target as HTMLElement | null;
-          if (
-            !target?.closest(
-              'a,button,input,textarea,select,[role="button"],.global-search-input-row,.global-search-mode-chip,.global-search-assistant-setup,.global-search-answer,.global-search-fallback,.global-search-easter-egg',
-            )
-          ) {
-            close();
-          }
-        }}
+        onMouseDown={isPage ? undefined : handlePanelPointerDown}
       >
         <header className="global-search-header">
           <div className="global-search-heading">
             <button
               className="global-search-brand"
               type="button"
+              data-state={assistantStatus === 'streaming' ? 'thinking' : brandState}
               onClick={handleBrandClick}
               aria-label={t('globalSearch.easterEgg.title')}
               title={t('globalSearch.easterEgg.title')}
             >
-              <SmartQaGlyph size={22} thinking={assistantStatus === 'streaming'} />
+              <SmartQaGlyph size={30} thinking={assistantStatus === 'streaming'} />
             </button>
             <h2 className="sr-only">{t('globalSearch.title')}</h2>
             <span
@@ -1384,19 +1670,34 @@ export function GlobalSearchPanel() {
               {mode === 'ask' ? t('globalSearch.mode.ask') : t('globalSearch.mode.search')}
             </span>
           </div>
-          <button
-            className="global-search-close"
-            type="button"
-            aria-label={t('globalSearch.action.close')}
-            onClick={close}
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">
-              close
-            </span>
-          </button>
+          {isPage ? null : (
+            <button
+              className="global-search-close"
+              type="button"
+              aria-label={t('globalSearch.action.close')}
+              onClick={close}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                close
+              </span>
+            </button>
+          )}
         </header>
 
-        <div className="global-search-scroll" ref={scrollRef}>
+        <div
+          className="global-search-scroll"
+          ref={scrollRef}
+          onKeyDown={(event) => {
+            if (
+              event.target instanceof HTMLElement &&
+              event.target.closest('.search-result-item') &&
+              (event.key === 'ArrowDown' || event.key === 'ArrowUp')
+            ) {
+              event.preventDefault();
+              moveResultFocus(event.key === 'ArrowDown' ? 1 : -1);
+            }
+          }}
+        >
           <div className="global-search-body">
             {easterEggOpen ? (
               <section className="global-search-easter-egg">
@@ -1503,7 +1804,7 @@ export function GlobalSearchPanel() {
                   </section>
                 ) : null}
 
-                {hasConversation ? (
+                {showConversation ? (
                   <section className="global-search-conversation" aria-live="polite">
                     {assistantHistory.map((message, index) =>
                       message.role === 'user' ? (
@@ -1513,7 +1814,40 @@ export function GlobalSearchPanel() {
                       ) : (
                         <div className="global-search-conversation-turn" key={`assistant-${index}`}>
                           <div className="global-search-conversation-assistant">
-                            {renderAnswerText(message.content, close)}
+                            <MarkdownBlocks markdown={message.content} />
+                          </div>
+                          <div className="global-search-answer-actions">
+                            <button
+                              className="global-search-answer-action"
+                              type="button"
+                              onClick={() =>
+                                void copyAssistantAnswer(message.content, `history-${index}`)
+                              }
+                            >
+                              <MaterialSymbol
+                                name={
+                                  copiedAnswerKey === `history-${index}` ? 'check' : 'content_copy'
+                                }
+                                aria-hidden="true"
+                              />
+                              <span>
+                                {copiedAnswerKey === `history-${index}`
+                                  ? t('globalSearch.assistant.copied')
+                                  : t('globalSearch.assistant.copy')}
+                              </span>
+                            </button>
+                            {assistantStatus === 'done' &&
+                            index === assistantHistory.length - 1 &&
+                            assistantConfig ? (
+                              <button
+                                className="global-search-answer-action"
+                                type="button"
+                                onClick={retryAssistantAnswer}
+                              >
+                                <MaterialSymbol name="refresh" aria-hidden="true" />
+                                <span>{t('globalSearch.assistant.retry')}</span>
+                              </button>
+                            ) : null}
                           </div>
                           {message.references && message.references.length > 0 ? (
                             <div className="global-search-ref-chips">
@@ -1535,9 +1869,7 @@ export function GlobalSearchPanel() {
                     ) : null}
                     {assistantStatus === 'streaming' ? (
                       <div className="global-search-conversation-assistant is-streaming">
-                        {assistantAnswer ? (
-                          <span>{renderAnswerText(assistantAnswer, close)}</span>
-                        ) : null}
+                        {assistantAnswer ? <MarkdownBlocks markdown={assistantAnswer} /> : null}
                         <span
                           className="global-search-typing"
                           aria-label={t('globalSearch.assistant.streaming')}
@@ -1549,16 +1881,47 @@ export function GlobalSearchPanel() {
                       </div>
                     ) : assistantStatus === 'error' && assistantAnswer ? (
                       <div className="global-search-conversation-assistant">
-                        {renderAnswerText(assistantAnswer, close)}
+                        <MarkdownBlocks markdown={assistantAnswer} />
                       </div>
                     ) : null}
                     {assistantStatus === 'error' && submittedAskQuery ? (
                       <p className="global-search-conversation-user">{submittedAskQuery}</p>
                     ) : null}
                     {assistantStatus === 'error' ? (
-                      <p className="global-search-conversation-error">
-                        {assistantError || t('globalSearch.assistant.error')}
-                      </p>
+                      <>
+                        <p className="global-search-conversation-error">
+                          {assistantError || t('globalSearch.assistant.error')}
+                        </p>
+                        {submittedAskQuery && assistantConfig ? (
+                          <div className="global-search-answer-actions">
+                            <button
+                              className="global-search-answer-action"
+                              type="button"
+                              onClick={() => void runAssistant(submittedAskQuery)}
+                            >
+                              <MaterialSymbol name="refresh" aria-hidden="true" />
+                              <span>{t('globalSearch.assistant.retry')}</span>
+                            </button>
+                            {assistantAnswer ? (
+                              <button
+                                className="global-search-answer-action"
+                                type="button"
+                                onClick={() => void copyAssistantAnswer(assistantAnswer, 'error')}
+                              >
+                                <MaterialSymbol
+                                  name={copiedAnswerKey === 'error' ? 'check' : 'content_copy'}
+                                  aria-hidden="true"
+                                />
+                                <span>
+                                  {copiedAnswerKey === 'error'
+                                    ? t('globalSearch.assistant.copied')
+                                    : t('globalSearch.assistant.copy')}
+                                </span>
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </>
                     ) : null}
                     {assistantReferences.length > 0 && assistantStatus !== 'done' ? (
                       <div className="global-search-answer-refs">
@@ -1579,9 +1942,21 @@ export function GlobalSearchPanel() {
                     ) : null}
                     {assistantStatus === 'done' && followUps.length > 0 ? (
                       <div className="global-search-follow-ups">
-                        <p className="global-search-section-label">
-                          {t('globalSearch.assistant.followUps')}
-                        </p>
+                        <div className="global-search-suggestions-heading">
+                          <p className="global-search-section-label">
+                            {t('globalSearch.assistant.followUps')}
+                          </p>
+                          {entryPreference.aiSuggestions && assistantConfig ? (
+                            <button
+                              className="global-search-suggestions-refresh"
+                              type="button"
+                              disabled={followUpStatus === 'loading'}
+                              onClick={refreshFollowUps}
+                            >
+                              {t('globalSearch.suggestion.refresh')}
+                            </button>
+                          ) : null}
+                        </div>
                         <div className="global-search-suggestions">
                           {followUps.map((item) => (
                             <button
@@ -1783,30 +2158,49 @@ export function GlobalSearchPanel() {
                                 {t('search.resultGroup.operations')}
                               </h2>
                               <div className="search-result-list">
-                                {results.operations.slice(0, visibleLimit).map((item) => (
-                                  <Link
-                                    className="search-result-item"
-                                    href={appPath(`/operations/${encodeURIComponent(item.id)}`)}
-                                    key={item.id}
-                                    onClick={close}
-                                  >
-                                    <span className="material-symbols-outlined" aria-hidden="true">
-                                      article
-                                    </span>
-                                    <span>
-                                      <strong>
-                                        <TitleWithBreaks
-                                          title={item.title}
-                                          segments={item.titleSegments}
-                                        />
-                                      </strong>
-                                      <span className="muted">
-                                        {item.categoryId}
-                                        {item.displayDate ? ` · ${item.displayDate}` : ''}
+                                {results.operations.slice(0, visibleLimit).map((item) => {
+                                  const cover =
+                                    item.coverImageUrl ??
+                                    item.migratedImagePath ??
+                                    item.legacyImagePath;
+                                  return (
+                                    <Link
+                                      className={`search-result-item${cover ? ' has-thumb' : ''}`}
+                                      href={appPath(`/operations/${encodeURIComponent(item.id)}`)}
+                                      key={item.id}
+                                      onClick={close}
+                                    >
+                                      <span
+                                        className="material-symbols-outlined"
+                                        aria-hidden="true"
+                                      >
+                                        article
                                       </span>
-                                    </span>
-                                  </Link>
-                                ))}
+                                      <span>
+                                        <strong>
+                                          <TitleWithBreaks
+                                            title={item.title}
+                                            segments={item.titleSegments}
+                                          />
+                                        </strong>
+                                        <span className="muted">
+                                          {item.categoryId}
+                                          {item.displayDate ? ` · ${item.displayDate}` : ''}
+                                        </span>
+                                      </span>
+                                      {cover ? (
+                                        <img
+                                          className="search-result-thumb is-trailing"
+                                          src={resolveSearchImageSrc(cover)}
+                                          alt=""
+                                          loading="lazy"
+                                          decoding="async"
+                                          referrerPolicy="no-referrer"
+                                        />
+                                      ) : null}
+                                    </Link>
+                                  );
+                                })}
                               </div>
                             </section>
                           ) : null}
@@ -1820,29 +2214,42 @@ export function GlobalSearchPanel() {
                               <div className="search-result-list">
                                 {results.poi.slice(0, visibleLimit).map((marker) => {
                                   const thumbnail = marker.imageUrls?.[0] ?? marker.imageUrl;
-                                  const categoryName = getMarkerCategoryLabel(
-                                    marker.categoryId,
-                                    poiCategoryNames,
-                                    locale,
-                                  );
+                                  const isPlayer = marker.categoryId === 'player';
+                                  const iconUrl = isPlayer
+                                    ? undefined
+                                    : resolveMapMarkerIconUrl(
+                                        marker.iconFileName,
+                                        markerIconBaseUrl,
+                                      );
+                                  const categoryName = isPlayer
+                                    ? t('search.resultGroup.player')
+                                    : getMarkerCategoryLabel(
+                                        marker.categoryId,
+                                        poiCategoryNames,
+                                        locale,
+                                      );
                                   return (
                                     <Link
-                                      className="search-result-item"
-                                      href={appPath(`/map?marker=${encodeURIComponent(marker.id)}`)}
+                                      className={`search-result-item${thumbnail ? ' has-thumb' : ''}`}
+                                      href={appPath(buildMapMarkerHref(marker))}
                                       key={marker.id}
                                       onClick={close}
                                     >
-                                      {thumbnail ? (
+                                      {iconUrl ? (
                                         <img
-                                          className="search-result-thumb"
-                                          src={resolveSearchImageSrc(thumbnail)}
+                                          className="search-result-icon"
+                                          src={iconUrl}
                                           alt=""
                                           loading="lazy"
                                           decoding="async"
                                         />
                                       ) : (
                                         <MaterialSymbol
-                                          name={marker.symbolIcon ?? 'location_on'}
+                                          name={
+                                            isPlayer
+                                              ? 'person_pin'
+                                              : (marker.symbolIcon ?? 'location_on')
+                                          }
                                           aria-hidden="true"
                                         />
                                       )}
@@ -1860,6 +2267,16 @@ export function GlobalSearchPanel() {
                                           {formatPoiSummary(marker, { categoryName })}
                                         </span>
                                       </span>
+                                      {thumbnail ? (
+                                        <img
+                                          className="search-result-thumb is-trailing"
+                                          src={resolveSearchImageSrc(thumbnail)}
+                                          alt=""
+                                          loading="lazy"
+                                          decoding="async"
+                                          referrerPolicy="no-referrer"
+                                        />
+                                      ) : null}
                                     </Link>
                                   );
                                 })}
@@ -2009,7 +2426,7 @@ export function GlobalSearchPanel() {
                               <div className="search-result-list">
                                 {results.wiki.slice(0, visibleLimit).map((item) => (
                                   <a
-                                    className="search-result-item"
+                                    className={`search-result-item${item.thumbnailUrl ? ' has-thumb' : ''}`}
                                     href={item.href}
                                     target="_blank"
                                     rel="noreferrer"
@@ -2031,6 +2448,16 @@ export function GlobalSearchPanel() {
                                           : ''}
                                       </span>
                                     </span>
+                                    {item.thumbnailUrl ? (
+                                      <img
+                                        className="search-result-thumb is-trailing"
+                                        src={item.thumbnailUrl}
+                                        alt=""
+                                        loading="lazy"
+                                        decoding="async"
+                                        referrerPolicy="no-referrer"
+                                      />
+                                    ) : null}
                                   </a>
                                 ))}
                               </div>
@@ -2266,10 +2693,6 @@ function getTopResultTarget(
   return null;
 }
 
-function resolveSearchImageSrc(value: string): string {
-  return /^(?:https?:|data:|blob:)/i.test(value) ? value : appPath(value);
-}
-
 function formatReferenceTime(value: string | undefined, locale: LocaleCode): string {
   if (!value) {
     return '';
@@ -2290,70 +2713,8 @@ function formatReferenceTime(value: string | undefined, locale: LocaleCode): str
   }).format(date);
 }
 
-const answerLinkPattern =
-  /https?:\/\/[^\s<>"'）)】]+|\/(?:map|travel|services|operations|account|search)(?:[/?#][^\s<>"'）)】]*)?/gi;
-
-/** 把回答中的站内路径和外部链接渲染成可点击的高亮链接。 */
-function renderAnswerText(text: string, onNavigate: () => void): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  let lastIndex = 0;
-
-  for (const match of text.matchAll(new RegExp(answerLinkPattern.source, 'gi'))) {
-    const index = match.index ?? 0;
-    if (index > lastIndex) {
-      nodes.push(text.slice(lastIndex, index));
-    }
-
-    const raw = match[0];
-    const link = raw.replace(/[.,;:!?。，；：！？、]+$/, '');
-    const trailing = raw.slice(link.length);
-    const key = `${index}-link`;
-
-    nodes.push(
-      /^https?:/i.test(link) ? (
-        <a
-          className="global-search-answer-link"
-          href={link}
-          target="_blank"
-          rel="noreferrer"
-          key={key}
-          onClick={onNavigate}
-        >
-          {link}
-        </a>
-      ) : (
-        <Link
-          className="global-search-answer-link"
-          href={appPath(link)}
-          key={key}
-          onClick={onNavigate}
-        >
-          {link}
-        </Link>
-      ),
-    );
-
-    if (trailing) {
-      nodes.push(trailing);
-    }
-    lastIndex = index + raw.length;
-  }
-
-  if (lastIndex < text.length) {
-    nodes.push(text.slice(lastIndex));
-  }
-
-  return nodes;
-}
-
 function isBlockedSearchPath(pathname: string): boolean {
   return pathname.startsWith(appPath('/admin')) || pathname.startsWith(appPath('/auth'));
-}
-
-function isEasterEggQuery(query: string): boolean {
-  return /彩蛋|关于问一问|问一问.*(图标|小人|由来)|图标.*(由来|哪来|来源)|小人.*(哪来|来源|是谁)|你是谁/i.test(
-    query,
-  );
 }
 
 async function readJson<T>(response: Response): Promise<T | undefined> {

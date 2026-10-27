@@ -122,6 +122,69 @@ function buildOpenApiDocument() {
           },
         },
       },
+      '/map/nearby': {
+        get: {
+          operationId: 'queryNearbyMapMarkers',
+          summary: '按距离查询某个地点周边标记',
+          parameters: [
+            localeParameter,
+            queryParameter('markerId', '锚点标记 ID，与 marker 二选一。'),
+            queryParameter('marker', '锚点标记名称。'),
+            queryParameter('x', '锚点 X 坐标，与 z 一起使用时替代锚点标记。'),
+            queryParameter('z', '锚点 Z 坐标。'),
+            queryParameter('radius', '搜索半径，单位地图格，默认 200。'),
+            queryParameter('category', '分类 ID 或分类名，多值用逗号分隔。'),
+            queryParameter('limit', '返回条数上限，默认 20。'),
+            {
+              in: 'query',
+              name: 'scope',
+              required: false,
+              schema: { type: 'string', enum: ['all', 'inside', 'outside'] },
+            },
+          ],
+          responses: {
+            '200': successResponse({
+              type: 'object',
+              properties: {
+                anchor: { type: 'object' },
+                radius: { type: 'number' },
+                items: { type: 'array', items: ref('SpatialPlaceItem') },
+              },
+            }),
+            '400': { ...errorResponse, description: '锚点缺失或没有可用坐标。' },
+            '404': { ...errorResponse, description: '没有找到锚点。' },
+            '502': { ...errorResponse, description: '地图标记源暂不可用。' },
+          },
+        },
+      },
+      '/map/along-line': {
+        get: {
+          operationId: 'queryAlongLineMapMarkers',
+          summary: '按沿线里程查询线路沿线标记',
+          parameters: [
+            localeParameter,
+            queryParameter('lineId', '线路 ID，与 line 二选一。'),
+            queryParameter('line', '线路名称，例如“170路”。'),
+            queryParameter('corridor', '标记到线路中心线的最大垂距，单位地图格，默认 300。'),
+            queryParameter('from', '沿线里程起点，单位地图格。'),
+            queryParameter('to', '沿线里程终点，单位地图格。'),
+            queryParameter('category', '分类 ID 或分类名，多值用逗号分隔。'),
+            queryParameter('limit', '返回条数上限，默认 30。'),
+          ],
+          responses: {
+            '200': successResponse({
+              type: 'object',
+              properties: {
+                line: { type: 'object' },
+                corridor: { type: 'number' },
+                items: { type: 'array', items: ref('SpatialPlaceItem') },
+              },
+            }),
+            '404': { ...errorResponse, description: '线路不存在或缺少路线坐标。' },
+            '502': { ...errorResponse, description: '地图标记源暂不可用。' },
+          },
+        },
+      },
       '/travel/schedules': {
         get: {
           operationId: 'queryTravelSchedules',
@@ -308,6 +371,28 @@ function buildOpenApiDocument() {
             transitOperationStatus: { type: 'string', enum: ['operating', 'planned', 'closed'] },
           },
           additionalProperties: true,
+        },
+        SpatialPlaceItem: {
+          type: 'object',
+          required: ['id', 'label', 'distance'],
+          properties: {
+            id: { type: 'string' },
+            label: { type: 'string' },
+            categoryId: { type: 'string' },
+            categoryLabel: { type: 'string' },
+            address: { type: 'string' },
+            description: { type: 'string' },
+            href: { type: 'string', format: 'uri-reference' },
+            distance: {
+              type: 'number',
+              description: '到中心点或线路中心线的垂距，单位地图格。',
+            },
+            mileage: {
+              type: 'number',
+              description: '沿线搜索时从线路起点算起的里程，单位地图格。',
+            },
+          },
+          additionalProperties: false,
         },
         TravelScheduleQueryResult: {
           type: 'object',

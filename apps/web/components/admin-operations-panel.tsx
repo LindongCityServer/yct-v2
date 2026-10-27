@@ -16,8 +16,10 @@ import type {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
+import { requestConfirmation } from '../lib/client-dialog-events';
 import { AdminRefreshButton } from './admin-refresh-button';
 import { ContentPoiBindingEditor } from './content-poi-binding-editor';
+import { useListKeyboardNavigation } from './use-list-keyboard-navigation';
 
 interface AdminContentMetadata {
   excerpt?: string;
@@ -1176,6 +1178,26 @@ export function AdminOperationsPanel({
       setIsBusy(false);
     }
   };
+
+  const contentListRef = useRef<HTMLDivElement | null>(null);
+  const runBulkSubmitShortcut = () => {
+    if (batchSubmitContentRecords.length === 0) {
+      return;
+    }
+    void (async () => {
+      const confirmed = await requestConfirmation(
+        `确认批量提交 ${batchSubmitContentRecords.length} 条内容进入审核吗？`,
+      );
+      if (!confirmed) {
+        return;
+      }
+      await runBatchContentAction(batchSubmitContentRecords, 'submit');
+    })();
+  };
+  useListKeyboardNavigation({
+    containerRef: contentListRef,
+    onBulkAction: runBulkSubmitShortcut,
+  });
 
   const openPublishDialog = (record: AdminContentRecord) => {
     setPublishTarget(record);
@@ -2679,7 +2701,7 @@ export function AdminOperationsPanel({
               清空筛选
             </button>
           </div>
-          <div className="admin-content-list" aria-label="内容记录">
+          <div className="admin-content-list" aria-label="内容记录" ref={contentListRef}>
             {filteredContentRecords.map((record) => {
               const reviewPreview =
                 contentReviewPreviewById.get(record.contentId) ??
@@ -2695,6 +2717,8 @@ export function AdminOperationsPanel({
                       : 'admin-content-item admin-content-record-item'
                   }
                   key={record.contentId}
+                  data-keyboard-list-item
+                  tabIndex={-1}
                 >
                   <label className="admin-content-select">
                     <input
@@ -2702,6 +2726,7 @@ export function AdminOperationsPanel({
                       checked={selectedContentIds.has(record.contentId)}
                       onChange={() => toggleContentRecordSelection(record.contentId)}
                       aria-label={`选择内容 ${record.revision.title}`}
+                      data-keyboard-select
                     />
                   </label>
                   <div>
@@ -2758,6 +2783,7 @@ export function AdminOperationsPanel({
                         }
                         loadRecordToEditor(record);
                       }}
+                      data-keyboard-open
                     >
                       {record.sourceKind === 'legacy_content_data' ? '接管编辑' : '编辑'}
                     </button>

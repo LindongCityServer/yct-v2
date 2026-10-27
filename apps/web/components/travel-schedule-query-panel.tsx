@@ -19,7 +19,15 @@ import type {
   TravelTicketingAvailability,
   TravelTripInstance,
 } from '@yct/contracts';
-import { Fragment, type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react';
+import {
+  Fragment,
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { appPath } from '../lib/app-paths';
 import { MaterialSymbol } from './material-symbol';
 import { publishLoginRequired, publishLoginRequiredForResponse } from '../lib/client-auth-events';
@@ -263,6 +271,57 @@ export function TravelScheduleQueryPanel({
       setJourneyBusy(false);
     }
   };
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const resetScheduleFilters = () => {
+    setServiceFilter('all');
+    setStationFilter('all');
+    setOriginFilter('all');
+    setDestinationFilter('all');
+    setTimeFilter('all');
+    setServiceDate(toDateInputValue(new Date()));
+    setQuery('');
+  };
+
+  // 旅行页快捷动作：/ 聚焦检索、Esc 清空筛选、Ctrl+Enter 规划行程。
+  const scheduleShortcutRef = useRef<(event: KeyboardEvent) => void>(() => undefined);
+  scheduleShortcutRef.current = (event) => {
+    const target = event.target;
+    const isEditable =
+      target instanceof HTMLElement &&
+      (target.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName));
+    const modifier = event.ctrlKey || event.metaKey;
+    if (modifier && event.key === 'Enter') {
+      event.preventDefault();
+      void planJourneys();
+      return;
+    }
+    if (modifier || event.altKey) {
+      return;
+    }
+    if (event.key === '/' && !isEditable) {
+      event.preventDefault();
+      searchInputRef.current?.focus();
+      return;
+    }
+    if (event.key === 'Escape') {
+      if (isEditable && target === searchInputRef.current) {
+        event.preventDefault();
+        setQuery('');
+        return;
+      }
+      if (!isEditable) {
+        event.preventDefault();
+        resetScheduleFilters();
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => scheduleShortcutRef.current(event);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const createJourneyOrder = async (journey: TravelJourneyOption) => {
     if (journey.ticketingStatus !== 'order_available') {
       setJourneyStatusText(t('travelSchedule.journey.segmentUnavailable'));
@@ -354,6 +413,7 @@ export function TravelScheduleQueryPanel({
             search
           </span>
           <input
+            ref={searchInputRef}
             type="search"
             aria-label={t('travelSchedule.search.aria')}
             value={query}
@@ -1707,9 +1767,7 @@ function formatScheduleReminderTitle(trip: TravelTripInstance, t: Translate): st
 function formatScheduleReminderDetail(trip: TravelTripInstance, t: Translate): string {
   const fareText = formatFareTextWithoutCurrencyUnit(trip.fareText);
   return [
-    trip.tripCode
-      ? t('travelSchedule.reminder.detailTrip', { code: trip.tripCode })
-      : undefined,
+    trip.tripCode ? t('travelSchedule.reminder.detailTrip', { code: trip.tripCode }) : undefined,
     t('travelSchedule.reminder.detailDeparture', { time: trip.departureTime }),
     trip.arrivalTime
       ? t('travelSchedule.journey.arrival', { time: formatArrivalTime(trip, t) })

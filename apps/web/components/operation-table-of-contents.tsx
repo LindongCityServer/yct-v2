@@ -154,6 +154,57 @@ export function OperationTableOfContents({
     mobileActionRail.registerItems(`operation-toc-${railItemId}`, railItems);
   }, [mobileActionRail, railItemId, railItems]);
 
+  const scrollToHeading = (heading: MarkdownHeading) => {
+    setActiveHeadingId(heading.id);
+    setExpanded(false);
+
+    window.history.pushState(null, '', `#${heading.id}`);
+    document.getElementById(heading.id)?.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'start',
+    });
+  };
+
+  // J/K 在章节间跳转，G / Shift+G 回到首末章节。
+  const tocShortcutRef = useRef<(event: KeyboardEvent) => void>(() => undefined);
+  tocShortcutRef.current = (event) => {
+    if (isEditableKeyboardTarget(event.target)) {
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+      return;
+    }
+    if (headings.length === 0) {
+      return;
+    }
+    if (!event.shiftKey && (event.key === 'j' || event.key === 'k')) {
+      event.preventDefault();
+      const currentIndex = headings.findIndex((heading) => heading.id === activeHeadingId);
+      const nextIndex =
+        event.key === 'j'
+          ? Math.min(headings.length - 1, currentIndex + 1)
+          : Math.max(0, currentIndex <= 0 ? 0 : currentIndex - 1);
+      const next = headings[nextIndex];
+      if (next) {
+        scrollToHeading(next);
+      }
+      return;
+    }
+    if (event.key === 'g' || event.key === 'G') {
+      event.preventDefault();
+      const target = event.shiftKey ? headings[headings.length - 1] : headings[0];
+      if (target) {
+        scrollToHeading(target);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => tocShortcutRef.current(event);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   if (headings.length === 0) {
     return null;
   }
@@ -188,16 +239,7 @@ export function OperationTableOfContents({
                   tabIndex={expanded ? undefined : -1}
                   onClick={(event) => {
                     event.preventDefault();
-                    setActiveHeadingId(heading.id);
-                    setExpanded(false);
-
-                    window.history.pushState(null, '', `#${heading.id}`);
-                    document.getElementById(heading.id)?.scrollIntoView({
-                      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-                        ? 'auto'
-                        : 'smooth',
-                      block: 'start',
-                    });
+                    scrollToHeading(heading);
                   }}
                 >
                   <span className="material-interaction-label">{heading.text}</span>
@@ -241,5 +283,12 @@ export function OperationTableOfContents({
         </span>
       </button>
     </aside>
+  );
+}
+
+function isEditableKeyboardTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName))
   );
 }

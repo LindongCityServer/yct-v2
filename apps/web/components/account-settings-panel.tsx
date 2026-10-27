@@ -101,6 +101,8 @@ import {
 } from '../lib/client-locale-preference';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import {
+  mobileActionRailTopOffsetMax,
+  mobileActionRailTopOffsetMin,
   readMobileActionRailPreference,
   writeMobileActionRailPreference,
   type MobileActionRailPreference,
@@ -162,6 +164,8 @@ type NotificationTypePreferences = Record<NotificationTypeKey, boolean>;
 
 const notificationTypePreferenceKey = 'yct.notifications.types.v1';
 const pushSubscriptionEndpointKey = 'yct.pushSubscription.endpoint';
+/** 项目开源仓库；与 git remote 保持一致。 */
+const projectRepositoryUrl = 'https://github.com/LindongCityServer/yct-v2';
 const webPushPublicKey = process.env.NEXT_PUBLIC_YCT_WEB_PUSH_PUBLIC_KEY?.trim() ?? '';
 const notificationTypeOptions: Array<{
   key: NotificationTypeKey;
@@ -345,6 +349,7 @@ export function AccountSettingsPanel({
   const [mobileActionRail, setMobileActionRail] = useState<MobileActionRailPreference>({
     enabled: false,
     side: 'right',
+    topOffset: 0,
   });
   const [assistantPreference, setAssistantPreference] = useState(readAssistantEntryPreference);
   const [assistantConfig, setAssistantConfig] = useState<AssistantConfig | null>(null);
@@ -354,6 +359,7 @@ export function AccountSettingsPanel({
   const [assistantStorageResult, setAssistantStorageResult] = useState<
     AssistantConfigStorageResult | 'idle'
   >('idle');
+  const [assistantConfigOpen, setAssistantConfigOpen] = useState(false);
   const [localeMode, setLocaleMode] = useState<LocalePreference>('system');
   const [localeStatusState, setLocaleStatusState] = useState<ClientLocalePreferenceState | null>(
     null,
@@ -391,6 +397,8 @@ export function AccountSettingsPanel({
   const [offlinePackageState, setOfflinePackageState] = useState<OfflinePackageState | null>(null);
   const [offlinePackageDraft, setOfflinePackageDraft] = useState(emptyOfflinePackageDraft);
   const [offlinePackageFormOpen, setOfflinePackageFormOpen] = useState(false);
+  const [mcpEndpoint, setMcpEndpoint] = useState('');
+  const [mcpEndpointCopied, setMcpEndpointCopied] = useState(false);
   // 提交按钮位于 form 之外（弹窗直接子级操作栏，保证吸底几何正确），用 form 属性关联。
   const offlinePackageFormId = useId();
   const [offlinePackageError, setOfflinePackageError] = useState('');
@@ -489,6 +497,24 @@ export function AccountSettingsPanel({
     setLocaleMode(preference.locale);
     document.documentElement.lang = preference.resolvedLocale;
   };
+  const copyMcpEndpoint = async () => {
+    if (!mcpEndpoint) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(mcpEndpoint);
+      setMcpEndpointCopied(true);
+      window.setTimeout(() => setMcpEndpointCopied(false), 1600);
+    } catch {
+      setMcpEndpointCopied(false);
+    }
+  };
+
+  useEffect(() => {
+    // 只读 MCP 入口跟随当前站点域名与 basePath，部署到子路径时也能复制到正确地址。
+    setMcpEndpoint(new URL(appPath('/api/mcp'), window.location.origin).toString());
+  }, []);
 
   useEffect(() => {
     setThemeMode(readThemeMode());
@@ -672,6 +698,10 @@ export function AccountSettingsPanel({
 
   const updateMobileActionRailSide = (side: MobileActionRailSide) => {
     setMobileActionRail(writeMobileActionRailPreference({ side }));
+  };
+
+  const updateMobileActionRailTopOffset = (topOffset: number) => {
+    setMobileActionRail(writeMobileActionRailPreference({ topOffset }));
   };
 
   const updateAssistantPreference = (
@@ -1272,6 +1302,33 @@ export function AccountSettingsPanel({
             value={mobileActionRail.side}
             onChange={updateMobileActionRailSide}
           />
+          <label
+            className={
+              mobileActionRail.enabled
+                ? 'material-thickness-control'
+                : 'material-thickness-control is-disabled'
+            }
+          >
+            <span>
+              <span>{t('settings.mobileActionRail.topOffset')}</span>
+              <output htmlFor="mobile-action-rail-top-offset">
+                {t('settings.mobileActionRail.topOffsetValue', {
+                  value: mobileActionRail.topOffset,
+                })}
+              </output>
+            </span>
+            <RangeInput
+              id="mobile-action-rail-top-offset"
+              min={mobileActionRailTopOffsetMin}
+              max={mobileActionRailTopOffsetMax}
+              step="4"
+              value={mobileActionRail.topOffset}
+              disabled={!mobileActionRail.enabled}
+              onChange={(event) =>
+                updateMobileActionRailTopOffset(Number(event.currentTarget.value))
+              }
+            />
+          </label>
         </section>
 
         <section
@@ -1340,67 +1397,17 @@ export function AccountSettingsPanel({
               </label>
             </div>
           </div>
-          <div className="settings-control-grid">
-            <label className="material-field">
-              <span>{t('settings.assistant.provider')}</span>
-              <select
-                value={assistantProviderId}
-                onChange={(event) => updateAssistantProvider(event.currentTarget.value)}
-              >
-                {assistantProviders.map((provider) => (
-                  <option value={provider.id} key={provider.id}>
-                    {provider.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="material-field">
-              <span>{t('settings.assistant.model')}</span>
-              <input
-                value={assistantModel}
-                onChange={(event) => setAssistantModel(event.currentTarget.value)}
-                list="account-assistant-models"
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <datalist id="account-assistant-models">
-                {selectedAssistantProvider.models.map((model) => (
-                  <option value={model} key={model} />
-                ))}
-              </datalist>
-            </label>
-            <label className="material-field settings-assistant-key-field">
-              <span>{t('settings.assistant.key')}</span>
-              <input
-                type="password"
-                value={assistantKeyInput}
-                onChange={(event) => setAssistantKeyInput(event.currentTarget.value)}
-                placeholder={t('settings.assistant.keyPlaceholder')}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </label>
-          </div>
-          <p className="settings-row-note">{t('settings.assistant.encryptionNote')}</p>
-          <p className="settings-row-note">{t('settings.assistant.modelNote')}</p>
           <div className="settings-action-row">
             <button
               className="secondary-action-button"
               type="button"
-              onClick={() => void saveAssistantSettings()}
-              disabled={!assistantKeyInput.trim()}
+              onClick={() => setAssistantConfigOpen(true)}
             >
-              {t('settings.assistant.save')}
+              <span className="material-symbols-outlined" aria-hidden="true">
+                tune
+              </span>
+              <span>{t('settings.assistant.configure')}</span>
             </button>
-            {assistantConfig ? (
-              <button
-                className="secondary-action-button"
-                type="button"
-                onClick={() => void clearAssistantSettings()}
-              >
-                {t('settings.assistant.clear')}
-              </button>
-            ) : null}
           </div>
         </section>
 
@@ -1745,9 +1752,149 @@ export function AccountSettingsPanel({
               </span>
               <span>{t('account.about.viewChangelog')}</span>
             </a>
+            <a
+              className="secondary-action-button"
+              href={projectRepositoryUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                code
+              </span>
+              <span>{t('account.about.github')}</span>
+            </a>
           </div>
         </section>
       </div>
+
+      {assistantConfigOpen ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={() => setAssistantConfigOpen(false)}
+        >
+          <section
+            className="modal-panel settings-assistant-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="assistant-config-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="section-heading">
+              <div>
+                <h2 id="assistant-config-title">{t('settings.assistant.configTitle')}</h2>
+                <span className="muted">{t('settings.assistant.configDescription')}</span>
+              </div>
+              <button
+                className="icon-action-button"
+                type="button"
+                onClick={() => setAssistantConfigOpen(false)}
+                aria-label={t('account.offlinePackage.close')}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  close
+                </span>
+              </button>
+            </div>
+
+            <div className="settings-control-grid">
+              <label className="material-field">
+                <span>{t('settings.assistant.provider')}</span>
+                <select
+                  value={assistantProviderId}
+                  onChange={(event) => updateAssistantProvider(event.currentTarget.value)}
+                >
+                  {assistantProviders.map((provider) => (
+                    <option value={provider.id} key={provider.id}>
+                      {provider.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="material-field">
+                <span>{t('settings.assistant.model')}</span>
+                <input
+                  value={assistantModel}
+                  onChange={(event) => setAssistantModel(event.currentTarget.value)}
+                  list="account-assistant-models"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <datalist id="account-assistant-models">
+                  {selectedAssistantProvider.models.map((model) => (
+                    <option value={model} key={model} />
+                  ))}
+                </datalist>
+              </label>
+              <label className="material-field settings-assistant-key-field">
+                <span>{t('settings.assistant.key')}</span>
+                <input
+                  type="password"
+                  value={assistantKeyInput}
+                  onChange={(event) => setAssistantKeyInput(event.currentTarget.value)}
+                  placeholder={t('settings.assistant.keyPlaceholder')}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </label>
+            </div>
+            <p className="settings-row-note">{t('settings.assistant.encryptionNote')}</p>
+            <p className="settings-row-note">{t('settings.assistant.modelNote')}</p>
+            <div className="settings-action-row">
+              <button
+                className="secondary-action-button"
+                type="button"
+                onClick={() => void saveAssistantSettings()}
+                disabled={!assistantKeyInput.trim()}
+              >
+                {t('settings.assistant.save')}
+              </button>
+              {assistantConfig ? (
+                <button
+                  className="secondary-action-button"
+                  type="button"
+                  onClick={() => void clearAssistantSettings()}
+                >
+                  {t('settings.assistant.clear')}
+                </button>
+              ) : null}
+            </div>
+
+            <div className="settings-about-mcp">
+              <h3>{t('account.about.mcpTitle')}</h3>
+              <p className="settings-row-note">{t('account.about.mcpDescription')}</p>
+              <div className="settings-about-mcp-endpoint">
+                <code>{mcpEndpoint || '/api/mcp'}</code>
+                <button
+                  className="secondary-action-button"
+                  type="button"
+                  disabled={!mcpEndpoint}
+                  onClick={() => void copyMcpEndpoint()}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    {mcpEndpointCopied ? 'check' : 'content_copy'}
+                  </span>
+                  <span>
+                    {mcpEndpointCopied ? t('account.about.mcpCopied') : t('account.about.mcpCopy')}
+                  </span>
+                </button>
+              </div>
+              <pre className="settings-about-mcp-example">
+                {[
+                  '{',
+                  '  "mcpServers": {',
+                  '    "yuchengtong": {',
+                  '      "type": "http",',
+                  `      "url": "${mcpEndpoint || 'https://<站点>/api/mcp'}"`,
+                  '    }',
+                  '  }',
+                  '}',
+                ].join('\n')}
+              </pre>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {offlinePackageFormOpen ? (
         <div

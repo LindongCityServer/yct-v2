@@ -38,12 +38,12 @@ export interface LdpassClientApplicationConfig {
 - 允许携带 Cookie 调用会话校验接口的 Origin。
 - 应用名称：`Yuchengtong`。
 
-### 2.1.1 当前 YCT `/v2` 测试部署的推荐登记值
+### 2.1.1 当前 YCT 根路径部署的推荐登记值
 
 当前测试阶段，YCT 通过宝塔反向代理挂载在：
 
-- 站点入口：`https://yct.shangxiaoguan.top/v2`
-- 登录回调：`https://yct.shangxiaoguan.top/v2/auth/ldpass/callback`
+- 站点入口：`https://yct.shangxiaoguan.top`
+- 登录回调：`https://yct.shangxiaoguan.top/auth/ldpass/callback`
 
 结合目前已申请到的客户端信息，`ldpass` 后台建议至少登记：
 
@@ -51,22 +51,22 @@ export interface LdpassClientApplicationConfig {
 client_id: yuchengtong
 应用名称: Yuchengtong
 redirect_uri:
-  - https://yct.shangxiaoguan.top/v2/auth/ldpass/callback
+  - https://yct.shangxiaoguan.top/auth/ldpass/callback
 allowed_origin:
   - https://yct.shangxiaoguan.top
 ```
 
 注意：
 
-- `redirect_uri` 需要精确到完整路径，当前测试态必须带 `/v2/auth/ldpass/callback`。
-- `allowed_origin` 一般只填来源，不带路径；当前测试态通常应写 `https://yct.shangxiaoguan.top`，而不是 `https://yct.shangxiaoguan.top/v2`。
+- `redirect_uri` 需要精确到完整路径，当前测试态必须带 `/auth/ldpass/callback`。
+- `allowed_origin` 一般只填来源，不带路径；当前测试态通常应写 `https://yct.shangxiaoguan.top`，而不是 `https://yct.shangxiaoguan.top`。
 - 如果后续 YCT 从 `/v2` 切回站点根路径，需要在 `ldpass` 侧额外登记根路径回调，例如 `https://yct.shangxiaoguan.top/auth/ldpass/callback`，并同步重新构建不带 `/v2` BasePath 的部署包。
 - 如果本地开发需要直接调试轻量登录回跳，建议再单独登记开发环境回调与来源，例如：
   - 不带 BasePath 的本地模式：`http://127.0.0.1:3300/auth/ldpass/callback`
-  - 带 `/v2` BasePath 的本地模式：`http://127.0.0.1:3300/v2/auth/ldpass/callback`
+  - 带 `/v2` BasePath 的本地模式：`http://127.0.0.1:3300/auth/ldpass/callback`
   - 对应来源仍然只需要 `http://127.0.0.1:3300`
     不要把生产和本地调试混成同一条配置说明。
-- 当前 `/v2` 测试站依赖外层反代把浏览器访问的 `/v2/auth/ldpass/callback` 转发到应用内部的 `/auth/ldpass/callback`。如果反代只覆盖了首页、但没有覆盖认证回调路径，就会表现为 `ldpass` 登录后回跳 404。
+- 当前 `/v2` 测试站依赖外层反代把浏览器访问的 `/auth/ldpass/callback` 转发到应用内部的 `/auth/ldpass/callback`。如果反代只覆盖了首页、但没有覆盖认证回调路径，就会表现为 `ldpass` 登录后回跳 404。
 
 ### 2.1.2 YCT 运行时必须具备的环境变量
 
@@ -84,7 +84,7 @@ YCT_PUBLIC_SITE_URL
 
 - `LDPASS_BASE_URL` 应为 `ldpass` 站点根地址，例如 `https://ldpass.example.com`，而不是带 `/login?...` 的完整登录链接。
 - `LDPASS_CLIENT_ID` 应与 `ldpass` 后台登记值一致；当前测试态为 `yuchengtong`。
-- `YCT_PUBLIC_SITE_URL` 应指向 YCT 对外访问的站点根，例如当前测试态应为 `https://yct.shangxiaoguan.top`。YCT 的实际回调路径会再由当前 BasePath 组合出 `/v2/auth/ldpass/callback`。
+- `YCT_PUBLIC_SITE_URL` 应指向 YCT 对外访问的站点根，例如当前测试态应为 `https://yct.shangxiaoguan.top`。YCT 的实际回调路径会再由当前 BasePath 组合出 `/auth/ldpass/callback`。
 - 反向代理如果会把外网 `https://yct.../v2/...` 转发到内网 `http://127.0.0.1:3300/...`，应尽量保留 `Host`、`X-Forwarded-Host` 和 `X-Forwarded-Proto`。当前 YCT 会优先用这些头判断对外站点，再回退到 `YCT_PUBLIC_SITE_URL`；如果这些头都缺失，回跳地址可能退回内网主机名或本地地址。
 - 当前代码即使在反代只保留了 `Host`、没有传入 `X-Forwarded-*` 时，也会优先按外层 `Host` 推导 `redirect_uri`；但如果反代把 `Host` 一并改写成 `127.0.0.1:3300` 或 `localhost:3300`，登录地址仍然会退回本地地址，因此宝塔/Nginx/反代层最好仍显式透传公网 Host。
 - 如果反代额外传入 `X-Forwarded-Port: 3300`，公网 `redirect_uri` 可能会被错误拼成 `https://yct.shangxiaoguan.top:3300/...`。新版 YCT 会在 `X-Forwarded-Host` 已是公网域名时忽略这种内部端口；如果确实需要公网非默认端口，请直接把端口写进 `X-Forwarded-Host`。
@@ -158,7 +158,7 @@ GET /api/auth/logout
 
 1. 检查部署目录根下真实 `.env` 是否存在，且 `LDPASS_BASE_URL`、`LDPASS_CLIENT_ID`、`YCT_PUBLIC_SITE_URL` 都不是空值。
 2. 检查当前运行包是否按 `/v2` 构建并以 `/v2` 启动；如果线上页面仍引用根路径的 `/_next/static/...` 或 `/auth/ldpass/callback`，通常说明运行的不是 `/v2` 包。
-3. 检查 `ldpass` 后台登记的 `redirect_uri` 是否是 `https://yct.shangxiaoguan.top/v2/auth/ldpass/callback`。
+3. 检查 `ldpass` 后台登记的 `redirect_uri` 是否是 `https://yct.shangxiaoguan.top/auth/ldpass/callback`。
 4. 检查 `ldpass` 后台登记的 `allowed_origin` 是否包含 `https://yct.shangxiaoguan.top`。
 5. 如果点击登录后跳转地址仍是 `localhost:3300`、`127.0.0.1:3300` 或其他内网地址，先检查宝塔/Nginx/反代是否传入了 `X-Forwarded-Host`、`X-Forwarded-Proto`，以及部署根目录中的 `YCT_PUBLIC_SITE_URL` 是否仍指向线上域名而不是本地地址；如果回跳地址是公网域名但多了 `:3300`，检查反代是否把内部端口写进了 `X-Forwarded-Port`；如果你是用旧版部署包启动的，记得重新解压新版包，因为旧版 `start-yct-web.ps1` 不会覆盖残留的进程环境变量，也不会忽略公网域名上的内部端口。
 6. 登录后请求 `GET /api/account/status`，确认返回的不是 `ldpass_not_configured`。
@@ -174,20 +174,20 @@ GET /api/auth/logout
 
 补充一个很快的路由烟雾检查：
 
-- 直接访问 `https://yct.shangxiaoguan.top/v2/auth/ldpass/callback?state=test`。
+- 直接访问 `https://yct.shangxiaoguan.top/auth/ldpass/callback?state=test`。
 - 如果进入了 YCT 应用自己的回调逻辑，通常会被 302 回账号页并带上 `auth=state_invalid` 一类参数。
-- 如果这里直接是 404，就说明请求根本没有到达 YCT 的 Next 应用，优先检查 `/v2/auth/ldpass/callback` 是否和 `/v2/account`、`/v2/map` 一样被反代到了 3300。
+- 如果这里直接是 404，就说明请求根本没有到达 YCT 的 Next 应用，优先检查 `/auth/ldpass/callback` 是否和 `/v2/account`、`/map` 一样被反代到了 3300。
 
 部署目录中也可以先运行：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -BasePath v2
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1
 ```
 
 如果只是想验证本地某个访问入口会生成什么回跳地址，也可以传入当前访问的 Origin：
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -Origin http://localhost:3300 -BasePath v2
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -Origin http://localhost:3300
 ```
 
 它会只输出配置是否存在、来源文件、推导出的 `allowed_origin` / `redirect_uri` 和常见告警，不会打印敏感密钥。
@@ -195,9 +195,9 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\check-runtime-config.ps1 -Origin
 如果你需要在本机直接模拟 `/v2` 反代挂载模式，当前仓库也提供了固定脚本：
 
 ```powershell
-pnpm web:dev:restart:v2
+pnpm web:dev:restart
 pnpm web:dev:status
-pnpm runtime:check:v2
+pnpm runtime:check
 ```
 
 其中 `web:dev:status` 会显示当前开发进程记录下来的 `BasePath`，避免本地根路径模式和 `/v2` 模式混淆。
@@ -522,7 +522,7 @@ export interface YctContributorIdentity {
 client_id: yuchengtong
 应用名称: Yuchengtong
 redirect_uri:
-  - https://yct.shangxiaoguan.top/v2/auth/ldpass/callback
+  - https://yct.shangxiaoguan.top/auth/ldpass/callback
 allowed_origin:
   - https://yct.shangxiaoguan.top
 ```

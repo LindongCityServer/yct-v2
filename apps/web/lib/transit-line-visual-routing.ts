@@ -74,6 +74,13 @@ interface VisualRoadAccessCandidate {
 
 const allMapTravelModes: readonly MapTravelMode[] = ['walk', 'taxi', 'bus', 'coach'];
 
+/**
+ * 站点/途径点到路网的接入段是直线，距离越大越像“横穿街区”。
+ * 因此优先吸附最近的道路（吸附半径内），并给接入距离加权，避免为了缩短路网里程而绕到远处的道路上。
+ */
+const maxRoadAccessDistance = 60;
+const roadAccessDistanceWeight = 3;
+
 export function buildVisualRoadGraph(
   markers: MapMarkerSnapshot['markers'],
   junctionSnapTolerance = 30,
@@ -413,11 +420,11 @@ function resolveRoadSegment(
             continue;
           }
           const distance =
-            startAccess.distanceToPoint +
+            getRoadAccessCost(startAccess.distanceToPoint) +
             coordinateDistance(startAccess.coordinate, startNode.coordinate) +
             path.distance +
             coordinateDistance(endNode.coordinate, endAccess.coordinate) +
-            endAccess.distanceToPoint;
+            getRoadAccessCost(endAccess.distanceToPoint);
           if (distance >= bestDistance) {
             continue;
           }
@@ -465,10 +472,14 @@ function resolveSameRoadSegment(
   return {
     coordinates: dedupeConsecutive([start, startAccess.coordinate, endAccess.coordinate, end]),
     distance:
-      startAccess.distanceToPoint +
+      getRoadAccessCost(startAccess.distanceToPoint) +
       Math.abs(startAccess.startDistance - endAccess.startDistance) +
-      endAccess.distanceToPoint,
+      getRoadAccessCost(endAccess.distanceToPoint),
   };
+}
+
+function getRoadAccessCost(distanceToPoint: number): number {
+  return distanceToPoint * roadAccessDistanceWeight;
 }
 
 function findRoadAccessCandidates(
@@ -494,12 +505,16 @@ function findRoadAccessCandidates(
       return {
         ...projection,
         score:
-          projection.distanceToPoint +
+          projection.distanceToPoint * roadAccessDistanceWeight +
           getRoadAccessDirectionPenalty(point, target, projection.coordinate),
       };
     });
-  const byScore = [...candidates].sort((left, right) => left.score - right.score).slice(0, limit);
-  const byDistance = [...candidates]
+  const nearbyCandidates = candidates.filter(
+    (candidate) => candidate.distanceToPoint <= maxRoadAccessDistance,
+  );
+  const candidatePool = nearbyCandidates.length > 0 ? nearbyCandidates : candidates;
+  const byScore = [...candidatePool].sort((left, right) => left.score - right.score).slice(0, limit);
+  const byDistance = [...candidatePool]
     .sort((left, right) => left.distanceToPoint - right.distanceToPoint)
     .slice(0, limit);
   const deduped = new Map<string, VisualRoadAccessCandidate>();

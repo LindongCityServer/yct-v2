@@ -372,6 +372,8 @@ export interface TransitDataRevisionLineUpdatedPayload {
     | 'departureRules'
     | 'departureTimesByDirection'
     | 'departureRulesByDirection'
+    | 'tripLabelConfigByDirection'
+    | 'tripLabelsByDirection'
     | 'operatingDateRule'
     | 'bookingUrl'
   >;

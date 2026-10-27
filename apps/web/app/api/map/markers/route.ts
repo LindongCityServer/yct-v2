@@ -313,6 +313,9 @@ function resolveTransitLineMarkerCoordinates(
   }
 
   const lineById = new Map(overview.lines.map((line) => [line.id, line]));
+  const modeProfileByMode = new Map(
+    (overview.modeProfiles ?? []).map((profile) => [profile.mode, profile] as const),
+  );
   const stationCoordinateIndex = buildStationCoordinateIndex(markerSnapshot.markers);
   const markerById = new Map(markerSnapshot.markers.map((marker) => [marker.id, marker]));
   const roadGraph = buildVisualRoadGraph(
@@ -336,24 +339,41 @@ function resolveTransitLineMarkerCoordinates(
       return marker;
     }
 
-    const controlCoordinates = collectTransitLineControlCoordinates(
+    const collected = collectTransitLineControlCoordinates(
       line,
       'forward',
       stationCoordinateIndex,
       markerById,
     );
-    if (controlCoordinates.length < 2) {
+    if (collected.coordinates.length < 2) {
       return marker;
     }
     const routeMode =
       line.routeMode ?? (line.mode === 'bus' || line.mode === 'coach' ? 'road' : 'straight');
-    const resolution = resolveVisualRoute(
-      controlCoordinates,
+    const modeProfile = modeProfileByMode.get(line.mode);
+    const resolvedSegments = resolveTransitLineMarkerSegments(
+      collected,
+      line,
       routeMode,
       roadGraph,
       line.mode === 'coach' ? 'coach' : 'bus',
     );
-    const coordinates = resolution.coordinates;
+    const coordinates = dedupeConsecutiveCoordinates(
+      resolvedSegments.flatMap((segment) => segment.coordinates),
+    );
+    if (coordinates.length < 2) {
+      return marker;
+    }
+    // 分段几何需与整条线路一致地做道路投影，否则地图只画出站点间的原始直线。
+    const visibleSegments = resolvedSegments.filter(
+      (segment) =>
+        segment.operationStatus === 'operating' ||
+        (segment.operationStatus === 'planned' && modeProfile?.showPlannedSegments === true),
+    );
+    const unresolvedSegmentCount = resolvedSegments.reduce(
+      (total, segment) => total + segment.unresolvedSegmentCount,
+      0,
+    );
 
     return {
       ...marker,
@@ -361,14 +381,107 @@ function resolveTransitLineMarkerCoordinates(
         type: 'MultiPoint',
         coordinates,
       },
+      transitLineSegments: visibleSegments.map((segment) => ({
+        coordinates: segment.coordinates,
+        operationStatus: segment.operationStatus === 'planned' ? 'planned' : 'operating',
+      })),
       description: describeTransitLineCoordinates(
         marker.description,
         coordinates.length,
         routeMode,
-        resolution.unresolvedSegmentCount,
+        unresolvedSegmentCount,
       ),
     };
   });
+}
+
+interface TransitLineControlCollection {
+  coordinates: Array<[number, number]>;
+  /** 站点坐标在坐标序列中的下标；相邻两站之间即为一个可投影的道路区段。 */
+  stationPositions: Array<{ index: number; stop: TransitLineStopSummary }>;
+}
+
+interface ResolvedTransitLineSegment {
+  coordinates: Array<[number, number]>;
+  operationStatus: 'operating' | 'planned' | 'closed';
+  unresolvedSegmentCount: number;
+}
+
+function resolveTransitLineMarkerSegments(
+  collected: TransitLineControlCollection,
+  line: TransitLineSummary,
+  routeMode: 'road' | 'straight',
+  roadGraph: ReturnType<typeof buildVisualRoadGraph>,
+  travelMode: 'bus' | 'coach',
+): ResolvedTransitLineSegment[] {
+  const segments: ResolvedTransitLineSegment[] = [];
+  for (let index = 1; index < collected.stationPositions.length; index += 1) {
+    const from = collected.stationPositions[index - 1];
+    const to = collected.stationPositions[index];
+    if (!from || !to) {
+      continue;
+    }
+    const controlCoordinates = dedupeConsecutiveCoordinates(
+      collected.coordinates.slice(from.index, to.index + 1),
+    );
+    if (controlCoordinates.length < 2) {
+      continue;
+    }
+    const resolution = resolveVisualRoute(controlCoordinates, routeMode, roadGraph, travelMode);
+    if (resolution.coordinates.length < 2) {
+      continue;
+    }
+    segments.push({
+      coordinates: resolution.coordinates,
+      operationStatus: getTransitSegmentOperationStatus(line, from.stop, to.stop),
+      unresolvedSegmentCount: resolution.unresolvedSegmentCount,
+    });
+  }
+  if (segments.length > 0) {
+    return segments;
+  }
+
+  // 站点坐标缺失时退化为整条线路一次性投影，至少保证线路连续可见。
+  const resolution = resolveVisualRoute(
+    dedupeConsecutiveCoordinates(collected.coordinates),
+    routeMode,
+    roadGraph,
+    travelMode,
+  );
+  return resolution.coordinates.length < 2
+    ? []
+    : [
+        {
+          coordinates: resolution.coordinates,
+          operationStatus: getTransitSegmentOperationStatus(line),
+          unresolvedSegmentCount: resolution.unresolvedSegmentCount,
+        },
+      ];
+}
+
+function getTransitSegmentOperationStatus(
+  line: TransitLineSummary,
+  previous?: TransitLineStopSummary,
+  current?: TransitLineStopSummary,
+): 'operating' | 'planned' | 'closed' {
+  const fromStationSourceId = previous?.stationSourceId;
+  const toStationSourceId = current?.stationSourceId;
+  const path =
+    fromStationSourceId && toStationSourceId
+      ? (line.segmentPaths ?? []).find(
+          (candidate) =>
+            (candidate.fromStationSourceId === fromStationSourceId &&
+              candidate.toStationSourceId === toStationSourceId) ||
+            (candidate.fromStationSourceId === toStationSourceId &&
+              candidate.toStationSourceId === fromStationSourceId),
+        )
+      : undefined;
+  const statuses = [line.operationStatus ?? 'operating', path?.operationStatus ?? 'operating'];
+  return statuses.includes('closed')
+    ? 'closed'
+    : statuses.includes('planned')
+      ? 'planned'
+      : 'operating';
 }
 
 function collectTransitLineControlCoordinates(
@@ -376,22 +489,26 @@ function collectTransitLineControlCoordinates(
   direction: TransitLineTravelDirection,
   index: Map<string, Marker[]>,
   markerById: Map<string, Marker>,
-): Array<[number, number]> {
+): TransitLineControlCollection {
   const stopByStationId = new Map(
     line.stationStops.flatMap((stop) =>
       stop.stationSourceId ? [[stop.stationSourceId, stop] as const] : [],
     ),
   );
+  const stationPositions: TransitLineControlCollection['stationPositions'] = [];
   const appendStopCoordinate = (
     coordinates: Array<[number, number]>,
     stop: TransitLineStopSummary | undefined,
   ) => {
-    const coordinate = stop
-      ? findStationCoordinate(stop, line, direction, index, markerById)
-      : undefined;
-    if (coordinate) {
-      coordinates.push(coordinate);
+    if (!stop) {
+      return;
     }
+    const coordinate = findStationCoordinate(stop, line, direction, index, markerById);
+    if (!coordinate) {
+      return;
+    }
+    coordinates.push(coordinate);
+    stationPositions.push({ index: coordinates.length - 1, stop });
   };
 
   if (line.routeNodes?.length) {
@@ -419,8 +536,9 @@ function collectTransitLineControlCoordinates(
       }
     }
     if (coordinates.length >= 2) {
-      return dedupeConsecutiveCoordinates(coordinates);
+      return { coordinates, stationPositions };
     }
+    stationPositions.length = 0;
   }
 
   const pathBySegment = new Map<
@@ -463,7 +581,7 @@ function collectTransitLineControlCoordinates(
       coordinates.push([waypoint.x, waypoint.z]);
     }
   }
-  return dedupeConsecutiveCoordinates(coordinates);
+  return { coordinates, stationPositions };
 }
 
 function buildStationCoordinateIndex(markers: Marker[]): Map<string, Marker[]> {

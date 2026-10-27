@@ -29,7 +29,8 @@ export interface TransitRealtimeSnapshot {
   nextDepartureDayOffset?: number;
 }
 
-export type TransitStationBoardStatus = 'waiting' | 'arriving' | 'arriving_now' | 'leaving';
+export type TransitStationBoardStatus =
+  'waiting' | 'arriving' | 'arriving_now' | 'leaving' | 'passed';
 
 export interface TransitStationBoardEntry {
   id: string;
@@ -51,8 +52,9 @@ export function getBeijingClockMinutes(date: Date = new Date()): number {
 }
 
 /**
- * 生成选中站点的后续班次看板：仅保留尚未离开该站的班次，按到站时间排序。
- * 返回全部符合条件的班次，由界面截取前 3 班展示。
+ * 生成选中站点的班次看板，按到站时间排序。
+ * 默认仅保留尚未离开该站的班次；includePassed 为 true 时按服务日（03:00 为界）
+ * 保留全天所有班次，已驶离该站的班次以 passed 状态返回，供“全部班次”列表使用。
  */
 export function buildTransitStationBoard(input: {
   departureTimes: readonly string[];
@@ -61,6 +63,7 @@ export function buildTransitStationBoard(input: {
   stationIndex: number;
   nowMinutes: number;
   dwellMinutes?: number;
+  includePassed?: boolean;
 }): TransitStationBoardEntry[] {
   const stopNames = input.stopNames.filter(Boolean);
   const departureTimes = normalizeDepartureTimes(input.departureTimes);
@@ -76,6 +79,10 @@ export function buildTransitStationBoard(input: {
   const segmentMinutes = normalizeSegmentMinutes(input.segmentMinutes, stopNames.length - 1);
   const dwellMinutes = Math.max(0, input.dwellMinutes ?? defaultDwellMinutes);
   const isTerminal = input.stationIndex === stopNames.length - 1;
+  // “全部班次”按服务日时间轴展示，避免把清晨班次误判为次日班次。
+  const referenceMinutes = input.includePassed
+    ? normalizeServiceDayMinutes(input.nowMinutes)
+    : input.nowMinutes;
   const entries: TransitStationBoardEntry[] = [];
 
   for (const [index, departureTime] of departureTimes.entries()) {
@@ -84,7 +91,9 @@ export function buildTransitStationBoard(input: {
       continue;
     }
 
-    const adjustedDeparture = adjustDepartureMinutes(scheduledMinutes, input.nowMinutes);
+    const adjustedDeparture = input.includePassed
+      ? normalizeServiceDayMinutes(scheduledMinutes)
+      : adjustDepartureMinutes(scheduledMinutes, input.nowMinutes);
     const { arrivals, departures } = buildTripTimeline({
       adjustedDeparture,
       dwellMinutes,
@@ -93,25 +102,26 @@ export function buildTransitStationBoard(input: {
     });
     const stationArrival = arrivals[input.stationIndex]!;
     const stationDeparture = departures[input.stationIndex]!;
+    const hasLeftStation =
+      referenceMinutes >= stationDeparture || (isTerminal && referenceMinutes >= stationArrival);
 
-    if (input.nowMinutes >= stationDeparture) {
-      continue;
-    }
-    // 终点站没有后续发车，抵达即视为该班次结束。
-    if (isTerminal && input.nowMinutes >= stationArrival) {
+    if (hasLeftStation && !input.includePassed) {
       continue;
     }
 
     let status: TransitStationBoardStatus;
     let minutesToStation: number | undefined;
-    if (input.nowMinutes < adjustedDeparture) {
+    if (hasLeftStation) {
+      status = 'passed';
+      minutesToStation = 0;
+    } else if (referenceMinutes < adjustedDeparture) {
       // 首站没有停站时间，发车前 1 分钟内按“即将离开”处理。
       status =
-        input.stationIndex === 0 && adjustedDeparture - input.nowMinutes <= 1
+        input.stationIndex === 0 && adjustedDeparture - referenceMinutes <= 1
           ? 'leaving'
           : 'waiting';
-    } else if (input.nowMinutes < stationArrival) {
-      const minutes = Math.max(1, Math.ceil(stationArrival - input.nowMinutes));
+    } else if (referenceMinutes < stationArrival) {
+      const minutes = Math.max(1, Math.ceil(stationArrival - referenceMinutes));
       status = minutes <= 1 ? 'arriving_now' : 'arriving';
       minutesToStation = minutes;
     } else {
@@ -343,4 +353,9 @@ function adjustDepartureMinutes(scheduledMinutes: number, nowMinutes: number): n
     return scheduledMinutes + 24 * 60;
   }
   return scheduledMinutes;
+}
+
+/** 服务日以 03:00 为界，00:xx–02:59 归入前一日 24:xx 之后，保证全天班次时间轴连续。 */
+function normalizeServiceDayMinutes(minutes: number): number {
+  return minutes < 3 * 60 ? minutes + 24 * 60 : minutes;
 }

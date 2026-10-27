@@ -26,19 +26,17 @@ export function useWikiSearch(query: string): {
     setStatus('loading');
     const timer = window.setTimeout(async () => {
       try {
-        const params = new URLSearchParams({ q: trimmed });
-        const response = await fetch(appPath(`/api/search/wiki?${params.toString()}`), {
-          cache: 'no-store',
-          signal: controller.signal,
-        });
-        if (!response.ok) {
+        // Wiki 偶发超时，客户端再补一次重试，避免一次失败就显示 Wiki 0。
+        const payload = await loadWikiResults(trimmed, controller.signal);
+        if (controller.signal.aborted) {
+          return;
+        }
+        if (!payload) {
           setResults([]);
           setStatus('unavailable');
           return;
         }
-
-        const payload = (await response.json()) as { results?: WikiSearchResult[] };
-        setResults(Array.isArray(payload?.results) ? payload.results : []);
+        setResults(Array.isArray(payload.results) ? payload.results : []);
         setStatus('ready');
       } catch (error) {
         if (!(error instanceof DOMException && error.name === 'AbortError')) {
@@ -55,4 +53,27 @@ export function useWikiSearch(query: string): {
   }, [query]);
 
   return { results, status };
+}
+
+async function loadWikiResults(
+  query: string,
+  signal: AbortSignal,
+): Promise<{ results?: WikiSearchResult[] } | undefined> {
+  const params = new URLSearchParams({ q: query });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(appPath(`/api/search/wiki?${params.toString()}`), {
+        cache: 'no-store',
+        signal,
+      });
+      if (response.ok) {
+        return (await response.json()) as { results?: WikiSearchResult[] };
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw error;
+      }
+    }
+  }
+  return undefined;
 }

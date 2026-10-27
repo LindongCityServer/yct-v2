@@ -84,8 +84,8 @@ export function AdminMarkdownEditorPage({
     publishEditorDraftChanged({ dirty: true, editorKind: 'markdown', sessionId: editorSessionId });
   };
 
-  const save = async () => {
-    if (!record || isBusy) return;
+  const save = async (): Promise<boolean> => {
+    if (!record || isBusy) return false;
     setIsBusy(true);
     setStatus('正在保存 Markdown');
     try {
@@ -114,7 +114,7 @@ export function AdminMarkdownEditorPage({
       const data = (await response.json()) as AdminContentRecord & { message?: string };
       if (!response.ok || !data.contentId) {
         setStatus(data.message ?? 'Markdown 保存失败。');
-        return;
+        return false;
       }
       setRecord({ ...data, sourceKind: 'local_content_store' });
       setMarkdown(data.revision.markdown);
@@ -130,8 +130,10 @@ export function AdminMarkdownEditorPage({
         occurredAt: new Date().toISOString(),
       });
       setStatus('Markdown 已保存');
+      return true;
     } catch {
       setStatus('Markdown 保存失败。');
+      return false;
     } finally {
       setIsBusy(false);
     }
@@ -160,7 +162,7 @@ export function AdminMarkdownEditorPage({
       editorKind="markdown"
       isBusy={isBusy}
       isDirty={isDirty}
-      onSave={() => void save()}
+      onSave={() => save()}
       sessionId={editorSessionId}
       status={status}
       title={record ? `编写 ${record.revision.title}` : 'Markdown 编辑器'}

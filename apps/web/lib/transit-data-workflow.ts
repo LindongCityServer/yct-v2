@@ -69,6 +69,8 @@ export type TransitLineEditableField =
   | 'departureRules'
   | 'departureTimesByDirection'
   | 'departureRulesByDirection'
+  | 'tripLabelConfigByDirection'
+  | 'tripLabelsByDirection'
   | 'operatingDateRule'
   | 'bookingUrl';
 
@@ -851,6 +853,8 @@ export async function saveTransitLine(input: {
     departureRules?: TransitDataRevision['lines'][number]['departureRules'];
     departureTimesByDirection?: TransitDataRevision['lines'][number]['departureTimesByDirection'];
     departureRulesByDirection?: TransitDataRevision['lines'][number]['departureRulesByDirection'];
+    tripLabelConfigByDirection?: TransitDataRevision['lines'][number]['tripLabelConfigByDirection'];
+    tripLabelsByDirection?: TransitDataRevision['lines'][number]['tripLabelsByDirection'];
     operatingDateRule?: string;
     bookingUrl?: string;
     stationDrafts?: Array<{
@@ -1228,6 +1232,8 @@ export async function updateTransitLineStationOrder(input: {
       departureRules: line.departureRules,
       departureTimesByDirection: line.departureTimesByDirection,
       departureRulesByDirection: line.departureRulesByDirection,
+      tripLabelConfigByDirection: line.tripLabelConfigByDirection,
+      tripLabelsByDirection: line.tripLabelsByDirection,
       operatingDateRule: line.operatingDateRule,
       bookingUrl: line.bookingUrl,
     },
@@ -1267,6 +1273,8 @@ function buildTransitLineSnapshot(
     departureRules?: TransitDataRevision['lines'][number]['departureRules'];
     departureTimesByDirection?: TransitDataRevision['lines'][number]['departureTimesByDirection'];
     departureRulesByDirection?: TransitDataRevision['lines'][number]['departureRulesByDirection'];
+    tripLabelConfigByDirection?: TransitDataRevision['lines'][number]['tripLabelConfigByDirection'];
+    tripLabelsByDirection?: TransitDataRevision['lines'][number]['tripLabelsByDirection'];
     operatingDateRule?: string;
     bookingUrl?: string;
   },
@@ -1326,6 +1334,12 @@ function buildTransitLineSnapshot(
   const departureRulesByDirection = normalizeDepartureRulesByDirection(
     patch.departureRulesByDirection ?? previous?.departureRulesByDirection,
   );
+  const tripLabelConfigByDirection = normalizeTripLabelConfigByDirection(
+    patch.tripLabelConfigByDirection ?? previous?.tripLabelConfigByDirection,
+  );
+  const tripLabelsByDirection = normalizeTripLabelsByDirection(
+    patch.tripLabelsByDirection ?? previous?.tripLabelsByDirection,
+  );
 
   return {
     sourceId: previous?.sourceId ?? `manual_line_${randomUUID()}`,
@@ -1381,6 +1395,12 @@ function buildTransitLineSnapshot(
       departureRulesByDirection.down || departureRulesByDirection.up
         ? departureRulesByDirection
         : undefined,
+    tripLabelConfigByDirection:
+      tripLabelConfigByDirection.down || tripLabelConfigByDirection.up
+        ? tripLabelConfigByDirection
+        : undefined,
+    tripLabelsByDirection:
+      tripLabelsByDirection.down || tripLabelsByDirection.up ? tripLabelsByDirection : undefined,
     operatingDateRule: patch.operatingDateRule?.trim() || undefined,
     bookingUrl: patch.bookingUrl?.trim() || undefined,
     sourcePath: previous?.sourcePath,
@@ -1444,6 +1464,55 @@ function normalizeDepartureRulesByDirection(
   };
 }
 
+/**
+ * 班次标签配置：只有选中了标签池的方向才保留记录；池标识去重后按顺序保存。
+ */
+function normalizeTripLabelConfigByDirection(
+  value: TransitDataRevision['lines'][number]['tripLabelConfigByDirection'],
+): NonNullable<TransitDataRevision['lines'][number]['tripLabelConfigByDirection']> {
+  const normalize = (
+    selection: NonNullable<
+      TransitDataRevision['lines'][number]['tripLabelConfigByDirection']
+    >['down'],
+  ) => {
+    if (!selection) {
+      return undefined;
+    }
+    const poolIds = Array.from(
+      new Set((selection.poolIds ?? []).map((poolId) => poolId.trim()).filter(Boolean)),
+    ).slice(0, 16);
+    if (poolIds.length === 0) {
+      return undefined;
+    }
+    return {
+      poolIds,
+      mode: selection.mode === 'random' ? ('random' as const) : ('sequential' as const),
+    };
+  };
+
+  return { down: normalize(value?.down), up: normalize(value?.up) };
+}
+
+/**
+ * 手动班次标签：以 HH:mm 发车时刻为键，手动值优先且不参与自动抽取。
+ */
+function normalizeTripLabelsByDirection(
+  value: TransitDataRevision['lines'][number]['tripLabelsByDirection'],
+): NonNullable<TransitDataRevision['lines'][number]['tripLabelsByDirection']> {
+  const normalize = (labels: Record<string, string> | undefined) => {
+    if (!labels) {
+      return undefined;
+    }
+    const entries = Object.entries(labels)
+      .map(([time, label]) => [time.trim(), label.trim()] as const)
+      .filter(([time, label]) => /^\d{1,2}:\d{2}$/u.test(time) && Boolean(label))
+      .slice(0, 500);
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+  };
+
+  return { down: normalize(value?.down), up: normalize(value?.up) };
+}
+
 function getChangedTransitLineFields(
   previous: TransitDataRevision['lines'][number],
   next: TransitDataRevision['lines'][number],
@@ -1466,6 +1535,8 @@ function getChangedTransitLineFields(
     'departureRules',
     'departureTimesByDirection',
     'departureRulesByDirection',
+    'tripLabelConfigByDirection',
+    'tripLabelsByDirection',
     'operatingDateRule',
     'bookingUrl',
   ];

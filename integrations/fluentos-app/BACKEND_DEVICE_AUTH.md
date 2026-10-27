@@ -42,8 +42,8 @@ App 侧被两条硬约束夹住，两者都是 FluentOS 沙箱的既定行为，
 {
   "device_code": "d3f1a9c2e8b74f10a6c5e2d9b0f3a7c1",
   "user_code": "HX4K-9P2M",
-  "verification_uri": "https://yct.shangxiaoguan.top/v2/auth/device",
-  "verification_uri_complete": "https://yct.shangxiaoguan.top/v2/auth/device?user_code=HX4K-9P2M",
+  "verification_uri": "https://yct.shangxiaoguan.top/auth/device",
+  "verification_uri_complete": "https://yct.shangxiaoguan.top/auth/device?user_code=HX4K-9P2M",
   "expires_in": 600,
   "interval": 5
 }
@@ -88,13 +88,13 @@ App 在用户点击「我已授权」时调用一次（**App 不做自动轮询*
 - `device_code` 不存在 → `404`（App 会据此判定「接口尚未开放」并给出对应提示）。
 - `readonly: true` 用于非 Active 用户的只读账户（对应 `LDPASS_INTEGRATION.md` §2.2.1 的只读账户诉求）。
 
-### 2.3 `GET /v2/auth/device?user_code=<可选>`
+### 2.3 `GET /auth/device?user_code=<可选>`
 
 给人看的页面，由 `FluentOS.openExternal` 在**真实浏览器标签**中打开（这一步 Cookie 一切正常，可直接复用现有 ldpass 登录）。
 
 要求：
 
-1. 若未登录 ldpass，先走现有 `/v2/auth/ldpass/start` 流程。
+1. 若未登录 ldpass，先走现有 `/auth/ldpass/start` 流程。
 2. 登录后提供输入框填写 `user_code`（若 URL 带 `user_code` 则预填）。
 3. 用户确认后把该 `device_code` 标记为 `approved`，并绑定当前 ldpass 用户。
 4. 显示明确的成功/失败结果与「可以回到 FluentOS 应用」的提示。
@@ -119,7 +119,7 @@ Access-Control-Allow-Headers: Accept, Content-Type
 3. **若将来有接口读取 `Authorization` 头**：必须把 `Authorization` **显式**写进 `Access-Control-Allow-Headers`。按 Fetch 规范，`Access-Control-Allow-Headers: *` **不覆盖** `Authorization`。
 4. **禁止 3xx**。桥接层是 `redirect:'error'`，任何 301/302/307/308 都会让 App 直接失败。因此：
    - 新接口必须能在 `/api/auth/device/...` 精确路径直接返回 200，不能被 nginx 或 Next 重写到别处。
-   - 注意线上现状：`GET /v2/api/v1/public/openapi` 会 **307** 到 `/api/v1/public/openapi`。App 里所有请求因此一律使用**不带 `/v2` 的规范路径**（已在 `app.js` 的 `API_BASE` 固化）。新接口请沿用 `/api/...` 形态。
+   - 注意线上现状：`GET /api/v1/public/openapi` 会 **307** 到 `/api/v1/public/openapi`。App 里所有请求因此一律使用**不带 `/v2` 的规范路径**（已在 `app.js` 的 `API_BASE` 固化）。新接口请沿用 `/api/...` 形态。
    - 若开启 `trailingSlash` 相关重定向，请确保这些路径不会被 308。
 
 ## 4. 令牌存储与校验

@@ -60,6 +60,13 @@ import {
 } from '../lib/client-map-settings';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { formatFareTextWithoutCurrencyUnit } from '../lib/fare-display';
+import {
+  findCoordinateChainProjection,
+  getCoordinateChainDistance,
+  getCoordinateDistance,
+  squaredDistance,
+  type CoordinateChainProjection,
+} from '../lib/map-spatial';
 import type { MetroFacilityIconAssetName } from '../lib/metro-wayfinding';
 import {
   collectMapRoadConnectionProjections,
@@ -398,6 +405,11 @@ interface TransitOverviewLine {
   departureTimesByDirection?: {
     down?: string[];
     up?: string[];
+  };
+  /** 当日已解析的班次标签，键为首站发车时刻（HH:mm）。 */
+  tripLabelsByDirection?: {
+    down?: Record<string, string>;
+    up?: Record<string, string>;
   };
   routeMode?: TransitLineRouteMode;
   routeNodes?: TransitLineRouteNodeSnapshot[];
@@ -2516,6 +2528,7 @@ export function MapStage() {
             pointMarkers,
             roadRoutingGraph,
             mapSpatialProfile?.roadTiming,
+            markerRoadAccessIndex,
           )
         : undefined,
     [
@@ -2523,6 +2536,7 @@ export function MapStage() {
       focusedTransitLineDirection,
       focusedTransitLineMarker,
       mapSpatialProfile?.roadTiming,
+      markerRoadAccessIndex,
       pointMarkers,
       roadRoutingGraph,
     ],
@@ -3057,17 +3071,100 @@ export function MapStage() {
     mobileActionRail.registerItems('map-stage', mobileActionRailItems);
   }, [mobileActionRail, mobileActionRailItems]);
 
+  // 快捷键处理函数随渲染更新，订阅只建立一次，避免弹层状态变化时反复解绑/重绑。
+  const shortcutCommandRef = useRef<
+    (
+      command:
+        | 'focus_search'
+        | 'reset_view'
+        | 'toggle_layers'
+        | 'toggle_favorite'
+        | 'search_nearby'
+        | 'dismiss',
+    ) => void
+  >(() => undefined);
+  shortcutCommandRef.current = (command) => {
+    if (command === 'focus_search') {
+      setMarkerListExpanded(true);
+      searchInputRef.current?.focus();
+      return;
+    }
+
+    if (command === 'reset_view') {
+      resetView();
+      return;
+    }
+
+    if (command === 'toggle_layers') {
+      setLayerPanelOpen((current) => !current);
+      return;
+    }
+
+    if (command === 'toggle_favorite') {
+      if (
+        !shareTarget &&
+        !poiSubmitDialogOpen &&
+        !layerPanelOpen &&
+        focusedMarker &&
+        isCenterableMarker(focusedMarker)
+      ) {
+        toggleFavoriteMarker(focusedMarker);
+      }
+      return;
+    }
+
+    if (command === 'search_nearby') {
+      if (
+        !shareTarget &&
+        !poiSubmitDialogOpen &&
+        !layerPanelOpen &&
+        focusedMarker &&
+        isCenterableMarker(focusedMarker)
+      ) {
+        startNearbySearch(focusedMarker);
+      }
+      return;
+    }
+
+    // 按视觉层级从高到低逐层关闭，保证一次 Esc 只收起最上面的一层。
+    if (shareTarget) {
+      setShareTarget(null);
+      return;
+    }
+    if (poiCoordinatePickMode) {
+      setPoiCoordinatePickMode(false);
+      return;
+    }
+    if (poiSubmitDialogOpen) {
+      setPoiSubmitDialogOpen(false);
+      return;
+    }
+    if (layerPanelOpen) {
+      setLayerPanelOpen(false);
+      return;
+    }
+    if (routePlanDraft) {
+      setRoutePlanDraft(null);
+      setEditingRouteEndpoint(null);
+      setRouteEndpointQuery('');
+      return;
+    }
+    if (focusedMarkerId) {
+      setFocusedMarkerId(null);
+      return;
+    }
+    if (selectedAdministrativeAreaId) {
+      setSelectedAdministrativeAreaId(null);
+      return;
+    }
+    if (nearbySearchCenter) {
+      setNearbySearchCenter(null);
+    }
+  };
+
   useEffect(
-    () =>
-      subscribeMapViewShortcutRequested(({ command }) => {
-        if (command === 'focus_search') {
-          setMarkerListExpanded(true);
-          searchInputRef.current?.focus();
-          return;
-        }
-        resetView();
-      }),
-    [resetView],
+    () => subscribeMapViewShortcutRequested(({ command }) => shortcutCommandRef.current(command)),
+    [],
   );
 
   const focusMapMarker = useCallback(
@@ -4505,6 +4602,7 @@ export function MapStage() {
                       direction={focusedTransitLineDirection}
                       line={focusedTransitLine}
                       lineColor={focusedMarker.accentColor}
+                      modeProfiles={transitOverview?.modeProfiles ?? []}
                       referenceCoordinate={preferredCurrentLocation}
                       segmentMinutes={focusedDirectionalTransitLineRoute?.segmentMinutes}
                       stops={focusedDirectionalTransitLineRoute?.stops}
@@ -6417,6 +6515,7 @@ function TransitLineMapDetail({
   direction,
   line,
   lineColor,
+  modeProfiles,
   onDirectionChange,
   onFocusStation,
   onSelectStation,
@@ -6428,6 +6527,7 @@ function TransitLineMapDetail({
   direction: TransitLineTravelDirection;
   line: TransitOverviewLine;
   lineColor?: string;
+  modeProfiles: TransitModeProfileForMap[];
   onDirectionChange: (direction: TransitLineTravelDirection) => void;
   onFocusStation: (stationName: string) => void;
   onSelectStation: (stationName: string) => void;
@@ -6444,6 +6544,7 @@ function TransitLineMapDetail({
     return () => window.clearInterval(timer);
   }, []);
   const realtimeDepartureTimes = getDirectionalDepartureTimes(line, direction);
+  const tripLabels = getDirectionalTripLabels(line, direction);
   const realtimeStops = stops ?? [];
   const realtimeStopNames = useMemo(
     () => realtimeStops.map((stop) => stop.stop.displayStationName ?? stop.stop.stationName),
@@ -6537,6 +6638,22 @@ function TransitLineMapDetail({
           }),
     [nowMinutes, realtimeDepartureTimes, realtimeStopNames, segmentMinutes, selectedStationIndex],
   );
+  const stationDayBoard = useMemo(
+    () =>
+      selectedStationIndex === undefined
+        ? []
+        : buildTransitStationBoard({
+            departureTimes: realtimeDepartureTimes,
+            stopNames: realtimeStopNames,
+            segmentMinutes: segmentMinutes ?? [],
+            stationIndex: selectedStationIndex,
+            nowMinutes,
+            includePassed: true,
+          }),
+    [nowMinutes, realtimeDepartureTimes, realtimeStopNames, segmentMinutes, selectedStationIndex],
+  );
+  const vehicleIcon = getTransitLineModeIcon(line, modeProfiles);
+  const detailColor = lineColor ?? line.color ?? 'var(--yct-color-primary)';
   const forwardDirectionName =
     line.displayLastStationName ??
     line.lastStationName ??
@@ -6555,7 +6672,7 @@ function TransitLineMapDetail({
       className="map-linear-detail"
       style={
         {
-          '--map-line-detail-color': lineColor ?? line.color ?? 'var(--yct-color-primary)',
+          '--map-line-detail-color': detailColor,
         } as CSSProperties
       }
     >
@@ -6581,6 +6698,8 @@ function TransitLineMapDetail({
           }))}
         />
         <TransitLineRealtimeSection
+          accentColor={detailColor}
+          dayBoard={stationDayBoard}
           departureTimes={realtimeDepartureTimes}
           now={now}
           selectedStationIndex={selectedStationIndex}
@@ -6588,6 +6707,9 @@ function TransitLineMapDetail({
           snapshot={realtimeSnapshot}
           stationBoard={stationBoard}
           t={t}
+          tripCount={realtimeDepartureTimes.length}
+          tripLabels={tripLabels}
+          vehicleIcon={vehicleIcon}
         />
       </div>
       {stationStops.length > 0 ? (
@@ -6612,13 +6734,18 @@ function TransitLineMapDetail({
               >
                 <span className="map-line-station-node" aria-hidden="true" />
                 {atStationVehicles?.length ? (
-                  <TransitLineVehicleBadge t={t} vehicles={atStationVehicles} />
+                  <TransitLineVehicleBadge
+                    t={t}
+                    vehicles={atStationVehicles}
+                    vehicleIcon={vehicleIcon}
+                  />
                 ) : null}
                 {segmentVehicles?.length && segmentProgress !== undefined ? (
                   <TransitLineVehicleBadge
                     segmentProgress={segmentProgress}
                     t={t}
                     vehicles={segmentVehicles}
+                    vehicleIcon={vehicleIcon}
                   />
                 ) : null}
                 <span className="map-line-station-copy">
@@ -6667,10 +6794,12 @@ function TransitLineVehicleBadge({
   segmentProgress,
   t,
   vehicles,
+  vehicleIcon,
 }: Readonly<{
   segmentProgress?: number;
   t: Translate;
   vehicles: TransitRealtimeVehicle[];
+  vehicleIcon: string;
 }>) {
   const label = vehicles
     .map((vehicle) =>
@@ -6700,14 +6829,19 @@ function TransitLineVehicleBadge({
       }
     >
       <span className="material-symbols-outlined" aria-hidden="true">
-        directions_bus
+        {vehicleIcon}
       </span>
       {vehicles.length > 1 ? <small>{vehicles.length}</small> : null}
     </span>
   );
 }
 
+/** 末班驶离后，下一班仍需等待超过该分钟数时隐藏班次列表并提示末班车已过。 */
+const lastTripNoticeWaitMinutes = 60;
+
 function TransitLineRealtimeSection({
+  accentColor,
+  dayBoard,
   departureTimes,
   now,
   selectedStationIndex,
@@ -6715,7 +6849,12 @@ function TransitLineRealtimeSection({
   snapshot,
   stationBoard,
   t,
+  tripCount,
+  tripLabels,
+  vehicleIcon,
 }: Readonly<{
+  accentColor: string;
+  dayBoard: TransitStationBoardEntry[];
   departureTimes: string[];
   now: Date;
   selectedStationIndex?: number;
@@ -6723,12 +6862,33 @@ function TransitLineRealtimeSection({
   snapshot: TransitRealtimeSnapshot;
   stationBoard: TransitStationBoardEntry[];
   t: Translate;
+  tripCount: number;
+  tripLabels: Record<string, string>;
+  vehicleIcon: string;
 }>) {
   const [detailEntry, setDetailEntry] = useState<TransitStationBoardEntry | null>(null);
+  const [allTripsOpen, setAllTripsOpen] = useState(false);
   const vehicles = snapshot.vehicles;
   const nowMinutes = getBeijingClockMinutes(now);
+  const serviceDayNowMinutes = nowMinutes < 3 * 60 ? nowMinutes + 24 * 60 : nowMinutes;
   const clock = formatTransitClockMinutes(nowMinutes);
   const visibleBoard = stationBoard.slice(0, 3);
+  const dayBoardByOrdinal = useMemo(
+    () => [...dayBoard].sort((left, right) => left.ordinal - right.ordinal),
+    [dayBoard],
+  );
+  const lastTripEntry = dayBoard.reduce<TransitStationBoardEntry | undefined>(
+    (latest, entry) => (latest === undefined || entry.ordinal > latest.ordinal ? entry : latest),
+    undefined,
+  );
+  const lastTripPassed =
+    lastTripEntry !== undefined && serviceDayNowMinutes >= lastTripEntry.departureMinutes;
+  const nextArrival = stationBoard[0];
+  // 末班已驶离后，若下一班（通常是次日首班）还需等待 1 小时以上，列表参考价值有限。
+  const shouldShowLastTripNotice =
+    lastTripPassed &&
+    nextArrival !== undefined &&
+    nextArrival.arrivalMinutes - nowMinutes > lastTripNoticeWaitMinutes;
   const activeAtSelectedStationCount =
     selectedStationIndex === undefined
       ? vehicles.length
@@ -6749,7 +6909,7 @@ function TransitLineRealtimeSection({
       <div className="map-line-realtime-head">
         <h3 id="map-line-realtime-title">
           <span className="material-symbols-outlined" aria-hidden="true">
-            directions_bus
+            {vehicleIcon}
           </span>
           {t('map.lineRealtime.title')}
           {selectedStationIndex !== undefined ? (
@@ -6777,26 +6937,113 @@ function TransitLineRealtimeSection({
         <p className="map-line-realtime-empty">{t('map.lineRealtime.selectStationHint')}</p>
       ) : selectedStationIndex === undefined ? (
         <p className="map-line-realtime-empty">{t('map.lineRealtime.stationNoData')}</p>
+      ) : shouldShowLastTripNotice && nextArrival !== undefined ? (
+        <p className="map-line-realtime-empty">
+          {t(
+            nextArrival.arrivalMinutes >= 24 * 60
+              ? 'map.lineRealtime.lastTripPassedNextDay'
+              : 'map.lineRealtime.lastTripPassed',
+            { time: formatTransitClockMinutes(nextArrival.arrivalMinutes) },
+          )}
+        </p>
       ) : visibleBoard.length === 0 ? (
         <p className="map-line-realtime-empty">{t('map.lineRealtime.noMoreTrips')}</p>
       ) : (
-        <ol className="map-line-realtime-list is-board">
-          {visibleBoard.map((entry) => (
-            <li key={entry.id}>
-              <button
-                className="map-line-realtime-board-item"
-                type="button"
-                onClick={() => setDetailEntry(entry)}
-              >
-                <strong className={`is-${entry.status}`}>
-                  {getStationBoardStatusText(entry, t)}
-                </strong>
-                <small>{getStationBoardTimeText(entry, t)}</small>
-              </button>
-            </li>
-          ))}
-        </ol>
+        <>
+          <ol className="map-line-realtime-list is-board">
+            {visibleBoard.map((entry) => (
+              <li key={entry.id}>
+                <button
+                  className="map-line-realtime-board-item"
+                  type="button"
+                  onClick={() => setDetailEntry(entry)}
+                >
+                  <strong className={`is-${entry.status}`}>
+                    {getStationBoardStatusText(entry, t)}
+                  </strong>
+                  <small>{getStationBoardTimeText(entry, t)}</small>
+                </button>
+              </li>
+            ))}
+          </ol>
+          <div className="map-line-realtime-actions">
+            <button
+              className="map-line-realtime-all-trips"
+              type="button"
+              onClick={() => setAllTripsOpen(true)}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                list
+              </span>
+              {t('map.lineRealtime.allTrips')}
+            </button>
+          </div>
+        </>
       )}
+      {allTripsOpen && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="modal-backdrop"
+              role="presentation"
+              onMouseDown={() => setAllTripsOpen(false)}
+            >
+              <section
+                className="modal-panel map-line-day-board-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="map-line-day-board-title"
+                style={{ '--map-line-detail-color': accentColor } as CSSProperties}
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <div className="section-heading">
+                  <h2 id="map-line-day-board-title">{t('map.lineRealtime.allTrips')}</h2>
+                  <button
+                    className="icon-action-button"
+                    type="button"
+                    aria-label={t('map.poi.close')}
+                    onClick={() => setAllTripsOpen(false)}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      close
+                    </span>
+                  </button>
+                </div>
+                <p className="map-line-realtime-summary">{selectedStationLabel}</p>
+                <ol className="map-line-realtime-list map-line-day-board-list">
+                  {dayBoardByOrdinal.map((entry) => (
+                    <li key={entry.id}>
+                      <button
+                        className="map-line-day-board-item"
+                        type="button"
+                        onClick={() => {
+                          setAllTripsOpen(false);
+                          setDetailEntry(entry);
+                        }}
+                      >
+                        <span className="map-line-day-board-trip">
+                          {[
+                            tripLabels[entry.departureTime],
+                            t('map.lineRealtime.tripTitlePosition', {
+                              current: entry.ordinal,
+                              total: tripCount,
+                            }),
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
+                        <strong className={`is-${entry.status}`}>
+                          {getStationBoardStatusText(entry, t)}
+                        </strong>
+                        <small>{getStationBoardTimeText(entry, t)}</small>
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            </div>,
+            document.body,
+          )
+        : null}
       {detailEntry && typeof document !== 'undefined'
         ? createPortal(
             <div
@@ -6813,7 +7060,17 @@ function TransitLineRealtimeSection({
               >
                 <div className="section-heading">
                   <h2 id="map-line-trip-title">
-                    {t('map.lineRealtime.tripTitle', { count: detailEntry.ordinal })}
+                    {detailEntry
+                      ? [
+                          tripLabels[detailEntry.departureTime],
+                          t('map.lineRealtime.tripTitlePosition', {
+                            current: detailEntry.ordinal,
+                            total: tripCount,
+                          }),
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')
+                      : null}
                   </h2>
                   <button
                     className="icon-action-button"
@@ -6843,7 +7100,9 @@ function TransitLineRealtimeSection({
                               from: activeVehicle.fromStationName ?? '',
                               to: activeVehicle.toStationName ?? '',
                             })
-                        : t('map.lineRealtime.detailWaiting')}
+                        : detailEntry.status === 'passed'
+                          ? t('map.lineRealtime.stationPassed')
+                          : t('map.lineRealtime.detailWaiting')}
                     </dd>
                   </div>
                   <div>
@@ -6882,6 +7141,8 @@ function getStationBoardStatusText(entry: TransitStationBoardEntry, t: Translate
       return t('map.lineRealtime.boardArriving');
     case 'leaving':
       return t('map.lineRealtime.boardLeaving');
+    case 'passed':
+      return t('map.lineRealtime.stationPassed');
     default:
       return t('map.lineRealtime.boardWaiting');
   }
@@ -6904,6 +7165,30 @@ function getDirectionalDepartureTimes(
   const down = line.departureTimesByDirection?.down ?? line.departureTimes;
   const up = line.departureTimesByDirection?.up;
   return direction === 'forward' ? (down ?? []) : (up ?? []);
+}
+
+/** 实时公交模块与车辆位置图标沿用线路交通方式图标。 */
+function getTransitLineModeIcon(
+  line: TransitOverviewLine,
+  modeProfiles: readonly TransitModeProfileForMap[],
+): string {
+  const profileIcon = modeProfiles.find((profile) => profile.mode === line.mode)?.icon;
+  if (profileIcon) {
+    return profileIcon;
+  }
+  return (
+    routeTransportModeOptions.find((option) => option.mode === line.mode)?.icon ?? 'directions_bus'
+  );
+}
+
+/** 服务端已按当天抽取好的班次标签，键为首站发车时刻。 */
+function getDirectionalTripLabels(
+  line: TransitOverviewLine,
+  direction: TransitLineTravelDirection,
+): Record<string, string> {
+  return direction === 'forward'
+    ? (line.tripLabelsByDirection?.down ?? {})
+    : (line.tripLabelsByDirection?.up ?? {});
 }
 
 function RoadMapDetail({ marker, t }: Readonly<{ marker: EndpointGroupMarker; t: Translate }>) {
@@ -8832,7 +9117,7 @@ function buildRoadRouteGraph(
     }
 
     const roadLabel = formatMarkerDisplayName(marker.label);
-    const coordinates = orderRoadTracePoints(marker.geometry.coordinates);
+    const coordinates = getRoadTraceCoordinates(marker);
     const coordinateYs = resolveRoadCoordinateYs(marker, coordinates, mapDefaultY);
     coordinates.forEach((coordinate, index) => {
       const node: RoadRouteNode = {
@@ -10367,13 +10652,6 @@ function formatTransitAlightStepLabel(
   return t('map.route.alight', { name });
 }
 
-function getCoordinateChainDistance(coordinates: Array<[number, number]>): number {
-  return coordinates.slice(1).reduce((total, coordinate, index) => {
-    const previous = coordinates[index];
-    return previous ? total + getCoordinateDistance(previous, coordinate) : total;
-  }, 0);
-}
-
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -11445,12 +11723,15 @@ function findTransferStopPair(input: {
     )[0];
 }
 
+/** 途经站图标；字体子集扫描按变量名识别图标常量，名称需保留 icon 字样。 */
+const transitStopStepIcon = 'radio_button_checked';
+
 function buildTransitStopStepDetails(stops: TransitRouteStop[]): RoutePlanStepDetail[] {
   return stops
     .slice(1, -1)
     .map((stop) =>
       createRouteStepDetail(
-        'radio_button_checked',
+        transitStopStepIcon,
         formatMarkerDisplayName(stop.marker.label),
         undefined,
         'place_pass',
@@ -11466,6 +11747,10 @@ function buildTransitSegmentRoute(
   roadGraph?: RoadRouteGraph,
   markerRoadAccessIndex?: ReadonlyMap<string, RoadAccessCandidate[]>,
   routeCache?: RoutePlanningCache,
+  options?: {
+    /** 线路详情展示用：个别区间无法沿路解析时只退回该区间直线，不放弃整条线路的沿路走向。 */
+    fallbackUnresolvedSegments?: boolean;
+  },
 ): TransitSegmentRouteResolution {
   if (stops.length < 2) {
     return {
@@ -11527,14 +11812,26 @@ function buildTransitSegmentRoute(
         })
       : undefined;
     if (shouldFollowRoad && !roadResolution?.resolved) {
-      resolved = false;
-      return {
-        coordinates: [],
-        distance: 0,
-        measurements,
-        resolved: false,
-        usesRoadGraph,
-      };
+      if (!options?.fallbackUnresolvedSegments) {
+        resolved = false;
+        return {
+          coordinates: [],
+          distance: 0,
+          measurements,
+          resolved: false,
+          usesRoadGraph,
+        };
+      }
+      // 该区间无法沿路解析：只让这一段回落为站间直线，其余区间继续沿路。
+      appendRouteSegmentCoordinates(coordinates, controlCoordinates);
+      const straightDistance = getCoordinateChainDistance(controlCoordinates);
+      distance += straightDistance;
+      measurements.push({
+        distance: straightDistance,
+        junctionCount: 0,
+        travelMinutes: configuredSegment?.travelMinutes,
+      });
+      continue;
     }
     const segmentCoordinates = roadResolution?.coordinates ?? controlCoordinates;
     appendRouteSegmentCoordinates(coordinates, segmentCoordinates);
@@ -12567,12 +12864,6 @@ function findNearestRouteStation<T extends { center: [number, number] }>(
   )[0];
 }
 
-function getCoordinateDistance(left: [number, number], right: [number, number]): number {
-  const deltaX = left[0] - right[0];
-  const deltaZ = left[1] - right[1];
-  return Math.hypot(deltaX, deltaZ);
-}
-
 function estimateRouteMinutes(distance: number, blocksPerMinute: number): number {
   return Math.max(1, Math.round(distance / blocksPerMinute));
 }
@@ -13435,6 +13726,7 @@ function buildDirectionalTransitLineRoute(
   pointMarkers: PointMarker[],
   roadGraph?: RoadRouteGraph,
   roadTiming?: MapSpatialProfile['roadTiming'],
+  markerRoadAccessIndex?: ReadonlyMap<string, RoadAccessCandidate[]>,
 ): DirectionalTransitLineRoute | undefined {
   const mode = isRouteTransportMode(line.mode) ? line.mode : undefined;
   const fallbackMarkerById = new Map(
@@ -13458,7 +13750,16 @@ function buildDirectionalTransitLineRoute(
     return undefined;
   }
 
-  const route = buildTransitSegmentRoute(stops, mode ?? 'walk', line, direction, roadGraph);
+  const route = buildTransitSegmentRoute(
+    stops,
+    mode ?? 'walk',
+    line,
+    direction,
+    roadGraph,
+    markerRoadAccessIndex,
+    undefined,
+    { fallbackUnresolvedSegments: true },
+  );
   const hasResolvedRoute = route.resolved && route.coordinates.length >= 2;
   const realtimeRoute = hasResolvedRoute
     ? route
@@ -15493,7 +15794,7 @@ function projectRoadTraceMarkers(
       continue;
     }
 
-    const orderedCoordinates = orderRoadTracePoints(marker.geometry.coordinates);
+    const orderedCoordinates = getRoadTraceCoordinates(marker);
     const orderedPoints = orderedCoordinates.map(([x, z]) => ({
       left: size.width / 2 + (x - view.centerX) * scale,
       top: size.height / 2 + (z - view.centerZ) * scale,
@@ -16032,10 +16333,6 @@ function traceBoundsIntersectsViewport(bounds: TraceBounds, size: ViewportSize):
     bounds.maxTop < -padding ||
     bounds.minTop > size.height + padding
   );
-}
-
-function squaredDistance(a: [number, number], b: [number, number]): number {
-  return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
 }
 
 function roundSvg(value: number): number {
@@ -17330,10 +17627,22 @@ function getMarkerCenter(marker: CenterableMarker): [number, number] | undefined
   return [(bounds.minX + bounds.maxX) / 2, (bounds.minZ + bounds.maxZ) / 2];
 }
 
-interface CoordinateChainProjection {
-  coordinate: [number, number];
-  distance: number;
-  mileage: number;
+/**
+ * 道路走向：只有真正乱序的坐标才需要按最近邻重排。
+ * 新建的线性道路（LineString）按录入顺序保存；旧道路分类散点也会在接口侧预先排序，
+ * 这两类数据再排一次会被重新选起点、把走向打乱甚至反向，因此只在重排后明显更短时才采用。
+ */
+function getRoadTraceCoordinates(marker: { geometry: MapGeometry }): Array<[number, number]> {
+  if (marker.geometry.type === 'LineString') {
+    return marker.geometry.coordinates;
+  }
+  const coordinates = getMapGeometryCoordinates(marker.geometry);
+  if (coordinates.length < 3) {
+    return coordinates;
+  }
+  const ordered = orderRoadTracePoints(coordinates);
+  const orderedDistance = getCoordinateChainDistance(ordered);
+  return orderedDistance < getCoordinateChainDistance(coordinates) * 0.98 ? ordered : coordinates;
 }
 
 /**
@@ -17345,49 +17654,7 @@ function getLinearMarkerChain(marker: CenterableMarker): Array<[number, number]>
     return coordinates;
   }
 
-  return isRoadEndpointGroupMarker(marker) ? orderRoadTracePoints(coordinates) : coordinates;
-}
-
-function findCoordinateChainProjection(
-  point: [number, number],
-  chain: Array<[number, number]>,
-): CoordinateChainProjection | undefined {
-  if (chain.length === 0) {
-    return undefined;
-  }
-  if (chain.length === 1) {
-    const coordinate = chain[0]!;
-    return { coordinate, distance: getCoordinateDistance(point, coordinate), mileage: 0 };
-  }
-
-  let best: CoordinateChainProjection | undefined;
-  let traveled = 0;
-  for (let index = 1; index < chain.length; index += 1) {
-    const from = chain[index - 1]!;
-    const to = chain[index]!;
-    const deltaX = to[0] - from[0];
-    const deltaZ = to[1] - from[1];
-    const segmentLength = Math.hypot(deltaX, deltaZ);
-    const squareLength = deltaX * deltaX + deltaZ * deltaZ;
-    const ratio =
-      squareLength === 0
-        ? 0
-        : Math.max(
-            0,
-            Math.min(
-              1,
-              ((point[0] - from[0]) * deltaX + (point[1] - from[1]) * deltaZ) / squareLength,
-            ),
-          );
-    const coordinate: [number, number] = [from[0] + deltaX * ratio, from[1] + deltaZ * ratio];
-    const distance = getCoordinateDistance(point, coordinate);
-    if (!best || distance < best.distance) {
-      best = { coordinate, distance, mileage: traveled + segmentLength * ratio };
-    }
-    traveled += segmentLength;
-  }
-
-  return best;
+  return isRoadEndpointGroupMarker(marker) ? getRoadTraceCoordinates(marker) : coordinates;
 }
 
 function findNearestChainEndpoint(
@@ -17594,7 +17861,7 @@ function getLinearMarkerLabelAnchor(
 
   const orderedCoordinates = isTransitLineMarker(marker)
     ? marker.geometry.coordinates
-    : orderRoadTracePoints(marker.geometry.coordinates);
+    : getRoadTraceCoordinates(marker);
 
   return (
     getPolylineMidpoint(getVisiblePolylineCoordinates(orderedCoordinates, view, size)) ??
@@ -17873,10 +18140,9 @@ function formatMarkerListDistanceDetail(
   }
 
   if (marker.geometry.type === 'MultiPoint' || marker.geometry.type === 'LineString') {
-    const rawCoordinates = marker.geometry.coordinates;
     const coordinates = isRoadEndpointGroupMarker(marker)
-      ? orderRoadTracePoints(rawCoordinates)
-      : rawCoordinates;
+      ? getRoadTraceCoordinates(marker)
+      : marker.geometry.coordinates;
     return reference.t('map.markerList.fullLength', {
       distance: formatRoutePlanDistance(getCoordinateChainDistance(coordinates), reference.t),
     });

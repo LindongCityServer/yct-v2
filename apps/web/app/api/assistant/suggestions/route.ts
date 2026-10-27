@@ -23,6 +23,7 @@ interface SuggestionRequestBody {
   query?: unknown;
   answer?: unknown;
   variation?: unknown;
+  previous?: unknown;
 }
 
 interface PageSnapshot {
@@ -60,70 +61,94 @@ export async function POST(request: Request) {
 
   const variation = normalizeVariation(body.variation);
   const prompt = followUpMode
-    ? buildFollowUpPrompt(page, body.query, body.answer)
+    ? buildFollowUpPrompt(
+        page,
+        body.query,
+        body.answer,
+        variation,
+        normalizePrevious(body.previous),
+      )
     : buildPagePrompt(page, await readCandidates(page, locale), variation);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
 
   try {
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    };
-    if (provider.id === 'mimo') {
-      headers['api-key'] = apiKey;
-    }
-
-    const response = await fetch(`${provider.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
+    let suggestions: string[] = [];
+    // 推理模型偶尔会把 token 花在思考过程上导致正文为空；空结果时用更严格的提示重试一次。
+    for (let attempt = 0; attempt < 2 && suggestions.length === 0; attempt += 1) {
+      const content = await requestSuggestionContent({
+        provider,
         model,
-        messages: [{ role: 'user', content: prompt }],
-        stream: false,
-        temperature: 0.8,
-        // 推理模型会先消耗一部分 token 再输出正文，预算太小会拿到空 content。
-        [provider.maxTokensField]: 800,
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      return jsonResponse(502, {
-        error: {
-          code: 'provider_unavailable',
-          message: describeProviderFailure(response.status),
-        },
+        apiKey,
+        prompt: attempt === 0 ? prompt : `${prompt}\n\n注意：只输出 JSON 字符串数组。`,
+        signal: controller.signal,
       });
+      suggestions = parseSuggestions(
+        content,
+        followUpMode ? (item) => !echoFollowUpPattern.test(item) : undefined,
+      );
     }
 
-    const payload = (await response.json()) as {
-      choices?: Array<{ message?: { content?: unknown } }>;
-    };
-    const content = payload.choices?.[0]?.message?.content;
-    const suggestions = parseSuggestions(content);
-    if (suggestions.length === 0) {
-      return jsonResponse(200, {
-        suggestions,
-        error: { code: 'empty_suggestions', message: '模型没有返回可用的推荐项。' },
-      });
-    }
     return jsonResponse(200, { suggestions });
   } catch (error) {
+    const message =
+      error instanceof SuggestionProviderError
+        ? error.message
+        : error instanceof DOMException && error.name === 'AbortError'
+          ? '模型响应超时，请稍后重试。'
+          : '无法连接模型服务，请检查网络或 Base URL。';
     return jsonResponse(502, {
       error: {
         code: 'provider_unavailable',
-        message:
-          error instanceof DOMException && error.name === 'AbortError'
-            ? '模型响应超时，请稍后重试。'
-            : '无法连接模型服务，请检查网络或 Base URL。',
+        message,
       },
     });
   } finally {
     clearTimeout(timeout);
   }
+}
+
+class SuggestionProviderError extends Error {}
+
+async function requestSuggestionContent(input: {
+  provider: ReturnType<typeof getAssistantProvider> & object;
+  model: string;
+  apiKey: string;
+  prompt: string;
+  signal: AbortSignal;
+}): Promise<unknown> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${input.apiKey}`,
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+  if (input.provider.id === 'mimo') {
+    headers['api-key'] = input.apiKey;
+  }
+
+  const response = await fetch(`${input.provider.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: input.model,
+      messages: [{ role: 'user', content: input.prompt }],
+      stream: false,
+      temperature: 0.8,
+      // 推理模型会先消耗一部分 token 再输出正文，预算太小会拿到空 content。
+      [input.provider.maxTokensField]: 900,
+    }),
+    signal: input.signal,
+  });
+
+  if (!response.ok) {
+    throw new SuggestionProviderError(describeProviderFailure(response.status));
+  }
+
+  const payload = (await response.json()) as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+  };
+  return payload.choices?.[0]?.message?.content;
 }
 
 function describeProviderFailure(status: number): string {
@@ -157,7 +182,8 @@ function buildPagePrompt(page: PageSnapshot, candidates: string[], variation: nu
     '3. 不要编造候选条目之外的线路、站点、班次或公告。',
     '4. 尽量覆盖不同角度：具体操作、概念解释、常见问题、下一步建议，不要四条都在问同一类事情。',
     '5. 用户已经在看的内容不要推荐“打开/查看/定位它”，那是重复操作；可以在它基础上继续追问或做下一步。',
-    variation > 0 ? `6. 这是第 ${variation + 1} 次生成，请换一个角度，避免和常见推荐重复。` : '',
+    '6. 只推荐站内资料能回答的问题：地图图例与界面说明、地点、线路与站点、班次时刻、运营公告、FAQ、Wiki、物料模板；不要推荐站外知识或需要实时计算的问题。',
+    variation > 0 ? `7. 这是第 ${variation + 1} 次生成，请换一个角度，避免和常见推荐重复。` : '',
     '',
     `当前页面：${page.title || '未知'}（${page.pathname || '未知路径'}）`,
     page.highlights.length > 0
@@ -179,7 +205,24 @@ function normalizeVariation(value: unknown): number {
   return Math.min(Math.floor(numeric), 20);
 }
 
-function buildFollowUpPrompt(page: PageSnapshot, query: unknown, answer: unknown): string {
+function normalizePrevious(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim().slice(0, 40))
+    .filter(Boolean)
+    .slice(0, 6);
+}
+
+function buildFollowUpPrompt(
+  page: PageSnapshot,
+  query: unknown,
+  answer: unknown,
+  variation: number,
+  previous: string[],
+): string {
   const cleanQuery = typeof query === 'string' ? query.trim().slice(0, 300) : '';
   const cleanAnswer = typeof answer === 'string' ? answer.trim().slice(0, 1600) : '';
 
@@ -187,13 +230,18 @@ function buildFollowUpPrompt(page: PageSnapshot, query: unknown, answer: unknown
     '你在为雨城通（Yuchengtong）的问一问生成回答下方的追问推荐。',
     '直接给出最终结果，不要展示推理过程。',
     '只输出一个 JSON 字符串数组，不要输出解释、代码块或多余文字。',
-    '生成 3 条用户看完这段回答后可能继续追问的短问题，每条 8-20 个字。',
+    '生成 3 条用户看完这段回答后可能继续操作的短句，每条 8-20 个字。',
     '要求：',
-    '1. 必须围绕原问题、回答内容和当前页面，不要发散到无关话题。',
-    '2. 不要重复原问题，也不要只换个说法。',
-    '3. 不要编造回答里没有出现的线路、站点、班次、时间或链接。',
-    '4. 三条追问尽量落在不同角度：原因、替代方案、注意事项或下一步操作。',
+    '1. 可以是问句，也可以直接是祈使句（例如“帮我规划一条少走路的路线”“把目的地换成铁西分馆”“列出这条线沿途的餐饮”），不要三条都是问句。',
+    '2. 必须围绕原问题、回答内容和当前页面，不要发散到无关话题。',
+    '3. 不要重复原问题，也不要只换个说法。',
+    '4. 不要追问回答里已经解释过的内容；回答已经说明“为什么没有/为什么查不到”时，不要再问同类问题。',
+    '5. 不要建议打开、查看用户已经在看的内容，也不要问“怎么打开这个页面”。',
+    '6. 不要编造回答里没有出现的线路、站点、班次、时间或链接。',
+    '7. 三条尽量落在不同角度：下一步操作、替代方案、注意事项或筛选条件。',
     '',
+    variation > 0 ? `这是第 ${variation + 1} 次生成，请换一批，不要和上一批重复。` : '',
+    previous.length > 0 ? `上一批推荐：${previous.join('、')}` : '',
     `当前页面：${page.title || '未知'}（${page.pathname || '未知路径'}）`,
     resolveMaterialWorkspace(page.pathname)
       ? '当前在物料工作台，追问应围绕模板、数据来源、编辑、预览、审核和导出，不要转到服务器地点或线路。'
@@ -206,6 +254,10 @@ function buildFollowUpPrompt(page: PageSnapshot, query: unknown, answer: unknown
     .filter(Boolean)
     .join('\n');
 }
+
+/** 过滤“骑驴找驴”和解释型追问：问回答里已经说过的事，或问系统为什么没有数据。 */
+const echoFollowUpPattern =
+  /为什么(没有|查不到|不显示|看不到|无法|不能|找不到)|怎么(打开|查看).*(页面|地图|标记)|如何(打开|查看).*(页面|地图|标记)/u;
 
 async function readCandidates(page: PageSnapshot, locale: LocaleCode): Promise<string[]> {
   const candidates: string[] = [];
@@ -269,7 +321,7 @@ async function readCandidates(page: PageSnapshot, locale: LocaleCode): Promise<s
   return candidates.slice(0, 60);
 }
 
-function parseSuggestions(value: unknown): string[] {
+function parseSuggestions(value: unknown, accept?: (item: string) => boolean): string[] {
   if (typeof value !== 'string') {
     return [];
   }
@@ -321,18 +373,28 @@ function parseSuggestions(value: unknown): string[] {
   const seen = new Set<string>();
   const suggestions: string[] = [];
   for (const item of rawItems) {
-    const cleaned = item.replace(/\s+/g, ' ').trim().slice(0, 30);
-    if (cleaned.length < 2 || seen.has(cleaned)) {
-      continue;
-    }
-    seen.add(cleaned);
-    suggestions.push(cleaned);
-    if (suggestions.length >= maximumSuggestions) {
-      break;
+    for (const part of splitConcatenatedSuggestion(item)) {
+      const cleaned = part.replace(/\s+/g, ' ').trim().slice(0, 30);
+      if (cleaned.length < 2 || seen.has(cleaned) || (accept && !accept(cleaned))) {
+        continue;
+      }
+      seen.add(cleaned);
+      suggestions.push(cleaned);
+      if (suggestions.length >= maximumSuggestions) {
+        return suggestions;
+      }
     }
   }
 
   return suggestions;
+}
+
+/** 模型偶尔把多条建议用中文引号连成一串，这里按「引号 + 逗号 + 引号」拆开。 */
+function splitConcatenatedSuggestion(value: string): string[] {
+  return value
+    .split(/[”"']\s*[，,]\s*[“"']/u)
+    .map((part) => part.replace(/^["'“”]+|["'“”]+$/gu, '').trim())
+    .filter(Boolean);
 }
 
 function normalizePage(value: unknown): PageSnapshot {

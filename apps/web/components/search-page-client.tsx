@@ -22,6 +22,9 @@ import { publishGlobalSearchRequested } from '../lib/client-global-search-events
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { useWikiSearch } from '../lib/client-wiki-search';
 import { getMarkerCategoryLabel } from '../lib/map-marker-categories';
+import { resolveMapMarkerIconUrl } from '../lib/map-marker-icon-url';
+import { buildMapMarkerHref } from '../lib/map-marker-link';
+import { resolveSearchImageSrc } from '../lib/search-image-src';
 import { getSiteSocialLinkLabel, matchSiteSocialLinks } from '../lib/site-social-links';
 import { faqAnswerText } from '../lib/faq-content';
 import { getLocalizedFaqContent } from '../lib/faq-translations';
@@ -33,6 +36,7 @@ type LoadStatus = 'idle' | 'loading' | 'ready' | 'unavailable';
 
 interface MapMarkerResponse {
   snapshot?: MapMarkerSnapshot;
+  iconBaseUrl?: string;
 }
 
 export function SearchPageClient({
@@ -49,6 +53,8 @@ export function SearchPageClient({
   const [query, setQuery] = useState(initialQuery);
   const [activeCategory, setActiveCategory] = useState<SearchCategory>('all');
   const [markers, setMarkers] = useState<MapMarkerSnapshot['markers']>([]);
+  const [playerMarkers, setPlayerMarkers] = useState<MapMarkerSnapshot['markers']>([]);
+  const [markerIconBaseUrl, setMarkerIconBaseUrl] = useState<string | undefined>();
   const [poiCategoryNames, setPoiCategoryNames] = useState<Map<string, string>>(new Map());
   const [markerStatus, setMarkerStatus] = useState<LoadStatus>('loading');
   const [scheduleResult, setScheduleResult] = useState<TravelScheduleQueryResult | null>(null);
@@ -71,12 +77,16 @@ export function SearchPageClient({
 
     async function loadMarkers() {
       try {
-        const [response, categoriesResponse] = await Promise.all([
+        const [response, categoriesResponse, playersResponse] = await Promise.all([
           fetch(appPath('/api/map/markers'), {
             cache: 'no-store',
             signal: controller.signal,
           }),
           fetch(appPath('/api/map/poi-categories'), {
+            cache: 'no-store',
+            signal: controller.signal,
+          }),
+          fetch(appPath('/api/map/player-locations'), {
             cache: 'no-store',
             signal: controller.signal,
           }),
@@ -87,7 +97,17 @@ export function SearchPageClient({
           return;
         }
         setMarkers(data.snapshot.markers.filter((marker) => marker.categoryId !== 'player'));
+        setMarkerIconBaseUrl(data.iconBaseUrl);
         setMarkerStatus('ready');
+
+        if (playersResponse.ok) {
+          const playersPayload = (await playersResponse.json()) as {
+            snapshot?: MapMarkerSnapshot;
+          };
+          if (playersPayload.snapshot?.markers) {
+            setPlayerMarkers(playersPayload.snapshot.markers);
+          }
+        }
 
         if (categoriesResponse.ok) {
           const categoryPayload = (await categoriesResponse.json()) as { items?: PoiCategory[] };
@@ -148,8 +168,8 @@ export function SearchPageClient({
   }, [trimmedQuery]);
 
   const poiResults = useMemo(
-    () => (trimmedQuery ? filterMapMarkers(markers, trimmedQuery) : []),
-    [markers, trimmedQuery],
+    () => (trimmedQuery ? filterMapMarkers([...markers, ...playerMarkers], trimmedQuery) : []),
+    [markers, playerMarkers, trimmedQuery],
   );
   const normalizedQuery = normalizeTitleForSearch(trimmedQuery);
   const operationResults = useMemo(() => {
@@ -341,26 +361,40 @@ export function SearchPageClient({
                 <section className="search-result-group" aria-labelledby="search-operations-title">
                   <h2 id="search-operations-title">{t('search.resultGroup.operations')}</h2>
                   <div className="search-result-list">
-                    {operationResults.map((item) => (
-                      <Link
-                        className="search-result-item"
-                        href={appPath(`/operations/${encodeURIComponent(item.id)}`)}
-                        key={item.id}
-                      >
-                        <span className="material-symbols-outlined" aria-hidden="true">
-                          article
-                        </span>
-                        <span>
-                          <strong>
-                            <TitleWithBreaks title={item.title} segments={item.titleSegments} />
-                          </strong>
-                          <span className="muted">
-                            {item.categoryId}
-                            {item.displayDate ? ` · ${item.displayDate}` : ''}
+                    {operationResults.map((item) => {
+                      const cover =
+                        item.coverImageUrl ?? item.migratedImagePath ?? item.legacyImagePath;
+                      return (
+                        <Link
+                          className={`search-result-item${cover ? ' has-thumb' : ''}`}
+                          href={appPath(`/operations/${encodeURIComponent(item.id)}`)}
+                          key={item.id}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            article
                           </span>
-                        </span>
-                      </Link>
-                    ))}
+                          <span>
+                            <strong>
+                              <TitleWithBreaks title={item.title} segments={item.titleSegments} />
+                            </strong>
+                            <span className="muted">
+                              {item.categoryId}
+                              {item.displayDate ? ` · ${item.displayDate}` : ''}
+                            </span>
+                          </span>
+                          {cover ? (
+                            <img
+                              className="search-result-thumb is-trailing"
+                              src={resolveSearchImageSrc(cover)}
+                              alt=""
+                              loading="lazy"
+                              decoding="async"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : null}
+                        </Link>
+                      );
+                    })}
                   </div>
                 </section>
               ) : null}
@@ -371,28 +405,30 @@ export function SearchPageClient({
                   <div className="search-result-list">
                     {poiResults.map((marker) => {
                       const thumbnail = marker.imageUrls?.[0] ?? marker.imageUrl;
-                      const categoryName = getMarkerCategoryLabel(
-                        marker.categoryId,
-                        poiCategoryNames,
-                        locale,
-                      );
+                      const isPlayer = marker.categoryId === 'player';
+                      const iconUrl = isPlayer
+                        ? undefined
+                        : resolveMapMarkerIconUrl(marker.iconFileName, markerIconBaseUrl);
+                      const categoryName = isPlayer
+                        ? t('search.resultGroup.player')
+                        : getMarkerCategoryLabel(marker.categoryId, poiCategoryNames, locale);
                       return (
                         <Link
-                          className="search-result-item"
-                          href={appPath(`/map?marker=${encodeURIComponent(marker.id)}`)}
+                          className={`search-result-item${thumbnail ? ' has-thumb' : ''}`}
+                          href={appPath(buildMapMarkerHref(marker))}
                           key={marker.id}
                         >
-                          {thumbnail ? (
+                          {iconUrl ? (
                             <img
-                              className="search-result-thumb"
-                              src={resolveSearchImageSrc(thumbnail)}
+                              className="search-result-icon"
+                              src={iconUrl}
                               alt=""
                               loading="lazy"
                               decoding="async"
                             />
                           ) : (
                             <MaterialSymbol
-                              name={marker.symbolIcon ?? 'location_on'}
+                              name={isPlayer ? 'person_pin' : (marker.symbolIcon ?? 'location_on')}
                               aria-hidden="true"
                             />
                           )}
@@ -408,6 +444,16 @@ export function SearchPageClient({
                             </strong>
                             <span className="muted">{formatPoiSummary(marker, categoryName)}</span>
                           </span>
+                          {thumbnail ? (
+                            <img
+                              className="search-result-thumb is-trailing"
+                              src={resolveSearchImageSrc(thumbnail)}
+                              alt=""
+                              loading="lazy"
+                              decoding="async"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : null}
                         </Link>
                       );
                     })}
@@ -524,7 +570,7 @@ export function SearchPageClient({
                   <div className="search-result-list">
                     {wikiResults.map((item) => (
                       <a
-                        className="search-result-item"
+                        className={`search-result-item${item.thumbnailUrl ? ' has-thumb' : ''}`}
                         href={item.href}
                         target="_blank"
                         rel="noreferrer"
@@ -545,6 +591,16 @@ export function SearchPageClient({
                               : ''}
                           </span>
                         </span>
+                        {item.thumbnailUrl ? (
+                          <img
+                            className="search-result-thumb is-trailing"
+                            src={item.thumbnailUrl}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : null}
                       </a>
                     ))}
                   </div>
@@ -600,10 +656,6 @@ function formatPoiSummary(
   ]
     .filter(Boolean)
     .join(' · ');
-}
-
-function resolveSearchImageSrc(value: string): string {
-  return /^(?:https?:|data:|blob:)/i.test(value) ? value : appPath(value);
 }
 
 function formatWikiTime(value: string, locale: LocaleCode): string {

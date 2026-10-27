@@ -101,7 +101,6 @@ export function OperationsHome({
     () => selectFeaturedOperationsItems(sortedItems, now),
     [now, sortedItems],
   );
-  const bannerItem = bannerItems[activeBannerIndex] ?? bannerItems[0];
 
   useEffect(() => {
     setActiveBannerIndex((current) => (current < bannerItems.length ? current : 0));
@@ -185,30 +184,54 @@ export function OperationsHome({
           }
         }}
       >
-        {bannerItem ? (
-          <Link
-            className="hero-feature-link"
-            href={appPath(`/operations/${encodeURIComponent(bannerItem.id)}`)}
-            style={buildHeroFallbackStyle(bannerItem)}
-            key={bannerItem.id}
-          >
-            {bannerItem.coverImageUrl ? (
-              <ProgressiveImage
-                className="hero-feature-image"
-                src={appPath(bannerItem.coverImageUrl)}
-                alt=""
-                loading="eager"
-                decoding="async"
-                fetchPriority="high"
-              />
-            ) : null}
-            <div className="hero-copy">
-              <p className="eyebrow">{bannerItem.categoryId}</p>
-              <h1 id="operations-title" className="hero-title">
-                <TitleWithBreaks title={bannerItem.title} segments={bannerItem.titleSegments} />
-              </h1>
-            </div>
-          </Link>
+        {bannerItems.length > 0 ? (
+          bannerItems.map((item, index) => {
+            const isActive = index === activeBannerIndex;
+            return (
+              <Link
+                className={[
+                  'hero-feature-link',
+                  bannerItems.length > 1 ? 'hero-slide' : '',
+                  isActive ? 'is-active' : '',
+                  item.coverImageUrl ? '' : 'is-text-only',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                href={appPath(`/operations/${encodeURIComponent(item.id)}`)}
+                style={
+                  {
+                    ...buildHeroFallbackStyle(item),
+                    '--hero-slide-shift': String(
+                      resolveCarouselOffset(index, activeBannerIndex, bannerItems.length),
+                    ),
+                  } as CSSProperties
+                }
+                key={item.id}
+                aria-hidden={isActive ? undefined : true}
+                tabIndex={isActive ? undefined : -1}
+              >
+                {item.coverImageUrl ? (
+                  <ProgressiveImage
+                    className="hero-feature-image"
+                    src={appPath(item.coverImageUrl)}
+                    alt=""
+                    loading={isActive ? 'eager' : 'lazy'}
+                    decoding="async"
+                    fetchPriority={isActive ? 'high' : 'low'}
+                  />
+                ) : null}
+                <div className="hero-copy">
+                  <p className="eyebrow">{item.categoryId}</p>
+                  <h1 id={isActive ? 'operations-title' : undefined} className="hero-title">
+                    <TitleWithBreaks title={item.title} segments={item.titleSegments} />
+                  </h1>
+                  {!item.coverImageUrl && item.excerpt ? (
+                    <p className="hero-summary">{item.excerpt}</p>
+                  ) : null}
+                </div>
+              </Link>
+            );
+          })
         ) : (
           <div className="hero-copy">
             <p className="eyebrow">{t('page.operations')}</p>
@@ -494,6 +517,19 @@ function ServerStatusPanel({
 function formatOperationsCategoryLabel(categoryId: string, t: Translate): string {
   const labelKey = categoryLabelKeyById.get(categoryId);
   return labelKey ? t(labelKey) : categoryId;
+}
+
+/** 计算轮播项相对激活项的最短环形位移，非激活卡片的位移方向由此决定。 */
+function resolveCarouselOffset(index: number, activeIndex: number, count: number): number {
+  let offset = index - activeIndex;
+  const half = count / 2;
+  if (offset > half) {
+    offset -= count;
+  } else if (offset < -half) {
+    offset += count;
+  }
+
+  return offset;
 }
 
 function buildHeroFallbackStyle(item: OperationsFeedItem): CSSProperties | undefined {

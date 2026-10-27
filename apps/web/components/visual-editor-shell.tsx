@@ -30,7 +30,7 @@ export function VisualEditorShell({
   isBusy?: boolean;
   isDirty?: boolean;
   onBack?: () => void;
-  onSave?: () => void;
+  onSave?: () => void | boolean | Promise<void | boolean>;
   sessionId: string;
   status?: string;
   title: string;
@@ -65,14 +65,39 @@ export function VisualEditorShell({
       return;
     }
     const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+      if (!(event.ctrlKey || event.metaKey)) {
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (isBusy) {
+          return;
+        }
+        void (async () => {
+          const saved = await onSave();
+          // 只有保存明确失败（返回 false）时才留在当前页，避免误丢草稿。
+          if (saved === false) {
+            return;
+          }
+          if (onBack) {
+            onBack();
+            return;
+          }
+          approvedNavigationRef.current = true;
+          window.location.assign(appPath(backHref));
+        })();
+        return;
+      }
+
+      if (event.key.toLowerCase() === 's') {
         event.preventDefault();
         if (!isBusy) onSave();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isBusy, onSave]);
+  }, [backHref, isBusy, onBack, onSave]);
 
   const requestBack = async () => {
     if (onBack) {

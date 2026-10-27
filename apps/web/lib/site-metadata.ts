@@ -160,6 +160,15 @@ export const pageMetadata = {
     ),
     noIndex: true,
   },
+  ask: {
+    title: localized('问一问', '問一問', 'Ask'),
+    description: localized(
+      '用自然语言向雨城通提问，结合运营信息、地图、班次和 Wiki 资料作答，并给出可点击的站内入口。',
+      '用自然語言向雨城通提問，結合營運資訊、地圖、班次和 Wiki 資料作答，並給出可點擊的站內入口。',
+      'Ask Yuchengtong in natural language and get answers grounded in operations updates, maps, schedules, and wiki pages, with clickable in-site links.',
+    ),
+    noIndex: true,
+  },
   services: {
     title: localized('更多服务', '更多服務', 'More Services'),
     description: localized(

@@ -54,7 +54,13 @@ export interface MapRouteShortcutRequestedPayload {
 export const mapViewShortcutRequestedEventName = 'yct:map-view-shortcut-requested';
 
 export interface MapViewShortcutRequestedPayload {
-  command: 'focus_search' | 'reset_view';
+  command:
+    | 'focus_search'
+    | 'reset_view'
+    | 'toggle_layers'
+    | 'toggle_favorite'
+    | 'search_nearby'
+    | 'dismiss';
   source: 'keyboard';
 }
 

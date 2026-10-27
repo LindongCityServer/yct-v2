@@ -175,6 +175,102 @@ export function AdminTransitLineMapEditor({
     Record<string, string>
   >({});
 
+  // 节点历史：只在 nodes 真正变化时入栈；加载初始数据时重置，避免撤销回到空线路。
+  const undoStackRef = useRef<EditorNode[][]>([]);
+  const redoStackRef = useRef<EditorNode[][]>([]);
+  const previousNodesRef = useRef<EditorNode[] | null>(null);
+  const applyingHistoryRef = useRef(false);
+  const nodeDragStartRef = useRef<EditorNode[] | null>(null);
+
+  useEffect(() => {
+    const previous = previousNodesRef.current;
+    previousNodesRef.current = nodes;
+    if (previous === null || previous === nodes) {
+      return;
+    }
+    if (applyingHistoryRef.current) {
+      applyingHistoryRef.current = false;
+      return;
+    }
+    // 拖拽过程中每帧都会更新节点坐标，历史在 pointerup 时统一补一条。
+    if (gestureRef.current?.kind === 'move-node') {
+      return;
+    }
+    undoStackRef.current.push(previous);
+    if (undoStackRef.current.length > 100) {
+      undoStackRef.current.shift();
+    }
+    redoStackRef.current = [];
+  }, [nodes]);
+
+  const undoNodes = () => {
+    const previous = undoStackRef.current.pop();
+    if (!previous) {
+      return;
+    }
+    applyingHistoryRef.current = true;
+    redoStackRef.current.push(nodes);
+    setNodes(previous);
+  };
+
+  const redoNodes = () => {
+    const next = redoStackRef.current.pop();
+    if (!next) {
+      return;
+    }
+    applyingHistoryRef.current = true;
+    undoStackRef.current.push(nodes);
+    setNodes(next);
+  };
+
+  // 键盘处理随渲染更新，订阅只建立一次，避免编辑时高频重渲染反复解绑监听。
+  const editorKeyboardHandlerRef = useRef<(event: KeyboardEvent) => void>(() => undefined);
+  editorKeyboardHandlerRef.current = (event) => {
+    if (isEditableKeyboardTarget(event.target)) {
+      return;
+    }
+    const modifier = event.ctrlKey || event.metaKey;
+    if (modifier && (event.key.toLowerCase() === 's' || event.key === 'Enter')) {
+      event.preventDefault();
+      if (!isSaving) {
+        void save();
+      }
+      return;
+    }
+    if (modifier && event.key.toLowerCase() === 'z') {
+      event.preventDefault();
+      if (event.shiftKey) {
+        redoNodes();
+      } else {
+        undoNodes();
+      }
+      return;
+    }
+    if (modifier && event.key.toLowerCase() === 'y') {
+      event.preventDefault();
+      redoNodes();
+      return;
+    }
+    if (modifier || event.altKey || event.shiftKey) {
+      return;
+    }
+    if (event.key !== 'Delete' && event.key !== 'Backspace') {
+      return;
+    }
+    if (!selectedNodeId) {
+      return;
+    }
+    event.preventDefault();
+    setNodes((current) => current.filter((node) => node.id !== selectedNodeId));
+    setSelectedNodeId(null);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => editorKeyboardHandlerRef.current(event);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -226,6 +322,9 @@ export function AdminTransitLineMapEditor({
           worldId: spatialProfileData.profile?.worldId ?? 'lindong-overworld',
         });
         setNodes(initialNodes);
+        previousNodesRef.current = initialNodes;
+        undoStackRef.current = [];
+        redoStackRef.current = [];
         setRouteMode(line.routeMode ?? defaultRouteMode(line));
         setSegmentOperationStatusByKey(
           Object.fromEntries(
@@ -649,6 +748,9 @@ export function AdminTransitLineMapEditor({
         removeNodeAtClientPoint(event.clientX, event.clientY, 44);
       }, longPressDurationMs);
     }
+    if (gesture.kind === 'move-node') {
+      nodeDragStartRef.current = nodes;
+    }
     gestureRef.current = gesture;
   };
 
@@ -783,6 +885,15 @@ export function AdminTransitLineMapEditor({
     if (gesture.kind === 'add' && !gesture.moved && !gesture.longPressTriggered) {
       addNodeAtClientPoint(event.clientX, event.clientY);
     } else if (gesture.kind === 'move-node' && gesture.moved) {
+      const dragStart = nodeDragStartRef.current;
+      if (dragStart) {
+        undoStackRef.current.push(dragStart);
+        if (undoStackRef.current.length > 100) {
+          undoStackRef.current.shift();
+        }
+        redoStackRef.current = [];
+      }
+      nodeDragStartRef.current = null;
       setSelectedNodeId(null);
       setStatus(
         gesture.snapMarkerLabel
@@ -792,6 +903,7 @@ export function AdminTransitLineMapEditor({
             : '已移动节点；保存线路后写入坐标。',
       );
     }
+    nodeDragStartRef.current = null;
     gestureRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
