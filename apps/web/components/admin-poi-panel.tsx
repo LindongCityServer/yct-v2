@@ -22,7 +22,7 @@ import type {
   ReactNode,
   WheelEvent as ReactWheelEvent,
 } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { publishEditorDraftChanged } from '../lib/client-editor-events';
@@ -265,15 +265,33 @@ const poiRejectReasonPresets = [
   '该地点疑似已存在，请确认后避免重复投稿。',
 ];
 
+/** 进入工作台前确认未保存修改，避免源表单内容被静默丢弃。 */
+async function confirmLeavePoiDialogForWorkspace(isDirty: boolean): Promise<boolean> {
+  if (!isDirty) {
+    return true;
+  }
+
+  return (
+    (await requestConfirmation('当前弹窗有未保存的修改，进入工作台会丢弃这些修改，确定继续吗？')) ===
+    true
+  );
+}
+
 export function AdminPoiPanel({
   editorMode = 'panel',
   initialMarkerId,
   onEditorClose,
+  openEditorOnLoad = false,
+  pageBackHref = '/admin/map-poi',
   pageWorkspace = 'geometry',
 }: Readonly<{
   editorMode?: 'page' | 'panel';
   initialMarkerId?: string;
   onEditorClose?: () => void;
+  /** 从工作台返回列表时，用 markerId 直接重新打开该 POI 的编辑弹窗。 */
+  openEditorOnLoad?: boolean;
+  /** 工作台页面的返回地址；未提供时回到 POI 后台列表。 */
+  pageBackHref?: string;
   pageWorkspace?: 'geometry' | 'intro';
 }>) {
   const [submissions, setSubmissions] = useState<AdminPoiSubmission[]>([]);
@@ -803,7 +821,7 @@ export function AdminPoiPanel({
       (item) => item.id === initialMarkerId || `poi-${item.id}` === initialMarkerId,
     );
     if (submission) {
-      if (editorMode === 'page') {
+      if (editorMode === 'page' || openEditorOnLoad) {
         setEditTarget(submission);
       }
       setQuery(submission.title);
@@ -813,7 +831,7 @@ export function AdminPoiPanel({
     } else {
       const legacyMarker = mapMarkers.find((marker) => marker.id === initialMarkerId);
       if (legacyMarker) {
-        if (editorMode === 'page') {
+        if (editorMode === 'page' || openEditorOnLoad) {
           setLegacyEditTarget(legacyMarker);
         }
         setQuery(legacyMarker.label);
@@ -835,7 +853,7 @@ export function AdminPoiPanel({
           block: 'center',
         });
     });
-  }, [initialMarkerId, mapMarkers, poiDataLoaded, submissions]);
+  }, [initialMarkerId, mapMarkers, openEditorOnLoad, poiDataLoaded, submissions]);
 
   const closeEditor = () => {
     setEditTarget(null);
@@ -1477,6 +1495,7 @@ export function AdminPoiPanel({
           editorSessionId={editorSessionId}
           iconBaseUrl={categoryIconBaseUrl}
           isBusy={isBusy}
+          pageBackHref={pageBackHref}
           pageWorkspace={pageWorkspace}
           parentMarkerOptions={parentMarkerOptions}
           regionMarkerOptions={regionMarkerOptions}
@@ -1502,6 +1521,7 @@ export function AdminPoiPanel({
           iconBaseUrl={categoryIconBaseUrl}
           isBusy={isBusy}
           marker={legacyEditTarget}
+          pageBackHref={pageBackHref}
           pageWorkspace={pageWorkspace}
           parentMarkerOptions={parentMarkerOptions}
           regionMarkerOptions={regionMarkerOptions}
@@ -2940,6 +2960,7 @@ function EditLegacyPoiMarkerDialog({
   marker,
   onClose,
   onSubmit,
+  pageBackHref = '/admin/map-poi',
   pageWorkspace = 'geometry',
   parentMarkerOptions,
   regionMarkerOptions,
@@ -2955,6 +2976,8 @@ function EditLegacyPoiMarkerDialog({
   marker: MapMarker;
   onClose: () => void;
   onSubmit: (input: LegacyPoiMarkerEditInput) => Promise<string | null>;
+  /** page 模式下“返回”按钮的地址；从 POI 弹窗进入时应回到该弹窗。 */
+  pageBackHref?: string;
   /** page 模式下要渲染的工作台；dialog 模式忽略。 */
   pageWorkspace?: 'geometry' | 'intro';
   parentMarkerOptions: MapMarker[];
@@ -3124,7 +3147,7 @@ function EditLegacyPoiMarkerDialog({
               <span>{isBusy ? '保存中' : '保存简介'}</span>
             </button>
           }
-          backHref="/admin/map-poi"
+          backHref={pageBackHref}
           editorKind="poi"
           isBusy={isBusy}
           isDirty={isDirty}
@@ -3167,7 +3190,7 @@ function EditLegacyPoiMarkerDialog({
             <span>{isBusy ? '保存中' : '保存几何'}</span>
           </button>
         }
-        backHref="/admin/map-poi"
+        backHref={pageBackHref}
         editorKind="poi"
         isBusy={isBusy}
         isDirty={isDirty}
@@ -3198,12 +3221,23 @@ function EditLegacyPoiMarkerDialog({
     buildMapGeometryFromDraft(geometryDraft).geometry ?? null,
   );
 
+  const openWorkspaceLink = async (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    if (!(await confirmLeavePoiDialogForWorkspace(isDirty))) {
+      return;
+    }
+    window.location.assign(event.currentTarget.href);
+  };
+
   const geometryEditorElement = (
     <PoiEditorSection summary={geometryLabelFromDraft(geometryDraft)} title="几何">
       <p className="muted">{`中点 ${geometryMetrics.center} · ${geometryMetrics.detail}`}</p>
       <a
         className="secondary-action-button"
-        href={appPath(`/admin/map-poi/editor?markerId=${encodeURIComponent(marker.id)}`)}
+        href={appPath(
+          `/admin/map-poi/editor?markerId=${encodeURIComponent(marker.id)}&from=poi-dialog`,
+        )}
+        onClick={openWorkspaceLink}
       >
         <span className="material-symbols-outlined" aria-hidden="true">
           edit_location_alt
@@ -3226,7 +3260,10 @@ function EditLegacyPoiMarkerDialog({
       </p>
       <a
         className="secondary-action-button"
-        href={appPath(`/admin/map-poi/intro-editor?markerId=${encodeURIComponent(marker.id)}`)}
+        href={appPath(
+          `/admin/map-poi/intro-editor?markerId=${encodeURIComponent(marker.id)}&from=poi-dialog`,
+        )}
+        onClick={openWorkspaceLink}
       >
         <span className="material-symbols-outlined" aria-hidden="true">
           article
@@ -4708,6 +4745,7 @@ function EditPoiSubmissionDialog({
   onSaveDraft,
   onSubmit,
   onSubmitForReview,
+  pageBackHref = '/admin/map-poi',
   pageWorkspace = 'geometry',
   parentMarkerOptions,
   regionMarkerOptions,
@@ -4731,6 +4769,8 @@ function EditPoiSubmissionDialog({
   ) => Promise<{ error: string | null; submission: { id: string } | null }>;
   onSubmit: (input: PoiSubmissionEditInput) => Promise<string | null>;
   onSubmitForReview?: (poiId?: string) => Promise<string | null>;
+  /** page 模式下“返回”按钮的地址；从 POI 弹窗进入时应回到该弹窗。 */
+  pageBackHref?: string;
   pageWorkspace?: 'geometry' | 'intro';
   parentMarkerOptions: MapMarker[];
   regionMarkerOptions: MapMarker[];
@@ -5068,7 +5108,7 @@ function EditPoiSubmissionDialog({
               <span>{isBusy ? '保存中' : '保存简介'}</span>
             </button>
           }
-          backHref="/admin/map-poi"
+          backHref={pageBackHref}
           editorKind="poi"
           isBusy={isBusy}
           isDirty={isDirty}
@@ -5111,7 +5151,7 @@ function EditPoiSubmissionDialog({
             <span>{isBusy ? '保存中' : '保存几何'}</span>
           </button>
         }
-        backHref="/admin/map-poi"
+        backHref={pageBackHref}
         editorKind="poi"
         isBusy={isBusy}
         isDirty={isDirty}
@@ -5145,6 +5185,14 @@ function EditPoiSubmissionDialog({
   /** 已保存的草稿 id：新建弹窗自动保存后即可进入几何/简介工作台。 */
   const effectivePoiId = submission?.id ?? draftId;
 
+  const openWorkspaceLink = async (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    if (!(await confirmLeavePoiDialogForWorkspace(isDirty))) {
+      return;
+    }
+    window.location.assign(event.currentTarget.href);
+  };
+
   const geometryEditorElement = (
     <>
       <PoiEditorSection summary={geometryLabelFromDraft(geometryDraft)} title="几何">
@@ -5153,8 +5201,9 @@ function EditPoiSubmissionDialog({
           <a
             className="secondary-action-button"
             href={appPath(
-              `/admin/map-poi/editor?markerId=${encodeURIComponent(effectivePoiId)}`,
+              `/admin/map-poi/editor?markerId=${encodeURIComponent(effectivePoiId)}&from=poi-dialog`,
             )}
+            onClick={openWorkspaceLink}
           >
             <span className="material-symbols-outlined" aria-hidden="true">
               edit_location_alt
@@ -5265,8 +5314,9 @@ function EditPoiSubmissionDialog({
         <a
           className="secondary-action-button"
           href={appPath(
-            `/admin/map-poi/intro-editor?markerId=${encodeURIComponent(effectivePoiId)}`,
+            `/admin/map-poi/intro-editor?markerId=${encodeURIComponent(effectivePoiId)}&from=poi-dialog`,
           )}
+          onClick={openWorkspaceLink}
         >
           <span className="material-symbols-outlined" aria-hidden="true">
             article

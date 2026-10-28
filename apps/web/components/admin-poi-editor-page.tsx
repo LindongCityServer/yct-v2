@@ -1,21 +1,25 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { appPath } from '../lib/app-paths';
+import { buildPoiEditorReturnHref } from '../lib/admin-poi-return';
 import { AdminPoiPanel } from './admin-poi-panel';
 
 export function AdminPoiEditorPage({
   initialMarkerId,
+  fromPoiDialog = false,
 }: Readonly<{
   initialMarkerId?: string;
+  fromPoiDialog?: boolean;
 }>) {
   const router = useRouter();
+  const returnHref = buildPoiEditorReturnHref(initialMarkerId, fromPoiDialog);
 
   return (
     <AdminPoiPanel
       editorMode="page"
       initialMarkerId={initialMarkerId}
-      onEditorClose={() => router.push(appPath('/admin/map-poi'))}
+      pageBackHref={returnHref}
+      onEditorClose={() => router.push(returnHref)}
     />
   );
 }
