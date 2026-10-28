@@ -17,6 +17,7 @@ export function VisualEditorShell({
   isDirty = false,
   onBack,
   onSave,
+  saveNavigatesBack = false,
   sessionId,
   status,
   title,
@@ -31,6 +32,8 @@ export function VisualEditorShell({
   isDirty?: boolean;
   onBack?: () => void;
   onSave?: () => void | boolean | Promise<void | boolean>;
+  /** The save callback already returns to its source; do not navigate twice on Ctrl+Enter. */
+  saveNavigatesBack?: boolean;
   sessionId: string;
   status?: string;
   title: string;
@@ -77,7 +80,7 @@ export function VisualEditorShell({
         void (async () => {
           const saved = await onSave();
           // 只有保存明确失败（返回 false）时才留在当前页，避免误丢草稿。
-          if (saved === false) {
+          if (saved === false || saveNavigatesBack) {
             return;
           }
           if (onBack) {
@@ -97,7 +100,7 @@ export function VisualEditorShell({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [backHref, isBusy, onBack, onSave]);
+  }, [backHref, isBusy, onBack, onSave, saveNavigatesBack]);
 
   const requestBack = async () => {
     if (onBack) {

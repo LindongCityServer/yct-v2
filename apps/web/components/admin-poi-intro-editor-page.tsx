@@ -1,22 +1,19 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { appPath } from '../lib/app-paths';
-import { AdminPoiPanel } from './admin-poi-panel';
+import { AdminPoiWorkspacePage } from './admin-poi-workspace-page';
 
 export function AdminPoiIntroEditorPage({
   initialMarkerId,
+  returnContext,
 }: Readonly<{
   initialMarkerId?: string;
+  returnContext?: string;
 }>) {
-  const router = useRouter();
-
   return (
-    <AdminPoiPanel
-      editorMode="page"
+    <AdminPoiWorkspacePage
       initialMarkerId={initialMarkerId}
-      pageWorkspace="intro"
-      onEditorClose={() => router.push(appPath('/admin/map-poi'))}
+      returnContext={returnContext}
+      workspace="intro"
     />
   );
 }

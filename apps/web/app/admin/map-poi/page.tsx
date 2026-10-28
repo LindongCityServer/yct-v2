@@ -10,9 +10,19 @@ export async function generateMetadata() {
 
 export default async function AdminMapPoiPage({
   searchParams,
-}: Readonly<{ searchParams?: Promise<{ markerId?: string | string[] }> }>) {
+}: Readonly<{
+  searchParams?: Promise<{
+    markerId?: string | string[];
+    edit?: string | string[];
+    returnContext?: string | string[];
+  }>;
+}>) {
   const resolved = searchParams ? await searchParams : undefined;
   const markerId = Array.isArray(resolved?.markerId) ? resolved.markerId[0] : resolved?.markerId;
+  const edit = Array.isArray(resolved?.edit) ? resolved.edit[0] : resolved?.edit;
+  const returnContext = Array.isArray(resolved?.returnContext)
+    ? resolved.returnContext[0]
+    : resolved?.returnContext;
   return (
     <SecondaryShell
       title="POI 后台"
@@ -20,7 +30,11 @@ export default async function AdminMapPoiPage({
       desktopBackHref="/account"
       desktopNavigation={<AdminSectionNavigation currentPath="/admin/map-poi" includeOverview />}
     >
-      <AdminPoiPanel initialMarkerId={markerId} />
+      <AdminPoiPanel
+        initialMarkerId={markerId}
+        initialOpenEditor={edit === '1'}
+        returnContext={returnContext}
+      />
     </SecondaryShell>
   );
 }
