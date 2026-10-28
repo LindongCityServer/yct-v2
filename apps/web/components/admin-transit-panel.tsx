@@ -31,6 +31,7 @@ import { useRouter } from 'next/navigation';
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { selectMapTileTemplates } from '../lib/map-tile-templates';
+import { formatTransitDepartureRulesForEditor } from '../lib/transit-departure-editor';
 import {
   getTransitStationServiceModes,
   isTransitPoiMarkerCompatibleWithStation,
@@ -7622,27 +7623,6 @@ function parseTransitLineRouteNodeDrafts(
   }
 
   return { routeNodes, stationSourceIds, oneWayStops, segmentPaths };
-}
-
-function formatTransitDepartureRulesForEditor(
-  line: TransitRevisionLine | undefined,
-  direction: 'down' | 'up',
-): string {
-  const directionalRules = line?.departureRulesByDirection?.[direction];
-  if (directionalRules?.length) {
-    return directionalRules.map((rule) => rule.sourceText).join('\n');
-  }
-  const fallbackRules = direction === 'down' ? line?.departureRules : undefined;
-  if (fallbackRules?.length) {
-    return fallbackRules.map((rule) => rule.sourceText).join('\n');
-  }
-  const directionalTimes = line?.departureTimesByDirection?.[direction];
-  if (directionalTimes?.length) {
-    return directionalTimes.join('\n');
-  }
-  const fallbackTimes =
-    direction === 'down' ? line?.departureTimes : line?.departureTimesByDirection?.down;
-  return (fallbackTimes ?? []).join('\n');
 }
 
 function buildTripLabelConfigDraft(

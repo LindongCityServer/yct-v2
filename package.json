@@ -11,6 +11,7 @@
     "dev": "pnpm --filter @yct/web dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
+    "transit:check": "tsx --test scripts/checks/verify-transit-departure-editor.mjs",
     "release:prepare": "node scripts/prepare-release.mjs",
     "release:freeze-history": "node scripts/freeze-release-history.mjs",
     "brand:icons": "node scripts/generate-icons.mjs",
