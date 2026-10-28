@@ -3223,10 +3223,12 @@ function EditLegacyPoiMarkerDialog({
 
   const openWorkspaceLink = async (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
+    // 先取地址：React 事件在 await 之后 currentTarget 会被置空。
+    const href = event.currentTarget.href;
     if (!(await confirmLeavePoiDialogForWorkspace(isDirty))) {
       return;
     }
-    window.location.assign(event.currentTarget.href);
+    window.location.assign(href);
   };
 
   const geometryEditorElement = (
@@ -5187,10 +5189,12 @@ function EditPoiSubmissionDialog({
 
   const openWorkspaceLink = async (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
+    // 先取地址：React 事件在 await 之后 currentTarget 会被置空。
+    const href = event.currentTarget.href;
     if (!(await confirmLeavePoiDialogForWorkspace(isDirty))) {
       return;
     }
-    window.location.assign(event.currentTarget.href);
+    window.location.assign(href);
   };
 
   const geometryEditorElement = (
