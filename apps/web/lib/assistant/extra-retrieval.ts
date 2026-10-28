@@ -6,6 +6,7 @@ import { readTransitServiceNotices } from '../transit-service-notices';
 import { readTravelScheduleQuery } from '../travel-schedules';
 import { planTravelJourneys } from '../travel-journey-planner';
 import { getBeijingClockMinutes, getTransitClockMinutes } from '../transit-realtime';
+import { resolveDirectionalDepartureTimes } from '../transit-departure-editor';
 
 export interface ExtraReference {
   title: string;
@@ -333,8 +334,7 @@ export function buildLineTimetableReference(
   line: TimetableLine,
   now = getBeijingClockMinutes(),
 ): ExtraReference {
-  const down = line.departureTimesByDirection?.down ?? line.departureTimes ?? [];
-  const up = line.departureTimesByDirection?.up ?? [];
+  const { down, up } = resolveDirectionalDepartureTimes(line);
   const downTimes = down
     .map(toClockMinutes)
     .filter((value): value is number => value !== undefined);

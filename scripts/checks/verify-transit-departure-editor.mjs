@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { formatTransitDepartureRulesForEditor as format } from '../../apps/web/lib/transit-departure-editor.ts';
+import {
+  formatTransitDepartureRulesForEditor as format,
+  resolveDirectionalDepartureTimes,
+} from '../../apps/web/lib/transit-departure-editor.ts';
 
 const rule = (time) => ({ sourceText: time, startTime: time });
 
@@ -88,4 +91,45 @@ test('legacy rules without directional data retain their source text', () => {
   const line = { departureRules: [rule('06:00'), rule('07:00')] };
   assert.equal(format(line, 'down'), '06:00\n07:00');
   assert.equal(format(line, 'up'), '');
+});
+
+test('resolver keeps directional sides apart for public reads', () => {
+  assert.deepEqual(
+    resolveDirectionalDepartureTimes({ departureTimesByDirection: { down: ['06:00'] } }),
+    { down: ['06:00'], up: [] },
+  );
+  assert.deepEqual(
+    resolveDirectionalDepartureTimes({ departureTimesByDirection: { up: ['08:00'] } }),
+    { down: [], up: ['08:00'] },
+  );
+});
+
+test('resolver does not resurrect cleared directional sides from legacy times', () => {
+  assert.deepEqual(
+    resolveDirectionalDepartureTimes({
+      departureTimes: ['05:00'],
+      departureRules: [rule('05:00')],
+      departureTimesByDirection: { down: [], up: ['08:00'] },
+      departureRulesByDirection: { down: [], up: [] },
+    }),
+    { down: [], up: ['08:00'] },
+  );
+});
+
+test('resolver treats directional rules as an existing configuration', () => {
+  assert.deepEqual(
+    resolveDirectionalDepartureTimes({
+      departureTimes: ['05:00'],
+      departureRulesByDirection: { up: [rule('09:00')] },
+    }),
+    { down: [], up: [] },
+  );
+});
+
+test('resolver only falls back to legacy times when directional data is absent', () => {
+  assert.deepEqual(resolveDirectionalDepartureTimes({ departureTimes: ['06:00', '07:00'] }), {
+    down: ['06:00', '07:00'],
+    up: [],
+  });
+  assert.deepEqual(resolveDirectionalDepartureTimes(undefined), { down: [], up: [] });
 });

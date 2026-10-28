@@ -87,6 +87,7 @@ import {
   type TransitRealtimeVehicle,
   type TransitStationBoardEntry,
 } from '../lib/transit-realtime';
+import { resolveDirectionalDepartureTimes } from '../lib/transit-departure-editor';
 import { getTransitStopLocationMarkerIdsForDirection } from '../lib/transit-stop-location';
 import {
   buildMapMarkerSearchText,
@@ -7162,9 +7163,8 @@ function getDirectionalDepartureTimes(
   line: TransitOverviewLine,
   direction: TransitLineTravelDirection,
 ): string[] {
-  const down = line.departureTimesByDirection?.down ?? line.departureTimes;
-  const up = line.departureTimesByDirection?.up;
-  return direction === 'forward' ? (down ?? []) : (up ?? []);
+  const { down, up } = resolveDirectionalDepartureTimes(line);
+  return direction === 'forward' ? down : up;
 }
 
 /** 实时公交模块与车辆位置图标沿用线路交通方式图标。 */

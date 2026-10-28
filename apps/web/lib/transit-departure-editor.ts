@@ -5,6 +5,28 @@ type DepartureSchedule = Pick<
   'departureTimes' | 'departureRules' | 'departureTimesByDirection' | 'departureRulesByDirection'
 >;
 
+export interface DirectionalDepartureTimes {
+  down: string[];
+  up: string[];
+}
+
+/**
+ * 存在分方向配置（时刻或规则）时以其为准，缺失的一侧视为空；
+ * 完全缺少分方向字段的旧数据只兼容到正向，不推断反向。
+ */
+export function resolveDirectionalDepartureTimes(
+  line: DepartureSchedule | undefined,
+): DirectionalDepartureTimes {
+  if (line?.departureTimesByDirection || line?.departureRulesByDirection) {
+    return {
+      down: line.departureTimesByDirection?.down ?? [],
+      up: line.departureTimesByDirection?.up ?? [],
+    };
+  }
+
+  return { down: line?.departureTimes ?? [], up: [] };
+}
+
 /** Directional schedules are authoritative, including an empty or missing side. */
 export function formatTransitDepartureRulesForEditor(
   line: DepartureSchedule | undefined,

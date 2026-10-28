@@ -28,6 +28,7 @@ import {
 } from './legacy-data-source';
 import { readRuntimeConfig, type RuntimeConfig } from './runtime-config';
 import { createTimedCache } from './server-cache';
+import { resolveDirectionalDepartureTimes } from './transit-departure-editor';
 
 export interface TransitLineSummary {
   id: string;
@@ -458,9 +459,14 @@ export function buildTransitOverview(
 function resolveTransitDepartureTimesByDirection(
   line: TransitLineSnapshot,
 ): TransitLineSummary['departureTimesByDirection'] {
-  const down = normalizeDepartureTimes(line.departureTimesByDirection?.down ?? line.departureTimes);
-  const up = normalizeDepartureTimes(line.departureTimesByDirection?.up);
-  return down || up ? { ...(down ? { down } : {}), ...(up ? { up } : {}) } : undefined;
+  const directional = resolveDirectionalDepartureTimes(line);
+  const down = normalizeDepartureTimes(directional.down);
+  const up = normalizeDepartureTimes(directional.up);
+  // 分方向配置存在时保留空对象，避免下游把"显式清空"误判为无方向数据而回退旧字段。
+  if (line.departureTimesByDirection || line.departureRulesByDirection) {
+    return { ...(down ? { down } : {}), ...(up ? { up } : {}) };
+  }
+  return down ? { down } : undefined;
 }
 
 function normalizeDepartureTimes(values: string[] | undefined): string[] | undefined {
