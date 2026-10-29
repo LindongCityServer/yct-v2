@@ -1,6 +1,12 @@
 'use client';
 
 import { useEffect } from 'react';
+import type { AccentTone } from '@yct/contracts';
+import {
+  fetchLdpassThemeSchedule,
+  readCachedLdpassAccentTone,
+  writeCachedLdpassThemeSchedule,
+} from '../lib/client-ldpass-theme';
 import {
   fetchServerLocalePreference,
   localePreferenceChangedEventName,
@@ -30,6 +36,9 @@ export const preferenceKeys = {
   font: 'yct.fontMode',
 } as const;
 
+// 临东通主题计划的最小粒度为分钟，按分钟重新解析即可在生效时刻自动切换。
+const ldpassAccentSyncIntervalMs = 60_000;
+
 export function applyThemeMode(mode: ThemeMode) {
   document.documentElement.dataset.colorScheme = mode;
   window.localStorage.setItem(preferenceKeys.theme, mode);
@@ -38,12 +47,51 @@ export function applyThemeMode(mode: ThemeMode) {
 }
 
 export function applyAccentMode(mode: AccentMode) {
-  if (mode === 'red' || mode === 'gray') {
-    document.documentElement.dataset.accent = mode;
-  } else {
-    delete document.documentElement.dataset.accent;
-  }
+  applyAccentTone(resolveAccentTone(mode));
   window.localStorage.setItem(preferenceKeys.accent, mode);
+}
+
+function resolveAccentTone(mode: AccentMode): AccentTone {
+  if (mode === 'ldpass') {
+    return readCachedLdpassAccentTone();
+  }
+  return mode === 'red' || mode === 'gray' ? mode : 'teal';
+}
+
+function applyAccentTone(tone: AccentTone) {
+  const root = document.documentElement;
+  if (tone === 'red' || tone === 'gray') {
+    if (root.dataset.accent !== tone) {
+      root.dataset.accent = tone;
+    }
+    return;
+  }
+
+  if (root.dataset.accent !== undefined) {
+    delete root.dataset.accent;
+  }
+}
+
+/**
+ * 拉取临东通主题计划并刷新本地缓存。
+ * 仅在“跟随临东通”模式或即将切换到该模式时调用；失败时继续使用本地缓存。
+ */
+export async function refreshLdpassAccentSchedule(): Promise<void> {
+  const schedule = await fetchLdpassThemeSchedule();
+  if (!schedule) {
+    return;
+  }
+
+  writeCachedLdpassThemeSchedule(schedule);
+  if (readAccentMode() === 'ldpass') {
+    applyAccentTone(resolveAccentTone('ldpass'));
+  }
+}
+
+function applyScheduledLdpassAccent() {
+  if (readAccentMode() === 'ldpass') {
+    applyAccentTone(resolveAccentTone('ldpass'));
+  }
 }
 
 export function applyMotionMode(mode: MotionMode) {
@@ -153,6 +201,11 @@ export function PreferenceBridge() {
     applyStoredPreferences();
     let ignoreServerLocale = false;
 
+    // “跟随临东通”时先用本地缓存渲染，再异步同步主题计划。
+    if (readAccentMode() === 'ldpass') {
+      void refreshLdpassAccentSchedule();
+    }
+
     const handleStorage = (event: StorageEvent) => {
       if (
         Object.values(preferenceKeys).includes(
@@ -160,6 +213,10 @@ export function PreferenceBridge() {
         )
       ) {
         applyStoredPreferences();
+
+        if (event.key === preferenceKeys.accent && readAccentMode() === 'ldpass') {
+          void refreshLdpassAccentSchedule();
+        }
       }
 
       if (event.key === localePreferenceStorageKey) {
@@ -201,6 +258,21 @@ export function PreferenceBridge() {
     reducedTransparencyQuery.addEventListener('change', handleReducedTransparencyChanged);
     colorSchemeQuery.addEventListener('change', handleColorSchemeChanged);
 
+    // 每分钟按本地时间重新解析一次主题计划，跨过生效时刻后无需刷新页面即可换色。
+    const ldpassAccentTimer = window.setInterval(
+      applyScheduledLdpassAccent,
+      ldpassAccentSyncIntervalMs,
+    );
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible' || readAccentMode() !== 'ldpass') {
+        return;
+      }
+
+      void refreshLdpassAccentSchedule();
+      applyScheduledLdpassAccent();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     void fetchServerLocalePreference()
       .then((preference) => {
         if (!preference || ignoreServerLocale) {
@@ -217,6 +289,8 @@ export function PreferenceBridge() {
       ignoreServerLocale = true;
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener(localePreferenceChangedEventName, handleLocalePreferenceChanged);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearInterval(ldpassAccentTimer);
       unsubscribeMaterialPreference();
       reducedTransparencyQuery.removeEventListener('change', handleReducedTransparencyChanged);
       colorSchemeQuery.removeEventListener('change', handleColorSchemeChanged);

@@ -60,6 +60,7 @@ import {
   readFontMode,
   readMotionMode,
   readThemeMode,
+  refreshLdpassAccentSchedule,
 } from './preference-bridge';
 import {
   readMaterialPreference,
@@ -274,6 +275,7 @@ export function AccountSettingsPanel({
     ldpassConfigured: boolean;
     ldpassBaseUrl?: string;
     localAdminAuthEnabled?: boolean;
+    isLocalAdmin?: boolean;
     status?: AuthStatus;
     session?: YctAccountSessionSnapshot;
   };
@@ -670,6 +672,11 @@ export function AccountSettingsPanel({
   const updateAccentMode = (mode: AccentMode) => {
     setAccentMode(mode);
     applyAccentMode(mode);
+
+    if (mode === 'ldpass') {
+      // 切到“跟随临东通”时立即重新拉取主题计划，避免继续沿用旧缓存或默认色。
+      void refreshLdpassAccentSchedule();
+    }
   };
 
   const updateMaterialMode = (mode: MaterialMode) => {
@@ -1995,6 +2002,7 @@ function AccountAuthPanel({
     ldpassConfigured: boolean;
     ldpassBaseUrl?: string;
     localAdminAuthEnabled?: boolean;
+    isLocalAdmin?: boolean;
     status?: AuthStatus;
     session?: YctAccountSessionSnapshot;
   };
@@ -2008,14 +2016,16 @@ function AccountAuthPanel({
     <section className="account-auth-panel" aria-labelledby="account-auth-title">
       <div className="account-identity">
         <span className="account-avatar" aria-hidden="true">
-          {user?.avatarUrl || readonlyUser?.avatarUrl ? (
+          {!auth.isLocalAdmin && (user?.avatarUrl || readonlyUser?.avatarUrl) ? (
             <ProgressiveImage
               src={user?.avatarUrl ?? readonlyUser?.avatarUrl ?? ''}
               alt=""
               showStatus={false}
             />
           ) : (
-            <span className="material-symbols-outlined">account_circle</span>
+            <span className="material-symbols-outlined">
+              {auth.isLocalAdmin ? 'admin_panel_settings' : 'account_circle'}
+            </span>
           )}
         </span>
         <div>

@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { SecondaryShell } from '../../components/app-shell';
 import { AccountSettingsPanel } from '../../components/account-settings-panel';
+import { isLocalAdminUser } from '../../lib/local-admin';
 import { readRuntimeConfig } from '../../lib/runtime-config';
 import { getPageMetadata } from '../../lib/site-metadata';
 import { readYctServerSession } from '../../lib/yct-server-session-store';
@@ -30,6 +31,10 @@ export default async function AccountPage({
   const authStatus = Array.isArray(resolvedSearchParams?.auth)
     ? (resolvedSearchParams?.auth[0] ?? '')
     : (resolvedSearchParams?.auth ?? '');
+  const snapshotUser = serverSession?.snapshot?.user;
+  const isLocalAdmin = snapshotUser
+    ? isLocalAdminUser({ id: snapshotUser.ldpassUserId, username: snapshotUser.username })
+    : false;
 
   return (
     <SecondaryShell title="账号设置" titleKey="page.account" legalVariant="mobile">
@@ -38,6 +43,7 @@ export default async function AccountPage({
           ldpassConfigured: Boolean(config.ldpassBaseUrl && config.ldpassClientId),
           ldpassBaseUrl: config.ldpassBaseUrl,
           localAdminAuthEnabled: config.localAdminAuthEnabled,
+          isLocalAdmin,
           status: normalizeAuthStatus(authStatus),
           session: serverSession?.snapshot,
         }}

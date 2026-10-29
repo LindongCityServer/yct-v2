@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { NextResponse } from 'next/server';
 import type { LdpassClientSessionResponse, YctAccountSessionSnapshot } from '@yct/contracts';
+import { isLocalAdminUser } from './local-admin';
 
 export const yctAuthStateCookieName = 'yct.ldpass_state';
 export const yctAuthReturnOriginCookieName = 'yct.ldpass_return_origin';
@@ -37,14 +38,18 @@ export function createYctSessionSnapshot(
   linkedAt = new Date().toISOString(),
 ): YctAccountSessionSnapshot | undefined {
   if (session.authenticated && session.user) {
-    const avatarFallbackUrl = buildMinotarAvatarUrl(
-      session.user.serverAccountName ?? session.user.username,
-    );
-    const avatarUrl = resolveYctAvatarUrl({
-      avatarFallbackUrl: session.user.avatarFallbackUrl,
-      avatarUrl: session.user.avatarUrl,
-      minotarUrl: avatarFallbackUrl,
-    });
+    // 本地管理员没有临东通头像，也不存在可用的 Minotar 皮肤；显式留空，前端回退到 Material Symbol。
+    const localAdmin = isLocalAdminUser(session.user);
+    const avatarFallbackUrl = localAdmin
+      ? undefined
+      : buildMinotarAvatarUrl(session.user.serverAccountName ?? session.user.username);
+    const avatarUrl = localAdmin
+      ? undefined
+      : resolveYctAvatarUrl({
+          avatarFallbackUrl: session.user.avatarFallbackUrl,
+          avatarUrl: session.user.avatarUrl,
+          minotarUrl: avatarFallbackUrl,
+        });
 
     return {
       authenticated: true,
@@ -56,7 +61,9 @@ export function createYctSessionSnapshot(
         serverAccountName: session.user.serverAccountName,
         serverAccountVerified: session.user.serverAccountVerified,
         avatarUrl,
-        avatarFallbackUrl: avatarFallbackUrl ?? session.user.avatarFallbackUrl,
+        avatarFallbackUrl: localAdmin
+          ? undefined
+          : (avatarFallbackUrl ?? session.user.avatarFallbackUrl),
       },
     };
   }
@@ -116,6 +123,23 @@ export function parseYctSessionSnapshot(
 
 function withAvatarFallback(snapshot: YctAccountSessionSnapshot): YctAccountSessionSnapshot {
   if (snapshot.user) {
+    // 旧快照可能已经写入过 Minotar 头像；本地管理员统一清空，避免继续请求必然失败的头像。
+    if (
+      isLocalAdminUser({
+        id: snapshot.user.ldpassUserId,
+        username: snapshot.user.username,
+      })
+    ) {
+      return {
+        ...snapshot,
+        user: {
+          ...snapshot.user,
+          avatarUrl: undefined,
+          avatarFallbackUrl: undefined,
+        },
+      };
+    }
+
     const fallbackUrl = buildMinotarAvatarUrl(
       snapshot.user.serverAccountName ?? snapshot.user.username,
     );

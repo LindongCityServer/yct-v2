@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveYctAdminMembershipForLdpassUser } from '../../../../lib/admin-identity';
 import { readAdminPendingReviewSummary } from '../../../../lib/admin-pending-review-summary';
 import { markResponseNoStore } from '../../../../lib/http-cache';
-import { resolveServerAccountVerified } from '../../../../lib/local-admin';
+import { resolveServerAccountVerified, isLocalAdminUser } from '../../../../lib/local-admin';
 import { readRuntimeConfig } from '../../../../lib/runtime-config';
 import { countPendingTicketOrdersForLdpassUser } from '../../../../lib/ticket-order-workflow';
 import { readYctServerSession } from '../../../../lib/yct-server-session-store';
@@ -22,6 +22,7 @@ interface AccountStatusResponse {
   accountStatus: 'not_configured' | 'anonymous' | 'active' | 'readonly' | 'unavailable';
   username?: string;
   avatarUrl?: string | null;
+  isLocalAdmin?: boolean;
   serverAccountVerified?: boolean;
   badge: AccountBadgeSummary;
   admin?: {
@@ -87,6 +88,7 @@ export async function GET(request: NextRequest) {
 
     if (session.authenticated && session.user) {
       const identity = serverSession.snapshot.user;
+      const localAdmin = isLocalAdminUser(session.user);
       const membership = await resolveYctAdminMembershipForLdpassUser(session.user);
       const [pendingReview, pendingTicketOrderCount] = await Promise.all([
         membership ? readAdminPendingReviewSummary() : undefined,
@@ -109,7 +111,8 @@ export async function GET(request: NextRequest) {
         NextResponse.json({
           accountStatus: 'active',
           username: identity?.username ?? session.user.username,
-          avatarUrl: identity?.avatarUrl,
+          avatarUrl: localAdmin ? undefined : identity?.avatarUrl,
+          isLocalAdmin: localAdmin || undefined,
           serverAccountVerified: resolveServerAccountVerified(session.user),
           badge:
             totalBadgeCount > 0

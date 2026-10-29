@@ -1,9 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
+import { flushAnalyticsQueue, trackAnalyticsEvent } from '../lib/analytics/client';
 import { appPath } from '../lib/app-paths';
+import { BrandSymbol, BrandWordmark } from './brand-logo';
 import { publishLoginRequired, publishLoginRequiredForResponse } from '../lib/client-auth-events';
 import {
   readAssistantEntryPreference,
@@ -47,6 +50,7 @@ interface AccountStatusResponse {
   accountStatus: 'not_configured' | 'anonymous' | 'active' | 'readonly' | 'unavailable';
   username?: string;
   avatarUrl?: string | null;
+  isLocalAdmin?: boolean;
   badge: {
     kind: 'none' | 'count' | 'dot';
     count: number;
@@ -240,6 +244,12 @@ function AppShellFrame({
         showTopbarNotice(payload.message ?? t('quickAction.rideCodeUnavailable'));
         return;
       }
+      trackAnalyticsEvent('feature.used', {
+        feature: 'ridecode.session',
+        surface: 'quick_action',
+      });
+      // 马上离开本站，先冲刷队列，避免事件随页面卸载丢失。
+      flushAnalyticsQueue(true);
       window.location.assign(payload.actionUrl);
     } catch {
       showTopbarNotice(t('quickAction.rideCodeUnavailable'));
@@ -292,7 +302,7 @@ function AppShellFrame({
         order: 30,
         priority: 50,
         label: accountButtonAriaLabel(accountStatus, accountBadge, t),
-        icon: accountIcon(accountStatus?.accountStatus),
+        icon: accountIcon(accountStatus?.accountStatus, accountStatus?.isLocalAdmin),
         href: appPath('/account'),
         badge:
           accountBadge.kind === 'count'
@@ -363,16 +373,8 @@ function AppShellFrame({
           href={appPath('/')}
           aria-label={t('brand.home')}
         >
-          <img
-            className="brand-logo brand-logo-wordmark"
-            src={appPath('/icons/yct-logo-wordmark.svg')}
-            alt={locale === 'en' ? 'Yuchengtong' : '雨城通'}
-          />
-          <img
-            className="brand-logo brand-logo-symbol"
-            src={appPath('/icons/yct-logo.svg')}
-            alt={locale === 'en' ? 'Yuchengtong' : '雨城通'}
-          />
+          <BrandWordmark className="brand-logo brand-logo-wordmark" />
+          <BrandSymbol className="brand-logo brand-logo-symbol" />
         </Link>
         {topbarPageTitle ? <span className="topbar-page-title">{topbarPageTitle}</span> : null}
         <div className="topbar-actions">
@@ -413,7 +415,7 @@ function AppShellFrame({
               />
             ) : (
               <span className="material-symbols-outlined">
-                {accountIcon(accountStatus?.accountStatus)}
+                {accountIcon(accountStatus?.accountStatus, accountStatus?.isLocalAdmin)}
               </span>
             )}
             {accountBadge.kind === 'count' ? (
@@ -540,7 +542,14 @@ function mergeTopbarBadge(
   };
 }
 
-function accountIcon(status: AccountStatusResponse['accountStatus'] | undefined): string {
+function accountIcon(
+  status: AccountStatusResponse['accountStatus'] | undefined,
+  isLocalAdmin?: boolean,
+): string {
+  if (isLocalAdmin) {
+    return 'admin_panel_settings';
+  }
+
   if (status === 'readonly') {
     return 'manage_accounts';
   }
@@ -586,6 +595,7 @@ function SecondaryShellFrame({
   children,
 }: SecondaryShellProps) {
   const { t } = useI18n();
+  const pathname = usePathname();
   const mobileActionRail = useMobileActionRail();
   const [assistantPreference, setAssistantPreference] = useState(readAssistantEntryPreference);
 
@@ -595,7 +605,14 @@ function SecondaryShellFrame({
     return subscribeAssistantEntryPreferenceChanged(setAssistantPreference);
   }, []);
 
-  const showAssistantEntry = assistantPreference.enabled && assistantPreference.allPages;
+  // 管理后台的二级页面不再保留问一问入口，后台操作页面不面向普通问答。
+  const normalizedPathname = pathname.replace(/\/+$/, '') || '/';
+  const adminBasePath = appPath('/admin');
+  const isAdminSecondaryPage =
+    normalizedPathname !== adminBasePath && normalizedPathname.startsWith(`${adminBasePath}/`);
+
+  const showAssistantEntry =
+    assistantPreference.enabled && assistantPreference.allPages && !isAdminSecondaryPage;
   const assistantInRail = showAssistantEntry && Boolean(mobileActionRail?.enabled);
 
   const railActions = useMemo<MobileActionRailItem[]>(

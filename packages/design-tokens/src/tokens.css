@@ -7,6 +7,9 @@
   --yct-color-accent: #168f78;
   --yct-color-accent-red: #c93a3a;
   --yct-color-accent-gray: #6f7775;
+  /* 品牌标识色：内联 SVG logo/wordmark 直接消费，强调色切换时同步换色。 */
+  --yct-brand-light: #32c5c7;
+  --yct-brand-deep: #0e8384;
   --yct-color-secondary: #2584e8;
   --yct-color-tertiary: #f59b22;
   --yct-color-coach: #8bbf35;
@@ -120,6 +123,8 @@
   --yct-color-primary: var(--yct-color-accent-red);
   --yct-color-primary-hover: #a93030;
   --yct-color-primary-soft: #fff0f0;
+  --yct-brand-light: #ff8a3d;
+  --yct-brand-deep: #c93a3a;
 }
 
 :root[data-motion='reduced'] {
@@ -157,6 +162,26 @@
   --yct-color-primary: var(--yct-color-accent-gray);
   --yct-color-primary-hover: #565e5c;
   --yct-color-primary-soft: #f0f2f1;
+  --yct-brand-light: #9aa09f;
+  --yct-brand-deep: #6f7775;
+  /*
+   * 哀悼日配色：语义色统一收敛为灰阶。
+   * 保留少量明度差，让地铁/公交/轮渡等分类仍可区分，但不再出现彩色。
+   * 徽标、提醒条、分类 chip、线路 badge 都直接消费这些 token，因此会一起变灰。
+   */
+  --yct-color-secondary: #5f6765;
+  --yct-color-tertiary: #737b79;
+  --yct-color-coach: #7b8381;
+  --yct-color-railway: #656d6b;
+  --yct-color-flight: #828a88;
+  --yct-color-tram: #6a7270;
+  --yct-color-ferry: #767e7c;
+  --yct-color-success: #6f7775;
+  --yct-color-success-strong: #565e5c;
+  --yct-color-warning: #7c8482;
+  --yct-color-warning-strong: #616967;
+  --yct-color-danger: #6f7775;
+  --yct-color-error: #6f7775;
 }
 
 :root[data-color-scheme='dark'] {

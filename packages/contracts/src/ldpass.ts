@@ -42,6 +42,28 @@ export interface LdpassClientSessionResponse {
   };
 }
 
+export interface LdpassThemeScheduleEntry {
+  effectiveAt: ISODateTimeString;
+  tone: AccentTone;
+  enabled: boolean;
+  note?: string | null;
+}
+
+export interface LdpassThemeScheduleResponse {
+  entries: LdpassThemeScheduleEntry[];
+}
+
+export interface LdpassAccentScheduleEntry {
+  effectiveAt: ISODateTimeString;
+  tone: AccentTone;
+}
+
+export interface YctLdpassThemeScheduleResponse {
+  activeTone: AccentTone;
+  entries: LdpassAccentScheduleEntry[];
+  fetchedAt: ISODateTimeString;
+}
+
 export interface LdpassThemePlan {
   id: string;
   name: string;
