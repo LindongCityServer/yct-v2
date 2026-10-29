@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import '@yct/design-tokens/tokens.css';
+import { AnalyticsBridge } from '../components/analytics-bridge';
 import { EmbeddedContextBridge } from '../components/embedded-context-bridge';
 import { EmbeddedAuthBridge } from '../components/embedded-auth-bridge';
 import { EmbeddedHostBridges } from '../components/embedded-host-bridges';
@@ -90,6 +91,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         ) : null}
       </head>
       <body>
+        <AnalyticsBridge />
         <EmbeddedContextBridge />
         <EmbeddedAuthBridge />
         <EmbeddedHostBridges />

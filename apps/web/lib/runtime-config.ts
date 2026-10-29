@@ -51,6 +51,10 @@ export interface RuntimeConfig {
   materialSymbolAssetDir: string;
   offlinePackageStorePath: string;
   eventOutboxStorePath: string;
+  analyticsEnabled: boolean;
+  analyticsDbPath: string;
+  analyticsMetricsFilePath: string;
+  analyticsRetentionDays: number;
   localePreferenceStorePath: string;
   mapFavoriteStorePath: string;
   mapMarkerPublicSnapshotStorePath: string;
@@ -275,6 +279,16 @@ export function readRuntimeConfig(): RuntimeConfig {
       process.env.YCT_EVENT_OUTBOX_STORE_PATH,
       '.yct-data/event-outbox-store.json',
     ),
+    analyticsEnabled: parseBoolean(process.env.YCT_ANALYTICS_ENABLED, true),
+    analyticsDbPath: resolveRuntimePath(
+      process.env.YCT_ANALYTICS_DB_PATH,
+      '.yct-data/analytics/analytics.db',
+    ),
+    analyticsMetricsFilePath: resolveRuntimePath(
+      process.env.YCT_ANALYTICS_METRICS_PATH,
+      '.yct-data/analytics/metrics-daily.json',
+    ),
+    analyticsRetentionDays: parsePositiveInteger(process.env.YCT_ANALYTICS_RETENTION_DAYS, 90),
     localePreferenceStorePath: resolveRuntimePath(
       process.env.YCT_LOCALE_PREFERENCE_STORE_PATH,
       '.yct-data/locale-preference-store.json',

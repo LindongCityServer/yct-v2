@@ -62,6 +62,7 @@ pnpm typecheck
 - [阶段目标](docs/GOALS.md)
 - [视觉与交互设计](DESIGN.md)
 - [事件契约](docs/EVENT_SCHEMA.md)
+- [统计与功能度量方案](docs/ANALYTICS_PLAN.md)
 - [地图接入](docs/MAP_INTEGRATION.md)
 - [物料模板与线网来源](docs/MATERIAL_TEMPLATE_SOURCE.md)
 - [多语言方案](docs/I18N_PLAN.md)

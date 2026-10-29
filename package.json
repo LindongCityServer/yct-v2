@@ -27,6 +27,8 @@
     "legacy:inspect": "tsx scripts/inspect-legacy-data.ts",
     "legacy:assets:download": "tsx scripts/download-legacy-assets.ts",
     "admin:init": "tsx scripts/init-admin.ts",
+    "analytics:aggregate": "tsx scripts/aggregate-analytics.ts",
+    "web:analytics:aggregate": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-web-analytics-aggregate.ps1",
     "runtime:check": "node scripts/run-runtime-check.mjs",
     "web:dev:start": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-dev-start.ps1",
     "web:dev:stop": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-dev-stop.ps1",

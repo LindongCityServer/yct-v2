@@ -1,4 +1,5 @@
 import { SecondaryShell } from '../../components/app-shell';
+import { AdminAnalyticsOverview } from '../../components/admin-analytics-overview';
 import { AdminHomeHeading, AdminHomeOverview } from '../../components/admin-home-overview';
 import { AdminSectionNavigation } from '../../components/admin-section-navigation';
 import { getPageMetadata } from '../../lib/site-metadata';
@@ -14,6 +15,7 @@ export default function AdminHomePage() {
       <section className="module-panel admin-home-panel" aria-labelledby="admin-home-title">
         <AdminHomeHeading />
         <AdminHomeOverview />
+        <AdminAnalyticsOverview />
         <AdminSectionNavigation currentPath="/admin" />
       </section>
     </SecondaryShell>
