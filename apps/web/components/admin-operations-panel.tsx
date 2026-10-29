@@ -209,6 +209,14 @@ export function AdminOperationsPanel({
   const [recordsLoaded, setRecordsLoaded] = useState(false);
   const [reminderRules, setReminderRules] = useState<OperationsStrongReminderRule[]>([]);
   const [reminderPreview, setReminderPreview] = useState<ReminderPreviewResponse | null>(null);
+  const [userDirectory, setUserDirectory] = useState<AdminUserDirectoryEntry[]>([]);
+  const actorNameById = useMemo(() => {
+    const entries: Array<[string, string]> = [];
+    for (const actor of userDirectory) {
+      entries.push([actor.id, actor.displayName], [actor.ldpassUserId, actor.displayName]);
+    }
+    return new Map(entries);
+  }, [userDirectory]);
   const [assetRecords, setAssetRecords] = useState<AdminContentAssetRecord[]>([]);
   const [legacyAssetManifest, setLegacyAssetManifest] = useState<LegacyAssetManifest | null>(null);
   const [legacyContentAssets, setLegacyContentAssets] =
@@ -649,6 +657,19 @@ export function AdminOperationsPanel({
     );
   };
 
+  const loadUserDirectory = async () => {
+    try {
+      const response = await fetch(appPath('/api/admin/user-links'), { cache: 'no-store' });
+      if (!response.ok) {
+        return;
+      }
+      const data = (await response.json()) as { actors?: AdminUserDirectoryEntry[] };
+      setUserDirectory(data.actors ?? []);
+    } catch {
+      // 用户目录仅用于展示名称，读取失败时回退显示原始 ID。
+    }
+  };
+
   const loadReminderPreview = async () => {
     const response = await fetch(appPath('/api/admin/operations/reminder-preview'), {
       cache: 'no-store',
@@ -807,6 +828,7 @@ export function AdminOperationsPanel({
 
   const reloadOperationsData = () =>
     Promise.all([
+      loadUserDirectory(),
       loadRecords(),
       loadReminderRules(),
       loadReminderPreview(),
@@ -1752,17 +1774,26 @@ export function AdminOperationsPanel({
               {editingContentId ? (
                 <>
                   <p>{markdown.trim().split('\n').find(Boolean) ?? '正文为空'}</p>
-                  <button
-                    className="secondary-action-button"
-                    type="button"
-                    disabled={isBusy || isContentEditorDirty}
-                    onClick={() => openContentEditorPage(editingContentId)}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      edit_note
-                    </span>
-                    <span>打开 Markdown 编辑器</span>
-                  </button>
+                  {isBusy || isContentEditorDirty ? (
+                    <button className="secondary-action-button" type="button" disabled>
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        edit_note
+                      </span>
+                      <span>打开 Markdown 编辑器</span>
+                    </button>
+                  ) : (
+                    <a
+                      className="secondary-action-button"
+                      href={appPath(
+                        `/admin/operations/editor?contentId=${encodeURIComponent(editingContentId)}`,
+                      )}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        edit_note
+                      </span>
+                      <span>打开 Markdown 编辑器</span>
+                    </a>
+                  )}
                   {isContentEditorDirty ? (
                     <small className="muted">
                       请先保存当前元数据修改，再进入 Markdown 编辑器。
@@ -2168,7 +2199,10 @@ export function AdminOperationsPanel({
                           )}`,
                           meta: [
                             taskRun.actorId
-                              ? `${taskRun.actorType === 'admin' ? '管理员' : '系统'} ${taskRun.actorId}`
+                              ? `${taskRun.actorType === 'admin' ? '管理员' : '系统'} ${formatActorName(
+                                  taskRun.actorId,
+                                  actorNameById,
+                                )}`
                               : taskRun.actorType === 'admin'
                                 ? '管理员触发'
                                 : '系统触发',
@@ -2208,7 +2242,7 @@ export function AdminOperationsPanel({
                       emptyText="当前没有可用于运营提醒的账号偏好记录。"
                       items={reminderPreview.users.map((user) => ({
                         id: user.userId,
-                        title: user.userId,
+                        title: formatActorName(user.userId, actorNameById),
                         meta: describeReminderPreviewUser(user),
                         body: user.lastDeliveryAt
                           ? `最近写入 ${formatDateTime(user.lastDeliveryAt)}`
@@ -2220,7 +2254,7 @@ export function AdminOperationsPanel({
                       emptyText="当前没有运营提醒投递记录。"
                       items={reminderPreview.deliveries.slice(0, 12).map((delivery) => ({
                         id: delivery.deliveryId,
-                        title: `${delivery.payload.title} -> ${delivery.userId}`,
+                        title: `${delivery.payload.title} -> ${formatActorName(delivery.userId, actorNameById)}`,
                         meta: `${describePushDeliveryStatus(delivery.status)} · ${formatDateTime(
                           delivery.createdAt,
                         )}`,
@@ -4074,6 +4108,12 @@ function describeStringListDiff(
   return `${label}：新增 ${added.length}，移除 ${removed.length}`;
 }
 
+interface AdminUserDirectoryEntry {
+  id: string;
+  ldpassUserId: string;
+  displayName: string;
+}
+
 interface ReminderPreviewResponse {
   generatedAt: string;
   sourceStates: Array<{
@@ -4424,12 +4464,22 @@ function describeReminderPreviewUser(user: ReminderPreviewResponse['users'][numb
         ? '会被标记为无订阅跳过'
         : '已关闭运营提醒';
   return [
-    `ldpass ${user.ldpassUserId}`,
     user.operationsEnabled ? '已启用运营提醒' : '未启用运营提醒',
     `订阅 ${user.subscriptionCount}`,
     `候选 ${user.candidateCount}`,
     actionText,
   ].join(' · ');
+}
+
+/** 将用户 ID 显示为“用户名（ID 末段）”，缺少快照时回退为原始 ID。 */
+function formatActorName(actorId: string, actorNameById: Map<string, string>): string {
+  const name = actorNameById.get(actorId);
+  if (!name || name === actorId) {
+    return actorId;
+  }
+
+  const suffix = actorId.length > 8 ? actorId.slice(-6) : actorId;
+  return `${name}（${suffix}）`;
 }
 
 function describePushDeliveryStatus(status: PushDelivery['status']): string {

@@ -11,6 +11,7 @@ import {
   createPoiSubmissionByAdmin,
   listAdminPoiSubmissions,
 } from '../../../../../lib/poi-submission-workflow';
+import { listYctUserLinks } from '../../../../../lib/yct-user-link-store';
 
 type AdminPoiSubmissionResponse = PoiSubmission & {
   imageMetadataByUrl?: Record<string, StoredPoiSubmissionImageMetadata>;
@@ -22,10 +23,14 @@ export async function GET(request: NextRequest) {
     return admin.response;
   }
 
-  const submissions = await listAdminPoiSubmissions();
+  const [submissions, users] = await Promise.all([listAdminPoiSubmissions(), listYctUserLinks()]);
   const items = await Promise.all(submissions.map(withImageMetadata));
   return NextResponse.json({
     items,
+    actors: users.map((user) => ({
+      ldpassUserId: user.ldpassUserId,
+      displayName: user.usernameSnapshot || user.serverAccountNameSnapshot || user.ldpassUserId,
+    })),
   });
 }
 

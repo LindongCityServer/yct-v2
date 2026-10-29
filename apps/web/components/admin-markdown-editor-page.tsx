@@ -158,7 +158,11 @@ export function AdminMarkdownEditorPage({
           <span>{isBusy ? '保存中' : '保存'}</span>
         </button>
       }
-      backHref="/admin/operations"
+      backHref={
+        initialContentId
+          ? `/admin/operations?contentId=${encodeURIComponent(initialContentId)}`
+          : '/admin/operations'
+      }
       editorKind="markdown"
       isBusy={isBusy}
       isDirty={isDirty}

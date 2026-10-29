@@ -277,6 +277,7 @@ export function AdminPoiPanel({
   pageWorkspace?: 'geometry' | 'intro';
 }>) {
   const [submissions, setSubmissions] = useState<AdminPoiSubmission[]>([]);
+  const [actorNameById, setActorNameById] = useState<Map<string, string>>(() => new Map());
   const [categories, setCategories] = useState<PoiCategory[]>([]);
   const [mapMarkers, setMapMarkers] = useState<MapMarker[]>([]);
   const [conflictDecisions, setConflictDecisions] = useState<PoiConflictDecision[]>([]);
@@ -636,10 +637,21 @@ export function AdminPoiPanel({
     () => submissions.find((submission) => submission.id === detailTargetId) ?? null,
     [detailTargetId, submissions],
   );
+  const formatActor = (actorId?: string) => formatPoiActorName(actorId, actorNameById);
+  const markerLabelById = useMemo(
+    () => new Map(mapMarkers.map((marker) => [marker.id, marker.label] as const)),
+    [mapMarkers],
+  );
+  const formatRoadMarker = (markerId?: string) =>
+    markerId ? (markerLabelById.get(markerId) ?? markerId) : '未绑定';
 
   const loadSubmissions = async () => {
     const response = await fetch(appPath('/api/admin/map/poi-submissions'), { cache: 'no-store' });
-    const data = (await response.json()) as { items?: AdminPoiSubmission[]; message?: string };
+    const data = (await response.json()) as {
+      items?: AdminPoiSubmission[];
+      actors?: Array<{ ldpassUserId: string; displayName: string }>;
+      message?: string;
+    };
     if (!response.ok) {
       setStatusText(data.message ?? 'POI 后台暂不可用');
       return;
@@ -647,6 +659,9 @@ export function AdminPoiPanel({
 
     const items = data.items ?? [];
     setSubmissions(items);
+    setActorNameById(
+      new Map((data.actors ?? []).map((actor) => [actor.ldpassUserId, actor.displayName])),
+    );
     setStatusText(items.length ? `已读取 ${items.length} 条 POI 投稿` : '暂无 POI 投稿');
   };
 
@@ -803,9 +818,8 @@ export function AdminPoiPanel({
       (item) => item.id === initialMarkerId || `poi-${item.id}` === initialMarkerId,
     );
     if (submission) {
-      if (editorMode === 'page') {
-        setEditTarget(submission);
-      }
+      // 深链 / 从工作台返回：直接打开该 POI 的编辑弹窗。
+      setEditTarget(submission);
       setQuery(submission.title);
       setSelectedSubmissionIds(new Set([submission.id]));
       setSelectedLegacyMarkerIds(new Set());
@@ -813,9 +827,7 @@ export function AdminPoiPanel({
     } else {
       const legacyMarker = mapMarkers.find((marker) => marker.id === initialMarkerId);
       if (legacyMarker) {
-        if (editorMode === 'page') {
-          setLegacyEditTarget(legacyMarker);
-        }
+        setLegacyEditTarget(legacyMarker);
         setQuery(legacyMarker.label);
         setSelectedSubmissionIds(new Set());
         setSelectedLegacyMarkerIds(new Set([legacyMarker.id]));
@@ -1519,7 +1531,11 @@ export function AdminPoiPanel({
     }
     return (
       <VisualEditorShell
-        backHref="/admin/map-poi"
+        backHref={
+          initialMarkerId
+            ? `/admin/map-poi?markerId=${encodeURIComponent(initialMarkerId)}`
+            : '/admin/map-poi'
+        }
         editorKind="poi"
         sessionId={editorSessionId}
         status={poiDataLoaded ? '未找到要编辑的 POI。' : '正在读取 POI 编辑数据'}
@@ -1706,6 +1722,7 @@ export function AdminPoiPanel({
                 <PoiSubmissionReviewItem
                   category={categoryById.get(item.submission.categoryId)}
                   conflictHints={conflictHintsBySubmissionId.get(item.submission.id) ?? []}
+                  formatActor={formatActor}
                   iconBaseUrl={categoryIconBaseUrl}
                   isBusy={isBusy}
                   imageReviews={getPoiImageReviews(item.submission, imageReviewByKey)}
@@ -1783,6 +1800,8 @@ export function AdminPoiPanel({
           conflictDecisionByKey={conflictDecisionByKey}
           contextMarkers={auditContextMarkersBySubmissionId.get(detailTarget.id) ?? []}
           conflictHints={conflictHintsBySubmissionId.get(detailTarget.id) ?? []}
+          formatActor={formatActor}
+          formatRoadMarker={formatRoadMarker}
           hierarchyHint={hierarchyHintBySubmissionId.get(detailTarget.id)}
           imageReviews={getPoiImageReviews(detailTarget, imageReviewByKey)}
           isBusy={isBusy}
@@ -2995,6 +3014,8 @@ function EditLegacyPoiMarkerDialog({
   const iconOptions = selectedCategory?.iconMapping.iconFileNames ?? [];
   /** 简介工作台复用投稿表单结构，仅主标题字段名不同。 */
   const introForm: PoiSubmissionFormInput = { ...form, title: form.label };
+  // 返回后台时带上 POI 标识，后台会自动重新打开该 POI 的编辑弹窗。
+  const pageBackHref = `/admin/map-poi?markerId=${encodeURIComponent(marker.id)}`;
 
   const updateForm = (patch: Partial<LegacyPoiMarkerEditInput>) => {
     setForm((current) => {
@@ -3124,7 +3145,7 @@ function EditLegacyPoiMarkerDialog({
               <span>{isBusy ? '保存中' : '保存简介'}</span>
             </button>
           }
-          backHref="/admin/map-poi"
+          backHref={pageBackHref}
           editorKind="poi"
           isBusy={isBusy}
           isDirty={isDirty}
@@ -3167,7 +3188,7 @@ function EditLegacyPoiMarkerDialog({
             <span>{isBusy ? '保存中' : '保存几何'}</span>
           </button>
         }
-        backHref="/admin/map-poi"
+        backHref={pageBackHref}
         editorKind="poi"
         isBusy={isBusy}
         isDirty={isDirty}
@@ -3533,9 +3554,28 @@ function PoiCategoryBoard({
   );
 }
 
+/** 将 LDPass 用户 ID 显示为“用户名（ID 末段）”，缺少快照时回退为原始 ID。 */
+function formatPoiActorName(
+  actorId: string | undefined,
+  actorNameById: Map<string, string>,
+): string {
+  if (!actorId) {
+    return '未知';
+  }
+
+  const name = actorNameById.get(actorId);
+  if (!name || name === actorId) {
+    return actorId;
+  }
+
+  const suffix = actorId.length > 8 ? actorId.slice(-6) : actorId;
+  return `${name}（${suffix}）`;
+}
+
 function PoiSubmissionReviewItem({
   category,
   conflictHints,
+  formatActor,
   hierarchyHint,
   iconBaseUrl,
   isBusy,
@@ -3554,6 +3594,7 @@ function PoiSubmissionReviewItem({
 }: Readonly<{
   category?: PoiCategory;
   conflictHints: PoiConflictHint[];
+  formatActor: (actorId?: string) => string;
   hierarchyHint?: PoiHierarchyHint | null;
   iconBaseUrl: string;
   isBusy: boolean;
@@ -3652,7 +3693,7 @@ function PoiSubmissionReviewItem({
           <p className="muted">代表坐标：{formatCoordinatePair(representativeCoordinate)}</p>
         ) : null}
         <p className="muted">
-          投稿人：{submission.submittedBy}
+          投稿人：{formatActor(submission.submittedBy)}
           {submission.submittedAt ? ` · ${formatDate(submission.submittedAt)}` : ''}
           {submission.reviewReason ? ` · ${submission.reviewReason}` : ''}
         </p>
@@ -3812,6 +3853,8 @@ function PoiSubmissionDetailDialog({
   conflictDecisionByKey,
   contextMarkers,
   conflictHints,
+  formatActor,
+  formatRoadMarker,
   hierarchyHint,
   imageReviews,
   isBusy,
@@ -3831,6 +3874,8 @@ function PoiSubmissionDetailDialog({
   conflictDecisionByKey: Map<string, PoiConflictDecision>;
   contextMarkers: PoiAuditContextMarker[];
   conflictHints: PoiConflictHint[];
+  formatActor: (actorId?: string) => string;
+  formatRoadMarker: (markerId?: string) => string;
   hierarchyHint?: PoiHierarchyHint | null;
   imageReviews: PoiSubmissionImageReview[];
   isBusy: boolean;
@@ -3962,6 +4007,8 @@ function PoiSubmissionDetailDialog({
         <PoiSubmissionDetail
           category={category}
           contextMarkers={contextMarkers}
+          formatActor={formatActor}
+          formatRoadMarker={formatRoadMarker}
           hierarchyHint={hierarchyHint}
           representativeCoordinate={representativeCoordinate}
           submission={submission}
@@ -3980,6 +4027,8 @@ function PoiSubmissionDetailDialog({
 function PoiSubmissionDetail({
   category,
   contextMarkers,
+  formatActor,
+  formatRoadMarker,
   hierarchyHint,
   representativeCoordinate,
   submission,
@@ -3987,6 +4036,8 @@ function PoiSubmissionDetail({
 }: Readonly<{
   category?: PoiCategory;
   contextMarkers: PoiAuditContextMarker[];
+  formatActor: (actorId?: string) => string;
+  formatRoadMarker: (markerId?: string) => string;
   hierarchyHint?: PoiHierarchyHint | null;
   representativeCoordinate: [number, number] | null;
   submission: PoiSubmission;
@@ -4051,13 +4102,17 @@ function PoiSubmissionDetail({
         </div>
         <div>
           <dt>地址道路</dt>
-          <dd>{submission.addressRoadMarkerId || '未绑定'}</dd>
+          <dd>
+            {submission.addressRoadMarkerId
+              ? formatRoadMarker(submission.addressRoadMarkerId)
+              : '未绑定'}
+          </dd>
         </div>
         <div>
           <dt>审核</dt>
           <dd>
             {submission.reviewedBy
-              ? `${submission.reviewedBy} · ${submission.reviewedAt ? formatDate(submission.reviewedAt) : '已审核'}`
+              ? `${formatActor(submission.reviewedBy)} · ${submission.reviewedAt ? formatDate(submission.reviewedAt) : '已审核'}`
               : '尚未审核'}
           </dd>
         </div>
@@ -4777,7 +4832,9 @@ function EditPoiSubmissionDialog({
   const [draftId, setDraftId] = useState<string | null>(
     submission?.status === 'draft' ? submission.id : null,
   );
-  const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+  const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>(
+    'idle',
+  );
   const autoSaveSnapshotRef = useRef('');
   const autoSavePendingRef = useRef(false);
   /** 记录表单修改版本，避免自动保存返回时把期间的新的修改误标为已保存。 */
@@ -4786,6 +4843,12 @@ function EditPoiSubmissionDialog({
   const submissionMarkerId = submission ? `poi-${submission.id}` : null;
   const selectedCategory = categories.find((category) => category.id === form.categoryId);
   const iconOptions = selectedCategory?.iconMapping.iconFileNames ?? [];
+  /** 已保存的草稿 id：新建弹窗自动保存后即可进入几何/简介工作台。 */
+  const effectivePoiId = submission?.id ?? draftId;
+  // 返回后台时带上 POI 标识，后台会自动重新打开该 POI 的编辑弹窗。
+  const pageBackHref = effectivePoiId
+    ? `/admin/map-poi?markerId=${encodeURIComponent(effectivePoiId)}`
+    : '/admin/map-poi';
 
   const updateForm = (patch: Partial<PoiSubmissionFormInput>) => {
     formVersionRef.current += 1;
@@ -5068,7 +5131,7 @@ function EditPoiSubmissionDialog({
               <span>{isBusy ? '保存中' : '保存简介'}</span>
             </button>
           }
-          backHref="/admin/map-poi"
+          backHref={pageBackHref}
           editorKind="poi"
           isBusy={isBusy}
           isDirty={isDirty}
@@ -5111,7 +5174,7 @@ function EditPoiSubmissionDialog({
             <span>{isBusy ? '保存中' : '保存几何'}</span>
           </button>
         }
-        backHref="/admin/map-poi"
+        backHref={pageBackHref}
         editorKind="poi"
         isBusy={isBusy}
         isDirty={isDirty}
@@ -5142,9 +5205,6 @@ function EditPoiSubmissionDialog({
     buildMapGeometryFromDraft(geometryDraft).geometry ?? null,
   );
 
-  /** 已保存的草稿 id：新建弹窗自动保存后即可进入几何/简介工作台。 */
-  const effectivePoiId = submission?.id ?? draftId;
-
   const geometryEditorElement = (
     <>
       <PoiEditorSection summary={geometryLabelFromDraft(geometryDraft)} title="几何">
@@ -5152,9 +5212,7 @@ function EditPoiSubmissionDialog({
         {effectivePoiId ? (
           <a
             className="secondary-action-button"
-            href={appPath(
-              `/admin/map-poi/editor?markerId=${encodeURIComponent(effectivePoiId)}`,
-            )}
+            href={appPath(`/admin/map-poi/editor?markerId=${encodeURIComponent(effectivePoiId)}`)}
           >
             <span className="material-symbols-outlined" aria-hidden="true">
               edit_location_alt
@@ -5162,7 +5220,9 @@ function EditPoiSubmissionDialog({
             <span>打开几何工作台</span>
           </a>
         ) : (
-          <p className="muted">填写名称后会自动保存草稿，随后即可进入几何工作台选择类型并增删坐标。</p>
+          <p className="muted">
+            填写名称后会自动保存草稿，随后即可进入几何工作台选择类型并增删坐标。
+          </p>
         )}
       </PoiEditorSection>
       {!submission ? (
@@ -5274,7 +5334,9 @@ function EditPoiSubmissionDialog({
           <span>打开简介工作台</span>
         </a>
       ) : (
-        <p className="muted">填写名称后会自动保存草稿，随后即可进入简介工作台编辑图片与营业信息。</p>
+        <p className="muted">
+          填写名称后会自动保存草稿，随后即可进入简介工作台编辑图片与营业信息。
+        </p>
       )}
     </PoiEditorSection>
   );
