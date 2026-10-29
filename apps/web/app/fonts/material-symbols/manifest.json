@@ -2,7 +2,7 @@
   "family": "Material Symbols Outlined",
   "axes": "opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
   "source": "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
-  "iconCount": 360,
+  "iconCount": 362,
   "icons": [
     "accessible",
     "accessible_forward",
@@ -283,6 +283,7 @@
     "service",
     "services",
     "settings",
+    "settings_backup_restore",
     "share",
     "shop",
     "shopping_bag",
@@ -340,6 +341,7 @@
     "u_turn_left",
     "u_turn_right",
     "undo",
+    "unfold_less",
     "unfold_more",
     "unresolved",
     "upload",
@@ -365,5 +367,5 @@
     "woman",
     "women"
   ],
-  "fontBytes": 265272
+  "fontBytes": 266092
 }
