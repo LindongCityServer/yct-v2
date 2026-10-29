@@ -13,7 +13,7 @@ export function GET(request: Request) {
       data: {
         name: '雨城通公共只读 API',
         version: 'v1',
-        description: '提供已发布的运营内容、服务目录、公共交通和班次数据。',
+        description: '提供已发布的运营内容、服务目录、公共交通、班次和地图路线规划数据。',
         documentationUrl: publicSiteUrl(publicApiPath('openapi')),
         endpoints: {
           operations: publicSiteUrl(publicApiPath('operations')),
@@ -21,6 +21,7 @@ export function GET(request: Request) {
           transitOverview: publicSiteUrl(publicApiPath('transit/overview')),
           transitStations: publicSiteUrl(publicApiPath('transit/stations')),
           mapMarkers: publicSiteUrl(publicApiPath('map/markers')),
+          mapRoutePlan: publicSiteUrl(publicApiPath('map/route-plan')),
           travelSchedules: publicSiteUrl(publicApiPath('travel/schedules')),
         },
       },
