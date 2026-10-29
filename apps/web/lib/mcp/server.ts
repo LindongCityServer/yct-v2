@@ -5,6 +5,7 @@ import {
   buildMcpToolDefinitions,
   runAssistantTool,
 } from '../assistant/tools';
+import { publicSiteUrl } from '../public-api';
 
 /** 服务端支持的 MCP 协议版本；优先回显客户端版本，未知时回落到最新。 */
 const supportedProtocolVersions = ['2025-06-18', '2025-03-26', '2024-11-05'];
@@ -60,8 +61,10 @@ export async function handleMcpMessage(
         capabilities: { tools: { listChanged: false } },
         serverInfo: mcpServerInfo,
         instructions: [
-          '雨城通（Yuchengtong）只读数据服务，提供临东市地图地点、公交地铁线路、班次换乘、运营公告与 Wiki 检索。',
-          '所有工具只读且匿名可用；不要在这里提交或修改任何数据。',
+          '雨城通（Yuchengtong）只读数据服务，提供临东市地图地点、公交地铁线路、班次换乘、地图路线规划、运营公告与 Wiki 检索。',
+          `站点地址：${publicSiteUrl('/')}`,
+          `MCP 端点：${publicSiteUrl('/api/mcp')}`,
+          '工具返回的引用链接均为可直接打开的绝对地址；所有工具只读且匿名可用，不要在这里提交或修改任何数据。',
           buildAssistantToolPrompt(),
         ].join('\n'),
       });
@@ -94,14 +97,21 @@ async function callTool(
     locale: context.locale,
   });
 
+  // 站内工具给的是相对路径；MCP 客户端在站外，需要转成可直接打开的绝对地址。
+  const references = outcome.result.references.map((reference) =>
+    reference.href?.startsWith('/')
+      ? { ...reference, href: publicSiteUrl(reference.href) }
+      : reference,
+  );
+
   return resultResponse(id, {
     content: [
       { type: 'text', text: outcome.result.summary },
-      ...(outcome.result.references.length > 0
+      ...(references.length > 0
         ? [
             {
               type: 'text',
-              text: `结构化引用：${JSON.stringify({ references: outcome.result.references })}`,
+              text: `结构化引用：${JSON.stringify({ references })}`,
             },
           ]
         : []),

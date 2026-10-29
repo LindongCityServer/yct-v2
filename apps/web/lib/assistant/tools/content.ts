@@ -1,6 +1,6 @@
 import type { MaterialTemplateFamily } from '@yct/contracts';
 import { listPublishedMaterialTemplates } from '../../material-workflow';
-import { searchWiki } from '../../wiki-search';
+import { searchWikiWithStatus } from '../../wiki-search';
 import { emptyToolResult, type AssistantTool, type AssistantToolResult } from './types';
 
 interface WikiSearchInput {
@@ -23,9 +23,17 @@ export const wikiSearchTool: AssistantTool<WikiSearchInput> = {
   },
   async run(input): Promise<AssistantToolResult> {
     const query = input.query.trim();
-    const results = await searchWiki(query, input.limit ?? 4);
+    const outcome = await searchWikiWithStatus(query, input.limit ?? 4);
+    const results = outcome.results;
     if (results.length === 0) {
-      return emptyToolResult(`Wiki 没有检索到与“${query}”相关的条目。`);
+      // 超时或服务不可用不能表述成“站内没有收录”，与问一问的提示词规则保持一致。
+      const reason =
+        outcome.status === 'timeout'
+          ? `Wiki 检索请求超时，暂时无法确认是否有与“${query}”相关的条目。`
+          : outcome.status === 'unavailable'
+            ? `Wiki 服务暂时不可用，无法确认是否有与“${query}”相关的条目。`
+            : `Wiki 没有检索到与“${query}”相关的条目。`;
+      return emptyToolResult(reason);
     }
 
     return {

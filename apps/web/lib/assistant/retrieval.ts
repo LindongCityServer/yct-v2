@@ -26,8 +26,11 @@ import {
 import { buildPlaceQueryCandidates } from './place-synonyms';
 import { buildPlayerLocationReferences } from './player-retrieval';
 import { buildEasterEggContext, isEasterEggQuery } from './easter-egg';
+import type { CurrentPlayerLocation } from './current-location';
 import { matchUiGuideEntries } from './ui-guide';
 import {
+  buildCurrentLocationRouteReferences,
+  buildDestinationRouteReference,
   buildJourneyReferences,
   buildLineTimetableReferences,
   buildMapRoutePlanReferences,
@@ -48,7 +51,7 @@ import {
 import { readTransitStationDetails } from '../transit-station-details';
 import { readTransitOverview } from '../transit-data';
 import { readTravelScheduleQuery } from '../travel-schedules';
-import { searchWiki } from '../wiki-search';
+import { searchWikiWithStatus, type WikiSearchOutcome } from '../wiki-search';
 
 export interface AssistantReference {
   id: number;
@@ -76,6 +79,8 @@ export interface AssistantRetrieval {
 export interface AssistantRetrievalOptions {
   pathname?: string;
   highlights?: Array<{ kind: string; title: string; detail?: string }>;
+  /** 当前登录账号绑定的玩家最后记录位置，只用于本人相关的位置与路线问题。 */
+  currentLocation?: CurrentPlayerLocation;
 }
 
 const maximumReferences = 10;
@@ -101,6 +106,17 @@ const pageReferencePattern =
   /这个页面|這頁|这页|当前页面|當前頁面|本页|本頁|此页|此頁|怎么用|怎麼用|能做什么|能做什麼|this page|what can i do/i;
 const highlightReferencePattern =
   /这条|這條|这个|這個|这里|這裡|当前|當前|选中|選中|上面|刚才|剛才|它|this\b|current/i;
+
+/** 只有这些问法才会带上“当前账号位置”，避免普通问答暴露位置。 */
+const currentLocationQuestionPattern =
+  /我在哪|我在哪里|我现在在哪|我的位置|我的坐标|当前位置|我这|我这里|怎么去|怎么到|怎么走|如何到|如何前往|路线/u;
+const askingWhereAmI = /我在哪|我在哪里|我现在在哪|我的位置|我的坐标|当前位置/u;
+
+/** 反馈、报错与建议类问法，需要额外给一个可直接提交的 Issue 入口。 */
+const feedbackIntentPattern =
+  /反馈|报错|出错|错误|异常|打不开|加载不出|无法加载|白屏|卡住|闪退|崩溃|没反应|不能用|提(?:个|一个)?建议|功能建议|改进建议|意见反馈|bug|issue|crash|broken|not working/i;
+/** 项目开源仓库；与设置页保持一致。 */
+const feedbackIssueBaseUrl = 'https://github.com/LindongCityServer/yct-v2/issues/new';
 
 export async function buildAssistantRetrieval(
   rawQuery: string,
@@ -144,7 +160,7 @@ export async function buildAssistantRetrieval(
   };
 
   const wantsSchedule =
-    /班次|船|航班|车次|列车|大巴|客运|出发|到达|时刻|ferry|flight|train|schedule|departure|arrival/i.test(
+    /班次|船|航班|车次|列车|大巴|客运|出发|到达|时刻|快线|夜线|直达|特快|ferry|flight|train|schedule|departure|arrival/i.test(
       query,
     );
   const schedulePromise = wantsSchedule
@@ -170,7 +186,7 @@ export async function buildAssistantRetrieval(
     readPublicMapMarkerSnapshot(),
     schedulePromise,
     readPoiCategories(),
-    searchWiki(wikiQuery, 3),
+    searchWikiWithStatus(wikiQuery, 3),
     readSocialPosts(),
   ]);
 
@@ -205,9 +221,12 @@ export async function buildAssistantRetrieval(
 
   // 工作台内问题只带工作台语料；用户明确问了服务器数据时才走全站资料。
   if (workspaceGuide && workspaceScoped) {
+    const workspaceHref =
+      workspaceId === 'road-materials' ? '/services/road-materials' : '/services/transit-materials';
     addReference({
       title: workspaceGuide.title,
       source: '物料工作台',
+      href: workspaceHref,
       snippet: workspaceGuide.summary,
       tone: 'service',
     });
@@ -215,6 +234,7 @@ export async function buildAssistantRetrieval(
       addReference({
         title: entry.title,
         source: '物料工作台',
+        href: workspaceHref,
         snippet: entry.content,
         tone: 'service',
       });
@@ -229,6 +249,7 @@ export async function buildAssistantRetrieval(
       addReference({
         title: '当前可用模板',
         source: '物料工作台',
+        href: workspaceHref,
         snippet: [...new Set(templates.map((item) => item.template.title))].join('、'),
         tone: 'service',
       });
@@ -274,8 +295,69 @@ export async function buildAssistantRetrieval(
 
   // 问一问形象的彩蛋：只进入模型上下文，不在界面上生成引用来源。
   const easterEggContext = isEasterEggQuery(query) ? buildEasterEggContext() : '';
+
+  // 当前账号绑定的玩家位置：只在问位置或路线时出现，路线入口用这份位置作为起点。
+  const currentLocation = options.currentLocation;
+  if (currentLocation && currentLocationQuestionPattern.test(query)) {
+    addReference({
+      title: `${currentLocation.playerName}（当前位置）`,
+      source: '当前位置',
+      href: `/map?x=${Math.round(currentLocation.x)}&z=${Math.round(currentLocation.z)}&label=${encodeURIComponent(currentLocation.playerName)}`,
+      asOf: currentLocation.lastSeenAt,
+      snippet: [
+        `坐标 ${Math.round(currentLocation.x)}, ${Math.round(currentLocation.z)}`,
+        '服务器记录的最后位置，以地图上的玩家标记为准',
+      ].join(' · '),
+      tone: 'place',
+    });
+  }
+  const markerPoints =
+    markersResult.status === 'fulfilled' && markersResult.value
+      ? markersResult.value.snapshot.markers
+      : [];
+  if (currentLocation) {
+    for (const reference of buildCurrentLocationRouteReferences(
+      query,
+      markerPoints,
+      currentLocation,
+    )) {
+      addReference(reference);
+    }
+  } else {
+    // 没有账号位置时，至少把目的地带到地图上，让用户自己补起点。
+    for (const reference of buildDestinationRouteReference(query, markerPoints)) {
+      addReference(reference);
+    }
+    if (askingWhereAmI.test(query)) {
+      addReference({
+        title: '在地图上查看当前位置',
+        source: '当前位置',
+        href: '/map',
+        snippet:
+          '还没有拿到你绑定的服务器账号位置记录：需要登录并验证服务器账号，并且服务器近期采集到过你的位置。也可以直接在地图上手动定位当前位置。',
+        tone: 'place',
+      });
+    }
+  }
   for (const reference of routePlanReferences) {
     addReference(reference);
+  }
+
+  // 路线问法无论能不能解析出起终点，都至少给一个地图入口，避免只回答操作步骤。
+  if (
+    /怎么走|怎么去|怎么到|如何去|如何到|如何前往|怎么前往|前往|去往|的路线|路线规划|规划路线|步行|驾车|开车|骑车|换乘/u.test(
+      query,
+    ) &&
+    !references.some((reference) => reference.source === '路线规划')
+  ) {
+    addReference({
+      title: '打开地图路线规划',
+      source: '路线规划',
+      href: '/map',
+      snippet:
+        '没有解析出可预填的起终点。打开地图后点“路线”按钮，设置起点和终点，即可查看步行、公交、驾车等方案。',
+      tone: 'line',
+    });
   }
 
   // 只有真正预填了起终点的深链才跳过线路/站点检索；兜底入口不算。
@@ -305,6 +387,19 @@ export async function buildAssistantRetrieval(
     }
   }
 
+  if (feedbackIntentPattern.test(query)) {
+    addReference({
+      title: locale === 'en' ? 'Report an issue on GitHub' : '提交 Issue 反馈问题',
+      source: '问题反馈',
+      href: buildFeedbackIssueUrl(query, locale),
+      snippet:
+        locale === 'en'
+          ? 'Submit a bug report or suggestion. Include the page URL, time, screenshot and steps to reproduce; never paste passwords or model API keys.'
+          : '可直接提交问题或建议。请在 Issue 里附上页面地址、出现时间、截图和复现步骤；不要填写账号密码或模型 Key。',
+      tone: 'page',
+    });
+  }
+
   if (socialPostsResult.status === 'fulfilled' && socialIntentPattern.test(query)) {
     for (const post of rankSocialPosts(socialPostsResult.value, query)) {
       addReference({
@@ -320,7 +415,7 @@ export async function buildAssistantRetrieval(
 
   // Wiki 对“临东历史/线路由来”这类问题最相关，优先占用引用名额。
   if (wikiResult.status === 'fulfilled' && !spatialQueryIntent) {
-    for (const item of wikiResult.value) {
+    for (const item of wikiResult.value.results) {
       addReference({
         title: item.title,
         source: 'Wiki',
@@ -602,6 +697,7 @@ export async function buildAssistantRetrieval(
         tone: 'schedule',
         snippet: [
           trip.serviceLabel,
+          trip.serviceNature,
           [
             trip.originStationName ?? trip.stationNames[0],
             trip.destinationStationName ?? trip.stationNames.at(-1),
@@ -609,6 +705,7 @@ export async function buildAssistantRetrieval(
             .filter(Boolean)
             .join(' - '),
           [trip.departureTime, trip.arrivalTime].filter(Boolean).join(' - '),
+          trip.routeNote,
           trip.fareText,
           trip.ticketing?.status === 'order_available'
             ? '可在线购票'
@@ -854,11 +951,28 @@ export async function buildAssistantRetrieval(
 
   return {
     references,
-    contextText: [buildContextText(references), easterEggContext].filter(Boolean).join('\n\n'),
+    contextText: [buildContextText(references), easterEggContext, describeWikiStatus(wikiResult)]
+      .filter(Boolean)
+      .join('\n\n'),
     sourceStatus,
     asOf,
     generatedAt: new Date().toISOString(),
   };
+}
+
+/** 把 Wiki 的检索状态告诉模型，避免把超时或服务不可用说成“站内没有收录”。 */
+function describeWikiStatus(wikiResult: PromiseSettledResult<WikiSearchOutcome>): string {
+  const status = wikiResult.status === 'fulfilled' ? wikiResult.value.status : 'unavailable';
+  if (status === 'timeout') {
+    return 'Wiki 检索请求超时：不能据此判断站内没有收录 Wiki 条目。';
+  }
+  if (status === 'unavailable') {
+    return 'Wiki 检索暂时不可用：不能据此判断站内没有收录 Wiki 条目。';
+  }
+  if (status === 'empty') {
+    return 'Wiki 检索已完成，但没有匹配的 Wiki 条目。';
+  }
+  return '';
 }
 
 const wikiQuestionPattern =
@@ -962,6 +1076,28 @@ export function buildMarkerSearchValues(
   ];
 }
 
+/** 设施类别 name 到可读标签；未知图标保留原始 id，避免丢失类别信息。 */
+const facilityCategoryLabels: Record<string, string> = {
+  elevator: '无障碍电梯',
+  escalator: '自动扶梯',
+  'escalator-and-stairs': '扶梯与楼梯',
+  stairs: '楼梯',
+  restroom: '卫生间',
+  'mens-restroom': '男卫生间',
+  'womens-restroom': '女卫生间',
+  'accessible-restroom': '无障碍卫生间',
+  'family-restroom': '家庭卫生间',
+  'nursing-room': '母婴室',
+  'wheelchair-lift': '轮椅升降机',
+  'accessible-ramp': '无障碍坡道',
+  wheelchair: '轮椅',
+  'ticket-machine': '售票机',
+  'passenger-service-center': '客服中心',
+  'waiting-room': '候车室',
+  'meeting-point': '集合点',
+  exit: '出入口',
+};
+
 export function buildMarkerSnippet(
   marker: {
     categoryId?: string;
@@ -969,13 +1105,23 @@ export function buildMarkerSnippet(
     floorLabel?: string;
     description?: string;
     openingHours?: string;
-    facilities?: Array<{ description: string }>;
+    facilities?: Array<{ symbolIcon?: string; description: string }>;
   },
   categoryNames: Map<string, string>,
   locale: LocaleCode,
 ): string {
   const facilities = marker.facilities
-    ?.map((facility) => facility.description)
+    ?.map((facility) => {
+      const label = facility.symbolIcon
+        ? (facilityCategoryLabels[facility.symbolIcon] ?? facility.symbolIcon)
+        : '';
+      if (!label) {
+        return facility.description;
+      }
+      return facility.description && facility.description !== label
+        ? `${label}（${facility.description}）`
+        : label;
+    })
     .filter(Boolean)
     .slice(0, 8)
     .join('、');
@@ -1194,6 +1340,42 @@ function buildBigrams(query: string): string[] {
     }
   }
   return [...grams].slice(0, 80);
+}
+
+/** 预填 Issue 标题与模板，减少用户提交反馈的门槛。 */
+function buildFeedbackIssueUrl(query: string, locale: LocaleCode): string {
+  const summary = query.replace(/\s+/g, ' ').trim().slice(0, 60);
+  const title = `${locale === 'en' ? '[Feedback]' : '[问题反馈]'} ${summary}`.trim();
+  const body =
+    locale === 'en'
+      ? [
+          '**What happened**',
+          '',
+          '**Steps to reproduce**',
+          '1. ',
+          '',
+          '**Page**',
+          '',
+          '**When**',
+          '',
+          '**Screenshot**',
+          '',
+        ].join('\n')
+      : [
+          '**问题描述**',
+          '',
+          '**复现步骤**',
+          '1. ',
+          '',
+          '**页面地址**',
+          '',
+          '**出现时间**',
+          '',
+          '**截图**',
+          '',
+        ].join('\n');
+
+  return `${feedbackIssueBaseUrl}?${new URLSearchParams({ title, body }).toString()}`;
 }
 
 function buildContextText(references: AssistantReference[]): string {

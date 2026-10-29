@@ -1,8 +1,8 @@
 # AI 接入基线
 
-更新时间：2026-08-08
+更新时间：2026-10-29
 
-雨城通当前采用“A+B，远期增加 D”的 AI 接入路线：先建设可发现的语义化页面和稳定公共只读 API，再按实际调用场景增加 MCP 工具服务。当前不部署大模型、Embedding、向量数据库或站内 RAG Worker。
+雨城通采用“A+B+D”的 AI 接入路线：先建设可发现的语义化页面和稳定公共只读 API，再通过 MCP 提供只读工具服务。当前不部署大模型、Embedding、向量数据库或站内 RAG Worker；问一问使用访问者自己配置的模型 Key。
 
 ## 当前公开边界
 
@@ -20,6 +20,9 @@
 | 公共交通概览       | `/api/v1/public/transit/overview` |
 | 站内设施详情       | `/api/v1/public/transit/stations` |
 | 地图地点和线路标记 | `/api/v1/public/map/markers`      |
+| 地图路线规划       | `/api/v1/public/map/route-plan`   |
+| 周边地点           | `/api/v1/public/map/nearby`       |
+| 沿线地点           | `/api/v1/public/map/along-line`   |
 | 班次查询           | `/api/v1/public/travel/schedules` |
 
 公共响应统一使用 `data` 和 `meta`：
@@ -108,18 +111,34 @@ pwsh -NoProfile -ExecutionPolicy Bypass `
 
 监听器只能读取已发布投影并执行异步副作用，不能绕过审核直接改变公共数据。
 
-## 远期 D：MCP
+## D：MCP（已实现）
 
-MCP 应作为独立网关部署在公共 API 之上，初期只提供只读工具：
+`/api/mcp` 提供无状态、只读的 Streamable HTTP MCP 服务，与问一问共用同一份工具清单（`apps/web/lib/assistant/tools`），工具变更只注册一次，两端自动同步。
 
-```text
-search_site
-get_operation_detail
-get_transit_line
-get_station_detail
-query_schedule
-search_poi
-plan_trip
-```
+当前工具：
 
-MCP 网关负责 API Key、权限范围、调用审计、限流和协议适配；业务数据仍由 `/api/v1/public` 提供。这样增加 MCP 时不需要引入新的数据库，也不需要部署大模型。
+| 工具                      | 能力                                   |
+| ------------------------- | -------------------------------------- |
+| `search_places`           | 按名称或类别检索地图地点               |
+| `search_transit`          | 检索公交/地铁线路与站点详情            |
+| `nearby_places`           | 以地点为圆心的周边检索                 |
+| `along_line_places`       | 线路沿线地点检索                       |
+| `line_timetable`          | 线路首末班、上下行下一班与特殊班次标注 |
+| `plan_journey`            | 按客运班次规划起终点换乘               |
+| `plan_route`              | 地图路线规划（步行、打车、公共交通）   |
+| `poi_notices`             | 地点当前生效的运营公告                 |
+| `service_notices`         | 客运停运与调整公告                     |
+| `network_health`          | 线网数据健康摘要                       |
+| `search_wiki`             | 检索临东 Wiki，区分超时与无结果        |
+| `list_material_templates` | 已发布的物料模板                       |
+| `search_site_content`     | 运营公告、服务目录与 FAQ 检索          |
+| `get_operation_detail`    | 按 ID 读取运营公告正文                 |
+| `query_travel_schedules`  | 按站点、日期、类型浏览客运班次列表     |
+
+约束：
+
+- 匿名可用，不读取账号、后台、票务订单和登录会话，也没有写入能力。
+- 协议版本为 `2025-06-18` / `2025-03-26` / `2024-11-05`，不支持 resources、prompts 和批量请求。
+- 引用链接在 MCP 响应中会转换为绝对地址；`initialize` 的 instructions 会给出站点地址与 MCP 端点。
+- 当前限流为进程内内存（来源 IP 每分钟 60 次）。多实例部署时应改由上游网关限流，或替换为共享存储实现，否则每个实例会独立计数。
+- 工具复用已发布的读模型；`sourceStatus`、`asOf`、时区等时间语义仍以公共 API 或引用中的 `asOf` 为准。

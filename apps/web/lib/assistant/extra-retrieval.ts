@@ -1,4 +1,8 @@
-import type { MapGeometry, TransitServiceNotice } from '@yct/contracts';
+import type {
+  MapGeometry,
+  TransitLineSpecialTripSnapshot,
+  TransitServiceNotice,
+} from '@yct/contracts';
 import { readActiveOperationsForPoi } from '../content-poi-read-model';
 import { getGeometryCenter } from '../map-spatial';
 import { readTransitNetworkHealthReport } from '../transit-network-health';
@@ -94,12 +98,12 @@ export async function buildJourneyPlanReferences(
       journey.durationMinutes === undefined ? undefined : `约 ${journey.durationMinutes} 分钟`,
       `换乘 ${journey.transferCount} 次`,
       journey.legs
-        .map(
-          (leg) =>
-            `${leg.lineName} ${leg.fromStationName} → ${leg.toStationName}（${leg.departureTime}${
-              leg.arrivalTime ? `-${leg.arrivalTime}` : ''
-            }）`,
-        )
+        .map((leg) => {
+          const nature = [leg.serviceNature, leg.routeNote].filter(Boolean).join('；');
+          return `${leg.lineName} ${leg.fromStationName} → ${leg.toStationName}（${leg.departureTime}${
+            leg.arrivalTime ? `-${leg.arrivalTime}` : ''
+          }）${nature ? ` · ${nature}` : ''}`;
+        })
         .join('；'),
       ticketingText(journey.ticketingStatus),
     ]
@@ -157,6 +161,8 @@ export function selectServiceNoticeReferences(
   return matches.slice(0, 2).map((notice) => ({
     title: notice.title,
     source: '客运公告',
+    // 客运公告没有独立详情页，直接带到按标题检索的班次查询页。
+    href: `/travel/schedules?q=${encodeURIComponent(notice.title)}`,
     asOf: notice.startsAt,
     snippet: [notice.periodText, notice.reason].filter(Boolean).join(' · '),
     tone: 'operation',
@@ -194,9 +200,9 @@ export async function buildNetworkHealthSummaryReference(): Promise<ExtraReferen
 const timetablePattern = /(下一班|下一趟|几点|首班|末班|首末班|还有车|发车时间)/u;
 
 const routePlanActionPattern =
-  '(?:怎么走|怎么坐|怎么去|如何走|如何坐|坐什么车|坐几路|哪路车|怎么过去|如何过去|的路线|路线规划|规划路线|路线|步行|驾车|开车|骑车)';
+  '(?:怎么走|怎么坐|怎么去|怎么到|怎么前往|如何走|如何坐|如何到|如何前往|坐什么车|坐几路|哪路车|怎么过去|如何过去|前往|去往|的路线|路线规划|规划路线|路线|步行|驾车|开车|骑车)';
 const routePlanPattern = new RegExp(
-  `(?:从|由)\\s*(.{2,18}?)\\s*(?:到|去|往)\\s*(.{2,18}?)\\s*${routePlanActionPattern}`,
+  `(?:从|由)\\s*(.{2,18}?)\\s*(?:到|去|往|前往|去往)\\s*(.{2,18}?)\\s*${routePlanActionPattern}`,
   'u',
 );
 /** 省略“从”的口语问法，例如“临东站到出生点怎么走”。 */
@@ -204,6 +210,9 @@ const routePlanPatternWithoutFrom = new RegExp(
   `(.{2,18}?)\\s*(?:到|去|往)\\s*(.{2,18}?)\\s*${routePlanActionPattern}`,
   'u',
 );
+/** 动作词放在句首的问法，例如“我如何从中鼎大厦前往中华早点”。 */
+const routePlanPatternWithLeadingAction =
+  /(?:怎么|如何|怎样|咋)(?:从|由)\s*(.{2,18}?)\s*(?:前往|去往|到|去|往)\s*(.{2,18}?)[？?]?$/u;
 
 /**
  * 起终点明确时，给出地图路线规划的预填链接。
@@ -213,7 +222,10 @@ export function buildMapRoutePlanReferences(
   query: string,
   markers: Array<{ id: string; label: string; geometry: MapGeometry }>,
 ): ExtraReference[] {
-  const match = query.match(routePlanPattern) ?? query.match(routePlanPatternWithoutFrom);
+  const match =
+    query.match(routePlanPattern) ??
+    query.match(routePlanPatternWithoutFrom) ??
+    query.match(routePlanPatternWithLeadingAction);
   if (!match) {
     return [];
   }
@@ -284,6 +296,105 @@ export function buildMapRoutePlanReferences(
   ];
 }
 
+const currentLocationDestinationPatterns = [
+  /(?:从我这|从当前位置|从我的位置|从这里)\s*(?:去|到|往)\s*([^\s，。！？?!]{2,16})/u,
+  /(?:怎么去|怎么到|如何去|如何到|如何前往|怎样去|去往|带我过去|带我去)\s*([^\s，。！？?!]{2,16})/u,
+];
+
+/** 起点省略时，用当前登录账号最后记录的位置作为起点，生成地图路线规划入口。 */
+export function buildCurrentLocationRouteReferences(
+  query: string,
+  markers: Array<{ id: string; label: string; geometry: MapGeometry }>,
+  currentLocation: { playerName: string; x: number; z: number },
+): ExtraReference[] {
+  const destination = resolveQueryDestination(query, markers);
+  if (!destination) {
+    return [];
+  }
+
+  const params = new URLSearchParams({
+    r: '1',
+    o: `${Math.round(currentLocation.x)}, ${Math.round(currentLocation.z)}`,
+    d: `${Math.round(destination.x)}, ${Math.round(destination.z)}`,
+    ol: '我的位置',
+    dl: destination.label,
+  });
+
+  return [
+    {
+      title: `路线规划：我的位置 → ${destination.label}`,
+      source: '路线规划',
+      href: `/map?${params.toString()}`,
+      snippet: `起点用的是你最后记录的位置（${currentLocation.playerName}），终点是“${destination.label}”。打开地图后可以选择步行、公交、驾车等方案并查看距离与用时。`,
+      tone: 'line',
+    },
+  ];
+}
+
+/** 没有当前位置时，至少把目的地定位到地图上，让用户自己补起点。 */
+export function buildDestinationRouteReference(
+  query: string,
+  markers: Array<{ id: string; label: string; geometry: MapGeometry }>,
+): ExtraReference[] {
+  const destination = resolveQueryDestination(query, markers);
+  if (!destination) {
+    return [];
+  }
+
+  const params = new URLSearchParams({
+    x: String(Math.round(destination.x)),
+    z: String(Math.round(destination.z)),
+    label: destination.label,
+  });
+
+  return [
+    {
+      title: `在地图上定位：${destination.label}`,
+      source: '路线规划',
+      href: `/map?${params.toString()}`,
+      snippet: `已在图上定位到“${destination.label}”。打开地图后点“路线”把它设为终点，再设置起点（登录并验证服务器账号后，可以直接用你的最后记录位置）。`,
+      tone: 'line',
+    },
+  ];
+}
+
+function resolveQueryDestination(
+  query: string,
+  markers: Array<{ id: string; label: string; geometry: MapGeometry }>,
+): { label: string; x: number; z: number } | undefined {
+  // 问题里已经写清起终点时交给 buildMapRoutePlanReferences，避免重复给入口。
+  if (
+    routePlanPattern.test(query) ||
+    routePlanPatternWithoutFrom.test(query) ||
+    routePlanPatternWithLeadingAction.test(query)
+  ) {
+    return undefined;
+  }
+
+  const match = currentLocationDestinationPatterns
+    .map((pattern) => query.match(pattern))
+    .find((item) => item !== null);
+  if (!match) {
+    return undefined;
+  }
+
+  const destinationText = cleanPlaceText(match[1] ?? '');
+  if (!destinationText) {
+    return undefined;
+  }
+
+  const points = markers.filter(
+    (marker) => marker.geometry.type === 'Point' && !marker.id.startsWith('transit-line-'),
+  );
+  const destination = resolveRoutePlace(destinationText, points);
+  const coordinate = destination ? getGeometryCenter(destination.geometry) : undefined;
+  if (!destination || !coordinate) {
+    return undefined;
+  }
+
+  return { label: destination.label, x: coordinate[0], z: coordinate[1] };
+}
+
 function resolveRoutePlace<T extends { label: string }>(text: string, markers: T[]): T | undefined {
   if (!text) {
     return undefined;
@@ -323,10 +434,16 @@ export function buildLineTimetableReferences(
 }
 
 export interface TimetableLine {
+  id?: string;
   name: string;
   firstLastBus?: { first?: string; last?: string };
   departureTimes?: string[];
   departureTimesByDirection?: { down?: string[]; up?: string[] };
+  /** 发车规则里的特殊班次标注，键为首站发车时刻（HH:mm）。 */
+  specialTripsByDirection?: {
+    down?: Record<string, TransitLineSpecialTripSnapshot>;
+    up?: Record<string, TransitLineSpecialTripSnapshot>;
+  };
 }
 
 /** 单条线路的发车时刻引用；工具调用可直接按线路名取用。 */
@@ -362,11 +479,12 @@ export function buildLineTimetableReference(
       : nextUp === undefined
         ? `上行末班 ${formatClock(upLast ?? 0)} 已过`
         : `上行下一班 ${formatClock(nextUp)}`;
+  const specialTrips = describeSpecialTrips(line);
 
   return {
     title: `${line.name} 发车时刻`,
     source: '时刻',
-    href: `/map?line=${encodeURIComponent(line.name)}`,
+    href: `/map?line=${encodeURIComponent(line.id ?? line.name)}`,
     snippet: [
       line.firstLastBus?.first || line.firstLastBus?.last
         ? `首末班 ${line.firstLastBus?.first ?? '—'} - ${line.firstLastBus?.last ?? '—'}`
@@ -376,11 +494,45 @@ export function buildLineTimetableReference(
       downStatus,
       upTimes.length > 0 ? `上行 ${upTimes.length} 班` : undefined,
       upStatus,
+      specialTrips.length > 0 ? `特殊班次：${specialTrips.join('；')}` : undefined,
     ]
       .filter(Boolean)
       .join(' · '),
     tone: 'line',
   };
+}
+
+/** 快线、夜线等特殊班次的标注；没有特殊班次时返回空数组。 */
+function describeSpecialTrips(line: TimetableLine): string[] {
+  const entries = [
+    ...Object.entries(line.specialTripsByDirection?.down ?? {}).map(([time, trip]) => ({
+      time,
+      trip,
+      direction: '下行',
+    })),
+    ...Object.entries(line.specialTripsByDirection?.up ?? {}).map(([time, trip]) => ({
+      time,
+      trip,
+      direction: '上行',
+    })),
+  ];
+  if (entries.length === 0) {
+    return [];
+  }
+
+  return entries
+    .sort((left, right) => left.time.localeCompare(right.time))
+    .slice(0, 3)
+    .map(({ time, trip, direction }) => {
+      const shortTurn =
+        trip.stationNames && trip.stationNames.length >= 2
+          ? `短交路 ${trip.stationNames[0]} → ${trip.stationNames.at(-1)}`
+          : undefined;
+      const nature = `${trip.serviceNature ?? ''}${
+        trip.routeNote ? `（${trip.routeNote}）` : ''
+      }`.trim();
+      return [`${direction} ${time}`, nature || undefined, shortTurn].filter(Boolean).join(' ');
+    });
 }
 
 export function formatServiceDate(date: Date): string {

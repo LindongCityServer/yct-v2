@@ -180,6 +180,7 @@ export function GlobalSearchPanel({
   const brandClickCountRef = useRef(0);
   const brandClickTimerRef = useRef<number | null>(null);
   const brandStateTimerRef = useRef<number | null>(null);
+  const brandRef = useRef<HTMLButtonElement>(null);
   const easterEggSeenRef = useRef(false);
   const [pageContext, setPageContext] = useState({
     pathname: '',
@@ -367,15 +368,26 @@ export function GlobalSearchPanel({
   }, [open, pathname]);
 
   useEffect(() => {
+    const doubleTapWindowMs = 400;
+    let lastShiftTapAt = 0;
+    let shiftTapPending = false;
+
+    // 焦点在输入控件里时不响应双击 Shift，避免和输入法切换、大小写输入互相干扰。
+    const isEditableFocus = () => {
+      const element = document.activeElement;
+      return (
+        element instanceof HTMLElement &&
+        (element.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(element.tagName))
+      );
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-        if (!enabledRef.current || isBlockedSearchPath(pathname)) {
-          return;
-        }
-        event.preventDefault();
-        setOpen(true);
+      // 单按 Shift 先记为候选；期间按下其它键说明是组合键，取消候选。
+      if (event.key === 'Shift' && !event.repeat) {
+        shiftTapPending = !isEditableFocus();
         return;
       }
+      shiftTapPending = false;
 
       if (event.key === 'Escape' && active) {
         event.preventDefault();
@@ -383,11 +395,128 @@ export function GlobalSearchPanel({
       }
     };
 
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key !== 'Shift' || !shiftTapPending || isEditableFocus()) {
+        return;
+      }
+      shiftTapPending = false;
+      const now = Date.now();
+      if (now - lastShiftTapAt <= doubleTapWindowMs) {
+        lastShiftTapAt = 0;
+        if (!enabledRef.current || isBlockedSearchPath(pathname)) {
+          return;
+        }
+        setOpen(true);
+        return;
+      }
+      lastShiftTapAt = now;
+    };
+
+    const resetShiftTap = () => {
+      shiftTapPending = false;
+      lastShiftTapAt = 0;
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', resetShiftTap);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', resetShiftTap);
+    };
     // close 是稳定的语义操作，不参与依赖即可。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, pathname]);
+
+  // 待机时眼睛跟随光标；光标停止移动 2.6 秒后回位。
+  useEffect(() => {
+    if (!active) {
+      return undefined;
+    }
+    const button = brandRef.current;
+    if (!button) {
+      return undefined;
+    }
+
+    const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let frame = 0;
+    let resetTimer = 0;
+    let pointer: { x: number; y: number } | undefined;
+
+    const resetGaze = () => {
+      button.style.setProperty('--smart-qa-look-x', '0');
+      button.style.setProperty('--smart-qa-look-y', '0');
+    };
+
+    // 与 CSS 的动态效果开关保持一致：data-motion='full' 强制启用，其余跟随系统设置。
+    const motionReduced = () => {
+      const mode = document.documentElement.dataset.motion;
+      if (mode === 'full') {
+        return false;
+      }
+      return mode === 'reduced' || reducedMotionQuery.matches;
+    };
+
+    const applyGaze = () => {
+      frame = 0;
+      if (!pointer) {
+        return;
+      }
+      const rect = button.getBoundingClientRect();
+      const dx = pointer.x - (rect.left + rect.width / 2);
+      const dy = pointer.y - (rect.top + rect.height / 2);
+      const distance = Math.hypot(dx, dy);
+      if (distance < 3) {
+        resetGaze();
+        return;
+      }
+      // 偏移上限按 SVG 用户单位控制，避免眼球跑出眼眶；距离越远越接近上限。
+      // 向下多看一点，让“视线落到下方”更明显；向上仍保持较小的幅度。
+      const strength = Math.min(1, distance / 220);
+      const verticalLimit = dy < 0 ? 0.8 : 1.4;
+      button.style.setProperty('--smart-qa-look-x', ((dx / distance) * 1.2 * strength).toFixed(2));
+      button.style.setProperty(
+        '--smart-qa-look-y',
+        ((dy / distance) * verticalLimit * strength).toFixed(2),
+      );
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      // 鼠标、触控笔和手指滑动都让眼睛跟随；触摸滚动时页面位置变化由每帧读取的 rect 处理。
+      // 只有待机状态才注视；思考、完成、错误与彩蛋各自有专门的动画。
+      if (button.dataset.state !== 'idle' || motionReduced()) {
+        resetGaze();
+        return;
+      }
+      pointer = { x: event.clientX, y: event.clientY };
+      if (!frame) {
+        frame = window.requestAnimationFrame(applyGaze);
+      }
+      window.clearTimeout(resetTimer);
+      resetTimer = window.setTimeout(resetGaze, 2600);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+      window.clearTimeout(resetTimer);
+      resetGaze();
+    };
+  }, [active]);
+
+  // 离开待机状态时清掉注视偏移，下次回到待机从原位开始。
+  useEffect(() => {
+    const button = brandRef.current;
+    if (!button) {
+      return;
+    }
+    button.style.setProperty('--smart-qa-look-x', '0');
+    button.style.setProperty('--smart-qa-look-y', '0');
+  }, [assistantStatus, brandState]);
 
   useEffect(() => {
     if (!active) {
@@ -1074,6 +1203,15 @@ export function GlobalSearchPanel({
     setEasterEggOpen(false);
   }
 
+  /** 把当前输入或对话带到独立页 /ask，方便收藏与分享。 */
+  function openAsPage() {
+    const target = trimmedQuery
+      ? `${appPath('/ask')}?q=${encodeURIComponent(trimmedQuery)}`
+      : appPath('/ask');
+    close();
+    router.push(target);
+  }
+
   const selectedProvider = getAssistantProvider(assistantProviderId) ?? assistantProviders[0];
 
   function handleProviderChange(value: string) {
@@ -1652,6 +1790,7 @@ export function GlobalSearchPanel({
         <header className="global-search-header">
           <div className="global-search-heading">
             <button
+              ref={brandRef}
               className="global-search-brand"
               type="button"
               data-state={assistantStatus === 'streaming' ? 'thinking' : brandState}
@@ -1670,6 +1809,17 @@ export function GlobalSearchPanel({
               {mode === 'ask' ? t('globalSearch.mode.ask') : t('globalSearch.mode.search')}
             </span>
           </div>
+          {isPage ? null : (
+            <button
+              className="global-search-open-page"
+              type="button"
+              aria-label={t('globalSearch.action.openPage')}
+              title={t('globalSearch.action.openPage')}
+              onClick={openAsPage}
+            >
+              <MaterialSymbol name="open_in_new" aria-hidden="true" />
+            </button>
+          )}
           {isPage ? null : (
             <button
               className="global-search-close"

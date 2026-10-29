@@ -1,6 +1,8 @@
 import { materialTemplatesTool, wikiSearchTool } from './content';
 import { poiNoticesTool, serviceNoticesTool } from './notices';
 import { alongLinePlacesTool, nearbyPlacesTool, searchPlacesTool } from './places';
+import { planRouteTool } from './routes';
+import { operationDetailTool, queryTravelSchedulesTool, searchSiteContentTool } from './site';
 import {
   journeyPlanTool,
   lineTimetableTool,
@@ -35,11 +37,15 @@ export const assistantTools: AssistantTool<never>[] = [
   alongLinePlacesTool,
   lineTimetableTool,
   journeyPlanTool,
+  planRouteTool,
   poiNoticesTool,
   serviceNoticesTool,
   networkHealthTool,
   wikiSearchTool,
   materialTemplatesTool,
+  searchSiteContentTool,
+  operationDetailTool,
+  queryTravelSchedulesTool,
 ];
 
 const maximumSummaryLength = 4000;

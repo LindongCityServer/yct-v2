@@ -11,17 +11,24 @@ const cacheTtlMs = 10 * 60 * 1000;
 export interface WikiPlayerRecord {
   name: string;
   xboxIds: string[];
+  /** 玩家列表「备注」列，例如“临东市服务器服主”。 */
+  role?: string;
 }
 
-let cache: { expiresAt: number; aliases: Map<string, string[]> } | undefined;
+export interface WikiPlayerProfile {
+  name: string;
+  role?: string;
+}
 
-/** 返回 Xbox ID（小写）到 Wiki 玩家名的映射。Wiki 不可用时返回空表。 */
-export async function readWikiPlayerAliases(): Promise<Map<string, string[]>> {
+let cache: { expiresAt: number; profiles: Map<string, WikiPlayerProfile> } | undefined;
+
+/** 返回 Xbox ID（小写）到 Wiki 玩家名与备注角色的映射。Wiki 不可用时返回空表。 */
+export async function readWikiPlayerProfiles(): Promise<Map<string, WikiPlayerProfile>> {
   if (cache && cache.expiresAt > Date.now()) {
-    return cache.aliases;
+    return cache.profiles;
   }
 
-  const aliases = new Map<string, string[]>();
+  const profiles = new Map<string, WikiPlayerProfile>();
   try {
     const params = new URLSearchParams({
       action: 'parse',
@@ -45,7 +52,7 @@ export async function readWikiPlayerAliases(): Promise<Map<string, string[]>> {
         const payload = (await response.json()) as { parse?: { wikitext?: string } };
         for (const record of parsePlayerListWikitext(payload.parse?.wikitext ?? '')) {
           for (const xboxId of record.xboxIds) {
-            aliases.set(xboxId.toLocaleLowerCase(), [record.name]);
+            profiles.set(xboxId.toLocaleLowerCase(), { name: record.name, role: record.role });
           }
         }
       }
@@ -56,7 +63,17 @@ export async function readWikiPlayerAliases(): Promise<Map<string, string[]>> {
     // Wiki 是可选来源，超时或出错时静默跳过。
   }
 
-  cache = { expiresAt: Date.now() + cacheTtlMs, aliases };
+  cache = { expiresAt: Date.now() + cacheTtlMs, profiles };
+  return profiles;
+}
+
+/** 返回 Xbox ID（小写）到 Wiki 玩家名的映射。Wiki 不可用时返回空表。 */
+export async function readWikiPlayerAliases(): Promise<Map<string, string[]>> {
+  const profiles = await readWikiPlayerProfiles();
+  const aliases = new Map<string, string[]>();
+  for (const [xboxId, profile] of profiles) {
+    aliases.set(xboxId, [profile.name]);
+  }
   return aliases;
 }
 
@@ -82,10 +99,14 @@ export function parsePlayerListWikitext(wikitext: string): WikiPlayerRecord[] {
 
     const xboxIds = extractXboxIds(line);
     const name = parsePlayerName(extractFirstCell(line));
+    const role = parseRoleCell(extractRoleCell(line));
     // 表格用 rowspan 表示同一玩家的多个 Xbox ID，空名字的行沿用上一个玩家。
     if (name && name !== current?.name) {
-      current = { name, xboxIds: [] };
+      current = { name, xboxIds: [], role };
       records.push(current);
+    }
+    if (current && role) {
+      current.role = role;
     }
     if (current && xboxIds.length > 0) {
       current.xboxIds.push(...xboxIds);
@@ -101,10 +122,39 @@ function extractXboxIds(line: string): string[] {
     .filter((value): value is string => Boolean(value));
 }
 
+/** 取表格最后一列作为「备注」；只有两列的行没有备注。 */
+function extractRoleCell(line: string): string | undefined {
+  const cells = line.slice(1).split('||');
+  return cells.length >= 3 ? cells[cells.length - 1] : undefined;
+}
+
+function parseRoleCell(cell: string | undefined): string | undefined {
+  if (!cell) {
+    return undefined;
+  }
+
+  let value = cell.trim();
+  const attribute = /^(?:[a-zA-Z-]+(?:=(?:"[^"]*"|[^\s|]*))?\s*)+\|/.exec(value);
+  if (attribute) {
+    value = value.slice(attribute[0].length).trim();
+  }
+  if (!value || value.startsWith('{{')) {
+    return undefined;
+  }
+
+  const text = value
+    .replace(
+      /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,
+      (_, title: string, label?: string) => label || title,
+    )
+    .trim();
+  return text || undefined;
+}
+
 /** 取表格第一列，去掉 rowspan 这类单元格属性。 */
 function extractFirstCell(line: string): string {
   let value = line.slice(1).trim();
-  const attribute = /^(?:[a-zA-Z-]+(?:="[^"]*")?\s*)+\|/.exec(value);
+  const attribute = /^(?:[a-zA-Z-]+(?:=(?:"[^"]*"|[^\s|]*))?\s*)+\|/.exec(value);
   if (attribute) {
     value = value.slice(attribute[0].length);
   }

@@ -1,4 +1,5 @@
 import type { LocaleCode } from '@yct/contracts';
+import type { NextRequest } from 'next/server';
 import {
   AssistantProviderError,
   buildAssistantSystemPrompt,
@@ -8,6 +9,8 @@ import {
   type AssistantProviderMessage,
   type AssistantToolCall,
 } from '../../../../lib/assistant/chat';
+import { resolveCurrentPlayerLocation } from '../../../../lib/assistant/current-location';
+import { buildViewerPrompt, resolveViewerProfile } from '../../../../lib/assistant/viewer-role';
 import { getAssistantProvider } from '../../../../lib/assistant/providers';
 import {
   buildAssistantRetrieval,
@@ -41,7 +44,7 @@ interface ChatRequestBody {
   page?: unknown;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const contentLength = Number(request.headers.get('content-length') ?? 0);
   if (Number.isFinite(contentLength) && contentLength > 200_000) {
     return errorResponse(413, 'too_large', '请求内容过大。');
@@ -79,11 +82,21 @@ export async function POST(request: Request) {
     .slice(-2)
     .map((message) => message.content)
     .join(' ');
+  const [currentLocation, viewer] = await Promise.all([
+    resolveCurrentPlayerLocation(request),
+    resolveViewerProfile(request),
+  ]);
   const retrieval = await buildAssistantRetrieval(retrievalQuery, locale, {
     pathname: page?.pathname,
     highlights: page?.highlights,
+    currentLocation,
   });
-  const baseSystemPrompt = buildAssistantSystemPrompt(retrieval, locale, page);
+  const baseSystemPrompt = [
+    buildAssistantSystemPrompt(retrieval, locale, page),
+    buildViewerPrompt(viewer),
+  ]
+    .filter(Boolean)
+    .join('\n\n');
   const systemPromptWithTools = [
     baseSystemPrompt,
     '',
@@ -208,6 +221,16 @@ export async function POST(request: Request) {
             continue;
           }
 
+          // 清洗后只剩符号（例如 `<<<<<<</`）时当作空回答：先关工具重答一次，再明确报错。
+          if (round === 0 && toolCalls.length === 0 && !isMeaningfulAssistantText(visibleText)) {
+            if (toolsEnabled) {
+              toolsEnabled = false;
+              send('reset', { reason: 'empty_answer' });
+              continue;
+            }
+            throw new AssistantProviderError(502, '模型没有返回可读内容，请重试。');
+          }
+
           if (toolCalls.length === 0 || round >= maximumToolRounds) {
             break;
           }
@@ -280,6 +303,18 @@ export async function POST(request: Request) {
       'X-Robots-Tag': 'noindex',
     },
   });
+}
+
+/** 清洗后至少要有中文、英文单词或数字，纯符号不算有效回答。 */
+function isMeaningfulAssistantText(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (/[\u4e00-\u9fff]/.test(trimmed)) {
+    return true;
+  }
+  return /[a-z]{2,}/i.test(trimmed) || /\d/.test(trimmed);
 }
 
 function normalizeModel(value: unknown): string | undefined {

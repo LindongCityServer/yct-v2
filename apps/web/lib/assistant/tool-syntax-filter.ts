@@ -6,6 +6,8 @@
  * 并在跨 chunk 时保留可能是标记开头的片段，避免漏到界面上。
  */
 const toolTagPattern = /<\s*\/?\s*\|[^>]*>/g;
+/** 只由尖括号、等号、斜杠组成的行：模型中断或输出 diff 标记后的残片（`---` 等水平线不算）。 */
+const symbolOnlyLinePattern = /^[<>{}=/\\]+$/;
 
 export interface AssistantTextFilter {
   push(chunk: string): string;
@@ -97,6 +99,11 @@ function filterCompleteLines(value: string, onToolSyntax: () => void): string {
       }
       continue;
     }
+    // `<<<<<<<`、`=======`、`<<<<<<</` 这类纯符号残片没有可读内容，整行丢弃。
+    if (isSymbolOnlyLine(line)) {
+      onToolSyntax();
+      continue;
+    }
     kept.push(line.replace(toolTagPattern, ''));
   }
 
@@ -109,6 +116,9 @@ function isMeaningfulRemainder(value: string): boolean {
   if (!trimmed) {
     return false;
   }
+  if (isSymbolOnlyLine(trimmed)) {
+    return false;
+  }
   if (/\b(?:calls|invoke|parameter)\b/i.test(trimmed)) {
     return false;
   }
@@ -119,7 +129,12 @@ function isMeaningfulRemainder(value: string): boolean {
   return /[a-z]{2,}[\s,.;:-]+[a-z]{2,}/i.test(trimmed);
 }
 
-/** DSML 标记、`<|...|>` 特殊 token、以及 `| | invoke` 这类孤立残片。 */
+function isSymbolOnlyLine(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.length >= 3 && symbolOnlyLinePattern.test(trimmed);
+}
+
+/** DSML 标记、`<|...|>` 特殊 token、diff 冲突标记，以及 `| | invoke` 这类孤立残片。 */
 function containsToolSyntax(value: string): boolean {
   if (!value) {
     return false;
@@ -128,6 +143,9 @@ function containsToolSyntax(value: string): boolean {
     return true;
   }
   if (/<\s*\/?\s*\|/.test(value)) {
+    return true;
+  }
+  if (/(?:<{4,}|>{4,}|={5,})/.test(value)) {
     return true;
   }
   // 普通中文回答不会出现连续管道符加工具关键字。

@@ -35,19 +35,37 @@ interface WikiThumbnailResponse {
   };
 }
 
-const cache = new Map<string, { expiresAt: number; results: WikiSearchResult[] }>();
+const cache = new Map<
+  string,
+  { expiresAt: number; results: WikiSearchResult[]; status: WikiSearchStatus }
+>();
+
+export type WikiSearchStatus = 'ready' | 'empty' | 'timeout' | 'unavailable';
+
+export interface WikiSearchOutcome {
+  results: WikiSearchResult[];
+  status: WikiSearchStatus;
+}
 
 /** 查询临东 Wiki（MediaWiki）。失败时返回空数组，不阻塞站内检索。 */
 export async function searchWiki(query: string, limit = defaultLimit): Promise<WikiSearchResult[]> {
+  return (await searchWikiWithStatus(query, limit)).results;
+}
+
+/** 带状态的检索：区分“没有匹配条目”和“请求超时/服务不可用”。 */
+export async function searchWikiWithStatus(
+  query: string,
+  limit = defaultLimit,
+): Promise<WikiSearchOutcome> {
   const normalizedQuery = query.trim();
   if (normalizedQuery.length < 2) {
-    return [];
+    return { results: [], status: 'empty' };
   }
 
   const cacheKey = `${normalizedQuery.toLocaleLowerCase()}|${limit}`;
   const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
-    return cached.results;
+    return { results: cached.results, status: cached.status };
   }
 
   const params = new URLSearchParams({
@@ -60,34 +78,39 @@ export async function searchWiki(query: string, limit = defaultLimit): Promise<W
     format: 'json',
   });
 
+  let lastStatus: WikiSearchStatus = 'unavailable';
   for (let attempt = 0; attempt < requestAttempts; attempt += 1) {
-    const results = await requestWikiResults(params);
-    if (results) {
-      // 首图单独查询，失败时保留纯文本结果，不阻塞搜索。
-      const thumbnails = await requestWikiThumbnails(results.map((item) => item.title));
-      const enriched = results.map((item) => ({
-        ...item,
-        thumbnailUrl: thumbnails.get(normalizeWikiTitle(item.title)),
-      }));
-
-      cache.set(cacheKey, { expiresAt: Date.now() + cacheTtlMs, results: enriched });
-      if (cache.size > maximumCacheEntries) {
-        const oldestKey = cache.keys().next().value;
-        if (oldestKey) {
-          cache.delete(oldestKey);
-        }
-      }
-      return enriched;
+    const outcome = await requestWikiResults(params);
+    lastStatus = outcome.status;
+    if (outcome.status !== 'ready') {
+      continue;
     }
+
+    // 首图单独查询，失败时保留纯文本结果，不阻塞搜索。
+    const thumbnails = await requestWikiThumbnails(outcome.results.map((item) => item.title));
+    const enriched = outcome.results.map((item) => ({
+      ...item,
+      thumbnailUrl: thumbnails.get(normalizeWikiTitle(item.title)),
+    }));
+    const status: WikiSearchStatus = enriched.length > 0 ? 'ready' : 'empty';
+
+    cache.set(cacheKey, { expiresAt: Date.now() + cacheTtlMs, results: enriched, status });
+    if (cache.size > maximumCacheEntries) {
+      const oldestKey = cache.keys().next().value;
+      if (oldestKey) {
+        cache.delete(oldestKey);
+      }
+    }
+    return { results: enriched, status };
   }
 
-  return [];
+  return { results: [], status: lastStatus };
 }
 
-/** 单次请求；失败返回 undefined，由外层决定是否重试。 */
+/** 单次请求；区分超时与服务不可用，由外层决定是否重试。 */
 async function requestWikiResults(
   params: URLSearchParams,
-): Promise<WikiSearchResult[] | undefined> {
+): Promise<{ status: WikiSearchStatus; results: WikiSearchResult[] }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
 
@@ -101,11 +124,11 @@ async function requestWikiResults(
       cache: 'no-store',
     });
     if (!response.ok) {
-      return undefined;
+      return { status: 'unavailable', results: [] };
     }
 
     const payload = (await response.json()) as WikiSearchResponse;
-    return (payload.query?.search ?? [])
+    const results = (payload.query?.search ?? [])
       .map((item) => {
         const title = typeof item.title === 'string' ? item.title.trim() : '';
         if (!title) {
@@ -120,8 +143,13 @@ async function requestWikiResults(
         } satisfies WikiSearchResult;
       })
       .filter((item): item is WikiSearchResult => item !== null);
-  } catch {
-    return undefined;
+    return { status: 'ready', results };
+  } catch (error) {
+    return {
+      status:
+        error instanceof DOMException && error.name === 'AbortError' ? 'timeout' : 'unavailable',
+      results: [],
+    };
   } finally {
     clearTimeout(timeout);
   }

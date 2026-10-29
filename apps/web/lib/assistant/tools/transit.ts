@@ -89,10 +89,13 @@ export const searchTransitTool: AssistantTool<SearchTransitInput> = {
         (station) => [station.lineName, station.stationName],
         limit,
       );
+      const lineIds = new Map(overview.lines.map((line) => [line.name, line.id]));
       for (const station of matches) {
+        const lineId = lineIds.get(station.lineName);
         references.push({
           title: `${station.lineName} · ${station.stationName}`,
           source: '站点',
+          href: lineId ? `/map?line=${encodeURIComponent(lineId)}` : undefined,
           tone: 'station',
           snippet: buildStationSnippet(station),
         });
@@ -138,20 +141,60 @@ export const lineTimetableTool: AssistantTool<LineTimetableInput> = {
   async run(input): Promise<AssistantToolResult> {
     const lineText = input.line.trim();
     const overview = await readTransitOverview();
-    const line = overview.lines
-      .filter((entry) => entry.name.includes(lineText) || lineText.includes(entry.name))
-      .sort((left, right) => right.name.length - left.name.length)[0];
-    if (!line) {
+    const query = normalizeTransitLineName(lineText);
+    const matches = overview.lines
+      .map((line) => ({ line, name: normalizeTransitLineName(line.name) }))
+      .map((entry) => ({ ...entry, score: getTransitLineMatchScore(entry.name, query) }))
+      .filter((entry) => entry.score > 0)
+      .sort(
+        (left, right) =>
+          right.score - left.score ||
+          left.name.length - right.name.length ||
+          left.name.localeCompare(right.name, 'zh-CN'),
+      );
+
+    if (matches.length === 0) {
       return emptyToolResult(`站内没有收录线路“${lineText}”。`);
     }
 
-    const reference = buildLineTimetableReference(line);
+    // 同一匹配层级可能有多条线路（例如“181”同时命中主线和支线），全部返回；
+    // 但用户明确写“181路”时，精确匹配会优先，不会混入支线。
+    const bestScore = matches[0]!.score;
+    const bestMatches = matches.filter((entry) => entry.score === bestScore).slice(0, 4);
+    const references = bestMatches.map((entry) => buildLineTimetableReference(entry.line));
     return {
-      summary: `${reference.title}：${reference.snippet}`,
-      references: [reference],
+      summary: [
+        bestMatches.length > 1
+          ? `找到 ${bestMatches.length} 条与“${lineText}”相关的线路：`
+          : undefined,
+        ...references.map(
+          (reference, index) =>
+            `${bestMatches.length > 1 ? `${index + 1}. ` : ''}${reference.title}：${reference.snippet}`,
+        ),
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      references,
     };
   },
 };
+
+function normalizeTransitLineName(value: string): string {
+  return value.replace(/[\s\u3000]+/g, '').toLocaleLowerCase();
+}
+
+function getTransitLineMatchScore(name: string, query: string): number {
+  if (!name || !query) {
+    return 0;
+  }
+  if (name === query) {
+    return 3;
+  }
+  if (name.startsWith(query) || query.startsWith(name)) {
+    return 2;
+  }
+  return name.includes(query) || query.includes(name) ? 1 : 0;
+}
 
 interface JourneyPlanInput {
   origin: string;
