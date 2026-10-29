@@ -3,6 +3,90 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.16.0",
+      "releasedAt": "2026-10-29T15:01:09.949Z",
+      "sourceFingerprint": "8dc7886ab6edd709518f17771dc862121235d87bde07104f604da5d0e39bd7eb",
+      "themes": [
+        "transit",
+        "map",
+        "analytics",
+        "account",
+        "assistant",
+        "materials",
+        "admin",
+        "search",
+        "web"
+      ],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "后台新增班次工作台，可在运行图上拖动调整区间与停站用时，并支持撤销重做和快捷键"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "后台线路与班次支持批量审批，逐条处理改为整批提交"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地图新增站内路线规划，支持步行、出租与多种公共交通组合，并开放公开查询接口"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "后台首页新增数据概览，可查看使用规模、功能渗透与任务成功率"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "强调色可跟随临东通主题计划自动切换，支持红色与灰色，品牌标识与运营配图同步换色"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "问一问可识别提问者身份与最后位置，并支持检索运营公告、服务目录与常见问题"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "全局搜索支持双击 Shift 唤起，问一问小人会跟随光标转动眼睛"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "物料新增地铁竖版线路图模板，宽度固定一米、高度可调，提供新版与旧版样式"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "公交站牌支持标记临时停靠，站名与线路同步提示"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "后台操作记录显示操作人昵称，可据此筛选"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "从可视化工作台返回后台时自动恢复原编辑弹窗"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复本地管理员在 localhost 与 127.0.0.1 之间登录后无法回跳的问题"
+        },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "灰色强调色下运营配图与语义色统一收敛，避免首页出现鲜艳底色"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.15.0",
       "releasedAt": "2026-10-27T22:39:47.221Z",
       "sourceFingerprint": "1e1a3dcdbefd20196697773349698812e3c910f2a9c1c8f9834a7a375dec74d2",
