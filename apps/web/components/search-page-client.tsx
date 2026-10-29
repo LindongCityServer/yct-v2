@@ -358,7 +358,10 @@ export function SearchPageClient({
 
             <div className="search-result-groups">
               {shouldShowOperations && operationResults.length > 0 ? (
-                <section className="search-result-group" aria-labelledby="search-operations-title">
+                <section
+                  className="search-result-group search-result-group-operations"
+                  aria-labelledby="search-operations-title"
+                >
                   <h2 id="search-operations-title">{t('search.resultGroup.operations')}</h2>
                   <div className="search-result-list">
                     {operationResults.map((item) => {
@@ -400,7 +403,10 @@ export function SearchPageClient({
               ) : null}
 
               {shouldShowPoi && poiResults.length > 0 ? (
-                <section className="search-result-group" aria-labelledby="search-poi-title">
+                <section
+                  className="search-result-group search-result-group-poi"
+                  aria-labelledby="search-poi-title"
+                >
                   <h2 id="search-poi-title">{t('search.resultGroup.poi')}</h2>
                   <div className="search-result-list">
                     {poiResults.map((marker) => {
