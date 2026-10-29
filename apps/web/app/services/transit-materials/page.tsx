@@ -16,6 +16,8 @@ import {
   METRO_DIRECTION_OLD_TEMPLATE_ID,
   METRO_LINE_MAP_NEW_TEMPLATE_ID,
   METRO_LINE_MAP_OLD_TEMPLATE_ID,
+  METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID,
+  METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID,
   METRO_STATION_NAME_NEW_TEMPLATE_ID,
   METRO_STATION_NAME_OLD_TEMPLATE_ID,
 } from '../../../lib/material-template-ids';
@@ -61,6 +63,12 @@ const transitMaterialTemplateGroups: MaterialTemplateGroup[] = [
     id: 'bus_stop_horizontal_detail',
     titleKey: 'materialStudio.group.busStopHorizontal',
     templateIds: [BUS_STOP_HORIZONTAL_DETAIL_TEMPLATE_ID],
+  },
+  {
+    id: 'metro_line_map_vertical',
+    titleKey: 'materialStudio.group.metroLineMapVertical',
+    variantLabelKey: 'materialStudio.group.style',
+    templateIds: [METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID, METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID],
   },
   {
     id: 'metro_line_map_merged',

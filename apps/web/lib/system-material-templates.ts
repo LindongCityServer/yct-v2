@@ -8,6 +8,8 @@ import {
   METRO_DIRECTION_OLD_TEMPLATE_ID,
   METRO_LINE_MAP_NEW_TEMPLATE_ID,
   METRO_LINE_MAP_OLD_TEMPLATE_ID,
+  METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID,
+  METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID,
   METRO_PLATFORM_SIGN_TEMPLATE_ID,
   METRO_STATION_NAME_NEW_TEMPLATE_ID,
   METRO_STATION_NAME_OLD_TEMPLATE_ID,
@@ -20,14 +22,14 @@ const busStopOverviewSource = createBusStopTemplateSource(
   'overview.svg',
   `<g id="material-dynamic-fields">
   <rect x="12" y="18" width="104" height="22" fill="#FFFFFF"/>
-  <g transform="translate(64 0) scale(0.92 1)"><text x="0" y="32" transform="scale({{fit.stationName.scaleX}} 1)" fill="#073764" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text></g>
-  <text x="0" y="38" transform="translate(64 0) scale({{fit.stationNamePinyin.scaleX}} 1)" fill="#073764" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="4.5" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationNamePinyin.letterSpacing}}">{{stationNamePinyin}}</text>
-  <rect x="17" y="45" width="36" height="22" fill="#000099"/><text x="0" y="61" transform="translate(35 0) scale({{fit.route1Number.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route1Number}}</text>
-  <rect x="17" y="72" width="36" height="22" fill="#B5B5BF"/><text x="0" y="88" transform="translate(35 0) scale({{fit.route2Number.scaleX}} 1)" fill="#2059CB" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route2Number}}</text>
-  <rect x="17" y="99" width="36" height="22" fill="#108433"/><text x="0" y="115" transform="translate(35 0) scale({{fit.route3Number.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route3Number}}</text>
-  <rect x="75" y="45" width="36" height="22" fill="#000099"/><text x="0" y="61" transform="translate(93 0) scale({{fit.route4Number.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route4Number}}</text>
-  <rect x="75" y="72" width="36" height="22" fill="#B5B5BF"/><text x="0" y="88" transform="translate(93 0) scale({{fit.route5Number.scaleX}} 1)" fill="#2059CB" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route5Number}}</text>
-  <rect x="75" y="99" width="36" height="22" fill="#108433"/><text x="0" y="115" transform="translate(93 0) scale({{fit.route6Number.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route6Number}}</text>
+  <g transform="translate(64 0) scale(0.92 1)"><text x="0" y="32" transform="scale({{fit.stationName.scaleX}} 1)" fill="{{temporaryStopAll.stationNameFill}}" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text></g>
+  <text x="0" y="38" transform="translate(64 0) scale({{fit.stationNamePinyin.scaleX}} 1)" fill="{{temporaryStopAll.stationNamePinyinFill}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="4.5" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationNamePinyin.letterSpacing}}">{{stationNamePinyin}}</text>
+  <rect x="17" y="45" width="36" height="22" fill="{{select.route1TemporaryStop.background}}"/><text x="0" y="61" transform="translate(35 0) scale({{fit.route1Number.scaleX}} 1)" fill="{{select.route1TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route1Number}}</text>
+  <rect x="17" y="72" width="36" height="22" fill="{{select.route2TemporaryStop.background}}"/><text x="0" y="88" transform="translate(35 0) scale({{fit.route2Number.scaleX}} 1)" fill="{{select.route2TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route2Number}}</text>
+  <rect x="17" y="99" width="36" height="22" fill="{{select.route3TemporaryStop.background}}"/><text x="0" y="115" transform="translate(35 0) scale({{fit.route3Number.scaleX}} 1)" fill="{{select.route3TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route3Number}}</text>
+  <rect x="75" y="45" width="36" height="22" fill="{{select.route4TemporaryStop.background}}"/><text x="0" y="61" transform="translate(93 0) scale({{fit.route4Number.scaleX}} 1)" fill="{{select.route4TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route4Number}}</text>
+  <rect x="75" y="72" width="36" height="22" fill="{{select.route5TemporaryStop.background}}"/><text x="0" y="88" transform="translate(93 0) scale({{fit.route5Number.scaleX}} 1)" fill="{{select.route5TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route5Number}}</text>
+  <rect x="75" y="99" width="36" height="22" fill="{{select.route6TemporaryStop.background}}"/><text x="0" y="115" transform="translate(93 0) scale({{fit.route6Number.scaleX}} 1)" fill="{{select.route6TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route6Number}}</text>
 </g>`,
 );
 
@@ -54,10 +56,10 @@ const busStopTerminalSource = createBusStopTemplateSource(
   'terminal.svg',
   `<g id="material-dynamic-fields">
   <rect x="12" y="18" width="104" height="22" fill="#FFFFFF"/>
-  <g transform="translate(64 0) scale(0.92 1)"><text x="0" y="32" transform="scale({{fit.stationName.scaleX}} 1)" fill="#073764" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text></g>
-  <text x="0" y="38.5" transform="translate(64 0) scale({{fit.stationNamePinyin.scaleX}} 1)" fill="#073764" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationNamePinyin.letterSpacing}}">{{stationNamePinyin}}</text>
-  <rect x="36.5" y="58" width="55" height="36" fill="#108433"/>
-  <text x="0" y="91" transform="translate(64 0) scale({{fit.routeNumber.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="46" font-weight="700" text-anchor="middle">{{routeNumber}}</text>
+  <g transform="translate(64 0) scale(0.92 1)"><text x="0" y="32" transform="scale({{fit.stationName.scaleX}} 1)" fill="{{temporaryStopAll.stationNameFill}}" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text></g>
+  <text x="0" y="38.5" transform="translate(64 0) scale({{fit.stationNamePinyin.scaleX}} 1)" fill="{{temporaryStopAll.stationNamePinyinFill}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="5" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationNamePinyin.letterSpacing}}">{{stationNamePinyin}}</text>
+  <rect x="36.5" y="58" width="55" height="36" fill="{{select.routeTemporaryStop.background}}"/>
+  <text x="0" y="91" transform="translate(64 0) scale({{fit.routeNumber.scaleX}} 1)" fill="{{select.routeTemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="46" font-weight="700" text-anchor="middle">{{routeNumber}}</text>
   <rect x="36.5" y="99" width="55" height="9" fill="#108433"/>
   <g transform="translate(64 0) scale(1.8 1)"><text x="0" y="106" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="6" font-weight="700" letter-spacing="3" text-anchor="middle">{{terminalRole}}</text></g>
 </g>`,
@@ -66,9 +68,10 @@ const busStopTerminalSource = createBusStopTemplateSource(
 const busStopTerminalRealisticSource = createBusStopTemplateSource(
   'terminal-realistic.svg',
   `<g id="material-dynamic-fields">
-  <g transform="translate(64 0) scale(0.92 1)"><text x="0" y="63" transform="scale({{fit.stationName.scaleX}} 1)" fill="#073764" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text></g>
-  <text x="0" y="73" transform="translate(64 0) scale({{fit.stationNamePinyin.scaleX}} 1)" fill="#073764" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="6" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationNamePinyin.letterSpacing}}">{{stationNamePinyin}}</text>
-  <text x="0" y="132" transform="translate(64 0) scale({{fit.routeNumber.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="46" font-weight="700" text-anchor="middle">{{routeNumber}}</text>
+  <g transform="translate(64 0) scale(0.92 1)"><text x="0" y="63" transform="scale({{fit.stationName.scaleX}} 1)" fill="{{temporaryStopAll.stationNameFill}}" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text></g>
+  <text x="0" y="73" transform="translate(64 0) scale({{fit.stationNamePinyin.scaleX}} 1)" fill="{{temporaryStopAll.stationNamePinyinFill}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="6" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationNamePinyin.letterSpacing}}">{{stationNamePinyin}}</text>
+  <rect x="33.619049" y="97.228572" width="60.761909" height="39.771431" fill="#FFFFFF" opacity="{{select.routeTemporaryStop.blockOpacity}}"/>
+  <text x="0" y="132" transform="translate(64 0) scale({{fit.routeNumber.scaleX}} 1)" fill="{{select.routeTemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="46" font-weight="700" text-anchor="middle">{{routeNumber}}</text>
   <g transform="translate(64 0) scale(1.8 1)"><text x="0" y="150" fill="#FFFFFF" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="6" font-weight="700" letter-spacing="3" text-anchor="middle">{{terminalRole}}</text></g>
 </g>`,
 );
@@ -76,14 +79,20 @@ const busStopTerminalRealisticSource = createBusStopTemplateSource(
 const busStopOverviewRealisticSource = createBusStopTemplateSource(
   'overview-realistic.svg',
   `<g id="material-dynamic-fields">
-  <g transform="translate(64 0) scale(0.92 1)"><text x="0" y="63" transform="scale({{fit.stationName.scaleX}} 1)" fill="#073764" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text></g>
-  <text x="0" y="73" transform="translate(64 0) scale({{fit.stationNamePinyin.scaleX}} 1)" fill="#073764" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="6" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationNamePinyin.letterSpacing}}">{{stationNamePinyin}}</text>
-  <text x="0" y="102" transform="translate(31.8 0) scale({{fit.route1Number.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route1Number}}</text>
-  <text x="0" y="132" transform="translate(31.8 0) scale({{fit.route2Number.scaleX}} 1)" fill="#2059CB" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route2Number}}</text>
-  <text x="0" y="162" transform="translate(31.8 0) scale({{fit.route3Number.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route3Number}}</text>
-  <text x="0" y="102" transform="translate(96.2 0) scale({{fit.route4Number.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route4Number}}</text>
-  <text x="0" y="132" transform="translate(96.2 0) scale({{fit.route5Number.scaleX}} 1)" fill="#2059CB" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route5Number}}</text>
-  <text x="0" y="162" transform="translate(96.2 0) scale({{fit.route6Number.scaleX}} 1)" fill="#FFFFFF" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route6Number}}</text>
+  <g transform="translate(64 0) scale(0.92 1)"><text x="0" y="63" transform="scale({{fit.stationName.scaleX}} 1)" fill="{{temporaryStopAll.stationNameFill}}" font-family="'HarmonyOS Sans SC', Arial, Helvetica, sans-serif" font-size="14" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationName.letterSpacing}}">{{stationName}}</text></g>
+  <text x="0" y="73" transform="translate(64 0) scale({{fit.stationNamePinyin.scaleX}} 1)" fill="{{temporaryStopAll.stationNamePinyinFill}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="6" font-weight="700" text-anchor="middle" letter-spacing="{{fit.stationNamePinyin.letterSpacing}}">{{stationNamePinyin}}</text>
+  <rect x="11.859375" y="82.921875" width="39.9375" height="24.406254" fill="#FFFFFF" opacity="{{select.route1TemporaryStop.blockOpacity}}"/>
+  <rect x="11.859375" y="112.875" width="39.9375" height="24.406254" fill="#FFFFFF" opacity="{{select.route2TemporaryStop.blockOpacity}}"/>
+  <rect x="11.859375" y="142.828125" width="39.9375" height="24.406254" fill="#FFFFFF" opacity="{{select.route3TemporaryStop.blockOpacity}}"/>
+  <rect x="76.203125" y="82.921875" width="39.9375" height="24.406254" fill="#FFFFFF" opacity="{{select.route4TemporaryStop.blockOpacity}}"/>
+  <rect x="76.203125" y="112.875" width="39.9375" height="24.406254" fill="#FFFFFF" opacity="{{select.route5TemporaryStop.blockOpacity}}"/>
+  <rect x="76.203125" y="142.828125" width="39.9375" height="24.406254" fill="#FFFFFF" opacity="{{select.route6TemporaryStop.blockOpacity}}"/>
+  <text x="0" y="102" transform="translate(31.8 0) scale({{fit.route1Number.scaleX}} 1)" fill="{{select.route1TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route1Number}}</text>
+  <text x="0" y="132" transform="translate(31.8 0) scale({{fit.route2Number.scaleX}} 1)" fill="{{select.route2TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route2Number}}</text>
+  <text x="0" y="162" transform="translate(31.8 0) scale({{fit.route3Number.scaleX}} 1)" fill="{{select.route3TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route3Number}}</text>
+  <text x="0" y="102" transform="translate(96.2 0) scale({{fit.route4Number.scaleX}} 1)" fill="{{select.route4TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route4Number}}</text>
+  <text x="0" y="132" transform="translate(96.2 0) scale({{fit.route5Number.scaleX}} 1)" fill="{{select.route5TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route5Number}}</text>
+  <text x="0" y="162" transform="translate(96.2 0) scale({{fit.route6Number.scaleX}} 1)" fill="{{select.route6TemporaryStop.text}}" font-family="Arial, Helvetica, 'HarmonyOS Sans SC', sans-serif" font-size="20" font-weight="700" text-anchor="middle">{{route6Number}}</text>
 </g>`,
 );
 
@@ -121,7 +130,70 @@ function createBusStopTemplateSource(fileName: string, overlay: string): string 
   return source.replace(/<\/svg>$/i, `${overlay}</svg>`);
 }
 
-/** 地铁横板线路图（新版 / 旧版）共用的字段定义。 */
+/** 公交站牌线路概览的六条线路默认配色，顺序对应 route1..route6。 */
+const busStopOverviewRouteColors = [
+  { background: '#000099', text: '#FFFFFF' },
+  { background: '#B5B5BF', text: '#2059CB' },
+  { background: '#108433', text: '#FFFFFF' },
+  { background: '#000099', text: '#FFFFFF' },
+  { background: '#B5B5BF', text: '#2059CB' },
+  { background: '#108433', text: '#FFFFFF' },
+];
+
+function createBusStopOverviewTemporaryStopFields(): MaterialTemplateVersion['fields'] {
+  return busStopOverviewRouteColors.map((colors, index) => {
+    const slot = index + 1;
+    return {
+      key: `route${slot}TemporaryStop`,
+      label: `第 ${slot} 条线路停靠状态`,
+      kind: 'select' as const,
+      defaultValue: 'no',
+      serverOverride: true,
+      options: [
+        { value: 'no', label: '正常' },
+        { value: 'yes', label: '临时停靠' },
+      ],
+      selectVariableValues: {
+        no: {
+          background: colors.background,
+          text: colors.text,
+          blockOpacity: '0',
+        },
+        yes: {
+          background: '#FFFFFF',
+          text: '#C11111',
+          blockOpacity: '1',
+        },
+      },
+    };
+  });
+}
+
+const busStopTerminalTemporaryStopField: MaterialTemplateVersion['fields'][number] = {
+  key: 'routeTemporaryStop',
+  label: '线路停靠状态',
+  kind: 'select',
+  defaultValue: 'no',
+  serverOverride: true,
+  options: [
+    { value: 'no', label: '正常' },
+    { value: 'yes', label: '临时停靠' },
+  ],
+  selectVariableValues: {
+    no: {
+      background: '#108433',
+      text: '#FFFFFF',
+      blockOpacity: '0',
+    },
+    yes: {
+      background: '#FFFFFF',
+      text: '#C11111',
+      blockOpacity: '1',
+    },
+  },
+};
+
+/** 地铁横版线路图（新版 / 旧版）共用的字段定义。 */
 function createMetroLineMapFields(
   renderer: 'metro_line_map_modern' | 'metro_line_map_classic',
 ): MaterialTemplateVersion['fields'] {
@@ -178,6 +250,94 @@ function createMetroLineMapFields(
       options: [
         { value: 'left', label: '左侧开门' },
         { value: 'right', label: '右侧开门' },
+      ],
+    },
+    {
+      key: 'transferLines',
+      label: '换乘线路（可选，格式：站名=2,4；需要指定颜色时写作 2:#EC6941）',
+      kind: 'text',
+      maxLength: 2000,
+      serverOverride: true,
+    },
+  ];
+}
+
+/** 地铁竖版线路图（新版 / 旧版）共用的字段定义，数据口径与横版一致。 */
+function createMetroVerticalLineMapFields(
+  renderer: 'metro_line_map_vertical_modern' | 'metro_line_map_vertical_classic',
+): MaterialTemplateVersion['fields'] {
+  return [
+    {
+      key: 'accentColor',
+      label: '线路颜色',
+      kind: 'color',
+      required: true,
+      defaultValue: '#F29DB4',
+    },
+    {
+      key: 'lineLabel',
+      label: '线路编号（页头圆形徽标，留空则不显示）',
+      kind: 'text',
+      maxLength: 16,
+    },
+    {
+      key: 'routeStations',
+      label: '完整站点列表（按起点到终点顺序，用 / 或换行分隔）',
+      kind: 'text',
+      required: true,
+      maxLength: 2000,
+      glyph: {
+        renderer,
+        layoutWidth: 128,
+        layoutHeight: 320,
+        currentIndexFieldKey: 'currentStationIndex',
+        colorFieldKey: 'accentColor',
+      },
+    },
+    {
+      key: 'currentStationIndex',
+      label: '当前站序号（从 0 开始）',
+      kind: 'number',
+      required: true,
+      minimum: 0,
+      maximum: 999,
+      defaultValue: '0',
+    },
+    {
+      key: 'trackPosition',
+      label: '轨道位置',
+      kind: 'select',
+      required: true,
+      defaultValue: 'left',
+      serverOverride: true,
+      options: [
+        { value: 'left', label: '左侧' },
+        { value: 'right', label: '右侧' },
+        { value: 'both', label: '两侧' },
+      ],
+    },
+    {
+      key: 'travelDirection',
+      label: '行车方向（单侧 / 左侧）',
+      kind: 'select',
+      required: true,
+      defaultValue: 'last',
+      serverOverride: true,
+      options: [
+        { value: 'last', label: '开往末站' },
+        { value: 'first', label: '开往首站' },
+      ],
+    },
+    {
+      key: 'travelDirectionSecondary',
+      label: '右侧方向（仅两侧轨道）',
+      kind: 'select',
+      required: true,
+      defaultValue: 'first',
+      serverOverride: true,
+      options: [
+        { value: 'last', label: '开往末站' },
+        { value: 'first', label: '开往首站' },
       ],
     },
     {
@@ -700,6 +860,7 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             maxLength: 16,
             textFit: { maxWidth: 38, fontSize: 20, maxLetterSpacing: 0 },
           })),
+          ...createBusStopOverviewTemporaryStopFields(),
         ],
         defaultCanvas: {
           widthM: 1,
@@ -748,6 +909,7 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             maxLength: 16,
             textFit: { maxWidth: 36, fontSize: 20, maxLetterSpacing: 0 },
           })),
+          ...createBusStopOverviewTemporaryStopFields(),
         ],
         defaultCanvas: {
           widthM: 1,
@@ -1037,6 +1199,7 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             maxLength: 16,
             textFit: { maxWidth: 49, fontSize: 46, maxLetterSpacing: 0 },
           },
+          busStopTerminalTemporaryStopField,
           {
             key: 'terminalRole',
             label: '站点属性',
@@ -1096,6 +1259,7 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
             maxLength: 16,
             textFit: { maxWidth: 54, fontSize: 46, maxLetterSpacing: 0 },
           },
+          busStopTerminalTemporaryStopField,
           {
             key: 'terminalRole',
             label: '站点属性',
@@ -1127,9 +1291,9 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
       {
         version: 1,
         status: 'published',
-        title: '地铁横板线路图（新版）',
+        title: '地铁横版线路图（新版）',
         description:
-          '新版地铁横板线路图：站名上下交替排布，换乘线路以彩色徽标标注，支持开门方向与终点站方位联动。',
+          '新版地铁横版线路图：站名上下交替排布，换乘线路以彩色徽标标注，支持开门方向与终点站方位联动。',
         family: 'metro_line',
         source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.logicalWidthPx}} {{canvas.logicalHeightPx}}">
   <g>{{glyph.routeStations}}</g>
@@ -1155,9 +1319,9 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
       {
         version: 1,
         status: 'published',
-        title: '地铁横板线路图（旧版）',
+        title: '地铁横版线路图（旧版）',
         description:
-          '旧版地铁横板线路图：保留左下角图例，换乘站以换乘线路文字标注，支持开门方向与终点站方位联动。',
+          '旧版地铁横版线路图：保留左下角图例，换乘站以换乘线路文字标注，支持开门方向与终点站方位联动。',
         family: 'metro_line',
         source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.logicalWidthPx}} {{canvas.logicalHeightPx}}">
   <g>{{glyph.routeStations}}</g>
@@ -1168,6 +1332,62 @@ export const systemMaterialTemplateRecords: MaterialTemplateRecord[] = [
           heightM: 1,
           pxPerMeter: 128,
           alignToTile: true,
+          tileSizePx: 128,
+        },
+        createdBy: systemActorId,
+        createdAt: systemPublishedAt,
+        publishedBy: systemActorId,
+        publishedAt: systemPublishedAt,
+      },
+    ],
+  },
+  {
+    id: METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID,
+    versions: [
+      {
+        version: 1,
+        status: 'published',
+        title: '地铁竖版线路图（新版）',
+        description:
+          '新版地铁竖版线路图：页头显示开往方向与线路编号，支持左侧、右侧或两侧轨道；两侧时并列显示两个方向，站点自上而下排列，当前站高亮，已过站置灰，换乘线路以彩色徽标标注。',
+        family: 'metro_line',
+        source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.logicalWidthPx}} {{canvas.logicalHeightPx}}">
+  <g>{{glyph.routeStations}}</g>
+</svg>`,
+        fields: createMetroVerticalLineMapFields('metro_line_map_vertical_modern'),
+        defaultCanvas: {
+          widthM: 1,
+          heightM: 2.5,
+          pxPerMeter: 128,
+          alignToTile: false,
+          tileSizePx: 128,
+        },
+        createdBy: systemActorId,
+        createdAt: systemPublishedAt,
+        publishedBy: systemActorId,
+        publishedAt: systemPublishedAt,
+      },
+    ],
+  },
+  {
+    id: METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID,
+    versions: [
+      {
+        version: 1,
+        status: 'published',
+        title: '地铁竖版线路图（旧版）',
+        description:
+          '旧版地铁竖版线路图：保留旧版浅色页头与文字换乘标注，支持左侧、右侧或两侧轨道；站点自上而下排列，当前站高亮，已过站置灰。',
+        family: 'metro_line',
+        source: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{canvas.logicalWidthPx}} {{canvas.logicalHeightPx}}">
+  <g>{{glyph.routeStations}}</g>
+</svg>`,
+        fields: createMetroVerticalLineMapFields('metro_line_map_vertical_classic'),
+        defaultCanvas: {
+          widthM: 1,
+          heightM: 2.5,
+          pxPerMeter: 128,
+          alignToTile: false,
           tileSizePx: 128,
         },
         createdBy: systemActorId,

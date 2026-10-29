@@ -269,7 +269,7 @@ export function findMaterialTransitNetworkLineByKey(
 }
 
 /**
- * 按线路几何顺序列出站点，供横板线路图使用。
+ * 按线路几何顺序列出站点，供横版 / 竖版线路图使用。
  * 从线路端点沿相邻边一路走到底；分支线只取第一条可行路径。
  */
 export function listMaterialTransitNetworkLineStations(

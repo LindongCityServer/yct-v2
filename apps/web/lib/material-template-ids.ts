@@ -8,11 +8,23 @@ export const BUS_STOP_HORIZONTAL_DETAIL_TEMPLATE_ID = 'system_material_bus_stop_
 export const BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID = 'system_material_bus_stop_terminal_realistic';
 export const BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID = 'system_material_bus_stop_overview_realistic';
 
-/** 地铁横板线路图：新版 / 旧版共用同一个入口，通过样式切换。 */
+/** 地铁横版线路图：新版 / 旧版共用同一个入口，通过样式切换。 */
 export const METRO_LINE_MAP_NEW_TEMPLATE_ID = 'system_material_metro_line_map_new';
 export const METRO_LINE_MAP_OLD_TEMPLATE_ID = 'system_material_metro_line_map_old';
 
-/** 地铁横板线路图的另外两种版式：站名、方向及下一站，各自都有新版 / 旧版。 */
+/** 地铁竖版线路图：宽度固定 1 米、高度可调，新版 / 旧版共用同一个入口。 */
+export const METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID = 'system_material_metro_line_map_vertical_new';
+export const METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID = 'system_material_metro_line_map_vertical_old';
+
+/** 判断模板是否属于竖版地铁线路图（画布需锁定宽度）。 */
+export function isMetroLineMapVerticalTemplateId(templateId: string): boolean {
+  return (
+    templateId === METRO_LINE_MAP_VERTICAL_NEW_TEMPLATE_ID ||
+    templateId === METRO_LINE_MAP_VERTICAL_OLD_TEMPLATE_ID
+  );
+}
+
+/** 地铁横版线路图的另外两种版式：站名、方向及下一站，各自都有新版 / 旧版。 */
 export const METRO_STATION_NAME_NEW_TEMPLATE_ID = 'system_material_metro_station_name_new';
 export const METRO_STATION_NAME_OLD_TEMPLATE_ID = 'system_material_metro_station_name_old';
 export const METRO_DIRECTION_NEW_TEMPLATE_ID = 'system_material_metro_direction_new';

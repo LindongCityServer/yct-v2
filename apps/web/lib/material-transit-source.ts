@@ -319,7 +319,7 @@ export async function resolveTransitLineMaterialInput(input: {
     : undefined;
   candidates.accentColor = networkLineMatch?.color ?? line.color ?? '';
   if (input.fields.some((field) => field.key === 'routeStations')) {
-    // 地铁横板线路图以整条线路为输入，站序、当前站与换乘线路都由所选线路派生。
+    // 地铁横版 / 竖版线路图以整条线路为输入，站序、当前站与换乘线路都由所选线路派生。
     candidates.routeStations = line.stationNames.join('\n');
     candidates.currentStationIndex = String(
       Math.max(selectedStop ? line.stationStops.indexOf(selectedStop) : 0, 0),

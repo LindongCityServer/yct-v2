@@ -191,6 +191,17 @@ export function renderMaterialGlyph(
     );
   }
   if (
+    config.renderer === 'metro_line_map_vertical_modern' ||
+    config.renderer === 'metro_line_map_vertical_classic'
+  ) {
+    return renderMetroLineMapVertical(
+      value,
+      config,
+      values,
+      config.renderer === 'metro_line_map_vertical_classic' ? 'classic' : 'modern',
+    );
+  }
+  if (
     config.renderer === 'metro_station_name_modern' ||
     config.renderer === 'metro_station_name_classic' ||
     config.renderer === 'metro_direction_modern' ||
@@ -1668,7 +1679,7 @@ const metroLineMapLegacyTransferFontFamily =
   "'HarmonyOS Sans SC', 'Source Han Sans SC', Arial, Helvetica, sans-serif";
 
 /**
- * 地铁横板线路图渲染器。
+ * 地铁横版线路图渲染器。
  * 旧版 / 新版共用同一套站序排版：站名在站线两侧交替排列，
  * 开门方向决定终点站在左端还是右端，当前站圆圈内的箭头始终指向终点站。
  */
@@ -1894,6 +1905,1366 @@ function renderMetroLineMap(
     ? `<g data-metro-line-map="${style}">${body}</g>`
     : `<g data-metro-line-map="${style}" transform="scale(1 ${formatNumber(yScale)})">${body}</g>`;
 }
+
+// 竖版线路图：设计稿 128 × 320（1 m × 2.5 m），以下坐标均取自设计导出的 SVG。
+const metroVerticalReferenceWidth = 128;
+const metroVerticalHeaderHeight = 32;
+const metroVerticalHeaderAccentHeight = 4;
+const metroVerticalHeaderBackground = '#42464D';
+const metroVerticalPassedColor = '#A0A0A0';
+// 页头方向箭头（设计稿绝对坐标，左侧）；右侧通过水平镜像复用。
+const metroVerticalHeaderArrowPath =
+  'M22.6765 23.2502L19.0139 19.4409L29.9382 19.4409L29.9382 16.3284L19.1712 16.3284L22.6765 12.683L19.0186 12.683L13.9382 17.9666L17.4881 17.9666L13.9382 17.9666L19.0186 23.2502L22.6765 23.2502Z';
+// 当前站旁的向上箭头（4 × 4.784 的局部坐标）。
+// 依据更正后的「两侧均有轨道」参考图：轨道在右时当前站箭头同样向上。
+const metroVerticalCurrentArrowPath =
+  'M2 0L3.992 1.992L4 2.744L2.312 1L2.312 4.784L1.752 4.784L1.752 1L0 2.744L0 2L2 0Z';
+// 换乘图标：上下两条循环箭头 + 中间「换乘」字形，来自设计稿的绝对坐标（中心 y = 188）。
+const metroVerticalTransferTopPath =
+  'M35.3733 186.105C36.8316 185.522 38.0461 185.23 39.0183 185.23C39.9905 185.23 41.3055 185.909 42.9583 187.27L43.8333 186.54L43.8333 189.31L41.4983 189.31L41.4983 189.75L44.9983 189.75L44.9983 184.5L43.3933 185.81C41.935 184.935 40.4766 184.5 39.0183 184.5C37.56 184.5 36.3455 185.036 35.3733 186.105Z';
+const metroVerticalTransferBottomPath =
+  'M44.7083 189.895C43.2499 190.478 42.0355 190.77 41.0633 190.77C40.091 190.77 38.776 190.091 37.1233 188.73L36.2483 189.46L36.2483 186.685L38.5833 186.685L38.5833 186.25L35.0833 186.25L35.0833 191.5L36.6883 190.185C38.1466 191.06 39.6049 191.5 41.0633 191.5C42.5216 191.5 43.736 190.964 44.7083 189.895Z';
+const metroVerticalTransferGlyphPaths = [  'M39.736 188.152L39.736 188.316L39.1155 188.316C39.181 188.477 39.3384 188.595 39.3384 188.595C39.4957 188.713 39.7339 188.783 39.7339 188.783L39.6596 188.956C39.2116 188.807 39.0324 188.48 39.0324 188.48C38.9581 188.637 38.7954 188.751 38.7954 188.751C38.6326 188.864 38.355 188.963 38.355 188.963L38.2655 188.792C38.5583 188.702 38.7123 188.589 38.7123 188.589C38.8664 188.475 38.9123 188.316 38.9123 188.316L38.2917 188.316L38.2917 188.152L38.4862 188.152L38.4862 187.684C38.4512 187.724 38.4075 187.763 38.4075 187.763L38.3026 187.634C38.473 187.468 38.5856 187.303 38.5856 187.303C38.6981 187.138 38.779 186.95 38.779 186.95L38.9407 186.998C38.9013 187.099 38.8707 187.155 38.8707 187.155L39.4389 187.155L39.4389 187.302L39.2335 187.59L39.5678 187.59L39.5678 188.152L39.736 188.152ZM38.3594 188.023L38.1584 188.099L38.1584 188.705C38.1584 188.831 38.1103 188.882 38.1103 188.882C38.0622 188.932 37.9399 188.932 37.9399 188.932C37.8568 188.932 37.7978 188.921 37.7978 188.921L37.7651 188.748C37.8284 188.766 37.9005 188.766 37.9005 188.766C37.9552 188.766 37.9727 188.74 37.9727 188.74C37.9901 188.713 37.9901 188.643 37.9901 188.643L37.9901 188.163L37.8918 188.202C37.859 188.215 37.823 188.229 37.823 188.229C37.7869 188.244 37.752 188.259 37.752 188.259L37.7083 188.075C37.8699 188.021 37.9901 187.975 37.9901 187.975L37.9901 187.544L37.7541 187.544L37.7541 187.374L37.9901 187.374L37.9901 186.976L38.1584 186.976L38.1584 187.374L38.3507 187.374L38.3507 187.544L38.1584 187.544L38.1584 187.909L38.2065 187.89C38.2436 187.877 38.3223 187.842 38.3223 187.842L38.3594 188.023ZM38.7833 187.313C38.7003 187.448 38.5736 187.59 38.5736 187.59L39.0237 187.59L39.2269 187.313L38.7833 187.313ZM38.6457 187.752L38.6457 188.152L38.9341 188.152L38.9341 188.145L38.9341 187.752L38.6457 187.752ZM39.0958 188.152L39.4105 188.152L39.4105 187.752L39.0958 187.752L39.0958 188.152Z',
+  'M41.5422 188.06C41.6951 188.281 41.9126 188.43 41.9126 188.43C42.13 188.58 42.4577 188.7 42.4577 188.7L42.3878 188.871C42.1038 188.751 41.8973 188.607 41.8973 188.607C41.6908 188.464 41.5422 188.281 41.5422 188.281L41.5422 188.945L41.3761 188.945L41.3761 188.281C41.2275 188.46 41.0352 188.598 41.0352 188.598C40.8429 188.735 40.5545 188.871 40.5545 188.871L40.4693 188.707C40.832 188.547 41.0287 188.411 41.0287 188.411C41.2253 188.274 41.3761 188.064 41.3761 188.064L41.3761 187.551L40.5064 187.551L40.5064 187.398L41.3761 187.398L41.3761 187.214C40.8648 187.232 40.69 187.234 40.69 187.234L40.6812 187.09C41.0046 187.085 41.4548 187.064 41.4548 187.064C41.9049 187.042 42.2152 187.016 42.2152 187.016L42.2349 187.166C41.9814 187.186 41.5422 187.206 41.5422 187.206L41.5422 187.398L42.425 187.398L42.425 187.551L41.5422 187.551L41.5422 188.06ZM40.5021 188.15C40.548 188.141 40.974 188.023 40.974 188.023L40.974 187.894L40.5545 187.894L40.5545 187.759L40.974 187.759L40.974 187.616L41.127 187.616L41.127 188.272L40.974 188.272L40.974 188.165C40.8517 188.198 40.7239 188.235 40.7239 188.235C40.596 188.272 40.5327 188.292 40.5327 188.292L40.5021 188.15ZM41.7913 187.616L41.9421 187.616L41.9421 187.824C42.1628 187.741 42.3092 187.654 42.3092 187.654L42.3703 187.783C42.2218 187.859 41.9421 187.966 41.9421 187.966L41.9421 188.064C41.9421 188.113 41.9639 188.131 41.9639 188.131C41.9858 188.15 42.0382 188.154 42.0382 188.154C42.0885 188.156 42.1365 188.154 42.1365 188.154C42.2086 188.15 42.2327 188.13 42.2327 188.13C42.2567 188.11 42.2633 188.049 42.2633 188.049C42.2676 188.003 42.2676 187.909 42.2676 187.909L42.4031 187.938L42.3944 188.095C42.39 188.204 42.3365 188.244 42.3365 188.244C42.2829 188.283 42.1496 188.287 42.1496 188.287L42.0732 188.289L41.9967 188.287C41.8874 188.283 41.8394 188.237 41.8394 188.237C41.7913 188.191 41.7913 188.084 41.7913 188.084L41.7913 187.616Z',
+];
+
+// 以下旧版两侧版式的图形全部直接取自参考 SVG，避免用近似几何替代。
+const metroVerticalClassicDirectionLeftPath =
+  'M8.79587 43.797L7.19349 42.1305L11.9729 42.1305L11.9729 40.7687L7.26232 40.7687L8.79587 39.1739L7.19554 39.1739L4.9729 41.4854L6.52598 41.4854L4.9729 41.4854L7.19554 43.797L8.79587 43.797Z';
+const metroVerticalClassicDirectionRightPath =
+  'M119.204 43.797L120.807 42.1305L116.027 42.1305L116.027 40.7687L120.738 40.7687L119.204 39.1739L120.804 39.1739L123.027 41.4854L121.474 41.4854L123.027 41.4854L120.804 43.797L119.204 43.797Z';
+const metroVerticalClassicHeaderTabPath =
+  'M0 21L0 0C0 0 0 0 0 0L36 0C36 0 36 0 36 0L36 21C36 23.2091 34.2091 25 32 25L4 25C1.79086 25 0 23.2091 0 21Z';
+const metroVerticalClassicHeaderTabCirclePath =
+  'M0 8Q0 7.80361 0.00963635 7.60746Q0.0192727 7.41131 0.0385222 7.21586Q0.0577717 7.02042 0.0865879 6.82616Q0.115404 6.63189 0.153718 6.43928Q0.192031 6.24666 0.23975 6.05616Q0.287469 5.86565 0.344477 5.67772Q0.401486 5.48979 0.467647 5.30488Q0.533809 5.11997 0.608964 4.93853Q0.684118 4.75709 0.768086 4.57956Q0.852053 4.40203 0.94463 4.22883Q1.03721 4.05563 1.13817 3.88718Q1.23914 3.71873 1.34824 3.55544Q1.45735 3.39215 1.57434 3.23441Q1.69133 3.07666 1.81592 2.92485Q1.9405 2.77304 2.07239 2.62753Q2.20428 2.48201 2.34315 2.34315Q2.48201 2.20428 2.62753 2.07239Q2.77304 1.9405 2.92485 1.81592Q3.07666 1.69133 3.23441 1.57434Q3.39215 1.45735 3.55544 1.34824Q3.71873 1.23914 3.88718 1.13817Q4.05563 1.03721 4.22883 0.94463Q4.40203 0.852053 4.57956 0.768086Q4.75709 0.684118 4.93853 0.608964Q5.11997 0.533809 5.30488 0.467647Q5.48979 0.401486 5.67772 0.344477Q5.86565 0.287469 6.05616 0.23975Q6.24666 0.192031 6.43928 0.153718Q6.63189 0.115404 6.82616 0.0865879Q7.02042 0.0577717 7.21586 0.0385222Q7.41131 0.0192727 7.60746 0.00963635Q7.80361 0 8 0Q8.19639 0 8.39254 0.00963635Q8.58869 0.0192727 8.78414 0.0385222Q8.97958 0.0577717 9.17384 0.0865879Q9.36811 0.115404 9.56072 0.153718Q9.75334 0.192031 9.94384 0.23975Q10.1343 0.287469 10.3223 0.344477Q10.5102 0.401486 10.6951 0.467647Q10.88 0.533809 11.0615 0.608964Q11.2429 0.684118 11.4204 0.768086Q11.598 0.852053 11.7712 0.94463Q11.9444 1.03721 12.1128 1.13817Q12.2813 1.23914 12.4446 1.34824Q12.6079 1.45735 12.7656 1.57434Q12.9233 1.69133 13.0751 1.81592Q13.227 1.9405 13.3725 2.07239Q13.518 2.20428 13.6569 2.34315Q13.7957 2.48201 13.9276 2.62753Q14.0595 2.77304 14.1841 2.92485Q14.3087 3.07666 14.4257 3.23441Q14.5426 3.39215 14.6518 3.55544Q14.7609 3.71873 14.8618 3.88718Q14.9628 4.05563 15.0554 4.22883Q15.1479 4.40203 15.2319 4.57956Q15.3159 4.75709 15.391 4.93853Q15.4662 5.11997 15.5324 5.30488Q15.5985 5.48979 15.6555 5.67772Q15.7125 5.86565 15.7602 6.05616Q15.808 6.24666 15.8463 6.43928Q15.8846 6.63189 15.9134 6.82616Q15.9422 7.02042 15.9615 7.21586Q15.9807 7.41131 15.9904 7.60746Q16 7.80361 16 8Q16 8.19639 15.9904 8.39254Q15.9807 8.58869 15.9615 8.78414Q15.9422 8.97958 15.9134 9.17384Q15.8846 9.36811 15.8463 9.56072Q15.808 9.75334 15.7602 9.94384Q15.7125 10.1343 15.6555 10.3223Q15.5985 10.5102 15.5324 10.6951Q15.4662 10.88 15.391 11.0615Q15.3159 11.2429 15.2319 11.4204Q15.1479 11.598 15.0554 11.7712Q14.9628 11.9444 14.8618 12.1128Q14.7609 12.2813 14.6518 12.4446Q14.5426 12.6079 14.4257 12.7656Q14.3087 12.9233 14.1841 13.0751Q14.0595 13.227 13.9276 13.3725Q13.7957 13.518 13.6569 13.6569Q13.518 13.7957 13.3725 13.9276Q13.227 14.0595 13.0751 14.1841Q12.9233 14.3087 12.7656 14.4257Q12.6079 14.5426 12.4446 14.6518Q12.2813 14.7609 12.1128 14.8618Q11.9444 14.9628 11.7712 15.0554Q11.598 15.1479 11.4204 15.2319Q11.2429 15.3159 11.0615 15.391Q10.88 15.4662 10.6951 15.5324Q10.5102 15.5985 10.3223 15.6555Q10.1343 15.7125 9.94384 15.7602Q9.75334 15.808 9.56072 15.8463Q9.36811 15.8846 9.17384 15.9134Q8.97958 15.9422 8.78414 15.9615Q8.58869 15.9807 8.39254 15.9904Q8.19639 16 8 16Q7.80361 16 7.60746 15.9904Q7.41131 15.9807 7.21586 15.9615Q7.02042 15.9422 6.82616 15.9134Q6.63189 15.8846 6.43928 15.8463Q6.24666 15.808 6.05616 15.7602Q5.86565 15.7125 5.67772 15.6555Q5.48979 15.5985 5.30488 15.5324Q5.11997 15.4662 4.93853 15.391Q4.75709 15.3159 4.57956 15.2319Q4.40203 15.1479 4.22883 15.0554Q4.05563 14.9628 3.88718 14.8618Q3.71873 14.7609 3.55544 14.6518Q3.39215 14.5426 3.23441 14.4257Q3.07666 14.3087 2.92485 14.1841Q2.77304 14.0595 2.62753 13.9276Q2.48201 13.7957 2.34315 13.6569Q2.20428 13.518 2.07239 13.3725Q1.9405 13.227 1.81592 13.0751Q1.69133 12.9233 1.57434 12.7656Q1.45735 12.6079 1.34824 12.4446Q1.23914 12.2813 1.13817 12.1128Q1.03721 11.9444 0.94463 11.7712Q0.852053 11.598 0.768086 11.4204Q0.684118 11.2429 0.608964 11.0615Q0.533809 10.88 0.467647 10.6951Q0.401486 10.5102 0.344477 10.3223Q0.287469 10.1343 0.23975 9.94384Q0.192031 9.75334 0.153718 9.56072Q0.115404 9.36811 0.0865879 9.17384Q0.0577717 8.97958 0.0385222 8.78414Q0.0192727 8.58869 0.00963635 8.39254Q0 8.19639 0 8Z';
+const metroVerticalClassicPillLeftBackgroundPath =
+  'M48.7417 77.1792L48.7417 77.1792C48.7417 78.3564 47.7874 79.3108 46.6101 79.3108L41.8733 79.3108C40.696 79.3108 39.7417 78.3564 39.7417 77.1792L39.7417 77.1792C39.7417 76.0019 40.696 75.0476 41.8733 75.0476L46.6101 75.0476C47.7874 75.0476 48.7417 76.0019 48.7417 77.1792Z';
+const metroVerticalClassicPillRightBackgroundPath =
+  'M88.0417 77.1792L88.0417 77.1792C88.0417 78.3564 87.0874 79.3108 85.9102 79.3108L81.1733 79.3108C79.9961 79.3108 79.0417 78.3564 79.0417 77.1792L79.0417 77.1792C79.0417 76.0019 79.9961 75.0476 81.1733 75.0476L85.9102 75.0476C87.0874 75.0476 88.0417 76.0019 88.0417 77.1792Z';
+const metroVerticalClassicPillLeftOutlinePath =
+  'M48.7417 77.1792C48.7417 78.3564 47.7874 79.3108 46.6101 79.3108L41.8733 79.3108C40.696 79.3108 39.7417 78.3564 39.7417 77.1792C39.7417 76.0019 40.696 75.0476 41.8733 75.0476L46.6101 75.0476C47.7874 75.0476 48.7417 76.0019 48.7417 77.1792ZM48.268 77.1792C48.268 76.2636 47.5258 75.5213 46.6101 75.5213L41.8733 75.5213C40.9576 75.5213 40.2154 76.2636 40.2154 77.1792C40.2154 78.0948 40.9576 78.8371 41.8733 78.8371L46.6101 78.8371C47.5258 78.8371 48.268 78.0948 48.268 77.1792Z';
+const metroVerticalClassicPillRightOutlinePath =
+  'M88.0417 77.1792C88.0417 78.3564 87.0874 79.3108 85.9102 79.3108L81.1733 79.3108C79.9961 79.3108 79.0417 78.3564 79.0417 77.1792C79.0417 76.0019 79.9961 75.0476 81.1733 75.0476L85.9102 75.0476C87.0874 75.0476 88.0417 76.0019 88.0417 77.1792ZM87.5681 77.1792C87.5681 76.2636 86.8258 75.5213 85.9102 75.5213L81.1733 75.5213C80.2577 75.5213 79.5154 76.2636 79.5154 77.1792C79.5154 78.0948 80.2577 78.8371 81.1733 78.8371L85.9102 78.8371C86.8258 78.8371 87.5681 78.0948 87.5681 77.1792Z';
+const metroVerticalClassicPillLeftGlyphTransferPath =
+  'M46.3732 76.2318L44.0048 76.2318L44.0048 76.7055L46.3732 76.7055C46.3897 76.7055 46.4138 76.7081 46.4453 76.7134C46.5107 76.7243 46.5698 76.7429 46.6225 76.7693C46.7721 76.8441 46.8469 76.9807 46.8469 77.1792C46.8469 77.3776 46.7721 77.5143 46.6225 77.5891C46.5698 77.6154 46.5107 77.6341 46.4453 77.645C46.4138 77.6502 46.3897 77.6529 46.3732 77.6529L45.8995 77.6529L45.8995 77.416L44.9521 77.8897L45.8995 78.3634L45.8995 78.1265L46.3732 78.1265C46.4159 78.1265 46.4659 78.1218 46.5231 78.1122C46.6354 78.0935 46.7391 78.0603 46.8344 78.0127C46.9755 77.9422 47.0873 77.845 47.1698 77.7213C47.2703 77.5705 47.3206 77.3898 47.3206 77.1792C47.3206 76.9685 47.2703 76.7878 47.1698 76.637C47.0873 76.5133 46.9755 76.4162 46.8344 76.3456C46.7391 76.298 46.6354 76.2648 46.5231 76.2461C46.4659 76.2366 46.4159 76.2318 46.3732 76.2318L46.3732 76.2318Z';
+const metroVerticalClassicPillLeftGlyphMainPath =
+  'M42.1101 78.1266L44.4785 78.1266L44.4785 77.6529L42.1101 77.6529C42.0936 77.6529 42.0695 77.6503 42.038 77.645C41.9726 77.6341 41.9135 77.6155 41.8608 77.5891C41.7112 77.5143 41.6364 77.3777 41.6364 77.1792C41.6364 76.9807 41.7112 76.8441 41.8608 76.7693C41.9135 76.7429 41.9726 76.7243 42.038 76.7134C42.0695 76.7081 42.0936 76.7055 42.1101 76.7055L42.1101 76.7055L42.5838 76.7055L42.5838 76.9424L43.5311 76.4687L43.0575 76.2318L42.5838 75.995L42.5838 76.2318L42.1101 76.2318L42.1101 76.2318C42.0674 76.2318 42.0174 76.2366 41.9601 76.2462C41.8479 76.2649 41.7442 76.298 41.6489 76.3457C41.5078 76.4162 41.396 76.5134 41.3135 76.6371C41.213 76.7879 41.1627 76.9686 41.1627 77.1792C41.1627 77.3898 41.213 77.5706 41.3135 77.7214C41.396 77.8451 41.5078 77.9422 41.6489 78.0127C41.7442 78.0604 41.8479 78.0935 41.9601 78.1123C42.0174 78.1218 42.0674 78.1266 42.1101 78.1266L42.1101 78.1266Z';
+const metroVerticalClassicPillRightGlyphTransferPath =
+  'M85.6732 76.2318L83.3048 76.2318L83.3048 76.7055L85.6732 76.7055C85.6898 76.7055 85.7138 76.7081 85.7453 76.7134C85.8107 76.7243 85.8698 76.7429 85.9226 76.7693C86.0721 76.8441 86.1469 76.9807 86.1469 77.1792C86.1469 77.3776 86.0721 77.5143 85.9226 77.5891C85.8698 77.6154 85.8107 77.6341 85.7453 77.645C85.7138 77.6502 85.6898 77.6529 85.6732 77.6529L85.1996 77.6529L85.1996 77.416L84.2522 77.8897L85.1996 78.3634L85.1996 78.1265L85.6732 78.1265C85.7159 78.1265 85.7659 78.1218 85.8232 78.1122C85.9354 78.0935 86.0392 78.0603 86.1344 78.0127C86.2755 77.9422 86.3873 77.845 86.4698 77.7213C86.5703 77.5705 86.6206 77.3898 86.6206 77.1792C86.6206 76.9685 86.5703 76.7878 86.4698 76.637C86.3873 76.5133 86.2755 76.4162 86.1344 76.3456C86.0392 76.298 85.9354 76.2648 85.8232 76.2461C85.7659 76.2366 85.7159 76.2318 85.6732 76.2318L85.6732 76.2318Z';
+const metroVerticalClassicPillRightGlyphMainPath =
+  'M81.4101 78.1266L83.7786 78.1266L83.7786 77.6529L81.4101 77.6529C81.3936 77.6529 81.3696 77.6503 81.3381 77.645C81.2727 77.6341 81.2136 77.6155 81.1608 77.5891C81.0112 77.5143 80.9365 77.3777 80.9365 77.1792C80.9365 76.9807 81.0112 76.8441 81.1608 76.7693C81.2136 76.7429 81.2727 76.7243 81.3381 76.7134C81.3696 76.7081 81.3936 76.7055 81.4101 76.7055L81.4101 76.7055L81.8838 76.7055L81.8838 76.9424L82.8312 76.4687L82.3575 76.2318L81.8838 75.995L81.8838 76.2318L81.4101 76.2318L81.4101 76.2318C81.3675 76.2318 81.3175 76.2366 81.2602 76.2462C81.1479 76.2649 81.0442 76.298 80.949 76.3457C80.8078 76.4162 80.696 76.5134 80.6136 76.6371C80.513 76.7879 80.4628 76.9686 80.4628 77.1792C80.4628 77.3898 80.513 77.5706 80.6136 77.7214C80.696 77.8451 80.8078 77.9422 80.949 78.0127C81.0442 78.0604 81.1479 78.0935 81.2602 78.1123C81.3175 78.1218 81.3675 78.1266 81.4101 78.1266L81.4101 78.1266Z';
+const metroVerticalClassicStemLeftPath =
+  'M45.5417 75.6739L51.2517 75.6739L53.5417 77.1739L51.2517 78.6739L45.5417 78.6739L45.5417 75.6739Z';
+const metroVerticalClassicStemRightPath =
+  'M82.4585 75.6739L76.7485 75.6739L74.4585 77.1739L76.7485 78.6739L82.4585 78.6739L82.4585 75.6739Z';
+const metroVerticalClassicCurrentUpPath =
+  'M44.2917 90.1565L45.7857 91.6505L45.7917 92.2145L44.5257 90.9065L44.5257 93.7445L44.1057 93.7445L44.1057 90.9065L42.7917 92.2145L42.7917 91.6565L44.2917 90.1565Z';
+const metroVerticalClassicCurrentDownPath =
+  'M83.6917 93.7465L85.1857 92.2525L85.1917 91.6885L83.9257 92.9965L83.9256 90.1585L83.5056 90.1585L83.5057 92.9965L82.1917 91.6885L82.1917 92.2465L83.6917 93.7465Z';
+const metroVerticalClassicPillLeftCenterX = 44.2417;
+const metroVerticalClassicPillRightCenterX = 83.5417;
+const metroVerticalClassicPillCenterY = 77.1792;
+const metroVerticalClassicStemCenterY = 77.1739;
+const metroVerticalClassicCurrentUpCenterX = 44.2917;
+const metroVerticalClassicCurrentDownCenterX = 83.6917;
+const metroVerticalClassicCurrentCenterY = 92.056;
+
+/**
+ * 地铁竖版线路图的站点文字与徽标比例。
+ */
+const metroVerticalStationNameFontSize = 5.2;
+const metroVerticalStationPinyinFontSize = 2.6;
+const metroVerticalNameBaselineOffset = 0.5;
+const metroVerticalPinyinBaselineOffset = 3.55;
+const metroVerticalBothTrackXs = [44.3, 83.7] as const;
+const metroVerticalTransferBadgeScale = 0.62;
+
+type MetroVerticalDirection = 'first' | 'last';
+type MetroVerticalTrackPosition = 'left' | 'right' | 'both';
+
+const metroVerticalHarmonyFontFamily =
+  "'HarmonyOS Sans SC', 'Source Han Sans SC', Arial, Helvetica, sans-serif";
+
+/** 从线路名中提取编号；提取不到时返回空串，页头不显示圆圈。 */
+function extractMetroVerticalLineNumber(value: string): string {
+  return value.match(/[0-9]+/u)?.[0] ?? '';
+}
+
+/**
+ * 地铁竖版线路图渲染器。
+ * 设计稿为 128 × 320：页头显示开往方向、线路编号与方向箭头；
+ * 站点自上而下等距排列，轨道位于开门方向一侧，当前站用线路色圆角框高亮。
+ */
+function renderMetroLineMapVertical(
+  value: string,
+  config: MaterialGlyphConfig,
+  values: Record<string, string>,
+  style: 'modern' | 'classic',
+): string {
+  const stations = value
+    .split(/\r?\n|\s*\/\s*/u)
+    .map((station) => station.replace(/[\s\u3000]+/gu, '').trim())
+    .filter(Boolean);
+  if (!stations.length) {
+    return '';
+  }
+  const canvasWidth = Math.max(
+    Number(values['canvas.logicalWidthPx']) || config.layoutWidth || metroVerticalReferenceWidth,
+    64,
+  );
+  const canvasHeight = Math.max(
+    Number(values['canvas.logicalHeightPx']) || config.layoutHeight || 320,
+    96,
+  );
+  const widthScale = canvasWidth / metroVerticalReferenceWidth;
+  const rawAccent = config.colorFieldKey ? (values[config.colorFieldKey] ?? '') : '';
+  const accentColor = /^#[0-9A-Fa-f]{6}$/u.test(rawAccent) ? rawAccent : '#F29DB4';
+  const rawCurrentIndex = config.currentIndexFieldKey
+    ? Number.parseInt(values[config.currentIndexFieldKey] ?? '', 10)
+    : 0;
+  const currentIndex = Math.min(
+    Math.max(Number.isFinite(rawCurrentIndex) ? rawCurrentIndex : 0, 0),
+    stations.length - 1,
+  );
+  const trackPosition: MetroVerticalTrackPosition =
+    values.trackPosition === 'both' ||
+    values.trackPosition === 'right' ||
+    values.trackPosition === 'left'
+      ? values.trackPosition
+      : values.doorDirection === 'right'
+        ? 'right'
+        : 'left';
+  const primaryDirection: MetroVerticalDirection =
+    values.travelDirection === 'first' ? 'first' : 'last';
+  let secondaryDirection: MetroVerticalDirection =
+    values.travelDirectionSecondary === 'first' || values.travelDirectionSecondary === 'last'
+      ? values.travelDirectionSecondary
+      : primaryDirection === 'first'
+        ? 'last'
+        : 'first';
+  if (secondaryDirection === primaryDirection) {
+    secondaryDirection = primaryDirection === 'first' ? 'last' : 'first';
+  }
+  const isBoth = trackPosition === 'both';
+  const isClassicBoth = style === 'classic' && isBoth;
+  // 两侧轨道时，页头左侧方向对应的终点站在上方，右侧方向对应下方。
+  const displayStations = primaryDirection === 'first' ? stations : [...stations].reverse();
+  const displayCurrentIndex =
+    primaryDirection === 'first' ? currentIndex : stations.length - 1 - currentIndex;
+  const transfersByStation = parseMetroLineMapTransfers(values.transferLines ?? '');
+  const lineLabel = (values.lineLabel ?? '').replace(/(?:号线|线)$/u, '').trim();
+  const lineNumber = extractMetroVerticalLineNumber(lineLabel);
+
+  // 旧版两侧版式带标题栏和方向栏，首站从方向栏下方开始。
+  const headerHeight = (isClassicBoth ? 50 : metroVerticalHeaderHeight) * widthScale;
+  const margin = 12 * widthScale;
+  const firstY = headerHeight + margin;
+  const lastY = Math.max(canvasHeight - margin, firstY);
+  const spacing =
+    displayStations.length > 1 ? (lastY - firstY) / (displayStations.length - 1) : 0;
+  const rowScale = Math.min(1, Math.max(spacing / (12 * widthScale), 0.5));
+  const layoutScale = widthScale * rowScale;
+  const classicStationScale = isClassicBoth ? 0.77 : 1;
+  const currentY = firstY + spacing * displayCurrentIndex;
+  const markerRadius = isClassicBoth
+    ? Math.min(2.5 * widthScale, Math.max(spacing * 0.38, 0.8))
+    : Math.min(2.25 * widthScale, Math.max(spacing * 0.38, 0.8));
+  const singleTrackX = (trackPosition === 'left' ? 57.3 : 70.7) * widthScale;
+  const leftTrackX = metroVerticalBothTrackXs[0] * widthScale;
+  const rightTrackX = metroVerticalBothTrackXs[1] * widthScale;
+  const yForIndex = (index: number) =>
+    displayStations.length > 1 ? firstY + spacing * index : (firstY + lastY) / 2;
+
+  const parts: string[] = [
+    `<rect width="${formatNumber(canvasWidth)}" height="${formatNumber(canvasHeight)}" fill="#FFFFFF"/>`,
+  ];
+  parts.push(
+    isClassicBoth
+      ? `<rect x="0" y="0" width="${formatNumber(canvasWidth)}" height="${formatNumber(metroVerticalHeaderAccentHeight * widthScale)}" fill="${accentColor}"/><rect x="0" y="${formatNumber(3 * widthScale)}" width="${formatNumber(canvasWidth)}" height="${formatNumber(29 * widthScale)}" fill="${metroVerticalHeaderBackground}"/>`
+      : style === 'classic'
+        ? `<rect x="0" y="0" width="${formatNumber(canvasWidth)}" height="${formatNumber(metroVerticalHeaderAccentHeight * widthScale)}" fill="${accentColor}"/>`
+        : `<rect x="0" y="0" width="${formatNumber(canvasWidth)}" height="${formatNumber(metroVerticalHeaderAccentHeight * widthScale)}" fill="${accentColor}"/><rect x="0" y="${formatNumber(metroVerticalHeaderAccentHeight * widthScale)}" width="${formatNumber(canvasWidth)}" height="${formatNumber((metroVerticalHeaderHeight - metroVerticalHeaderAccentHeight) * widthScale)}" fill="${metroVerticalHeaderBackground}"/>`,
+  );
+  parts.push(
+    isClassicBoth
+      ? renderMetroVerticalClassicBothHeader({
+          canvasWidth,
+          widthScale,
+          accentColor,
+          primaryName: displayStations[0]!,
+          secondaryName: displayStations[displayStations.length - 1]!,
+          lineLabel: lineNumber,
+        })
+      : renderMetroVerticalLineMapHeader({
+          canvasWidth,
+          widthScale,
+          accentColor,
+          style,
+          trackPosition,
+          primaryName: displayStations[0]!,
+          secondaryName: displayStations[displayStations.length - 1]!,
+          lineLabel: lineNumber,
+        }),
+  );
+
+  const trackWidth = 4 * widthScale;
+  const trackY = firstY;
+  const trackHeight = Math.max(lastY - firstY, 0);
+  if (isBoth) {
+    parts.push(
+      `<rect x="${formatNumber(leftTrackX - trackWidth / 2)}" y="${formatNumber(trackY)}" width="${formatNumber(trackWidth)}" height="${formatNumber(trackHeight)}" fill="${metroVerticalPassedColor}"/>`,
+      `<rect x="${formatNumber(rightTrackX - trackWidth / 2)}" y="${formatNumber(trackY)}" width="${formatNumber(trackWidth)}" height="${formatNumber(trackHeight)}" fill="${metroVerticalPassedColor}"/>`,
+    );
+    if (currentY > firstY + 0.01) {
+      parts.push(
+        `<rect x="${formatNumber(leftTrackX - trackWidth / 2)}" y="${formatNumber(trackY)}" width="${formatNumber(trackWidth)}" height="${formatNumber(currentY - firstY)}" fill="${accentColor}"/>`,
+      );
+    }
+    if (lastY > currentY + 0.01) {
+      parts.push(
+        `<rect x="${formatNumber(rightTrackX - trackWidth / 2)}" y="${formatNumber(currentY)}" width="${formatNumber(trackWidth)}" height="${formatNumber(lastY - currentY)}" fill="${accentColor}"/>`,
+      );
+    }
+  } else {
+    parts.push(
+      `<rect x="${formatNumber(singleTrackX - trackWidth / 2)}" y="${formatNumber(trackY)}" width="${formatNumber(trackWidth)}" height="${formatNumber(trackHeight)}" fill="${metroVerticalPassedColor}"/>`,
+    );
+    if (currentY > firstY + 0.01) {
+      parts.push(
+        `<rect x="${formatNumber(singleTrackX - trackWidth / 2)}" y="${formatNumber(trackY)}" width="${formatNumber(trackWidth)}" height="${formatNumber(currentY - firstY)}" fill="${accentColor}"/>`,
+      );
+    }
+  }
+
+  const labelParts: string[] = [];
+  const transferParts: string[] = [];
+  const classicTransferParts: string[] = [];
+  const markerParts: string[] = [];
+  const currentParts: string[] = [];
+
+  displayStations.forEach((station, displayIndex) => {
+    const y = yForIndex(displayIndex);
+    const pinyin = toUppercasePinyin(station);
+    const transferList = transfersByStation.get(station) ?? [];
+    const isCurrent = displayIndex === displayCurrentIndex;
+
+    if (isBoth) {
+      const leftPassed = displayIndex > displayCurrentIndex;
+      const rightPassed = displayIndex < displayCurrentIndex;
+      const stationLayoutScale = layoutScale * classicStationScale;
+      if (isCurrent) {
+        if (isClassicBoth) {
+          // 旧版不画实心框：本站站名用线路色，中间标注「本站」。
+          currentParts.push(
+            renderMetroVerticalLabelPair({
+              station,
+              pinyin,
+              x: 37.5 * widthScale,
+              y,
+              anchor: 'end',
+              color: accentColor,
+              layoutScale: stationLayoutScale,
+              maxWidth: 30 * widthScale,
+            }),
+            renderMetroVerticalLabelPair({
+              station,
+              pinyin,
+              x: 90.5 * widthScale,
+              y,
+              anchor: 'start',
+              color: accentColor,
+              layoutScale: stationLayoutScale,
+              maxWidth: 30 * widthScale,
+            }),
+            renderMetroVerticalClassicThisStation({
+              centerX: (leftTrackX + rightTrackX) / 2,
+              y,
+              widthScale,
+            }),
+          );
+        } else {
+          currentParts.push(
+            renderMetroVerticalCurrentLabel({
+              station,
+              pinyin,
+              x: 37.5 * widthScale,
+              y,
+              anchor: 'end',
+              accentColor,
+              widthScale,
+              layoutScale,
+              maxWidth: 28 * widthScale,
+              padding: 1.5,
+              arrowGap: 3,
+              arrowDirection: 'up',
+            }),
+            renderMetroVerticalCurrentLabel({
+              station,
+              pinyin,
+              x: 90.5 * widthScale,
+              y,
+              anchor: 'start',
+              accentColor,
+              widthScale,
+              layoutScale,
+              maxWidth: 28 * widthScale,
+              padding: 1.5,
+              arrowGap: 3,
+              arrowDirection: 'down',
+            }),
+          );
+        }
+      } else {
+        labelParts.push(
+          renderMetroVerticalLabelPair({
+            station,
+            pinyin,
+            x: 37.5 * widthScale,
+            y,
+            anchor: 'end',
+            color: leftPassed ? metroVerticalPassedColor : '#000000',
+            layoutScale: isClassicBoth ? stationLayoutScale : layoutScale,
+            maxWidth: (isClassicBoth ? 30 : 28) * widthScale,
+          }),
+          renderMetroVerticalLabelPair({
+            station,
+            pinyin,
+            x: 90.5 * widthScale,
+            y,
+            anchor: 'start',
+            color: rightPassed ? metroVerticalPassedColor : '#000000',
+            layoutScale: isClassicBoth ? stationLayoutScale : layoutScale,
+            maxWidth: (isClassicBoth ? 30 : 28) * widthScale,
+          }),
+        );
+      }
+      if (transferList.length) {
+        if (isClassicBoth) {
+          classicTransferParts.push(
+            renderMetroVerticalClassicBothTransfer({
+              y,
+              transferList,
+              leftPassed,
+              rightPassed,
+              leftTrackX,
+              rightTrackX,
+              mainColor: accentColor,
+              widthScale,
+            }),
+          );
+        } else {
+          transferParts.push(
+            renderMetroVerticalBothTransfer({
+              y,
+              transferList,
+              mainColor: accentColor,
+              leftPassed,
+              rightPassed,
+              leftTrackX,
+              rightTrackX,
+              widthScale,
+              markerRadius,
+            }),
+          );
+        }
+      }
+      markerParts.push(
+        renderMetroVerticalMarker({
+          x: leftTrackX,
+          y,
+          radius: markerRadius,
+          inkColor: isClassicBoth
+            ? leftPassed
+              ? metroVerticalPassedColor
+              : accentColor
+            : leftPassed
+              ? metroVerticalPassedColor
+              : '#000000',
+          widthScale,
+          style,
+          innerRadius: isClassicBoth ? 1 * widthScale : undefined,
+          currentArrow: isClassicBoth && isCurrent ? 'up' : undefined,
+          terminalFill:
+            style === 'classic' && displayIndex === 0
+              ? leftPassed
+                ? metroVerticalPassedColor
+                : accentColor
+              : style === 'classic' && displayIndex === displayStations.length - 1
+                ? metroVerticalPassedColor
+                : undefined,
+        }),
+        renderMetroVerticalMarker({
+          x: rightTrackX,
+          y,
+          radius: markerRadius,
+          inkColor: isClassicBoth
+            ? rightPassed
+              ? metroVerticalPassedColor
+              : accentColor
+            : rightPassed
+              ? metroVerticalPassedColor
+              : '#000000',
+          widthScale,
+          style,
+          innerRadius: isClassicBoth ? 1 * widthScale : undefined,
+          currentArrow: isClassicBoth && isCurrent ? 'down' : undefined,
+          terminalFill:
+            style === 'classic' && displayIndex === displayStations.length - 1
+              ? rightPassed
+                ? metroVerticalPassedColor
+                : accentColor
+              : style === 'classic' && displayIndex === 0
+                ? metroVerticalPassedColor
+                : undefined,
+        }),
+      );
+      return;
+    }
+
+    const passed = displayIndex > displayCurrentIndex;
+    const labelAnchor: 'start' | 'end' = trackPosition === 'left' ? 'start' : 'end';
+    const labelX = (trackPosition === 'left' ? 66 : 62) * widthScale;
+    const maxLabelWidth = Math.max(
+      (trackPosition === 'left' ? canvasWidth - labelX : labelX) - 2 * widthScale,
+      8,
+    );
+    if (isCurrent) {
+      currentParts.push(
+        renderMetroVerticalCurrentLabel({
+          station,
+          pinyin,
+          x: labelX,
+          y,
+          anchor: labelAnchor,
+          accentColor,
+          widthScale,
+          layoutScale,
+          maxWidth: maxLabelWidth,
+        }),
+      );
+    } else {
+      labelParts.push(
+        renderMetroVerticalLabelPair({
+          station,
+          pinyin,
+          x: labelX,
+          y,
+          anchor: labelAnchor,
+          color: passed ? metroVerticalPassedColor : '#000000',
+          layoutScale,
+          maxWidth: maxLabelWidth,
+        }),
+      );
+    }
+    if (transferList.length) {
+      transferParts.push(
+        style === 'classic'
+          ? renderMetroVerticalClassicTransfer({
+              y,
+              trackSide: trackPosition === 'left' ? 'left' : 'right',
+              transferList,
+              inkColor: passed ? metroVerticalPassedColor : '#000000',
+              widthScale,
+            })
+          : renderMetroVerticalSingleTransfer({
+              y,
+              trackSide: trackPosition === 'left' ? 'left' : 'right',
+              transferList,
+              mainColor: accentColor,
+              passed,
+              widthScale,
+              trackX: singleTrackX,
+            }),
+      );
+    }
+    markerParts.push(
+      renderMetroVerticalMarker({
+        x: singleTrackX,
+        y,
+        radius: markerRadius,
+        inkColor: passed ? metroVerticalPassedColor : '#000000',
+        widthScale,
+        style,
+        terminalFill:
+          style === 'classic' && (displayIndex === 0 || displayIndex === displayStations.length - 1)
+            ? displayIndex === 0 && !passed
+              ? accentColor
+              : metroVerticalPassedColor
+            : undefined,
+      }),
+    );
+  });
+
+  // 旧版两侧换乘胶囊压在站点圆点上，因此先画圆点再画换乘；新版保持圆点最上层。
+  const orderedParts = isClassicBoth
+    ? [...parts, ...labelParts, ...markerParts, ...classicTransferParts, ...currentParts]
+    : [...parts, ...labelParts, ...transferParts, ...markerParts, ...currentParts];
+  return `<g data-metro-line-map-vertical="${style}">${orderedParts.join('')}</g>`;
+}
+
+function renderMetroVerticalLabelPair(input: {
+  station: string;
+  pinyin: string;
+  x: number;
+  y: number;
+  anchor: 'start' | 'end';
+  color: string;
+  layoutScale: number;
+  maxWidth: number;
+}): string {
+  const { station, pinyin, x, y, anchor, color, layoutScale, maxWidth } = input;
+  const name = renderMetroSignText({
+    value: station,
+    x,
+    y: y + metroVerticalNameBaselineOffset * layoutScale,
+    fontSize: metroVerticalStationNameFontSize * layoutScale,
+    color,
+    weight: 400,
+    anchor,
+    maxWidth,
+  });
+  const pinyinText = pinyin
+    ? renderMetroSignText({
+        value: pinyin,
+        x,
+        y: y + metroVerticalPinyinBaselineOffset * layoutScale,
+        fontSize: metroVerticalStationPinyinFontSize * layoutScale,
+        color,
+        weight: 400,
+        anchor,
+        maxWidth,
+      })
+    : '';
+  return name + pinyinText;
+}
+
+function renderMetroVerticalCurrentLabel(input: {
+  station: string;
+  pinyin: string;
+  x: number;
+  y: number;
+  anchor: 'start' | 'end';
+  accentColor: string;
+  widthScale: number;
+  layoutScale: number;
+  maxWidth: number;
+  padding?: number;
+  arrowGap?: number;
+  arrowDirection?: 'up' | 'down';
+}): string {
+  const {
+    station,
+    pinyin,
+    x,
+    y,
+    anchor,
+    accentColor,
+    widthScale,
+    layoutScale,
+    maxWidth,
+    padding = 2,
+    arrowGap = 6,
+    arrowDirection = 'up',
+  } = input;
+  const nameFont = metroVerticalStationNameFontSize * layoutScale;
+  const pinyinFont = metroVerticalStationPinyinFontSize * layoutScale;
+  const nameWidth = estimateMetroLineMapTextWidth(station, nameFont);
+  const pinyinWidth = pinyin ? estimateMetroLineMapTextWidth(pinyin, pinyinFont) : 0;
+  const paddingPx = padding * layoutScale;
+  const textWidth = Math.min(
+    Math.max(nameWidth, pinyinWidth, 1),
+    Math.max(maxWidth - paddingPx * 2, 1),
+  );
+  const boxWidth = textWidth + paddingPx * 2;
+  const boxHeight = 9.8 * layoutScale;
+  const boxTop = y - boxHeight / 2;
+  const boxX = anchor === 'start' ? x - paddingPx : x + paddingPx - boxWidth;
+  const arrowX =
+    anchor === 'start'
+      ? boxX + boxWidth + arrowGap * widthScale
+      : boxX - arrowGap * widthScale - 4 * widthScale;
+  return [
+    `<rect x="${formatNumber(boxX)}" y="${formatNumber(boxTop)}" width="${formatNumber(boxWidth)}" height="${formatNumber(boxHeight)}" rx="${formatNumber(1 * layoutScale)}" fill="${accentColor}"/>`,
+    renderMetroSignText({
+      value: station,
+      x,
+      y: y + metroVerticalNameBaselineOffset * layoutScale,
+      fontSize: nameFont,
+      color: '#FFFFFF',
+      weight: 400,
+      anchor,
+      maxWidth: textWidth,
+    }),
+    pinyin
+      ? renderMetroSignText({
+          value: pinyin,
+          x,
+          y: y + metroVerticalPinyinBaselineOffset * layoutScale,
+          fontSize: pinyinFont,
+          color: '#FFFFFF',
+          weight: 400,
+          anchor,
+          maxWidth: textWidth,
+        })
+      : '',
+    `<g transform="translate(${formatNumber(arrowX)} ${formatNumber(
+      arrowDirection === 'down' ? y + 2.392 * widthScale : y - 2.392 * widthScale,
+    )}) scale(${formatNumber(widthScale)} ${formatNumber(
+      arrowDirection === 'down' ? -widthScale : widthScale,
+    )})"><path d="${metroVerticalCurrentArrowPath}" fill="#000000" stroke="#000000" stroke-width="${formatNumber(0.6 * widthScale)}" stroke-linejoin="round"/></g>`,
+  ].join('');
+}
+
+function renderMetroVerticalMarker(input: {
+  x: number;
+  y: number;
+  radius: number;
+  inkColor: string;
+  widthScale: number;
+  style: 'modern' | 'classic';
+  terminalFill?: string;
+  innerRadius?: number;
+  currentArrow?: 'up' | 'down';
+}): string {
+  const { x, y, radius, inkColor, widthScale, terminalFill, innerRadius, currentArrow } = input;
+  const parts = [
+    `<circle cx="${formatNumber(x)}" cy="${formatNumber(y)}" r="${formatNumber(radius)}" fill="#FFFFFF" stroke="${inkColor}" stroke-width="${formatNumber(0.6 * widthScale)}"/>`,
+  ];
+  if (terminalFill !== undefined) {
+    parts.push(
+      `<circle cx="${formatNumber(x)}" cy="${formatNumber(y)}" r="${formatNumber(
+        innerRadius ?? Math.max(radius - 1 * widthScale, 0.4),
+      )}" fill="${terminalFill}"/>`,
+    );
+  }
+  if (currentArrow) {
+    const isDown = currentArrow === 'down';
+    const path = isDown
+      ? metroVerticalClassicCurrentDownPath
+      : metroVerticalClassicCurrentUpPath;
+    const referenceCenterX = isDown
+      ? metroVerticalClassicCurrentDownCenterX
+      : metroVerticalClassicCurrentUpCenterX;
+    const transform = `translate(${formatNumber(x)} ${formatNumber(y)}) scale(${formatNumber(
+      widthScale,
+    )}) translate(${formatNumber(-referenceCenterX)} ${formatNumber(
+      -metroVerticalClassicCurrentCenterY,
+    )})`;
+    parts.push(
+      `<g transform="${transform}"><path d="${path}" fill="${inkColor}" stroke="${inkColor}" stroke-width="0.1"/></g>`,
+    );
+  }
+  return parts.join('');
+}
+
+/** 旧版两侧版式的标题栏与方向栏。 */
+function renderMetroVerticalClassicBothHeader(input: {
+  canvasWidth: number;
+  widthScale: number;
+  accentColor: string;
+  primaryName: string;
+  secondaryName: string;
+  lineLabel: string;
+}): string {
+  const { canvasWidth, widthScale, accentColor, primaryName, secondaryName, lineLabel } = input;
+  const parts: string[] = [];
+  const title = lineLabel ? `地铁${lineLabel}号线行车示意图` : '地铁行车示意图';
+  parts.push(
+    renderMetroSignText({
+      value: title,
+      x: 6.5 * widthScale,
+      y: 17.5 * widthScale,
+      fontSize: 8 * widthScale,
+      color: '#FFFFFF',
+      weight: 400,
+      anchor: 'start',
+      maxWidth: 78 * widthScale,
+    }),
+    renderMetroSignText({
+      value: `Direction For Subway Line${lineLabel ? ` ${lineLabel}` : ''}`,
+      x: 6.5 * widthScale,
+      y: 24.5 * widthScale,
+      fontSize: 5 * widthScale,
+      color: '#FFFFFF',
+      weight: 400,
+      anchor: 'start',
+      maxWidth: 78 * widthScale,
+    }),
+  );
+  if (lineLabel) {
+    const numberFontSize = (Array.from(lineLabel).length > 2 ? 10 : Array.from(lineLabel).length > 1 ? 11.5 : 14) * widthScale;
+    parts.push(
+      `<g transform="translate(${formatNumber(87 * widthScale)} ${formatNumber(3 * widthScale)}) scale(${formatNumber(widthScale)})"><path d="${metroVerticalClassicHeaderTabPath}" fill="${accentColor}"/></g>`,
+      `<g transform="translate(${formatNumber(97 * widthScale)} ${formatNumber(7.5 * widthScale)}) scale(${formatNumber(widthScale)})"><path d="${metroVerticalClassicHeaderTabCirclePath}" fill="none" stroke="#FFFFFF" stroke-width="1.2"/></g>`,
+      `<text x="${formatNumber(105 * widthScale)}" y="${formatNumber(15.5 * widthScale + numberFontSize * 0.36)}" fill="#FFFFFF" font-family="${metroVerticalHarmonyFontFamily}" font-size="${formatNumber(numberFontSize)}" font-weight="400" text-anchor="middle">${escapeXml(lineLabel)}</text>`,
+    );
+  }
+  parts.push(
+    renderMetroVerticalClassicDirectionArrow(widthScale, false),
+    renderMetroVerticalClassicDirectionArrow(widthScale, true),
+    renderMetroSignText({
+      value: `${primaryName}方向`,
+      x: 14 * widthScale,
+      y: 44 * widthScale,
+      fontSize: 6 * widthScale,
+      color: '#000000',
+      weight: 700,
+      anchor: 'start',
+      maxWidth: 48 * widthScale,
+    }),
+    renderMetroSignText({
+      value: `To ${toUppercasePinyin(primaryName)}`,
+      x: 14 * widthScale,
+      y: 48.5 * widthScale,
+      fontSize: 3 * widthScale,
+      color: '#000000',
+      weight: 400,
+      anchor: 'start',
+      maxWidth: 48 * widthScale,
+    }),
+    renderMetroSignText({
+      value: `${secondaryName}方向`,
+      x: canvasWidth - 15 * widthScale,
+      y: 44 * widthScale,
+      fontSize: 6 * widthScale,
+      color: '#000000',
+      weight: 700,
+      anchor: 'end',
+      maxWidth: 48 * widthScale,
+    }),
+    renderMetroSignText({
+      value: `To ${toUppercasePinyin(secondaryName)}`,
+      x: canvasWidth - 15 * widthScale,
+      y: 48.5 * widthScale,
+      fontSize: 3 * widthScale,
+      color: '#000000',
+      weight: 400,
+      anchor: 'end',
+      maxWidth: 48 * widthScale,
+    }),
+  );
+  return parts.join('');
+}
+
+/** 旧版方向栏的黑色块状箭头，直接复用参考 SVG 的路径。 */
+function renderMetroVerticalClassicDirectionArrow(
+  widthScale: number,
+  mirrored: boolean,
+): string {
+  const path = mirrored
+    ? metroVerticalClassicDirectionRightPath
+    : metroVerticalClassicDirectionLeftPath;
+  return `<g transform="scale(${formatNumber(widthScale)})"><path d="${path}" fill="#000000" fill-rule="evenodd"/></g>`;
+}
+
+function renderMetroVerticalLineMapHeader(input: {
+  canvasWidth: number;
+  widthScale: number;
+  accentColor: string;
+  style: 'modern' | 'classic';
+  trackPosition: MetroVerticalTrackPosition;
+  primaryName: string;
+  secondaryName: string;
+  lineLabel: string;
+}): string {
+  const {
+    canvasWidth,
+    widthScale,
+    accentColor,
+    style,
+    trackPosition,
+    primaryName,
+    secondaryName,
+    lineLabel,
+  } = input;
+  const arrowColor = style === 'classic' ? accentColor : '#FFFFFF';
+  const textColor = style === 'classic' ? '#000000' : '#FFFFFF';
+  const englishColor = style === 'classic' ? '#666666' : '#FFFFFF';
+  const parts: string[] = [];
+
+  if (trackPosition === 'both') {
+    // 两侧轨道：左右方向文案分别贴住两端箭头，中间留弹性空格。
+    const arrowWidth = 16 * widthScale;
+    const leftArrow = 2 * widthScale;
+    const rightArrow = canvasWidth - 2 * widthScale - arrowWidth;
+    parts.push(
+      renderMetroVerticalHeaderArrow(leftArrow, widthScale, arrowColor, false),
+      renderMetroVerticalHeaderArrow(rightArrow, widthScale, arrowColor, true),
+    );
+    const textMaxWidth = 42 * widthScale;
+    const leftX = 20 * widthScale;
+    const rightX = canvasWidth - 20 * widthScale;
+    parts.push(
+      renderMetroSignText({
+        value: `${primaryName}方向`,
+        x: leftX,
+        y: 17.6 * widthScale,
+        fontSize: 8 * widthScale,
+        color: textColor,
+        weight: 400,
+        anchor: 'start',
+        maxWidth: textMaxWidth,
+      }),
+      renderMetroSignText({
+        value: `To ${toUppercasePinyin(primaryName)}`,
+        x: leftX,
+        y: 23.8 * widthScale,
+        fontSize: 4 * widthScale,
+        color: englishColor,
+        weight: 400,
+        anchor: 'start',
+        maxWidth: textMaxWidth,
+      }),
+      renderMetroSignText({
+        value: `${secondaryName}方向`,
+        x: rightX,
+        y: 17.6 * widthScale,
+        fontSize: 8 * widthScale,
+        color: textColor,
+        weight: 400,
+        anchor: 'end',
+        maxWidth: textMaxWidth,
+      }),
+      renderMetroSignText({
+        value: `To ${toUppercasePinyin(secondaryName)}`,
+        x: rightX,
+        y: 23.8 * widthScale,
+        fontSize: 4 * widthScale,
+        color: englishColor,
+        weight: 400,
+        anchor: 'end',
+        maxWidth: textMaxWidth,
+      }),
+    );
+    return parts.join('');
+  }
+
+  const title = `${primaryName}方向`;
+  const pinyin = toUppercasePinyin(primaryName);
+  const titleFontSize = 10 * widthScale;
+  const englishFontSize = 5 * widthScale;
+  const textMaxWidth = 78 * widthScale;
+  const titleWidth = Math.min(
+    estimateMetroLineMapTextWidth(title, titleFontSize),
+    textMaxWidth,
+  );
+  const englishWidth = pinyin
+    ? Math.min(
+        estimateMetroLineMapTextWidth(`To ${pinyin}`, englishFontSize),
+        textMaxWidth,
+      )
+    : 0;
+  const textWidth = Math.max(titleWidth, englishWidth, 1);
+  const hasBadge = Boolean(lineLabel);
+  const gap = 4 * widthScale;
+  const arrowWidth = 16 * widthScale;
+  const badgeSize = 16 * widthScale;
+  const groupWidth =
+    arrowWidth + gap + (hasBadge ? badgeSize + gap : 0) + textWidth;
+  const start = Math.max((canvasWidth - groupWidth) / 2, 2 * widthScale);
+  const isLeft = trackPosition === 'left';
+  const arrowLeft = isLeft ? start : canvasWidth - start - arrowWidth;
+  const textX = isLeft
+    ? start + arrowWidth + gap + (hasBadge ? badgeSize + gap : 0)
+    : start + textWidth;
+  const badgeCenterX = isLeft
+    ? start + arrowWidth + gap + badgeSize / 2
+    : start + textWidth + gap + badgeSize / 2;
+  parts.push(renderMetroVerticalHeaderArrow(arrowLeft, widthScale, arrowColor, !isLeft));
+  if (hasBadge) {
+    const digits = Array.from(lineLabel).length;
+    parts.push(
+      `<circle cx="${formatNumber(badgeCenterX)}" cy="${formatNumber(18 * widthScale)}" r="${formatNumber(8 * widthScale)}" fill="${accentColor}"/>`,
+      `<text x="${formatNumber(badgeCenterX)}" y="${formatNumber(22.7 * widthScale)}" fill="#FFFFFF" font-family="${metroLineMapFontFamily}" font-size="${formatNumber((digits > 2 ? 10 : digits > 1 ? 11.5 : 14) * widthScale)}" font-weight="400" text-anchor="middle">${escapeXml(lineLabel)}</text>`,
+    );
+  }
+  parts.push(
+    renderMetroSignText({
+      value: title,
+      x: textX,
+      y: 18.8 * widthScale,
+      fontSize: titleFontSize,
+      color: textColor,
+      weight: 400,
+      anchor: isLeft ? 'start' : 'end',
+      maxWidth: textWidth,
+    }),
+  );
+  if (pinyin) {
+    parts.push(
+      renderMetroSignText({
+        value: `To ${pinyin}`,
+        x: textX,
+        y: 25.5 * widthScale,
+        fontSize: englishFontSize,
+        color: englishColor,
+        weight: 400,
+        anchor: isLeft ? 'start' : 'end',
+        maxWidth: textWidth,
+      }),
+    );
+  }
+  return parts.join('');
+}
+
+function renderMetroVerticalHeaderArrow(
+  left: number,
+  widthScale: number,
+  color: string,
+  mirrored: boolean,
+): string {
+  const transform = mirrored
+    ? `translate(${formatNumber(left + 16 * widthScale)} 0) scale(${formatNumber(-widthScale)} ${formatNumber(widthScale)}) translate(${formatNumber(-13.9382 * widthScale)} 0)`
+    : `translate(${formatNumber(left - 13.9382 * widthScale)} 0) scale(${formatNumber(widthScale)})`;
+  return `<g transform="${transform}"><path d="${metroVerticalHeaderArrowPath}" fill="${color}"/></g>`;
+}
+
+function renderMetroVerticalTransferIcon(input: {
+  left: number;
+  centerY: number;
+  widthScale: number;
+  mainColor: string;
+  transferColor: string;
+  glyphColor: string;
+  mirrored: boolean;
+}): string {
+  const { left, centerY, widthScale, mainColor, transferColor, glyphColor, mirrored } = input;
+  const transform = mirrored
+    ? `translate(${formatNumber(left + 44.9983 * widthScale)} ${formatNumber(centerY - 188 * widthScale)}) scale(${formatNumber(-widthScale)} ${formatNumber(widthScale)})`
+    : `translate(${formatNumber(left - 35.0833 * widthScale)} ${formatNumber(centerY - 188 * widthScale)}) scale(${formatNumber(widthScale)})`;
+  return `<g transform="${transform}"><path d="${metroVerticalTransferTopPath}" fill="${mainColor}"/><path d="${metroVerticalTransferBottomPath}" fill="${transferColor}"/>${metroVerticalTransferGlyphPaths.map((path) => `<path d="${path}" fill="${glyphColor}"/>`).join('')}</g>`;
+}
+
+function renderMetroVerticalTransferBadge(input: {
+  label: string;
+  left: number;
+  top: number;
+  scale: number;
+  color: string;
+}): string {
+  const { label, left, top, scale, color } = input;
+  const width = getMetroLineMapBadgeWidth(label) * scale;
+  const number = label.replace(/(?:号线|线)$/u, '').trim();
+  const rect = `<rect x="${formatNumber(left)}" y="${formatNumber(top)}" width="${formatNumber(width)}" height="${formatNumber(11 * scale)}" rx="${formatNumber(1.5 * scale)}" fill="${color}"/>`;
+  if (!isMetroLineMapNumericLine(label)) {
+    const english = resolveMetroLineEnglishName(label);
+    const chineseY = english ? 5.3 : 7.4;
+    return `${rect}<text x="${formatNumber(left + width / 2)}" y="${formatNumber(top + chineseY * scale)}" fill="#FFFFFF" font-family="${metroLineMapFontFamily}" font-size="${formatNumber(5.2 * scale)}" font-weight="400" text-anchor="middle">${escapeXml(label)}</text>${
+      english
+        ? `<text x="${formatNumber(left + width / 2)}" y="${formatNumber(top + 9.4 * scale)}" fill="#FFFFFF" font-family="${metroLineMapFontFamily}" font-size="${formatNumber(2.8 * scale)}" font-weight="400" text-anchor="middle">${escapeXml(english)}</text>`
+        : ''
+    }`;
+  }
+  const digits = Array.from(number).length;
+  const suffixX = digits > 1 ? 10.5 : 7;
+  const lineX = digits > 1 ? 10 : 7.5;
+  const letterSpacing = (digits > 1 ? -2 : -1) * scale;
+  return [
+    rect,
+    `<text x="${formatNumber(left + 1 * scale)}" y="${formatNumber(top + 8.9668 * scale)}" fill="#FFFFFF" font-family="${metroLineMapFontFamily}" font-size="${formatNumber(10 * scale)}" font-weight="400" letter-spacing="${formatNumber(letterSpacing)}">${escapeXml(number)}</text>`,
+    `<text x="${formatNumber(left + suffixX * scale)}" y="${formatNumber(top + 5.8 * scale)}" fill="#FFFFFF" font-family="${metroLineMapFontFamily}" font-size="${formatNumber(5 * scale)}" font-weight="400">号线</text>`,
+    `<text x="${formatNumber(left + lineX * scale)}" y="${formatNumber(top + 8.7158 * scale)}" fill="#FFFFFF" font-family="${metroLineMapFontFamily}" font-size="${formatNumber(3 * scale)}" font-weight="400">Line ${escapeXml(number)}</text>`,
+  ].join('');
+}
+
+/** 单侧轨道：换乘徽标与换乘图标位于轨道另一侧，连接线尖端朝向图标。 */
+function renderMetroVerticalSingleTransfer(input: {
+  y: number;
+  trackSide: 'left' | 'right';
+  transferList: MetroLineMapTransfer[];
+  mainColor: string;
+  passed: boolean;
+  widthScale: number;
+  trackX: number;
+}): string {
+  const { y, trackSide, transferList, mainColor, passed, widthScale, trackX } = input;
+  const badgeScale = metroVerticalTransferBadgeScale * widthScale;
+  const iconWidth = 9.915 * widthScale;
+  const badgeGap = 1 * widthScale;
+  const badgeStackGap = 0.5 * widthScale;
+  const badgeSizes = transferList.map((transfer) => ({
+    transfer,
+    width: getMetroLineMapBadgeWidth(transfer.label) * badgeScale,
+    height: 11 * badgeScale,
+  }));
+  const stackHeight =
+    badgeSizes.length * (11 * badgeScale) + Math.max(badgeSizes.length - 1, 0) * badgeStackGap;
+  const iconLeft =
+    trackSide === 'left'
+      ? trackX - 12.3 * widthScale - iconWidth
+      : trackX + 12.3 * widthScale;
+  const transferColor = passed ? metroVerticalPassedColor : (transferList[0]?.color ?? '#666666');
+  const mainColorResolved = passed ? metroVerticalPassedColor : mainColor;
+  const glyphColor = passed ? metroVerticalPassedColor : '#000000';
+  const stemDirection = trackSide === 'left' ? -1 : 1;
+  const stemInner = trackX + stemDirection * 1.3 * widthScale;
+  const stemBody = trackX + stemDirection * 9.91 * widthScale;
+  const stemTip = trackX + stemDirection * 11.3 * widthScale;
+  const parts: string[] = [
+    `<path d="M${formatNumber(stemInner)} ${formatNumber(y - 1.5 * widthScale)}L${formatNumber(stemBody)} ${formatNumber(y - 1.5 * widthScale)}L${formatNumber(stemTip)} ${formatNumber(y)}L${formatNumber(stemBody)} ${formatNumber(y + 1.5 * widthScale)}L${formatNumber(stemInner)} ${formatNumber(y + 1.5 * widthScale)}Z" fill="${transferColor}"/>`,
+    renderMetroVerticalTransferIcon({
+      left: iconLeft,
+      centerY: y,
+      widthScale,
+      mainColor: mainColorResolved,
+      transferColor,
+      glyphColor,
+      // 图标内部带「换乘」字形，左右两侧都保持正向，不能水平翻转。
+      mirrored: false,
+    }),
+  ];
+  let cursorTop = y - stackHeight / 2;
+  for (const item of badgeSizes) {
+    const left =
+      trackSide === 'left'
+        ? iconLeft - badgeGap - item.width
+        : iconLeft + iconWidth + badgeGap;
+    parts.push(
+      renderMetroVerticalTransferBadge({
+        label: item.transfer.label,
+        left,
+        top: cursorTop,
+        scale: badgeScale,
+        color: passed ? metroVerticalPassedColor : item.transfer.color,
+      }),
+    );
+    cursorTop += item.height + badgeStackGap;
+  }
+  return parts.join('');
+}
+
+/** 两侧轨道：换乘线条横跨两条轨道，徽标与图标居中放在两轨之间。 */
+function renderMetroVerticalBothTransfer(input: {
+  y: number;
+  transferList: MetroLineMapTransfer[];
+  mainColor: string;
+  leftPassed: boolean;
+  rightPassed: boolean;
+  leftTrackX: number;
+  rightTrackX: number;
+  widthScale: number;
+  markerRadius: number;
+}): string {
+  const {
+    y,
+    transferList,
+    mainColor,
+    leftPassed,
+    rightPassed,
+    leftTrackX,
+    rightTrackX,
+    widthScale,
+    markerRadius,
+  } = input;
+  const badgeScale = metroVerticalTransferBadgeScale * widthScale;
+  const iconWidth = 9.915 * widthScale;
+  const badgeGap = 1 * widthScale;
+  const badgeStackGap = 0.5 * widthScale;
+  const badgeSizes = transferList.map((transfer) => ({
+    transfer,
+    width: getMetroLineMapBadgeWidth(transfer.label) * badgeScale,
+    height: 11 * badgeScale,
+  }));
+  const maxBadgeWidth = Math.max(...badgeSizes.map((item) => item.width));
+  const clusterWidth = iconWidth + badgeGap + maxBadgeWidth;
+  const clusterLeft = (leftTrackX + rightTrackX) / 2 - clusterWidth / 2;
+  const badgeLeft = clusterLeft + iconWidth + badgeGap;
+  const clusterRight = badgeLeft + maxBadgeWidth;
+  const stackHeight =
+    badgeSizes.length * (11 * badgeScale) + Math.max(badgeSizes.length - 1, 0) * badgeStackGap;
+  const transferColor = transferList[0]?.color ?? '#666666';
+  const parts: string[] = [
+    // 换乘徽标与图标保留线路颜色；只有已过站那一侧的连接箭头变灰。
+    renderMetroVerticalTransferStem({
+      trackX: leftTrackX,
+      clusterX: clusterLeft,
+      y,
+      color: leftPassed ? metroVerticalPassedColor : transferColor,
+      widthScale,
+      markerRadius,
+    }),
+    renderMetroVerticalTransferStem({
+      trackX: rightTrackX,
+      clusterX: clusterRight,
+      y,
+      color: rightPassed ? metroVerticalPassedColor : transferColor,
+      widthScale,
+      markerRadius,
+    }),
+    renderMetroVerticalTransferIcon({
+      left: clusterLeft,
+      centerY: y,
+      widthScale,
+      mainColor,
+      transferColor,
+      glyphColor: '#000000',
+      mirrored: false,
+    }),
+  ];
+  let cursorTop = y - stackHeight / 2;
+  for (const item of badgeSizes) {
+    parts.push(
+      renderMetroVerticalTransferBadge({
+        label: item.transfer.label,
+        left: badgeLeft,
+        top: cursorTop,
+        scale: badgeScale,
+        color: item.transfer.color,
+      }),
+    );
+    cursorTop += item.height + badgeStackGap;
+  }
+  return parts.join('');
+}
+
+/** 两侧轨道换乘连接线：从站点圆点指向中间的换乘徽标，末端带箭头。 */
+function renderMetroVerticalTransferStem(input: {
+  trackX: number;
+  clusterX: number;
+  y: number;
+  color: string;
+  widthScale: number;
+  markerRadius: number;
+  startX?: number;
+}): string {
+  const { trackX, clusterX, y, color, widthScale, markerRadius, startX } = input;
+  const direction = clusterX >= trackX ? 1 : -1;
+  const start = startX ?? trackX + direction * markerRadius;
+  const length = Math.abs(clusterX - start);
+  if (length <= 0.05) {
+    return '';
+  }
+  const barHeight = 3 * widthScale;
+  // 指向中间的连接线保持等宽：箭柄与尖端同宽，只在末端收成尖角。
+  const headLength = Math.min(barHeight / 2, length);
+  const barEnd = clusterX - direction * headLength;
+  const points: Array<[number, number]> = [
+    [start, y - barHeight / 2],
+    [barEnd, y - barHeight / 2],
+    [clusterX, y],
+    [barEnd, y + barHeight / 2],
+    [start, y + barHeight / 2],
+  ];
+  return `<path d="M${points
+    .map((point) => `${formatNumber(point[0])} ${formatNumber(point[1])}`)
+    .join('L')}Z" fill="${color}"/>`;
+}
+
+/** 旧版两侧轨道：换乘胶囊压在本侧圆点上，向中间引出等宽箭头，中间写「换乘X号线」。 */
+function renderMetroVerticalClassicBothTransfer(input: {
+  y: number;
+  transferList: MetroLineMapTransfer[];
+  leftPassed: boolean;
+  rightPassed: boolean;
+  leftTrackX: number;
+  rightTrackX: number;
+  mainColor: string;
+  widthScale: number;
+}): string {
+  const {
+    y,
+    transferList,
+    leftPassed,
+    rightPassed,
+    leftTrackX,
+    rightTrackX,
+    mainColor,
+    widthScale,
+  } = input;
+  const transferColor = transferList[0]?.color ?? '#666666';
+  const leftColor = leftPassed ? metroVerticalPassedColor : transferColor;
+  const rightColor = rightPassed ? metroVerticalPassedColor : transferColor;
+  const leftMainColor = leftPassed ? metroVerticalPassedColor : mainColor;
+  const rightMainColor = rightPassed ? metroVerticalPassedColor : mainColor;
+  const textX = (leftTrackX + rightTrackX) / 2;
+  const textMaxWidth = 20 * widthScale;
+  const labels = transferList.map((transfer) =>
+    /号线$/u.test(transfer.label) ? transfer.label : `${transfer.label}号线`,
+  );
+  return [
+    renderMetroVerticalClassicTransferStem({
+      side: 'left',
+      y,
+      color: leftColor,
+      widthScale,
+    }),
+    renderMetroVerticalClassicTransferStem({
+      side: 'right',
+      y,
+      color: rightColor,
+      widthScale,
+    }),
+    renderMetroVerticalClassicTransferPill({
+      centerX: leftTrackX,
+      y,
+      side: 'left',
+      outlineColor: leftColor,
+      glyphTransferColor: leftColor,
+      glyphMainColor: leftMainColor,
+      widthScale,
+    }),
+    renderMetroVerticalClassicTransferPill({
+      centerX: rightTrackX,
+      y,
+      side: 'right',
+      outlineColor: rightColor,
+      glyphTransferColor: rightColor,
+      glyphMainColor: rightMainColor,
+      widthScale,
+    }),
+    renderMetroSignText({
+      value: `换乘${labels.join('、')}`,
+      x: textX,
+      y: y - 0.8 * widthScale,
+      fontSize: 3 * widthScale,
+      color: '#000000',
+      weight: 400,
+      anchor: 'middle',
+      maxWidth: textMaxWidth,
+      fontFamily: metroVerticalHarmonyFontFamily,
+    }),
+    renderMetroSignText({
+      value: `Transfer to Line ${transferList.map((transfer) => transfer.label).join('、')}`,
+      x: textX,
+      y: y + 2.4 * widthScale,
+      fontSize: 2 * widthScale,
+      color: '#000000',
+      weight: 400,
+      anchor: 'middle',
+      maxWidth: textMaxWidth,
+      fontFamily: metroVerticalHarmonyFontFamily,
+    }),
+  ].join('');
+}
+
+/** 旧版换乘连接带，直接复用参考 SVG 的左右两条路径。 */
+function renderMetroVerticalClassicTransferStem(input: {
+  side: 'left' | 'right';
+  y: number;
+  color: string;
+  widthScale: number;
+}): string {
+  const { side, y, color, widthScale } = input;
+  const path =
+    side === 'left'
+      ? metroVerticalClassicStemLeftPath
+      : metroVerticalClassicStemRightPath;
+  return `<g transform="translate(0 ${formatNumber(
+    y - metroVerticalClassicStemCenterY * widthScale,
+  )}) scale(${formatNumber(widthScale)})"><path d="${path}" fill="${color}"/></g>`;
+}
+
+/** 旧版换乘胶囊：白底圆角矩形 + 线路色描边和循环箭头，全部取自参考 SVG。 */
+function renderMetroVerticalClassicTransferPill(input: {
+  centerX: number;
+  y: number;
+  side: 'left' | 'right';
+  outlineColor: string;
+  glyphTransferColor: string;
+  glyphMainColor: string;
+  widthScale: number;
+}): string {
+  const {
+    centerX,
+    y,
+    side,
+    outlineColor,
+    glyphTransferColor,
+    glyphMainColor,
+    widthScale,
+  } = input;
+  const isLeft = side === 'left';
+  const referenceCenterX = isLeft
+    ? metroVerticalClassicPillLeftCenterX
+    : metroVerticalClassicPillRightCenterX;
+  const backgroundPath = isLeft
+    ? metroVerticalClassicPillLeftBackgroundPath
+    : metroVerticalClassicPillRightBackgroundPath;
+  const outlinePath = isLeft
+    ? metroVerticalClassicPillLeftOutlinePath
+    : metroVerticalClassicPillRightOutlinePath;
+  const glyphTransferPath = isLeft
+    ? metroVerticalClassicPillLeftGlyphTransferPath
+    : metroVerticalClassicPillRightGlyphTransferPath;
+  const glyphMainPath = isLeft
+    ? metroVerticalClassicPillLeftGlyphMainPath
+    : metroVerticalClassicPillRightGlyphMainPath;
+  const transform = `translate(${formatNumber(
+    centerX - referenceCenterX * widthScale,
+  )} ${formatNumber(y - metroVerticalClassicPillCenterY * widthScale)}) scale(${formatNumber(widthScale)})`;
+  return `<g transform="${transform}"><path d="${backgroundPath}" fill="#FFFFFF"/><path d="${outlinePath}" fill="${outlineColor}" fill-rule="evenodd"/><path d="${glyphTransferPath}" fill="${glyphTransferColor}" fill-rule="evenodd"/><path d="${glyphMainPath}" fill="${glyphMainColor}" fill-rule="evenodd"/></g>`;
+}
+
+/** 旧版两侧轨道：本站标注。 */
+function renderMetroVerticalClassicThisStation(input: {
+  centerX: number;
+  y: number;
+  widthScale: number;
+}): string {
+  const { centerX, y, widthScale } = input;
+  return [
+    renderMetroSignText({
+      value: '本站',
+      x: centerX,
+      y: y - 0.2 * widthScale,
+      fontSize: 3 * widthScale,
+      color: '#000000',
+      weight: 400,
+      anchor: 'middle',
+    }),
+    renderMetroSignText({
+      value: 'This Station',
+      x: centerX,
+      y: y + 2.3 * widthScale,
+      fontSize: 2 * widthScale,
+      color: '#000000',
+      weight: 400,
+      anchor: 'middle',
+    }),
+  ].join('');
+}
+
+/** 旧版竖版线路图的换乘标注：沿用旧版横版的文字换乘说明。 */
+function renderMetroVerticalClassicTransfer(input: {
+  y: number;
+  trackSide: 'left' | 'right';
+  transferList: MetroLineMapTransfer[];
+  inkColor: string;
+  widthScale: number;
+}): string {
+  const { y, trackSide, transferList, inkColor, widthScale } = input;
+  const labels = transferList.map((transfer) =>
+    /号线$/u.test(transfer.label) ? transfer.label : `${transfer.label}号线`,
+  );
+  const chinese = `换乘 ${labels.join('、')}`;
+  const english = `Transfer to Line ${transferList.map((transfer) => transfer.label).join('、')}`;
+  const x = 34.0833 * widthScale;
+  const anchor: 'start' | 'end' = trackSide === 'left' ? 'end' : 'start';
+  const textX = trackSide === 'left' ? x : 128 * widthScale - x;
+  return [
+    renderMetroSignText({
+      value: chinese,
+      x: textX,
+      y: y - 0.4 * widthScale,
+      fontSize: 3.4 * widthScale,
+      color: inkColor,
+      weight: 400,
+      anchor,
+      maxWidth: 40 * widthScale,
+    }),
+    renderMetroSignText({
+      value: english,
+      x: textX,
+      y: y + 3.6 * widthScale,
+      fontSize: 2.2 * widthScale,
+      color: inkColor,
+      weight: 400,
+      anchor,
+      maxWidth: 40 * widthScale,
+    }),
+  ].join('');
+}
+
 
 // 新版方向箭头：设计稿中位于 50×33 的局部坐标，左开门时指向左侧。
 const metroDirectionModernArrowPath =
@@ -2292,6 +3663,7 @@ function renderMetroSignText(input: {
   anchor?: 'start' | 'middle' | 'end';
   letterSpacing?: number;
   maxWidth?: number;
+  fontFamily?: string;
 }): string {
   const value = input.value.trim();
   if (!value) {
@@ -2309,7 +3681,7 @@ function renderMetroSignText(input: {
   const x = anchor === 'middle' ? input.x + spacing / 2 : input.x;
   const spacingAttribute =
     Math.abs(spacing) > 0.01 ? ` letter-spacing="${formatNumber(spacing)}"` : '';
-  return `<text x="${formatNumber(x)}" y="${formatNumber(input.y)}" fill="${input.color}" font-family="${metroLineMapFontFamily}" font-size="${formatNumber(fontSize)}" font-weight="${input.weight ?? 400}" text-anchor="${anchor}"${spacingAttribute}>${escapeXml(value)}</text>`;
+  return `<text x="${formatNumber(x)}" y="${formatNumber(input.y)}" fill="${input.color}" font-family="${input.fontFamily ?? metroLineMapFontFamily}" font-size="${formatNumber(fontSize)}" font-weight="${input.weight ?? 400}" text-anchor="${anchor}"${spacingAttribute}>${escapeXml(value)}</text>`;
 }
 
 function renderMetroLineMapText(

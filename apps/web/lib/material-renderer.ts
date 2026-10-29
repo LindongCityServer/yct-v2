@@ -174,6 +174,10 @@ export function renderMaterialTemplateToSvg(input: {
     'typography.secondaryFontPx': String(typography.secondaryFontPx),
     'typography.captionFontPx': String(typography.captionFontPx),
   };
+  // 公交站牌：板面上所有已填线路都开启临时停靠时，站名同步变红。
+  const temporaryStopAll = resolveMaterialTemporaryStopAll(values);
+  context['temporaryStopAll.stationNameFill'] = temporaryStopAll ? '#C11111' : '#073764';
+  context['temporaryStopAll.stationNamePinyinFill'] = temporaryStopAll ? '#C11111' : '#073764';
   const trustedContext = new Set<string>();
   for (const field of input.template.fields) {
     if (field.glyph) {
@@ -375,12 +379,42 @@ function escapeXml(value: string): string {
   });
 }
 
+/** 判断板面上所有已填线路是否都开启了临时停靠。 */
+function resolveMaterialTemporaryStopAll(values: Record<string, string>): boolean {
+  let activeCount = 0;
+  let allTemporary = true;
+  for (const [key, value] of Object.entries(values)) {
+    const match = key.match(/^route(\d+)Number$/u);
+    if (!match || !value.trim()) {
+      continue;
+    }
+    activeCount += 1;
+    if (!isTemporaryStopValue(values[`route${match[1]}TemporaryStop`])) {
+      allTemporary = false;
+    }
+  }
+  if (values.routeNumber?.trim()) {
+    activeCount += 1;
+    if (!isTemporaryStopValue(values.routeTemporaryStop)) {
+      allTemporary = false;
+    }
+  }
+  return activeCount > 0 && allTemporary;
+}
+
+function isTemporaryStopValue(value: string | undefined): boolean {
+  return ['yes', 'true', '1'].includes((value ?? '').trim().toLowerCase());
+}
+
 function isAllowedTemplateVariable(variable: string, fields: MaterialTemplateField[]): boolean {
   if (
     /^(?:[a-z][a-zA-Z0-9_]*|canvas\.(?:widthPx|heightPx|logicalWidthPx|logicalHeightPx|innerWidthPx|innerHeightPx|primaryFontPx|secondaryFontPx|captionFontPx|largeFontPx)|typography\.(?:primaryFontPx|secondaryFontPx|captionFontPx))$/.test(
       variable,
     )
   ) {
+    return true;
+  }
+  if (/^temporaryStopAll\.(?:stationNameFill|stationNamePinyinFill)$/.test(variable)) {
     return true;
   }
   const fitMatch = variable.match(/^fit\.([a-z][a-zA-Z0-9_]*)\.(letterSpacing|scaleX)$/);

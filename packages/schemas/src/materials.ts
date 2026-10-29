@@ -70,6 +70,8 @@ export const materialTemplateFieldSchema = z
           'metro_wayfinding',
           'metro_line_map_modern',
           'metro_line_map_classic',
+          'metro_line_map_vertical_modern',
+          'metro_line_map_vertical_classic',
           'metro_station_name_modern',
           'metro_station_name_classic',
           'metro_direction_modern',
@@ -177,6 +179,8 @@ export const materialTemplateFieldSchema = z
         'transit_horizontal_station_list',
         'metro_line_map_modern',
         'metro_line_map_classic',
+        'metro_line_map_vertical_modern',
+        'metro_line_map_vertical_classic',
       ].includes(field.glyph?.renderer ?? '') &&
       !field.glyph?.currentIndexFieldKey
     ) {
@@ -191,6 +195,8 @@ export const materialTemplateFieldSchema = z
         'transit_route_map',
         'metro_line_map_modern',
         'metro_line_map_classic',
+        'metro_line_map_vertical_modern',
+        'metro_line_map_vertical_classic',
         'metro_station_name_modern',
         'metro_station_name_classic',
         'metro_direction_modern',

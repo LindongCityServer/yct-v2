@@ -2,6 +2,7 @@
 
 import type { MaterialTransitNetworkSnapshot, TileProviderDescriptor } from '@yct/contracts';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { trackAnalyticsEvent } from '../lib/analytics/client';
 import { appPath } from '../lib/app-paths';
 import {
   createMaterialOfflineDraftId,
@@ -41,6 +42,7 @@ import {
   BUS_STOP_OVERVIEW_REALISTIC_TEMPLATE_ID,
   BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID,
   METRO_PLATFORM_SIGN_TEMPLATE_ID,
+  isMetroLineMapVerticalTemplateId,
 } from '../lib/material-template-ids';
 import {
   buildMetroWayfindingTemplateExamples,
@@ -377,6 +379,8 @@ export function MaterialStudioPanel({
   const isMetroLineMap = selected?.template.family === 'metro_line';
   // 站台站名标志是固定 512×512 的方形版面，不提供宽高或长度调节。
   const isMetroPlatformSign = selected?.id === METRO_PLATFORM_SIGN_TEMPLATE_ID;
+  // 竖版地铁线路图宽度固定 1 米，只允许调节高度。
+  const isMetroVerticalLineMap = selected ? isMetroLineMapVerticalTemplateId(selected.id) : false;
   // 拟真公交站牌画布高 180（128×180），对齐到 128 的整数倍会改变比例，因此禁用该选项。
   const isRealisticBusStop =
     selected?.id === BUS_STOP_TERMINAL_REALISTIC_TEMPLATE_ID ||
@@ -829,6 +833,56 @@ export function MaterialStudioPanel({
           { value: 'first', label: `开往${travelDirectionStationNames[0]}` },
         ]
       : undefined;
+  const verticalTrackPosition = isMetroVerticalLineMap
+    ? input.trackPosition === 'right' || input.trackPosition === 'both'
+      ? input.trackPosition
+      : 'left'
+    : undefined;
+  const isVerticalBothTracks = verticalTrackPosition === 'both';
+  const verticalPrimaryDirection = input.travelDirection === 'first' ? 'first' : 'last';
+  const verticalSecondaryDirectionOptions = (
+    travelDirectionOptions ??
+    selected?.template.fields.find((field) => field.key === 'travelDirectionSecondary')?.options ??
+    []
+  ).filter((option) => option.value !== verticalPrimaryDirection);
+  const isMaterialFieldVisible = (field: MaterialField) =>
+    field.key !== 'travelDirectionSecondary' || isVerticalBothTracks;
+  const materialFieldLabelOverride = (field: MaterialField) => {
+    if (!isMetroVerticalLineMap) {
+      return undefined;
+    }
+    if (field.key === 'travelDirection' && isVerticalBothTracks) {
+      return '左侧方向';
+    }
+    if (field.key === 'travelDirectionSecondary') {
+      return '右侧方向';
+    }
+    return undefined;
+  };
+  const updateMaterialFieldValue = (key: string, value: string) => {
+    setInput((current) => {
+      const next = { ...current, [key]: value };
+      if (!isMetroVerticalLineMap) {
+        return next;
+      }
+      const primary = current.travelDirection === 'first' ? 'first' : 'last';
+      if (key === 'trackPosition' && value === 'both') {
+        const secondary = current.travelDirectionSecondary;
+        if ((secondary !== 'first' && secondary !== 'last') || secondary === primary) {
+          next.travelDirectionSecondary = primary === 'first' ? 'last' : 'first';
+        }
+      }
+      if (
+        key === 'travelDirection' &&
+        current.trackPosition === 'both' &&
+        current.travelDirectionSecondary === value
+      ) {
+        next.travelDirectionSecondary = value === 'first' ? 'last' : 'first';
+      }
+      return next;
+    });
+    clearPreview();
+  };
   const selectableImportedTransitLines = useMemo<ImportedTransitLineOption[]>(() => {
     if (!importedTransitNetwork || !selectedImportedTransitStation) return [];
     const stationId = selectedImportedTransitStation.markerId;
@@ -1313,6 +1367,26 @@ export function MaterialStudioPanel({
     );
     clearPreview();
   }, [activeTransitLineColor, selected?.id]);
+
+  useEffect(() => {
+    if (!isMetroVerticalLineMap || input.trackPosition !== 'both') {
+      return;
+    }
+    const primary = input.travelDirection === 'first' ? 'first' : 'last';
+    const secondary = input.travelDirectionSecondary;
+    if ((secondary === 'first' || secondary === 'last') && secondary !== primary) {
+      return;
+    }
+    setInput((current) => ({
+      ...current,
+      travelDirectionSecondary: primary === 'first' ? 'last' : 'first',
+    }));
+  }, [
+    input.trackPosition,
+    input.travelDirection,
+    input.travelDirectionSecondary,
+    isMetroVerticalLineMap,
+  ]);
 
   useEffect(
     () => () => {
@@ -2006,6 +2080,11 @@ export function MaterialStudioPanel({
       return;
     }
     setIsBusy(true);
+    trackAnalyticsEvent('material.export.started', {
+      template_id: draft.templateId,
+      source_kind: 'draft',
+    });
+    let reported = false;
     try {
       const response = await fetch(appPath('/api/materials/exports'), {
         method: 'POST',
@@ -2013,16 +2092,25 @@ export function MaterialStudioPanel({
         body: JSON.stringify({ mode: 'custom', draftId: draft.id }),
       });
       if (response.status === 401 || response.status === 403) {
+        reported = true;
+        trackAnalyticsEvent('material.export.failed', { reason: 'fallback_watermark' });
         await downloadWatermarkedPreview();
         return;
       }
       if (!response.ok) {
+        reported = true;
+        trackAnalyticsEvent('material.export.failed', { reason: 'server_rejected' });
         const data = (await response.json()) as { message?: string };
         blockAction(data.message ?? t('materialStudio.downloadFailed'));
         return;
       }
       await downloadBlob(response);
+      reported = true;
+      trackAnalyticsEvent('material.export.succeeded', { source_kind: 'draft' });
     } catch {
+      if (!reported) {
+        trackAnalyticsEvent('material.export.failed', { reason: 'network' });
+      }
       blockAction(t('materialStudio.downloadNetworkError'));
     } finally {
       setIsBusy(false);
@@ -2038,6 +2126,11 @@ export function MaterialStudioPanel({
       return;
     }
     setIsBusy(true);
+    trackAnalyticsEvent('material.export.started', {
+      template_id: selected.id,
+      source_kind: 'manual',
+    });
+    let reported = false;
     try {
       const response = await fetch(appPath('/api/materials/exports'), {
         method: 'POST',
@@ -2052,12 +2145,19 @@ export function MaterialStudioPanel({
         }),
       });
       if (!response.ok) {
+        reported = true;
+        trackAnalyticsEvent('material.export.failed', { reason: 'server_rejected' });
         const data = (await response.json().catch(() => ({}))) as { message?: string };
         blockAction(data.message ?? t('materialStudio.downloadFailed'));
         return;
       }
       await downloadBlob(response);
+      reported = true;
+      trackAnalyticsEvent('material.export.succeeded', { source_kind: 'manual' });
     } catch {
+      if (!reported) {
+        trackAnalyticsEvent('material.export.failed', { reason: 'network' });
+      }
       blockAction(t('materialStudio.downloadNetworkError'));
     } finally {
       setIsBusy(false);
@@ -2342,6 +2442,7 @@ export function MaterialStudioPanel({
                 disabled={isBusy || !selected}
                 sizeMode={canvasSizeMode}
                 isMetroWayfinding={isMetroWayfinding}
+                isVerticalLineMap={isMetroVerticalLineMap}
                 lockAlignToTile={isRealisticBusStop}
                 metroWayfindingLayoutMode={metroWayfindingLayoutMode}
               />
@@ -2424,7 +2525,7 @@ export function MaterialStudioPanel({
           ) : null}
           {mode === 'server' && overridableFields.length ? (
             <div className="material-field-grid">
-              {overridableFields.map((field) =>
+              {overridableFields.filter(isMaterialFieldVisible).map((field) =>
                 field.key === SERVICE_TIME_FIELD_KEY && offerProjectServiceTimeInput ? (
                   // 项目线网不带运营时间，这里换成「首班 / 末班」两个输入补数据，
                   // 免得用户只能对着一个空文本框猜格式。
@@ -2433,25 +2534,24 @@ export function MaterialStudioPanel({
                     label={field.label}
                     value={input[field.key] ?? ''}
                     disabled={isBusy}
-                    onChange={(value) => {
-                      setInput((current) => ({ ...current, [field.key]: value }));
-                      clearPreview();
-                    }}
+                    onChange={updateMaterialFieldValue.bind(null, field.key)}
                   />
                 ) : (
                   <MaterialFieldEditor
                     key={field.key}
                     field={field}
+                    labelOverride={materialFieldLabelOverride(field)}
                     value={input[field.key] ?? field.defaultValue ?? ''}
                     disabled={isBusy}
                     suggestions={field.key === 'roadName' ? serverLocationSuggestions : undefined}
                     optionsOverride={
-                      field.key === 'travelDirection' ? travelDirectionOptions : undefined
+                      field.key === 'travelDirection'
+                        ? travelDirectionOptions
+                        : field.key === 'travelDirectionSecondary'
+                          ? verticalSecondaryDirectionOptions
+                          : undefined
                     }
-                    onChange={(value) => {
-                      setInput((current) => ({ ...current, [field.key]: value }));
-                      clearPreview();
-                    }}
+                    onChange={updateMaterialFieldValue.bind(null, field.key)}
                   />
                 ),
               )}
@@ -2879,23 +2979,27 @@ export function MaterialStudioPanel({
               ) : (
                 <div className="material-field-grid">
                   {selected.template.fields
-                    .filter((field) => field.userEditable !== false)
+                    .filter(
+                      (field) => field.userEditable !== false && isMaterialFieldVisible(field),
+                    )
                     .map((field) => (
                       <MaterialFieldEditor
                         key={field.key}
                         field={field}
-                        value={input[field.key] ?? ''}
+                        labelOverride={materialFieldLabelOverride(field)}
+                        value={input[field.key] ?? field.defaultValue ?? ''}
                         disabled={isBusy}
                         suggestions={
                           field.key === 'roadName' ? serverLocationSuggestions : undefined
                         }
                         optionsOverride={
-                          field.key === 'travelDirection' ? travelDirectionOptions : undefined
+                          field.key === 'travelDirection'
+                            ? travelDirectionOptions
+                            : field.key === 'travelDirectionSecondary'
+                              ? verticalSecondaryDirectionOptions
+                              : undefined
                         }
-                        onChange={(value) => {
-                          setInput((current) => ({ ...current, [field.key]: value }));
-                          clearPreview();
-                        }}
+                        onChange={updateMaterialFieldValue.bind(null, field.key)}
                       />
                     ))}
                 </div>
@@ -3210,6 +3314,7 @@ function CanvasEditor({
   disabled,
   sizeMode,
   isMetroWayfinding,
+  isVerticalLineMap = false,
   lockAlignToTile = false,
   metroWayfindingLayoutMode,
   onChange,
@@ -3218,12 +3323,19 @@ function CanvasEditor({
   disabled: boolean;
   sizeMode: 'full' | 'length' | 'none';
   isMetroWayfinding: boolean;
+  isVerticalLineMap?: boolean;
   lockAlignToTile?: boolean;
   metroWayfindingLayoutMode?: 'single' | 'double' | 'vertical';
   onChange: <TKey extends keyof MaterialCanvas>(key: TKey, value: MaterialCanvas[TKey]) => void;
 }>) {
   const metroLayoutMode = metroWayfindingLayoutMode ?? 'single';
   const isMetroVertical = isMetroWayfinding && metroLayoutMode === 'vertical';
+  const isVerticalLength = isMetroVertical || isVerticalLineMap;
+  // 竖版线路图以 0.5 米为步进，才能使用设计稿默认的 2.5 米高度。
+  const normalizeVerticalLength = (value: number) =>
+    isVerticalLineMap
+      ? Math.min(64, Math.max(1, Math.round(value * 2) / 2))
+      : Math.min(64, Math.max(1, Math.round(value)));
   const { t } = useI18n();
 
   // 拟真公交站牌必须保持 128×180 的比例，切到该模板时强制关闭对齐。
@@ -3238,19 +3350,33 @@ function CanvasEditor({
       return;
     }
     const fixedHeight = isMetroWayfinding && metroLayoutMode === 'double' ? 2 : 1;
-    const currentLength = isMetroVertical ? canvas.heightM : canvas.widthM;
-    const normalizedLength = Math.min(64, Math.max(1, Math.round(currentLength)));
+    const currentLength = isVerticalLength ? canvas.heightM : canvas.widthM;
+    const normalizedLength = normalizeVerticalLength(currentLength);
     if (currentLength !== normalizedLength) {
-      onChange(isMetroVertical ? 'heightM' : 'widthM', normalizedLength);
+      onChange(isVerticalLength ? 'heightM' : 'widthM', normalizedLength);
     }
-    const normalizedWidth = Math.min(64, Math.max(1, Math.round(canvas.widthM)));
-    if (isMetroVertical && canvas.widthM !== normalizedWidth) {
-      onChange('widthM', normalizedWidth);
+    if (isVerticalLineMap) {
+      if (canvas.widthM !== 1) {
+        onChange('widthM', 1);
+      }
+    } else {
+      const normalizedWidth = Math.min(64, Math.max(1, Math.round(canvas.widthM)));
+      if (isVerticalLength && canvas.widthM !== normalizedWidth) {
+        onChange('widthM', normalizedWidth);
+      }
+      if (!isVerticalLength && canvas.heightM !== fixedHeight) {
+        onChange('heightM', fixedHeight);
+      }
     }
-    if (!isMetroVertical && canvas.heightM !== fixedHeight) {
-      onChange('heightM', fixedHeight);
-    }
-  }, [canvas, isMetroVertical, isMetroWayfinding, metroLayoutMode, onChange, sizeMode]);
+  }, [
+    canvas,
+    isMetroWayfinding,
+    isVerticalLength,
+    isVerticalLineMap,
+    metroLayoutMode,
+    onChange,
+    sizeMode,
+  ]);
 
   if (!canvas) {
     return null;
@@ -3264,10 +3390,9 @@ function CanvasEditor({
   const outputHeight = canvas.alignToTile
     ? Math.ceil(heightPx / canvas.tileSizePx) * canvas.tileSizePx
     : heightPx;
-  const metroLength = isMetroVertical ? canvas.heightM : canvas.widthM;
+  const metroLength = isVerticalLength ? canvas.heightM : canvas.widthM;
   const updateMetroLength = (value: number) => {
-    const length = Math.min(64, Math.max(1, Math.round(value)));
-    onChange(isMetroVertical ? 'heightM' : 'widthM', length);
+    onChange(isVerticalLength ? 'heightM' : 'widthM', normalizeVerticalLength(value));
   };
 
   return (
@@ -3277,13 +3402,13 @@ function CanvasEditor({
         <>
           <label>
             <span>
-              {isMetroVertical ? t('materialStudio.signHeight') : t('materialStudio.signLength')}
+              {isVerticalLength ? t('materialStudio.signHeight') : t('materialStudio.signLength')}
             </span>
             <input
               type="number"
               min="1"
               max="64"
-              step="1"
+              step={isVerticalLineMap ? '0.5' : '1'}
               value={metroLength}
               onChange={(event) => updateMetroLength(Number(event.currentTarget.value))}
             />
@@ -3416,6 +3541,7 @@ function MaterialFieldEditor({
   disabled,
   suggestions,
   optionsOverride,
+  labelOverride,
   onChange,
 }: Readonly<{
   field: MaterialField;
@@ -3423,6 +3549,7 @@ function MaterialFieldEditor({
   disabled: boolean;
   suggestions?: string[];
   optionsOverride?: MaterialField['options'];
+  labelOverride?: string;
   onChange: (value: string) => void;
 }>) {
   const suggestionsId = useId();
@@ -3435,7 +3562,7 @@ function MaterialFieldEditor({
   return (
     <label className="material-field">
       <span>
-        {field.label}
+        {labelOverride ?? field.label}
         {field.required ? ' *' : ''}
       </span>
       {field.kind === 'select' ? (
