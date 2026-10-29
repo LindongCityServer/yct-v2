@@ -14,12 +14,16 @@ export default async function AdminTransitPage({
   searchParams?: Promise<{
     section?: string | string[];
     lineId?: string | string[];
+    openLineId?: string | string[];
     tripInstanceId?: string | string[];
   }>;
 }>) {
   const resolved = searchParams ? await searchParams : undefined;
   const rawSection = Array.isArray(resolved?.section) ? resolved.section[0] : resolved?.section;
   const lineId = Array.isArray(resolved?.lineId) ? resolved.lineId[0] : resolved?.lineId;
+  const openLineId = Array.isArray(resolved?.openLineId)
+    ? resolved.openLineId[0]
+    : resolved?.openLineId;
   const tripInstanceId = Array.isArray(resolved?.tripInstanceId)
     ? resolved.tripInstanceId[0]
     : resolved?.tripInstanceId;
@@ -34,6 +38,7 @@ export default async function AdminTransitPage({
       <AdminTransitPanel
         initialSection={section}
         initialLineId={lineId}
+        initialOpenLineId={openLineId}
         initialTripInstanceId={tripInstanceId}
       />
     </SecondaryShell>

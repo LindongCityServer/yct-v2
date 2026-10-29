@@ -71,6 +71,7 @@ export type TransitLineEditableField =
   | 'departureRulesByDirection'
   | 'tripLabelConfigByDirection'
   | 'tripLabelsByDirection'
+  | 'specialTripsByDirection'
   | 'operatingDateRule'
   | 'bookingUrl';
 
@@ -855,6 +856,7 @@ export async function saveTransitLine(input: {
     departureRulesByDirection?: TransitDataRevision['lines'][number]['departureRulesByDirection'];
     tripLabelConfigByDirection?: TransitDataRevision['lines'][number]['tripLabelConfigByDirection'];
     tripLabelsByDirection?: TransitDataRevision['lines'][number]['tripLabelsByDirection'];
+    specialTripsByDirection?: TransitDataRevision['lines'][number]['specialTripsByDirection'];
     operatingDateRule?: string;
     bookingUrl?: string;
     stationDrafts?: Array<{
@@ -1180,6 +1182,84 @@ export async function updateTransitLineApprovalStatus(input: {
   return { ok: true, revision: updated };
 }
 
+/**
+ * 批量审批线路：整批一次写入；任一条线路状态不允许该动作时整批拒绝，避免半成功。
+ */
+export async function updateTransitLineApprovalStatuses(input: {
+  revisionId: string;
+  actorId: string;
+  lineSourceIds: string[];
+  action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive';
+  reason?: string;
+}): Promise<TransitDataActionResult> {
+  const revision = await findTransitDataRevision(input.revisionId);
+  if (!revision) {
+    return notFound();
+  }
+
+  const targetIds = Array.from(new Set(input.lineSourceIds));
+  const previousStatuses: Record<string, string> = {};
+  let nextStatus: string | undefined;
+  for (const lineSourceId of targetIds) {
+    const line = revision.lines.find((item) => item.sourceId === lineSourceId);
+    if (!line) {
+      return {
+        ok: false,
+        status: 404,
+        error: 'transit_line_not_found',
+        message: `交通数据版本中不存在线路 ${lineSourceId}。`,
+      };
+    }
+    const previousStatus = getTransitLineApprovalStatus(line, revision.status);
+    const status = getNextTransitItemApprovalStatus(previousStatus, input.action);
+    if (!status) {
+      return invalidTransition('当前线路状态不允许执行该审批动作。');
+    }
+    if (nextStatus && status !== nextStatus) {
+      return invalidTransition('所选线路的审批结果不一致，请分批处理。');
+    }
+    nextStatus = status;
+    previousStatuses[lineSourceId] = previousStatus;
+  }
+
+  if (!nextStatus) {
+    return invalidTransition('没有可处理的线路。');
+  }
+
+  const changedAt = new Date().toISOString();
+  const nextLines = revision.lines.map((line) =>
+    targetIds.includes(line.sourceId)
+      ? withTransitItemApprovalFields(
+          line,
+          nextStatus as TransitItemApprovalStatus,
+          input.actorId,
+          changedAt,
+          input.reason,
+        )
+      : line,
+  );
+  const updated = await updateTransitDataRevision(input.revisionId, (current) => ({
+    ...current,
+    lines: nextLines,
+  }));
+
+  if (updated) {
+    await emitEvent('TransitLinesApprovalBatchChanged', input.actorId, {
+      datasetId: updated.datasetId,
+      revisionId: updated.revisionId,
+      lineSourceIds: targetIds,
+      previousStatuses: previousStatuses as Record<string, TransitItemApprovalStatus>,
+      nextStatus: nextStatus as TransitItemApprovalStatus,
+      action: input.action,
+      actorId: input.actorId,
+      changedAt,
+      reason: input.reason,
+    });
+  }
+
+  return { ok: true, revision: updated };
+}
+
 export async function updateTransitLineStationOrder(input: {
   revisionId: string;
   lineSourceId: string;
@@ -1275,6 +1355,7 @@ function buildTransitLineSnapshot(
     departureRulesByDirection?: TransitDataRevision['lines'][number]['departureRulesByDirection'];
     tripLabelConfigByDirection?: TransitDataRevision['lines'][number]['tripLabelConfigByDirection'];
     tripLabelsByDirection?: TransitDataRevision['lines'][number]['tripLabelsByDirection'];
+    specialTripsByDirection?: TransitDataRevision['lines'][number]['specialTripsByDirection'];
     operatingDateRule?: string;
     bookingUrl?: string;
   },
@@ -1340,6 +1421,9 @@ function buildTransitLineSnapshot(
   const tripLabelsByDirection = normalizeTripLabelsByDirection(
     patch.tripLabelsByDirection ?? previous?.tripLabelsByDirection,
   );
+  const specialTripsByDirection = normalizeSpecialTripsByDirection(
+    patch.specialTripsByDirection ?? previous?.specialTripsByDirection,
+  );
 
   return {
     sourceId: previous?.sourceId ?? `manual_line_${randomUUID()}`,
@@ -1401,6 +1485,10 @@ function buildTransitLineSnapshot(
         : undefined,
     tripLabelsByDirection:
       tripLabelsByDirection.down || tripLabelsByDirection.up ? tripLabelsByDirection : undefined,
+    specialTripsByDirection:
+      specialTripsByDirection.down || specialTripsByDirection.up
+        ? specialTripsByDirection
+        : undefined,
     operatingDateRule: patch.operatingDateRule?.trim() || undefined,
     bookingUrl: patch.bookingUrl?.trim() || undefined,
     sourcePath: previous?.sourcePath,
@@ -1513,6 +1601,44 @@ function normalizeTripLabelsByDirection(
   return { down: normalize(value?.down), up: normalize(value?.up) };
 }
 
+/**
+ * 线路规则中的特殊班次标注：以 HH:mm 发车时刻为键，
+ * 保留班次性质、备注与短交路经停站；空项直接丢弃。
+ */
+function normalizeSpecialTripsByDirection(
+  value: TransitDataRevision['lines'][number]['specialTripsByDirection'],
+): NonNullable<TransitDataRevision['lines'][number]['specialTripsByDirection']> {
+  const normalize = (
+    trips: NonNullable<
+      TransitDataRevision['lines'][number]['specialTripsByDirection']
+    >['down'],
+  ) => {
+    if (!trips) {
+      return undefined;
+    }
+    const entries = Object.entries(trips)
+      .filter(([time]) => /^\d{1,2}:\d{2}$/u.test(time.trim()))
+      .map(([time, trip]) => {
+        const serviceNature = trip.serviceNature?.trim() || undefined;
+        const routeNote = trip.routeNote?.trim() || undefined;
+        const stationNames = Array.from(
+          new Set((trip.stationNames ?? []).map((name) => name.trim()).filter(Boolean)),
+        );
+        const special = {
+          ...(serviceNature ? { serviceNature } : {}),
+          ...(routeNote ? { routeNote } : {}),
+          ...(stationNames.length >= 2 ? { stationNames } : {}),
+        };
+        return [time.trim(), special] as const;
+      })
+      .filter(([, trip]) => Object.keys(trip).length > 0)
+      .slice(0, 500);
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+  };
+
+  return { down: normalize(value?.down), up: normalize(value?.up) };
+}
+
 function getChangedTransitLineFields(
   previous: TransitDataRevision['lines'][number],
   next: TransitDataRevision['lines'][number],
@@ -1537,6 +1663,7 @@ function getChangedTransitLineFields(
     'departureRulesByDirection',
     'tripLabelConfigByDirection',
     'tripLabelsByDirection',
+    'specialTripsByDirection',
     'operatingDateRule',
     'bookingUrl',
   ];

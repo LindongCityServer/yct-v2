@@ -39,6 +39,8 @@ export function KeyboardShortcutBridge() {
   const isMapPage = pathname === mapPath || pathname.startsWith(`${mapPath}/`);
   const isLineEditorPage =
     pathname.startsWith(appPath('/admin/transit/lines/')) && pathname.endsWith('/edit');
+  const isTripWorkbenchPage =
+    pathname.startsWith(appPath('/admin/transit/lines/')) && pathname.endsWith('/schedule');
   const isWayfindingPage = [
     appPath('/services/transit-materials'),
     appPath('/services/road-materials'),
@@ -229,6 +231,35 @@ export function KeyboardShortcutBridge() {
     };
   }, [isMapPage, mapShortcutContext, router, shortcutDialogOpen]);
 
+  // 面板打开后，鼠标在面板外移动超过阈值就关闭，避免按住 Ctrl 时遮挡后续拖拽/点击。
+  useEffect(() => {
+    if (!shortcutDialogOpen) {
+      return undefined;
+    }
+
+    const moveThresholdPx = 16;
+    let origin: { x: number; y: number } | null = null;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      if (event.target instanceof Element && event.target.closest('.shortcut-dialog')) {
+        return;
+      }
+      if (!origin) {
+        origin = { x: event.clientX, y: event.clientY };
+        return;
+      }
+      if (
+        Math.abs(event.clientX - origin.x) + Math.abs(event.clientY - origin.y) >
+        moveThresholdPx
+      ) {
+        setShortcutDialogOpen(false);
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, [shortcutDialogOpen]);
+
   if (!shortcutDialogOpen) {
     return null;
   }
@@ -270,7 +301,7 @@ export function KeyboardShortcutBridge() {
                 <div>
                   <dt>{t('shortcut.globalSearch')}</dt>
                   <dd>
-                    <KeyboardKeys keys={['Ctrl', 'K']} />
+                    <KeyboardKeys keys={[t('shortcut.doubleShift')]} />
                   </dd>
                 </div>
                 <div>
@@ -400,13 +431,25 @@ export function KeyboardShortcutBridge() {
                 <div>
                   <dt>{t('shortcut.redo')}</dt>
                   <dd>
-                    <KeyboardKeys keys={['Ctrl', 'Shift', 'Z']} />
+                    <KeyboardKeys keys={['Ctrl + Shift + Z / Ctrl + Y']} />
                   </dd>
                 </div>
                 <div>
                   <dt>{t('shortcut.deleteSelected')}</dt>
                   <dd>
                     <KeyboardKeys keys={['Delete']} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('shortcut.lineEditor.toolSwap')}</dt>
+                  <dd>
+                    <KeyboardKeys keys={['Alt']} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('shortcut.lineEditor.snapToggle')}</dt>
+                  <dd>
+                    <KeyboardKeys keys={['Shift']} />
                   </dd>
                 </div>
                 <div>
@@ -468,7 +511,7 @@ export function KeyboardShortcutBridge() {
                 <div>
                   <dt>{t('shortcut.redo')}</dt>
                   <dd>
-                    <KeyboardKeys keys={['Ctrl', 'Shift', 'Z']} />
+                    <KeyboardKeys keys={['Ctrl + Shift + Z / Ctrl + Y']} />
                   </dd>
                 </div>
                 <div>
@@ -630,6 +673,24 @@ export function KeyboardShortcutBridge() {
                   </dd>
                 </div>
                 <div>
+                  <dt>{t('shortcut.insertPrepend')}</dt>
+                  <dd>
+                    <KeyboardKeys keys={['[']} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('shortcut.insertAppend')}</dt>
+                  <dd>
+                    <KeyboardKeys keys={[']']} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('shortcut.insertNearest')}</dt>
+                  <dd>
+                    <KeyboardKeys keys={['\\']} />
+                  </dd>
+                </div>
+                <div>
                   <dt>{t('shortcut.listBulk')}</dt>
                   <dd>
                     <KeyboardKeys keys={['Ctrl', 'Enter']} />
@@ -638,6 +699,62 @@ export function KeyboardShortcutBridge() {
               </dl>
             </section>
           ) : null}
+
+          {isTripWorkbenchPage ? (
+            <section className="shortcut-section" aria-labelledby="shortcut-trip-workbench-title">
+              <h3 id="shortcut-trip-workbench-title">{t('shortcut.tripWorkbench')}</h3>
+              <dl className="shortcut-list">
+                <div>
+                  <dt>{t('shortcut.save')}</dt>
+                  <dd>
+                    <KeyboardKeys keys={['Ctrl + S / Ctrl + Enter']} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('shortcut.undo')}</dt>
+                  <dd>
+                    <KeyboardKeys keys={['Ctrl', 'Z']} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('shortcut.redo')}</dt>
+                  <dd>
+                    <KeyboardKeys keys={['Ctrl + Shift + Z / Ctrl + Y']} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('shortcut.tripWorkbench.toolPan')}</dt>
+                  <dd>
+                    <KeyboardKeys keys={['V / 1']} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('shortcut.tripWorkbench.toolMove')}</dt>
+                  <dd>
+                    <KeyboardKeys keys={['M / 2']} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('shortcut.tripWorkbench.toolDraw')}</dt>
+                  <dd>
+                    <KeyboardKeys keys={['D / 3']} />
+                  </dd>
+                </div>
+              </dl>
+            </section>
+          ) : null}
+
+          <section className="shortcut-section" aria-labelledby="shortcut-general-title">
+            <h3 id="shortcut-general-title">{t('shortcut.general')}</h3>
+            <dl className="shortcut-list">
+              <div>
+                <dt>{t('shortcut.dismissPopover')}</dt>
+                <dd>
+                  <KeyboardKeys keys={['Esc']} />
+                </dd>
+              </div>
+            </dl>
+          </section>
         </div>
 
         <div className="shortcut-help-row">

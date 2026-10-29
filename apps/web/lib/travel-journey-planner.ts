@@ -181,10 +181,7 @@ function findJourneyOptions(input: {
         }
         const nextLegs = [...legs, edge];
         const nextTransfers = originCandidate.transfer
-          ? [
-              ...transferSegments,
-              toJourneyTransfer(originCandidate.transfer),
-            ]
+          ? [...transferSegments, toJourneyTransfer(originCandidate.transfer)]
           : transferSegments;
         if (nextStation === destination) {
           candidates.push({ legs: nextLegs, transfers: nextTransfers });
@@ -294,7 +291,9 @@ function toJourneyLeg(edge: RideEdge): TravelJourneyLeg {
     tripCode: edge.trip.tripCode,
     serviceKind: edge.trip.serviceKind,
     serviceLabel: edge.trip.serviceLabel,
+    serviceNature: edge.trip.serviceNature,
     lineName: edge.trip.lineName,
+    routeNote: edge.trip.routeNote,
     fromStationName: edge.fromStationName,
     toStationName: edge.toStationName,
     departureTime: formatMinuteTime(edge.departureMinutes),

@@ -25,7 +25,7 @@ import type {
   TravelTripInstance,
 } from '@yct/contracts';
 import type { CSSProperties, FormEvent } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { appPath } from '../lib/app-paths';
@@ -43,10 +43,7 @@ import { LayeredMapTile } from './layered-map-tile';
 import { WorldCoordinatePicker } from './world-coordinate-picker';
 import { MaterialSymbol } from './material-symbol';
 import { TransitTripLabelPoolPanel } from './transit-trip-label-pool-panel';
-import {
-  TransitLineTripLabelFields,
-  type TransitTripLabelDraftConfig,
-} from './transit-line-trip-label-fields';
+import { type TransitTripLabelDraftConfig } from './transit-line-trip-label-fields';
 import type { TransitStationDetailUpdateInput } from '@yct/schemas';
 import {
   detectTravelScheduleConflicts,
@@ -299,10 +296,13 @@ const supportedTravelServiceProfiles: TravelScheduleServiceProfile[] = [
 export function AdminTransitPanel({
   initialSection = 'lines',
   initialLineId,
+  initialOpenLineId,
   initialTripInstanceId,
 }: Readonly<{
   initialSection?: TransitAdminSection;
   initialLineId?: string;
+  /** 从线路工作台返回时自动打开对应线路的编辑弹窗。 */
+  initialOpenLineId?: string;
   initialTripInstanceId?: string;
 }>) {
   const [revisions, setRevisions] = useState<TransitDataRevision[]>([]);
@@ -534,6 +534,22 @@ export function AdminTransitPanel({
       ? getScheduleTripSelectionKey(row.revision.revisionId, row.trip.tripInstanceId)
       : undefined;
   }, [allScheduleTripRows, initialTripInstanceId]);
+  // 从线路地图编辑器 / 班次工作台返回时，自动重新打开对应线路的编辑弹窗。
+  const autoOpenedLineKeyRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!initialOpenLineId) {
+      return;
+    }
+    const row = allTransitLineRows.find(({ line }) => line.sourceId === initialOpenLineId);
+    if (!row || !canEditTransitRevisionLines(row.revision)) {
+      return;
+    }
+    if (autoOpenedLineKeyRef.current === initialOpenLineId) {
+      return;
+    }
+    autoOpenedLineKeyRef.current = initialOpenLineId;
+    setLineEditTarget({ revision: row.revision, line: row.line });
+  }, [allTransitLineRows, initialOpenLineId]);
   const currentSectionStatusText = useMemo(() => {
     if (activeSection === 'lines') {
       return statusText;
@@ -941,17 +957,47 @@ export function AdminTransitPanel({
       return;
     }
 
-    let successCount = 0;
+    // 同一批次只发一次请求，服务端整批写入。
+    const lineIdsByRevision = new Map<string, string[]>();
     for (const { line, revision } of selectedTransitLineRows) {
-      const ok = await runTransitLineItemAction(
-        revision.revisionId,
-        line.sourceId,
-        action,
-        action === 'reject' ? '后台批量退回' : undefined,
-      );
-      if (ok) {
-        successCount += 1;
+      const ids = lineIdsByRevision.get(revision.revisionId) ?? [];
+      ids.push(line.sourceId);
+      lineIdsByRevision.set(revision.revisionId, ids);
+    }
+
+    setIsBusy(true);
+    let successCount = 0;
+    try {
+      for (const [revisionId, lineSourceIds] of lineIdsByRevision) {
+        const response = await fetch(
+          appPath(
+            `/api/admin/transit/datasets/${encodeURIComponent(revisionId)}/lines/approval`,
+          ),
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              lineSourceIds,
+              action,
+              reason: action === 'reject' ? '后台批量退回' : undefined,
+            }),
+          },
+        );
+        const data = (await response.json()) as TransitDataRevision & { message?: string };
+        if (!response.ok) {
+          setStatusText(`${data.message ?? '线路批量审批失败'}（已处理 ${successCount} 条）`);
+          continue;
+        }
+        successCount += lineSourceIds.length;
+        setRevisions((current) =>
+          current.map((revision) =>
+            revision.revisionId === data.revisionId ? data : revision,
+          ),
+        );
       }
+      notifyTransitDataChanged(action === 'archive' ? 'record_archived' : 'status_changed');
+    } finally {
+      setIsBusy(false);
     }
 
     setSelectedTransitLineKeys(new Set());
@@ -1175,17 +1221,51 @@ export function AdminTransitPanel({
       return;
     }
 
-    let successCount = 0;
+    // 同一批次只发一次请求，服务端整批写入，避免逐条串行等待。
+    const tripIdsByRevision = new Map<string, string[]>();
     for (const { revision, trip } of selectedScheduleTripRows) {
-      const ok = await runScheduleTripItemAction(
-        revision.revisionId,
-        trip.tripInstanceId,
-        action,
-        action === 'reject' ? '后台批量退回' : undefined,
-      );
-      if (ok) {
-        successCount += 1;
+      const ids = tripIdsByRevision.get(revision.revisionId) ?? [];
+      ids.push(trip.tripInstanceId);
+      tripIdsByRevision.set(revision.revisionId, ids);
+    }
+
+    setScheduleRevisionBusy(true);
+    let successCount = 0;
+    try {
+      for (const [revisionId, tripInstanceIds] of tripIdsByRevision) {
+        const response = await fetch(
+          appPath(
+            `/api/admin/travel/schedule-revisions/${encodeURIComponent(
+              revisionId,
+            )}/trips/approval`,
+          ),
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tripInstanceIds,
+              action,
+              reason: action === 'reject' ? '后台批量退回' : undefined,
+            }),
+          },
+        );
+        const data = (await response.json()) as TravelScheduleRevision & { message?: string };
+        if (!response.ok) {
+          setScheduleRevisionStatusText(
+            `${data.message ?? '班次批量审批失败'}（已处理 ${successCount} 个）`,
+          );
+          continue;
+        }
+        successCount += tripInstanceIds.length;
+        setScheduleRevisions((current) =>
+          current.map((revision) =>
+            revision.revisionId === data.revisionId ? data : revision,
+          ),
+        );
       }
+      notifyTransitDataChanged(action === 'archive' ? 'record_archived' : 'status_changed');
+    } finally {
+      setScheduleRevisionBusy(false);
     }
 
     setSelectedScheduleTripKeys(new Set());
@@ -3250,12 +3330,18 @@ function ScheduleTripEditDialog({
 
   useEffect(() => {
     const stationNames = parseLineList(stationNamesText);
+    // 输入过程中列表可能被临时清空；此时保留原时刻，避免把整组停站时间清掉。
+    if (stationNames.length === 0) {
+      return;
+    }
     setStopTimes((current) =>
-      stationNames.map((stationName, index) => {
-        const existing =
-          current.find((stopTime) => stopTime.stationName === stationName) ?? current[index];
-        return existing ? { ...existing, stationName } : { stationName, isStop: true };
-      }),
+      stationNames.map(
+        (stationName) =>
+          current.find((stopTime) => stopTime.stationName === stationName) ?? {
+            stationName,
+            isStop: true,
+          },
+      ),
     );
   }, [stationNamesText]);
 
@@ -3773,8 +3859,21 @@ function TransitStationCoordinateDialog({
     }
 
     setPoiSearchText(option.marker.label);
+    const hadBindings = boundPoiRefs.length > 0;
     setBoundPoiRefs((current) => mergeTransitStationPoiBindingRefs(current, option.marker));
-    applyPoiCoordinate(option);
+    // 首次绑定顺便确定站点坐标；追加绑定时不移动站点默认坐标。
+    if (!hadBindings) {
+      applyPoiCoordinate(option);
+    }
+  };
+
+  const setPrimaryBinding = (markerId: string) => {
+    setBoundPoiRefs((current) => {
+      const primary = current.find((ref) => ref.markerId === markerId);
+      return primary ? [primary, ...current.filter((ref) => ref.markerId !== markerId)] : current;
+    });
+    setBoundPoiMarkerId(markerId);
+    setError('');
   };
 
   const removeBinding = (markerId: string) => {
@@ -3820,7 +3919,8 @@ function TransitStationCoordinateDialog({
             {stationModes.length > 0
               ? stationModes.map(formatTransitMode).join('、')
               : '未接入线路'}
-            。 候选项仅显示对应交通方式的站点 POI。
+            。 候选项仅显示对应交通方式的站点 POI。可重复选择绑定多个 POI 或出口，第一个作为车站默认
+            POI； 各线路的实际停靠位置在编辑线路时单独指定。
           </p>
           <div className="transit-station-binding-toolbar">
             <label className="transit-admin-search">
@@ -3835,7 +3935,7 @@ function TransitStationCoordinateDialog({
               />
             </label>
             <label>
-              <span>候选 POI</span>
+              <span>添加 POI 绑定</span>
               <select
                 value={boundPoiMarkerId}
                 onChange={(event) => {
@@ -3873,15 +3973,27 @@ function TransitStationCoordinateDialog({
           </div>
           {boundPoiRefs.length > 0 ? (
             <div className="transit-station-bound-poi-list" aria-label="已绑定 POI">
-              {boundPoiRefs.map((ref) => {
+              {boundPoiRefs.map((ref, index) => {
                 const option = boundPoiOptionsById.get(ref.markerId);
                 return (
                   <span className="transit-station-bound-poi-chip" key={ref.markerId}>
                     <strong>{ref.label}</strong>
                     <small>
+                      {index === 0 ? '默认 POI · ' : ''}
                       {ref.categoryId ?? option?.marker.categoryId ?? '未分类'}
                       {option ? ` · ${formatTransitCoordinatePair(option.coordinate)}` : ''}
                     </small>
+                    {index > 0 ? (
+                      <button
+                        type="button"
+                        aria-label={`将 ${ref.label} 设为默认 POI`}
+                        onClick={() => setPrimaryBinding(ref.markerId)}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          star
+                        </span>
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       disabled={!option}
@@ -3907,7 +4019,8 @@ function TransitStationCoordinateDialog({
             </div>
           ) : (
             <p className="muted">
-              绑定后可直接复用现有 POI 坐标，也方便后续回查站点与地图对象的对应关系。
+              绑定后可直接复用现有 POI 坐标，也方便后续回查站点与地图对象的对应关系。重复选择候选
+              POI 可继续追加绑定。
             </p>
           )}
         </div>
@@ -5448,7 +5561,6 @@ function TransitLineEditorDialog({
     }),
   );
   const [activeTab, setActiveTab] = useState<TransitLineEditorTab>('basic');
-  const [showScheduleRunChart, setShowScheduleRunChart] = useState(false);
   const [error, setError] = useState('');
   const stationById = useMemo(
     () => new Map(revision.stations.map((station) => [station.sourceId, station])),
@@ -5492,38 +5604,6 @@ function TransitLineEditorDialog({
     segmentTravelMinutes,
     parsedStationSourceIds,
   );
-  const scheduleTransitRevisions = useMemo(() => {
-    if (!line) {
-      return transitRevisions;
-    }
-    const draftedRevision: TransitDataRevision = {
-      ...revision,
-      lines: revision.lines.map((candidate) =>
-        candidate.sourceId === line.sourceId
-          ? {
-              ...candidate,
-              mode,
-              routeMode,
-              stationSourceIds: parsedStationSourceIds,
-              segmentPaths: parsedRoute.segmentPaths,
-            }
-          : candidate,
-      ),
-    };
-    return [
-      draftedRevision,
-      ...transitRevisions.filter((candidate) => candidate.revisionId !== revision.revisionId),
-    ];
-  }, [
-    line,
-    mode,
-    parsedRoute.segmentPaths,
-    parsedStationSourceIds,
-    revision,
-    routeMode,
-    transitRevisions,
-  ]);
-
   const saveLine = async (intent: 'close' | 'map-editor') => {
     if (!name.trim()) {
       setError('线路名称不能为空。');
@@ -5936,13 +6016,19 @@ function TransitLineEditorDialog({
                   const stationDetail = station
                     ? findTransitStationDetail(revision.stationDetails, line?.name, station.name)
                     : undefined;
+                  const stationBoundPoiRefs = station ? getTransitStationBoundPoiRefs(station) : [];
+                  const stationBoundMarkerIds = new Set(
+                    stationBoundPoiRefs.map((ref) => ref.markerId),
+                  );
                   const stopLocationOptions = station
                     ? getPreferredTransitStopLocationOptions(
                         bindableStopLocationOptions,
                         station.name,
                         node.stopLocationRefs,
+                        stationBoundMarkerIds,
                       )
                     : [];
+                  const stationDefaultPoiLabel = stationBoundPoiRefs[0]?.label;
                   return (
                     <div
                       className={
@@ -6055,10 +6141,12 @@ function TransitLineEditorDialog({
                               pin_drop
                             </span>
                             <span>
-                              停靠位置
+                              停靠 POI
                               {node.stopLocationRefs?.length
-                                ? ` · 已配置 ${node.stopLocationRefs.length} 项`
-                                : ' · 使用车站默认位置'}
+                                ? ` · ${formatTransitStopLocationSelectionSummary(node.stopLocationRefs)}`
+                                : stationDefaultPoiLabel
+                                  ? ` · 车站默认：${stationDefaultPoiLabel}`
+                                  : ' · 使用车站默认位置'}
                             </span>
                           </summary>
                           <div>
@@ -6092,7 +6180,9 @@ function TransitLineEditorDialog({
                             ))}
                           </div>
                           <p className="muted">
-                            方向位置优先于本线路默认位置；都未设置时使用车站默认位置。
+                            方向位置优先于本线路默认位置；都未设置时使用车站默认
+                            POI（车站绑定的第一个 POI）。同一车站绑定多个 POI
+                            或出口时，可分别给不同线路指定各自的停靠位置。
                           </p>
                         </details>
                       ) : null}
@@ -6202,162 +6292,33 @@ function TransitLineEditorDialog({
                 placeholder="例如：每日 / 工作日 / 2026-07-01 至 2026-08-31"
               />
             </label>
-            <div className="transit-line-departure-direction-grid">
-              <label>
-                <span>{`正向发车时刻（${stationById.get(parsedStationSourceIds[0] ?? '')?.name ?? '线路首站'} → ${forwardTerminalName}）`}</span>
-                <textarea
-                  value={departureTimesDownText}
-                  onChange={(event) => {
-                    setDepartureTimesDownText(event.currentTarget.value);
-                    setError('');
-                  }}
-                  placeholder={'每行一个时刻或规则，例如：\n06:30\n06:30 + 00:05 * 5'}
-                />
-                {!parsedDepartureSchedules.down.error &&
-                parsedDepartureSchedules.down.rules.length > 0 ? (
-                  <small className="muted">
-                    {`已识别 ${parsedDepartureSchedules.down.rules.length} 行，展开为 ${parsedDepartureSchedules.down.departureTimes.length} 个时刻`}
-                  </small>
-                ) : null}
-              </label>
-              <label>
-                <span>{`反向发车时刻（${forwardTerminalName} → ${reverseTerminalName}）`}</span>
-                <textarea
-                  value={departureTimesUpText}
-                  onChange={(event) => {
-                    setDepartureTimesUpText(event.currentTarget.value);
-                    setError('');
-                  }}
-                  placeholder={'每行一个时刻或规则，例如：\n06:30\n06:30 + 00:05 * 5'}
-                />
-                {!parsedDepartureSchedules.up.error &&
-                parsedDepartureSchedules.up.rules.length > 0 ? (
-                  <small className="muted">
-                    {`已识别 ${parsedDepartureSchedules.up.rules.length} 行，展开为 ${parsedDepartureSchedules.up.departureTimes.length} 个时刻`}
-                  </small>
-                ) : null}
-              </label>
-            </div>
-            <TransitLineTripLabelFields
-              config={tripLabelConfig.down}
-              departureTimes={parsedDepartureSchedules.down.departureTimes}
-              labels={tripLabels.down}
-              onConfigChange={(config) =>
-                setTripLabelConfig((current) => ({ ...current, down: config }))
-              }
-              onLabelsChange={(labels) =>
-                setTripLabels((current) => ({ ...current, down: labels }))
-              }
-              pools={tripLabelPools}
-              title="正向"
-            />
-            <TransitLineTripLabelFields
-              config={tripLabelConfig.up}
-              departureTimes={parsedDepartureSchedules.up.departureTimes}
-              labels={tripLabels.up}
-              onConfigChange={(config) =>
-                setTripLabelConfig((current) => ({ ...current, up: config }))
-              }
-              onLabelsChange={(labels) => setTripLabels((current) => ({ ...current, up: labels }))}
-              pools={tripLabelPools}
-              title="反向"
-            />
-            <fieldset className="transit-line-stop-direction-editor">
-              <legend>逐站停站方向</legend>
-              <p className="muted">默认每一站两个方向都停靠；取消勾选后，该方向班次将通过本站。</p>
-              <div
-                className="transit-line-stop-direction-table"
-                role="table"
-                aria-label="逐站停站方向"
-              >
-                <div className="transit-line-stop-direction-row is-header" role="row">
-                  <span role="columnheader">站点</span>
-                  <span role="columnheader">正向（按站序）</span>
-                  <span role="columnheader">反向（逆站序）</span>
-                </div>
-                {parsedStationSourceIds.map((stationSourceId, index) => {
-                  const stationName = stationById.get(stationSourceId)?.name ?? stationSourceId;
-                  const isTerminal = index === 0 || index === parsedStationSourceIds.length - 1;
-                  const draft = stopDirections[stationSourceId] ?? { down: true, up: true };
-                  return (
-                    <div
-                      className="transit-line-stop-direction-row"
-                      role="row"
-                      key={stationSourceId}
-                    >
-                      <span role="cell">{stationName}</span>
-                      <label role="cell">
-                        <input
-                          type="checkbox"
-                          checked={isTerminal || draft.down}
-                          disabled={isTerminal}
-                          onChange={(event) =>
-                            setStopDirections((current) => ({
-                              ...current,
-                              [stationSourceId]: {
-                                ...(current[stationSourceId] ?? { down: true, up: true }),
-                                down: event.currentTarget.checked,
-                              },
-                            }))
-                          }
-                        />
-                        <span>{isTerminal ? '首末站固定停靠' : '停站'}</span>
-                      </label>
-                      <label role="cell">
-                        <input
-                          type="checkbox"
-                          checked={isTerminal || draft.up}
-                          disabled={isTerminal}
-                          onChange={(event) =>
-                            setStopDirections((current) => ({
-                              ...current,
-                              [stationSourceId]: {
-                                ...(current[stationSourceId] ?? { down: true, up: true }),
-                                up: event.currentTarget.checked,
-                              },
-                            }))
-                          }
-                        />
-                        <span>{isTerminal ? '首末站固定停靠' : '停站'}</span>
-                      </label>
-                    </div>
-                  );
-                })}
-              </div>
-            </fieldset>
             {line ? (
-              <section className="transit-line-schedule-chart-entry" aria-label="线路运行图入口">
+              <section className="transit-line-schedule-chart-entry" aria-label="班次工作台入口">
                 <div className="section-heading">
                   <div>
-                    <h3>班次运行图</h3>
-                    <p className="muted">在当前线路上下文中查看并调整全部班次的停站时刻。</p>
+                    <h3>班次工作台</h3>
+                    <p className="muted">
+                      发车时刻、班次标签、停站方向与运行图已合并为独立工作台，在折线运行图上直接调整每个班次的停站时刻。
+                    </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowScheduleRunChart((current) => !current)}
-                    aria-expanded={showScheduleRunChart}
+                  <Link
+                    className="transit-line-schedule-workbench-link"
+                    href={appPath(
+                      `/admin/transit/lines/${encodeURIComponent(revision.revisionId)}/${encodeURIComponent(line.sourceId)}/schedule`,
+                    )}
                   >
                     <span className="material-symbols-outlined" aria-hidden="true">
                       timeline
                     </span>
-                    <span>{showScheduleRunChart ? '收起运行图' : '展开运行图'}</span>
-                  </button>
+                    <span>打开班次工作台</span>
+                  </Link>
                 </div>
-                {showScheduleRunChart ? (
-                  <ScheduleRunChart
-                    coachRoadTimingContext={coachRoadTimingContext}
-                    initialLineName={line.name}
-                    isBusy={scheduleIsBusy}
-                    lockedLineName={line.name}
-                    rows={scheduleRows}
-                    transitRevisions={scheduleTransitRevisions}
-                    onSaveTiming={onSaveScheduleTiming}
-                    titleId="transit-line-schedule-run-chart-title"
-                  />
-                ) : null}
+                <p className="muted">
+                  工作台按发车时刻对齐保留已手工调整的班次；新增时刻会生成新班次，停站与通过状态逐班次保存。
+                </p>
               </section>
             ) : (
-              <p className="muted">新线路保存后，才能在这里关联和调整对应班次运行图。</p>
+              <p className="muted">新线路保存后，才能进入班次工作台。</p>
             )}
           </div>
         ) : null}
@@ -7066,6 +7027,7 @@ function getPreferredTransitStopLocationOptions(
   options: TransitStationPoiBindingOption[],
   stationName: string,
   selectedRefs: TransitLineStopLocationRef[] | undefined,
+  stationBoundMarkerIds?: ReadonlySet<string>,
 ): TransitStationPoiBindingOption[] {
   const normalizedStationName = normalizeSearchText(stationName);
   const selectedMarkerIds = new Set((selectedRefs ?? []).map((ref) => ref.markerId));
@@ -7076,11 +7038,13 @@ function getPreferredTransitStopLocationOptions(
       leftLabel,
       normalizedStationName,
       selectedMarkerIds.has(left.marker.id),
+      stationBoundMarkerIds?.has(left.marker.id) ?? false,
     );
     const rightScore = getTransitStopLocationOptionScore(
       rightLabel,
       normalizedStationName,
       selectedMarkerIds.has(right.marker.id),
+      stationBoundMarkerIds?.has(right.marker.id) ?? false,
     );
     return (
       rightScore - leftScore ||
@@ -7093,6 +7057,7 @@ function getPreferredTransitStopLocationOptions(
     const label = normalizeSearchText(option.marker.label);
     return (
       selectedMarkerIds.has(option.marker.id) ||
+      stationBoundMarkerIds?.has(option.marker.id) ||
       label === normalizedStationName ||
       label.includes(normalizedStationName) ||
       normalizedStationName.includes(label)
@@ -7105,8 +7070,10 @@ function getTransitStopLocationOptionScore(
   label: string,
   stationName: string,
   selected: boolean,
+  stationBound: boolean,
 ): number {
-  if (selected) return 100;
+  if (selected) return 120;
+  if (stationBound) return 100;
   if (label === stationName) return 80;
   if (label.startsWith(stationName) || stationName.startsWith(label)) return 60;
   if (label.includes(stationName) || stationName.includes(label)) return 40;
@@ -7995,6 +7962,17 @@ function formatTransitStationBindingSummary(station: TransitRevisionStation): st
       : `(${roundCoordinateValue(station.x)},${roundCoordinateValue(station.z)})`;
   const poiCount = getTransitStationBoundPoiRefs(station).length;
   return poiCount > 0 ? `${coordinate} · ${poiCount} POI` : coordinate;
+}
+
+function formatTransitStopLocationSelectionSummary(
+  refs: readonly TransitLineStopLocationRef[],
+): string {
+  return refs
+    .map(
+      (ref) =>
+        `${ref.scope === 'both' ? '默认' : ref.scope === 'down' ? '正向' : '反向'}：${ref.label}`,
+    )
+    .join(' · ');
 }
 
 function parseTransitCoordinatePair(xValue: string, zValue: string): [number, number] | null {

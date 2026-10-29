@@ -816,6 +816,7 @@ function buildTripSearchText(trip: TravelTripInstance): string {
     trip.tripInstanceId,
     trip.tripCode,
     trip.serviceLabel,
+    trip.serviceNature,
     trip.departureTime,
     trip.arrivalTime,
     trip.lineName,

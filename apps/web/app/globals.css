@@ -468,6 +468,27 @@ body .material-symbols-outlined {
   display: none;
 }
 
+/* 品牌标识改用内联 SVG + 品牌色变量，随强调色同步换色，不再需要 filter 近似。 */
+
+/* 灰色强调色下，运营配图统一降为黑白；红色强调色保持原图。 */
+:root[data-accent='gray'] .hero-feature-image,
+:root[data-accent='gray'] .feed-item-cover img,
+:root[data-accent='gray'] .operation-detail-cover[style*='background-image'],
+:root[data-accent='gray'] .operation-detail .markdown-blocks img,
+:root[data-accent='gray'] .search-result-group-operations .search-result-thumb,
+:root[data-accent='gray'] .operations-social-link img,
+:root[data-accent='gray'] .map-poi-detail-image,
+:root[data-accent='gray'] .search-result-group-poi .search-result-thumb {
+  filter: grayscale(1);
+}
+
+/* 哀悼日：运营消息的自定义封面色临时收敛为强调色，避免首页出现鲜艳底色。 */
+:root[data-accent='gray'] .hero-feature-link[style*='background-color'],
+:root[data-accent='gray'] .feed-item-cover[style*='background-color'],
+:root[data-accent='gray'] .operation-detail-cover[style*='background-color'] {
+  background-color: var(--yct-color-accent) !important;
+}
+
 .topbar-page-title {
   min-width: 0;
   overflow: hidden;
@@ -1109,15 +1130,41 @@ body .material-symbols-outlined {
   font-size: 18px;
 }
 
+/* hero 背景跟随强调色：默认保留青绿+蓝，红色/灰色时收敛到当前强调色。 */
+:root {
+  --yct-hero-panel-background: linear-gradient(
+    135deg,
+    rgba(22, 143, 120, 0.12),
+    rgba(37, 132, 232, 0.1)
+  );
+  --yct-hero-link-background: linear-gradient(
+    135deg,
+    rgba(22, 143, 120, 0.42),
+    rgba(37, 132, 232, 0.26)
+  );
+}
+
+:root[data-accent='red'],
+:root[data-accent='gray'] {
+  --yct-hero-panel-background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--yct-color-accent) 12%, transparent),
+    color-mix(in srgb, var(--yct-color-accent) 8%, transparent)
+  );
+  --yct-hero-link-background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--yct-color-accent) 42%, transparent),
+    color-mix(in srgb, var(--yct-color-accent) 24%, transparent)
+  );
+}
+
 .hero-panel {
   position: relative;
   aspect-ratio: 16 / 9;
   display: block;
   overflow: hidden;
   padding: 0;
-  background:
-    linear-gradient(135deg, rgba(22, 143, 120, 0.12), rgba(37, 132, 232, 0.1)),
-    var(--yct-color-surface-panel);
+  background: var(--yct-hero-panel-background), var(--yct-color-surface-panel);
   transition:
     background-color var(--yct-motion-duration-standard) var(--yct-motion-easing-standard),
     box-shadow var(--yct-motion-duration-standard) var(--yct-motion-easing-standard);
@@ -1138,7 +1185,7 @@ body .material-symbols-outlined {
       rgba(17, 24, 23, 0.26) 54%,
       rgba(17, 24, 23, 0.04)
     ),
-    linear-gradient(135deg, rgba(22, 143, 120, 0.42), rgba(37, 132, 232, 0.26));
+    var(--yct-hero-link-background);
   background-position: center;
   background-size: cover;
   color: #ffffff;
@@ -1317,6 +1364,15 @@ body .material-symbols-outlined {
 .hero-panel.has-carousel .hero-slide.is-active .hero-feature-image {
   transform: none;
   filter: none;
+}
+
+/* 轮播规则里的 filter 会覆盖通用灰度，这里按同样优先级补上灰色强调色的去色。 */
+:root[data-accent='gray'] .hero-panel.has-carousel .hero-slide .hero-feature-image {
+  filter: blur(16px) grayscale(1);
+}
+
+:root[data-accent='gray'] .hero-panel.has-carousel .hero-slide.is-active .hero-feature-image {
+  filter: grayscale(1);
 }
 
 .hero-panel.has-carousel .hero-slide .hero-copy {
@@ -2453,6 +2509,43 @@ body .material-symbols-outlined {
   pointer-events: auto;
   font: inherit;
   transform: translate(-50%, -50%);
+}
+
+/* 地图标记与标签的出现/消失使用淡入淡出：
+ * 时长取自 motion token，关闭动态效果时为 0ms，等同瞬时切换。 */
+@keyframes map-overlay-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes map-overlay-fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+/* 淡入不保留结束帧，避免覆盖离线标记自身的 opacity；淡出保留结束帧直到节点移除。 */
+.map-marker-dot,
+.map-linear-poi,
+.map-shape-poi-center {
+  animation: map-overlay-fade-in var(--yct-motion-duration-state) var(--yct-motion-easing-standard);
+}
+
+.map-marker-dot.is-overlay-leaving,
+.map-linear-poi.is-overlay-leaving,
+.map-shape-poi-center.is-overlay-leaving {
+  animation: map-overlay-fade-out var(--yct-motion-duration-state) var(--yct-motion-easing-standard)
+    forwards;
+  pointer-events: none;
 }
 
 .map-marker-dot img {
@@ -13411,6 +13504,101 @@ div.telegraph-output-scene.is-packing {
   white-space: nowrap;
 }
 
+.admin-analytics-overview {
+  display: grid;
+  gap: var(--yct-space-3);
+  padding: var(--yct-space-4) 0;
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+.admin-analytics-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--yct-space-2);
+}
+
+.admin-analytics-metric {
+  display: grid;
+  gap: var(--yct-space-2);
+  padding: var(--yct-space-3);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.admin-analytics-metric strong {
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.admin-analytics-metric small {
+  color: var(--yct-color-text-muted);
+}
+
+.admin-analytics-trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 72px;
+  padding: var(--yct-space-2) var(--yct-space-3);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-panel);
+}
+
+.admin-analytics-trend-bar {
+  flex: 1 1 0;
+  min-height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--yct-color-primary);
+  opacity: 0.85;
+}
+
+.admin-analytics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.admin-analytics-table th,
+.admin-analytics-table td {
+  padding: var(--yct-space-2);
+  border-bottom: 1px solid var(--yct-color-border-subtle);
+  text-align: left;
+}
+
+.admin-analytics-table th {
+  color: var(--yct-color-text-muted);
+  font-weight: 500;
+}
+
+.admin-analytics-table th:not(:first-child),
+.admin-analytics-table td:not(:first-child) {
+  text-align: right;
+}
+
+.admin-analytics-empty {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+}
+
+.admin-analytics-tasks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-2) var(--yct-space-4);
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .admin-analytics-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-analytics-trend {
+    height: 56px;
+  }
+}
+
 .secondary-back-desktop,
 .secondary-desktop-navigation {
   display: none;
@@ -16830,26 +17018,96 @@ div.telegraph-output-scene.is-packing {
 
 .transit-trip-label-pool-list {
   display: grid;
+  gap: var(--yct-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.transit-trip-label-pool-card.is-selected {
+  background: color-mix(in srgb, var(--yct-color-primary) 7%, var(--yct-color-surface));
+}
+
+.transit-trip-label-pool-card-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.transit-trip-label-pool-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.transit-trip-label-pool-card-head strong {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transit-trip-label-pool-count {
+  padding: 1px 8px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.transit-trip-label-pool-card-rule {
+  overflow: hidden;
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transit-trip-label-pool-card-meta {
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--yct-space-3);
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: 11px;
 }
 
-.transit-trip-label-pool-item {
-  display: grid;
-  gap: var(--yct-space-2);
-  padding: var(--yct-space-3);
+.transit-trip-label-pool-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transit-trip-label-pool-dialog button {
+  min-height: 32px;
+  padding: 0 12px;
   border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-md);
-  background: var(--yct-color-surface-panel);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text);
+  cursor: pointer;
+  font: inherit;
 }
 
-.transit-trip-label-pool-head {
+.transit-trip-label-pool-dialog {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: end;
-  gap: var(--yct-space-2);
+  gap: var(--yct-space-3);
+  width: min(720px, 94vw);
+  max-height: 88vh;
+  padding: var(--yct-space-4);
+  overflow-y: auto;
 }
 
-.transit-trip-label-pool-item label,
+.transit-trip-label-pool-dialog label,
 .transit-line-trip-label-fields label {
   display: grid;
   gap: 4px;
@@ -16858,8 +17116,8 @@ div.telegraph-output-scene.is-packing {
   font-weight: 700;
 }
 
-.transit-trip-label-pool-item textarea,
-.transit-trip-label-pool-item input,
+.transit-trip-label-pool-dialog textarea,
+.transit-trip-label-pool-dialog input,
 .transit-line-trip-label-fields input,
 .transit-line-trip-label-fields select {
   min-height: 32px;
@@ -16870,6 +17128,21 @@ div.telegraph-output-scene.is-packing {
   color: var(--yct-color-text);
   font: inherit;
   font-weight: 400;
+}
+
+.transit-trip-label-pool-limits {
+  display: grid;
+  gap: var(--yct-space-2);
+  margin: 0;
+  padding: var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+}
+
+.transit-trip-label-pool-limits > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--yct-space-2);
 }
 
 .transit-trip-label-batch {
@@ -17541,7 +17814,8 @@ div.telegraph-output-scene.is-packing {
   margin: var(--yct-space-1) 0 0;
 }
 
-.transit-line-schedule-chart-entry .section-heading > button {
+.transit-line-schedule-chart-entry .section-heading > button,
+.transit-line-schedule-chart-entry .section-heading > a {
   display: inline-flex;
   align-items: center;
   gap: var(--yct-space-1);
@@ -17555,10 +17829,13 @@ div.telegraph-output-scene.is-packing {
   font: inherit;
   font-size: 13px;
   font-weight: 700;
+  text-decoration: none;
 }
 
 .transit-line-schedule-chart-entry .section-heading > button:hover,
-.transit-line-schedule-chart-entry .section-heading > button:focus-visible {
+.transit-line-schedule-chart-entry .section-heading > button:focus-visible,
+.transit-line-schedule-chart-entry .section-heading > a:hover,
+.transit-line-schedule-chart-entry .section-heading > a:focus-visible {
   border-color: var(--yct-color-primary);
   background: color-mix(in srgb, var(--yct-color-primary) 9%, var(--yct-color-surface-panel));
   color: var(--yct-color-primary);
@@ -23586,7 +23863,7 @@ div.telegraph-output-scene.is-packing {
   min-width: 0;
 }
 
-.map-share-preview-footer-copy > img {
+.map-share-preview-footer-copy > :is(img, svg) {
   display: block;
   width: auto;
   max-width: 112px;
@@ -23600,7 +23877,7 @@ div.telegraph-output-scene.is-packing {
   color: var(--yct-color-text);
 }
 
-.map-share-preview-footer-brand img {
+.map-share-preview-footer-brand :is(img, svg) {
   width: 22px;
   height: 22px;
 }
@@ -30804,6 +31081,26 @@ dialog.client-dialog.is-page {
   color: var(--yct-color-text);
 }
 
+/* 浮层里把当前问题带到独立页 /ask，方便收藏或分享。 */
+.global-search-open-page {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  cursor: pointer;
+}
+
+.global-search-open-page:hover {
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 78%, transparent);
+  color: var(--yct-color-text);
+}
+
 .global-search-brand {
   position: relative;
   display: inline-flex;
@@ -30883,6 +31180,8 @@ dialog.client-dialog.is-page {
 /* 待机：每 6 秒眨一次眼。 */
 .global-search-brand[data-state='idle'] .smart-qa-icon-eyes {
   animation: smart-qa-blink 6s var(--yct-motion-easing-standard) infinite;
+  /* 眼睛跟随光标；偏移量由组件写入 CSS 变量，停止移动后通过 transition 回位。 */
+  translate: calc(var(--smart-qa-look-x, 0) * 1px) calc(var(--smart-qa-look-y, 0) * 1px);
 }
 
 /* 思考：两只眼睛整体下移表示低头，同时左右来回扫视像翻书。 */
@@ -30978,22 +31277,31 @@ dialog.client-dialog.is-page {
   }
 }
 
+/* 失败：快速左右平移两次，不做角度旋转。 */
 @keyframes smart-qa-shake {
   0%,
   100% {
-    transform: translateX(0) rotate(0deg);
+    transform: translateX(0);
   }
 
-  20% {
-    transform: translateX(-1.5px) rotate(-4deg);
+  15% {
+    transform: translateX(-2px);
   }
 
-  50% {
-    transform: translateX(1.5px) rotate(4deg);
+  35% {
+    transform: translateX(2px);
   }
 
-  80% {
-    transform: translateX(-1px) rotate(-2deg);
+  55% {
+    transform: translateX(-2px);
+  }
+
+  75% {
+    transform: translateX(2px);
+  }
+
+  90% {
+    transform: translateX(-0.8px);
   }
 }
 
@@ -31056,6 +31364,11 @@ dialog.client-dialog.is-page {
 :root[data-motion='reduced'] .global-search-brand .smart-qa-icon-badge {
   animation: none;
   transition: none;
+}
+
+/* 关闭动态效果时也不做光标注视，眼睛始终居中。 */
+:root[data-motion='reduced'] .global-search-brand[data-state='idle'] .smart-qa-icon-eyes {
+  translate: none;
 }
 
 .global-search-easter-egg {
@@ -31770,6 +32083,10 @@ dialog.client-dialog.is-page {
     transition: none;
   }
 
+  :root:not([data-motion='full']) .global-search-brand[data-state='idle'] .smart-qa-icon-eyes {
+    translate: none;
+  }
+
   .global-search-typing span,
   .global-search-conversation-assistant.is-streaming > span:first-child::after {
     animation: none;
@@ -32080,4 +32397,396 @@ dialog.client-dialog.is-page {
   height: 42px;
   border-radius: 8px;
   object-fit: cover;
+}
+
+/* 班次工作台：沿用线路工作台的全屏画布 + 悬浮面板 + 左下工具条骨架 */
+.transit-trip-chart-host {
+  position: absolute;
+  z-index: 1;
+  inset: var(--yct-topbar-height) 0 0;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.transit-trip-run-chart {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+.transit-trip-run-chart.is-tool-draw {
+  cursor: crosshair;
+}
+
+.transit-trip-run-chart.is-tool-move {
+  cursor: grab;
+}
+
+.transit-trip-run-chart.is-tool-pan:active {
+  cursor: grabbing;
+}
+
+.transit-trip-run-chart svg {
+  display: block;
+}
+
+.transit-trip-run-band {
+  fill: var(--yct-color-surface);
+}
+
+.transit-trip-run-band.is-alt {
+  fill: var(--yct-color-surface-muted);
+}
+
+.transit-trip-run-station-line {
+  stroke: color-mix(in srgb, var(--yct-color-border) 82%, transparent);
+  stroke-width: 1;
+}
+
+.transit-trip-run-station-label {
+  fill: var(--yct-color-text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.transit-trip-run-time-line {
+  stroke: color-mix(in srgb, var(--yct-color-border) 76%, transparent);
+  stroke-dasharray: 3 5;
+  stroke-width: 1;
+}
+
+.transit-trip-run-time-line.is-hour {
+  stroke: color-mix(in srgb, var(--yct-color-border) 96%, transparent);
+  stroke-dasharray: none;
+  stroke-width: 1.4;
+}
+
+.transit-trip-run-time-label {
+  fill: var(--yct-color-text-muted);
+  font-size: 11px;
+}
+
+.transit-trip-run-trip-line {
+  fill: none;
+  stroke-width: 2;
+  opacity: 0.72;
+}
+
+.transit-trip-run-trip-line.is-selected {
+  stroke-width: 3;
+  opacity: 1;
+}
+
+.transit-trip-run-node {
+  fill: var(--yct-color-surface);
+  stroke-width: 2;
+}
+
+.transit-trip-run-node.is-passing {
+  fill: transparent;
+  stroke-dasharray: 2 2;
+}
+
+.transit-trip-run-extend line {
+  stroke: var(--yct-color-text-secondary);
+  stroke-dasharray: 6 4;
+  stroke-width: 1.4;
+  opacity: 0.6;
+}
+
+.transit-trip-run-tooltip {
+  position: absolute;
+  z-index: 3;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgb(15 23 42 / 82%);
+  color: #fff;
+  font-size: 12px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* 左侧面板复用线路工作台的 .transit-visual-route-panel，仅追加列表区排版 */
+.transit-trip-panel {
+  max-height: calc(100dvh - var(--yct-topbar-height) - 190px);
+}
+
+.transit-trip-panel-body {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--yct-space-2);
+  min-height: 0;
+  padding: var(--yct-space-3);
+  overflow: hidden;
+}
+
+.transit-trip-direction {
+  margin: 0;
+}
+
+.transit-trip-direction button {
+  min-width: 56px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.transit-trip-pool-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: 8px;
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  text-align: left;
+}
+
+.transit-trip-pool-button:hover,
+.transit-trip-pool-button:focus-visible {
+  background: var(--yct-color-surface-muted);
+}
+
+.transit-trip-pool-button > .material-symbols-outlined {
+  color: var(--yct-color-primary-hover);
+  font-size: 21px;
+}
+
+.transit-trip-pool-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 6px;
+}
+
+.transit-trip-pool-action {
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--yct-color-border);
+  border-radius: 8px;
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-primary-hover);
+  cursor: pointer;
+}
+
+.transit-trip-pool-action:hover,
+.transit-trip-pool-action:focus-visible {
+  background: var(--yct-color-surface-muted);
+}
+
+.transit-trip-pool-action:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.transit-trip-pool-action.is-warning {
+  border-color: #d97706;
+  color: #d97706;
+}
+
+.transit-trip-pool-action > .material-symbols-outlined {
+  font-size: 21px;
+}
+
+.transit-trip-list {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.transit-trip-row {
+  display: grid;
+  gap: 6px;
+  padding: var(--yct-space-2);
+  border: 1px solid color-mix(in srgb, var(--yct-color-border) 72%, transparent);
+  border-left: 3px solid var(--trip-color, var(--yct-color-border));
+  border-radius: 8px;
+  background: var(--yct-color-surface-panel);
+}
+
+.transit-trip-row.is-selected {
+  box-shadow: inset 0 0 0 1px var(--yct-color-primary);
+}
+
+.transit-trip-row-main,
+.transit-trip-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.transit-trip-row input {
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: 6px;
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.transit-trip-row-main input[type='time'] {
+  width: 100px;
+}
+
+.transit-trip-row-main input[type='text'],
+.transit-trip-row-meta input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.transit-trip-row-meta .muted {
+  flex: 0 0 auto;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.transit-trip-row button {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  cursor: pointer;
+}
+
+.transit-trip-row button:hover,
+.transit-trip-row button:focus-visible {
+  background: var(--yct-color-surface-muted);
+}
+
+.transit-trip-row button.is-active {
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-primary-hover);
+}
+
+.transit-trip-row button > .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.transit-trip-panel-status {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.transit-trip-panel-status.is-error {
+  color: var(--yct-color-danger, #dc2626);
+}
+
+/* 左下角：新规则输入框与工具条上下排列 */
+.transit-trip-bottom {
+  position: absolute;
+  z-index: 5;
+  bottom: 20px;
+  left: 16px;
+  display: grid;
+  justify-items: stretch;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+}
+
+.transit-trip-rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--yct-color-border) 78%, transparent);
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 97%, transparent);
+  box-shadow: 0 10px 28px rgb(30 45 42 / 18%);
+}
+
+.transit-trip-rule input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.transit-trip-rule button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-primary);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.transit-trip-bottom .transit-visual-toolbar {
+  position: static;
+  width: 100%;
+}
+
+.transit-trip-toolbar button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+/* 缩放控制放右下，避免遮挡顶部时间刻度 */
+.transit-trip-viewport-controls {
+  top: auto;
+  right: 16px;
+  bottom: 20px;
+}
+
+/* 全屏工作台层级高于全局遮罩，标签池弹窗需要单独抬到编辑器之上 */
+.transit-trip-editor .modal-backdrop {
+  z-index: 120;
+}
+
+.transit-trip-pool-dialog {
+  width: min(560px, 92vw);
+}
+
+.transit-trip-pool-options {
+  display: grid;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.transit-trip-pool-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: 8px;
+}
+
+.transit-trip-pool-options small {
+  margin-left: auto;
+  color: var(--yct-color-text-muted);
 }

@@ -4,13 +4,13 @@ import {
   entityTranslationKey,
   listEntityTranslations,
 } from '../../../../lib/entity-translation-store';
-import { readTransitOverview } from '../../../../lib/transit-data';
+import { readTransitRealtimeOverview } from '../../../../lib/transit-data';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const [overview, translations] = await Promise.all([
-    readTransitOverview(),
+    readTransitRealtimeOverview(),
     listEntityTranslations(),
   ]);
   const translationMap = buildEntityTranslationMap(translations);

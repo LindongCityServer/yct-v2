@@ -9,13 +9,13 @@ import {
   createPublicJsonResponse,
   publicSiteUrl,
 } from '../../../../../../lib/public-api';
-import { readTransitOverview } from '../../../../../../lib/transit-data';
+import { readTransitRealtimeOverview } from '../../../../../../lib/transit-data';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   const [overview, translations] = await Promise.all([
-    readTransitOverview(),
+    readTransitRealtimeOverview(),
     listEntityTranslations(),
   ]);
   const translationMap = buildEntityTranslationMap(translations);

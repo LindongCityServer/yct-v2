@@ -55,6 +55,8 @@ interface EditorStationNode {
   boundPoiCategoryId?: string;
   boundPoiLabel?: string;
   boundPoiMarkerId?: string;
+  /** 站点可绑定多个 POI；第一个作为车站默认位置。 */
+  boundPoiRefs?: NonNullable<TransitStation['boundPoiRefs']>;
   coordinate: [number, number] | null;
   direction: Direction;
   draftClientId?: string;
@@ -97,6 +99,8 @@ interface PointerGesture {
   nodeId?: string;
   /** 拖动开始时该节点是否已绑定 POI，用于结束时区分「改绑」与「解绑」。 */
   hadPoiBinding?: boolean;
+  /** 拖动开始时绑定的主 POI；拖离 POI 时只移除该绑定，保留其他同站 POI。 */
+  startBoundPoiMarkerId?: string;
   /** 拖动过程中最近吸附到的 POI 名称；null 表示当前没有吸附。 */
   snapMarkerLabel?: string | null;
   startClientX: number;
@@ -148,6 +152,11 @@ export function AdminTransitLineMapEditor({
 }: Readonly<{ lineSourceId: string; revisionId: string }>) {
   const normalizedLineSourceId = decodeRouteIdentifier(lineSourceId);
   const normalizedRevisionId = decodeRouteIdentifier(revisionId);
+  // 关闭编辑器后回到后台，并自动重新打开该线路的编辑弹窗。
+  const backToAdminPath = `/admin/transit?section=lines&openLineId=${encodeURIComponent(
+    normalizedLineSourceId,
+  )}`;
+  const backToAdminHref = appPath(backToAdminPath);
   const router = useRouter();
   const stageRef = useRef<HTMLDivElement | null>(null);
   const gestureRef = useRef<PointerGesture | null>(null);
@@ -159,7 +168,7 @@ export function AdminTransitLineMapEditor({
   const [activeTool, setActiveTool] = useState<EditorTool>('pan');
   const [insertionMode, setInsertionMode] = useState<InsertionMode>('append');
   const [snapEnabled, setSnapEnabled] = useState(true);
-  const [controlDown, setControlDown] = useState(false);
+  const [altDown, setAltDown] = useState(false);
   const [shiftDown, setShiftDown] = useState(false);
   const [mapView, setMapView] = useState<MapView>(defaultView);
   const [viewportSize, setViewportSize] = useState<ViewportSize>({ height: 0, width: 0 });
@@ -379,8 +388,12 @@ export function AdminTransitLineMapEditor({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      setControlDown(event.ctrlKey);
+      setAltDown(event.altKey);
       setShiftDown(event.shiftKey);
+      // 单独按住 Alt 会激活浏览器菜单，尽量拦下，避免临时换工具时闪菜单。
+      if (event.key === 'Alt') {
+        event.preventDefault();
+      }
       if (isEditableKeyboardTarget(event.target)) {
         return;
       }
@@ -410,11 +423,11 @@ export function AdminTransitLineMapEditor({
       }
     };
     const handleKeyUp = (event: KeyboardEvent) => {
-      setControlDown(event.ctrlKey);
+      setAltDown(event.altKey);
       setShiftDown(event.shiftKey);
     };
     const handleBlur = () => {
-      setControlDown(false);
+      setAltDown(false);
       setShiftDown(false);
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -490,9 +503,9 @@ export function AdminTransitLineMapEditor({
     [data?.freshTileTemplate, data?.tileTemplate, mapView, viewportSize],
   );
   const effectiveTool: EditorTool =
-    controlDown && activeTool === 'station'
+    altDown && activeTool === 'station'
       ? 'waypoint'
-      : controlDown && activeTool === 'waypoint'
+      : altDown && activeTool === 'waypoint'
         ? 'station'
         : activeTool;
   const effectiveSnapEnabled = shiftDown ? !snapEnabled : snapEnabled;
@@ -546,8 +559,7 @@ export function AdminTransitLineMapEditor({
       }
       const rect = stage.getBoundingClientRect();
       const coordinate = unprojectClientPoint(clientX, clientY, rect, mapView);
-      const snapCandidates =
-        effectiveTool === 'station' ? stationSnapCandidates : pointMarkers;
+      const snapCandidates = effectiveTool === 'station' ? stationSnapCandidates : pointMarkers;
       const snapMarker = effectiveSnapEnabled
         ? findNearestSnapMarker(coordinate, snapCandidates, mapView.zoom, 48)
         : undefined;
@@ -568,6 +580,9 @@ export function AdminTransitLineMapEditor({
                   ...(node.kind === 'station'
                     ? {
                         boundPoiCategoryId: snapMarker?.categoryId,
+                        boundPoiRefs: snapMarker
+                          ? mergeStationBoundPoiRef(node.boundPoiRefs, snapMarker)
+                          : node.boundPoiRefs,
                         // 尚未命名的站点在绑定 POI 后直接套用 POI 名称。
                         name:
                           node.draftClientId && !node.name.trim() && snapMarker
@@ -732,6 +747,8 @@ export function AdminTransitLineMapEditor({
       pointerType: event.pointerType,
       nodeId: canMoveNode ? hitNode?.id : undefined,
       hadPoiBinding: canMoveNode ? Boolean(hitNode?.boundPoiMarkerId) : undefined,
+      startBoundPoiMarkerId:
+        canMoveNode && hitNode?.kind === 'station' ? hitNode.boundPoiMarkerId : undefined,
       startClientX: event.clientX,
       startClientY: event.clientY,
       startX: event.clientX,
@@ -832,19 +849,36 @@ export function AdminTransitLineMapEditor({
                 boundPoiMarkerId: snapMarker.id,
                 boundPoiLabel: snapMarker.label,
                 ...(node.kind === 'station'
-                  ? { boundPoiCategoryId: snapMarker.categoryId }
+                  ? {
+                      boundPoiCategoryId: snapMarker.categoryId,
+                      boundPoiRefs: mergeStationBoundPoiRef(node.boundPoiRefs, snapMarker),
+                    }
                   : {}),
               };
             }
             if (!effectiveSnapEnabled) {
               return { ...node, coordinate: nextCoordinate };
             }
+            if (node.kind === 'station') {
+              // 拖离 POI 时只解绑当前主 POI，站点绑定的其他 POI 继续保留。
+              const nextRefs = (node.boundPoiRefs ?? []).filter(
+                (ref) => ref.markerId !== gesture.startBoundPoiMarkerId,
+              );
+              const nextPrimaryRef = nextRefs[0];
+              return {
+                ...node,
+                coordinate: nextCoordinate,
+                boundPoiMarkerId: nextPrimaryRef?.markerId,
+                boundPoiLabel: nextPrimaryRef?.label,
+                boundPoiCategoryId: nextPrimaryRef?.categoryId,
+                boundPoiRefs: nextRefs,
+              };
+            }
             return {
               ...node,
               coordinate: nextCoordinate,
               boundPoiMarkerId: undefined,
               boundPoiLabel: undefined,
-              ...(node.kind === 'station' ? { boundPoiCategoryId: undefined } : {}),
             };
           }),
         );
@@ -1091,16 +1125,7 @@ export function AdminTransitLineMapEditor({
               z: node.coordinate![1],
               boundPoiMarkerId: node.boundPoiMarkerId,
               boundPoiLabel: node.boundPoiLabel,
-              boundPoiRefs:
-                node.boundPoiMarkerId && node.boundPoiLabel
-                  ? [
-                      {
-                        markerId: node.boundPoiMarkerId,
-                        label: node.boundPoiLabel,
-                        categoryId: node.boundPoiCategoryId,
-                      },
-                    ]
-                  : undefined,
+              boundPoiRefs: node.boundPoiRefs?.length ? node.boundPoiRefs : undefined,
             }),
           },
         );
@@ -1131,7 +1156,7 @@ export function AdminTransitLineMapEditor({
         reason: 'record_updated',
         occurredAt: new Date().toISOString(),
       });
-      router.push(appPath('/admin/transit'));
+      router.push(backToAdminHref);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '线路保存失败。');
     } finally {
@@ -1146,7 +1171,7 @@ export function AdminTransitLineMapEditor({
           route
         </span>
         <p>{status}</p>
-        <Link href={appPath('/admin/transit')}>返回线路后台</Link>
+        <Link href={backToAdminHref}>返回线路后台</Link>
       </main>
     );
   }
@@ -1154,7 +1179,7 @@ export function AdminTransitLineMapEditor({
   return (
     <main className="transit-visual-editor">
       <SecondaryPageHeader
-        backHref="/admin/transit"
+        backHref={backToAdminPath}
         secondaryActions={
           <button
             className="secondary-action-button is-primary"
@@ -1718,6 +1743,8 @@ function createExistingStationNode(
   routeNode?: Extract<TransitLineRouteNodeSnapshot, { kind: 'station' }>,
 ): EditorStationNode {
   const stationSourceId = routeNode?.stationSourceId ?? station?.sourceId ?? '';
+  const boundPoiRefs = getStationBoundPoiRefs(station);
+  const primaryBoundPoiRef = boundPoiRefs[0];
   return {
     id: `station-${stationSourceId || index}-${index}`,
     kind: 'station',
@@ -1725,10 +1752,54 @@ function createExistingStationNode(
     name: station?.name ?? stationSourceId,
     coordinate: station?.x !== undefined && station.z !== undefined ? [station.x, station.z] : null,
     direction: routeNode?.direction ?? 'both',
-    boundPoiMarkerId: station?.boundPoiMarkerId,
-    boundPoiLabel: station?.boundPoiLabel,
-    boundPoiCategoryId: station?.boundPoiRefs?.[0]?.categoryId,
+    boundPoiMarkerId: station?.boundPoiMarkerId ?? primaryBoundPoiRef?.markerId,
+    boundPoiLabel: station?.boundPoiLabel ?? primaryBoundPoiRef?.label,
+    boundPoiCategoryId: primaryBoundPoiRef?.categoryId,
+    boundPoiRefs,
   };
+}
+
+function getStationBoundPoiRefs(
+  station: TransitStation | undefined,
+): NonNullable<TransitStation['boundPoiRefs']> {
+  if (!station) {
+    return [];
+  }
+
+  const refs = (station.boundPoiRefs ?? []).filter(
+    (ref, index, all) =>
+      Boolean(ref.markerId.trim() && ref.label.trim()) &&
+      all.findIndex((item) => item.markerId === ref.markerId) === index,
+  );
+  const primaryMarkerId = station.boundPoiMarkerId?.trim();
+  const primaryLabel = station.boundPoiLabel?.trim();
+  if (primaryMarkerId && primaryLabel && !refs.some((ref) => ref.markerId === primaryMarkerId)) {
+    refs.unshift({ markerId: primaryMarkerId, label: primaryLabel });
+  }
+  const primaryIndex = primaryMarkerId
+    ? refs.findIndex((ref) => ref.markerId === primaryMarkerId)
+    : -1;
+  if (primaryIndex > 0) {
+    const primaryRef = refs.splice(primaryIndex, 1)[0];
+    if (primaryRef) {
+      refs.unshift(primaryRef);
+    }
+  }
+  return refs;
+}
+
+function mergeStationBoundPoiRef(
+  refs: EditorStationNode['boundPoiRefs'],
+  marker: MapMarkerSnapshot['markers'][number],
+): NonNullable<TransitStation['boundPoiRefs']> {
+  return [
+    {
+      markerId: marker.id,
+      label: marker.label,
+      categoryId: marker.categoryId,
+    },
+    ...(refs ?? []).filter((ref) => ref.markerId !== marker.id),
+  ];
 }
 
 function buildEditorSegmentPaths(

@@ -549,9 +549,26 @@ export interface TransitLineSnapshot {
     down?: Record<string, string>;
     up?: Record<string, string>;
   };
+  /**
+   * 线路发车规则中的特殊班次标注，键为首站发车时刻（HH:mm）。
+   * 用于没有班次实例时仍能在地图时刻表上体现快线/夜线性质、备注与短交路经停站。
+   */
+  specialTripsByDirection?: {
+    down?: Record<string, TransitLineSpecialTripSnapshot>;
+    up?: Record<string, TransitLineSpecialTripSnapshot>;
+  };
   operatingDateRule?: string;
   bookingUrl?: string;
   sourcePath?: string;
+}
+
+export interface TransitLineSpecialTripSnapshot {
+  /** 班次性质，例如“快线”“夜线”。 */
+  serviceNature?: string;
+  /** 班次备注，例如“原夜经济班次并入”。 */
+  routeNote?: string;
+  /** 短交路经停站名（按本方向站序）；缺省表示按整条线路站序停靠。 */
+  stationNames?: string[];
 }
 
 export interface TransitStationPoiBindingSnapshot {
@@ -839,6 +856,19 @@ export interface TransitTripLabelPool {
   id: string;
   name: string;
   labels: string[];
+  /** 最近一次批量添加所用的规则摘要，仅供后台列表回显。 */
+  ruleText?: string;
+  /** 最大连续班次数；不填表示不限制。 */
+  maxConsecutiveTrips?: number;
+  /**
+   * 最大连续值乘时长（分钟）：累计各段运行时间与终点短等待，
+   * 不包含达到上限后的强制休息。默认 240。
+   */
+  maxContinuousWorkMinutes?: number;
+  /** 达到连续班次或连续值乘上限后的强制休息时长（分钟）。默认 120。 */
+  mandatoryRestMinutes?: number;
+  createdAt?: ISODateTimeString;
+  createdBy?: string;
   updatedAt?: ISODateTimeString;
   updatedBy?: string;
 }
@@ -999,6 +1029,8 @@ export interface TravelTripInstance {
   serviceId?: string;
   serviceKind: TicketableServiceKind;
   serviceLabel: string;
+  /** 班次性质的自定义文本，例如“快速”“特快”“直达”，留空表示普通班次。 */
+  serviceNature?: string;
   departureTime: string;
   arrivalTime?: string;
   arrivalDayOffset?: number;
@@ -1100,7 +1132,11 @@ export interface TravelJourneyLeg {
   tripCode?: string;
   serviceKind: TicketableServiceKind;
   serviceLabel: string;
+  /** 班次性质，例如“快速”“特快”“直达”。 */
+  serviceNature?: string;
   lineName: string;
+  /** 班次备注，例如线路或经停说明。 */
+  routeNote?: string;
   fromStationName: string;
   toStationName: string;
   departureTime: string;
@@ -1466,6 +1502,8 @@ export interface MaterialGlyphConfig {
     | 'metro_wayfinding'
     | 'metro_line_map_modern'
     | 'metro_line_map_classic'
+    | 'metro_line_map_vertical_modern'
+    | 'metro_line_map_vertical_classic'
     | 'metro_station_name_modern'
     | 'metro_station_name_classic'
     | 'metro_direction_modern'

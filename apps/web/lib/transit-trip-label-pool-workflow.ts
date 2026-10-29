@@ -19,10 +19,12 @@ export async function listTransitTripLabelPools(): Promise<TransitTripLabelPool[
 
 export async function updateTransitTripLabelPools(input: {
   actorId: string;
+  actorName?: string;
   pools: TransitTripLabelPool[];
 }): Promise<TransitTripLabelPoolActionResult> {
   const pools = await writeTransitTripLabelPools({
     actorId: input.actorId,
+    actorName: input.actorName,
     pools: input.pools,
   });
   // 概览缓存里带有按标签池算出的班次标签，池内容变化后必须立即重算。

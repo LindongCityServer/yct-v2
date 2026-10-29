@@ -1,7 +1,20 @@
 import type { TransitTripLabelMode, TransitTripLabelPool } from '@yct/contracts';
+import {
+  resolveLegacySegmentMinutes,
+  resolveLineTotalMinutes,
+  type TransitSegmentPathLike,
+} from './transit-segment-minutes';
 
 export interface TransitTripLabelLineSource {
   id: string;
+  /** 线路大交路站序；用于判断车辆在终点站的就近接续。 */
+  stationNames?: string[];
+  /** 与 stationNames 同序的站点 ID，用于匹配 segmentPaths。 */
+  stationSourceIds?: string[];
+  /** 与 stationNames 同序的旧数据 travelTime，供区间用时兜底。 */
+  stopTravelTimes?: Array<number | undefined>;
+  /** 实测单班运行时长（分钟），优先于区间配置与兜底值。 */
+  tripDurationMinutes?: number;
   departureTimesByDirection?: {
     down?: string[];
     up?: string[];
@@ -14,7 +27,7 @@ export interface TransitTripLabelLineSource {
     down?: Record<string, string>;
     up?: Record<string, string>;
   };
-  segmentPaths?: Array<{ travelMinutes?: number }>;
+  segmentPaths?: TransitSegmentPathLike[];
 }
 
 export interface TransitTripLabelsByDirection {
@@ -33,6 +46,16 @@ export interface ResolveTransitTripLabelsInput {
 
 type Direction = 'down' | 'up';
 
+interface CandidateLabel {
+  label: string;
+  /** 最大连续班次数；undefined 表示不限制。 */
+  maxConsecutiveTrips?: number;
+  /** 最大连续值乘时长（分钟），累计运行与终点短等待，0 表示不限制。 */
+  maxContinuousWorkMinutes: number;
+  /** 达到上限后的强制休息时长（分钟）。 */
+  mandatoryRestMinutes: number;
+}
+
 interface TransitTripLabelAllocation {
   lineId: string;
   direction: Direction;
@@ -40,14 +63,33 @@ interface TransitTripLabelAllocation {
   ordinal: number;
   startMinutes: number;
   endMinutes: number;
+  /** 本班次首站，用于判断车辆是否正好在该站等待。 */
+  originStationName?: string;
+  /** 本方向的大交路终点，执行完班次后车辆固定停在这里。 */
+  destinationStationName?: string;
   manualLabel?: string;
   mode: TransitTripLabelMode;
-  candidates: string[];
+  candidates: CandidateLabel[];
+}
+
+interface TransitTripLabelRuntime {
+  /** 车辆当前所在的大交路终点。 */
+  location?: string;
+  availableAt: number;
+  consecutiveTrips: number;
+  continuousWorkMinutes: number;
+  /** 上一段连续值乘是否以强制休息收尾；休息结束后的额外等待不计入值乘。 */
+  resting: boolean;
+  maxConsecutiveTrips?: number;
+  maxContinuousWorkMinutes: number;
+  mandatoryRestMinutes: number;
 }
 
 const directionOrder: Direction[] = ['down', 'up'];
 const serviceDayBoundaryMinutes = 3 * 60;
 const defaultTripDurationMinutes = 60;
+const defaultMaxContinuousWorkMinutes = 240;
+const defaultMandatoryRestMinutes = 120;
 
 /** 抽取结果按北京时间自然日变化，跨日自动换一批。 */
 export function getTransitTripLabelServiceDateKey(date: Date = new Date()): string {
@@ -59,9 +101,10 @@ export function getTransitTripLabelServiceDateKey(date: Date = new Date()): stri
  *
  * 规则：
  * - 手动标签优先，直接占用对应时间窗且不参与抽取；
- * - 多个池按配置顺序合并去重后统一抽取；
+ * - 多个池按配置顺序合并去重后统一抽取，标签继承所属池的排班约束；
  * - 顺序模式按池内顺序轮转，随机模式按“日期 + 线路 + 方向”确定性洗牌，保证所有用户结果一致；
- * - 同一标签在时间窗重叠时只分配给一个班次（跨线路共享同一份占用表）。
+ * - 车辆执行完班次后停在该方向的大交路终点，下一班优先由“已在该首站等待”的车辆接续；
+ * - 连续值乘累计运行时间与终点短等待，达到班次数或时长上限后强制休息一段时间再重新开始。
  */
 export function resolveTransitTripLabels(
   input: ResolveTransitTripLabelsInput,
@@ -74,7 +117,8 @@ export function resolveTransitTripLabels(
   );
 
   for (const line of input.lines) {
-    const duration = resolveLineTripDuration(line.segmentPaths, fallbackDuration);
+    const duration = resolveLineTripDuration(line, fallbackDuration);
+    const stationNames = line.stationNames ?? [];
     for (const direction of directionOrder) {
       const departureTimes = line.departureTimesByDirection?.[direction] ?? [];
       if (departureTimes.length === 0) {
@@ -90,6 +134,10 @@ export function resolveTransitTripLabels(
       }
       const mode =
         line.tripLabelConfigByDirection?.[direction]?.mode === 'random' ? 'random' : 'sequential';
+      const originStationName =
+        direction === 'down' ? stationNames[0] : stationNames[stationNames.length - 1];
+      const destinationStationName =
+        direction === 'down' ? stationNames[stationNames.length - 1] : stationNames[0];
 
       departureTimes.forEach((departureTime, index) => {
         const startMinutes = toServiceMinutes(departureTime);
@@ -103,6 +151,8 @@ export function resolveTransitTripLabels(
           ordinal: index + 1,
           startMinutes,
           endMinutes: startMinutes + duration,
+          originStationName,
+          destinationStationName,
           manualLabel: manualLabels[departureTime]?.trim() || undefined,
           mode,
           candidates,
@@ -119,9 +169,8 @@ export function resolveTransitTripLabels(
       left.ordinal - right.ordinal,
   );
 
-  const labelFreeAt = new Map<string, number>();
-  const autoExcludedLabels = new Set<string>();
-  const candidatesByLineDirection = new Map<string, string[]>();
+  const runtimeByLabel = new Map<string, TransitTripLabelRuntime>();
+  const candidatesByLineDirection = new Map<string, CandidateLabel[]>();
   const cursorByLineDirection = new Map<string, number>();
   const result = new Map<string, TransitTripLabelsByDirection>();
 
@@ -129,9 +178,15 @@ export function resolveTransitTripLabels(
     if (!allocation.manualLabel) {
       continue;
     }
-    // 手动标签固定给该班次，且当天不再参与任何自动抽取。
-    autoExcludedLabels.add(allocation.manualLabel);
-    reserveLabel(labelFreeAt, allocation.manualLabel, allocation.endMinutes);
+    // 手动标签固定给该班次，同时占用对应车辆的运行时，
+    // 让其它线路的自动抽取避开同一时间窗，避免跨线路同车冲突。
+    const manualCandidate =
+      allocation.candidates.find((candidate) => candidate.label === allocation.manualLabel) ?? {
+        label: allocation.manualLabel,
+        maxContinuousWorkMinutes: defaultMaxContinuousWorkMinutes,
+        mandatoryRestMinutes: defaultMandatoryRestMinutes,
+      };
+    applyAllocation(runtimeByLabel, manualCandidate, allocation);
     writeLabel(result, allocation, allocation.manualLabel);
   }
 
@@ -140,77 +195,193 @@ export function resolveTransitTripLabels(
       continue;
     }
     const key = `${allocation.lineId}|${allocation.direction}`;
-    let candidates = candidatesByLineDirection.get(key);
-    if (!candidates) {
-      const poolLabels = allocation.candidates.filter((label) => !autoExcludedLabels.has(label));
-      candidates =
+    if (!candidatesByLineDirection.has(key)) {
+      candidatesByLineDirection.set(
+        key,
         allocation.mode === 'random'
-          ? shuffleDeterministically(poolLabels, `${input.dateKey}|${key}`)
-          : poolLabels;
-      candidatesByLineDirection.set(key, candidates);
+          ? shuffleDeterministically(allocation.candidates, `${input.dateKey}|${key}`)
+          : allocation.candidates,
+      );
     }
+    const candidates = candidatesByLineDirection.get(key)!;
     if (candidates.length === 0) {
       continue;
     }
 
     const cursor = cursorByLineDirection.get(key) ?? 0;
-    let picked: string | undefined;
-    for (let offset = 0; offset < candidates.length; offset += 1) {
-      const index = (cursor + offset) % candidates.length;
-      const label = candidates[index]!;
-      if ((labelFreeAt.get(label) ?? 0) <= allocation.startMinutes) {
-        picked = label;
-        cursorByLineDirection.set(key, (index + 1) % candidates.length);
-        break;
-      }
-    }
+    const picked = pickCandidate(candidates, cursor, allocation, runtimeByLabel);
     if (!picked) {
       continue;
     }
 
-    reserveLabel(labelFreeAt, picked, allocation.endMinutes);
-    writeLabel(result, allocation, picked);
+    cursorByLineDirection.set(key, (picked.index + 1) % candidates.length);
+    applyAllocation(runtimeByLabel, picked.candidate, allocation);
+    writeLabel(result, allocation, picked.candidate.label);
   }
 
   return result;
 }
 
+/**
+ * 优先选择正好停在班次首站的车辆，其次才考虑调其他可用车辆；
+ * 两种情况都按候选顺序取第一辆，保证顺序/随机模式的轮转语义不变。
+ */
+function pickCandidate(
+  candidates: readonly CandidateLabel[],
+  cursor: number,
+  allocation: TransitTripLabelAllocation,
+  runtimeByLabel: ReadonlyMap<string, TransitTripLabelRuntime>,
+): { candidate: CandidateLabel; index: number } | undefined {
+  let fallback: { candidate: CandidateLabel; index: number } | undefined;
+  for (let offset = 0; offset < candidates.length; offset += 1) {
+    const index = (cursor + offset) % candidates.length;
+    const candidate = candidates[index]!;
+    const runtime = runtimeByLabel.get(candidate.label);
+    const availableAt = runtime?.availableAt ?? Number.NEGATIVE_INFINITY;
+    if (availableAt > allocation.startMinutes) {
+      continue;
+    }
+    if (allocation.originStationName && runtime?.location === allocation.originStationName) {
+      return { candidate, index };
+    }
+    if (!fallback) {
+      fallback = { candidate, index };
+    }
+  }
+  return fallback;
+}
+
+function applyAllocation(
+  runtimeByLabel: Map<string, TransitTripLabelRuntime>,
+  candidate: CandidateLabel,
+  allocation: TransitTripLabelAllocation,
+): void {
+  const runtime = ensureRuntime(runtimeByLabel, candidate);
+  const waitMinutes = Number.isFinite(runtime.availableAt)
+    ? Math.max(0, allocation.startMinutes - runtime.availableAt)
+    : 0;
+  // 强制休息期间的等待不计入连续值乘，其他终点短等待计入。
+  if (!runtime.resting) {
+    runtime.continuousWorkMinutes += waitMinutes;
+  }
+  runtime.resting = false;
+  runtime.consecutiveTrips += 1;
+  runtime.continuousWorkMinutes += allocation.endMinutes - allocation.startMinutes;
+  runtime.location = allocation.destinationStationName;
+  runtime.availableAt = allocation.endMinutes;
+
+  const reachedTripLimit =
+    runtime.maxConsecutiveTrips !== undefined &&
+    runtime.consecutiveTrips >= runtime.maxConsecutiveTrips;
+  const reachedWorkLimit =
+    runtime.maxContinuousWorkMinutes > 0 &&
+    runtime.continuousWorkMinutes >= runtime.maxContinuousWorkMinutes;
+  if (!reachedTripLimit && !reachedWorkLimit) {
+    return;
+  }
+
+  runtime.availableAt = allocation.endMinutes + runtime.mandatoryRestMinutes;
+  runtime.consecutiveTrips = 0;
+  runtime.continuousWorkMinutes = 0;
+  runtime.resting = true;
+}
+
+function ensureRuntime(
+  runtimeByLabel: Map<string, TransitTripLabelRuntime>,
+  candidate: CandidateLabel,
+): TransitTripLabelRuntime {
+  let runtime = runtimeByLabel.get(candidate.label);
+  if (!runtime) {
+    runtime = {
+      availableAt: Number.NEGATIVE_INFINITY,
+      consecutiveTrips: 0,
+      continuousWorkMinutes: 0,
+      resting: false,
+      maxConsecutiveTrips: candidate.maxConsecutiveTrips,
+      maxContinuousWorkMinutes: candidate.maxContinuousWorkMinutes,
+      mandatoryRestMinutes: candidate.mandatoryRestMinutes,
+    };
+    runtimeByLabel.set(candidate.label, runtime);
+  }
+  return runtime;
+}
+
 function collectCandidateLabels(
   poolIds: readonly string[] | undefined,
   poolById: ReadonlyMap<string, TransitTripLabelPool>,
-): string[] {
-  const labels: string[] = [];
+): CandidateLabel[] {
+  const candidates: CandidateLabel[] = [];
   const seen = new Set<string>();
   for (const poolId of poolIds ?? []) {
     const pool = poolById.get(poolId);
     if (!pool) {
       continue;
     }
+    const limits = resolvePoolLimits(pool);
     for (const label of pool.labels) {
       const trimmed = label.trim();
       if (!trimmed || seen.has(trimmed)) {
         continue;
       }
       seen.add(trimmed);
-      labels.push(trimmed);
+      candidates.push({ label: trimmed, ...limits });
     }
   }
-  return labels;
+  return candidates;
 }
 
-function resolveLineTripDuration(
-  segmentPaths: Array<{ travelMinutes?: number }> | undefined,
-  fallback: number,
-): number {
-  const total = (segmentPaths ?? []).reduce((sum, segment) => {
+function resolvePoolLimits(pool: TransitTripLabelPool): Omit<CandidateLabel, 'label'> {
+  return {
+    maxConsecutiveTrips:
+      pool.maxConsecutiveTrips !== undefined && pool.maxConsecutiveTrips > 0
+        ? Math.floor(pool.maxConsecutiveTrips)
+        : undefined,
+    maxContinuousWorkMinutes:
+      pool.maxContinuousWorkMinutes === undefined
+        ? defaultMaxContinuousWorkMinutes
+        : Math.max(0, pool.maxContinuousWorkMinutes),
+    mandatoryRestMinutes:
+      pool.mandatoryRestMinutes === undefined
+        ? defaultMandatoryRestMinutes
+        : Math.max(0, pool.mandatoryRestMinutes),
+  };
+}
+
+function resolveLineTripDuration(line: TransitTripLabelLineSource, fallback: number): number {
+  // 实测时长优先：区间配置缺失时，班次实例的首末时刻比固定 60 分钟更可靠。
+  if (
+    line.tripDurationMinutes !== undefined &&
+    Number.isFinite(line.tripDurationMinutes) &&
+    line.tripDurationMinutes > 0
+  ) {
+    return line.tripDurationMinutes;
+  }
+
+  // 逐段优先：后台区间用时优先，缺失段用旧数据 travelTime 兜底。
+  const stationSourceIds = line.stationSourceIds ?? [];
+  const merged =
+    stationSourceIds.length >= 2
+      ? resolveLineTotalMinutes({
+          segmentPaths: line.segmentPaths,
+          stationSourceIds,
+          stopTravelTimes: line.stopTravelTimes,
+        })
+      : undefined;
+  if (merged !== undefined) {
+    return merged;
+  }
+
+  const configured = (line.segmentPaths ?? []).reduce((sum, segment) => {
     const minutes = segment.travelMinutes;
     return minutes !== undefined && Number.isFinite(minutes) && minutes > 0 ? sum + minutes : sum;
   }, 0);
-  return total > 0 ? total : fallback;
-}
-
-function reserveLabel(labelFreeAt: Map<string, number>, label: string, endMinutes: number): void {
-  labelFreeAt.set(label, Math.max(labelFreeAt.get(label) ?? 0, endMinutes));
+  if (configured > 0) {
+    return configured;
+  }
+  if (line.stopTravelTimes?.length) {
+    return resolveLegacySegmentMinutes(line.stopTravelTimes).totalMinutes ?? fallback;
+  }
+  return fallback;
 }
 
 function writeLabel(

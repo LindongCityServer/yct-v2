@@ -374,6 +374,7 @@ export interface TransitDataRevisionLineUpdatedPayload {
     | 'departureRulesByDirection'
     | 'tripLabelConfigByDirection'
     | 'tripLabelsByDirection'
+    | 'specialTripsByDirection'
     | 'operatingDateRule'
     | 'bookingUrl'
   >;
@@ -1131,6 +1132,7 @@ export interface TravelScheduleTripEditedPayload {
   changedFields: Array<
     | 'tripCode'
     | 'serviceKind'
+    | 'serviceNature'
     | 'departureTime'
     | 'arrivalTime'
     | 'arrivalDayOffset'
@@ -1213,6 +1215,40 @@ export interface TravelScheduleTripApprovalChangedPayload {
   nextStatus: TransitItemApprovalStatus;
   actorId: string;
   changedAt: ISODateTimeString;
+  reason?: string;
+}
+
+export interface TransitLinesApprovalBatchChangedPayload {
+  datasetId: string;
+  revisionId: string;
+  lineSourceIds: string[];
+  previousStatuses: Record<string, TransitItemApprovalStatus>;
+  nextStatus?: TransitItemApprovalStatus;
+  action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive';
+  actorId: string;
+  changedAt: ISODateTimeString;
+  reason?: string;
+}
+
+export interface TravelScheduleTripsBatchMutatedPayload {
+  scheduleServiceId: string;
+  revisionId: string;
+  updatedBy: string;
+  updatedAt: ISODateTimeString;
+  createdTripInstanceIds: string[];
+  updatedTripInstanceIds: string[];
+  changedFields: string[];
+}
+
+export interface TravelScheduleTripsApprovalBatchChangedPayload {
+  scheduleServiceId: string;
+  revisionId: string;
+  actorId: string;
+  changedAt: ISODateTimeString;
+  action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive';
+  tripInstanceIds: string[];
+  previousStatuses: Record<string, TransitItemApprovalStatus>;
+  nextStatus?: TransitItemApprovalStatus;
   reason?: string;
 }
 
@@ -1450,6 +1486,9 @@ export type YctEventPayloadMap = {
   TravelScheduleTripCreated: TravelScheduleTripCreatedPayload;
   TravelScheduleTripDeleted: TravelScheduleTripDeletedPayload;
   TravelScheduleTripApprovalChanged: TravelScheduleTripApprovalChangedPayload;
+  TravelScheduleTripsBatchMutated: TravelScheduleTripsBatchMutatedPayload;
+  TravelScheduleTripsApprovalBatchChanged: TravelScheduleTripsApprovalBatchChangedPayload;
+  TransitLinesApprovalBatchChanged: TransitLinesApprovalBatchChangedPayload;
   TravelSchedulePublished: TravelSchedulePublishedPayload;
   TravelScheduleServiceProfileCreated: TravelScheduleServiceProfileCreatedPayload;
   TravelScheduleServiceProfileDeleted: TravelScheduleServiceProfileDeletedPayload;

@@ -39,6 +39,7 @@ export async function PUT(request: NextRequest) {
 
   const result = await updateTransitTripLabelPools({
     actorId: admin.ldpassUserId,
+    actorName: admin.username,
     pools: parsed.data.pools,
   });
   if (!result.ok) {

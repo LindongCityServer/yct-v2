@@ -1,5 +1,6 @@
 'use client';
 
+import { trackAnalyticsEvent } from '../lib/analytics/client';
 import { requestConfirmation } from '../lib/client-dialog-events';
 
 import type {
@@ -329,6 +330,11 @@ export function TravelScheduleQueryPanel({
     }
     setJourneyOrderBusy(true);
     setJourneyStatusText(t('travelSchedule.journey.holding'));
+    trackAnalyticsEvent('ticket.order.started', {
+      leg_count: journey.legs.length,
+      passenger_count: 1,
+    });
+    let reported = false;
     try {
       const response = await fetch(appPath('/api/travel/ticketing/journeys'), {
         method: 'POST',
@@ -350,17 +356,26 @@ export function TravelScheduleQueryPanel({
           message: t('travelSchedule.order.loginRequired'),
         })
       ) {
+        reported = true;
+        trackAnalyticsEvent('ticket.order.failed', { reason: 'login_required' });
         return;
       }
       if (!response.ok || !data.item) {
+        reported = true;
+        trackAnalyticsEvent('ticket.order.failed', { reason: 'server_rejected' });
         throw new Error(data.message ?? t('travelSchedule.journey.orderFailed'));
       }
+      reported = true;
+      trackAnalyticsEvent('ticket.order.succeeded', { order_count: data.item.orders.length });
       setJourneyStatusText(
         t('travelSchedule.journey.orderCreated', { count: data.item.orders.length }),
       );
       await refreshTicketOrders();
       notifyTicketOrderStateChanged();
     } catch (error) {
+      if (!reported) {
+        trackAnalyticsEvent('ticket.order.failed', { reason: 'exception' });
+      }
       setJourneyStatusText(
         error instanceof Error ? error.message : t('travelSchedule.journey.orderFailed'),
       );
@@ -1063,7 +1078,10 @@ function ScheduleTripCard({
         </span>
         <div className="schedule-trip-title">
           <strong>{formatTripHeading(trip, t)}</strong>
-          <span>{trip.serviceLabel}</span>
+          <span>
+            {trip.serviceNature ? `${trip.serviceNature} · ` : ''}
+            {trip.serviceLabel}
+          </span>
         </div>
         <div className="schedule-trip-fare">
           <span>{t('travelSchedule.trip.fare')}</span>

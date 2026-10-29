@@ -6,6 +6,7 @@ import type {
   TransitLineRouteNodeSnapshot,
   TransitLineSegmentPathSnapshot,
   TransitLineSnapshot,
+  TransitLineSpecialTripSnapshot,
   TransitLineStopLocationRef,
   TransitOperationStatus,
   TransitModeSnapshotSummary,
@@ -29,6 +30,7 @@ import {
 import { readRuntimeConfig, type RuntimeConfig } from './runtime-config';
 import { createTimedCache } from './server-cache';
 import { resolveDirectionalDepartureTimes } from './transit-departure-editor';
+import type { TransitTripInstance } from './transit-realtime';
 
 export interface TransitLineSummary {
   id: string;
@@ -60,6 +62,13 @@ export interface TransitLineSummary {
     down?: Record<string, string>;
     up?: Record<string, string>;
   };
+  /** 线路规则中的特殊班次标注：键为首站发车时刻（HH:mm）。 */
+  specialTripsByDirection?: {
+    down?: Record<string, TransitLineSpecialTripSnapshot>;
+    up?: Record<string, TransitLineSpecialTripSnapshot>;
+  };
+  /** 已发布班次实例（仅实时公交接口附加），供到站与车辆位置按实际停站推算。 */
+  tripInstances?: TransitTripInstance[];
   bookingUrl?: string;
   routeMode?: TransitLineRouteMode;
   routeNodes?: TransitLineRouteNodeSnapshot[];
@@ -434,6 +443,7 @@ export function buildTransitOverview(
       departureTimesByDirection: resolveTransitDepartureTimesByDirection(line),
       tripLabelConfigByDirection: line.tripLabelConfigByDirection,
       tripLabelsByDirection: line.tripLabelsByDirection,
+      specialTripsByDirection: line.specialTripsByDirection,
       bookingUrl: line.bookingUrl,
       routeMode: line.routeMode,
       routeNodes: line.routeNodes,

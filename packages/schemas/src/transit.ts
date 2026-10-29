@@ -149,6 +149,20 @@ export const transitTripLabelPoolSchema = z.object({
   id: idSchema,
   name: z.string().trim().min(1).max(40),
   labels: z.array(z.string().trim().min(1).max(40)).max(2000),
+  ruleText: z.string().trim().max(120).optional(),
+  maxConsecutiveTrips: z.number().int().min(0).max(999).optional(),
+  maxContinuousWorkMinutes: z
+    .number()
+    .int()
+    .min(0)
+    .max(24 * 60)
+    .optional(),
+  mandatoryRestMinutes: z
+    .number()
+    .int()
+    .min(0)
+    .max(24 * 60)
+    .optional(),
 });
 
 export const transitTripLabelPoolsUpdateSchema = z.object({
@@ -249,6 +263,30 @@ export const transitLineDraftSchema = z.object({
         .optional(),
     })
     .optional(),
+  specialTripsByDirection: z
+    .object({
+      down: z
+        .record(
+          z.string().regex(/^\d{1,2}:\d{2}$/u),
+          z.object({
+            serviceNature: z.string().trim().max(20).optional(),
+            routeNote: z.string().trim().max(200).optional(),
+            stationNames: z.array(z.string().trim().min(1).max(80)).min(2).max(80).optional(),
+          }),
+        )
+        .optional(),
+      up: z
+        .record(
+          z.string().regex(/^\d{1,2}:\d{2}$/u),
+          z.object({
+            serviceNature: z.string().trim().max(20).optional(),
+            routeNote: z.string().trim().max(200).optional(),
+            stationNames: z.array(z.string().trim().min(1).max(80)).min(2).max(80).optional(),
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
   operatingDateRule: z.string().trim().max(240).optional(),
   bookingUrl: z.string().trim().max(500).optional(),
   stationDrafts: z.array(transitVisualStationDraftSchema).max(128).optional(),
@@ -257,6 +295,7 @@ export const transitLineDraftSchema = z.object({
 export const travelScheduleTripUpdateSchema = z.object({
   tripCode: z.string().trim().max(80).optional(),
   serviceKind: ticketableServiceKindSchema.optional(),
+  serviceNature: z.string().trim().max(20).optional(),
   departureTime: z.string().trim().min(1).max(40).optional(),
   arrivalTime: z.string().trim().max(40).optional(),
   arrivalDayOffset: z.number().int().min(0).max(7).optional(),
@@ -304,6 +343,31 @@ export const travelScheduleTripDraftSchema = travelScheduleTripUpdateSchema.exte
   lineName: z.string().trim().min(1).max(120),
   stationNames: z.array(z.string().trim().min(1).max(80)).min(1).max(80),
   availability: travelTripAvailabilitySchema.default('ticketing_unavailable'),
+});
+
+export const travelScheduleTripBatchMutationSchema = z.object({
+  updates: z
+    .array(
+      z.object({
+        tripInstanceId: z.string().trim().min(1).max(120),
+        patch: travelScheduleTripUpdateSchema,
+      }),
+    )
+    .max(500)
+    .optional(),
+  creates: z.array(travelScheduleTripDraftSchema).max(200).optional(),
+});
+
+export const travelScheduleTripBatchApprovalSchema = z.object({
+  tripInstanceIds: z.array(z.string().trim().min(1).max(120)).min(1).max(500),
+  action: z.enum(['submit', 'approve', 'reject', 'publish', 'archive']),
+  reason: z.string().trim().max(240).optional(),
+});
+
+export const transitLineBatchApprovalSchema = z.object({
+  lineSourceIds: z.array(z.string().trim().min(1).max(160)).min(1).max(500),
+  action: z.enum(['submit', 'approve', 'reject', 'publish', 'archive']),
+  reason: z.string().trim().max(240).optional(),
 });
 
 export const transitStationCoordinateUpdateSchema = z.object({

@@ -15,6 +15,12 @@ const cacheInvalidationEventTypes = [
   'TransitModeProfileCreated',
   'TransitModeProfileDeleted',
   'TransitModeProfileUpdated',
+  'TravelSchedulePublished',
+  'TravelScheduleTripEdited',
+  'TravelScheduleTripTimingUpdated',
+  'TravelScheduleTripCreated',
+  'TravelScheduleTripDeleted',
+  'TravelScheduleTripApprovalChanged',
 ] as const satisfies readonly YctEventType[];
 
 let registered = false;

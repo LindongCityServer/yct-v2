@@ -41,6 +41,7 @@ export interface TravelScheduleRevisionActionResult {
 export type TravelScheduleTripEditableField =
   | 'tripCode'
   | 'serviceKind'
+  | 'serviceNature'
   | 'departureTime'
   | 'arrivalTime'
   | 'arrivalDayOffset'
@@ -65,6 +66,12 @@ export type TravelScheduleTripEditableField =
 export type TravelScheduleTripUpdatePatch = Partial<
   Pick<TravelTripInstance, TravelScheduleTripEditableField>
 >;
+
+/** 新增班次的入参，供单条与批量保存共用。 */
+export type TravelScheduleTripCreateInput = TravelScheduleTripUpdatePatch &
+  Pick<TravelTripInstance, 'serviceKind' | 'departureTime' | 'lineName' | 'stationNames'> & {
+    availability: TravelTripInstance['availability'];
+  };
 
 export async function listAdminTravelScheduleRevisions(): Promise<TravelScheduleRevision[]> {
   return listTravelScheduleRevisions();
@@ -376,10 +383,7 @@ export async function updateTravelScheduleTrip(input: {
 export async function createTravelScheduleTrip(input: {
   revisionId: string;
   actorId: string;
-  trip: TravelScheduleTripUpdatePatch &
-    Pick<TravelTripInstance, 'serviceKind' | 'departureTime' | 'lineName' | 'stationNames'> & {
-      availability: TravelTripInstance['availability'];
-    };
+  trip: TravelScheduleTripCreateInput;
 }): Promise<TravelScheduleRevisionActionResult> {
   const revision = await findTravelScheduleRevision(input.revisionId);
   if (!revision) {
@@ -411,6 +415,181 @@ export async function createTravelScheduleTrip(input: {
       lineName: trip.lineName,
       createdBy: input.actorId,
       createdAt,
+    });
+  }
+
+  return { ok: true, revision: updated };
+}
+
+/**
+ * 批量保存班次：新增与修正合并为一次版本写入，避免工作台逐条 PATCH 造成长时间串行保存。
+ */
+export async function mutateTravelScheduleTrips(input: {
+  revisionId: string;
+  actorId: string;
+  updates?: Array<{ tripInstanceId: string; patch: TravelScheduleTripUpdatePatch }>;
+  creates?: TravelScheduleTripCreateInput[];
+}): Promise<TravelScheduleRevisionActionResult> {
+  const revision = await findTravelScheduleRevision(input.revisionId);
+  if (!revision) {
+    return notFound();
+  }
+  if (!canEditTravelScheduleRevisionTripStatus(revision.status)) {
+    return invalidTransition('当前班次版本状态不允许保存班次。');
+  }
+
+  const updates = input.updates ?? [];
+  const creates = input.creates ?? [];
+  if (updates.length === 0 && creates.length === 0) {
+    return { ok: true, revision };
+  }
+
+  const nextTrips = [...revision.trips];
+  const createdTripInstanceIds: string[] = [];
+  const updatedTripInstanceIds: string[] = [];
+  const changedFields = new Set<string>();
+  let timingChanged = false;
+
+  for (const update of updates) {
+    const index = nextTrips.findIndex(
+      (trip) => trip.tripInstanceId === update.tripInstanceId,
+    );
+    if (index < 0) {
+      return {
+        ok: false,
+        status: 404,
+        error: 'travel_schedule_trip_not_found',
+        message: '班次不存在。',
+      };
+    }
+    const current = nextTrips[index]!;
+    const nextTrip = normalizeTravelScheduleTripPatch(current, update.patch, revision.services);
+    const entryChangedFields = getChangedTravelScheduleTripFields(current, nextTrip);
+    if (entryChangedFields.length === 0) {
+      continue;
+    }
+    nextTrips[index] = nextTrip;
+    updatedTripInstanceIds.push(update.tripInstanceId);
+    entryChangedFields.forEach((field) => changedFields.add(field));
+    if (entryChangedFields.includes('stopTimes') || entryChangedFields.includes('timingSource')) {
+      timingChanged = true;
+    }
+  }
+
+  for (const create of creates) {
+    const trip = buildCreatedTravelScheduleTrip(create, revision.services);
+    nextTrips.push(trip);
+    createdTripInstanceIds.push(trip.tripInstanceId);
+  }
+
+  if (updatedTripInstanceIds.length === 0 && createdTripInstanceIds.length === 0) {
+    return { ok: true, revision };
+  }
+
+  const publishedValidationError = getPublishedTravelScheduleMutationError(revision, nextTrips);
+  if (publishedValidationError) {
+    return invalidTransition(publishedValidationError);
+  }
+
+  const updatedAt = new Date().toISOString();
+  const updated = await updateTravelScheduleRevision(input.revisionId, (current) =>
+    applyTravelScheduleTripMutation(current, nextTrips),
+  );
+
+  if (updated) {
+    clearTravelScheduleQueryCache();
+    await emitEvent('TravelScheduleTripsBatchMutated', input.actorId, {
+      scheduleServiceId: updated.scheduleServiceId,
+      revisionId: updated.revisionId,
+      updatedBy: input.actorId,
+      updatedAt,
+      createdTripInstanceIds,
+      updatedTripInstanceIds,
+      changedFields: Array.from(changedFields),
+    });
+    if (timingChanged) {
+      await emitTravelScheduleConflictEvent(updated, input.actorId, updatedAt);
+    }
+  }
+
+  return { ok: true, revision: updated };
+}
+
+/**
+ * 批量审批班次：整批一次写入；任一班次状态不允许该动作时整批拒绝，避免半成功。
+ */
+export async function updateTravelScheduleTripsApprovalStatus(input: {
+  revisionId: string;
+  tripInstanceIds: string[];
+  actorId: string;
+  action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive';
+  reason?: string;
+}): Promise<TravelScheduleRevisionActionResult> {
+  const revision = await findTravelScheduleRevision(input.revisionId);
+  if (!revision) {
+    return notFound();
+  }
+
+  const targetIds = Array.from(new Set(input.tripInstanceIds));
+  const previousStatuses: Record<string, string> = {};
+  let nextStatus: string | undefined;
+  for (const tripInstanceId of targetIds) {
+    const trip = revision.trips.find((item) => item.tripInstanceId === tripInstanceId);
+    if (!trip) {
+      return {
+        ok: false,
+        status: 404,
+        error: 'travel_schedule_trip_not_found',
+        message: `班次 ${tripInstanceId} 不存在。`,
+      };
+    }
+    const previousStatus = getTravelScheduleTripApprovalStatus(trip, revision.status);
+    const status = getNextTravelScheduleItemApprovalStatus(previousStatus, input.action);
+    if (!status) {
+      return invalidTransition('当前班次状态不允许执行该审批动作。');
+    }
+    if (nextStatus && status !== nextStatus) {
+      return invalidTransition('所选班次的审批结果不一致，请分批处理。');
+    }
+    nextStatus = status;
+    previousStatuses[tripInstanceId] = previousStatus;
+  }
+
+  if (!nextStatus) {
+    return invalidTransition('没有可处理的班次。');
+  }
+
+  const changedAt = new Date().toISOString();
+  const nextTrips = revision.trips.map((trip) =>
+    targetIds.includes(trip.tripInstanceId)
+      ? withTravelScheduleItemApprovalFields(
+          trip,
+          nextStatus as TransitItemApprovalStatus,
+          input.actorId,
+          changedAt,
+          input.reason,
+        )
+      : trip,
+  );
+  const updated = await updateTravelScheduleRevision(input.revisionId, (current) => ({
+    ...current,
+    trips: nextTrips,
+  }));
+
+  if (updated) {
+    if (nextStatus === 'published' || nextStatus === 'archived') {
+      clearTravelScheduleQueryCache();
+    }
+    await emitEvent('TravelScheduleTripsApprovalBatchChanged', input.actorId, {
+      scheduleServiceId: updated.scheduleServiceId,
+      revisionId: updated.revisionId,
+      actorId: input.actorId,
+      changedAt,
+      action: input.action,
+      tripInstanceIds: targetIds,
+      previousStatuses: previousStatuses as Record<string, TransitItemApprovalStatus>,
+      nextStatus: nextStatus as TransitItemApprovalStatus,
+      reason: input.reason,
     });
   }
 
@@ -566,6 +745,10 @@ function normalizeTravelScheduleTripPatch(
     serviceKind: nextServiceKind,
     serviceId: nextServiceSummary?.serviceId ?? trip.serviceId,
     serviceLabel: nextServiceSummary?.label ?? trip.serviceLabel,
+    serviceNature:
+      patch.serviceNature === undefined
+        ? trip.serviceNature
+        : optionalTrimmedString(patch.serviceNature),
     departureTime:
       patch.departureTime?.trim() ||
       (patch.stopTimes ? firstStoppingTime?.departureTime : undefined) ||
@@ -639,6 +822,7 @@ function getChangedTravelScheduleTripFields(
   const fields: TravelScheduleTripEditableField[] = [
     'tripCode',
     'serviceKind',
+    'serviceNature',
     'departureTime',
     'arrivalTime',
     'arrivalDayOffset',
@@ -673,10 +857,7 @@ function getChangedTravelScheduleTripFields(
 }
 
 function buildCreatedTravelScheduleTrip(
-  patch: TravelScheduleTripUpdatePatch &
-    Pick<TravelTripInstance, 'serviceKind' | 'departureTime' | 'lineName' | 'stationNames'> & {
-      availability: TravelTripInstance['availability'];
-    },
+  patch: TravelScheduleTripCreateInput,
   services: TravelScheduleRevision['services'],
 ): TravelTripInstance {
   const stopTimes = normalizeTravelTripStopTimes(patch.stopTimes);
@@ -698,6 +879,7 @@ function buildCreatedTravelScheduleTrip(
     serviceId: service?.serviceId,
     serviceKind: patch.serviceKind,
     serviceLabel: service?.label ?? patch.serviceKind,
+    serviceNature: optionalTrimmedString(patch.serviceNature),
     departureTime: firstStoppingTime?.departureTime ?? patch.departureTime.trim(),
     arrivalTime:
       lastStoppingTime?.arrivalTime ??

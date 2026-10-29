@@ -21,21 +21,30 @@ export async function readTransitTripLabelPools(): Promise<TransitTripLabelPool[
 export async function writeTransitTripLabelPools(input: {
   pools: TransitTripLabelPool[];
   actorId: string;
+  actorName?: string;
 }): Promise<TransitTripLabelPool[]> {
   const now = new Date().toISOString();
-  const pools = normalizePools(
-    input.pools.map((pool) => ({
+  const actorName = input.actorName?.trim() || input.actorId;
+  const existingById = new Map((await readTransitTripLabelPools()).map((pool) => [pool.id, pool]));
+  // 整组提交时未改动的池不应被刷新更新时间，否则列表里的“最近更新”会失真。
+  const pools = normalizePools(input.pools).map((pool) => {
+    const previous = existingById.get(pool.id);
+    const changed = !previous || !isSamePoolContent(previous, pool);
+    return {
       ...pool,
-      updatedAt: now,
-      updatedBy: input.actorId,
-    })),
-  );
+      // 创建者与创建时间只在首次写入时确定，后续编辑不能覆盖。
+      createdAt: previous?.createdAt ?? now,
+      createdBy: previous?.createdBy ?? actorName,
+      updatedAt: changed ? now : (previous?.updatedAt ?? now),
+      updatedBy: changed ? actorName : (previous?.updatedBy ?? actorName),
+    };
+  });
 
   await writeSnapshot({
     version: 1,
     pools,
     updatedAt: now,
-    updatedBy: input.actorId,
+    updatedBy: actorName,
   });
   return pools;
 }
@@ -88,12 +97,27 @@ function normalizePools(pools: readonly TransitTripLabelPool[]): TransitTripLabe
       id,
       name,
       labels,
+      ruleText: pool.ruleText?.trim() || undefined,
+      maxConsecutiveTrips: pool.maxConsecutiveTrips,
+      maxContinuousWorkMinutes: pool.maxContinuousWorkMinutes,
+      mandatoryRestMinutes: pool.mandatoryRestMinutes,
+      createdAt: pool.createdAt,
+      createdBy: pool.createdBy,
       updatedAt: pool.updatedAt,
       updatedBy: pool.updatedBy,
     });
   }
 
   return normalized;
+}
+
+function isSamePoolContent(left: TransitTripLabelPool, right: TransitTripLabelPool): boolean {
+  return (
+    left.name === right.name &&
+    (left.ruleText ?? '') === (right.ruleText ?? '') &&
+    left.labels.length === right.labels.length &&
+    left.labels.every((label, index) => label === right.labels[index])
+  );
 }
 
 function resolveStorePath(): string {
