@@ -285,7 +285,9 @@ check(
 );
 check(
   '可在光标处插入下角标',
-  /insertSuffixAtCaret/.test(EDITOR) && /在光标处添加下角标/.test(EDITOR),
+  // 文案已迁到 i18n（'在光标处添加下角标'），这里断言插入函数与 i18n 键同时存在。
+  /insertSuffixAtCaret/.test(EDITOR) &&
+    /t\('metroWayfindingEditor\.largeText\.insertSuffix'\)/.test(EDITOR),
 );
 check(
   '编辑写回 suffixes，并同步 legacy suffix',

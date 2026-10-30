@@ -612,6 +612,11 @@ export const faqGroups: FaqGroup[] = [
             text: 'Chitose.City Sign Maker',
             href: 'https://signmaker.chitose.city/',
           },
+          '、',
+          {
+            text: 'MoeRT-GuideGen',
+            href: 'https://guidegen.0v0.my/',
+          },
           '”的 JSON。一次最多选择 2 个文件、每个不超过 2 MB，不能混合不同生成器；YCT 与 NaL 工程需要逐个导入。外部工程会先显示转换预览和警告，可选择',
           { icon: 'conversion_path', label: '仅语义（推荐）' },
           '或',
@@ -620,7 +625,7 @@ export const faqGroups: FaqGroup[] = [
           { icon: 'save', label: '导出工程文件' },
           '只在手动编辑地铁导视牌时出现，导出的 YCT JSON 可以稍后再次导入。',
         ],
-        keywords: ['导入工程', '导出工程', 'YCT 工程', 'NaL', 'Chitose', 'JSON', '2 MB'],
+        keywords: ['导入工程', '导出工程', 'YCT 工程', 'NaL', 'Chitose', 'MoeRT', 'JSON', '2 MB'],
       },
       {
         id: 'metro-wayfinding-project-vs-rmp',

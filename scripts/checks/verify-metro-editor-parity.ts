@@ -44,12 +44,12 @@ check(
 check(
   // 外壳刻意**不**渲染自己的标签行：行 <header> 已写「第 N 行 · 主/副文本」，
   // 动态字高也统一由上方的 .metro-wayfinding-text-metrics 给出（主/副一次说清）。
-  // 这里改为断言：外壳不带重复标签行，但字高指标栏确实存在且同时覆盖主副文本。
+  // 文案已迁到 i18n（主文本 {main} · 副文本 {secondary}），这里断言结构而不是中文字面量。
   '外壳不重复渲染标签行，字高由统一指标栏给出',
   !/<strong>\{label\}<\/strong>/.test(EDITOR) &&
     /className="metro-wayfinding-text-metrics"/.test(EDITOR) &&
-    /主文本 \{formatMetroMetric\(metrics\.mainFontSize\)\}/.test(EDITOR) &&
-    /副文本\{?['"\s}]*\{?formatMetroMetric\(metrics\.secondaryFontSize\)\}/.test(EDITOR),
+    /main:\s*formatMetroMetric\(metrics\.mainFontSize\)/.test(EDITOR) &&
+    /secondary:\s*formatMetroMetric\(metrics\.secondaryFontSize\)/.test(EDITOR),
 );
 
 // 主副两个编辑器都必须经由外壳渲染，否则样式会再次分叉。
@@ -122,7 +122,9 @@ console.log('\n── A4. 副文本行渲染改用新组件 ──────�
 check('副文本行渲染 MetroWayfindingSecondaryField', /<MetroWayfindingSecondaryField/.test(EDITOR));
 check(
   '副文本行标签沿用「第 N 行副文本内容」格式',
-  /label=\{`第 \$\{index \+ 1\} 行副文本内容`\}/.test(EDITOR),
+  /label=\{t\('metroWayfindingEditor\.text\.secondaryRowLabel',\s*\{\s*index:\s*index \+ 1\s*\}\)\}/.test(
+    EDITOR,
+  ),
 );
 check(
   // 副文本行一度被 <label className="material-field"> 包着——那会把它拖回

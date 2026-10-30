@@ -45,8 +45,13 @@ const floatingSurface =
   /background:\s*color-mix\(in srgb, var\(--yct-color-surface-panel\) 92%, transparent\);/;
 
 const embeddedSecondaryTopbar = ruleBody(/:root\[data-embedded\]\s+\.secondary-topbar\s*\{[^}]*\}/);
-const embeddedActions = ruleBody(
-  /:root\[data-embedded\]:not\(\[data-material-mode='advanced'\]\)\s+:is\(\.topbar-actions, \.secondary-actions\):has\(> \*\)\s*\{[^}]*\}/,
+// 药丸背景按「只命中一次」拆成两条规则：一级页面加在 .topbar 的直接子级，
+// 二级页面加在 .secondary-topbar 的直接子级，并排除内层工作台工具栏。
+const embeddedPrimaryActions = ruleBody(
+  /:root\[data-embedded\]:not\(\[data-material-mode='advanced'\]\)\s+\.topbar:not\(\.secondary-topbar\)\s*>\s*\.topbar-actions:has\(> \*\)\s*\{[^}]*\}/,
+);
+const embeddedSecondaryActions = ruleBody(
+  /:root\[data-embedded\]:not\(\[data-material-mode='advanced'\]\)\s+\.secondary-topbar\s*>\s*\.secondary-actions:has\(> \*\):not\(:has\(> \.material-studio-topbar-actions\)\)\s*\{[^}]*\}/,
 );
 const embeddedTopbarIcon = ruleBody(
   /:root\[data-embedded\]:not\(\[data-material-mode='advanced'\]\)\s+\.topbar\s*>\s*\.icon-button\s*\{[^}]*\}/,
@@ -73,18 +78,36 @@ check(
 console.log('── 2. 非透光材质下，工具栏与返回按钮要有背景/投影 ──────');
 
 check(
-  '工具栏规则同时覆盖 .topbar-actions 与 .secondary-actions',
-  /:is\(\.topbar-actions, \.secondary-actions\)/.test(embeddedActions),
+  '一级工具栏药丸只作用于 .topbar 的直接子级 .topbar-actions',
+  embeddedPrimaryActions.length > 0,
 );
 check(
-  '工具栏规则带 :has(> *)（`secondaryActions` 是可选 prop，防空 div 渲染出空药丸）',
-  /:has\(> \*\)/.test(embeddedActions),
+  '二级工具栏药丸只作用于 .secondary-topbar 的直接子级 .secondary-actions',
+  embeddedSecondaryActions.length > 0,
 );
 check(
-  '工具栏规则声明 box-shadow: var(--yct-shadow-floating)',
-  /box-shadow:\s*var\(--yct-shadow-floating\);/.test(embeddedActions),
+  '两条药丸规则都带 :has(> *)（`secondaryActions` 是可选 prop，防空 div 渲染出空药丸）',
+  /:has\(> \*\)/.test(embeddedPrimaryActions) && /:has\(> \*\)/.test(embeddedSecondaryActions),
 );
-check('工具栏规则声明不透明背景', floatingSurface.test(embeddedActions));
+check(
+  '两条药丸规则都声明 box-shadow: var(--yct-shadow-floating)',
+  /box-shadow:\s*var\(--yct-shadow-floating\);/.test(embeddedPrimaryActions) &&
+    /box-shadow:\s*var\(--yct-shadow-floating\);/.test(embeddedSecondaryActions),
+);
+check(
+  '两条药丸规则都声明不透明背景',
+  floatingSurface.test(embeddedPrimaryActions) && floatingSurface.test(embeddedSecondaryActions),
+);
+check(
+  '二级规则排除内层工作台工具栏（避免药丸套药丸）',
+  /:not\(:has\(> \.material-studio-topbar-actions\)\)/.test(embeddedSecondaryActions),
+);
+check(
+  '不存在同时命中内外两层的并列药丸规则',
+  !/:is\(\.topbar-actions, \.secondary-actions\):has\(> \*\)[^{]*\{[^}]*border-radius:\s*var\(--yct-radius-pill\)/.test(
+    CSS,
+  ),
+);
 check(
   '返回按钮规则用 .topbar > .icon-button（不再排除 .secondary-topbar）',
   /\.topbar\s*>\s*\.icon-button\s*\{/.test(embeddedTopbarIcon),

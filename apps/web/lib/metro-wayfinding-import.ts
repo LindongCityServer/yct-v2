@@ -8,6 +8,7 @@ import {
   METRO_WAYFINDING_COMBINATION_MAX_SCALE,
   METRO_WAYFINDING_BACKGROUND,
   METRO_WAYFINDING_FOREGROUND,
+  METRO_WAYFINDING_GAP,
   METRO_WAYFINDING_PROJECT_FORMAT,
   METRO_WAYFINDING_PROJECT_SCHEMA_VERSION,
   METRO_WAYFINDING_WARNING_FOREGROUND,
@@ -16,12 +17,15 @@ import {
   type MetroWayfindingArrowElement,
   type MetroWayfindingCombinationChild,
   type MetroWayfindingCombinationElement,
+  type MetroWayfindingCombinationStripePosition,
   type MetroWayfindingElement,
   type MetroWayfindingFacilityElement,
+  type MetroWayfindingFrameShape,
   type MetroWayfindingIconDirection,
   type MetroWayfindingIconVariant,
   type MetroWayfindingLargeTextElement,
   type MetroWayfindingLayout,
+  type MetroWayfindingMainSegment,
   type MetroWayfindingProjectCanvas,
   type MetroWayfindingTextElement,
   type MetroWayfindingTextRow,
@@ -32,7 +36,8 @@ export const METRO_WAYFINDING_IMPORT_MAX_FILES = 2;
 export const METRO_WAYFINDING_IMPORT_MAX_FILE_BYTES = 2 * 1024 * 1024;
 export const METRO_WAYFINDING_SEMANTIC_TARGET_STYLE = 'DB21/T 2573-2023 语义适配';
 
-export type MetroWayfindingImportSource = 'yct' | 'nal-vitool' | 'chitose-signmaker';
+export type MetroWayfindingImportSource =
+  'yct' | 'nal-vitool' | 'chitose-signmaker' | 'moert-guidegen';
 export type MetroWayfindingImportMode = 'semantic' | 'source-style';
 
 export interface MetroWayfindingImportFile {
@@ -1065,6 +1070,7 @@ export function resolveMetroWayfindingImportPreview(
     'nal-style-approximation',
     'chitose-style-approximation',
     'chitose-addon-approximation',
+    'moert-style-approximation',
     'palette-mismatch',
   ]);
   return {
@@ -1161,6 +1167,9 @@ function parseImportDocument(file: MetroWayfindingImportFile): ParsedImportDocum
   }
   if (value.type === 'nalvitool') {
     return parseNalDocument(file.name, value);
+  }
+  if (isMoertGuideGenDocument(value)) {
+    return parseMoertDocument(file.name, value);
   }
   if (Array.isArray(value.columns) || Array.isArray(value.zones)) {
     return parseChitoseDocument(file.name, value);
@@ -2129,6 +2138,913 @@ function chitoseZoneColors(category: string, style: string): ElementColors {
   };
 }
 
+/**
+ * MoeRT-GuideGen（guidegen.0v0.my）工程格式的解析与语义转换。
+ *
+ * 结构：`{ version, config: { width, showSpecLine, theme }, rows: [[{ id, type, props }]] }`。
+ * 组件 `type` 形如 `themes.chongqing.components.LineNum`，`props` 随主题而异：
+ * 重庆 / 成都的线路组件用 `num + lineColor + customChinese`，北京用 `lineId + colorKey + textZh`。
+ * 因此按「组件名 + 属性名」双维度分派，未覆盖的组件只记告警，不中断整份导入。
+ *
+ * 上游仓库：https://github.com/LYXOfficial/MoeRT-GuideGen（MIT）。
+ * 这里只解析工程结构，不复用其主题渲染代码、字体与图标素材。
+ */
+const MOERT_GUIDEGEN_KNOWN_VERSION = 1;
+const MOERT_GUIDEGEN_PX_PER_METER = 128;
+
+/** 主题 key（`themes.` 之后的部分）→ 展示名。与上游 themereg 的注册顺序一致。 */
+const moertThemeLabels: Record<string, string> = {
+  chongqing: '重庆轨道交通',
+  chengdu: '成都地铁',
+  hongkong: '港铁 MTR',
+  beijing: '北京地铁（新版）',
+  beijingOld: '北京地铁（旧版）',
+};
+
+/**
+ * 各主题的默认底色 / 前景色 / 出口字母底板色。
+ * 取自上游 `themes/<主题>/define/colors.ts`：上游把「透明」写在组件属性里，
+ * 真正画出来的底色由主题常量提供，所以画布色缺失时必须回落到这里。
+ */
+const moertThemeDefaults: Record<
+  string,
+  { background: string; foreground: string; exitPlate?: string }
+> = {
+  chongqing: { background: '#FFFFFF', foreground: '#000000', exitPlate: '#FFC72C' },
+  chengdu: { background: '#444444', foreground: '#FFFFFF', exitPlate: '#444444' },
+  hongkong: { background: '#000000', foreground: '#FFFFFF', exitPlate: '#6D92AA' },
+  beijing: { background: '#142134', foreground: '#FFFFFF', exitPlate: '#25AA41' },
+  beijingOld: { background: '#0E3463', foreground: '#FFFFFF', exitPlate: '#25AA41' },
+};
+
+/**
+ * 北京两套主题的线路色键 → 十六进制。
+ * 直接取自上游 `themes/beijing(-old)/define/colors.ts`，勿凭观感调整。
+ */
+const moertLineColorKeys: Record<string, string> = {
+  line1: '#C23A30',
+  line2: '#006098',
+  line3: '#E60033',
+  line4: '#008E9C',
+  line5: '#A6217F',
+  line6: '#D29700',
+  line7: '#FAC671',
+  line8: '#009B6B',
+  line9: '#8FC31F',
+  line10: '#009BC0',
+  line11: '#ED796B',
+  line12: '#C76B00',
+  line13: '#F9E700',
+  line14: '#D5A7A1',
+  line15: '#6A357D',
+  line16: '#76A32D',
+  line17: '#00A9A9',
+  line18: '#5654A2',
+  line19: '#D6ABC1',
+  line22: '#F7C8CE',
+  line28: '#35570B',
+  lineyizhuang: '#E40077',
+  linefangshan: '#E46022',
+  lines1: '#B25921',
+  linechangping: '#DE82B2',
+  linexijiao: '#E6081B',
+  linecapitalairport: '#A29BBB',
+  linedaxingairport: '#004BA0',
+};
+
+/**
+ * 上游箭头方向 → 本模板箭头。
+ * `ahead-*`（前方向左/右）对应「先左/右后上」，`back-*` 对应「先左/右后下」，
+ * 港铁的 `turn-back` 没有独立掉头方向，统一按左掉头处理（已由样式近似告警覆盖）。
+ */
+const moertArrowIcons: Record<string, MetroWayfindingArrowElement['iconId']> = {
+  up: 'north',
+  down: 'south',
+  left: 'west',
+  right: 'east',
+  'up-left': 'north-west',
+  'up-right': 'north-east',
+  'down-left': 'south-west',
+  'down-right': 'south-east',
+  'ahead-left': 'turn-left-up',
+  'ahead-right': 'turn-right-up',
+  'back-left': 'turn-left-down',
+  'back-right': 'turn-right-down',
+  'uturn-left': 'u-turn-left',
+  'uturn-right': 'u-turn-right',
+  'turn-back': 'u-turn-left',
+};
+
+/**
+ * 上游设施图标键 → 本模板图标 id（键为去掉 `themes.*.components.Icon.props.icon.` 前缀后的名字）。
+ * 只登记语义等价的图标；没有对应物的（AED、警务以外的广播/停车/轮椅以外的特殊设施等）
+ * 一律走未知图标告警，避免把不同含义硬套成同一个图形。
+ */
+const moertFacilityIcons: Record<string, string> = {
+  // 轨道交通 / 列车
+  train: 'subway',
+  metro: 'subway',
+  mtr: 'subway',
+  monorail: 'subway',
+  cr: 'train',
+  coach: 'train',
+  kcr: 'train',
+  sp1900: 'train',
+  xrl: 'train',
+  // 出口
+  exit: 'exit',
+  exit1: 'exit',
+  exit2: 'exit',
+  // 电梯 / 扶梯 / 楼梯
+  elevator: 'elevator',
+  lift: 'elevator',
+  escalator: 'escalator',
+  stairs: 'stairs',
+  // 卫生间
+  toilet: 'restroom',
+  toilets: 'restroom',
+  restroom: 'restroom',
+  men: 'mens-restroom',
+  male: 'mens-restroom',
+  restroom_men: 'mens-restroom',
+  women: 'womens-restroom',
+  female: 'womens-restroom',
+  restroom_women: 'womens-restroom',
+  thirdtoilet: 'family-restroom',
+  restroom_third: 'family-restroom',
+  restroom_accessible: 'accessible-restroom',
+  // 无障碍
+  wheelchair: 'wheelchair',
+  accessibility: 'wheelchair',
+  accessibility_white: 'wheelchair',
+  nursing: 'nursing-room',
+  nursing_room: 'nursing-room',
+  ramp: 'accessible-ramp',
+  lifting_platform: 'wheelchair-lift',
+  elevator_accessible: 'elevator',
+  // 其他服务
+  waitingroom: 'waiting',
+  ticket: 'ticket',
+  tickets: 'ticket',
+  ticket_vending: 'ticket',
+  customer: 'service',
+  customer_service: 'service',
+  ticket_service: 'service',
+  inquiry: 'service',
+  help_button: 'service',
+  police: 'police',
+  taxi: 'taxi',
+  airplane: 'airplane',
+  airport: 'airplane',
+  boat: 'boat',
+  no: 'no-entry',
+  no_entry_dark: 'no-entry',
+  no_entry_light: 'no-entry',
+  no_entry_cross: 'no-entry',
+  no_entry_cross_framed: 'no-entry',
+};
+
+/** 只有这些设施图标支持「方向」，其余图标即使带 `_left` / `_right` 后缀也不写入方向。 */
+const moertDirectionalIcons = new Set(['stairs', 'escalator', 'wheelchair', 'wheelchair-lift']);
+
+function isMoertGuideGenDocument(root: JsonObject): boolean {
+  return typeof root.version === 'number' && isObject(root.config) && Array.isArray(root.rows);
+}
+
+function parseMoertDocument(fileName: string, root: JsonObject): ParsedImportDocument {
+  const warnings = createWarningCollector();
+  const config = isObject(root.config) ? root.config : {};
+  const rawRows = (Array.isArray(root.rows) ? root.rows : []).filter((row): row is unknown[] =>
+    Array.isArray(row),
+  );
+  if (!rawRows.length) {
+    throw new Error(`${fileName} 中没有可转换的标牌行。`);
+  }
+  const themeKey = asString(config.theme).replace(/^themes\./u, '');
+  if (typeof root.version === 'number' && root.version > MOERT_GUIDEGEN_KNOWN_VERSION) {
+    warnings.add(
+      'moert-version',
+      `工程版本 ${root.version} 高于已适配的 ${MOERT_GUIDEGEN_KNOWN_VERSION}，已按尽力解析处理。`,
+    );
+  }
+  if (!moertThemeLabels[themeKey]) {
+    warnings.add(
+      'moert-theme-unmapped',
+      `主题 ${themeKey || '（未标注）'} 没有专门映射，已按通用组件语义转换。`,
+    );
+  }
+
+  const defaults = resolveMoertCanvasColors(rawRows, themeKey);
+  const rows = rawRows.map((row) =>
+    row
+      .filter(isObject)
+      .flatMap((component) => parseMoertComponent(component, themeKey, defaults, warnings)),
+  );
+  if (rows.every((row) => row.length === 0)) {
+    throw new Error(`${fileName} 中没有可转换的标牌组件。`);
+  }
+  warnings.add(
+    'moert-style-approximation',
+    '主题字号、字宽与组件固定宽度已按当前地铁导视模板近似转换。',
+  );
+
+  return {
+    source: 'moert-guidegen',
+    sourceLabel: 'MoeRT-GuideGen',
+    styleLabel: moertThemeLabels[themeKey] ?? (themeKey || '未标注主题'),
+    projectName: stripJsonExtension(fileName),
+    fileName,
+    canvasLength: resolveMoertCanvasLength(config.width),
+    backgroundColor: defaults.backgroundColor ?? METRO_WAYFINDING_BACKGROUND,
+    foregroundColor: defaults.foregroundColor ?? METRO_WAYFINDING_FOREGROUND,
+    dividerBetweenRows: rows.length > 1,
+    rows,
+    warnings: warnings.values(),
+  };
+}
+
+function parseMoertComponent(
+  component: JsonObject,
+  themeKey: string,
+  defaults: ElementColors,
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingElement[] {
+  const type = asString(component.type);
+  const name = type.split('.').pop() ?? '';
+  const props = isObject(component.props) ? component.props : {};
+  const colors = resolveMoertElementColors(props, defaults);
+  const align = resolveMoertAlign(props.align);
+
+  switch (name) {
+    case 'Arrow': {
+      // 北京两套主题把方向存在 `direction`，重庆 / 成都 / 港铁存在 `type`。
+      const arrowType = asString(props.direction) || asString(props.type);
+      const iconId = moertArrowIcons[arrowType];
+      if (!iconId) {
+        warnings.add('moert-unknown-arrow', `未识别箭头方向 ${arrowType || '（空）'}，已忽略。`);
+        return [];
+      }
+      const elements: MetroWayfindingElement[] = [createArrowElement(iconId, colors)];
+      // 北京箭头可附带「下一站」这类小字，开启 showText 时才输出。
+      if (props.showText === true) {
+        const chinese = asString(props.textZh);
+        const english = asString(props.textEn);
+        if (chinese || english) elements.push(createTextElement(chinese, english, align, colors));
+      }
+      return elements;
+    }
+    case 'Icon': {
+      // 上游把图标存成完整 i18n 键，如 `themes.chongqing.components.Icon.props.icon.train`。
+      const rawIcon = asString(props.icon).split('.').pop() ?? '';
+      const icon = resolveMoertFacilityIcon(rawIcon);
+      if (!icon) {
+        warnings.add(
+          'moert-unknown-icon',
+          `未识别图标 ${rawIcon || '（空）'}（主题 ${themeKey || '未知'}），已忽略。`,
+        );
+        return [];
+      }
+      return [createFacilityElement(icon.iconId, { ...colors, direction: icon.direction })];
+    }
+    case 'ExitIcon': {
+      // 北京主题的出口图标按版式分为 exitA/B/C、exitLongA/B 与 emergency 六种，
+      // 本模板只有单一出口图标，紧急出口额外提示语义缺失。
+      if (asString(props.variant) === 'emergency') {
+        warnings.add('moert-emergency-exit', '紧急出口没有独立图标，已按普通出口图标转换。');
+      }
+      return [createFacilityElement('exit', colors)];
+    }
+    case 'ToTrain': {
+      // 北京旧版的「去往列车」是带线路色底板的列车图形，底板色存在 plateColor 上。
+      const plateColor = normalizeMoertColor(props.plateColor);
+      return [
+        createFacilityElement(
+          'subway',
+          plateColor
+            ? {
+                ...colors,
+                frameShape: 'rectangle',
+                frameFillMode: 'color',
+                frameFillColor: plateColor,
+                foregroundColor: resolveReadableForeground(plateColor),
+              }
+            : colors,
+        ),
+      ];
+    }
+    case 'LineNum':
+    case 'Line':
+      return parseMoertLineComponent(name, props, themeKey, align, colors, warnings);
+    case 'LineText':
+      return parseMoertLineTextComponent(props, themeKey, align, colors, warnings);
+    case 'Platform':
+      // 港铁站台号是圆形色块，用圆形外框比矩形更接近原图。
+      return parseMoertFilledLargeText(
+        asString(props.num) || asString(props.text),
+        props.color,
+        'circle',
+        defaults,
+        colors,
+        warnings,
+      );
+    case 'NumAlphabet':
+      return parseMoertNumAlphabet(props, colors, warnings);
+    case 'StationNumber':
+      return parseMoertStationNumber(props, align, colors, warnings);
+    case 'Text':
+    case 'StationName':
+    case 'StationSign':
+      return parseMoertTextComponent(props, align, colors, warnings);
+    case 'DualText':
+    case 'ExitName':
+      return parseMoertDualText(props, align, colors);
+    case 'Direction':
+    case 'DirectionLoop':
+      return parseMoertDirection(name, props, align, colors);
+    case 'TrainDirection':
+    case 'LoopNextStation':
+      return parseMoertJoinedText(name, props, align, colors);
+    case 'Exit':
+      // 港铁出口字母的底板色不在属性里（属性写的是 transparent），由主题的 exitletter 提供。
+      return parseMoertFilledLargeText(
+        asString(props.letter),
+        normalizeMoertColor(props.background) ?? moertThemeDefaults[themeKey]?.exitPlate,
+        'rectangle',
+        defaults,
+        colors,
+        warnings,
+      );
+    case 'ExitLetter':
+    case 'ExitNum':
+      return parseMoertExitCodes(name, props, align, defaults, colors, warnings);
+    case 'Spacing':
+      return [createSpaceElement('flex', colors)];
+    case 'Blank': {
+      // Blank 是固定像素宽的空隙（默认 20px），按 16px 一格换算成固定空白。
+      const width = Number(props.width);
+      const units = Number.isFinite(width)
+        ? Math.max(1, Math.min(10, Math.round(width / METRO_WAYFINDING_GAP)))
+        : 1;
+      return [createSpaceElement('fixed', colors, units)];
+    }
+    case 'SpecLine':
+      // 规格线在上游是可见的竖直分隔线（港铁、北京都在用），转成同色的分割线。
+      return [
+        createDividerElement(
+          normalizeMoertColor(props.foreground) ??
+            colors.foregroundColor ??
+            METRO_WAYFINDING_FOREGROUND,
+          colors.backgroundColor,
+        ),
+      ];
+    case 'TwoRowContainer':
+      return parseMoertTwoRowContainer(props, themeKey, defaults, warnings);
+    default:
+      warnings.add(
+        'moert-unknown-component',
+        `未识别组件 ${name || asString(component.type) || 'unknown'}，已忽略。`,
+      );
+      return [];
+  }
+}
+
+function parseMoertLineComponent(
+  name: string,
+  props: JsonObject,
+  themeKey: string,
+  align: MetroWayfindingTextAlign,
+  colors: ElementColors,
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingElement[] {
+  const lineColor =
+    normalizeMoertColor(props.lineColor) ??
+    resolveMoertLineColorByKey(asString(props.colorKey)) ??
+    normalizeMoertColor(props.color) ??
+    METRO_WAYFINDING_FOREGROUND;
+  const chinese = asString(props.chinese) || asString(props.textZh);
+  const english = asString(props.english) || asString(props.textEn);
+  const num = asString(props.num) || asString(props.lineId);
+
+  // 带编号的线路标：重庆 / 成都 / 北京新版是「编号 + 号线」，北京旧版是整体填充底板。
+  const numbered = name === 'LineNum' || (name === 'Line' && themeKey === 'beijingOld');
+  if (numbered && num) {
+    const customChinese = asString(props.customChinese);
+    const customEnglish = asString(props.customEnglish);
+    // 北京主题的 textZh 本身已带「号线」，若直接当后缀会渲染成「1 1号线」，这里剥掉重复编号。
+    let suffix = customChinese || chinese || '号线';
+    if (!customChinese && suffix.startsWith(num)) {
+      suffix = suffix.slice(num.length) || '号线';
+    }
+    const children: MetroWayfindingCombinationChild[] = [
+      createLargeTextElement(num),
+      createTextElement(suffix, customEnglish || english || `Line ${num}`, align),
+    ];
+    if (themeKey === 'beijing') {
+      // 北京新版：线路色是编号下方的一条横色带。
+      return [createStripeCombinationElement(children, lineColor, 'bottom', colors)];
+    }
+    if (themeKey === 'beijingOld') {
+      // 北京旧版：编号与文字整体压在圆角线路色底板里。
+      return [createFilledCombinationElement(children, lineColor, colors)];
+    }
+    // 重庆 / 成都：线路色是编号左侧的竖色带。
+    return [createStripeCombinationElement(children, lineColor, 'left', colors)];
+  }
+  if (!chinese && !english) {
+    warnings.add('moert-empty-line', '线路组件缺少线路名，已忽略。');
+    return [];
+  }
+  // 港铁 Line 是「整块线路色 + 白色线路名」，用文本内的线路色块表达；
+  // 其余主题的 LineText 是「细色带 + 线路名」，用侧边色带组合框表达。
+  if (name === 'Line') return [createColoredLineText(chinese, english, lineColor, align, colors)];
+  return [
+    createStripeCombinationElement(
+      [createTextElement(chinese, english, align)],
+      lineColor,
+      'left',
+      colors,
+    ),
+  ];
+}
+
+function parseMoertLineTextComponent(
+  props: JsonObject,
+  themeKey: string,
+  align: MetroWayfindingTextAlign,
+  colors: ElementColors,
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingElement[] {
+  const chinese = asString(props.chinese) || asString(props.textZh);
+  const english = asString(props.english) || asString(props.textEn);
+  if (!chinese && !english) {
+    warnings.add('moert-empty-line', '线路组件缺少线路名，已忽略。');
+    return [];
+  }
+  const lineColor =
+    normalizeMoertColor(props.lineColor) ??
+    resolveMoertLineColorByKey(asString(props.colorKey)) ??
+    METRO_WAYFINDING_FOREGROUND;
+  if (themeKey === 'hongkong') {
+    return [createColoredLineText(chinese, english, lineColor, align, colors)];
+  }
+  return [
+    createStripeCombinationElement(
+      [createTextElement(chinese, english, align)],
+      lineColor,
+      'left',
+      colors,
+    ),
+  ];
+}
+
+function parseMoertNumAlphabet(
+  props: JsonObject,
+  colors: ElementColors,
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingElement[] {
+  const value = asString(props.text);
+  if (!value) {
+    warnings.add('moert-empty-text', '数字字母组件内容为空，已忽略。');
+    return [];
+  }
+  // `block` 是带底板的编号块，`fit` 是纯文字，分别对应矩形外框与无外框的大文本。
+  return [
+    createLargeTextElement(value, asString(props.type) === 'block' ? 'rectangle' : 'none', colors),
+  ];
+}
+
+function parseMoertStationNumber(
+  props: JsonObject,
+  align: MetroWayfindingTextAlign,
+  colors: ElementColors,
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingElement[] {
+  const lines = Array.isArray(props.lines) ? props.lines.filter(isObject) : [];
+  const mainRows: MetroWayfindingMainSegment[][] = lines
+    .map((line) => {
+      const lineNumber = asString(line.lineNum);
+      const stationNumber = asString(line.stationNum);
+      const segments: MetroWayfindingMainSegment[] = [];
+      if (lineNumber) {
+        segments.push({
+          kind: 'line',
+          value: lineNumber.slice(0, 160),
+          color: normalizeMoertColor(line.color) ?? METRO_WAYFINDING_FOREGROUND,
+        });
+      }
+      if (stationNumber) {
+        segments.push({ kind: 'text', value: stationNumber.slice(0, 160) });
+      }
+      return segments;
+    })
+    .filter((segments) => segments.length > 0);
+  if (!mainRows.length) {
+    warnings.add(
+      'moert-station-number-missing',
+      '车站编号组件缺少线路与编号数据（上游按默认值渲染），已忽略。',
+    );
+    return [];
+  }
+  return [createSegmentedTextElement(mainRows, align, colors)];
+}
+
+function parseMoertTextComponent(
+  props: JsonObject,
+  align: MetroWayfindingTextAlign,
+  colors: ElementColors,
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingElement[] {
+  const chinese = asString(props.chinese) || asString(props.nameZh);
+  const english = asString(props.english) || asString(props.nameEn);
+  if (!chinese && !english) {
+    warnings.add('moert-empty-text', '文本组件内容为空，已忽略。');
+    return [];
+  }
+  // 港铁 Text 提供 small / large 两档；本模板没有字号字段，
+  // small 用「全副文本行」表达，large 用默认的主 / 副文本组合。
+  if (asString(props.fontsize) === 'small') {
+    return [createSecondaryTextElement([chinese, english], align, colors)];
+  }
+  return [createTextElement(chinese, english, align, colors)];
+}
+
+function parseMoertDualText(
+  props: JsonObject,
+  align: MetroWayfindingTextAlign,
+  colors: ElementColors,
+): MetroWayfindingElement[] {
+  const mainLines = [asString(props.line1chinese), asString(props.line2chinese)].filter(Boolean);
+  // 北京旧版 DualText 提供 showEn 开关，关掉时英文行不参与渲染。
+  const showEnglish = props.showEn !== false;
+  const secondaryLines = showEnglish
+    ? [asString(props.line1english), asString(props.line2english)].filter(Boolean)
+    : [];
+  if (!mainLines.length && !secondaryLines.length) return [];
+  return [createMultilineTextElement(mainLines, secondaryLines, align, colors)];
+}
+
+function parseMoertDirection(
+  name: string,
+  props: JsonObject,
+  align: MetroWayfindingTextAlign,
+  colors: ElementColors,
+): MetroWayfindingElement[] {
+  // 环线方向的「内环 / Clockwise Loop」在源版式里位于主方向之上，按原顺序输出。
+  const mainLines =
+    name === 'DirectionLoop'
+      ? [asString(props.tipchinese), asString(props.tochinese)].filter(Boolean)
+      : [asString(props.tochinese), asString(props.viachinese)].filter(Boolean);
+  const secondaryLines =
+    name === 'DirectionLoop'
+      ? [asString(props.tipenglish), asString(props.toenglish)].filter(Boolean)
+      : [asString(props.toenglish), asString(props.viaenglish)].filter(Boolean);
+  if (!mainLines.length && !secondaryLines.length) return [];
+  return [createMultilineTextElement(mainLines, secondaryLines, align, colors)];
+}
+
+function parseMoertJoinedText(
+  name: string,
+  props: JsonObject,
+  align: MetroWayfindingTextAlign,
+  colors: ElementColors,
+): MetroWayfindingElement[] {
+  // 开往方向 / 环线下一站都是「小前缀 + 站名」的两段结构，本模板没有对应容器，
+  // 合并成一条文本行以保证内容不丢失。
+  const main =
+    name === 'TrainDirection'
+      ? joinMoertText(asString(props.prefixZh), asString(props.destinationZh))
+      : joinMoertText(asString(props.nextZh), asString(props.stationZh));
+  const secondary =
+    name === 'TrainDirection'
+      ? joinMoertText(asString(props.prefixEn), asString(props.destinationEn))
+      : joinMoertText(asString(props.nextEn), asString(props.stationEn));
+  if (!main && !secondary) return [];
+  return [createTextElement(main, secondary, align, colors)];
+}
+
+function parseMoertExitCodes(
+  name: string,
+  props: JsonObject,
+  align: MetroWayfindingTextAlign,
+  defaults: ElementColors,
+  colors: ElementColors,
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingElement[] {
+  const codes = Array.isArray(props.exits)
+    ? props.exits
+        .filter(isObject)
+        .map((exit) => `${asString(exit.letter)}${asString(exit.number)}`)
+        .filter(Boolean)
+    : [];
+  const value = codes.join('·');
+  if (!value) {
+    warnings.add('moert-empty-exit', '出口编号组件内容为空，已忽略。');
+    return [];
+  }
+  const elements: MetroWayfindingElement[] = [
+    createFilledLargeText(value, props.background, 'rectangle', defaults, colors),
+  ];
+  if (name === 'ExitNum') {
+    // 北京「出入口编号」把东/西/南/北方向字直接拼在名称后面：
+    // 中文按「东西南北」顺序拼接、英文按「北南东西」顺序拼成一个首字母大写的词。
+    // 这里按上游 render 的实现原样复现，避免丢掉可见的方向信息。
+    const directions = resolveMoertExitDirectionText(props.directions);
+    const chinese = [asString(props.textZh), directions.zh].filter(Boolean).join('');
+    const english = [asString(props.textEn), directions.en].filter(Boolean).join(' ');
+    if (chinese || english) elements.push(createTextElement(chinese, english, align, colors));
+  }
+  return elements;
+}
+
+/**
+ * 北京「出入口编号」的方向标注拼写规则（照上游 render 实现复现）：
+ * 中文按「东、西、南、北」排序后逐字拼接；英文按「北、南、东、西」排序后
+ * 拼成一个单词，只有首字母大写。
+ */
+const moertExitDirectionZh: Record<string, string> = {
+  east: '东',
+  west: '西',
+  south: '南',
+  north: '北',
+};
+const moertExitDirectionEn: Record<string, string> = {
+  east: 'East',
+  west: 'West',
+  south: 'South',
+  north: 'North',
+};
+const moertExitDirectionOrderZh = ['east', 'west', 'south', 'north'];
+const moertExitDirectionOrderEn = ['north', 'south', 'east', 'west'];
+
+function resolveMoertExitDirectionText(raw: unknown): { zh: string; en: string } {
+  const values = Array.isArray(raw) ? raw.map(asString) : [];
+  const zh = moertExitDirectionOrderZh
+    .filter((direction) => values.includes(direction))
+    .map((direction) => moertExitDirectionZh[direction])
+    .join('');
+  const words = moertExitDirectionOrderEn
+    .filter((direction) => values.includes(direction))
+    .map((direction) => moertExitDirectionEn[direction]);
+  const en = words.length
+    ? words[0] +
+      words
+        .slice(1)
+        .map((word) => word.toLowerCase())
+        .join('')
+    : '';
+  return { zh, en };
+}
+
+function parseMoertTwoRowContainer(
+  props: JsonObject,
+  themeKey: string,
+  defaults: ElementColors,
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingElement[] {
+  const containerRows = (Array.isArray(props.children) ? props.children : []).filter(
+    (row): row is unknown[] => Array.isArray(row),
+  );
+  const elements = containerRows.flatMap((row) =>
+    row
+      .filter(isObject)
+      .flatMap((component) => parseMoertComponent(component, themeKey, defaults, warnings)),
+  );
+  if (elements.length) {
+    warnings.add('moert-two-row-container', '双行容器已展开为同一行，容器内的上下分行不再保留。');
+  }
+  return elements;
+}
+
+function parseMoertFilledLargeText(
+  value: string,
+  rawFillColor: unknown,
+  shape: 'rectangle' | 'circle',
+  defaults: ElementColors,
+  colors: ElementColors,
+  warnings: ReturnType<typeof createWarningCollector>,
+): MetroWayfindingElement[] {
+  if (!value) {
+    warnings.add('moert-empty-text', '文本组件内容为空，已忽略。');
+    return [];
+  }
+  return [createFilledLargeText(value, rawFillColor, shape, defaults, colors)];
+}
+
+function resolveMoertAlign(value: unknown): MetroWayfindingTextAlign {
+  const align = asString(value);
+  return align === 'right' || align === 'center' ? align : 'left';
+}
+
+function resolveMoertFacilityIcon(
+  rawIcon: string,
+): { iconId: string; direction?: MetroWayfindingIconDirection } | undefined {
+  const normalized = rawIcon.trim().toLowerCase();
+  if (!normalized) return undefined;
+  const directional = normalized.match(/^(.*)_(left|right)$/u);
+  const base = directional ? (directional[1] ?? normalized) : normalized;
+  const iconId = moertFacilityIcons[base];
+  if (!iconId) return undefined;
+  const direction = directional?.[2] as MetroWayfindingIconDirection | undefined;
+  return {
+    iconId,
+    direction: direction && moertDirectionalIcons.has(iconId) ? direction : undefined,
+  };
+}
+
+function resolveMoertLineColorByKey(key: string): string | undefined {
+  return moertLineColorKeys[key.trim().toLowerCase()];
+}
+
+function resolveMoertCanvasLength(value: unknown): number {
+  const width = Number(value);
+  // 上游按像素标注牌面宽度，本模板以米为画布单位、默认 128 px/m。
+  return Number.isFinite(width)
+    ? Math.max(1, Math.min(100, Math.round(width / MOERT_GUIDEGEN_PX_PER_METER)))
+    : 4;
+}
+
+/**
+ * 画布底色 / 前景色取各组件 `props.background`、`props.foreground` 的众数：
+ * 上游把画布颜色下沉到了组件上，没有单独的画布字段。
+ * 组件的背景普遍写成 `transparent` 时（成都、港铁、北京旧版），回落到主题常量。
+ */
+function resolveMoertCanvasColors(rawRows: readonly unknown[][], themeKey: string): ElementColors {
+  const backgrounds = new Map<string, number>();
+  const foregrounds = new Map<string, number>();
+  rawRows
+    .flat()
+    .filter(isObject)
+    .forEach((component) => {
+      const props = isObject(component.props) ? component.props : {};
+      const background = normalizeMoertColor(props.background);
+      if (background) backgrounds.set(background, (backgrounds.get(background) ?? 0) + 1);
+      const foreground = normalizeMoertColor(props.foreground);
+      if (foreground) foregrounds.set(foreground, (foregrounds.get(foreground) ?? 0) + 1);
+    });
+  const themeDefaults = moertThemeDefaults[themeKey];
+  const backgroundColor = resolveMoertMostFrequent(backgrounds) ?? themeDefaults?.background;
+  return {
+    backgroundColor,
+    foregroundColor:
+      resolveMoertMostFrequent(foregrounds) ??
+      themeDefaults?.foreground ??
+      resolveReadableForeground(backgroundColor),
+  };
+}
+
+function resolveMoertElementColors(props: JsonObject, defaults: ElementColors): ElementColors {
+  const background = normalizeMoertColor(props.background);
+  const foreground = normalizeMoertColor(props.foreground);
+  // 与画布底色一致的组件背景不落到元素上，避免每个元素都带一层同色底块。
+  // 前景色必须保留：线路组合框会据此决定文字颜色，丢掉会回退成按线路色反推的白色。
+  return {
+    backgroundColor: background && background !== defaults.backgroundColor ? background : undefined,
+    foregroundColor: foreground,
+  };
+}
+
+function resolveMoertMostFrequent(counts: Map<string, number>): string | undefined {
+  let best: string | undefined;
+  let bestCount = 0;
+  counts.forEach((count, value) => {
+    if (count > bestCount) {
+      best = value;
+      bestCount = count;
+    }
+  });
+  return best;
+}
+
+function normalizeMoertColor(value: unknown): string | undefined {
+  const raw = asString(value).trim();
+  if (!raw || raw.toLowerCase() === 'transparent') return undefined;
+  return cssColorToHex(raw);
+}
+
+function joinMoertText(prefix: string, value: string): string {
+  return [prefix.trim(), value.trim()].filter(Boolean).join(' ');
+}
+
+function createColoredLineText(
+  chinese: string,
+  english: string,
+  color: string,
+  align: MetroWayfindingTextAlign,
+  colors: ElementColors,
+): Extract<MetroWayfindingElement, { type: 'text' }> {
+  if (!chinese) return createTextElement(chinese, english, align, colors);
+  const element = createTextElement(chinese, english, align, colors);
+  element.rows[0] = {
+    id: createMetroWayfindingId('text-main-import'),
+    kind: 'main',
+    segments: [{ kind: 'line', value: chinese.slice(0, 160), color }],
+  };
+  return element;
+}
+
+function createSegmentedTextElement(
+  mainRows: readonly (readonly MetroWayfindingMainSegment[])[],
+  align: MetroWayfindingTextAlign,
+  colors: ElementColors,
+): Extract<MetroWayfindingElement, { type: 'text' }> {
+  return {
+    id: createMetroWayfindingId('text-import'),
+    type: 'text',
+    align,
+    writingMode: 'horizontal',
+    rows: mainRows.map((segments) => ({
+      id: createMetroWayfindingId('text-main-import'),
+      kind: 'main' as const,
+      segments: segments.map((segment) => ({ ...segment })),
+    })),
+    ...colors,
+  };
+}
+
+function createFilledLargeText(
+  value: string,
+  rawFillColor: unknown,
+  shape: 'rectangle' | 'circle',
+  defaults: ElementColors,
+  colors: ElementColors,
+): Extract<MetroWayfindingElement, { type: 'largeText' }> {
+  const rawFill = normalizeMoertColor(rawFillColor);
+  // 与画布同色的底板不可见，不要为它画一圈与外框等大的色块。
+  const fill = rawFill && rawFill !== defaults.backgroundColor ? rawFill : undefined;
+  const element = createLargeTextElement(value, fill ? shape : 'none', colors);
+  if (!fill) return element;
+  return {
+    ...element,
+    frameFillMode: 'color',
+    frameFillColor: fill,
+    foregroundColor: resolveReadableForeground(fill),
+  };
+}
+
+/**
+ * 「侧边 / 底部色带 + 内容」的组合框，用于重庆 / 成都 / 北京的线路标识。
+ * 上游的线路色在这三种版式里分别是左侧竖条、下方横条、整体填充。
+ */
+function createStripeCombinationElement(
+  children: MetroWayfindingCombinationChild[],
+  color: string,
+  stripePosition: MetroWayfindingCombinationStripePosition,
+  colors: ElementColors,
+): MetroWayfindingCombinationElement {
+  return {
+    id: createMetroWayfindingId('combination-import'),
+    type: 'combination',
+    scale: METRO_WAYFINDING_COMBINATION_MAX_SCALE,
+    children,
+    frameFillMode: 'stripe',
+    frameFillColor: color,
+    frameStroke: false,
+    stripePosition,
+    ...colors,
+  };
+}
+
+/** 「整块线路色 + 内容」的组合框，用于北京旧版的实心线路底板。 */
+function createFilledCombinationElement(
+  children: MetroWayfindingCombinationChild[],
+  color: string,
+  colors: ElementColors,
+): MetroWayfindingCombinationElement {
+  return {
+    id: createMetroWayfindingId('combination-import'),
+    type: 'combination',
+    scale: METRO_WAYFINDING_COMBINATION_MAX_SCALE,
+    children,
+    frameFillMode: 'color',
+    frameFillColor: color,
+    frameStroke: false,
+    stripePosition: 'left',
+    foregroundColor: colors.foregroundColor ?? resolveReadableForeground(color),
+    backgroundColor: colors.backgroundColor,
+  };
+}
+
+/** 全副文本行的小字文本：本模板没有字号字段，用「只含次要文本行」表达更小的字号。 */
+function createSecondaryTextElement(
+  lines: readonly string[],
+  align: MetroWayfindingTextAlign,
+  colors: ElementColors = {},
+): Extract<MetroWayfindingElement, { type: 'text' }> {
+  return {
+    id: createMetroWayfindingId('text-import'),
+    type: 'text',
+    align,
+    writingMode: 'horizontal',
+    rows: lines.filter(Boolean).map((value) => ({
+      id: createMetroWayfindingId('text-secondary-import'),
+      kind: 'secondary' as const,
+      value: value.slice(0, 160),
+      bold: false,
+    })),
+    ...colors,
+  };
+}
+
 function createTextElement(
   main: string,
   secondary: string,
@@ -2684,7 +3600,7 @@ function createArrowElement(
 
 function createLargeTextElement(
   value: string,
-  frameShape: 'none' | 'rectangle' = 'none',
+  frameShape: MetroWayfindingFrameShape = 'none',
   colors: ElementColors = {},
 ): Extract<MetroWayfindingElement, { type: 'largeText' }> {
   return {
@@ -2729,12 +3645,13 @@ function mergeMetroLargeTextValues(
 function createSpaceElement(
   mode: 'fixed' | 'flex',
   colors: ElementColors = {},
+  units = 1,
 ): Extract<MetroWayfindingElement, { type: 'space' }> {
   return {
     id: createMetroWayfindingId('space-import'),
     type: 'space',
     mode,
-    units: 1,
+    units,
     ...colors,
   };
 }

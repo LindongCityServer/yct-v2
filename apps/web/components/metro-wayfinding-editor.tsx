@@ -1205,6 +1205,15 @@ export function MetroWayfindingEditor({
                         </a>
                         <small>{t('metroWayfindingEditor.import.sourceExternalHint')}</small>
                       </li>
+                      <li>
+                        <a href="https://guidegen.0v0.my/" target="_blank" rel="noreferrer">
+                          MoeRT-GuideGen
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            open_in_new
+                          </span>
+                        </a>
+                        <small>{t('metroWayfindingEditor.import.sourceExternalHint')}</small>
+                      </li>
                     </ul>
                   </div>
                   <div className="metro-wayfinding-project-import-limits">

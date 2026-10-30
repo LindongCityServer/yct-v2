@@ -166,7 +166,9 @@ check(
 );
 check(
   '双输入接在字段网格里，且不依赖 serverOverride 标记',
-  /overridableFields\.map\(\(field\) =>[\s\S]{0,200}?field\.key === SERVICE_TIME_FIELD_KEY && offerProjectServiceTimeInput/.test(
+  // 字段网格现会先过 isMaterialFieldVisible 过滤（隐藏不适用的联动字段），
+  // 断言允许这层过滤存在，但仍要求首末班车字段在同一处按 offerProjectServiceTimeInput 分支渲染。
+  /overridableFields\s*\.filter\(isMaterialFieldVisible\)\s*\.map\(\(field\) =>[\s\S]{0,300}?field\.key === SERVICE_TIME_FIELD_KEY && offerProjectServiceTimeInput/.test(
     studioSource,
   ),
 );
