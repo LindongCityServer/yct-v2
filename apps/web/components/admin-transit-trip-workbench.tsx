@@ -626,7 +626,8 @@ export function AdminTransitTripWorkbench({
     pushHistory();
     setEntries((current) => current.filter((item) => item.clientId !== clientId));
     setSelectedId((current) => (current === clientId ? null : current));
-    markLabelsStale();
+    // 删除不会改变剩余班次的时刻，不需要强制重新分配标签；
+    // 若删到一条不剩，也就没有标签可重排，避免保存被卡住。
     setDirty(true);
     setError('');
     setStatus(
@@ -878,7 +879,7 @@ export function AdminTransitTripWorkbench({
     if (!line || !revision) {
       return;
     }
-    if (labelsNeedRefresh) {
+    if (labelsNeedRefresh && entries.length > 0) {
       setError('班次时刻已改动，请先重新按标签池分配班次标签，再保存。');
       return;
     }
