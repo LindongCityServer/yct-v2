@@ -58,6 +58,12 @@ import { buildMapMarkerHref } from '../lib/map-marker-link';
 import { resolveSearchImageSrc } from '../lib/search-image-src';
 import { getSiteSocialLinkLabel } from '../lib/site-social-links';
 import { pickSuggestionIcon } from '../lib/suggestion-icons';
+import {
+  isExplorablePoi,
+  hasExplorableGeometry,
+  nextSuggestionSeed,
+  shuffleWithSeed,
+} from '../lib/random-explore';
 import type { WikiSearchResult } from '../lib/wiki-search';
 import {
   detectEmbeddedContext,
@@ -203,6 +209,9 @@ export function GlobalSearchPanel({
   const trimmedQuery = query.trim();
   // 浮层用 open 控制；独立页面始终处于“已打开”状态。
   const active = isPage || open;
+  useEffect(() => {
+    if (active) setSuggestionOffset(nextSuggestionSeed);
+  }, [active]);
   const [conversationHydrated, setConversationHydrated] = useState(false);
 
   // 关闭面板或刷新页面后恢复上一次问一问问答，避免误退出后丢失上下文。
@@ -257,7 +266,7 @@ export function GlobalSearchPanel({
       setAskRequested(payload.ask === true);
       setActiveAskQuery('');
       setSubmittedAskQuery('');
-      setSuggestionOffset(0);
+      setSuggestionOffset(nextSuggestionSeed);
       assistantAbortRef.current?.abort();
       setAssistantSetupOpen(false);
       setAssistantStatus('idle');
@@ -826,7 +835,19 @@ export function GlobalSearchPanel({
     };
 
     const addMarkers = (limit: number) => {
-      const placeMarkers = markers.filter((marker) => marker.categoryId !== 'player');
+      const placeMarkers = shuffleWithSeed(
+        markers.filter(
+          (marker) =>
+            isExplorablePoi(marker) ||
+            (marker.categoryId === 'transit-line' &&
+              (!marker.transitOperationStatus || marker.transitOperationStatus === 'operating') &&
+              marker.transitLineSegments?.some(
+                (segment) => segment.operationStatus === 'operating',
+              ) &&
+              hasExplorableGeometry(marker.geometry)),
+        ),
+        suggestionOffset,
+      );
       const taken = new Set<string>();
       let added = 0;
 
@@ -848,13 +869,13 @@ export function GlobalSearchPanel({
       };
 
       // 交通设施分类各取一个；同类有多个地点时跟着“换一批”轮换。
-      for (const category of suggestionMarkerCategories) {
+      for (const category of shuffleWithSeed(suggestionMarkerCategories, suggestionOffset)) {
         if (added >= limit) {
           break;
         }
         const group = placeMarkers.filter((marker) => marker.categoryId === category);
         if (group.length > 0) {
-          tryAdd(group[suggestionOffset % group.length]);
+          tryAdd(group[0]);
         }
       }
 
@@ -1045,12 +1066,7 @@ export function GlobalSearchPanel({
   ]);
 
   const visibleSuggestions = useMemo(() => {
-    if (suggestionPool.length <= 4) {
-      return suggestionPool;
-    }
-
-    const offset = suggestionOffset % suggestionPool.length;
-    return [...suggestionPool.slice(offset), ...suggestionPool.slice(0, offset)].slice(0, 4);
+    return shuffleWithSeed(suggestionPool, suggestionOffset).slice(0, 4);
   }, [suggestionOffset, suggestionPool]);
 
   useEffect(() => {
@@ -1186,7 +1202,7 @@ export function GlobalSearchPanel({
     setAskRequested(false);
     setActiveAskQuery('');
     setSubmittedAskQuery('');
-    setSuggestionOffset(0);
+    setSuggestionOffset(nextSuggestionSeed);
     assistantAbortRef.current?.abort();
     setAssistantSetupOpen(false);
     setAssistantStatus(
@@ -1673,7 +1689,7 @@ export function GlobalSearchPanel({
   }
 
   function refreshSuggestions() {
-    setSuggestionOffset((current) => current + 4);
+    setSuggestionOffset(nextSuggestionSeed);
     if (!entryPreference.aiSuggestions || !assistantConfig) {
       return;
     }
@@ -1883,7 +1899,7 @@ export function GlobalSearchPanel({
                     <button
                       className="global-search-suggestions-refresh"
                       type="button"
-                      onClick={() => setSuggestionOffset((current) => current + 4)}
+                      onClick={() => setSuggestionOffset(nextSuggestionSeed)}
                     >
                       {t('globalSearch.suggestion.refresh')}
                     </button>

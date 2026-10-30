@@ -490,6 +490,14 @@ body .material-symbols-outlined {
 }
 
 .topbar-page-title {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font-family: inherit;
+  line-height: inherit;
+  text-align: start;
+  cursor: pointer;
   min-width: 0;
   overflow: hidden;
   color: var(--yct-color-text-secondary);
@@ -497,6 +505,11 @@ body .material-symbols-outlined {
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.topbar-page-title:focus-visible {
+  outline: 2px solid var(--yct-color-accent);
+  outline-offset: 4px;
 }
 
 .topbar-actions {

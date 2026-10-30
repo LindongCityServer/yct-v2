@@ -5,6 +5,12 @@ type CommonCatalog = Record<CommonMessageKey, string>;
 
 export const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
   'zh-CN': {
+    'map.explore.action': '手气不错',
+    'map.explore.loading': '正在寻找一个好去处…',
+    'map.explore.failed': '暂时无法读取探索资料，请再次点击标题重试。',
+    'map.explore.empty': '暂时没有可探索的地点或运营线路。',
+    'map.explore.found': '手气不错：{name}',
+
     'account.offlinePackage.area': '面积 {area} 方块',
     'account.offlinePackage.bounds': 'X {minX} 至 {maxX}，Z {minZ} 至 {maxZ}',
     'account.offlinePackage.close': '关闭',
@@ -2070,6 +2076,12 @@ export const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'worldCoordinate.yPlaceholder': '留空继承地图默认高度',
   },
   'zh-Hant': {
+    'map.explore.action': '好手氣',
+    'map.explore.loading': '正在尋找一個好去處…',
+    'map.explore.failed': '暫時無法讀取探索資料，請再次點擊標題重試。',
+    'map.explore.empty': '暫時沒有可探索的地點或營運路線。',
+    'map.explore.found': '好手氣：{name}',
+
     'account.offlinePackage.area': '面積 {area} 方塊',
     'account.offlinePackage.bounds': 'X {minX} 至 {maxX}，Z {minZ} 至 {maxZ}',
     'account.offlinePackage.close': '關閉',
@@ -4135,6 +4147,12 @@ export const commonCatalogs: Record<LocaleCode, CommonCatalog> = {
     'worldCoordinate.yPlaceholder': '留空繼承地圖預設高度',
   },
   en: {
+    'map.explore.action': 'I’m feeling lucky',
+    'map.explore.loading': 'Finding somewhere to explore…',
+    'map.explore.failed': 'Could not load places to explore. Select the title to try again.',
+    'map.explore.empty': 'No places or operating lines are available to explore.',
+    'map.explore.found': 'Feeling lucky: {name}',
+
     'account.offlinePackage.area': 'Area {area} blocks',
     'account.offlinePackage.bounds': 'X {minX} to {maxX}, Z {minZ} to {maxZ}',
     'account.offlinePackage.close': 'Close',
