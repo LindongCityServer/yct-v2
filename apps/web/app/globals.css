@@ -14078,6 +14078,18 @@ div.telegraph-output-scene.is-packing {
   font-weight: 650;
 }
 
+.transit-operator-link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+}
+
+.transit-operator-link .material-symbols-outlined {
+  font-size: 0.9em;
+}
+
 .admin-content-item.admin-poi-item,
 .admin-content-item.admin-poi-legacy-marker-item {
   grid-template-columns: 24px minmax(0, 1fr);

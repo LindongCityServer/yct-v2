@@ -41,6 +41,7 @@ export interface TransitLineSummary {
   color?: string;
   maxCarCount?: number;
   operator?: string;
+  operatorUrl?: string;
   fare?: string;
   firstLastBus?: {
     first?: string;
@@ -284,6 +285,7 @@ async function readLegacyTransitSnapshotUncached(
         color: line.color,
         maxCarCount: line.maxCarCount ?? maxCarCountByLine.get(line.name),
         operator: line.operator,
+        operatorUrl: line.operatorUrl,
         fare: line.fare,
         firstLastBus: line.firstLastBus,
         departureTimes: line.departureTimes,
@@ -437,6 +439,7 @@ export function buildTransitOverview(
       maxCarCount: line.maxCarCount,
       color: line.color,
       operator: line.operator,
+      operatorUrl: line.operatorUrl,
       fare: line.fare,
       firstLastBus: line.firstLastBus,
       departureTimes: line.departureTimes,

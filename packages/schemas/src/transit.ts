@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { optionalHttpUrlSchema } from './common';
 import { idSchema } from './common';
 
 const transitModeSchema = z.enum(['metro', 'tram', 'bus', 'coach', 'ferry', 'railway', 'custom']);
@@ -230,6 +231,7 @@ export const transitLineDraftSchema = z.object({
     .optional(),
   segmentPaths: z.array(transitLineSegmentPathSchema).max(255).optional(),
   operator: z.string().trim().max(120).optional(),
+  operatorUrl: optionalHttpUrlSchema,
   fare: z.string().trim().max(80).optional(),
   firstBus: z.string().trim().max(40).optional(),
   lastBus: z.string().trim().max(40).optional(),

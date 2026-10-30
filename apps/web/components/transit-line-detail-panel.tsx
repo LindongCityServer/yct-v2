@@ -1,5 +1,7 @@
 'use client';
 
+import { TransitOperatorName } from './transit-operator-name';
+
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
@@ -131,7 +133,13 @@ export function TransitLineDetailPanel({
           </div>
           <div>
             <dt>{t('lineDetail.operator')}</dt>
-            <dd>{line.operator ?? t('lineDetail.toBeAdded')}</dd>
+            <dd>
+              <TransitOperatorName
+                name={line.operator}
+                url={line.operatorUrl}
+                fallback={t('lineDetail.toBeAdded')}
+              />
+            </dd>
           </div>
           <div>
             <dt>{t('lineDetail.extraAttributes')}</dt>

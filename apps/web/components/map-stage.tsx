@@ -1,5 +1,7 @@
 'use client';
 
+import { TransitOperatorName } from './transit-operator-name';
+
 import type {
   ApiListResponse,
   ApiMeta,
@@ -5814,7 +5816,13 @@ export function MapStage() {
               </div>
               <div>
                 <dt>{t('lineDetail.operator')}</dt>
-                <dd>{focusedTransitLine.operator ?? t('lineDetail.toBeAdded')}</dd>
+                <dd>
+                  <TransitOperatorName
+                    name={focusedTransitLine.operator}
+                    url={focusedTransitLine.operatorUrl}
+                    fallback={t('lineDetail.toBeAdded')}
+                  />
+                </dd>
               </div>
               <div>
                 <dt>{t('map.lineDetail.fare')}</dt>

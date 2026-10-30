@@ -29,6 +29,7 @@ interface LegacyLineRecord {
   color?: string;
   maxCarCount?: number;
   operator?: string | string[];
+  operatorUrl?: string;
   fare?: string | number;
   firstLastBus?: {
     first?: string;
@@ -234,6 +235,7 @@ export function parseLegacyTransitSource(input: {
       color: normalizeColor(line.color),
       maxCarCount: normalizePositiveInteger(line.maxCarCount),
       operator: normalizeLegacyText(line.operator),
+      operatorUrl: line.operatorUrl,
       fare: normalizeLegacyFare(line.fare),
       firstLastBus: line.firstLastBus,
       sourcePath: input.sourcePath,
