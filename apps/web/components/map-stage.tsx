@@ -34,6 +34,7 @@ import { getFontEmbedCSS, toBlob } from 'html-to-image';
 import LZString from 'lz-string';
 import QRCode from 'qrcode';
 import { appPath } from '../lib/app-paths';
+import { buildExploreCandidates, pickExploreCandidate } from '../lib/random-explore';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { publishAssistantPageContext } from '../lib/client-assistant-page-context';
 import { publishLoginRequiredForResponse } from '../lib/client-auth-events';
@@ -829,6 +830,14 @@ export function MapStage() {
   );
   const [regionResponse, setRegionResponse] = useState<UnminedRegionResponse | null>(null);
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
+  const [transitLoadStatus, setTransitLoadStatus] = useState<LoadStatus>('loading');
+  const [exploreReload, setExploreReload] = useState(0);
+  const [mapCompletedReload, setMapCompletedReload] = useState(-1);
+  const [transitCompletedReload, setTransitCompletedReload] = useState(-1);
+  const luckyRequest = searchParams.get('lucky');
+  const handledLuckyRef = useRef<string | null>(null);
+  const luckyRequiredReloadRef = useRef(0);
+  const lastLuckyMarkerRef = useRef<string | undefined>(undefined);
   const [viewportSize, setViewportSize] = useState<ViewportSize>({ width: 0, height: 0 });
   const [mapVisibleRect, setMapVisibleRect] = useState<MapVisibleRect>({
     left: 0,
@@ -1100,6 +1109,8 @@ export function MapStage() {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
 
     async function loadMapData() {
       setLoadStatus('loading');
@@ -1107,13 +1118,23 @@ export function MapStage() {
       try {
         const [tileResult, markerResult, categoryResult, spatialProfileResult, areaResult] =
           await Promise.all([
-            fetch(appPath('/api/map/tile-providers'), { cache: 'no-store' }),
-            fetch(appPath('/api/map/markers'), { cache: 'no-store' }),
-            fetch(appPath('/api/map/poi-categories'), { cache: 'no-store' }),
-            fetch(appPath('/api/map/spatial-profile'), { cache: 'no-store' }).catch(() => null),
-            fetch(appPath('/api/map/administrative-areas'), { cache: 'no-store' }).catch(
-              () => null,
-            ),
+            fetch(appPath('/api/map/tile-providers'), {
+              cache: 'no-store',
+              signal: controller.signal,
+            }),
+            fetch(appPath('/api/map/markers'), { cache: 'no-store', signal: controller.signal }),
+            fetch(appPath('/api/map/poi-categories'), {
+              cache: 'no-store',
+              signal: controller.signal,
+            }),
+            fetch(appPath('/api/map/spatial-profile'), {
+              cache: 'no-store',
+              signal: controller.signal,
+            }).catch(() => null),
+            fetch(appPath('/api/map/administrative-areas'), {
+              cache: 'no-store',
+              signal: controller.signal,
+            }).catch(() => null),
           ]);
 
         const tileData = (await tileResult.json()) as ApiListResponse<TileProviderDescriptor>;
@@ -1128,12 +1149,21 @@ export function MapStage() {
 
         if (!cancelled) {
           setTileResponse(tileData);
-          setMarkerResponse(markerData);
+          setMarkerResponse(
+            markerResult.ok && Array.isArray(markerData.snapshot?.markers) ? markerData : null,
+          );
           setCategoryResponse(categoryData);
           setMapSpatialProfile(spatialProfileData.profile ?? null);
           setAdministrativeAreas(areaData.items ?? []);
           setLoadStatus(
-            tileResult.ok && markerResult.ok && categoryResult.ok ? 'ready' : 'unavailable',
+            tileResult.ok &&
+              markerResult.ok &&
+              categoryResult.ok &&
+              Array.isArray(tileData.items) &&
+              Array.isArray(markerData.snapshot?.markers) &&
+              Array.isArray(categoryData.items)
+              ? 'ready'
+              : 'unavailable',
           );
         }
       } catch {
@@ -1143,12 +1173,17 @@ export function MapStage() {
       }
     }
 
-    void loadMapData();
+    void loadMapData().finally(() => {
+      window.clearTimeout(timeout);
+      if (!cancelled) setMapCompletedReload(exploreReload);
+    });
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timeout);
+      controller.abort();
     };
-  }, []);
+  }, [exploreReload]);
 
   useEffect(
     () =>
@@ -1193,19 +1228,27 @@ export function MapStage() {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
 
     async function loadTransitOverview() {
+      setTransitLoadStatus('loading');
       try {
         const [overviewResponse, stationDetailsResponse] = await Promise.all([
-          fetch(appPath('/api/transit/overview'), { cache: 'no-store' }),
-          fetch(appPath('/api/transit/station-details'), { cache: 'no-store' }),
+          fetch(appPath('/api/transit/overview'), { cache: 'no-store', signal: controller.signal }),
+          fetch(appPath('/api/transit/station-details'), {
+            cache: 'no-store',
+            signal: controller.signal,
+          }),
         ]);
         const [overviewData, stationDetailsData] = await Promise.all([
           overviewResponse.json() as Promise<TransitOverviewResponse>,
           stationDetailsResponse.json() as Promise<TransitStationDetailsResponse>,
         ]);
-        if (!cancelled && overviewResponse.ok) {
-          setTransitOverview(overviewData);
+        if (!cancelled) {
+          const usable = overviewResponse.ok && Array.isArray(overviewData.lines);
+          setTransitOverview(usable ? overviewData : null);
+          setTransitLoadStatus(usable ? 'ready' : 'unavailable');
         }
         if (!cancelled && stationDetailsResponse.ok) {
           setTransitStationDetails(stationDetailsData.items ?? []);
@@ -1213,17 +1256,23 @@ export function MapStage() {
       } catch {
         if (!cancelled) {
           setTransitOverview(null);
+          setTransitLoadStatus('unavailable');
           setTransitStationDetails([]);
         }
       }
     }
 
-    void loadTransitOverview();
+    void loadTransitOverview().finally(() => {
+      window.clearTimeout(timeout);
+      if (!cancelled) setTransitCompletedReload(exploreReload);
+    });
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timeout);
+      controller.abort();
     };
-  }, []);
+  }, [exploreReload]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -1508,6 +1557,7 @@ export function MapStage() {
       routePlanDraft ||
       sharedCoordinateFocus ||
       sharedMarkerFocusKey ||
+      luckyRequest ||
       sharedRoutePlan
     ) {
       return;
@@ -3112,6 +3162,76 @@ export function MapStage() {
     },
     [effectiveMapVisibleRect, viewportSize],
   );
+
+  // A query token survives the map chunk loading and also works from other pages.
+  useEffect(() => {
+    if (!luckyRequest) return;
+    luckyRequiredReloadRef.current = exploreReload;
+    if (loadStatus === 'unavailable' || transitLoadStatus === 'unavailable') {
+      luckyRequiredReloadRef.current = exploreReload + 1;
+      setExploreReload(exploreReload + 1);
+    }
+    publishToastRequested({ message: t('map.explore.loading'), dedupeKey: 'map-lucky-loading' });
+    const timer = window.setTimeout(() => {
+      if (handledLuckyRef.current !== luckyRequest) {
+        handledLuckyRef.current = luckyRequest;
+        publishToastRequested({ message: t('map.explore.failed'), tone: 'warning' });
+      }
+    }, 15000);
+    return () => window.clearTimeout(timer);
+    // The request token is the trigger; data updates must not start another request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [luckyRequest]);
+
+  const luckyCandidates = useMemo(
+    () => buildExploreCandidates(canonicalCenterableMarkers, localizedTransitOverview?.lines ?? []),
+    [canonicalCenterableMarkers, localizedTransitOverview],
+  );
+
+  useEffect(() => {
+    if (
+      !luckyRequest ||
+      handledLuckyRef.current === luckyRequest ||
+      mapCompletedReload < luckyRequiredReloadRef.current ||
+      transitCompletedReload < luckyRequiredReloadRef.current ||
+      viewportSize.width <= 0 ||
+      viewportSize.height <= 0
+    )
+      return;
+    handledLuckyRef.current = luckyRequest;
+    if (loadStatus !== 'ready' || transitLoadStatus !== 'ready') {
+      publishToastRequested({ message: t('map.explore.failed'), tone: 'warning' });
+      return;
+    }
+    const target = pickExploreCandidate(luckyCandidates, lastLuckyMarkerRef.current);
+    if (!target) {
+      publishToastRequested({ message: t('map.explore.empty'), tone: 'info' });
+      return;
+    }
+    lastLuckyMarkerRef.current = target.id;
+    setRoutePlanDraft(null);
+    setEditingRouteEndpoint(null);
+    setMarkerQuery('');
+    setMarkersVisible(true);
+    setLinearFeaturesVisible(true);
+    setLayerPanelOpen(false);
+    focusMapMarker(target);
+    publishToastRequested({
+      message: t('map.explore.found', { name: target.label }),
+      tone: 'success',
+    });
+  }, [
+    luckyRequest,
+    mapCompletedReload,
+    transitCompletedReload,
+    loadStatus,
+    transitLoadStatus,
+    luckyCandidates,
+    focusMapMarker,
+    viewportSize.width,
+    viewportSize.height,
+    t,
+  ]);
 
   useEffect(() => {
     if (!sharedMarkerFocusKey) {
@@ -11092,8 +11212,7 @@ function applyMapOverlayPreviousVisibility(
     }),
     shapePois: shapePois.filter(
       (shape) =>
-        snapshot.shapePois.has(shape.id) &&
-        isInsideViewport(shape.centerLeft, shape.centerTop),
+        snapshot.shapePois.has(shape.id) && isInsideViewport(shape.centerLeft, shape.centerTop),
     ),
   };
 }
