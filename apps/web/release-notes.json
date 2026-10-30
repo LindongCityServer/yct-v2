@@ -5,7 +5,7 @@
     {
       "version": "2.17.0",
       "releasedAt": "2026-10-30T09:24:58.633Z",
-      "sourceFingerprint": "fdd191693fa1259d29ea422f93316c1c459ab3969ed44c34b9de3f7b9ea69f63",
+      "sourceFingerprint": "80db0ef6c101794fc73f937f4fee98fa73df9f188d496cbe21fcc0d6957a31ac",
       "themes": ["map", "transit", "materials", "portal", "i18n", "api"],
       "changes": [
         {
