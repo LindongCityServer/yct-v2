@@ -400,9 +400,11 @@ export function MaterialStudioPanel({
     wayfindingBaseline !== null &&
     buildMetroWayfindingTextSignature(input.layout ?? '') ===
       buildMetroWayfindingTextSignature(wayfindingBaseline.layout);
-  // 服务器线网 / 导入项目模式导出本身就是无水印；地铁导视需额外满足未修改文本。
+  // 服务器线网导出需要已验证账号；文本未修改的地铁导视则对所有访问者开放免水印下载，
+  // 未验证账号由服务端压到标准清晰度（≤128 px/m、长边 ≤2048 px）。
   const canDownloadWatermarkFree =
-    serverAccountReady && (mode === 'server' || wayfindingTemplateUnmodified);
+    (mode === 'manual' && wayfindingTemplateUnmodified) ||
+    (serverAccountReady && mode === 'server');
   // 宽屏（≥960px）时预览区以独立面板常驻页面，此时把插入建议/宽度警告下移到预览下方。
   // 窄屏时预览退化为弹窗，页面上没有预览面板可依附，改由编辑器本体就地渲染。
   const isMetroInspectorDetached = isMetroWayfinding && !isPreviewDialogViewport;

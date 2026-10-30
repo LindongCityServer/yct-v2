@@ -372,7 +372,17 @@ export async function prepareMaterialExport(input: {
   ipAddress?: string;
   ipLocation?: string;
   serverAccountVerified: boolean;
+  /**
+   * 标准清晰度通道：未登录或未验证服务器账号时走这里。
+   * 只允许「文本未修改」的地铁导视，并按 128 px/m 上限渲染。
+   */
+  standardTier?: boolean;
+  /** 事件里的操作者类型：未登录导出记为 anonymous，登录用户记为 user。 */
+  actorType?: 'user' | 'anonymous';
 }): Promise<MaterialExportResult> {
+  if (input.standardTier && input.request.mode !== 'manual') {
+    return forbidden('未登录或未验证服务器账号时，只能导出文本未修改的地铁导视物料。');
+  }
   if (requiresVerifiedServerAccount(input.request) && !input.serverAccountVerified) {
     return {
       ok: false,
@@ -385,15 +395,17 @@ export async function prepareMaterialExport(input: {
     input.request,
     input.actorId,
     input.serverAccountVerified,
+    input.standardTier === true,
   );
   if (!source.ok) {
     return source;
   }
   try {
+    const canvas = input.standardTier ? clampAnonymousExportCanvas(source.canvas) : source.canvas;
     const rendered = await renderMaterialTemplateToPng({
       template: source.template,
       values: source.values,
-      canvas: source.canvas,
+      canvas,
       // 值已按数据来源口径校验过一次，渲染前复核必须沿用同一口径，
       // 否则派生字段（导入项目没有的运营时间）会在这一道被重新判为空而报错。
       validation:
@@ -417,14 +429,14 @@ export async function prepareMaterialExport(input: {
       sourceRef: source.sourceRef,
       draftId: source.draftId,
       inputHash: hashMaterialInput(source.values),
-      canvas: source.canvas,
+      canvas,
       outputWidthPx: rendered.widthPx,
       outputHeightPx: rendered.heightPx,
       outputSha256: createHash('sha256').update(rendered.png).digest('hex'),
       requestedAt: now,
     };
     await appendMaterialExportAuditRecord(audit);
-    await emitEvent('MaterialExportRequested', 'user', input.actorId, {
+    await emitEvent('MaterialExportRequested', input.actorType ?? 'user', input.actorId, {
       exportId: audit.id,
       actorId: input.actorId,
       templateId: audit.templateId,
@@ -455,6 +467,26 @@ function requiresVerifiedServerAccount(request: MaterialExportRequestInput): boo
     return true;
   }
   return request.source.kind === 'transit_station' && 'stationMarkerId' in request.source;
+}
+
+const anonymousExportMaxPxPerMeter = 128;
+const anonymousExportMaxLongSidePx = 2048;
+
+/**
+ * 未登录导出统一压到标准清晰度：不超过 128 px/m，且长边不超过 2048 px。
+ * 客户端可以请求更高分辨率，但匿名通道一律按此口径渲染，避免把服务端当高清出图机。
+ */
+function clampAnonymousExportCanvas(canvas: MaterialCanvasConfig): MaterialCanvasConfig {
+  const longSideM = Math.max(canvas.widthM, canvas.heightM, 1);
+  const fitPxPerMeter = Math.floor(anonymousExportMaxLongSidePx / longSideM);
+  return {
+    ...canvas,
+    pxPerMeter: Math.max(
+      16,
+      Math.min(canvas.pxPerMeter, anonymousExportMaxPxPerMeter, fitPxPerMeter),
+    ),
+    alignToTile: false,
+  };
 }
 
 export async function prepareMaterialPreview(input: {
@@ -553,6 +585,7 @@ async function resolveMaterialExportSource(
   request: MaterialExportRequestInput,
   actorId: string,
   serverAccountVerified: boolean,
+  standardTier = false,
 ): Promise<
   | {
       ok: true;
@@ -592,7 +625,7 @@ async function resolveMaterialExportSource(
     if (!isWayfindingTemplate) {
       return forbidden('只有地铁导视模板可以在未修改时免审核导出。');
     }
-    if (!serverAccountVerified) {
+    if (!serverAccountVerified && !standardTier) {
       return {
         ok: false,
         status: 403,
@@ -995,11 +1028,7 @@ function buildMaterialExportFileName(
   exportId: string,
 ): string {
   return (
-    [
-      sanitizeFileNamePart(template.title, 40) || 'material',
-      contentSummary,
-      exportId.slice(-8),
-    ]
+    [sanitizeFileNamePart(template.title, 40) || 'material', contentSummary, exportId.slice(-8)]
       .filter(Boolean)
       .join('_') + '.png'
   );

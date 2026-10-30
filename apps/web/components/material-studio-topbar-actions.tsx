@@ -98,8 +98,12 @@ export function MaterialStudioTopbarActions({ studioId }: Readonly<{ studioId: s
   const showReviewBadge =
     !studioState.canDownloadWatermarkFree &&
     (isAnonymous || studioState.mode === 'manual' || serverAccountUnverified);
+  const hasVerifiedAccount =
+    accountInfo.accountStatus === 'active' && accountInfo.serverAccountVerified === true;
   const downloadLabel = studioState.canDownloadWatermarkFree
-    ? t('materialStudio.downloadWatermarkFree')
+    ? hasVerifiedAccount
+      ? t('materialStudio.downloadWatermarkFree')
+      : t('materialStudio.downloadCleanStandard')
     : t('materialStudio.download');
 
   const railItems = useMemo<MobileActionRailItem[]>(() => {
