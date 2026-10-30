@@ -5,7 +5,7 @@
     {
       "version": "2.16.1",
       "releasedAt": "2026-10-29T16:38:27.367Z",
-      "sourceFingerprint": "e3da74aebc9aeaac936c53870ff8383aa62e831c8531ed7bf4d16551d9e4e556",
+      "sourceFingerprint": "a3c95391e5f2b2a2dc7aecf182faf9849f0529c3136f0f72442e56bde7eb653b",
       "themes": ["admin", "search", "web", "deploy"],
       "changes": [
         {
