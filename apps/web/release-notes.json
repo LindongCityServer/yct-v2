@@ -5,8 +5,8 @@
     {
       "version": "2.16.1",
       "releasedAt": "2026-10-29T16:38:27.367Z",
-      "sourceFingerprint": "7a723dbfd976c69a90ba089793a51fa973919908b0efcf321efe5a00c7a99eec",
-      "themes": ["admin", "search", "web"],
+      "sourceFingerprint": "949af55206214906f9a3b2a9ef211968c81c2eb7280ac93db345e2c8cb05db30",
+      "themes": ["admin", "search", "web", "deploy"],
       "changes": [
         {
           "category": "fix",
@@ -22,6 +22,27 @@
           "category": "fix",
           "breaking": false,
           "summary": "修复部署包缺少图片优化依赖导致首页与地点图片无法渐进加载的问题"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "POI 长简介在后台列表默认收起并支持展开"
+        },
+        { "category": "feat", "breaking": false, "summary": "线路运营公司名称支持配置官网外链" },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "后台数据概览接入每日聚合任务，部署包内置注册脚本"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "部署替换时保留 legacy-assets，避免线上图片被包内旧版本覆盖"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "内容与 POI 图片改走同源地址，线上恢复低清快照渐进加载"
         }
       ],
       "bump": "patch"
