@@ -23,6 +23,7 @@ import type {
   WheelEvent as ReactWheelEvent,
 } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AdminPoiDescription } from './admin-poi-description';
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { publishEditorDraftChanged } from '../lib/client-editor-events';
@@ -2046,7 +2047,9 @@ function LegacyPoiMarkerItem({
           {marker.categoryId ? formatCategoryName(marker.categoryId, category) : '未分类'} ·{' '}
           {geometryLabel(marker.geometry)} · {marker.id}
         </p>
-        {marker.description ? <p className="muted">{marker.description}</p> : null}
+        {marker.description ? (
+          <AdminPoiDescription key={marker.id} description={marker.description} />
+        ) : null}
         {getPoiImageUrls(marker).length > 0 ? (
           <p className="muted">图片：{getPoiImageUrls(marker).length} 张</p>
         ) : null}
