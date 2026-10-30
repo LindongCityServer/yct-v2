@@ -1386,7 +1386,7 @@ Notes:
 - start-yct-web.ps1 loads .env -> .env.production -> .env.local -> .env.production.local, and later files override earlier ones. These values also override inherited shell / PM2 environment variables for the same keys so stale localhost settings do not leak into production.
 - start-yct-web.ps1 forces NODE_ENV=production. Keep YCT_LOCAL_ADMIN_AUTH_ENABLED=0 in the deployment environment; the local administrator login is only for loopback development.
 - check-runtime-config.ps1 reports YCT_LOCAL_ADMIN_AUTH_ENABLED=true as a production warning.
-- deploy-yct-web.ps1 will automatically preserve .env, .env.production, .env.local, .env.production.local, .yct-data, runtime-assets, and apps\web\public\content-assets from the old deployment directory before replacing files.
+- deploy-yct-web.ps1 will automatically preserve .env, .env.production, .env.local, .env.production.local, .yct-data, runtime-assets, apps\web\public\content-assets, and apps\web\public\legacy-assets from the old deployment directory before replacing files.
 - Dynamic Material Symbols metadata (.yct-data\material-symbol-asset-store.json) and SVG files (runtime-assets\material-symbols) form one persistent dataset. Stop all writers and back up or restore both paths together.
 - Admin preview and first-time promotion of a new Material Symbol require outbound HTTPS access from the server to fonts.googleapis.com:443 and fonts.gstatic.com:443. Public rendering uses local assets and must not require visitor access to Google Fonts.
 - The current JSON plus filesystem Material Symbols store is single-writer only. Do not run multiple Web writers against separate local disks or concurrently write the same JSON file; migrate to shared database/object storage before horizontal scaling.
