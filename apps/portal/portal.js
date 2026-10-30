@@ -2,6 +2,7 @@
   'use strict';
 
   const config = window.LINDONG_PORTAL_CONFIG;
+  let heroItems = config.gallery ? config.gallery.slice() : [];
   if (!config) {
     return;
   }
@@ -33,8 +34,8 @@
     const locale = document.documentElement.lang;
     const i18n = window.LINDONG_PORTAL_I18N;
     return {
-      label: i18n?.translate(locale, `heroPlace.${hero.id}.label`) ?? hero.label,
-      imageAlt: i18n?.translate(locale, `heroPlace.${hero.id}.alt`) ?? hero.imageAlt,
+      label: i18n?.translate(locale, `gallery.${hero.id}.label`) ?? hero.label,
+      imageAlt: i18n?.translate(locale, `gallery.${hero.id}.alt`) ?? hero.imageAlt,
     };
   }
 
@@ -42,7 +43,7 @@
     if (activeHeroIndex < 0 || !heroImage || !heroPlaceName) {
       return;
     }
-    const hero = config.heroes[activeHeroIndex];
+    const hero = heroItems[activeHeroIndex];
     const localizedHero = localizeHero(hero);
     heroImage.alt = localizedHero.imageAlt;
     heroPlaceName.textContent = localizedHero.label;
@@ -50,7 +51,10 @@
 
   function readLastHeroId() {
     try {
-      return window.sessionStorage.getItem(lastHeroStorageKey);
+      return (
+        window.localStorage.getItem(lastHeroStorageKey) ??
+        window.sessionStorage.getItem(lastHeroStorageKey)
+      );
     } catch {
       return null;
     }
@@ -58,7 +62,8 @@
 
   function rememberHeroId(heroId) {
     try {
-      window.sessionStorage.setItem(lastHeroStorageKey, heroId);
+      window.localStorage.setItem(lastHeroStorageKey, heroId);
+      window.sessionStorage.removeItem(lastHeroStorageKey);
     } catch {
       // 存储受限时仍允许随机展示，只是不跨刷新排除上一张。
     }
@@ -90,7 +95,7 @@
   }
 
   function selectHero(reason) {
-    if (!heroImage || !heroPlaceName || !heroPlaceLink || config.heroes.length === 0) {
+    if (!heroImage || !heroPlaceName || !heroPlaceLink || heroItems.length === 0) {
       return;
     }
 
@@ -98,25 +103,29 @@
     const excludedIndex =
       activeHeroIndex >= 0
         ? activeHeroIndex
-        : config.heroes.findIndex((hero) => hero.id === storedHeroId);
+        : heroItems.findIndex((hero) => hero.id === storedHeroId);
     let nextIndex;
+    const primaryIndex = heroItems.findIndex((hero) => hero.id === config.primaryHeroId);
 
-    if (config.heroes.length > 1 && excludedIndex >= 0) {
-      nextIndex = secureRandomIndex(config.heroes.length - 1);
+    if (activeHeroIndex < 0 && !storedHeroId) {
+      // 首次打开展示固定主图，让第一次印象可控；之后每次随机。
+      nextIndex = primaryIndex >= 0 ? primaryIndex : 0;
+    } else if (heroItems.length > 1 && excludedIndex >= 0) {
+      nextIndex = secureRandomIndex(heroItems.length - 1);
       if (nextIndex >= excludedIndex) {
         nextIndex += 1;
       }
     } else {
-      nextIndex = secureRandomIndex(config.heroes.length);
+      nextIndex = secureRandomIndex(heroItems.length);
     }
 
-    const nextHero = config.heroes[nextIndex];
+    const nextHero = heroItems[nextIndex];
     const localizedHero = localizeHero(nextHero);
     activeHeroIndex = nextIndex;
     fallbackApplied = false;
     heroImage.src = nextHero.imageUrl;
     heroImage.alt = localizedHero.imageAlt;
-    heroImage.style.objectPosition = nextHero.objectPosition;
+    heroImage.style.objectPosition = nextHero.objectPosition ?? 'center 50%';
     heroPlaceName.textContent = localizedHero.label;
     heroPlaceLink.href = buildPoiMapUrl(nextHero.poiId);
     rememberHeroId(nextHero.id);
@@ -148,21 +157,22 @@
   });
 
   heroImage?.addEventListener('error', () => {
-    if (fallbackApplied || config.heroes.length === 0) {
+    if (fallbackApplied || heroItems.length === 0) {
       return;
     }
     fallbackApplied = true;
-    const fallbackHero = config.heroes[0];
+    const fallbackHero = heroItems[0];
     activeHeroIndex = 0;
     heroImage.src = fallbackHero.imageUrl;
     const localizedHero = localizeHero(fallbackHero);
     heroImage.alt = localizedHero.imageAlt;
-    heroImage.style.objectPosition = fallbackHero.objectPosition;
+    heroImage.style.objectPosition = fallbackHero.objectPosition ?? 'center 50%';
     heroPlaceName.textContent = localizedHero.label;
     heroPlaceLink.href = buildPoiMapUrl(fallbackHero.poiId);
   });
 
   document.addEventListener(eventNames.localeChanged, applyActiveHeroTranslation);
+
 
   for (const button of document.querySelectorAll('[data-copy-url]')) {
     button.addEventListener('click', () => {
@@ -229,22 +239,7 @@
   });
 
   for (const entry of document.querySelectorAll('[data-entry-id]:not([data-copy-url])')) {
-    entry.addEventListener('click', () => {
-      const targetUrl =
-        entry instanceof HTMLAnchorElement
-          ? entry.href
-          : new URL(entry.dataset.entryTarget ?? window.location.href, document.baseURI).toString();
-
-      document.dispatchEvent(
-        new CustomEvent(eventNames.entryActivated, {
-          detail: {
-            entryId: entry.dataset.entryId,
-            group: entry.dataset.entryGroup,
-            targetUrl,
-          },
-        }),
-      );
-    });
+    entry.addEventListener('click', () => dispatchEntryActivated(entry));
   }
 
   function requestWechatPosterVisibility(visible, source) {
@@ -443,6 +438,29 @@
       }
     });
   }
+
+  const searchForm = document.querySelector('#portal-search-form');
+
+  function dispatchEntryActivated(entry) {
+    const targetUrl =
+      entry instanceof HTMLAnchorElement
+        ? entry.href
+        : new URL(entry.dataset.entryTarget ?? window.location.href, document.baseURI).toString();
+    document.dispatchEvent(
+      new CustomEvent(eventNames.entryActivated, {
+        detail: {
+          entryId: entry.dataset.entryId,
+          group: entry.dataset.entryGroup,
+          targetUrl,
+        },
+      }),
+    );
+  }
+
+  if (searchForm instanceof HTMLFormElement && config.links.search) {
+    searchForm.action = config.links.search;
+  }
+
 
   initializeProgressiveImages();
 

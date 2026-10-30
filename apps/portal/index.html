@@ -66,7 +66,7 @@
         <img
           class="hero-image"
           id="hero-image"
-          src="./assets/hero/city-government.jpg"
+          src="./assets/hero/city-government.webp"
           alt="临东市政府与周边城市景观"
           fetchpriority="high"
           decoding="async"
@@ -85,7 +85,7 @@
           <div class="header-actions">
             <nav class="header-nav" aria-label="页面导航" data-i18n-aria-label="header.navLabel">
               <a href="#tools" data-i18n="header.tools">创作工具</a>
-              <a href="#maps" data-i18n="header.maps">城市地图</a>
+              <a href="#story" data-i18n="header.story">了解临东</a>
               <a href="#services" data-i18n="header.services">服务器服务</a>
               <a href="#community" data-i18n="header.community">加入临东</a>
             </nav>
@@ -108,24 +108,47 @@
           <h1 id="page-title" data-i18n="hero.title">临东市服务器</h1>
           <p class="hero-slogan" data-i18n="hero.slogan">向往临东 美好生活</p>
           <p class="hero-summary" data-i18n="hero.summary">
-            十几位建设者，把各自对家乡的记忆带进同一个 Minecraft 世界，慢慢拼成了今天的临东。
+            一座由玩家建了十年的虚拟城市，也是一套开放的公共交通设计工具——站牌、导视、线路图，打开浏览器就能做。
           </p>
           <div class="hero-actions">
-            <a class="button button-primary" href="#tools">
-              <span data-i18n="hero.useTools">使用创作工具</span>
+            <a class="button button-primary" href="#story">
+              <span data-i18n="hero.learnCity">了解临东</span>
               <span class="material-icon icon-arrow-downward" aria-hidden="true"></span>
             </a>
-            <a
-              class="button button-secondary"
-              data-link-key="yctMap"
-              data-entry-id="hero-yct-map"
-              data-entry-group="hero"
-              href="https://yct.shangxiaoguan.top/map"
-            >
-              <span data-i18n="hero.browseCity">浏览城市</span>
-              <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+            <a class="button button-secondary" href="#tools">
+              <span data-i18n="hero.makeSigns">制作站牌与线路图</span>
+              <span class="material-icon icon-arrow-downward" aria-hidden="true"></span>
             </a>
           </div>
+          <form
+            class="hero-search"
+            id="portal-search-form"
+            role="search"
+            action="https://yct.shangxiaoguan.top/search"
+            method="get"
+          >
+            <label
+              class="visually-hidden"
+              for="portal-search-input"
+              data-i18n="hero.searchLabel"
+              >搜索地点、线路或运营信息</label
+            >
+            <input
+              class="hero-search-input"
+              id="portal-search-input"
+              name="q"
+              type="search"
+              placeholder="搜索地点、线路、班次或运营公告"
+              data-i18n-placeholder="hero.searchPlaceholder"
+              autocomplete="off"
+            />
+            <button class="hero-search-submit" type="submit" data-i18n="hero.searchSubmit">
+              搜索
+            </button>
+          </form>
+          <p class="hero-note" data-i18n="hero.note">
+            无需 Minecraft 账号；登录并验证服务器账号后可下载无水印 PNG。
+          </p>
         </div>
 
         <div class="hero-place">
@@ -153,151 +176,33 @@
         </div>
       </section>
 
-      <section class="story section-band" aria-labelledby="story-title">
-        <div class="section-inner story-layout">
-          <div class="section-heading">
-            <p class="section-kicker" data-i18n="story.kicker">认识临东</p>
-            <h2 id="story-title" class="phrase-title" data-i18n-html="story.title">
-              <span>一座由不同家乡</span><span>拼成的城市</span>
-            </h2>
-          </div>
-          <div class="story-copy">
-            <p data-i18n="story.paragraph1">
-              临东从一份存档出发，经历联机、中国版房间与独立服务器，逐渐成为一座由许多人共同建设的虚拟城市。熟悉的街道、公交、车站、学校和社区被带到同一个世界里，也留下了每个人对家乡不同的理解。
-            </p>
-            <p data-i18n="story.paragraph2">
-              近十年里，玩家来来往往，建设却没有停下。地图、导视、影像、年度报告和纪念活动又把这座城市带到游戏之外：有人在这里找到归属，有人把想法变成作品，也有人从一件工具开始认识临东。
-            </p>
-            <div class="story-resources" aria-labelledby="story-resources-title">
-              <p class="story-resources-title" id="story-resources-title" data-i18n="story.more">
-                继续了解
-              </p>
-              <div class="story-resource-links">
-                <a
-                  class="story-resource-link"
-                  data-link-key="lindongWiki"
-                  data-entry-id="lindong-wiki"
-                  data-entry-group="story"
-                  href="https://wiki.shangxiaoguan.top/%E4%B8%B4%E4%B8%9C%E5%B8%82"
-                >
-                  <span data-i18n="story.cityWiki">Wiki：临东市</span>
-                  <span class="content-language-badge" data-i18n="language.simplifiedChinese"
-                    >简体中文</span
-                  >
-                  <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
-                </a>
-                <a
-                  class="story-resource-link"
-                  data-link-key="annualReports"
-                  data-entry-id="annual-reports"
-                  data-entry-group="story"
-                  href="https://wiki.shangxiaoguan.top/%E5%88%86%E7%B1%BB:%E6%9C%8D%E5%8A%A1%E5%99%A8%E5%B9%B4%E5%BA%A6%E6%8A%A5%E5%91%8A"
-                >
-                  <span data-i18n="story.annualReports">历年年度报告</span>
-                  <span class="content-language-badge" data-i18n="language.simplifiedChinese"
-                    >简体中文</span
-                  >
-                  <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
-                </a>
-                <a
-                  class="story-resource-link"
-                  data-link-key="annualReport2025"
-                  data-entry-id="annual-report-2025"
-                  data-entry-group="story"
-                  href="https://yct.shangxiaoguan.top/operations/local_content_4f81ff67-00d4-4152-a833-5a3099f1e8b6"
-                >
-                  <span data-i18n="story.annualReport2025">2025 年度报告</span>
-                  <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <section class="tools section-band" id="tools" aria-labelledby="tools-title">
         <div class="section-inner">
           <div class="section-heading section-heading-row">
             <div>
-              <span class="section-symbol"
-                ><img src="./assets/icons/construction.svg" alt=""
-              /></span>
-              <p class="section-kicker" data-i18n="tools.kicker">不必先了解 Minecraft</p>
+              <span class="section-symbol"><img src="./assets/icons/construction.svg" alt="" /></span>
+              <p class="section-kicker" data-i18n="tools.kicker">公共交通设计工具</p>
               <h2 id="tools-title" data-i18n="tools.title">创作工具</h2>
             </div>
             <p data-i18n="tools.intro">
-              路牌、公共交通导视、动态线路图与电报纸都可独立使用。选择一个任务，直接开始创作。
+              公交站牌、轨道交通导视、动态线路图与路牌都可以独立使用。支持导入既有项目，也可以直接使用临东线网。
             </p>
           </div>
 
           <div class="tool-grid">
-            <article class="tool-card tool-card-road">
-              <span class="tool-card-media">
-                <img
-                  src="./assets/tools/road-materials.webp"
-                  alt="多个临东道路指示牌、路名牌和楼牌成品拼贴"
-                  data-i18n-alt="tools.roadAlt"
-                  width="1200"
-                  height="750"
-                  loading="lazy"
-                  decoding="async"
-                />
-              </span>
-              <span class="card-index">01</span>
-              <span class="card-title"
-                ><span data-i18n="tools.roadTitle">路牌与楼牌工作台</span
-                ><span class="content-language-badge" data-i18n="language.simplifiedChinese"
-                  >简体中文</span
-                ></span
-              >
-              <span class="card-description" data-i18n="tools.roadDescription"
-                >设计道路指示牌、路名牌和楼栋地名标志。</span
-              >
-              <div class="tool-details">
-                <div class="tool-detail-row">
-                  <span class="tool-detail-label">
-                    <span class="material-icon icon-construction" aria-hidden="true"></span>
-                    <span data-i18n="tools.roadInputLabel">手动输入</span>
-                  </span>
-                  <span class="tool-detail-value" data-i18n="tools.roadInputDetail"
-                    >道路、地名和编号</span
-                  >
-                </div>
-                <div class="tool-detail-row">
-                  <span class="tool-detail-label">
-                    <span class="material-icon icon-map" aria-hidden="true"></span>
-                    <span data-i18n="tools.roadLocationLabel">服务器位置</span>
-                  </span>
-                  <span class="tool-detail-value" data-i18n="tools.roadLocationDetail"
-                    >道路坐标或楼牌标记点</span
-                  >
-                </div>
-              </div>
-              <div class="card-actions">
-                <a
-                  data-link-key="roadMaterials"
-                  data-entry-id="road-materials"
-                  data-entry-group="tools"
-                  href="https://yct.shangxiaoguan.top/services/road-materials"
-                >
-                  <span data-i18n="tools.openRoad">打开路牌工作台</span>
-                  <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
-                </a>
-              </div>
-            </article>
             <article class="tool-card tool-card-transit">
               <span class="tool-card-media">
                 <img
                   src="./assets/tools/transit-materials.webp"
                   alt="公交站牌、线路牌与轨道交通导视成品拼贴"
                   data-i18n-alt="tools.transitAlt"
-                  width="1200"
-                  height="750"
+                  width="720"
+                  height="480"
                   loading="lazy"
                   decoding="async"
                 />
               </span>
-              <span class="card-index">02</span>
+              <span class="card-index">01</span>
               <span class="card-title"
                 ><span data-i18n="tools.transitTitle">公共交通导视</span
                 ><span class="content-language-badge" data-i18n="language.simplifiedChinese"
@@ -305,7 +210,7 @@
                 ></span
               >
               <span class="card-description" data-i18n="tools.transitDescription">
-                选择服务器线网或导入兼容项目，制作公交站牌与轨道交通导视。
+                制作公交站牌与轨道交通导视。可选择示例线网、导入 RMP 项目，或直接使用临东服务器线网。
               </span>
               <div class="tool-details">
                 <div class="tool-detail-row">
@@ -358,6 +263,9 @@
                   </span>
                 </div>
               </div>
+              <p class="tool-footnote" data-i18n="tools.transitWatermarkNote">
+                未登录可下载带水印预览；登录并验证服务器账号后下载无水印 PNG。
+              </p>
               <div class="card-actions">
                 <a
                   data-link-key="transitMaterials"
@@ -382,16 +290,16 @@
                   decoding="async"
                 />
               </span>
-              <span class="card-index">03</span>
+              <span class="card-index">02</span>
               <span class="card-title"
                 ><span data-i18n="tools.dynamicTitle">动态线路图</span
                 ><span class="content-language-badge" data-i18n="language.simplifiedChinese"
                   >简体中文</span
                 ></span
               >
-              <span class="card-description" data-i18n="tools.dynamicDescription"
-                >导入线路数据，展示车辆运行、到站与播报信息。</span
-              >
+              <span class="card-description" data-i18n="tools.dynamicDescription">
+                导入线路数据，生成可播放的动态线路图，展示车辆运行、到站与播报信息。
+              </span>
               <div class="card-actions">
                 <a
                   data-link-key="dynamicRouteMap"
@@ -409,6 +317,60 @@
                   href="https://yct.shangxiaoguan.top/data_composer/"
                 >
                   <span data-i18n="tools.editData">编辑线路数据</span>
+                  <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                </a>
+              </div>
+            </article>
+            <article class="tool-card tool-card-road">
+              <span class="tool-card-media">
+                <img
+                  src="./assets/tools/road-materials.webp"
+                  alt="多个临东道路指示牌、路名牌和楼牌成品拼贴"
+                  data-i18n-alt="tools.roadAlt"
+                  width="1200"
+                  height="750"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </span>
+              <span class="card-index">03</span>
+              <span class="card-title"
+                ><span data-i18n="tools.roadTitle">路牌与楼牌工作台</span
+                ><span class="content-language-badge" data-i18n="language.simplifiedChinese"
+                  >简体中文</span
+                ></span
+              >
+              <span class="card-description" data-i18n="tools.roadDescription"
+                >设计道路指示牌、路名牌和楼栋地名标志，可填写文字，也可绑定地图坐标。</span
+              >
+              <div class="tool-details">
+                <div class="tool-detail-row">
+                  <span class="tool-detail-label">
+                    <span class="material-icon icon-construction" aria-hidden="true"></span>
+                    <span data-i18n="tools.roadInputLabel">手动输入</span>
+                  </span>
+                  <span class="tool-detail-value" data-i18n="tools.roadInputDetail"
+                    >道路、地名和编号</span
+                  >
+                </div>
+                <div class="tool-detail-row">
+                  <span class="tool-detail-label">
+                    <span class="material-icon icon-map" aria-hidden="true"></span>
+                    <span data-i18n="tools.roadLocationLabel">服务器位置</span>
+                  </span>
+                  <span class="tool-detail-value" data-i18n="tools.roadLocationDetail"
+                    >道路坐标或楼牌标记点</span
+                  >
+                </div>
+              </div>
+              <div class="card-actions">
+                <a
+                  data-link-key="roadMaterials"
+                  data-entry-id="road-materials"
+                  data-entry-group="tools"
+                  href="https://yct.shangxiaoguan.top/services/road-materials"
+                >
+                  <span data-i18n="tools.openRoad">打开路牌工作台</span>
                   <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
                 </a>
               </div>
@@ -451,69 +413,60 @@
         </div>
       </section>
 
-      <section class="maps section-band" id="maps" aria-labelledby="maps-title">
-        <div class="section-inner map-layout">
-          <div class="map-intro">
-            <span class="section-symbol"><img src="./assets/icons/map.svg" alt="" /></span>
-            <p class="section-kicker" data-i18n="maps.kicker">地图入口</p>
-            <h2 id="maps-title" data-i18n="maps.title">从雨城通地图开始</h2>
-            <p data-i18n="maps.intro">
-              一个整合入口，两套原始地图。地点、线路和路线规划都集中在这里。
-            </p>
+      <section class="story section-band" id="story" aria-labelledby="story-title">
+        <div class="section-inner story-layout">
+          <div class="section-heading">
+            <p class="section-kicker" data-i18n="story.kicker">认识临东</p>
+            <h2 id="story-title" class="phrase-title" data-i18n-html="story.title">
+              <span>一座由不同家乡</span><span>拼成的城市</span>
+            </h2>
           </div>
-          <div class="map-directory">
-            <a
-              class="map-primary"
-              data-link-key="yctMap"
-              data-entry-id="yct-map"
-              data-entry-group="maps"
-              href="https://yct.shangxiaoguan.top/map"
-            >
-              <span class="map-recommendation" data-i18n="maps.recommended">推荐</span>
-              <span>
-                <strong data-i18n="maps.yctTitle">雨城通地图</strong>
-                <small data-i18n="maps.yctDescription"
-                  >整合地点、公共交通、路线规划与底图切换</small
+          <div class="story-copy">
+            <p data-i18n="story.paragraph1">
+              临东从一份存档出发，经历联机、中国版房间与独立服务器，逐渐成为一座由许多人共同建设的虚拟城市。近十年里，地图、导视、影像、年度报告和纪念活动又把这座城市带到游戏之外：有人在这里找到归属，有人把想法变成作品，也有人从一件工具开始认识临东。
+            </p>
+            <div class="story-resources" aria-labelledby="story-resources-title">
+              <p class="story-resources-title" id="story-resources-title" data-i18n="story.more">
+                继续了解
+              </p>
+              <div class="story-resource-links">
+                <a
+                  class="story-resource-link"
+                  data-link-key="lindongWiki"
+                  data-entry-id="lindong-wiki"
+                  data-entry-group="story"
+                  href="https://wiki.shangxiaoguan.top/%E4%B8%B4%E4%B8%9C%E5%B8%82"
                 >
-              </span>
-              <span
-                class="service-arrow material-icon icon-arrow-outward"
-                aria-hidden="true"
-              ></span>
-            </a>
-            <div
-              class="map-source-list"
-              aria-label="原始地图入口"
-              data-i18n-aria-label="maps.sources"
-            >
-              <a
-                data-link-key="staticMap"
-                data-entry-id="static-map"
-                data-entry-group="maps"
-                href="https://map.shangxiaoguan.top/"
-              >
-                <span>
-                  <strong data-i18n="maps.staticTitle">高清静态地图</strong>
-                  <small data-i18n="maps.staticDescription"
-                    >HTTPS · 精细瓦片与地点标记，更新较慢</small
+                  <span data-i18n="story.cityWiki">Wiki：临东市</span>
+                  <span class="content-language-badge" data-i18n="language.simplifiedChinese"
+                    >简体中文</span
                   >
-                </span>
-                <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
-              </a>
-              <a
-                data-link-key="freshMap"
-                data-entry-id="fresh-map"
-                data-entry-group="maps"
-                href="http://ld.cmsy.xyz:19136/"
-              >
-                <span>
-                  <strong data-i18n="maps.liveTitle">较新实时地图</strong>
-                  <small data-i18n="maps.liveDescription"
-                    >HTTP · 较新瓦片与玩家位置，浏览器可能提示不安全</small
+                  <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                </a>
+                <a
+                  class="story-resource-link"
+                  data-link-key="annualReports"
+                  data-entry-id="annual-reports"
+                  data-entry-group="story"
+                  href="https://wiki.shangxiaoguan.top/%E5%88%86%E7%B1%BB:%E6%9C%8D%E5%8A%A1%E5%99%A8%E5%B9%B4%E5%BA%A6%E6%8A%A5%E5%91%8A"
+                >
+                  <span data-i18n="story.annualReports">历年年度报告</span>
+                  <span class="content-language-badge" data-i18n="language.simplifiedChinese"
+                    >简体中文</span
                   >
-                </span>
-                <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
-              </a>
+                  <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                </a>
+                <a
+                  class="story-resource-link"
+                  data-link-key="annualReport2025"
+                  data-entry-id="annual-report-2025"
+                  data-entry-group="story"
+                  href="https://yct.shangxiaoguan.top/operations/local_content_4f81ff67-00d4-4152-a833-5a3099f1e8b6"
+                >
+                  <span data-i18n="story.annualReport2025">2025 年度报告</span>
+                  <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -531,22 +484,33 @@
           </div>
 
           <div class="service-list">
-            <a
-              data-link-key="yct"
-              data-entry-id="yct"
-              data-entry-group="services"
-              href="https://yct.shangxiaoguan.top/"
-            >
+                        <article class="service-card">
               <span class="service-number">01</span>
-              <span>
+              <div class="service-card-body">
                 <strong data-i18n="services.yctTitle">雨城通</strong>
                 <small data-i18n="services.yctDescription">公共交通、运营信息与生活服务</small>
-              </span>
-              <span
-                class="service-arrow material-icon icon-arrow-outward"
-                aria-hidden="true"
-              ></span>
-            </a>
+                <div class="service-card-links">
+                  <a
+                    data-link-key="yct"
+                    data-entry-id="yct"
+                    data-entry-group="services"
+                    href="https://yct.shangxiaoguan.top/"
+                  >
+                    <span data-i18n="services.openYct">打开雨城通</span>
+                    <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                  </a>
+                  <a
+                    data-link-key="yctMap"
+                    data-entry-id="yct-map"
+                    data-entry-group="services"
+                    href="https://yct.shangxiaoguan.top/map"
+                  >
+                    <span data-i18n="services.openMap">地图</span>
+                    <span class="material-icon icon-arrow-outward" aria-hidden="true"></span>
+                  </a>
+                </div>
+              </div>
+            </article>
             <a
               href="https://ldpass.shangxiaoguan.top/"
               data-entry-id="ldpass"

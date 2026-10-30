@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-29",
+  "generatedAt": "2026-10-30",
   "items": [
     {
       "id": "road-materials",
@@ -10,8 +10,8 @@
     {
       "id": "transit-materials",
       "file": "transit-materials.webp",
-      "source": "用户提供的公共交通导视工作台封面",
-      "processing": "保留透明通道，居中裁切为 1200 × 750"
+      "source": "用户更新后从 shangxiaoguan.top 重新下载的公共交通导视工作台封面",
+      "processing": "保留 720 × 480 原图 WebP，未做裁切"
     },
     {
       "id": "dynamic-route-map",
@@ -22,8 +22,8 @@
     {
       "id": "telegraph-paper",
       "file": "telegraph-paper.png",
-      "source": "用户提供的电报纸生成器封面",
-      "processing": "保留 720 × 480 PNG 原图"
+      "source": "用户提供的透明底电报纸封面",
+      "processing": "保留 720 × 480 PNG 原图，保留透明通道"
     }
   ]
 }

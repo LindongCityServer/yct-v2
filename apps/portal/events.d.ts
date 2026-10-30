@@ -14,7 +14,16 @@ export interface PortalHeroSelectedPayload {
 
 export interface PortalEntryActivatedPayload {
   entryId: string;
-  group: 'hero' | 'story' | 'tools' | 'maps' | 'services' | 'community' | 'friends';
+  group:
+    | 'hero'
+    | 'story'
+    | 'tools'
+    | 'maps'
+    | 'services'
+    | 'community'
+    | 'friends'
+    | 'gallery'
+    | 'search';
   targetUrl: string;
 }
 

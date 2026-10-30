@@ -1871,3 +1871,591 @@ body.dialog-open {
     animation: none;
   }
 }
+
+/* ============================================================
+ * 门户首页改版：双身份首屏、快捷工具带、城市切片、查找临东
+ * ============================================================ */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.hero-note {
+  max-width: 680px;
+  margin: 14px 0 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.button-secondary {
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: rgba(12, 24, 18, 0.35);
+}
+
+.button-secondary:hover,
+.button-secondary:focus-visible {
+  border-color: rgba(255, 255, 255, 0.72);
+}
+
+.quick-tools {
+  padding: 16px 0;
+  background: var(--surface-raised);
+}
+
+.quick-tools-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.quick-tools-title {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+.quick-tools-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.quick-tools-links a {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  background: var(--surface-muted);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.quick-tools-links a .material-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.quick-tools-links a:hover,
+.quick-tools-links a:focus-visible {
+  color: var(--green-dark);
+  background: var(--surface-green);
+  outline: none;
+}
+
+.gallery {
+  background: var(--surface-raised);
+}
+
+.city-gallery {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(232px, 288px);
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.city-gallery-card {
+  display: grid;
+  align-content: start;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  background: var(--surface-muted);
+  text-decoration: none;
+  scroll-snap-align: start;
+}
+
+.city-gallery-media {
+  aspect-ratio: 4 / 3;
+  display: block;
+  overflow: hidden;
+  background: var(--tool-media-surface);
+}
+
+.city-gallery-media img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.city-gallery-meta {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px 14px;
+}
+
+.city-gallery-meta strong {
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.city-gallery-meta small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.city-gallery-card:hover,
+.city-gallery-card:focus-visible {
+  outline: none;
+  box-shadow: 0 10px 26px rgba(20, 34, 27, 0.12);
+}
+
+.city-gallery-all {
+  place-content: center;
+  gap: 8px;
+  min-height: 100%;
+  padding: 24px;
+  border: 1px dashed var(--line);
+  background: transparent;
+  text-align: center;
+}
+
+.city-gallery-all strong {
+  font-size: 15px;
+}
+
+.city-gallery-all small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.city-gallery-all .material-icon {
+  width: 22px;
+  height: 22px;
+  margin: 0 auto;
+  color: var(--green-dark);
+}
+
+.gallery-status {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.gallery-status[hidden] {
+  display: none;
+}
+
+.search-section {
+  background: var(--paper);
+}
+
+.search-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
+  gap: 84px;
+  align-items: start;
+}
+
+.search-intro h2 {
+  max-width: 720px;
+  margin: 0;
+  font-size: 38px;
+  line-height: 1.24;
+}
+
+.search-intro > p:last-child {
+  max-width: 430px;
+  margin: 22px 0 0;
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.search-form {
+  display: flex;
+  gap: 10px;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  background: var(--surface-raised);
+  font: inherit;
+  font-size: 16px;
+}
+
+.search-input::placeholder {
+  color: var(--muted);
+}
+
+.search-input:focus {
+  border-color: var(--green);
+  outline: 3px solid rgba(22, 143, 120, 0.28);
+  outline-offset: 0;
+}
+
+.search-submit {
+  min-height: 52px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--white);
+  background: var(--map-primary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.search-submit:hover,
+.search-submit:focus-visible {
+  background: var(--map-primary-hover);
+  outline: none;
+}
+
+.search-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.search-examples a {
+  color: var(--green-dark);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.search-examples a:hover,
+.search-examples a:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  outline: none;
+}
+
+.ask-card {
+  margin-top: 24px;
+  padding: 20px;
+  border-radius: var(--radius-md);
+  background: var(--surface-green);
+}
+
+.ask-card strong {
+  font-size: 17px;
+}
+
+.ask-card p {
+  margin: 8px 0 0;
+  color: var(--body-copy);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.ask-link {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 14px;
+  color: var(--green-dark);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.ask-link .material-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.ask-link:hover,
+.ask-link:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  outline: none;
+}
+
+.tool-card {
+  grid-template-rows: none;
+  align-content: start;
+}
+
+.tool-card .card-actions {
+  margin-top: auto;
+}
+
+.tool-flow {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.tool-flow-step {
+  display: grid;
+  gap: 1px;
+}
+
+.tool-flow-step small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.tool-flow-step strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tool-flow-arrow {
+  color: var(--green-dark);
+  font-weight: 700;
+}
+
+.tool-footnote {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+@media (max-width: 880px) {
+  .header-nav a:nth-child(3) {
+    display: inline;
+  }
+
+  .header-nav a:nth-child(4) {
+    display: none;
+  }
+
+  .search-layout {
+    grid-template-columns: 1fr;
+    gap: 38px;
+  }
+
+  .search-intro h2 {
+    font-size: 31px;
+  }
+
+  .quick-tools-inner {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 620px) {
+  .hero-note {
+    max-width: 520px;
+    font-size: 12px;
+  }
+
+  .quick-tools-links {
+    width: 100%;
+  }
+
+  .quick-tools-links a {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+
+  .city-gallery {
+    grid-auto-columns: minmax(220px, 76vw);
+  }
+
+  .search-form {
+    flex-direction: column;
+  }
+
+  .search-submit {
+    width: 100%;
+  }
+
+  .search-intro h2 {
+    font-size: 31px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .city-gallery-card:hover,
+  .city-gallery-card:focus-visible {
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32);
+  }
+}
+
+/* 首屏新增第三个按钮和说明行后，小屏改为按内容撑高，避免压到地点卡片。 */
+@media (max-width: 620px) {
+  .hero {
+    height: auto;
+    min-height: 640px;
+  }
+
+  .hero-content {
+    height: auto;
+    min-height: 564px;
+    padding-bottom: 152px;
+  }
+}
+
+@media (max-height: 650px) {
+  .hero {
+    height: auto;
+    min-height: 540px;
+  }
+
+  .hero-content {
+    height: auto;
+    padding-bottom: 100px;
+  }
+}
+
+/* 首屏搜索框与服务卡片双链接 */
+.hero-search {
+  width: min(560px, 100%);
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.hero-search-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: var(--radius-sm);
+  color: var(--white);
+  background: rgba(12, 24, 18, 0.56);
+  font: inherit;
+  font-size: 15px;
+}
+
+.hero-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.hero-search-input:focus {
+  border-color: var(--white);
+  outline: 2px solid var(--white);
+  outline-offset: 2px;
+}
+
+.hero-search-submit {
+  min-height: 46px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--on-light);
+  background: var(--white);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hero-search-submit:hover,
+.hero-search-submit:focus-visible {
+  background: #edf2ef;
+  outline: none;
+}
+
+.service-card {
+  min-height: 92px;
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 18px;
+  align-items: center;
+  padding: 18px;
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: 0 6px 20px rgba(20, 34, 27, 0.05);
+}
+
+.service-card strong,
+.service-card small {
+  display: block;
+}
+
+.service-card strong {
+  font-size: 18px;
+}
+
+.service-card small {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.service-card-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 10px;
+}
+
+.service-card-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--green-dark);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.service-card-links a .material-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.service-card-links a:hover,
+.service-card-links a:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  outline: none;
+}
+
+@media (max-width: 620px) {
+  .hero {
+    min-height: 700px;
+  }
+
+  .hero-content {
+    min-height: 616px;
+    padding-bottom: 172px;
+  }
+
+  .hero-search {
+    width: 100%;
+  }
+
+  .service-card {
+    grid-template-columns: 34px 1fr;
+    gap: 12px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .service-card {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  }
+}
