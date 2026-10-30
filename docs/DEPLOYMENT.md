@@ -87,7 +87,7 @@ pnpm web:artifact
 - 额外把 `deploy-yct-web.ps1`、`start-yct-web.ps1`、`init-yct-admin.ps1`、运行时配置检查、烟雾检查和统一任务脚本一起放进部署包根目录。
 - 补齐 `apps/web/.next/static` 和 `apps/web/public`。
 - 补齐 pnpm workspace 下 Next standalone 可能漏掉的 `@next/*`、`@swc/*` 等运行时依赖。
-- 跳过本机上传素材目录 `apps/web/public/content-assets`，运行时静态资源目录 `runtime-assets` 也由部署脚本从旧部署目录保留。
+- 跳过本机上传素材目录 `apps/web/public/content-assets`，运行时静态资源目录 `runtime-assets` 也由部署脚本从旧部署目录保留；旧内容图片目录 `apps/web/public/legacy-assets` 同样由部署脚本保留，避免线上转码或补充过的旧资源被包内版本覆盖。
 - 不打包 `.env`、`.env.*`、`.yct-data`、`runtime-assets`、日志和本地缓存。
 - 在 `artifacts/` 下生成 `yct-web-时间戳.zip`、`yct-web-时间戳.tar.gz` 或 `yct-web-时间戳.tar`。
 - 压缩时先写入临时文件，成功后再改名为最终产物，避免失败时留下看似可用的坏包。
@@ -222,7 +222,7 @@ pnpm web:player-locations:run
 
 玩家位置快照默认使用 `YCT_PLAYER_LOCATION_STORE_PATH=.yct-data/player-location-store.json`。Next standalone 启动时会把工作目录切到 `apps\\web`；部署包提供的 `start-yct-web.ps1` 会把 `*_STORE_PATH`、`*_UPLOAD_DIR`、`*_DATA_DIR` 和 `*_REPORT_PATH` 这类相对路径统一解析到部署根目录，因此使用该启动器时会写入根目录下的 `.yct-data`。如果 PM2、宝塔或 Windows 服务直接启动 `apps\\web\\server.js`，必须把这些运行时路径配置为绝对路径，例如 `C:\\wwwroot\\yct-v2\\.yct-data\\player-location-store.json`，确保应用更新到新的版本目录时仍然写入同一份持久数据。Web 进程和部署脚本必须使用同一份路径；替换部署目录前先停止 Web 进程和玩家位置采集器，避免正在写入的临时文件被搬走。
 
-把 `artifacts/yct-web-*` 上传到服务器后，推荐先解压到一个新的临时目录，再从这个临时目录执行包内的 `deploy-yct-web.ps1`。这个脚本会自动把旧部署目录中的环境文件、`.yct-data`、`runtime-assets` 和 `apps\web\public\content-assets` 迁走，替换部署文件，再把这些持久数据放回去。
+把 `artifacts/yct-web-*` 上传到服务器后，推荐先解压到一个新的临时目录，再从这个临时目录执行包内的 `deploy-yct-web.ps1`。这个脚本会自动把旧部署目录中的环境文件、`.yct-data`、`runtime-assets`、`apps\web\public\content-assets` 和 `apps\web\public\legacy-assets` 迁走，替换部署文件，再把这些持久数据放回去。
 
 推荐命令：
 
@@ -245,6 +245,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\deploy-yct-web.ps1 -TargetRoot C
 - `.yct-data`
 - `runtime-assets`
 - `apps\web\public\content-assets`
+- `apps\web\public\legacy-assets`
 
 执行前仍然要确认旧进程已经停止，并且新包已经解压到一个和正式部署目录不同的新目录里。不要把新包直接覆盖解压到仍保留旧 `.next` 文件的目录里；Next.js 的 `server.js`、`.next/server` 和 `.next/static` 必须来自同一次构建，否则会出现页面能打开但客户端 chunk 404、路线规划或周边地点等交互失效的问题。
 
@@ -267,7 +268,8 @@ foreach ($relativePath in @(
   ".env.production.local",
   ".yct-data",
   "runtime-assets",
-  "apps\web\public\content-assets"
+  "apps\web\public\content-assets",
+  "apps\web\public\legacy-assets"
 )) {
   $source = Join-Path $deployRoot $relativePath
   if (Test-Path -LiteralPath $source) {
@@ -287,7 +289,8 @@ foreach ($relativePath in @(
   ".env.production.local",
   ".yct-data",
   "runtime-assets",
-  "apps\web\public\content-assets"
+  "apps\web\public\content-assets",
+  "apps\web\public\legacy-assets"
 )) {
   $source = Join-Path $backupRoot $relativePath
   if (Test-Path -LiteralPath $source) {
@@ -302,11 +305,12 @@ foreach ($relativePath in @(
 
 ### 需要迁移哪些数据
 
-如果你是在“旧版 YCT v2 部署目录”上做原地升级，默认至少要保留这三类内容：
+如果你是在“旧版 YCT v2 部署目录”上做原地升级，默认至少要保留这四类内容：
 
 1. `.yct-data`
 2. `runtime-assets`
 3. `apps\web\public\content-assets`
+4. `apps\web\public\legacy-assets`
 
 只复制 `.yct-data` 并不总是足够，因为内容后台上传的图片素材默认不在 `.yct-data` 里，而是在 `apps\web\public\content-assets`。如果不一起保留，历史内容和审核通过的素材链接可能会丢图。
 
@@ -315,11 +319,11 @@ foreach ($relativePath in @(
 - `.yct-data`：账号会话、账号映射、管理员成员、交通数据版本、POI 投稿、POI 投稿图片、提醒、通知、票务草稿、离线范围请求和物料线网项目等本地仓储；账号会话默认写入 `.yct-data/yct-account-sessions.json`，也可通过 `YCT_SESSION_STORE_PATH` 调整，当前 POI 投稿图片默认在 `.yct-data/poi-submission-images`。RMP 线网草稿默认写入 `.yct-data/material-transit-network-project-store.json`，可通过 `YCT_MATERIAL_TRANSIT_NETWORK_PROJECT_STORE_PATH` 调整。已确认的 Material Symbols 名称与本地文件映射默认写入 `.yct-data/material-symbol-asset-store.json`。
 - `runtime-assets`：部署包根目录下的运行时静态资源；当前 POI 分类图标默认在 `runtime-assets/poi-icons`，按需固化的 Material Symbols SVG 默认在 `runtime-assets/material-symbols`。
 - `apps\web\public\content-assets`：内容后台上传的真实图片和附件。
-- `apps\web\public\legacy-assets`：如果它来自你本地打包机的 `public` 目录，通常已经包含在部署包里；只有当云端还保留了“没有重新打进包的额外旧资源”时，才需要额外手工保留。
+- `apps\web\public\legacy-assets`：旧内容的图片资源。它虽然也会随部署包进入，但线上可能已经做过转码、补充或清理，因此部署脚本默认以云端版本为准，不再用包内版本覆盖。
 
 所以，对大多数当前部署来说：
 
-- 如果你从一个旧的 YCT v2 目录升级到新的 YCT v2 目录，至少复制 `.yct-data`、`runtime-assets` 和 `apps\web\public\content-assets`。
+- 如果你从一个旧的 YCT v2 目录升级到新的 YCT v2 目录，至少复制 `.yct-data`、`runtime-assets`、`apps\web\public\content-assets` 和 `apps\web\public\legacy-assets`。
 - 如果这是第一次把 v2 部署到云端，`.yct-data` 可以先让系统按需创建，但 `.env` 仍然必须手工放好。
 - 如果你确认当前没有任何后台上传素材，理论上只复制 `.yct-data` 也能跑，但我不建议把这个当默认流程。
 

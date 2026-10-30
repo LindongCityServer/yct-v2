@@ -11,7 +11,8 @@ param(
     ".env.production.local",
     ".yct-data",
     "runtime-assets",
-    "apps\\web\\public\\content-assets"
+    "apps\\web\\public\\content-assets",
+    "apps\\web\\public\\legacy-assets"
   ),
   [switch]$StartAfterDeploy,
   [int]$Port = 3300,
