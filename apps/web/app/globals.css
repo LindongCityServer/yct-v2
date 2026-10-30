@@ -32730,6 +32730,15 @@ dialog.client-dialog.is-page {
   color: var(--yct-color-primary-hover);
 }
 
+.transit-trip-row button.is-danger {
+  color: var(--yct-color-danger, #b42318);
+}
+
+.transit-trip-row button.is-danger:hover,
+.transit-trip-row button.is-danger:focus-visible {
+  background: color-mix(in srgb, var(--yct-color-danger, #b42318) 12%, transparent);
+}
+
 .transit-trip-row button > .material-symbols-outlined {
   font-size: 20px;
 }

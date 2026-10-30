@@ -130,6 +130,9 @@ export function AdminTransitTripWorkbench({
   const tripRowRefs = useRef(new Map<string, HTMLDivElement>());
   const entriesRef = useRef<WorkbenchEntry[]>([]);
   const duplicateTripsRef = useRef<WorkbenchEntry[]>([]);
+  // 加载时的班次快照：保存时用它反推“哪些真实班次被删掉”，撤销后自动回到未删除状态。
+  const loadedRealTripKeysRef = useRef<Set<string>>(new Set());
+  const loadedDirectionCountsRef = useRef<Record<WorkbenchDirection, number>>({ down: 0, up: 0 });
   const undoStackRef = useRef<WorkbenchEntry[][]>([]);
   const redoStackRef = useRef<WorkbenchEntry[][]>([]);
   const keyboardHandlerRef = useRef<(event: KeyboardEvent) => void>(() => undefined);
@@ -313,6 +316,19 @@ export function AdminTransitTripWorkbench({
     setPools(labelPools);
     setScheduleRevisionId(sourceRevision?.revisionId ?? '');
     setEntries(loadedEntries);
+    loadedRealTripKeysRef.current = new Set(
+      existingEntries
+        .filter((entry) => !entry.isNew && entry.trip.tripInstanceId)
+        .map((entry) => `${entry.revisionId}\u0000${entry.trip.tripInstanceId}`),
+    );
+    loadedDirectionCountsRef.current = {
+      down: loadedEntries.filter(
+        (entry) => resolveTripDirection(entry.trip, nextLine, nameOfStation) === 'down',
+      ).length,
+      up: loadedEntries.filter(
+        (entry) => resolveTripDirection(entry.trip, nextLine, nameOfStation) === 'up',
+      ).length,
+    };
     setPoolConfigs(loadedPoolConfigs);
     const draftCount = draftEntries.length;
     const duplicateCount = duplicateEntries.length;
@@ -601,6 +617,23 @@ export function AdminTransitTripWorkbench({
     );
   };
 
+  /** 删除整条班次：真实班次在保存时调用 DELETE，规则展开项随线路发车规则一起移除。 */
+  const handleDeleteEntry = (clientId: string) => {
+    const entry = entriesRef.current.find((item) => item.clientId === clientId);
+    if (!entry) {
+      return;
+    }
+    pushHistory();
+    setEntries((current) => current.filter((item) => item.clientId !== clientId));
+    setSelectedId((current) => (current === clientId ? null : current));
+    markLabelsStale();
+    setDirty(true);
+    setError('');
+    setStatus(
+      `已删除 ${formatWorkbenchMinutes(firstDepartureOrUndefined(entry.stops))} 的班次，保存后生效`,
+    );
+  };
+
   const handleResizeRange = (clientId: string, startName: string, endName: string) => {
     markLabelsStale();
     updateEntry(
@@ -865,6 +898,40 @@ export function AdminTransitTripWorkbench({
     setError('');
     setStatus('正在保存班次与线路配置');
     try {
+      // 先在列表里被移除的真实班次落库删除；规则展开项没有实例，随线路配置清空即可。
+      const currentRealTripKeys = new Set(
+        entries
+          .filter((entry) => !entry.isNew && entry.trip.tripInstanceId)
+          .map((entry) => `${entry.revisionId}\u0000${entry.trip.tripInstanceId}`),
+      );
+      const removedTripKeys = [...loadedRealTripKeysRef.current].filter(
+        (key) => !currentRealTripKeys.has(key),
+      );
+      for (const key of removedTripKeys) {
+        const [targetRevisionId, tripInstanceId] = key.split('\u0000');
+        if (!targetRevisionId || !tripInstanceId) {
+          continue;
+        }
+        const deleteResponse = await fetch(
+          appPath(
+            `/api/admin/travel/schedule-revisions/${encodeURIComponent(
+              targetRevisionId,
+            )}/trips/${encodeURIComponent(tripInstanceId)}`,
+          ),
+          { method: 'DELETE' },
+        );
+        if (!deleteResponse.ok) {
+          const data = (await deleteResponse.json().catch(() => ({}))) as { message?: string };
+          throw new Error(data.message ?? '删除班次失败。');
+        }
+      }
+      const overriddenDirections = resolveOverriddenDirections(
+        line,
+        entries,
+        loadedDirectionCountsRef.current,
+        stationNameOf,
+      );
+
       // 按目标版本分组，新增与修正合并为一次批量写入；未修改的已有班次不再重复提交。
       const mutationsByRevision = new Map<
         string,
@@ -942,7 +1009,9 @@ export function AdminTransitTripWorkbench({
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildLinePayload(line, entries, poolConfigs, stationNameOf)),
+          body: JSON.stringify(
+            buildLinePayload(line, entries, poolConfigs, stationNameOf, overriddenDirections),
+          ),
         },
       );
       if (!response.ok) {
@@ -1007,6 +1076,11 @@ export function AdminTransitTripWorkbench({
     }
     if (key === 'd' || key === '3') {
       setTool('draw');
+      return;
+    }
+    if (event.key === 'Delete' && selectedId) {
+      event.preventDefault();
+      handleDeleteEntry(selectedId);
     }
   };
 
@@ -1242,6 +1316,17 @@ export function AdminTransitTripWorkbench({
                         >
                           <span className="material-symbols-outlined" aria-hidden="true">
                             edit
+                          </span>
+                        </button>
+                        <button
+                          className="is-danger"
+                          type="button"
+                          aria-label="删除班次"
+                          title="删除班次（保存后生效）"
+                          onClick={() => handleDeleteEntry(entry.clientId)}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            delete
                           </span>
                         </button>
                       </div>
@@ -1726,11 +1811,34 @@ function buildTripPayload(entry: WorkbenchEntry, line: TransitLineSnapshot) {
   };
 }
 
+/** 加载时该方向有班次、编辑后一个不剩：保存时需要把该方向的发车配置一并清空。 */
+function resolveOverriddenDirections(
+  line: TransitLineSnapshot,
+  entries: readonly WorkbenchEntry[],
+  loadedCounts: Record<WorkbenchDirection, number>,
+  stationNameOf: (stationSourceId: string) => string,
+): Set<WorkbenchDirection> {
+  const overridden = new Set<WorkbenchDirection>();
+  for (const value of ['down', 'up'] as const) {
+    if (loadedCounts[value] === 0) {
+      continue;
+    }
+    const currentCount = entries.filter(
+      (entry) => resolveTripDirection(entry.trip, line, stationNameOf) === value,
+    ).length;
+    if (currentCount === 0) {
+      overridden.add(value);
+    }
+  }
+  return overridden;
+}
+
 function buildLinePayload(
   line: TransitLineSnapshot,
   entries: WorkbenchEntry[],
   poolConfigs: Record<WorkbenchDirection, PoolConfig>,
   stationNameOf: (stationSourceId: string) => string,
+  overriddenDirections: ReadonlySet<WorkbenchDirection> = new Set(),
 ) {
   const departureTimesByDirection: Record<WorkbenchDirection, string[]> = { down: [], up: [] };
   const entryCountByDirection: Record<WorkbenchDirection, number> = { down: 0, up: 0 };
@@ -1785,15 +1893,18 @@ function buildLinePayload(
     departureTimesByDirection[value] = Array.from(new Set(departureTimesByDirection[value])).sort();
   }
 
-  // 某个方向在工作台里没有班次时保留原有发车配置，避免把尚未生成班次的规则清空。
+  // 某个方向在工作台里没有班次时保留原有发车配置，避免把尚未生成班次的规则清空；
+  // 但如果该方向本次被删空，必须写入空配置才能真正删掉，否则保存后规则会重新展开。
+  const coversDirection = (value: WorkbenchDirection) =>
+    entryCountByDirection[value] > 0 || overriddenDirections.has(value);
   const originalTimes = resolveDirectionalDepartureTimes(line);
   const resolvedTimes: Record<WorkbenchDirection, string[] | undefined> = {
-    down: entryCountByDirection.down > 0 ? departureTimesByDirection.down : originalTimes.down,
-    up: entryCountByDirection.up > 0 ? departureTimesByDirection.up : originalTimes.up,
+    down: coversDirection('down') ? departureTimesByDirection.down : originalTimes.down,
+    up: coversDirection('up') ? departureTimesByDirection.up : originalTimes.up,
   };
   const resolvedRules = {
-    down: entryCountByDirection.down > 0 ? undefined : line.departureRulesByDirection?.down,
-    up: entryCountByDirection.up > 0 ? undefined : line.departureRulesByDirection?.up,
+    down: coversDirection('down') ? undefined : line.departureRulesByDirection?.down,
+    up: coversDirection('up') ? undefined : line.departureRulesByDirection?.up,
   };
   // 工作台没有覆盖到的方向沿用原特殊班次标注，避免保存后丢失。
   const resolvedSpecialTrips: Record<
@@ -1801,13 +1912,13 @@ function buildLinePayload(
     Record<string, { serviceNature?: string; routeNote?: string; stationNames?: string[] }> | undefined
   > = {
     down:
-      entryCountByDirection.down > 0
+      coversDirection('down')
         ? Object.keys(specialTripsByDirection.down).length
           ? specialTripsByDirection.down
           : undefined
         : line.specialTripsByDirection?.down,
     up:
-      entryCountByDirection.up > 0
+      coversDirection('up')
         ? Object.keys(specialTripsByDirection.up).length
           ? specialTripsByDirection.up
           : undefined
