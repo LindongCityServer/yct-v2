@@ -1376,123 +1376,131 @@ export function AdminTransitLineMapEditor({
           </div>
         </div>
         {routePanelCollapsed ? null : (
-          <div className="transit-visual-node-list">
-            {nodes.map((node, index) => (
-              <div key={node.id}>
-                <div
-                  className={`transit-visual-node-row is-${node.kind}${selectedNodeId === node.id ? ' is-selected' : ''}`}
-                >
-                  <button
-                    className="transit-visual-node-focus"
-                    type="button"
-                    aria-label={
-                      node.coordinate
-                        ? `在地图定位${node.kind === 'station' ? node.name : '途径点'}`
-                        : `在地图设置${node.kind === 'station' ? node.name : '途径点'}坐标`
-                    }
-                    title={node.coordinate ? '在地图定位' : '在地图设置坐标'}
-                    onClick={() => focusNode(node)}
+          <>
+            <p className="muted transit-visual-node-list-hint">
+              拖动站点节点会修改车站共享坐标与默认 POI，影响停靠该站的所有线路；只想调整本线路停靠
+              POI 时，请回到线路编辑弹窗的“本线路停靠 POI”设置。
+            </p>
+            <div className="transit-visual-node-list">
+              {nodes.map((node, index) => (
+                <div key={node.id}>
+                  <div
+                    className={`transit-visual-node-row is-${node.kind}${selectedNodeId === node.id ? ' is-selected' : ''}`}
                   >
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      {node.kind === 'station' ? 'location_on' : 'add_road'}
-                    </span>
-                  </button>
-                  <div className="transit-visual-node-main">
-                    {node.kind === 'station' && node.draftClientId ? (
-                      <input
-                        value={node.name}
-                        placeholder="填写新站点名称"
-                        aria-label={`第 ${index + 1} 个新站点名称`}
-                        onChange={(event) =>
-                          updateNode(node.id, (current) =>
-                            current.kind === 'station'
-                              ? { ...current, name: event.currentTarget.value }
-                              : current,
-                          )
-                        }
-                      />
-                    ) : (
-                      <strong>{node.kind === 'station' ? node.name : `途径点 ${index + 1}`}</strong>
-                    )}
-                    <span>
-                      {node.coordinate ? formatCoordinate(node.coordinate) : '缺少坐标'}
-                      {node.boundPoiLabel ? ` · ${node.boundPoiLabel}` : ''}
-                    </span>
-                  </div>
-                  <select
-                    value={node.direction}
-                    aria-label={`${node.kind === 'station' ? '站点' : '途径点'}方向`}
-                    onChange={(event) =>
-                      updateNode(node.id, (current) => ({
-                        ...current,
-                        direction: event.currentTarget.value as Direction,
-                      }))
-                    }
-                  >
-                    <option value="both">双向</option>
-                    <option value="down">仅正向（按站序）</option>
-                    <option value="up">仅反向（逆站序）</option>
-                  </select>
-                  <div className="transit-visual-node-actions">
                     <button
+                      className="transit-visual-node-focus"
                       type="button"
-                      title="上移"
-                      aria-label="上移"
-                      disabled={index === 0}
-                      onClick={() => moveNode(index, -1)}
+                      aria-label={
+                        node.coordinate
+                          ? `在地图定位${node.kind === 'station' ? node.name : '途径点'}`
+                          : `在地图设置${node.kind === 'station' ? node.name : '途径点'}坐标`
+                      }
+                      title={node.coordinate ? '在地图定位' : '在地图设置坐标'}
+                      onClick={() => focusNode(node)}
                     >
                       <span className="material-symbols-outlined" aria-hidden="true">
-                        arrow_upward
+                        {node.kind === 'station' ? 'location_on' : 'add_road'}
                       </span>
                     </button>
-                    <button
-                      type="button"
-                      title="下移"
-                      aria-label="下移"
-                      disabled={index === nodes.length - 1}
-                      onClick={() => moveNode(index, 1)}
-                    >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        arrow_downward
+                    <div className="transit-visual-node-main">
+                      {node.kind === 'station' && node.draftClientId ? (
+                        <input
+                          value={node.name}
+                          placeholder="填写新站点名称"
+                          aria-label={`第 ${index + 1} 个新站点名称`}
+                          onChange={(event) =>
+                            updateNode(node.id, (current) =>
+                              current.kind === 'station'
+                                ? { ...current, name: event.currentTarget.value }
+                                : current,
+                            )
+                          }
+                        />
+                      ) : (
+                        <strong>
+                          {node.kind === 'station' ? node.name : `途径点 ${index + 1}`}
+                        </strong>
+                      )}
+                      <span>
+                        {node.coordinate ? formatCoordinate(node.coordinate) : '缺少坐标'}
+                        {node.boundPoiLabel ? ` · ${node.boundPoiLabel}` : ''}
                       </span>
-                    </button>
-                    <button
-                      type="button"
-                      title="删除"
-                      aria-label="删除"
-                      onClick={() =>
-                        setNodes((current) => current.filter((item) => item.id !== node.id))
+                    </div>
+                    <select
+                      value={node.direction}
+                      aria-label={`${node.kind === 'station' ? '站点' : '途径点'}方向`}
+                      onChange={(event) =>
+                        updateNode(node.id, (current) => ({
+                          ...current,
+                          direction: event.currentTarget.value as Direction,
+                        }))
                       }
                     >
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        close
-                      </span>
-                    </button>
+                      <option value="both">双向</option>
+                      <option value="down">仅正向（按站序）</option>
+                      <option value="up">仅反向（逆站序）</option>
+                    </select>
+                    <div className="transit-visual-node-actions">
+                      <button
+                        type="button"
+                        title="上移"
+                        aria-label="上移"
+                        disabled={index === 0}
+                        onClick={() => moveNode(index, -1)}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          arrow_upward
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        title="下移"
+                        aria-label="下移"
+                        disabled={index === nodes.length - 1}
+                        onClick={() => moveNode(index, 1)}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          arrow_downward
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        title="删除"
+                        aria-label="删除"
+                        onClick={() =>
+                          setNodes((current) => current.filter((item) => item.id !== node.id))
+                        }
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          close
+                        </span>
+                      </button>
+                    </div>
                   </div>
+                  {node.kind === 'station' ? (
+                    <TransitSegmentOperationStatusEditor
+                      fromNode={node}
+                      nextStationNode={findNextEditorStationNode(nodes, index)}
+                      statusByKey={segmentOperationStatusByKey}
+                      travelMinutesByKey={segmentTravelMinutesByKey}
+                      onChange={(key, operationStatus) =>
+                        setSegmentOperationStatusByKey((current) => ({
+                          ...current,
+                          [key]: operationStatus,
+                        }))
+                      }
+                      onTravelMinutesChange={(key, travelMinutes) =>
+                        setSegmentTravelMinutesByKey((current) => ({
+                          ...current,
+                          [key]: travelMinutes,
+                        }))
+                      }
+                    />
+                  ) : null}
                 </div>
-                {node.kind === 'station' ? (
-                  <TransitSegmentOperationStatusEditor
-                    fromNode={node}
-                    nextStationNode={findNextEditorStationNode(nodes, index)}
-                    statusByKey={segmentOperationStatusByKey}
-                    travelMinutesByKey={segmentTravelMinutesByKey}
-                    onChange={(key, operationStatus) =>
-                      setSegmentOperationStatusByKey((current) => ({
-                        ...current,
-                        [key]: operationStatus,
-                      }))
-                    }
-                    onTravelMinutesChange={(key, travelMinutes) =>
-                      setSegmentTravelMinutesByKey((current) => ({
-                        ...current,
-                        [key]: travelMinutes,
-                      }))
-                    }
-                  />
-                ) : null}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </>
         )}
       </aside>
 

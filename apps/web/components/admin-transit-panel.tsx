@@ -3903,7 +3903,7 @@ function TransitStationCoordinateDialog({
         </p>
         <div className="transit-station-binding-card">
           <div className="section-heading">
-            <h3>绑定现有 POI</h3>
+            <h3>车站共享 POI / 出口</h3>
             <span className="muted">
               {boundPoiRefs.length > 0 ? `已绑定 ${boundPoiRefs.length} 个 POI` : '未绑定'}
             </span>
@@ -3913,8 +3913,8 @@ function TransitStationCoordinateDialog({
             {stationModes.length > 0
               ? stationModes.map(formatTransitMode).join('、')
               : '未接入线路'}
-            。 候选项仅显示对应交通方式的站点 POI。可重复选择绑定多个 POI 或出口，第一个作为车站默认
-            POI； 各线路的实际停靠位置在编辑线路时单独指定。
+            。 候选项仅显示对应交通方式的站点 POI。这里的绑定属于车站共享配置：未在“编辑线路 →
+            本线路停靠 POI”单独指定的线路，都会使用第一个绑定 POI。可重复选择绑定多个 POI 或出口。
           </p>
           <div className="transit-station-binding-toolbar">
             <label className="transit-admin-search">
@@ -5573,6 +5573,31 @@ function TransitLineEditorDialog({
     () => buildTransitBindablePoiOptions(mapMarkers, [mode]),
     [mapMarkers, mode],
   );
+  const stationPreviewCoordinates = useMemo(() => {
+    const markerById = new Map(mapMarkers.map((marker) => [marker.id, marker] as const));
+    const coordinatesByStationId = new Map<string, [number, number]>();
+    for (const node of routeNodeDrafts) {
+      if (node.kind !== 'station') {
+        continue;
+      }
+      const stationSourceId = node.stationSourceId.trim();
+      const station = stationById.get(stationSourceId);
+      if (!station) {
+        continue;
+      }
+      const locationRef =
+        node.stopLocationRefs?.find((ref) => ref.scope === 'both') ??
+        node.stopLocationRefs?.find((ref) => ref.scope === 'down');
+      const marker = locationRef ? markerById.get(locationRef.markerId) : undefined;
+      const coordinate =
+        (marker ? getTransitMarkerRepresentativeCoordinate(marker.geometry) : undefined) ??
+        (station.x !== undefined && station.z !== undefined ? [station.x, station.z] : undefined);
+      if (coordinate) {
+        coordinatesByStationId.set(stationSourceId, coordinate);
+      }
+    }
+    return coordinatesByStationId;
+  }, [mapMarkers, routeNodeDrafts, stationById]);
   const parsedStationSourceIds = parsedRoute.stationSourceIds;
   useEffect(() => {
     setStopDirections((current) => {
@@ -5941,6 +5966,7 @@ function TransitLineEditorDialog({
                 color={color.trim() || line?.color}
                 segmentPaths={parsedRoute.segmentPaths}
                 stationById={stationById}
+                stationCoordinates={stationPreviewCoordinates}
                 stationSourceIds={parsedStationSourceIds}
                 tilePreviewFreshTemplate={tilePreviewFreshTemplate}
                 tilePreviewTemplate={tilePreviewTemplate}
@@ -6079,8 +6105,8 @@ function TransitLineEditorDialog({
                             </span>
                             <span>
                               {station
-                                ? formatTransitStationBindingSummary(station)
-                                : '选择位置 / POI'}
+                                ? `车站共享 · ${formatTransitStationBindingSummary(station)}`
+                                : '车站坐标 / 共享 POI'}
                             </span>
                           </button>
                           <button
@@ -6146,24 +6172,49 @@ function TransitLineEditorDialog({
                         </select>
                       </label>
                       {node.kind === 'station' ? (
+                        <label className="transit-line-stop-location-primary">
+                          <span>本线路停靠 POI</span>
+                          <select
+                            value={
+                              node.stopLocationRefs?.find((ref) => ref.scope === 'both')
+                                ?.markerId ?? ''
+                            }
+                            disabled={!station}
+                            onChange={(event) =>
+                              updateStopLocation(index, 'both', event.currentTarget.value)
+                            }
+                          >
+                            <option value="">
+                              {stationDefaultPoiLabel
+                                ? `跟随车站默认（${stationDefaultPoiLabel}）`
+                                : '跟随车站默认位置'}
+                            </option>
+                            {stopLocationOptions.map((option) => (
+                              <option value={option.marker.id} key={option.marker.id}>
+                                {`${option.marker.label} · ${formatTransitCoordinatePair(option.coordinate)}`}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
+                      {node.kind === 'station' ? (
                         <details className="transit-line-stop-location-editor">
                           <summary>
                             <span className="material-symbols-outlined" aria-hidden="true">
                               pin_drop
                             </span>
                             <span>
-                              停靠 POI
-                              {node.stopLocationRefs?.length
-                                ? ` · ${formatTransitStopLocationSelectionSummary(node.stopLocationRefs)}`
-                                : stationDefaultPoiLabel
-                                  ? ` · 车站默认：${stationDefaultPoiLabel}`
-                                  : ' · 使用车站默认位置'}
+                              分方向覆盖
+                              {node.stopLocationRefs?.some((ref) => ref.scope !== 'both')
+                                ? ` · ${formatTransitStopLocationSelectionSummary(
+                                    node.stopLocationRefs.filter((ref) => ref.scope !== 'both'),
+                                  )}`
+                                : ' · 本轮方向跟随本线路停靠 POI'}
                             </span>
                           </summary>
                           <div>
                             {(
                               [
-                                ['both', '本线路默认位置'],
                                 ['down', `正向 · 去 ${forwardTerminalName}`],
                                 ['up', `反向 · 去 ${reverseTerminalName}`],
                               ] as const
@@ -6180,7 +6231,7 @@ function TransitLineEditorDialog({
                                     updateStopLocation(index, scope, event.currentTarget.value)
                                   }
                                 >
-                                  <option value="">使用车站默认位置</option>
+                                  <option value="">跟随本线路停靠 POI</option>
                                   {stopLocationOptions.map((option) => (
                                     <option value={option.marker.id} key={option.marker.id}>
                                       {`${option.marker.label} · ${formatTransitCoordinatePair(option.coordinate)}`}
@@ -6191,9 +6242,8 @@ function TransitLineEditorDialog({
                             ))}
                           </div>
                           <p className="muted">
-                            方向位置优先于本线路默认位置；都未设置时使用车站默认
-                            POI（车站绑定的第一个 POI）。同一车站绑定多个 POI
-                            或出口时，可分别给不同线路指定各自的停靠位置。
+                            分方向设置优先于本线路停靠 POI；都未设置时使用车站共享的默认
+                            POI。同一车站绑定多个 POI 或出口时，可分别给不同线路指定各自的停靠位置。
                           </p>
                         </details>
                       ) : null}
@@ -6351,6 +6401,7 @@ function TransitLineOrderMapPreview({
   color,
   segmentPaths,
   stationById,
+  stationCoordinates,
   stationSourceIds,
   tilePreviewFreshTemplate,
   tilePreviewTemplate,
@@ -6358,6 +6409,7 @@ function TransitLineOrderMapPreview({
   color?: string;
   segmentPaths?: TransitRevisionLine['segmentPaths'];
   stationById: Map<string, TransitRevisionStation>;
+  stationCoordinates?: ReadonlyMap<string, [number, number]>;
   stationSourceIds: string[];
   tilePreviewFreshTemplate: string | null;
   tilePreviewTemplate: string | null;
@@ -6366,6 +6418,7 @@ function TransitLineOrderMapPreview({
     color,
     segmentPaths,
     stationById,
+    stationCoordinates,
     stationSourceIds,
   });
   if (!model) {
@@ -6659,6 +6712,7 @@ function buildTransitLineOrderPreviewModel(input: {
   color?: string;
   segmentPaths?: TransitRevisionLine['segmentPaths'];
   stationById: Map<string, TransitRevisionStation>;
+  stationCoordinates?: ReadonlyMap<string, [number, number]>;
   stationSourceIds: string[];
 }): {
   bounds: { maxX: number; maxZ: number; minX: number; minZ: number };
@@ -6668,11 +6722,17 @@ function buildTransitLineOrderPreviewModel(input: {
   stationCount: number;
   stations: Array<{ id: string; label: string; missing: boolean; x: string; y: string }>;
 } | null {
+  const getStationCoordinate = (stationSourceId: string): [number, number] | undefined => {
+    const configured = input.stationCoordinates?.get(stationSourceId);
+    if (configured) {
+      return configured;
+    }
+    const station = input.stationById.get(stationSourceId);
+    return station?.x !== undefined && station.z !== undefined ? [station.x, station.z] : undefined;
+  };
   const stationCoordinates = input.stationSourceIds
-    .map((stationSourceId) => input.stationById.get(stationSourceId))
-    .filter((station): station is TransitRevisionStation => Boolean(station))
-    .filter((station) => station.x !== undefined && station.z !== undefined)
-    .map((station) => [station.x as number, station.z as number] as [number, number]);
+    .map((stationSourceId) => getStationCoordinate(stationSourceId))
+    .filter((coordinate): coordinate is [number, number] => Boolean(coordinate));
   const customCoordinates = (input.segmentPaths ?? []).flatMap((path) =>
     path.waypoints.map((point) => [point.x, point.z] as [number, number]),
   );
@@ -6692,14 +6752,9 @@ function buildTransitLineOrderPreviewModel(input: {
   );
   const segments = input.stationSourceIds.slice(0, -1).flatMap((fromStationSourceId, index) => {
     const toStationSourceId = input.stationSourceIds[index + 1] ?? '';
-    const fromStation = input.stationById.get(fromStationSourceId);
-    const toStation = input.stationById.get(toStationSourceId);
-    if (
-      fromStation?.x === undefined ||
-      fromStation.z === undefined ||
-      toStation?.x === undefined ||
-      toStation.z === undefined
-    ) {
+    const fromCoordinate = getStationCoordinate(fromStationSourceId);
+    const toCoordinate = getStationCoordinate(toStationSourceId);
+    if (!fromCoordinate || !toCoordinate) {
       return [];
     }
 
@@ -6707,9 +6762,9 @@ function buildTransitLineOrderPreviewModel(input: {
       getTransitSegmentPathKey(fromStationSourceId, toStationSourceId),
     );
     const coordinatesForSegment: Array<[number, number]> = [
-      [fromStation.x, fromStation.z],
+      fromCoordinate,
       ...(path?.waypoints.map((point) => [point.x, point.z] as [number, number]) ?? []),
-      [toStation.x, toStation.z],
+      toCoordinate,
     ];
     const points = coordinatesForSegment
       .map(project)
@@ -6727,11 +6782,12 @@ function buildTransitLineOrderPreviewModel(input: {
   });
   const stations = input.stationSourceIds.flatMap((stationSourceId, index) => {
     const station = input.stationById.get(stationSourceId);
-    if (station?.x === undefined || station.z === undefined) {
+    const coordinate = getStationCoordinate(stationSourceId);
+    if (!station || !coordinate) {
       return [];
     }
 
-    const [x, y] = project([station.x, station.z]);
+    const [x, y] = project(coordinate);
     return [
       {
         id: `${stationSourceId}-${index}`,
