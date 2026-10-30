@@ -3,6 +3,55 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.17.0",
+      "releasedAt": "2026-10-30T09:24:58.633Z",
+      "sourceFingerprint": "0adc086cca33662317e3916802f597c35c286fa1112dad6c020442a068e846ef",
+      "themes": ["map", "transit", "materials", "portal", "i18n", "api"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地图路线规划结合实际班次，可按出发或到达时间规划，并显示候车、乘车与到发时刻"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "路线方案支持出发与到达时间排序，换乘更少更稳，步行过长的单线方案不再称为直达"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "区域地点在路网与交通视图下常驻半透明填充，颜色按分类区分且不随标签隐藏"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地图支持 WASD 与方向键平移，双击斜杠随机探索，手气不错图标显示加载动画"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "公开路线规划接口与接口文档支持出发与到达时间参数"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "门户首页扩充地点轮播，首次打开固定主图，之后随机换图并记住上次地点"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地铁导视在文本未修改时支持未登录免水印下载，统一为标准清晰度并按来源限流"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "后台线路编辑支持为单条线路单独指定停靠 POI"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.16.1",
       "releasedAt": "2026-10-29T16:38:27.367Z",
       "sourceFingerprint": "a3c95391e5f2b2a2dc7aecf182faf9849f0529c3136f0f72442e56bde7eb653b",
