@@ -106,7 +106,18 @@ export type RouteEndpointKind = 'origin' | 'destination';
 export type RouteTransportMode =
   'walk' | 'taxi' | 'bus' | 'metro' | 'tram' | 'coach' | 'ferry' | 'railway';
 export type TransitRouteTransportMode = Exclude<RouteTransportMode, 'walk' | 'taxi'>;
-export type RoutePlanSortMode = 'time' | 'walking' | 'transfers' | 'fare';
+export type RoutePlanSortMode = 'time' | 'arrival' | 'walking' | 'transfers' | 'fare';
+
+/** 路线规划使用的出行时刻口径：出发时刻或期望到达时刻。 */
+export type RoutePlanTimeMode = 'departure' | 'arrival';
+
+export interface RoutePlanTimeContext {
+  mode: RoutePlanTimeMode;
+  /** 出发模式为期望出发时刻，到达模式为期望到达时刻（服务日分钟）。 */
+  minutes: number;
+  /** 当前时刻（服务日分钟），用于过滤已错过的班次。 */
+  nowMinutes: number;
+}
 
 export interface RouteTransportModeOption {
   mode: RouteTransportMode;
@@ -137,6 +148,23 @@ export interface RoutePlanOption {
   note: string;
   roadLabels?: RoutePlanRoadLabel[];
   suppressLabelMarkerIds?: string[];
+  /** 时刻来源：scheduled 表示按真实班次推算，estimated 表示线路缺少时刻数据、按距离估算。 */
+  scheduleStatus?: 'scheduled' | 'estimated';
+  /** 从起点出发的可展示时刻（含步行接驳）。 */
+  departureTime?: string;
+  departureDayOffset?: number;
+  /** 上车站的实际发车时刻。 */
+  boardTime?: string;
+  boardDayOffset?: number;
+  /** 到达终点的可展示时刻（含步行接驳）。 */
+  arrivalTime?: string;
+  arrivalDayOffset?: number;
+  /** 等待上车分钟数（仅出发模式）。 */
+  waitMinutes?: number;
+  /** 车上分钟数。 */
+  rideMinutes?: number;
+  /** 到达时刻的绝对分钟（服务日口径），供“按到达时间”排序使用。 */
+  arrivalSortMinutes?: number;
 }
 
 export interface RoutePlanRoadLabel {

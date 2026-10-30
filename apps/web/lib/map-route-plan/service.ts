@@ -2,11 +2,13 @@ import type { LocaleCode, MapMarkerSnapshot, TransitFareQuote } from '@yct/contr
 import { readPublicMapMarkerSnapshot } from '../map-marker-public-snapshot-store';
 import { readMapSpatialProfile } from '../map-spatial-profile-store';
 import { getMapRoadMarkerKind } from '../map-road-geometry';
-import { readTransitOverview } from '../transit-data';
+import { readTransitRealtimeOverview } from '../transit-data';
+import { getBeijingClockMinutes } from '../transit-realtime';
 import { buildMapPlaceRelationIndex } from '../map-place-relations';
 import { createTranslator } from '../i18n-catalog';
 import { buildMarkerRoadAccessIndex, buildRoadRouteGraph, buildRoutePlanOptions } from './engine';
 import { buildSecondaryPoiIndex, buildSecondaryPoiParentIndex } from './place-index';
+import { clockToServiceDayMinutes, normalizeServiceDayMinutes } from './schedule';
 import { formatMarkerDisplayName, getMarkerCenter, resolveLocalizedLabel } from './helpers';
 import type {
   CenterableMarker,
@@ -17,6 +19,8 @@ import type {
   RegionGeometry,
   RoutePlanDraft,
   RoutePlanOption,
+  RoutePlanTimeContext,
+  RoutePlanTimeMode,
   RouteTransportMode,
   RouteTraversalBarrier,
   TransitLineStopForMap,
@@ -35,6 +39,10 @@ export interface MapRoutePlanRequest {
   modes?: RouteTransportMode[];
   locale?: LocaleCode;
   limit?: number;
+  /** 出行时刻口径，缺省按出发时刻。 */
+  timeMode?: RoutePlanTimeMode;
+  /** HH:mm；出发模式为期望出发时刻，到达模式为期望到达时刻，缺省为当前时刻。 */
+  time?: string;
 }
 
 export interface MapRoutePlanEndpoint {
@@ -64,6 +72,21 @@ export interface MapRoutePlanOptionSummary {
   fare?: TransitFareQuote;
   note: string;
   steps: MapRoutePlanStepSummary[];
+  /** 时刻来源：scheduled 表示按真实班次推算，estimated 表示按距离估算。 */
+  scheduleStatus?: 'scheduled' | 'estimated';
+  /** 从起点出发时刻（HH:mm）与跨日天数。 */
+  departureTime?: string;
+  departureDayOffset?: number;
+  /** 上车站实际发车时刻（HH:mm）与跨日天数。 */
+  boardTime?: string;
+  boardDayOffset?: number;
+  /** 到达终点时刻（HH:mm）与跨日天数。 */
+  arrivalTime?: string;
+  arrivalDayOffset?: number;
+  /** 等待上车分钟数。 */
+  waitMinutes?: number;
+  /** 车上分钟数。 */
+  rideMinutes?: number;
   /** 打开地图并自动重建该方案的深链。 */
   mapUrl: string;
 }
@@ -71,6 +94,10 @@ export interface MapRoutePlanOptionSummary {
 export interface MapRoutePlanResult {
   origin: MapRoutePlanEndpoint;
   destination: MapRoutePlanEndpoint;
+  /** 本次规划使用的时刻口径。 */
+  timeMode: RoutePlanTimeMode;
+  /** 本次规划使用的时刻（HH:mm）；出发模式缺省为当前时刻。 */
+  requestedTime: string;
   options: MapRoutePlanOptionSummary[];
   searchedMarkerCount: number;
   asOf?: string;
@@ -120,7 +147,7 @@ export async function planMapRoute(input: MapRoutePlanRequest): Promise<MapRoute
 
   const [spatialProfile, transitOverview] = await Promise.all([
     readMapSpatialProfile(),
-    readTransitOverview().catch(() => undefined),
+    readTransitRealtimeOverview().catch(() => undefined),
   ]);
   const pointMarkers = markers.filter(isPointMarker).filter(shouldRenderAsPointPoi);
   const shapeMarkers = markers.filter(isShapeMarker);
@@ -144,6 +171,8 @@ export async function planMapRoute(input: MapRoutePlanRequest): Promise<MapRoute
   const traversalBarriers = buildTraversalBarriers(markers);
   const transitLines = buildTransitLines(transitOverview, locale);
   const enabledModes = buildEnabledModes(input.modes);
+  const timeContext = buildRoutePlanTimeContext(input);
+  const requestedTime = formatClockTime(timeContext.minutes);
 
   const draft: RoutePlanDraft = {
     originId: originMarker.id,
@@ -170,6 +199,7 @@ export async function planMapRoute(input: MapRoutePlanRequest): Promise<MapRoute
     taxiFare: spatialProfile.taxiFare,
     transitFare: spatialProfile.transitFare,
     traversalBarriers,
+    time: timeContext,
   });
 
   const limit = Math.min(Math.max(input.limit ?? 5, 1), 10);
@@ -181,12 +211,37 @@ export async function planMapRoute(input: MapRoutePlanRequest): Promise<MapRoute
   return {
     origin,
     destination,
+    timeMode: timeContext.mode,
+    requestedTime,
     options,
     searchedMarkerCount: markers.length,
     asOf: snapshotRecord.snapshot.fetchedAt,
     sourceStatus: 'ready',
     mapUrl: options[0]?.mapUrl ?? buildMapRouteUrl(origin, destination, selectedModes),
   };
+}
+
+/** 把请求里的时刻参数整理成引擎使用的服务日分钟口径。 */
+function buildRoutePlanTimeContext(input: MapRoutePlanRequest): RoutePlanTimeContext {
+  const nowMinutes = normalizeServiceDayMinutes(getBeijingClockMinutes());
+  const requestedMinutes = clockToServiceDayMinutes(input.time);
+  if (input.timeMode === 'arrival') {
+    return {
+      mode: 'arrival',
+      minutes: requestedMinutes ?? nowMinutes + 60,
+      nowMinutes,
+    };
+  }
+  return {
+    mode: 'departure',
+    minutes: requestedMinutes ?? nowMinutes,
+    nowMinutes,
+  };
+}
+
+function formatClockTime(minutes: number): string {
+  const minutesInDay = ((minutes % (24 * 60)) + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(minutesInDay / 60)).padStart(2, '0')}:${String(minutesInDay % 60).padStart(2, '0')}`;
 }
 
 /** 把结构化结果压成适合模型直接回答的文本。 */
@@ -198,14 +253,24 @@ export function formatMapRoutePlanSummary(result: MapRoutePlanResult): string {
 
   const lines = [`${header}，共 ${result.options.length} 个方案：`];
   result.options.forEach((option, index) => {
+    const timeText = formatOptionTimeText(option);
     lines.push(
-      `${index + 1}. ${option.title}：${option.summary}，约 ${option.estimatedMinutes} 分钟，换乘 ${option.transferCount} 次${formatFareText(option.fare)}。`,
+      `${index + 1}. ${option.title}：${option.summary}，约 ${option.estimatedMinutes} 分钟，换乘 ${option.transferCount} 次${timeText}${formatFareText(option.fare)}。`,
     );
     if (option.steps.length > 0) {
       lines.push(`   步骤：${option.steps.map((step) => step.label).join(' → ')}`);
     }
   });
   return lines.join('\n');
+}
+
+function formatOptionTimeText(option: MapRoutePlanOptionSummary): string {
+  if (option.scheduleStatus !== 'scheduled' || !option.arrivalTime) {
+    return '';
+  }
+  const boardText = option.boardTime ? `，${option.boardTime} 发车` : '';
+  const waitText = option.waitMinutes ? `，等待 ${option.waitMinutes} 分钟` : '';
+  return `${boardText}${waitText}，${option.arrivalTime} 到达`;
 }
 
 function summarizeOption(option: RoutePlanOption): Omit<MapRoutePlanOptionSummary, 'mapUrl'> {
@@ -221,6 +286,15 @@ function summarizeOption(option: RoutePlanOption): Omit<MapRoutePlanOptionSummar
     serviceLabels: option.serviceLabels,
     fare: option.fare,
     note: option.note,
+    scheduleStatus: option.scheduleStatus,
+    departureTime: option.departureTime,
+    departureDayOffset: option.departureDayOffset,
+    boardTime: option.boardTime,
+    boardDayOffset: option.boardDayOffset,
+    arrivalTime: option.arrivalTime,
+    arrivalDayOffset: option.arrivalDayOffset,
+    waitMinutes: option.waitMinutes,
+    rideMinutes: option.rideMinutes,
     steps: option.steps.slice(0, 30).map((step) => ({
       kind: step.kind,
       label: step.label,
@@ -454,7 +528,7 @@ function isRegionGeometry(
 }
 
 function buildTransitLines(
-  overview: Awaited<ReturnType<typeof readTransitOverview>> | undefined,
+  overview: Awaited<ReturnType<typeof readTransitRealtimeOverview>> | undefined,
   locale: LocaleCode,
 ): TransitOverviewLine[] {
   if (!overview) {

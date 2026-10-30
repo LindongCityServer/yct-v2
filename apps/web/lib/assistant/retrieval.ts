@@ -143,7 +143,9 @@ export async function buildAssistantRetrieval(
       return;
     }
 
-    const key = `${reference.source}:${reference.href ?? reference.title}`;
+    // 同一来源、同一链接下仍可能有不同条目（如工作台总览与模板清单），
+    // 去重键必须带上标题，否则后加入的条目会被误判为重复。
+    const key = `${reference.source}:${reference.href ?? ''}:${reference.title}`;
     // 同名同类且摘要完全一致的地点对用户没有区分度，合并成一条。
     const contentKey = `${reference.source}|${reference.title}|${reference.snippet ?? ''}`;
     if (seen.has(key) || seen.has(contentKey)) {

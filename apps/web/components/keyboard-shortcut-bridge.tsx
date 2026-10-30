@@ -13,6 +13,9 @@ import {
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 
 const controlHoldDurationMs = 600;
+/** 双击斜杠触发「手气不错」的时间窗与单击聚焦搜索的延迟。 */
+const doubleSlashWindowMs = 280;
+const slashFocusDelayMs = 320;
 const navigationShortcuts = [
   { digit: '1', href: '/', labelKey: 'nav.operations' },
   { digit: '2', href: '/map', labelKey: 'nav.map' },
@@ -35,6 +38,8 @@ export function KeyboardShortcutBridge() {
   });
   const controlTimer = useRef<number | null>(null);
   const controlHeld = useRef(false);
+  const slashTimer = useRef<number | null>(null);
+  const lastSlashAt = useRef(0);
   const mapPath = appPath('/map');
   const isMapPage = pathname === mapPath || pathname.startsWith(`${mapPath}/`);
   const isLineEditorPage =
@@ -176,16 +181,37 @@ export function KeyboardShortcutBridge() {
         !event.altKey &&
         !event.ctrlKey &&
         !event.metaKey &&
-        !isEditableTarget(event.target) &&
         !event.shiftKey &&
-        (event.key === '/' || event.key === '0')
+        !event.repeat &&
+        !isEditableTarget(event.target)
       ) {
-        event.preventDefault();
-        publishMapViewShortcutRequested({
-          command: event.key === '/' ? 'focus_search' : 'reset_view',
-          source: 'keyboard',
-        });
-        return;
+        if (event.key === '/') {
+          event.preventDefault();
+          const now = Date.now();
+          const isDoubleTap = now - lastSlashAt.current <= doubleSlashWindowMs;
+          lastSlashAt.current = now;
+          if (slashTimer.current !== null) {
+            window.clearTimeout(slashTimer.current);
+            slashTimer.current = null;
+          }
+          if (isDoubleTap) {
+            lastSlashAt.current = 0;
+            publishMapViewShortcutRequested({ command: 'random_explore', source: 'keyboard' });
+            return;
+          }
+          // 延迟聚焦搜索，给第二次斜杠留出识别窗口，避免双击被拆成两次单击。
+          slashTimer.current = window.setTimeout(() => {
+            slashTimer.current = null;
+            publishMapViewShortcutRequested({ command: 'focus_search', source: 'keyboard' });
+          }, slashFocusDelayMs);
+          return;
+        }
+
+        if (event.key === '0') {
+          event.preventDefault();
+          publishMapViewShortcutRequested({ command: 'reset_view', source: 'keyboard' });
+          return;
+        }
       }
 
       if (
@@ -225,6 +251,10 @@ export function KeyboardShortcutBridge() {
     window.addEventListener('blur', handleWindowBlur);
     return () => {
       clearControlTimer();
+      if (slashTimer.current !== null) {
+        window.clearTimeout(slashTimer.current);
+        slashTimer.current = null;
+      }
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', handleWindowBlur);
@@ -325,6 +355,12 @@ export function KeyboardShortcutBridge() {
                   </dd>
                 </div>
                 <div>
+                  <dt>{t('shortcut.doubleSlashExplore')}</dt>
+                  <dd>
+                    <KeyboardKeys keys={['/ /']} />
+                  </dd>
+                </div>
+                <div>
                   <dt>{t('shortcut.resetMapView')}</dt>
                   <dd>
                     <KeyboardKeys keys={['0']} />
@@ -362,6 +398,12 @@ export function KeyboardShortcutBridge() {
                   <dt>{t('map.toolbar.zoomOut')}</dt>
                   <dd>
                     <KeyboardKeys keys={['-']} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('shortcut.panMap')}</dt>
+                  <dd>
+                    <KeyboardKeys keys={['WASD / ↑↓←→']} />
                   </dd>
                 </div>
                 <div>

@@ -68,6 +68,7 @@ import type {
   RoutePlanSortMode,
   RoutePlanStep,
   RoutePlanStepDetail,
+  RoutePlanTimeContext,
   RoutePlanTraceSegment,
   RoutePlanningCache,
   RouteTransportMode,
@@ -81,6 +82,17 @@ import type {
   TransitRouteTransportMode,
   Translate,
 } from './types';
+
+import {
+  buildLineDirectionSchedules,
+  clockToServiceDayMinutes,
+  formatServiceDayMinutes,
+  listArrivalRides,
+  selectArrivalRide,
+  selectDepartureRide,
+  type TransitLineDirectionSchedules,
+  type TransitRideSelection,
+} from './schedule';
 
 export function getRouteTransportModeLabel(mode: RouteTransportMode, t: Translate): string {
   return t(`map.route.mode.${mode}` as Parameters<Translate>[0]);
@@ -102,6 +114,8 @@ export function buildRoutePlanOptions(input: {
   taxiFare?: MapSpatialProfile['taxiFare'];
   transitFare?: MapSpatialProfile['transitFare'];
   traversalBarriers: RouteTraversalBarrier[];
+  /** 出行时刻口径；缺省视为不按班次时刻规划。 */
+  time?: RoutePlanTimeContext;
 }): RoutePlanOption[] {
   const roadGraph = input.roadGraph;
   const routeCache = createRoutePlanningCache(input.traversalBarriers);
@@ -509,6 +523,21 @@ export function buildRoutePlanOptions(input: {
 
   options.push(...buildTransitRoutePlanOptions({ ...input, draft, roadGraph, routeCache }));
 
+  // 没有班次时刻的方案（步行、打车、缺时刻线路）按“预计出发 + 耗时”补一个到达排序值，
+  // 让“按到达时间”排序对所有方案都成立。
+  const arrivalReferenceMinutes = input.time
+    ? input.time.mode === 'departure'
+      ? input.time.minutes
+      : input.time.nowMinutes
+    : undefined;
+  if (arrivalReferenceMinutes !== undefined) {
+    for (const option of options) {
+      if (option.arrivalSortMinutes === undefined) {
+        option.arrivalSortMinutes = arrivalReferenceMinutes + option.estimatedMinutes;
+      }
+    }
+  }
+
   return prepareRoutePlanOptions(options);
 }
 
@@ -681,6 +710,7 @@ function areCoordinateChainsEquivalent(
 export function buildRoutePlanCalculationKey(
   draft: RoutePlanDraft,
   enabledModes: EnabledRouteTransportModes,
+  time?: RoutePlanTimeContext,
 ): string {
   return JSON.stringify({
     destination: draft.destination,
@@ -690,6 +720,7 @@ export function buildRoutePlanCalculationKey(
     origin: draft.origin,
     originId: draft.originId,
     originLabel: draft.originLabel,
+    time: time ? [time.mode, time.minutes] : undefined,
   });
 }
 
@@ -868,6 +899,9 @@ function dominatesRouteOption(left: RoutePlanOption, right: RoutePlanOption): bo
   return noWorse && strictlyBetter;
 }
 
+/** 排序时给每次换乘附加的时间惩罚：避免为省几分钟而多换乘一次。 */
+const routeTransferPenaltyMinutes = 8;
+
 function compareRoutePlanOptions(
   left: RoutePlanOption,
   right: RoutePlanOption,
@@ -875,9 +909,15 @@ function compareRoutePlanOptions(
 ): number {
   const criteria: Record<RoutePlanSortMode, Array<(option: RoutePlanOption) => number>> = {
     time: [
-      (option) => option.estimatedMinutes,
+      (option) =>
+        option.estimatedMinutes + option.transferCount * routeTransferPenaltyMinutes,
       (option) => option.walkingDistance,
       (option) => option.transferCount,
+    ],
+    arrival: [
+      (option) => option.arrivalSortMinutes ?? Number.MAX_SAFE_INTEGER,
+      (option) => option.estimatedMinutes,
+      (option) => option.walkingDistance,
     ],
     walking: [
       (option) => option.walkingDistance,
@@ -3048,6 +3088,8 @@ interface TransitLineDirectionCandidate {
   line: TransitOverviewLine;
   mode: RouteTransportModeOption & { mode: TransitRouteTransportMode };
   modeLabel: string;
+  /** 该方向的班次时刻表（实例优先、线路时刻表兜底）。 */
+  schedule: TransitLineDirectionSchedules;
   stops: TransitRouteStop[];
   terminalName: string;
 }
@@ -3065,6 +3107,8 @@ function buildTransitRoutePlanOptions(input: {
   t: Translate;
   transitFare?: MapSpatialProfile['transitFare'];
   transitLines: TransitOverviewLine[];
+  /** 出行时刻口径；缺省不按班次时刻计算。 */
+  time?: RoutePlanTimeContext;
 }): RoutePlanOption[] {
   const profileByMode = new Map(input.modeProfiles.map((profile) => [profile.mode, profile]));
   const stationMarkerIndex = buildTransitStationMarkerIndex(input.pointMarkers);
@@ -3112,6 +3156,22 @@ function buildTransitRoutePlanOptions(input: {
           line,
           mode: { ...mode, mode: mode.mode },
           modeLabel: getRouteTransportModeLabel(mode.mode, input.t),
+          schedule: buildLineDirectionSchedules({
+            line,
+            direction,
+            stops: stops.map((stop) => stop.stop),
+            estimateSegmentMinutes: (index) => {
+              const from = stops[index];
+              const to = stops[index + 1];
+              if (!from || !to) {
+                return 1;
+              }
+              return estimateRouteMinutes(
+                getCoordinateDistance(from.center, to.center),
+                getTransitSpeedFactor(mode.mode),
+              );
+            },
+          }),
           stops,
           // 方向终点必须取当前候选方向的最后一站；不能回退到线路的正向终点，
           // 否则中文界面缺少 displayStationName 时，反向方案会被标成相反方向。
@@ -3136,6 +3196,7 @@ function buildTransitRoutePlanOptions(input: {
         input.roadTiming,
         input.transitFare,
         railFareDistanceGraph,
+        input.time,
       ),
     )
     .filter((option): option is RoutePlanOption => Boolean(option));
@@ -3150,6 +3211,7 @@ function buildTransitRoutePlanOptions(input: {
     input.roadTiming,
     input.transitFare,
     railFareDistanceGraph,
+    input.time,
   );
 
   return [...directOptions, ...transferOptions].sort(compareRoutePlanOptions);
@@ -3251,6 +3313,328 @@ function isContinuousRailRouteMode(mode: RouteTransportMode): mode is 'metro' | 
   return mode === 'metro' || mode === 'tram';
 }
 
+interface TransitRideTiming {
+  status: 'scheduled' | 'estimated';
+  selection?: TransitRideSelection;
+  transitMinutes: number;
+  waitMinutes: number;
+  /** 含端点接驳的出发/到达绝对分钟（服务日口径）。 */
+  departureMinutes?: number;
+  arrivalMinutes?: number;
+}
+
+/**
+ * 没有班次时刻表时，用线路首末班判断是否已经收班：
+ * 出发模式比较到达上车站的时刻，到达模式只要求当前时刻还没有过末班。
+ */
+function isTransitLineServiceEnded(
+  line: TransitOverviewLine,
+  time: RoutePlanTimeContext | undefined,
+  departureReadyMinutes: number,
+): boolean {
+  if (!time) {
+    return false;
+  }
+  const lastMinutes = clockToServiceDayMinutes(line.firstLastBus?.last);
+  if (lastMinutes === undefined) {
+    return false;
+  }
+  const referenceMinutes = time.mode === 'departure' ? departureReadyMinutes : time.nowMinutes;
+  return referenceMinutes > lastMinutes;
+}
+
+/** 单段乘车：按出发或到达口径选出实际班次；有时刻表但无可行班次时返回 undefined。 */
+function resolveDirectTransitRideTiming(input: {
+  line: TransitOverviewLine;
+  schedule: TransitLineDirectionSchedules;
+  originIndex: number;
+  destinationIndex: number;
+  time?: RoutePlanTimeContext;
+  endpointAccessMinutes: number;
+  accessMinutes: number;
+  egressMinutes: number;
+  estimatedTransitMinutes: number;
+}): TransitRideTiming | undefined {
+  if (!input.time || !input.schedule.hasScheduleData) {
+    // 没有班次时刻表时，用线路首末班兜底判断是否已经收班。
+    const departureReadyMinutes =
+      input.time === undefined
+        ? 0
+        : input.time.minutes + input.endpointAccessMinutes + input.accessMinutes;
+    if (isTransitLineServiceEnded(input.line, input.time, departureReadyMinutes)) {
+      return undefined;
+    }
+    return {
+      status: 'estimated',
+      transitMinutes: input.estimatedTransitMinutes,
+      waitMinutes: 0,
+    };
+  }
+
+  if (input.time.mode === 'departure') {
+    const readyMinutes = Math.ceil(
+      input.time.minutes + input.endpointAccessMinutes + input.accessMinutes,
+    );
+    const selection = selectDepartureRide({
+      schedules: input.schedule.schedules,
+      originIndex: input.originIndex,
+      destinationIndex: input.destinationIndex,
+      readyMinutes,
+    });
+    if (!selection) {
+      return undefined;
+    }
+    return {
+      status: 'scheduled',
+      selection,
+      transitMinutes: selection.rideMinutes,
+      waitMinutes: Math.max(0, Math.round(selection.waitMinutes)),
+      departureMinutes: Math.round(
+        selection.boardMinutes - input.accessMinutes - input.endpointAccessMinutes,
+      ),
+      arrivalMinutes: Math.round(
+        selection.arrivalMinutes + input.egressMinutes + input.endpointAccessMinutes,
+      ),
+    };
+  }
+
+  const deadlineMinutes = Math.floor(
+    input.time.minutes - input.endpointAccessMinutes - input.egressMinutes,
+  );
+  const earliestBoardMinutes = Math.ceil(
+    input.time.nowMinutes + input.endpointAccessMinutes + input.accessMinutes,
+  );
+  const selection = selectArrivalRide({
+    schedules: input.schedule.schedules,
+    originIndex: input.originIndex,
+    destinationIndex: input.destinationIndex,
+    deadlineMinutes,
+    earliestBoardMinutes,
+  });
+  if (!selection) {
+    return undefined;
+  }
+  return {
+    status: 'scheduled',
+    selection,
+    transitMinutes: selection.rideMinutes,
+    waitMinutes: 0,
+    departureMinutes: Math.round(
+      selection.boardMinutes - input.accessMinutes - input.endpointAccessMinutes,
+    ),
+    arrivalMinutes: Math.round(
+      selection.arrivalMinutes + input.egressMinutes + input.endpointAccessMinutes,
+    ),
+  };
+}
+
+/** 换乘乘车：按先后顺序衔接两段班次，衔接时间不足时自动等下一班。 */
+function resolveTransferTransitRideTiming(input: {
+  firstLine: TransitOverviewLine;
+  secondLine: TransitOverviewLine;
+  firstSchedule: TransitLineDirectionSchedules;
+  secondSchedule: TransitLineDirectionSchedules;
+  firstOriginIndex: number;
+  firstTransferIndex: number;
+  secondTransferIndex: number;
+  secondDestinationIndex: number;
+  transferWalkMinutes: number;
+  time?: RoutePlanTimeContext;
+  endpointAccessMinutes: number;
+  accessMinutes: number;
+  egressMinutes: number;
+  firstEstimatedMinutes: number;
+  secondEstimatedMinutes: number;
+}): { first: TransitRideTiming; second: TransitRideTiming } | undefined {
+  const estimated: { first: TransitRideTiming; second: TransitRideTiming } = {
+    first: { status: 'estimated', transitMinutes: input.firstEstimatedMinutes, waitMinutes: 0 },
+    second: { status: 'estimated', transitMinutes: input.secondEstimatedMinutes, waitMinutes: 0 },
+  };
+  if (
+    !input.time ||
+    !input.firstSchedule.hasScheduleData ||
+    !input.secondSchedule.hasScheduleData
+  ) {
+    // 缺接续时刻表时同样要判断两条线路是否已经收班。
+    if (input.time) {
+      const firstReadyMinutes =
+        input.time.mode === 'departure'
+          ? input.time.minutes + input.endpointAccessMinutes + input.accessMinutes
+          : input.time.nowMinutes;
+      const secondReadyMinutes =
+        input.time.mode === 'departure'
+          ? firstReadyMinutes + input.firstEstimatedMinutes + input.transferWalkMinutes
+          : input.time.nowMinutes + input.transferWalkMinutes;
+      if (
+        isTransitLineServiceEnded(input.firstLine, input.time, firstReadyMinutes) ||
+        isTransitLineServiceEnded(input.secondLine, input.time, secondReadyMinutes)
+      ) {
+        return undefined;
+      }
+    }
+    return estimated;
+  }
+
+  if (input.time.mode === 'departure') {
+    const firstReady = Math.ceil(
+      input.time.minutes + input.endpointAccessMinutes + input.accessMinutes,
+    );
+    const first = selectDepartureRide({
+      schedules: input.firstSchedule.schedules,
+      originIndex: input.firstOriginIndex,
+      destinationIndex: input.firstTransferIndex,
+      readyMinutes: firstReady,
+    });
+    if (!first) {
+      return undefined;
+    }
+    const secondReady = Math.ceil(first.arrivalMinutes + input.transferWalkMinutes);
+    const second = selectDepartureRide({
+      schedules: input.secondSchedule.schedules,
+      originIndex: input.secondTransferIndex,
+      destinationIndex: input.secondDestinationIndex,
+      readyMinutes: secondReady,
+    });
+    if (!second) {
+      return undefined;
+    }
+    return {
+      first: {
+        status: 'scheduled',
+        selection: first,
+        transitMinutes: first.rideMinutes,
+        waitMinutes: Math.max(0, Math.round(first.waitMinutes)),
+      },
+      second: {
+        status: 'scheduled',
+        selection: second,
+        transitMinutes: second.rideMinutes,
+        waitMinutes: Math.max(0, Math.round(second.waitMinutes)),
+      },
+    };
+  }
+
+  const secondDeadline = Math.floor(
+    input.time.minutes - input.endpointAccessMinutes - input.egressMinutes,
+  );
+  // 最晚的第二段班次未必接得上第一段，按到达时刻从晚到早逐个尝试。
+  const secondRides = listArrivalRides({
+    schedules: input.secondSchedule.schedules,
+    originIndex: input.secondTransferIndex,
+    destinationIndex: input.secondDestinationIndex,
+    deadlineMinutes: secondDeadline,
+    earliestBoardMinutes: Math.ceil(input.time.nowMinutes + input.transferWalkMinutes),
+  });
+  for (const second of secondRides) {
+    const first = selectArrivalRide({
+      schedules: input.firstSchedule.schedules,
+      originIndex: input.firstOriginIndex,
+      destinationIndex: input.firstTransferIndex,
+      deadlineMinutes: Math.floor(second.boardMinutes - input.transferWalkMinutes),
+      earliestBoardMinutes: Math.ceil(
+        input.time.nowMinutes + input.endpointAccessMinutes + input.accessMinutes,
+      ),
+    });
+    if (!first) {
+      continue;
+    }
+    return {
+      first: {
+        status: 'scheduled',
+        selection: first,
+        transitMinutes: first.rideMinutes,
+        waitMinutes: 0,
+      },
+      second: {
+        status: 'scheduled',
+        selection: second,
+        transitMinutes: second.rideMinutes,
+        waitMinutes: 0,
+      },
+    };
+  }
+  return undefined;
+}
+
+/** 把实际班次时刻写入方案字段，供列表展示与排序。 */
+function buildTransitRideTimingFields(
+  timing: TransitRideTiming,
+  overrides?: { departureMinutes?: number; arrivalMinutes?: number },
+): Pick<
+  RoutePlanOption,
+  | 'scheduleStatus'
+  | 'departureTime'
+  | 'departureDayOffset'
+  | 'boardTime'
+  | 'boardDayOffset'
+  | 'arrivalTime'
+  | 'arrivalDayOffset'
+  | 'waitMinutes'
+  | 'rideMinutes'
+  | 'arrivalSortMinutes'
+> {
+  if (!timing.selection) {
+    return { scheduleStatus: 'estimated' };
+  }
+  const board = formatServiceDayMinutes(timing.selection.boardMinutes);
+  const departureMinutes = overrides?.departureMinutes ?? timing.departureMinutes;
+  const arrivalMinutes = overrides?.arrivalMinutes ?? timing.arrivalMinutes;
+  const departure =
+    departureMinutes === undefined ? undefined : formatServiceDayMinutes(departureMinutes);
+  const arrival =
+    arrivalMinutes === undefined ? undefined : formatServiceDayMinutes(arrivalMinutes);
+  return {
+    scheduleStatus: timing.status,
+    departureTime: departure?.time,
+    departureDayOffset: departure?.dayOffset,
+    boardTime: board.time,
+    boardDayOffset: board.dayOffset,
+    arrivalTime: arrival?.time,
+    arrivalDayOffset: arrival?.dayOffset,
+    waitMinutes: timing.waitMinutes,
+    rideMinutes: timing.transitMinutes,
+    arrivalSortMinutes: arrivalMinutes,
+  };
+}
+
+/** 乘车步骤里补充实际发车/到达时刻与等待时间。 */
+function buildTransitRideScheduleDetails(
+  timing: TransitRideTiming,
+  t: Translate,
+): RoutePlanStepDetail[] {
+  if (timing.status !== 'scheduled' || !timing.selection) {
+    return [];
+  }
+  const board = formatServiceDayMinutes(timing.selection.boardMinutes);
+  const arrival = formatServiceDayMinutes(timing.selection.arrivalMinutes);
+  return [
+    {
+      icon: 'schedule',
+      label: t('map.route.rideSchedule', { board: board.time, arrive: arrival.time }),
+      meta:
+        timing.waitMinutes > 0
+          ? t('map.route.waitMinutes', { count: timing.waitMinutes })
+          : undefined,
+    },
+  ];
+}
+
+function formatTransitRideStepLabel(
+  label: string,
+  timing: TransitRideTiming,
+  t: Translate,
+): string {
+  if (timing.status !== 'scheduled' || !timing.selection) {
+    return label;
+  }
+  return `${label} · ${t('map.route.rideBoardAt', {
+    time: formatServiceDayMinutes(timing.selection.boardMinutes).time,
+  })}`;
+}
+
+/** 单线方案被称作“直达”的最大接驳步行分钟数。 */
+const routeDirectTitleWalkLimitMinutes = 8;
+
 function buildDirectTransitLineOption(
   candidate: TransitLineDirectionCandidate,
   draft: RoutePlanDraft,
@@ -3262,6 +3646,7 @@ function buildDirectTransitLineOption(
   roadTiming?: MapSpatialProfile['roadTiming'],
   transitFare?: MapSpatialProfile['transitFare'],
   railFareDistanceGraph?: RailFareDistanceGraph,
+  time?: RoutePlanTimeContext,
 ): RoutePlanOption | undefined {
   const originStop = findNearestRouteLineStop(draft.origin, candidate.stops);
   const destinationStop = findNearestRouteLineStop(draft.destination, candidate.stops);
@@ -3349,13 +3734,31 @@ function buildDirectTransitLineOption(
   const accessMinutes = estimateResolvedWalkRouteMinutes(accessRoute);
   const egressMinutes = estimateResolvedWalkRouteMinutes(egressRoute);
   const endpointAccessMinutes = estimateRouteMinutes(endpointAccessDistance, 72);
-  const transitMinutes = estimateTransitSegmentMinutes(
+  const estimatedTransitMinutes = estimateTransitSegmentMinutes(
     segmentStops,
     transitRoute,
     candidate.mode.mode,
     roadTiming,
   );
-  const estimatedMinutes = endpointAccessMinutes + accessMinutes + egressMinutes + transitMinutes;
+  const rideTiming = resolveDirectTransitRideTiming({
+    line: candidate.line,
+    schedule: candidate.schedule,
+    originIndex: originStop.index,
+    destinationIndex: destinationStop.index,
+    time,
+    endpointAccessMinutes,
+    accessMinutes,
+    egressMinutes,
+    estimatedTransitMinutes,
+  });
+  if (!rideTiming) {
+    // 线路有时刻表但期望时刻内没有可行班次（已收班或赶不上），不再给出该方案。
+    return undefined;
+  }
+  const transitMinutes = rideTiming.transitMinutes;
+  const waitMinutes = rideTiming.waitMinutes;
+  const estimatedMinutes =
+    endpointAccessMinutes + accessMinutes + egressMinutes + transitMinutes + waitMinutes;
   const stationSpan = Math.max(1, destinationStop.index - originStop.index);
   const coordinates = buildRouteTraceCoordinates(draft, [
     ...accessRoute.coordinates,
@@ -3386,12 +3789,17 @@ function buildDirectTransitLineOption(
     createRouteRoadLabelsFromSegments(accessRoute.roadSegments),
     createRouteRoadLabelsFromSegments(egressRoute.roadSegments),
   );
+  // 接驳步行时间过长时不再叫“直达”，直接显示线路名，避免把长距离步行包装成直达。
+  const usesDirectTitle =
+    endpointAccessMinutes + accessMinutes + egressMinutes <= routeDirectTitleWalkLimitMinutes;
 
   return {
     id: `${candidate.mode.mode}-${candidate.line.id}-${candidate.direction}-${originStop.marker.id}-${destinationStop.marker.id}`,
-    title: t
-      ? t('map.route.directTitle', { mode: candidate.modeLabel })
-      : `${candidate.modeLabel}直达`,
+    title: usesDirectTitle
+      ? t
+        ? t('map.route.directTitle', { mode: candidate.modeLabel })
+        : `${candidate.modeLabel}直达`
+      : candidate.line.name,
     summary: `${candidate.line.name} · ${
       t ? t('map.route.stationCount', { count: stationSpan }) : `${stationSpan}站`
     } · ${formatRoutePlanDistance(
@@ -3418,6 +3826,7 @@ function buildDirectTransitLineOption(
     fare,
     transferCount: 0,
     walkingDistance: endpointAccessDistance + accessDistance + egressDistance,
+    ...buildTransitRideTimingFields(rideTiming),
     steps: [
       createRoutePlaceStep(
         t ? t('map.route.depart', { name: draft.originLabel }) : `${draft.originLabel} 出发`,
@@ -3439,18 +3848,25 @@ function buildDirectTransitLineOption(
         candidate.color,
       ),
       createRouteTransitStep(
-        t
-          ? t('map.route.ride', {
-              line: candidate.line.name,
-              direction: candidate.terminalName,
-              stops: stationSpan,
-              duration: formatRouteStepMinutes(transitMinutes, t),
-            })
-          : `乘坐 ${candidate.line.name}（${candidate.terminalName}方向） ${stationSpan}站 ${formatRouteStepMinutes(
-              transitMinutes,
-            )}`,
+        formatTransitRideStepLabel(
+          t
+            ? t('map.route.ride', {
+                line: candidate.line.name,
+                direction: candidate.terminalName,
+                stops: stationSpan,
+                duration: formatRouteStepMinutes(transitMinutes, t),
+              })
+            : `乘坐 ${candidate.line.name}（${candidate.terminalName}方向） ${stationSpan}站 ${formatRouteStepMinutes(
+                transitMinutes,
+              )}`,
+          rideTiming,
+          t,
+        ),
         candidate.color,
-        buildTransitStopStepDetails(segmentStops),
+        [
+          ...buildTransitRideScheduleDetails(rideTiming, t),
+          ...buildTransitStopStepDetails(segmentStops),
+        ],
       ),
       createRoutePlaceStep(
         formatTransitAlightStepLabel(
@@ -3489,6 +3905,7 @@ function buildTransferTransitLineOptions(
   roadTiming?: MapSpatialProfile['roadTiming'],
   transitFare?: MapSpatialProfile['transitFare'],
   railFareDistanceGraph?: RailFareDistanceGraph,
+  time?: RoutePlanTimeContext,
 ): RoutePlanOption[] {
   const originCandidates = candidates
     .map((candidate) => ({
@@ -3693,18 +4110,63 @@ function buildTransferTransitLineOptions(
       const endpointAccessMinutes = estimateRouteMinutes(endpointAccessDistance, 72);
       const transferWalkMinutes =
         transferDistance > 0 ? estimateResolvedWalkRouteMinutes(transferRoute) : 0;
-      const firstTransitMinutes = estimateTransitSegmentMinutes(
+      const firstEstimatedTransitMinutes = estimateTransitSegmentMinutes(
         firstSegment,
         firstTransitRoute,
         originCandidate.candidate.mode.mode,
         roadTiming,
       );
-      const secondTransitMinutes = estimateTransitSegmentMinutes(
+      const secondEstimatedTransitMinutes = estimateTransitSegmentMinutes(
         secondSegment,
         secondTransitRoute,
         destinationCandidate.candidate.mode.mode,
         roadTiming,
       );
+      const rideTiming = resolveTransferTransitRideTiming({
+        firstLine: originCandidate.candidate.line,
+        secondLine: destinationCandidate.candidate.line,
+        firstSchedule: originCandidate.candidate.schedule,
+        secondSchedule: destinationCandidate.candidate.schedule,
+        firstOriginIndex: originCandidate.originStop.index,
+        firstTransferIndex: transfer.fromStop.index,
+        secondTransferIndex: transfer.toStop.index,
+        secondDestinationIndex: destinationCandidate.destinationStop.index,
+        transferWalkMinutes,
+        time,
+        endpointAccessMinutes,
+        accessMinutes,
+        egressMinutes,
+        firstEstimatedMinutes: firstEstimatedTransitMinutes,
+        secondEstimatedMinutes: secondEstimatedTransitMinutes,
+      });
+      if (!rideTiming) {
+        // 有时刻表但衔接不上（已收班或赶不上换乘），不再给出该方案。
+        continue;
+      }
+      const firstTransitMinutes = rideTiming.first.transitMinutes;
+      const secondTransitMinutes = rideTiming.second.transitMinutes;
+      const totalWaitMinutes = rideTiming.first.waitMinutes + rideTiming.second.waitMinutes;
+      const scheduled = rideTiming.first.status === 'scheduled';
+      const departureMinutes =
+        scheduled && rideTiming.first.selection
+          ? Math.round(
+              rideTiming.first.selection.boardMinutes - accessMinutes - endpointAccessMinutes,
+            )
+          : undefined;
+      const arrivalMinutes =
+        scheduled && rideTiming.second.selection
+          ? Math.round(
+              rideTiming.second.selection.arrivalMinutes + egressMinutes + endpointAccessMinutes,
+            )
+          : undefined;
+      const mergedRideTiming: TransitRideTiming = {
+        status: scheduled ? 'scheduled' : 'estimated',
+        selection: rideTiming.first.selection,
+        transitMinutes: firstTransitMinutes + secondTransitMinutes,
+        waitMinutes: totalWaitMinutes,
+        departureMinutes,
+        arrivalMinutes,
+      };
       const firstStationSpan = Math.max(
         1,
         transfer.fromStop.index - originCandidate.originStop.index,
@@ -3716,6 +4178,9 @@ function buildTransferTransitLineOptions(
       const noteMode = shouldUseRoadGraphForTransitMode(originCandidate.candidate.mode.mode)
         ? originCandidate.candidate.mode.mode
         : destinationCandidate.candidate.mode.mode;
+      const defaultTransferWaitMinutes = getDefaultTransferWaitMinutes(
+        destinationCandidate.candidate.mode.mode,
+      );
       const estimatedMinutes =
         endpointAccessMinutes +
         accessMinutes +
@@ -3723,7 +4188,7 @@ function buildTransferTransitLineOptions(
         transferWalkMinutes +
         firstTransitMinutes +
         secondTransitMinutes +
-        4;
+        (scheduled ? totalWaitMinutes : defaultTransferWaitMinutes);
       const coordinates = buildRouteTraceCoordinates(draft, [
         ...accessRoute.coordinates,
         ...firstTransitRoute.coordinates,
@@ -3817,6 +4282,7 @@ function buildTransferTransitLineOptions(
         transferCount: 1,
         walkingDistance:
           endpointAccessDistance + accessDistance + egressDistance + transferDistance,
+        ...buildTransitRideTimingFields(mergedRideTiming),
         steps: [
           createRoutePlaceStep(t('map.route.depart', { name: draft.originLabel }), 'origin'),
           ...createRouteEndpointAccessSteps(draft, 'origin', t),
@@ -3835,14 +4301,21 @@ function buildTransferTransitLineOptions(
             originCandidate.candidate.color,
           ),
           createRouteTransitStep(
-            t('map.route.ride', {
-              line: originCandidate.candidate.line.name,
-              direction: originCandidate.candidate.terminalName,
-              stops: firstStationSpan,
-              duration: formatRouteStepMinutes(firstTransitMinutes, t),
-            }),
+            formatTransitRideStepLabel(
+              t('map.route.ride', {
+                line: originCandidate.candidate.line.name,
+                direction: originCandidate.candidate.terminalName,
+                stops: firstStationSpan,
+                duration: formatRouteStepMinutes(firstTransitMinutes, t),
+              }),
+              rideTiming.first,
+              t,
+            ),
             originCandidate.candidate.color,
-            buildTransitStopStepDetails(firstSegment),
+            [
+              ...buildTransitRideScheduleDetails(rideTiming.first, t),
+              ...buildTransitStopStepDetails(firstSegment),
+            ],
           ),
           createRoutePlaceStep(
             t('map.route.transferAction', {
@@ -3870,14 +4343,21 @@ function buildTransferTransitLineOptions(
             destinationCandidate.candidate.color,
           ),
           createRouteTransitStep(
-            t('map.route.ride', {
-              line: destinationCandidate.candidate.line.name,
-              direction: destinationCandidate.candidate.terminalName,
-              stops: secondStationSpan,
-              duration: formatRouteStepMinutes(secondTransitMinutes, t),
-            }),
+            formatTransitRideStepLabel(
+              t('map.route.ride', {
+                line: destinationCandidate.candidate.line.name,
+                direction: destinationCandidate.candidate.terminalName,
+                stops: secondStationSpan,
+                duration: formatRouteStepMinutes(secondTransitMinutes, t),
+              }),
+              rideTiming.second,
+              t,
+            ),
             destinationCandidate.candidate.color,
-            buildTransitStopStepDetails(secondSegment),
+            [
+              ...buildTransitRideScheduleDetails(rideTiming.second, t),
+              ...buildTransitStopStepDetails(secondSegment),
+            ],
           ),
           createRoutePlaceStep(
             formatTransitAlightStepLabel(
@@ -5240,6 +5720,20 @@ export function getTransitSpeedFactor(mode: RouteTransportMode): number {
   }
 
   return 120;
+}
+
+/**
+ * 缺少接续时刻表时的默认换乘等待：
+ * 公交按 8 分钟、地铁按 3 分钟，其余方式沿用 4 分钟经验值。
+ */
+export function getDefaultTransferWaitMinutes(mode: RouteTransportMode): number {
+  if (mode === 'bus') {
+    return 8;
+  }
+  if (mode === 'metro') {
+    return 3;
+  }
+  return 4;
 }
 
 export function formatRoutePlanDistance(distance: number, t?: Translate): string {

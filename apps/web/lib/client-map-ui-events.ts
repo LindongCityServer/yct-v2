@@ -60,6 +60,7 @@ export interface MapViewShortcutRequestedPayload {
     | 'toggle_layers'
     | 'toggle_favorite'
     | 'search_nearby'
+    | 'random_explore'
     | 'dismiss';
   source: 'keyboard';
 }

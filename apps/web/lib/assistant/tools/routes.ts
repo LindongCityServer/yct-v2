@@ -14,6 +14,8 @@ interface PlanRouteInput {
   destinationId?: string;
   modes?: string[];
   limit?: number;
+  time?: string;
+  timeMode?: 'departure' | 'arrival';
 }
 
 const routeTransportModes = new Set<RouteTransportMode>([
@@ -35,7 +37,7 @@ export const planRouteTool: AssistantTool<PlanRouteInput> = {
   name: 'plan_route',
   title: '地图路线规划',
   description:
-    '规划两个地图地点之间的步行、打车和公共交通路线，返回耗时、距离、票价、换乘次数与文字步骤。适合“从A到B怎么走”“打车多久”这类问题；站点间的班次换乘请用 plan_journey。',
+    '规划两个地图地点之间的步行、打车和公共交通路线，返回耗时、距离、票价、换乘次数、到发时刻与文字步骤。可按指定出发时刻（timeMode=departure）或期望到达时刻（timeMode=arrival）结合已发布班次与线路发车时刻规划；适合“从A到B怎么走”“打车多久”“几点前到怎么坐车”这类问题；站点间的班次换乘请用 plan_journey。',
   inputSchema: {
     type: 'object',
     properties: {
@@ -53,6 +55,15 @@ export const planRouteTool: AssistantTool<PlanRouteInput> = {
         items: { type: 'string' },
       },
       limit: { type: 'number', description: '返回方案数，默认 5。', minimum: 1, maximum: 10 },
+      time: {
+        type: 'string',
+        description: '出行时刻，格式 HH:mm；留空表示当前时刻。',
+      },
+      timeMode: {
+        type: 'string',
+        enum: ['departure', 'arrival'],
+        description: '时间口径：departure 表示出发时间，arrival 表示期望到达时间。',
+      },
     },
     required: ['origin', 'destination'],
     additionalProperties: false,
@@ -73,6 +84,8 @@ export const planRouteTool: AssistantTool<PlanRouteInput> = {
       modes: modes.length > 0 ? modes : undefined,
       locale: context.locale,
       limit: input.limit,
+      time: input.time,
+      timeMode: input.timeMode,
     };
 
     try {

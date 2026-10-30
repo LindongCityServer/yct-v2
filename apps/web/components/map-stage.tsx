@@ -28,7 +28,7 @@ import type {
 } from '@yct/contracts';
 import { ADMINISTRATIVE_AREA_DEFAULT_MAX_ZOOM } from '@yct/contracts';
 import { quoteTaxiFare, quoteTransitRouteFare } from '@yct/domain';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { startTransition, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -92,6 +92,8 @@ import {
   type TransitStationBoardEntry,
 } from '../lib/transit-realtime';
 import { resolveDirectionalDepartureTimes } from '../lib/transit-departure-editor';
+import { createTripReminder } from '../lib/client-trip-reminders';
+import { requestConfirmation } from '../lib/client-dialog-events';
 import { resolveLegacySegmentMinutes } from '../lib/transit-segment-minutes';
 import { getTransitStopLocationMarkerIdsForDirection } from '../lib/transit-stop-location';
 import {
@@ -128,6 +130,7 @@ import {
   buildTransitSegmentRoute,
   buildTransitStationMarkerIndex,
   clampNumber,
+  clockToServiceDayMinutes,
   dedupeConsecutiveCoordinates,
   dedupeValues,
   estimateRouteMinutes,
@@ -147,6 +150,7 @@ import {
   isPlayerLocationMarkerId,
   isRouteAccessSecondaryPoi,
   matchesTransitMarkerMode,
+  normalizeServiceDayMinutes,
   selectRoutePlanOptions,
   shouldUseRoadGraphForTransitMode,
   updateRoutePlanDraftPlayerEndpoints,
@@ -169,6 +173,8 @@ import {
   type RoutePlanSortMode,
   type RoutePlanStep,
   type RoutePlanStepDetail,
+  type RoutePlanTimeContext,
+  type RoutePlanTimeMode,
   type RoutePlanTraceSegment,
   type RouteTransportMode,
   type RouteTransportModeOption,
@@ -467,6 +473,13 @@ interface TransitLineConnection {
   sortOrder: number;
 }
 
+interface TransitStationConnectionIndex {
+  /** 按站名聚合的线路，作为没有明确停靠 POI 时的默认回退。 */
+  byName: Map<string, TransitLineConnection[]>;
+  /** 线路实际使用的 POI（显式停靠点或按交通方式解析出的默认点位）。 */
+  byMarkerId: Map<string, TransitLineConnection[]>;
+}
+
 interface RoadRoutingSnapshot {
   graph?: RoadRouteGraph;
   markerRoadAccessIndex: Map<string, RoadAccessCandidate[]>;
@@ -559,6 +572,34 @@ const mapBrowseModes: Array<{ value: MapBrowseMode; labelKey: CommonMessageKey; 
   { value: 'traffic', labelKey: 'map.layer.mode.traffic', icon: 'commute' },
 ];
 
+/** 区域 POI 的半透明填充色：按分类语义取色，未命中的分类沿用原强调色。 */
+const mapAreaFillColorByCategory: Readonly<Record<string, string>> = {
+  park: '#3f8f5b',
+  scenery: '#2f8c7c',
+  water: '#3b7fc4',
+  museum: '#8a63b6',
+  education: '#6b74c9',
+  medical: '#c75c5c',
+  sports: '#d1812f',
+  commerce: '#c29a2c',
+  dining: '#c4763f',
+  residence: '#7c8ca6',
+  industry: '#8b7863',
+  'public-service': '#3e9ba0',
+  facility: '#8892a3',
+  parking: '#5e7fa8',
+  airport: '#6a7b92',
+  'coach-station': '#647e9e',
+  'metro-station': '#647e9e',
+  'railway-station': '#647e9e',
+  'ferry-port': '#647e9e',
+  'tram-station': '#647e9e',
+};
+
+function getMapAreaFillColor(categoryId: string | undefined): string | undefined {
+  return categoryId ? mapAreaFillColorByCategory[categoryId] : undefined;
+}
+
 const defaultRouteTransportModes: EnabledRouteTransportModes = {
   walk: true,
   taxi: false,
@@ -578,7 +619,7 @@ const mapShareModes: MapShareMode[] = ['image'];
 const mapShareCopyKinds: MapShareCopyKind[] = ['link', 'text', 'coordinate', 'teleport'];
 
 const mapShareModeIcons: Record<MapShareMode, string> = {
-  image: 'image',
+  image: 'download',
   link: 'link',
   text: 'article',
 };
@@ -804,6 +845,7 @@ export function MapStage() {
   const { locale, t } = useI18n();
   const mobileActionRail = useMobileActionRail();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -837,6 +879,8 @@ export function MapStage() {
   const [mapCompletedReload, setMapCompletedReload] = useState(-1);
   const [transitCompletedReload, setTransitCompletedReload] = useState(-1);
   const luckyRequest = searchParams.get('lucky');
+  // 「手气不错」从点击到落点完成（含地图/线路数据加载）期间的等待态，用于图标加载动画。
+  const [explorePending, setExplorePending] = useState(false);
   const handledLuckyRef = useRef<string | null>(null);
   const luckyRequiredReloadRef = useRef(0);
   const lastLuckyMarkerRef = useRef<string | undefined>(undefined);
@@ -919,6 +963,16 @@ export function MapStage() {
     defaultRouteTransportModes,
   );
   const [routePlanSortMode, setRoutePlanSortMode] = useState<RoutePlanSortMode>('time');
+  const [routePlanTimeMode, setRoutePlanTimeMode] = useState<RoutePlanTimeMode>('departure');
+  /** 空字符串表示自动：出发模式取当前时刻，到达模式取一小时后。 */
+  const [routePlanTimeValue, setRoutePlanTimeValue] = useState('');
+  const [routePlanRequirementDialogOpen, setRoutePlanRequirementDialogOpen] = useState(false);
+  useEffect(() => {
+    // 首次进入：出发时间默认填当前时刻。
+    setRoutePlanTimeValue((current) =>
+      current ? current : getDefaultRoutePlanTimeValue('departure'),
+    );
+  }, []);
   const [routePlanOptions, setRoutePlanOptions] = useState<RoutePlanOption[]>([]);
   const [routePlanOptionsKey, setRoutePlanOptionsKey] = useState<string | null>(null);
   const [routePlanStatus, setRoutePlanStatus] = useState<RoutePlanStatus>('idle');
@@ -1661,8 +1715,8 @@ export function MapStage() {
     [localizedTransitOverview],
   );
   const stationConnectionIndex = useMemo(
-    () => buildStationConnectionIndex(localizedTransitOverview, t),
-    [localizedTransitOverview, t],
+    () => buildStationConnectionIndex(localizedTransitOverview, t, pointMarkers),
+    [localizedTransitOverview, pointMarkers, t],
   );
   const focusedTransitLine = focusedTransitLineMarker
     ? findTransitLineByMarker(focusedTransitLineMarker, transitLineLookup)
@@ -2120,8 +2174,17 @@ export function MapStage() {
     setPlayersVisible(true);
   }, [markerListCategoryOptions, searchParams]);
 
+  const routePlanNowAnchor = routePlanDraft?.originId ?? routePlanDraft?.originLabel ?? '';
+  const routePlanTimeContext = useMemo<RoutePlanTimeContext>(() => {
+    const nowMinutes = normalizeServiceDayMinutes(getBeijingClockMinutes());
+    const requested = clockToServiceDayMinutes(routePlanTimeValue || undefined);
+    return routePlanTimeMode === 'arrival'
+      ? { mode: 'arrival', minutes: requested ?? nowMinutes + 60, nowMinutes }
+      : { mode: 'departure', minutes: requested ?? nowMinutes, nowMinutes };
+    // 起点变化时刷新“现在”，避免长时间停留后仍按旧时刻规划。
+  }, [routePlanNowAnchor, routePlanTimeMode, routePlanTimeValue]);
   const routePlanCalculationKey = routePlanDraft
-    ? buildRoutePlanCalculationKey(routePlanDraft, routeTransportModes)
+    ? buildRoutePlanCalculationKey(routePlanDraft, routeTransportModes, routePlanTimeContext)
     : null;
   const routePlanHasTwoLinearEndpoints =
     Boolean(routePlanDraft?.originId && routePlanDraft?.destinationId) &&
@@ -2318,9 +2381,12 @@ export function MapStage() {
             line.color ? [[line.id, line.color] as const] : [],
           ),
         ),
+        // 区域填充由独立图层统一绘制；主图层只在卫星视图聚焦区域时保留填充。
+        browseMode === 'satellite' && focusedMarkerId ? 0.18 : 0,
       ),
     [
       browseMode,
+      focusedMarkerId,
       localizedTransitOverview?.lines,
       mapView,
       perspective2_5dVisible,
@@ -2343,6 +2409,38 @@ export function MapStage() {
       ),
     [administrativeAreas, localizedTransitOverview?.lines, mapView, markerSnapshot, viewportSize],
   );
+  // 区域填充按地铁线条的方式处理：作为独立的几何图层常驻，不随标记、标签、
+  // 搜索或聚焦而消失；受「线条与标签」开关控制，聚焦或路线结果展示时保留。
+  const rawAreaFillShapePois = useMemo(() => {
+    if (browseMode !== 'road-network' && browseMode !== 'traffic') {
+      return [];
+    }
+    const keepForContext = Boolean(focusedMarker) || routeResultActive;
+    if (!linearFeaturesVisible && !keepForContext) {
+      return [];
+    }
+    return projectShapePoiMarkers(
+      shapeMarkers,
+      mapView,
+      viewportSize,
+      false,
+      new Map(
+        (localizedTransitOverview?.lines ?? []).flatMap((line) =>
+          line.color ? [[line.id, line.color] as const] : [],
+        ),
+      ),
+      0.18,
+    ).filter((shape) => shape.isArea);
+  }, [
+    browseMode,
+    focusedMarker,
+    linearFeaturesVisible,
+    localizedTransitOverview?.lines,
+    mapView,
+    routeResultActive,
+    shapeMarkers,
+    viewportSize,
+  ]);
   const {
     markers: projectedMarkers,
     linearPois: projectedLinearPois,
@@ -2636,6 +2734,7 @@ export function MapStage() {
             secondaryPoiParentIndex,
             transitLines: localizedTransitOverview?.lines ?? [],
             modeProfiles: localizedTransitOverview?.modeProfiles ?? [],
+            time: routePlanTimeContext,
           }
         : null,
     [
@@ -2648,6 +2747,7 @@ export function MapStage() {
       routeTraversalBarriers,
       routePlanDraft,
       routeTransportModes,
+      routePlanTimeContext,
       secondaryPoiIndex,
       secondaryPoiParentIndex,
       localizedTransitOverview,
@@ -2989,6 +3089,68 @@ export function MapStage() {
 
   useEffect(() => subscribeMapZoomRequested(({ delta }) => zoomBy(delta)), [zoomBy]);
 
+  const triggerRandomExplore = useCallback(() => {
+    const token =
+      globalThis.crypto?.randomUUID?.() ??
+      `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    setExplorePending(true);
+    router.push(appPath(`/map?lucky=${token}`), { scroll: false });
+  }, [router]);
+
+  const panByScreenDelta = useCallback((deltaX: number, deltaY: number) => {
+    routeManuallyZoomedRef.current = true;
+    setMapView((current) => {
+      const scale = getScale(current.zoom);
+      return {
+        ...current,
+        centerX: current.centerX - deltaX / scale,
+        centerZ: current.centerZ - deltaY / scale,
+      };
+    });
+  }, []);
+
+  // WASD 与方向键平移地图；输入框、可编辑区域和带修饰键的组合键不拦截。
+  useEffect(() => {
+    const panStepPixels = 64;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey
+      ) {
+        return;
+      }
+      if (event.target instanceof HTMLElement) {
+        if (
+          event.target.isContentEditable ||
+          ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)
+        ) {
+          return;
+        }
+      }
+      const key = event.key.toLowerCase();
+      let deltaX = 0;
+      let deltaY = 0;
+      if (key === 'w' || key === 'arrowup') {
+        deltaY = panStepPixels;
+      } else if (key === 's' || key === 'arrowdown') {
+        deltaY = -panStepPixels;
+      } else if (key === 'a' || key === 'arrowleft') {
+        deltaX = panStepPixels;
+      } else if (key === 'd' || key === 'arrowright') {
+        deltaX = -panStepPixels;
+      } else {
+        return;
+      }
+      event.preventDefault();
+      panByScreenDelta(deltaX, deltaY);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [panByScreenDelta]);
+
   const resetView = useCallback(() => {
     setMapView((current) =>
       fitCoordinatesToMapView(
@@ -3064,6 +3226,7 @@ export function MapStage() {
         | 'toggle_layers'
         | 'toggle_favorite'
         | 'search_nearby'
+        | 'random_explore'
         | 'dismiss',
     ) => void
   >(() => undefined);
@@ -3071,6 +3234,11 @@ export function MapStage() {
     if (command === 'focus_search') {
       setMarkerListExpanded(true);
       searchInputRef.current?.focus();
+      return;
+    }
+
+    if (command === 'random_explore') {
+      triggerRandomExplore();
       return;
     }
 
@@ -3176,6 +3344,7 @@ export function MapStage() {
     const timer = window.setTimeout(() => {
       if (handledLuckyRef.current !== luckyRequest) {
         handledLuckyRef.current = luckyRequest;
+        setExplorePending(false);
         publishToastRequested({ message: t('map.explore.failed'), tone: 'warning' });
       }
     }, 15000);
@@ -3200,6 +3369,7 @@ export function MapStage() {
     )
       return;
     handledLuckyRef.current = luckyRequest;
+    setExplorePending(false);
     if (loadStatus !== 'ready' || transitLoadStatus !== 'ready') {
       publishToastRequested({ message: t('map.explore.failed'), tone: 'warning' });
       return;
@@ -4247,6 +4417,9 @@ export function MapStage() {
             sortMode={routePlanSortMode}
             status={currentRoutePlanStatus}
             selectedOptionId={selectedRouteOption?.id}
+            timeMode={routePlanTimeMode}
+            timeValue={routePlanTimeValue}
+            onEditRequirements={() => setRoutePlanRequirementDialogOpen(true)}
             iconBaseUrl={markerIconBaseUrl}
             onBeginEndpointEdit={beginRouteEndpointEdit}
             onClear={() => {
@@ -4255,22 +4428,12 @@ export function MapStage() {
               setRouteEndpointQuery('');
             }}
             onEndpointQueryChange={setRouteEndpointQuery}
-            onSetAllModes={(enabled) =>
-              setRouteTransportModes(
-                Object.fromEntries(
-                  routeTransportModeOptions.map((mode) => [mode.mode, enabled]),
-                ) as EnabledRouteTransportModes,
-              )
-            }
             onSelectOption={setSelectedRouteOptionId}
             onSortModeChange={setRoutePlanSortMode}
             onSelectEndpointCandidate={applyRouteEndpointMarker}
             onShare={() => void shareRoutePlan()}
             onSwapEndpoints={swapRoutePlanEndpoints}
             onToggleCollapsed={() => setRoutePlanCollapsed((current) => !current)}
-            onToggleMode={(mode) =>
-              setRouteTransportModes((current) => ({ ...current, [mode]: !current[mode] }))
-            }
             onUseMapCenter={updateRoutePlanOriginToMapCenter}
           />
         ) : null}
@@ -4299,7 +4462,23 @@ export function MapStage() {
                     close
                   </span>
                 </button>
-              ) : null}
+              ) : (
+                <button
+                  className={
+                    explorePending ? 'search-random-button is-loading' : 'search-random-button'
+                  }
+                  type="button"
+                  aria-label={t('map.explore.action')}
+                  title={t('map.explore.action')}
+                  aria-busy={explorePending || undefined}
+                  disabled={explorePending}
+                  onClick={triggerRandomExplore}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    casino
+                  </span>
+                </button>
+              )}
             </div>
             {routePlanDraft || (focusedMarker && isCenterableMarker(focusedMarker)) ? null : (
               <div
@@ -5241,6 +5420,28 @@ export function MapStage() {
                   ))}
               </div>
             ) : null}
+            {rawAreaFillShapePois.length > 0 ? (
+              <div className="map-shape-poi-layer map-shape-poi-fill-layer">
+                <svg
+                  viewBox={`0 0 ${Math.max(1, viewportSize.width)} ${Math.max(1, viewportSize.height)}`}
+                  aria-hidden="true"
+                >
+                  {rawAreaFillShapePois.map((shape) => (
+                    <path
+                      key={`${shape.id}-area-fill`}
+                      className="map-shape-poi-path is-area"
+                      d={shape.path}
+                      style={
+                        {
+                          '--shape-poi-fill-color': shape.fillColor ?? shape.accentColor,
+                          '--shape-poi-fill-opacity': shape.fillOpacity ?? 0.18,
+                        } as CSSProperties
+                      }
+                    />
+                  ))}
+                </svg>
+              </div>
+            ) : null}
             {visibleProjectedRoadTraces.length ? (
               <div className="map-road-trace-layer" aria-hidden="true">
                 {visibleProjectedRoadTraces.map((trace) => (
@@ -5443,7 +5644,9 @@ export function MapStage() {
                         {
                           '--shape-poi-left': `${shape.centerLeft}px`,
                           '--shape-poi-top': `${shape.centerTop}px`,
-                          '--shape-poi-color': shape.accentColor,
+                          '--shape-poi-color': shape.isArea
+                            ? (shape.fillColor ?? shape.strokeColor ?? shape.accentColor)
+                            : shape.accentColor,
                         } as CSSProperties
                       }
                     >
@@ -5605,6 +5808,8 @@ export function MapStage() {
                   {
                     '--marker-left': `${marker.left}px`,
                     '--marker-top': `${marker.top}px`,
+                    // 选中描边与填充共用分类色，避免和分类图标的主色脱节。
+                    '--map-marker-accent-color': getMapAreaFillColor(marker.categoryId),
                   } as CSSProperties
                 }
                 title={t('map.overlay.markerTitle', {
@@ -6047,6 +6252,21 @@ export function MapStage() {
             </div>
           </section>
         </div>
+      ) : null}
+      {routePlanRequirementDialogOpen && routePlanDraft ? (
+        <RouteRequirementDialog
+          enabledModes={routeTransportModes}
+          timeMode={routePlanTimeMode}
+          timeValue={routePlanTimeValue}
+          t={t}
+          onCancel={() => setRoutePlanRequirementDialogOpen(false)}
+          onConfirm={({ enabledModes, timeMode, timeValue }) => {
+            setRouteTransportModes(enabledModes);
+            setRoutePlanTimeMode(timeMode);
+            setRoutePlanTimeValue(timeValue);
+            setRoutePlanRequirementDialogOpen(false);
+          }}
+        />
       ) : null}
       {shareTarget ? (
         <MapShareDialog
@@ -7313,18 +7533,19 @@ function RoutePlanDraftCard({
   sortMode,
   status,
   selectedOptionId,
+  timeMode,
+  timeValue,
+  onEditRequirements,
   iconBaseUrl,
   onBeginEndpointEdit,
   onClear,
   onEndpointQueryChange,
-  onSetAllModes,
   onSelectOption,
   onSortModeChange,
   onSelectEndpointCandidate,
   onShare,
   onSwapEndpoints,
   onToggleCollapsed,
-  onToggleMode,
   onUseMapCenter,
 }: Readonly<{
   draft: RoutePlanDraft;
@@ -7341,18 +7562,19 @@ function RoutePlanDraftCard({
   sortMode: RoutePlanSortMode;
   status: RoutePlanStatus;
   selectedOptionId?: string;
+  timeMode: RoutePlanTimeMode;
+  timeValue: string;
+  onEditRequirements: () => void;
   iconBaseUrl: string;
   onBeginEndpointEdit: (endpoint: RouteEndpointKind) => void;
   onClear: () => void;
   onEndpointQueryChange: (value: string) => void;
-  onSetAllModes: (enabled: boolean) => void;
   onSelectOption: (optionId: string) => void;
   onSortModeChange: (mode: RoutePlanSortMode) => void;
   onSelectEndpointCandidate: (endpoint: RouteEndpointKind, marker: CenterableMarker) => void;
   onShare: () => void;
   onSwapEndpoints: () => void;
   onToggleCollapsed: () => void;
-  onToggleMode: (mode: RouteTransportMode) => void;
   onUseMapCenter: () => void;
 }>) {
   const selectedOption = options.find((option) => option.id === selectedOptionId) ?? options[0];
@@ -7361,6 +7583,20 @@ function RoutePlanDraftCard({
     : [];
   const hasEnabledModes = routeTransportModeOptions.some((mode) => enabledModes[mode.mode]);
   const allModesEnabled = routeTransportModeOptions.every((mode) => enabledModes[mode.mode]);
+  const enabledModeLabels = routeTransportModeOptions
+    .filter((mode) => enabledModes[mode.mode])
+    .map((mode) => getRouteTransportModeLabel(mode.mode, t));
+  const requirementModeLabel = allModesEnabled
+    ? t('map.route.mode.all')
+    : enabledModeLabels.join('、') || t('map.route.requirements.none');
+  const requirementTimeLabel =
+    timeMode === 'arrival'
+      ? timeValue
+        ? t('map.route.requirements.arriveBy', { time: timeValue })
+        : t('map.route.requirements.arriveWithin')
+      : timeValue
+        ? t('map.route.requirements.departAt', { time: timeValue })
+        : t('map.route.requirements.departNow');
   const isPlanning = status === 'loading' && !editingEndpoint;
   const cardClassName = [
     'map-route-plan-card',
@@ -7370,10 +7606,73 @@ function RoutePlanDraftCard({
     .filter(Boolean)
     .join(' ');
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(() => new Set());
+  const [reminderMessage, setReminderMessage] = useState('');
+  const selectedOptionCardRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setExpandedStepIds(new Set());
+    setReminderMessage('');
   }, [selectedOption?.id]);
+
+  useEffect(() => {
+    if (collapsed) {
+      return;
+    }
+    const element = selectedOptionCardRef.current;
+    if (!element) {
+      return;
+    }
+    // 展开后布局才稳定，延迟一帧再滚动到当前方案，避免按折叠态高度计算位置。
+    const timer = window.setTimeout(() => {
+      element.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [collapsed, selectedOption?.id]);
+
+  const createOptionReminder = async () => {
+    if (
+      !selectedOption ||
+      selectedOption.scheduleStatus !== 'scheduled' ||
+      !selectedOption.boardTime
+    ) {
+      setReminderMessage(t('map.route.reminder.unavailable'));
+      return;
+    }
+    const remindAt = buildRouteOptionReminderAt(selectedOption);
+    const lineName = selectedOption.serviceLabels?.[0] ?? selectedOption.title;
+    const remindTimeText = formatRouteOptionClock(remindAt);
+    // 写入本地提醒前先让用户确认班次与提醒时刻，避免误触。
+    const confirmed = await requestConfirmation(
+      t('map.route.reminder.confirm', {
+        line: lineName,
+        time: selectedOption.boardTime,
+        remind: remindTimeText,
+      }),
+      { presentation: 'in-app' },
+    );
+    if (!confirmed) {
+      return;
+    }
+    const transportMode = selectedOption.modes[0] === 'taxi' ? undefined : selectedOption.modes[0];
+    createTripReminder({
+      title: t('map.route.reminder.title', {
+        line: lineName,
+        from: draft.originLabel,
+        to: draft.destinationLabel,
+      }),
+      departure: draft.originLabel,
+      arrival: draft.destinationLabel,
+      lineName: selectedOption.serviceLabels?.[0],
+      transportMode,
+      detail: t('map.route.reminder.detail', {
+        time: selectedOption.boardTime,
+        remind: remindTimeText,
+      }),
+      remindAt: toLocalDatetimeValue(remindAt),
+      source: 'route_plan',
+    });
+    setReminderMessage(t('map.route.reminder.created', { time: remindTimeText }));
+  };
 
   const toggleRouteStepDetails = (stepId: string) => {
     setExpandedStepIds((current) => {
@@ -7493,8 +7792,20 @@ function RoutePlanDraftCard({
               {formatRoutePlanDistance(selectedOption.walkingDistance, t)}
             </span>
           </div>
-          {selectedOption.fare || selectedOptionBadges.length > 0 ? (
+          {selectedOption.fare ||
+          selectedOptionBadges.length > 0 ||
+          (selectedOption.scheduleStatus === 'scheduled' && selectedOption.arrivalTime) ? (
             <div className="map-route-option-meta">
+              {selectedOption.scheduleStatus === 'scheduled' && selectedOption.arrivalTime ? (
+                <span className="map-route-option-schedule">
+                  <span>
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      flag
+                    </span>
+                    {t('map.route.arrivalAt', { time: selectedOption.arrivalTime })}
+                  </span>
+                </span>
+              ) : null}
               {selectedOption.fare ? (
                 <span className="map-route-option-fare">
                   <span className="material-symbols-outlined" aria-hidden="true">
@@ -7584,25 +7895,28 @@ function RoutePlanDraftCard({
           {!editingEndpoint ? (
             <>
               <div className="map-route-preference-toolbar">
-                <RouteModeToggleList
-                  options={routeTransportModeOptions.map((mode) => ({
-                    mode: mode.mode,
-                    icon: mode.icon,
-                    color: mode.color,
-                    label: getRouteTransportModeLabel(mode.mode, t),
-                    taxi: mode.mode === 'taxi',
-                  }))}
-                  enabledModes={enabledModes}
-                  allModesEnabled={allModesEnabled}
-                  onToggle={(mode) => onToggleMode(mode as Parameters<typeof onToggleMode>[0])}
-                  onSetAll={onSetAllModes}
-                  labels={{
-                    groupAria: t('map.route.modeAria'),
-                    all: t('map.route.mode.all'),
-                    more: (count) => t('map.route.mode.more', { count }),
-                    collapse: t('map.route.mode.collapse'),
-                  }}
-                />
+                <button
+                  type="button"
+                  className="map-route-requirement-bar"
+                  aria-label={t('map.route.requirements.edit')}
+                  title={t('map.route.requirements.edit')}
+                  onClick={onEditRequirements}
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    tune
+                  </span>
+                  <span className="map-route-requirement-text">{requirementModeLabel}</span>
+                  <span className="map-route-requirement-divider" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="map-route-requirement-text is-time">{requirementTimeLabel}</span>
+                  <span
+                    className="material-symbols-outlined map-route-requirement-edit"
+                    aria-hidden="true"
+                  >
+                    edit
+                  </span>
+                </button>
                 <RoutePlanSortControl mode={sortMode} onChange={onSortModeChange} t={t} />
               </div>
               <div className="map-route-option-list" aria-label={t('map.route.optionsAria')}>
@@ -7620,6 +7934,7 @@ function RoutePlanDraftCard({
                           isSelected ? 'map-route-option-card is-selected' : 'map-route-option-card'
                         }
                         key={option.id}
+                        ref={isSelected ? selectedOptionCardRef : undefined}
                         style={{ '--route-option-color': option.color } as CSSProperties}
                         role="button"
                         tabIndex={0}
@@ -7702,6 +8017,29 @@ function RoutePlanDraftCard({
                             {option.title} · {option.summary}
                           </span>
                         </p>
+                        {option.scheduleStatus === 'scheduled' && option.boardTime ? (
+                          <div className="map-route-option-schedule">
+                            <span>
+                              <span className="material-symbols-outlined" aria-hidden="true">
+                                schedule
+                              </span>
+                              {t('map.route.rideBoardAt', { time: option.boardTime })}
+                            </span>
+                            {option.waitMinutes ? (
+                              <span>
+                                {t('map.route.waitMinutes', { count: option.waitMinutes })}
+                              </span>
+                            ) : null}
+                            {option.arrivalTime ? (
+                              <span>
+                                <span className="material-symbols-outlined" aria-hidden="true">
+                                  flag
+                                </span>
+                                {t('map.route.arrivalAt', { time: option.arrivalTime })}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
                         {isSelected ? (
                           <ol
                             className="map-route-step-timeline"
@@ -7795,6 +8133,23 @@ function RoutePlanDraftCard({
                             })}
                           </ol>
                         ) : null}
+                        {isSelected ? (
+                          <div className="map-route-reminder">
+                            <button
+                              type="button"
+                              className="map-route-reminder-button"
+                              onClick={() => void createOptionReminder()}
+                            >
+                              <span className="material-symbols-outlined" aria-hidden="true">
+                                notifications_active
+                              </span>
+                              {t('map.route.reminder.create')}
+                            </button>
+                            {reminderMessage ? (
+                              <p className="map-route-reminder-note">{reminderMessage}</p>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </article>
                     );
                   })
@@ -7817,6 +8172,190 @@ function RoutePlanDraftCard({
   );
 }
 
+/** 出行需求弹窗：集中确认交通方式与时间要求，确认后才应用到路线规划。 */
+function RouteRequirementDialog({
+  enabledModes,
+  timeMode,
+  timeValue,
+  onCancel,
+  onConfirm,
+  t,
+}: Readonly<{
+  enabledModes: EnabledRouteTransportModes;
+  timeMode: RoutePlanTimeMode;
+  timeValue: string;
+  onCancel: () => void;
+  onConfirm: (input: {
+    enabledModes: EnabledRouteTransportModes;
+    timeMode: RoutePlanTimeMode;
+    timeValue: string;
+  }) => void;
+  t: Translate;
+}>) {
+  const [draftModes, setDraftModes] = useState<EnabledRouteTransportModes>(enabledModes);
+  const [draftTimeMode, setDraftTimeMode] = useState<RoutePlanTimeMode>(timeMode);
+  const [draftTimeValue, setDraftTimeValue] = useState(timeValue);
+  const allModesEnabled = routeTransportModeOptions.every((mode) => draftModes[mode.mode]);
+  const draftModeLabels = routeTransportModeOptions
+    .filter((mode) => draftModes[mode.mode])
+    .map((mode) => getRouteTransportModeLabel(mode.mode, t));
+  const modeSummary = allModesEnabled
+    ? t('map.route.mode.all')
+    : draftModeLabels.join('、') || t('map.route.requirements.none');
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onCancel}>
+      <section
+        className="modal-panel map-route-requirement-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="map-route-requirement-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="section-heading">
+          <h2 id="map-route-requirement-title">{t('map.route.requirements.title')}</h2>
+          <button
+            className="icon-action-button"
+            type="button"
+            aria-label={t('map.route.requirements.close')}
+            onClick={onCancel}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">
+              close
+            </span>
+          </button>
+        </div>
+        <section className="map-route-requirement-section">
+          <h3>{t('map.route.requirements.modes')}</h3>
+          <RouteModeToggleList
+            options={routeTransportModeOptions.map((mode) => ({
+              mode: mode.mode,
+              icon: mode.icon,
+              color: mode.color,
+              label: getRouteTransportModeLabel(mode.mode, t),
+              taxi: mode.mode === 'taxi',
+            }))}
+            enabledModes={draftModes}
+            allModesEnabled={allModesEnabled}
+            onToggle={(mode) =>
+              setDraftModes((current) => ({
+                ...current,
+                [mode]: !current[mode as RouteTransportMode],
+              }))
+            }
+            onSetAll={(enabled) =>
+              setDraftModes(
+                Object.fromEntries(
+                  routeTransportModeOptions.map((mode) => [mode.mode, enabled]),
+                ) as EnabledRouteTransportModes,
+              )
+            }
+            labels={{
+              groupAria: t('map.route.modeAria'),
+              all: t('map.route.mode.all'),
+              more: (count) => t('map.route.mode.more', { count }),
+              collapse: t('map.route.mode.collapse'),
+            }}
+          />
+          <p className="map-route-requirement-hint">{modeSummary}</p>
+        </section>
+        <section className="map-route-requirement-section">
+          <h3>{t('map.route.requirements.time')}</h3>
+          <div className="map-route-time-bar">
+            <SegmentedControl
+              className="map-route-time-mode"
+              ariaLabel={t('map.route.time.aria')}
+              value={draftTimeMode}
+              onChange={(mode) => {
+                setDraftTimeMode(mode);
+                // 切换口径时按该口径的默认值回填：出发=现在，到达=一小时后。
+                setDraftTimeValue(getDefaultRoutePlanTimeValue(mode));
+              }}
+              options={[
+                { value: 'departure', label: t('map.route.time.departMode') },
+                { value: 'arrival', label: t('map.route.time.arriveMode') },
+              ]}
+            />
+            <input
+              type="time"
+              value={draftTimeValue}
+              aria-label={t('map.route.time.aria')}
+              onChange={(event) => setDraftTimeValue(event.currentTarget.value)}
+            />
+            {draftTimeMode === 'departure' ? (
+              <button
+                type="button"
+                className="map-route-time-now"
+                onClick={() => setDraftTimeValue(getDefaultRoutePlanTimeValue('departure'))}
+              >
+                {t('map.route.time.now')}
+              </button>
+            ) : null}
+          </div>
+        </section>
+        <div className="admin-content-actions">
+          <button className="secondary-action-button" type="button" onClick={onCancel}>
+            {t('map.route.requirements.cancel')}
+          </button>
+          <button
+            className="secondary-action-button is-primary"
+            type="button"
+            onClick={() =>
+              onConfirm({
+                enabledModes: draftModes,
+                timeMode: draftTimeMode,
+                timeValue: draftTimeValue,
+              })
+            }
+          >
+            {t('map.route.requirements.confirm')}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** 城市公交提醒提前量：提前 15 分钟提醒，最少留 1 分钟。 */
+const routeReminderLeadMinutes = 15;
+
+/** 由上车站发车时刻倒推提醒时间；跨凌晨时自动落到下一个自然日。 */
+function buildRouteOptionReminderAt(option: RoutePlanOption): Date {
+  const match = option.boardTime?.trim().match(/^(\d{1,2}):(\d{2})$/);
+  const target = new Date();
+  if (match) {
+    target.setHours(Number(match[1]), Number(match[2]), 0, 0);
+  }
+  if (target.getTime() <= Date.now()) {
+    target.setDate(target.getDate() + 1);
+  }
+  const reminder = new Date(target.getTime() - routeReminderLeadMinutes * 60 * 1000);
+  const minimum = new Date(Date.now() + 60 * 1000);
+  return reminder.getTime() > minimum.getTime() ? reminder : minimum;
+}
+
+function formatRouteOptionClock(date: Date): string {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+/** <input type="datetime-local"> 需要的本地时间字符串。 */
+function toLocalDatetimeValue(date: Date): string {
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
+  return offsetDate.toISOString().slice(0, 16);
+}
+
+/** 服务日分钟还原为 HH:mm，供时间输入框使用。 */
+function formatRoutePlanTimeValue(minutes: number): string {
+  const minutesInDay = ((minutes % (24 * 60)) + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(minutesInDay / 60)).padStart(2, '0')}:${String(minutesInDay % 60).padStart(2, '0')}`;
+}
+
+/** 出发时间默认当前时刻，到达时间默认一小时后。 */
+function getDefaultRoutePlanTimeValue(mode: RoutePlanTimeMode): string {
+  const nowMinutes = normalizeServiceDayMinutes(getBeijingClockMinutes());
+  return formatRoutePlanTimeValue(mode === 'arrival' ? nowMinutes + 60 : nowMinutes);
+}
+
 function RoutePlanSortControl({
   mode,
   onChange,
@@ -7832,6 +8371,7 @@ function RoutePlanSortControl({
     value: RoutePlanSortMode;
   }> = [
     { value: 'time', icon: 'schedule', labelKey: 'map.route.sort.time' },
+    { value: 'arrival', icon: 'alarm', labelKey: 'map.route.sort.arrival' },
     { value: 'walking', icon: 'directions_walk', labelKey: 'map.route.sort.walking' },
     { value: 'transfers', icon: 'swap_horiz', labelKey: 'map.route.sort.transfers' },
     { value: 'fare', icon: 'payments', labelKey: 'map.route.sort.fare' },
@@ -7854,6 +8394,7 @@ function RoutePlanSortControl({
             <span className="material-symbols-outlined" aria-hidden="true">
               {option.icon}
             </span>
+            {mode === option.value ? <span className="map-route-sort-label">{label}</span> : null}
           </button>
         );
       })}
@@ -8095,16 +8636,6 @@ async function runMapShareAction({
   }
 
   const imageBlob = await createMapShareImageBlob(previewElement);
-  const file = new File([imageBlob], 'yuchengtong-share.png', { type: 'image/png' });
-  if (navigator.canShare?.({ files: [file] })) {
-    await navigator.share({
-      files: [file],
-      text: payload.text,
-      title: payload.title,
-    });
-    return t('map.share.imageShared');
-  }
-
   downloadBlob(imageBlob, 'yuchengtong-share.png');
   return t('map.share.imageDownloaded');
 }
@@ -10032,15 +10563,20 @@ function findPoiAddressRoadMarkers(
 function buildStationConnectionIndex(
   overview: TransitOverviewResponse | null,
   t: Translate,
-): Map<string, TransitLineConnection[]> {
+  pointMarkers: PointMarker[],
+): TransitStationConnectionIndex {
+  const index: TransitStationConnectionIndex = {
+    byName: new Map(),
+    byMarkerId: new Map(),
+  };
   if (!overview) {
-    return new Map();
+    return index;
   }
 
   const profileByMode = new Map(
     (overview.modeProfiles ?? []).map((profile) => [profile.mode, profile]),
   );
-  const connectionsByStation = new Map<string, TransitLineConnection[]>();
+  const stationMarkerIndex = buildTransitStationMarkerIndex(pointMarkers);
 
   for (const line of overview.lines ?? []) {
     const profile = profileByMode.get(line.mode);
@@ -10052,23 +10588,57 @@ function buildStationConnectionIndex(
       color: line.color ?? profile?.color,
       sortOrder: profile?.sortOrder ?? 999,
     };
+    const lineMode = isRouteTransportMode(line.mode) ? line.mode : undefined;
 
     for (const stationName of line.stationNames ?? []) {
       for (const key of getStationNameMatchKeys(stationName)) {
-        const existing = connectionsByStation.get(key) ?? [];
-        if (!existing.some((item) => item.id === connection.id)) {
-          existing.push(connection);
-          connectionsByStation.set(key, existing);
+        addStationConnection(index.byName, key, connection);
+      }
+    }
+
+    for (const stop of line.stationStops ?? []) {
+      const refs = stop.stopLocationRefs ?? [];
+      if (refs.length > 0) {
+        for (const ref of refs) {
+          addStationConnection(index.byMarkerId, ref.markerId, connection);
         }
+        continue;
+      }
+
+      if (!lineMode) {
+        continue;
+      }
+      const marker = findTransitStationMarker(
+        { stationName: stop.stationName, stationMarkerIds: stop.stationMarkerIds },
+        stationMarkerIndex,
+        pointMarkers,
+        lineMode,
+      );
+      if (marker) {
+        addStationConnection(index.byMarkerId, marker.id, connection);
       }
     }
   }
 
-  for (const [key, connections] of connectionsByStation) {
-    connectionsByStation.set(key, connections.sort(compareTransitConnections));
+  for (const [key, connections] of index.byName) {
+    index.byName.set(key, connections.sort(compareTransitConnections));
   }
+  for (const [markerId, connections] of index.byMarkerId) {
+    index.byMarkerId.set(markerId, connections.sort(compareTransitConnections));
+  }
+  return index;
+}
 
-  return connectionsByStation;
+function addStationConnection(
+  index: Map<string, TransitLineConnection[]>,
+  key: string,
+  connection: TransitLineConnection,
+) {
+  const existing = index.get(key) ?? [];
+  if (!existing.some((item) => item.id === connection.id)) {
+    existing.push(connection);
+    index.set(key, existing);
+  }
 }
 
 function localizeTransitOverview(
@@ -10126,22 +10696,23 @@ function resolveLocalizedLabel(
 
 function findStationConnections(
   marker: MapMarkerSnapshot['markers'][number],
-  index: Map<string, TransitLineConnection[]>,
+  index: TransitStationConnectionIndex,
 ): TransitLineConnection[] {
+  const directConnections = index.byMarkerId.get(marker.id);
+  if (directConnections && directConnections.length > 0) {
+    return directConnections;
+  }
+
+  // 没有线路明确指定该 POI 时，回退到车站名下的全部线路，
+  // 等同于这些线路默认使用车站第一个可用 POI。
   const collected: TransitLineConnection[] = [];
   const seen = new Set<string>();
 
   for (const key of getMarkerStationNameMatchKeys(marker)) {
-    const connections = index.get(key);
-    if (!connections) {
-      continue;
-    }
-
-    for (const connection of connections) {
+    for (const connection of index.byName.get(key) ?? []) {
       if (seen.has(connection.id)) {
         continue;
       }
-
       seen.add(connection.id);
       collected.push(connection);
     }
@@ -10167,7 +10738,7 @@ function findTransitStationMarkerForLine(
   markers: PointMarker[],
   stationName: string,
   line: TransitOverviewLine,
-  connectionIndex: Map<string, TransitLineConnection[]>,
+  connectionIndex: TransitStationConnectionIndex,
 ): PointMarker | undefined {
   const stopMarkerIds = dedupeValues(
     (line.stationStops ?? [])
@@ -10209,24 +10780,58 @@ function findTransitStationMarkerForLine(
 function findTransitLineStationMarkers(
   markers: PointMarker[],
   line: TransitOverviewLine,
-  connectionIndex: Map<string, TransitLineConnection[]>,
+  connectionIndex: TransitStationConnectionIndex,
 ): PointMarker[] {
-  const boundMarkerIds = new Set(
-    (line.stationStops ?? []).flatMap((stop) => stop.stationMarkerIds ?? []),
+  const explicitMarkerIds = new Set(
+    (line.stationStops ?? []).flatMap((stop) =>
+      (stop.stopLocationRefs ?? []).map((ref) => ref.markerId),
+    ),
   );
+  const explicitMarkerIdsByStationKey = new Map<string, Set<string>>();
+  for (const stop of line.stationStops ?? []) {
+    const refs = stop.stopLocationRefs ?? [];
+    if (refs.length === 0) {
+      continue;
+    }
+    for (const key of getStationNameMatchKeys(stop.stationName)) {
+      const markerIds = explicitMarkerIdsByStationKey.get(key) ?? new Set<string>();
+      for (const ref of refs) {
+        markerIds.add(ref.markerId);
+      }
+      explicitMarkerIdsByStationKey.set(key, markerIds);
+    }
+  }
   const stationKeys = new Set(line.stationNames.flatMap(getStationNameMatchKeys));
   const lineMode = isRouteTransportMode(line.mode) ? line.mode : 'walk';
   return dedupeMarkersById(
-    markers.filter(
-      (marker) =>
-        matchesTransitMarkerMode(marker, lineMode) &&
-        (boundMarkerIds.has(marker.id) ||
-          (isTransitStationPoi(marker) &&
-            getMarkerStationNameMatchKeys(marker).some((key) => stationKeys.has(key)) &&
-            findStationConnections(marker, connectionIndex).some(
-              (connection) => connection.id === line.id,
-            ))),
-    ),
+    markers.filter((marker) => {
+      if (!matchesTransitMarkerMode(marker, lineMode)) {
+        return false;
+      }
+      if (explicitMarkerIds.has(marker.id)) {
+        return true;
+      }
+      if (!isTransitStationPoi(marker)) {
+        return false;
+      }
+      const markerStationKeys = getMarkerStationNameMatchKeys(marker);
+      if (!markerStationKeys.some((key) => stationKeys.has(key))) {
+        return false;
+      }
+      // 该线路在这个站已经明确指定了停靠 POI 时，不再高亮同站其他 POI。
+      const explicitIdsAtStation = new Set<string>();
+      for (const key of markerStationKeys) {
+        for (const markerId of explicitMarkerIdsByStationKey.get(key) ?? []) {
+          explicitIdsAtStation.add(markerId);
+        }
+      }
+      if (explicitIdsAtStation.size > 0) {
+        return explicitIdsAtStation.has(marker.id);
+      }
+      return findStationConnections(marker, connectionIndex).some(
+        (connection) => connection.id === line.id,
+      );
+    }),
   );
 }
 
@@ -11572,6 +12177,7 @@ function projectShapePoiMarkers(
   size: ViewportSize,
   perspectiveEnabled = false,
   transitLineColorById: ReadonlyMap<string, string> = new Map(),
+  defaultAreaFillOpacity = 0,
 ): ProjectedShapePoi[] {
   if (size.width <= 0 || size.height <= 0) {
     return [];
@@ -11643,9 +12249,20 @@ function projectShapePoiMarkers(
         isArea,
         isRegionMarker: isRegionMarker(marker),
         accentColor: marker.accentColor,
-        fillColor: marker.spatial?.style?.fillColor ?? boundTransitLineColor,
-        fillOpacity: marker.spatial?.style?.fillOpacity,
-        strokeColor: marker.spatial?.style?.strokeColor ?? boundTransitLineColor,
+        fillColor:
+          marker.spatial?.style?.fillColor ??
+          boundTransitLineColor ??
+          (isArea ? getMapAreaFillColor(marker.categoryId) : undefined),
+        fillOpacity:
+          marker.spatial?.style?.fillOpacity ?? (isArea ? defaultAreaFillOpacity : undefined),
+        // 区域描边与填充同源：默认都取分类色，避免出现“蓝色填充 + 青色描边”的混搭。
+        strokeColor:
+          marker.spatial?.style?.strokeColor ??
+          (isArea
+            ? (marker.spatial?.style?.fillColor ??
+              boundTransitLineColor ??
+              getMapAreaFillColor(marker.categoryId))
+            : boundTransitLineColor),
         strokeOpacity: marker.spatial?.style?.strokeOpacity,
         centerLeft: (labelAnchor ?? geometryCenter).left - perspectiveOffset * 0.45,
         centerTop: (labelAnchor ?? geometryCenter).top - perspectiveOffset * 0.75,

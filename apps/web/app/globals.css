@@ -497,7 +497,7 @@ body .material-symbols-outlined {
   font-family: inherit;
   line-height: inherit;
   text-align: start;
-  cursor: pointer;
+  cursor: default;
   min-width: 0;
   overflow: hidden;
   color: var(--yct-color-text-secondary);
@@ -1118,7 +1118,8 @@ body .material-symbols-outlined {
   -webkit-appearance: none;
 }
 
-.search-clear-button {
+.search-clear-button,
+.search-random-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1135,12 +1136,27 @@ body .material-symbols-outlined {
     color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
 }
 
-.search-clear-button:hover {
+.search-random-button {
+  color: var(--yct-color-primary);
+}
+
+.search-clear-button:hover,
+.search-random-button:hover {
   background: var(--yct-color-surface-muted);
 }
 
-.search-clear-button .material-symbols-outlined {
+.search-clear-button .material-symbols-outlined,
+.search-random-button .material-symbols-outlined {
   font-size: 18px;
+}
+
+/* 「手气不错」触发中：图标持续旋转，按钮保持禁用直到落点完成。 */
+.search-random-button.is-loading {
+  cursor: progress;
+}
+
+.search-random-button.is-loading .material-symbols-outlined {
+  animation: route-plan-loading-spin var(--yct-motion-duration-spinner) linear infinite;
 }
 
 /* hero 背景跟随强调色：默认保留青绿+蓝，红色/灰色时收敛到当前强调色。 */
@@ -2158,6 +2174,11 @@ body .material-symbols-outlined {
   pointer-events: none;
 }
 
+/* 区域 POI 默认只保留填充，描边只在选中时作为虚线边界出现。 */
+.map-shape-poi-path.is-area:not(.is-selected) {
+  stroke: none;
+}
+
 .map-shape-poi-path.is-extrusion-base {
   stroke-width: 1;
   opacity: 0.46;
@@ -2166,7 +2187,8 @@ body .material-symbols-outlined {
 
 .map-shape-poi-path.is-area.is-selected {
   fill: var(--shape-poi-fill-color);
-  fill-opacity: max(0.18, var(--shape-poi-fill-opacity));
+  /* 选中态只加虚线边界；填充由独立的区域填充图层提供，避免叠加加深。 */
+  fill-opacity: var(--shape-poi-fill-opacity, 0);
   fill-rule: evenodd;
   stroke-dasharray: 18;
   stroke-width: 7;
@@ -2656,10 +2678,15 @@ body .material-symbols-outlined {
 .map-marker-dot.is-selected::before {
   position: absolute;
   inset: -8px;
-  border: 2px solid var(--yct-color-primary);
+  border: 2px solid var(--map-marker-accent-color, var(--yct-color-primary));
   border-radius: var(--yct-radius-pill);
-  background: color-mix(in srgb, var(--yct-color-primary) 10%, transparent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--yct-color-primary) 16%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--map-marker-accent-color, var(--yct-color-primary)) 10%,
+    transparent
+  );
+  box-shadow: 0 0 0 4px
+    color-mix(in srgb, var(--map-marker-accent-color, var(--yct-color-primary)) 16%, transparent);
   content: '';
 }
 
@@ -3062,7 +3089,8 @@ body .material-symbols-outlined {
 :root[data-motion='reduced']
   :is(
     .map-route-plan-loading .material-symbols-outlined,
-    .secondary-action-button[aria-busy='true'] .material-symbols-outlined
+    .secondary-action-button[aria-busy='true'] .material-symbols-outlined,
+    .search-random-button.is-loading .material-symbols-outlined
   ) {
   animation: none;
 }
@@ -3071,7 +3099,8 @@ body .material-symbols-outlined {
   :root:not([data-motion='full'])
     :is(
       .map-route-plan-loading .material-symbols-outlined,
-      .secondary-action-button[aria-busy='true'] .material-symbols-outlined
+      .secondary-action-button[aria-busy='true'] .material-symbols-outlined,
+      .search-random-button.is-loading .material-symbols-outlined
     ) {
     animation: none;
   }
@@ -3079,11 +3108,16 @@ body .material-symbols-outlined {
 
 .map-route-preference-toolbar {
   display: flex;
-  /* 方式条 30px、排序控件 32px，统一顶端对齐而非中线对齐 */
+  flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between;
   gap: var(--yct-space-2);
   min-width: 0;
+}
+
+/* 只读需求栏与排序控件各自占满一行，排序按钮均分剩余宽度。 */
+.map-route-preference-toolbar > .map-route-requirement-bar,
+.map-route-preference-toolbar > .map-route-sort-control {
+  align-self: stretch;
 }
 
 .map-route-mode-toggle-list {
@@ -3158,9 +3192,9 @@ body .material-symbols-outlined {
 /* 排序控件：与 map-poi-detail-tabs 同款紧凑轨道（3px 内边距 + 2px 间隙），
  * 内嵌 30px 圆形按钮，与左侧多选 chip 组的尺寸（30px 圆钮、18px 图标）保持一致。 */
 .map-route-sort-control {
-  display: grid;
+  display: flex;
   flex: 0 0 auto;
-  grid-template-columns: repeat(4, 30px);
+  align-items: center;
   gap: 2px;
   padding: 3px;
   border-radius: var(--yct-radius-pill);
@@ -3169,9 +3203,11 @@ body .material-symbols-outlined {
 
 .map-route-sort-control button {
   display: inline-flex;
+  flex: 1 1 0;
   align-items: center;
   justify-content: center;
-  width: 30px;
+  gap: 4px;
+  min-width: 30px;
   height: 30px;
   padding: 0;
   border: 0;
@@ -3182,9 +3218,17 @@ body .material-symbols-outlined {
 }
 
 .map-route-sort-control button.is-active {
+  flex: 0 0 auto;
+  padding: 0 12px;
   background: var(--yct-color-surface-selected);
   color: var(--yct-color-primary);
   box-shadow: var(--yct-shadow-soft);
+}
+
+.map-route-sort-control .map-route-sort-label {
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .map-route-sort-control .material-symbols-outlined {
@@ -3402,6 +3446,201 @@ body .material-symbols-outlined {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 出行时刻栏：出发/到达切换 + 时刻输入 + “现在”复位。 */
+.map-route-time-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+.map-route-time-mode {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 2px;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-text-muted) 12%, transparent);
+}
+
+.map-route-time-mode button {
+  padding: 3px 10px;
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: transparent;
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.map-route-time-mode button.is-active {
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-primary);
+  font-weight: 800;
+}
+
+.map-route-time-bar input[type='time'] {
+  flex: 0 0 auto;
+  width: 92px;
+  padding: 4px 6px;
+  border: 1px solid color-mix(in srgb, var(--yct-color-text-muted) 30%, transparent);
+  border-radius: var(--yct-radius-sm);
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-route-time-now {
+  margin-left: auto;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--yct-radius-pill);
+  background: transparent;
+  color: var(--yct-color-primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.map-route-time-now:is(:hover, :focus-visible) {
+  background: color-mix(in srgb, var(--yct-color-primary) 12%, transparent);
+}
+
+/* 方案卡上的实际班次信息。 */
+.map-route-option-schedule {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--yct-space-1) var(--yct-space-2);
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+}
+
+.map-route-option-schedule > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.map-route-option-schedule .material-symbols-outlined {
+  font-size: 14px;
+  color: var(--route-option-color);
+}
+
+.map-route-reminder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--yct-space-1);
+  margin-top: var(--yct-space-2);
+}
+
+.map-route-reminder-button {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--yct-space-1);
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--yct-color-primary) 45%, transparent);
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-primary) 10%, transparent);
+  color: var(--yct-color-primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.map-route-reminder-button .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.map-route-reminder-note {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: 11px;
+}
+
+/* 只读需求栏：展示当前交通方式与时间要求，点击后再弹窗修改。 */
+.map-route-requirement-bar {
+  display: inline-flex;
+  align-items: center;
+  flex: 1 1 auto;
+  gap: var(--yct-space-1);
+  min-width: 0;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--yct-color-text-muted) 28%, transparent);
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-surface-panel) 72%, transparent);
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-route-requirement-bar:is(:hover, :focus-visible) {
+  border-color: color-mix(in srgb, var(--yct-color-primary) 55%, transparent);
+  color: var(--yct-color-primary);
+}
+
+.map-route-requirement-bar > .material-symbols-outlined {
+  flex: 0 0 auto;
+  font-size: 16px;
+  color: var(--yct-color-primary);
+}
+
+.map-route-requirement-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-route-requirement-text.is-time {
+  flex: 0 0 auto;
+  color: var(--yct-color-text-muted);
+}
+
+.map-route-requirement-divider {
+  flex: 0 0 auto;
+  color: var(--yct-color-text-muted);
+}
+
+.map-route-requirement-edit {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 15px;
+  color: var(--yct-color-text-muted);
+}
+
+/* 出行需求弹窗。 */
+.modal-panel.map-route-requirement-modal {
+  width: min(480px, 100%);
+}
+
+.map-route-requirement-section {
+  display: grid;
+  gap: var(--yct-space-2);
+  min-width: 0;
+}
+
+.map-route-requirement-section h3 {
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.map-route-requirement-hint {
+  margin: 0;
+  color: var(--yct-color-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.map-route-requirement-modal .map-route-time-bar {
+  flex-wrap: wrap;
 }
 
 .map-route-option-type-icon {
@@ -4551,7 +4790,7 @@ img.map-player-list-avatar.is-offline {
   width: fit-content;
   padding: 4px;
   border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-lg);
+  border-radius: var(--yct-radius-pill);
   background: color-mix(in srgb, var(--yct-color-surface-panel) 94%, transparent);
   box-shadow: var(--yct-shadow-floating);
   -webkit-backdrop-filter: blur(16px);
@@ -18066,6 +18305,14 @@ div.telegraph-output-scene.is-packing {
   padding-top: var(--yct-space-2);
 }
 
+.transit-line-stop-location-primary {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--yct-space-1);
+  padding-top: var(--yct-space-2);
+  border-top: 1px dashed var(--yct-color-border);
+}
+
 .transit-line-stop-location-editor > summary {
   display: inline-flex;
   align-items: center;
@@ -19006,6 +19253,10 @@ div.telegraph-output-scene.is-packing {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0 var(--yct-space-3);
+}
+
+.transit-visual-node-list-hint {
+  margin: var(--yct-space-2) var(--yct-space-3) 0;
 }
 
 .transit-visual-node-row {

@@ -28,6 +28,9 @@ export async function GET(request: Request) {
   const destination = url.searchParams.get('destination')?.trim();
   const destinationId = url.searchParams.get('destinationId')?.trim();
   const limit = clamp(parseNumber(url.searchParams.get('limit')) ?? 5, 1, 10);
+  const time = url.searchParams.get('time')?.trim() || undefined;
+  const timeModeParam = url.searchParams.get('timeMode')?.trim();
+  const timeMode = timeModeParam === 'arrival' ? 'arrival' : 'departure';
   const modes = (url.searchParams.get('modes') ?? '')
     .split(',')
     .map((value) => value.trim())
@@ -52,6 +55,8 @@ export async function GET(request: Request) {
       modes: modes.length > 0 ? modes : undefined,
       locale: resolvePublicLocale(request),
       limit,
+      time,
+      timeMode,
     });
     return createPublicJsonResponse(
       {

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { flushAnalyticsQueue, trackAnalyticsEvent } from '../lib/analytics/client';
@@ -98,7 +98,6 @@ function AppShellFrame({
   hideAssistantEntry = false,
   children,
 }: AppShellProps) {
-  const router = useRouter();
   const mobileActionRail = useMobileActionRail();
   const [navOpen, setNavOpen] = useState(true);
   const [accountStatus, setAccountStatus] = useState<AccountStatusResponse | null>(null);
@@ -377,23 +376,7 @@ function AppShellFrame({
           <BrandWordmark className="brand-logo brand-logo-wordmark" />
           <BrandSymbol className="brand-logo brand-logo-symbol" />
         </Link>
-        {topbarPageTitle ? (
-          <button
-            type="button"
-            className="topbar-page-title"
-            aria-label={`${topbarPageTitle} · ${t('map.explore.action')}`}
-            onClick={() =>
-              router.push(
-                appPath(
-                  `/map?lucky=${globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`,
-                ),
-                { scroll: false },
-              )
-            }
-          >
-            {topbarPageTitle}
-          </button>
-        ) : null}
+        {topbarPageTitle ? <span className="topbar-page-title">{topbarPageTitle}</span> : null}
         <div className="topbar-actions">
           <button
             className="pill-button"
