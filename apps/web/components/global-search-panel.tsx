@@ -1219,14 +1219,10 @@ export function GlobalSearchPanel({
     setEasterEggOpen(false);
   }
 
-  /** 把当前输入或对话带到独立页 /ask，方便收藏与分享。 */
-  function openAsPage() {
-    const target = trimmedQuery
-      ? `${appPath('/ask')}?q=${encodeURIComponent(trimmedQuery)}`
-      : appPath('/ask');
-    close();
-    router.push(target);
-  }
+  /** 把当前输入或对话带到独立页 /ask，方便收藏与分享；用真实链接以便新标签页打开。 */
+  const askPageHref = trimmedQuery
+    ? `${appPath('/ask')}?q=${encodeURIComponent(trimmedQuery)}`
+    : appPath('/ask');
 
   const selectedProvider = getAssistantProvider(assistantProviderId) ?? assistantProviders[0];
 
@@ -1826,15 +1822,17 @@ export function GlobalSearchPanel({
             </span>
           </div>
           {isPage ? null : (
-            <button
+            <a
               className="global-search-open-page"
-              type="button"
+              href={askPageHref}
+              target="_blank"
+              rel="noreferrer"
               aria-label={t('globalSearch.action.openPage')}
               title={t('globalSearch.action.openPage')}
-              onClick={openAsPage}
+              onClick={close}
             >
               <MaterialSymbol name="open_in_new" aria-hidden="true" />
-            </button>
+            </a>
           )}
           {isPage ? null : (
             <button

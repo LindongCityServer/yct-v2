@@ -3,6 +3,30 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.16.1",
+      "releasedAt": "2026-10-29T16:38:27.367Z",
+      "sourceFingerprint": "7a723dbfd976c69a90ba089793a51fa973919908b0efcf321efe5a00c7a99eec",
+      "themes": ["admin", "search", "web"],
+      "changes": [
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复后台数据概览被挤进左侧导航栏的问题"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "问一问的在新页面打开按钮改为链接，可在新标签页真正打开"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复部署包缺少图片优化依赖导致首页与地点图片无法渐进加载的问题"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.16.0",
       "releasedAt": "2026-10-29T15:01:09.949Z",
       "sourceFingerprint": "8dc7886ab6edd709518f17771dc862121235d87bde07104f604da5d0e39bd7eb",

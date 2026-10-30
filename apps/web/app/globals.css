@@ -13648,7 +13648,8 @@ div.telegraph-output-scene.is-packing {
     grid-template-columns: 220px minmax(0, 720px);
     grid-template-areas:
       'admin-nav admin-heading'
-      'admin-nav admin-overview';
+      'admin-nav admin-overview'
+      'admin-nav admin-analytics';
     align-items: start;
   }
 
@@ -13658,6 +13659,11 @@ div.telegraph-output-scene.is-packing {
 
   .admin-home-overview {
     grid-area: admin-overview;
+  }
+
+  /* 数据概览必须显式落到右栏；否则自动放置会把它挤进 220px 的导航列。 */
+  .admin-analytics-overview {
+    grid-area: admin-analytics;
   }
 
   .service-entry-grid.admin-home-grid {
@@ -31140,6 +31146,7 @@ dialog.client-dialog.is-page {
   background: transparent;
   color: var(--yct-color-text-secondary);
   cursor: pointer;
+  text-decoration: none;
 }
 
 .global-search-open-page:hover {

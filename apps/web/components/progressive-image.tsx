@@ -231,7 +231,26 @@ function buildOptimizerSrc(src: string, width: number): string | undefined {
     w: String(width),
     q: '75',
   });
+  // 运行时上传的图片由反向代理直接托管，不在 Node 的 public 目录里；
+  // 优化器按相对路径抓取只会拿到 404 HTML（线上表现为 400），必须改用同源绝对地址。
+  const sameOriginSrc = toSameOriginAbsoluteSrc(src);
+  if (sameOriginSrc) {
+    params.set('url', sameOriginSrc);
+  }
   return appPath(`/_next/image?${params.toString()}`);
+}
+
+/**
+ * 站内相对路径转同源绝对地址。
+ * 仅当当前站点域名在优化器白名单内时启用，否则退回相对路径，避免优化器拒绝请求。
+ */
+function toSameOriginAbsoluteSrc(src: string): string | undefined {
+  if (!src.startsWith('/') || typeof window === 'undefined') {
+    return undefined;
+  }
+
+  const absolute = new URL(src, window.location.origin).href;
+  return isAllowedRemoteImage(absolute) ? absolute : undefined;
 }
 
 function toOptimizerSource(src: string): string {

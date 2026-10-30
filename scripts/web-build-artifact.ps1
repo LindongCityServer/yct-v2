@@ -582,6 +582,32 @@ function Copy-YctNextRuntimeDependencies {
       Copy-YctNodeModuleEntry -Source $entry -Destination (Join-Path $DestinationNodeModules $entry.Name)
     }
   }
+
+  # sharp 是 next 的 optionalDependency。pnpm 把 sharp 本体挂在
+  # `.pnpm/next@*/node_modules/sharp`，但它的运行期依赖（@img/* 原生 binding、
+  # detect-libc、semver）位于 `.pnpm/sharp@*/node_modules` 的**同级**，不在 next 的
+  # node_modules 里。只复制 next 的依赖会得到一个“sharp 目录存在但 require 失败”的包，
+  # 线上 /_next/image 全部 500，所有 LQIP 低清快照会静默失效。
+  $sharpEntry = Get-ChildItem -LiteralPath $nextNodeModules -Filter "sharp" -Force -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if ($sharpEntry) {
+    $sharpActualPath = Resolve-YctLinkedPath -Item $sharpEntry
+    $sharpDependencyRoot = Split-Path -Parent $sharpActualPath
+    foreach ($dependency in @(Get-ChildItem -LiteralPath $sharpDependencyRoot -Force)) {
+      if ($dependency.FullName -eq $sharpActualPath) {
+        continue
+      }
+      if ($dependency.Name.StartsWith("@")) {
+        $scopeDestination = Join-Path $DestinationNodeModules $dependency.Name
+        New-Item -ItemType Directory -Force -Path $scopeDestination | Out-Null
+        foreach ($scoped in @(Get-ChildItem -LiteralPath $dependency.FullName -Force)) {
+          Copy-YctNodeModuleEntry -Source $scoped -Destination (Join-Path $scopeDestination $scoped.Name)
+        }
+      } else {
+        Copy-YctNodeModuleEntry -Source $dependency -Destination (Join-Path $DestinationNodeModules $dependency.Name)
+      }
+    }
+  }
 }
 
 function Copy-YctMaterialRendererRuntimeDependencies {
@@ -690,6 +716,49 @@ for (const id of ids) {
       -Arguments @($validationScriptPath, $serverJsFull)
     if ($validationExitCode -ne 0) {
       throw "Staged Next runtime validation failed with exit code $validationExitCode."
+    }
+  } finally {
+    Remove-Item -LiteralPath $validationScriptPath -Force -ErrorAction SilentlyContinue
+  }
+}
+
+function Assert-YctSharpRuntimeDependency {
+  param(
+    [Parameter(Mandatory = $true)][string]$NodeCommand,
+    [Parameter(Mandatory = $true)][string]$NodeModules
+  )
+
+  # 图片优化器（/_next/image）在运行期 require('sharp')。sharp 缺失或依赖不全时，
+  # Next 只会在线上返回 500，前端 LQIP 低清快照全部静默失效，因此必须在打包阶段
+  # 从部署目录真实加载一次，并跑一次最小尺寸转码。
+  $sharpPackageJson = Join-Path $NodeModules "sharp\package.json"
+  if (-not (Test-Path -LiteralPath $sharpPackageJson)) {
+    return
+  }
+
+  $validationScriptPath = Join-Path ([System.IO.Path]::GetTempPath()) "yct-sharp-standalone-probe-$PID.cjs"
+  $validationScript = @'
+const { createRequire } = require('node:module');
+const path = require('node:path');
+
+const nodeModules = process.argv[2];
+const probe = createRequire(path.join(nodeModules, 'noop.js'));
+probe('sharp')({ create: { width: 1, height: 1, channels: 4, background: '#00000000' } })
+  .png()
+  .toBuffer()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+'@
+  Write-YctUtf8File -Path $validationScriptPath -Content $validationScript
+  try {
+    $validationExitCode = Invoke-YctCommand `
+      -FilePath $NodeCommand `
+      -Arguments @($validationScriptPath, $NodeModules)
+    if ($validationExitCode -ne 0) {
+      throw "Staged sharp runtime validation failed with exit code $validationExitCode."
     }
   } finally {
     Remove-Item -LiteralPath $validationScriptPath -Force -ErrorAction SilentlyContinue
@@ -1145,6 +1214,9 @@ if ($SkipStaging) {
   Assert-YctNextRuntimeDependency `
     -NodeCommand $nodeCommand `
     -NodeModules $standaloneWebNodeModules
+  Assert-YctSharpRuntimeDependency `
+    -NodeCommand $nodeCommand `
+    -NodeModules $standaloneWebNodeModules
 
   $startScript = @"
 param(
@@ -1291,6 +1363,10 @@ AI/public-data smoke check (included in the deployment smoke check):
 Unified internal task runner example:
   pwsh -NoProfile -ExecutionPolicy Bypass -File .\run-yct-internal-tasks.ps1 -Origin http://127.0.0.1:3300 -BasePath "$startBasePathArgument"
 
+Analytics aggregation (register the daily task once, then run it immediately to backfill):
+  pwsh -NoProfile -ExecutionPolicy Bypass -File .\run-yct-analytics-aggregate.ps1 -RegisterDailyTask
+  pwsh -NoProfile -ExecutionPolicy Bypass -File .\run-yct-analytics-aggregate.ps1 -Days 30
+
 One-time legacy content migration preview:
   pwsh -NoProfile -ExecutionPolicy Bypass -File .\migrate-yct-legacy-content.ps1 -Origin http://127.0.0.1:3300 -BasePath "$startBasePathArgument" -EnvironmentRoot "C:\wwwroot\yct-v2"
 
@@ -1319,6 +1395,7 @@ Notes:
 - Before any server-side configuration or release operation, read SERVER_PRODUCTION_CONFIG_RUNBOOK.md and follow its secret, single-instance, push, ldpass, and data-preservation rules.
 - init-yct-admin.ps1 writes .yct-data\admin-memberships.json by default, or YCT_ADMIN_STORE_PATH when that environment variable is set. This file is runtime data and must not be committed.
 - run-yct-player-location-poller.ps1 must run as a separate long-lived process with the same YCT_INTERNAL_TASK_TOKEN as the web server. It keeps polling the player provider while no browser is visiting the site, so offline locations are persisted after disconnects.
+- run-yct-analytics-aggregate.ps1 produces metrics-daily.json for the admin analytics dashboard. It is never started by the web process: register it with -RegisterDailyTask once after deployment, otherwise the dashboard keeps showing "no aggregated data". The task reads YCT_INTERNAL_TASK_TOKEN from .env in the deployment root and appends each run to .yct-data\analytics\aggregate-task.log.
 - If the reverse proxy is mounted at /v2, build and start with BasePath /v2. If it is mounted at the site root later, rebuild with an empty BasePath.
 - Stop the old process before deployment and unpack this bundle into an empty deployment directory, or clean the old standalone files first. Do not merge it over an old .next directory: server.js, .next/server, and .next/static must come from the same build.
 - When replacing an existing deployment in place, preserve at least .yct-data, runtime-assets, and apps\web\public\content-assets from the old directory before clearing files. Copying only .yct-data is not enough if the site already contains uploaded content assets or POI category icons.
@@ -1341,6 +1418,7 @@ Notes:
   Copy-Item -LiteralPath (Join-Path $root "scripts\run-web-internal-tasks.ps1") -Destination (Join-Path $stageRoot "run-yct-internal-tasks.ps1") -Force
   Copy-Item -LiteralPath (Join-Path $root "scripts\run-yct-legacy-content-migration.ps1") -Destination (Join-Path $stageRoot "migrate-yct-legacy-content.ps1") -Force
   Copy-Item -LiteralPath (Join-Path $root "scripts\run-web-player-location-poller.ps1") -Destination (Join-Path $stageRoot "run-yct-player-location-poller.ps1") -Force
+  Copy-Item -LiteralPath (Join-Path $root "scripts\run-web-analytics-aggregate.ps1") -Destination (Join-Path $stageRoot "run-yct-analytics-aggregate.ps1") -Force
   Copy-Item -LiteralPath (Join-Path $root "scripts\init-admin-membership.ps1") -Destination (Join-Path $stageRoot "init-yct-admin.ps1") -Force
   Copy-Item -LiteralPath (Join-Path $root "scripts\merge-yct-env-example.ps1") -Destination (Join-Path $stageRoot "merge-yct-env.ps1") -Force
   Copy-Item -LiteralPath (Join-Path $root "scripts\prepare-yct-root-migration.ps1") -Destination (Join-Path $stageRoot "prepare-yct-root-migration.ps1") -Force
