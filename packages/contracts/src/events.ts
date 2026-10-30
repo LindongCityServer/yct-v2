@@ -366,6 +366,7 @@ export interface TransitDataRevisionLineUpdatedPayload {
     | 'stops'
     | 'segmentPaths'
     | 'operator'
+    | 'operatorUrl'
     | 'fare'
     | 'firstLastBus'
     | 'departureTimes'

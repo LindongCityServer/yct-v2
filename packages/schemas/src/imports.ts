@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { idSchema, isoDateTimeSchema, nonEmptyTextSchema } from './common';
+import { idSchema, isoDateTimeSchema, nonEmptyTextSchema, optionalHttpUrlSchema } from './common';
 
 export const legacyImportKindSchema = z.enum([
   'content',
@@ -62,6 +62,7 @@ export const legacyTransitLineImportItemSchema = z.object({
     .optional(),
   maxCarCount: z.number().int().min(1).max(64).optional(),
   operator: z.string().trim().max(200).optional(),
+  operatorUrl: optionalHttpUrlSchema,
   fare: z.string().trim().max(120).optional(),
   firstLastBus: z
     .object({

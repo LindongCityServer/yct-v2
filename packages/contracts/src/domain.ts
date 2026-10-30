@@ -523,6 +523,8 @@ export interface TransitLineSnapshot {
   stops: TransitLineStopSnapshot[];
   segmentPaths?: TransitLineSegmentPathSnapshot[];
   operator?: string;
+  /** Optional website or public information page for this line’s operator. */
+  operatorUrl?: string;
   fare?: string;
   firstLastBus?: {
     first?: string;

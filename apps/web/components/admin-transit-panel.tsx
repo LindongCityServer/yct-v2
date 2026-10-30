@@ -45,6 +45,7 @@ import { MaterialSymbol } from './material-symbol';
 import { TransitTripLabelPoolPanel } from './transit-trip-label-pool-panel';
 import { type TransitTripLabelDraftConfig } from './transit-line-trip-label-fields';
 import type { TransitStationDetailUpdateInput } from '@yct/schemas';
+import { optionalHttpUrlSchema } from '@yct/schemas';
 import {
   detectTravelScheduleConflicts,
   formatAbsoluteMinutes,
@@ -101,6 +102,7 @@ interface TransitLineEditorSubmitPayload {
   }>;
   segmentPaths?: TransitRevisionLine['segmentPaths'];
   operator?: string;
+  operatorUrl?: string;
   fare?: string;
   firstBus?: string;
   lastBus?: string;
@@ -970,9 +972,7 @@ export function AdminTransitPanel({
     try {
       for (const [revisionId, lineSourceIds] of lineIdsByRevision) {
         const response = await fetch(
-          appPath(
-            `/api/admin/transit/datasets/${encodeURIComponent(revisionId)}/lines/approval`,
-          ),
+          appPath(`/api/admin/transit/datasets/${encodeURIComponent(revisionId)}/lines/approval`),
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -990,9 +990,7 @@ export function AdminTransitPanel({
         }
         successCount += lineSourceIds.length;
         setRevisions((current) =>
-          current.map((revision) =>
-            revision.revisionId === data.revisionId ? data : revision,
-          ),
+          current.map((revision) => (revision.revisionId === data.revisionId ? data : revision)),
         );
       }
       notifyTransitDataChanged(action === 'archive' ? 'record_archived' : 'status_changed');
@@ -1235,9 +1233,7 @@ export function AdminTransitPanel({
       for (const [revisionId, tripInstanceIds] of tripIdsByRevision) {
         const response = await fetch(
           appPath(
-            `/api/admin/travel/schedule-revisions/${encodeURIComponent(
-              revisionId,
-            )}/trips/approval`,
+            `/api/admin/travel/schedule-revisions/${encodeURIComponent(revisionId)}/trips/approval`,
           ),
           {
             method: 'POST',
@@ -1258,9 +1254,7 @@ export function AdminTransitPanel({
         }
         successCount += tripInstanceIds.length;
         setScheduleRevisions((current) =>
-          current.map((revision) =>
-            revision.revisionId === data.revisionId ? data : revision,
-          ),
+          current.map((revision) => (revision.revisionId === data.revisionId ? data : revision)),
         );
       }
       notifyTransitDataChanged(action === 'archive' ? 'record_archived' : 'status_changed');
@@ -5524,6 +5518,7 @@ function TransitLineEditorDialog({
     line?.maxCarCount === undefined ? '' : String(line.maxCarCount),
   );
   const [operator, setOperator] = useState(line?.operator ?? '');
+  const [operatorUrl, setOperatorUrl] = useState(line?.operatorUrl ?? '');
   const [fare, setFare] = useState(line?.fare ?? '');
   const [firstBus, setFirstBus] = useState(line?.firstLastBus?.first ?? '');
   const [lastBus, setLastBus] = useState(line?.firstLastBus?.last ?? '');
@@ -5605,6 +5600,11 @@ function TransitLineEditorDialog({
     parsedStationSourceIds,
   );
   const saveLine = async (intent: 'close' | 'map-editor') => {
+    const parsedOperatorUrl = optionalHttpUrlSchema.safeParse(operatorUrl);
+    if (!parsedOperatorUrl.success) {
+      setError('公司外链：请填写有效的 http/https 完整网址，或留空。');
+      return;
+    }
     if (!name.trim()) {
       setError('线路名称不能为空。');
       return;
@@ -5658,6 +5658,7 @@ function TransitLineEditorDialog({
       stopLocationRefs: buildTransitLineStopLocationPayload(routeNodeDrafts),
       segmentPaths: parsedRoute.segmentPaths,
       operator: operator.trim() || undefined,
+      operatorUrl: operatorUrl.trim(),
       fare: fare.trim() || undefined,
       firstBus: firstBus.trim() || undefined,
       lastBus: lastBus.trim() || undefined,
@@ -5905,6 +5906,16 @@ function TransitLineEditorDialog({
                 <input
                   value={operator}
                   onChange={(event) => setOperator(event.currentTarget.value)}
+                />
+              </label>
+              <label>
+                <span>公司外链（可选）</span>
+                <input
+                  type="url"
+                  maxLength={2000}
+                  value={operatorUrl}
+                  onChange={(event) => setOperatorUrl(event.currentTarget.value)}
+                  placeholder="https://..."
                 />
               </label>
               <label>

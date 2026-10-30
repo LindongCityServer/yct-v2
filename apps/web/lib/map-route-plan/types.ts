@@ -25,6 +25,7 @@ export interface TransitOverviewLine {
   localizedName?: LocalizedLabelMap;
   color?: string;
   operator?: string;
+  operatorUrl?: string;
   fare?: string;
   firstLastBus?: {
     first?: string;

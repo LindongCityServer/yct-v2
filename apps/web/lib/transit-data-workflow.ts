@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { UnminedCustomMarkerProvider } from '@yct/adapters';
 import type { TransitStationDetailUpdateInput } from '@yct/schemas';
+import { optionalHttpUrlSchema } from '@yct/schemas';
 import type {
   MapMarkerSnapshot,
   TransitDataRevision,
@@ -63,6 +64,7 @@ export type TransitLineEditableField =
   | 'stops'
   | 'segmentPaths'
   | 'operator'
+  | 'operatorUrl'
   | 'fare'
   | 'firstLastBus'
   | 'departureTimes'
@@ -847,6 +849,7 @@ export async function saveTransitLine(input: {
     }>;
     segmentPaths?: TransitDataRevision['lines'][number]['segmentPaths'];
     operator?: string;
+    operatorUrl?: string;
     fare?: string;
     firstBus?: string;
     lastBus?: string;
@@ -870,6 +873,14 @@ export async function saveTransitLine(input: {
     }>;
   };
 }): Promise<TransitDataActionResult> {
+  if (!optionalHttpUrlSchema.safeParse(input.patch.operatorUrl).success) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'invalid_transit_operator_url',
+      message: '公司外链：请填写有效的 http/https 完整网址，或留空。',
+    };
+  }
   const revision = await findTransitDataRevision(input.revisionId);
   if (!revision) {
     return notFound();
@@ -1305,6 +1316,7 @@ export async function updateTransitLineStationOrder(input: {
       })),
       segmentPaths: line.segmentPaths,
       operator: line.operator,
+      operatorUrl: line.operatorUrl,
       fare: line.fare,
       firstBus: line.firstLastBus?.first,
       lastBus: line.firstLastBus?.last,
@@ -1346,6 +1358,7 @@ function buildTransitLineSnapshot(
     }>;
     segmentPaths?: TransitDataRevision['lines'][number]['segmentPaths'];
     operator?: string;
+    operatorUrl?: string;
     fare?: string;
     firstBus?: string;
     lastBus?: string;
@@ -1461,6 +1474,10 @@ function buildTransitLineSnapshot(
     })),
     segmentPaths: segmentPaths.length > 0 ? segmentPaths : undefined,
     operator: patch.operator?.trim() || undefined,
+    operatorUrl:
+      patch.operatorUrl === undefined
+        ? previous?.operatorUrl
+        : patch.operatorUrl.trim() || undefined,
     fare: patch.fare?.trim() || undefined,
     firstLastBus:
       patch.firstBus?.trim() || patch.lastBus?.trim()
@@ -1609,9 +1626,7 @@ function normalizeSpecialTripsByDirection(
   value: TransitDataRevision['lines'][number]['specialTripsByDirection'],
 ): NonNullable<TransitDataRevision['lines'][number]['specialTripsByDirection']> {
   const normalize = (
-    trips: NonNullable<
-      TransitDataRevision['lines'][number]['specialTripsByDirection']
-    >['down'],
+    trips: NonNullable<TransitDataRevision['lines'][number]['specialTripsByDirection']>['down'],
   ) => {
     if (!trips) {
       return undefined;
@@ -1655,6 +1670,7 @@ function getChangedTransitLineFields(
     'stops',
     'segmentPaths',
     'operator',
+    'operatorUrl',
     'fare',
     'firstLastBus',
     'departureTimes',
