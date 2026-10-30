@@ -3171,7 +3171,6 @@ export function MapStage() {
       luckyRequiredReloadRef.current = exploreReload + 1;
       setExploreReload(exploreReload + 1);
     }
-    publishToastRequested({ message: t('map.explore.loading'), dedupeKey: 'map-lucky-loading' });
     const timer = window.setTimeout(() => {
       if (handledLuckyRef.current !== luckyRequest) {
         handledLuckyRef.current = luckyRequest;
@@ -3219,6 +3218,8 @@ export function MapStage() {
     publishToastRequested({
       message: t('map.explore.found', { name: target.label }),
       tone: 'success',
+      durationMs: 1500,
+      dedupeKey: 'map-lucky-result',
     });
   }, [
     luckyRequest,

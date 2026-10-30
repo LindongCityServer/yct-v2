@@ -118,6 +118,10 @@ const overview = {
       await page.goto(base + '/map');
       await trigger();
       await title().waitFor();
+      assert.equal(await page.getByText('正在寻找一个好去处…', { exact: true }).count(), 0);
+      const resultToast = page.locator('.app-toast').filter({ hasText: '手气不错：' });
+      await resultToast.waitFor();
+      await resultToast.waitFor({ state: 'hidden', timeout: 3000 });
       const first = await title().textContent();
       const loads = fullLoads;
       await page.locator('.topbar-page-title').focus();
@@ -129,7 +133,7 @@ const overview = {
       assert.ok(['彩蛋商店', '彩蛋运营线'].includes(await title().textContent()));
       assert.equal(fullLoads, loads, 'repeat selection reuses loaded markers');
       console.log(
-        `PASS ${width}px: title click/keyboard, POI and line details, no immediate repeat, no candidate refetch`,
+        `PASS ${width}px: no waiting toast, short-lived result, title click/keyboard, POI/line details, no immediate repeat or candidate refetch`,
       );
     }
     mode = 'one';
