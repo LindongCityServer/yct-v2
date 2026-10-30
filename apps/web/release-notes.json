@@ -5,7 +5,7 @@
     {
       "version": "2.17.0",
       "releasedAt": "2026-10-30T09:24:58.633Z",
-      "sourceFingerprint": "0adc086cca33662317e3916802f597c35c286fa1112dad6c020442a068e846ef",
+      "sourceFingerprint": "fdd191693fa1259d29ea422f93316c1c459ab3969ed44c34b9de3f7b9ea69f63",
       "themes": ["map", "transit", "materials", "portal", "i18n", "api"],
       "changes": [
         {
@@ -47,6 +47,11 @@
           "category": "feat",
           "breaking": false,
           "summary": "后台线路编辑支持为单条线路单独指定停靠 POI"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地铁导视支持导入 MoeRT-GuideGen 工程，转换预览会标注近似映射与版本兼容提示"
         }
       ],
       "bump": "minor"
