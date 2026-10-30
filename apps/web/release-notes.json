@@ -5,7 +5,7 @@
     {
       "version": "2.16.1",
       "releasedAt": "2026-10-29T16:38:27.367Z",
-      "sourceFingerprint": "7643eceaa5b12947373502f4119fe694dbb90ba77e4a818df03752c81eac8e5c",
+      "sourceFingerprint": "e3da74aebc9aeaac936c53870ff8383aa62e831c8531ed7bf4d16551d9e4e556",
       "themes": ["admin", "search", "web", "deploy"],
       "changes": [
         {
@@ -43,6 +43,11 @@
           "category": "fix",
           "breaking": false,
           "summary": "内容与 POI 图片改走同源地址，线上恢复低清快照渐进加载"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "班次工作台支持删除班次，删空方向时同步清除发车规则"
         }
       ],
       "bump": "patch"
