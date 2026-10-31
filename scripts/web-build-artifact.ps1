@@ -1386,7 +1386,7 @@ Notes:
 - start-yct-web.ps1 loads .env -> .env.production -> .env.local -> .env.production.local, and later files override earlier ones. These values also override inherited shell / PM2 environment variables for the same keys so stale localhost settings do not leak into production.
 - start-yct-web.ps1 forces NODE_ENV=production. Keep YCT_LOCAL_ADMIN_AUTH_ENABLED=0 in the deployment environment; the local administrator login is only for loopback development.
 - check-runtime-config.ps1 reports YCT_LOCAL_ADMIN_AUTH_ENABLED=true as a production warning.
-- deploy-yct-web.ps1 will automatically preserve .env, .env.production, .env.local, .env.production.local, .yct-data, runtime-assets, apps\web\public\content-assets, and apps\web\public\legacy-assets from the old deployment directory before replacing files.
+- deploy-yct-web.ps1 will automatically preserve .env, .env.production, .env.local, .env.production.local, .yct-data, runtime-assets, and apps\web\public\content-assets from the old deployment directory before replacing files. apps\web\public\legacy-assets is merged instead: package files are written first, old files then overwrite the same paths, and files that only exist in the old deployment are copied back. This keeps cloud-side edits while letting correctly named UTF-8 files from a rebuilt artifact take effect.
 - Dynamic Material Symbols metadata (.yct-data\material-symbol-asset-store.json) and SVG files (runtime-assets\material-symbols) form one persistent dataset. Stop all writers and back up or restore both paths together.
 - Admin preview and first-time promotion of a new Material Symbol require outbound HTTPS access from the server to fonts.googleapis.com:443 and fonts.gstatic.com:443. Public rendering uses local assets and must not require visitor access to Google Fonts.
 - The current JSON plus filesystem Material Symbols store is single-writer only. Do not run multiple Web writers against separate local disks or concurrently write the same JSON file; migrate to shared database/object storage before horizontal scaling.
@@ -1399,6 +1399,7 @@ Notes:
 - If the reverse proxy is mounted at /v2, build and start with BasePath /v2. If it is mounted at the site root later, rebuild with an empty BasePath.
 - Stop the old process before deployment and unpack this bundle into an empty deployment directory, or clean the old standalone files first. Do not merge it over an old .next directory: server.js, .next/server, and .next/static must come from the same build.
 - When replacing an existing deployment in place, preserve at least .yct-data, runtime-assets, and apps\web\public\content-assets from the old directory before clearing files. Copying only .yct-data is not enough if the site already contains uploaded content assets or POI category icons.
+- If non-ASCII paths under /legacy-assets/... all return 404 while ASCII files in the same directory return 200, the old deployment was unpacked with a corrupted filename encoding. Rebuild with the current script (7-Zip -mcu=on) and redeploy; do not repack by hand without UTF-8 filenames.
 - If returning users still see an older version, check that the old Node process is stopped, the deployment directory does not contain stale .next/static files, and the reverse proxy or browser Service Worker is not serving cached HTML/RSC responses.
 - After deployment, $publicHealthPath should return JSON containing buildId '$buildId' and basePath '$basePathValue'. Then $publicMapPath, $publicMarkerPath, $publicServiceWorkerPath, and the $publicStaticPath assets referenced by the page HTML should all return 200. The first line of $publicServiceWorkerPath should contain: const YCT_SW_VERSION = '$buildId';
 - The A+B public-data surface must remain on the same public origin and BasePath: $publicRobotsPath, $publicSitemapPath, $publicLlmsPath, $publicApiPath, and $publicOpenApiPath. Do not route these paths to the legacy static site or an internal API.
@@ -1581,9 +1582,12 @@ try {
     }
   } elseif ($null -ne $sevenZip) {
     $archiveTool = $sevenZip
+    # -mcu=on 强制 zip 条目名使用 UTF-8 并写入 EFS 标志位。省略该开关时，7-Zip 会按
+    # 本机 ANSI 代码页写非 ASCII 文件名（中文 Windows 上是 GBK）且不设置标志位，服务器
+    # 解压后 legacy-assets 里的中文文件名会变成乱码目录，导致 /legacy-assets/... 404。
     $sevenZipExitCode = Invoke-YctCommand `
       -FilePath $sevenZip `
-      -Arguments @("a", "-tzip", "-mx=5", $temporaryArtifactPath, ".\*") `
+      -Arguments @("a", "-tzip", "-mcu=on", "-mx=5", $temporaryArtifactPath, ".\*") `
       -WorkingDirectory $stageRoot
     if ($sevenZipExitCode -ne 0) {
       throw "7-Zip failed to create deployment artifact with exit code $sevenZipExitCode."

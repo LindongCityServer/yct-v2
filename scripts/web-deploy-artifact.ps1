@@ -11,7 +11,13 @@ param(
     ".env.production.local",
     ".yct-data",
     "runtime-assets",
-    "apps\\web\\public\\content-assets",
+    "apps\\web\\public\\content-assets"
+  ),
+  # 合并恢复：先写入新包内容，再用旧部署中的同名文件覆盖，最后补入旧部署独有的文件。
+  # legacy-assets 曾经是整体覆盖恢复，旧部署里因 zip 文件名编码损坏产生的乱码目录会
+  # 原样盖回来，把新包里正确命名的中文文件挤掉，线上继续 404；合并恢复可以同时保住
+  # 云端补充资源和新包里的正确文件名。
+  [string[]]$MergePaths = @(
     "apps\\web\\public\\legacy-assets"
   ),
   [switch]$StartAfterDeploy,
@@ -140,6 +146,65 @@ function Copy-YctIfExists {
   }
 
   Copy-Item -LiteralPath $Source -Destination $Destination -Recurse -Force
+}
+
+function Copy-YctDirectoryMerge {
+  param(
+    [Parameter(Mandatory = $true)][string]$Source,
+    [Parameter(Mandatory = $true)][string]$Destination
+  )
+
+  if (-not (Test-Path -LiteralPath $Source)) {
+    return
+  }
+
+  $sourceRoot = (Resolve-YctFullPath -Path $Source).TrimEnd("\")
+  $sourcePrefix = "$sourceRoot\"
+  New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+
+  Get-ChildItem -LiteralPath $sourceRoot -Recurse -Force -Directory | ForEach-Object {
+    $relativePath = $_.FullName.Substring($sourcePrefix.Length)
+    New-Item -ItemType Directory -Force -Path (Join-Path $Destination $relativePath) | Out-Null
+  }
+
+  Get-ChildItem -LiteralPath $sourceRoot -Recurse -Force -File | ForEach-Object {
+    $relativePath = $_.FullName.Substring($sourcePrefix.Length)
+    $targetPath = Join-Path $Destination $relativePath
+    $targetParent = Split-Path -Parent $targetPath
+    if (-not [string]::IsNullOrWhiteSpace($targetParent)) {
+      New-Item -ItemType Directory -Force -Path $targetParent | Out-Null
+    }
+    Copy-Item -LiteralPath $_.FullName -Destination $targetPath -Force
+  }
+}
+
+function Assert-YctMergedFilesRestored {
+  param(
+    [Parameter(Mandatory = $true)][string]$Source,
+    [Parameter(Mandatory = $true)][string]$Destination,
+    [Parameter(Mandatory = $true)][string]$Label
+  )
+
+  if (-not (Test-Path -LiteralPath $Source)) {
+    return
+  }
+
+  $sourceRoot = (Resolve-YctFullPath -Path $Source).TrimEnd("\")
+  $sourcePrefix = "$sourceRoot\"
+
+  Get-ChildItem -LiteralPath $sourceRoot -Recurse -Force -File | ForEach-Object {
+    $relativePath = $_.FullName.Substring($sourcePrefix.Length)
+    $targetPath = Join-Path $Destination $relativePath
+    if (-not (Test-Path -LiteralPath $targetPath -PathType Leaf)) {
+      throw "Persistent data verification failed: $Label is missing $relativePath after merge restore."
+    }
+
+    $sourceHash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+    $targetHash = (Get-FileHash -LiteralPath $targetPath -Algorithm SHA256).Hash
+    if ($sourceHash -ne $targetHash) {
+      throw "Persistent data verification failed: $Label has a mismatched $relativePath after merge restore."
+    }
+  }
 }
 
 function Get-YctPathSnapshot {
@@ -286,8 +351,14 @@ if ($existingDeploymentItems.Count -gt 0) {
   Copy-YctDirectoryChildren -Source $resolvedTargetRoot -Destination $resolvedBackupRoot
 }
 
+$mergePathLookup = @{}
+foreach ($relativePath in $MergePaths) {
+  Assert-YctRelativePersistentPath -Path $relativePath
+  $mergePathLookup[(($relativePath.Replace("/", "\")).TrimEnd("\"))] = $true
+}
+
 $persistentSnapshots = @{}
-foreach ($relativePath in $PersistentPaths) {
+foreach ($relativePath in @($PersistentPaths) + @($MergePaths)) {
   $source = Resolve-YctChildPath -Root $resolvedTargetRoot -RelativePath $relativePath
   $backup = Resolve-YctChildPath -Root $resolvedBackupRoot -RelativePath $relativePath
   $sourceSnapshot = Get-YctPathSnapshot -Path $source
@@ -304,11 +375,22 @@ try {
   Copy-YctDirectoryChildren -Source $resolvedSourceRoot -Destination $resolvedTargetRoot
 
   foreach ($relativePath in $PersistentPaths) {
+    if ($mergePathLookup.ContainsKey((($relativePath.Replace("/", "\")).TrimEnd("\")))) {
+      continue
+    }
+
     $backup = Resolve-YctChildPath -Root $resolvedBackupRoot -RelativePath $relativePath
     $destination = Resolve-YctChildPath -Root $resolvedTargetRoot -RelativePath $relativePath
     Copy-YctIfExists -Source $backup -Destination $destination
     $restoredSnapshot = Get-YctPathSnapshot -Path $destination
     Assert-YctSnapshotsEqual -Expected $persistentSnapshots[$relativePath] -Actual $restoredSnapshot -Label "$relativePath restore"
+  }
+
+  foreach ($relativePath in $MergePaths) {
+    $backup = Resolve-YctChildPath -Root $resolvedBackupRoot -RelativePath $relativePath
+    $destination = Resolve-YctChildPath -Root $resolvedTargetRoot -RelativePath $relativePath
+    Copy-YctDirectoryMerge -Source $backup -Destination $destination
+    Assert-YctMergedFilesRestored -Source $backup -Destination $destination -Label "$relativePath merged restore"
   }
 } catch {
   $deploymentError = $_

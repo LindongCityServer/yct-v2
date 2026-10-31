@@ -36,7 +36,11 @@ apps/web/.next/standalone
 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1
 ```
 
-生成 `zip` 时脚本会优先使用 7-Zip，其次回退到 `tar.exe -a`，最后才使用 PowerShell `Compress-Archive`。如果 7-Zip 不在 PATH 或常见安装目录，可以显式指定：
+生成 `zip` 时脚本会优先使用 7-Zip，其次回退到 `tar.exe -a`，最后才使用 PowerShell `Compress-Archive`。脚本调用 7-Zip 时会显式加 `-mcu=on`，强制 zip 条目名使用 UTF-8 并写入 EFS 标志位。
+
+部署包里的 `apps\web\public\legacy-assets` 存在大量中文目录和文件名。不要手工去掉 `-mcu=on`：中文 Windows 上 7-Zip 默认按 ANSI（GBK）写入非 ASCII 文件名且不设置标志位，服务器用 UTF-8 解压后目录名会变成乱码，浏览器请求 `/legacy-assets/...` 时全部 404。手工重新打包时也应保证 UTF-8 文件名，或改用 `tar.gz`。
+
+如果 7-Zip 不在 PATH 或常见安装目录，可以显式指定：
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1 -SevenZipPath "C:\Program Files\7-Zip\7z.exe"
@@ -201,7 +205,7 @@ Invoke-RestMethod `
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\run-yct-internal-tasks.ps1 `
   -Origin http://127.0.0.1:3300 `
- 
+
 ```
 
 常用参数：
@@ -319,7 +323,14 @@ foreach ($relativePath in @(
 - `.yct-data`：账号会话、账号映射、管理员成员、交通数据版本、POI 投稿、POI 投稿图片、提醒、通知、票务草稿、离线范围请求和物料线网项目等本地仓储；账号会话默认写入 `.yct-data/yct-account-sessions.json`，也可通过 `YCT_SESSION_STORE_PATH` 调整，当前 POI 投稿图片默认在 `.yct-data/poi-submission-images`。RMP 线网草稿默认写入 `.yct-data/material-transit-network-project-store.json`，可通过 `YCT_MATERIAL_TRANSIT_NETWORK_PROJECT_STORE_PATH` 调整。已确认的 Material Symbols 名称与本地文件映射默认写入 `.yct-data/material-symbol-asset-store.json`。
 - `runtime-assets`：部署包根目录下的运行时静态资源；当前 POI 分类图标默认在 `runtime-assets/poi-icons`，按需固化的 Material Symbols SVG 默认在 `runtime-assets/material-symbols`。
 - `apps\web\public\content-assets`：内容后台上传的真实图片和附件。
-- `apps\web\public\legacy-assets`：旧内容的图片资源。它虽然也会随部署包进入，但线上可能已经做过转码、补充或清理，因此部署脚本默认以云端版本为准，不再用包内版本覆盖。
+- `apps\web\public\legacy-assets`：旧内容的图片资源。它虽然也会随部署包进入，但线上可能已经做过转码、补充或清理，因此部署脚本采用合并恢复：先用部署包覆盖，再用旧部署中的同名文件覆盖，最后补入旧部署独有的文件。这样既保留云端转码或补充的资源，也能让新包里正确命名的文件落盘。不能用整体覆盖恢复，否则旧部署里因压缩编码损坏产生的乱码目录会被原样盖回来，新包的中文文件名会被挤掉。
+
+如果线上 `/legacy-assets/...` 中带中文名的图片返回 404，而同一目录下的 ASCII 文件（例如 `/legacy-assets/mainpage.css`）返回 200，说明旧部署解压时文件名编码已经损坏。处理步骤：
+
+1. 用带 `-mcu=on` 的当前构建脚本重新生成部署包。
+2. 按本文流程执行 `deploy-yct-web.ps1`。合并恢复会把新包里的正确文件名写入，同时保留云端同名文件和补充文件。
+3. 部署后抽查一个中文目录图片和一个 ASCII 文件，确认都返回 200；后台旧资源报告里的“本地缺失文件”数量应明显下降。
+4. 乱码目录不影响访问，但会占用磁盘。确认新包已包含对应资源后，可以手工删除 `apps\web\public\legacy-assets` 下名称包含 `�` 的目录。
 
 所以，对大多数当前部署来说：
 
