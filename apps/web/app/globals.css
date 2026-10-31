@@ -13827,6 +13827,104 @@ div.telegraph-output-scene.is-packing {
   text-align: right;
 }
 
+.admin-analytics-table td.admin-analytics-trend-column,
+.admin-analytics-table th.admin-analytics-trend-column {
+  width: 110px;
+  text-align: left;
+}
+
+.admin-analytics-spark {
+  display: block;
+  color: var(--yct-color-primary);
+}
+
+.admin-analytics-spark-empty {
+  color: var(--yct-color-text-muted);
+}
+
+.admin-analytics-table.is-events th,
+.admin-analytics-table.is-events td {
+  text-align: left;
+}
+
+.admin-event-log {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.admin-event-log-tabs {
+  display: flex;
+  gap: var(--yct-space-2);
+  padding-bottom: var(--yct-space-2);
+  border-bottom: 1px solid var(--yct-color-border);
+}
+
+.admin-event-log-tabs button {
+  min-height: 36px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--yct-radius-pill);
+  background: transparent;
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.admin-event-log-tabs button.is-active {
+  border-color: var(--yct-color-border);
+  background: var(--yct-color-surface-panel);
+  color: var(--yct-color-text);
+}
+
+.admin-analytics-events {
+  display: grid;
+  gap: var(--yct-space-3);
+}
+
+.admin-analytics-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--yct-space-2);
+}
+
+.admin-analytics-filters label {
+  display: grid;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+}
+
+.admin-analytics-filters select,
+.admin-analytics-filters input {
+  min-width: 140px;
+  min-height: 36px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface);
+  color: var(--yct-color-text);
+  font-size: 13px;
+}
+
+.admin-analytics-event-name {
+  display: block;
+  color: var(--yct-color-text-muted);
+  font-size: 12px;
+}
+
+.admin-analytics-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--yct-space-3);
+}
+
+.admin-analytics-pagination > span {
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+}
+
 .admin-analytics-empty {
   margin: 0;
   color: var(--yct-color-text-muted);
@@ -13848,6 +13946,11 @@ div.telegraph-output-scene.is-packing {
 
   .admin-analytics-trend {
     height: 56px;
+  }
+
+  .admin-analytics-trend-column,
+  .admin-analytics-props-column {
+    display: none;
   }
 }
 
@@ -15781,6 +15884,26 @@ div.telegraph-output-scene.is-packing {
   min-height: 76px;
   padding: var(--yct-space-2);
   resize: vertical;
+}
+
+/* 分类语义色：输入框 + 色块预览；跨列独占一行，避免挤坏分类行网格。 */
+.admin-poi-category-color {
+  grid-column: 2 / -1;
+}
+
+.admin-poi-category-color-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  gap: var(--yct-space-1);
+  align-items: center;
+}
+
+.admin-poi-category-color-field > span {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--yct-color-border);
+  border-radius: var(--yct-radius-pill);
 }
 
 .admin-poi-category-icons,
@@ -31979,6 +32102,227 @@ dialog.client-dialog.is-page {
   gap: 6px;
 }
 
+/* 问一问回答里的结构化卡片：替代正文中的逐条罗列 */
+.assistant-icon-list {
+  display: grid;
+  gap: 2px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assistant-icon-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 8px;
+  border-radius: var(--yct-radius-md);
+  color: var(--yct-color-text);
+  text-decoration: none;
+}
+
+.assistant-icon-row:hover,
+.assistant-icon-row:focus-visible {
+  background: var(--yct-color-interaction-hover);
+}
+
+.assistant-icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--assistant-icon-color, var(--yct-color-primary));
+  color: var(--yct-color-on-primary, #ffffff);
+}
+
+.assistant-icon-badge .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.assistant-icon-body {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+}
+
+.assistant-icon-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.assistant-icon-meta {
+  overflow: hidden;
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-icon-row > .material-symbols-outlined {
+  flex: 0 0 auto;
+  color: var(--yct-color-text-muted);
+  font-size: 18px;
+}
+
+.assistant-line-strip {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 0;
+  border-left: 3px solid var(--line-color);
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+}
+
+.assistant-line-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.assistant-line-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line-color);
+}
+
+.assistant-line-name {
+  flex: 1 1 auto;
+  color: var(--yct-color-text);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.assistant-line-head > .material-symbols-outlined {
+  color: var(--yct-color-text-muted);
+  font-size: 18px;
+}
+
+.assistant-line-stations {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 2px;
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.assistant-line-station {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.assistant-line-arrow {
+  color: var(--yct-color-text-muted);
+}
+
+.assistant-trip-list {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.assistant-trip-card {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--yct-radius-md);
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text);
+  text-decoration: none;
+}
+
+.assistant-trip-card:hover,
+.assistant-trip-card:focus-visible {
+  background: var(--yct-color-surface-panel);
+}
+
+.assistant-trip-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.assistant-trip-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.assistant-tag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--yct-color-primary) 12%, transparent);
+  color: var(--yct-color-primary);
+  font-size: 11px;
+}
+
+.assistant-tag.is-strong {
+  background: color-mix(in srgb, var(--yct-color-text) 8%, transparent);
+  color: var(--yct-color-text);
+}
+
+/* 卡片本身是入口，不沿用正文链接的下划线与强调色。 */
+.global-search-conversation-assistant .markdown-blocks .assistant-icon-row,
+.global-search-conversation-assistant .markdown-blocks .assistant-line-name,
+.global-search-conversation-assistant .markdown-blocks .assistant-trip-card {
+  color: var(--yct-color-text);
+  text-decoration: none;
+}
+
+.assistant-trip-times {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+}
+
+.assistant-trip-time {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.assistant-trip-arrow {
+  color: var(--yct-color-text-muted);
+  font-size: 13px;
+}
+
+.assistant-trip-meta {
+  margin: 0;
+  color: var(--yct-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.assistant-trip-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--yct-color-primary);
+  font-size: 12px;
+}
+
+.assistant-trip-action .material-symbols-outlined {
+  font-size: 16px;
+}
+
 .global-search-answer-ref {
   --ref-color: var(--yct-color-primary);
   display: inline-flex;
@@ -33072,6 +33416,43 @@ dialog.client-dialog.is-page {
   top: auto;
   right: 16px;
   bottom: 20px;
+}
+
+@media (max-width: 760px) {
+  /* 窄屏通用工具条会居中（translateX(-50%)），班次工作台的工具条是静态排版，
+     这里必须显式复位，否则会被整体推出屏幕左侧。 */
+  .transit-trip-bottom {
+    left: 8px;
+    width: max-content;
+    max-width: calc(100vw - 16px);
+  }
+
+  .transit-trip-bottom .transit-visual-toolbar {
+    left: auto;
+    bottom: auto;
+    width: max-content;
+    max-width: 100%;
+    transform: none;
+  }
+
+  /* 缩放按钮上移到规则条上方并靠左，避免遮挡右侧站名刻度。 */
+  .transit-trip-viewport-controls {
+    left: 8px;
+    right: auto;
+    bottom: 146px;
+  }
+
+  /* 沿用窄屏下的面板高度上限，避免展开后占满整屏只剩一条运行图。 */
+  .transit-trip-panel {
+    max-height: min(46dvh, 420px);
+  }
+}
+
+@media (max-width: 480px) {
+  .transit-trip-bottom .transit-visual-toolbar button {
+    width: 36px;
+    height: 36px;
+  }
 }
 
 /* 全屏工作台层级高于全局遮罩，标签池弹窗需要单独抬到编辑器之上 */
