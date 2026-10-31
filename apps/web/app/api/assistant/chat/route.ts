@@ -2,6 +2,7 @@ import type { LocaleCode } from '@yct/contracts';
 import type { NextRequest } from 'next/server';
 import {
   AssistantProviderError,
+  buildAssistantContextBlock,
   buildAssistantSystemPrompt,
   streamAssistantReply,
   type AssistantChatMessage,
@@ -35,6 +36,8 @@ const maximumToolRounds = 2;
 // 引用 chip 过多会挤占回答区域，也会放大模型引用编号出错的概率。
 // 预检索最多 10 条，这里留 2 条给工具补充结果。
 const maximumReferences = 12;
+/** 模型在回答末尾输出追问建议的标记；这里剥离后单独下发给前端。 */
+const followUpMarker = '[[followups]]';
 
 interface ChatRequestBody {
   providerId?: unknown;
@@ -91,12 +94,7 @@ export async function POST(request: NextRequest) {
     highlights: page?.highlights,
     currentLocation,
   });
-  const baseSystemPrompt = [
-    buildAssistantSystemPrompt(retrieval, locale, page),
-    buildViewerPrompt(viewer),
-  ]
-    .filter(Boolean)
-    .join('\n\n');
+  const baseSystemPrompt = buildAssistantSystemPrompt(locale);
   const systemPromptWithTools = [
     baseSystemPrompt,
     '',
@@ -106,6 +104,13 @@ export async function POST(request: NextRequest) {
     '3. 工具结果会附带引用编号，回答时继续用 [编号] 引用；不要编造编号。',
     buildAssistantToolPrompt(),
   ].join('\n');
+  // 时间、身份、页面与检索资料都属于会变化的内容，只拼进最后一条用户消息，
+  // 系统提示与历史记录保持不变，模型的前缀缓存才能持续命中。
+  const contextBlock = buildAssistantContextBlock({
+    retrieval,
+    page,
+    viewerPrompt: buildViewerPrompt(viewer),
+  });
   const encoder = new TextEncoder();
   const abortController = new AbortController();
   const abortFromClient = () => abortController.abort();
@@ -165,9 +170,22 @@ export async function POST(request: NextRequest) {
         role: message.role,
         content: message.content,
       }));
+      // 检索资料等易变上下文只拼在最后一条用户消息开头，历史消息保持原样。
+      for (let index = providerMessages.length - 1; index >= 0; index -= 1) {
+        const message = providerMessages[index];
+        if (message?.role !== 'user') {
+          continue;
+        }
+        providerMessages[index] = {
+          role: 'user',
+          content: `${contextBlock}\n\n---\n\n用户问题：${message.content ?? ''}`,
+        };
+        break;
+      }
       const toolDefinitions = buildOpenAiToolDefinitions();
       let toolsEnabled = true;
       let round = 0;
+      let finalFollowUps: string[] = [];
 
       try {
         while (true) {
@@ -176,6 +194,8 @@ export async function POST(request: NextRequest) {
           let toolCalls: AssistantToolCall[] = [];
           const useTools = toolsEnabled && round < maximumToolRounds;
           const textFilter = createAssistantTextFilter();
+          const followUpSplitter = createFollowUpSplitter();
+          let roundFollowUps: string[] = [];
           try {
             for await (const event of streamAssistantReply({
               provider,
@@ -189,7 +209,7 @@ export async function POST(request: NextRequest) {
             })) {
               if (event.type === 'text') {
                 roundText += event.text;
-                const visible = textFilter.push(event.text);
+                const visible = textFilter.push(followUpSplitter.push(event.text));
                 if (visible) {
                   visibleText += visible;
                   send('delta', { text: visible });
@@ -208,7 +228,9 @@ export async function POST(request: NextRequest) {
             throw error;
           }
 
-          const tail = textFilter.flush();
+          const splitTail = followUpSplitter.flush();
+          roundFollowUps = splitTail.followUps;
+          const tail = `${splitTail.text ? textFilter.push(splitTail.text) : ''}${textFilter.flush()}`;
           if (tail) {
             visibleText += tail;
             send('delta', { text: tail });
@@ -232,6 +254,7 @@ export async function POST(request: NextRequest) {
           }
 
           if (toolCalls.length === 0 || round >= maximumToolRounds) {
+            finalFollowUps = roundFollowUps;
             break;
           }
 
@@ -268,6 +291,9 @@ export async function POST(request: NextRequest) {
           }
 
           round += 1;
+        }
+        if (finalFollowUps.length > 0) {
+          send('followups', { items: finalFollowUps });
         }
         send('done', { ok: true });
       } catch (error) {
@@ -439,6 +465,92 @@ function isToolsUnsupported(error: unknown): boolean {
     error instanceof AssistantProviderError &&
     (error.status === 400 || error.status === 404 || error.status === 422)
   );
+}
+
+interface AssistantFollowUpSplitter {
+  push(chunk: string): string;
+  flush(): { text: string; followUps: string[] };
+}
+
+/**
+ * 把回答末尾的追问建议行从正文里剥离：标记之后的内容不再下发，
+ * 收尾时再解析成追问列表。标记可能被拆到两个 chunk 中，因此保留较短尾部等待下一块。
+ */
+function createFollowUpSplitter(): AssistantFollowUpSplitter {
+  let carry = '';
+  let buffer = '';
+  let active = false;
+
+  return {
+    push(chunk) {
+      if (active) {
+        buffer += chunk;
+        return '';
+      }
+
+      carry += chunk;
+      const index = carry.indexOf(followUpMarker);
+      if (index >= 0) {
+        const visible = carry.slice(0, index);
+        buffer = carry.slice(index + followUpMarker.length);
+        carry = '';
+        active = true;
+        return visible;
+      }
+
+      const hold = Math.min(followUpMarker.length - 1, carry.length);
+      if (hold === 0) {
+        return carry;
+      }
+      const visible = carry.slice(0, carry.length - hold);
+      carry = carry.slice(carry.length - hold);
+      return visible;
+    },
+    flush() {
+      const visible = active ? '' : carry;
+      carry = '';
+      const followUps = active ? parseFollowUps(buffer) : [];
+      buffer = '';
+      active = false;
+      return { text: visible, followUps };
+    },
+  };
+}
+
+/** 解析追问 JSON 数组；模型输出不合规时安静忽略，不影响正文回答。 */
+function parseFollowUps(raw: string): string[] {
+  const start = raw.indexOf('[');
+  const end = raw.lastIndexOf(']');
+  if (start < 0 || end <= start) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw.slice(start, end + 1)) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    const seen = new Set<string>();
+    const items: string[] = [];
+    for (const item of parsed) {
+      if (typeof item !== 'string') {
+        continue;
+      }
+      const text = item.replace(/\s+/g, ' ').trim().slice(0, 30);
+      if (text.length < 2 || seen.has(text)) {
+        continue;
+      }
+      seen.add(text);
+      items.push(text);
+      if (items.length >= 3) {
+        break;
+      }
+    }
+    return items;
+  } catch {
+    return [];
+  }
 }
 
 function errorResponse(status: number, code: string, message: string) {

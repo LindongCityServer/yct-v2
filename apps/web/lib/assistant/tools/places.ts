@@ -45,8 +45,13 @@ export const searchPlacesTool: AssistantTool<SearchPlacesInput> = {
       return emptyToolResult('地图地点数据暂不可用，无法检索地点。');
     }
 
-    const categoryNames = new Map(
-      (await readPoiCategories().catch(() => [])).map((category) => [category.id, category.name]),
+    const categories = await readPoiCategories().catch(() => []);
+    const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
+    // 与地图保持一致：优先使用后台配置的分类语义色。
+    const categoryColors = new Map(
+      categories.flatMap((category) =>
+        category.color ? [[category.id, category.color] as const] : [],
+      ),
     );
     const markers = snapshot.snapshot.markers.filter((marker) => marker.categoryId !== 'player');
     const placeCandidates = buildPlaceQueryCandidates(query);
@@ -80,6 +85,7 @@ export const searchPlacesTool: AssistantTool<SearchPlacesInput> = {
         href: `/map?marker=${encodeURIComponent(marker.id)}`,
         asOf: snapshot.snapshot.fetchedAt,
         color: marker.accentColor,
+        cardColor: marker.categoryId ? categoryColors.get(marker.categoryId) : undefined,
         tone: 'place',
         snippet: buildMarkerSnippet(marker, categoryNames, context.locale),
       })),

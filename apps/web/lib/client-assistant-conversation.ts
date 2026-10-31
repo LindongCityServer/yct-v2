@@ -136,7 +136,11 @@ function normalizeMessage(value: unknown): AssistantConversationMessage[] {
     return [];
   }
 
-  const candidate = value as { role?: unknown; content?: unknown; references?: unknown };
+  const candidate = value as {
+    role?: unknown;
+    content?: unknown;
+    references?: unknown;
+  };
   if (
     (candidate.role !== 'user' && candidate.role !== 'assistant') ||
     typeof candidate.content !== 'string'
@@ -182,6 +186,7 @@ function normalizeReferences(value: unknown): AssistantReference[] | undefined {
           snippet:
             typeof candidate.snippet === 'string' ? candidate.snippet.slice(0, 400) : undefined,
           color: typeof candidate.color === 'string' ? candidate.color : undefined,
+          cardColor: typeof candidate.cardColor === 'string' ? candidate.cardColor : undefined,
           tone: typeof candidate.tone === 'string' ? candidate.tone : undefined,
         },
       ];

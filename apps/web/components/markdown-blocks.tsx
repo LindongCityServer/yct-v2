@@ -9,7 +9,8 @@ type MarkdownBlock =
   | { type: 'table'; headers: string[]; rows: string[][] }
   | { type: 'list'; ordered: boolean; items: string[] }
   | { type: 'quote'; text: string }
-  | { type: 'image'; alt: string; src: string };
+  | { type: 'image'; alt: string; src: string }
+  | { type: 'ui'; body: string; closed: boolean };
 
 export interface MarkdownHeading {
   id: string;
@@ -17,7 +18,14 @@ export interface MarkdownHeading {
   text: string;
 }
 
-export function MarkdownBlocks({ markdown }: Readonly<{ markdown: string }>) {
+export function MarkdownBlocks({
+  markdown,
+  renderUiBlock,
+}: Readonly<{
+  markdown: string;
+  /** 渲染 ```ui 代码块；未提供时直接隐藏，避免把指令 JSON 漏到界面上。 */
+  renderUiBlock?: (body: string) => ReactNode;
+}>) {
   const blocks = parseMarkdownBlocks(markdown);
   const headings = extractMarkdownHeadings(markdown);
   let headingIndex = 0;
@@ -26,7 +34,7 @@ export function MarkdownBlocks({ markdown }: Readonly<{ markdown: string }>) {
     <div className="markdown-blocks">
       {blocks.map((block, index) => {
         const headingId = block.type === 'heading' ? headings[headingIndex++]?.id : undefined;
-        return renderMarkdownBlock(block, index, headingId);
+        return renderMarkdownBlock(block, index, headingId, renderUiBlock);
       })}
     </div>
   );
@@ -55,7 +63,12 @@ export function extractMarkdownHeadings(markdown: string): MarkdownHeading[] {
   });
 }
 
-function renderMarkdownBlock(block: MarkdownBlock, index: number, headingId?: string): ReactNode {
+function renderMarkdownBlock(
+  block: MarkdownBlock,
+  index: number,
+  headingId?: string,
+  renderUiBlock?: (body: string) => ReactNode,
+): ReactNode {
   switch (block.type) {
     case 'heading': {
       const HeadingTag = `h${block.level}` as 'h2' | 'h3' | 'h4';
@@ -106,6 +119,14 @@ function renderMarkdownBlock(block: MarkdownBlock, index: number, headingId?: st
       );
     case 'image':
       return renderMarkdownImage(block, index);
+    case 'ui': {
+      // 流式过程中代码块还没闭合，先不渲染，等闭合后再交给卡片组件。
+      if (!block.closed || !renderUiBlock) {
+        return null;
+      }
+      const rendered = renderUiBlock(block.body);
+      return rendered ? <div key={index}>{rendered}</div> : null;
+    }
     case 'paragraph':
     default:
       return <p key={index}>{renderInlineMarkdown(block.text)}</p>;
@@ -162,6 +183,13 @@ function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
     if (image) {
       blocks.push(image);
       index += 1;
+      continue;
+    }
+
+    const uiFence = parseUiFenceBlock(lines, index);
+    if (uiFence) {
+      blocks.push(uiFence.block);
+      index = uiFence.nextIndex;
       continue;
     }
 
@@ -268,6 +296,38 @@ function parseMarkdownTableRow(line: string | undefined): string[] | undefined {
 
 function isMarkdownTableSeparatorCell(value: string): boolean {
   return /^:?-{3,}:?$/.test(value.trim());
+}
+
+/** ```ui 代码块：模型用它下发结构化卡片指令。 */
+const uiFenceOpenPattern = /^```\s*ui\s*$/i;
+const codeFenceClosePattern = /^```\s*$/;
+
+function parseUiFenceBlock(
+  lines: string[],
+  startIndex: number,
+): { block: Extract<MarkdownBlock, { type: 'ui' }>; nextIndex: number } | undefined {
+  if (!uiFenceOpenPattern.test(lines[startIndex].trim())) {
+    return undefined;
+  }
+
+  const bodyLines: string[] = [];
+  let index = startIndex + 1;
+  while (index < lines.length) {
+    if (codeFenceClosePattern.test(lines[index].trim())) {
+      return {
+        block: { type: 'ui', body: bodyLines.join('\n'), closed: true },
+        nextIndex: index + 1,
+      };
+    }
+    bodyLines.push(lines[index]);
+    index += 1;
+  }
+
+  // 流式过程中代码块还没闭合：吞掉剩余内容，等闭合后再交给卡片组件。
+  return {
+    block: { type: 'ui', body: bodyLines.join('\n'), closed: false },
+    nextIndex: index,
+  };
 }
 
 function parseImageLine(line: string): MarkdownBlock | undefined {
@@ -380,6 +440,7 @@ function collectParagraph(
       isMarkdownDivider(line) ||
       /^(#{1,3})\s+(.+)$/.test(line) ||
       parseImageLine(line) ||
+      uiFenceOpenPattern.test(line) ||
       parseListItem(line) ||
       /^\s*>\s?/.test(line)
     ) {

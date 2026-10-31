@@ -1,5 +1,4 @@
 import type { MaterialTemplateFamily } from '@yct/contracts';
-import { listPublishedMaterialTemplates } from '../../material-workflow';
 import { searchWikiWithStatus } from '../../wiki-search';
 import { emptyToolResult, type AssistantTool, type AssistantToolResult } from './types';
 
@@ -83,6 +82,8 @@ export const materialTemplatesTool: AssistantTool<MaterialTemplatesInput> = {
   },
   async run(input): Promise<AssistantToolResult> {
     const limit = input.limit ?? 10;
+    // 物料模板会牵出图片渲染依赖，按需引入，避免问一问路由在加载时就解析原生模块。
+    const { listPublishedMaterialTemplates } = await import('../../material-workflow');
     const templates = (await listPublishedMaterialTemplates())
       .filter((item) => (input.family ? item.template.family === input.family : true))
       .slice(0, limit);

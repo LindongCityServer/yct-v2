@@ -12,7 +12,7 @@ import {
   buildAssistantRetrieval,
   buildQueryCandidates,
 } from '../../apps/web/lib/assistant/retrieval';
-import { buildAssistantSystemPrompt } from '../../apps/web/lib/assistant/chat';
+import { buildAssistantContextBlock } from '../../apps/web/lib/assistant/chat';
 import { buildPlaceQueryCandidates } from '../../apps/web/lib/assistant/place-synonyms';
 import {
   getMaterialWorkspaceGuide,
@@ -482,10 +482,13 @@ console.log('── 7. 真实场景：时刻、换乘与运营 ─────�
     '当前数据没有该线路时刻表',
   );
 
-  const prompt = buildAssistantSystemPrompt(result, 'zh-CN', {
-    pathname: '/map',
-    title: '地图探索',
-    search: '',
+  const prompt = buildAssistantContextBlock({
+    retrieval: result,
+    page: {
+      pathname: '/map',
+      title: '地图探索',
+      search: '',
+    },
   });
   check('提示词注入北京时间，避免“即将停运”这类过期措辞', prompt.includes('当前时间是'));
 }

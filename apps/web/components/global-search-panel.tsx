@@ -76,10 +76,12 @@ import {
   formatTripSummary,
   formatTripTitle,
   type SearchCategory,
+  type SearchResults,
 } from '../lib/client-search';
 import { faqAnswerText } from '../lib/faq-content';
 import { getLocalizedFaqContent } from '../lib/faq-translations';
 import { MarkdownBlocks } from './markdown-blocks';
+import { AssistantUiBlocks } from './assistant-ui-blocks';
 import { MaterialSymbol } from './material-symbol';
 import { SmartQaGlyph } from './smart-qa-icon';
 import { TitleWithBreaks } from './title-with-breaks';
@@ -199,6 +201,8 @@ export function GlobalSearchPanel({
   const [aiSuggestionsStatus, setAiSuggestionsStatus] = useState<LoadStatus>('idle');
   const [aiSuggestionsError, setAiSuggestionsError] = useState('');
   const [aiSuggestionRefreshToken, setAiSuggestionRefreshToken] = useState(0);
+  // AI 推荐按需生成：只有用户点“换一批”时才请求模型。
+  const [aiSuggestionRequested, setAiSuggestionRequested] = useState(false);
   const enabledRef = useRef(entryPreference.enabled);
   const aiSuggestionCacheRef = useRef(new Map<string, SearchSuggestion[]>());
   const dataLoadedRef = useRef(false);
@@ -786,6 +790,8 @@ export function GlobalSearchPanel({
       }),
     [dataStatus, trimmedQuery, results.hasExactEntity, results.hasStrongResult, embedded],
   );
+  // 问一问不可用时的站内兜底：除了 FAQ，也把最相关的地点、班次和公告列出来。
+  const fallbackEntries = useMemo(() => buildFallbackEntries(results), [results]);
   const mode: 'search' | 'ask' =
     activeAskQuery !== ''
       ? 'ask'
@@ -1079,6 +1085,13 @@ export function GlobalSearchPanel({
       return undefined;
     }
 
+    if (!aiSuggestionRequested) {
+      setAiSuggestions([]);
+      setAiSuggestionsError('');
+      setAiSuggestionsStatus('idle');
+      return undefined;
+    }
+
     const cacheKey = `${pageContext.pathname}${pageContext.search}`;
     const cached = aiSuggestionCacheRef.current.get(cacheKey);
     if (aiSuggestionRefreshToken === 0 && cached && cached.length > 0) {
@@ -1164,6 +1177,7 @@ export function GlobalSearchPanel({
     active,
     activeAskQuery,
     aiSuggestionRefreshToken,
+    aiSuggestionRequested,
     assistantConfig,
     entryPreference.aiSuggestions,
     locale,
@@ -1216,6 +1230,10 @@ export function GlobalSearchPanel({
     setFollowUpError('');
     setFollowUpStatus((current) => (current === 'loading' ? 'idle' : current));
     setAiSuggestionRefreshToken(0);
+    // 下次打开面板回到站内静态推荐，AI 推荐仍需手动触发。
+    setAiSuggestionRequested(false);
+    setAiSuggestions([]);
+    setAiSuggestionsStatus('idle');
     setEasterEggOpen(false);
   }
 
@@ -1414,7 +1432,7 @@ export function GlobalSearchPanel({
   }
 
   async function copyAssistantAnswer(text: string, key: string) {
-    const content = text.trim();
+    const content = stripUiBlocks(text);
     if (!content) {
       return;
     }
@@ -1533,6 +1551,20 @@ export function GlobalSearchPanel({
           return;
         }
 
+        if (event === 'followups') {
+          // 追问建议随主回答一起返回，不再单独发起一次模型请求。
+          const items = (data as { items?: unknown }).items;
+          const list = Array.isArray(items)
+            ? items.filter(
+                (item): item is string => typeof item === 'string' && Boolean(item.trim()),
+              )
+            : [];
+          setFollowUps(list);
+          setFollowUpError('');
+          setFollowUpStatus(list.length > 0 ? 'ready' : 'idle');
+          return;
+        }
+
         if (event === 'error') {
           const message = (data as { message?: unknown }).message;
           throw new Error(
@@ -1550,14 +1582,17 @@ export function GlobalSearchPanel({
 
       setAssistantHistory([
         ...nextHistory,
-        { role: 'assistant', content: accumulated.trim(), references: receivedReferences },
+        {
+          role: 'assistant',
+          content: accumulated.trim(),
+          references: receivedReferences,
+        },
       ]);
       setAssistantAnswer('');
       setAssistantStatus('done');
       if (!isEasterEggQuery(cleanQuery) || !revealEasterEggAfterAnswer()) {
         flashBrandState('done', 600);
       }
-      void requestFollowUps(cleanQuery, accumulated.trim(), config);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return;
@@ -1687,6 +1722,16 @@ export function GlobalSearchPanel({
   function refreshSuggestions() {
     setSuggestionOffset(nextSuggestionSeed);
     if (!entryPreference.aiSuggestions || !assistantConfig) {
+      return;
+    }
+
+    setAiSuggestionRequested(true);
+    // 本页已有生成结果时先复用缓存，避免重复产生模型调用。
+    const cached = aiSuggestionCacheRef.current.get(`${pageContext.pathname}${pageContext.search}`);
+    if (aiSuggestionRefreshToken === 0 && cached && cached.length > 0) {
+      setAiSuggestions(cached);
+      setAiSuggestionsError('');
+      setAiSuggestionsStatus('ready');
       return;
     }
 
@@ -1978,7 +2023,17 @@ export function GlobalSearchPanel({
                       ) : (
                         <div className="global-search-conversation-turn" key={`assistant-${index}`}>
                           <div className="global-search-conversation-assistant">
-                            <MarkdownBlocks markdown={message.content} />
+                            <MarkdownBlocks
+                              markdown={message.content}
+                              renderUiBlock={(body) => (
+                                <AssistantUiBlocks
+                                  body={body}
+                                  references={message.references ?? []}
+                                  t={t}
+                                  onNavigate={close}
+                                />
+                              )}
+                            />
                           </div>
                           <div className="global-search-answer-actions">
                             <button
@@ -2033,7 +2088,19 @@ export function GlobalSearchPanel({
                     ) : null}
                     {assistantStatus === 'streaming' ? (
                       <div className="global-search-conversation-assistant is-streaming">
-                        {assistantAnswer ? <MarkdownBlocks markdown={assistantAnswer} /> : null}
+                        {assistantAnswer ? (
+                          <MarkdownBlocks
+                            markdown={assistantAnswer}
+                            renderUiBlock={(body) => (
+                              <AssistantUiBlocks
+                                body={body}
+                                references={assistantReferences}
+                                t={t}
+                                onNavigate={close}
+                              />
+                            )}
+                          />
+                        ) : null}
                         <span
                           className="global-search-typing"
                           aria-label={t('globalSearch.assistant.streaming')}
@@ -2104,7 +2171,8 @@ export function GlobalSearchPanel({
                         </div>
                       </div>
                     ) : null}
-                    {assistantStatus === 'done' && followUps.length > 0 ? (
+                    {assistantStatus === 'done' &&
+                    (followUps.length > 0 || (entryPreference.aiSuggestions && assistantConfig)) ? (
                       <div className="global-search-follow-ups">
                         <div className="global-search-suggestions-heading">
                           <p className="global-search-section-label">
@@ -2121,19 +2189,24 @@ export function GlobalSearchPanel({
                             </button>
                           ) : null}
                         </div>
-                        <div className="global-search-suggestions">
-                          {followUps.map((item) => (
-                            <button
-                              className="global-search-suggestion is-follow-up"
-                              type="button"
-                              key={item}
-                              onClick={() => sendSuggestion(item)}
-                            >
-                              <MaterialSymbol name={pickSuggestionIcon(item)} aria-hidden="true" />
-                              <span>{item}</span>
-                            </button>
-                          ))}
-                        </div>
+                        {followUps.length > 0 ? (
+                          <div className="global-search-suggestions">
+                            {followUps.map((item) => (
+                              <button
+                                className="global-search-suggestion is-follow-up"
+                                type="button"
+                                key={item}
+                                onClick={() => sendSuggestion(item)}
+                              >
+                                <MaterialSymbol
+                                  name={pickSuggestionIcon(item)}
+                                  aria-hidden="true"
+                                />
+                                <span>{item}</span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                     {followUpStatus === 'loading' ? (
@@ -2242,6 +2315,20 @@ export function GlobalSearchPanel({
                               </Link>
                             ))}
                           </div>
+                        ) : fallbackEntries.length > 0 ? (
+                          <div className="global-search-fallback-list">
+                            {fallbackEntries.map((entry) => (
+                              <Link
+                                className="global-search-fallback-item"
+                                href={appPath(entry.href)}
+                                key={entry.key}
+                                onClick={close}
+                              >
+                                <strong>{entry.title}</strong>
+                                {entry.detail ? <small>{entry.detail}</small> : null}
+                              </Link>
+                            ))}
+                          </div>
                         ) : (
                           <p>{t('globalSearch.docsFallbackEmpty')}</p>
                         )}
@@ -2258,7 +2345,7 @@ export function GlobalSearchPanel({
                       </section>
                     ) : null}
                   </>
-                ) : (
+                ) : !trimmedQuery ? null : (
                   <section className="global-search-results">
                     <div className="global-search-results-heading">
                       <h2>{t('globalSearch.liveResults')}</h2>
@@ -2887,6 +2974,65 @@ async function readJson<T>(response: Response): Promise<T | undefined> {
   } catch {
     return undefined;
   }
+}
+
+interface FallbackEntry {
+  key: string;
+  title: string;
+  detail?: string;
+  href: string;
+}
+
+/** 复制回答时去掉 ```ui 指令块，只复制用户能读的正文。 */
+function stripUiBlocks(text: string): string {
+  return text
+    .replace(/```\s*ui[^\n]*\n[\s\S]*?```/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/** 问一问不可用时的站内兜底：优先地点，其次班次、公告与 Wiki。 */
+function buildFallbackEntries(results: SearchResults): FallbackEntry[] {
+  const entries: FallbackEntry[] = [];
+
+  for (const marker of results.poi.slice(0, 2)) {
+    entries.push({
+      key: `poi-${marker.id}`,
+      title: marker.label,
+      detail: marker.address ?? marker.secondaryLabel,
+      href: buildMapMarkerHref(marker),
+    });
+  }
+
+  for (const trip of results.schedules.slice(0, 1)) {
+    const keyword = trip.tripCode ?? trip.lineName ?? '';
+    entries.push({
+      key: `trip-${keyword}`,
+      title: formatTripTitle(trip),
+      detail: formatTripSummary(trip),
+      href: `/travel/schedules?q=${encodeURIComponent(keyword)}`,
+    });
+  }
+
+  for (const item of results.operations.slice(0, 1)) {
+    entries.push({
+      key: `operation-${item.id}`,
+      title: item.title,
+      detail: item.excerpt,
+      href: `/operations/${encodeURIComponent(item.id)}`,
+    });
+  }
+
+  for (const item of results.wiki.slice(0, 1)) {
+    entries.push({
+      key: `wiki-${item.href}`,
+      title: item.title,
+      detail: item.snippet,
+      href: item.href,
+    });
+  }
+
+  return entries.slice(0, 3);
 }
 
 async function consumeAssistantStream(

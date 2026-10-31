@@ -10,7 +10,6 @@ import {
   shouldStayInWorkspace,
 } from './material-workspaces';
 import { readPublicMapMarkerSnapshot } from '../map-marker-public-snapshot-store';
-import { listPublishedMaterialTemplates } from '../material-workflow';
 import { readOperationsFeed, readOperationDetail } from '../operations-content';
 import {
   findSpatialMarker,
@@ -62,6 +61,8 @@ export interface AssistantReference {
   snippet?: string;
   /** 线路/地点自身的标识色，用于引用 chip 着色。 */
   color?: string;
+  /** 后台为 POI 分类配置的语义色，只用于回答里的卡片着色。 */
+  cardColor?: string;
   /** 语义类型：line / station / place / operation / service / faq / wiki / social / page / schedule。 */
   tone?: string;
   /** 只给模型看的正文摘录，不进入前端引用 chip。 */
@@ -197,6 +198,17 @@ export async function buildAssistantRetrieval(
       ? categoriesResult.value.map((category) => [category.id, category.name])
       : [],
   );
+  // 后台可为 POI 分类配置语义色；引用带上它，问一问的地点卡和引用 chip 才能和地图一致。
+  const categoryColors = new Map<string, string>();
+  if (categoriesResult.status === 'fulfilled') {
+    for (const category of categoriesResult.value) {
+      if (category.color) {
+        categoryColors.set(category.id, category.color);
+      }
+    }
+  }
+  const resolveCategoryColor = (categoryId: string | undefined) =>
+    categoryId ? categoryColors.get(categoryId) : undefined;
 
   const highlights = options.highlights ?? [];
   const workspaceId = resolveMaterialWorkspace(options.pathname);
@@ -244,6 +256,9 @@ export async function buildAssistantRetrieval(
 
     const templatePattern =
       workspaceId === 'road-materials' ? /路牌|地址牌|门牌/ : /公交|地铁|导视|站牌|线路图|站名/;
+    // 物料模板的渲染链会加载 @resvg/resvg-js 这类原生模块，
+    // 只在物料工作台内按需引入，避免普通问答也把图片渲染依赖带进路由。
+    const { listPublishedMaterialTemplates } = await import('../material-workflow');
     const templates = (await listPublishedMaterialTemplates())
       .filter((item) => templatePattern.test(item.template.title))
       .slice(0, 12);
@@ -609,6 +624,7 @@ export async function buildAssistantRetrieval(
             ]
               .filter(Boolean)
               .join(' · '),
+            cardColor: resolveCategoryColor(item.categoryId),
             tone: 'place',
           });
         }
@@ -651,6 +667,7 @@ export async function buildAssistantRetrieval(
             snippet: [item.categoryLabel, `距${anchor.label} ${item.distance} 格`, item.address]
               .filter(Boolean)
               .join(' · '),
+            cardColor: resolveCategoryColor(item.categoryId),
             tone: 'place',
           });
         }
@@ -909,6 +926,7 @@ export async function buildAssistantRetrieval(
         href: `/map?marker=${encodeURIComponent(marker.id)}`,
         asOf: markersResult.value.snapshot.fetchedAt,
         color: marker.accentColor,
+        cardColor: resolveCategoryColor(marker.categoryId),
         tone: 'place',
         snippet: buildMarkerSnippet(marker, categoryNames, locale),
       });
@@ -1185,14 +1203,22 @@ export function rankSearchMatches<T>(
   const synonymCandidates = options.extraCandidates ?? [];
   const sourceItems = options.filter ? items.filter(options.filter) : items;
   const scored = sourceItems.map((item) => {
-    const haystack = buildSearchHaystack(getValues(item));
+    const values = getValues(item);
+    const haystack = buildSearchHaystack(values);
+    // 约定第一个字段是标题：标题命中单独加权，避免“简介里提到一次”压过真正的实体。
+    const titleHaystack = buildSearchHaystack(values.slice(0, 1));
+    const titleScore = Math.max(
+      matchScore(titleHaystack, candidates, 200),
+      scoreSearchMatch(titleHaystack, keywordQuery) * 2,
+    );
     // 与站内搜索保持一致：整串（或去掉疑问词后的关键词）命中优先级最高。
     const directScore = matchScore(haystack, candidates, 100);
     // 用户原话里的关键词比“口语词映射出的分类名”更贴近意图，权重更高。
     const tokenScore = matchScore(haystack, keywordTokens, 80);
     const synonymScore = matchScore(haystack, synonymCandidates, 60);
-    const score = Math.max(directScore, scoreSearchMatch(haystack, keywordQuery));
+    const score = Math.max(titleScore, directScore, scoreSearchMatch(haystack, keywordQuery));
     const looseScore = Math.max(
+      titleScore,
       directScore,
       tokenScore,
       synonymScore,
