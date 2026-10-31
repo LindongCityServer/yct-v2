@@ -2,10 +2,11 @@
   "family": "Material Symbols Outlined",
   "axes": "opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
   "source": "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200",
-  "iconCount": 364,
+  "iconCount": 370,
   "icons": [
     "accessible",
     "accessible_forward",
+    "account_balance",
     "account_circle",
     "account_tree",
     "active",
@@ -182,6 +183,7 @@
     "list_alt",
     "loading",
     "local_fire_department",
+    "local_hospital",
     "local_library",
     "local_parking",
     "local_police",
@@ -236,7 +238,9 @@
     "person_pin_circle",
     "person_remove",
     "pets",
+    "photo_camera",
     "pin_drop",
+    "place",
     "plain",
     "play_circle",
     "poi",
@@ -300,6 +304,7 @@
     "space_dashboard",
     "split_scene",
     "sports",
+    "sports_soccer",
     "stadium",
     "stairs",
     "star",
@@ -359,6 +364,7 @@
     "visibility_off",
     "waiting",
     "warning",
+    "water",
     "wc",
     "web",
     "west",
@@ -369,5 +375,5 @@
     "woman",
     "women"
   ],
-  "fontBytes": 267364
+  "fontBytes": 272148
 }
