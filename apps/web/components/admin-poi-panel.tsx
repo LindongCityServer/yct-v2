@@ -7449,6 +7449,8 @@ interface PoiCategoryDraft {
   sortOrder: number;
   defaultIconFileName: string;
   iconFileNamesText: string;
+  /** 地图区域标记的语义色；留空表示沿用内置分类色。 */
+  color: string;
 }
 
 function AdminPoiIconPicker({
@@ -7640,6 +7642,14 @@ function PoiCategoryProfileDialog({
       });
       if (invalidDraft) {
         setLocalStatus(`分类 ${invalidDraft.id || '未命名'} 必须先配置至少一个真实图标文件。`);
+        return;
+      }
+      const invalidColor = drafts.find(
+        (draft) =>
+          draft.color.trim() && !/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(draft.color.trim()),
+      );
+      if (invalidColor) {
+        setLocalStatus(`分类 ${invalidColor.id} 的地图色必须是 #RRGGBB 或 #RRGGBBAA。`);
         return;
       }
       const payload = {
@@ -7844,6 +7854,7 @@ function PoiCategoryProfileDialog({
                     sortOrder: 20,
                     defaultIconFileName: '',
                     iconFileNamesText: '',
+                    color: '',
                   },
                 ])
               }
@@ -7878,6 +7889,22 @@ function PoiCategoryProfileDialog({
                     updateDraft(draft.id, { sortOrder: Number(event.currentTarget.value) })
                   }
                 />
+              </label>
+              <label className="admin-poi-category-color">
+                <span>地图色</span>
+                <span className="admin-poi-category-color-field">
+                  <input
+                    value={draft.color}
+                    placeholder="#3f8f5b"
+                    onChange={(event) =>
+                      updateDraft(draft.id, { color: event.currentTarget.value })
+                    }
+                  />
+                  <span
+                    aria-hidden="true"
+                    style={{ backgroundColor: draft.color.trim() || '#9aa8a4' }}
+                  />
+                </span>
               </label>
               <label>
                 <span>默认图标</span>
@@ -9425,6 +9452,7 @@ function createCategoryDrafts(categories: PoiCategory[]): PoiCategoryDraft[] {
       sortOrder: category.sortOrder,
       defaultIconFileName: category.iconMapping.defaultIconFileName,
       iconFileNamesText: category.iconMapping.iconFileNames.join('\n'),
+      color: category.color ?? '',
     }));
 }
 
@@ -9444,6 +9472,7 @@ function categoryDraftToInput(draft: PoiCategoryDraft): PoiCategory {
       defaultIconFileName,
       iconFileNames: normalizedIconFileNames,
     },
+    ...(draft.color.trim() ? { color: draft.color.trim() } : {}),
   };
 }
 

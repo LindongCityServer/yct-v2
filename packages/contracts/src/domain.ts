@@ -350,6 +350,8 @@ export interface PoiCategory {
   iconMapping: PoiIconMapping;
   acceptsPublicSubmissions: boolean;
   sortOrder: number;
+  /** 分类语义色（#RRGGBB），用于地图区域标记的填充与描边；缺省沿用内置分类色。 */
+  color?: string;
 }
 
 export type PoiVisibility = 'private' | 'public_pending_review' | 'public';

@@ -306,6 +306,7 @@ export const poiCategorySchema = z.object({
   iconMapping: poiIconMappingSchema,
   acceptsPublicSubmissions: z.boolean(),
   sortOrder: z.number().int().min(0).max(100_000),
+  color: colorWithAlphaSchema.optional(),
 });
 
 export const poiCategoryProfileUpdateSchema = z.object({

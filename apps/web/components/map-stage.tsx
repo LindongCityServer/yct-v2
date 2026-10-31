@@ -596,8 +596,14 @@ const mapAreaFillColorByCategory: Readonly<Record<string, string>> = {
   'tram-station': '#647e9e',
 };
 
-function getMapAreaFillColor(categoryId: string | undefined): string | undefined {
-  return categoryId ? mapAreaFillColorByCategory[categoryId] : undefined;
+function getMapAreaFillColor(
+  categoryId: string | undefined,
+  overrides?: ReadonlyMap<string, string>,
+): string | undefined {
+  if (!categoryId) {
+    return undefined;
+  }
+  return overrides?.get(categoryId) ?? mapAreaFillColorByCategory[categoryId];
 }
 
 const defaultRouteTransportModes: EnabledRouteTransportModes = {
@@ -2369,6 +2375,16 @@ export function MapStage() {
     routeResultActive,
     shapeMarkers,
   ]);
+  // 后台可为 POI 分类配置语义色；未配置时沿用内置分类色。
+  const areaColorByCategory = useMemo(() => {
+    const colors = new Map<string, string>();
+    for (const category of categoryResponse?.items ?? []) {
+      if (category.color) {
+        colors.set(category.id, category.color);
+      }
+    }
+    return colors;
+  }, [categoryResponse]);
   const rawProjectedShapePois = useMemo(
     () =>
       projectShapePoiMarkers(
@@ -2383,8 +2399,10 @@ export function MapStage() {
         ),
         // 区域填充由独立图层统一绘制；主图层只在卫星视图聚焦区域时保留填充。
         browseMode === 'satellite' && focusedMarkerId ? 0.18 : 0,
+        areaColorByCategory,
       ),
     [
+      areaColorByCategory,
       browseMode,
       focusedMarkerId,
       localizedTransitOverview?.lines,
@@ -2430,8 +2448,10 @@ export function MapStage() {
         ),
       ),
       0.18,
+      areaColorByCategory,
     ).filter((shape) => shape.isArea);
   }, [
+    areaColorByCategory,
     browseMode,
     focusedMarker,
     linearFeaturesVisible,
@@ -5809,7 +5829,10 @@ export function MapStage() {
                     '--marker-left': `${marker.left}px`,
                     '--marker-top': `${marker.top}px`,
                     // 选中描边与填充共用分类色，避免和分类图标的主色脱节。
-                    '--map-marker-accent-color': getMapAreaFillColor(marker.categoryId),
+                    '--map-marker-accent-color': getMapAreaFillColor(
+                      marker.categoryId,
+                      areaColorByCategory,
+                    ),
                   } as CSSProperties
                 }
                 title={t('map.overlay.markerTitle', {
@@ -12178,6 +12201,7 @@ function projectShapePoiMarkers(
   perspectiveEnabled = false,
   transitLineColorById: ReadonlyMap<string, string> = new Map(),
   defaultAreaFillOpacity = 0,
+  areaColorByCategory: ReadonlyMap<string, string> = new Map(),
 ): ProjectedShapePoi[] {
   if (size.width <= 0 || size.height <= 0) {
     return [];
@@ -12252,7 +12276,7 @@ function projectShapePoiMarkers(
         fillColor:
           marker.spatial?.style?.fillColor ??
           boundTransitLineColor ??
-          (isArea ? getMapAreaFillColor(marker.categoryId) : undefined),
+          (isArea ? getMapAreaFillColor(marker.categoryId, areaColorByCategory) : undefined),
         fillOpacity:
           marker.spatial?.style?.fillOpacity ?? (isArea ? defaultAreaFillOpacity : undefined),
         // 区域描边与填充同源：默认都取分类色，避免出现“蓝色填充 + 青色描边”的混搭。
@@ -12261,7 +12285,7 @@ function projectShapePoiMarkers(
           (isArea
             ? (marker.spatial?.style?.fillColor ??
               boundTransitLineColor ??
-              getMapAreaFillColor(marker.categoryId))
+              getMapAreaFillColor(marker.categoryId, areaColorByCategory))
             : boundTransitLineColor),
         strokeOpacity: marker.spatial?.style?.strokeOpacity,
         centerLeft: (labelAnchor ?? geometryCenter).left - perspectiveOffset * 0.45,
