@@ -22,10 +22,22 @@ export async function GET(request: NextRequest) {
   const entityId = parseOptionalFilter(url.searchParams.get('entityId'));
   const actorId = parseOptionalFilter(url.searchParams.get('actorId'));
   const search = parseOptionalFilter(url.searchParams.get('search'));
-  const records = await listOutboxEvents({ limit, status, type, entityId, actorId, search });
+  const offset = parseOffset(url.searchParams.get('offset'));
+  const { items, total } = await listOutboxEvents({
+    limit,
+    offset,
+    status,
+    type,
+    entityId,
+    actorId,
+    search,
+  });
 
   return NextResponse.json({
-    items: records.map((record) => ({
+    total,
+    limit,
+    offset,
+    items: items.map((record) => ({
       eventId: record.eventId,
       type: record.type,
       status: record.status,
@@ -49,6 +61,11 @@ function parseLimit(value: string | null): number {
 
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) ? parsed : 50;
+}
+
+function parseOffset(value: string | null): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
 function parseStatus(value: string | null): EventOutboxStatus | 'all' {

@@ -9,6 +9,8 @@ export interface AnalyticsOverviewFeature {
   id: string;
   users: number;
   penetration: number | null;
+  /** 与 series 日期轴对齐的每日功能活跃人数，缺失日期补 0。 */
+  trend: Array<{ day: string; users: number }>;
 }
 
 export interface AnalyticsOverviewTask {
@@ -60,13 +62,26 @@ export function buildAnalyticsOverview(input: {
     }
   }
 
-  const series = [...dayRows.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([day, rows]) => ({
-      day,
-      activeUsers: pickTotal(rows, analyticsMetricNames.activeUsers),
-      sessions: pickTotal(rows, analyticsMetricNames.sessions),
-    }));
+  const sortedEntries = [...dayRows.entries()].sort(([left], [right]) => left.localeCompare(right));
+  const series = sortedEntries.map(([day, rows]) => ({
+    day,
+    activeUsers: pickTotal(rows, analyticsMetricNames.activeUsers),
+    sessions: pickTotal(rows, analyticsMetricNames.sessions),
+  }));
+  const dayAxis = series.map((item) => item.day);
+
+  const featureTrends = new Map<string, Map<string, number>>();
+  for (const [day, rows] of sortedEntries) {
+    for (const row of rows) {
+      if (row.metric !== analyticsMetricNames.featureUsers) {
+        continue;
+      }
+
+      const points = featureTrends.get(row.dimension) ?? new Map<string, number>();
+      points.set(day, row.value);
+      featureTrends.set(row.dimension, points);
+    }
+  }
 
   const latestDay = series.at(-1)?.day;
   const latestRows = latestDay ? (dayRows.get(latestDay) ?? []) : [];
@@ -88,11 +103,18 @@ export function buildAnalyticsOverview(input: {
           errorRate: pickTotal(latestRows, analyticsMetricNames.errorRate),
           features: latestRows
             .filter((row) => row.metric === analyticsMetricNames.featureUsers)
-            .map((row) => ({
-              id: row.dimension,
-              users: row.value,
-              penetration: featureRates.get(row.dimension) ?? null,
-            }))
+            .map((row) => {
+              const points = featureTrends.get(row.dimension);
+              return {
+                id: row.dimension,
+                users: row.value,
+                penetration: featureRates.get(row.dimension) ?? null,
+                trend: dayAxis.map((day) => ({
+                  day,
+                  users: points?.get(day) ?? 0,
+                })),
+              };
+            })
             .sort((left, right) => right.users - left.users),
           tasks: latestRows
             .filter((row) => row.metric === analyticsMetricNames.taskSuccessRate)

@@ -120,6 +120,37 @@ export interface DailyMetricRow {
   value: number;
 }
 
+export interface AnalyticsEventQuery {
+  project: AnalyticsProject;
+  eventName?: string;
+  route?: string;
+  userId?: string;
+  fromDay?: string;
+  toDay?: string;
+  limit: number;
+  offset: number;
+}
+
+export interface AnalyticsEventListItem {
+  eventId: string;
+  eventName: string;
+  occurredAt: string;
+  receivedAt: string;
+  day: string;
+  route?: string;
+  locale?: string;
+  embedHost?: string;
+  userId?: string;
+  clientId: string;
+  sessionId: string;
+  properties: Record<string, unknown>;
+}
+
+export interface AnalyticsEventPage {
+  items: AnalyticsEventListItem[];
+  total: number;
+}
+
 export interface AnalyticsStore {
   /** 幂等写入，返回实际新增的行数。 */
   append(events: AnalyticsEventRecord[]): Promise<number>;
@@ -136,6 +167,8 @@ export interface AnalyticsStore {
   purgeBefore(input: { day: string; project: AnalyticsProject }): Promise<number>;
   /** 已生成指标的最早日期，用于限制清理范围。 */
   findEarliestMetricDay(project: AnalyticsProject): Promise<string | undefined>;
+  /** 分页查询原始行为事件，供后台明细使用。 */
+  listEvents(query: AnalyticsEventQuery): Promise<AnalyticsEventPage>;
 }
 
 export interface DailyMetricsFile {

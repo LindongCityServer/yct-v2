@@ -64,16 +64,18 @@ export async function listPendingOutboxEvents(limit = 50): Promise<EventOutboxRe
 export async function listOutboxEvents(
   input: {
     limit?: number;
+    offset?: number;
     status?: EventOutboxStatus | 'all';
     type?: string;
     entityId?: string;
     actorId?: string;
     search?: string;
   } = {},
-): Promise<EventOutboxRecord[]> {
-  const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
+): Promise<{ items: EventOutboxRecord[]; total: number }> {
+  const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
+  const offset = Math.max(input.offset ?? 0, 0);
   const snapshot = await readSnapshot();
-  return snapshot.records
+  const filtered = snapshot.records
     .filter(
       (record) =>
         (!input.status || input.status === 'all' || record.status === input.status) &&
@@ -82,8 +84,12 @@ export async function listOutboxEvents(
         matchesOutboxEventEntity(record, input.entityId) &&
         matchesOutboxEventSearch(record, input.search),
     )
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-    .slice(0, limit);
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+
+  return {
+    items: filtered.slice(offset, offset + limit),
+    total: filtered.length,
+  };
 }
 
 export async function markOutboxEventDispatched(

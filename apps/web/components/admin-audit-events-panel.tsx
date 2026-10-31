@@ -30,6 +30,8 @@ interface AdminUserDirectoryEntry {
   displayName: string;
 }
 
+const pageSize = 50;
+
 const auditStatusFilterOptions: Array<{ value: AdminAuditStatusFilter; label: string }> = [
   { value: 'all', label: '全部状态' },
   { value: 'queued', label: '待派发' },
@@ -47,6 +49,8 @@ export function AdminAuditEventsPanel() {
   const [actorFilter, setActorFilter] = useState('');
   const [searchText, setSearchText] = useState('');
   const [isBusy, setIsBusy] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
 
   const statusCounts = useMemo(
     () =>
@@ -90,8 +94,11 @@ export function AdminAuditEventsPanel() {
     }
   };
 
-  const loadAuditEvents = async () => {
-    const params = new URLSearchParams({ limit: '100' });
+  const loadAuditEvents = async (nextOffset = offset) => {
+    const params = new URLSearchParams({
+      limit: String(pageSize),
+      offset: String(nextOffset),
+    });
     if (statusFilter !== 'all') {
       params.set('status', statusFilter);
     }
@@ -121,6 +128,7 @@ export function AdminAuditEventsPanel() {
       });
       const data = (await response.json()) as {
         items?: AdminAuditEventRecord[];
+        total?: number;
         message?: string;
       };
       if (!response.ok) {
@@ -129,6 +137,8 @@ export function AdminAuditEventsPanel() {
       }
 
       setAuditEvents(data.items ?? []);
+      setTotal(data.total ?? 0);
+      setOffset(nextOffset);
       const filterSummary = describeAuditFilterSummary({
         status: statusFilter,
         type: typeFilter,
@@ -138,7 +148,7 @@ export function AdminAuditEventsPanel() {
       });
       setStatusText(
         data.items?.length
-          ? `已读取 ${data.items.length} 条审计事件${filterSummary ? ` · ${filterSummary}` : ''}`
+          ? `第 ${nextOffset + 1}-${nextOffset + data.items.length} 条 / 共 ${data.total ?? 0} 条${filterSummary ? ` · ${filterSummary}` : ''}`
           : filterSummary
             ? `当前筛选下暂无审计事件 · ${filterSummary}`
             : '暂无后台审计事件',
@@ -154,7 +164,7 @@ export function AdminAuditEventsPanel() {
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {
-      void loadAuditEvents();
+      void loadAuditEvents(0);
     }, 180);
 
     return () => window.clearTimeout(timerId);
@@ -171,19 +181,19 @@ export function AdminAuditEventsPanel() {
   return (
     <section className="module-panel admin-operations-panel" aria-labelledby="admin-audit-title">
       <div className="section-heading">
-        <h1 id="admin-audit-title">审计事件</h1>
+        <h1 id="admin-audit-title">领域事件</h1>
         <span className="muted">{statusText}</span>
       </div>
       <div className="admin-report-summary" aria-label="后台事件摘要">
-        <ReportMetric label="最近事件" value={auditEvents.length} />
-        <ReportMetric label="待派发" value={statusCounts.queued} />
+        <ReportMetric label="筛选结果" value={total} />
+        <ReportMetric label="本页待派发" value={statusCounts.queued} />
         <ReportMetric
-          label="已派发"
+          label="本页已派发"
           value={statusCounts.dispatched}
           tone={statusCounts.dispatched > 0 ? 'ok' : undefined}
         />
         <ReportMetric
-          label="失败"
+          label="本页失败"
           value={statusCounts.failed}
           tone={statusCounts.failed > 0 ? 'warning' : undefined}
         />
@@ -193,7 +203,9 @@ export function AdminAuditEventsPanel() {
           <span>状态</span>
           <select
             value={statusFilter}
-            onChange={(event) => setStatusFilter(event.currentTarget.value as AdminAuditStatusFilter)}
+            onChange={(event) =>
+              setStatusFilter(event.currentTarget.value as AdminAuditStatusFilter)
+            }
           >
             {auditStatusFilterOptions.map((option) => (
               <option value={option.value} key={option.value}>
@@ -277,7 +289,7 @@ export function AdminAuditEventsPanel() {
             <p className="muted">
               {hasActiveFilters ? '当前筛选下暂无后台审计事件。' : '暂无后台审计事件。'}
             </p>
-            <button type="button" onClick={() => void loadAuditEvents()}>
+            <button type="button" onClick={() => void loadAuditEvents(0)}>
               重新读取
             </button>
             {hasActiveFilters ? (
@@ -287,6 +299,35 @@ export function AdminAuditEventsPanel() {
             ) : null}
           </div>
         ) : null}
+      </div>
+      <div className="admin-analytics-pagination">
+        <button
+          className="secondary-action-button"
+          type="button"
+          disabled={offset === 0 || isBusy}
+          onClick={() => void loadAuditEvents(Math.max(offset - pageSize, 0))}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            chevron_left
+          </span>
+          <span>上一页</span>
+        </button>
+        <span>
+          {total === 0
+            ? '共 0 条'
+            : `第 ${offset + 1}-${Math.min(offset + pageSize, total)} 条 / 共 ${total} 条`}
+        </span>
+        <button
+          className="secondary-action-button"
+          type="button"
+          disabled={offset + pageSize >= total || isBusy}
+          onClick={() => void loadAuditEvents(offset + pageSize)}
+        >
+          <span>下一页</span>
+          <span className="material-symbols-outlined" aria-hidden="true">
+            chevron_right
+          </span>
+        </button>
       </div>
     </section>
   );

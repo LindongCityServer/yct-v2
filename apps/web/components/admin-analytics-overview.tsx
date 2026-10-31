@@ -118,6 +118,9 @@ export function AdminAnalyticsOverview() {
           <thead>
             <tr>
               <th scope="col">功能</th>
+              <th scope="col" className="admin-analytics-trend-column">
+                趋势
+              </th>
               <th scope="col">活跃用户</th>
               <th scope="col">渗透率</th>
             </tr>
@@ -126,6 +129,9 @@ export function AdminAnalyticsOverview() {
             {features.map((item) => (
               <tr key={item.id}>
                 <td>{featureLabels[item.id] ?? item.id}</td>
+                <td className="admin-analytics-trend-column">
+                  <FeatureTrend points={item.trend} />
+                </td>
                 <td>{formatCount(item.users)}</td>
                 <td>{formatPercent(item.penetration)}</td>
               </tr>
@@ -146,6 +152,38 @@ export function AdminAnalyticsOverview() {
         </div>
       ) : null}
     </section>
+  );
+}
+
+/** 迷你趋势线：按每日活跃人数归一化绘制，缺失日期为 0。 */
+function FeatureTrend({ points }: { points: Array<{ day: string; users: number }> }) {
+  if (points.length < 2) {
+    return <span className="admin-analytics-spark-empty">—</span>;
+  }
+
+  const width = 96;
+  const height = 24;
+  const max = Math.max(1, ...points.map((point) => point.users));
+  const step = width / (points.length - 1);
+  const path = points
+    .map((point, index) => {
+      const x = index * step;
+      const y = height - (point.users / max) * (height - 4) - 2;
+      return `${index === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(' ');
+
+  return (
+    <svg
+      className="admin-analytics-spark"
+      viewBox={`0 0 ${width} ${height}`}
+      width={width}
+      height={height}
+      role="img"
+      aria-label="功能活跃趋势"
+    >
+      <path d={path} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
   );
 }
 

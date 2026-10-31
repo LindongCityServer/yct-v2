@@ -5,6 +5,7 @@ import {
   analyticsMetricNames,
   analyticsTaskFlows,
   isAnalyticsFeatureId,
+  type AnalyticsEventListItem,
   type AnalyticsEventRecord,
   type AnalyticsProject,
   type AnalyticsStore,
@@ -51,6 +52,13 @@ CREATE TABLE IF NOT EXISTS analytics_metric_daily (
 CREATE INDEX IF NOT EXISTS idx_analytics_metric_day
   ON analytics_metric_daily (project, day);
 `;
+
+/**
+ * 后台管理页面的浏览不计入活跃口径，避免管理员查看数据把指标抬高。
+ * 事件仍会入库，只是不参与 DAU、会话数与错误率的分母。
+ */
+const excludeAdminRouteClause =
+  "(route IS NULL OR (route <> '/admin' AND route NOT LIKE '/admin/%'))";
 
 interface AnalyticsDatabaseCache {
   path: string;
@@ -182,7 +190,7 @@ export function createAnalyticsStore(dbPath: string): AnalyticsStore {
              COUNT(DISTINCT COALESCE(user_id, client_id)) AS users,
              COUNT(DISTINCT session_id) AS sessions
            FROM analytics_event
-           WHERE day = ? AND project = ?`,
+           WHERE day = ? AND project = ? AND ${excludeAdminRouteClause}`,
         )
         .get(day, project) as unknown as CountRow | undefined;
 
@@ -210,7 +218,7 @@ export function createAnalyticsStore(dbPath: string): AnalyticsStore {
              COUNT(DISTINCT CASE WHEN event_name = 'error.client' THEN session_id END) AS error_sessions,
              COUNT(DISTINCT session_id) AS total_sessions
            FROM analytics_event
-           WHERE day = ? AND project = ?`,
+           WHERE day = ? AND project = ? AND ${excludeAdminRouteClause}`,
         )
         .get(day, project) as unknown as SessionErrorRow | undefined;
 
@@ -355,7 +363,97 @@ export function createAnalyticsStore(dbPath: string): AnalyticsStore {
 
       return row?.day ?? undefined;
     },
+
+    async listEvents(query) {
+      const db = getAnalyticsDatabase(dbPath);
+      const limit = Math.min(Math.max(Math.trunc(query.limit), 1), 200);
+      const offset = Math.max(Math.trunc(query.offset), 0);
+      const conditions = ['project = ?'];
+      const params: Array<string | number> = [query.project];
+
+      if (query.eventName) {
+        conditions.push('event_name = ?');
+        params.push(query.eventName);
+      }
+      if (query.route) {
+        conditions.push('route = ?');
+        params.push(query.route);
+      }
+      if (query.userId) {
+        conditions.push('user_id = ?');
+        params.push(query.userId);
+      }
+      if (query.fromDay) {
+        conditions.push('day >= ?');
+        params.push(query.fromDay);
+      }
+      if (query.toDay) {
+        conditions.push('day <= ?');
+        params.push(query.toDay);
+      }
+
+      const where = conditions.join(' AND ');
+      const totalRow = db
+        .prepare(`SELECT COUNT(*) AS total FROM analytics_event WHERE ${where}`)
+        .get(...params) as unknown as { total: number | bigint } | undefined;
+
+      const rows = db
+        .prepare(
+          `SELECT event_id, event_name, occurred_at, received_at, day, route, locale,
+                  embed_host, user_id, client_id, session_id, properties
+           FROM analytics_event
+           WHERE ${where}
+           ORDER BY received_at DESC, event_id DESC
+           LIMIT ? OFFSET ?`,
+        )
+        .all(...params, limit, offset) as unknown as Array<{
+        event_id: string;
+        event_name: string;
+        occurred_at: string;
+        received_at: string;
+        day: string;
+        route: string | null;
+        locale: string | null;
+        embed_host: string | null;
+        user_id: string | null;
+        client_id: string;
+        session_id: string;
+        properties: string;
+      }>;
+
+      const items: AnalyticsEventListItem[] = rows.map((row) => ({
+        eventId: row.event_id,
+        eventName: row.event_name,
+        occurredAt: row.occurred_at,
+        receivedAt: row.received_at,
+        day: row.day,
+        route: row.route ?? undefined,
+        locale: row.locale ?? undefined,
+        embedHost: row.embed_host ?? undefined,
+        userId: row.user_id ?? undefined,
+        clientId: row.client_id,
+        sessionId: row.session_id,
+        properties: parseEventProperties(row.properties),
+      }));
+
+      return { items, total: Number(totalRow?.total ?? 0) };
+    },
   };
+}
+
+function parseEventProperties(value: string): Record<string, unknown> {
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
 }
 
 /** 把记录转换为可用于断言的稳定结构，避免聚合结果受插入顺序影响。 */

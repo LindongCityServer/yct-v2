@@ -1,5 +1,5 @@
 import { SecondaryShell } from '../../../components/app-shell';
-import { AdminAuditEventsPanel } from '../../../components/admin-audit-events-panel';
+import { AdminEventLogPanel } from '../../../components/admin-event-log-panel';
 import { AdminSectionNavigation } from '../../../components/admin-section-navigation';
 import { getPageMetadata } from '../../../lib/site-metadata';
 
@@ -11,14 +11,14 @@ export async function generateMetadata() {
 export default function AdminAuditEventsPage() {
   return (
     <SecondaryShell
-      title="审计事件"
+      title="事件记录"
       backHref="/admin"
       desktopBackHref="/account"
       desktopNavigation={
         <AdminSectionNavigation currentPath="/admin/audit-events" includeOverview />
       }
     >
-      <AdminAuditEventsPanel />
+      <AdminEventLogPanel />
     </SecondaryShell>
   );
 }
