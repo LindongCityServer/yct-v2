@@ -3,6 +3,50 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.17.1",
+      "releasedAt": "2026-10-31T14:17:40.765Z",
+      "sourceFingerprint": "274ee93899a9d74c762ea2c3aa1ec637a7ee64ed30f9880f46a56b9ab2e7e4ca",
+      "themes": ["assistant", "admin", "map", "deploy", "search", "transit"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "问一问支持地点、线路与班次结构化卡片，条目可直接打开对应页面"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "问一问追问建议随主回答返回，AI 推荐改为点击后才生成，减少等待与模型调用"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "后台事件记录页合并领域事件与行为事件，数据概览新增功能活跃趋势"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "后台可为 POI 分类配置地图语义色，地图区域填充与描边跟随分类色"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复旧内容中文文件名图片在部署包中乱码导致线上 404"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "搜索与问一问铺底结果按标题优先排序，问一问不可用时仍展示站内相关地点、班次和公告"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "班次停站时长按分钟取整，单次批量新增上限放宽，避免浮点误差与大批量排班失败"
+        }
+      ],
+      "bump": "patch"
+    },
+    {
       "version": "2.17.0",
       "releasedAt": "2026-10-30T09:24:58.633Z",
       "sourceFingerprint": "80db0ef6c101794fc73f937f4fee98fa73df9f188d496cbe21fcc0d6957a31ac",
