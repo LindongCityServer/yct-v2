@@ -201,8 +201,7 @@ export function AdminTransitTripWorkbench({
       .map((trip) => {
         const tripDirection = resolveTripDirection(trip, nextLine, nameOfStation);
         const label = nextLine.tripLabelsByDirection?.[tripDirection]?.[trip.departureTime] ?? '';
-        const special =
-          nextLine.specialTripsByDirection?.[tripDirection]?.[trip.departureTime];
+        const special = nextLine.specialTripsByDirection?.[tripDirection]?.[trip.departureTime];
         return {
           clientId: trip.tripInstanceId,
           revisionId: sourceRevision?.revisionId ?? '',
@@ -1794,7 +1793,9 @@ function buildTripPayload(entry: WorkbenchEntry, line: TransitLineSnapshot) {
     departureDayOffset: toDayOffset(stop.departureMinutes),
     dwellMinutes:
       stop.isStop && stop.arrivalMinutes !== undefined && stop.departureMinutes !== undefined
-        ? Math.max(0, stop.departureMinutes - stop.arrivalMinutes)
+        ? // 区间用时可能是小数（如 2.4 分钟），浮点累加后停站时长会带出 1.0000000000000568
+          // 这类误差；服务端要求整数分钟，这里按分钟取整后再写入。
+          Math.max(0, Math.round(stop.departureMinutes - stop.arrivalMinutes))
         : undefined,
   }));
   const first = entry.stops[0];
@@ -1910,20 +1911,19 @@ function buildLinePayload(
   // 工作台没有覆盖到的方向沿用原特殊班次标注，避免保存后丢失。
   const resolvedSpecialTrips: Record<
     WorkbenchDirection,
-    Record<string, { serviceNature?: string; routeNote?: string; stationNames?: string[] }> | undefined
+    | Record<string, { serviceNature?: string; routeNote?: string; stationNames?: string[] }>
+    | undefined
   > = {
-    down:
-      coversDirection('down')
-        ? Object.keys(specialTripsByDirection.down).length
-          ? specialTripsByDirection.down
-          : undefined
-        : line.specialTripsByDirection?.down,
-    up:
-      coversDirection('up')
-        ? Object.keys(specialTripsByDirection.up).length
-          ? specialTripsByDirection.up
-          : undefined
-        : line.specialTripsByDirection?.up,
+    down: coversDirection('down')
+      ? Object.keys(specialTripsByDirection.down).length
+        ? specialTripsByDirection.down
+        : undefined
+      : line.specialTripsByDirection?.down,
+    up: coversDirection('up')
+      ? Object.keys(specialTripsByDirection.up).length
+        ? specialTripsByDirection.up
+        : undefined
+      : line.specialTripsByDirection?.up,
   };
 
   return {
@@ -2034,9 +2034,9 @@ function restrictStopsToSpecial(
   if (lastWantedIndex < 0) {
     return stops;
   }
-  return stops.slice(0, lastWantedIndex + 1).map((stop) =>
-    wanted.has(stop.stationName) ? { ...stop } : { ...stop, isStop: false },
-  );
+  return stops
+    .slice(0, lastWantedIndex + 1)
+    .map((stop) => (wanted.has(stop.stationName) ? { ...stop } : { ...stop, isStop: false }));
 }
 
 function inferServiceKind(

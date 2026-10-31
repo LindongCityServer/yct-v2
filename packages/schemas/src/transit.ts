@@ -357,7 +357,9 @@ export const travelScheduleTripBatchMutationSchema = z.object({
     )
     .max(500)
     .optional(),
-  creates: z.array(travelScheduleTripDraftSchema).max(200).optional(),
+  // 工作台一次提交整条线路的新增班次，单方向全天可达 100+ 班，
+  // 200 条会挡住双向同时追加的常规排班，这里放宽到 1000 条。
+  creates: z.array(travelScheduleTripDraftSchema).max(1000).optional(),
 });
 
 export const travelScheduleTripBatchApprovalSchema = z.object({
