@@ -25,6 +25,7 @@ export interface PlayerLocationSnapshot {
   lastSuccessfulSyncAt?: string;
   sourceStatus?: PlayerLocationSourceStatus;
   latencyMs?: number;
+  unavailableReason?: 'map_unavailable' | 'external_offline';
   locations: PlayerLocationRecord[];
 }
 
@@ -46,10 +47,7 @@ export interface PlayerLocationMergeResult {
   previousSourceStatus?: PlayerLocationSourceStatus;
 }
 
-export interface PlayerLocationAttemptResult {
-  snapshot: PlayerLocationSnapshot;
-  previousSourceStatus?: PlayerLocationSourceStatus;
-}
+export interface PlayerLocationAttemptResult extends PlayerLocationMergeResult {}
 
 const sourceId = 'bdslm-player-markers';
 const emptySnapshot: PlayerLocationSnapshot = {
@@ -68,11 +66,31 @@ export async function recordPlayerLocationAttempt(input: {
   attemptedAt: string;
   sourceStatus: PlayerLocationSourceStatus;
   latencyMs?: number;
+  unavailableReason?: PlayerLocationSnapshot['unavailableReason'];
 }): Promise<PlayerLocationAttemptResult> {
   return enqueueMutation(async () => {
     const snapshot = await readSnapshot();
-    const nextSnapshot = {
+    const presenceChanges: PlayerPresenceChange[] = [];
+    const locations = snapshot.locations.map((previous) => {
+      if (input.sourceStatus !== 'unavailable' || previous.presence === 'offline') return previous;
+      const current: PlayerLocationRecord = {
+        ...previous,
+        presence: 'offline',
+        observedAt: input.attemptedAt,
+        offlineSince: input.attemptedAt,
+      };
+      presenceChanges.push({ current, previousPresence: previous.presence });
+      return current;
+    });
+    const nextSnapshot: PlayerLocationSnapshot = {
       ...snapshot,
+      locations,
+      // A map outage must not erase an unresolved external-offline observation.
+      // Only a successful merge after positive MCBE evidence clears that latch.
+      unavailableReason:
+        snapshot.unavailableReason === 'external_offline'
+          ? 'external_offline'
+          : input.unavailableReason,
       lastAttemptAt: input.attemptedAt,
       sourceStatus: input.sourceStatus,
       latencyMs: input.latencyMs,
@@ -81,6 +99,8 @@ export async function recordPlayerLocationAttempt(input: {
     return {
       snapshot: nextSnapshot,
       previousSourceStatus: snapshot.sourceStatus,
+      changed: presenceChanges.length > 0,
+      presenceChanges,
     };
   });
 }
@@ -202,6 +222,11 @@ async function readSnapshot(): Promise<PlayerLocationSnapshot> {
       lastSuccessfulSyncAt: normalizeOptionalText(parsed.lastSuccessfulSyncAt),
       sourceStatus: normalizeSourceStatus(parsed.sourceStatus),
       latencyMs: normalizeLatency(parsed.latencyMs),
+      unavailableReason:
+        parsed.unavailableReason === 'map_unavailable' ||
+        parsed.unavailableReason === 'external_offline'
+          ? parsed.unavailableReason
+          : undefined,
       locations: Array.isArray(parsed.locations)
         ? parsed.locations.filter(isPlayerLocationRecord)
         : [],

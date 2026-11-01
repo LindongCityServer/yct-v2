@@ -81,6 +81,8 @@ export interface RuntimeConfig {
   unminedMapBaseUrl: string;
   markerBdslmBaseUrl?: string;
   markerBdslmTimeoutMs: number;
+  bedrockServerAddress: string;
+  bedrockStatusTimeoutMs: number;
   legacyDataSource: 'auto' | 'local' | 'remote';
   legacyDataDir?: string;
   legacyDataRemoteBaseUrl: string;
@@ -368,6 +370,9 @@ export function readRuntimeConfig(): RuntimeConfig {
     markerBdslmBaseUrl:
       emptyToUndefined(process.env.YCT_MARKER_BDSLM_BASE_URL) ?? 'http://ld.cmsy.xyz:19136',
     markerBdslmTimeoutMs: Number(process.env.YCT_MARKER_BDSLM_TIMEOUT_MS ?? 6000),
+    bedrockServerAddress:
+      emptyToUndefined(process.env.YCT_BEDROCK_SERVER_ADDRESS) ?? 'ld.cmsy.xyz:19132',
+    bedrockStatusTimeoutMs: parsePositiveInteger(process.env.YCT_BEDROCK_STATUS_TIMEOUT_MS, 5000),
     legacyDataSource: parseLegacyDataSource(process.env.YCT_LEGACY_DATA_SOURCE),
     legacyDataDir: resolveRuntimePath(process.env.YCT_LEGACY_DATA_DIR),
     legacyDataRemoteBaseUrl:
