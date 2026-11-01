@@ -15,7 +15,7 @@ export async function readOperationsServerStatus(): Promise<
       availability,
       checkedAt: result.checkedAt,
       latencyMs: result.status === 'ready' ? result.latencyMs : undefined,
-      onlinePlayerCount: result.status === 'ready' ? result.onlineCount : undefined,
+      onlinePlayerCount: result.status === 'not_configured' ? undefined : result.onlineCount,
     },
   };
 }

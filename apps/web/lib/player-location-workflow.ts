@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { BdslmMarkerProvider } from '@yct/adapters';
 import { publishDomainEvent } from './app-event-bus';
+import { readBedrockServerStatus } from './bedrock-server-status';
 import {
   mergePlayerLocationObservation,
   readPlayerLocationSnapshot,
   recordPlayerLocationAttempt,
   type PlayerLocationSnapshot,
+  type PlayerLocationMergeResult,
 } from './player-location-store';
 import { readRuntimeConfig } from './runtime-config';
 import { createTimedCache } from './server-cache';
@@ -29,9 +31,14 @@ export async function syncPlayerLocations(
   } = {},
 ): Promise<PlayerLocationSyncResult> {
   const config = readRuntimeConfig();
-  return playerLocationSyncCache.read(config.markerBdslmBaseUrl ?? 'not-configured', () =>
-    performPlayerLocationSync(config, input),
-  );
+  const key = JSON.stringify([
+    config.markerBdslmBaseUrl,
+    config.markerBdslmTimeoutMs,
+    config.bedrockServerAddress,
+    config.bedrockStatusTimeoutMs,
+    config.playerLocationStorePath,
+  ]);
+  return playerLocationSyncCache.read(key, () => performPlayerLocationSync(config, input));
 }
 
 async function performPlayerLocationSync(
@@ -66,41 +73,34 @@ async function performPlayerLocationSync(
   try {
     providerSnapshot = await provider.fetchMarkers('default');
   } catch {
-    const latencyMs = Date.now() - requestStartedAt;
-    const attemptResult = await recordPlayerLocationAttempt({
-      attemptedAt: checkedAt,
-      sourceStatus: 'unavailable',
-      latencyMs,
-    });
-    if (attemptResult.previousSourceStatus !== 'unavailable') {
-      await publishObservationEvent({
-        eventId: `event_${randomUUID()}`,
-        type: 'ServerStatusObserved',
-        occurredAt: checkedAt,
-        actor: {
-          type: input.actorType ?? 'adapter',
-          id: input.actorId?.trim() || provider.id,
-        },
-        payload: {
-          sourceId: provider.id,
-          observedAt: checkedAt,
-          availability: 'offline',
-          latencyMs,
-        },
-      });
-    }
-    return {
-      status: 'unavailable',
-      checkedAt,
-      latencyMs,
-      onlineCount: 0,
-      changed: false,
-      message: '实时玩家位置源暂不可用，已保留最后一次成功位置。',
-      snapshot: attemptResult.snapshot,
-    };
+    return recordUnavailable(
+      'map_unavailable',
+      '网页地图服务不可用，服务器离线；所有玩家已标为离线，保留最后位置。',
+    );
   }
 
   const latencyMs = Date.now() - requestStartedAt;
+  // The map HTTP endpoint is the primary probe. Only after it succeeds do we
+  // confirm the configured MCBE UDP address from an external observation point.
+  const external = await readBedrockServerStatus(
+    config.bedrockServerAddress,
+    config.bedrockStatusTimeoutMs,
+  );
+  if (external.availability === 'offline') {
+    return recordUnavailable(
+      'external_offline',
+      '网页地图在线，但 MCBE 服务器外网离线，不可访问；所有玩家已标为离线，保留最后位置。',
+    );
+  }
+  if (external.availability === 'unknown') {
+    const previous = await readPlayerLocationSnapshot();
+    if (previous.unavailableReason === 'external_offline') {
+      return recordUnavailable(
+        'external_offline',
+        'MCBE 服务器此前检测为外网离线，不可访问；第三方检测暂不可用，等待在线确认，玩家保持离线。',
+      );
+    }
+  }
   const observedAt = providerSnapshot.fetchedAt || checkedAt;
   const mergeResult = await mergePlayerLocationObservation({
     observedAt,
@@ -119,48 +119,10 @@ async function performPlayerLocationSync(
     }),
   });
 
-  if (mergeResult.changed) {
-    await publishObservationEvent({
-      eventId: `event_${randomUUID()}`,
-      type: 'PlayerLocationsObserved',
-      occurredAt: observedAt,
-      actor: {
-        type: input.actorType ?? 'adapter',
-        id: input.actorId?.trim() || provider.id,
-      },
-      payload: {
-        sourceId: provider.id,
-        observedAt,
-        onlinePlayerNames: mergeResult.snapshot.locations
-          .filter((location) => location.presence === 'online')
-          .map((location) => location.playerName),
-        onlineCount: mergeResult.snapshot.locations.filter(
-          (location) => location.presence === 'online',
-        ).length,
-      },
-    });
-  }
-
-  for (const change of mergeResult.presenceChanges) {
-    await publishObservationEvent({
-      eventId: `event_${randomUUID()}`,
-      type: 'PlayerLocationPresenceChanged',
-      occurredAt: observedAt,
-      actor: {
-        type: input.actorType ?? 'adapter',
-        id: input.actorId?.trim() || provider.id,
-      },
-      payload: {
-        playerName: change.current.playerName,
-        previousPresence: change.previousPresence,
-        presence: change.current.presence,
-        x: change.current.x,
-        z: change.current.z,
-        observedAt,
-        lastSeenAt: change.current.lastSeenAt,
-      },
-    });
-  }
+  await publishLocationChanges(mergeResult, observedAt, {
+    type: input.actorType ?? 'adapter',
+    id: input.actorId?.trim() || provider.id,
+  });
 
   const onlineCount = mergeResult.snapshot.locations.filter(
     (location) => location.presence === 'online',
@@ -189,9 +151,97 @@ async function performPlayerLocationSync(
     latencyMs,
     onlineCount,
     changed: mergeResult.changed,
-    message: `已记录 ${onlineCount} 个在线玩家位置。`,
+    message:
+      external.availability === 'unknown'
+        ? `网页地图在线，已记录 ${onlineCount} 个在线玩家位置；第三方 MCBE 检测暂不可用，尚未完成外网确认。`
+        : `已记录 ${onlineCount} 个在线玩家位置。`,
     snapshot: mergeResult.snapshot,
   };
+
+  async function recordUnavailable(
+    reason: NonNullable<PlayerLocationSnapshot['unavailableReason']>,
+    message: string,
+  ): Promise<PlayerLocationSyncResult> {
+    const observedAt = new Date().toISOString();
+    const latencyMs = Date.now() - requestStartedAt;
+    const result = await recordPlayerLocationAttempt({
+      attemptedAt: observedAt,
+      sourceStatus: 'unavailable',
+      latencyMs,
+      unavailableReason: reason,
+    });
+    const actor = {
+      type: input.actorType ?? 'adapter',
+      id: input.actorId?.trim() || provider.id,
+    } as const;
+    await publishLocationChanges(result, observedAt, actor);
+    if (result.previousSourceStatus !== 'unavailable') {
+      await publishObservationEvent({
+        eventId: `event_${randomUUID()}`,
+        type: 'ServerStatusObserved',
+        occurredAt: observedAt,
+        actor,
+        payload: {
+          sourceId: provider.id,
+          observedAt,
+          availability: 'offline',
+          latencyMs,
+          onlineCount: 0,
+        },
+      });
+    }
+    return {
+      status: 'unavailable',
+      checkedAt: observedAt,
+      latencyMs,
+      onlineCount: 0,
+      changed: result.changed,
+      message,
+      snapshot: result.snapshot,
+    };
+  }
+}
+
+async function publishLocationChanges(
+  result: PlayerLocationMergeResult,
+  observedAt: string,
+  actor: { type: 'system' | 'adapter'; id: string },
+): Promise<void> {
+  if (result.changed) {
+    await publishObservationEvent({
+      eventId: `event_${randomUUID()}`,
+      type: 'PlayerLocationsObserved',
+      occurredAt: observedAt,
+      actor,
+      payload: {
+        sourceId: result.snapshot.sourceId,
+        observedAt,
+        onlinePlayerNames: result.snapshot.locations
+          .filter((location) => location.presence === 'online')
+          .map((location) => location.playerName),
+        onlineCount: result.snapshot.locations.filter((location) => location.presence === 'online')
+          .length,
+      },
+    });
+  }
+
+  for (const change of result.presenceChanges) {
+    await publishObservationEvent({
+      eventId: `event_${randomUUID()}`,
+      type: 'PlayerLocationPresenceChanged',
+      occurredAt: observedAt,
+      actor,
+      payload: {
+        playerName: change.current.playerName,
+        previousPresence: change.previousPresence,
+        presence: change.current.presence,
+        x: change.current.x,
+        z: change.current.z,
+        observedAt,
+        lastSeenAt: change.current.lastSeenAt,
+      },
+    });
+  }
 }
 
 type ObservationEventInput = Parameters<typeof publishDomainEvent>[0];
