@@ -72,6 +72,17 @@ export function KeyboardShortcutBridge() {
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key === 'Escape' &&
+        (event.defaultPrevented ||
+          event.repeat ||
+          event.isComposing ||
+          event.altKey ||
+          event.ctrlKey ||
+          event.metaKey ||
+          event.shiftKey)
+      )
+        return;
       if (event.key === 'Escape' && shortcutDialogOpen) {
         event.preventDefault();
         setShortcutDialogOpen(false);

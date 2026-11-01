@@ -853,6 +853,7 @@ export function MapStage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const poiReturnFocusRef = useRef<HTMLElement | null>(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -3237,6 +3238,14 @@ export function MapStage() {
     mobileActionRail.registerItems('map-stage', mobileActionRailItems);
   }, [mobileActionRail, mobileActionRailItems]);
 
+  const closePoiDetails = useCallback(() => {
+    setFocusedMarkerId(null);
+    const origin = poiReturnFocusRef.current;
+    const target = origin?.isConnected && origin !== document.body ? origin : viewportRef.current;
+    target?.focus({ preventScroll: true });
+    poiReturnFocusRef.current = null;
+  }, []);
+
   // 快捷键处理函数随渲染更新，订阅只建立一次，避免弹层状态变化时反复解绑/重绑。
   const shortcutCommandRef = useRef<
     (
@@ -3322,7 +3331,7 @@ export function MapStage() {
       return;
     }
     if (focusedMarkerId) {
-      setFocusedMarkerId(null);
+      closePoiDetails();
       return;
     }
     if (selectedAdministrativeAreaId) {
@@ -3341,6 +3350,10 @@ export function MapStage() {
 
   const focusMapMarker = useCallback(
     (marker: CenterableMarker) => {
+      const origin = document.activeElement;
+      if (origin instanceof HTMLElement && !origin.closest('.map-poi-detail-panel')) {
+        poiReturnFocusRef.current = origin;
+      }
       setMapView((current) =>
         fitMarkerToMapView(marker, current, viewportSize, effectiveMapVisibleRect),
       );
@@ -4822,7 +4835,8 @@ export function MapStage() {
                 className="icon-action-button"
                 type="button"
                 aria-label={t('map.poi.close')}
-                onClick={() => setFocusedMarkerId(null)}
+                aria-keyshortcuts="Escape"
+                onClick={closePoiDetails}
               >
                 <span className="material-symbols-outlined" aria-hidden="true">
                   close
@@ -5290,6 +5304,7 @@ export function MapStage() {
       <div
         className="map-viewport"
         ref={viewportRef}
+        tabIndex={-1}
         aria-live="polite"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}

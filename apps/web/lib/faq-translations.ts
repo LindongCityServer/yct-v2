@@ -226,7 +226,7 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             answer: [
               '長按',
               { icon: 'keyboard', label: 'Ctrl' },
-              '可以開啟目前頁面可用的快捷鍵清單。地圖支援加號和減號縮放、斜線聚焦搜尋、數字 0 回到預設視圖；選取地點或開啟路線規劃後，清單還會顯示規劃路線、交換起終點等目前可執行操作。輸入文字時不會觸發地圖快捷鍵。',
+              '可以開啟目前頁面可用的快捷鍵清單。地圖支援加號和減號縮放、斜線聚焦搜尋、數字 0 回到預設視圖；選取地點或開啟路線規劃後，清單還會顯示規劃路線、交換起終點等目前可執行操作。輸入文字時不會觸發地圖快捷鍵。地圖地點詳情開啟時，按一次 Esc 可關閉詳情；若分享、全域搜尋或快捷鍵彈窗開啟，則先關閉上層彈窗。關閉詳情後，焦點會返回仍可用的原入口，否則返回地圖。',
             ],
             keywords: ['鍵盤', '快捷鍵', 'Ctrl', '搜尋', '縮放', '預設視圖', '交換起終點'],
           },
@@ -901,7 +901,7 @@ const faqCatalogs: Record<FaqTranslatedLocale, FaqCatalog> = {
             answer: [
               'Hold ',
               { icon: 'keyboard', label: 'Ctrl' },
-              ' to open the shortcuts available on the current page. On the map, plus and minus zoom the view, slash focuses search, and 0 resets the view; after selecting a place or opening route planning, the list also shows actions such as planning a route and swapping endpoints. Map shortcuts do not trigger while you are typing.',
+              ' to open the shortcuts available on the current page. On the map, plus and minus zoom the view, slash focuses search, and 0 resets the view; after selecting a place or opening route planning, the list also shows actions such as planning a route and swapping endpoints. Map shortcuts do not trigger while you are typing. Press Esc to close map place details. If a share, global search, or shortcut dialog is open, Esc closes that dialog first. After closing place details, focus returns to the original control when it is still available, or to the map.',
             ],
             keywords: [
               'keyboard',
