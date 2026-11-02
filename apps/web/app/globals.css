@@ -1829,6 +1829,87 @@ body .material-symbols-outlined {
   font-size: 20px;
 }
 
+/* 顶栏服务器状态胶囊：与首页状态面板共用同一份数据，只做轻量指示。 */
+.topbar-server-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--yct-space-2);
+  height: 30px;
+  padding: 0 var(--yct-space-3);
+  border: 1px solid var(--yct-color-border-subtle);
+  border-radius: var(--yct-radius-pill);
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.topbar-server-status-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--yct-color-text-muted);
+}
+
+.topbar-server-status.is-online .topbar-server-status-dot {
+  background: var(--yct-color-primary);
+}
+
+.topbar-server-status.is-offline .topbar-server-status-dot {
+  background: var(--yct-color-error);
+}
+
+.topbar-server-status.is-loading .topbar-server-status-dot {
+  background: var(--yct-color-tertiary);
+}
+
+.server-status-rail-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+}
+
+.server-status-rail-dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--yct-color-surface-panel);
+  border-radius: 50%;
+  background: var(--yct-color-text-muted);
+  box-sizing: content-box;
+}
+
+.server-status-rail-icon.is-online .server-status-rail-dot {
+  background: var(--yct-color-primary);
+}
+
+.server-status-rail-icon.is-offline .server-status-rail-dot {
+  background: var(--yct-color-error);
+}
+
+.server-status-rail-icon.is-loading .server-status-rail-dot {
+  background: var(--yct-color-tertiary);
+}
+
+@media (max-width: 900px) {
+  .topbar-server-status {
+    padding: 0 var(--yct-space-2);
+  }
+
+  .topbar-server-status-label {
+    display: none;
+  }
+}
+
 @media (max-width: 620px) {
   .hero-carousel-controls {
     right: var(--yct-space-3);
@@ -2920,6 +3001,11 @@ body .material-symbols-outlined {
 
 .map-route-plan-card:not(.is-collapsed) {
   grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+/* 规划中会额外渲染一条状态条；补一行，避免后续子元素整体错位把工具栏挤成 0 高。 */
+.map-route-plan-card:not(.is-collapsed):has(> .map-route-plan-loading) {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
 }
 
 .map-route-plan-card.is-collapsed {
@@ -19319,6 +19405,14 @@ div.telegraph-output-scene.is-packing {
   max-height: none;
 }
 
+/* 面板主体单独成行，避免提示段落与节点列表争抢同一网格行导致重叠 */
+.transit-visual-route-panel-body {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
 .transit-visual-route-panel-actions {
   display: flex;
   align-items: center;
@@ -31057,6 +31151,15 @@ dialog.client-dialog.is-page {
   opacity: 0.7;
 }
 
+.mobile-action-rail-button.is-readonly {
+  cursor: default;
+}
+
+.mobile-action-rail-button.is-readonly:is(:hover, :focus-visible) {
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+}
+
 .mobile-action-rail-badge {
   position: absolute;
   top: 5px;
@@ -33244,6 +33347,79 @@ dialog.client-dialog.is-page {
   font-size: 21px;
 }
 
+.transit-trip-rules {
+  display: grid;
+  gap: 4px;
+  max-height: 132px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.transit-trip-rule-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 28px 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--yct-color-border) 72%, transparent);
+  border-radius: 7px;
+  background: var(--yct-color-surface);
+}
+
+.transit-trip-rule-row.is-editing {
+  border-color: var(--yct-color-primary);
+}
+
+.transit-trip-rule-row code {
+  overflow: hidden;
+  color: var(--yct-color-text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transit-trip-rule-row .muted {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.transit-trip-rule-row button {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--yct-color-text-secondary);
+  cursor: pointer;
+}
+
+.transit-trip-rule-row button:hover,
+.transit-trip-rule-row button:focus-visible {
+  background: var(--yct-color-surface-muted);
+}
+
+.transit-trip-rule-row button.is-danger {
+  color: var(--yct-color-danger, #b42318);
+}
+
+.transit-trip-rule-row button > .material-symbols-outlined {
+  font-size: 17px;
+}
+
+.transit-trip-rule-badge {
+  flex: 0 0 auto;
+  padding: 3px 9px;
+  border-radius: var(--yct-radius-pill);
+  background: var(--yct-color-surface-selected);
+  color: var(--yct-color-primary-hover);
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
 .transit-trip-list {
   display: grid;
   align-content: start;
@@ -33401,6 +33577,11 @@ dialog.client-dialog.is-page {
   font-weight: 750;
 }
 
+.transit-trip-rule button.is-secondary {
+  background: var(--yct-color-surface-muted);
+  color: var(--yct-color-text);
+}
+
 .transit-trip-bottom .transit-visual-toolbar {
   position: static;
   width: 100%;
@@ -33462,6 +33643,10 @@ dialog.client-dialog.is-page {
 
 .transit-trip-pool-dialog {
   width: min(560px, 92vw);
+}
+
+.transit-trip-confirm-dialog {
+  width: min(520px, 92vw);
 }
 
 .transit-trip-pool-options {

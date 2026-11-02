@@ -8,9 +8,15 @@ import type {
   OperationsStrongReminderItem,
 } from '@yct/contracts';
 import Link from 'next/link';
-import type { CSSProperties } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import type { CSSProperties, RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { appPath } from '../lib/app-paths';
+import {
+  publishServerStatusPanelVisibility,
+  seedServerStatus,
+  subscribeServerStatus,
+  type ServerStatusDisplayState,
+} from '../lib/client-server-status';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { ProgressiveImage } from './progressive-image';
 import { TitleWithBreaks } from './title-with-breaks';
@@ -77,6 +83,9 @@ export function OperationsHome({
   const [carouselPaused, setCarouselPaused] = useState(false);
   const [motionReduced, setMotionReduced] = useState(false);
   const [currentServerStatus, setCurrentServerStatus] = useState(serverStatus);
+  const [serverStatusDisplayState, setServerStatusDisplayState] =
+    useState<ServerStatusDisplayState>(serverStatus.item?.availability ?? 'unknown');
+  const serverStatusPanelRef = useRef<HTMLAnchorElement>(null);
   const now = useMemo(() => Date.now(), []);
   const activeReminders = reminders.items;
 
@@ -139,29 +148,46 @@ export function OperationsHome({
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function refreshServerStatus() {
-      try {
-        const response = await fetch(appPath('/api/operations/server-status'), {
-          cache: 'no-store',
-        });
-        if (!response.ok) {
-          return;
-        }
-        const payload = (await response.json()) as ApiItemResponse<OperationsServerStatus>;
-        if (!cancelled && payload.item) {
-          setCurrentServerStatus(payload);
-        }
-      } catch {
-        // 保留最近一次明确状态，下一轮轮询会继续尝试。
+    seedServerStatus(serverStatus);
+    // 状态轮询由共享 store 统一负责，首页面板与顶栏胶囊共用同一次请求。
+    return subscribeServerStatus((snapshot) => {
+      if (snapshot.response) {
+        setCurrentServerStatus(snapshot.response);
       }
+      setServerStatusDisplayState(snapshot.displayState);
+    });
+  }, [serverStatus]);
+
+  useEffect(() => {
+    const element = serverStatusPanelRef.current;
+    if (!element) {
+      return undefined;
     }
 
-    const timer = window.setInterval(() => void refreshServerStatus(), 15_000);
+    // 顶栏会遮住视口上沿，用它的高度收缩观察区域，
+    // 面板被顶栏挡住时也算“没有完整可见”。
+    const topbarHeight =
+      document.querySelector<HTMLElement>('.topbar')?.offsetHeight ||
+      Number.parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue('--yct-topbar-height'),
+      ) ||
+      64;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry) {
+          return;
+        }
+        publishServerStatusPanelVisibility({
+          fullyVisible: entry.isIntersecting && entry.intersectionRatio >= 1,
+        });
+      },
+      { threshold: [0, 1], rootMargin: `-${topbarHeight}px 0px 0px 0px` },
+    );
+
+    observer.observe(element);
     return () => {
-      cancelled = true;
-      window.clearInterval(timer);
+      observer.disconnect();
+      publishServerStatusPanelVisibility({ fullyVisible: false });
     };
   }, []);
 
@@ -265,7 +291,12 @@ export function OperationsHome({
         </div>
       </section>
 
-      <ServerStatusPanel response={currentServerStatus} t={t} />
+      <ServerStatusPanel
+        displayState={serverStatusDisplayState}
+        response={currentServerStatus}
+        panelRef={serverStatusPanelRef}
+        t={t}
+      />
 
       <section className="feed-panel" aria-label={t('operations.feedAria')}>
         <div className="operations-feed-toolbar">
@@ -466,11 +497,18 @@ function ReminderTickerItem({
 }
 
 function ServerStatusPanel({
+  displayState,
   response,
+  panelRef,
   t,
-}: Readonly<{ response: ApiItemResponse<OperationsServerStatus>; t: Translate }>) {
+}: Readonly<{
+  displayState: ServerStatusDisplayState;
+  response: ApiItemResponse<OperationsServerStatus>;
+  panelRef: RefObject<HTMLAnchorElement | null>;
+  t: Translate;
+}>) {
   const status = response.item;
-  const availability = status?.availability ?? 'unknown';
+  const availability = displayState;
   const statusLabel =
     availability === 'online'
       ? t('operations.serverStatus.online')
@@ -484,6 +522,7 @@ function ServerStatusPanel({
       href={appPath('/map?category=player')}
       aria-label={t('operations.serverStatusAria')}
       title={t('operations.serverStatus.openPlayers')}
+      ref={panelRef}
     >
       <h2 className="server-status-title">{t('operations.serverStatus.title')}</h2>
       <div className="server-status-summary">

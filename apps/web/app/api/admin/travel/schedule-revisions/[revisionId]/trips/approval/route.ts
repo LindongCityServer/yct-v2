@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { travelScheduleTripBatchApprovalSchema } from '@yct/schemas';
 import { requireYctAdmin } from '../../../../../../../../lib/admin-auth';
 import { updateTravelScheduleTripsApprovalStatus } from '../../../../../../../../lib/travel-schedule-revision-workflow';
+import { formatValidationErrorMessage } from '../../../../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,7 @@ export async function POST(
     return NextResponse.json(
       {
         error: 'invalid_travel_schedule_trip_batch_approval',
-        message: '班次批量审批内容不符合要求。',
+        message: formatValidationErrorMessage('班次批量审批内容不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

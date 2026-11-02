@@ -5,6 +5,7 @@ import {
   listOperationsStrongReminderRules,
   updateOperationsStrongReminderRules,
 } from '../../../../../lib/operations-reminder-rule-workflow';
+import { formatValidationErrorMessage } from '../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +31,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_operations_reminder_rules',
-        message: '首页强提醒规则不符合要求。',
+        message: formatValidationErrorMessage('首页强提醒规则不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

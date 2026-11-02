@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { materialTemplateRevisionSchema } from '@yct/schemas';
 import { requireYctAdmin } from '../../../../../../../lib/admin-auth';
 import { createMaterialTemplateRevision } from '../../../../../../../lib/material-workflow';
+import { formatValidationErrorMessage } from '../../../../../../../lib/validation-error-message';
 
 interface RouteContext {
   params: Promise<{
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json(
       {
         error: 'invalid_material_template_revision',
-        message: '模板修订不符合要求。',
+        message: formatValidationErrorMessage('模板修订不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

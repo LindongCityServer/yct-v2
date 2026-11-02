@@ -217,12 +217,28 @@ export async function renamePoiCategoryIcon(input: {
 }> {
   const fileName = normalizePoiCategoryIconMetadataKey(input.iconFileName);
   const displayName = input.displayName.trim();
-  if (!fileName || !displayName || displayName.length > 80) {
+  if (!fileName) {
     return {
       ok: false,
       status: 400,
       error: 'invalid_poi_category_icon_name',
-      message: '图标显示名称不符合要求。',
+      message: '图标文件名不能为空，且不能超过 300 个字符或包含控制字符。',
+    };
+  }
+  if (!displayName) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'invalid_poi_category_icon_name',
+      message: '图标显示名称不能为空。',
+    };
+  }
+  if (displayName.length > 80) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'invalid_poi_category_icon_name',
+      message: '图标显示名称不能超过 80 个字符。',
     };
   }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { transitLineDraftSchema } from '@yct/schemas';
 import { requireYctAdmin } from '../../../../../../../lib/admin-auth';
 import { saveTransitLine } from '../../../../../../../lib/transit-data-workflow';
+import { formatTransitLineDraftError } from '../../../../../../../lib/transit-line-draft-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +21,7 @@ export async function POST(
     return NextResponse.json(
       {
         error: 'invalid_transit_line_create',
-        message: '线路新增内容不符合要求。',
+        message: formatTransitLineDraftError(parsed.error, 'create'),
         issues: parsed.error.issues,
       },
       { status: 400 },

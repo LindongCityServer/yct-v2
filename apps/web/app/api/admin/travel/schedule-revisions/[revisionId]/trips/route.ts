@@ -5,6 +5,7 @@ import {
   createTravelScheduleTrip,
   mutateTravelScheduleTrips,
 } from '../../../../../../../lib/travel-schedule-revision-workflow';
+import { formatValidationErrorMessage } from '../../../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,7 @@ export async function POST(
     return NextResponse.json(
       {
         error: 'invalid_travel_schedule_trip_create',
-        message: '班次新增内容不符合要求。',
+        message: formatValidationErrorMessage('班次新增内容不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },
@@ -65,7 +66,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         error: 'invalid_travel_schedule_trip_batch',
-        message: '班次批量保存内容不符合要求。',
+        message: formatValidationErrorMessage('班次批量保存内容不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

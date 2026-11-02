@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { transitStationDetailUpdateSchema } from '@yct/schemas';
 import { requireYctAdmin } from '../../../../../../../../../lib/admin-auth';
 import { updateTransitStationDetail } from '../../../../../../../../../lib/transit-data-workflow';
+import { formatValidationErrorMessage } from '../../../../../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         error: 'invalid_transit_station_detail_update',
-        message: '站内设施编辑内容不符合要求。',
+        message: formatValidationErrorMessage('站内设施编辑内容不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

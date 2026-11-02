@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { transitLineBatchApprovalSchema } from '@yct/schemas';
 import { requireYctAdmin } from '../../../../../../../../lib/admin-auth';
 import { updateTransitLineApprovalStatuses } from '../../../../../../../../lib/transit-data-workflow';
+import { formatValidationErrorMessage } from '../../../../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,7 @@ export async function POST(
     return NextResponse.json(
       {
         error: 'invalid_transit_line_batch_approval',
-        message: '线路批量审批内容不符合要求。',
+        message: formatValidationErrorMessage('线路批量审批内容不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

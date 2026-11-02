@@ -6,6 +6,7 @@ import {
   revokeUserPushSubscription,
 } from '../../../../lib/push-subscription-workflow';
 import { requireActiveLdpassUser } from '../../../../lib/user-auth';
+import { formatValidationErrorMessage } from '../../../../lib/validation-error-message';
 
 export async function GET(request: NextRequest) {
   const user = await requireActiveLdpassUser(request);
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_push_subscription',
-        message: 'Push 设备订阅不符合要求。',
+        message: formatValidationErrorMessage('Push 设备订阅不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },
@@ -59,7 +60,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_push_subscription_delete',
-        message: 'Push 设备订阅撤销请求不符合要求。',
+        message: formatValidationErrorMessage('Push 设备订阅撤销请求不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

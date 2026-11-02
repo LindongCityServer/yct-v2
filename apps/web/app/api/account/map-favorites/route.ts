@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { mapFavoritesSchema } from '@yct/schemas';
-import { readUserMapFavorites, updateUserMapFavorites } from '../../../../lib/map-favorite-workflow';
+import {
+  readUserMapFavorites,
+  updateUserMapFavorites,
+} from '../../../../lib/map-favorite-workflow';
 import { requireActiveLdpassUser } from '../../../../lib/user-auth';
+import { formatValidationErrorMessage } from '../../../../lib/validation-error-message';
 
 export async function GET(request: NextRequest) {
   const user = await requireActiveLdpassUser(request);
@@ -29,7 +33,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_map_favorites',
-        message: '地图收藏数据不符合要求。',
+        message: formatValidationErrorMessage('地图收藏数据不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

@@ -2,6 +2,7 @@ import { mapShareLinkCreateSchema } from '@yct/schemas';
 import { NextResponse } from 'next/server';
 import { appPath } from '../../../../lib/app-paths';
 import { createMapShareLink } from '../../../../lib/map-share-link-workflow';
+import { formatValidationErrorMessage } from '../../../../lib/validation-error-message';
 
 export const runtime = 'nodejs';
 
@@ -15,12 +16,18 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ message: '分享内容格式无效。' }, { status: 400 });
+    return NextResponse.json({ message: '分享内容不是合法的 JSON。' }, { status: 400 });
   }
 
   const parsed = mapShareLinkCreateSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ message: '分享内容不符合要求。' }, { status: 400 });
+    return NextResponse.json(
+      {
+        message: formatValidationErrorMessage('分享内容不符合要求', parsed.error),
+        issues: parsed.error.issues,
+      },
+      { status: 400 },
+    );
   }
 
   try {

@@ -5,6 +5,7 @@ import {
   listMaterialTransitNetworkProjectsForUser,
 } from '../../../../lib/material-transit-network-project-workflow';
 import { requireActiveLdpassUser } from '../../../../lib/user-auth';
+import { formatValidationErrorMessage } from '../../../../lib/validation-error-message';
 
 export async function GET(request: NextRequest) {
   const user = await requireActiveLdpassUser(request);
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_material_transit_network_project',
-        message: '导入的线网项目不符合要求。',
+        message: formatValidationErrorMessage('导入的线网项目不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

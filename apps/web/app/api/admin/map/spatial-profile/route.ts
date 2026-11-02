@@ -5,6 +5,7 @@ import {
   getMapSpatialProfile,
   updateMapSpatialProfile,
 } from '../../../../../lib/map-spatial-profile-workflow';
+import { formatValidationErrorMessage } from '../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +27,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_map_spatial_profile',
-        message: '地图空间设置不符合要求。',
+        message: formatValidationErrorMessage('地图空间设置不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

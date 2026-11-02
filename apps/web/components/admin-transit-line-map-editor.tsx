@@ -1376,7 +1376,7 @@ export function AdminTransitLineMapEditor({
           </div>
         </div>
         {routePanelCollapsed ? null : (
-          <>
+          <div className="transit-visual-route-panel-body">
             <p className="muted transit-visual-node-list-hint">
               拖动站点节点会修改车站共享坐标与默认 POI，影响停靠该站的所有线路；只想调整本线路停靠
               POI 时，请回到线路编辑弹窗的“本线路停靠 POI”设置。
@@ -1500,7 +1500,7 @@ export function AdminTransitLineMapEditor({
                 </div>
               ))}
             </div>
-          </>
+          </div>
         )}
       </aside>
 

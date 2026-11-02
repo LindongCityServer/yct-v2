@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { serviceEntryReviewDecisionSchema } from '@yct/schemas';
 import { requireYctAdmin } from '../../../../../../../lib/admin-auth';
 import { reviewServiceEntry } from '../../../../../../../lib/service-entry-workflow';
+import { formatValidationErrorMessage } from '../../../../../../../lib/validation-error-message';
 
 export async function POST(
   request: NextRequest,
@@ -18,7 +19,7 @@ export async function POST(
     return NextResponse.json(
       {
         error: 'invalid_service_entry_review',
-        message: '服务入口审核决定不符合要求。',
+        message: formatValidationErrorMessage('服务入口审核决定不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

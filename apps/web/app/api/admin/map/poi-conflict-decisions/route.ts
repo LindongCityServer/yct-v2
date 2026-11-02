@@ -5,6 +5,7 @@ import {
   listAdminPoiConflictDecisions,
   updatePoiConflictDecision,
 } from '../../../../../lib/poi-conflict-decision-workflow';
+import { formatValidationErrorMessage } from '../../../../../lib/validation-error-message';
 
 export async function GET(request: NextRequest) {
   const admin = await requireYctAdmin(request);
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_poi_conflict_decision',
-        message: 'POI 冲突提示决策不符合要求。',
+        message: formatValidationErrorMessage('POI 冲突提示决策不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

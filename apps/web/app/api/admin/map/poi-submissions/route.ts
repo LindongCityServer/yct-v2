@@ -12,6 +12,7 @@ import {
   listAdminPoiSubmissions,
 } from '../../../../../lib/poi-submission-workflow';
 import { listYctUserLinks } from '../../../../../lib/yct-user-link-store';
+import { formatValidationErrorMessage } from '../../../../../lib/validation-error-message';
 
 type AdminPoiSubmissionResponse = PoiSubmission & {
   imageMetadataByUrl?: Record<string, StoredPoiSubmissionImageMetadata>;
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_poi_submission_create',
-        message: '新增 POI 内容不符合要求。',
+        message: formatValidationErrorMessage('新增 POI 内容不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

@@ -15,6 +15,7 @@ import { createAnalyticsStore } from '../../../../lib/analytics/store';
 import { markResponseNoStore } from '../../../../lib/http-cache';
 import { resolveClientIp } from '../../../../lib/request-client-ip';
 import { readRuntimeConfig } from '../../../../lib/runtime-config';
+import { formatValidationErrorMessage } from '../../../../lib/validation-error-message';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
       NextResponse.json(
         {
           error: 'invalid_events',
-          message: '事件格式不符合要求。',
+          message: formatValidationErrorMessage('事件格式不符合要求', parsed.error),
           issues: parsed.error.issues,
         },
         { status: 400 },

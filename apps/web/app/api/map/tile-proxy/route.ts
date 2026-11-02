@@ -24,7 +24,12 @@ export async function GET(request: NextRequest) {
 
   if (!source || !z || !x || !y || !xd || !yd) {
     return NextResponse.json(
-      { meta: { status: 'error', message: '瓦片代理参数无效。' } },
+      {
+        meta: {
+          status: 'error',
+          message: '瓦片请求缺少有效参数：需要 source、z、x、y（可选 xd、yd）。',
+        },
+      },
       { status: 400 },
     );
   }

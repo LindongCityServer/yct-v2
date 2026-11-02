@@ -7,6 +7,7 @@ import { consumeMaterialExportRateLimit } from '../../../../lib/material-export-
 import { resolveClientIp } from '../../../../lib/request-client-ip';
 import { resolveClientIpLocation } from '../../../../lib/client-ip-location';
 import { yctEmbedSessionCookieName, yctSessionCookieName } from '../../../../lib/yct-session';
+import { formatValidationErrorMessage } from '../../../../lib/validation-error-message';
 
 export async function POST(request: NextRequest) {
   // 先解析请求体：匿名通道需要在鉴权前判断模式，非法 JSON 也必须回 400 而不是 500。
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest) {
     body = await request.json();
   } catch {
     return NextResponse.json(
-      { error: 'invalid_material_export', message: '物料导出参数不符合要求。' },
+      { error: 'invalid_material_export', message: '导出请求体不是合法的 JSON。' },
       { status: 400 },
     );
   }
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_material_export',
-        message: '物料导出参数不符合要求。',
+        message: formatValidationErrorMessage('物料导出参数不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

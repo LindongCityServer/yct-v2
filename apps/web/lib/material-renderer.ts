@@ -49,7 +49,9 @@ export function validateMaterialTemplateSource(
   }
   for (const match of normalized.matchAll(/{{([^}]+)}}/g)) {
     if (!isAllowedTemplateVariable(match[1], fields)) {
-      throw new MaterialTemplateSourceError(`模板变量 ${match[1]} 不符合要求。`);
+      throw new MaterialTemplateSourceError(
+        `模板变量 {{${match[1]}}} 不可用，请改用已登记的数据字段。`,
+      );
     }
   }
 }

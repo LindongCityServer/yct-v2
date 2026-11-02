@@ -3,6 +3,7 @@ import { poiSubmissionSchema } from '@yct/schemas';
 import { readPoiCategories, findPoiCategory } from '../../../../lib/poi-categories';
 import { submitPublicPoi } from '../../../../lib/poi-submission-workflow';
 import { requireVerifiedLdpassUser } from '../../../../lib/user-auth';
+import { formatValidationErrorMessage } from '../../../../lib/validation-error-message';
 
 export async function POST(request: NextRequest) {
   const user = await requireVerifiedLdpassUser(request);
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_poi_submission',
-        message: 'POI 投稿不符合要求。',
+        message: formatValidationErrorMessage('POI 投稿不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

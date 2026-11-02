@@ -5,6 +5,7 @@ import {
   listAdminPoiSubmissionImageReviews,
   updatePoiSubmissionImageReview,
 } from '../../../../../lib/poi-submission-image-review-workflow';
+import { formatValidationErrorMessage } from '../../../../../lib/validation-error-message';
 
 export async function GET(request: NextRequest) {
   const admin = await requireYctAdmin(request);
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_poi_submission_image_review',
-        message: 'POI 投稿图片审核状态不符合要求。',
+        message: formatValidationErrorMessage('POI 投稿图片审核状态不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

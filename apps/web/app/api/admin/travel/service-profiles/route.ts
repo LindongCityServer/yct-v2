@@ -5,6 +5,7 @@ import {
   listTravelServiceProfiles,
   updateTravelServiceProfiles,
 } from '../../../../../lib/travel-service-profile-workflow';
+import { formatValidationErrorMessage } from '../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +33,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_travel_service_profile',
-        message: '可排班服务配置不符合要求。',
+        message: formatValidationErrorMessage('可排班服务配置不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

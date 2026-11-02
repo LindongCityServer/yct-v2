@@ -6,6 +6,8 @@ import {
   saveTransitLine,
   updateTransitLineApprovalStatus,
 } from '../../../../../../../../lib/transit-data-workflow';
+import { formatTransitLineDraftError } from '../../../../../../../../lib/transit-line-draft-error';
+import { formatValidationErrorMessage } from '../../../../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +26,7 @@ export async function POST(
     return NextResponse.json(
       {
         error: 'invalid_transit_line_approval_action',
-        message: '线路审批动作不符合要求。',
+        message: formatValidationErrorMessage('线路审批动作不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },
@@ -67,7 +69,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         error: 'invalid_transit_line_update',
-        message: '线路编辑内容不符合要求。',
+        message: formatTransitLineDraftError(parsed.error, 'update'),
         issues: parsed.error.issues,
       },
       { status: 400 },

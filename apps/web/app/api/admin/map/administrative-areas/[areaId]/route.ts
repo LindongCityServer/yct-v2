@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { administrativeAreaUpsertSchema } from '@yct/schemas';
 import { requireYctAdmin } from '../../../../../../lib/admin-auth';
 import { updateAdministrativeArea } from '../../../../../../lib/administrative-area-workflow';
+import { formatValidationErrorMessage } from '../../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         error: 'invalid_administrative_area',
-        message: '行政区划内容不符合要求。',
+        message: formatValidationErrorMessage('行政区划内容不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

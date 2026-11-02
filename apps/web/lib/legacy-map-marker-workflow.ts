@@ -94,7 +94,7 @@ function invalidMarkerId(): LegacyMapMarkerActionResult {
     ok: false,
     status: 400,
     error: 'invalid_legacy_map_marker_id',
-    message: '旧有标记点 ID 不符合要求。',
+    message: '旧有标记点 ID 不能为空。',
   };
 }
 

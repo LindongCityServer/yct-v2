@@ -2081,6 +2081,16 @@ export function MapStage() {
               (nearbySearchScope === 'inside'),
           )
         : categoryFiltered;
+    // 玩家栏先排在线玩家，再排离线玩家；其他分类保持原有排序。
+    const presenceRank = (marker: CenterableMarker) => {
+      if (markerListCategoryId !== 'player') {
+        return 0;
+      }
+      if (marker.playerLocation?.presence === 'online') {
+        return 0;
+      }
+      return marker.playerLocation?.presence === 'offline' ? 1 : 2;
+    };
 
     if (queryMode) {
       return nearbyScopeFiltered
@@ -2091,7 +2101,9 @@ export function MapStage() {
         }))
         .sort(
           (left, right) =>
-            left.matchPriority - right.matchPriority || left.distance - right.distance,
+            left.matchPriority - right.matchPriority ||
+            presenceRank(left.marker) - presenceRank(right.marker) ||
+            left.distance - right.distance,
         )
         .map(({ marker }) => marker)
         .slice(0, 12);
@@ -2115,7 +2127,11 @@ export function MapStage() {
                 entry.projection.mileage <= rangeEnd,
               ),
           )
-          .sort((left, right) => left.projection.mileage - right.projection.mileage)
+          .sort(
+            (left, right) =>
+              presenceRank(left.marker) - presenceRank(right.marker) ||
+              left.projection.mileage - right.projection.mileage,
+          )
           .map(({ marker }) => marker)
           .slice(0, nearbyLinearResultLimit);
       }
@@ -2125,7 +2141,11 @@ export function MapStage() {
           marker,
           distance: getMarkerDistanceToCoordinates(marker, nearbySearchCenter.coordinates),
         }))
-        .sort((left, right) => left.distance - right.distance)
+        .sort(
+          (left, right) =>
+            presenceRank(left.marker) - presenceRank(right.marker) ||
+            left.distance - right.distance,
+        )
         .map(({ marker }) => marker)
         .slice(0, 12);
     }
@@ -2135,7 +2155,10 @@ export function MapStage() {
         marker,
         distance: getMarkerDistanceToMapCenter(marker, mapView),
       }))
-      .sort((left, right) => left.distance - right.distance)
+      .sort(
+        (left, right) =>
+          presenceRank(left.marker) - presenceRank(right.marker) || left.distance - right.distance,
+      )
       .map(({ marker }) => marker)
       .slice(0, 8);
   }, [

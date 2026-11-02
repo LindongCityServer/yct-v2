@@ -5,6 +5,7 @@ import {
   listTransitTripLabelPools,
   updateTransitTripLabelPools,
 } from '../../../../../lib/transit-trip-label-pool-workflow';
+import { formatValidationErrorMessage } from '../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +31,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_transit_trip_label_pool',
-        message: '班次标签池配置不符合要求。',
+        message: formatValidationErrorMessage('班次标签池配置不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

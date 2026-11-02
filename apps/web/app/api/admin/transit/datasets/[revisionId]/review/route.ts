@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { transitDataReviewDecisionSchema } from '@yct/schemas';
 import { requireYctAdmin } from '../../../../../../../lib/admin-auth';
 import { reviewTransitDataRevision } from '../../../../../../../lib/transit-data-workflow';
+import { formatValidationErrorMessage } from '../../../../../../../lib/validation-error-message';
 
 export async function POST(
   request: NextRequest,
@@ -18,7 +19,7 @@ export async function POST(
     return NextResponse.json(
       {
         error: 'invalid_transit_review_decision',
-        message: '交通数据审核结论不符合要求。',
+        message: formatValidationErrorMessage('交通数据审核结论不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

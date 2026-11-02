@@ -50,14 +50,17 @@ const transitLineSegmentPathSchema = z
     note: z.string().trim().max(120).optional(),
   })
   .superRefine((path, context) => {
+    // 途径点用于记录沿道路走行的几何；只配置区间分钟时允许为空，
+    // 由后台按地图道路补全路径（与 normalizeTransitLineSegmentPaths 的保留条件一致）。
     if (
       path.mode === 'road' &&
       path.waypoints.length === 0 &&
-      path.operationStatus === 'operating'
+      path.operationStatus === 'operating' &&
+      path.travelMinutes === undefined
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: '沿道路走行的站间路径至少需要 1 个途径点。',
+        message: '沿道路走行的站间路径至少需要 1 个途径点或一个区间运行分钟。',
         path: ['waypoints'],
       });
     }

@@ -5,6 +5,7 @@ import { publishDomainEvent } from '../../../../lib/app-event-bus';
 import { resolveClientIp } from '../../../../lib/request-client-ip';
 import { evaluateTelegraphDraft } from '../../../../lib/telegraph-domain';
 import { renderTelegraphPaper } from '../../../../lib/telegraph-renderer';
+import { formatValidationErrorMessage } from '../../../../lib/validation-error-message';
 
 export async function POST(request: NextRequest) {
   const parsed = telegraphRenderRequestSchema.safeParse(await request.json());
@@ -12,7 +13,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_telegraph_render',
-        message: '电报导出参数不符合要求。',
+        message: formatValidationErrorMessage('电报导出参数不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

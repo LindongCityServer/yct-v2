@@ -5,6 +5,7 @@ import {
   archiveLegacyMapMarkerByAdmin,
   updateLegacyMapMarkerByAdmin,
 } from '../../../../../../lib/legacy-map-marker-workflow';
+import { formatValidationErrorMessage } from '../../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         error: 'invalid_legacy_map_marker_update',
-        message: '旧有标记点更新内容不符合要求。',
+        message: formatValidationErrorMessage('旧有标记点更新内容不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

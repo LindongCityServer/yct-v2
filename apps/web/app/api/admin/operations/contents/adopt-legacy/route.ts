@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireYctAdmin } from '../../../../../../lib/admin-auth';
 import { adoptLegacyContent } from '../../../../../../lib/content-workflow';
+import { formatValidationErrorMessage } from '../../../../../../lib/validation-error-message';
 
 const adoptLegacyContentSchema = z.object({
   contentId: z.string().trim().min(1).max(240),
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_legacy_content_adoption',
-        message: '旧消息标识无效。',
+        message: formatValidationErrorMessage('旧消息标识无效', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

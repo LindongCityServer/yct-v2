@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireYctAdmin } from '../../../../../../lib/admin-auth';
 import { adminContentDraftSchema } from '../../../../../../lib/admin-content-draft-schema';
 import { updateContentDraft } from '../../../../../../lib/content-workflow';
+import { formatValidationErrorMessage } from '../../../../../../lib/validation-error-message';
 
 interface RouteContext {
   params: Promise<{
@@ -22,7 +23,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json(
       {
         error: 'invalid_content_draft',
-        message: '内容草稿不符合要求。',
+        message: formatValidationErrorMessage('内容草稿不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

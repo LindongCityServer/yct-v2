@@ -3,6 +3,7 @@
 import type {
   TicketableServiceKind,
   TransitDataRevision,
+  TransitDepartureScheduleRule,
   TransitLineSnapshot,
   TransitTripLabelPool,
   TravelScheduleRevision,
@@ -16,6 +17,7 @@ import { collectStopTravelTimes } from '../lib/transit-segment-minutes';
 import {
   getTransitTripLabelServiceDateKey,
   resolveTransitTripLabels,
+  type TransitTripLabelTripSource,
 } from '../lib/transit-trip-labels';
 import { SecondaryPageHeader } from './app-shell';
 import {
@@ -78,6 +80,26 @@ export interface WorkbenchEntry {
   materialize?: boolean;
   /** 已有班次是否被本次编辑修改过；未修改的保存时跳过。 */
   changed?: boolean;
+  /** 归属的批量规则；手工改过发车时刻后会解除归属。 */
+  ruleId?: string;
+  /** 曾由规则生成，但已手工改时刻脱离规则。 */
+  ruleDetached?: boolean;
+}
+
+/** 工作台内可管理的批量发车规则；规则文本随线路一起保存。 */
+interface WorkbenchRule {
+  id: string;
+  sourceText: string;
+  startTime: string;
+  intervalMinutes?: number;
+  additionalDepartures?: number;
+  /** 规则展开后的发车时刻，用于和班次建立归属关系。 */
+  departureTimes: string[];
+}
+
+interface WorkbenchSnapshot {
+  entries: WorkbenchEntry[];
+  rules: Record<WorkbenchDirection, WorkbenchRule[]>;
 }
 
 interface PoolConfig {
@@ -114,6 +136,13 @@ export function AdminTransitTripWorkbench({
   });
   const [poolDialogOpen, setPoolDialogOpen] = useState(false);
   const [ruleText, setRuleText] = useState('');
+  const [rules, setRules] = useState<Record<WorkbenchDirection, WorkbenchRule[]>>({
+    down: [],
+    up: [],
+  });
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [ruleDeleteTarget, setRuleDeleteTarget] = useState<WorkbenchRule | null>(null);
   const [status, setStatus] = useState('正在读取班次与线路数据');
   const [error, setError] = useState('');
   const [dirty, setDirty] = useState(false);
@@ -129,12 +158,13 @@ export function AdminTransitTripWorkbench({
   const chartHostRef = useRef<HTMLDivElement | null>(null);
   const tripRowRefs = useRef(new Map<string, HTMLDivElement>());
   const entriesRef = useRef<WorkbenchEntry[]>([]);
+  const rulesRef = useRef<Record<WorkbenchDirection, WorkbenchRule[]>>({ down: [], up: [] });
   const duplicateTripsRef = useRef<WorkbenchEntry[]>([]);
   // 加载时的班次快照：保存时用它反推“哪些真实班次被删掉”，撤销后自动回到未删除状态。
   const loadedRealTripKeysRef = useRef<Set<string>>(new Set());
   const loadedDirectionCountsRef = useRef<Record<WorkbenchDirection, number>>({ down: 0, up: 0 });
-  const undoStackRef = useRef<WorkbenchEntry[][]>([]);
-  const redoStackRef = useRef<WorkbenchEntry[][]>([]);
+  const undoStackRef = useRef<WorkbenchSnapshot[]>([]);
+  const redoStackRef = useRef<WorkbenchSnapshot[]>([]);
   const keyboardHandlerRef = useRef<(event: KeyboardEvent) => void>(() => undefined);
 
   const stationById = useMemo(
@@ -239,8 +269,12 @@ export function AdminTransitTripWorkbench({
 
     // 市内公交线路通常只有发车时刻规则、没有班次实例，
     // 这里把规则展开成待保存草稿，否则工作台会显示为空。
+    const loadedRules = buildLoadedRules(nextLine);
     const draftEntries: WorkbenchEntry[] = [];
-    if (sourceRevision && nextLine.departureTimesByDirection) {
+    if (
+      sourceRevision &&
+      (nextLine.departureTimesByDirection || nextLine.departureRulesByDirection)
+    ) {
       const downStationNames = nextLine.stationSourceIds.map(nameOfStation);
       const downSegments = resolveSegmentBaseMinutes({
         line: nextLine,
@@ -248,7 +282,11 @@ export function AdminTransitTripWorkbench({
         trips: existingEntries,
       });
       for (const value of ['down', 'up'] as const) {
-        const times = nextLine.departureTimesByDirection?.[value] ?? [];
+        // 时刻表是“已生效时刻”的唯一来源；只有旧数据完全没有分方向时刻字段时，
+        // 才按持久化规则展开，避免把用户删空的时刻又补回来。
+        const times = nextLine.departureTimesByDirection
+          ? (nextLine.departureTimesByDirection[value] ?? [])
+          : loadedRules[value].flatMap((rule) => rule.departureTimes);
         if (times.length === 0) {
           continue;
         }
@@ -306,7 +344,25 @@ export function AdminTransitTripWorkbench({
       down: toPoolConfig(nextLine.tripLabelConfigByDirection?.down),
       up: toPoolConfig(nextLine.tripLabelConfigByDirection?.up),
     };
-    const loadedEntries = [...existingEntries, ...draftEntries];
+    // 把班次和持久化规则按“方向 + 发车时刻”重新挂上归属关系；
+    // 同一时刻只归属第一条规则，避免重叠规则互相抢班次。
+    const ruleIdByTime = new Map<string, string>();
+    for (const value of ['down', 'up'] as const) {
+      for (const rule of loadedRules[value]) {
+        for (const time of rule.departureTimes) {
+          const key = `${value}|${time}`;
+          if (!ruleIdByTime.has(key)) {
+            ruleIdByTime.set(key, rule.id);
+          }
+        }
+      }
+    }
+    const loadedEntries = [...existingEntries, ...draftEntries].map((entry) => {
+      const entryDirection = resolveTripDirection(entry.trip, nextLine, nameOfStation);
+      const departure = toClockTime(firstDepartureOrUndefined(entry.stops));
+      const ruleId = departure ? ruleIdByTime.get(`${entryDirection}|${departure}`) : undefined;
+      return ruleId ? { ...entry, ruleId } : entry;
+    });
     // 标签随线路一起保存，重新打开时与保存前一致；改时刻后仍需重新分配。
     // 不在读取时重算自动标签，避免把用户手动删掉的标签又自动填回来。
 
@@ -315,6 +371,7 @@ export function AdminTransitTripWorkbench({
     setPools(labelPools);
     setScheduleRevisionId(sourceRevision?.revisionId ?? '');
     setEntries(loadedEntries);
+    setRules(loadedRules);
     loadedRealTripKeysRef.current = new Set(
       existingEntries
         .filter((entry) => !entry.isNew && entry.trip.tripInstanceId)
@@ -376,6 +433,28 @@ export function AdminTransitTripWorkbench({
       )
       .sort((left, right) => firstDeparture(left.stops) - firstDeparture(right.stops));
   }, [direction, entries, line, stationNameOf]);
+
+  const countDirectionDepartures = (value: WorkbenchDirection) => {
+    if (!line) {
+      return 0;
+    }
+    const times = new Set<string>();
+    for (const entry of entries) {
+      const entryDirection = resolveTripDirection(
+        { stationNames: entry.stops.map((stop) => stop.stationName), stopTimes: [] },
+        line,
+        stationNameOf,
+      );
+      if (entryDirection !== value) {
+        continue;
+      }
+      const time = toClockTime(firstDepartureOrUndefined(entry.stops));
+      if (time) {
+        times.add(time);
+      }
+    }
+    return times.size;
+  };
 
   // 运行图固定按线路正序排列站点，双向班次叠在同一张图上才能看出会车。
   const chartStationIds = useMemo(() => line?.stationSourceIds ?? [], [line]);
@@ -470,6 +549,10 @@ export function AdminTransitTripWorkbench({
   }, [entries]);
 
   useEffect(() => {
+    rulesRef.current = rules;
+  }, [rules]);
+
+  useEffect(() => {
     if (!selectedId) {
       return;
     }
@@ -485,8 +568,18 @@ export function AdminTransitTripWorkbench({
       stops: entry.stops.map((stop) => ({ ...stop })),
     }));
 
+  const cloneRules = (
+    value: Record<WorkbenchDirection, WorkbenchRule[]>,
+  ): Record<WorkbenchDirection, WorkbenchRule[]> => ({
+    down: value.down.map((rule) => ({ ...rule, departureTimes: [...rule.departureTimes] })),
+    up: value.up.map((rule) => ({ ...rule, departureTimes: [...rule.departureTimes] })),
+  });
+
   const pushHistory = () => {
-    undoStackRef.current.push(cloneEntries(entriesRef.current));
+    undoStackRef.current.push({
+      entries: cloneEntries(entriesRef.current),
+      rules: cloneRules(rulesRef.current),
+    });
     if (undoStackRef.current.length > 100) {
       undoStackRef.current.shift();
     }
@@ -498,8 +591,12 @@ export function AdminTransitTripWorkbench({
     if (!previous) {
       return;
     }
-    redoStackRef.current.push(cloneEntries(entriesRef.current));
-    setEntries(previous);
+    redoStackRef.current.push({
+      entries: cloneEntries(entriesRef.current),
+      rules: cloneRules(rulesRef.current),
+    });
+    setEntries(previous.entries);
+    setRules(previous.rules);
     setDirty(true);
     setError('');
   };
@@ -509,8 +606,12 @@ export function AdminTransitTripWorkbench({
     if (!next) {
       return;
     }
-    undoStackRef.current.push(cloneEntries(entriesRef.current));
-    setEntries(next);
+    undoStackRef.current.push({
+      entries: cloneEntries(entriesRef.current),
+      rules: cloneRules(rulesRef.current),
+    });
+    setEntries(next.entries);
+    setRules(next.rules);
     setDirty(true);
     setError('');
   };
@@ -624,6 +725,22 @@ export function AdminTransitTripWorkbench({
     }
     pushHistory();
     setEntries((current) => current.filter((item) => item.clientId !== clientId));
+    // 规则生成的最后一条班次被单独删除时，规则本身也失去意义，一并移除。
+    if (entry.ruleId) {
+      const stillOwned = entriesRef.current.some(
+        (item) => item.clientId !== clientId && item.ruleId === entry.ruleId,
+      );
+      if (!stillOwned) {
+        setRules((current) => ({
+          ...current,
+          [direction]: current[direction].filter((rule) => rule.id !== entry.ruleId),
+        }));
+        if (editingRuleId === entry.ruleId) {
+          setEditingRuleId(null);
+          setRuleText('');
+        }
+      }
+    }
     setSelectedId((current) => (current === clientId ? null : current));
     // 删除不会改变剩余班次的时刻，不需要强制重新分配标签；
     // 若删到一条不剩，也就没有标签可重排，避免保存被卡住。
@@ -654,12 +771,60 @@ export function AdminTransitTripWorkbench({
     );
   };
 
-  const appendDepartures = () => {
-    const parsed = parseDepartureRuleInput(ruleText);
-    if (parsed.error) {
-      setError(parsed.error);
-      return;
+  /** 按方向构造一个新班次；可带上要复制的性质与短交路经停站。 */
+  const buildEntryAtTime = (
+    value: WorkbenchDirection,
+    departureTime: string,
+    options: {
+      ruleId?: string;
+      copySavedLabel?: boolean;
+      serviceNature?: string;
+      shortTurnStationNames?: readonly string[];
+    } = {},
+  ): WorkbenchEntry | undefined => {
+    if (!line) {
+      return undefined;
     }
+    const departureMinutes = clockToMinutes(departureTime);
+    if (departureMinutes === undefined) {
+      return undefined;
+    }
+    const forwardStationNames = line.stationSourceIds.map(stationNameOf);
+    const stationNames =
+      value === 'down' ? forwardStationNames : [...forwardStationNames].reverse();
+    const segments = value === 'down' ? segmentMinutes : [...segmentMinutes].reverse();
+    const label =
+      options.copySavedLabel === false
+        ? ''
+        : (line.tripLabelsByDirection?.[value]?.[departureTime] ?? '');
+    const poolById = new Map(pools.map((pool) => [pool.id, pool]));
+    const baseStops = buildNewTripStops(stationNames, segments, departureMinutes);
+    return {
+      clientId: `new_${value}_${departureTime.replace(':', '')}_${Date.now().toString(
+        36,
+      )}_${Math.random().toString(36).slice(2, 6)}`,
+      revisionId: scheduleRevisionId,
+      trip: {
+        tripInstanceId: '',
+        serviceKind: inferServiceKind(line.mode, entriesRef.current[0]?.trip.serviceKind),
+        serviceLabel: '',
+        serviceNature: options.serviceNature,
+        departureTime,
+        lineName: line.name,
+        stationNames,
+        availability: 'ticketing_unavailable',
+      },
+      stops: options.shortTurnStationNames?.length
+        ? restrictStopsToSpecial(baseStops, options.shortTurnStationNames)
+        : baseStops,
+      label,
+      labelSource: resolveEntryLabelSource(label, poolConfigs[value].poolIds, poolById),
+      isNew: true,
+      ruleId: options.ruleId,
+    };
+  };
+
+  const appendDepartures = () => {
     if (!line) {
       return;
     }
@@ -667,44 +832,77 @@ export function AdminTransitTripWorkbench({
       setError('当前没有可写入的班次数据版本，请先在班次后台导入一次班次。');
       return;
     }
+    if (editingRuleId) {
+      saveRuleEdit(editingRuleId);
+      return;
+    }
+    const parsed = parseDepartureRuleLines(ruleText);
+    if (parsed.error) {
+      setError(parsed.error);
+      return;
+    }
     const existingTimes = new Set(
       directionEntries
         .map((entry) => toClockTime(firstDepartureOrUndefined(entry.stops)))
         .filter((value): value is string => Boolean(value)),
     );
+    const existingEntryByTime = new Map<string, WorkbenchEntry>();
+    for (const entry of directionEntries) {
+      const time = toClockTime(firstDepartureOrUndefined(entry.stops));
+      if (time && !existingEntryByTime.has(time)) {
+        existingEntryByTime.set(time, entry);
+      }
+    }
+    const existingRuleTimes = new Set(rules[direction].flatMap((rule) => rule.departureTimes));
+    const claimedRuleByClientId = new Map<string, string>();
     const nextEntries: WorkbenchEntry[] = [];
-    const poolById = new Map(pools.map((pool) => [pool.id, pool]));
-    for (const departureTime of parsed.departureTimes) {
-      if (existingTimes.has(departureTime)) {
-        continue;
+    const nextRules: WorkbenchRule[] = [];
+    for (const item of parsed.items) {
+      const isBatchRule =
+        item.intervalMinutes !== undefined && item.additionalDepartures !== undefined;
+      if (isBatchRule) {
+        const overlap = item.departureTimes.filter((time) => existingRuleTimes.has(time));
+        if (overlap.length > 0) {
+          setError(`规则与已有规则时刻重叠：${overlap.slice(0, 4).join('、')}`);
+          return;
+        }
       }
-      const departureMinutes = clockToMinutes(departureTime);
-      if (departureMinutes === undefined) {
-        continue;
+      const ruleId = isBatchRule
+        ? `rule_${direction}_${Date.now().toString(36)}_${nextRules.length}`
+        : undefined;
+      let addedCount = 0;
+      const claimedClientIds: string[] = [];
+      for (const departureTime of item.departureTimes) {
+        if (existingTimes.has(departureTime)) {
+          // 规则时刻与已有单独班次重合时，让该班次一并归入规则管理。
+          if (isBatchRule) {
+            const existingEntry = existingEntryByTime.get(departureTime);
+            if (existingEntry && !existingEntry.ruleId) {
+              claimedClientIds.push(existingEntry.clientId);
+            }
+          }
+          continue;
+        }
+        existingTimes.add(departureTime);
+        const entry = buildEntryAtTime(direction, departureTime, { ruleId });
+        if (entry) {
+          nextEntries.push(entry);
+          addedCount += 1;
+        }
       }
-      const stops = buildNewTripStops(
-        directionStationNames,
-        directionSegmentMinutes,
-        departureMinutes,
-      );
-      const label = line.tripLabelsByDirection?.[direction]?.[departureTime] ?? '';
-      nextEntries.push({
-        clientId: `new_${Date.now().toString(36)}_${departureTime.replace(':', '')}`,
-        revisionId: scheduleRevisionId,
-        trip: {
-          tripInstanceId: '',
-          serviceKind: inferServiceKind(line.mode, entries[0]?.trip.serviceKind),
-          serviceLabel: '',
-          departureTime,
-          lineName: line.name,
-          stationNames: directionStationNames,
-          availability: 'ticketing_unavailable',
-        },
-        stops,
-        label,
-        labelSource: resolveEntryLabelSource(label, poolConfigs[direction].poolIds, poolById),
-        isNew: true,
-      });
+      if (isBatchRule && addedCount > 0) {
+        nextRules.push({
+          id: ruleId as string,
+          sourceText: item.sourceText,
+          startTime: item.startTime,
+          intervalMinutes: item.intervalMinutes,
+          additionalDepartures: item.additionalDepartures,
+          departureTimes: item.departureTimes,
+        });
+        for (const clientId of claimedClientIds) {
+          claimedRuleByClientId.set(clientId, ruleId as string);
+        }
+      }
     }
     if (nextEntries.length === 0) {
       setError('这些发车时刻已经存在，没有新增班次。');
@@ -712,10 +910,208 @@ export function AdminTransitTripWorkbench({
     }
     markLabelsStale();
     pushHistory();
-    setEntries((current) => [...current, ...nextEntries]);
+    setEntries((current) => {
+      const next = [...current, ...nextEntries];
+      if (claimedRuleByClientId.size === 0) {
+        return next;
+      }
+      return next.map((entry) => {
+        const claimedRuleId = claimedRuleByClientId.get(entry.clientId);
+        return claimedRuleId ? { ...entry, ruleId: claimedRuleId } : entry;
+      });
+    });
+    if (nextRules.length > 0) {
+      setRules((current) => ({ ...current, [direction]: [...current[direction], ...nextRules] }));
+    }
     setRuleText('');
     setDirty(true);
     setStatus(`已追加 ${nextEntries.length} 个班次草稿`);
+  };
+
+  /** 编辑已有批量规则：保留仍命中的班次，移除被删时刻，补齐新增时刻。 */
+  const saveRuleEdit = (ruleId: string) => {
+    const rule = rules[direction].find((item) => item.id === ruleId);
+    if (!rule) {
+      setEditingRuleId(null);
+      return;
+    }
+    const parsed = parseDepartureRuleLines(ruleText);
+    if (parsed.error) {
+      setError(parsed.error);
+      return;
+    }
+    const item = parsed.items[0];
+    if (
+      parsed.items.length !== 1 ||
+      item?.intervalMinutes === undefined ||
+      item?.additionalDepartures === undefined
+    ) {
+      setError('编辑批量规则时请只填写一条 HH:mm + HH:mm * N 规则。');
+      return;
+    }
+    const timeOf = (entry: WorkbenchEntry) =>
+      toClockTime(firstDepartureOrUndefined(entry.stops)) ?? '';
+    const ownedByTime = new Map<string, WorkbenchEntry>();
+    for (const entry of entries) {
+      if (entry.ruleId !== rule.id) {
+        continue;
+      }
+      const time = timeOf(entry);
+      if (time && !ownedByTime.has(time)) {
+        ownedByTime.set(time, entry);
+      }
+    }
+    const otherTimes = new Set(
+      entries
+        .filter((entry) => entry.ruleId !== rule.id)
+        .map(timeOf)
+        .filter(Boolean),
+    );
+    const conflicts = item.departureTimes.filter((time) => otherTimes.has(time));
+    if (conflicts.length > 0) {
+      setError(`新规则的时刻与现有班次重叠：${conflicts.slice(0, 4).join('、')}`);
+      return;
+    }
+
+    const nextEntries = entries.filter((entry) => entry.ruleId !== rule.id);
+    for (const departureTime of item.departureTimes) {
+      const existing = ownedByTime.get(departureTime);
+      if (existing) {
+        nextEntries.push(existing);
+        continue;
+      }
+      const created = buildEntryAtTime(direction, departureTime, { ruleId: rule.id });
+      if (created) {
+        nextEntries.push(created);
+      }
+    }
+
+    pushHistory();
+    markLabelsStale();
+    setEntries(nextEntries);
+    setRules((current) => ({
+      ...current,
+      [direction]: current[direction].map((currentRule) =>
+        currentRule.id === rule.id
+          ? {
+              ...currentRule,
+              sourceText: item.sourceText,
+              startTime: item.startTime,
+              intervalMinutes: item.intervalMinutes,
+              additionalDepartures: item.additionalDepartures,
+              departureTimes: item.departureTimes,
+            }
+          : currentRule,
+      ),
+    }));
+    setEditingRuleId(null);
+    setRuleText('');
+    setDirty(true);
+    setError('');
+    setStatus(`规则已更新为 ${item.departureTimes.length} 个时刻`);
+  };
+
+  /** 删除规则；未被手工脱钩的班次一并移除，保存时同步删除真实班次。 */
+  const deleteRule = (rule: WorkbenchRule) => {
+    const removedCount = entriesRef.current.filter((entry) => entry.ruleId === rule.id).length;
+    pushHistory();
+    setEntries((current) => current.filter((entry) => entry.ruleId !== rule.id));
+    setRules((current) => ({
+      ...current,
+      [direction]: current[direction].filter((item) => item.id !== rule.id),
+    }));
+    if (editingRuleId === rule.id) {
+      setEditingRuleId(null);
+      setRuleText('');
+    }
+    setRuleDeleteTarget(null);
+    setDirty(true);
+    setError('');
+    setStatus(`已删除规则，并移除其生成的 ${removedCount} 个班次，保存后生效`);
+  };
+
+  const cancelRuleEdit = () => {
+    setEditingRuleId(null);
+    setRuleText('');
+    setError('');
+  };
+
+  /** 把正向发车时刻同步到反向；覆盖会清空反向班次与规则，补齐只追加缺失时刻。 */
+  const syncForwardTimes = (mode: 'replace' | 'fill') => {
+    if (!line) {
+      return;
+    }
+    if (!scheduleRevisionId) {
+      setError('当前没有可写入的班次数据版本，请先在班次后台导入一次班次。');
+      setSyncDialogOpen(false);
+      return;
+    }
+    const timeOf = (entry: WorkbenchEntry) => toClockTime(firstDepartureOrUndefined(entry.stops));
+    const directionOf = (entry: WorkbenchEntry) =>
+      resolveTripDirection(
+        { stationNames: entry.stops.map((stop) => stop.stationName), stopTimes: [] },
+        line,
+        stationNameOf,
+      );
+    const downEntryByTime = new Map<string, WorkbenchEntry>();
+    for (const entry of entries) {
+      if (directionOf(entry) !== 'down') {
+        continue;
+      }
+      const time = timeOf(entry);
+      if (time && !downEntryByTime.has(time)) {
+        downEntryByTime.set(time, entry);
+      }
+    }
+    const downTimes = Array.from(downEntryByTime.keys()).sort();
+    if (downTimes.length === 0) {
+      setError('正向还没有发车时刻，无法同步到反向。');
+      setSyncDialogOpen(false);
+      return;
+    }
+    const existingUpTimes = new Set(
+      entries
+        .filter((entry) => directionOf(entry) === 'up')
+        .map(timeOf)
+        .filter((time): time is string => Boolean(time)),
+    );
+    const nextEntries =
+      mode === 'replace' ? entries.filter((entry) => directionOf(entry) !== 'up') : [...entries];
+    let addedCount = 0;
+    for (const departureTime of downTimes) {
+      if (mode === 'fill' && existingUpTimes.has(departureTime)) {
+        continue;
+      }
+      const source = downEntryByTime.get(departureTime);
+      const servedStationNames = source
+        ? source.stops.filter((stop) => stop.isStop).map((stop) => stop.stationName)
+        : [];
+      const isShortTurn =
+        servedStationNames.length >= 2 && servedStationNames.length < line.stationSourceIds.length;
+      const entry = buildEntryAtTime('up', departureTime, {
+        copySavedLabel: false,
+        serviceNature: source?.trip.serviceNature,
+        shortTurnStationNames: isShortTurn ? servedStationNames : undefined,
+      });
+      if (entry) {
+        nextEntries.push(entry);
+        addedCount += 1;
+      }
+    }
+    pushHistory();
+    markLabelsStale();
+    setEntries(nextEntries);
+    if (mode === 'replace') {
+      setRules((current) => ({ ...current, up: [] }));
+    }
+    setSyncDialogOpen(false);
+    setDirty(true);
+    setError('');
+    setStatus(
+      mode === 'replace'
+        ? `已用正向 ${downTimes.length} 个时刻覆盖反向`
+        : `已补齐反向缺少的 ${addedCount} 个发车时刻`,
+    );
   };
 
   const updateDeparture = (entry: WorkbenchEntry, value: string) => {
@@ -727,10 +1123,28 @@ export function AdminTransitTripWorkbench({
     if (currentMinutes === undefined) {
       return;
     }
+    // 手工改过发车时刻后，这个班次不再跟随原批量规则。
+    if (entry.ruleId) {
+      const stillOwned = entriesRef.current.some(
+        (item) => item.clientId !== entry.clientId && item.ruleId === entry.ruleId,
+      );
+      if (!stillOwned) {
+        setRules((current) => ({
+          ...current,
+          [direction]: current[direction].filter((rule) => rule.id !== entry.ruleId),
+        }));
+        if (editingRuleId === entry.ruleId) {
+          setEditingRuleId(null);
+          setRuleText('');
+        }
+      }
+    }
     const delta = nextMinutes - currentMinutes;
     markLabelsStale();
     updateEntry(entry.clientId, (current) => ({
       ...current,
+      ruleId: current.ruleId ? undefined : current.ruleId,
+      ruleDetached: current.ruleId ? true : current.ruleDetached,
       stops: current.stops.map((stop) => ({
         ...stop,
         arrivalMinutes: stop.arrivalMinutes === undefined ? undefined : stop.arrivalMinutes + delta,
@@ -1010,7 +1424,14 @@ export function AdminTransitTripWorkbench({
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(
-            buildLinePayload(line, entries, poolConfigs, stationNameOf, overriddenDirections),
+            buildLinePayload(
+              line,
+              entries,
+              poolConfigs,
+              stationNameOf,
+              overriddenDirections,
+              rules,
+            ),
           ),
         },
       );
@@ -1192,6 +1613,9 @@ export function AdminTransitTripWorkbench({
                     onClick={() => {
                       setDirection(value);
                       setSelectedId(null);
+                      setEditingRuleId(null);
+                      setRuleText('');
+                      setRuleDeleteTarget(null);
                     }}
                   >
                     {value === 'down' ? '正向' : '反向'}
@@ -1199,6 +1623,19 @@ export function AdminTransitTripWorkbench({
                 ))}
               </div>
             </fieldset>
+            {direction === 'up' ? (
+              <button
+                className="transit-visual-route-panel-toggle"
+                type="button"
+                title="把正向发车时刻同步到反向"
+                aria-label="把正向发车时刻同步到反向"
+                onClick={() => setSyncDialogOpen(true)}
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  sync_alt
+                </span>
+              </button>
+            ) : null}
             <button
               className="transit-visual-route-panel-toggle"
               type="button"
@@ -1244,6 +1681,53 @@ export function AdminTransitTripWorkbench({
                 </span>
               </button>
             </div>
+            {rules[direction].length > 0 ? (
+              <div className="transit-trip-rules" aria-label="已添加的批量规则">
+                {rules[direction].map((rule) => {
+                  const ownedCount = directionEntries.filter(
+                    (entry) => entry.ruleId === rule.id,
+                  ).length;
+                  return (
+                    <div
+                      className={
+                        editingRuleId === rule.id
+                          ? 'transit-trip-rule-row is-editing'
+                          : 'transit-trip-rule-row'
+                      }
+                      key={rule.id}
+                    >
+                      <code>{rule.sourceText}</code>
+                      <span className="muted">{`${ownedCount} 个班次`}</span>
+                      <button
+                        type="button"
+                        title="编辑规则（会按新规则重算时刻）"
+                        aria-label="编辑规则"
+                        onClick={() => {
+                          setEditingRuleId(rule.id);
+                          setRuleText(rule.sourceText);
+                          setError('');
+                        }}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          edit
+                        </span>
+                      </button>
+                      <button
+                        className="is-danger"
+                        type="button"
+                        title="删除规则及其生成的班次"
+                        aria-label="删除规则"
+                        onClick={() => setRuleDeleteTarget(rule)}
+                      >
+                        <span className="material-symbols-outlined" aria-hidden="true">
+                          delete
+                        </span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
             <div className="transit-trip-list">
               {directionEntries.length === 0 ? (
                 <p className="muted">
@@ -1394,6 +1878,7 @@ export function AdminTransitTripWorkbench({
 
       <div className="transit-trip-bottom" aria-label="班次工具">
         <div className="transit-trip-rule">
+          {editingRuleId ? <span className="transit-trip-rule-badge">编辑规则</span> : null}
           <input
             type="text"
             value={ruleText}
@@ -1407,8 +1892,13 @@ export function AdminTransitTripWorkbench({
             }}
           />
           <button type="button" onClick={appendDepartures}>
-            确认追加
+            {editingRuleId ? '保存规则' : '确认追加'}
           </button>
+          {editingRuleId ? (
+            <button className="is-secondary" type="button" onClick={cancelRuleEdit}>
+              取消
+            </button>
+          ) : null}
         </div>
         <nav className="transit-visual-toolbar transit-trip-toolbar" aria-label="运行图工具">
           {(
@@ -1516,7 +2006,135 @@ export function AdminTransitTripWorkbench({
           }}
         />
       ) : null}
+
+      {syncDialogOpen ? (
+        <DirectionSyncDialog
+          downCount={countDirectionDepartures('down')}
+          upCount={countDirectionDepartures('up')}
+          onCancel={() => setSyncDialogOpen(false)}
+          onConfirm={syncForwardTimes}
+        />
+      ) : null}
+
+      {ruleDeleteTarget ? (
+        <RuleDeleteDialog
+          rule={ruleDeleteTarget}
+          ownedCount={entries.filter((entry) => entry.ruleId === ruleDeleteTarget.id).length}
+          onCancel={() => setRuleDeleteTarget(null)}
+          onConfirm={() => deleteRule(ruleDeleteTarget)}
+        />
+      ) : null}
     </main>
+  );
+}
+
+function DirectionSyncDialog({
+  downCount,
+  upCount,
+  onCancel,
+  onConfirm,
+}: Readonly<{
+  downCount: number;
+  upCount: number;
+  onCancel: () => void;
+  onConfirm: (mode: 'replace' | 'fill') => void;
+}>) {
+  const [mode, setMode] = useState<'replace' | 'fill'>('replace');
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onCancel}>
+      <div
+        className="modal-panel admin-transit-dialog transit-trip-confirm-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="同步正向发车时刻到反向"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="section-heading">
+          <h2>同步正向时刻到反向</h2>
+          <span className="muted">{`正向 ${downCount} 个 · 反向 ${upCount} 个`}</span>
+        </div>
+        <p className="muted">
+          会复制首站发车时刻、班次性质和短交路经停站；不复制班次标签和备注。反向规则会按所选方式处理。
+        </p>
+        <fieldset className="segmented-control">
+          <legend>同步方式</legend>
+          <div>
+            {(
+              [
+                ['replace', '覆盖反向'],
+                ['fill', '仅补齐缺失'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                className={mode === value ? 'is-active' : ''}
+                type="button"
+                aria-pressed={mode === value}
+                key={value}
+                onClick={() => setMode(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        <p className="muted">
+          {mode === 'replace'
+            ? `将清空反向现有的 ${upCount} 个班次和全部反向规则，再写入正向的 ${downCount} 个时刻。`
+            : `保留反向现有 ${upCount} 个班次，只追加正向有而反向没有的时刻。`}
+        </p>
+        <div className="admin-content-actions">
+          <button type="button" onClick={onCancel}>
+            取消
+          </button>
+          <button type="button" disabled={downCount === 0} onClick={() => onConfirm(mode)}>
+            确认同步
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RuleDeleteDialog({
+  rule,
+  ownedCount,
+  onCancel,
+  onConfirm,
+}: Readonly<{
+  rule: WorkbenchRule;
+  ownedCount: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}>) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onCancel}>
+      <div
+        className="modal-panel admin-transit-dialog transit-trip-confirm-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="删除批量规则"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="section-heading">
+          <h2>删除批量规则</h2>
+          <span className="muted">{rule.sourceText}</span>
+        </div>
+        <p>
+          {ownedCount > 0
+            ? `将同时删除该规则生成的 ${ownedCount} 个班次；已手工改过发车时刻而脱离规则的班次会保留。`
+            : '该规则当前没有生效班次，只会删除规则记录。'}
+        </p>
+        <div className="admin-content-actions">
+          <button type="button" onClick={onCancel}>
+            取消
+          </button>
+          <button type="button" onClick={onConfirm}>
+            删除规则
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1665,6 +2283,32 @@ function resolveTripLabelAssignments(input: TripLabelAssignmentInput): TripLabel
       .map((entry) => toClockTime(firstDepartureOrUndefined(entry.stops)))
       .filter((time): time is string => Boolean(time))
       .sort();
+  // 每班实际首末站与实测时长：小交路折返后应停在折返站，而不是大交路终点。
+  const tripsOf = (targetDirection: WorkbenchDirection): TransitTripLabelTripSource[] => {
+    const trips: TransitTripLabelTripSource[] = [];
+    for (const entry of entries) {
+      if (directionOf(entry) !== targetDirection) {
+        continue;
+      }
+      const departureTime = toClockTime(firstDepartureOrUndefined(entry.stops));
+      const originStationName = entry.stops[0]?.stationName;
+      const lastStop = entry.stops[entry.stops.length - 1];
+      const destinationStationName = lastStop?.stationName;
+      if (!departureTime || !originStationName || !destinationStationName) {
+        continue;
+      }
+      const start = firstDepartureOrUndefined(entry.stops);
+      const end = lastStop?.arrivalMinutes ?? lastStop?.departureMinutes;
+      trips.push({
+        departureTime,
+        originStationName,
+        destinationStationName,
+        durationMinutes:
+          start !== undefined && end !== undefined && end > start ? end - start : undefined,
+      });
+    }
+    return trips;
+  };
   const missingPoolDirections = (['down', 'up'] as const).filter(
     (value) => timesOf(value).length > 0 && poolConfigs[value].poolIds.length === 0,
   );
@@ -1710,6 +2354,8 @@ function resolveTripLabelAssignments(input: TripLabelAssignmentInput): TripLabel
         stationSourceIds: [...line.stationSourceIds],
         stopTravelTimes: collectStopTravelTimes(line.stops),
         tripDurationMinutes,
+        tripsByDirection: { down: tripsOf('down'), up: tripsOf('up') },
+        specialTripsByDirection: line.specialTripsByDirection,
         departureTimesByDirection: { down: timesOf('down'), up: timesOf('up') },
         tripLabelConfigByDirection: {
           down: toPoolConfigPayload(poolConfigs.down),
@@ -1728,6 +2374,7 @@ function resolveTripLabelAssignments(input: TripLabelAssignmentInput): TripLabel
           stationNames: other.stationSourceIds.map(stationNameOf),
           stationSourceIds: [...other.stationSourceIds],
           stopTravelTimes: collectStopTravelTimes(other.stops),
+          specialTripsByDirection: other.specialTripsByDirection,
           departureTimesByDirection: other.departureTimesByDirection,
           tripLabelConfigByDirection: other.tripLabelConfigByDirection,
           segmentPaths: other.segmentPaths,
@@ -1841,6 +2488,7 @@ function buildLinePayload(
   poolConfigs: Record<WorkbenchDirection, PoolConfig>,
   stationNameOf: (stationSourceId: string) => string,
   overriddenDirections: ReadonlySet<WorkbenchDirection> = new Set(),
+  rules: Record<WorkbenchDirection, WorkbenchRule[]> = { down: [], up: [] },
 ) {
   const departureTimesByDirection: Record<WorkbenchDirection, string[]> = { down: [], up: [] };
   const entryCountByDirection: Record<WorkbenchDirection, number> = { down: 0, up: 0 };
@@ -1904,9 +2552,27 @@ function buildLinePayload(
     down: coversDirection('down') ? departureTimesByDirection.down : originalTimes.down,
     up: coversDirection('up') ? departureTimesByDirection.up : originalTimes.up,
   };
+  const toRulePayload = (rule: WorkbenchRule) => ({
+    sourceText: rule.sourceText,
+    startTime: rule.startTime,
+    ...(rule.intervalMinutes !== undefined ? { intervalMinutes: rule.intervalMinutes } : {}),
+    ...(rule.additionalDepartures !== undefined
+      ? { additionalDepartures: rule.additionalDepartures }
+      : {}),
+  });
+  // 工作台覆盖到的方向以当前规则列表为准；未覆盖的方向继续沿用线路原规则。
+  // 方向被删空时不保留规则，否则重新打开会按规则把班次补回来。
   const resolvedRules = {
-    down: coversDirection('down') ? undefined : line.departureRulesByDirection?.down,
-    up: coversDirection('up') ? undefined : line.departureRulesByDirection?.up,
+    down: coversDirection('down')
+      ? entryCountByDirection.down > 0 && rules.down.length > 0
+        ? rules.down.map(toRulePayload)
+        : undefined
+      : line.departureRulesByDirection?.down,
+    up: coversDirection('up')
+      ? entryCountByDirection.up > 0 && rules.up.length > 0
+        ? rules.up.map(toRulePayload)
+        : undefined
+      : line.departureRulesByDirection?.up,
   };
   // 工作台没有覆盖到的方向沿用原特殊班次标注，避免保存后丢失。
   const resolvedSpecialTrips: Record<
@@ -2068,8 +2734,45 @@ function clockToMinutes(value: string): number | undefined {
   return hours * 60 + minutes;
 }
 
-export function parseDepartureRuleInput(value: string): {
+interface ParsedDepartureRuleLine {
+  sourceText: string;
+  startTime: string;
+  intervalMinutes?: number;
+  additionalDepartures?: number;
   departureTimes: string[];
+}
+
+function expandRuleDepartureTimes(
+  startTime: string,
+  intervalMinutes: number | undefined,
+  additionalDepartures: number | undefined,
+): string[] {
+  const start = clockToMinutes(startTime);
+  if (start === undefined) {
+    return [];
+  }
+  if (
+    intervalMinutes === undefined ||
+    intervalMinutes <= 0 ||
+    additionalDepartures === undefined ||
+    additionalDepartures <= 0
+  ) {
+    const single = toClockTime(start);
+    return single ? [single] : [];
+  }
+  const times: string[] = [];
+  for (let index = 0; index <= additionalDepartures; index += 1) {
+    const formatted = toClockTime(start + intervalMinutes * index);
+    if (formatted) {
+      times.push(formatted);
+    }
+  }
+  return Array.from(new Set(times)).sort();
+}
+
+/** 逐行解析发车时刻/批量规则，保留每一行对应的规则参数供后续管理。 */
+export function parseDepartureRuleLines(value: string): {
+  items: ParsedDepartureRuleLine[];
   error?: string;
 } {
   const lines = value
@@ -2077,39 +2780,75 @@ export function parseDepartureRuleInput(value: string): {
     .map((line) => line.trim())
     .filter(Boolean);
   if (lines.length === 0) {
-    return { departureTimes: [], error: '请先填写发车时刻或规则。' };
+    return { items: [], error: '请先填写发车时刻或规则。' };
   }
-  const departureTimes: string[] = [];
+  const items: ParsedDepartureRuleLine[] = [];
   for (const line of lines) {
     const single = clockToMinutes(line);
     if (single !== undefined) {
       const formatted = toClockTime(single);
       if (formatted) {
-        departureTimes.push(formatted);
+        items.push({ sourceText: line, startTime: formatted, departureTimes: [formatted] });
       }
       continue;
     }
     const repeated = line.match(/^(\d{1,2}):(\d{2})\s*\+\s*(\d{1,2}):(\d{2})\s*\*\s*(\d{1,3})$/u);
     if (!repeated) {
-      return {
-        departureTimes: [],
-        error: `无法识别“${line}”，请使用 HH:mm 或 HH:mm + HH:mm * N。`,
-      };
+      return { items: [], error: `无法识别“${line}”，请使用 HH:mm 或 HH:mm + HH:mm * N。` };
     }
     const start = clockToMinutes(`${repeated[1]}:${repeated[2]}`);
-    const interval = Number(repeated[3]) * 60 + Number(repeated[4]);
-    const count = Number(repeated[5]);
-    if (start === undefined || interval <= 0 || count <= 0) {
-      return { departureTimes: [], error: '发车规则的间隔或班次数无效。' };
+    const intervalMinutes = Number(repeated[3]) * 60 + Number(repeated[4]);
+    const additionalDepartures = Number(repeated[5]);
+    const startTime = start === undefined ? undefined : toClockTime(start);
+    if (startTime === undefined || intervalMinutes <= 0 || additionalDepartures <= 0) {
+      return { items: [], error: '发车规则的间隔或班次数无效。' };
     }
-    for (let index = 0; index <= count; index += 1) {
-      const formatted = toClockTime(start + interval * index);
-      if (formatted) {
-        departureTimes.push(formatted);
-      }
-    }
+    items.push({
+      sourceText: line,
+      startTime,
+      intervalMinutes,
+      additionalDepartures,
+      departureTimes: expandRuleDepartureTimes(startTime, intervalMinutes, additionalDepartures),
+    });
   }
-  return { departureTimes: Array.from(new Set(departureTimes)).sort() };
+  return { items };
+}
+
+/** 从线路持久化的规则还原工作台可管理规则；单点规则不进入批量规则列表。 */
+function buildLoadedRules(line: TransitLineSnapshot): Record<WorkbenchDirection, WorkbenchRule[]> {
+  const build = (value: WorkbenchDirection, items?: TransitDepartureScheduleRule[]) =>
+    (items ?? []).flatMap((item, index) => {
+      const parsed = parseDepartureRuleLines(item.sourceText);
+      const source = parsed.error ? undefined : parsed.items[0];
+      const startTime = source?.startTime ?? item.startTime;
+      const intervalMinutes = source?.intervalMinutes ?? item.intervalMinutes;
+      const additionalDepartures = source?.additionalDepartures ?? item.additionalDepartures;
+      if (intervalMinutes === undefined || additionalDepartures === undefined) {
+        return [];
+      }
+      const departureTimes = expandRuleDepartureTimes(
+        startTime,
+        intervalMinutes,
+        additionalDepartures,
+      );
+      if (departureTimes.length < 2) {
+        return [];
+      }
+      return [
+        {
+          id: `rule_${value}_${index}_${startTime.replace(':', '')}_${additionalDepartures}`,
+          sourceText: item.sourceText,
+          startTime,
+          intervalMinutes,
+          additionalDepartures,
+          departureTimes,
+        },
+      ];
+    });
+  return {
+    down: build('down', line.departureRulesByDirection?.down),
+    up: build('up', line.departureRulesByDirection?.up),
+  };
 }
 
 /** 同一班次标签固定同色；无标签班次用灰色，避免和车辆配色混淆。 */

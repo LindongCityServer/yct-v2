@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireYctAdmin } from '../../../../../lib/admin-auth';
 import { adminContentCreateDraftSchema } from '../../../../../lib/admin-content-draft-schema';
 import { createContentDraft, listAdminContentRecords } from '../../../../../lib/content-workflow';
+import { formatValidationErrorMessage } from '../../../../../lib/validation-error-message';
 
 export async function GET(request: NextRequest) {
   const admin = await requireYctAdmin(request);
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_content_draft',
-        message: '内容草稿不符合要求。',
+        message: formatValidationErrorMessage('内容草稿不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

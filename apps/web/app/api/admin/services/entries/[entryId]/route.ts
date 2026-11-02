@@ -5,6 +5,7 @@ import {
   deleteServiceEntry,
   updateServiceEntry,
 } from '../../../../../../lib/service-entry-workflow';
+import { formatValidationErrorMessage } from '../../../../../../lib/validation-error-message';
 
 export async function PATCH(
   request: NextRequest,
@@ -21,7 +22,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         error: 'invalid_service_entry_update',
-        message: '服务入口更新内容不符合要求。',
+        message: formatValidationErrorMessage('服务入口更新内容不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

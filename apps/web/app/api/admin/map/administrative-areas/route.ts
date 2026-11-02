@@ -3,6 +3,7 @@ import { administrativeAreaUpsertSchema } from '@yct/schemas';
 import { requireYctAdmin } from '../../../../../lib/admin-auth';
 import { listAdministrativeAreas } from '../../../../../lib/administrative-area-store';
 import { createAdministrativeArea } from '../../../../../lib/administrative-area-workflow';
+import { formatValidationErrorMessage } from '../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_administrative_area',
-        message: '行政区划内容不符合要求。',
+        message: formatValidationErrorMessage('行政区划内容不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

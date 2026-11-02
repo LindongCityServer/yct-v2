@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { LdpassIdentityProvider } from '@yct/adapters';
 import { markResponseNoStore } from '../../../../../lib/http-cache';
 import { readRuntimeConfig } from '../../../../../lib/runtime-config';
+import { formatValidationErrorMessage } from '../../../../../lib/validation-error-message';
 
 const loginUrlQuerySchema = z.object({
   redirect_uri: z.string().url(),
@@ -33,7 +34,10 @@ export async function GET(request: NextRequest) {
       NextResponse.json(
         {
           error: 'invalid_query',
-          message: 'redirect_uri 和 state 参数不符合要求。',
+          message: formatValidationErrorMessage(
+            'redirect_uri 和 state 参数不符合要求',
+            parsed.error,
+          ),
           issues: parsed.error.issues,
         },
         { status: 400 },

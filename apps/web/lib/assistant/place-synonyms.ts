@@ -15,6 +15,11 @@ const placeSynonymGroups: Array<{ terms: string[]; targets: string[] }> = [
   { terms: ['学校', '大学', '中学', '小学', '幼儿园'], targets: ['教育', 'education'] },
   { terms: ['公园', '绿地', '草坪'], targets: ['公园绿地', 'park'] },
   { terms: ['景点', '景区', '游玩', '打卡'], targets: ['景点', 'scenery', '展馆', 'museum'] },
+  {
+    // “值得去/好玩”不是分类名，但用户在问同一类地点。
+    terms: ['值得去', '值得一去', '好玩', '好去处', '去处', '逛逛', '逛一逛', '游览'],
+    targets: ['景点', 'scenery', '公园绿地', 'park', '展馆', 'museum', '体育', 'sports'],
+  },
   { terms: ['停车', '车位'], targets: ['停车', 'parking'] },
   { terms: ['地铁站', '地铁'], targets: ['地铁站', 'metro-station', '地铁出入口'] },
   { terms: ['公交站', '车站', '站台'], targets: ['公交站', 'bus-stop'] },

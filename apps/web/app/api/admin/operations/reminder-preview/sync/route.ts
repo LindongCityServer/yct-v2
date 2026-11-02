@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireYctAdmin } from '../../../../../../lib/admin-auth';
 import { readOperationsReminderPreview } from '../../../../../../lib/operations-reminder-preview';
 import { syncTransitServiceNoticeReminderSource } from '../../../../../../lib/operations-reminder-source-sync-workflow';
+import { formatValidationErrorMessage } from '../../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_request',
-        message: '公告源同步参数无效。',
+        message: formatValidationErrorMessage('公告源同步参数无效', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

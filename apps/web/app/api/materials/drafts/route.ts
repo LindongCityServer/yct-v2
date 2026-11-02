@@ -5,6 +5,7 @@ import {
   createManualMaterialDraft,
   listMaterialDraftsForUser,
 } from '../../../../lib/material-workflow';
+import { formatValidationErrorMessage } from '../../../../lib/validation-error-message';
 
 export async function GET(request: NextRequest) {
   const user = await requireActiveLdpassUser(request);
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_material_draft',
-        message: '物料草稿不符合要求。',
+        message: formatValidationErrorMessage('物料草稿不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

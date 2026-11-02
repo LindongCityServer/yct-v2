@@ -44,6 +44,8 @@ export interface MobileActionRailItem {
   badge?: string;
   /** 主操作强调色，例如工作台的下载按钮。 */
   emphasis?: boolean;
+  /** 纯状态展示项：不渲染成按钮，避免出现点击后没有任何反馈的假操作。 */
+  readOnly?: boolean;
 }
 
 export interface MobileActionRailApi {
@@ -445,6 +447,20 @@ function RailAction({
       ) : null}
     </>
   );
+
+  if (item.readOnly) {
+    return (
+      <div
+        className={`${className} is-readonly`}
+        role="status"
+        aria-live="polite"
+        aria-label={item.label}
+        title={item.label}
+      >
+        {content}
+      </div>
+    );
+  }
 
   if (item.href) {
     return (

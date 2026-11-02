@@ -5,6 +5,7 @@ import {
   importCurrentTravelScheduleRevision,
   listAdminTravelScheduleRevisions,
 } from '../../../../../lib/travel-schedule-revision-workflow';
+import { formatValidationErrorMessage } from '../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_travel_schedule_import',
-        message: '班次数据导入参数不符合要求。',
+        message: formatValidationErrorMessage('班次数据导入参数不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

@@ -4,6 +4,7 @@ import { requireActiveLdpassUser } from '../../../../lib/user-auth';
 import { prepareMaterialPreview } from '../../../../lib/material-workflow';
 import { resolveClientIp } from '../../../../lib/request-client-ip';
 import { resolveClientIpLocation } from '../../../../lib/client-ip-location';
+import { formatValidationErrorMessage } from '../../../../lib/validation-error-message';
 
 export async function POST(request: NextRequest) {
   const parsed = materialPreviewRequestSchema.safeParse(await request.json());
@@ -11,7 +12,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_material_preview',
-        message: '物料预览参数不符合要求。',
+        message: formatValidationErrorMessage('物料预览参数不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

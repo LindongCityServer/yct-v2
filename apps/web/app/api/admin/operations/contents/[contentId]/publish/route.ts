@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { contentPublishRequestSchema } from '@yct/schemas';
 import { requireYctAdmin } from '../../../../../../../lib/admin-auth';
 import { publishContentRevision } from '../../../../../../../lib/content-workflow';
+import { formatValidationErrorMessage } from '../../../../../../../lib/validation-error-message';
 
 export async function POST(
   request: NextRequest,
@@ -18,7 +19,7 @@ export async function POST(
     return NextResponse.json(
       {
         error: 'invalid_publish_request',
-        message: '发布请求不符合要求。',
+        message: formatValidationErrorMessage('发布请求不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

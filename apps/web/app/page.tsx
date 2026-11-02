@@ -14,7 +14,7 @@ export default async function HomePage() {
   ]);
 
   return (
-    <AppShell active="operations">
+    <AppShell active="operations" initialServerStatus={serverStatus}>
       <OperationsHome feed={feed} reminders={reminders} serverStatus={serverStatus} />
     </AppShell>
   );

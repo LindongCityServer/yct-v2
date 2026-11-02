@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { transitStationCoordinateUpdateSchema } from '@yct/schemas';
 import { requireYctAdmin } from '../../../../../../../../lib/admin-auth';
 import { updateTransitStationCoordinate } from '../../../../../../../../lib/transit-data-workflow';
+import { formatValidationErrorMessage } from '../../../../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +21,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         error: 'invalid_transit_station_coordinate',
-        message: '站点坐标修正内容不符合要求。',
+        message: formatValidationErrorMessage('站点坐标修正内容不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

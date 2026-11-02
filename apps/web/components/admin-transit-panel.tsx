@@ -7960,6 +7960,15 @@ function applyTransitSegmentTravelMinutes(
     if (!value) {
       if (existing) {
         existing.travelMinutes = undefined;
+        // 仅靠区间分钟存在的站间路径，清空分钟后就失去意义，
+        // 保留会触发“沿道路走行至少需要途径点”的校验。
+        if (
+          existing.mode === 'road' &&
+          existing.waypoints.length === 0 &&
+          (existing.operationStatus ?? 'operating') === 'operating'
+        ) {
+          segmentPaths.splice(segmentPaths.indexOf(existing), 1);
+        }
       }
       continue;
     }

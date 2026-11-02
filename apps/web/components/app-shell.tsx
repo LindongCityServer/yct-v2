@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import type { ApiItemResponse, OperationsServerStatus } from '@yct/contracts';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { flushAnalyticsQueue, trackAnalyticsEvent } from '../lib/analytics/client';
@@ -13,6 +14,13 @@ import {
   subscribeAssistantEntryPreferenceChanged,
 } from '../lib/client-assistant-entry-preference';
 import { publishGlobalSearchRequested } from '../lib/client-global-search-events';
+import {
+  readServerStatusSnapshot,
+  seedServerStatus,
+  subscribeServerStatus,
+  subscribeServerStatusPanelVisibility,
+  type ServerStatusSnapshot,
+} from '../lib/client-server-status';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import {
   publishMapNavigationLayoutChanged,
@@ -27,6 +35,7 @@ import {
   tripReminderStateChangedEventName,
 } from '../lib/client-trip-reminders';
 import { ProgressiveImage } from './progressive-image';
+import { ServerStatusPill, ServerStatusRailIcon, serverStatusPillText } from './server-status-pill';
 import { SmartQaGlyph } from './smart-qa-icon';
 import {
   MobileActionRailProvider,
@@ -79,6 +88,8 @@ type AppShellProps = Readonly<{
   variant?: AppShellVariant;
   /** 独立问一问页面自身就是入口，不再显示问一问按钮。 */
   hideAssistantEntry?: boolean;
+  /** 首页服务端已读取的状态，用于首屏直接展示，避免重复请求。 */
+  initialServerStatus?: ApiItemResponse<OperationsServerStatus>;
   children: ReactNode;
 }>;
 
@@ -96,6 +107,7 @@ function AppShellFrame({
   pageTitleKey,
   variant = 'default',
   hideAssistantEntry = false,
+  initialServerStatus,
   children,
 }: AppShellProps) {
   const mobileActionRail = useMobileActionRail();
@@ -105,10 +117,38 @@ function AppShellFrame({
   const [mapRoutePanelVisible, setMapRoutePanelVisible] = useState(false);
   const [mapSidebarOverlayVisible, setMapSidebarOverlayVisible] = useState(false);
   const [rideCodeLoading, setRideCodeLoading] = useState(false);
+  const [serverStatus, setServerStatus] = useState<ServerStatusSnapshot>(() => {
+    const snapshot = readServerStatusSnapshot();
+    if (snapshot.response || !initialServerStatus?.item) {
+      return snapshot;
+    }
+    // 首页首屏直接使用服务端结果，避免先闪一帧“检测中”。
+    return {
+      displayState: initialServerStatus.item.availability,
+      response: initialServerStatus,
+      checkedAt: initialServerStatus.item.checkedAt,
+    };
+  });
+  const [homeServerStatusPanelFullyVisible, setHomeServerStatusPanelFullyVisible] = useState(false);
   const [assistantEnabled, setAssistantEnabled] = useState(
     () => readAssistantEntryPreference().enabled,
   );
   const { locale, t } = useI18n();
+
+  useEffect(() => {
+    if (initialServerStatus) {
+      seedServerStatus(initialServerStatus);
+    }
+    return subscribeServerStatus(setServerStatus);
+  }, [initialServerStatus]);
+
+  useEffect(
+    () =>
+      subscribeServerStatusPanelVisibility(({ fullyVisible }) =>
+        setHomeServerStatusPanelFullyVisible(fullyVisible),
+      ),
+    [],
+  );
 
   useEffect(() => {
     return subscribeAppNavigationToggleRequested(() => setNavOpen((current) => !current));
@@ -268,6 +308,18 @@ function AppShellFrame({
     active === 'operations' && locale === 'en' && !renderedPageTitle
       ? 'Yuchengtong'
       : renderedPageTitle;
+  // 首页本身已有服务器状态面板，面板完整可见时不再重复显示顶栏胶囊。
+  const isHomePage = active === 'operations' && !pageTitle && !pageTitleKey;
+  const showServerStatusPill = !isHomePage || !homeServerStatusPanelFullyVisible;
+  const serverStatusOnlinePlayerCount =
+    serverStatus.displayState === 'online'
+      ? serverStatus.response?.item?.onlinePlayerCount
+      : undefined;
+  const serverStatusLabel = serverStatusPillText(
+    serverStatus.displayState,
+    serverStatusOnlinePlayerCount,
+    t,
+  );
 
   // 侧边操作栏条目：顶部工具栏 → 底部主导航，均为纯图标按钮。
   const railActions = useMemo<MobileActionRailItem[]>(
@@ -296,6 +348,16 @@ function AppShellFrame({
             },
           ]
         : []),
+      {
+        id: 'rail-top-server-status',
+        group: 'top',
+        order: 15,
+        priority: 55,
+        label: serverStatusLabel,
+        icon: 'database',
+        iconNode: <ServerStatusRailIcon state={serverStatus.displayState} />,
+        readOnly: true,
+      },
       {
         id: 'rail-top-account',
         group: 'top',
@@ -332,6 +394,9 @@ function AppShellFrame({
       openGlobalSearch,
       openRideCode,
       rideCodeLoading,
+      serverStatus.displayState,
+      serverStatusOnlinePlayerCount,
+      serverStatusLabel,
       t,
     ],
   );
@@ -378,6 +443,12 @@ function AppShellFrame({
         </Link>
         {topbarPageTitle ? <span className="topbar-page-title">{topbarPageTitle}</span> : null}
         <div className="topbar-actions">
+          {showServerStatusPill ? (
+            <ServerStatusPill
+              state={serverStatus.displayState}
+              onlinePlayerCount={serverStatusOnlinePlayerCount}
+            />
+          ) : null}
           <button
             className="pill-button"
             type="button"

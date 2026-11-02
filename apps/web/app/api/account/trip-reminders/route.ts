@@ -6,6 +6,7 @@ import {
   syncUserTripReminders,
 } from '../../../../lib/trip-reminder-workflow';
 import { requireActiveLdpassUser } from '../../../../lib/user-auth';
+import { formatValidationErrorMessage } from '../../../../lib/validation-error-message';
 
 export async function GET(request: NextRequest) {
   const user = await requireActiveLdpassUser(request);
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_trip_reminder_sync',
-        message: '行程提醒同步数据不符合要求。',
+        message: formatValidationErrorMessage('行程提醒同步数据不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },
@@ -56,7 +57,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_trip_reminder_delete',
-        message: '行程提醒删除条件不符合要求。',
+        message: formatValidationErrorMessage('行程提醒删除条件不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

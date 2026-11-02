@@ -7,6 +7,7 @@ import {
   requestOfflinePackage,
 } from '../../../../lib/offline-package-workflow';
 import { requireActiveLdpassUser } from '../../../../lib/user-auth';
+import { formatValidationErrorMessage } from '../../../../lib/validation-error-message';
 
 const offlinePackageRequestSchema = z.object({
   packageId: z.string().trim().min(1).max(128),
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_offline_package_request',
-        message: '离线范围请求不符合要求。',
+        message: formatValidationErrorMessage('离线范围请求不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },
@@ -77,7 +78,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_offline_package_delete',
-        message: '离线范围删除请求不符合要求。',
+        message: formatValidationErrorMessage('离线范围删除请求不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

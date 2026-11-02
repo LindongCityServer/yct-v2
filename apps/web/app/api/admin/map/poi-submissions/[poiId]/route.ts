@@ -6,6 +6,7 @@ import {
   archivePoiSubmissionByAdmin,
   updatePoiSubmissionByAdmin,
 } from '../../../../../../lib/poi-submission-workflow';
+import { formatValidationErrorMessage } from '../../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +26,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         error: 'invalid_poi_submission_update',
-        message: 'POI 投稿修正内容不符合要求。',
+        message: formatValidationErrorMessage('POI 投稿修正内容不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

@@ -5,6 +5,7 @@ import {
   listTransitModeProfiles,
   updateTransitModeProfiles,
 } from '../../../../../lib/transit-mode-profile-workflow';
+import { formatValidationErrorMessage } from '../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +33,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_transit_mode_profile',
-        message: '交通方式配置不符合要求。',
+        message: formatValidationErrorMessage('交通方式配置不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

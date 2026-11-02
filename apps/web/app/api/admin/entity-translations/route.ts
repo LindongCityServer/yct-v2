@@ -3,6 +3,7 @@ import { entityTranslationUpdateSchema } from '@yct/schemas';
 import { requireYctAdmin } from '../../../../lib/admin-auth';
 import { listEntityTranslations } from '../../../../lib/entity-translation-store';
 import { updateEntityTranslations } from '../../../../lib/entity-translation-workflow';
+import { formatValidationErrorMessage } from '../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_entity_translation_update',
-        message: '实体翻译内容不符合要求。',
+        message: formatValidationErrorMessage('实体翻译内容不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

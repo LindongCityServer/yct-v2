@@ -3,6 +3,65 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.18.0",
+      "releasedAt": "2026-11-02T12:23:26.518Z",
+      "sourceFingerprint": "257328e8ee68d419e62972233682ad581b89795545e3da844a4785333bfb1865",
+      "themes": ["transit", "admin", "map", "assistant", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "班次工作台支持管理批量发车规则，可编辑或删除规则并同步增减对应班次"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "反向发车时刻支持一键同步正向，可选择覆盖或补齐，并复制班次性质与短交路"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "修复手动填写道路区间运行时间被误判为线路内容不符合要求"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "后台与接口校验失败提示改为指出具体字段和原因"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "服务器状态在首页与顶栏共用一次请求，顶栏和移动端操作栏常驻显示服务器状态"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "首页服务器状态面板完整可见时隐藏重复的顶栏状态胶囊"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "班次标签按班次实际起终点分配，小交路折返后可按折返站正确接续车辆"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "问一问先识别行政区范围与地点类别，标题命中优先并去除重复地点卡片"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "问一问能理解“值得去”“好玩”等口语并返回对应类别地点"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地图玩家列表和附近搜索优先展示在线玩家"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.17.1",
       "releasedAt": "2026-10-31T14:17:40.765Z",
       "sourceFingerprint": "274ee93899a9d74c762ea2c3aa1ec637a7ee64ed30f9880f46a56b9ab2e7e4ca",

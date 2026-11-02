@@ -5,6 +5,7 @@ import {
   updateMaterialTransitNetworkProject,
 } from '../../../../../lib/material-transit-network-project-workflow';
 import { requireActiveLdpassUser } from '../../../../../lib/user-auth';
+import { formatValidationErrorMessage } from '../../../../../lib/validation-error-message';
 
 interface RouteContext {
   params: Promise<{ projectId: string }>;
@@ -18,7 +19,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json(
       {
         error: 'invalid_material_transit_network_project_update',
-        message: '线网项目补充信息不符合要求。',
+        message: formatValidationErrorMessage('线网项目补充信息不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

@@ -623,9 +623,15 @@ function formatPoolSaveError(data: {
   );
   if (fieldKey) {
     const limitField = poolLimitFields.find((field) => field.key === fieldKey);
-    return limitField
-      ? formatPoolLimitMessage(limitField)
-      : `${poolFieldLabels[fieldKey]}不符合要求。`;
+    if (limitField) {
+      return formatPoolLimitMessage(limitField);
+    }
+    const fieldMessage: Record<string, string> = {
+      name: '标题需为 1–40 个字符。',
+      labels: '每个标签需为 1–40 个字符，且最多 2000 个。',
+      ruleText: '规则说明不能超过 120 个字符。',
+    };
+    return `${poolFieldLabels[fieldKey]}：${fieldMessage[fieldKey] ?? '填写内容不正确。'}`;
   }
   return data.message ?? '保存标签池失败。';
 }

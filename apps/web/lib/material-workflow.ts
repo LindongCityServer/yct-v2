@@ -893,7 +893,7 @@ function invalidInput(error: unknown): MaterialWorkflowFailure {
     error instanceof MaterialTemplateSourceError ||
     error instanceof Error
       ? error.message
-      : '物料参数不符合要求。';
+      : '物料参数无法解析，请检查提交内容后重试。';
   return { ok: false, status: 400, error: 'invalid_material_input', message };
 }
 

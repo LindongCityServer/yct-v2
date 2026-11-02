@@ -5,6 +5,7 @@ import {
   readAdminMembershipDirectory,
   updateAdminMembership,
 } from '../../../../lib/admin-membership-workflow';
+import { formatValidationErrorMessage } from '../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +40,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'invalid_admin_membership_update',
-        message: '管理员成员设置不符合要求。',
+        message: formatValidationErrorMessage('管理员成员设置不符合要求', parsed.error),
         issues: parsed.error.issues,
       },
       { status: 400 },

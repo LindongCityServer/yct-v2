@@ -6,6 +6,7 @@ import {
   deletePoiCategoryIcon,
   renamePoiCategoryIcon,
 } from '../../../../../lib/poi-category-icon-workflow';
+import { formatValidationErrorMessage } from '../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +28,11 @@ export async function PATCH(request: NextRequest) {
   const parsed = poiCategoryIconRenameSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json(
-      { error: 'invalid_poi_category_icon_name', message: '图标显示名称不符合要求。' },
+      {
+        error: 'invalid_poi_category_icon_name',
+        message: formatValidationErrorMessage('图标显示名称不符合要求', parsed.error),
+        issues: parsed.error.issues,
+      },
       { status: 400 },
     );
   }

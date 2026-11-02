@@ -23,6 +23,7 @@ import {
   type SpatialPlaceItem,
 } from '../map-spatial-query';
 import { buildPlaceQueryCandidates } from './place-synonyms';
+import { stripAdministrativeAreaScope } from './administrative-areas';
 import { buildPlayerLocationReferences } from './player-retrieval';
 import { buildEasterEggContext, isEasterEggQuery } from './easter-egg';
 import type { CurrentPlayerLocation } from './current-location';
@@ -38,6 +39,7 @@ import {
   buildServiceNoticeReferences,
 } from './extra-retrieval';
 import { readPoiCategories } from '../poi-categories';
+import { listAdministrativeAreas } from '../administrative-area-store';
 import { readServiceEntryGroups } from '../service-entries';
 import { matchSiteSocialLinks } from '../site-social-links';
 import { rankSocialPosts, readSocialPosts } from '../social-content';
@@ -181,6 +183,7 @@ export async function buildAssistantRetrieval(
     categoriesResult,
     wikiResult,
     socialPostsResult,
+    administrativeAreasResult,
   ] = await Promise.allSettled([
     readOperationsFeed(),
     readServiceEntryGroups(),
@@ -191,7 +194,14 @@ export async function buildAssistantRetrieval(
     readPoiCategories(),
     searchWikiWithStatus(wikiQuery, 3),
     readSocialPosts(),
+    // 行政区名以后台已挂的数据为准，内置列表只兜底旧名。
+    listAdministrativeAreas(),
   ]);
+
+  const administrativeAreaNames =
+    administrativeAreasResult.status === 'fulfilled'
+      ? administrativeAreasResult.value.map((area) => area.name)
+      : [];
 
   const categoryNames = new Map<string, string>(
     categoriesResult.status === 'fulfilled'
@@ -906,20 +916,35 @@ export async function buildAssistantRetrieval(
       buildMarkerSearchValues(marker, categoryNames, locale);
     // 地点名称差异大（“尚瑞超市”对“有哪些超市”“工厂”对“产业设施”），允许关键词级兜底并补充分类名。
     const placeCandidates = buildPlaceQueryCandidates(query);
-    const matches = rankSearchMatches(placeMarkers, query, getMarkerValues, 3, {
+    // 有明确类别意图时先收敛到目标分类：否则城市名等同分项会先占满名额，
+    // 让“值得去的地方”退化成数据里最靠前的基础设施。
+    const categoryScopedMarkers =
+      placeCandidates.length > 0
+        ? filterMarkersByCategories(placeMarkers, placeCandidates, categoryNames, locale)
+        : [];
+    const searchPool = categoryScopedMarkers.length > 0 ? categoryScopedMarkers : placeMarkers;
+    const matches = rankSearchMatches(searchPool, query, getMarkerValues, 3, {
       allowLoose: true,
       getLooseValues: (marker) => [marker.label, ...Object.values(marker.localizedLabels ?? {})],
       extraCandidates: placeCandidates,
+      areaNames: administrativeAreaNames,
     });
     // 用户问的是某一类地点时，额外补两条同类地点，避免被线路名或站点名挤掉。
     const categoryMatches =
       placeCandidates.length > 0
-        ? rankSearchMatches(placeMarkers, placeCandidates.join(' '), getMarkerValues, 2, {
+        ? rankSearchMatches(searchPool, placeCandidates.join(' '), getMarkerValues, 2, {
             extraCandidates: placeCandidates,
+            areaNames: administrativeAreaNames,
           })
         : [];
 
+    // 两段检索可能命中同一条地点，合并时按 id 去重，避免参考答案出现重复卡片。
+    const seenMarkers = new Set<string>();
     for (const marker of [...matches, ...categoryMatches]) {
+      if (seenMarkers.has(marker.id)) {
+        continue;
+      }
+      seenMarkers.add(marker.id);
       addReference({
         title: marker.label,
         source: '地点',
@@ -1190,13 +1215,18 @@ export function rankSearchMatches<T>(
     getLooseValues?: (item: T) => Array<string | undefined | null>;
     /** 补充口语词对应的站内分类名，例如“工厂”对应“产业设施”。 */
     extraCandidates?: string[];
+    /** 后台已挂的行政区名；用于识别“某地有什么”里的范围词。 */
+    areaNames?: string[];
     /** 打分前的硬过滤，例如路线问题只保留会影响出行的公告。 */
     filter?: (item: T) => boolean;
   } = {},
 ): T[] {
-  const candidates = buildQueryCandidates(query);
+  // 行政区名在“某地有什么”这类问句里表示范围，不参与实体匹配。
+  // 否则“临东”会让所有同名前缀地点拿到相同分数，按数据顺序挤满名额。
+  const scopedQuery = stripAdministrativeAreaScope(query, options.areaNames);
+  const candidates = buildQueryCandidates(scopedQuery);
   // 疑问词只保留语义关键词，避免“有哪些 X”因为“哪些”误命中其他问句。
-  const keywordQuery = query.replace(queryNoisePattern, ' ').trim() || query;
+  const keywordQuery = scopedQuery.replace(queryNoisePattern, ' ').trim() || scopedQuery;
   const keywordTokens = options.allowLoose
     ? buildSearchTokens(keywordQuery).filter((token) => !genericPlaceTokenPattern.test(token))
     : [];
@@ -1207,8 +1237,9 @@ export function rankSearchMatches<T>(
     const haystack = buildSearchHaystack(values);
     // 约定第一个字段是标题：标题命中单独加权，避免“简介里提到一次”压过真正的实体。
     const titleHaystack = buildSearchHaystack(values.slice(0, 1));
+    const titleDirectScore = matchScore(titleHaystack, candidates, 200);
     const titleScore = Math.max(
-      matchScore(titleHaystack, candidates, 200),
+      titleDirectScore,
       scoreSearchMatch(titleHaystack, keywordQuery) * 2,
     );
     // 与站内搜索保持一致：整串（或去掉疑问词后的关键词）命中优先级最高。
@@ -1226,12 +1257,17 @@ export function rankSearchMatches<T>(
         ? scoreSearchMatch(buildSearchHaystack(options.getLooseValues(item)), keywordQuery)
         : score,
     );
-    return { item, score, looseScore };
+    return { item, score, looseScore, titleMatched: titleDirectScore > 0 };
   });
 
+  // 标题命中严格排在前：只用分数取 max 时，长正文的碎片命中可能反超标题。
+  // 标题判定使用整串/去疑问词/空格片段候选，而不是任意二元片段，避免标题沾到一个常用词就被抬高。
   const strict = scored
     .filter((entry) => entry.score >= minimumMatchScore)
-    .sort((left, right) => right.score - left.score)
+    .sort(
+      (left, right) =>
+        Number(right.titleMatched) - Number(left.titleMatched) || right.score - left.score,
+    )
     .slice(0, limit);
   if (!options.allowLoose || strict.length >= limit) {
     return strict.map((entry) => entry.item);
@@ -1240,7 +1276,11 @@ export function rankSearchMatches<T>(
   const chosen = new Set(strict.map((entry) => entry.item));
   const loose = scored
     .filter((entry) => entry.looseScore >= minimumLooseMatchScore && !chosen.has(entry.item))
-    .sort((left, right) => right.looseScore - left.looseScore)
+    .sort(
+      (left, right) =>
+        Number(right.titleMatched) - Number(left.titleMatched) ||
+        right.looseScore - left.looseScore,
+    )
     .slice(0, limit - strict.length);
 
   return [...strict, ...loose].map((entry) => entry.item);
@@ -1251,6 +1291,34 @@ const socialIntentPattern = /(动态|视频|b站|up主|混剪|十周年|作品|�
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+/** 按分类 id 或分类名筛地点；候选词既有中文名（景点）也有 id（scenery）。 */
+function filterMarkersByCategories(
+  markers: SpatialMarker[],
+  candidates: string[],
+  categoryNames: Map<string, string>,
+  locale: LocaleCode,
+): SpatialMarker[] {
+  const normalizedCandidates = candidates
+    .map((candidate) => normalizeSearchText(candidate))
+    .filter(Boolean);
+  if (normalizedCandidates.length === 0) {
+    return markers;
+  }
+
+  return markers.filter((marker) => {
+    const categoryId = normalizeSearchText(marker.categoryId ?? '');
+    const categoryLabel = normalizeSearchText(
+      getMarkerCategoryLabel(marker.categoryId, categoryNames, locale) ?? '',
+    );
+
+    return normalizedCandidates.some(
+      (candidate) =>
+        // 英文 id 必须精确匹配：前缀匹配会让 park 吞掉 parking。
+        categoryId === candidate || (categoryLabel.length > 0 && categoryLabel.includes(candidate)),
+    );
+  });
 }
 
 /** 命中候选词时按权重计分，越贴近用户原话权重越高。 */
