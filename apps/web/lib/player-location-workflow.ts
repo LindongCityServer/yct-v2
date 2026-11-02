@@ -36,6 +36,8 @@ export async function syncPlayerLocations(
     config.markerBdslmTimeoutMs,
     config.bedrockServerAddress,
     config.bedrockStatusTimeoutMs,
+    config.bedrockStatusEnabled,
+    config.bedrockOfflineHoldMs,
     config.playerLocationStorePath,
   ]);
   return playerLocationSyncCache.read(key, () => performPlayerLocationSync(config, input));
@@ -82,23 +84,33 @@ async function performPlayerLocationSync(
   const latencyMs = Date.now() - requestStartedAt;
   // The map HTTP endpoint is the primary probe. Only after it succeeds do we
   // confirm the configured MCBE UDP address from an external observation point.
-  const external = await readBedrockServerStatus(
-    config.bedrockServerAddress,
-    config.bedrockStatusTimeoutMs,
-  );
+  const external = config.bedrockStatusEnabled
+    ? await readBedrockServerStatus(config.bedrockServerAddress, config.bedrockStatusTimeoutMs)
+    : { availability: 'unknown' as const, observedAt: undefined };
+  let externalHoldExpired = false;
   if (external.availability === 'offline') {
     return recordUnavailable(
       'external_offline',
       '网页地图在线，但 MCBE 服务器外网离线，不可访问；所有玩家已标为离线，保留最后位置。',
+      external.observedAt,
     );
   }
-  if (external.availability === 'unknown') {
+  if (config.bedrockStatusEnabled && external.availability === 'unknown') {
     const previous = await readPlayerLocationSnapshot();
     if (previous.unavailableReason === 'external_offline') {
-      return recordUnavailable(
-        'external_offline',
-        'MCBE 服务器此前检测为外网离线，不可访问；第三方检测暂不可用，等待在线确认，玩家保持离线。',
-      );
+      // Older snapshots did not persist a detector timestamp. Anchor once to
+      // their last attempt, then persist it so unknown probes cannot renew it.
+      const confirmedAt = previous.externalOfflineConfirmedAt ?? previous.lastAttemptAt;
+      const confirmedTime = Date.parse(confirmedAt ?? '');
+      const age = Date.now() - confirmedTime;
+      if (Number.isFinite(age) && age >= -5_000 && age < config.bedrockOfflineHoldMs) {
+        return recordUnavailable(
+          'external_offline',
+          'MCBE 服务器此前检测为外网离线，不可访问；第三方检测暂不可用，等待在线确认，玩家保持离线。',
+          confirmedAt,
+        );
+      }
+      externalHoldExpired = true;
     }
   }
   const observedAt = providerSnapshot.fetchedAt || checkedAt;
@@ -151,16 +163,20 @@ async function performPlayerLocationSync(
     latencyMs,
     onlineCount,
     changed: mergeResult.changed,
-    message:
-      external.availability === 'unknown'
-        ? `网页地图在线，已记录 ${onlineCount} 个在线玩家位置；第三方 MCBE 检测暂不可用，尚未完成外网确认。`
-        : `已记录 ${onlineCount} 个在线玩家位置。`,
+    message: !config.bedrockStatusEnabled
+      ? `网页地图在线，已记录 ${onlineCount} 个在线玩家位置；第三方 MCBE 判定已关闭。`
+      : externalHoldExpired
+        ? `网页地图在线，已记录 ${onlineCount} 个在线玩家位置；此前外网离线确认已过期，暂以地图结果为准，尚未完成外网确认。`
+        : external.availability === 'unknown'
+          ? `网页地图在线，已记录 ${onlineCount} 个在线玩家位置；第三方 MCBE 检测暂不可用，尚未完成外网确认。`
+          : `已记录 ${onlineCount} 个在线玩家位置。`,
     snapshot: mergeResult.snapshot,
   };
 
   async function recordUnavailable(
     reason: NonNullable<PlayerLocationSnapshot['unavailableReason']>,
     message: string,
+    externalOfflineConfirmedAt?: string,
   ): Promise<PlayerLocationSyncResult> {
     const observedAt = new Date().toISOString();
     const latencyMs = Date.now() - requestStartedAt;
@@ -169,6 +185,7 @@ async function performPlayerLocationSync(
       sourceStatus: 'unavailable',
       latencyMs,
       unavailableReason: reason,
+      externalOfflineConfirmedAt,
     });
     const actor = {
       type: input.actorType ?? 'adapter',

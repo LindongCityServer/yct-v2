@@ -3,6 +3,7 @@ import { createTimedKeyedCache } from './server-cache';
 export interface BedrockStatusObservation {
   availability: 'online' | 'offline' | 'unknown';
   validUntil: number;
+  observedAt?: string;
 }
 
 // mcstatus.io caches its own observations. Never extend those beyond expires_at,
@@ -31,7 +32,7 @@ export function createBedrockStatusChecker(
         const url = new URL(
           `https://api.mcstatus.io/v2/status/bedrock/${encodeURIComponent(address)}`,
         );
-        url.searchParams.set('timeout', '2.0');
+        url.searchParams.set('timeout', String(Math.min(2, Math.max(0.1, (timeout - 500) / 1000))));
         const response = await request(url, {
           signal: controller.signal,
           cache: 'no-store',
@@ -56,6 +57,7 @@ export function createBedrockStatusChecker(
           return unknown();
         return {
           availability: online ? 'online' : 'offline',
+          observedAt: new Date(retrieved_at).toISOString(),
           validUntil: Math.min(expires_at, retrieved_at + 120_000, time + 30_000),
         };
       } catch {
