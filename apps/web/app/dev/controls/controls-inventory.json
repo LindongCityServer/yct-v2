@@ -21402,7 +21402,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1458
+            1530
           ]
         },
         {
@@ -21416,24 +21416,24 @@
           "types": [],
           "states": [],
           "lines": [
-            1459,
-            1490,
+            1531,
             1562,
-            1575,
-            1589,
-            1607,
-            1639,
-            1650,
-            1729,
-            1740,
-            1846,
-            1869,
-            1881,
-            1893,
-            1898,
-            1903,
-            1908,
-            1913
+            1634,
+            1647,
+            1661,
+            1679,
+            1711,
+            1722,
+            1801,
+            1812,
+            1924,
+            1947,
+            1959,
+            1971,
+            1976,
+            1981,
+            1986,
+            1991
           ]
         },
         {
@@ -21448,7 +21448,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1463
+            1535
           ]
         },
         {
@@ -21460,7 +21460,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1464
+            1536
           ]
         },
         {
@@ -21475,7 +21475,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1470
+            1542
           ]
         },
         {
@@ -21487,7 +21487,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1471
+            1543
           ]
         },
         {
@@ -21505,7 +21505,7 @@
             "disabled"
           ],
           "lines": [
-            1475
+            1547
           ]
         },
         {
@@ -21524,7 +21524,7 @@
             "disabled"
           ],
           "lines": [
-            1483
+            1555
           ]
         },
         {
@@ -21538,7 +21538,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1500
+            1572
           ]
         },
         {
@@ -21550,7 +21550,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1501
+            1573
           ]
         },
         {
@@ -21566,7 +21566,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1523
+            1595
           ]
         },
         {
@@ -21580,7 +21580,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1527
+            1599
           ]
         },
         {
@@ -21594,7 +21594,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1532
+            1604
           ]
         },
         {
@@ -21609,7 +21609,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1533
+            1605
           ]
         },
         {
@@ -21627,10 +21627,10 @@
             "aria-pressed"
           ],
           "lines": [
-            1536,
-            1718,
-            1833,
-            1860
+            1608,
+            1790,
+            1911,
+            1938
           ]
         },
         {
@@ -21646,7 +21646,7 @@
           ],
           "states": [],
           "lines": [
-            1555
+            1627
           ]
         },
         {
@@ -21664,7 +21664,7 @@
             "aria-expanded"
           ],
           "lines": [
-            1567
+            1639
           ]
         },
         {
@@ -21678,7 +21678,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1582
+            1654
           ]
         },
         {
@@ -21692,7 +21692,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1583
+            1655
           ]
         },
         {
@@ -21708,7 +21708,7 @@
           ],
           "states": [],
           "lines": [
-            1584
+            1656
           ]
         },
         {
@@ -21727,7 +21727,7 @@
             "disabled"
           ],
           "lines": [
-            1596
+            1668
           ]
         },
         {
@@ -21741,7 +21741,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1613
+            1685
           ]
         },
         {
@@ -21756,7 +21756,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1619
+            1691
           ]
         },
         {
@@ -21770,8 +21770,8 @@
           "types": [],
           "states": [],
           "lines": [
-            1628,
-            1785
+            1700,
+            1857
           ]
         },
         {
@@ -21785,13 +21785,13 @@
           ],
           "states": [],
           "lines": [
-            1629,
-            1821,
-            1892,
-            1897,
-            1902,
-            1907,
-            1912
+            1701,
+            1894,
+            1970,
+            1975,
+            1980,
+            1985,
+            1990
           ]
         },
         {
@@ -21807,8 +21807,8 @@
           ],
           "states": [],
           "lines": [
-            1643,
-            1733
+            1715,
+            1805
           ]
         },
         {
@@ -21822,7 +21822,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1659
+            1731
           ]
         },
         {
@@ -21836,7 +21836,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1661
+            1733
           ]
         },
         {
@@ -21851,7 +21851,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1670
+            1742
           ]
         },
         {
@@ -21865,7 +21865,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1690
+            1762
           ]
         },
         {
@@ -21879,7 +21879,7 @@
           ],
           "states": [],
           "lines": [
-            1691
+            1763
           ]
         },
         {
@@ -21893,10 +21893,10 @@
           ],
           "states": [],
           "lines": [
-            1697,
-            1746,
-            1766,
-            1809
+            1769,
+            1818,
+            1838,
+            1882
           ]
         },
         {
@@ -21910,7 +21910,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1745
+            1817
           ]
         },
         {
@@ -21925,7 +21925,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1798
+            1870
           ]
         },
         {
@@ -21939,7 +21939,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1807
+            1879
           ]
         },
         {
@@ -21953,7 +21953,37 @@
           "types": [],
           "states": [],
           "lines": [
-            1808
+            1880
+          ]
+        },
+        {
+          "owner": "AdminTransitTripWorkbench",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "transit-trip-rule-badge"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            1881
+          ]
+        },
+        {
+          "owner": "AdminTransitTripWorkbench",
+          "element": "button",
+          "kind": "control",
+          "classes": [
+            "is-secondary"
+          ],
+          "roles": [],
+          "types": [
+            "button"
+          ],
+          "states": [],
+          "lines": [
+            1898
           ]
         },
         {
@@ -21968,7 +21998,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1825
+            1903
           ]
         },
         {
@@ -21982,8 +22012,8 @@
           "types": [],
           "states": [],
           "lines": [
-            1851,
-            1874
+            1929,
+            1952
           ]
         },
         {
@@ -21999,7 +22029,7 @@
             "disabled"
           ],
           "lines": [
-            1875
+            1953
           ]
         },
         {
@@ -22014,7 +22044,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1888
+            1966
           ]
         },
         {
@@ -22026,7 +22056,275 @@
           "types": [],
           "states": [],
           "lines": [
-            1920
+            1998
+          ]
+        },
+        {
+          "owner": "AdminTransitTripWorkbench",
+          "element": "DirectionSyncDialog",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            2011
+          ]
+        },
+        {
+          "owner": "AdminTransitTripWorkbench",
+          "element": "RuleDeleteDialog",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            2020
+          ]
+        },
+        {
+          "owner": "DirectionSyncDialog",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "modal-backdrop"
+          ],
+          "roles": [
+            "presentation"
+          ],
+          "types": [],
+          "states": [],
+          "lines": [
+            2045
+          ]
+        },
+        {
+          "owner": "DirectionSyncDialog",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "admin-transit-dialog",
+            "modal-panel",
+            "transit-trip-confirm-dialog"
+          ],
+          "roles": [
+            "dialog"
+          ],
+          "types": [],
+          "states": [],
+          "lines": [
+            2046
+          ]
+        },
+        {
+          "owner": "DirectionSyncDialog",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "section-heading"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            2053
+          ]
+        },
+        {
+          "owner": "DirectionSyncDialog",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "muted"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            2055
+          ]
+        },
+        {
+          "owner": "DirectionSyncDialog",
+          "element": "p",
+          "kind": "surface",
+          "classes": [
+            "muted"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            2057,
+            2081
+          ]
+        },
+        {
+          "owner": "DirectionSyncDialog",
+          "element": "fieldset",
+          "kind": "control",
+          "classes": [
+            "segmented-control"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            2060
+          ]
+        },
+        {
+          "owner": "DirectionSyncDialog",
+          "element": "button",
+          "kind": "control",
+          "classes": [
+            "is-active"
+          ],
+          "roles": [],
+          "types": [
+            "button"
+          ],
+          "states": [
+            "aria-pressed"
+          ],
+          "lines": [
+            2069
+          ]
+        },
+        {
+          "owner": "DirectionSyncDialog",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "admin-content-actions"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            2086
+          ]
+        },
+        {
+          "owner": "DirectionSyncDialog",
+          "element": "button",
+          "kind": "control",
+          "classes": [],
+          "roles": [],
+          "types": [
+            "button"
+          ],
+          "states": [],
+          "lines": [
+            2087
+          ]
+        },
+        {
+          "owner": "DirectionSyncDialog",
+          "element": "button",
+          "kind": "control",
+          "classes": [],
+          "roles": [],
+          "types": [
+            "button"
+          ],
+          "states": [
+            "disabled"
+          ],
+          "lines": [
+            2090
+          ]
+        },
+        {
+          "owner": "RuleDeleteDialog",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "modal-backdrop"
+          ],
+          "roles": [
+            "presentation"
+          ],
+          "types": [],
+          "states": [],
+          "lines": [
+            2111
+          ]
+        },
+        {
+          "owner": "RuleDeleteDialog",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "admin-transit-dialog",
+            "modal-panel",
+            "transit-trip-confirm-dialog"
+          ],
+          "roles": [
+            "dialog"
+          ],
+          "types": [],
+          "states": [],
+          "lines": [
+            2112
+          ]
+        },
+        {
+          "owner": "RuleDeleteDialog",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "section-heading"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            2119
+          ]
+        },
+        {
+          "owner": "RuleDeleteDialog",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "muted"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            2121
+          ]
+        },
+        {
+          "owner": "RuleDeleteDialog",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "admin-content-actions"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            2128
+          ]
+        },
+        {
+          "owner": "RuleDeleteDialog",
+          "element": "button",
+          "kind": "control",
+          "classes": [],
+          "roles": [],
+          "types": [
+            "button"
+          ],
+          "states": [],
+          "lines": [
+            2129,
+            2132
           ]
         },
         {
@@ -22042,7 +22340,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1949
+            2155
           ]
         },
         {
@@ -22060,7 +22358,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1950
+            2156
           ]
         },
         {
@@ -22074,7 +22372,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1957
+            2163
           ]
         },
         {
@@ -22088,7 +22386,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1959
+            2165
           ]
         },
         {
@@ -22102,8 +22400,8 @@
           "types": [],
           "states": [],
           "lines": [
-            1961,
-            1966
+            2167,
+            2172
           ]
         },
         {
@@ -22117,7 +22415,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1964
+            2170
           ]
         },
         {
@@ -22133,7 +22431,7 @@
             "checked"
           ],
           "lines": [
-            1970
+            2176
           ]
         },
         {
@@ -22147,7 +22445,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1984
+            2190
           ]
         },
         {
@@ -22161,7 +22459,7 @@
           "types": [],
           "states": [],
           "lines": [
-            1989
+            2195
           ]
         },
         {
@@ -22179,7 +22477,7 @@
             "aria-pressed"
           ],
           "lines": [
-            1998
+            2204
           ]
         },
         {
@@ -22193,7 +22491,7 @@
           "types": [],
           "states": [],
           "lines": [
-            2010
+            2216
           ]
         },
         {
@@ -22207,8 +22505,8 @@
           ],
           "states": [],
           "lines": [
-            2011,
-            2014
+            2217,
+            2220
           ]
         }
       ]

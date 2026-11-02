@@ -5,7 +5,7 @@
     {
       "version": "2.18.0",
       "releasedAt": "2026-11-02T12:23:26.518Z",
-      "sourceFingerprint": "257328e8ee68d419e62972233682ad581b89795545e3da844a4785333bfb1865",
+      "sourceFingerprint": "56500072e0f7f001c6a156260612df5d41ae686179865615b014aa92384485d3",
       "themes": ["transit", "admin", "map", "assistant", "web"],
       "changes": [
         {
