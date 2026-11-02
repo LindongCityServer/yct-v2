@@ -217,6 +217,7 @@ export function OperationsHome({
                     alt=""
                     loading={isActive ? 'eager' : 'lazy'}
                     decoding="async"
+                    deferPlaceholder={!isActive}
                     fetchPriority={isActive ? 'high' : 'low'}
                   />
                 ) : null}

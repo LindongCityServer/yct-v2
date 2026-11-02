@@ -17,6 +17,7 @@ import {
   type StoredContentAssetRecord,
 } from './content-asset-store';
 import { storeUploadedContentAssetFile } from './content-asset-file-store';
+import { warmImagePlaceholderByPublicPath } from './image-placeholder';
 import { readLegacyContentAssetInventory } from './legacy-content-asset-inventory';
 
 const uploadedMimeTypeByExtension: Record<string, string> = {
@@ -152,6 +153,10 @@ export async function uploadContentAsset(input: {
     ...input,
     mimeType,
   });
+  // 上传后立即生成低清占位，首访直接命中缓存；失败不影响上传主流程。
+  if (mimeType.startsWith('image/') && mimeType !== 'image/svg+xml') {
+    await warmImagePlaceholderByPublicPath(storedFile.publicPath);
+  }
   const existing = (await listContentAssetRecords()).find(
     (record) => record.sha256 === storedFile.sha256,
   );

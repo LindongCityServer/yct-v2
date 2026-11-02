@@ -74,6 +74,9 @@ importers:
       react-dom:
         specifier: ^19.2.7
         version: 19.2.7(react@19.2.7)
+      sharp:
+        specifier: 0.34.5
+        version: 0.34.5
       web-push:
         specifier: 3.6.7
         version: 3.6.7
@@ -1719,7 +1722,6 @@ snapshots:
       '@img/sharp-win32-arm64': 0.34.5
       '@img/sharp-win32-ia32': 0.34.5
       '@img/sharp-win32-x64': 0.34.5
-    optional: true
 
   sharp@0.35.2:
     dependencies:

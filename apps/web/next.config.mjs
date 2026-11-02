@@ -27,7 +27,8 @@ const nextConfig = {
     ],
   },
   poweredByHeader: false,
-  serverExternalPackages: ['@resvg/resvg-js'],
+  // sharp 是原生模块：交给 Node 运行时直接 require，避免被打进 server bundle。
+  serverExternalPackages: ['@resvg/resvg-js', 'sharp'],
   assetPrefix: normalizedBasePath || undefined,
   env: {
     NEXT_PUBLIC_YCT_BASE_PATH: normalizedBasePath,

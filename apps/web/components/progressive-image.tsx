@@ -5,11 +5,16 @@ import { appBasePath, appPath } from '../lib/app-paths';
 
 type ProgressiveImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> & {
   /**
-   * 可选的自定义低清占位图。不传时自动走 Next 图片优化器生成分级快照。
+   * 可选的自定义低清占位图。不传时使用站内低清占位接口生成 32px 快照。
    */
   placeholderSrc?: string;
   /** 是否在低清快照阶段显示右上角加载图标；头像等小图可关闭。 */
   showStatus?: boolean;
+  /**
+   * 越靠后的轮播项先不请求低清快照，等真正激活后再加载。
+   * 首页 hero 一次会渲染多张，全部提前请求会把优化器与带宽打满。
+   */
+  deferPlaceholder?: boolean;
   src: string;
 };
 
@@ -17,6 +22,8 @@ type ProgressiveImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> & 
 const ladderWidths = [32, 64, 128, 256, 512, 1024];
 const maxLadderLevels = 3;
 const maxPreviewWidth = 1024;
+// 低清首档固定用 32px，保证占位请求本身足够小、生成足够快。
+const firstPlaceholderWidth = 32;
 // 与 next.config.mjs 的 images.remotePatterns 保持同步；未命中的远程图不做 LQIP。
 const allowedRemoteHosts = ['minotar.net', 'mc-heads.net', 'shangxiaoguan.top'];
 
@@ -28,12 +35,14 @@ const allowedRemoteHosts = ['minotar.net', 'mc-heads.net', 'shangxiaoguan.top'];
  *   每一档就绪后就替换背景层，缩小“32px 直接跳原图”的落差；
  * 3. 原图始终通过原生 loading/decoding 正常加载，解码完成后覆盖背景层。
  *
- * 不做“加载完成后再降低模糊度”的动画；低清层只负责加载期间的可见性。
- * 只用于内容图，图标、地图瓦片、二维码、电报纸/物料模板不要使用。
+ * 低清首档走站内 /api/image-placeholder，直接读本地文件并缓存，避免 Next 优化器
+ * 在冷缓存时为生成缩略图去抓完整原图（大图会 7 秒超时并直接 500）。
+ * 中间档仍走 Next 优化器；任意一档失败后立即停止，不连续触发多次超时请求。
  */
 export function ProgressiveImage({
   className,
   decoding = 'async',
+  deferPlaceholder = false,
   loading,
   onError,
   onLoad,
@@ -82,50 +91,75 @@ export function ProgressiveImage({
       return undefined;
     }
 
+    // 非激活轮播项等激活后（deferPlaceholder 变为 false）再请求低清快照。
+    if (deferPlaceholder) {
+      return undefined;
+    }
+
     const widths = resolveLadderWidths(image);
-    // 挂载后立即显示阶梯第一档（此时渲染尺寸已知），避免 SSR 的 32px 直接跳大图。
-    setPlaceholder({
-      src,
-      url: placeholderSrc ?? buildOptimizerSrc(src, widths[0]),
-    });
-
     let cancelled = false;
-    let index = 1;
+    let observer: IntersectionObserver | undefined;
 
-    const loadNext = () => {
-      if (cancelled || index >= widths.length || loadedSrcRef.current === src) {
+    const startLadder = () => {
+      let index = 0;
+      const loadNext = () => {
+        if (cancelled || index >= widths.length || loadedSrcRef.current === src) {
+          return;
+        }
+
+        const width = widths[index++];
+        const nextUrl = buildOptimizerSrc(src, width);
+        if (!nextUrl) {
+          return;
+        }
+
+        const preloader = new Image();
+        preloader.decoding = 'async';
+        preloader.onload = () => {
+          if (cancelled || loadedSrcRef.current === src) {
+            return;
+          }
+          setPlaceholder({ src, url: nextUrl });
+          loadNext();
+        };
+        preloader.onerror = () => {
+          // 任意一档失败就停止；继续请求只会让同一张图反复触发服务端超时。
+        };
+        preloader.src = nextUrl;
+      };
+
+      loadNext();
+    };
+
+    const loadFirstPlaceholder = () => {
+      const firstUrl = placeholderSrc ?? buildPlaceholderSrc(src, firstPlaceholderWidth);
+      if (!firstUrl) {
+        startLadder();
         return;
       }
 
-      const width = widths[index++];
-      const nextUrl = buildOptimizerSrc(src, width);
-      if (!nextUrl) {
-        loadNext();
-        return;
-      }
-
-      const preloader = new Image();
-      preloader.decoding = 'async';
-      preloader.onload = () => {
+      const first = new Image();
+      first.decoding = 'async';
+      first.onload = () => {
         if (cancelled || loadedSrcRef.current === src) {
           return;
         }
-        setPlaceholder({ src, url: nextUrl });
-        loadNext();
+        setPlaceholder({ src, url: firstUrl });
+        startLadder();
       };
-      preloader.onerror = () => {
+      first.onerror = () => {
+        // 占位不可用时保留原图加载，不再尝试中间档，避免连续失败请求。
         if (!cancelled) {
-          loadNext();
+          setPlaceholder({ src, url: undefined });
         }
       };
-      preloader.src = nextUrl;
+      first.src = firstUrl;
     };
 
-    let observer: IntersectionObserver | undefined;
     const start = () => {
       observer?.disconnect();
       observer = undefined;
-      loadNext();
+      loadFirstPlaceholder();
     };
 
     if (loading === 'lazy' && typeof IntersectionObserver !== 'undefined') {
@@ -146,7 +180,7 @@ export function ProgressiveImage({
       cancelled = true;
       observer?.disconnect();
     };
-  }, [loading, placeholderSrc, src]);
+  }, [deferPlaceholder, loading, placeholderSrc, src]);
 
   return (
     <>
@@ -205,10 +239,29 @@ function resolveLadderWidths(image: HTMLImageElement): number[] {
     2048,
   );
   const eligible = ladderWidths.filter(
-    (width) => width <= Math.min(targetWidth * 0.9, maxPreviewWidth),
+    (width) =>
+      width > firstPlaceholderWidth && width <= Math.min(targetWidth * 0.9, maxPreviewWidth),
   );
 
-  return (eligible.length ? eligible : [ladderWidths[0]]).slice(-maxLadderLevels);
+  return eligible.slice(-maxLadderLevels);
+}
+
+/**
+ * 低清首档：走站内占位接口，服务端直接读本地文件并缓存。
+ */
+function buildPlaceholderSrc(src: string, width: number): string | undefined {
+  if (!src.startsWith('/') || src.startsWith('//')) {
+    return undefined;
+  }
+  if (/\.svg(?:[?#]|$)/i.test(src) || src.includes('/_next/image')) {
+    return undefined;
+  }
+
+  const params = new URLSearchParams({
+    url: toOptimizerSource(src),
+    w: String(width),
+  });
+  return appPath(`/api/image-placeholder?${params.toString()}`);
 }
 
 function buildOptimizerSrc(src: string, width: number): string | undefined {
@@ -231,11 +284,15 @@ function buildOptimizerSrc(src: string, width: number): string | undefined {
     w: String(width),
     q: '75',
   });
-  // 运行时上传的图片由反向代理直接托管，不在 Node 的 public 目录里；
-  // 优化器按相对路径抓取只会拿到 404 HTML（线上表现为 400），必须改用同源绝对地址。
-  const sameOriginSrc = toSameOriginAbsoluteSrc(src);
-  if (sameOriginSrc) {
-    params.set('url', sameOriginSrc);
+  // content-assets 由反向代理直接托管，不在 Node 的 public 目录里；优化器按相对路径
+  // 抓取只会拿到 404 HTML（线上表现为 400），必须改用同源绝对地址。
+  // 其余站内路径（legacy-assets、应用内的图片路由）保持相对路径，让优化器走内部读取，
+  // 避免为了一张缩略图再经公网域名绕一圈。
+  if (src.startsWith('/content-assets/')) {
+    const sameOriginSrc = toSameOriginAbsoluteSrc(src);
+    if (sameOriginSrc) {
+      params.set('url', sameOriginSrc);
+    }
   }
   return appPath(`/_next/image?${params.toString()}`);
 }

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { YctEvent, YctEventPayloadMap, YctEventType } from '@yct/contracts';
 import { publishDomainEvent } from './app-event-bus';
+import { warmImagePlaceholderByPublicPath } from './image-placeholder';
 import {
   isAllowedPoiImageMimeType,
   normalizePoiImageMimeType,
@@ -39,6 +40,8 @@ export async function uploadPoiSubmissionImage(input: {
     mimeType,
     bytes: input.bytes,
   });
+  // 上传后立即生成低清占位，首访直接命中缓存；失败不影响上传主流程。
+  await warmImagePlaceholderByPublicPath(storedFile.publicPath);
   const image = {
     imageId: `poi_image_${storedFile.sha256.slice(0, 24)}`,
     fileName: input.fileName,

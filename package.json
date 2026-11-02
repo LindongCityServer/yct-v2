@@ -26,6 +26,7 @@
     "metro:assets:inspect": "node scripts/inspect-nal-assets.mjs",
     "legacy:inspect": "tsx scripts/inspect-legacy-data.ts",
     "legacy:assets:download": "tsx scripts/download-legacy-assets.ts",
+    "images:placeholders": "tsx scripts/warm-image-placeholders.ts",
     "admin:init": "tsx scripts/init-admin.ts",
     "analytics:aggregate": "tsx scripts/aggregate-analytics.ts",
     "web:analytics:aggregate": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-web-analytics-aggregate.ps1",
