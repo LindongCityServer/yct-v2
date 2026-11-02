@@ -15,9 +15,9 @@
 | 成功         | 在线                                       | 在线，按本次地图名单更新玩家               |
 | 成功         | 明确离线                                   | 外网离线、不可访问，所有玩家离线           |
 | 成功         | 超时、限流、HTTP/JSON 错误、无效或过期观测 | 保持地图在线基准，消息说明尚未完成外网确认 |
-| 成功         | 检测失败，且此前明确外网离线尚未恢复       | 保持离线，等待第三方新在线证据             |
+| 成功         | 检测失败，且此前明确外网离线尚未恢复       | 保持离线，保持期限内等待第三方新在线证据   |
 
-地图暂时故障不会抹除此前未解决的外网离线记录。检测恢复且第三方报告在线后，才重新按地图实际名单恢复玩家在线。
+地图暂时故障不会抹除此前未解决的外网离线记录。第三方报告在线后，立即按地图实际名单恢复。若第三方持续故障，离线确认默认保持最多 5 分钟（从提供方 retrieved_at 计），超过期限且地图正常时恢复以地图结果为准，并通过 API 消息说明尚未完成外网确认。只有新的明确离线观测才续期；未知结果、复用同一提供方缓存或地图失败不续期。旧快照无确认时间时，以其上次尝试时间锚定一次，避免无限保持。
 
 ## 配置
 
@@ -27,10 +27,14 @@ YCT_MARKER_BDSLM_BASE_URL=http://ld.cmsy.xyz:19136
 YCT_MARKER_BDSLM_TIMEOUT_MS=6000
 # 用户确认的 MCBE UDP 游戏地址
 YCT_BEDROCK_SERVER_ADDRESS=ld.cmsy.xyz:19132
-YCT_BEDROCK_STATUS_TIMEOUT_MS=5000
+YCT_BEDROCK_STATUS_TIMEOUT_MS=2000
+# 设为 false 时不调用第三方、不采用第三方离线判定，恢复按地图结果判断
+YCT_BEDROCK_STATUS_ENABLED=true
+# 第三方故障时，最近一次明确离线最多保持多久；0 表示不保持
+YCT_BEDROCK_OFFLINE_HOLD_MS=300000
 ```
 
-游戏地址默认使用上述值，可通过环境变量替换。第三方 API 域名固定为 `api.mcstatus.io`，只向第三方提交游戏连接地址，不上传玩家名字或位置。HTTP 超时限制在 100–10000ms，第三方内部探测参数为 2 秒。
+游戏地址默认使用上述值，可通过环境变量替换。第三方 API 域名固定为 `api.mcstatus.io`，只向第三方提交游戏连接地址，不上传玩家名字或位置。HTTP 超时默认 2 秒，限制在 100–10000ms。第三方内部探测参数根据预算缩短，默认 1.5 秒，为 HTTP 通信留出时间。保持期限允许配置为 0–86400000ms。关闭第三方判定不会绕过地图故障的离线处理。
 
 ## 缓存与限制
 
@@ -47,3 +51,9 @@ pnpm exec tsx --test scripts/checks/verify-server-status.mjs
 ```
 
 测试使用隔离临时存储、模拟时钟和模拟 fetch，不连接生产服务器、不修改生产玩家数据。
+
+## 事件与时间语义
+
+沿用原实现顺序：先发布 `PlayerLocationsObserved`，再逐个发布 `PlayerLocationPresenceChanged`；服务器状态发生切换时随后发布 `ServerStatusObserved`。原 main 也采用这一顺序，本次不改动该契约。
+
+`lastAttemptAt` / 故障 `observedAt` 表示本次检测完成时刻；`externalOfflineConfirmedAt` 单独保存第三方 `retrieved_at`，用于保持期判断，不以每次失败请求的完成时间续期。

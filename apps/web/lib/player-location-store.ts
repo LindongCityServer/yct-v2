@@ -26,6 +26,7 @@ export interface PlayerLocationSnapshot {
   sourceStatus?: PlayerLocationSourceStatus;
   latencyMs?: number;
   unavailableReason?: 'map_unavailable' | 'external_offline';
+  externalOfflineConfirmedAt?: string;
   locations: PlayerLocationRecord[];
 }
 
@@ -67,6 +68,7 @@ export async function recordPlayerLocationAttempt(input: {
   sourceStatus: PlayerLocationSourceStatus;
   latencyMs?: number;
   unavailableReason?: PlayerLocationSnapshot['unavailableReason'];
+  externalOfflineConfirmedAt?: string;
 }): Promise<PlayerLocationAttemptResult> {
   return enqueueMutation(async () => {
     const snapshot = await readSnapshot();
@@ -85,8 +87,10 @@ export async function recordPlayerLocationAttempt(input: {
     const nextSnapshot: PlayerLocationSnapshot = {
       ...snapshot,
       locations,
+      externalOfflineConfirmedAt:
+        input.externalOfflineConfirmedAt ?? snapshot.externalOfflineConfirmedAt,
       // A map outage must not erase an unresolved external-offline observation.
-      // Only a successful merge after positive MCBE evidence clears that latch.
+      // A later successful merge clears it after recovery or its hold timeout.
       unavailableReason:
         snapshot.unavailableReason === 'external_offline'
           ? 'external_offline'
@@ -222,6 +226,11 @@ async function readSnapshot(): Promise<PlayerLocationSnapshot> {
       lastSuccessfulSyncAt: normalizeOptionalText(parsed.lastSuccessfulSyncAt),
       sourceStatus: normalizeSourceStatus(parsed.sourceStatus),
       latencyMs: normalizeLatency(parsed.latencyMs),
+      externalOfflineConfirmedAt:
+        normalizeOptionalText(parsed.externalOfflineConfirmedAt) ??
+        (parsed.unavailableReason === 'external_offline'
+          ? normalizeOptionalText(parsed.lastAttemptAt)
+          : undefined),
       unavailableReason:
         parsed.unavailableReason === 'map_unavailable' ||
         parsed.unavailableReason === 'external_offline'

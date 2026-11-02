@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -64,7 +64,7 @@ test('MCBE checker validates freshness, coalesces calls and separates probe erro
   assert.equal((await timeoutCheck('example.com:19132', 100)).availability, 'unknown');
 });
 
-test('map-first workflow persists all-offline transitions, emits once and restores only with online evidence', async (t) => {
+test('map-first workflow persists all-offline transitions, emits once and restores with online evidence or bounded fallback', async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'yct-server-status-'));
   const oldEnv = { ...process.env };
   const oldFetch = globalThis.fetch;
@@ -76,6 +76,8 @@ test('map-first workflow persists all-offline transitions, emits once and restor
   process.env.YCT_EVENT_OUTBOX_STORE_PATH = path.join(temporary, 'events.json');
   process.env.YCT_MARKER_BDSLM_BASE_URL = 'http://map.example:19136';
   process.env.YCT_BEDROCK_SERVER_ADDRESS = 'example.com:19132';
+  process.env.YCT_BEDROCK_STATUS_ENABLED = 'true';
+  process.env.YCT_BEDROCK_OFFLINE_HOLD_MS = '300000';
   let mapAvailable = true;
   let external = 'online';
   const requests = [];
@@ -244,6 +246,85 @@ test('map-first workflow persists all-offline transitions, emits once and restor
       const result = await syncPlayerLocations();
       assert.ok(result.snapshot.locations.every((player) => player.presence === 'offline'));
     });
+    await t.test('unknown probes do not renew the bounded offline hold', async () => {
+      advance();
+      mapAvailable = true;
+      external = 'offline';
+      const offline = await syncPlayerLocations();
+      const confirmedAt = offline.snapshot.externalOfflineConfirmedAt;
+      assert.ok(confirmedAt);
+      advance();
+      external = 'error';
+      const held = await syncPlayerLocations();
+      assert.equal(held.status, 'unavailable');
+      assert.equal(held.snapshot.externalOfflineConfirmedAt, confirmedAt);
+      clock += 300_000;
+      const recovered = await syncPlayerLocations();
+      assert.equal(recovered.status, 'ready');
+      assert.equal(recovered.onlineCount, 2);
+      assert.equal(recovered.snapshot.externalOfflineConfirmedAt, undefined);
+      assert.match(recovered.message, /确认已过期/);
+    });
+    await t.test(
+      'fresh offline confirmation renews the hold using provider observation time',
+      async () => {
+        advance();
+        external = 'offline';
+        const first = await syncPlayerLocations();
+        advance();
+        const renewed = await syncPlayerLocations();
+        assert.notEqual(
+          renewed.snapshot.externalOfflineConfirmedAt,
+          first.snapshot.externalOfflineConfirmedAt,
+        );
+        assert.equal(renewed.changed, false);
+        assert.equal(
+          renewed.snapshot.locations[0].offlineSince,
+          first.snapshot.locations[0].offlineSince,
+        );
+      },
+    );
+    await t.test(
+      'disabling external verdict bypasses the detector and clears the hold',
+      async () => {
+        process.env.YCT_BEDROCK_STATUS_ENABLED = 'false';
+        advance();
+        const result = await syncPlayerLocations();
+        assert.equal(result.status, 'ready');
+        assert.deepEqual(requests, ['map.example']);
+        assert.equal(result.snapshot.externalOfflineConfirmedAt, undefined);
+        assert.match(result.message, /判定已关闭/);
+        advance();
+        mapAvailable = false;
+        assert.equal((await syncPlayerLocations()).status, 'unavailable');
+      },
+    );
+    await t.test(
+      'legacy empty-player offline snapshots acquire a fixed expiry anchor',
+      async () => {
+        process.env.YCT_BEDROCK_STATUS_ENABLED = 'true';
+        mapAvailable = true;
+        external = 'error';
+        const anchor = new Date(clock - 100_000).toISOString();
+        await writeFile(
+          process.env.YCT_PLAYER_LOCATION_STORE_PATH,
+          JSON.stringify({
+            version: 1,
+            sourceId: 'bdslm-player-markers',
+            locations: [],
+            sourceStatus: 'unavailable',
+            unavailableReason: 'external_offline',
+            lastAttemptAt: anchor,
+          }),
+        );
+        advance();
+        const held = await syncPlayerLocations();
+        assert.equal(held.status, 'unavailable');
+        assert.equal(held.snapshot.externalOfflineConfirmedAt, anchor);
+        clock += 200_000;
+        assert.equal((await syncPlayerLocations()).status, 'ready');
+      },
+    );
   } finally {
     unsubscribe.forEach((stop) => stop());
     globalThis.fetch = oldFetch;

@@ -80,6 +80,8 @@ export interface RuntimeConfig {
   markerBdslmTimeoutMs: number;
   bedrockServerAddress: string;
   bedrockStatusTimeoutMs: number;
+  bedrockStatusEnabled: boolean;
+  bedrockOfflineHoldMs: number;
   legacyDataSource: 'auto' | 'local' | 'remote';
   legacyDataDir?: string;
   legacyDataRemoteBaseUrl: string;
@@ -364,7 +366,19 @@ export function readRuntimeConfig(): RuntimeConfig {
     markerBdslmTimeoutMs: Number(process.env.YCT_MARKER_BDSLM_TIMEOUT_MS ?? 6000),
     bedrockServerAddress:
       emptyToUndefined(process.env.YCT_BEDROCK_SERVER_ADDRESS) ?? 'ld.cmsy.xyz:19132',
-    bedrockStatusTimeoutMs: parsePositiveInteger(process.env.YCT_BEDROCK_STATUS_TIMEOUT_MS, 5000),
+    bedrockStatusTimeoutMs: parseIntegerInRange(
+      process.env.YCT_BEDROCK_STATUS_TIMEOUT_MS,
+      2000,
+      100,
+      10_000,
+    ),
+    bedrockStatusEnabled: process.env.YCT_BEDROCK_STATUS_ENABLED?.trim().toLowerCase() !== 'false',
+    bedrockOfflineHoldMs: parseIntegerInRange(
+      process.env.YCT_BEDROCK_OFFLINE_HOLD_MS,
+      300_000,
+      0,
+      86_400_000,
+    ),
     legacyDataSource: parseLegacyDataSource(process.env.YCT_LEGACY_DATA_SOURCE),
     legacyDataDir: resolveRuntimePath(process.env.YCT_LEGACY_DATA_DIR),
     legacyDataRemoteBaseUrl:
