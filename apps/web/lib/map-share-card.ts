@@ -3,6 +3,9 @@ import { appBasePath } from './app-paths';
 /** 与 next.config.mjs 的 images.remotePatterns 保持同步。 */
 const shareImageAllowedRemoteHosts = ['minotar.net', 'mc-heads.net', 'shangxiaoguan.top'];
 
+/** 分享卡片简介的最大展示长度（按 Unicode 码点计，含结尾省略号）。 */
+export const mapShareDescriptionMaxLength = 180;
+
 export interface MapShareImageSourceOptions {
   basePath?: string;
   origin?: string;
@@ -56,10 +59,7 @@ function stripBasePath(src: string, basePath: string): string {
   return src;
 }
 
-function resolveSameOriginAllowedSrc(
-  src: string,
-  origin: string | undefined,
-): string | undefined {
+function resolveSameOriginAllowedSrc(src: string, origin: string | undefined): string | undefined {
   const resolvedOrigin =
     origin ?? (typeof window !== 'undefined' ? window.location.origin : undefined);
   if (!resolvedOrigin) {
@@ -104,5 +104,8 @@ export function buildMapShareDescription(raw: string | null | undefined): string
     return normalized;
   }
 
-  return `${characters.slice(0, mapShareDescriptionMaxLength - 1).join('').trimEnd()}…`;
+  return `${characters
+    .slice(0, mapShareDescriptionMaxLength - 1)
+    .join('')
+    .trimEnd()}…`;
 }
