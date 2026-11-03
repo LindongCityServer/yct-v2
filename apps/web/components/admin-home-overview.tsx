@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { appPath } from '../lib/app-paths';
 import { useI18n } from '../lib/client-i18n';
@@ -65,10 +66,30 @@ export function AdminHomeOverview() {
       label: '内容与素材',
       value: summary ? summary.contents + summary.contentAssets : undefined,
       icon: 'article',
+      href: '/admin/operations',
+      target: '内容后台',
     },
-    { label: '服务入口', value: summary?.services, icon: 'dashboard_customize' },
-    { label: '线路与班次', value: summary?.transit, icon: 'route' },
-    { label: 'POI', value: summary?.poi, icon: 'add_location_alt' },
+    {
+      label: '服务入口',
+      value: summary?.services,
+      icon: 'dashboard_customize',
+      href: '/admin/services',
+      target: '服务后台',
+    },
+    {
+      label: '线路与班次',
+      value: summary?.transit,
+      icon: 'route',
+      href: '/admin/transit',
+      target: '线路与班次后台',
+    },
+    {
+      label: 'POI',
+      value: summary?.poi,
+      icon: 'add_location_alt',
+      href: '/admin/map-poi',
+      target: 'POI 后台',
+    },
   ];
 
   return (
@@ -89,7 +110,12 @@ export function AdminHomeOverview() {
       </div>
       <div className="admin-home-overview-grid">
         {metrics.map((metric) => (
-          <div className="admin-home-overview-metric" key={metric.label}>
+          <Link
+            className="admin-home-overview-metric"
+            href={appPath(metric.href)}
+            aria-label={`${metric.label} ${metric.value ?? '-'} 项待审核，前往${metric.target}`}
+            key={metric.label}
+          >
             <span className="material-symbols-outlined" aria-hidden="true">
               {metric.icon}
             </span>
@@ -97,7 +123,7 @@ export function AdminHomeOverview() {
               <strong>{metric.value ?? '-'}</strong>
               <small>{metric.label}</small>
             </span>
-          </div>
+          </Link>
         ))}
       </div>
     </section>

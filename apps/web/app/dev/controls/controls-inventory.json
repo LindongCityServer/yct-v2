@@ -5791,7 +5791,7 @@
           "types": [],
           "states": [],
           "lines": [
-            28
+            29
           ]
         },
         {
@@ -5805,7 +5805,7 @@
           "types": [],
           "states": [],
           "lines": [
-            30
+            31
           ]
         },
         {
@@ -5819,7 +5819,7 @@
           "types": [],
           "states": [],
           "lines": [
-            75
+            96
           ]
         },
         {
@@ -5833,7 +5833,7 @@
           "types": [],
           "states": [],
           "lines": [
-            76
+            97
           ]
         },
         {
@@ -5847,8 +5847,8 @@
           "types": [],
           "states": [],
           "lines": [
-            78,
-            93
+            99,
+            119
           ]
         },
         {
@@ -5862,7 +5862,7 @@
           "types": [],
           "states": [],
           "lines": [
-            83
+            104
           ]
         },
         {
@@ -5878,7 +5878,7 @@
           "types": [],
           "states": [],
           "lines": [
-            84
+            105
           ]
         },
         {
@@ -5890,7 +5890,7 @@
           "types": [],
           "states": [],
           "lines": [
-            87
+            108
           ]
         },
         {
@@ -5904,13 +5904,13 @@
           "types": [],
           "states": [],
           "lines": [
-            90
+            111
           ]
         },
         {
           "owner": "AdminHomeOverview",
-          "element": "div",
-          "kind": "surface",
+          "element": "Link",
+          "kind": "component",
           "classes": [
             "admin-home-overview-metric"
           ],
@@ -5918,7 +5918,7 @@
           "types": [],
           "states": [],
           "lines": [
-            92
+            113
           ]
         }
       ]

@@ -13817,8 +13817,29 @@ div.telegraph-output-scene.is-packing {
   gap: var(--yct-space-2);
   min-width: 0;
   padding: var(--yct-space-3);
+  border: 1px solid transparent;
   border-radius: var(--yct-radius-md);
   background: var(--yct-color-surface-panel);
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    border-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.admin-home-overview-metric:is(:hover, :focus-visible) {
+  border-color: var(--yct-color-border-strong);
+  background: color-mix(in srgb, var(--yct-color-primary) 6%, var(--yct-color-surface-panel));
+}
+
+.admin-home-overview-metric:active {
+  background: color-mix(in srgb, var(--yct-color-primary) 12%, var(--yct-color-surface-panel));
+}
+
+.admin-home-overview-metric:focus-visible {
+  outline: 2px solid var(--yct-color-primary);
+  outline-offset: 2px;
 }
 
 .admin-home-overview-metric > .material-symbols-outlined {
