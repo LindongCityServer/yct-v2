@@ -6,7 +6,7 @@
 ## Unreleased
 
 <!-- changelog:unreleased:start -->
-区间：2026-11-02T12:23:26.518Z → 当前时间；已合并 PR 12 个。
+区间：2026-11-02T12:23:26.518Z → 当前时间；已合并 PR 13 个。
 
 ### 新功能
 - 概览指标块改为可点击跳转（[#30](https://github.com/LindongCityServer/yct-v2/pull/30)，@wangkai8787）
@@ -21,6 +21,7 @@
 - 分享卡片补充简介与固定比例配图（[#29](https://github.com/LindongCityServer/yct-v2/pull/29)，@wangkai8787）
 - 修正 sharp 默认导出类型引用，恢复 typecheck 基线（[#41](https://github.com/LindongCityServer/yct-v2/pull/41)，@wangkai8787）
 - 地图优先确认 MCBE 外网状态并同步玩家离线（重建）（[#46](https://github.com/LindongCityServer/yct-v2/pull/46)，@beepingflijo）
+- 进入工作台前确认未保存修改（[#51](https://github.com/LindongCityServer/yct-v2/pull/51)，@beepingflijo）
 
 ### 重构
 - 「班次」页签更名为「运营配置」（[#31](https://github.com/LindongCityServer/yct-v2/pull/31)，@wangkai8787）
