@@ -7,17 +7,31 @@ import {
 } from './bedrock-status-providers';
 import { createTimedKeyedCache } from './server-cache';
 
+export type BedrockProviderOutcome = 'online' | 'offline' | 'failed' | 'skipped';
+
+export interface BedrockProviderResult {
+  id: string;
+  outcome: BedrockProviderOutcome;
+}
+
 export interface BedrockStatusObservation {
   availability: 'online' | 'offline' | 'unknown';
   validUntil: number;
   observedAt?: string;
   providerId?: string;
+  /** 各来源本轮的结果，便于排查误报与降级原因。 */
+  providerResults?: BedrockProviderResult[];
+  degraded?: boolean;
+  degradedReason?: 'conflict' | 'insufficient' | 'all-failed';
 }
 
 const invalidAddressWarning = new Set<string>();
 
-// 来源按配置顺序尝试：单个来源超时、限流、非法响应或网络错误时跳下一个；
-// 全部来源都无法给出明确结果时返回 unknown，由调用方按“离线保持”策略处理。
+// 来源并行探测后的聚合策略：
+// - 任一来源明确在线 → 在线（同时有来源报离线时记 conflict 降级）；
+// - 全部来源都明确离线 → 离线（可选经过确认窗口）；
+// - 其余情况（冲突未出现在线、部分失败、全部失败、熔断跳过）→ unknown + degraded，
+//   由调用方的“离线保持”策略沿用上一次已知状态，不据此误判在线/离线。
 export function createBedrockStatusChecker(
   request: typeof fetch = (...args) => fetch(...args),
   now: () => number = () => Date.now(),
@@ -25,14 +39,23 @@ export function createBedrockStatusChecker(
 ) {
   const cache = createTimedKeyedCache<BedrockStatusObservation>(30_000, 8);
   const pending = new Map<string, Promise<BedrockStatusObservation>>();
+  // 熔断与离线确认状态按 checker 实例隔离，避免测试与多地址互相污染。
+  const breaker = new Map<string, { failures: number; openUntil: number }>();
+  const offlineFirstSeen = new Map<string, number>();
+  const lastDegraded = new Map<string, string>();
+  const circuitWarned = new Set<string>();
+
   return async (address: string, timeoutMs: number): Promise<BedrockStatusObservation> => {
     const timeout = Math.min(10_000, Math.max(100, timeoutMs));
     const config = configOverride ?? resolveBedrockStatusProviderConfig(process.env);
     const key = JSON.stringify([address, timeout, config.signature]);
     const load = async (): Promise<BedrockStatusObservation> => {
-      const unknown = (): BedrockStatusObservation => ({
+      const unknown = (
+        extra: Partial<BedrockStatusObservation> = {},
+      ): BedrockStatusObservation => ({
         availability: 'unknown',
         validUntil: now() + 8_000,
+        ...extra,
       });
       // 只向配置的来源提交已校验的 host:port，不上传玩家信息。
       if (!isValidBedrockAddress(address)) {
@@ -45,12 +68,79 @@ export function createBedrockStatusChecker(
         return unknown();
       }
 
-      for (const provider of config.providers) {
-        const observation = await probeProvider(config, provider, address, timeout, request, now);
-        if (!observation) continue;
-        return { ...observation, providerId: provider.id };
+      const results = await Promise.all(
+        config.providers.map(async (provider) => {
+          const breakerKey = `${provider.id}|${address}`;
+          const state = breaker.get(breakerKey);
+          if (state && state.openUntil > now()) {
+            return { provider, observation: null, outcome: 'skipped' as const };
+          }
+          const observation = await probeProvider(config, provider, address, timeout, request, now);
+          recordProviderOutcome(breakerKey, provider.id, Boolean(observation), config);
+          return {
+            provider,
+            observation,
+            outcome: observation ? observation.availability : ('failed' as const),
+          };
+        }),
+      );
+
+      const providerResults: BedrockProviderResult[] = results.map((item) => ({
+        id: item.provider.id,
+        outcome: item.outcome,
+      }));
+      const onlineResults = results.filter((item) => item.observation?.availability === 'online');
+      const offlineResults = results.filter((item) => item.observation?.availability === 'offline');
+
+      if (onlineResults.length > 0) {
+        const chosen = onlineResults[0].observation as BedrockProviderObservation;
+        const conflict = offlineResults.length > 0;
+        if (conflict) {
+          warnDegraded(address, 'conflict', providerResults);
+        } else {
+          lastDegraded.delete(address);
+        }
+        return {
+          ...chosen,
+          validUntil: Math.min(
+            ...onlineResults.map(
+              (item) => (item.observation as BedrockProviderObservation).validUntil,
+            ),
+          ),
+          providerId: onlineResults[0].provider.id,
+          providerResults,
+          degraded: conflict || undefined,
+          degradedReason: conflict ? 'conflict' : undefined,
+        };
       }
-      return unknown();
+
+      const allExplicitOffline =
+        results.length > 0 && results.every((item) => item.observation?.availability === 'offline');
+      if (allExplicitOffline) {
+        // 默认确认窗口为 0，保持“明确离线立即生效”的既有语义；
+        // 需要抑制抖动时可配置为要求全源持续离线一段时间。
+        if (config.offlineConfirmMs <= 0) {
+          offlineFirstSeen.delete(address);
+          return buildOfflineObservation(offlineResults, providerResults, address);
+        }
+        const firstSeen = offlineFirstSeen.get(address);
+        if (firstSeen === undefined) {
+          offlineFirstSeen.set(address, now());
+        }
+        if (now() - (firstSeen ?? now()) < config.offlineConfirmMs) {
+          warnDegraded(address, 'insufficient', providerResults);
+          return unknown({ providerResults, degraded: true, degradedReason: 'insufficient' });
+        }
+        offlineFirstSeen.delete(address);
+        return buildOfflineObservation(offlineResults, providerResults, address);
+      }
+
+      offlineFirstSeen.delete(address);
+      const reason = results.every((item) => item.observation === null)
+        ? ('all-failed' as const)
+        : ('insufficient' as const);
+      warnDegraded(address, reason, providerResults);
+      return unknown({ providerResults, degraded: true, degradedReason: reason });
     };
     const existing = pending.get(key);
     if (existing) return existing;
@@ -69,6 +159,75 @@ export function createBedrockStatusChecker(
       pending.delete(key);
     }
   };
+
+  function buildOfflineObservation(
+    offlineResults: {
+      provider: BedrockStatusProvider;
+      observation: BedrockProviderObservation | null;
+    }[],
+    providerResults: BedrockProviderResult[],
+    address: string,
+  ): BedrockStatusObservation {
+    lastDegraded.delete(address);
+    const chosen = offlineResults[0];
+    if (!chosen?.observation) {
+      return {
+        availability: 'unknown',
+        validUntil: now() + 8_000,
+        providerResults,
+        degraded: true,
+        degradedReason: 'insufficient',
+      };
+    }
+    return {
+      ...chosen.observation,
+      validUntil: Math.min(...offlineResults.map((item) => item.observation!.validUntil)),
+      providerId: chosen.provider.id,
+      providerResults,
+    };
+  }
+
+  function recordProviderOutcome(
+    key: string,
+    providerId: string,
+    ok: boolean,
+    config: BedrockStatusProviderConfig,
+  ): void {
+    if (ok) {
+      breaker.delete(key);
+      return;
+    }
+    const state = breaker.get(key) ?? { failures: 0, openUntil: 0 };
+    state.failures += 1;
+    if (state.failures >= config.failureThreshold && config.cooldownMs > 0) {
+      state.openUntil = now() + config.cooldownMs;
+      const warnKey = `${key}|${state.openUntil}`;
+      if (!circuitWarned.has(warnKey)) {
+        circuitWarned.add(warnKey);
+        console.warn(
+          `[bedrock-status] 熔断 ${JSON.stringify({
+            provider: providerId,
+            failures: state.failures,
+            cooldownMs: config.cooldownMs,
+          })}`,
+        );
+      }
+    }
+    breaker.set(key, state);
+  }
+
+  function warnDegraded(
+    address: string,
+    reason: NonNullable<BedrockStatusObservation['degradedReason']>,
+    providerResults: BedrockProviderResult[],
+  ): void {
+    const signature = `${reason}|${providerResults.map((item) => `${item.id}:${item.outcome}`).join(',')}`;
+    if (lastDegraded.get(address) === signature) return;
+    lastDegraded.set(address, signature);
+    console.warn(
+      `[bedrock-status] degraded ${JSON.stringify({ address, reason, providers: providerResults })}`,
+    );
+  }
 }
 
 async function probeProvider(

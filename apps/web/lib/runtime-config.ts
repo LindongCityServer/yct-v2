@@ -85,6 +85,9 @@ export interface RuntimeConfig {
   bedrockProviders?: string;
   bedrockProviderRetries: number;
   bedrockProviderBackoffMs: number;
+  bedrockProviderFailureThreshold: number;
+  bedrockProviderCooldownMs: number;
+  bedrockOfflineConfirmMs: number;
   legacyDataSource: 'auto' | 'local' | 'remote';
   legacyDataDir?: string;
   legacyDataRemoteBaseUrl: string;
@@ -389,6 +392,24 @@ export function readRuntimeConfig(): RuntimeConfig {
       250,
       0,
       5_000,
+    ),
+    bedrockProviderFailureThreshold: parseIntegerInRange(
+      process.env.YCT_BEDROCK_PROVIDER_FAILURE_THRESHOLD,
+      3,
+      1,
+      20,
+    ),
+    bedrockProviderCooldownMs: parseIntegerInRange(
+      process.env.YCT_BEDROCK_PROVIDER_COOLDOWN_MS,
+      60_000,
+      0,
+      3_600_000,
+    ),
+    bedrockOfflineConfirmMs: parseIntegerInRange(
+      process.env.YCT_BEDROCK_OFFLINE_CONFIRM_MS,
+      0,
+      0,
+      3_600_000,
     ),
     legacyDataSource: parseLegacyDataSource(process.env.YCT_LEGACY_DATA_SOURCE),
     legacyDataDir: resolveRuntimePath(process.env.YCT_LEGACY_DATA_DIR),
