@@ -214,7 +214,19 @@ export function AdminTripOperatingCalendarEditor({
         >
           每日（含节假日）
         </button>
-        <button type="button" onClick={() => onChange(null)}>
+        <button
+          type="button"
+          onClick={() => {
+            // 关闭后 operatingDays 会沿用日历派生的星期码，已丢失的原文规则不会自动恢复。
+            if (
+              window.confirm(
+                '关闭后将沿用当前结构化日历派生的运营日，原文本规则不会自动恢复。确定关闭吗？',
+              )
+            ) {
+              onChange(null);
+            }
+          }}
+        >
           关闭结构化日历
         </button>
       </div>

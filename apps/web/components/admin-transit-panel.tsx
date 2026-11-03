@@ -7757,7 +7757,8 @@ function preserveTransitSegmentOperationStatuses(
       parsed.segmentPaths.push({
         fromStationSourceId,
         toStationSourceId,
-        mode: routeMode,
+        // 仅运行分钟的空段没有途径点，road 模式下按直线保存，避免 schema 拒绝。
+        mode: routeMode === 'road' && operationStatus === 'operating' ? 'straight' : routeMode,
         operationStatus,
         travelMinutes: previousPath?.travelMinutes,
         waypoints: [],
@@ -7975,6 +7976,17 @@ function applyTransitSegmentTravelMinutes(
     if (!value) {
       if (existing) {
         existing.travelMinutes = undefined;
+        // 仅由运行分钟生成的空途径点段在清空后应移除，避免留下无法通过校验的空 road 段。
+        if (
+          existing.waypoints.length === 0 &&
+          existing.operationStatus === 'operating' &&
+          existing.travelMinutes === undefined
+        ) {
+          const existingIndex = segmentPaths.indexOf(existing);
+          if (existingIndex >= 0) {
+            segmentPaths.splice(existingIndex, 1);
+          }
+        }
       }
       continue;
     }
@@ -7990,7 +8002,8 @@ function applyTransitSegmentTravelMinutes(
     segmentPaths.push({
       fromStationSourceId,
       toStationSourceId,
-      mode: routeMode,
+      // 没有途径点的段无法沿道路走行，降级为直线，避免触发 schema 校验失败。
+      mode: routeMode === 'road' ? 'straight' : routeMode,
       operationStatus: 'operating',
       travelMinutes,
       waypoints: [],
