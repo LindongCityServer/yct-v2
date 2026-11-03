@@ -59,13 +59,10 @@ export function buildProgressiveImageOptimizerSrc(
   const basePath = options.basePath ?? appBasePath;
   // 优化器在应用内部按“自己的 origin + url”取图，因此本地路径要去掉外部 basePath。
   const optimizerSource = toOptimizerSource(src, basePath);
-  const params = new URLSearchParams({
-    url: optimizerSource,
-    w: String(width),
-    q: '75',
-  });
+  let source = optimizerSource;
   // content-assets 由反向代理直接托管，不在 Node 的 public 目录里；优化器按相对路径
   // 抓取只会拿到 404 HTML（线上表现为 400），必须改用同源绝对地址。
+  // 无法确认同源域名时返回 undefined，让调用方回退原图，而不是发一个必然失败的请求。
   // 其余站内路径（legacy-assets、应用内的图片路由）保持相对路径，让优化器走内部读取，
   // 避免为了一张缩略图再经公网域名绕一圈。
   if (optimizerSource.startsWith('/content-assets/')) {
@@ -74,10 +71,13 @@ export function buildProgressiveImageOptimizerSrc(
       options.origin,
       allowedRemoteHosts,
     );
-    if (sameOriginSrc) {
-      params.set('url', sameOriginSrc);
+    if (!sameOriginSrc) {
+      return undefined;
     }
+    source = sameOriginSrc;
   }
+
+  const params = new URLSearchParams({ url: source, w: String(width), q: '75' });
 
   const pathname = `/_next/image?${params.toString()}`;
   return basePath ? `${basePath}${pathname}` : pathname;

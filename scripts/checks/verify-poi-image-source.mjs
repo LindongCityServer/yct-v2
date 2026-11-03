@@ -51,12 +51,12 @@ test('remote whitelist is used for the content-assets origin check', () => {
   assert.equal(decodeUrl(src), 'https://cdn.example.com/content-assets/poi/cover.png');
 });
 
-test('content-assets without an allowed origin fall back to the relative source', () => {
+test('content-assets without an allowed origin are skipped instead of sending a bad request', () => {
   const src = buildProgressiveImageOptimizerSrc('/content-assets/poi/cover.png', 1024, {
     basePath: '',
     origin: 'http://localhost:3000',
   });
-  assert.equal(decodeUrl(src), '/content-assets/poi/cover.png');
+  assert.equal(src, undefined);
 });
 
 test('whitelisted remote https images are optimized', () => {
