@@ -6,7 +6,6 @@ import {
   updateTravelScheduleTripApprovalStatus,
   updateTravelScheduleTrip,
 } from '../../../../../../../../lib/travel-schedule-revision-workflow';
-import { formatValidationErrorMessage } from '../../../../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +24,7 @@ export async function POST(
     return NextResponse.json(
       {
         error: 'invalid_travel_schedule_trip_approval_action',
-        message: formatValidationErrorMessage('班次审批动作不符合要求', parsed.error),
+        message: '班次审批动作不符合要求。',
         issues: parsed.error.issues,
       },
       { status: 400 },
@@ -65,10 +64,13 @@ export async function PATCH(
   const body = await request.json();
   const parsed = travelScheduleTripUpdateSchema.safeParse(body);
   if (!parsed.success) {
+    const operatingCalendarIssue = parsed.error.issues.find(
+      (issue) => issue.code === 'custom' && issue.path.includes('operatingCalendar'),
+    );
     return NextResponse.json(
       {
         error: 'invalid_travel_schedule_trip_update',
-        message: formatValidationErrorMessage('班次修正内容不符合要求', parsed.error),
+        message: operatingCalendarIssue?.message ?? '班次修正内容不符合要求。',
         issues: parsed.error.issues,
       },
       { status: 400 },

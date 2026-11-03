@@ -5,7 +5,6 @@ import {
   createTravelScheduleTrip,
   mutateTravelScheduleTrips,
 } from '../../../../../../../lib/travel-schedule-revision-workflow';
-import { formatValidationErrorMessage } from '../../../../../../../lib/validation-error-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,10 +20,13 @@ export async function POST(
   const body = await request.json();
   const parsed = travelScheduleTripDraftSchema.safeParse(body);
   if (!parsed.success) {
+    const operatingCalendarIssue = parsed.error.issues.find(
+      (issue) => issue.code === 'custom' && issue.path.includes('operatingCalendar'),
+    );
     return NextResponse.json(
       {
         error: 'invalid_travel_schedule_trip_create',
-        message: formatValidationErrorMessage('班次新增内容不符合要求', parsed.error),
+        message: operatingCalendarIssue?.message ?? '班次新增内容不符合要求。',
         issues: parsed.error.issues,
       },
       { status: 400 },
@@ -63,10 +65,13 @@ export async function PATCH(
   const body = await request.json();
   const parsed = travelScheduleTripBatchMutationSchema.safeParse(body);
   if (!parsed.success) {
+    const operatingCalendarIssue = parsed.error.issues.find(
+      (issue) => issue.code === 'custom' && issue.path.includes('operatingCalendar'),
+    );
     return NextResponse.json(
       {
         error: 'invalid_travel_schedule_trip_batch',
-        message: formatValidationErrorMessage('班次批量保存内容不符合要求', parsed.error),
+        message: operatingCalendarIssue?.message ?? '班次批量保存内容不符合要求。',
         issues: parsed.error.issues,
       },
       { status: 400 },

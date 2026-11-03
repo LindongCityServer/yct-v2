@@ -24,6 +24,7 @@
     "ui:controls:check": "node scripts/ui-controls-inventory.mjs --check",
     "metro:check": "tsx scripts/checks/verify-form-controls.ts && tsx scripts/checks/verify-metro-line-number.ts && tsx scripts/checks/verify-metro-line-source.ts && tsx scripts/checks/verify-metro-caret-suggestion.ts && tsx scripts/checks/verify-metro-segment-navigation.ts && tsx scripts/checks/verify-metro-toolbar-collapse.ts && tsx scripts/checks/verify-metro-narrow-width.ts && tsx scripts/checks/verify-metro-editor-parity.ts && tsx scripts/checks/verify-metro-preview-track.ts && tsx scripts/checks/verify-metro-import-sources.ts && tsx scripts/checks/verify-metro-import-preview.ts && tsx scripts/checks/verify-material-server-source.ts && tsx scripts/checks/verify-material-mode-transparency.ts && tsx scripts/checks/verify-embedded-topbar.ts",
     "assistant:check": "pnpm --filter @yct/web exec tsx ../../scripts/checks/verify-assistant-scenarios.ts",
+    "travel:calendar:check": "pnpm --filter @yct/web exec tsx ../../scripts/checks/verify-operating-calendar.ts",
     "mcp:check": "pnpm --filter @yct/web exec tsx ../../scripts/checks/verify-mcp-server.ts",
     "metro:assets:inspect": "node scripts/inspect-nal-assets.mjs",
     "legacy:inspect": "tsx scripts/inspect-legacy-data.ts",

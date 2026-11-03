@@ -1,5 +1,7 @@
 import type {
   ApiItemResponse,
+  HolidayCalendarYearSnapshot,
+  HolidayCalendarYearState,
   TicketableServiceKind,
   TransitServiceNotice,
   TransitScreenGate,
@@ -23,6 +25,16 @@ import { readPublishedTravelScheduleEntitySnapshot } from './published-travel-sc
 import { readTravelServiceProfiles } from './travel-service-profile-store';
 import { createTimedCache } from './server-cache';
 import { readTravelJourneyTransferOptions } from './travel-journey-transfers';
+import {
+  createHolidayLookup,
+  getOperatingWeekdayKey,
+  getShanghaiYear,
+  resolveTripOperatingDay,
+  toShanghaiDateString,
+  type OperatingHolidayLookup,
+} from './operating-calendar';
+import { buildHolidayCalendarStates, readHolidayCalendarYears } from './holiday-calendar-store';
+import { ensureHolidayCalendarFreshness, shouldPreloadNextYear } from './holiday-calendar-fetcher';
 
 const targetFlightAirport = '临东金桦';
 const targetFlightOperator = '临东航空';
@@ -97,8 +109,9 @@ async function readLiveTravelScheduleQueryUncached(
     trips.flatMap((trip) => trip.stationNames),
   );
   const serviceDate = normalizeServiceDate(query.serviceDate);
+  const calendarContext = await readHolidayCalendarContext(serviceDate);
   const filteredTrips = await attachTicketingAvailability(
-    filterTrips(trips, { ...query, serviceDate }),
+    filterTrips(trips, { ...query, serviceDate }, calendarContext.lookup),
   );
   const sourceMessages = [
     screen.meta.message,
@@ -134,6 +147,8 @@ async function readLiveTravelScheduleQueryUncached(
         transferOptions: [],
         sourceFiles,
         serviceDate,
+        holidayCalendars: calendarContext.snapshots,
+        holidayCalendarStates: calendarContext.states,
       },
     };
   }
@@ -156,6 +171,8 @@ async function readLiveTravelScheduleQueryUncached(
       sourceFiles,
       serviceDate,
       notice: screen.item?.notice,
+      holidayCalendars: calendarContext.snapshots,
+      holidayCalendarStates: calendarContext.states,
     },
   };
 }
@@ -165,8 +182,9 @@ async function readPublishedTravelScheduleQueryUncached(
   revision: TravelScheduleRevision,
 ): Promise<ApiItemResponse<TravelScheduleQueryResult>> {
   const serviceDate = normalizeServiceDate(query.serviceDate);
+  const calendarContext = await readHolidayCalendarContext(serviceDate);
   const filteredTrips = await attachTicketingAvailability(
-    filterTrips(revision.trips, { ...query, serviceDate }),
+    filterTrips(revision.trips, { ...query, serviceDate }, calendarContext.lookup),
   );
   const transferOptions = await readTravelJourneyTransferOptions(
     revision.trips.flatMap((trip) => trip.stationNames),
@@ -188,7 +206,53 @@ async function readPublishedTravelScheduleQueryUncached(
       sourceFiles: revision.sourceFiles,
       serviceDate,
       notice: revision.notice,
+      holidayCalendars: calendarContext.snapshots,
+      holidayCalendarStates: calendarContext.states,
     },
+  };
+}
+
+interface HolidayCalendarContext {
+  snapshots: HolidayCalendarYearSnapshot[];
+  states: HolidayCalendarYearState[];
+  lookup: OperatingHolidayLookup;
+}
+
+/**
+ * 读取判定所需的年度快照；缺失只记录状态并异步刷新，绝不阻塞查询。
+ * 跨年日期按自身年份读取，不做互相推断。
+ */
+async function readHolidayCalendarContext(
+  serviceDate: string | undefined,
+): Promise<HolidayCalendarContext> {
+  const currentYear = getShanghaiYear();
+  const targetYear = serviceDate ? Number(serviceDate.slice(0, 4)) : currentYear;
+  const preloadYear = shouldPreloadNextYear();
+  const years = uniqueSorted(
+    [targetYear, currentYear, currentYear + 1, preloadYear]
+      .filter((year): year is number => Number.isInteger(year))
+      .map(String),
+  ).map(Number);
+
+  for (const year of years) {
+    void ensureHolidayCalendarFreshness(year).catch((error) => {
+      console.warn(
+        `[holiday-calendar] ${year} 年新鲜度检查失败：${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    });
+  }
+
+  const results = await readHolidayCalendarYears(years);
+  const snapshots = results.flatMap((result) =>
+    result.status === 'ready' && result.snapshot ? [result.snapshot] : [],
+  );
+
+  return {
+    snapshots,
+    states: buildHolidayCalendarStates(results),
+    lookup: createHolidayLookup(snapshots),
   };
 }
 
@@ -598,6 +662,7 @@ function timeWithDayOffsetToMinutes(segment: Pick<FlightSegment, 'time' | 'dayOf
 function filterTrips(
   trips: TravelTripInstance[],
   query: TravelScheduleQuery,
+  holiday: OperatingHolidayLookup,
 ): TravelTripInstance[] {
   const serviceKind = query.serviceKind ?? 'all';
   const timeScope = query.timeScope ?? 'all';
@@ -614,7 +679,7 @@ function filterTrips(
 
   return trips
     .filter((trip) => serviceKind === 'all' || trip.serviceKind === serviceKind)
-    .filter((trip) => filterByServiceDay(trip, serviceDay))
+    .filter((trip) => filterByServiceDay(trip, serviceDay, query.serviceDate, holiday))
     .filter((trip) => filterByStationPair(trip, originStationName, destinationStationName))
     .filter(
       (trip) =>
@@ -686,7 +751,18 @@ function filterByTime(
 
 type ServiceDateState = 'unspecified' | 'past' | 'today' | 'future';
 
-function filterByServiceDay(trip: TravelTripInstance, serviceDay: string | undefined): boolean {
+function filterByServiceDay(
+  trip: TravelTripInstance,
+  serviceDay: string | undefined,
+  serviceDate: string | undefined,
+  holiday: OperatingHolidayLookup,
+): boolean {
+  if (serviceDate && trip.operatingCalendar) {
+    const decision = resolveTripOperatingDay(trip, serviceDate, holiday);
+    // unknown 不隐藏班次：规则确实无法判定时宁可保留并让调用方展示状态，避免误删服务。
+    return decision.status !== 'closed';
+  }
+
   if (!serviceDay || !trip.operatingDays?.length) {
     return true;
   }
@@ -740,14 +816,7 @@ function getServiceDateState(serviceDate: string | undefined): ServiceDateState 
 }
 
 function getServiceDay(serviceDate: string | undefined): string | undefined {
-  if (!serviceDate) {
-    return undefined;
-  }
-
-  const [yearText, monthText, dayText] = serviceDate.split('-');
-  const date = new Date(Number(yearText), Number(monthText) - 1, Number(dayText));
-  const dayKeys = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-  return dayKeys[date.getDay()];
+  return serviceDate ? getOperatingWeekdayKey(serviceDate) : undefined;
 }
 
 function normalizeServiceDate(value: string | undefined): string | undefined {
@@ -767,10 +836,7 @@ function normalizeServiceDate(value: string | undefined): string | undefined {
 }
 
 function toDateInputValue(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return toShanghaiDateString(date);
 }
 
 function formatPublishedScheduleRevisionTime(value: string | undefined): string {

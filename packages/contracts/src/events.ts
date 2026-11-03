@@ -1152,6 +1152,7 @@ export interface TravelScheduleTripEditedPayload {
     | 'vehicleTypeText'
     | 'vehicleModelText'
     | 'operatingDays'
+    | 'operatingCalendar'
     | 'availability'
     | 'sourcePath'
   >;
