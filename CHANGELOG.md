@@ -6,7 +6,7 @@
 ## Unreleased
 
 <!-- changelog:unreleased:start -->
-区间：2026-11-02T12:23:26.518Z → 当前时间；已合并 PR 9 个。
+区间：2026-11-02T12:23:26.518Z → 当前时间；已合并 PR 10 个。
 
 ### 新功能
 - 概览指标块改为可点击跳转（[#30](https://github.com/LindongCityServer/yct-v2/pull/30)，@wangkai8787）
@@ -22,6 +22,9 @@
 
 ### 重构
 - 「班次」页签更名为「运营配置」（[#31](https://github.com/LindongCityServer/yct-v2/pull/31)，@wangkai8787）
+
+### 维护
+- 变更日志只收录合并 PR 并加入覆盖率校验（重建）（[#49](https://github.com/LindongCityServer/yct-v2/pull/49)，@beepingflijo）
 <!-- changelog:unreleased:end -->
 
 ## 2.18.0 — 2026-11-02
