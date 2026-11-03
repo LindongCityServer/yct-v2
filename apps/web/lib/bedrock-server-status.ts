@@ -103,9 +103,16 @@ export function createBedrockStatusChecker(
         warnDegraded(address, 'conflict', providerResults);
         // 冲突时按事件时间新鲜度判定：有来源时间戳的一侧优先；双方都有则取更新的；
         // 双方都无时间戳（例如 mcsrvstat 的上游缓存结果）时保守保留在线，避免误报离线。
+        // 多来源时取每侧最鲜的一条，避免固定取列表首项错过更新的证据。
+        const newestOnline = [...onlineResults].sort(
+          (left, right) => freshnessRank(left.observation) - freshnessRank(right.observation),
+        )[0];
+        const newestOffline = [...offlineResults].sort(
+          (left, right) => freshnessRank(left.observation) - freshnessRank(right.observation),
+        )[0];
         const newer = compareFreshness(
-          onlineResults[0].observation as BedrockProviderObservation,
-          offlineResults[0].observation as BedrockProviderObservation,
+          newestOnline.observation as BedrockProviderObservation,
+          newestOffline.observation as BedrockProviderObservation,
         );
         if (newer === 'online') {
           // 出现在线证据后重新计时，避免此前累计的离线窗口在下次冲突时直接生效。
