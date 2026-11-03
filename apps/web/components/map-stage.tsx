@@ -37,6 +37,7 @@ import LZString from 'lz-string';
 import QRCode from 'qrcode';
 import { appPath } from '../lib/app-paths';
 import { buildMapShareDescription, buildShareImagePreviewSrc } from '../lib/map-share-card';
+import { buildProgressiveImageOptimizerSrc } from '../lib/progressive-image-source';
 import { buildExploreCandidates, pickExploreCandidate } from '../lib/random-explore';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { publishAssistantPageContext } from '../lib/client-assistant-page-context';
@@ -8813,12 +8814,14 @@ async function createMapShareImageBlob(previewElement: HTMLElement): Promise<Blo
   await document.fonts?.ready;
   // 分享图与二维码都是异步加载；等它们落定再截图，避免导出空白块。
   await waitForSharePreviewImages(previewElement);
-  // 加载失败的图片直接剔除，保证导出的是干净的无图卡片。
-  const brokenImages: HTMLImageElement[] = [];
+  // 加载失败的图片直接剔除，保证导出的是干净的无图卡片；配图连同容器一起隐藏，避免留下空白色条。
+  const hiddenElements: HTMLElement[] = [];
   for (const image of previewElement.querySelectorAll('img')) {
     if (image.complete && image.naturalWidth === 0) {
-      image.style.display = 'none';
-      brokenImages.push(image);
+      const media = image.closest('.map-share-preview-media');
+      const target = media instanceof HTMLElement ? media : image;
+      target.style.display = 'none';
+      hiddenElements.push(target);
     }
   }
 
@@ -8839,8 +8842,8 @@ async function createMapShareImageBlob(previewElement: HTMLElement): Promise<Blo
 
     return blob;
   } finally {
-    for (const image of brokenImages) {
-      image.style.display = '';
+    for (const element of hiddenElements) {
+      element.style.display = '';
     }
   }
 }
@@ -8857,14 +8860,18 @@ async function waitForSharePreviewImages(previewElement: HTMLElement): Promise<v
             return;
           }
 
+          let timer: number | undefined;
           const finish = () => {
+            if (timer !== undefined) {
+              window.clearTimeout(timer);
+            }
             image.removeEventListener('load', finish);
             image.removeEventListener('error', finish);
             resolve();
           };
           image.addEventListener('load', finish);
           image.addEventListener('error', finish);
-          window.setTimeout(finish, 2500);
+          timer = window.setTimeout(finish, 2500);
         }),
     ),
   );
