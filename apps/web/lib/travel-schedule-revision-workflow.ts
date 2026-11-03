@@ -29,6 +29,7 @@ import {
   updateTravelScheduleRevision,
   withTravelScheduleRevisionStatus,
 } from './travel-schedule-revision-store';
+import { deriveOperatingDays, deriveTravelTripKey } from './operating-calendar';
 
 export interface TravelScheduleRevisionActionResult {
   ok: boolean;
@@ -60,12 +61,17 @@ export type TravelScheduleTripEditableField =
   | 'vehicleTypeText'
   | 'vehicleModelText'
   | 'operatingDays'
+  | 'operatingCalendar'
   | 'availability'
   | 'sourcePath';
 
-export type TravelScheduleTripUpdatePatch = Partial<
-  Pick<TravelTripInstance, TravelScheduleTripEditableField>
->;
+export type TravelScheduleTripUpdatePatch = Omit<
+  Partial<Pick<TravelTripInstance, TravelScheduleTripEditableField>>,
+  'operatingCalendar'
+> & {
+  /** null 表示显式关闭结构化运营日历，回退到旧 operatingDays 行为。 */
+  operatingCalendar?: TravelTripInstance['operatingCalendar'] | null;
+};
 
 /** 新增班次的入参，供单条与批量保存共用。 */
 export type TravelScheduleTripCreateInput = TravelScheduleTripUpdatePatch &
@@ -395,7 +401,10 @@ export async function createTravelScheduleTrip(input: {
   }
 
   const createdAt = new Date().toISOString();
-  const trip = buildCreatedTravelScheduleTrip(input.trip, revision.services);
+  const trip = adoptOperatingCalendarFromExistingTrips(
+    buildCreatedTravelScheduleTrip(input.trip, revision.services),
+    revision.trips,
+  );
   const nextTrips = [...revision.trips, trip];
   const publishedValidationError = getPublishedTravelScheduleMutationError(revision, nextTrips);
   if (publishedValidationError) {
@@ -451,9 +460,7 @@ export async function mutateTravelScheduleTrips(input: {
   let timingChanged = false;
 
   for (const update of updates) {
-    const index = nextTrips.findIndex(
-      (trip) => trip.tripInstanceId === update.tripInstanceId,
-    );
+    const index = nextTrips.findIndex((trip) => trip.tripInstanceId === update.tripInstanceId);
     if (index < 0) {
       return {
         ok: false,
@@ -477,7 +484,10 @@ export async function mutateTravelScheduleTrips(input: {
   }
 
   for (const create of creates) {
-    const trip = buildCreatedTravelScheduleTrip(create, revision.services);
+    const trip = adoptOperatingCalendarFromExistingTrips(
+      buildCreatedTravelScheduleTrip(create, revision.services),
+      nextTrips,
+    );
     nextTrips.push(trip);
     createdTripInstanceIds.push(trip.tripInstanceId);
   }
@@ -739,6 +749,12 @@ function normalizeTravelScheduleTripPatch(
     services.find((service) => service.kind === nextServiceKind) ??
     services.find((service) => service.kind === trip.serviceKind) ??
     null;
+  const nextOperatingCalendar =
+    patch.operatingCalendar === undefined
+      ? trip.operatingCalendar
+      : patch.operatingCalendar === null
+        ? undefined
+        : { ...patch.operatingCalendar, updatedAt: new Date().toISOString() };
   const nextTrip: TravelTripInstance = {
     ...trip,
     tripCode: patch.tripCode === undefined ? trip.tripCode : optionalTrimmedString(patch.tripCode),
@@ -803,6 +819,7 @@ function normalizeTravelScheduleTripPatch(
       patch.operatingDays === undefined
         ? trip.operatingDays
         : normalizeStringList(patch.operatingDays),
+    operatingCalendar: nextOperatingCalendar,
     availability: patch.availability ?? trip.availability,
     sourcePath:
       patch.sourcePath === undefined ? trip.sourcePath : optionalTrimmedString(patch.sourcePath),
@@ -811,6 +828,15 @@ function normalizeTravelScheduleTripPatch(
   if (nextTrip.operatingDays?.length === 0) {
     nextTrip.operatingDays = undefined;
   }
+
+  if (nextTrip.operatingCalendar) {
+    // 旧字段改为派生只读：只按 patterns 展开，节假日/调休无法用星期码表达。
+    nextTrip.operatingDays = deriveOperatingDays(nextTrip.operatingCalendar.patterns);
+  }
+
+  const tripKey = deriveTravelTripKey(nextTrip);
+  nextTrip.tripKey = tripKey;
+  nextTrip.tripKeyStatus = tripKey ? 'derived' : 'legacy_unkeyed';
 
   return nextTrip;
 }
@@ -841,6 +867,7 @@ function getChangedTravelScheduleTripFields(
     'vehicleTypeText',
     'vehicleModelText',
     'operatingDays',
+    'operatingCalendar',
     'availability',
     'sourcePath',
   ];
@@ -910,8 +937,36 @@ function buildCreatedTravelScheduleTrip(
     vehicleTypeText: optionalTrimmedString(patch.vehicleTypeText),
     vehicleModelText: optionalTrimmedString(patch.vehicleModelText),
     operatingDays: normalizeOptionalStringList(patch.operatingDays),
+    operatingCalendar: patch.operatingCalendar
+      ? { ...patch.operatingCalendar, updatedAt: new Date().toISOString() }
+      : undefined,
     availability: patch.availability,
     sourcePath: optionalTrimmedString(patch.sourcePath),
+  };
+}
+
+/**
+ * 手动重建班次会生成新的 tripInstanceId，但 tripKey 稳定；
+ * 若同一版本内已有同键班次，则沿用其运营日历，避免规则在重建后丢失。
+ */
+function adoptOperatingCalendarFromExistingTrips(
+  trip: TravelTripInstance,
+  existingTrips: readonly TravelTripInstance[],
+): TravelTripInstance {
+  const tripKey = deriveTravelTripKey(trip);
+  const calendar =
+    trip.operatingCalendar ??
+    (tripKey
+      ? existingTrips.find((item) => item.tripKey === tripKey && item.operatingCalendar)
+          ?.operatingCalendar
+      : undefined);
+
+  return {
+    ...trip,
+    tripKey,
+    tripKeyStatus: tripKey ? 'derived' : 'legacy_unkeyed',
+    operatingCalendar: calendar,
+    operatingDays: calendar ? deriveOperatingDays(calendar.patterns) : trip.operatingDays,
   };
 }
 

@@ -36,6 +36,8 @@ export interface RuntimeConfig {
   transitTripLabelPoolStorePath: string;
   travelScheduleRevisionStorePath: string;
   travelServiceProfileStorePath: string;
+  /** 年度节假日快照目录，默认 .yct-data/holidays。 */
+  holidayCalendarDir: string;
   ticketingCatalogStorePath: string;
   ticketOrderStorePath: string;
   poiSubmissionStorePath: string;
@@ -218,6 +220,10 @@ export function readRuntimeConfig(): RuntimeConfig {
     travelServiceProfileStorePath: resolveRuntimePath(
       process.env.YCT_TRAVEL_SERVICE_PROFILE_STORE_PATH,
       '.yct-data/travel-service-profile-store.json',
+    ),
+    holidayCalendarDir: resolveRuntimePath(
+      process.env.YCT_HOLIDAY_CALENDAR_DIR,
+      '.yct-data/holidays',
     ),
     ticketingCatalogStorePath: resolveRuntimePath(
       process.env.YCT_TICKETING_CATALOG_STORE_PATH,

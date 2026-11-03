@@ -1019,6 +1019,82 @@ export interface TravelTripStopTime {
   dwellMinutes?: number;
 }
 
+/** 班次运营日历的默认日类型。 */
+export type TravelOperatingPattern = 'WORKDAY' | 'WEEKEND' | 'HOLIDAY' | 'MAKEUP_WORKDAY';
+
+/** 自定义缓冲日的运营方式：停运，或按法定节假日规则判定。 */
+export type TravelOperatingBufferMode = 'closed' | 'holiday';
+
+export interface TravelOperatingBufferDay {
+  /** 起始日期（含），Asia/Shanghai 本地日期。 */
+  from: string;
+  /** 结束日期（含），缺省即单日。 */
+  to?: string;
+  mode: TravelOperatingBufferMode;
+  /** 仅作备注的锚点说明，判定只读取 from/to。 */
+  anchor?: string;
+}
+
+export type TravelOperatingOverrideMode = 'open' | 'closed';
+
+export interface TravelOperatingOverride {
+  /** 单日指定；与 from/to 二选一。 */
+  date?: string;
+  /** 区间起始（含）。 */
+  from?: string;
+  /** 区间结束（含）。 */
+  to?: string;
+  mode: TravelOperatingOverrideMode;
+}
+
+/**
+ * 班次级结构化运营日历。
+ * patterns 表示“默认按哪些日类型运营”，bufferDays / overrides 为人工声明的日期。
+ */
+export interface TravelOperatingCalendar {
+  version: 1;
+  patterns: TravelOperatingPattern[];
+  bufferDays?: TravelOperatingBufferDay[];
+  overrides?: TravelOperatingOverride[];
+  updatedAt?: ISODateTimeString;
+}
+
+/** tripKey 补算状态：derived 为已成功派生，legacy_unkeyed 表示缺少足够字段无法派生。 */
+export type TravelTripKeyStatus = 'derived' | 'legacy_unkeyed';
+
+export type HolidayCalendarDayKind = 'holiday' | 'makeup_workday';
+
+export interface HolidayCalendarDay {
+  /** Asia/Shanghai 本地日期，YYYY-MM-DD。 */
+  date: string;
+  name: string;
+  kind: HolidayCalendarDayKind;
+}
+
+export type HolidayCalendarSource = 'holiday-cn' | 'timor.tech' | 'seed';
+
+/** 按年落盘的节假日快照；判定只读取本结构。 */
+export interface HolidayCalendarYearSnapshot {
+  version: 1;
+  year: number;
+  source: HolidayCalendarSource;
+  sourceUrl?: string;
+  fetchedAt: ISODateTimeString;
+  /** 国务院公告链接，用于对账。 */
+  papers?: string[];
+  days: HolidayCalendarDay[];
+}
+
+export type HolidayCalendarYearStatus = 'ready' | 'missing';
+
+export interface HolidayCalendarYearState {
+  year: number;
+  status: HolidayCalendarYearStatus;
+  source?: HolidayCalendarSource;
+  fetchedAt?: ISODateTimeString;
+  message?: string;
+}
+
 export interface TravelTripInstance {
   tripInstanceId: string;
   approvalStatus?: TransitItemApprovalStatus;
@@ -1052,7 +1128,13 @@ export interface TravelTripInstance {
   gateText?: string;
   vehicleTypeText?: string;
   vehicleModelText?: string;
+  /** 旧版星期码；存在 operatingCalendar 时仅作派生只读展示。 */
   operatingDays?: string[];
+  /** 跨 revision 稳定的班次业务键，用于让运营日历跟随班次而非随机 tripInstanceId。 */
+  tripKey?: string;
+  tripKeyStatus?: TravelTripKeyStatus;
+  /** 班次级结构化运营日历；缺省时沿用旧版 operatingDays 行为。 */
+  operatingCalendar?: TravelOperatingCalendar;
   availability: TravelTripAvailability;
   ticketing?: TravelTicketingAvailability;
   sourcePath?: string;
@@ -1107,6 +1189,10 @@ export interface TravelScheduleQueryResult {
   sourceFiles: string[];
   serviceDate?: string;
   notice?: string;
+  /** 服务端按需读取的年度节假日快照，供前端复用同一判定函数。 */
+  holidayCalendars?: HolidayCalendarYearSnapshot[];
+  /** 缺失或不可用的年度日历状态，前端据此提示“未知”。 */
+  holidayCalendarStates?: HolidayCalendarYearState[];
 }
 
 export type TravelJourneyTicketingStatus = 'order_available' | 'partially_available' | 'query_only';

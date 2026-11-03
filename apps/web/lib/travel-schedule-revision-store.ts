@@ -7,6 +7,7 @@ import type {
   TravelScheduleRevisionStatus,
 } from '@yct/contracts';
 import { readRuntimeConfig } from './runtime-config';
+import { withDerivedTripKey } from './operating-calendar';
 
 interface TravelScheduleRevisionStoreSnapshot {
   version: 1;
@@ -145,7 +146,13 @@ async function readSnapshot(): Promise<TravelScheduleRevisionStoreSnapshot> {
     const parsed = JSON.parse(source) as TravelScheduleRevisionStoreSnapshot;
     return {
       version: 1,
-      revisions: Array.isArray(parsed.revisions) ? parsed.revisions : [],
+      revisions: Array.isArray(parsed.revisions)
+        ? parsed.revisions.map((revision) => ({
+            ...revision,
+            // 旧数据惰性补算 tripKey；补算失败时 withDerivedTripKey 保持原样。
+            trips: revision.trips.map(withDerivedTripKey),
+          }))
+        : [],
     };
   } catch {
     return emptySnapshot;

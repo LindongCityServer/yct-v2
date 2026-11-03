@@ -1954,6 +1954,7 @@ export type CommonMessageKey =
   | 'travelSchedule.reminder.detailFare'
   | 'travelSchedule.reminder.detailTrip'
   | 'travelSchedule.reminder.titleWithTime'
+  | 'travelSchedule.calendar.missing'
   | 'travelSchedule.resultCount'
   | 'travelSchedule.search.aria'
   | 'travelSchedule.search.clear'
