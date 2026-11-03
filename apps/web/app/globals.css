@@ -4999,6 +4999,8 @@ img.map-player-list-avatar.is-offline {
   box-shadow: var(--yct-shadow-floating);
   overflow-y: auto;
   cursor: default;
+  /* 地图视口用 touch-action:none 禁止手势缩放，面板自身仍需恢复纵向触控滚动。 */
+  touch-action: pan-y;
   transform: translateX(-50%);
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);

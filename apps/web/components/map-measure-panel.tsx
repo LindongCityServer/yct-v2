@@ -199,7 +199,7 @@ export function MapMeasurePanel({
           <>
             <strong>
               {t('map.measure.perimeter', {
-                value: formatDistance(points.length >= 2 ? getMeasurePerimeter(points) : 0),
+                value: formatDistance(points.length >= 3 ? getMeasurePerimeter(points) : 0),
               })}
             </strong>
             {validation.valid ? (

@@ -1082,6 +1082,10 @@ export function MapStage() {
     }
 
     const handleNativeWheel = (event: globalThis.WheelEvent) => {
+      // 测量面板自身可滚动时，滚轮只滚动面板，不缩放地图。
+      if (event.target instanceof Element && event.target.closest('.map-measure-panel')) {
+        return;
+      }
       event.preventDefault();
       const currentView = mapViewRef.current;
       const currentSize = viewportSizeRef.current;
@@ -4039,6 +4043,10 @@ export function MapStage() {
   };
 
   const beginPoiCoordinatePick = () => {
+    // 坐标拾取与测量互斥，避免拾取点击被测量模式吞掉。
+    if (measureMode) {
+      exitMeasure();
+    }
     setPoiCoordinatePickMode(true);
     setPoiSubmitDialogOpen(false);
     setPoiSubmitStatus(t('map.poiSubmit.pickPrompt'));
@@ -4405,6 +4413,10 @@ export function MapStage() {
   );
 
   const beginRouteEndpointEdit = (endpoint: RouteEndpointKind) => {
+    // 端点编辑依赖地图点击，与测量模式互斥。
+    if (measureMode) {
+      exitMeasure();
+    }
     setEditingRouteEndpoint(endpoint);
     setRouteEndpointQuery('');
     setRoutePlanCollapsed(false);

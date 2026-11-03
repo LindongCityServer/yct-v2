@@ -601,6 +601,8 @@
         "apps/web/components/global-search-panel.tsx",
         "apps/web/components/keyboard-shortcut-bridge.tsx",
         "apps/web/components/map-layer-toggle.tsx",
+        "apps/web/components/map-measure-layer.tsx",
+        "apps/web/components/map-measure-panel.tsx",
         "apps/web/components/map-stage-loader.tsx",
         "apps/web/components/map-stage.tsx",
         "apps/web/components/markdown-blocks.tsx",
@@ -26922,6 +26924,337 @@
       ]
     },
     {
+      "source": "apps/web/components/map-measure-layer.tsx",
+      "routes": [
+        "/map"
+      ],
+      "controls": [
+        {
+          "owner": "MapMeasureLayer",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "map-measure-layer"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            36
+          ]
+        },
+        {
+          "owner": "MapMeasureLayer",
+          "element": "svg",
+          "kind": "surface",
+          "classes": [
+            "map-measure-svg"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            38
+          ]
+        },
+        {
+          "owner": "MapMeasureLayer",
+          "element": "polygon",
+          "kind": "surface",
+          "classes": [
+            "is-locked",
+            "map-measure-area"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            43
+          ]
+        },
+        {
+          "owner": "MapMeasureLayer",
+          "element": "polyline",
+          "kind": "surface",
+          "classes": [
+            "map-measure-line"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            48
+          ]
+        },
+        {
+          "owner": "MapMeasureLayer",
+          "element": "polyline",
+          "kind": "surface",
+          "classes": [
+            "map-measure-preview"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            54
+          ]
+        },
+        {
+          "owner": "MapMeasureLayer",
+          "element": "circle",
+          "kind": "surface",
+          "classes": [
+            "map-measure-vertex"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            66
+          ]
+        },
+        {
+          "owner": "MapMeasureLayer",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "map-measure-crosshair"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            77
+          ]
+        }
+      ]
+    },
+    {
+      "source": "apps/web/components/map-measure-panel.tsx",
+      "routes": [
+        "/map"
+      ],
+      "controls": [
+        {
+          "owner": "MapMeasurePanel",
+          "element": "section",
+          "kind": "surface",
+          "classes": [
+            "map-measure-panel"
+          ],
+          "roles": [
+            "region"
+          ],
+          "types": [],
+          "states": [],
+          "lines": [
+            93
+          ]
+        },
+        {
+          "owner": "MapMeasurePanel",
+          "element": "header",
+          "kind": "surface",
+          "classes": [
+            "map-measure-header"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            100
+          ]
+        },
+        {
+          "owner": "MapMeasurePanel",
+          "element": "span",
+          "kind": "surface",
+          "classes": [
+            "material-symbols-outlined"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            102,
+            113,
+            137
+          ]
+        },
+        {
+          "owner": "MapMeasurePanel",
+          "element": "button",
+          "kind": "control",
+          "classes": [
+            "icon-action-button"
+          ],
+          "roles": [],
+          "types": [
+            "button"
+          ],
+          "states": [],
+          "lines": [
+            107
+          ]
+        },
+        {
+          "owner": "MapMeasurePanel",
+          "element": "SegmentedControl",
+          "kind": "component",
+          "classes": [
+            "map-measure-mode"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            119
+          ]
+        },
+        {
+          "owner": "MapMeasurePanel",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "map-measure-actions"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            130
+          ]
+        },
+        {
+          "owner": "MapMeasurePanel",
+          "element": "button",
+          "kind": "control",
+          "classes": [
+            "is-primary",
+            "map-measure-button"
+          ],
+          "roles": [],
+          "types": [
+            "button"
+          ],
+          "states": [
+            "disabled"
+          ],
+          "lines": [
+            131
+          ]
+        },
+        {
+          "owner": "MapMeasurePanel",
+          "element": "button",
+          "kind": "control",
+          "classes": [
+            "map-measure-button"
+          ],
+          "roles": [],
+          "types": [
+            "button"
+          ],
+          "states": [
+            "disabled"
+          ],
+          "lines": [
+            142,
+            150,
+            164
+          ]
+        },
+        {
+          "owner": "MapMeasurePanel",
+          "element": "button",
+          "kind": "control",
+          "classes": [
+            "map-measure-button"
+          ],
+          "roles": [],
+          "types": [
+            "button"
+          ],
+          "states": [],
+          "lines": [
+            160,
+            174
+          ]
+        },
+        {
+          "owner": "MapMeasurePanel",
+          "element": "p",
+          "kind": "surface",
+          "classes": [
+            "map-measure-hint"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            179
+          ]
+        },
+        {
+          "owner": "MapMeasurePanel",
+          "element": "div",
+          "kind": "surface",
+          "classes": [
+            "map-measure-results"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            181
+          ]
+        },
+        {
+          "owner": "MapMeasurePanel",
+          "element": "ul",
+          "kind": "surface",
+          "classes": [
+            "map-measure-segment-list"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            185
+          ]
+        },
+        {
+          "owner": "MapMeasurePanel",
+          "element": "p",
+          "kind": "surface",
+          "classes": [
+            "map-measure-warning"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            211
+          ]
+        },
+        {
+          "owner": "MapMeasurePanel",
+          "element": "p",
+          "kind": "surface",
+          "classes": [
+            "map-measure-note"
+          ],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            215
+          ]
+        }
+      ]
+    },
+    {
       "source": "apps/web/components/map-stage-loader.tsx",
       "routes": [
         "/map"
@@ -27003,7 +27336,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4502
+            4642
           ]
         },
         {
@@ -27017,7 +27350,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4512
+            4652
           ]
         },
         {
@@ -27032,7 +27365,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4516
+            4656
           ]
         },
         {
@@ -27044,7 +27377,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4522
+            4662
           ]
         },
         {
@@ -27058,7 +27391,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4558
+            4698
           ]
         },
         {
@@ -27073,7 +27406,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4559
+            4699
           ]
         },
         {
@@ -27087,36 +27420,37 @@
           "types": [],
           "states": [],
           "lines": [
-            4560,
-            4578,
-            4594,
-            4611,
-            4638,
-            4752,
-            4790,
-            4867,
-            4902,
-            4914,
-            4925,
-            5110,
-            5209,
-            5267,
-            5411,
-            5420,
-            5449,
-            5471,
-            5959,
-            5974,
-            5982,
-            5990,
-            6000,
-            6016,
-            6026,
-            6103,
-            6134,
-            6201,
-            6352,
-            6367
+            4700,
+            4718,
+            4734,
+            4751,
+            4778,
+            4892,
+            4930,
+            5007,
+            5042,
+            5054,
+            5065,
+            5250,
+            5349,
+            5407,
+            5551,
+            5560,
+            5589,
+            5611,
+            6099,
+            6150,
+            6158,
+            6166,
+            6182,
+            6192,
+            6208,
+            6218,
+            6295,
+            6326,
+            6393,
+            6544,
+            6559
           ]
         },
         {
@@ -27130,8 +27464,8 @@
           ],
           "states": [],
           "lines": [
-            4563,
-            5151
+            4703,
+            5291
           ]
         },
         {
@@ -27147,7 +27481,7 @@
           ],
           "states": [],
           "lines": [
-            4572
+            4712
           ]
         },
         {
@@ -27167,7 +27501,7 @@
             "disabled"
           ],
           "lines": [
-            4583
+            4723
           ]
         },
         {
@@ -27182,7 +27516,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4601
+            4741
           ]
         },
         {
@@ -27196,7 +27530,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4604
+            4744
           ]
         },
         {
@@ -27214,7 +27548,7 @@
             "aria-expanded"
           ],
           "lines": [
-            4605
+            4745
           ]
         },
         {
@@ -27228,8 +27562,8 @@
           "types": [],
           "states": [],
           "lines": [
-            4628,
-            4800
+            4768,
+            4940
           ]
         },
         {
@@ -27243,7 +27577,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4637
+            4777
           ]
         },
         {
@@ -27259,7 +27593,7 @@
           ],
           "states": [],
           "lines": [
-            4649
+            4789
           ]
         },
         {
@@ -27273,7 +27607,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4658
+            4798
           ]
         },
         {
@@ -27287,7 +27621,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4659
+            4799
           ]
         },
         {
@@ -27299,7 +27633,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4668
+            4808
           ]
         },
         {
@@ -27313,7 +27647,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4684
+            4824
           ]
         },
         {
@@ -27331,8 +27665,8 @@
             "aria-pressed"
           ],
           "lines": [
-            4689,
-            4939
+            4829,
+            5079
           ]
         },
         {
@@ -27346,11 +27680,11 @@
           "types": [],
           "states": [],
           "lines": [
-            4701,
-            4736,
-            4946,
-            5185,
-            5244
+            4841,
+            4876,
+            5086,
+            5325,
+            5384
           ]
         },
         {
@@ -27365,9 +27699,9 @@
           "types": [],
           "states": [],
           "lines": [
-            4714,
-            5162,
-            5221
+            4854,
+            5302,
+            5361
           ]
         },
         {
@@ -27381,9 +27715,9 @@
           "types": [],
           "states": [],
           "lines": [
-            4721,
-            5169,
-            5228
+            4861,
+            5309,
+            5368
           ]
         },
         {
@@ -27400,9 +27734,9 @@
           ],
           "states": [],
           "lines": [
-            4726,
-            5175,
-            5234
+            4866,
+            5315,
+            5374
           ]
         },
         {
@@ -27420,9 +27754,9 @@
             "aria-expanded"
           ],
           "lines": [
-            4741,
-            5196,
-            5254
+            4881,
+            5336,
+            5394
           ]
         },
         {
@@ -27436,7 +27770,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4762
+            4902
           ]
         },
         {
@@ -27448,11 +27782,11 @@
           "types": [],
           "states": [],
           "lines": [
-            4785,
-            4860,
-            5297,
-            5332,
-            5773
+            4925,
+            5000,
+            5437,
+            5472,
+            5913
           ]
         },
         {
@@ -27466,7 +27800,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4787
+            4927
           ]
         },
         {
@@ -27481,7 +27815,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4789
+            4929
           ]
         },
         {
@@ -27502,7 +27836,7 @@
             "disabled"
           ],
           "lines": [
-            4806
+            4946
           ]
         },
         {
@@ -27516,7 +27850,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4825
+            4965
           ]
         },
         {
@@ -27530,8 +27864,8 @@
           ],
           "states": [],
           "lines": [
-            4835,
-            5424
+            4975,
+            5564
           ]
         },
         {
@@ -27546,7 +27880,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4853
+            4993
           ]
         },
         {
@@ -27560,7 +27894,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4859
+            4999
           ]
         },
         {
@@ -27575,7 +27909,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4864
+            5004
           ]
         },
         {
@@ -27587,7 +27921,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4885
+            5025
           ]
         },
         {
@@ -27604,7 +27938,7 @@
           ],
           "states": [],
           "lines": [
-            4896
+            5036
           ]
         },
         {
@@ -27622,7 +27956,7 @@
             "aria-expanded"
           ],
           "lines": [
-            4907
+            5047
           ]
         },
         {
@@ -27638,9 +27972,9 @@
           ],
           "states": [],
           "lines": [
-            4918,
-            6128,
-            6195
+            5058,
+            6320,
+            6387
           ]
         },
         {
@@ -27654,7 +27988,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4933
+            5073
           ]
         },
         {
@@ -27668,7 +28002,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4951
+            5091
           ]
         },
         {
@@ -27680,7 +28014,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4953
+            5093
           ]
         },
         {
@@ -27692,7 +28026,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4976
+            5116
           ]
         },
         {
@@ -27706,7 +28040,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4980
+            5120
           ]
         },
         {
@@ -27720,7 +28054,7 @@
           "types": [],
           "states": [],
           "lines": [
-            4981
+            5121
           ]
         },
         {
@@ -27732,7 +28066,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5003
+            5143
           ]
         },
         {
@@ -27748,7 +28082,7 @@
           ],
           "states": [],
           "lines": [
-            5049
+            5189
           ]
         },
         {
@@ -27762,8 +28096,8 @@
           "types": [],
           "states": [],
           "lines": [
-            5063,
-            5083
+            5203,
+            5223
           ]
         },
         {
@@ -27780,7 +28114,7 @@
           ],
           "states": [],
           "lines": [
-            5065
+            5205
           ]
         },
         {
@@ -27796,7 +28130,7 @@
           ],
           "states": [],
           "lines": [
-            5085
+            5225
           ]
         },
         {
@@ -27810,7 +28144,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5109
+            5249
           ]
         },
         {
@@ -27822,7 +28156,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5123
+            5263
           ]
         },
         {
@@ -27836,7 +28170,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5131
+            5271
           ]
         },
         {
@@ -27850,7 +28184,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5133
+            5273
           ]
         },
         {
@@ -27862,8 +28196,8 @@
           "types": [],
           "states": [],
           "lines": [
-            5137,
-            5950
+            5277,
+            6090
           ]
         },
         {
@@ -27877,8 +28211,8 @@
           "types": [],
           "states": [],
           "lines": [
-            5144,
-            5320
+            5284,
+            5460
           ]
         },
         {
@@ -27892,7 +28226,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5148
+            5288
           ]
         },
         {
@@ -27906,7 +28240,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5149
+            5289
           ]
         },
         {
@@ -27920,8 +28254,8 @@
           "types": [],
           "states": [],
           "lines": [
-            5160,
-            5219
+            5300,
+            5359
           ]
         },
         {
@@ -27935,8 +28269,8 @@
           "types": [],
           "states": [],
           "lines": [
-            5282,
-            5321
+            5422,
+            5461
           ]
         },
         {
@@ -27950,8 +28284,8 @@
           "types": [],
           "states": [],
           "lines": [
-            5289,
-            5326
+            5429,
+            5466
           ]
         },
         {
@@ -27967,8 +28301,8 @@
           ],
           "states": [],
           "lines": [
-            5291,
-            5327
+            5431,
+            5467
           ]
         },
         {
@@ -27980,7 +28314,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5362
+            5502
           ]
         },
         {
@@ -27992,7 +28326,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5371
+            5511
           ]
         },
         {
@@ -28006,7 +28340,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5388
+            5528
           ]
         },
         {
@@ -28020,7 +28354,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5400
+            5540
           ]
         },
         {
@@ -28034,7 +28368,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5401
+            5541
           ]
         },
         {
@@ -28050,7 +28384,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5410
+            5550
           ]
         },
         {
@@ -28066,7 +28400,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5419
+            5559
           ]
         },
         {
@@ -28080,7 +28414,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5438
+            5578
           ]
         },
         {
@@ -28094,7 +28428,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5439
+            5579
           ]
         },
         {
@@ -28108,7 +28442,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5440
+            5580
           ]
         },
         {
@@ -28122,7 +28456,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5447
+            5587
           ]
         },
         {
@@ -28136,7 +28470,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5448
+            5588
           ]
         },
         {
@@ -28150,7 +28484,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5470
+            5610
           ]
         },
         {
@@ -28164,7 +28498,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5486
+            5626
           ]
         },
         {
@@ -28178,7 +28512,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5488
+            5628
           ]
         },
         {
@@ -28192,7 +28526,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5496
+            5636
           ]
         },
         {
@@ -28211,7 +28545,7 @@
             "aria-pressed"
           ],
           "lines": [
-            5516
+            5656
           ]
         },
         {
@@ -28226,7 +28560,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5543
+            5683
           ]
         },
         {
@@ -28241,7 +28575,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5549
+            5689
           ]
         },
         {
@@ -28255,7 +28589,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5565
+            5705
           ]
         },
         {
@@ -28267,9 +28601,9 @@
           "types": [],
           "states": [],
           "lines": [
-            5567,
-            5582,
-            5646
+            5707,
+            5722,
+            5786
           ]
         },
         {
@@ -28283,7 +28617,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5580
+            5720
           ]
         },
         {
@@ -28297,7 +28631,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5595
+            5735
           ]
         },
         {
@@ -28312,7 +28646,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5596
+            5736
           ]
         },
         {
@@ -28326,7 +28660,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5609
+            5749
           ]
         },
         {
@@ -28340,7 +28674,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5610
+            5750
           ]
         },
         {
@@ -28354,8 +28688,8 @@
           "types": [],
           "states": [],
           "lines": [
-            5611,
-            5617
+            5751,
+            5757
           ]
         },
         {
@@ -28370,7 +28704,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5624
+            5764
           ]
         },
         {
@@ -28385,7 +28719,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5633
+            5773
           ]
         },
         {
@@ -28399,7 +28733,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5645
+            5785
           ]
         },
         {
@@ -28414,7 +28748,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5654
+            5794
           ]
         },
         {
@@ -28429,7 +28763,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5675
+            5815
           ]
         },
         {
@@ -28446,7 +28780,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5691
+            5831
           ]
         },
         {
@@ -28464,7 +28798,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5705
+            5845
           ]
         },
         {
@@ -28484,7 +28818,7 @@
           ],
           "states": [],
           "lines": [
-            5747
+            5887
           ]
         },
         {
@@ -28498,9 +28832,9 @@
           "types": [],
           "states": [],
           "lines": [
-            5776,
-            5889,
-            5952
+            5916,
+            6029,
+            6092
           ]
         },
         {
@@ -28515,7 +28849,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5784
+            5924
           ]
         },
         {
@@ -28529,7 +28863,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5797
+            5937
           ]
         },
         {
@@ -28543,7 +28877,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5799
+            5939
           ]
         },
         {
@@ -28558,7 +28892,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5800
+            5940
           ]
         },
         {
@@ -28572,7 +28906,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5806
+            5946
           ]
         },
         {
@@ -28587,7 +28921,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5819
+            5959
           ]
         },
         {
@@ -28603,7 +28937,7 @@
           ],
           "states": [],
           "lines": [
-            5824
+            5964
           ]
         },
         {
@@ -28625,7 +28959,7 @@
           ],
           "states": [],
           "lines": [
-            5842
+            5982
           ]
         },
         {
@@ -28637,8 +28971,8 @@
           "types": [],
           "states": [],
           "lines": [
-            5878,
-            5946
+            6018,
+            6086
           ]
         },
         {
@@ -28652,7 +28986,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5882
+            6022
           ]
         },
         {
@@ -28678,7 +29012,7 @@
           ],
           "states": [],
           "lines": [
-            5897
+            6037
           ]
         },
         {
@@ -28692,7 +29026,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5944
+            6084
           ]
         },
         {
@@ -28707,7 +29041,31 @@
           "types": [],
           "states": [],
           "lines": [
-            5958
+            6098
+          ]
+        },
+        {
+          "owner": "MapStage",
+          "element": "MapMeasureLayer",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            6109
+          ]
+        },
+        {
+          "owner": "MapStage",
+          "element": "MapMeasurePanel",
+          "kind": "component",
+          "classes": [],
+          "roles": [],
+          "types": [],
+          "states": [],
+          "lines": [
+            6125
           ]
         },
         {
@@ -28721,7 +29079,7 @@
           "types": [],
           "states": [],
           "lines": [
-            5967
+            6143
           ]
         },
         {
@@ -28737,9 +29095,28 @@
           ],
           "states": [],
           "lines": [
-            5968,
-            5976,
-            5984
+            6144,
+            6152,
+            6160
+          ]
+        },
+        {
+          "owner": "MapStage",
+          "element": "button",
+          "kind": "control",
+          "classes": [
+            "icon-button",
+            "is-active"
+          ],
+          "roles": [],
+          "types": [
+            "button"
+          ],
+          "states": [
+            "aria-pressed"
+          ],
+          "lines": [
+            6168
           ]
         },
         {
@@ -28758,7 +29135,7 @@
             "aria-expanded"
           ],
           "lines": [
-            5992
+            6184
           ]
         },
         {
@@ -28772,7 +29149,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6005
+            6197
           ]
         },
         {
@@ -28788,7 +29165,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6006
+            6198
           ]
         },
         {
@@ -28802,7 +29179,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6025
+            6217
           ]
         },
         {
@@ -28814,8 +29191,8 @@
           "types": [],
           "states": [],
           "lines": [
-            6031,
-            6219
+            6223,
+            6411
           ]
         },
         {
@@ -28829,7 +29206,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6045
+            6237
           ]
         },
         {
@@ -28843,7 +29220,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6057
+            6249
           ]
         },
         {
@@ -28857,10 +29234,10 @@
             "checked"
           ],
           "lines": [
-            6058,
-            6066,
-            6078,
-            6085
+            6250,
+            6258,
+            6270,
+            6277
           ]
         },
         {
@@ -28879,7 +29256,7 @@
             "disabled"
           ],
           "lines": [
-            6097
+            6289
           ]
         },
         {
@@ -28893,8 +29270,8 @@
           "types": [],
           "states": [],
           "lines": [
-            6108,
-            6359
+            6300,
+            6551
           ]
         },
         {
@@ -28910,8 +29287,8 @@
           "types": [],
           "states": [],
           "lines": [
-            6112,
-            6181
+            6304,
+            6373
           ]
         },
         {
@@ -28928,7 +29305,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6117
+            6309
           ]
         },
         {
@@ -28942,8 +29319,8 @@
           "types": [],
           "states": [],
           "lines": [
-            6124,
-            6193
+            6316,
+            6385
           ]
         },
         {
@@ -28957,7 +29334,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6139
+            6331
           ]
         },
         {
@@ -28969,7 +29346,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6147
+            6339
           ]
         },
         {
@@ -28986,7 +29363,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6186
+            6378
           ]
         },
         {
@@ -29000,7 +29377,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6206
+            6398
           ]
         },
         {
@@ -29012,10 +29389,10 @@
           "types": [],
           "states": [],
           "lines": [
-            6209,
-            6243,
-            6253,
-            6263
+            6401,
+            6435,
+            6445,
+            6455
           ]
         },
         {
@@ -29027,7 +29404,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6233
+            6425
           ]
         },
         {
@@ -29041,7 +29418,7 @@
             "disabled"
           ],
           "lines": [
-            6273
+            6465
           ]
         },
         {
@@ -29053,7 +29430,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6287
+            6479
           ]
         },
         {
@@ -29067,8 +29444,8 @@
           ],
           "states": [],
           "lines": [
-            6290,
-            6318
+            6482,
+            6510
           ]
         },
         {
@@ -29082,7 +29459,7 @@
           ],
           "states": [],
           "lines": [
-            6300
+            6492
           ]
         },
         {
@@ -29096,7 +29473,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6326
+            6518
           ]
         },
         {
@@ -29110,8 +29487,8 @@
           ],
           "states": [],
           "lines": [
-            6329,
-            6339
+            6521,
+            6531
           ]
         },
         {
@@ -29127,7 +29504,7 @@
           ],
           "states": [],
           "lines": [
-            6347
+            6539
           ]
         },
         {
@@ -29141,7 +29518,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6360
+            6552
           ]
         },
         {
@@ -29160,7 +29537,7 @@
             "disabled"
           ],
           "lines": [
-            6361
+            6553
           ]
         },
         {
@@ -29172,7 +29549,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6379
+            6571
           ]
         },
         {
@@ -29184,7 +29561,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6394
+            6586
           ]
         },
         {
@@ -29196,7 +29573,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6401
+            6593
           ]
         },
         {
@@ -29213,7 +29590,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6565
+            6757
           ]
         },
         {
@@ -29230,7 +29607,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6566
+            6758
           ]
         },
         {
@@ -29244,7 +29621,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6573
+            6765
           ]
         },
         {
@@ -29260,7 +29637,7 @@
           ],
           "states": [],
           "lines": [
-            6575
+            6767
           ]
         },
         {
@@ -29274,11 +29651,11 @@
           "types": [],
           "states": [],
           "lines": [
-            6581,
-            6634,
-            6702,
-            6735,
-            6764
+            6773,
+            6826,
+            6894,
+            6927,
+            6956
           ]
         },
         {
@@ -29292,7 +29669,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6586
+            6778
           ]
         },
         {
@@ -29306,7 +29683,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6591
+            6783
           ]
         },
         {
@@ -29321,7 +29698,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6592
+            6784
           ]
         },
         {
@@ -29335,7 +29712,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6601
+            6793
           ]
         },
         {
@@ -29349,7 +29726,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6608
+            6800
           ]
         },
         {
@@ -29363,7 +29740,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6611
+            6803
           ]
         },
         {
@@ -29378,7 +29755,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6622
+            6814
           ]
         },
         {
@@ -29392,7 +29769,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6627
+            6819
           ]
         },
         {
@@ -29406,7 +29783,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6632
+            6824
           ]
         },
         {
@@ -29420,7 +29797,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6639
+            6831
           ]
         },
         {
@@ -29434,7 +29811,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6640
+            6832
           ]
         },
         {
@@ -29448,7 +29825,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6641
+            6833
           ]
         },
         {
@@ -29462,7 +29839,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6644
+            6836
           ]
         },
         {
@@ -29477,7 +29854,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6647
+            6839
           ]
         },
         {
@@ -29492,7 +29869,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6653
+            6845
           ]
         },
         {
@@ -29506,7 +29883,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6673
+            6865
           ]
         },
         {
@@ -29520,7 +29897,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6674
+            6866
           ]
         },
         {
@@ -29532,7 +29909,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6677
+            6869
           ]
         },
         {
@@ -29546,7 +29923,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6679
+            6871
           ]
         },
         {
@@ -29558,7 +29935,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6680
+            6872
           ]
         },
         {
@@ -29572,7 +29949,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6687
+            6879
           ]
         },
         {
@@ -29586,7 +29963,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6693
+            6885
           ]
         },
         {
@@ -29600,7 +29977,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6696
+            6888
           ]
         },
         {
@@ -29614,7 +29991,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6698
+            6890
           ]
         },
         {
@@ -29628,7 +30005,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6700
+            6892
           ]
         },
         {
@@ -29642,7 +30019,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6701
+            6893
           ]
         },
         {
@@ -29656,7 +30033,7 @@
             "disabled"
           ],
           "lines": [
-            6707
+            6899
           ]
         },
         {
@@ -29675,7 +30052,7 @@
             "disabled"
           ],
           "lines": [
-            6721
+            6913
           ]
         },
         {
@@ -29695,7 +30072,7 @@
             "disabled"
           ],
           "lines": [
-            6749
+            6941
           ]
         },
         {
@@ -29709,7 +30086,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6803
+            6995
           ]
         },
         {
@@ -29721,8 +30098,8 @@
           "types": [],
           "states": [],
           "lines": [
-            6806,
-            6809
+            6998,
+            7001
           ]
         },
         {
@@ -29736,7 +30113,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6825
+            7017
           ]
         },
         {
@@ -29750,7 +30127,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6864
+            7056
           ]
         },
         {
@@ -29764,7 +30141,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6882
+            7074
           ]
         },
         {
@@ -29778,7 +30155,7 @@
           "types": [],
           "states": [],
           "lines": [
-            6913
+            7105
           ]
         },
         {
@@ -29792,7 +30169,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7104
+            7296
           ]
         },
         {
@@ -29806,7 +30183,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7112
+            7304
           ]
         },
         {
@@ -29822,7 +30199,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7113
+            7305
           ]
         },
         {
@@ -29836,7 +30213,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7127
+            7319
           ]
         },
         {
@@ -29848,7 +30225,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7133
+            7325
           ]
         },
         {
@@ -29862,7 +30239,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7148
+            7340
           ]
         },
         {
@@ -29876,7 +30253,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7163
+            7355
           ]
         },
         {
@@ -29890,7 +30267,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7167
+            7359
           ]
         },
         {
@@ -29902,8 +30279,8 @@
           "types": [],
           "states": [],
           "lines": [
-            7169,
-            7176
+            7361,
+            7368
           ]
         },
         {
@@ -29917,7 +30294,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7183
+            7375
           ]
         },
         {
@@ -29931,7 +30308,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7184
+            7376
           ]
         },
         {
@@ -29949,7 +30326,7 @@
             "aria-pressed"
           ],
           "lines": [
-            7185
+            7377
           ]
         },
         {
@@ -29965,7 +30342,7 @@
           ],
           "states": [],
           "lines": [
-            7200
+            7392
           ]
         },
         {
@@ -29979,7 +30356,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7207
+            7399
           ]
         },
         {
@@ -29997,7 +30374,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7251
+            7443
           ]
         },
         {
@@ -30011,7 +30388,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7268
+            7460
           ]
         },
         {
@@ -30025,7 +30402,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7343
+            7535
           ]
         },
         {
@@ -30039,7 +30416,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7344
+            7536
           ]
         },
         {
@@ -30053,10 +30430,10 @@
           "types": [],
           "states": [],
           "lines": [
-            7346,
-            7414,
-            7445,
-            7522
+            7538,
+            7606,
+            7637,
+            7714
           ]
         },
         {
@@ -30070,7 +30447,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7351
+            7543
           ]
         },
         {
@@ -30084,7 +30461,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7365
+            7557
           ]
         },
         {
@@ -30098,11 +30475,11 @@
           "types": [],
           "states": [],
           "lines": [
-            7370,
-            7372,
-            7374,
-            7376,
-            7385
+            7562,
+            7564,
+            7566,
+            7568,
+            7577
           ]
         },
         {
@@ -30117,7 +30494,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7388
+            7580
           ]
         },
         {
@@ -30133,7 +30510,7 @@
           ],
           "states": [],
           "lines": [
-            7391
+            7583
           ]
         },
         {
@@ -30147,8 +30524,8 @@
           "types": [],
           "states": [],
           "lines": [
-            7396,
-            7474
+            7588,
+            7666
           ]
         },
         {
@@ -30162,7 +30539,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7408
+            7600
           ]
         },
         {
@@ -30178,7 +30555,7 @@
           ],
           "states": [],
           "lines": [
-            7409
+            7601
           ]
         },
         {
@@ -30194,8 +30571,8 @@
           "types": [],
           "states": [],
           "lines": [
-            7424,
-            7489
+            7616,
+            7681
           ]
         },
         {
@@ -30212,7 +30589,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7429
+            7621
           ]
         },
         {
@@ -30226,8 +30603,8 @@
           "types": [],
           "states": [],
           "lines": [
-            7437,
-            7501
+            7629,
+            7693
           ]
         },
         {
@@ -30243,8 +30620,8 @@
           ],
           "states": [],
           "lines": [
-            7439,
-            7516
+            7631,
+            7708
           ]
         },
         {
@@ -30258,7 +30635,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7450
+            7642
           ]
         },
         {
@@ -30273,7 +30650,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7451
+            7643
           ]
         },
         {
@@ -30289,7 +30666,7 @@
           ],
           "states": [],
           "lines": [
-            7454
+            7646
           ]
         },
         {
@@ -30303,7 +30680,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7462
+            7654
           ]
         },
         {
@@ -30320,7 +30697,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7494
+            7686
           ]
         },
         {
@@ -30334,7 +30711,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7527
+            7719
           ]
         },
         {
@@ -30348,7 +30725,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7653
+            7845
           ]
         },
         {
@@ -30362,7 +30739,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7843
+            8035
           ]
         },
         {
@@ -30376,7 +30753,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7844
+            8036
           ]
         },
         {
@@ -30390,8 +30767,8 @@
           "types": [],
           "states": [],
           "lines": [
-            7845,
-            7873
+            8037,
+            8065
           ]
         },
         {
@@ -30407,7 +30784,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7846
+            8038
           ]
         },
         {
@@ -30419,8 +30796,8 @@
           "types": [],
           "states": [],
           "lines": [
-            7853,
-            7881
+            8045,
+            8073
           ]
         },
         {
@@ -30436,8 +30813,8 @@
           ],
           "states": [],
           "lines": [
-            7861,
-            7889
+            8053,
+            8081
           ]
         },
         {
@@ -30451,12 +30828,12 @@
           ],
           "states": [],
           "lines": [
-            7869,
-            7897,
-            7913,
-            7918,
-            7923,
-            8016
+            8061,
+            8089,
+            8105,
+            8110,
+            8115,
+            8208
           ]
         },
         {
@@ -30472,7 +30849,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7874
+            8066
           ]
         },
         {
@@ -30486,7 +30863,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7902
+            8094
           ]
         },
         {
@@ -30502,7 +30879,7 @@
             "aria-expanded"
           ],
           "lines": [
-            7903
+            8095
           ]
         },
         {
@@ -30516,23 +30893,23 @@
           "types": [],
           "states": [],
           "lines": [
-            7909,
-            7914,
-            7919,
-            7924,
-            7941,
-            7954,
-            7963,
-            7997,
-            8057,
-            8125,
-            8141,
-            8175,
-            8187,
-            8227,
-            8247,
-            8262,
-            8295
+            8101,
+            8106,
+            8111,
+            8116,
+            8133,
+            8146,
+            8155,
+            8189,
+            8249,
+            8317,
+            8333,
+            8367,
+            8379,
+            8419,
+            8439,
+            8454,
+            8487
           ]
         },
         {
@@ -30546,7 +30923,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7931
+            8123
           ]
         },
         {
@@ -30560,8 +30937,8 @@
           "types": [],
           "states": [],
           "lines": [
-            7935,
-            8116
+            8127,
+            8308
           ]
         },
         {
@@ -30576,8 +30953,8 @@
           "types": [],
           "states": [],
           "lines": [
-            7936,
-            8117
+            8128,
+            8309
           ]
         },
         {
@@ -30591,8 +30968,8 @@
           "types": [],
           "states": [],
           "lines": [
-            7940,
-            8124
+            8132,
+            8316
           ]
         },
         {
@@ -30606,8 +30983,8 @@
           "types": [],
           "states": [],
           "lines": [
-            7950,
-            8138
+            8142,
+            8330
           ]
         },
         {
@@ -30621,7 +30998,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7952
+            8144
           ]
         },
         {
@@ -30635,8 +31012,8 @@
           "types": [],
           "states": [],
           "lines": [
-            7962,
-            8140
+            8154,
+            8332
           ]
         },
         {
@@ -30650,8 +31027,8 @@
           "types": [],
           "states": [],
           "lines": [
-            7970,
-            8148
+            8162,
+            8340
           ]
         },
         {
@@ -30665,8 +31042,8 @@
           "types": [],
           "states": [],
           "lines": [
-            7972,
-            8153
+            8164,
+            8345
           ]
         },
         {
@@ -30680,8 +31057,8 @@
           "types": [],
           "states": [],
           "lines": [
-            7980,
-            8161
+            8172,
+            8353
           ]
         },
         {
@@ -30696,8 +31073,8 @@
           "types": [],
           "states": [],
           "lines": [
-            7981,
-            8162
+            8173,
+            8354
           ]
         },
         {
@@ -30713,7 +31090,7 @@
           "types": [],
           "states": [],
           "lines": [
-            7996
+            8188
           ]
         },
         {
@@ -30727,7 +31104,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8005
+            8197
           ]
         },
         {
@@ -30741,7 +31118,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8009
+            8201
           ]
         },
         {
@@ -30755,7 +31132,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8021
+            8213
           ]
         },
         {
@@ -30771,7 +31148,7 @@
           ],
           "states": [],
           "lines": [
-            8024
+            8216
           ]
         },
         {
@@ -30783,7 +31160,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8030
+            8222
           ]
         },
         {
@@ -30797,12 +31174,12 @@
           "types": [],
           "states": [],
           "lines": [
-            8042,
-            8076,
-            8078,
-            8309,
-            8315,
-            8317
+            8234,
+            8268,
+            8270,
+            8501,
+            8507,
+            8509
           ]
         },
         {
@@ -30816,7 +31193,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8049
+            8241
           ]
         },
         {
@@ -30832,7 +31209,7 @@
           ],
           "states": [],
           "lines": [
-            8050
+            8242
           ]
         },
         {
@@ -30846,7 +31223,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8060
+            8252
           ]
         },
         {
@@ -30860,7 +31237,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8061
+            8253
           ]
         },
         {
@@ -30875,7 +31252,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8064
+            8256
           ]
         },
         {
@@ -30890,7 +31267,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8065
+            8257
           ]
         },
         {
@@ -30902,7 +31279,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8072
+            8264
           ]
         },
         {
@@ -30916,7 +31293,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8074
+            8266
           ]
         },
         {
@@ -30935,7 +31312,7 @@
             "aria-expanded"
           ],
           "lines": [
-            8084
+            8276
           ]
         },
         {
@@ -30950,7 +31327,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8130
+            8322
           ]
         },
         {
@@ -30964,7 +31341,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8173
+            8365
           ]
         },
         {
@@ -30978,7 +31355,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8196
+            8388
           ]
         },
         {
@@ -30992,7 +31369,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8225
+            8417
           ]
         },
         {
@@ -31006,7 +31383,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8232
+            8424
           ]
         },
         {
@@ -31020,7 +31397,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8233
+            8425
           ]
         },
         {
@@ -31034,7 +31411,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8234
+            8426
           ]
         },
         {
@@ -31052,7 +31429,7 @@
             "aria-expanded"
           ],
           "lines": [
-            8236
+            8428
           ]
         },
         {
@@ -31066,7 +31443,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8259
+            8451
           ]
         },
         {
@@ -31081,7 +31458,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8268
+            8460
           ]
         },
         {
@@ -31095,7 +31472,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8289
+            8481
           ]
         },
         {
@@ -31111,7 +31488,7 @@
           ],
           "states": [],
           "lines": [
-            8290
+            8482
           ]
         },
         {
@@ -31125,7 +31502,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8301
+            8493
           ]
         },
         {
@@ -31141,7 +31518,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8359
+            8551
           ]
         },
         {
@@ -31158,7 +31535,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8360
+            8552
           ]
         },
         {
@@ -31172,7 +31549,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8367
+            8559
           ]
         },
         {
@@ -31188,7 +31565,7 @@
           ],
           "states": [],
           "lines": [
-            8369
+            8561
           ]
         },
         {
@@ -31202,7 +31579,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8375
+            8567
           ]
         },
         {
@@ -31216,8 +31593,8 @@
           "types": [],
           "states": [],
           "lines": [
-            8380,
-            8414
+            8572,
+            8606
           ]
         },
         {
@@ -31229,7 +31606,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8382
+            8574
           ]
         },
         {
@@ -31243,7 +31620,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8412
+            8604
           ]
         },
         {
@@ -31257,7 +31634,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8416
+            8608
           ]
         },
         {
@@ -31271,7 +31648,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8417
+            8609
           ]
         },
         {
@@ -31285,7 +31662,7 @@
           ],
           "states": [],
           "lines": [
-            8431
+            8623
           ]
         },
         {
@@ -31301,7 +31678,7 @@
           ],
           "states": [],
           "lines": [
-            8438
+            8630
           ]
         },
         {
@@ -31315,7 +31692,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8448
+            8640
           ]
         },
         {
@@ -31331,7 +31708,7 @@
           ],
           "states": [],
           "lines": [
-            8449
+            8641
           ]
         },
         {
@@ -31348,7 +31725,7 @@
           ],
           "states": [],
           "lines": [
-            8452
+            8644
           ]
         },
         {
@@ -31362,7 +31739,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8533
+            8725
           ]
         },
         {
@@ -31380,7 +31757,7 @@
             "aria-pressed"
           ],
           "lines": [
-            8537
+            8729
           ]
         },
         {
@@ -31394,7 +31771,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8546
+            8738
           ]
         },
         {
@@ -31408,7 +31785,7 @@
           "types": [],
           "states": [],
           "lines": [
-            8549
+            8741
           ]
         },
         {
@@ -31422,7 +31799,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9322
+            9514
           ]
         },
         {
@@ -31439,7 +31816,7 @@
           ],
           "states": [],
           "lines": [
-            9323
+            9515
           ]
         },
         {
@@ -31453,10 +31830,10 @@
           "types": [],
           "states": [],
           "lines": [
-            9324,
-            9338,
-            9351,
-            9361
+            9516,
+            9530,
+            9543,
+            9553
           ]
         },
         {
@@ -31472,8 +31849,8 @@
           ],
           "states": [],
           "lines": [
-            9329,
-            9355
+            9521,
+            9547
           ]
         },
         {
@@ -31492,7 +31869,7 @@
             "aria-pressed"
           ],
           "lines": [
-            9342
+            9534
           ]
         },
         {
@@ -31506,7 +31883,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9366
+            9558
           ]
         },
         {
@@ -31520,7 +31897,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9712
+            9904
           ]
         },
         {
@@ -31534,7 +31911,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9721
+            9913
           ]
         },
         {
@@ -31548,7 +31925,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9722
+            9914
           ]
         },
         {
@@ -31562,7 +31939,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9726
+            9918
           ]
         },
         {
@@ -31578,7 +31955,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9727
+            9919
           ]
         },
         {
@@ -31598,7 +31975,7 @@
             "aria-selected"
           ],
           "lines": [
-            9733
+            9925
           ]
         },
         {
@@ -31613,7 +31990,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9747
+            9939
           ]
         },
         {
@@ -31627,7 +32004,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9750
+            9942
           ]
         },
         {
@@ -31639,7 +32016,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9757
+            9949
           ]
         },
         {
@@ -31654,7 +32031,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9823
+            10015
           ]
         },
         {
@@ -31668,7 +32045,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9824
+            10016
           ]
         },
         {
@@ -31680,7 +32057,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9836
+            10028
           ]
         },
         {
@@ -31692,7 +32069,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9846
+            10038
           ]
         },
         {
@@ -31706,7 +32083,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9849
+            10041
           ]
         },
         {
@@ -31724,7 +32101,7 @@
             "disabled"
           ],
           "lines": [
-            9860
+            10052
           ]
         },
         {
@@ -31738,7 +32115,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9890
+            10082
           ]
         },
         {
@@ -31752,7 +32129,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9912
+            10104
           ]
         },
         {
@@ -31766,7 +32143,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9913
+            10105
           ]
         },
         {
@@ -31780,7 +32157,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9914
+            10106
           ]
         },
         {
@@ -31794,7 +32171,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9915
+            10107
           ]
         },
         {
@@ -31808,7 +32185,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9917
+            10109
           ]
         },
         {
@@ -31820,8 +32197,8 @@
           "types": [],
           "states": [],
           "lines": [
-            9918,
-            9919
+            10110,
+            10111
           ]
         },
         {
@@ -31837,7 +32214,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9935
+            10127
           ]
         },
         {
@@ -31851,7 +32228,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9936
+            10128
           ]
         },
         {
@@ -31865,7 +32242,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9939
+            10131
           ]
         },
         {
@@ -31879,7 +32256,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9943
+            10135
           ]
         },
         {
@@ -31893,8 +32270,8 @@
           "types": [],
           "states": [],
           "lines": [
-            9946,
-            9956
+            10138,
+            10148
           ]
         },
         {
@@ -31908,8 +32285,8 @@
           "types": [],
           "states": [],
           "lines": [
-            9947,
-            9953
+            10139,
+            10145
           ]
         },
         {
@@ -31923,7 +32300,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9993
+            10185
           ]
         },
         {
@@ -31937,7 +32314,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9994
+            10186
           ]
         },
         {
@@ -31949,7 +32326,7 @@
           "types": [],
           "states": [],
           "lines": [
-            9999
+            10191
           ]
         },
         {
@@ -31964,7 +32341,7 @@
           "types": [],
           "states": [],
           "lines": [
-            10008
+            10200
           ]
         },
         {
@@ -31978,7 +32355,7 @@
           "types": [],
           "states": [],
           "lines": [
-            10017
+            10209
           ]
         },
         {
@@ -31992,7 +32369,7 @@
           "types": [],
           "states": [],
           "lines": [
-            10049
+            10241
           ]
         },
         {
@@ -32006,7 +32383,7 @@
           "types": [],
           "states": [],
           "lines": [
-            10057
+            10249
           ]
         },
         {
@@ -32021,7 +32398,7 @@
           "types": [],
           "states": [],
           "lines": [
-            10082
+            10274
           ]
         },
         {
@@ -32035,7 +32412,7 @@
           "types": [],
           "states": [],
           "lines": [
-            10092
+            10284
           ]
         },
         {
@@ -32049,7 +32426,7 @@
           "types": [],
           "states": [],
           "lines": [
-            10104
+            10296
           ]
         },
         {
@@ -32064,7 +32441,7 @@
           "types": [],
           "states": [],
           "lines": [
-            10536
+            10728
           ]
         },
         {
@@ -32076,7 +32453,7 @@
           "types": [],
           "states": [],
           "lines": [
-            10552
+            10744
           ]
         },
         {
@@ -32090,7 +32467,7 @@
           "types": [],
           "states": [],
           "lines": [
-            10560
+            10752
           ]
         },
         {
@@ -32106,7 +32483,7 @@
           "types": [],
           "states": [],
           "lines": [
-            10577
+            10769
           ]
         },
         {
@@ -32120,7 +32497,7 @@
           "types": [],
           "states": [],
           "lines": [
-            10595
+            10787
           ]
         },
         {
@@ -32134,7 +32511,7 @@
           "types": [],
           "states": [],
           "lines": [
-            10596
+            10788
           ]
         },
         {
@@ -32149,7 +32526,7 @@
           "types": [],
           "states": [],
           "lines": [
-            10712
+            10904
           ]
         },
         {
@@ -32163,7 +32540,7 @@
           "types": [],
           "states": [],
           "lines": [
-            10726
+            10918
           ]
         },
         {
@@ -32180,7 +32557,7 @@
           ],
           "states": [],
           "lines": [
-            10736
+            10928
           ]
         },
         {
@@ -32194,8 +32571,8 @@
           "types": [],
           "states": [],
           "lines": [
-            10742,
-            10752
+            10934,
+            10944
           ]
         },
         {
@@ -32212,7 +32589,7 @@
           ],
           "states": [],
           "lines": [
-            10746
+            10938
           ]
         },
         {
@@ -32226,7 +32603,7 @@
           "types": [],
           "states": [],
           "lines": [
-            10756
+            10948
           ]
         },
         {
@@ -32241,8 +32618,8 @@
           "types": [],
           "states": [],
           "lines": [
-            13697,
-            13701
+            13889,
+            13893
           ]
         },
         {
@@ -32256,7 +32633,7 @@
           "types": [],
           "states": [],
           "lines": [
-            13705
+            13897
           ]
         },
         {
@@ -32268,7 +32645,7 @@
           "types": [],
           "states": [],
           "lines": [
-            13707
+            13899
           ]
         },
         {
@@ -32282,8 +32659,8 @@
           "types": [],
           "states": [],
           "lines": [
-            13708,
-            13716
+            13900,
+            13908
           ]
         }
       ]

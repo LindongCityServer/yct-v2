@@ -34,7 +34,7 @@ export function MapMeasureLayer({
 
   return (
     <div className="map-measure-layer" aria-hidden="true">
-      {projected.length >= 2 ? (
+      {projected.length >= 1 ? (
         <svg
           className="map-measure-svg"
           viewBox={`0 0 ${Math.max(1, viewportWidth)} ${Math.max(1, viewportHeight)}`}
