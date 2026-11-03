@@ -3,6 +3,54 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.19.0",
+      "releasedAt": "2026-11-03T12:28:38.743Z",
+      "sourceFingerprint": "0b7a622872e8074c635de6ca06539288e204b95b20769bb35db6651571c697e1",
+      "themes": ["map", "transit", "admin", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "班次级运营日历支持节假日、调休与自定义缓冲日"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地图支持历史瓦片版本切换与历史视图分享"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "地图新增测距与测面积工具，含自交与退化边界校验"
+        },
+        { "category": "feat", "breaking": false, "summary": "在线玩家胶囊可点击跳转玩家板块" },
+        { "category": "feat", "breaking": false, "summary": "后台概览指标块可点击跳转对应板块" },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "POI 详情 Esc 在输入法组合态与上层已消费时仍可关闭"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "POI 相册主图限制展示尺寸并预取相邻图片"
+        },
+        { "category": "fix", "breaking": false, "summary": "POI 分享卡片补充简介与固定比例配图" },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "服务器状态优先确认 MCBE 外网可达，地图故障时标记未知并保留玩家状态"
+        },
+        { "category": "fix", "breaking": false, "summary": "后台 POI 进入工作台前提示未保存修改" },
+        {
+          "category": "style",
+          "breaking": false,
+          "summary": "线路编辑「班次」页签更名为「运营配置」"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.18.0",
       "releasedAt": "2026-11-02T12:23:26.518Z",
       "sourceFingerprint": "56500072e0f7f001c6a156260612df5d41ae686179865615b014aa92384485d3",
