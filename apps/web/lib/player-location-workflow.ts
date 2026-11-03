@@ -38,6 +38,9 @@ export async function syncPlayerLocations(
     config.bedrockStatusTimeoutMs,
     config.bedrockStatusEnabled,
     config.bedrockOfflineHoldMs,
+    config.bedrockProviders,
+    config.bedrockProviderRetries,
+    config.bedrockProviderBackoffMs,
     config.playerLocationStorePath,
   ]);
   return playerLocationSyncCache.read(key, () => performPlayerLocationSync(config, input));

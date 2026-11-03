@@ -1,70 +1,56 @@
+import {
+  isValidBedrockAddress,
+  resolveBedrockStatusProviderConfig,
+  type BedrockProviderObservation,
+  type BedrockStatusProvider,
+  type BedrockStatusProviderConfig,
+} from './bedrock-status-providers';
 import { createTimedKeyedCache } from './server-cache';
 
 export interface BedrockStatusObservation {
   availability: 'online' | 'offline' | 'unknown';
   validUntil: number;
   observedAt?: string;
+  providerId?: string;
 }
 
-// mcstatus.io caches its own observations. Never extend those beyond expires_at,
-// and do not interpret detector errors/rate limits as an offline game server.
+const invalidAddressWarning = new Set<string>();
+
+// 来源按配置顺序尝试：单个来源超时、限流、非法响应或网络错误时跳下一个；
+// 全部来源都无法给出明确结果时返回 unknown，由调用方按“离线保持”策略处理。
 export function createBedrockStatusChecker(
   request: typeof fetch = (...args) => fetch(...args),
   now: () => number = () => Date.now(),
+  configOverride?: BedrockStatusProviderConfig,
 ) {
   const cache = createTimedKeyedCache<BedrockStatusObservation>(30_000, 8);
   const pending = new Map<string, Promise<BedrockStatusObservation>>();
   return async (address: string, timeoutMs: number): Promise<BedrockStatusObservation> => {
     const timeout = Math.min(10_000, Math.max(100, timeoutMs));
-    const key = JSON.stringify([address, timeout]);
+    const config = configOverride ?? resolveBedrockStatusProviderConfig(process.env);
+    const key = JSON.stringify([address, timeout, config.signature]);
     const load = async (): Promise<BedrockStatusObservation> => {
       const unknown = (): BedrockStatusObservation => ({
         availability: 'unknown',
         validUntil: now() + 8_000,
       });
-      // Only configured host:port values are sent to the fixed HTTPS provider.
-      if (!/^(?:[a-zA-Z0-9.-]+|\[[a-fA-F0-9:]+\]):\d{1,5}$/.test(address)) return unknown();
-      const port = Number(address.slice(address.lastIndexOf(':') + 1));
-      if (port < 1 || port > 65535) return unknown();
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeout);
-      try {
-        const url = new URL(
-          `https://api.mcstatus.io/v2/status/bedrock/${encodeURIComponent(address)}`,
-        );
-        url.searchParams.set('timeout', String(Math.min(2, Math.max(0.1, (timeout - 500) / 1000))));
-        const response = await request(url, {
-          signal: controller.signal,
-          cache: 'no-store',
-          headers: { accept: 'application/json' },
-        });
-        if (!response.ok) return unknown();
-        const body: unknown = await response.json();
-        if (!body || typeof body !== 'object') return unknown();
-        const { online, retrieved_at, expires_at } = body as Record<string, unknown>;
-        const time = now();
-        if (
-          typeof online !== 'boolean' ||
-          typeof retrieved_at !== 'number' ||
-          typeof expires_at !== 'number' ||
-          !Number.isFinite(retrieved_at) ||
-          !Number.isFinite(expires_at) ||
-          retrieved_at > time + 5_000 ||
-          retrieved_at < time - 120_000 ||
-          expires_at <= time ||
-          expires_at <= retrieved_at
-        )
-          return unknown();
-        return {
-          availability: online ? 'online' : 'offline',
-          observedAt: new Date(retrieved_at).toISOString(),
-          validUntil: Math.min(expires_at, retrieved_at + 120_000, time + 30_000),
-        };
-      } catch {
+      // 只向配置的来源提交已校验的 host:port，不上传玩家信息。
+      if (!isValidBedrockAddress(address)) {
+        if (!invalidAddressWarning.has(address)) {
+          invalidAddressWarning.add(address);
+          console.warn(
+            `[bedrock-status] YCT_BEDROCK_SERVER_ADDRESS 不是合法的 host:port：${address}`,
+          );
+        }
         return unknown();
-      } finally {
-        clearTimeout(timer);
       }
+
+      for (const provider of config.providers) {
+        const observation = await probeProvider(config, provider, address, timeout, request, now);
+        if (!observation) continue;
+        return { ...observation, providerId: provider.id };
+      }
+      return unknown();
     };
     const existing = pending.get(key);
     if (existing) return existing;
@@ -83,6 +69,57 @@ export function createBedrockStatusChecker(
       pending.delete(key);
     }
   };
+}
+
+async function probeProvider(
+  config: BedrockStatusProviderConfig,
+  provider: BedrockStatusProvider,
+  address: string,
+  timeoutMs: number,
+  request: typeof fetch,
+  now: () => number,
+): Promise<BedrockProviderObservation | null> {
+  // 每个来源的超时取自配置；重试共享同一预算，不会把总耗时翻倍。
+  const budget = Math.min(10_000, Math.max(100, provider.timeoutMs ?? timeoutMs));
+  const deadline = now() + budget;
+  for (let attempt = 0; attempt <= config.retries; attempt += 1) {
+    const remaining = deadline - now();
+    if (remaining < 100) return null;
+    const result = await attemptProvider(provider, address, remaining, request, now);
+    if (result) return result;
+    if (attempt >= config.retries) return null;
+    const wait = Math.min(config.backoffMs * 2 ** attempt, deadline - now() - 100);
+    if (wait > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, wait));
+    }
+  }
+  return null;
+}
+
+async function attemptProvider(
+  provider: BedrockStatusProvider,
+  address: string,
+  timeoutMs: number,
+  request: typeof fetch,
+  now: () => number,
+): Promise<BedrockProviderObservation | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const requestedAt = now();
+    const response = await request(provider.buildUrl(address, timeoutMs), {
+      signal: controller.signal,
+      cache: 'no-store',
+      headers: { accept: 'application/json' },
+    });
+    if (!response.ok) return null;
+    const body: unknown = await response.json().catch(() => null);
+    return provider.parse(body, { now: now(), requestedAt });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export const readBedrockServerStatus = createBedrockStatusChecker();
