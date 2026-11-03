@@ -62,7 +62,7 @@ export async function readImagePlaceholder(input: {
       return { bytes: cached, contentType: 'image/webp' };
     }
 
-    const sharp = requireFromHere('sharp') as typeof import('sharp').default;
+    const sharp = requireFromHere('sharp') as typeof import('sharp');
     const bytes = await sharp(sourcePath, {
       limitInputPixels: maxInputPixels,
       sequentialRead: true,
