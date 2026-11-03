@@ -5842,7 +5842,7 @@ function TransitLineEditorDialog({
               [
                 ['basic', '基本信息'],
                 ['route', '路线'],
-                ['schedule', '班次'],
+                ['schedule', '运营配置'],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -6354,12 +6354,15 @@ function TransitLineEditorDialog({
               />
             </label>
             {line ? (
-              <section className="transit-line-schedule-chart-entry" aria-label="班次工作台入口">
+              <section
+                className="transit-line-schedule-chart-entry"
+                aria-label="运营配置中的班次工作台入口"
+              >
                 <div className="section-heading">
                   <div>
                     <h3>班次工作台</h3>
                     <p className="muted">
-                      发车时刻、班次标签、停站方向与运行图已合并为独立工作台，在折线运行图上直接调整每个班次的停站时刻。
+                      本页签配置线路的首末班与运营日规则；发车时刻、班次标签、停站方向与运行图已合并为独立工作台，在折线运行图上直接调整每个班次的停站时刻。
                     </p>
                   </div>
                   <Link
