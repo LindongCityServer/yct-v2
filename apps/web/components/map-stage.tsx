@@ -36,6 +36,7 @@ import { getFontEmbedCSS, toBlob } from 'html-to-image';
 import LZString from 'lz-string';
 import QRCode from 'qrcode';
 import { appPath } from '../lib/app-paths';
+import { buildMapShareDescription, buildShareImagePreviewSrc } from '../lib/map-share-card';
 import { buildProgressiveImageOptimizerSrc } from '../lib/progressive-image-source';
 import { buildExploreCandidates, pickExploreCandidate } from '../lib/random-explore';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
@@ -506,8 +507,12 @@ type MapShareTarget =
 interface MapSharePayload {
   color: string;
   coordinateText?: string;
+  /** POI 简介的纯文本摘要；路线分享不使用。 */
+  description?: string;
   eyebrow: string;
   icon: string;
+  /** POI 首图原始地址；渲染时再转成站内优化地址，不可优化则不展示。 */
+  imageUrl?: string;
   meta: string[];
   steps: MapShareStep[];
   text: string;
@@ -6420,6 +6425,22 @@ function MapShareDialog({
     () => buildMapSharePayload(target, t, shortShareUrl ?? undefined),
     [shortShareUrl, t, target],
   );
+  // 分享图只使用站内优化地址：既避免原图拉伸，也保证导出画布不被跨域图片污染。
+  // 无法优化的外链直接不展示，卡片退回无图布局。
+  const shareImageSrc = useMemo(
+    () =>
+      payload.imageUrl
+        ? buildShareImagePreviewSrc(appPath(payload.imageUrl), {
+            origin: typeof window === 'undefined' ? undefined : window.location.origin,
+          })
+        : undefined,
+    [payload.imageUrl],
+  );
+  const [shareImageFailed, setShareImageFailed] = useState(false);
+
+  useEffect(() => {
+    setShareImageFailed(false);
+  }, [shareImageSrc]);
   const copyOptions = useMemo(
     () => mapShareCopyKinds.filter((kind) => Boolean(getMapShareCopyValue(payload, kind))),
     [payload],
@@ -6582,6 +6603,20 @@ function MapShareDialog({
                 <span key={`${item}-${index}`}>{item}</span>
               ))}
             </div>
+          ) : null}
+          {payload.description ? (
+            <p className="map-share-preview-description">{payload.description}</p>
+          ) : null}
+          {shareImageSrc && !shareImageFailed ? (
+            <figure className="map-share-preview-media">
+              <img
+                alt=""
+                decoding="async"
+                loading="eager"
+                onError={() => setShareImageFailed(true)}
+                src={shareImageSrc}
+              />
+            </figure>
           ) : null}
           {payload.steps.length > 0 ? (
             <ol className="map-route-step-timeline map-share-preview-steps">
@@ -8531,6 +8566,8 @@ function buildMapSharePayload(
     const category = target.marker.categoryId
       ? getMarkerCategoryDisplayName(target.marker.categoryId, t)
       : formatMarkerDetail(target.marker, t);
+    const description = buildMapShareDescription(target.marker.description);
+    const imageUrl = getMapMarkerImageUrls(target.marker)[0];
     const coordinateDisplayText = coordinate ? formatShareCoordinate(coordinate) : '';
     const teleportCommand = coordinate
       ? target.marker.playerLocation?.serverAccountName
@@ -8541,8 +8578,10 @@ function buildMapSharePayload(
     return {
       color: 'var(--yct-color-primary)',
       coordinateText: coordinateDisplayText || undefined,
+      description,
       eyebrow: category,
       icon: 'location_on',
+      imageUrl,
       meta: [formatMarkerDetail(target.marker, t), coordinateDisplayText].filter(Boolean),
       steps: [],
       text: [
@@ -8773,21 +8812,69 @@ async function copyTextOrUseSystemShare(value: string, shareData: ShareData): Pr
 
 async function createMapShareImageBlob(previewElement: HTMLElement): Promise<Blob> {
   await document.fonts?.ready;
+  // 分享图与二维码都是异步加载；等它们落定再截图，避免导出空白块。
+  await waitForSharePreviewImages(previewElement);
+  // 加载失败的图片直接剔除，保证导出的是干净的无图卡片；配图连同容器一起隐藏，避免留下空白色条。
+  const hiddenElements: HTMLElement[] = [];
+  for (const image of previewElement.querySelectorAll('img')) {
+    if (image.complete && image.naturalWidth === 0) {
+      const media = image.closest('.map-share-preview-media');
+      const target = media instanceof HTMLElement ? media : image;
+      target.style.display = 'none';
+      hiddenElements.push(target);
+    }
+  }
+
   const fontEmbedCSS = await getFontEmbedCSS(previewElement, {
     preferredFontFormat: 'woff2',
   });
-  const blob = await toBlob(previewElement, {
-    cacheBust: true,
-    fontEmbedCSS,
-    pixelRatio: Math.min(window.devicePixelRatio || 2, 3),
-    preferredFontFormat: 'woff2',
-  });
+  try {
+    const blob = await toBlob(previewElement, {
+      cacheBust: true,
+      fontEmbedCSS,
+      pixelRatio: Math.min(window.devicePixelRatio || 2, 3),
+      preferredFontFormat: 'woff2',
+    });
 
-  if (!blob) {
-    throw new Error('Failed to create share image');
+    if (!blob) {
+      throw new Error('Failed to create share image');
+    }
+
+    return blob;
+  } finally {
+    for (const element of hiddenElements) {
+      element.style.display = '';
+    }
   }
+}
 
-  return blob;
+/** 等待预览区图片加载完成或失败，最多 2.5 秒，避免慢网下无限等待。 */
+async function waitForSharePreviewImages(previewElement: HTMLElement): Promise<void> {
+  const images = Array.from(previewElement.querySelectorAll('img'));
+  await Promise.all(
+    images.map(
+      (image) =>
+        new Promise<void>((resolve) => {
+          if (image.complete) {
+            resolve();
+            return;
+          }
+
+          let timer: number | undefined;
+          const finish = () => {
+            if (timer !== undefined) {
+              window.clearTimeout(timer);
+            }
+            image.removeEventListener('load', finish);
+            image.removeEventListener('error', finish);
+            resolve();
+          };
+          image.addEventListener('load', finish);
+          image.addEventListener('error', finish);
+          timer = window.setTimeout(finish, 2500);
+        }),
+    ),
+  );
 }
 
 function downloadBlob(blob: Blob, fileName: string) {
