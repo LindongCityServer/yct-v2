@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   createHistoryTileEmptyResponse,
   createHistoryTileHeaders,
+  isHistoryTileInCoverage,
   parseMapHistoryVersions,
 } from '../../../../lib/map-history';
 import {
@@ -101,6 +102,22 @@ async function respondHistoryTile(
   }
   if (version.status === 'archived') {
     return createHistoryTileEmptyResponse(versionId, 'archived-version');
+  }
+
+  // 手工构造 URL 也必须遵守版本声明的缩放与覆盖范围，避免代理被用来抓取上游任意瓦片。
+  const tileZoom = Number(coordinates.z);
+  const tileX = Number(coordinates.x);
+  const tileZ = Number(coordinates.y);
+  if (!Number.isSafeInteger(tileZoom) || !Number.isSafeInteger(tileX) || !Number.isSafeInteger(tileZ)) {
+    return createHistoryTileEmptyResponse(versionId, 'invalid-coordinate');
+  }
+  const minZoom = Math.min(version.zoomRange.minZoom, version.zoomRange.maxZoom);
+  const maxZoom = Math.max(version.zoomRange.minZoom, version.zoomRange.maxZoom);
+  if (tileZoom < minZoom || tileZoom > maxZoom) {
+    return createHistoryTileEmptyResponse(versionId, 'zoom-out-of-range');
+  }
+  if (!isHistoryTileInCoverage(tileX, tileZ, tileZoom, version.coverage)) {
+    return createHistoryTileEmptyResponse(versionId, 'out-of-coverage');
   }
 
   const upstreamUrl = fillMapTileTemplate(version.tileTemplate, coordinates);
