@@ -2,9 +2,11 @@ import type {
   ContentAsset,
   ContentSummary,
   ISODateTimeString,
+  MapHistoryVersionDescriptor,
   OperationsStrongReminderSourceKind,
   OperationsStrongReminderTone,
   ServiceEntry,
+  TileProviderDescriptor,
 } from './domain';
 
 export type DataSourceStatus = 'ready' | 'not_configured' | 'unavailable';
@@ -18,6 +20,11 @@ export interface ApiMeta {
 export interface ApiListResponse<TItem> {
   meta: ApiMeta;
   items: TItem[];
+}
+
+/** `/api/map/tile-providers` 的响应：当前瓦片源 + 服务端登记的历史版本元数据。 */
+export interface MapTileProvidersResponse extends ApiListResponse<TileProviderDescriptor> {
+  history?: MapHistoryVersionDescriptor[];
 }
 
 export interface ApiItemResponse<TItem> {

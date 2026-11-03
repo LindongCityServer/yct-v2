@@ -14,6 +14,7 @@
     "transit:check": "tsx --test scripts/checks/verify-transit-departure-editor.mjs",
     "poi:images:check": "tsx --test scripts/checks/verify-poi-image-source.mjs",
     "map:measure:check": "tsx --test scripts/checks/verify-map-measure.mjs",
+    "map:history:check": "tsx --test scripts/checks/verify-map-history.ts",
     "release:prepare": "node scripts/prepare-release.mjs",
     "release:freeze-history": "node scripts/freeze-release-history.mjs",
     "brand:icons": "node scripts/generate-icons.mjs",

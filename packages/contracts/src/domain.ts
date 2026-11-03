@@ -338,6 +338,30 @@ export interface TileProviderDescriptor {
   zoomRange?: TileZoomRange;
 }
 
+/** 历史快照在世界坐标中的覆盖矩形（Minecraft X/Z）。 */
+export interface MapTileCoverage {
+  minX: number;
+  minZ: number;
+  maxX: number;
+  maxZ: number;
+}
+
+export type MapHistoryVersionStatus = 'active' | 'archived';
+
+/**
+ * 历史瓦片版本元数据。`worldDataDate` 为世界数据日期（YYYY-MM-DD），
+ * 未知时必须为 null，禁止用文件上传日期代替。
+ */
+export interface MapHistoryVersionDescriptor {
+  id: string;
+  name: string;
+  worldDataDate: string | null;
+  dateNote?: string;
+  coverage: MapTileCoverage;
+  zoomRange: TileZoomRange;
+  status: MapHistoryVersionStatus;
+}
+
 export interface PoiIconMapping {
   categoryId: string;
   iconFileNames: string[];

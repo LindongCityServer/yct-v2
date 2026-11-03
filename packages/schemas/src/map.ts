@@ -294,6 +294,42 @@ export const tileProviderConfigSchema = z.object({
   attribution: z.string().trim().max(300).optional(),
 });
 
+/** 历史快照版本：服务端人工登记，id 进入请求 URL 与缓存键。 */
+export const mapHistoryVersionConfigSchema = z.object({
+  id: z
+    .string()
+    .trim()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9-]+$/, { message: '历史版本 id 只允许小写字母、数字和连字符' }),
+  name: nonEmptyTextSchema,
+  worldDataDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { message: '世界数据日期必须为 YYYY-MM-DD 或 null' })
+    .nullable(),
+  dateNote: z.string().trim().max(300).optional(),
+  tileTemplate: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((value) => value.includes('{x}') && value.includes('{y}') && value.includes('{z}'), {
+      message: '历史瓦片模板必须包含 {x}、{y}、{z}',
+    }),
+  coverage: rectangleBoundsSchema,
+  zoomRange: z
+    .object({
+      minZoom: z.number().int().min(-16).max(16),
+      maxZoom: z.number().int().min(-16).max(16),
+    })
+    .refine((value) => value.minZoom <= value.maxZoom, {
+      message: '历史版本 minZoom 不能大于 maxZoom',
+      path: ['maxZoom'],
+    }),
+  status: z.enum(['active', 'archived']).default('active'),
+});
+
+export type MapHistoryVersionConfigInput = z.infer<typeof mapHistoryVersionConfigSchema>;
+
 export const poiIconMappingSchema = z.object({
   categoryId: idSchema,
   iconFileNames: z.array(z.string().trim().min(1).max(160)).min(1).max(32),
