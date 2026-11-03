@@ -36,6 +36,7 @@ import { getFontEmbedCSS, toBlob } from 'html-to-image';
 import LZString from 'lz-string';
 import QRCode from 'qrcode';
 import { appPath } from '../lib/app-paths';
+import { buildProgressiveImageOptimizerSrc } from '../lib/progressive-image-source';
 import { buildExploreCandidates, pickExploreCandidate } from '../lib/random-explore';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { publishAssistantPageContext } from '../lib/client-assistant-page-context';
@@ -10573,6 +10574,37 @@ function MapPoiImageGallery({
     setActiveIndex(0);
   }, [imageKey]);
 
+  // 只在空闲时预取相邻下一张的展示宽度优化图：限 1 张，不下载整组原图。
+  useEffect(() => {
+    if (!hasMultipleImages) {
+      return undefined;
+    }
+    const urls = imageKey ? imageKey.split('\u0000') : [];
+    const nextImageUrl = urls[(activeIndex + 1) % urls.length];
+    if (!nextImageUrl) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled) {
+        return;
+      }
+      const optimizedSrc = buildProgressiveImageOptimizerSrc(nextImageUrl, 1024);
+      if (!optimizedSrc) {
+        return;
+      }
+      const preloader = new Image();
+      preloader.decoding = 'async';
+      preloader.src = optimizedSrc;
+    }, 900);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeIndex, hasMultipleImages, imageKey]);
+
   const showPrevious = () =>
     setActiveIndex((current) => (current - 1 + imageUrls.length) % imageUrls.length);
   const showNext = () => setActiveIndex((current) => (current + 1) % imageUrls.length);
@@ -10607,6 +10639,7 @@ function MapPoiImageGallery({
       <ProgressiveImage
         className="map-poi-detail-image"
         src={appPath(imageUrls[activeIndex] ?? imageUrls[0])}
+        maxDisplayWidth={1024}
         alt={imageAlt}
         loading="lazy"
         draggable={false}

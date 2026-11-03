@@ -2,8 +2,14 @@
 
 import { useEffect, useRef, useState, type ImgHTMLAttributes } from 'react';
 import { appBasePath, appPath } from '../lib/app-paths';
+import { buildProgressiveImageOptimizerSrc } from '../lib/progressive-image-source';
 
 type ProgressiveImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> & {
+  /**
+   * 首屏前景图的最大展示宽度。设置后前景图改走 Next 优化器，避免直接下载原图；
+   * 来源不可优化时仍回退到原始地址。
+   */
+  maxDisplayWidth?: number;
   /**
    * 可选的自定义低清占位图。不传时使用站内低清占位接口生成 32px 快照。
    */
@@ -24,8 +30,6 @@ const maxLadderLevels = 3;
 const maxPreviewWidth = 1024;
 // 低清首档固定用 32px，保证占位请求本身足够小、生成足够快。
 const firstPlaceholderWidth = 32;
-// 与 next.config.mjs 的 images.remotePatterns 保持同步；未命中的远程图不做 LQIP。
-const allowedRemoteHosts = ['minotar.net', 'mc-heads.net', 'shangxiaoguan.top'];
 
 /**
  * 内容图片的多级 LQIP 渐进加载：
@@ -44,6 +48,7 @@ export function ProgressiveImage({
   decoding = 'async',
   deferPlaceholder = false,
   loading,
+  maxDisplayWidth,
   onError,
   onLoad,
   placeholderSrc,
@@ -60,12 +65,16 @@ export function ProgressiveImage({
     url: placeholderSrc,
   }));
 
-  const loaded = loadedSrc === src;
+  // 前景图使用展示宽度的优化图；无法优化时保持原图，避免出现必然 400 的请求。
+  const foregroundSrc = maxDisplayWidth
+    ? (buildProgressiveImageOptimizerSrc(src, maxDisplayWidth) ?? src)
+    : src;
+  const loaded = loadedSrc === foregroundSrc;
   // SSR 阶段没有渲染尺寸，先给自定义占位或中性底色；挂载后再换成阶梯的第一档。
   const initialPlaceholder = placeholderSrc;
   const commitLoaded = () => {
-    loadedSrcRef.current = src;
-    setLoadedSrc(src);
+    loadedSrcRef.current = foregroundSrc;
+    setLoadedSrc(foregroundSrc);
   };
   // src 切换时不要短暂沿用上一张图的高清占位。
   const placeholderUrl = loaded
@@ -80,14 +89,14 @@ export function ProgressiveImage({
       return undefined;
     }
 
-    if (loadedSrcRef.current === src) {
+    if (loadedSrcRef.current === foregroundSrc) {
       return undefined;
     }
 
     // 命中缓存的图片不会再触发 load，挂载后同步一次并跳过分级预加载。
     if (image.complete && image.naturalWidth > 0) {
-      loadedSrcRef.current = src;
-      setLoadedSrc(src);
+      loadedSrcRef.current = foregroundSrc;
+      setLoadedSrc(foregroundSrc);
       return undefined;
     }
 
@@ -103,12 +112,12 @@ export function ProgressiveImage({
     const startLadder = () => {
       let index = 0;
       const loadNext = () => {
-        if (cancelled || index >= widths.length || loadedSrcRef.current === src) {
+        if (cancelled || index >= widths.length || loadedSrcRef.current === foregroundSrc) {
           return;
         }
 
         const width = widths[index++];
-        const nextUrl = buildOptimizerSrc(src, width);
+        const nextUrl = buildProgressiveImageOptimizerSrc(src, width);
         if (!nextUrl) {
           return;
         }
@@ -116,7 +125,7 @@ export function ProgressiveImage({
         const preloader = new Image();
         preloader.decoding = 'async';
         preloader.onload = () => {
-          if (cancelled || loadedSrcRef.current === src) {
+          if (cancelled || loadedSrcRef.current === foregroundSrc) {
             return;
           }
           setPlaceholder({ src, url: nextUrl });
@@ -141,7 +150,7 @@ export function ProgressiveImage({
       const first = new Image();
       first.decoding = 'async';
       first.onload = () => {
-        if (cancelled || loadedSrcRef.current === src) {
+        if (cancelled || loadedSrcRef.current === foregroundSrc) {
           return;
         }
         setPlaceholder({ src, url: firstUrl });
@@ -180,7 +189,7 @@ export function ProgressiveImage({
       cancelled = true;
       observer?.disconnect();
     };
-  }, [deferPlaceholder, loading, placeholderSrc, src]);
+  }, [deferPlaceholder, foregroundSrc, loading, placeholderSrc, src]);
 
   return (
     <>
@@ -192,7 +201,7 @@ export function ProgressiveImage({
           .join(' ')}
         decoding={decoding}
         loading={loading}
-        src={src}
+        src={foregroundSrc}
         style={
           placeholderUrl
             ? {
@@ -264,52 +273,6 @@ function buildPlaceholderSrc(src: string, width: number): string | undefined {
   return appPath(`/api/image-placeholder?${params.toString()}`);
 }
 
-function buildOptimizerSrc(src: string, width: number): string | undefined {
-  if (src.startsWith('data:') || src.startsWith('blob:') || src.startsWith('//')) {
-    return undefined;
-  }
-  if (/\.svg(?:[?#]|$)/i.test(src) || src.includes('/_next/image')) {
-    return undefined;
-  }
-  if (!src.startsWith('/') && !/^https?:\/\//i.test(src)) {
-    return undefined;
-  }
-  if (/^https?:\/\//i.test(src) && !isAllowedRemoteImage(src)) {
-    return undefined;
-  }
-
-  const params = new URLSearchParams({
-    // 优化器在应用内部按“自己的 origin + url”取图，因此本地路径要去掉外部 basePath。
-    url: toOptimizerSource(src),
-    w: String(width),
-    q: '75',
-  });
-  // content-assets 由反向代理直接托管，不在 Node 的 public 目录里；优化器按相对路径
-  // 抓取只会拿到 404 HTML（线上表现为 400），必须改用同源绝对地址。
-  // 其余站内路径（legacy-assets、应用内的图片路由）保持相对路径，让优化器走内部读取，
-  // 避免为了一张缩略图再经公网域名绕一圈。
-  if (src.startsWith('/content-assets/')) {
-    const sameOriginSrc = toSameOriginAbsoluteSrc(src);
-    if (sameOriginSrc) {
-      params.set('url', sameOriginSrc);
-    }
-  }
-  return appPath(`/_next/image?${params.toString()}`);
-}
-
-/**
- * 站内相对路径转同源绝对地址。
- * 仅当当前站点域名在优化器白名单内时启用，否则退回相对路径，避免优化器拒绝请求。
- */
-function toSameOriginAbsoluteSrc(src: string): string | undefined {
-  if (!src.startsWith('/') || typeof window === 'undefined') {
-    return undefined;
-  }
-
-  const absolute = new URL(src, window.location.origin).href;
-  return isAllowedRemoteImage(absolute) ? absolute : undefined;
-}
-
 function toOptimizerSource(src: string): string {
   if (
     src.startsWith('/') &&
@@ -320,19 +283,4 @@ function toOptimizerSource(src: string): string {
   }
 
   return src;
-}
-
-function isAllowedRemoteImage(src: string): boolean {
-  try {
-    const url = new URL(src);
-    if (url.protocol !== 'https:') {
-      return false;
-    }
-    const hostname = url.hostname.toLowerCase();
-    return allowedRemoteHosts.some(
-      (allowed) => hostname === allowed || hostname.endsWith(`.${allowed}`),
-    );
-  } catch {
-    return false;
-  }
 }
