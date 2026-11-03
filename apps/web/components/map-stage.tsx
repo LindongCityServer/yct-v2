@@ -71,7 +71,11 @@ import {
   getCoordinateDistance,
   squaredDistance,
   type CoordinateChainProjection,
+  type MapCoordinate,
 } from '../lib/map-spatial';
+import { validateMeasureArea, type MapMeasureMode } from '../lib/map-measure';
+import { MapMeasureLayer } from './map-measure-layer';
+import { MapMeasurePanel } from './map-measure-panel';
 import type { MetroFacilityIconAssetName } from '../lib/metro-wayfinding';
 import {
   collectMapRoadConnectionProjections,
@@ -998,6 +1002,11 @@ export function MapStage() {
     markerRoadAccessIndex: new Map(),
   }));
   const [poiCoordinatePickMode, setPoiCoordinatePickMode] = useState(false);
+  const measureButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [measureMode, setMeasureMode] = useState<MapMeasureMode | null>(null);
+  const [measurePoints, setMeasurePoints] = useState<MapCoordinate[]>([]);
+  const [measureLocked, setMeasureLocked] = useState(false);
+  const [measureNotice, setMeasureNotice] = useState('');
   const [nearbySearchCenter, setNearbySearchCenter] = useState<NearbySearchCenter | null>(null);
   const [nearbySearchScope, setNearbySearchScope] = useState<MapNearbySearchScope>('outside');
   const [nearbyLinearRange, setNearbyLinearRange] = useState<[number, number]>([0, 0]);
@@ -1073,6 +1082,10 @@ export function MapStage() {
     }
 
     const handleNativeWheel = (event: globalThis.WheelEvent) => {
+      // 测量面板自身可滚动时，滚轮只滚动面板，不缩放地图。
+      if (event.target instanceof Element && event.target.closest('.map-measure-panel')) {
+        return;
+      }
       event.preventDefault();
       const currentView = mapViewRef.current;
       const currentSize = viewportSizeRef.current;
@@ -1417,6 +1430,101 @@ export function MapStage() {
     () => normalizeMapVisibleRect(mapVisibleRect, viewportSize),
     [mapVisibleRect, viewportSize],
   );
+
+  // 测量准星取“可用地图区域”中心：手机底部面板、侧栏展开后仍与实际取点一致。
+  const measureCrosshairScreen = useMemo(() => {
+    const rect = effectiveMapVisibleRect;
+    return { left: (rect.left + rect.right) / 2, top: (rect.top + rect.bottom) / 2 };
+  }, [effectiveMapVisibleRect]);
+  const measureCrosshairWorld = useMemo<MapCoordinate>(() => {
+    const center = screenToWorld(
+      measureCrosshairScreen.left,
+      measureCrosshairScreen.top,
+      mapView,
+      viewportSize,
+    );
+    return [center.x, center.z];
+  }, [measureCrosshairScreen, mapView, viewportSize]);
+  const measureAreaValidation = useMemo(() => validateMeasureArea(measurePoints), [measurePoints]);
+
+  const startMeasure = () => {
+    // 测量与坐标拾取、路线端点编辑互斥，避免同一次点击被两套逻辑争抢。
+    setEditingRouteEndpoint(null);
+    setRouteEndpointQuery('');
+    setPoiCoordinatePickMode(false);
+    setMeasureMode('distance');
+    setMeasurePoints([]);
+    setMeasureLocked(false);
+    setMeasureNotice('');
+  };
+
+  const exitMeasure = () => {
+    setMeasureMode(null);
+    setMeasurePoints([]);
+    setMeasureLocked(false);
+    setMeasureNotice('');
+    window.requestAnimationFrame(() => measureButtonRef.current?.focus({ preventScroll: true }));
+  };
+
+  const addMeasurePoint = () => {
+    if (!measureMode || measureLocked) {
+      return;
+    }
+    const coordinate: MapCoordinate = measureCrosshairWorld;
+    const last = measurePoints.at(-1);
+    // 0.01 格以内视为同一位置，避免产生零长度分段或重复顶点。
+    if (last && getCoordinateDistance(last, coordinate) < 0.01) {
+      setMeasureNotice(t('map.measure.invalid.duplicate'));
+      return;
+    }
+    setMeasureNotice('');
+    setMeasurePoints([...measurePoints, coordinate]);
+  };
+
+  const changeMeasureMode = (mode: MapMeasureMode) => {
+    if (mode === measureMode) {
+      return;
+    }
+    setMeasureMode(mode);
+    setMeasurePoints([]);
+    setMeasureLocked(false);
+    setMeasureNotice(t('map.measure.switchedMode'));
+  };
+
+  const undoMeasurePoint = () => {
+    if (measureLocked) {
+      return;
+    }
+    setMeasureNotice('');
+    setMeasurePoints((current) => current.slice(0, -1));
+  };
+
+  const clearMeasure = () => {
+    setMeasureNotice('');
+    setMeasurePoints([]);
+    setMeasureLocked(false);
+  };
+
+  const finishMeasureArea = () => {
+    if (measureLocked) {
+      return;
+    }
+    if (!measureAreaValidation.valid) {
+      const reason = measureAreaValidation.reason;
+      setMeasureNotice(
+        reason === 'selfIntersecting'
+          ? t('map.measure.invalid.selfIntersecting')
+          : reason === 'duplicatePoint'
+            ? t('map.measure.invalid.duplicate')
+            : reason === 'collinear'
+              ? t('map.measure.invalid.collinear')
+              : t('map.measure.points.areaNeed'),
+      );
+      return;
+    }
+    setMeasureNotice('');
+    setMeasureLocked(true);
+  };
 
   useEffect(() => {
     if (viewportSize.width <= 0 || viewportSize.height <= 0) {
@@ -3246,6 +3354,22 @@ export function MapStage() {
               onClick: resetView,
             },
             {
+              id: 'rail-map-measure',
+              group: 'page',
+              order: 35,
+              priority: 75,
+              label: t('map.measure.entry'),
+              icon: 'straighten',
+              active: measureMode !== null,
+              onClick: () => {
+                if (measureMode) {
+                  exitMeasure();
+                } else {
+                  startMeasure();
+                }
+              },
+            },
+            {
               id: 'rail-map-layers',
               group: 'page',
               order: 40,
@@ -3257,7 +3381,7 @@ export function MapStage() {
             },
           ]
         : [],
-    [layerPanelOpen, mobileActionRail?.enabled, resetView, t, zoomBy],
+    [layerPanelOpen, measureMode, mobileActionRail?.enabled, resetView, t, zoomBy],
   );
 
   useEffect(() => {
@@ -3390,6 +3514,10 @@ export function MapStage() {
     // 按视觉层级从高到低逐层关闭，保证一次 Esc 只收起最上面的一层。
     if (shareTarget) {
       setShareTarget(null);
+      return;
+    }
+    if (measureMode) {
+      exitMeasure();
       return;
     }
     if (poiCoordinatePickMode) {
@@ -3800,7 +3928,7 @@ export function MapStage() {
     const markerId =
       event.pointerType === 'mouse' ? undefined : getPointerTargetMapMarkerId(event.target);
     tapRef.current =
-      editingRouteEndpoint || poiCoordinatePickMode || markerId
+      !measureMode && (editingRouteEndpoint || poiCoordinatePickMode || markerId)
         ? {
             pointerId: event.pointerId,
             startX: event.clientX,
@@ -3915,6 +4043,10 @@ export function MapStage() {
   };
 
   const beginPoiCoordinatePick = () => {
+    // 坐标拾取与测量互斥，避免拾取点击被测量模式吞掉。
+    if (measureMode) {
+      exitMeasure();
+    }
     setPoiCoordinatePickMode(true);
     setPoiSubmitDialogOpen(false);
     setPoiSubmitStatus(t('map.poiSubmit.pickPrompt'));
@@ -4281,6 +4413,10 @@ export function MapStage() {
   );
 
   const beginRouteEndpointEdit = (endpoint: RouteEndpointKind) => {
+    // 端点编辑依赖地图点击，与测量模式互斥。
+    if (measureMode) {
+      exitMeasure();
+    }
     setEditingRouteEndpoint(endpoint);
     setRouteEndpointQuery('');
     setRoutePlanCollapsed(false);
@@ -4378,6 +4514,10 @@ export function MapStage() {
   };
 
   const handleMapMarkerActivate = (marker: CenterableMarker) => {
+    // 测量模式下 POI 与路线端点点击一律让位给准星取点，退出后自动恢复。
+    if (measureMode) {
+      return;
+    }
     if (editingRouteEndpoint) {
       applyRouteEndpointMarker(editingRouteEndpoint, marker);
       return;
@@ -5964,6 +6104,42 @@ export function MapStage() {
         )}
       </div>
 
+      {measureMode ? (
+        <>
+          <MapMeasureLayer
+            mode={measureMode}
+            points={measurePoints}
+            previewPoint={measureLocked ? null : measureCrosshairWorld}
+            locked={measureLocked}
+            crosshair={measureLocked ? null : measureCrosshairScreen}
+            project={(coordinate) => {
+              const scale = getScale(mapView.zoom);
+              return {
+                left: viewportSize.width / 2 + (coordinate[0] - mapView.centerX) * scale,
+                top: viewportSize.height / 2 + (coordinate[1] - mapView.centerZ) * scale,
+              };
+            }}
+            viewportWidth={viewportSize.width}
+            viewportHeight={viewportSize.height}
+          />
+          <MapMeasurePanel
+            mode={measureMode}
+            points={measurePoints}
+            locked={measureLocked}
+            validation={measureAreaValidation}
+            notice={measureNotice}
+            t={t}
+            onAddPoint={addMeasurePoint}
+            onChangeMode={changeMeasureMode}
+            onClear={clearMeasure}
+            onExit={exitMeasure}
+            onFinish={finishMeasureArea}
+            onRestart={clearMeasure}
+            onUndo={undoMeasurePoint}
+          />
+        </>
+      ) : null}
+
       <div className="map-toolbar">
         <button
           className="icon-button"
@@ -5988,6 +6164,22 @@ export function MapStage() {
           onClick={resetView}
         >
           <span className="material-symbols-outlined">my_location</span>
+        </button>
+        <button
+          ref={measureButtonRef}
+          className={measureMode ? 'icon-button is-active' : 'icon-button'}
+          type="button"
+          aria-label={t('map.measure.entry')}
+          aria-pressed={measureMode !== null}
+          onClick={() => {
+            if (measureMode) {
+              exitMeasure();
+            } else {
+              startMeasure();
+            }
+          }}
+        >
+          <span className="material-symbols-outlined">straighten</span>
         </button>
         <button
           className={layerPanelOpen ? 'icon-button is-active' : 'icon-button'}
