@@ -40,7 +40,8 @@
     "web:player-locations:run": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-web-player-location-poller.ps1",
     "web:artifact": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/web-build-artifact.ps1",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "poi:share:check": "tsx --test scripts/checks/verify-poi-share-description.mjs"
   },
   "devDependencies": {
     "@yct/legacy-import": "workspace:*",

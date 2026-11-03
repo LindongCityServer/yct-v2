@@ -24375,6 +24375,34 @@ div.telegraph-output-scene.is-packing {
   font-weight: 650;
 }
 
+/* POI 简介使用普通文本块，不再包胶囊；超长时最多 6 行并以省略号收尾。 */
+.map-share-preview-description {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  color: var(--yct-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+/* 分享图固定宽高比、等比裁切，避免竖图被拉伸成长图。 */
+.map-share-preview-media {
+  margin: 0;
+  overflow: hidden;
+  aspect-ratio: 16 / 7;
+  background: var(--yct-color-surface-muted);
+}
+
+.map-share-preview-media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .map-share-preview-steps {
   --route-option-color: var(--map-share-color);
   font-size: 13px;
