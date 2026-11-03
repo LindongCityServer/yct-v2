@@ -24,3 +24,13 @@
 `2.0.0` 是例外的人工策划版本：其更新记录依据旧版 [`LindongCityServer/yct`](https://github.com/LindongCityServer/yct) 的真实页面与功能，对照 v2 首批实现描述迁移差异，不直接显示“初始化雨城通 v2 实现”这一条技术提交标题。
 
 `pnpm release:freeze-history` 默认拒绝覆盖现有快照。只有在明确决定重写全部历史版本时，才允许执行 `pnpm release:freeze-history --force`；这会改变既有版本号，不能作为日常发布步骤。
+
+## 变更日志与覆盖率校验
+
+根目录 `CHANGELOG.md` 记录每个版本区间内**经 PR 合并**的改动，条目含 PR 号、标题、作者与关联 issue。本日志只收录经 PR 合并的改动；直接推送到 main 的提交不在此列，脚本也不会为其补条目。
+
+- 生成：`pnpm changelog:gen`，等价于 `node scripts/changelog/generate.mjs`。默认区间为 `apps/web/release-notes.json` 最新版本的 `releasedAt` 到当前时间，也可用 `--from` / `--to` 指定 git 引用或日期。脚本只重写标记之间的自动区段，重复运行结果一致。
+- 校验：`pnpm changelog:check`，等价于 `node scripts/changelog/check.mjs`。以区间内已合并 PR 为唯一基准，缺失时退出码为 1 并打印编号差集；日志中出现区间外的 PR 只提示，不算失败。
+- 发布时先刷新 `Unreleased` 并校验通过，再用 `pnpm release:prepare` 填写用户可感知摘要，两份记录同时保留：`release-notes.json` 面向用户，`CHANGELOG.md` 面向可核查的 PR/issue 追溯。
+- `2.16.0` 之前的版本没有 PR 记录，在 `CHANGELOG.md` 中标记为「历史区间未回溯」，内容以 `apps/web/release-notes.json` 的人工摘要为准。
+- 若将来需要覆盖直推提交，可在提交信息中写入 `Refs #<issue>` 作为扩展点。
