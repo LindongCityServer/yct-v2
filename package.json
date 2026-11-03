@@ -16,6 +16,8 @@
     "map:measure:check": "tsx --test scripts/checks/verify-map-measure.mjs",
     "release:prepare": "node scripts/prepare-release.mjs",
     "release:freeze-history": "node scripts/freeze-release-history.mjs",
+    "changelog:gen": "node scripts/changelog/generate.mjs",
+    "changelog:check": "node scripts/changelog/check.mjs",
     "brand:icons": "node scripts/generate-icons.mjs",
     "portal:lqip": "node scripts/generate-portal-lqip.mjs",
     "icons:material-symbols:sync": "node scripts/sync-material-symbols-font.mjs",
