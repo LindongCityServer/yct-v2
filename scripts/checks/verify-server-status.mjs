@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { createBedrockStatusChecker } from '../../apps/web/lib/bedrock-server-status.ts';
+import { resolveBedrockStatusProviderConfig } from '../../apps/web/lib/bedrock-status-providers.ts';
 import {
   mergePlayerLocationObservation,
   readPlayerLocationSnapshot,
@@ -64,6 +65,120 @@ test('MCBE checker validates freshness, coalesces calls and separates probe erro
   assert.equal((await timeoutCheck('example.com:19132', 100)).availability, 'unknown');
 });
 
+test('provider config keeps the default source and validates ordered entries', () => {
+  const fallback = resolveBedrockStatusProviderConfig({});
+  assert.deepEqual(
+    fallback.providers.map((provider) => provider.id),
+    ['mcstatus'],
+  );
+  assert.equal(fallback.retries, 0);
+
+  const configured = resolveBedrockStatusProviderConfig({
+    YCT_BEDROCK_PROVIDERS:
+      'mcstatus#1500,mcsrvstat#2500,custom@https://status.example/query/{address}#800',
+    YCT_BEDROCK_PROVIDER_RETRIES: '2',
+    YCT_BEDROCK_PROVIDER_BACKOFF_MS: '100',
+  });
+  assert.deepEqual(
+    configured.providers.map((provider) => [provider.id, provider.timeoutMs]),
+    [
+      ['mcstatus', 1500],
+      ['mcsrvstat', 2500],
+      ['custom', 800],
+    ],
+  );
+  assert.equal(configured.retries, 2);
+  assert.equal(configured.backoffMs, 100);
+
+  const invalid = resolveBedrockStatusProviderConfig({
+    YCT_BEDROCK_PROVIDERS: 'unknown-source,broken@https://example.com/no-placeholder',
+  });
+  assert.deepEqual(
+    invalid.providers.map((provider) => provider.id),
+    ['mcstatus'],
+  );
+  assert.equal(invalid.retries, 0);
+});
+
+test('provider chain falls back after failures and returns unknown only when every source fails', async () => {
+  const attempts = [];
+  const fallbackConfig = resolveBedrockStatusProviderConfig({
+    YCT_BEDROCK_PROVIDERS: 'mcstatus#400,mcsrvstat#400',
+  });
+  const fallbackCheck = createBedrockStatusChecker(
+    async (url) => {
+      attempts.push(url.hostname);
+      if (url.hostname === 'api.mcstatus.io') return new Response('Unavailable', { status: 503 });
+      return Response.json({ online: true });
+    },
+    Date.now,
+    fallbackConfig,
+  );
+  const fallback = await fallbackCheck('example.com:19132', 2000);
+  assert.equal(fallback.availability, 'online');
+  assert.equal(fallback.providerId, 'mcsrvstat');
+  assert.deepEqual(attempts, ['api.mcstatus.io', 'api.mcsrvstat.us']);
+
+  const failedAttempts = [];
+  const failedCheck = createBedrockStatusChecker(
+    async (url) => {
+      failedAttempts.push(url.hostname);
+      return url.hostname === 'api.mcstatus.io'
+        ? new Response('Too many requests', { status: 429 })
+        : Response.json({ online: 'false' });
+    },
+    Date.now,
+    fallbackConfig,
+  );
+  const failed = await failedCheck('example.com:19132', 2000);
+  assert.equal(failed.availability, 'unknown');
+  assert.equal(failed.providerId, undefined);
+  assert.deepEqual(failedAttempts, ['api.mcstatus.io', 'api.mcsrvstat.us']);
+  assert.ok(failed.validUntil > Date.now());
+});
+
+test('provider timeout, invalid response and retry budget never turn probe errors into offline', async () => {
+  const timeoutCheck = createBedrockStatusChecker(
+    (_url, { signal }) =>
+      new Promise((_resolve, reject) =>
+        signal.addEventListener('abort', () => reject(new Error('timeout'))),
+      ),
+    Date.now,
+    resolveBedrockStatusProviderConfig({ YCT_BEDROCK_PROVIDERS: 'mcstatus' }),
+  );
+  assert.equal((await timeoutCheck('example.com:19132', 100)).availability, 'unknown');
+
+  const malformedCheck = createBedrockStatusChecker(
+    async () => Response.json({ online: 'false' }),
+    Date.now,
+    resolveBedrockStatusProviderConfig({ YCT_BEDROCK_PROVIDERS: 'mcsrvstat' }),
+  );
+  assert.equal((await malformedCheck('example.com:19132', 1000)).availability, 'unknown');
+
+  let calls = 0;
+  const retryCheck = createBedrockStatusChecker(
+    async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response('Unavailable', { status: 503 })
+        : Response.json({
+            online: false,
+            retrieved_at: Date.now(),
+            expires_at: Date.now() + 60_000,
+          });
+    },
+    Date.now,
+    resolveBedrockStatusProviderConfig({
+      YCT_BEDROCK_PROVIDERS: 'mcstatus',
+      YCT_BEDROCK_PROVIDER_RETRIES: '1',
+      YCT_BEDROCK_PROVIDER_BACKOFF_MS: '10',
+    }),
+  );
+  const retried = await retryCheck('example.com:19132', 2000);
+  assert.equal(calls, 2);
+  assert.equal(retried.availability, 'offline');
+});
+
 test('map-first workflow persists all-offline transitions, emits once and restores with online evidence or bounded fallback', async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'yct-server-status-'));
   const oldEnv = { ...process.env };
@@ -101,7 +216,7 @@ test('map-first workflow persists all-offline transitions, emits once and restor
         { text: 'Bob', x: -10, z: -20 },
       ]);
     }
-    assert.equal(url.hostname, 'api.mcstatus.io');
+    assert.ok(['api.mcstatus.io', 'api.mcsrvstat.us'].includes(url.hostname));
     return external === 'error'
       ? new Response('Unavailable', { status: 503 })
       : response(external === 'online');
@@ -171,6 +286,21 @@ test('map-first workflow persists all-offline transitions, emits once and restor
       assert.ok(result.snapshot.locations.every((player) => player.presence === 'offline'));
       assert.match(result.message, /等待在线确认/);
     });
+    await t.test(
+      'all configured sources failing keeps the bounded offline hold instead of guessing',
+      async () => {
+        process.env.YCT_BEDROCK_PROVIDERS = 'mcstatus,mcsrvstat';
+        advance();
+        external = 'error';
+        const result = await syncPlayerLocations();
+        assert.equal(result.status, 'unavailable');
+        assert.deepEqual(requests, ['map.example', 'api.mcstatus.io', 'api.mcsrvstat.us']);
+        assert.ok(result.snapshot.locations.every((player) => player.presence === 'offline'));
+        assert.equal(result.snapshot.unavailableReason, 'external_offline');
+        assert.match(result.message, /等待在线确认/);
+        delete process.env.YCT_BEDROCK_PROVIDERS;
+      },
+    );
     await t.test(
       'an intervening map outage preserves unresolved external offline state',
       async () => {
