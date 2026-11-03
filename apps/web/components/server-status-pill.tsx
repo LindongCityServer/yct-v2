@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import type { CommonMessageKey } from '../lib/client-i18n';
 import { useI18n } from '../lib/client-i18n';
 import type { ServerStatusDisplayState } from '../lib/client-server-status';
@@ -36,12 +37,39 @@ export function serverStatusPillText(
 export function ServerStatusPill({
   state,
   onlinePlayerCount,
-}: Readonly<{ state: ServerStatusDisplayState; onlinePlayerCount?: number }>) {
+  href,
+}: Readonly<{
+  state: ServerStatusDisplayState;
+  onlinePlayerCount?: number;
+  /** 有玩家在线时的跳转地址；其余状态保持纯展示，避免指向空列表的死链。 */
+  href?: string;
+}>) {
   const { t } = useI18n();
   const label = serverStatusPillText(state, onlinePlayerCount, t);
   const ariaLabel = hasPlayers(state, onlinePlayerCount)
     ? t('serverStatus.pill.ariaPlayers', { count: onlinePlayerCount })
     : t('serverStatus.pill.aria', { status: t(statusLabelKeys[state]) });
+  const content = (
+    <>
+      <span className="topbar-server-status-dot" aria-hidden="true" />
+      <span className="topbar-server-status-label">{label}</span>
+    </>
+  );
+
+  if (href && hasPlayers(state, onlinePlayerCount)) {
+    const openLabel = t('serverStatus.pill.openPlayers', { count: onlinePlayerCount });
+    return (
+      <Link
+        className={`topbar-server-status is-${state} is-link`}
+        href={href}
+        aria-live="polite"
+        aria-label={openLabel}
+        title={openLabel}
+      >
+        {content}
+      </Link>
+    );
+  }
 
   return (
     <span
@@ -50,8 +78,7 @@ export function ServerStatusPill({
       aria-live="polite"
       aria-label={ariaLabel}
     >
-      <span className="topbar-server-status-dot" aria-hidden="true" />
-      <span className="topbar-server-status-label">{label}</span>
+      {content}
     </span>
   );
 }

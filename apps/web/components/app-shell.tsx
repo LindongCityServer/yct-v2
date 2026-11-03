@@ -447,6 +447,7 @@ function AppShellFrame({
             <ServerStatusPill
               state={serverStatus.displayState}
               onlinePlayerCount={serverStatusOnlinePlayerCount}
+              href={appPath('/map?category=player')}
             />
           ) : null}
           <button
