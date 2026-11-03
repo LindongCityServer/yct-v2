@@ -77,6 +77,7 @@ export interface RuntimeConfig {
   tripReminderStorePath: string;
   tileFreshHttpTemplate?: string;
   tileSafeHttpsStaticTemplate?: string;
+  tileHistoryVersions?: string;
   unminedMapBaseUrl: string;
   markerBdslmBaseUrl?: string;
   markerBdslmTimeoutMs: number;
@@ -361,6 +362,7 @@ export function readRuntimeConfig(): RuntimeConfig {
       emptyToUndefined(process.env.YCT_TILE_FRESH_HTTP_TEMPLATE) ??
       'http://ld.cmsy.xyz:19136/tiles/zoom.{z}/{xd}/{yd}/tile.{x}.{y}.webp',
     tileSafeHttpsStaticTemplate: emptyToUndefined(process.env.YCT_TILE_SAFE_HTTPS_STATIC_TEMPLATE),
+    tileHistoryVersions: emptyToUndefined(process.env.YCT_TILE_HISTORY_VERSIONS),
     unminedMapBaseUrl:
       emptyToUndefined(process.env.YCT_UNMINED_MAP_BASE_URL) ?? 'https://map.shangxiaoguan.top/',
     markerBdslmBaseUrl:

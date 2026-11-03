@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  createHistoryTileEmptyResponse,
+  createHistoryTileHeaders,
+  isHistoryTileInCoverage,
+  parseMapHistoryVersions,
+} from '../../../../lib/map-history';
+import {
   buildUnminedTileTemplate,
   fillMapTileTemplate,
   type MapTileProxySource,
@@ -15,13 +21,22 @@ const transparentTileSvg =
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const source = readTileSource(searchParams.get('source'));
   const z = readTileCoordinate(searchParams.get('z'));
   const x = readTileCoordinate(searchParams.get('x'));
   const y = readTileCoordinate(searchParams.get('y'));
   const xd = readTileCoordinate(searchParams.get('xd')) ?? x;
   const yd = readTileCoordinate(searchParams.get('yd')) ?? y;
+  const versionParam = searchParams.get('version');
 
+  // version 一旦出现就必须按历史版本处理：非法或已下架也不能回退到当前瓦片。
+  if (versionParam !== null) {
+    if (!z || !x || !y || !xd || !yd) {
+      return createHistoryTileEmptyResponse(null, 'invalid-coordinate');
+    }
+    return respondHistoryTile(versionParam, { z, x, y, xd, yd });
+  }
+
+  const source = readTileSource(searchParams.get('source'));
   if (!source || !z || !x || !y || !xd || !yd) {
     return NextResponse.json(
       {
@@ -65,6 +80,72 @@ export async function GET(request: NextRequest) {
     });
   } catch {
     return createTransparentTileResponse('upstream-unavailable');
+  }
+}
+
+const historyVersionIdPattern = /^[a-z0-9-]{1,64}$/;
+
+async function respondHistoryTile(
+  versionParam: string,
+  coordinates: { z: string; x: string; y: string; xd: string; yd: string },
+): Promise<Response> {
+  const versionId = versionParam.trim();
+  if (!historyVersionIdPattern.test(versionId)) {
+    return createHistoryTileEmptyResponse(null, 'invalid-version');
+  }
+
+  const version = parseMapHistoryVersions(readRuntimeConfig().tileHistoryVersions).versions.find(
+    (item) => item.id === versionId,
+  );
+  if (!version) {
+    return createHistoryTileEmptyResponse(versionId, 'unknown-version');
+  }
+  if (version.status === 'archived') {
+    return createHistoryTileEmptyResponse(versionId, 'archived-version');
+  }
+
+  // 手工构造 URL 也必须遵守版本声明的缩放与覆盖范围，避免代理被用来抓取上游任意瓦片。
+  const tileZoom = Number(coordinates.z);
+  const tileX = Number(coordinates.x);
+  const tileZ = Number(coordinates.y);
+  if (!Number.isSafeInteger(tileZoom) || !Number.isSafeInteger(tileX) || !Number.isSafeInteger(tileZ)) {
+    return createHistoryTileEmptyResponse(versionId, 'invalid-coordinate');
+  }
+  const minZoom = Math.min(version.zoomRange.minZoom, version.zoomRange.maxZoom);
+  const maxZoom = Math.max(version.zoomRange.minZoom, version.zoomRange.maxZoom);
+  if (tileZoom < minZoom || tileZoom > maxZoom) {
+    return createHistoryTileEmptyResponse(versionId, 'zoom-out-of-range');
+  }
+  if (!isHistoryTileInCoverage(tileX, tileZ, tileZoom, version.coverage)) {
+    return createHistoryTileEmptyResponse(versionId, 'out-of-coverage');
+  }
+
+  const upstreamUrl = fillMapTileTemplate(version.tileTemplate, coordinates);
+
+  try {
+    const upstreamResponse = await fetch(upstreamUrl, { cache: 'no-store' });
+    if (upstreamResponse.status === 404 || upstreamResponse.status === 204) {
+      return createHistoryTileEmptyResponse(versionId, 'not-found');
+    }
+
+    if (!upstreamResponse.ok || !upstreamResponse.body) {
+      return createHistoryTileEmptyResponse(versionId, `upstream-${upstreamResponse.status}`);
+    }
+
+    const contentType = upstreamResponse.headers.get('content-type') ?? 'image/png';
+    if (!imageContentTypePattern.test(contentType)) {
+      return createHistoryTileEmptyResponse(versionId, 'invalid-content-type');
+    }
+
+    return new Response(upstreamResponse.body, {
+      status: 200,
+      headers: createHistoryTileHeaders(versionId, {
+        contentType,
+        upstreamEtag: upstreamResponse.headers.get('etag'),
+      }),
+    });
+  } catch {
+    return createHistoryTileEmptyResponse(versionId, 'upstream-unavailable');
   }
 }
 
