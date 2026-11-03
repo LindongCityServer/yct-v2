@@ -1867,6 +1867,28 @@ body .material-symbols-outlined {
   background: var(--yct-color-tertiary);
 }
 
+/* 有玩家在线时整块胶囊变为链接：只补交互反馈，尺寸与配色沿用原状态胶囊。 */
+.topbar-server-status.is-link {
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    border-color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard),
+    color var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.topbar-server-status.is-link:hover,
+.topbar-server-status.is-link:focus-visible {
+  border-color: var(--yct-color-border);
+  background: var(--yct-material-hover-state);
+  color: var(--yct-color-text);
+}
+
+.topbar-server-status.is-link:focus-visible {
+  outline: 2px solid var(--yct-color-accent);
+  outline-offset: 2px;
+}
+
 .server-status-rail-icon {
   position: relative;
   display: inline-flex;
