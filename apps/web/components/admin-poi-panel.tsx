@@ -22,7 +22,13 @@ import type {
   ReactNode,
   WheelEvent as ReactWheelEvent,
 } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from 'react';
 import { AdminPoiDescription } from './admin-poi-description';
 import { appPath } from '../lib/app-paths';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
@@ -265,6 +271,31 @@ const poiRejectReasonPresets = [
   '投稿图片无法确认来源或与地点不匹配，请更换后提交。',
   '该地点疑似已存在，请确认后避免重复投稿。',
 ];
+
+/** 进入工作台前确认未保存修改，避免源表单内容被静默丢弃。 */
+async function confirmLeavePoiDialogForWorkspace(isDirty: boolean): Promise<boolean> {
+  if (!isDirty) {
+    return true;
+  }
+
+  return (
+    (await requestConfirmation('当前弹窗有未保存的修改，进入工作台会丢弃这些修改，确定继续吗？')) ===
+    true
+  );
+}
+
+/** 工作台链接的点击处理：先取地址再等待确认，避免 React 事件对象在 await 后被回收。 */
+async function openPoiWorkspaceWithConfirm(
+  event: MouseEvent<HTMLAnchorElement>,
+  isDirty: boolean,
+): Promise<void> {
+  event.preventDefault();
+  const href = event.currentTarget.href;
+  if (!(await confirmLeavePoiDialogForWorkspace(isDirty))) {
+    return;
+  }
+  window.location.assign(href);
+}
 
 export function AdminPoiPanel({
   editorMode = 'panel',
@@ -3228,6 +3259,7 @@ function EditLegacyPoiMarkerDialog({
       <a
         className="secondary-action-button"
         href={appPath(`/admin/map-poi/editor?markerId=${encodeURIComponent(marker.id)}`)}
+        onClick={(event) => void openPoiWorkspaceWithConfirm(event, isDirty)}
       >
         <span className="material-symbols-outlined" aria-hidden="true">
           edit_location_alt
@@ -3251,6 +3283,7 @@ function EditLegacyPoiMarkerDialog({
       <a
         className="secondary-action-button"
         href={appPath(`/admin/map-poi/intro-editor?markerId=${encodeURIComponent(marker.id)}`)}
+        onClick={(event) => void openPoiWorkspaceWithConfirm(event, isDirty)}
       >
         <span className="material-symbols-outlined" aria-hidden="true">
           article
@@ -5216,6 +5249,7 @@ function EditPoiSubmissionDialog({
           <a
             className="secondary-action-button"
             href={appPath(`/admin/map-poi/editor?markerId=${encodeURIComponent(effectivePoiId)}`)}
+            onClick={(event) => void openPoiWorkspaceWithConfirm(event, isDirty)}
           >
             <span className="material-symbols-outlined" aria-hidden="true">
               edit_location_alt
@@ -5330,6 +5364,7 @@ function EditPoiSubmissionDialog({
           href={appPath(
             `/admin/map-poi/intro-editor?markerId=${encodeURIComponent(effectivePoiId)}`,
           )}
+          onClick={(event) => void openPoiWorkspaceWithConfirm(event, isDirty)}
         >
           <span className="material-symbols-outlined" aria-hidden="true">
             article
