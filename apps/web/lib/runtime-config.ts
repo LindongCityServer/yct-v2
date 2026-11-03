@@ -81,6 +81,16 @@ export interface RuntimeConfig {
   unminedMapBaseUrl: string;
   markerBdslmBaseUrl?: string;
   markerBdslmTimeoutMs: number;
+  bedrockServerAddress: string;
+  bedrockStatusTimeoutMs: number;
+  bedrockStatusEnabled: boolean;
+  bedrockOfflineHoldMs: number;
+  bedrockProviders?: string;
+  bedrockProviderRetries: number;
+  bedrockProviderBackoffMs: number;
+  bedrockProviderFailureThreshold: number;
+  bedrockProviderCooldownMs: number;
+  bedrockOfflineConfirmMs: number;
   legacyDataSource: 'auto' | 'local' | 'remote';
   legacyDataDir?: string;
   legacyDataRemoteBaseUrl: string;
@@ -368,6 +378,49 @@ export function readRuntimeConfig(): RuntimeConfig {
     markerBdslmBaseUrl:
       emptyToUndefined(process.env.YCT_MARKER_BDSLM_BASE_URL) ?? 'http://ld.cmsy.xyz:19136',
     markerBdslmTimeoutMs: Number(process.env.YCT_MARKER_BDSLM_TIMEOUT_MS ?? 6000),
+    bedrockServerAddress:
+      emptyToUndefined(process.env.YCT_BEDROCK_SERVER_ADDRESS) ?? 'ld.cmsy.xyz:19132',
+    bedrockStatusTimeoutMs: parseIntegerInRange(
+      process.env.YCT_BEDROCK_STATUS_TIMEOUT_MS,
+      2000,
+      100,
+      10_000,
+    ),
+    bedrockStatusEnabled: process.env.YCT_BEDROCK_STATUS_ENABLED?.trim().toLowerCase() !== 'false',
+    bedrockOfflineHoldMs: parseIntegerInRange(
+      process.env.YCT_BEDROCK_OFFLINE_HOLD_MS,
+      300_000,
+      0,
+      300_000,
+    ),
+    bedrockProviders: emptyToUndefined(process.env.YCT_BEDROCK_PROVIDERS),
+    bedrockProviderRetries: parseIntegerInRange(process.env.YCT_BEDROCK_PROVIDER_RETRIES, 0, 0, 5),
+    bedrockProviderBackoffMs: parseIntegerInRange(
+      process.env.YCT_BEDROCK_PROVIDER_BACKOFF_MS,
+      250,
+      0,
+      5_000,
+    ),
+    bedrockProviderFailureThreshold: parseIntegerInRange(
+      process.env.YCT_BEDROCK_PROVIDER_FAILURE_THRESHOLD,
+      3,
+      1,
+      20,
+    ),
+    bedrockProviderCooldownMs: parseIntegerInRange(
+      process.env.YCT_BEDROCK_PROVIDER_COOLDOWN_MS,
+      60_000,
+      0,
+      3_600_000,
+    ),
+    // 默认 5 分钟确认窗：单次第三方离线结果不足以把地图仍在线的玩家判为离线。
+    // 允许设为 0 恢复“明确离线立即生效”，由 providers 侧打印误判风险告警。
+    bedrockOfflineConfirmMs: parseIntegerInRange(
+      process.env.YCT_BEDROCK_OFFLINE_CONFIRM_MS,
+      300_000,
+      0,
+      3_600_000,
+    ),
     legacyDataSource: parseLegacyDataSource(process.env.YCT_LEGACY_DATA_SOURCE),
     legacyDataDir: resolveRuntimePath(process.env.YCT_LEGACY_DATA_DIR),
     legacyDataRemoteBaseUrl:
