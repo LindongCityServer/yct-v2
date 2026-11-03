@@ -15,6 +15,7 @@
     "poi:images:check": "tsx --test scripts/checks/verify-poi-image-source.mjs",
     "map:measure:check": "tsx --test scripts/checks/verify-map-measure.mjs",
     "map:history:check": "tsx --test scripts/checks/verify-map-history.ts",
+    "server:status:check": "tsx --test scripts/checks/verify-server-status.mjs",
     "release:prepare": "node scripts/prepare-release.mjs",
     "release:freeze-history": "node scripts/freeze-release-history.mjs",
     "changelog:gen": "node scripts/changelog/generate.mjs",

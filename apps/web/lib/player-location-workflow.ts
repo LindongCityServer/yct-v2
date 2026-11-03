@@ -83,7 +83,9 @@ async function performPlayerLocationSync(
   } catch {
     return recordUnavailable(
       'map_unavailable',
-      '网页地图服务不可用，服务器离线；所有玩家已标为离线，保留最后位置。',
+      '网页地图服务暂不可用，服务器状态未知；玩家状态保留最后已知数据，可能已过期。',
+      undefined,
+      true,
     );
   }
 
@@ -183,6 +185,7 @@ async function performPlayerLocationSync(
     reason: NonNullable<PlayerLocationSnapshot['unavailableReason']>,
     message: string,
     externalOfflineConfirmedAt?: string,
+    preservePresence = false,
   ): Promise<PlayerLocationSyncResult> {
     const observedAt = new Date().toISOString();
     const latencyMs = Date.now() - requestStartedAt;
@@ -192,13 +195,18 @@ async function performPlayerLocationSync(
       latencyMs,
       unavailableReason: reason,
       externalOfflineConfirmedAt,
+      preservePresence,
     });
     const actor = {
       type: input.actorType ?? 'adapter',
       id: input.actorId?.trim() || provider.id,
     } as const;
     await publishLocationChanges(result, observedAt, actor);
-    if (result.previousSourceStatus !== 'unavailable') {
+    const onlineCount = result.snapshot.locations.filter(
+      (location) => location.presence === 'online',
+    ).length;
+    // 地图故障只代表“未知”，不能对外发布 offline 事件，也不能清零在线数。
+    if (!preservePresence && result.previousSourceStatus !== 'unavailable') {
       await publishObservationEvent({
         eventId: `event_${randomUUID()}`,
         type: 'ServerStatusObserved',
@@ -217,7 +225,7 @@ async function performPlayerLocationSync(
       status: 'unavailable',
       checkedAt: observedAt,
       latencyMs,
-      onlineCount: 0,
+      onlineCount: preservePresence ? onlineCount : 0,
       changed: result.changed,
       message,
       snapshot: result.snapshot,
