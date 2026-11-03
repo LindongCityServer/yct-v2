@@ -6,13 +6,14 @@
 ## Unreleased
 
 <!-- changelog:unreleased:start -->
-区间：2026-11-02T12:23:26.518Z → 当前时间；已合并 PR 10 个。
+区间：2026-11-02T12:23:26.518Z → 当前时间；已合并 PR 11 个。
 
 ### 新功能
 - 概览指标块改为可点击跳转（[#30](https://github.com/LindongCityServer/yct-v2/pull/30)，@wangkai8787）
 - 新增测距/测面积工具并拦截自交边界（[#32](https://github.com/LindongCityServer/yct-v2/pull/32)，@wangkai8787）
 - 在线玩家胶囊可点击跳转玩家板块（[#47](https://github.com/LindongCityServer/yct-v2/pull/47)，@beepingflijo）
 - 班次级运营日历支持节假日、调休与自定义缓冲日（重建）（[#48](https://github.com/LindongCityServer/yct-v2/pull/48)，@beepingflijo）
+- 历史瓦片版本选择、前后切换与视图分享（重建）（[#50](https://github.com/LindongCityServer/yct-v2/pull/50)，@beepingflijo，关闭 [#2](https://github.com/LindongCityServer/yct-v2/issues/2)）
 
 ### 修复
 - 兜底关闭 POI 详情的 Esc（修复 #33 回归）（[#34](https://github.com/LindongCityServer/yct-v2/pull/34)，@wangkai8787）
