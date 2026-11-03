@@ -1024,6 +1024,7 @@ export type CommonMessageKey =
   | 'serverStatus.pill.loading'
   | 'serverStatus.pill.offline'
   | 'serverStatus.pill.online'
+  | 'serverStatus.pill.openPlayers'
   | 'serverStatus.pill.players'
   | 'serverStatus.pill.unknown'
   | 'operations.social.afdian'
