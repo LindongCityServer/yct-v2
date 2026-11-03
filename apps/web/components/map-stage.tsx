@@ -3269,6 +3269,57 @@ export function MapStage() {
     poiReturnFocusRef.current = null;
   }, []);
 
+  // POI 详情打开期间在 document 捕获阶段兜底处理 Esc。全局快捷键桥监听在 window 冒泡阶段，
+  // 更早的 preventDefault / stopPropagation 或输入法组合态（isComposing）会让它提前返回，
+  // 表现为详情按 Esc 关不掉。这里只在本面板是最上层时关闭，上层弹层仍按既有顺序先消费 Esc。
+  useEffect(() => {
+    if (!focusedMarkerId) {
+      return undefined;
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' && event.key !== 'Esc' && event.keyCode !== 27) {
+        return;
+      }
+      if (event.defaultPrevented) {
+        return;
+      }
+      if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+        return;
+      }
+      // 全局搜索、快捷键面板和原生 dialog 自带 Esc 处理，避免一次按键同时关掉两层。
+      if (document.querySelector('.global-search-panel, .shortcut-dialog, dialog[open]')) {
+        return;
+      }
+      // 与 shortcutCommand 的关闭顺序保持一致：这些弹层在上，先让它们消费 Esc。
+      if (
+        shareTarget ||
+        poiCoordinatePickMode ||
+        poiSubmitDialogOpen ||
+        layerPanelOpen ||
+        lineInfoDialogOpen ||
+        routePlanDraft
+      ) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      closePoiDetails();
+    };
+
+    document.addEventListener('keydown', handleEscape, true);
+    return () => document.removeEventListener('keydown', handleEscape, true);
+  }, [
+    closePoiDetails,
+    focusedMarkerId,
+    layerPanelOpen,
+    lineInfoDialogOpen,
+    poiCoordinatePickMode,
+    poiSubmitDialogOpen,
+    routePlanDraft,
+    shareTarget,
+  ]);
+
   // 快捷键处理函数随渲染更新，订阅只建立一次，避免弹层状态变化时反复解绑/重绑。
   const shortcutCommandRef = useRef<
     (
@@ -3351,6 +3402,10 @@ export function MapStage() {
       setRoutePlanDraft(null);
       setEditingRouteEndpoint(null);
       setRouteEndpointQuery('');
+      return;
+    }
+    if (lineInfoDialogOpen) {
+      setLineInfoDialogOpen(false);
       return;
     }
     if (focusedMarkerId) {

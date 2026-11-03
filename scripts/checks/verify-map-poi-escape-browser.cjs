@@ -32,6 +32,7 @@ if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname))
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify(data) });
     });
     const page = await context.newPage();
+    const cdp = await context.newCDPSession(page);
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     const details = () => page.locator('.map-poi-detail-panel');
@@ -63,7 +64,6 @@ if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname))
       await open();
       for (const extra of [
         { repeat: true },
-        { isComposing: true },
         { ctrlKey: true },
         { altKey: true },
         { metaKey: true },
@@ -83,21 +83,49 @@ if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname))
         );
         assert.equal(await details().count(), 1);
       }
+      // 更早的 window 捕获层已消费 Esc 时，详情不重复关闭；消费方移除后下一次 Esc 正常关闭。
       await page.evaluate(() => {
         const consume = (event) => {
           if (event.key === 'Escape') {
             event.preventDefault();
-            document.removeEventListener('keydown', consume);
+            window.removeEventListener('keydown', consume, true);
           }
         };
-        document.addEventListener('keydown', consume);
+        window.addEventListener('keydown', consume, true);
       });
       await page.keyboard.press('Escape');
       assert.equal(await details().count(), 1);
       await page.keyboard.press('Escape');
       await details().waitFor({ state: 'detached' });
+
+      // 焦点在详情内的输入框时，Esc 仍应关闭详情并把焦点交还地图。
+      await open();
+      await page.evaluate(() => {
+        const input = document.createElement('input');
+        input.id = '__poi_focus_probe';
+        input.style.cssText = 'position:fixed;left:8px;top:8px;z-index:9999';
+        document.querySelector('.map-poi-detail-panel').appendChild(input);
+        input.focus();
+      });
+      await page.keyboard.press('Escape');
+      await details().waitFor({ state: 'detached' });
+      assert.equal(await page.evaluate(() => document.activeElement?.className), 'map-viewport');
+
+      // 真实输入法组合态：Chrome 下发 isComposing=true 的 Esc，不应被快捷键桥的守卫吞掉。
+      await open();
+      await page.evaluate(() => {
+        const input = document.createElement('input');
+        input.id = '__poi_ime_probe';
+        input.style.cssText = 'position:fixed;left:8px;top:8px;z-index:9999';
+        document.querySelector('.map-poi-detail-panel').appendChild(input);
+        input.focus();
+      });
+      await cdp.send('Input.imeSetComposition', { text: '雨', selectionStart: 1, selectionEnd: 1 });
+      await page.keyboard.press('Escape');
+      await details().waitFor({ state: 'detached' });
+      assert.equal(await page.evaluate(() => document.activeElement?.className), 'map-viewport');
       console.log(
-        `PASS ${width}px: Esc/close/collapsed details, accessible shortcut metadata, focus fallback, consumed/repeated/composing/modified Escape`,
+        `PASS ${width}px: Esc/close/collapsed details, accessible shortcut metadata, focus fallback, consumed/repeated/modified Escape, focused input, IME composing Escape`,
       );
     }
     await page.setViewportSize({ width: 1280, height: 844 });
