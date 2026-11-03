@@ -6,20 +6,22 @@
 ## Unreleased
 
 <!-- changelog:unreleased:start -->
-区间：2026-11-02T12:23:26.518Z → 当前时间；已合并 PR 7 个。
+区间：2026-11-02T12:23:26.518Z → 当前时间；已合并 PR 9 个。
 
 ### 新功能
-- 概览指标块支持点击跳转对应板块（[#30](https://github.com/LindongCityServer/yct-v2/pull/30)，@WangKai878787，关闭 [#28](https://github.com/LindongCityServer/yct-v2/issues/28)）
-- 新增测距/测面积工具并拦截自交边界（[#32](https://github.com/LindongCityServer/yct-v2/pull/32)，@WangKai878787，关闭 [#5](https://github.com/LindongCityServer/yct-v2/issues/5)）
+- 概览指标块改为可点击跳转（[#30](https://github.com/LindongCityServer/yct-v2/pull/30)，@wangkai8787）
+- 新增测距/测面积工具并拦截自交边界（[#32](https://github.com/LindongCityServer/yct-v2/pull/32)，@wangkai8787）
+- 在线玩家胶囊可点击跳转玩家板块（[#47](https://github.com/LindongCityServer/yct-v2/pull/47)，@beepingflijo）
+- 班次级运营日历支持节假日、调休与自定义缓冲日（重建）（[#48](https://github.com/LindongCityServer/yct-v2/pull/48)，@beepingflijo）
 
 ### 修复
-- 完善 POI Esc 关闭与快捷键 Q&A（[#21](https://github.com/LindongCityServer/yct-v2/pull/21)，@WangKai878787，关闭 [#20](https://github.com/LindongCityServer/yct-v2/issues/20)）
-- 兜底关闭 POI 详情的 Esc（修复 #33 回归）（[#34](https://github.com/LindongCityServer/yct-v2/pull/34)，@WangKai878787，关闭 [#33](https://github.com/LindongCityServer/yct-v2/issues/33)）
-- 限制相册主图尺寸并预取相邻图片（[#25](https://github.com/LindongCityServer/yct-v2/pull/25)，@WangKai878787，关闭 [#12](https://github.com/LindongCityServer/yct-v2/issues/12)）
-- 分享卡片补充简介与固定比例配图（[#29](https://github.com/LindongCityServer/yct-v2/pull/29)，@WangKai878787，关闭 [#14](https://github.com/LindongCityServer/yct-v2/issues/14)）
+- 兜底关闭 POI 详情的 Esc（修复 #33 回归）（[#34](https://github.com/LindongCityServer/yct-v2/pull/34)，@wangkai8787）
+- 限制相册主图尺寸并预取相邻图片（[#25](https://github.com/LindongCityServer/yct-v2/pull/25)，@wangkai8787）
+- 分享卡片补充简介与固定比例配图（[#29](https://github.com/LindongCityServer/yct-v2/pull/29)，@wangkai8787）
+- 修正 sharp 默认导出类型引用，恢复 typecheck 基线（[#41](https://github.com/LindongCityServer/yct-v2/pull/41)，@wangkai8787）
 
 ### 重构
-- 线路编辑弹窗「班次」页签更名为「运营配置」（[#31](https://github.com/LindongCityServer/yct-v2/pull/31)，@WangKai878787，关闭 [#27](https://github.com/LindongCityServer/yct-v2/issues/27)）
+- 「班次」页签更名为「运营配置」（[#31](https://github.com/LindongCityServer/yct-v2/pull/31)，@wangkai8787）
 <!-- changelog:unreleased:end -->
 
 ## 2.18.0 — 2026-11-02

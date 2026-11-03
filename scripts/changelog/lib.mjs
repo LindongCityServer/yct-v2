@@ -123,22 +123,131 @@ export function resolveBoundary(value) {
   return { ref: null, date: new Date(timestamp), label: value };
 }
 
-export function getMergedPullRequests() {
-  const pullRequests = runGhJson([
-    'pr',
-    'list',
-    '--repo',
-    REPO_SLUG,
-    '--state',
-    'merged',
-    '--limit',
-    '1000',
-    '--json',
-    'number,title,mergedAt,author,url,mergeCommit,closingIssuesReferences',
+const pullRequestNumberPattern = /\(#(\d+)\)\s*$/u;
+const closingIssuePattern = /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/giu;
+let cachedRepoSlug = null;
+
+/** 从远端地址解析 owner/repo，避免脚本依赖硬编码 slug。 */
+export function resolveRepoSlug() {
+  if (cachedRepoSlug) {
+    return cachedRepoSlug;
+  }
+  const remote = runGit(['remote', 'get-url', 'origin'], { allowFailure: true });
+  const match = /github\.com[:/]([^/]+)\/([^/.]+?)(?:\.git)?$/u.exec(remote ?? '');
+  cachedRepoSlug = match ? `${match[1]}/${match[2]}` : REPO_SLUG;
+  return cachedRepoSlug;
+}
+
+/**
+ * 从 git 历史解析 squash 合并提交，作为不依赖 GitHub API 的数据源。
+ * 账号被封或 gh 未登录时，`gh pr list` 会返回空数组，这会让覆盖率校验恒通过并清空日志。
+ */
+export function getMergedPullRequestsFromGit() {
+  const baseRef = runGit(['rev-parse', '--verify', '--quiet', 'origin/main'], {
+    allowFailure: true,
+  })
+    ? 'origin/main'
+    : 'HEAD';
+  const log = runGit([
+    'log',
+    '--first-parent',
+    '--format=%H%x1f%cI%x1f%an%x1f%ae%x1f%s%x1f%b%x1e',
+    baseRef,
   ]);
-  return pullRequests
-    .filter((item) => item && item.mergedAt)
-    .sort((left, right) => new Date(left.mergedAt) - new Date(right.mergedAt));
+  const slug = resolveRepoSlug();
+  const records = [];
+  for (const record of log.split('\x1e')) {
+    const normalized = record.trim();
+    if (!normalized) {
+      continue;
+    }
+    const [sha, mergedAt, authorName, authorEmail, subject, body] = normalized.split('\x1f');
+    const match = pullRequestNumberPattern.exec(subject ?? '');
+    if (!match) {
+      continue;
+    }
+    const number = Number(match[1]);
+    records.push({
+      number,
+      title: subject,
+      mergedAt,
+      author: { login: extractGithubLogin(authorEmail, authorName) },
+      url: `https://github.com/${slug}/pull/${number}`,
+      mergeCommit: { oid: sha },
+      closingIssuesReferences: parseClosingIssues(body ?? '', slug),
+    });
+  }
+  return records.sort((left, right) => new Date(left.mergedAt) - new Date(right.mergedAt));
+}
+
+function extractGithubLogin(email, name) {
+  const match = /^(?:\d+\+)?([^@]+)@users\.noreply\.github\.com$/iu.exec(email ?? '');
+  if (match) {
+    return match[1];
+  }
+  const localPart = (email ?? '').split('@')[0]?.trim();
+  return localPart || name || 'unknown';
+}
+
+function parseClosingIssues(body, slug) {
+  const issues = new Map();
+  for (const match of body.matchAll(closingIssuePattern)) {
+    const number = Number(match[1]);
+    issues.set(number, {
+      number,
+      url: `https://github.com/${slug}/issues/${number}`,
+    });
+  }
+  return [...issues.values()];
+}
+
+function getMergedPullRequestsFromGh() {
+  try {
+    const pullRequests = runGhJson([
+      'pr',
+      'list',
+      '--repo',
+      resolveRepoSlug(),
+      '--state',
+      'merged',
+      '--limit',
+      '1000',
+      '--json',
+      'number,title,mergedAt,author,url,mergeCommit,closingIssuesReferences',
+    ]);
+    return pullRequests
+      .filter((item) => item && item.mergedAt)
+      .sort((left, right) => new Date(left.mergedAt) - new Date(right.mergedAt));
+  } catch {
+    // gh 未登录、账号不可用或网络失败时，完全退回 git 数据源。
+    return [];
+  }
+}
+
+/** git 是唯一必需的数据源；gh 可用时补充标题、作者与关联 issue。 */
+export function getMergedPullRequests() {
+  const fromGit = getMergedPullRequestsFromGit();
+  const fromGh = getMergedPullRequestsFromGh();
+  if (fromGh.length === 0) {
+    return fromGit;
+  }
+  const ghByNumber = new Map(fromGh.map((item) => [String(item.number), item]));
+  return fromGit.map((item) => {
+    const fallback = ghByNumber.get(String(item.number));
+    if (!fallback) {
+      return item;
+    }
+    return {
+      ...item,
+      title: fallback.title || item.title,
+      url: fallback.url || item.url,
+      author: fallback.author || item.author,
+      closingIssuesReferences:
+        (fallback.closingIssuesReferences?.length ?? 0) > 0
+          ? fallback.closingIssuesReferences
+          : item.closingIssuesReferences,
+    };
+  });
 }
 
 export function selectPullRequests(pullRequests, from, to) {

@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @yct/web dev",
-    "build": "pnpm -r build && pnpm map:measure:check",
+    "build": "pnpm -r build && pnpm map:measure:check && pnpm changelog:check",
     "typecheck": "pnpm -r typecheck",
     "transit:check": "tsx --test scripts/checks/verify-transit-departure-editor.mjs",
     "poi:images:check": "tsx --test scripts/checks/verify-poi-image-source.mjs",
