@@ -9,6 +9,8 @@ export interface BedrockProviderPayloadContext {
 export interface BedrockProviderObservation {
   availability: 'online' | 'offline';
   observedAt?: string;
+  /** 观测时间是否来自来源自身的时间戳；false 表示仅能按本次请求时间估算。 */
+  timestamped?: boolean;
   validUntil: number;
 }
 
@@ -55,6 +57,7 @@ function parseMcstatusPayload(
     return {
       availability: online ? 'online' : 'offline',
       observedAt: new Date(now).toISOString(),
+      timestamped: false,
       validUntil: now + 15_000,
     };
   }
@@ -70,6 +73,7 @@ function parseMcstatusPayload(
   return {
     availability: online ? 'online' : 'offline',
     observedAt: new Date(retrieved_at).toISOString(),
+    timestamped: true,
     validUntil: Math.min(expires_at, retrieved_at + 120_000, now + 30_000),
   };
 }
@@ -97,7 +101,7 @@ function createMcsrvstatProvider(timeoutMs?: number): BedrockStatusProvider {
     label: 'mcsrvstat.us Bedrock v3',
     timeoutMs,
     buildUrl: (address) =>
-      new URL(`https://api.mcsrvstat.us/bedrock/2/${encodeURIComponent(address)}`),
+      new URL(`https://api.mcsrvstat.us/bedrock/3/${encodeURIComponent(address)}`),
     parse(body, context) {
       if (!body || typeof body !== 'object') return null;
       const { online } = body as Record<string, unknown>;
@@ -105,6 +109,7 @@ function createMcsrvstatProvider(timeoutMs?: number): BedrockStatusProvider {
       return {
         availability: online ? 'online' : 'offline',
         observedAt: new Date(context.requestedAt).toISOString(),
+        timestamped: false,
         validUntil: context.now + 15_000,
       };
     },
@@ -228,7 +233,19 @@ export function resolveBedrockStatusProviderConfig(
     0,
     3_600_000,
   );
-  const offlineConfirmMs = parseIntegerInRange(env.YCT_BEDROCK_OFFLINE_CONFIRM_MS, 0, 0, 3_600_000);
+  const offlineConfirmMs = parseIntegerInRange(
+    env.YCT_BEDROCK_OFFLINE_CONFIRM_MS,
+    300_000,
+    0,
+    3_600_000,
+  );
+  if (offlineConfirmMs === 0) {
+    warnOnce(
+      'offline-confirm-zero',
+      'YCT_BEDROCK_OFFLINE_CONFIRM_MS=0：任一次明确的离线观测都会立即把玩家标记为离线，' +
+        '单源误报时会有整站误判风险；仅在确认来源可靠时使用。',
+    );
+  }
   const signature = JSON.stringify([
     raw ?? '',
     resolved.map((provider) => [provider.id, provider.timeoutMs ?? null]),

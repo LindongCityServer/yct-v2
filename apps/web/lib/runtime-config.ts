@@ -383,7 +383,7 @@ export function readRuntimeConfig(): RuntimeConfig {
       process.env.YCT_BEDROCK_OFFLINE_HOLD_MS,
       300_000,
       0,
-      86_400_000,
+      300_000,
     ),
     bedrockProviders: emptyToUndefined(process.env.YCT_BEDROCK_PROVIDERS),
     bedrockProviderRetries: parseIntegerInRange(process.env.YCT_BEDROCK_PROVIDER_RETRIES, 0, 0, 5),
@@ -405,9 +405,11 @@ export function readRuntimeConfig(): RuntimeConfig {
       0,
       3_600_000,
     ),
+    // 默认 5 分钟确认窗：单次第三方离线结果不足以把地图仍在线的玩家判为离线。
+    // 允许设为 0 恢复“明确离线立即生效”，由 providers 侧打印误判风险告警。
     bedrockOfflineConfirmMs: parseIntegerInRange(
       process.env.YCT_BEDROCK_OFFLINE_CONFIRM_MS,
-      0,
+      300_000,
       0,
       3_600_000,
     ),

@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { createBedrockStatusChecker } from '../../apps/web/lib/bedrock-server-status.ts';
 import { resolveBedrockStatusProviderConfig } from '../../apps/web/lib/bedrock-status-providers.ts';
 import {
@@ -20,6 +22,8 @@ test('MCBE checker validates freshness, coalesces calls and separates probe erro
   let time = Date.now();
   let calls = 0;
   let mode = 'online';
+  // 本用例验证缓存与探测语义，确认窗为 0 便于直接观察 offline 判定。
+  const config = resolveBedrockStatusProviderConfig({ YCT_BEDROCK_OFFLINE_CONFIRM_MS: '0' });
   const check = createBedrockStatusChecker(
     async (url, options) => {
       calls++;
@@ -35,6 +39,7 @@ test('MCBE checker validates freshness, coalesces calls and separates probe erro
       return response(mode === 'online', time, time + 5_000);
     },
     () => time,
+    config,
   );
   const first = await Promise.all(
     Array.from({ length: 10 }, () => check('example.com:19132', 1000)),
@@ -74,7 +79,17 @@ test('provider config keeps the default source and validates ordered entries', (
   assert.equal(fallback.retries, 0);
   assert.equal(fallback.failureThreshold, 3);
   assert.equal(fallback.cooldownMs, 60_000);
-  assert.equal(fallback.offlineConfirmMs, 0);
+  // 默认 5 分钟确认窗：单次明确离线不会立即把玩家判为离线。
+  assert.equal(fallback.offlineConfirmMs, 300_000);
+  assert.equal(
+    resolveBedrockStatusProviderConfig({ YCT_BEDROCK_OFFLINE_CONFIRM_MS: '0' }).offlineConfirmMs,
+    0,
+  );
+  assert.equal(
+    resolveBedrockStatusProviderConfig({ YCT_BEDROCK_OFFLINE_CONFIRM_MS: '99999999' })
+      .offlineConfirmMs,
+    300_000,
+  );
 
   const configured = resolveBedrockStatusProviderConfig({
     YCT_BEDROCK_PROVIDERS:
@@ -175,6 +190,8 @@ test('provider timeout, invalid response and retry budget never turn probe error
       YCT_BEDROCK_PROVIDERS: 'mcstatus',
       YCT_BEDROCK_PROVIDER_RETRIES: '1',
       YCT_BEDROCK_PROVIDER_BACKOFF_MS: '10',
+      // 本用例验证重试预算，不叠加确认窗。
+      YCT_BEDROCK_OFFLINE_CONFIRM_MS: '0',
     }),
   );
   const retried = await retryCheck('example.com:19132', 2000);
@@ -182,34 +199,104 @@ test('provider timeout, invalid response and retry budget never turn probe error
   assert.equal(retried.availability, 'offline');
 });
 
-test('multi-source aggregation prefers any online result and marks conflicts degraded', async () => {
+test('conflict resolution uses observation freshness instead of source order', async () => {
   const time = 1_793_679_000_000;
-  const config = resolveBedrockStatusProviderConfig({
+  // 带来源时间戳的离线证据优先于 mcsrvstat 无时间戳的在线结果。
+  const immediate = resolveBedrockStatusProviderConfig({
     YCT_BEDROCK_PROVIDERS: 'mcstatus,mcsrvstat',
+    YCT_BEDROCK_OFFLINE_CONFIRM_MS: '0',
   });
-  const check = createBedrockStatusChecker(
+  const freshOffline = createBedrockStatusChecker(
     async (url) =>
       url.hostname === 'api.mcstatus.io'
-        ? Response.json({ online: false, retrieved_at: time, expires_at: time + 60_000 })
+        ? Response.json({
+            online: false,
+            retrieved_at: time - 5_000,
+            expires_at: time + 60_000,
+          })
         : Response.json({ online: true }),
     () => time,
-    config,
+    immediate,
   );
-  const result = await check('example.com:19132', 2000);
-  assert.equal(result.availability, 'online');
-  assert.equal(result.providerId, 'mcsrvstat');
-  assert.equal(result.degraded, true);
-  assert.equal(result.degradedReason, 'conflict');
-  assert.deepEqual(result.providerResults, [
+  const offline = await freshOffline('example.com:19132', 2000);
+  assert.equal(offline.availability, 'offline');
+  assert.equal(offline.providerId, 'mcstatus');
+  assert.equal(offline.degraded, true);
+  assert.equal(offline.degradedReason, 'conflict');
+  assert.deepEqual(offline.providerResults, [
     { id: 'mcstatus', outcome: 'offline' },
     { id: 'mcsrvstat', outcome: 'online' },
   ]);
+
+  // 双方都无时间戳时保守保留在线，不凭上游缓存判离线。
+  const untimestamped = resolveBedrockStatusProviderConfig({
+    YCT_BEDROCK_PROVIDERS: 'mcsrvstat,custom@https://status.example/query/{address}',
+    YCT_BEDROCK_OFFLINE_CONFIRM_MS: '0',
+  });
+  const untimedCheck = createBedrockStatusChecker(
+    async (url) =>
+      url.hostname === 'api.mcsrvstat.us'
+        ? Response.json({ online: true })
+        : Response.json({ online: false }),
+    () => time,
+    untimestamped,
+  );
+  const untimed = await untimedCheck('example.com:19132', 2000);
+  assert.equal(untimed.availability, 'online');
+  assert.equal(untimed.providerId, 'mcsrvstat');
+  assert.equal(untimed.degradedReason, 'conflict');
+
+  // 双方都有时间戳时取更新时间较新的一侧。
+  const bothTimestamped = resolveBedrockStatusProviderConfig({
+    YCT_BEDROCK_PROVIDERS: 'mcstatus,custom@https://status.example/query/{address}',
+    YCT_BEDROCK_OFFLINE_CONFIRM_MS: '0',
+  });
+  const newerOffline = createBedrockStatusChecker(
+    async (url) =>
+      url.hostname === 'api.mcstatus.io'
+        ? Response.json({
+            online: true,
+            retrieved_at: time - 30_000,
+            expires_at: time + 60_000,
+          })
+        : Response.json({
+            online: false,
+            retrieved_at: time - 1_000,
+            expires_at: time + 60_000,
+          }),
+    () => time,
+    bothTimestamped,
+  );
+  const newer = await newerOffline('example.com:19132', 2000);
+  assert.equal(newer.availability, 'offline');
+  assert.equal(newer.providerId, 'custom');
+  assert.equal(newer.degradedReason, 'conflict');
+});
+
+test('default confirm window keeps offline unknown until the window elapses', async () => {
+  let time = 1_793_679_000_000;
+  const config = resolveBedrockStatusProviderConfig({ YCT_BEDROCK_PROVIDERS: 'mcstatus' });
+  assert.equal(config.offlineConfirmMs, 300_000);
+  const check = createBedrockStatusChecker(
+    async () => Response.json({ online: false, retrieved_at: time, expires_at: time + 60_000 }),
+    () => time,
+    config,
+  );
+  const first = await check('example.com:19132', 2000);
+  assert.equal(first.availability, 'unknown');
+  time += 299_000;
+  assert.equal((await check('example.com:19132', 2000)).availability, 'unknown');
+  // 越过确认窗，同时越过上一条 unknown 的 8 秒本地缓存。
+  time += 8_000;
+  const confirmed = await check('example.com:19132', 2000);
+  assert.equal(confirmed.availability, 'offline');
 });
 
 test('unanimous offline, all failures and partial failures never guess', async () => {
   const time = 1_793_679_000_000;
   const config = resolveBedrockStatusProviderConfig({
     YCT_BEDROCK_PROVIDERS: 'mcstatus,mcsrvstat',
+    YCT_BEDROCK_OFFLINE_CONFIRM_MS: '0',
   });
   const make = (handler) => createBedrockStatusChecker(handler, () => time, config);
 
@@ -372,6 +459,8 @@ test('map-first workflow persists all-offline transitions, emits once and restor
   process.env.YCT_BEDROCK_SERVER_ADDRESS = 'example.com:19132';
   process.env.YCT_BEDROCK_STATUS_ENABLED = 'true';
   process.env.YCT_BEDROCK_OFFLINE_HOLD_MS = '300000';
+  // 工作流用例验证离线切换本身；确认窗的独立用例见上方 checker 测试。
+  process.env.YCT_BEDROCK_OFFLINE_CONFIRM_MS = '0';
   // 该用例验证工作流语义，不验证熔断；把阈值调高，避免 31s 步进被 60s 冷却干扰。
   process.env.YCT_BEDROCK_PROVIDER_FAILURE_THRESHOLD = '20';
   let mapAvailable = true;
@@ -521,18 +610,42 @@ test('map-first workflow persists all-offline transitions, emits once and restor
         );
       },
     );
-    await t.test('map failure has priority, skips third party and persists offline', async () => {
+    await t.test('map failure reports unknown and keeps every player presence', async () => {
       advance();
       mapAvailable = false;
+      const beforeFailure = await readPlayerLocationSnapshot();
       const result = await syncPlayerLocations();
       assert.equal(result.status, 'unavailable');
       assert.deepEqual(requests, ['map.example']);
-      assert.ok(result.snapshot.locations.every((player) => player.presence === 'offline'));
+      assert.equal(result.snapshot.unavailableReason, 'map_unavailable');
+      assert.equal(
+        result.onlineCount,
+        beforeFailure.locations.filter((player) => player.presence === 'online').length,
+      );
+      assert.deepEqual(
+        result.snapshot.locations.map(({ playerKey, presence, offlineSince }) => ({
+          playerKey,
+          presence,
+          offlineSince,
+        })),
+        beforeFailure.locations.map(({ playerKey, presence, offlineSince }) => ({
+          playerKey,
+          presence,
+          offlineSince,
+        })),
+      );
+      assert.deepEqual(
+        events.filter((event) => event.type === 'PlayerLocationPresenceChanged'),
+        [],
+      );
       const persisted = JSON.parse(
         await readFile(process.env.YCT_PLAYER_LOCATION_STORE_PATH, 'utf8'),
       );
       assert.equal(persisted.unavailableReason, 'map_unavailable');
-      assert.ok(persisted.locations.every((player) => player.presence === 'offline'));
+      assert.ok(persisted.locations.every((player) => player.presence === 'online'));
+      const status = await readOperationsServerStatus();
+      assert.equal(status.item.availability, 'unknown');
+      assert.equal(status.item.onlinePlayerCount, undefined);
     });
     await t.test(
       'a detector error alone does not override recovered map availability',
@@ -546,7 +659,7 @@ test('map-first workflow persists all-offline transitions, emits once and restor
         assert.match(result.message, /尚未完成外网确认/);
       },
     );
-    await t.test('a legacy online snapshot also becomes offline when the map fails', async () => {
+    await t.test('a legacy online snapshot keeps its presence when the map fails', async () => {
       advance();
       mapAvailable = false;
       await mergePlayerLocationObservation({
@@ -554,8 +667,18 @@ test('map-first workflow persists all-offline transitions, emits once and restor
         latencyMs: 1,
         locations: [{ playerName: 'Legacy', x: 3, z: 4 }],
       });
+      const beforeFailure = await readPlayerLocationSnapshot();
       const result = await syncPlayerLocations();
-      assert.ok(result.snapshot.locations.every((player) => player.presence === 'offline'));
+      assert.equal(result.status, 'unavailable');
+      assert.equal(
+        result.snapshot.locations.find((player) => player.playerKey === 'legacy')?.presence,
+        'online',
+      );
+      assert.deepEqual(
+        result.snapshot.locations.map(({ playerKey, presence }) => ({ playerKey, presence })),
+        beforeFailure.locations.map(({ playerKey, presence }) => ({ playerKey, presence })),
+      );
+      assert.deepEqual(events, []);
     });
     await t.test('unknown probes do not renew the bounded offline hold', async () => {
       advance();
@@ -640,6 +763,64 @@ test('map-first workflow persists all-offline transitions, emits once and restor
     unsubscribe.forEach((stop) => stop());
     globalThis.fetch = oldFetch;
     Date.now = oldNow;
+    for (const key of Object.keys(process.env)) if (!(key in oldEnv)) delete process.env[key];
+    Object.assign(process.env, oldEnv);
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test('concurrent writes from separate processes never lose updates', async () => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'yct-player-store-'));
+  const oldEnv = { ...process.env };
+  process.env.YCT_RUNTIME_ROOT = temporary;
+  process.env.YCT_PLAYER_LOCATION_STORE_PATH = path.join(temporary, 'players.json');
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+  const storeUrl = new URL('../../apps/web/lib/player-location-store.ts', import.meta.url).href;
+  const tsxCli = path.join(repoRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+  const childScriptPath = path.join(temporary, 'writer.mjs');
+  await writeFile(
+    childScriptPath,
+    [
+      `import { mergePlayerLocationObservation } from ${JSON.stringify(storeUrl)};`,
+      'const [name, count] = process.argv.slice(2);',
+      'for (let index = 0; index < Number(count); index += 1) {',
+      '  await mergePlayerLocationObservation({',
+      '    observedAt: new Date().toISOString(),',
+      '    latencyMs: 1,',
+      '    locations: [{ playerName: name, x: index, z: index }],',
+      '  });',
+      '}',
+    ].join('\n'),
+    'utf8',
+  );
+  const run = (name) =>
+    new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [tsxCli, childScriptPath, name, '20'], {
+        env: { ...process.env },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let output = '';
+      child.stdout.on('data', (chunk) => {
+        output += chunk;
+      });
+      child.stderr.on('data', (chunk) => {
+        output += chunk;
+      });
+      child.on('exit', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`${name} exited ${code}: ${output}`));
+      });
+    });
+  try {
+    await Promise.all([run('ConcurrentA'), run('ConcurrentB')]);
+    const snapshot = await readPlayerLocationSnapshot();
+    assert.deepEqual(snapshot.locations.map((player) => player.playerKey).sort(), [
+      'concurrenta',
+      'concurrentb',
+    ]);
+    // 两个进程各写 20 次：若读改写在跨进程层面不加锁，revision 会因覆盖写而少于 40。
+    assert.equal(snapshot.revision, 40);
+  } finally {
     for (const key of Object.keys(process.env)) if (!(key in oldEnv)) delete process.env[key];
     Object.assign(process.env, oldEnv);
     await rm(temporary, { recursive: true, force: true });

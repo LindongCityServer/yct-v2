@@ -92,47 +92,55 @@ export function createBedrockStatusChecker(
       const onlineResults = results.filter((item) => item.observation?.availability === 'online');
       const offlineResults = results.filter((item) => item.observation?.availability === 'offline');
 
+      const conflict = onlineResults.length > 0 && offlineResults.length > 0;
+
       if (onlineResults.length > 0) {
-        const chosen = onlineResults[0].observation as BedrockProviderObservation;
-        const conflict = offlineResults.length > 0;
-        if (conflict) {
-          warnDegraded(address, 'conflict', providerResults);
-        } else {
+        if (!conflict) {
           lastDegraded.delete(address);
+          offlineFirstSeen.delete(address);
+          return buildOnlineObservation(onlineResults, providerResults);
         }
-        return {
-          ...chosen,
-          validUntil: Math.min(
-            ...onlineResults.map(
-              (item) => (item.observation as BedrockProviderObservation).validUntil,
-            ),
-          ),
-          providerId: onlineResults[0].provider.id,
+        warnDegraded(address, 'conflict', providerResults);
+        // 冲突时按事件时间新鲜度判定：有来源时间戳的一侧优先；双方都有则取更新的；
+        // 双方都无时间戳（例如 mcsrvstat 的上游缓存结果）时保守保留在线，避免误报离线。
+        const newer = compareFreshness(
+          onlineResults[0].observation as BedrockProviderObservation,
+          offlineResults[0].observation as BedrockProviderObservation,
+        );
+        if (newer === 'online') {
+          // 出现在线证据后重新计时，避免此前累计的离线窗口在下次冲突时直接生效。
+          offlineFirstSeen.delete(address);
+          return {
+            ...buildOnlineObservation(onlineResults, providerResults),
+            degraded: true,
+            degradedReason: 'conflict',
+          };
+        }
+        const pending = confirmOfflineOrPending(
+          address,
           providerResults,
-          degraded: conflict || undefined,
-          degradedReason: conflict ? 'conflict' : undefined,
+          'conflict',
+          config.offlineConfirmMs,
+        );
+        if (pending) return pending;
+        return {
+          ...buildOfflineObservation(offlineResults, providerResults),
+          degraded: true,
+          degradedReason: 'conflict',
         };
       }
 
       const allExplicitOffline =
         results.length > 0 && results.every((item) => item.observation?.availability === 'offline');
       if (allExplicitOffline) {
-        // 默认确认窗口为 0，保持“明确离线立即生效”的既有语义；
-        // 需要抑制抖动时可配置为要求全源持续离线一段时间。
-        if (config.offlineConfirmMs <= 0) {
-          offlineFirstSeen.delete(address);
-          return buildOfflineObservation(offlineResults, providerResults, address);
-        }
-        const firstSeen = offlineFirstSeen.get(address);
-        if (firstSeen === undefined) {
-          offlineFirstSeen.set(address, now());
-        }
-        if (now() - (firstSeen ?? now()) < config.offlineConfirmMs) {
-          warnDegraded(address, 'insufficient', providerResults);
-          return unknown({ providerResults, degraded: true, degradedReason: 'insufficient' });
-        }
-        offlineFirstSeen.delete(address);
-        return buildOfflineObservation(offlineResults, providerResults, address);
+        const pending = confirmOfflineOrPending(
+          address,
+          providerResults,
+          'insufficient',
+          config.offlineConfirmMs,
+        );
+        if (pending) return pending;
+        return buildOfflineObservation(offlineResults, providerResults);
       }
 
       offlineFirstSeen.delete(address);
@@ -160,15 +168,84 @@ export function createBedrockStatusChecker(
     }
   };
 
+  function buildOnlineObservation(
+    onlineResults: {
+      provider: BedrockStatusProvider;
+      observation: BedrockProviderObservation | null;
+    }[],
+    providerResults: BedrockProviderResult[],
+  ): BedrockStatusObservation {
+    const chosen = [...onlineResults].sort(
+      (left, right) => freshnessRank(left.observation) - freshnessRank(right.observation),
+    )[0];
+    return {
+      ...(chosen.observation as BedrockProviderObservation),
+      validUntil: Math.min(
+        ...onlineResults.map((item) => (item.observation as BedrockProviderObservation).validUntil),
+      ),
+      providerId: chosen.provider.id,
+      providerResults,
+    };
+  }
+
+  function freshnessRank(observation: BedrockProviderObservation | null): number {
+    const timestamp = observation?.observedAt ? Date.parse(observation.observedAt) : NaN;
+    return Number.isFinite(timestamp) ? -timestamp : Number.POSITIVE_INFINITY;
+  }
+
+  // 冲突判定：有来源自身时间戳的一侧优先；双方都有时间戳时取更新的；
+  // 双方都没有时间戳时保守选择在线，避免仅凭缓存结果把服务器判为离线。
+  function compareFreshness(
+    online: BedrockProviderObservation,
+    offline: BedrockProviderObservation,
+  ): 'online' | 'offline' {
+    if (online.timestamped && !offline.timestamped) return 'online';
+    if (!online.timestamped && offline.timestamped) return 'offline';
+    if (online.timestamped && offline.timestamped) {
+      const onlineAt = online.observedAt ? Date.parse(online.observedAt) : NaN;
+      const offlineAt = offline.observedAt ? Date.parse(offline.observedAt) : NaN;
+      if (Number.isFinite(onlineAt) && Number.isFinite(offlineAt)) {
+        return onlineAt >= offlineAt ? 'online' : 'offline';
+      }
+    }
+    return 'online';
+  }
+
+  function confirmOfflineOrPending(
+    address: string,
+    providerResults: BedrockProviderResult[],
+    degradedReason: NonNullable<BedrockStatusObservation['degradedReason']>,
+    confirmMs: number,
+  ): BedrockStatusObservation | null {
+    if (confirmMs <= 0) {
+      offlineFirstSeen.delete(address);
+      return null;
+    }
+    const firstSeen = offlineFirstSeen.get(address);
+    if (firstSeen === undefined) {
+      offlineFirstSeen.set(address, now());
+    }
+    if (now() - (firstSeen ?? now()) < confirmMs) {
+      return {
+        availability: 'unknown',
+        validUntil: now() + 8_000,
+        providerResults,
+        degraded: true,
+        degradedReason,
+      };
+    }
+    // 确认后保留起始时间：持续的离线观测应持续判定为离线，
+    // 只有出现在线结果或不再有离线证据时才清除（见调用方）。
+    return null;
+  }
+
   function buildOfflineObservation(
     offlineResults: {
       provider: BedrockStatusProvider;
       observation: BedrockProviderObservation | null;
     }[],
     providerResults: BedrockProviderResult[],
-    address: string,
   ): BedrockStatusObservation {
-    lastDegraded.delete(address);
     const chosen = offlineResults[0];
     if (!chosen?.observation) {
       return {
@@ -239,7 +316,12 @@ async function probeProvider(
   now: () => number,
 ): Promise<BedrockProviderObservation | null> {
   // 每个来源的超时取自配置；重试共享同一预算，不会把总耗时翻倍。
-  const budget = Math.min(10_000, Math.max(100, provider.timeoutMs ?? timeoutMs));
+  // 来源级超时不能突破全局预算，避免 #10000 这类覆盖把 SSR 拖过 8s 超时。
+  const budget = Math.min(
+    10_000,
+    Math.max(100, timeoutMs),
+    Math.max(100, provider.timeoutMs ?? timeoutMs),
+  );
   const deadline = now() + budget;
   for (let attempt = 0; attempt <= config.retries; attempt += 1) {
     const remaining = deadline - now();
