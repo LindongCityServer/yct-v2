@@ -66,9 +66,13 @@ export function ProgressiveImage({
   }));
 
   // 前景图使用展示宽度的优化图；无法优化时保持原图，避免出现必然 400 的请求。
-  const foregroundSrc = maxDisplayWidth
-    ? (buildProgressiveImageOptimizerSrc(src, maxDisplayWidth) ?? src)
-    : src;
+  const optimizerSrc = maxDisplayWidth
+    ? buildProgressiveImageOptimizerSrc(src, maxDisplayWidth)
+    : undefined;
+  // 优化器运行时失败（域名未放行、上游超时等）时退回原图重试一次，避免主图直接破图。
+  const [optimizerFallbackSrc, setOptimizerFallbackSrc] = useState<string | null>(null);
+  const foregroundSrc =
+    optimizerFallbackSrc === src ? src : (optimizerSrc ?? src);
   const loaded = loadedSrc === foregroundSrc;
   // SSR 阶段没有渲染尺寸，先给自定义占位或中性底色；挂载后再换成阶梯的第一档。
   const initialPlaceholder = placeholderSrc;
@@ -214,6 +218,11 @@ export function ProgressiveImage({
             : style
         }
         onError={(event) => {
+          // 优化地址失败时先退回原图重试；原图也失败才按加载失败处理。
+          if (optimizerSrc && foregroundSrc !== src && optimizerFallbackSrc !== src) {
+            setOptimizerFallbackSrc(src);
+            return;
+          }
           commitLoaded();
           onError?.(event);
         }}
