@@ -36,8 +36,7 @@ import { getFontEmbedCSS, toBlob } from 'html-to-image';
 import LZString from 'lz-string';
 import QRCode from 'qrcode';
 import { appPath } from '../lib/app-paths';
-import { buildMapShareDescription } from '../lib/map-share-card';
-import { buildProgressiveImageOptimizerSrc } from '../lib/progressive-image-source';
+import { buildMapShareDescription, buildShareImagePreviewSrc } from '../lib/map-share-card';
 import { buildExploreCandidates, pickExploreCandidate } from '../lib/random-explore';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
 import { publishAssistantPageContext } from '../lib/client-assistant-page-context';
@@ -6429,7 +6428,11 @@ function MapShareDialog({
   // 无法优化的外链直接不展示，卡片退回无图布局。
   const shareImageSrc = useMemo(
     () =>
-      payload.imageUrl ? buildProgressiveImageOptimizerSrc(appPath(payload.imageUrl), 1024) : undefined,
+      payload.imageUrl
+        ? buildShareImagePreviewSrc(appPath(payload.imageUrl), {
+            origin: typeof window === 'undefined' ? undefined : window.location.origin,
+          })
+        : undefined,
     [payload.imageUrl],
   );
   const [shareImageFailed, setShareImageFailed] = useState(false);
