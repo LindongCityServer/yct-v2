@@ -9,9 +9,12 @@ import type {
   CompactMapRouteShareState,
   LocaleCode,
   MapGeometry,
+  MapHistoryVersionDescriptor,
   MapMarkerSnapshot,
   MapNetworkDirection,
   MapSpatialProfile,
+  MapTileCoverage,
+  MapTileProvidersResponse,
   MapTravelMode,
   LocalizedLabelMap,
   OperationsFeedItem,
@@ -37,6 +40,19 @@ import LZString from 'lz-string';
 import QRCode from 'qrcode';
 import { appPath } from '../lib/app-paths';
 import { buildMapShareDescription, buildShareImagePreviewSrc } from '../lib/map-share-card';
+import {
+  buildMapHistoryShareUrl,
+  buildMapHistoryTileCacheKey,
+  buildMapHistoryTileProxyTemplate,
+  clampViewToHistoryVersion,
+  clearMapHistoryParams,
+  isHistoryTileInCoverage,
+  pickAdjacentHistoryVersion,
+  readMapHistoryParams,
+  setMapHistoryParams,
+  sortActiveHistoryVersions,
+  type MapHistoryNotice,
+} from '../lib/map-history';
 import { buildProgressiveImageOptimizerSrc } from '../lib/progressive-image-source';
 import { buildExploreCandidates, pickExploreCandidate } from '../lib/random-explore';
 import { publishAdminDataChanged } from '../lib/client-admin-data-events';
@@ -873,10 +889,23 @@ export function MapStage() {
   const suppressedMarkerClickRef = useRef<string | null>(null);
   const [layerPanelOpen, setLayerPanelOpen] = useState(false);
   const [markerQuery, setMarkerQuery] = useState('');
-  const [tileResponse, setTileResponse] = useState<ApiListResponse<TileProviderDescriptor> | null>(
-    null,
-  );
+  const [tileResponse, setTileResponse] = useState<MapTileProvidersResponse | null>(null);
   const [selectedTileProviderId, setSelectedTileProviderId] = useState('');
+  // 历史瓦片：版本只存在内存与 URL 中，不写入 localStorage。
+  const [historyVersionId, setHistoryVersionId] = useState<string | null>(null);
+  const [historyNotice, setHistoryNotice] = useState<MapHistoryNotice | null>(null);
+  const [historyShareStatus, setHistoryShareStatus] = useState('');
+  const [historyTileStatuses, setHistoryTileStatuses] = useState<
+    Record<string, 'loaded' | 'missing'>
+  >({});
+  const [historyOverlaysFromCurrentData, setHistoryOverlaysFromCurrentData] = useState(false);
+  const historyInitializedRef = useRef(false);
+  const historyLayerPreferenceRef = useRef<{
+    browseMode: MapBrowseMode;
+    markersVisible: boolean;
+    playersVisible: boolean;
+    linearFeaturesVisible: boolean;
+  } | null>(null);
   const [markerResponse, setMarkerResponse] = useState<MarkerResponse | null>(null);
   const [playerLocationResponse, setPlayerLocationResponse] =
     useState<PlayerLocationResponse | null>(null);
@@ -1584,12 +1613,254 @@ export function MapStage() {
 
   const activeTileProvider =
     tileProviders.find((provider) => provider.id === selectedTileProviderId) ?? tileProviders[0];
-  const tileTemplate = activeTileProvider?.tileTemplate;
-  const tileBaseUrl = tileTemplate ? getTileBaseUrl(tileTemplate) : '';
+  const historyVersions = useMemo<MapHistoryVersionDescriptor[]>(
+    () => tileResponse?.history ?? [],
+    [tileResponse],
+  );
+  const activeHistoryVersion =
+    historyVersions.find(
+      (version) => version.id === historyVersionId && version.status === 'active',
+    ) ?? null;
+  const sortedHistoryVersions = useMemo(
+    () => sortActiveHistoryVersions(historyVersions),
+    [historyVersions],
+  );
+  const navigableHistoryVersions = useMemo(
+    () => sortedHistoryVersions.filter((version) => version.worldDataDate !== null),
+    [sortedHistoryVersions],
+  );
+  const previousHistoryVersion = activeHistoryVersion
+    ? pickAdjacentHistoryVersion(historyVersions, activeHistoryVersion.id, -1)
+    : null;
+  const nextHistoryVersion = activeHistoryVersion
+    ? pickAdjacentHistoryVersion(historyVersions, activeHistoryVersion.id, 1)
+    : null;
+  const historyPosition = activeHistoryVersion
+    ? navigableHistoryVersions.findIndex((version) => version.id === activeHistoryVersion.id)
+    : -1;
+  const currentTileTemplate = activeTileProvider?.tileTemplate;
+  // 历史模式只使用该版本自己的代理模板；没有版本数据时不会退回当前瓦片。
+  const tileTemplate = activeHistoryVersion
+    ? buildMapHistoryTileProxyTemplate(activeHistoryVersion.id)
+    : currentTileTemplate;
+  const tileBaseUrl = currentTileTemplate ? getTileBaseUrl(currentTileTemplate) : '';
   const markerIconBaseUrl = markerResponse?.iconBaseUrl ?? tileBaseUrl;
-  const tilesVisible = browseMode === 'satellite';
+  const tilesVisible = browseMode === 'satellite' || activeHistoryVersion !== null;
   const activeTileZoom = getTileZoom(mapView.zoom);
   const regionIndex = useMemo(() => buildUnminedRegionIndex(regionResponse), [regionResponse]);
+
+  const applyMapHistoryUrl = useCallback((versionId: string | null, view: MapView) => {
+    const url = new URL(window.location.href);
+    if (versionId) {
+      setMapHistoryParams(url.searchParams, versionId, view);
+    } else {
+      clearMapHistoryParams(url.searchParams);
+    }
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  }, []);
+
+  const returnToCurrentMap = useCallback(() => {
+    setHistoryVersionId(null);
+    setHistoryNotice(null);
+    setHistoryShareStatus('');
+    setHistoryOverlaysFromCurrentData(false);
+    setHistoryTileStatuses({});
+    const preferences = historyLayerPreferenceRef.current;
+    if (preferences) {
+      setBrowseMode(preferences.browseMode);
+      setMarkersVisible(preferences.markersVisible);
+      setPlayersVisible(preferences.playersVisible);
+      setLinearFeaturesVisible(preferences.linearFeaturesVisible);
+      historyLayerPreferenceRef.current = null;
+    }
+    applyMapHistoryUrl(null, mapViewRef.current);
+  }, [applyMapHistoryUrl]);
+
+  const handleHistoryTileStatus = useCallback((tileId: string, status: 'loaded' | 'missing') => {
+    setHistoryTileStatuses((current) =>
+      current[tileId] === status ? current : { ...current, [tileId]: status },
+    );
+  }, []);
+
+  const selectHistoryVersion = useCallback(
+    (versionId: string | null) => {
+      if (!versionId) {
+        returnToCurrentMap();
+        return;
+      }
+
+      const version = historyVersions.find(
+        (item) => item.id === versionId && item.status === 'active',
+      );
+      if (!version) {
+        return;
+      }
+
+      if (historyLayerPreferenceRef.current === null) {
+        historyLayerPreferenceRef.current = {
+          browseMode,
+          markersVisible,
+          playersVisible,
+          linearFeaturesVisible,
+        };
+      }
+
+      const clamped = clampViewToHistoryVersion(mapViewRef.current, version, {
+        minZoom: mapDefaults.minZoom,
+        maxZoom: mapDefaults.maxZoom,
+      });
+      setHistoryVersionId(version.id);
+      setHistoryNotice(clamped.clamped ? 'view-clamped' : null);
+      setHistoryShareStatus('');
+      setHistoryOverlaysFromCurrentData(false);
+      setBrowseMode('satellite');
+      setMarkersVisible(false);
+      setPlayersVisible(false);
+      setLinearFeaturesVisible(false);
+      setMapView(clamped.view);
+      setHistoryTileStatuses({});
+      applyMapHistoryUrl(version.id, clamped.view);
+    },
+    [
+      applyMapHistoryUrl,
+      browseMode,
+      historyVersions,
+      linearFeaturesVisible,
+      markersVisible,
+      playersVisible,
+      returnToCurrentMap,
+    ],
+  );
+
+  const shareHistoryView = useCallback(async () => {
+    if (!activeHistoryVersion) {
+      return;
+    }
+    const url = buildMapHistoryShareUrl(
+      activeHistoryVersion.id,
+      mapViewRef.current,
+      window.location.origin,
+    );
+    try {
+      await navigator.clipboard.writeText(url);
+      setHistoryShareStatus(t('map.history.shareCopied'));
+    } catch {
+      setHistoryShareStatus(t('map.history.shareFailed'));
+    }
+  }, [activeHistoryVersion, t]);
+
+  // 分享链接只在首次拿到版本清单后解析一次，避免视图变化时重复套用。
+  useEffect(() => {
+    if (historyInitializedRef.current || tileResponse === null) {
+      return;
+    }
+
+    historyInitializedRef.current = true;
+    const state = readMapHistoryParams(
+      searchParams,
+      historyVersions,
+      {
+        centerX: mapDefaults.centerX,
+        centerZ: mapDefaults.centerZ,
+        zoom: mapDefaults.defaultZoom,
+      },
+      { minZoom: mapDefaults.minZoom, maxZoom: mapDefaults.maxZoom },
+    );
+
+    if (state.version) {
+      historyLayerPreferenceRef.current = {
+        browseMode,
+        markersVisible,
+        playersVisible,
+        linearFeaturesVisible,
+      };
+      setHistoryVersionId(state.version.id);
+      setBrowseMode('satellite');
+      setMarkersVisible(false);
+      setPlayersVisible(false);
+      setLinearFeaturesVisible(false);
+      setMapView(state.view);
+    }
+    setHistoryNotice(state.notice);
+
+    if (!state.version && searchParams.get('hv') !== null) {
+      // 非法或已下架的版本参数不留在地址栏，避免刷新时反复提示。
+      applyMapHistoryUrl(null, mapViewRef.current);
+    }
+  }, [
+    applyMapHistoryUrl,
+    browseMode,
+    historyVersions,
+    linearFeaturesVisible,
+    markersVisible,
+    playersVisible,
+    searchParams,
+    tileResponse,
+  ]);
+
+  // 历史视图的平移/缩放稳定后同步到地址栏，刷新或复制链接都能复现同一视图。
+  useEffect(() => {
+    if (!activeHistoryVersion || !mapViewSettled) {
+      return;
+    }
+    applyMapHistoryUrl(activeHistoryVersion.id, mapView);
+  }, [activeHistoryVersion, applyMapHistoryUrl, mapView, mapViewSettled]);
+
+  // Alt+← / Alt+→：避开既有方向键平移与 Esc 详情链路。
+  useEffect(() => {
+    if (!activeHistoryVersion) {
+      return;
+    }
+
+    const handleHistoryKeyDown = (event: KeyboardEvent) => {
+      if (
+        !event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        event.repeat ||
+        (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')
+      ) {
+        return;
+      }
+
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT')
+      ) {
+        return;
+      }
+
+      const direction = event.key === 'ArrowLeft' ? -1 : 1;
+      const adjacent = pickAdjacentHistoryVersion(
+        historyVersions,
+        activeHistoryVersion.id,
+        direction,
+      );
+      if (!adjacent) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      selectHistoryVersion(adjacent.id);
+    };
+
+    window.addEventListener('keydown', handleHistoryKeyDown, true);
+    return () => window.removeEventListener('keydown', handleHistoryKeyDown, true);
+  }, [activeHistoryVersion, historyVersions, selectHistoryVersion]);
+
+  useEffect(() => {
+    setHistoryTileStatuses({});
+  }, [activeHistoryVersion?.id, activeTileZoom]);
   const localizedStaticRoutingMarkerSnapshot = useMemo(
     () =>
       (markerResponse?.snapshot.markers ?? [])
@@ -3071,13 +3342,50 @@ export function MapStage() {
       tilesVisible && tileTemplate
         ? {
             zoom: activeTileZoom,
-            tiles: buildVisibleTiles(mapView, viewportSize, tileTemplate, regionIndex, {
-              tileZoom: activeTileZoom,
-            }),
+            tiles: buildVisibleTiles(
+              mapView,
+              viewportSize,
+              tileTemplate,
+              activeHistoryVersion ? undefined : regionIndex,
+              {
+                tileZoom: activeTileZoom,
+                versionId: activeHistoryVersion?.id,
+                coverage: activeHistoryVersion?.coverage,
+              },
+            ),
           }
         : null,
-    [activeTileZoom, mapView, regionIndex, tileTemplate, tilesVisible, viewportSize],
+    [
+      activeHistoryVersion,
+      activeTileZoom,
+      mapView,
+      regionIndex,
+      tileTemplate,
+      tilesVisible,
+      viewportSize,
+    ],
   );
+  const historyTileSummary = useMemo(() => {
+    if (!activeHistoryVersion || !visibleTiles) {
+      return null;
+    }
+    let loaded = 0;
+    let missing = 0;
+    for (const tile of visibleTiles.tiles) {
+      const status = historyTileStatuses[tile.id];
+      if (status === 'loaded') {
+        loaded += 1;
+      } else if (status === 'missing') {
+        missing += 1;
+      }
+    }
+    return {
+      total: visibleTiles.tiles.length,
+      loaded,
+      missing,
+      pending: visibleTiles.tiles.length - loaded - missing,
+    };
+  }, [activeHistoryVersion, historyTileStatuses, visibleTiles]);
   useEffect(() => {
     if (!poiCategoryId && publicPoiCategories.length > 0) {
       setPoiCategoryId(publicPoiCategories[0].id);
@@ -5541,8 +5849,35 @@ export function MapStage() {
             <TileLayerView
               layer={visibleTiles}
               className="unmined-tile-layer"
-              key={`tile-${visibleTiles.zoom}`}
+              key={`tile-${visibleTiles.zoom}-${activeHistoryVersion?.id ?? 'current'}`}
+              historyVersionId={activeHistoryVersion?.id}
+              onTileStatus={handleHistoryTileStatus}
             />
+          </div>
+        ) : null}
+
+        {activeHistoryVersion && historyTileSummary && historyTileSummary.pending > 0 ? (
+          <div className="map-history-tile-status" role="status">
+            <span className="material-symbols-outlined" aria-hidden="true">
+              hourglass_top
+            </span>
+            <span>{t('map.history.tileLoading', { name: activeHistoryVersion.name })}</span>
+          </div>
+        ) : activeHistoryVersion && historyTileSummary && historyTileSummary.missing > 0 ? (
+          <div className="map-history-tile-status is-missing" role="status">
+            <span className="material-symbols-outlined" aria-hidden="true">
+              report
+            </span>
+            <span>{t('map.history.tileMissing', { count: historyTileSummary.missing })}</span>
+          </div>
+        ) : null}
+
+        {historyNotice ? (
+          <div className="map-history-notice" role="status">
+            <span className="material-symbols-outlined" aria-hidden="true">
+              info
+            </span>
+            <span>{getMapHistoryNoticeText(historyNotice, activeHistoryVersion, t)}</span>
           </div>
         ) : null}
 
@@ -6234,6 +6569,131 @@ export function MapStage() {
               </span>
             </label>
           ) : null}
+          <section className="map-history-panel" aria-label={t('map.history.title')}>
+            <div className="map-history-header">
+              <span className="material-symbols-outlined" aria-hidden="true">
+                history
+              </span>
+              <strong>{t('map.history.title')}</strong>
+              {activeHistoryVersion ? (
+                <span className="map-history-badge">
+                  {historyPosition >= 0
+                    ? t('map.history.position', {
+                        index: historyPosition + 1,
+                        total: navigableHistoryVersions.length,
+                      })
+                    : t('map.history.unknownPosition')}
+                </span>
+              ) : null}
+            </div>
+
+            {sortedHistoryVersions.length === 0 ? (
+              <p className="map-history-note">{t('map.history.empty')}</p>
+            ) : (
+              <>
+                <select
+                  className="map-history-select"
+                  value={historyVersionId ?? ''}
+                  aria-label={t('map.history.selectAria')}
+                  onChange={(event) => selectHistoryVersion(event.currentTarget.value || null)}
+                >
+                  <option value="">{t('map.history.optionCurrent')}</option>
+                  {sortedHistoryVersions.map((version) => (
+                    <option value={version.id} key={version.id}>
+                      {formatHistoryVersionOption(version, t)}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="map-history-switch">
+                  <button
+                    className="secondary-action-button"
+                    type="button"
+                    disabled={!previousHistoryVersion}
+                    aria-keyshortcuts="Alt+ArrowLeft"
+                    onClick={() =>
+                      previousHistoryVersion && selectHistoryVersion(previousHistoryVersion.id)
+                    }
+                  >
+                    {t('map.history.previous')}
+                  </button>
+                  <span className="map-history-position">
+                    {activeHistoryVersion
+                      ? historyPosition >= 0
+                        ? t('map.history.position', {
+                            index: historyPosition + 1,
+                            total: navigableHistoryVersions.length,
+                          })
+                        : t('map.history.unknownPosition')
+                      : t('map.history.currentCaption')}
+                  </span>
+                  <button
+                    className="secondary-action-button"
+                    type="button"
+                    disabled={!nextHistoryVersion}
+                    aria-keyshortcuts="Alt+ArrowRight"
+                    onClick={() =>
+                      nextHistoryVersion && selectHistoryVersion(nextHistoryVersion.id)
+                    }
+                  >
+                    {t('map.history.next')}
+                  </button>
+                </div>
+
+                {activeHistoryVersion ? (
+                  <>
+                    <p className="map-history-note">
+                      {formatHistoryVersionMeta(activeHistoryVersion, t)}
+                    </p>
+                    <label className="map-history-current-data">
+                      <input
+                        type="checkbox"
+                        checked={historyOverlaysFromCurrentData}
+                        onChange={(event) => {
+                          const checked = event.currentTarget.checked;
+                          setHistoryOverlaysFromCurrentData(checked);
+                          setMarkersVisible(checked);
+                          setPlayersVisible(checked);
+                          setLinearFeaturesVisible(checked);
+                        }}
+                      />
+                      <span>{t('map.history.showCurrentData')}</span>
+                    </label>
+                    {historyOverlaysFromCurrentData ? (
+                      <p className="map-history-warning">{t('map.history.currentDataBadge')}</p>
+                    ) : null}
+                    <div className="map-history-actions">
+                      <button
+                        className="secondary-action-button"
+                        type="button"
+                        onClick={() => void shareHistoryView()}
+                      >
+                        {t('map.history.share')}
+                      </button>
+                      <button
+                        className="secondary-action-button"
+                        type="button"
+                        onClick={returnToCurrentMap}
+                      >
+                        {t('map.history.returnCurrent')}
+                      </button>
+                    </div>
+                    {historyShareStatus ? (
+                      <p className="map-history-note" role="status">
+                        {historyShareStatus}
+                      </p>
+                    ) : null}
+                  </>
+                ) : null}
+              </>
+            )}
+
+            {historyNotice ? (
+              <p className="map-history-warning" role="status">
+                {getMapHistoryNoticeText(historyNotice, activeHistoryVersion, t)}
+              </p>
+            ) : null}
+          </section>
           <p className="map-layer-note">
             {browseMode === 'satellite'
               ? t('map.layer.noteSatellite', {
@@ -7010,26 +7470,138 @@ function MapStageLegal() {
   );
 }
 
-function TileLayerView({ layer, className }: Readonly<{ layer: TileLayer; className: string }>) {
+function formatHistoryVersionOption(version: MapHistoryVersionDescriptor, t: Translate): string {
+  return version.worldDataDate
+    ? t('map.history.optionWithDate', { name: version.name, date: version.worldDataDate })
+    : t('map.history.optionUnknownDate', { name: version.name });
+}
+
+function formatHistoryVersionMeta(version: MapHistoryVersionDescriptor, t: Translate): string {
+  return t('map.history.versionMeta', {
+    date: version.worldDataDate ?? t('map.history.dateUnknown'),
+    note: version.dateNote ? ` ${version.dateNote}` : '',
+    minZoom: version.zoomRange.minZoom,
+    maxZoom: version.zoomRange.maxZoom,
+    minX: version.coverage.minX,
+    maxX: version.coverage.maxX,
+    minZ: version.coverage.minZ,
+    maxZ: version.coverage.maxZ,
+  });
+}
+
+function getMapHistoryNoticeText(
+  notice: MapHistoryNotice,
+  version: MapHistoryVersionDescriptor | null,
+  t: Translate,
+): string {
+  if (notice === 'unknown-version') {
+    return t('map.history.notice.unknownVersion');
+  }
+  if (notice === 'archived-version') {
+    return t('map.history.notice.archivedVersion');
+  }
+  if (notice === 'invalid-view') {
+    return t('map.history.notice.invalidView');
+  }
+  return t('map.history.notice.viewClamped', {
+    minZoom: version?.zoomRange.minZoom ?? '',
+    maxZoom: version?.zoomRange.maxZoom ?? '',
+  });
+}
+
+function TileLayerView({
+  layer,
+  className,
+  historyVersionId,
+  onTileStatus,
+}: Readonly<{
+  layer: TileLayer;
+  className: string;
+  historyVersionId?: string | null;
+  onTileStatus?: (tileId: string, status: 'loaded' | 'missing') => void;
+}>) {
   return (
     <div className={className}>
-      {layer.tiles.map((tile) => (
-        <img
-          className="unmined-tile"
-          src={tile.url}
-          alt=""
-          draggable={false}
-          key={tile.id}
-          style={
-            {
-              '--tile-left': `${tile.left}px`,
-              '--tile-top': `${tile.top}px`,
-              '--tile-display-size': `${tile.displaySize}px`,
-            } as CSSProperties
-          }
-        />
-      ))}
+      {layer.tiles.map((tile) => {
+        const style = {
+          '--tile-left': `${tile.left}px`,
+          '--tile-top': `${tile.top}px`,
+          '--tile-display-size': `${tile.displaySize}px`,
+        } as CSSProperties;
+
+        if (historyVersionId) {
+          return (
+            <HistoryTileView
+              key={tile.id}
+              tile={tile}
+              style={style}
+              versionId={historyVersionId}
+              onStatus={onTileStatus}
+            />
+          );
+        }
+
+        return (
+          <img
+            className="unmined-tile"
+            src={tile.url}
+            alt=""
+            draggable={false}
+            key={tile.id}
+            style={style}
+          />
+        );
+      })}
     </div>
+  );
+}
+
+/**
+ * 历史瓦片单独渲染：请求失败时显示缺图占位并上报，绝不换用当前瓦片。
+ */
+function HistoryTileView({
+  tile,
+  style,
+  versionId,
+  onStatus,
+}: Readonly<{
+  tile: VisibleTile;
+  style: CSSProperties;
+  versionId: string;
+  onStatus?: (tileId: string, status: 'loaded' | 'missing') => void;
+}>) {
+  const [status, setStatus] = useState<'pending' | 'loaded' | 'missing'>('pending');
+
+  if (status === 'missing') {
+    return (
+      <span
+        className="unmined-tile is-history-missing"
+        style={style}
+        data-history-version={versionId}
+        data-history-tile-state="missing"
+        aria-hidden="true"
+      />
+    );
+  }
+
+  return (
+    <img
+      className="unmined-tile"
+      src={tile.url}
+      alt=""
+      draggable={false}
+      style={style}
+      data-history-version={versionId}
+      data-history-tile-state={status}
+      onLoad={() => {
+        setStatus('loaded');
+        onStatus?.(tile.id, 'loaded');
+      }}
+      onError={() => {
+        setStatus('missing');
+        onStatus?.(tile.id, 'missing');
+      }}
+    />
   );
 }
 
@@ -11294,7 +11866,7 @@ function buildVisibleTiles(
   size: ViewportSize,
   tileTemplate: string,
   regionIndex: UnminedRegionIndex | undefined,
-  options?: { tileZoom?: number },
+  options?: { tileZoom?: number; versionId?: string; coverage?: MapTileCoverage },
 ): VisibleTile[] {
   if (size.width <= 0 || size.height <= 0) {
     return [];
@@ -11319,9 +11891,14 @@ function buildVisibleTiles(
       if (regionIndex && !hasUnminedTile(tileX, tileZ, tileZoom, regionIndex)) {
         continue;
       }
+      if (options?.coverage && !isHistoryTileInCoverage(tileX, tileZ, tileZoom, options.coverage)) {
+        continue;
+      }
 
       tiles.push({
-        id: `${tileZoom}:${tileX}:${tileZ}`,
+        id: options?.versionId
+          ? buildMapHistoryTileCacheKey(options.versionId, tileZoom, tileX, tileZ)
+          : `${tileZoom}:${tileX}:${tileZ}`,
         url: buildTileUrl(tileTemplate, tileZoom, tileX, tileZ),
         left:
           size.width / 2 + (tileX * tileSize * viewScale) / tileScale - view.centerX * viewScale,

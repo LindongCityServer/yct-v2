@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server';
-import type { ApiListResponse, TileProviderDescriptor, TileZoomRange } from '@yct/contracts';
+import type {
+  MapTileProvidersResponse,
+  TileProviderDescriptor,
+  TileZoomRange,
+} from '@yct/contracts';
 import { tileProviderConfigSchema } from '@yct/schemas';
 import { createApiMeta } from '../../../../lib/api-meta';
+import {
+  parseMapHistoryVersions,
+  toMapHistoryVersionDescriptor,
+} from '../../../../lib/map-history';
 import {
   buildMapTileProxyTemplate,
   buildUnminedTileTemplate,
@@ -71,12 +79,21 @@ export async function GET() {
     });
   }
 
-  const response: ApiListResponse<TileProviderDescriptor> = {
+  const historyConfig = parseMapHistoryVersions(config.tileHistoryVersions);
+  const history = historyConfig.versions.map(toMapHistoryVersionDescriptor);
+  const messages = [
+    items.length > 0 ? undefined : '瓦片模板尚未配置。',
+    historyConfig.issues.length > 0
+      ? `历史瓦片配置有 ${historyConfig.issues.length} 项无效，已忽略。`
+      : undefined,
+  ].filter((message): message is string => Boolean(message));
+  const response: MapTileProvidersResponse = {
     meta: createApiMeta(
       items.length > 0 ? 'ready' : 'not_configured',
-      items.length > 0 ? undefined : '瓦片模板尚未配置。',
+      messages.length > 0 ? messages.join(' ') : undefined,
     ),
     items,
+    history,
   };
 
   return NextResponse.json(response);

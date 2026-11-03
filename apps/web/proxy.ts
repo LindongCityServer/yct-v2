@@ -15,6 +15,7 @@ export function proxy(request: NextRequest) {
 
   if (
     !isAiPublicSurface &&
+    !isMapTileProxySurface(request) &&
     (isServiceWorker ||
       (!pathname.includes('/_next/static/') &&
         !pathname.includes('/_next/image') &&
@@ -39,6 +40,13 @@ function isPublicAiSurface(pathname: string): boolean {
     pathname.startsWith(`${publicApiPath}/`) ||
     discoveryPaths.includes(pathname)
   );
+}
+
+// 历史瓦片代理自带按版本区分的 Cache-Control/ETag，不能被全局 no-store 覆盖；
+// 当前瓦片代理保持原有行为。
+function isMapTileProxySurface(request: NextRequest): boolean {
+  const tileProxyPath = appBasePath ? `${appBasePath}/api/map/tile-proxy` : '/api/map/tile-proxy';
+  return request.nextUrl.pathname === tileProxyPath && request.nextUrl.searchParams.has('version');
 }
 
 function resolveRewrittenPathname(pathname: string): string | undefined {
