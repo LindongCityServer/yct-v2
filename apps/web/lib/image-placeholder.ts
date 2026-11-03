@@ -20,6 +20,19 @@ import { readRuntimeConfig } from './runtime-config';
 // 静态 import 会被 Turbopack 改写成带哈希的外部模块名，在 next dev 下解析失败。
 const requireFromHere = createRequire(import.meta.url);
 
+// sharp 不同版本的类型导出不一致：0.34.x 用 `export = sharp`，0.35.x 用 `export default sharp`。
+// 这里只声明实际用到的最小调用面，避免构建环境解析到哪个版本就报「表达式不可调用」。
+type SharpPipeline = {
+  rotate(): SharpPipeline;
+  resize(options: { width: number; withoutEnlargement?: boolean }): SharpPipeline;
+  webp(options: { quality: number }): SharpPipeline;
+  toBuffer(): Promise<Buffer>;
+};
+type SharpFactory = (
+  input: string,
+  options?: { limitInputPixels?: number; sequentialRead?: boolean },
+) => SharpPipeline;
+
 const placeholderWidths = new Set([32, 64, 96, 128]);
 const maxSourceBytes = 24 * 1024 * 1024;
 const maxInputPixels = 100_000_000;
@@ -62,7 +75,12 @@ export async function readImagePlaceholder(input: {
       return { bytes: cached, contentType: 'image/webp' };
     }
 
-    const sharp = requireFromHere('sharp') as typeof import('sharp');
+    // sharp 的 CJS 导出在 0.34/0.35 间可能是函数本身或挂在 default 上，运行时两种都兼容。
+    const sharpModule = requireFromHere('sharp') as SharpFactory | { default?: SharpFactory };
+    const sharp = typeof sharpModule === 'function' ? sharpModule : sharpModule.default;
+    if (!sharp) {
+      throw new Error('sharp 模块加载失败');
+    }
     const bytes = await sharp(sourcePath, {
       limitInputPixels: maxInputPixels,
       sequentialRead: true,
