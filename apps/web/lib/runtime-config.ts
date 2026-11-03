@@ -36,6 +36,8 @@ export interface RuntimeConfig {
   transitTripLabelPoolStorePath: string;
   travelScheduleRevisionStorePath: string;
   travelServiceProfileStorePath: string;
+  /** 年度节假日快照目录，默认 .yct-data/holidays。 */
+  holidayCalendarDir: string;
   ticketingCatalogStorePath: string;
   ticketOrderStorePath: string;
   poiSubmissionStorePath: string;
@@ -78,6 +80,16 @@ export interface RuntimeConfig {
   unminedMapBaseUrl: string;
   markerBdslmBaseUrl?: string;
   markerBdslmTimeoutMs: number;
+  bedrockServerAddress: string;
+  bedrockStatusTimeoutMs: number;
+  bedrockStatusEnabled: boolean;
+  bedrockOfflineHoldMs: number;
+  bedrockProviders?: string;
+  bedrockProviderRetries: number;
+  bedrockProviderBackoffMs: number;
+  bedrockProviderFailureThreshold: number;
+  bedrockProviderCooldownMs: number;
+  bedrockOfflineConfirmMs: number;
   legacyDataSource: 'auto' | 'local' | 'remote';
   legacyDataDir?: string;
   legacyDataRemoteBaseUrl: string;
@@ -218,6 +230,10 @@ export function readRuntimeConfig(): RuntimeConfig {
     travelServiceProfileStorePath: resolveRuntimePath(
       process.env.YCT_TRAVEL_SERVICE_PROFILE_STORE_PATH,
       '.yct-data/travel-service-profile-store.json',
+    ),
+    holidayCalendarDir: resolveRuntimePath(
+      process.env.YCT_HOLIDAY_CALENDAR_DIR,
+      '.yct-data/holidays',
     ),
     ticketingCatalogStorePath: resolveRuntimePath(
       process.env.YCT_TICKETING_CATALOG_STORE_PATH,
@@ -360,6 +376,47 @@ export function readRuntimeConfig(): RuntimeConfig {
     markerBdslmBaseUrl:
       emptyToUndefined(process.env.YCT_MARKER_BDSLM_BASE_URL) ?? 'http://ld.cmsy.xyz:19136',
     markerBdslmTimeoutMs: Number(process.env.YCT_MARKER_BDSLM_TIMEOUT_MS ?? 6000),
+    bedrockServerAddress:
+      emptyToUndefined(process.env.YCT_BEDROCK_SERVER_ADDRESS) ?? 'ld.cmsy.xyz:19132',
+    bedrockStatusTimeoutMs: parseIntegerInRange(
+      process.env.YCT_BEDROCK_STATUS_TIMEOUT_MS,
+      2000,
+      100,
+      10_000,
+    ),
+    bedrockStatusEnabled: process.env.YCT_BEDROCK_STATUS_ENABLED?.trim().toLowerCase() !== 'false',
+    bedrockOfflineHoldMs: parseIntegerInRange(
+      process.env.YCT_BEDROCK_OFFLINE_HOLD_MS,
+      300_000,
+      0,
+      86_400_000,
+    ),
+    bedrockProviders: emptyToUndefined(process.env.YCT_BEDROCK_PROVIDERS),
+    bedrockProviderRetries: parseIntegerInRange(process.env.YCT_BEDROCK_PROVIDER_RETRIES, 0, 0, 5),
+    bedrockProviderBackoffMs: parseIntegerInRange(
+      process.env.YCT_BEDROCK_PROVIDER_BACKOFF_MS,
+      250,
+      0,
+      5_000,
+    ),
+    bedrockProviderFailureThreshold: parseIntegerInRange(
+      process.env.YCT_BEDROCK_PROVIDER_FAILURE_THRESHOLD,
+      3,
+      1,
+      20,
+    ),
+    bedrockProviderCooldownMs: parseIntegerInRange(
+      process.env.YCT_BEDROCK_PROVIDER_COOLDOWN_MS,
+      60_000,
+      0,
+      3_600_000,
+    ),
+    bedrockOfflineConfirmMs: parseIntegerInRange(
+      process.env.YCT_BEDROCK_OFFLINE_CONFIRM_MS,
+      0,
+      0,
+      3_600_000,
+    ),
     legacyDataSource: parseLegacyDataSource(process.env.YCT_LEGACY_DATA_SOURCE),
     legacyDataDir: resolveRuntimePath(process.env.YCT_LEGACY_DATA_DIR),
     legacyDataRemoteBaseUrl:

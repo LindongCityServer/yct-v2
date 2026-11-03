@@ -50,17 +50,14 @@ const transitLineSegmentPathSchema = z
     note: z.string().trim().max(120).optional(),
   })
   .superRefine((path, context) => {
-    // 途径点用于记录沿道路走行的几何；只配置区间分钟时允许为空，
-    // 由后台按地图道路补全路径（与 normalizeTransitLineSegmentPaths 的保留条件一致）。
     if (
       path.mode === 'road' &&
       path.waypoints.length === 0 &&
-      path.operationStatus === 'operating' &&
-      path.travelMinutes === undefined
+      path.operationStatus === 'operating'
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: '沿道路走行的站间路径至少需要 1 个途径点或一个区间运行分钟。',
+        message: '沿道路走行的站间路径至少需要 1 个途径点。',
         path: ['waypoints'],
       });
     }
@@ -297,6 +294,89 @@ export const transitLineDraftSchema = z.object({
   stationDrafts: z.array(transitVisualStationDraftSchema).max(128).optional(),
 });
 
+const travelOperatingDateSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, '日期需为 YYYY-MM-DD（Asia/Shanghai）')
+  .refine(isRealCalendarDate, '日期不存在，请检查年月日');
+
+const travelOperatingPatternSchema = z.enum(['WORKDAY', 'WEEKEND', 'HOLIDAY', 'MAKEUP_WORKDAY']);
+
+const travelOperatingBufferDaySchema = z
+  .object({
+    from: travelOperatingDateSchema,
+    to: travelOperatingDateSchema.optional(),
+    mode: z.enum(['closed', 'holiday']),
+    anchor: z.string().trim().max(120).optional(),
+  })
+  .refine((value) => !value.to || value.from <= value.to, '结束日期不能早于开始日期。');
+
+const travelOperatingOverrideSchema = z
+  .object({
+    date: travelOperatingDateSchema.optional(),
+    from: travelOperatingDateSchema.optional(),
+    to: travelOperatingDateSchema.optional(),
+    mode: z.enum(['open', 'closed']),
+  })
+  .refine((value) => Boolean(value.date) !== Boolean(value.from), '请选择单日或日期区间中的一种。')
+  .refine((value) => !value.date || !value.to, '单日指定不能再填写结束日期。')
+  .refine(
+    (value) => !value.to || (value.from && value.from <= value.to),
+    '结束日期不能早于开始日期。',
+  );
+
+export const travelOperatingCalendarSchema = z
+  .object({
+    version: z.literal(1),
+    patterns: z
+      .array(travelOperatingPatternSchema)
+      .min(1)
+      .max(4)
+      .refine((patterns) => new Set(patterns).size === patterns.length, '运营日类型不能重复。'),
+    bufferDays: z.array(travelOperatingBufferDaySchema).max(60).optional(),
+    overrides: z.array(travelOperatingOverrideSchema).max(60).optional(),
+    updatedAt: z.string().trim().max(40).optional(),
+  })
+  .superRefine((calendar, ctx) => {
+    const modesByDate = new Map<string, 'open' | 'closed'>();
+    const conflicts = new Set<string>();
+
+    const record = (date: string, mode: 'open' | 'closed') => {
+      const previous = modesByDate.get(date);
+      if (previous && previous !== mode) {
+        conflicts.add(date);
+        return;
+      }
+
+      modesByDate.set(date, mode);
+    };
+
+    for (const bufferDay of calendar.bufferDays ?? []) {
+      for (const date of expandOperatingDateRange(bufferDay.from, bufferDay.to)) {
+        record(date, bufferDay.mode === 'closed' ? 'closed' : 'open');
+      }
+    }
+
+    for (const override of calendar.overrides ?? []) {
+      if (override.date) {
+        record(override.date, override.mode);
+        continue;
+      }
+
+      for (const date of expandOperatingDateRange(override.from, override.to)) {
+        record(date, override.mode);
+      }
+    }
+
+    for (const date of conflicts) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['overrides'],
+        message: `${date} 同时被设为营业和停运，请保留一条。`,
+      });
+    }
+  });
+
 export const travelScheduleTripUpdateSchema = z.object({
   tripCode: z.string().trim().max(80).optional(),
   serviceKind: ticketableServiceKindSchema.optional(),
@@ -338,6 +418,7 @@ export const travelScheduleTripUpdateSchema = z.object({
   vehicleTypeText: z.string().trim().max(80).optional(),
   vehicleModelText: z.string().trim().max(80).optional(),
   operatingDays: z.array(z.string().trim().min(1).max(40)).max(31).optional(),
+  operatingCalendar: travelOperatingCalendarSchema.nullable().optional(),
   availability: travelTripAvailabilitySchema.optional(),
   sourcePath: z.string().trim().max(240).optional(),
 });
@@ -442,6 +523,37 @@ export const transitStationDetailUpdateSchema = z.object({
     .optional(),
   flipTemplateForUpwards: z.boolean().optional(),
 });
+
+function isRealCalendarDate(value: string): boolean {
+  const [yearText, monthText, dayText] = value.split('-');
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return false;
+  }
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  );
+}
+
+/** 展开闭区间内的日期；区间倒置或年月日非法时返回空数组。 */
+function expandOperatingDateRange(from: string | undefined, to?: string): string[] {
+  if (!from || !isRealCalendarDate(from)) {
+    return [];
+  }
+
+  const start = Date.parse(`${from}T00:00:00Z`);
+  const endText = to && to >= from && isRealCalendarDate(to) ? to : from;
+  const end = Date.parse(`${endText}T00:00:00Z`);
+  const dates: string[] = [];
+  for (let value = start; value <= end && dates.length < 366; value += 24 * 60 * 60 * 1000) {
+    dates.push(new Date(value).toISOString().slice(0, 10));
+  }
+  return dates;
+}
 
 export const transitLineStationOrderUpdateSchema = z.object({
   stationSourceIds: z.array(z.string().trim().min(1).max(120)).min(2).max(256),

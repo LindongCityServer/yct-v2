@@ -18,6 +18,7 @@ import type {
   TransitModeProfile,
   TransitStationDetailSnapshot,
   TransitTripLabelPool,
+  TravelOperatingCalendar,
   TravelScheduleQueryResult,
   TravelScheduleRevision,
   TravelScheduleRevisionStatus,
@@ -39,6 +40,8 @@ import {
 import { findTransitStationDetail } from '../lib/transit-station-detail-match';
 import { CurrentPlayerLocationButton } from './current-player-location-button';
 import { AdminRefreshButton } from './admin-refresh-button';
+import { AdminTripOperatingCalendarEditor } from './admin-trip-operating-calendar-editor';
+import { getOperatingCalendarConflict } from '../lib/operating-calendar';
 import { LayeredMapTile } from './layered-map-tile';
 import { WorldCoordinatePicker } from './world-coordinate-picker';
 import { MaterialSymbol } from './material-symbol';
@@ -3258,10 +3261,12 @@ function ScheduleTripEditDialog({
           | 'gateText'
           | 'vehicleTypeText'
           | 'vehicleModelText'
-          | 'operatingDays'
           | 'sourcePath'
         >
-      >,
+      > & {
+        /** null 表示显式关闭结构化运营日历。 */
+        operatingCalendar?: TravelOperatingCalendar | null;
+      },
   ) => Promise<string | null>;
 }>) {
   const availableKinds = serviceProfiles
@@ -3313,8 +3318,8 @@ function ScheduleTripEditDialog({
   const [gateText, setGateText] = useState(trip?.gateText ?? '');
   const [vehicleTypeText, setVehicleTypeText] = useState(trip?.vehicleTypeText ?? '');
   const [vehicleModelText, setVehicleModelText] = useState(trip?.vehicleModelText ?? '');
-  const [operatingDaysText, setOperatingDaysText] = useState(
-    (trip?.operatingDays ?? []).join('\n'),
+  const [operatingCalendar, setOperatingCalendar] = useState<TravelOperatingCalendar | null>(
+    trip?.operatingCalendar ?? null,
   );
   const [availability, setAvailability] = useState<TravelTripInstance['availability']>(
     trip?.availability ?? 'ticketing_unavailable',
@@ -3451,6 +3456,14 @@ function ScheduleTripEditDialog({
       return;
     }
 
+    const calendarConflict = operatingCalendar
+      ? getOperatingCalendarConflict(operatingCalendar)
+      : undefined;
+    if (calendarConflict) {
+      setError(calendarConflict);
+      return;
+    }
+
     const submitError = await onSubmit({
       serviceKind,
       tripCode: tripCode.trim(),
@@ -3479,7 +3492,7 @@ function ScheduleTripEditDialog({
       gateText: gateText.trim(),
       vehicleTypeText: vehicleTypeText.trim(),
       vehicleModelText: vehicleModelText.trim(),
-      operatingDays: parseLineList(operatingDaysText),
+      operatingCalendar,
       availability,
       sourcePath: sourcePath.trim(),
     });
@@ -3689,14 +3702,12 @@ function ScheduleTripEditDialog({
             }
           />
         </fieldset>
-        <label>
-          <span>运营日期规则</span>
-          <textarea
-            value={operatingDaysText}
-            onChange={(event) => setOperatingDaysText(event.currentTarget.value)}
-            placeholder="每行一条规则，例如 每日 / 工作日 / 2026-07-12"
-          />
-        </label>
+        <AdminTripOperatingCalendarEditor
+          tripKey={trip?.tripKey}
+          tripKeyStatus={trip?.tripKeyStatus}
+          value={operatingCalendar}
+          onChange={setOperatingCalendar}
+        />
         {error ? <p className="muted admin-poi-dialog-error">{error}</p> : null}
         <div className="admin-content-actions">
           <button type="button" onClick={onClose} disabled={isBusy}>
@@ -5536,7 +5547,7 @@ function TransitLineEditorDialog({
   const [stopDirections, setStopDirections] = useState<
     Record<string, { down: boolean; up: boolean }>
   >(() => buildTransitStopDirectionsDraft(line));
-  const [operatingDateRule, setOperatingDateRule] = useState(line?.operatingDateRule ?? '');
+  const [operatingDateRule] = useState(line?.operatingDateRule ?? '');
   const [departureTimesDownText, setDepartureTimesDownText] = useState(
     formatTransitDepartureRulesForEditor(line, 'down'),
   );
@@ -6343,15 +6354,16 @@ function TransitLineEditorDialog({
               </label>
             </div>
             <label>
-              <span>运营日期规则</span>
+              <span>运营日期规则（旧版文本，已停用）</span>
               <input
                 value={operatingDateRule}
-                onChange={(event) => {
-                  setOperatingDateRule(event.currentTarget.value);
-                  setError('');
-                }}
-                placeholder="例如：每日 / 工作日 / 2026-07-01 至 2026-08-31"
+                readOnly
+                aria-disabled="true"
+                placeholder="历史文本，仅保留展示"
               />
+              <span className="muted">
+                班次级规则改为在「班次工作台」的运营日历中维护；此处文本不再参与判定。
+              </span>
             </label>
             {line ? (
               <section
@@ -7963,15 +7975,6 @@ function applyTransitSegmentTravelMinutes(
     if (!value) {
       if (existing) {
         existing.travelMinutes = undefined;
-        // 仅靠区间分钟存在的站间路径，清空分钟后就失去意义，
-        // 保留会触发“沿道路走行至少需要途径点”的校验。
-        if (
-          existing.mode === 'road' &&
-          existing.waypoints.length === 0 &&
-          (existing.operationStatus ?? 'operating') === 'operating'
-        ) {
-          segmentPaths.splice(segmentPaths.indexOf(existing), 1);
-        }
       }
       continue;
     }

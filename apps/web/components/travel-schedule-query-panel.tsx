@@ -6,6 +6,8 @@ import { requestConfirmation } from '../lib/client-dialog-events';
 import type {
   ApiListResponse,
   ApiItemResponse,
+  HolidayCalendarYearSnapshot,
+  HolidayCalendarYearState,
   TicketOrderDraftResult,
   TicketOrderListItem,
   TicketableServiceKind,
@@ -42,6 +44,12 @@ import {
 import { createTripReminder, formatTripReminderTime } from '../lib/client-trip-reminders';
 import { useI18n, type CommonMessageKey } from '../lib/client-i18n';
 import { formatFareTextWithoutCurrencyUnit } from '../lib/fare-display';
+import {
+  createHolidayLookup,
+  getOperatingWeekdayKey,
+  resolveTripOperatingDay,
+  toShanghaiDateString,
+} from '../lib/operating-calendar';
 import { TicketOrderDraftPanel } from './ticket-order-draft-panel';
 import { AdminEditLink } from './admin-edit-link';
 
@@ -86,8 +94,19 @@ export function TravelScheduleQueryPanel({
   const [originFilter, setOriginFilter] = useState('all');
   const [destinationFilter, setDestinationFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState<TravelScheduleTimeScope>('all');
-  const [serviceDate, setServiceDate] = useState(() => toDateInputValue(new Date()));
+  const [serviceDate, setServiceDate] = useState(() => toShanghaiDateString());
+  const [extraHolidayCalendars, setExtraHolidayCalendars] = useState<HolidayCalendarYearSnapshot[]>(
+    [],
+  );
+  const [holidayCalendarStates, setHolidayCalendarStates] = useState<HolidayCalendarYearState[]>(
+    () => result.holidayCalendarStates ?? [],
+  );
   const [query, setQuery] = useState(initialQuery);
+  const holidayCalendars = useMemo(
+    () => mergeHolidayCalendars(result.holidayCalendars ?? [], extraHolidayCalendars),
+    [result.holidayCalendars, extraHolidayCalendars],
+  );
+  const holidayLookup = useMemo(() => createHolidayLookup(holidayCalendars), [holidayCalendars]);
   const [historyState, setHistoryState] = useState<TravelScheduleHistoryState | null>(null);
   const [ticketOrders, setTicketOrders] = useState<TicketOrderListItem[] | null>(null);
   const [ticketOrderStatusText, setTicketOrderStatusText] = useState('');
@@ -96,6 +115,54 @@ export function TravelScheduleQueryPanel({
   const [journeyStatusText, setJourneyStatusText] = useState('');
   const [journeyBusy, setJourneyBusy] = useState(false);
   const [journeyOrderBusy, setJourneyOrderBusy] = useState(false);
+  const requestedHolidayYears = useRef(new Set<number>());
+
+  // 用户切到服务端未预载的年份时，只请求本站接口；第三方节假日源仍由服务端访问。
+  useEffect(() => {
+    const year = Number(serviceDate.slice(0, 4));
+    if (!Number.isInteger(year) || holidayLookup.getYearStatus(year) === 'ready') {
+      return;
+    }
+    if (requestedHolidayYears.current.has(year)) {
+      return;
+    }
+    requestedHolidayYears.current.add(year);
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(appPath(`/api/travel/holiday-calendars?year=${year}`), {
+          cache: 'no-store',
+        });
+        if (!response.ok) {
+          return;
+        }
+        const payload = (await response.json()) as {
+          years?: HolidayCalendarYearState[];
+          snapshots?: HolidayCalendarYearSnapshot[];
+        };
+        if (cancelled) {
+          return;
+        }
+        if (payload.snapshots?.length) {
+          setExtraHolidayCalendars((current) =>
+            mergeHolidayCalendars(current, payload.snapshots ?? []),
+          );
+        }
+        if (payload.years?.length) {
+          setHolidayCalendarStates((current) =>
+            mergeHolidayCalendarStates(current, payload.years ?? []),
+          );
+        }
+      } catch {
+        // 拿不到快照时保持 unknown，不把日期静默当工作日。
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [holidayLookup, serviceDate]);
   const currentMinutes = getCurrentAdjustedMinutes();
   const syncScheduleHistory = () => {
     setHistoryState(readTravelScheduleHistoryState());
@@ -183,10 +250,12 @@ export function TravelScheduleQueryPanel({
         serviceDate,
         query,
         currentMinutes,
+        holiday: holidayLookup,
       }),
     [
       currentMinutes,
       destinationFilter,
+      holidayLookup,
       originFilter,
       query,
       result.trips,
@@ -197,6 +266,9 @@ export function TravelScheduleQueryPanel({
     ],
   );
   const routeGroups = useMemo(() => groupScheduleTrips(filteredTrips), [filteredTrips]);
+  const missingCalendarYear = holidayCalendarStates.find(
+    (state) => state.year === Number(serviceDate.slice(0, 4)) && state.status === 'missing',
+  )?.year;
   const serviceNotices = useMemo(
     () => filterServiceNoticesByDate(result.serviceNotices ?? [], serviceDate),
     [result.serviceNotices, serviceDate],
@@ -397,6 +469,12 @@ export function TravelScheduleQueryPanel({
           </span>
         </div>
       </div>
+
+      {missingCalendarYear ? (
+        <p className="muted" role="status">
+          {t('travelSchedule.calendar.missing', { year: missingCalendarYear })}
+        </p>
+      ) : null}
 
       <div className="schedule-service-strip" aria-label={t('travelSchedule.service.aria')}>
         <button
@@ -1326,6 +1404,7 @@ function filterTrips(
     serviceDate: string;
     query: string;
     currentMinutes: number;
+    holiday: ReturnType<typeof createHolidayLookup>;
   },
 ): TravelTripInstance[] {
   const query = normalizeSearchValue(input.query);
@@ -1342,7 +1421,7 @@ function filterTrips(
 
   return [...trips]
     .filter((trip) => input.serviceFilter === 'all' || trip.serviceKind === input.serviceFilter)
-    .filter((trip) => filterByServiceDay(trip, serviceDay))
+    .filter((trip) => filterByServiceDay(trip, serviceDay, serviceDate ?? '', input.holiday))
     .filter((trip) => filterByStationPair(trip, originFilter, destinationFilter))
     .filter(
       (trip) =>
@@ -1402,7 +1481,17 @@ function filterByTime(
 
 type ServiceDateState = 'unspecified' | 'past' | 'today' | 'future';
 
-function filterByServiceDay(trip: TravelTripInstance, serviceDay: string | undefined): boolean {
+function filterByServiceDay(
+  trip: TravelTripInstance,
+  serviceDay: string | undefined,
+  serviceDate: string,
+  holiday: ReturnType<typeof createHolidayLookup>,
+): boolean {
+  if (trip.operatingCalendar) {
+    // 与服务端共用同一判定函数；unknown 不隐藏班次，避免节假日数据缺失时误删服务。
+    return resolveTripOperatingDay(trip, serviceDate, holiday).status !== 'closed';
+  }
+
   if (!serviceDay || !trip.operatingDays?.length) {
     return true;
   }
@@ -1456,14 +1545,7 @@ function getServiceDateState(serviceDate: string | undefined): ServiceDateState 
 }
 
 function getServiceDay(serviceDate: string | undefined): string | undefined {
-  if (!serviceDate) {
-    return undefined;
-  }
-
-  const [yearText, monthText, dayText] = serviceDate.split('-');
-  const date = new Date(Number(yearText), Number(monthText) - 1, Number(dayText));
-  const dayKeys = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-  return dayKeys[date.getDay()];
+  return serviceDate ? getOperatingWeekdayKey(serviceDate) : undefined;
 }
 
 function normalizeServiceDate(value: string): string | undefined {
@@ -1483,10 +1565,29 @@ function normalizeServiceDate(value: string): string | undefined {
 }
 
 function toDateInputValue(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return toShanghaiDateString(date);
+}
+
+function mergeHolidayCalendars(
+  current: readonly HolidayCalendarYearSnapshot[],
+  incoming: readonly HolidayCalendarYearSnapshot[],
+): HolidayCalendarYearSnapshot[] {
+  const byYear = new Map(current.map((snapshot) => [snapshot.year, snapshot]));
+  for (const snapshot of incoming) {
+    byYear.set(snapshot.year, snapshot);
+  }
+  return [...byYear.values()].sort((left, right) => left.year - right.year);
+}
+
+function mergeHolidayCalendarStates(
+  current: readonly HolidayCalendarYearState[],
+  incoming: readonly HolidayCalendarYearState[],
+): HolidayCalendarYearState[] {
+  const byYear = new Map(current.map((state) => [state.year, state]));
+  for (const state of incoming) {
+    byYear.set(state.year, state);
+  }
+  return [...byYear.values()].sort((left, right) => left.year - right.year);
 }
 
 function formatScheduleNoticeDate(serviceDate: string, locale: Locale): string {
