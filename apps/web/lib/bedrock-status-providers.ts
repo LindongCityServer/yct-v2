@@ -24,6 +24,12 @@ export interface BedrockStatusProviderConfig {
   providers: BedrockStatusProvider[];
   retries: number;
   backoffMs: number;
+  /** 连续失败多少次后熔断该来源。 */
+  failureThreshold: number;
+  /** 熔断后暂时跳过来源的时长，到期后自动半开重试。 */
+  cooldownMs: number;
+  /** 全部来源明确离线时，可选的最短确认窗口；0 表示立即生效。 */
+  offlineConfirmMs: number;
   signature: string;
 }
 
@@ -210,12 +216,36 @@ export function resolveBedrockStatusProviderConfig(
 
   const retries = parseIntegerInRange(env.YCT_BEDROCK_PROVIDER_RETRIES, 0, 0, 5);
   const backoffMs = parseIntegerInRange(env.YCT_BEDROCK_PROVIDER_BACKOFF_MS, 250, 0, 5_000);
+  const failureThreshold = parseIntegerInRange(
+    env.YCT_BEDROCK_PROVIDER_FAILURE_THRESHOLD,
+    3,
+    1,
+    20,
+  );
+  const cooldownMs = parseIntegerInRange(
+    env.YCT_BEDROCK_PROVIDER_COOLDOWN_MS,
+    60_000,
+    0,
+    3_600_000,
+  );
+  const offlineConfirmMs = parseIntegerInRange(env.YCT_BEDROCK_OFFLINE_CONFIRM_MS, 0, 0, 3_600_000);
   const signature = JSON.stringify([
     raw ?? '',
     resolved.map((provider) => [provider.id, provider.timeoutMs ?? null]),
     retries,
     backoffMs,
+    failureThreshold,
+    cooldownMs,
+    offlineConfirmMs,
   ]);
 
-  return { providers: resolved, retries, backoffMs, signature };
+  return {
+    providers: resolved,
+    retries,
+    backoffMs,
+    failureThreshold,
+    cooldownMs,
+    offlineConfirmMs,
+    signature,
+  };
 }
