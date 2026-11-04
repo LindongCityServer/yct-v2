@@ -5012,7 +5012,7 @@ img.map-player-list-avatar.is-offline {
   z-index: 5;
   display: grid;
   gap: var(--yct-space-2);
-  width: min(320px, calc(100% - var(--yct-map-control-inset) * 2));
+  width: min(300px, calc(100% - var(--yct-map-control-inset) * 2));
   max-height: min(52vh, 420px);
   padding: var(--yct-space-3);
   border: 1px solid var(--yct-color-border);
@@ -5028,11 +5028,26 @@ img.map-player-list-avatar.is-offline {
   backdrop-filter: blur(18px);
 }
 
+/* 拖动后由内联 left/top 接管定位，解除默认的底部居中。 */
+.map-measure-panel.is-positioned {
+  right: auto;
+  bottom: auto;
+}
+
 .map-measure-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--yct-space-2);
+  /* 标题栏是拖动热区，必须自己接管指针，避免手势穿透到地图。 */
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.map-measure-header:active {
+  cursor: grabbing;
 }
 
 .map-measure-header > span {
@@ -5049,6 +5064,11 @@ img.map-player-list-avatar.is-offline {
 .map-measure-header .material-symbols-outlined {
   color: var(--yct-color-primary);
   font-size: 20px;
+}
+
+.map-measure-header .material-symbols-outlined.is-grip {
+  color: var(--yct-color-text-muted);
+  font-size: 18px;
 }
 
 .map-measure-mode {
@@ -5084,36 +5104,53 @@ img.map-player-list-avatar.is-offline {
   outline-offset: 2px;
 }
 
+/* 与线路/几何工作台一致的胶囊图标工具条：只保留图标，文案落在 title/aria-label。 */
 .map-measure-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--yct-space-2);
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--yct-radius-pill);
+  background: color-mix(in srgb, var(--yct-color-text-secondary) 10%, transparent);
 }
 
 .map-measure-button {
-  min-height: 34px;
-  padding: 0 10px;
-  border: 1px solid var(--yct-color-border);
-  border-radius: var(--yct-radius-pill);
-  background: color-mix(in srgb, var(--yct-color-surface-panel) 92%, transparent);
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
   color: var(--yct-color-text-secondary);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
-  font-weight: 650;
+}
+
+.map-measure-button .material-symbols-outlined {
+  font-size: 21px;
+}
+
+.map-measure-button:not(:disabled):is(:hover, :focus-visible) {
+  background: var(--yct-color-surface-muted);
 }
 
 .map-measure-button.is-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border-color: transparent;
   background: var(--yct-color-primary);
   color: #ffffff;
 }
 
-.map-measure-button.is-primary .material-symbols-outlined {
-  font-size: 18px;
+.map-measure-button.is-primary:not(:disabled):is(:hover, :focus-visible) {
+  background: var(--yct-color-primary-hover);
+}
+
+.map-measure-divider {
+  width: 1px;
+  height: 24px;
+  margin: 0 2px;
+  background: var(--yct-color-border);
 }
 
 .map-measure-button:disabled {
@@ -5139,11 +5176,42 @@ img.map-player-list-avatar.is-offline {
   font-variant-numeric: tabular-nums;
 }
 
+/* 分段明细默认收起，避免面板被逐段列表撑高。 */
+.map-measure-segments {
+  border-top: 1px solid color-mix(in srgb, var(--yct-color-border) 72%, transparent);
+  padding-top: 4px;
+}
+
+.map-measure-segments > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yct-space-2);
+  color: var(--yct-color-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  list-style: none;
+}
+
+.map-measure-segments > summary::-webkit-details-marker {
+  display: none;
+}
+
+.map-measure-segments > summary .material-symbols-outlined {
+  font-size: 18px;
+  transition: transform var(--yct-motion-duration-fast) var(--yct-motion-easing-standard);
+}
+
+.map-measure-segments[open] > summary .material-symbols-outlined {
+  transform: rotate(180deg);
+}
+
 .map-measure-segment-list {
   display: grid;
   gap: 2px;
   max-height: 110px;
-  margin: 0;
+  margin: 4px 0 0;
   padding: 0;
   overflow-y: auto;
   color: var(--yct-color-text-secondary);
@@ -5176,9 +5244,13 @@ img.map-player-list-avatar.is-offline {
     transform: none;
   }
 
+  .map-measure-panel.is-positioned {
+    right: auto;
+  }
+
   .map-measure-button {
-    flex: 1 1 auto;
-    min-height: 44px;
+    width: 44px;
+    height: 44px;
   }
 }
 
@@ -24803,16 +24875,22 @@ div.telegraph-output-scene.is-packing {
 
 .map-share-preview-heading {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr);
   align-items: center;
   gap: var(--yct-space-3);
 }
 
+.map-share-preview-heading > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
 .map-share-preview-heading small {
   display: block;
-  color: var(--map-share-color);
+  color: var(--yct-color-text-muted);
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 650;
   line-height: 1.4;
 }
 
@@ -24824,13 +24902,33 @@ div.telegraph-output-scene.is-packing {
   line-height: 1.25;
 }
 
+/* 分享图标题图标按图3的圆角色块呈现，色块取分享主题色，白图标保证对比。 */
 .map-share-preview-icon {
   --icon-fill: 1;
-  background: transparent;
-  color: var(--map-share-color);
-  font-size: 30px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--yct-radius-md);
+  background: var(--map-share-color);
+  color: #ffffff;
+  font-size: 26px;
   line-height: 1;
   text-align: center;
+}
+
+/* 使用 POI 原始图标时改用浅色底块，让图标自身的颜色和像素细节透出来。 */
+.map-share-preview-icon.is-image {
+  padding: 7px;
+  background: color-mix(in srgb, var(--map-share-color) 12%, var(--yct-color-surface-panel));
+}
+
+.map-share-preview-icon.is-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
 }
 
 .map-share-detail-symbol {
@@ -24875,11 +24973,12 @@ div.telegraph-output-scene.is-packing {
   overflow-wrap: anywhere;
 }
 
-/* 分享图固定宽高比、等比裁切，避免竖图被拉伸成长图。 */
+/* 分享图固定宽高比、等比裁切，避免竖图被拉伸成长图；
+ * 有封面时贴到卡片上缘，承担图3的“封面大图置顶”视觉层级。 */
 .map-share-preview-media {
-  margin: 0;
+  margin: calc(-1 * var(--yct-space-4)) calc(-1 * var(--yct-space-4)) 0;
   overflow: hidden;
-  aspect-ratio: 16 / 7;
+  aspect-ratio: 16 / 8;
   background: var(--yct-color-surface-muted);
 }
 
@@ -26559,6 +26658,46 @@ dialog.transit-health-target-dialog > header p {
   display: block;
 }
 
+/* 地图类页面（地图探索与使用卫星图瓦片的线路/班次/POI 几何工作台）在透光材质下强制深色标题栏：
+ * 只替换标题栏底色与标题文本，按钮、工具栏仍沿用各自的材质配色，保证彩色卫星图上的可读性。 */
+:root[data-material-mode='advanced']
+  :is(
+    .app-shell.is-map-shell > .topbar,
+    .transit-visual-editor > .secondary-topbar,
+    .visual-editor-page.is-poi-editor > .secondary-topbar
+  ) {
+  --yct-material-content-shadow-color: rgb(0 0 0 / 42%);
+  --yct-material-text-shadow: 0 1px 8px rgb(0 0 0 / 56%);
+  border-bottom-color: transparent;
+  color: var(--yct-material-dark-text);
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    .app-shell.is-map-shell > .topbar,
+    .transit-visual-editor > .secondary-topbar,
+    .visual-editor-page.is-poi-editor > .secondary-topbar
+  )
+  > .topbar-material-layers {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--yct-material-dark-surface) 72%, transparent) 0%,
+    color-mix(in srgb, var(--yct-material-dark-surface) 30%, transparent) 62%,
+    transparent 100%
+  );
+}
+
+:root[data-material-mode='advanced']
+  :is(
+    .app-shell.is-map-shell > .topbar,
+    .transit-visual-editor > .secondary-topbar,
+    .visual-editor-page.is-poi-editor > .secondary-topbar
+  )
+  :is(.topbar-page-title, .secondary-title) {
+  color: var(--yct-material-dark-text);
+  text-shadow: var(--yct-material-text-shadow);
+}
+
 :root[data-material-mode='advanced'] {
   --yct-material-floating-border: color-mix(in srgb, var(--yct-color-border) 76%, transparent);
 }
@@ -26646,6 +26785,7 @@ dialog.transit-health-target-dialog > header p {
     .map-marker-list,
     .map-coordinate-pick-hint,
     .map-toolbar,
+    .map-measure-panel,
     .map-poi-detail-panel,
     .map-layer-panel,
     .transit-visual-route-panel,
@@ -26673,6 +26813,18 @@ dialog.transit-health-target-dialog > header p {
     saturate(var(--yct-material-saturation)) blur(var(--yct-material-blur));
   text-shadow: var(--yct-material-text-shadow);
   box-shadow: var(--yct-material-surface-shadow);
+}
+
+/* 透光材质下测距面板内部的模式切换与图标工具条同步材质化，避免面板透光但控件仍是实心白。 */
+:root[data-material-mode='advanced'] .map-measure-mode,
+:root[data-material-mode='advanced'] .map-measure-actions {
+  background: var(--yct-material-control-surface);
+}
+
+:root[data-material-mode='advanced'] .map-measure-mode button.is-active {
+  background: var(--yct-material-selected-state);
+  color: var(--yct-color-primary-hover);
+  box-shadow: none;
 }
 
 :root[data-material-mode='advanced'] .modal-backdrop {

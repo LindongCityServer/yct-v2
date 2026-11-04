@@ -531,6 +531,8 @@ interface MapSharePayload {
   description?: string;
   eyebrow: string;
   icon: string;
+  /** POI 原始图标地址；有值时标题区优先展示图片图标而不是符号图标。 */
+  iconUrl?: string;
   /** POI 首图原始地址；渲染时再转成站内优化地址，不可优化则不展示。 */
   imageUrl?: string;
   meta: string[];
@@ -3922,30 +3924,51 @@ export function MapStage() {
     )
       return;
     handledLuckyRef.current = luckyRequest;
-    setExplorePending(false);
     if (loadStatus !== 'ready' || transitLoadStatus !== 'ready') {
+      setExplorePending(false);
       publishToastRequested({ message: t('map.explore.failed'), tone: 'warning' });
       return;
     }
-    const target = pickExploreCandidate(luckyCandidates, lastLuckyMarkerRef.current);
-    if (!target) {
-      publishToastRequested({ message: t('map.explore.empty'), tone: 'info' });
-      return;
-    }
-    lastLuckyMarkerRef.current = target.id;
-    setRoutePlanDraft(null);
-    setEditingRouteEndpoint(null);
-    setMarkerQuery('');
-    setMarkersVisible(true);
-    setLinearFeaturesVisible(true);
-    setLayerPanelOpen(false);
-    focusMapMarker(target);
-    publishToastRequested({
-      message: t('map.explore.found', { name: target.label }),
-      tone: 'success',
-      durationMs: 1500,
-      dedupeKey: 'map-lucky-result',
-    });
+
+    // 随机结果统一由服务端接口产出，保证与分享图、其他端使用同一套筛选规则；
+    // 接口不可用时回退本地候选，避免「手气不错」整体不可用。
+    void (async () => {
+      let target: CenterableMarker | undefined;
+      try {
+        const params = new URLSearchParams();
+        if (lastLuckyMarkerRef.current) {
+          params.set('exclude', lastLuckyMarkerRef.current);
+        }
+        const query = params.toString();
+        const response = await fetch(appPath(`/api/map/random-poi${query ? `?${query}` : ''}`));
+        if (response.ok) {
+          const payload = (await response.json()) as { poi?: { id?: string } };
+          target = luckyCandidates.find((item) => item.id === payload.poi?.id);
+        }
+      } catch {
+        // 网络失败由下面的本地候选兜底。
+      }
+      setExplorePending(false);
+      target ??= pickExploreCandidate(luckyCandidates, lastLuckyMarkerRef.current);
+      if (!target) {
+        publishToastRequested({ message: t('map.explore.empty'), tone: 'info' });
+        return;
+      }
+      lastLuckyMarkerRef.current = target.id;
+      setRoutePlanDraft(null);
+      setEditingRouteEndpoint(null);
+      setMarkerQuery('');
+      setMarkersVisible(true);
+      setLinearFeaturesVisible(true);
+      setLayerPanelOpen(false);
+      focusMapMarker(target);
+      publishToastRequested({
+        message: t('map.explore.found', { name: target.label }),
+        tone: 'success',
+        durationMs: 1500,
+        dedupeKey: 'map-lucky-result',
+      });
+    })();
   }, [
     luckyRequest,
     mapCompletedReload,
@@ -7044,6 +7067,7 @@ export function MapStage() {
       ) : null}
       {shareTarget ? (
         <MapShareDialog
+          iconBaseUrl={markerIconBaseUrl}
           locale={locale}
           target={shareTarget}
           t={t}
@@ -7056,11 +7080,13 @@ export function MapStage() {
 }
 
 function MapShareDialog({
+  iconBaseUrl,
   locale,
   target,
   t,
   onClose,
 }: Readonly<{
+  iconBaseUrl: string;
   locale: LocaleCode;
   target: MapShareTarget;
   t: Translate;
@@ -7074,8 +7100,8 @@ function MapShareDialog({
   const [shortShareUrl, setShortShareUrl] = useState<string | null>(null);
   const [shortShareLinkLoading, setShortShareLinkLoading] = useState(true);
   const payload = useMemo(
-    () => buildMapSharePayload(target, t, shortShareUrl ?? undefined),
-    [shortShareUrl, t, target],
+    () => buildMapSharePayload(target, t, shortShareUrl ?? undefined, iconBaseUrl),
+    [iconBaseUrl, shortShareUrl, t, target],
   );
   // 分享图只使用站内优化地址：既避免原图拉伸，也保证导出画布不被跨域图片污染。
   // 无法优化的外链直接不展示，卡片退回无图布局。
@@ -7089,10 +7115,15 @@ function MapShareDialog({
     [payload.imageUrl],
   );
   const [shareImageFailed, setShareImageFailed] = useState(false);
+  const [shareIconFailed, setShareIconFailed] = useState(false);
 
   useEffect(() => {
     setShareImageFailed(false);
   }, [shareImageSrc]);
+
+  useEffect(() => {
+    setShareIconFailed(false);
+  }, [payload.iconUrl]);
   const copyOptions = useMemo(
     () => mapShareCopyKinds.filter((kind) => Boolean(getMapShareCopyValue(payload, kind))),
     [payload],
@@ -7240,13 +7271,37 @@ function MapShareDialog({
           ref={previewRef}
           style={{ '--map-share-color': payload.color } as CSSProperties}
         >
+          {shareImageSrc && !shareImageFailed ? (
+            <figure className="map-share-preview-media">
+              <img
+                alt=""
+                decoding="async"
+                loading="eager"
+                onError={() => setShareImageFailed(true)}
+                src={shareImageSrc}
+              />
+            </figure>
+          ) : null}
           <div className="map-share-preview-heading">
-            <span className="material-symbols-outlined map-share-preview-icon" aria-hidden="true">
-              {payload.icon}
-            </span>
+            {payload.iconUrl && !shareIconFailed ? (
+              <span className="map-share-preview-icon is-image">
+                <img
+                  alt=""
+                  decoding="async"
+                  draggable={false}
+                  loading="eager"
+                  onError={() => setShareIconFailed(true)}
+                  src={payload.iconUrl}
+                />
+              </span>
+            ) : (
+              <span className="material-symbols-outlined map-share-preview-icon" aria-hidden="true">
+                {payload.icon}
+              </span>
+            )}
             <span>
-              <small>{payload.eyebrow}</small>
               <strong>{payload.title}</strong>
+              <small>{payload.eyebrow}</small>
             </span>
           </div>
           {payload.meta.length > 0 ? (
@@ -7258,17 +7313,6 @@ function MapShareDialog({
           ) : null}
           {payload.description ? (
             <p className="map-share-preview-description">{payload.description}</p>
-          ) : null}
-          {shareImageSrc && !shareImageFailed ? (
-            <figure className="map-share-preview-media">
-              <img
-                alt=""
-                decoding="async"
-                loading="eager"
-                onError={() => setShareImageFailed(true)}
-                src={shareImageSrc}
-              />
-            </figure>
           ) : null}
           {payload.steps.length > 0 ? (
             <ol className="map-route-step-timeline map-share-preview-steps">
@@ -8413,9 +8457,21 @@ function getDirectionalTripLabels(
 }
 
 function RoadMapDetail({ marker, t }: Readonly<{ marker: EndpointGroupMarker; t: Translate }>) {
+  const imageUrls = getMapMarkerImageUrls(marker);
+  const center = getMarkerCenter(marker);
+
   return (
     <div className="map-linear-detail">
-      <p>{t('map.roadDetail.description')}</p>
+      {imageUrls.length > 0 ? (
+        <MapPoiImageGallery
+          imageUrls={imageUrls}
+          imageAlt={t('map.poi.imageAlt', { name: formatMarkerDisplayName(marker.label) })}
+          previousLabel={t('map.poi.imagePrevious')}
+          nextLabel={t('map.poi.imageNext')}
+          counterLabel={(current, total) => t('map.poi.imageCounter', { current, total })}
+        />
+      ) : null}
+      <p>{marker.description || t('map.roadDetail.description')}</p>
       <dl>
         <div>
           <dt>{t('map.roadDetail.endpointCount')}</dt>
@@ -8429,7 +8485,43 @@ function RoadMapDetail({ marker, t }: Readonly<{ marker: EndpointGroupMarker; t:
           <dt>{t('map.roadDetail.traceStatus')}</dt>
           <dd>{t('map.roadDetail.traceHighlighted')}</dd>
         </div>
+        {center ? (
+          <div>
+            <dt>{t('map.poi.coordinate')}</dt>
+            <dd>{formatPoint(center)}</dd>
+          </div>
+        ) : null}
+        {marker.address ? (
+          <div>
+            <dt>{t('map.poi.address')}</dt>
+            <dd>{marker.address}</dd>
+          </div>
+        ) : null}
+        {marker.floorLabel ? (
+          <div>
+            <dt>{t('map.poi.floor')}</dt>
+            <dd>{marker.floorLabel}</dd>
+          </div>
+        ) : null}
+        {marker.openingHours ? (
+          <div>
+            <dt>{t('map.poi.openingHours')}</dt>
+            <dd>{marker.openingHours}</dd>
+          </div>
+        ) : null}
+        <div>
+          <dt>{t('map.poi.type')}</dt>
+          <dd>{formatGeometryDetail(marker, t)}</dd>
+        </div>
       </dl>
+      {marker.href ? (
+        <a className="secondary-action-button" href={marker.href}>
+          <span className="material-symbols-outlined" aria-hidden="true">
+            open_in_new
+          </span>
+          <span>{t('map.poi.openDetail')}</span>
+        </a>
+      ) : null}
     </div>
   );
 }
@@ -9322,6 +9414,7 @@ function buildMapSharePayload(
   target: MapShareTarget,
   t: Translate,
   shortShareUrl?: string,
+  iconBaseUrl?: string,
 ): MapSharePayload {
   if (target.kind === 'marker') {
     const label = formatMarkerDisplayName(target.marker.label);
@@ -9332,6 +9425,11 @@ function buildMapSharePayload(
       : formatMarkerDetail(target.marker, t);
     const description = buildMapShareDescription(target.marker.description);
     const imageUrl = getMapMarkerImageUrls(target.marker)[0];
+    // 分享图标题区沿用地图上的原始 POI 图标；透明道路图标没有可读图形，回退符号图标。
+    const iconUrl =
+      target.marker.iconFileName && !isTransparentRoadIcon(target.marker.iconFileName)
+        ? toMarkerIconUrl(target.marker.iconFileName, iconBaseUrl ?? '')
+        : undefined;
     const coordinateDisplayText = coordinate ? formatShareCoordinate(coordinate) : '';
     const teleportCommand = coordinate
       ? target.marker.playerLocation?.serverAccountName
@@ -9343,10 +9441,12 @@ function buildMapSharePayload(
       color: 'var(--yct-color-primary)',
       coordinateText: coordinateDisplayText || undefined,
       description,
-      eyebrow: category,
-      icon: 'location_on',
+      // 分享图副标题按「分类 · 坐标」合并成一行，避免与标题区、胶囊重复展示同一信息。
+      eyebrow: [category, coordinateDisplayText].filter(Boolean).join(' · '),
+      icon: target.marker.symbolIcon ?? 'location_on',
+      iconUrl,
       imageUrl,
-      meta: [formatMarkerDetail(target.marker, t), coordinateDisplayText].filter(Boolean),
+      meta: [],
       steps: [],
       text: [
         t('map.poi.shareText', { name: label }),

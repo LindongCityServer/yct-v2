@@ -700,6 +700,16 @@ function groupRoadEndpointMarkers(snapshot: MapMarkerSnapshot): MapMarkerSnapsho
           marker,
         ]),
       );
+      // 道路聚合前会丢弃源点位详情；这里把首个非空值继承到聚合 marker，
+      // 让道路详情页能像普通 POI 一样展示简介、地址、营业时间与图片。
+      const imageUrls = Array.from(
+        new Set(
+          markers.flatMap((marker) => [
+            ...(marker.imageUrls ?? []),
+            ...(marker.imageUrl ? [marker.imageUrl] : []),
+          ]),
+        ),
+      ).filter(Boolean);
       return {
         id: `road-endpoints-${stableMarkerId(label)}`,
         label,
@@ -714,6 +724,15 @@ function groupRoadEndpointMarkers(snapshot: MapMarkerSnapshot): MapMarkerSnapsho
           }),
         },
         iconFileName: markers.find((marker) => marker.iconFileName)?.iconFileName,
+        accentColor: markers.find((marker) => marker.accentColor)?.accentColor,
+        description: markers.find((marker) => marker.description)?.description,
+        imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+        imageUrl: imageUrls[0],
+        address: markers.find((marker) => marker.address)?.address,
+        openingHours: markers.find((marker) => marker.openingHours)?.openingHours,
+        floorLabel: markers.find((marker) => marker.floorLabel)?.floorLabel,
+        href: markers.find((marker) => marker.href)?.href,
+        facilities: markers.find((marker) => marker.facilities?.length)?.facilities,
       };
     })
     .filter(

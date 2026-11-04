@@ -1,6 +1,12 @@
 'use client';
 
-import type { ReactElement } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactElement,
+} from 'react';
 import type { CommonMessageKey } from '../lib/client-i18n';
 import type { MapCoordinate } from '../lib/map-spatial';
 import {
@@ -18,6 +24,25 @@ type Translate = (key: CommonMessageKey, values?: Record<string, string | number
 const distanceKilometerThreshold = 1000;
 const areaHectareThreshold = 10_000;
 const squareBlocksPerHectare = 10_000;
+/** 拖动时面板与视口边缘的最小留白。 */
+const dragViewportInset = 8;
+/** 小于该位移视为点击，不写入拖动位置，避免轻微抖动改变布局。 */
+const dragActivationDistance = 3;
+
+interface MeasurePanelPosition {
+  left: number;
+  top: number;
+}
+
+interface DragState {
+  offsetX: number;
+  offsetY: number;
+  originX: number;
+  originY: number;
+  pointerId: number;
+  startLeft: number;
+  startTop: number;
+}
 
 export function MapMeasurePanel({
   mode,
@@ -51,6 +76,9 @@ export function MapMeasurePanel({
   const segments = getMeasureSegmentDistances(points);
   const totalDistance = segments.reduce((total, value) => total + value, 0);
   const hasConfirmedPoints = points.length > 0;
+  const panelRef = useRef<HTMLElement | null>(null);
+  const dragRef = useRef<DragState | null>(null);
+  const [position, setPosition] = useState<MeasurePanelPosition | null>(null);
 
   const formatDistance = (value: number): string =>
     value >= distanceKilometerThreshold
@@ -89,16 +117,111 @@ export function MapMeasurePanel({
             ? t('map.measure.points.areaNeed')
             : t('map.measure.hint');
 
+  // 窗口尺寸变化后把面板拉回可视范围，避免拖动位置在旋转屏幕后跑到视口外。
+  useEffect(() => {
+    if (!position) {
+      return undefined;
+    }
+    const clampPosition = () => {
+      setPosition((current) => (current ? clampPanelPosition(panelRef.current, current) : current));
+    };
+    window.addEventListener('resize', clampPosition);
+    return () => window.removeEventListener('resize', clampPosition);
+  }, [position]);
+
+  const handleDragStart = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.button !== 0 || (event.target as Element).closest('button')) {
+      return;
+    }
+    const panel = panelRef.current;
+    const parent = panel?.offsetParent;
+    if (!panel || !(parent instanceof HTMLElement)) {
+      return;
+    }
+    const panelRect = panel.getBoundingClientRect();
+    const parentRect = parent.getBoundingClientRect();
+    dragRef.current = {
+      offsetX: event.clientX - panelRect.left,
+      offsetY: event.clientY - panelRect.top,
+      originX: event.clientX,
+      originY: event.clientY,
+      pointerId: event.pointerId,
+      startLeft: panelRect.left - parentRect.left,
+      startTop: panelRect.top - parentRect.top,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  const handleDragMove = (event: ReactPointerEvent<HTMLElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+    if (
+      Math.abs(event.clientX - drag.originX) < dragActivationDistance &&
+      Math.abs(event.clientY - drag.originY) < dragActivationDistance
+    ) {
+      return;
+    }
+    const parent = panelRef.current?.offsetParent;
+    if (!(parent instanceof HTMLElement)) {
+      return;
+    }
+    const parentRect = parent.getBoundingClientRect();
+    setPosition(
+      clampPanelPosition(panelRef.current, {
+        left: event.clientX - parentRect.left - drag.offsetX,
+        top: event.clientY - parentRect.top - drag.offsetY,
+      }),
+    );
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  const handleDragEnd = (event: ReactPointerEvent<HTMLElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
   return (
     <section
-      className="map-measure-panel"
+      ref={panelRef}
+      className={position ? 'map-measure-panel is-positioned' : 'map-measure-panel'}
       role="region"
       aria-label={t('map.measure.panelAria')}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
+      style={
+        position
+          ? {
+              left: `${position.left}px`,
+              top: `${position.top}px`,
+              bottom: 'auto',
+              transform: 'none',
+            }
+          : undefined
+      }
     >
-      <header className="map-measure-header">
+      <header
+        className="map-measure-header"
+        title={t('map.measure.dragHint')}
+        onPointerDown={handleDragStart}
+        onPointerMove={handleDragMove}
+        onPointerUp={handleDragEnd}
+        onPointerCancel={handleDragEnd}
+      >
         <span>
+          <span className="material-symbols-outlined is-grip" aria-hidden="true">
+            open_with
+          </span>
           <span className="material-symbols-outlined" aria-hidden="true">
             straighten
           </span>
@@ -127,52 +250,83 @@ export function MapMeasurePanel({
         ]}
       />
 
-      <div className="map-measure-actions">
+      <div className="map-measure-actions" role="toolbar" aria-label={t('map.measure.panelAria')}>
         <button
           className="map-measure-button is-primary"
           type="button"
           disabled={locked}
+          aria-label={t('map.measure.addPoint')}
+          title={t('map.measure.addPoint')}
           onClick={onAddPoint}
         >
           <span className="material-symbols-outlined" aria-hidden="true">
             add_location_alt
           </span>
-          <span>{t('map.measure.addPoint')}</span>
         </button>
+        <span className="map-measure-divider" aria-hidden="true" />
         <button
           className="map-measure-button"
           type="button"
           disabled={locked || !hasConfirmedPoints}
+          aria-label={t('map.measure.undo')}
+          title={t('map.measure.undo')}
           onClick={onUndo}
         >
-          {t('map.measure.undo')}
+          <span className="material-symbols-outlined" aria-hidden="true">
+            undo
+          </span>
         </button>
         <button
           className="map-measure-button"
           type="button"
           disabled={!hasConfirmedPoints}
+          aria-label={t('map.measure.clear')}
+          title={t('map.measure.clear')}
           onClick={onClear}
         >
-          {t('map.measure.clear')}
+          <span className="material-symbols-outlined" aria-hidden="true">
+            delete_sweep
+          </span>
         </button>
         {mode === 'area' ? (
           locked ? (
-            <button className="map-measure-button" type="button" onClick={onRestart}>
-              {t('map.measure.restart')}
+            <button
+              className="map-measure-button"
+              type="button"
+              aria-label={t('map.measure.restart')}
+              title={t('map.measure.restart')}
+              onClick={onRestart}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                refresh
+              </span>
             </button>
           ) : (
             <button
               className="map-measure-button"
               type="button"
               disabled={!validation.valid}
+              aria-label={t('map.measure.finish')}
+              title={t('map.measure.finish')}
               onClick={onFinish}
             >
-              {t('map.measure.finish')}
+              <span className="material-symbols-outlined" aria-hidden="true">
+                check
+              </span>
             </button>
           )
         ) : null}
-        <button className="map-measure-button" type="button" onClick={onExit}>
-          {t('map.measure.exit')}
+        <span className="map-measure-divider" aria-hidden="true" />
+        <button
+          className="map-measure-button"
+          type="button"
+          aria-label={t('map.measure.exit')}
+          title={t('map.measure.exit')}
+          onClick={onExit}
+        >
+          <span className="material-symbols-outlined" aria-hidden="true">
+            close
+          </span>
         </button>
       </div>
 
@@ -181,19 +335,27 @@ export function MapMeasurePanel({
       <div className="map-measure-results" aria-live="polite">
         {mode === 'distance' ? (
           <>
-            {segments.length > 0 ? (
-              <ul className="map-measure-segment-list">
-                {segments.map((value, index) => (
-                  <li key={`segment-${index}`}>
-                    {t('map.measure.segment', {
-                      index: index + 1,
-                      value: formatDistance(value),
-                    })}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
             <strong>{t('map.measure.total', { value: formatDistance(totalDistance) })}</strong>
+            {segments.length > 0 ? (
+              <details className="map-measure-segments">
+                <summary>
+                  {t('map.measure.segments', { count: segments.length })}
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    expand_more
+                  </span>
+                </summary>
+                <ul className="map-measure-segment-list">
+                  {segments.map((value, index) => (
+                    <li key={`segment-${index}`}>
+                      {t('map.measure.segment', {
+                        index: index + 1,
+                        value: formatDistance(value),
+                      })}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
           </>
         ) : (
           <>
@@ -216,4 +378,23 @@ export function MapMeasurePanel({
       </div>
     </section>
   );
+}
+
+/** 将面板位置限制在父容器可视范围内；父容器缺失时退回窗口尺寸。 */
+function clampPanelPosition(
+  panel: HTMLElement | null,
+  position: MeasurePanelPosition,
+): MeasurePanelPosition {
+  const parent = panel?.offsetParent;
+  const parentWidth = parent instanceof HTMLElement ? parent.clientWidth : window.innerWidth;
+  const parentHeight = parent instanceof HTMLElement ? parent.clientHeight : window.innerHeight;
+  const panelWidth = panel?.offsetWidth ?? 0;
+  const panelHeight = panel?.offsetHeight ?? 0;
+  const maxLeft = Math.max(dragViewportInset, parentWidth - panelWidth - dragViewportInset);
+  const maxTop = Math.max(dragViewportInset, parentHeight - panelHeight - dragViewportInset);
+
+  return {
+    left: Math.min(Math.max(position.left, dragViewportInset), maxLeft),
+    top: Math.min(Math.max(position.top, dragViewportInset), maxTop),
+  };
 }
