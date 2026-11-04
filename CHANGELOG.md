@@ -6,7 +6,23 @@
 ## Unreleased
 
 <!-- changelog:unreleased:start -->
-区间：2026-11-02T12:23:26.518Z → 当前时间；已合并 PR 13 个。
+区间：2026-11-04T09:48:32.417Z → 当前时间；已合并 PR 0 个。
+
+本区间无经 PR 合并的改动（直接推送到 main 的提交按体例不收录）。
+<!-- changelog:unreleased:end -->
+
+## 2.20.0 — 2026-11-04
+
+<!-- changelog:release:2.20.0:start -->
+区间：2.19.0（2026-11-03T12:28:38.743Z） → 2.20.0（2026-11-04T09:48:32.417Z）；已合并 PR 0 个。
+
+本区间无经 PR 合并的改动（直接推送到 main 的提交按体例不收录）。
+<!-- changelog:release:2.20.0:end -->
+
+## 2.19.0 — 2026-11-03
+
+<!-- changelog:release:2.19.0:start -->
+区间：2.18.0（2026-11-02T12:23:26.518Z） → 2.19.0（2026-11-03T12:28:38.743Z）；已合并 PR 13 个。
 
 ### 新功能
 - 概览指标块改为可点击跳转（[#30](https://github.com/LindongCityServer/yct-v2/pull/30)，@wangkai8787）
@@ -28,7 +44,7 @@
 
 ### 维护
 - 变更日志只收录合并 PR 并加入覆盖率校验（重建）（[#49](https://github.com/LindongCityServer/yct-v2/pull/49)，@beepingflijo）
-<!-- changelog:unreleased:end -->
+<!-- changelog:release:2.19.0:end -->
 
 ## 2.18.0 — 2026-11-02
 

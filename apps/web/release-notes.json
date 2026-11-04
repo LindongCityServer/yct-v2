@@ -3,6 +3,40 @@
   "historyCutoffSha": "f978651b1697436cf4a866334c06e9119a61457c",
   "releases": [
     {
+      "version": "2.20.0",
+      "releasedAt": "2026-11-04T09:48:32.417Z",
+      "sourceFingerprint": "3380ba51501d1f64f1c585f6ee31dd97e44fa18f31d8b75bcd619952217959e8",
+      "themes": ["map", "web"],
+      "changes": [
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "测距面板支持拖动与图标化操作，并适配透光材质"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "POI 分享图新增封面大图版式并沿用地点原图标"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "新增随机地点接口，手气不错改为服务端随机"
+        },
+        {
+          "category": "feat",
+          "breaking": false,
+          "summary": "道路 POI 详情支持简介、地址、营业时间与图片"
+        },
+        {
+          "category": "fix",
+          "breaking": false,
+          "summary": "地图类页面在透光材质下标题栏转深色，改善卫星图上的可读性"
+        }
+      ],
+      "bump": "minor"
+    },
+    {
       "version": "2.19.0",
       "releasedAt": "2026-11-03T12:28:38.743Z",
       "sourceFingerprint": "0b7a622872e8074c635de6ca06539288e204b95b20769bb35db6651571c697e1",
